@@ -24,7 +24,7 @@ export class App {
   constructor() {
     this.http.get<BackendHealthResponse>('http://127.0.0.1:8000/api/health').subscribe({
       next: (response) => {
-        this.backendStatus.set(response.message);
+        this.backendStatus.set(this.backendMessage(response.message));
         this.backendDetail.set(`${response.status} · ${response.timestamp}`);
       },
       error: () => {
@@ -32,5 +32,15 @@ export class App {
         this.backendDetail.set('Revisa que el backend esté ejecutándose en http://127.0.0.1:8000');
       }
     });
+  }
+
+  private backendMessage(message: string): string {
+    const labels: Record<string, string> = {
+      'Laravel API is healthy': 'Laravel está conectado',
+      healthy: 'Servicio disponible',
+      ok: 'Servicio disponible'
+    };
+
+    return labels[message] ?? message;
   }
 }

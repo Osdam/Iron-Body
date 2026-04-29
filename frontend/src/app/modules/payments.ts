@@ -42,7 +42,7 @@ import { ApiService, PaymentSummary } from '../services/api.service';
             </td>
             <td>{{ payment.plan?.name || 'Sin plan' }}</td>
             <td>{{ payment.amount | currency:'USD':'symbol':'1.0-0' }}</td>
-            <td><span class="badge bg-info text-dark">{{ payment.status }}</span></td>
+            <td><span class="badge bg-info text-dark">{{ statusLabel(payment.status) }}</span></td>
             <td>{{ (payment.paid_at || payment.created_at) | date:'mediumDate' }}</td>
           </tr>
         </tbody>
@@ -68,5 +68,19 @@ export default class PaymentsModule implements OnInit {
         this.loading.set(false);
       }
     });
+  }
+
+  statusLabel(status: string): string {
+    const labels: Record<string, string> = {
+      paid: 'Pagado',
+      pending: 'Pendiente',
+      failed: 'Fallido',
+      cancelled: 'Cancelado',
+      refunded: 'Reembolsado',
+      active: 'Activo',
+      inactive: 'Inactivo'
+    };
+
+    return labels[status?.toLowerCase()] ?? status;
   }
 }

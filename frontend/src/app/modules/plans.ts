@@ -10,17 +10,17 @@ import { ApiService, PlanSummary } from '../services/api.service';
   <section class="plans-page">
     <header class="plans-header">
       <div>
-        <h1>Plans & Memberships</h1>
-        <p>Manage your premium membership offerings, billing cycles, and access tiers.</p>
+        <h1>Planes y membresías</h1>
+        <p>Administra membresías, ciclos de cobro y niveles de acceso del gimnasio.</p>
       </div>
       <div class="plans-actions">
         <button type="button" class="outline-btn">
           <span class="material-symbols-outlined" aria-hidden="true">table_rows</span>
-          Table View
+          Vista de tabla
         </button>
         <button type="button" class="gold-btn">
           <span class="material-symbols-outlined" aria-hidden="true">add</span>
-          Create Plan
+          Crear plan
         </button>
       </div>
     </header>
@@ -33,7 +33,7 @@ import { ApiService, PlanSummary } from '../services/api.service';
         <article>
           <div class="stat-label">
             <span class="material-symbols-outlined" aria-hidden="true">loyalty</span>
-            Active Plans
+            Planes activos
           </div>
           <div class="stat-value">
             <strong>{{ activePlans }}</strong>
@@ -43,7 +43,7 @@ import { ApiService, PlanSummary } from '../services/api.service';
         <article>
           <div class="stat-label">
             <span class="material-symbols-outlined" aria-hidden="true">group</span>
-            Total Subscribers
+            Suscriptores totales
           </div>
           <div class="stat-value">
             <strong>{{ estimatedSubscribers }}</strong>
@@ -53,7 +53,7 @@ import { ApiService, PlanSummary } from '../services/api.service';
         <article>
           <div class="stat-label">
             <span class="material-symbols-outlined" aria-hidden="true">payments</span>
-            Monthly MRR
+            Ingreso mensual
           </div>
           <div class="stat-value">
             <strong>{{ monthlyMrr | currency:'USD':'symbol':'1.0-0' }}</strong>
@@ -70,7 +70,7 @@ import { ApiService, PlanSummary } from '../services/api.service';
         <article *ngFor="let plan of plans; let i = index" class="plan-card">
           <div class="status-pill" [class.inactive]="!plan.active">
             <i></i>
-            {{ plan.active ? 'Active' : 'Inactive' }}
+            {{ plan.active ? 'Activo' : 'Inactivo' }}
           </div>
 
           <div class="plan-icon" [class.featured]="i === 0">
@@ -78,7 +78,7 @@ import { ApiService, PlanSummary } from '../services/api.service';
           </div>
 
           <h2>{{ plan.name }}</h2>
-          <p>{{ plan.benefits || 'Standard facility access with selected membership benefits.' }}</p>
+          <p>{{ plan.benefits || 'Acceso estándar al gimnasio con beneficios seleccionados de la membresía.' }}</p>
 
           <div class="price-row">
             <strong>{{ plan.price | currency:'USD':'symbol':'1.0-0' }}</strong>
@@ -88,20 +88,20 @@ import { ApiService, PlanSummary } from '../services/api.service';
           <ul>
             <li>
               <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
-              {{ plan.duration_days }} days access cycle
+              Ciclo de acceso de {{ plan.duration_days }} días
             </li>
             <li>
               <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
-              Member check-in and billing tracking
+              Control de ingreso y seguimiento de cobros
             </li>
             <li>
               <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
-              {{ plan.active ? 'Available for new subscribers' : 'Hidden from new sales' }}
+              {{ plan.active ? 'Disponible para nuevos suscriptores' : 'Oculto para nuevas ventas' }}
             </li>
           </ul>
 
           <footer>
-            <span>{{ subscriberEstimate(i) }} Subscribers</span>
+            <span>{{ subscriberEstimate(i) }} suscriptores</span>
             <div>
               <button type="button" aria-label="Editar plan">
                 <span class="material-symbols-outlined" aria-hidden="true">edit</span>
@@ -171,9 +171,9 @@ export default class PlansModule implements OnInit {
   }
 
   billingLabel(days: number): string {
-    if (days >= 360) return 'year';
-    if (days >= 28 && days <= 31) return 'month';
-    return `${days} days`;
+    if (days >= 360) return 'año';
+    if (days >= 28 && days <= 31) return 'mes';
+    return `${days} días`;
   }
 
   subscriberEstimate(index: number): number {

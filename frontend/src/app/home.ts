@@ -76,7 +76,7 @@ import { ApiService, DashboardStats } from './services/api.service';
       <article class="panel-card">
         <div class="panel-title">
           <h3>Tareas pendientes</h3>
-          <a routerLink="/reports">View all</a>
+          <a routerLink="/reports">Ver todo</a>
         </div>
         <div class="task-list">
           <div *ngFor="let task of tasks">
@@ -127,17 +127,17 @@ export default class HomeComponent implements OnInit {
   });
 
   protected metrics = signal([
-    { label: 'Members', value: '0', helper: 'Registrados', icon: 'group' },
-    { label: 'Revenue', value: '$0', helper: 'Pagos completados', icon: 'payments' },
-    { label: 'Active Plans', value: '0', helper: 'Disponibles', icon: 'loyalty' },
-    { label: 'Payments', value: '0', helper: 'Historial total', icon: 'receipt_long' }
+    { label: 'Miembros', value: '0', helper: 'Registrados', icon: 'group' },
+    { label: 'Ingresos', value: '$0', helper: 'Pagos completados', icon: 'payments' },
+    { label: 'Planes activos', value: '0', helper: 'Disponibles', icon: 'loyalty' },
+    { label: 'Pagos', value: '0', helper: 'Historial total', icon: 'receipt_long' }
   ]);
 
   protected quickActions = [
-    { label: 'Members', detail: 'Gestionar perfiles', icon: 'group', path: '/users' },
-    { label: 'Plans', detail: 'Membresías y precios', icon: 'loyalty', path: '/plans' },
-    { label: 'Payments', detail: 'Cobros y recibos', icon: 'payments', path: '/payments' },
-    { label: 'Classes', detail: 'Agenda y cupos', icon: 'calendar_month', path: '/classes' }
+    { label: 'Miembros', detail: 'Gestionar perfiles', icon: 'group', path: '/users' },
+    { label: 'Planes', detail: 'Membresías y precios', icon: 'loyalty', path: '/plans' },
+    { label: 'Pagos', detail: 'Cobros y recibos', icon: 'payments', path: '/payments' },
+    { label: 'Clases', detail: 'Agenda y cupos', icon: 'calendar_month', path: '/classes' }
   ];
 
   protected tasks = [
@@ -148,8 +148,8 @@ export default class HomeComponent implements OnInit {
 
   protected modules = [
     { label: 'Rutinas', detail: 'Plantillas de entrenamiento', icon: 'fitness_center', path: '/routines' },
-    { label: 'Entrenadores', detail: 'Staff y asignaciones', icon: 'badge', path: '/trainers' },
-    { label: 'Marketing', detail: 'Campañas y cupones', icon: 'campaign', path: '/marketing' },
+    { label: 'Entrenadores', detail: 'Equipo y asignaciones', icon: 'badge', path: '/trainers' },
+    { label: 'Mercadeo', detail: 'Campañas y cupones', icon: 'campaign', path: '/marketing' },
     { label: 'Configuración', detail: 'Ajustes globales', icon: 'settings', path: '/settings' }
   ];
 
@@ -158,10 +158,10 @@ export default class HomeComponent implements OnInit {
       next: (stats) => {
         this.stats.set(stats);
         this.metrics.set([
-          { label: 'Members', value: String(stats.users), helper: 'Registrados', icon: 'group' },
-          { label: 'Revenue', value: this.formatCurrency(stats.revenue), helper: 'Pagos completados', icon: 'payments' },
-          { label: 'Active Plans', value: String(stats.active_plans), helper: 'Disponibles', icon: 'loyalty' },
-          { label: 'Payments', value: String(stats.payments), helper: 'Historial total', icon: 'receipt_long' }
+          { label: 'Miembros', value: String(stats.users), helper: 'Registrados', icon: 'group' },
+          { label: 'Ingresos', value: this.formatCurrency(stats.revenue), helper: 'Pagos completados', icon: 'payments' },
+          { label: 'Planes activos', value: String(stats.active_plans), helper: 'Disponibles', icon: 'loyalty' },
+          { label: 'Pagos', value: String(stats.payments), helper: 'Historial total', icon: 'receipt_long' }
         ]);
       },
       error: () => {
