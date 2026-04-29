@@ -22,28 +22,27 @@
 	width: 280px;
 	flex-direction: column;
 	background: #0a0a0a;
-	padding: 2rem 1rem;
+	padding: 0.75rem 1rem 1.25rem;
 }
 
 .brand-block {
-	padding: 0 1rem 2rem;
+	display: flex;
+	justify-content: center;
+	margin: -1.15rem -1rem -0.65rem;
+	padding: 0;
 }
 
 .brand-logo {
-	color: #fff;
-	font-family: Lexend, sans-serif;
-	font-size: 1.45rem;
-	font-weight: 800;
-	letter-spacing: 0.04em;
-}
-
-.brand-logo span {
-	color: var(--gold);
+	display: block;
+	width: min(100%, 380px);
+	height: 182px;
+	background: url('../assets/Logo_Iron_Body.png') center / contain no-repeat;
 }
 
 .nav-list {
 	display: grid;
 	gap: 0.25rem;
+	margin-top: 0;
 }
 
 .nav-list a,
@@ -218,6 +217,15 @@
 		position: static;
 		width: 100%;
 		padding: 1rem;
+	}
+
+	.brand-block {
+		padding-bottom: 1rem;
+	}
+
+	.brand-logo {
+		width: 220px;
+		height: 86px;
 	}
 
 	.nav-list {
