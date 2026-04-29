@@ -1,103 +1,93 @@
-<div class="min-vh-100" style="background: linear-gradient(180deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);">
-  <nav class="navbar navbar-dark sticky-top" style="background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px);">
-    <div class="container-fluid">
-      <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="#">
-        <div class="d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; background: linear-gradient(135deg, #3b82f6, #1d4ed8); border-radius: 6px; color: white; font-weight: bold;">
-          IB
-        </div>
-        <div>
-          <div class="fw-semibold" style="font-size: 1.1rem;">Iron Body - Admin</div>
-          <div style="font-size: 0.75rem; color: #94a3b8;">Panel administrativo</div>
-        </div>
+<div class="admin-shell">
+  <aside class="side-nav">
+    <div class="brand-block">
+      <div class="brand-logo">IRON<span>BODY</span></div>
+    </div>
+
+    <nav class="nav-list" aria-label="Navegación principal">
+      <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
+        <span class="material-symbols-outlined" aria-hidden="true">dashboard</span>
+        <span>Dashboard</span>
       </a>
-      <div class="text-light" style="font-size: 0.9rem;">
-        Conectado: <span style="color: #34d399;" class="header-status">{{ backendStatus() }}</span>
+      <a routerLink="/users" routerLinkActive="active">
+        <span class="material-symbols-outlined" aria-hidden="true">group</span>
+        <span>Members</span>
+      </a>
+      <a routerLink="/plans" routerLinkActive="active">
+        <span class="material-symbols-outlined" aria-hidden="true">payments</span>
+        <span>Payments</span>
+      </a>
+      <a routerLink="/classes" routerLinkActive="active">
+        <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+        <span>Classes</span>
+      </a>
+      <a routerLink="/reports" routerLinkActive="active">
+        <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
+        <span>Analytics</span>
+      </a>
+      <a routerLink="/routines" routerLinkActive="active">
+        <span class="material-symbols-outlined" aria-hidden="true">fitness_center</span>
+        <span>Routines</span>
+      </a>
+      <a routerLink="/trainers" routerLinkActive="active">
+        <span class="material-symbols-outlined" aria-hidden="true">badge</span>
+        <span>Trainers</span>
+      </a>
+      <a routerLink="/marketing" routerLinkActive="active">
+        <span class="material-symbols-outlined" aria-hidden="true">campaign</span>
+        <span>Marketing</span>
+      </a>
+      <a routerLink="/settings" routerLinkActive="active">
+        <span class="material-symbols-outlined" aria-hidden="true">settings</span>
+        <span>Settings</span>
+      </a>
+    </nav>
+
+    <div class="side-footer">
+      <button class="primary-action" type="button">New Member</button>
+      <section class="backend-card" aria-label="Estado del backend">
+        <span class="material-symbols-outlined" aria-hidden="true">dns</span>
+        <div>
+          <strong>{{ backendStatus() }}</strong>
+          <small>{{ backendDetail() || 'Esperando respuesta del servidor' }}</small>
+        </div>
+      </section>
+      <a href="#" aria-label="Soporte">
+        <span class="material-symbols-outlined" aria-hidden="true">help</span>
+        Support
+      </a>
+      <a href="#" aria-label="Salir">
+        <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+        Logout
+      </a>
+    </div>
+  </aside>
+
+  <div class="workspace">
+    <header class="top-bar">
+      <label class="search-box">
+        <span class="material-symbols-outlined" aria-hidden="true">search</span>
+        <input type="search" placeholder="Search members, plans..." />
+      </label>
+
+      <div class="top-actions">
+        <button type="button" aria-label="Notificaciones">
+          <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
+        </button>
+        <button type="button" aria-label="Mensajes">
+          <span class="material-symbols-outlined" aria-hidden="true">chat_bubble</span>
+        </button>
+        <button type="button" aria-label="Aplicaciones">
+          <span class="material-symbols-outlined" aria-hidden="true">apps</span>
+        </button>
+        <a class="profile-link" routerLink="/settings" aria-label="Perfil ejecutivo">
+          <span class="material-symbols-outlined" aria-hidden="true">account_circle</span>
+        </a>
       </div>
-    </div>
-  </nav>
+    </header>
 
-  <div class="container-fluid" style="min-height: calc(100vh - 56px);">
-    <div class="row h-100">
-      <aside class="col-12 col-md-3 col-lg-2 p-3" style="background: rgba(30, 41, 59, 0.4);">
-        <div class="sticky-top" style="top: 70px;">
-          <nav class="nav flex-column gap-2 mb-4">
-            <a routerLink="/" routerLinkActive="active" 
-               class="nav-link px-3 py-2" 
-               style="border-radius: 6px; color: #cbd5e1; transition: all 0.3s;">
-              📊 Inicio
-            </a>
-            <a routerLink="/users" routerLinkActive="active" 
-               class="nav-link px-3 py-2" 
-               style="border-radius: 6px; color: #cbd5e1; transition: all 0.3s;">
-              👥 Usuarios
-            </a>
-            <a routerLink="/plans" routerLinkActive="active" 
-               class="nav-link px-3 py-2" 
-               style="border-radius: 6px; color: #cbd5e1; transition: all 0.3s;">
-              🎯 Membresías
-            </a>
-            <a routerLink="/payments" routerLinkActive="active" 
-               class="nav-link px-3 py-2" 
-               style="border-radius: 6px; color: #cbd5e1; transition: all 0.3s;">
-              💰 Pagos
-            </a>
-            <a routerLink="/routines" routerLinkActive="active" 
-               class="nav-link px-3 py-2" 
-               style="border-radius: 6px; color: #cbd5e1; transition: all 0.3s;">
-              🏋️ Rutinas
-            </a>
-            <a routerLink="/classes" routerLinkActive="active" 
-               class="nav-link px-3 py-2" 
-               style="border-radius: 6px; color: #cbd5e1; transition: all 0.3s;">
-              📅 Clases
-            </a>
-            <a routerLink="/trainers" routerLinkActive="active" 
-               class="nav-link px-3 py-2" 
-               style="border-radius: 6px; color: #cbd5e1; transition: all 0.3s;">
-              👨‍🏫 Entrenadores
-            </a>
-            <a routerLink="/marketing" routerLinkActive="active" 
-               class="nav-link px-3 py-2" 
-               style="border-radius: 6px; color: #cbd5e1; transition: all 0.3s;">
-              📢 Marketing
-            </a>
-            <a routerLink="/reports" routerLinkActive="active" 
-               class="nav-link px-3 py-2" 
-               style="border-radius: 6px; color: #cbd5e1; transition: all 0.3s;">
-              📈 Reportes
-            </a>
-            <a routerLink="/settings" routerLinkActive="active" 
-               class="nav-link px-3 py-2" 
-               style="border-radius: 6px; color: #cbd5e1; transition: all 0.3s;">
-              ⚙️ Configuración
-            </a>
-          </nav>
-
-          <div class="card" style="background: rgba(51, 65, 85, 0.4); border: 1px solid rgba(148, 163, 184, 0.1);">
-            <div class="card-body" style="font-size: 0.9rem;">
-              <div class="fw-semibold mb-2">Estado del backend</div>
-              <div class="text-light small header-status">{{ backendStatus() }}</div>
-              <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.5rem;">{{ backendDetail() }}</div>
-            </div>
-          </div>
-        </div>
-      </aside>
-
-      <main class="col-12 col-md-9 col-lg-10 p-4">
-        <div class="card" style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(148, 163, 184, 0.1); min-height: 500px;">
-          <div class="card-body">
-            <router-outlet></router-outlet>
-          </div>
-        </div>
-      </main>
-    </div>
+    <main class="content-canvas">
+      <router-outlet></router-outlet>
+    </main>
   </div>
 </div>
-
-<style>
-  .nav-link.active {
-    background-color: rgba(59, 130, 246, 0.2) !important;
-    color: #60a5fa !important;
-    border-left: 3px solid #3b82f6;
-  }
-</style>
