@@ -1,0 +1,13 @@
+/* Styles specific to the root app component */
+
+.sidebar-link.active {
+	background-color: rgba(100,116,139,0.12);
+}
+
+.header-status {
+	font-weight: 600;
+}
+
+.main-container {
+	min-height: 60vh;
+}
