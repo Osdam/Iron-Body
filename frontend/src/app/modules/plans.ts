@@ -165,6 +165,8 @@ import { CreatePlanModalComponent } from './components/create-plan-modal';
   styles: [
     `
       .plans-page {
+        width: 100%;
+        min-width: 0;
         max-width: 1400px;
         margin: 0 auto;
         padding: 0;
@@ -369,8 +371,8 @@ import { CreatePlanModalComponent } from './components/create-plan-modal';
 
       .cards-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-        gap: 2rem;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+        gap: 1.5rem;
         margin-bottom: 2rem;
       }
 
@@ -397,7 +399,7 @@ import { CreatePlanModalComponent } from './components/create-plan-modal';
         }
 
         .cards-grid {
-          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+          grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
           gap: 1.5rem;
         }
 

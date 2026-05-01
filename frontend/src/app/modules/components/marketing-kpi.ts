@@ -21,9 +21,11 @@ import { Component, Input } from '@angular/core';
         border: 1px solid #ededed;
         border-radius: 14px;
         background: #ffffff;
-        padding: 1.4rem;
+        padding: 1.25rem;
         box-shadow: 0 8px 16px rgba(0, 0, 0, 0.04);
         transition: all 0.22s ease;
+        min-width: 0;
+        overflow: hidden;
       }
 
       .kpi-card:hover {
@@ -33,15 +35,24 @@ import { Component, Input } from '@angular/core';
       }
 
       .kpi-header {
-        display: flex;
+        display: grid;
+        grid-template-columns: 38px minmax(0, 1fr);
         align-items: center;
-        gap: 0.6rem;
-        margin-bottom: 0.8rem;
+        gap: 0.75rem;
+        margin-bottom: 0.9rem;
+        min-width: 0;
       }
 
       .kpi-icon {
-        font-size: 1.4rem;
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        background: #f7f7f7;
+        font-size: 1.25rem;
         font-weight: 800;
+        flex: 0 0 auto;
       }
 
       .kpi-title {
@@ -50,7 +61,10 @@ import { Component, Input } from '@angular/core';
         color: #666;
         margin: 0;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.04em;
+        line-height: 1.25;
+        min-width: 0;
+        overflow-wrap: break-word;
       }
 
       .kpi-value {
@@ -59,6 +73,7 @@ import { Component, Input } from '@angular/core';
         color: #0a0a0a;
         margin: 0.4rem 0;
         line-height: 1.2;
+        overflow-wrap: break-word;
       }
 
       .kpi-subtitle {
@@ -66,22 +81,42 @@ import { Component, Input } from '@angular/core';
         color: #999;
         margin: 0;
         font-weight: 500;
+        line-height: 1.35;
+        overflow-wrap: break-word;
+      }
+
+      @media (max-width: 520px) {
+        .kpi-card {
+          padding: 1.1rem;
+        }
+
+        .kpi-title {
+          font-size: 0.78rem;
+        }
+
+        .kpi-value {
+          font-size: 1.75rem;
+        }
       }
 
       .kpi-success .kpi-icon {
         color: #10b981;
+        background: rgba(16, 185, 129, 0.1);
       }
 
       .kpi-info .kpi-icon {
         color: #3b82f6;
+        background: rgba(59, 130, 246, 0.1);
       }
 
       .kpi-primary .kpi-icon {
         color: #fbbf24;
+        background: rgba(251, 191, 36, 0.12);
       }
 
       .kpi-warning .kpi-icon {
         color: #f97316;
+        background: rgba(249, 115, 22, 0.1);
       }
     `,
   ],

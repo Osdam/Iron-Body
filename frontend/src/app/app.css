@@ -152,6 +152,7 @@
   flex: 1;
   margin-left: 280px;
   background: #fbf8ff;
+  min-width: 0;
 }
 
 .top-bar {
@@ -251,6 +252,8 @@
   min-height: calc(100vh - 64px);
   background: linear-gradient(180deg, #fbf8ff 0%, #f7f3ec 100%);
   padding: 3.5rem 2rem;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 @media (max-width: 991.98px) {
@@ -259,27 +262,60 @@
   }
 
   .side-nav {
-    position: static;
+    position: relative;
     width: 100%;
-    padding: 1rem;
+    padding: 0.75rem;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
   }
 
   .brand-block {
-    padding-bottom: 1rem;
+    justify-content: flex-start;
+    margin: 0 0 0.75rem;
+    padding: 0;
   }
 
   .brand-logo {
-    width: 220px;
-    height: 86px;
+    width: 150px;
+    height: 58px;
+    background-position: left center;
   }
 
   .nav-list {
-    display: flex;
-    overflow-x: auto;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.5rem;
+    overflow: visible;
   }
 
   .nav-list a {
-    flex: 0 0 auto;
+    min-width: 0;
+    min-height: 64px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.35rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    padding: 0.55rem 0.45rem;
+    text-align: center;
+    font-size: 0.72rem;
+    line-height: 1.15;
+  }
+
+  .nav-list a .material-symbols-outlined {
+    font-size: 1.25rem;
+  }
+
+  .nav-list a.active {
+    border-left: 1px solid rgba(234, 179, 8, 0.65);
+    border-color: rgba(234, 179, 8, 0.65);
+    background: rgba(234, 179, 8, 0.13);
+    box-shadow: inset 0 0 0 1px rgba(234, 179, 8, 0.16);
+  }
+
+  .nav-list a span:last-child {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .side-footer {
@@ -293,9 +329,106 @@
   .top-bar {
     gap: 1rem;
     padding: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+    min-height: auto;
+  }
+
+  .search-box {
+    flex: 1 1 280px;
+    width: auto;
+  }
+
+  .top-actions {
+    margin-left: auto;
+    gap: 0.55rem;
   }
 
   .content-canvas {
     padding: 1.25rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .side-nav {
+    padding: 0.65rem;
+  }
+
+  .brand-block {
+    justify-content: center;
+    margin-bottom: 0.65rem;
+  }
+
+  .brand-logo {
+    width: 128px;
+    height: 48px;
+    background-position: center;
+  }
+
+  .nav-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.45rem;
+  }
+
+  .nav-list a {
+    min-height: 58px;
+    border-radius: 10px;
+    padding: 0.5rem 0.35rem;
+    font-size: 0.68rem;
+  }
+
+  .top-bar {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.75rem;
+    padding: 0.85rem;
+  }
+
+  .search-box {
+    min-width: 0;
+  }
+
+  .search-box input {
+    height: 40px;
+    font-size: 0.85rem;
+  }
+
+  .top-actions {
+    gap: 0.25rem;
+  }
+
+  .top-actions button,
+  .profile-link {
+    width: 36px;
+    height: 36px;
+  }
+
+  .content-canvas {
+    padding: 1rem 0.85rem 1.25rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .nav-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .nav-list a {
+    min-height: 54px;
+    font-size: 0.64rem;
+  }
+
+  .nav-list a .material-symbols-outlined {
+    font-size: 1.12rem;
+  }
+
+  .top-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .top-actions {
+    width: 100%;
+    justify-content: space-between;
+    margin-left: 0;
   }
 }

@@ -31,7 +31,7 @@ interface CalendarDay {
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="calendar-container">
+    <div class="calendar-container" [class.has-selected-day]="selectedDay()">
       <!-- Header with navigation -->
       <div class="calendar-header">
         <button class="nav-btn" (click)="previousMonth()" aria-label="Mes anterior">
@@ -147,16 +147,25 @@ interface CalendarDay {
     `
       .calendar-container {
         display: grid;
-        grid-template-columns: 1fr 300px;
-        gap: 2rem;
+        grid-template-columns: minmax(0, 820px);
+        gap: 1.5rem;
         padding: 1.5rem;
         background: #fff;
         border-radius: 12px;
         border: 1px solid #e5e5e5;
+        min-width: 0;
+        overflow: hidden;
+        justify-content: center;
+        align-items: start;
+      }
+
+      .calendar-container.has-selected-day {
+        grid-template-columns: minmax(0, 820px) minmax(260px, 300px);
       }
 
       @media (max-width: 1024px) {
-        .calendar-container {
+        .calendar-container,
+        .calendar-container.has-selected-day {
           grid-template-columns: 1fr;
         }
       }
@@ -167,6 +176,7 @@ interface CalendarDay {
         align-items: center;
         justify-content: space-between;
         gap: 1rem;
+        flex-wrap: wrap;
         padding-bottom: 1.5rem;
         border-bottom: 1px solid #f0f0f0;
       }
@@ -197,7 +207,6 @@ interface CalendarDay {
         font-weight: 600;
         width: auto;
         padding: 0.5rem 1rem;
-        margin-left: auto;
         font-size: 0.85rem;
       }
 
@@ -207,6 +216,7 @@ interface CalendarDay {
 
       .month-year {
         flex: 1;
+        min-width: 140px;
         text-align: center;
       }
 
@@ -225,6 +235,10 @@ interface CalendarDay {
         grid-template-columns: repeat(7, 1fr);
         gap: 0.5rem;
         margin-bottom: 0.5rem;
+        min-width: 0;
+        width: 100%;
+        max-width: 820px;
+        justify-self: center;
       }
 
       .weekday {
@@ -235,6 +249,7 @@ interface CalendarDay {
         text-transform: uppercase;
         padding: 0.75rem 0;
         letter-spacing: 0.05em;
+        min-width: 0;
       }
 
       .calendar-grid {
@@ -242,10 +257,15 @@ interface CalendarDay {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
         gap: 0.5rem;
+        min-width: 0;
+        width: 100%;
+        max-width: 820px;
+        justify-self: center;
       }
 
       .calendar-day {
         aspect-ratio: 1;
+        min-width: 0;
         border: 1px solid #e5e5e5;
         border-radius: 8px;
         background: #fff;
@@ -327,6 +347,7 @@ interface CalendarDay {
       .day-details {
         grid-column: 2;
         grid-row: 2 / 4;
+        min-width: 0;
         border: 1px solid #e5e5e5;
         border-radius: 10px;
         padding: 1.5rem;
@@ -348,6 +369,7 @@ interface CalendarDay {
         align-items: center;
         justify-content: space-between;
         gap: 1rem;
+        flex-wrap: wrap;
         padding-bottom: 1rem;
         border-bottom: 1px solid #e5e5e5;
       }
@@ -360,6 +382,7 @@ interface CalendarDay {
         text-transform: uppercase;
         letter-spacing: 0.05em;
         margin: 0;
+        overflow-wrap: anywhere;
       }
 
       .class-count-badge {
@@ -386,6 +409,7 @@ interface CalendarDay {
         border-radius: 8px;
         padding: 1rem;
         transition: all 200ms ease;
+        min-width: 0;
       }
 
       .class-item:hover {
@@ -416,6 +440,7 @@ interface CalendarDay {
         color: #0a0a0a;
         margin: 0 0 0.5rem;
         font-size: 0.95rem;
+        overflow-wrap: anywhere;
       }
 
       .class-meta {
@@ -432,6 +457,8 @@ interface CalendarDay {
         display: flex;
         align-items: center;
         gap: 0.4rem;
+        min-width: 0;
+        overflow-wrap: anywhere;
       }
 
       .class-meta span.material-symbols-outlined {
@@ -465,6 +492,7 @@ interface CalendarDay {
 
       .class-type-badge {
         display: inline-block;
+        max-width: 100%;
         font-size: 0.65rem;
         font-weight: 700;
         padding: 0.35rem 0.7rem;
@@ -472,6 +500,7 @@ interface CalendarDay {
         text-transform: uppercase;
         letter-spacing: 0.05em;
         margin-top: 0.75rem;
+        overflow-wrap: anywhere;
       }
 
       .type-spinning {
@@ -525,10 +554,12 @@ interface CalendarDay {
       @media (max-width: 640px) {
         .calendar-container {
           padding: 1rem;
+          gap: 1rem;
         }
 
         .calendar-day {
           font-size: 0.85rem;
+          padding: 0.3rem;
         }
 
         .day-number {
@@ -541,6 +572,11 @@ interface CalendarDay {
 
         .calendar-header {
           gap: 0.5rem;
+        }
+
+        .calendar-weekdays,
+        .calendar-grid {
+          gap: 0.25rem;
         }
 
         .today-btn {

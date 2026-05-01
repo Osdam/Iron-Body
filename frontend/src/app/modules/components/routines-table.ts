@@ -15,7 +15,7 @@ import type { Routine } from './routine-card';
         </div>
       </header>
 
-      <div class="table-wrap" *ngIf="routines?.length; else empty">
+      <div class="table-wrap" *ngIf="routines.length; else empty">
         <table class="table">
           <thead>
             <tr>
@@ -34,7 +34,7 @@ import type { Routine } from './routine-card';
             <tr *ngFor="let r of routines; trackBy: trackRoutine">
               <td class="col-title">
                 <div class="name">{{ r.name }}</div>
-                <div class="muted">{{ r.exercises?.length || 0 }} ejercicios</div>
+                <div class="muted">{{ r.exercises.length || 0 }} ejercicios</div>
               </td>
               <td>
                 <span class="pill">{{ r.objective }}</span>

@@ -46,7 +46,7 @@ import { ApiService, PaymentSummary } from '../services/api.service';
               <td class="plan-name">{{ payment.plan?.name || 'Sin plan' }}</td>
               <td class="amount">{{ payment.amount | currency: 'COP' : 'symbol' : '1.0-0' }}</td>
               <td class="status-cell">
-                <span class="status-badge" [class]="'status-' + (payment.status?.toLowerCase() || 'pending')">
+                <span class="status-badge" [class]="'status-' + payment.status.toLowerCase()">
                   {{ statusLabel(payment.status) }}
                 </span>
               </td>

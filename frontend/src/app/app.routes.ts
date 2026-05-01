@@ -40,6 +40,11 @@ export const routes: Routes = [
     loadComponent: () => import('./modules/payments').then((m) => m.default),
   },
   {
+    path: 'inventory',
+    canActivate: [AuthGuard],
+    loadComponent: () => import('./modules/inventory').then((m) => m.default),
+  },
+  {
     path: 'routines',
     canActivate: [AuthGuard],
     loadComponent: () => import('./modules/routines').then((m) => m.default),

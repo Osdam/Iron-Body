@@ -1,7 +1,7 @@
-import { Component, OnInit, inject, signal, effect } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ApiService, UserSummary } from './services/api.service';
+import { ApiService } from './services/api.service';
 import { CreateMemberModalComponent } from './modules/components/create-member-modal';
 import { MembersEmptyComponent } from './modules/components/members-empty';
 
@@ -53,14 +53,16 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
                 type="text"
                 class="search-input"
                 placeholder="Buscar miembro..."
-                [(ngModel)]="searchQuery"
+                [ngModel]="searchQuery()"
+                (ngModelChange)="searchQuery.set($event)"
                 aria-label="Buscar miembros"
               />
               <span class="material-symbols-outlined">search</span>
             </div>
             <div class="filter-group">
               <select
-                [(ngModel)]="filterStatus"
+                [ngModel]="filterStatus()"
+                (ngModelChange)="filterStatus.set($event)"
                 class="filter-select"
                 aria-label="Filtrar por estado"
               >
@@ -642,13 +644,28 @@ export class UsersList implements OnInit {
   isCreateMemberOpen = signal(false);
   searchQuery = signal('');
   filterStatus = signal('');
-  filteredMembers = signal<any[]>([]);
+  filteredMembers = computed(() => {
+    const search = this.searchQuery().toLowerCase();
+    const status = this.filterStatus();
+
+    return this.members().filter((member) => {
+      if (search) {
+        const searchFields = [member.name, member.email, member.document, member.phone]
+          .join(' ')
+          .toLowerCase();
+        if (!searchFields.includes(search)) return false;
+      }
+
+      if (status && member.status !== status) return false;
+
+      return true;
+    });
+  });
 
   ngOnInit(): void {
     this.api.getUsers().subscribe({
       next: (res) => {
         this.members.set(res.data || []);
-        this.applyFilters();
         this.loading.set(false);
       },
       error: () => {
@@ -657,17 +674,6 @@ export class UsersList implements OnInit {
       },
     });
 
-    // Watch para búsqueda
-    effect(() => {
-      this.searchQuery();
-      this.applyFilters();
-    });
-
-    // Watch para filtro de estado
-    effect(() => {
-      this.filterStatus();
-      this.applyFilters();
-    });
   }
 
   openCreateMember(): void {
@@ -681,30 +687,7 @@ export class UsersList implements OnInit {
   onMemberCreated(newMember: any): void {
     // Agregar miembro a la lista
     this.members.update((members) => [newMember, ...members]);
-    this.applyFilters();
     this.isCreateMemberOpen.set(false);
-  }
-
-  applyFilters(): void {
-    const search = this.searchQuery().toLowerCase();
-    const status = this.filterStatus();
-
-    const filtered = this.members().filter((member) => {
-      // Filtro por búsqueda
-      if (search) {
-        const searchFields = [member.name, member.email, member.document, member.phone]
-          .join(' ')
-          .toLowerCase();
-        if (!searchFields.includes(search)) return false;
-      }
-
-      // Filtro por estado
-      if (status && member.status !== status) return false;
-
-      return true;
-    });
-
-    this.filteredMembers.set(filtered);
   }
 
   getInitials(name: string): string {
@@ -746,13 +729,6 @@ export class UsersList implements OnInit {
   deleteMember(member: any): void {
     if (confirm(`¿Eliminar a ${member.name}? Esta acción no se puede deshacer.`)) {
       this.members.update((members) => members.filter((m) => m.id !== member.id));
-      this.applyFilters();
     }
   }
-
-  constructor() {
-    this.initializeWatchers();
-  }
-
-  private initializeWatchers(): void {}
 }

@@ -213,6 +213,11 @@ type ViewType = 'calendar' | 'cards';
   styles: [
     `
       .classes-container {
+        width: 100%;
+        min-width: 0;
+        max-width: 1400px;
+        margin: 0 auto;
+        box-sizing: border-box;
         padding: 2rem;
         background: #f5f5f5;
         min-height: 100vh;
@@ -432,6 +437,7 @@ type ViewType = 'calendar' | 'cards';
 
       .content-area {
         min-height: 400px;
+        min-width: 0;
       }
 
       .cards-grid {

@@ -45,7 +45,7 @@ import MarketingCommunicationComponent, {
           </button>
 
           <button type="button" class="btn-secondary" (click)="openCouponModal()">
-            <span class="material-symbols-outlined" aria-hidden="true">discount</span>
+            <span class="material-symbols-outlined" aria-hidden="true">local_offer</span>
             Crear cupón
           </button>
 
@@ -74,7 +74,7 @@ import MarketingCommunicationComponent, {
         ></app-marketing-kpi>
         <app-marketing-kpi
           title="Cupones vigentes"
-          icon="discount"
+          icon="local_offer"
           color="info"
           [value]="kpis().validCoupons"
           subtitle="Activos y sin expirar"
@@ -273,7 +273,7 @@ import MarketingCommunicationComponent, {
 
       .kpis {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
         gap: 1rem;
         margin-bottom: 1.5rem;
       }

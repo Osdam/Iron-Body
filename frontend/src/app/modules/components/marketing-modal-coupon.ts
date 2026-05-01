@@ -34,7 +34,7 @@ export interface Coupon {
       <div class="modal-drawer" (click)="$event.stopPropagation()">
         <div class="modal-header">
           <div class="modal-title-section">
-            <span class="material-symbols-outlined modal-icon">discount</span>
+            <span class="material-symbols-outlined modal-icon">local_offer</span>
             <div>
               <h2 class="modal-title">{{ mode === 'create' ? 'Crear cupón' : 'Editar cupón' }}</h2>
               <p class="modal-subtitle">Define código, descuento, vigencia y aplicabilidad.</p>

@@ -138,6 +138,7 @@ export interface PlanCardData extends PlanSummary {
         position: relative;
         display: flex;
         flex-direction: column;
+        min-width: 0;
         background: #fff;
         border: 1px solid #e5e5e5;
         border-radius: 14px;
@@ -181,13 +182,15 @@ export interface PlanCardData extends PlanSummary {
       }
 
       .card-badges {
-        position: absolute;
-        top: 1.5rem;
-        right: 1.5rem;
+        position: relative;
+        z-index: 1;
         display: flex;
         gap: 0.5rem;
         flex-wrap: wrap;
         justify-content: flex-end;
+        align-self: flex-end;
+        max-width: 100%;
+        margin-bottom: 1rem;
       }
 
       .status-badge,
@@ -275,12 +278,13 @@ export interface PlanCardData extends PlanSummary {
 
       .plan-name {
         font-family: Inter, sans-serif;
-        font-size: 1.5rem;
+        font-size: clamp(1.2rem, 2vw, 1.5rem);
         font-weight: 700;
         color: #0a0a0a;
         margin: 0 0 0.5rem;
         letter-spacing: -0.01em;
         line-height: 1.2;
+        overflow-wrap: anywhere;
       }
 
       .plan-description {
@@ -301,6 +305,8 @@ export interface PlanCardData extends PlanSummary {
         display: flex;
         align-items: baseline;
         gap: 0.5rem;
+        flex-wrap: wrap;
+        min-width: 0;
       }
 
       .currency {
@@ -310,11 +316,12 @@ export interface PlanCardData extends PlanSummary {
       }
 
       .amount {
-        font-size: 3rem;
+        font-size: clamp(1.8rem, 5vw, 3rem);
         color: #0a0a0a;
         line-height: 1;
         letter-spacing: -0.02em;
         font-family: Inter, sans-serif;
+        overflow-wrap: anywhere;
       }
 
       .period {
@@ -325,7 +332,7 @@ export interface PlanCardData extends PlanSummary {
 
       .plan-details {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
         gap: 1rem;
         margin-bottom: 1.75rem;
         padding: 1.25rem;
@@ -337,6 +344,7 @@ export interface PlanCardData extends PlanSummary {
         display: flex;
         gap: 0.75rem;
         align-items: flex-start;
+        min-width: 0;
       }
 
       .detail-icon {
@@ -361,6 +369,7 @@ export interface PlanCardData extends PlanSummary {
         font-size: 0.95rem;
         color: #0a0a0a;
         font-weight: 600;
+        overflow-wrap: anywhere;
       }
 
       .benefits-section {
@@ -393,6 +402,8 @@ export interface PlanCardData extends PlanSummary {
         font-size: 0.9rem;
         color: #555;
         transition: color 200ms ease;
+        min-width: 0;
+        overflow-wrap: anywhere;
       }
 
       .benefits-list li:hover {
@@ -407,7 +418,7 @@ export interface PlanCardData extends PlanSummary {
 
       .card-actions {
         display: grid;
-        grid-template-columns: repeat(5, 1fr);
+        grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
         gap: 0.5rem;
         padding-top: 1.5rem;
         border-top: 1px solid #f0f0f0;
@@ -431,6 +442,13 @@ export interface PlanCardData extends PlanSummary {
         font-family: Inter, sans-serif;
         text-transform: uppercase;
         letter-spacing: 0.05em;
+        min-width: 0;
+      }
+
+      .action-btn span:last-child {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       .action-btn span:first-child {
@@ -492,11 +510,6 @@ export interface PlanCardData extends PlanSummary {
       @media (max-width: 768px) {
         .plan-card {
           padding: 1.5rem 1.25rem;
-        }
-
-        .card-badges {
-          top: 1rem;
-          right: 1rem;
         }
 
         .plan-name {

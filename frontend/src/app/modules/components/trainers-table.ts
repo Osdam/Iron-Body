@@ -7,7 +7,7 @@ import type { Trainer } from './trainer-card';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="table-wrap" *ngIf="trainers?.length; else empty">
+    <div class="table-wrap" *ngIf="trainers.length; else empty">
       <table class="admin-table">
         <thead>
           <tr>
