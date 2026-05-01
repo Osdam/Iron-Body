@@ -1,4 +1,4 @@
-<div class="admin-shell">
+<div class="admin-shell" *ngIf="isAuthenticated()">
   <aside class="side-nav">
     <div class="brand-block">
       <div class="brand-logo" role="img" aria-label="Iron Body"></div>
@@ -44,7 +44,9 @@
     </nav>
 
     <div class="side-footer">
-      <button class="primary-action" type="button">Nuevo miembro</button>
+      <button class="primary-action" type="button" (click)="openNewMemberModal()">
+        Nuevo miembro
+      </button>
       <section class="backend-card" aria-label="Estado del backend">
         <span class="material-symbols-outlined" aria-hidden="true">dns</span>
         <div>
@@ -52,14 +54,26 @@
           <small>{{ backendDetail() || 'Esperando respuesta del servidor' }}</small>
         </div>
       </section>
-      <a href="#" aria-label="Soporte">
+      <a
+        (click)="openSupportPanel()"
+        style="cursor: pointer"
+        role="button"
+        tabindex="0"
+        aria-label="Soporte"
+      >
         <span class="material-symbols-outlined" aria-hidden="true">help</span>
         Soporte
       </a>
-      <a href="#" aria-label="Salir">
+      <button
+        type="button"
+        class="logout-btn"
+        (click)="onLogout()"
+        aria-label="Cerrar sesión"
+        title="Cerrar sesión"
+      >
         <span class="material-symbols-outlined" aria-hidden="true">logout</span>
         Salir
-      </a>
+      </button>
     </div>
   </aside>
 
@@ -71,18 +85,26 @@
       </label>
 
       <div class="top-actions">
-        <button type="button" aria-label="Notificaciones">
+        <button
+          type="button"
+          aria-label="Notificaciones"
+          (click)="toggleNotifications()"
+          [class.has-badge]="notificationsService.unreadCount() > 0"
+        >
           <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
+          <span *ngIf="notificationsService.unreadCount() > 0" class="badge">
+            {{ notificationsService.unreadCount() }}
+          </span>
         </button>
-        <button type="button" aria-label="Mensajes">
+        <button type="button" aria-label="Mensajes" (click)="toggleMessages()">
           <span class="material-symbols-outlined" aria-hidden="true">chat_bubble</span>
         </button>
-        <button type="button" aria-label="Aplicaciones">
+        <button type="button" aria-label="Acceso rápido" (click)="toggleQuickAccess()">
           <span class="material-symbols-outlined" aria-hidden="true">apps</span>
         </button>
-        <a class="profile-link" routerLink="/settings" aria-label="Perfil ejecutivo">
+        <button type="button" aria-label="Menú de usuario" (click)="toggleUserMenu()">
           <span class="material-symbols-outlined" aria-hidden="true">account_circle</span>
-        </a>
+        </button>
       </div>
     </header>
 
@@ -91,3 +113,31 @@
     </main>
   </div>
 </div>
+
+<!-- Global Create Member Modal -->
+<app-create-member-modal
+  [isOpen]="isCreateMemberOpen"
+  (onClose)="closeNewMemberModal()"
+  (onMemberCreated)="onMemberCreated($event)"
+></app-create-member-modal>
+
+<!-- Global Support Panel -->
+<app-support-panel></app-support-panel>
+
+<!-- Topbar Popovers -->
+<app-notifications-popover
+  [isOpen]="isNotificationsOpen()"
+  (close)="isNotificationsOpen.set(false)"
+></app-notifications-popover>
+<app-messages-popover
+  [isOpen]="isMessagesOpen()"
+  (close)="isMessagesOpen.set(false)"
+></app-messages-popover>
+<app-quick-access-menu
+  [isOpen]="isQuickAccessOpen()"
+  (close)="isQuickAccessOpen.set(false)"
+></app-quick-access-menu>
+<app-user-menu [isOpen]="isUserMenuOpen()" (close)="isUserMenuOpen.set(false)"></app-user-menu>
+
+<!-- Login/Forgot Password Router Outlet (shown when not authenticated) -->
+<router-outlet *ngIf="!isAuthenticated()"></router-outlet>

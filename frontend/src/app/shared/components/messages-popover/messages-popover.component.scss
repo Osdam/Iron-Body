@@ -1,0 +1,384 @@
+// Messages Popover SCSS
+
+.messages-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 998;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.messages-popover {
+  position: fixed;
+  right: 16px;
+  top: 72px;
+  width: 400px;
+  max-height: 540px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.1);
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  animation: slideInRight 0.2s ease-in-out;
+  overflow: hidden;
+
+  @media (max-width: 768px) {
+    right: 8px;
+    left: 8px;
+    width: auto;
+    max-height: 60vh;
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.messages-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.messages-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0a0a0a;
+  margin: 0;
+}
+
+.messages-close-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    background: #f3f4f6;
+    color: #0a0a0a;
+  }
+
+  .material-symbols-outlined {
+    font-size: 20px;
+  }
+}
+
+.messages-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 16px;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 12px 8px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.2s ease;
+
+  &:hover {
+    color: #0a0a0a;
+  }
+
+  &.active {
+    color: #facc15;
+
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background-color: #facc15;
+    }
+  }
+}
+
+.messages-content {
+  overflow-y: auto;
+  flex: 1;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 3px;
+
+    &:hover {
+      background: #9ca3af;
+    }
+  }
+}
+
+.tab-content {
+  padding: 12px 0;
+  min-height: 200px;
+}
+
+.messages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.message-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f3f4f6;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background-color: #f9fafb;
+  }
+}
+
+.message-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background-color: #fffbeb;
+  border-radius: 8px;
+  flex-shrink: 0;
+  color: #facc15;
+
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
+}
+
+.message-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.message-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0a0a0a;
+  margin: 0 0 4px 0;
+}
+
+.message-text {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 0 0 6px 0;
+  line-height: 1.4;
+}
+
+.message-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.message-status {
+  display: inline-block;
+  padding: 2px 6px;
+  background-color: #f0fdf4;
+  color: #059669;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 24px;
+  color: #9ca3af;
+  text-align: center;
+
+  .material-symbols-outlined {
+    font-size: 48px;
+    opacity: 0.5;
+  }
+
+  p {
+    margin: 0;
+    font-size: 14px;
+  }
+}
+
+.feedback-alert {
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  margin: 12px 16px 0;
+  border-radius: 8px;
+  font-size: 13px;
+
+  .material-symbols-outlined {
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  strong {
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  p {
+    margin: 0;
+  }
+
+  &.success {
+    background-color: #ecfdf5;
+    border: 1px solid #d1fae5;
+    color: #059669;
+
+    .material-symbols-outlined {
+      color: #059669;
+    }
+  }
+
+  &.error {
+    background-color: #fef2f2;
+    border: 1px solid #fee2e2;
+    color: #dc2626;
+
+    .material-symbols-outlined {
+      color: #dc2626;
+    }
+  }
+}
+
+.feedback-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0a0a0a;
+}
+
+.form-control {
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: inherit;
+  color: #0a0a0a;
+  background-color: #ffffff;
+  transition: all 0.2s ease;
+
+  &:focus {
+    outline: none;
+    border-color: #facc15;
+    box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.1);
+  }
+
+  &::placeholder {
+    color: #9ca3af;
+  }
+}
+
+.submit-btn {
+  padding: 8px 12px;
+  background-color: #facc15;
+  color: #0a0a0a;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 4px;
+
+  &:hover:not(:disabled) {
+    background-color: #eab308;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.tickets-info {
+  padding: 24px 16px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.5;
+
+  p {
+    margin: 0 0 16px 0;
+  }
+}
+
+.full-support-btn {
+  margin: 0 16px 16px;
+  width: calc(100% - 32px);
+  padding: 10px;
+  background-color: #facc15;
+  color: #0a0a0a;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background-color: #eab308;
+  }
+}

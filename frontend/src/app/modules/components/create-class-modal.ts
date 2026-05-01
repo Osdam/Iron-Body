@@ -1,0 +1,859 @@
+import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnInit, signal, Signal } from '@angular/core';
+import {
+  ReactiveFormsModule,
+  FormsModule,
+  FormBuilder,
+  FormGroup,
+  Validators,
+} from '@angular/forms';
+import { ApiService } from '../../services/api.service';
+
+@Component({
+  selector: 'app-create-class-modal',
+  standalone: true,
+  imports: [CommonModule, ReactiveFormsModule, FormsModule],
+  template: `
+    <!-- Modal Backdrop -->
+    <div *ngIf="isOpen()" class="modal-backdrop" (click)="close()" aria-hidden="true"></div>
+
+    <!-- Modal Card -->
+    <div *ngIf="isOpen()" class="modal-container">
+      <div class="modal-card">
+        <!-- Header -->
+        <div class="modal-header">
+          <div class="header-content">
+            <div class="header-icon">
+              <span class="material-symbols-outlined" aria-hidden="true">school</span>
+            </div>
+            <div class="header-text">
+              <h2 class="modal-title">Crear nueva clase</h2>
+              <p class="modal-subtitle">
+                Define horario, entrenador, cupos y configuración de la clase.
+              </p>
+            </div>
+          </div>
+          <button
+            class="btn-close"
+            (click)="close()"
+            aria-label="Cerrar modal"
+            [disabled]="isSaving()"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
+        </div>
+
+        <!-- Error Message -->
+        <div *ngIf="errorMessage()" class="error-message">
+          <span class="material-symbols-outlined" aria-hidden="true">error</span>
+          <div>
+            <strong>Error al crear clase</strong>
+            <p>{{ errorMessage() }}</p>
+          </div>
+        </div>
+
+        <!-- Form Content -->
+        <form [formGroup]="classForm" (ngSubmit)="onSubmit()" class="modal-form">
+          <!-- Section: Basic Information -->
+          <div class="form-section">
+            <h3 class="section-title">Información Básica</h3>
+
+            <div class="form-grid">
+              <!-- Nombre -->
+              <div class="form-group full-width">
+                <label for="name" class="form-label">Nombre de la clase *</label>
+                <input
+                  id="name"
+                  type="text"
+                  formControlName="name"
+                  class="form-input"
+                  placeholder="Ej: Spinning, Cross Training, Yoga"
+                  aria-required="true"
+                />
+                <span
+                  *ngIf="
+                    classForm.get('name')?.hasError('required') && classForm.get('name')?.touched
+                  "
+                  class="error-text"
+                >
+                  El nombre es obligatorio
+                </span>
+              </div>
+
+              <!-- Tipo -->
+              <div class="form-group">
+                <label for="type" class="form-label">Tipo de clase *</label>
+                <select formControlName="type" class="form-select" aria-required="true">
+                  <option value="">Seleccionar...</option>
+                  <option value="Spinning">Spinning</option>
+                  <option value="Funcional">Funcional</option>
+                  <option value="Cross Training">Cross Training</option>
+                  <option value="Yoga">Yoga</option>
+                  <option value="Pilates">Pilates</option>
+                  <option value="Boxeo">Boxeo</option>
+                  <option value="Cardio">Cardio</option>
+                  <option value="Personalizada">Personalizada</option>
+                </select>
+                <span
+                  *ngIf="
+                    classForm.get('type')?.hasError('required') && classForm.get('type')?.touched
+                  "
+                  class="error-text"
+                >
+                  El tipo es obligatorio
+                </span>
+              </div>
+
+              <!-- Entrenador -->
+              <div class="form-group">
+                <label for="trainer_id" class="form-label">Entrenador asignado</label>
+                <select formControlName="trainer_id" class="form-select">
+                  <option value="">Sin asignar</option>
+                  <option value="1">Carlos Ruiz</option>
+                  <option value="2">Laura Gómez</option>
+                  <option value="3">Andrés Martínez</option>
+                  <option value="4">Camila Torres</option>
+                </select>
+              </div>
+
+              <!-- Descripción -->
+              <div class="form-group full-width">
+                <label for="description" class="form-label">Descripción</label>
+                <textarea
+                  id="description"
+                  formControlName="description"
+                  class="form-input textarea"
+                  placeholder="Describe brevemente el enfoque de la clase"
+                  rows="3"
+                ></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section: Schedule -->
+          <div class="form-section">
+            <h3 class="section-title">Programación</h3>
+
+            <div class="form-grid">
+              <!-- Fecha de la clase -->
+              <div class="form-group">
+                <label for="date" class="form-label">Fecha de la clase *</label>
+                <input
+                  id="date"
+                  type="date"
+                  formControlName="date"
+                  class="form-input"
+                  aria-required="true"
+                />
+                <span
+                  *ngIf="
+                    classForm.get('date')?.hasError('required') && classForm.get('date')?.touched
+                  "
+                  class="error-text"
+                >
+                  La fecha es obligatoria
+                </span>
+              </div>
+
+              <!-- Día de la semana -->
+              <div class="form-group">
+                <label for="day_of_week" class="form-label">Día de la semana *</label>
+                <select formControlName="day_of_week" class="form-select" aria-required="true">
+                  <option value="">Seleccionar...</option>
+                  <option value="Lunes">Lunes</option>
+                  <option value="Martes">Martes</option>
+                  <option value="Miércoles">Miércoles</option>
+                  <option value="Jueves">Jueves</option>
+                  <option value="Viernes">Viernes</option>
+                  <option value="Sábado">Sábado</option>
+                  <option value="Domingo">Domingo</option>
+                </select>
+                <span
+                  *ngIf="
+                    classForm.get('day_of_week')?.hasError('required') &&
+                    classForm.get('day_of_week')?.touched
+                  "
+                  class="error-text"
+                >
+                  El día es obligatorio
+                </span>
+              </div>
+
+              <!-- Hora de inicio -->
+              <div class="form-group">
+                <label for="start_time" class="form-label">Hora de inicio *</label>
+                <input
+                  id="start_time"
+                  type="time"
+                  formControlName="start_time"
+                  class="form-input"
+                  aria-required="true"
+                />
+                <span
+                  *ngIf="
+                    classForm.get('start_time')?.hasError('required') &&
+                    classForm.get('start_time')?.touched
+                  "
+                  class="error-text"
+                >
+                  La hora de inicio es obligatoria
+                </span>
+              </div>
+
+              <!-- Hora de fin -->
+              <div class="form-group">
+                <label for="end_time" class="form-label">Hora de fin *</label>
+                <input
+                  id="end_time"
+                  type="time"
+                  formControlName="end_time"
+                  class="form-input"
+                  aria-required="true"
+                />
+                <span
+                  *ngIf="
+                    classForm.get('end_time')?.hasError('required') &&
+                    classForm.get('end_time')?.touched
+                  "
+                  class="error-text"
+                >
+                  La hora de fin es obligatoria
+                </span>
+              </div>
+
+              <!-- Duración -->
+              <div class="form-group">
+                <label for="duration_minutes" class="form-label">Duración (minutos)</label>
+                <input
+                  id="duration_minutes"
+                  type="number"
+                  formControlName="duration_minutes"
+                  class="form-input"
+                  placeholder="Ej: 60"
+                  min="15"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Section: Capacity -->
+          <div class="form-section">
+            <h3 class="section-title">Capacidad y Ubicación</h3>
+
+            <div class="form-grid">
+              <!-- Cupos máximos -->
+              <div class="form-group">
+                <label for="max_capacity" class="form-label">Cupos máximos *</label>
+                <input
+                  id="max_capacity"
+                  type="number"
+                  formControlName="max_capacity"
+                  class="form-input"
+                  placeholder="Ej: 20"
+                  min="1"
+                  aria-required="true"
+                />
+                <span
+                  *ngIf="
+                    classForm.get('max_capacity')?.hasError('required') &&
+                    classForm.get('max_capacity')?.touched
+                  "
+                  class="error-text"
+                >
+                  Los cupos máximos son obligatorios
+                </span>
+                <span
+                  *ngIf="
+                    classForm.get('max_capacity')?.hasError('min') &&
+                    classForm.get('max_capacity')?.touched
+                  "
+                  class="error-text"
+                >
+                  Los cupos deben ser mayor a 0
+                </span>
+              </div>
+
+              <!-- Ubicación -->
+              <div class="form-group">
+                <label for="location" class="form-label">Sala o ubicación</label>
+                <input
+                  id="location"
+                  type="text"
+                  formControlName="location"
+                  class="form-input"
+                  placeholder="Ej: Salón principal, Zona funcional"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Section: Additional -->
+          <div class="form-section">
+            <h3 class="section-title">Configuración</h3>
+
+            <div class="form-grid">
+              <!-- Estado -->
+              <div class="form-group">
+                <label for="status" class="form-label">Estado *</label>
+                <select formControlName="status" class="form-select" aria-required="true">
+                  <option value="">Seleccionar...</option>
+                  <option value="active">Activa</option>
+                  <option value="inactive">Inactiva</option>
+                </select>
+                <span
+                  *ngIf="
+                    classForm.get('status')?.hasError('required') &&
+                    classForm.get('status')?.touched
+                  "
+                  class="error-text"
+                >
+                  El estado es obligatorio
+                </span>
+              </div>
+
+              <!-- Notas internas -->
+              <div class="form-group full-width">
+                <label for="notes" class="form-label">Notas internas</label>
+                <textarea
+                  id="notes"
+                  formControlName="notes"
+                  class="form-input textarea"
+                  placeholder="Ej: traer toalla, hidratación, ropa cómoda"
+                  rows="3"
+                ></textarea>
+              </div>
+
+              <!-- Recurrente -->
+              <div class="form-group-checkbox">
+                <input
+                  id="is_recurring"
+                  type="checkbox"
+                  formControlName="is_recurring"
+                  class="form-checkbox"
+                />
+                <label for="is_recurring" class="checkbox-label">Clase recurrente semanal</label>
+              </div>
+
+              <!-- Permitir inscripción online -->
+              <div class="form-group-checkbox">
+                <input
+                  id="allow_online_booking"
+                  type="checkbox"
+                  formControlName="allow_online_booking"
+                  class="form-checkbox"
+                />
+                <label for="allow_online_booking" class="checkbox-label"
+                  >Permitir inscripción online</label
+                >
+              </div>
+
+              <!-- Requiere plan activo -->
+              <div class="form-group-checkbox">
+                <input
+                  id="requires_active_plan"
+                  type="checkbox"
+                  formControlName="requires_active_plan"
+                  class="form-checkbox"
+                />
+                <label for="requires_active_plan" class="checkbox-label"
+                  >Requiere plan activo</label
+                >
+              </div>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="modal-footer">
+            <button type="button" class="btn-secondary" (click)="close()" [disabled]="isSaving()">
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              class="btn-primary"
+              [disabled]="!classForm.valid || isSaving()"
+              [class.loading]="isSaving()"
+            >
+              <span *ngIf="!isSaving()">Crear clase</span>
+              <span *ngIf="isSaving()">Creando...</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `,
+  styles: [
+    `
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(2px);
+        z-index: 40;
+        animation: fadeIn 200ms ease;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      .modal-container {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 50;
+        padding: 1rem;
+        animation: slideUp 300ms cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      @keyframes slideUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .modal-card {
+        background: #fff;
+        border: 1px solid #e5e5e5;
+        border-radius: 14px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+        width: 100%;
+        max-width: 700px;
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .modal-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1.5rem;
+        padding: 2rem;
+        border-bottom: 1px solid #f0f0f0;
+      }
+
+      .header-content {
+        display: flex;
+        gap: 1rem;
+        flex: 1;
+      }
+
+      .header-icon {
+        display: grid;
+        place-items: center;
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+        background: rgba(250, 204, 21, 0.1);
+        color: #ca8a04;
+        font-size: 1.5rem;
+        flex-shrink: 0;
+      }
+
+      .modal-title {
+        font-family: Inter, sans-serif;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #0a0a0a;
+        margin: 0 0 0.4rem;
+        letter-spacing: -0.01em;
+      }
+
+      .modal-subtitle {
+        font-size: 0.9rem;
+        color: #666;
+        margin: 0;
+        line-height: 1.5;
+      }
+
+      .btn-close {
+        display: grid;
+        place-items: center;
+        width: 36px;
+        height: 36px;
+        border: none;
+        border-radius: 8px;
+        background: #f5f5f5;
+        color: #666;
+        cursor: pointer;
+        transition: all 200ms ease;
+        padding: 0;
+        flex-shrink: 0;
+      }
+
+      .btn-close:hover:not(:disabled) {
+        background: #e8e8e8;
+        color: #0a0a0a;
+      }
+
+      .btn-close:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .error-message {
+        display: flex;
+        gap: 1rem;
+        padding: 1.25rem 2rem;
+        background: #fee2e2;
+        border: 1px solid #fecaca;
+        margin: 1.5rem 2rem 0;
+        border-radius: 10px;
+        color: #991b1b;
+      }
+
+      .error-message span {
+        font-size: 1.5rem;
+        flex-shrink: 0;
+        margin-top: -0.25rem;
+      }
+
+      .error-message strong {
+        display: block;
+        margin-bottom: 0.25rem;
+      }
+
+      .error-message p {
+        margin: 0;
+        font-size: 0.9rem;
+      }
+
+      .modal-form {
+        flex: 1;
+        overflow-y: auto;
+        padding: 2rem;
+      }
+
+      .form-section {
+        margin-bottom: 2.5rem;
+      }
+
+      .section-title {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #0a0a0a;
+        margin: 0 0 1.25rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 2px solid #f0f0f0;
+      }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.5rem;
+      }
+
+      .form-group.full-width {
+        grid-column: 1 / -1;
+      }
+
+      .form-label {
+        display: block;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #0a0a0a;
+        margin-bottom: 0.5rem;
+        font-family: Inter, sans-serif;
+      }
+
+      .form-input,
+      .form-select {
+        width: 100%;
+        padding: 0.875rem;
+        border: 1px solid #e5e5e5;
+        border-radius: 8px;
+        font-family: Inter, sans-serif;
+        font-size: 0.95rem;
+        color: #0a0a0a;
+        background: #fff;
+        transition: all 200ms ease;
+      }
+
+      .form-input::placeholder {
+        color: #999;
+      }
+
+      .form-input:focus,
+      .form-select:focus {
+        outline: none;
+        border-color: #facc15;
+        box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.1);
+      }
+
+      .form-input.textarea {
+        resize: vertical;
+        min-height: 80px;
+      }
+
+      .error-text {
+        display: block;
+        margin-top: 0.4rem;
+        font-size: 0.8rem;
+        color: #dc2626;
+        font-weight: 500;
+      }
+
+      .form-group-checkbox {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 0;
+      }
+
+      .form-checkbox {
+        width: 18px;
+        height: 18px;
+        border: 1.5px solid #e5e5e5;
+        border-radius: 4px;
+        cursor: pointer;
+        accent-color: #facc15;
+        transition: all 200ms ease;
+      }
+
+      .form-checkbox:checked {
+        background: #facc15;
+        border-color: #facc15;
+      }
+
+      .checkbox-label {
+        font-size: 0.95rem;
+        color: #0a0a0a;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .modal-footer {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 1rem;
+        padding: 1.5rem 2rem;
+        border-top: 1px solid #f0f0f0;
+        background: #f9f9f9;
+      }
+
+      .btn-primary,
+      .btn-secondary {
+        padding: 0.875rem 1.75rem;
+        border-radius: 8px;
+        font-family: Inter, sans-serif;
+        font-weight: 600;
+        font-size: 0.95rem;
+        cursor: pointer;
+        transition: all 200ms ease;
+        border: none;
+      }
+
+      .btn-primary {
+        background: #facc15;
+        color: #000;
+        box-shadow: 0 2px 8px rgba(250, 204, 21, 0.2);
+      }
+
+      .btn-primary:hover:not(:disabled) {
+        background: #f0c00e;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(250, 204, 21, 0.3);
+      }
+
+      .btn-primary:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .btn-secondary {
+        background: #fff;
+        color: #0a0a0a;
+        border: 1.5px solid #d0d0d0;
+      }
+
+      .btn-secondary:hover:not(:disabled) {
+        border-color: #a0a0a0;
+        background: #f5f5f5;
+      }
+
+      .btn-secondary:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      @media (max-width: 640px) {
+        .modal-container {
+          padding: 0.5rem;
+        }
+
+        .modal-card {
+          max-height: 95vh;
+        }
+
+        .modal-header {
+          padding: 1.5rem;
+          flex-direction: column;
+        }
+
+        .header-content {
+          width: 100%;
+        }
+
+        .modal-form {
+          padding: 1.5rem;
+        }
+
+        .form-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .modal-footer {
+          flex-direction: column;
+          padding: 1.25rem 1.5rem;
+        }
+
+        .btn-primary,
+        .btn-secondary {
+          width: 100%;
+        }
+      }
+    `,
+  ],
+})
+export class CreateClassModalComponent implements OnInit {
+  @Input() isOpen!: Signal<boolean>;
+  @Output() onClose = new EventEmitter<void>();
+  @Output() onClassCreated = new EventEmitter<any>();
+
+  classForm!: FormGroup;
+  isSaving = signal(false);
+  errorMessage = signal('');
+
+  constructor(
+    private fb: FormBuilder,
+    private api: ApiService,
+  ) {
+    this.initializeForm();
+  }
+
+  ngOnInit(): void {
+    this.initializeForm();
+  }
+
+  private initializeForm(): void {
+    const today = new Date().toISOString().split('T')[0];
+    this.classForm = this.fb.group({
+      name: ['', [Validators.required]],
+      type: ['', [Validators.required]],
+      date: [today, [Validators.required]],
+      day_of_week: ['', [Validators.required]],
+      start_time: ['', [Validators.required]],
+      end_time: ['', [Validators.required]],
+      duration_minutes: ['60'],
+      max_capacity: ['20', [Validators.required, Validators.min(1)]],
+      location: [''],
+      status: ['active', [Validators.required]],
+      trainer_id: [''],
+      description: [''],
+      notes: [''],
+      is_recurring: [true],
+      allow_online_booking: [true],
+      requires_active_plan: [false],
+    });
+  }
+
+  onSubmit(): void {
+    if (!this.classForm.valid) {
+      Object.keys(this.classForm.controls).forEach((key) => {
+        this.classForm.get(key)?.markAsTouched();
+      });
+      return;
+    }
+
+    this.isSaving.set(true);
+    this.errorMessage.set('');
+
+    const formData = this.classForm.value;
+
+    // TODO: Conectar con API real de Laravel
+    // this.api.createClass(formData).subscribe({...})
+
+    // MOCK: Por ahora usamos datos locales
+    setTimeout(() => {
+      try {
+        // Construir objeto con estructura correcta (snake_case)
+        const newClass = {
+          id: Math.floor(Math.random() * 10000),
+          name: formData.name || '',
+          type: formData.type || '',
+          trainer_id: formData.trainer_id ? parseInt(formData.trainer_id, 10) : null,
+          trainerName: formData.trainer_id
+            ? this.getTrainerName(formData.trainer_id)
+            : 'Sin asignar',
+          date: formData.date || '',
+          day_of_week: formData.day_of_week || '',
+          start_time: formData.start_time || '',
+          end_time: formData.end_time || '',
+          duration_minutes: formData.duration_minutes
+            ? parseInt(formData.duration_minutes, 10)
+            : 60,
+          max_capacity: formData.max_capacity ? parseInt(formData.max_capacity, 10) : 20,
+          enrolled_count: 0,
+          location: formData.location || '',
+          status: formData.status || 'active',
+          description: formData.description || '',
+          notes: formData.notes || '',
+          is_recurring: formData.is_recurring === true,
+          allow_online_booking: formData.allow_online_booking === true,
+          requires_active_plan: formData.requires_active_plan === true,
+          created_at: new Date().toISOString(),
+        };
+
+        this.onClassCreated.emit(newClass);
+        this.close();
+      } catch (error) {
+        console.error('Error al crear clase:', error);
+        this.errorMessage.set('Error al procesar los datos. Por favor intenta nuevamente.');
+      } finally {
+        this.isSaving.set(false);
+      }
+    }, 1200);
+  }
+
+  private getTrainerName(trainerId: string): string {
+    const trainers: { [key: string]: string } = {
+      '1': 'Carlos Ruiz',
+      '2': 'Laura Gómez',
+      '3': 'Andrés Martínez',
+      '4': 'Camila Torres',
+    };
+    return trainers[trainerId] || 'Sin asignar';
+  }
+
+  close(): void {
+    if (!this.isSaving()) {
+      const today = new Date().toISOString().split('T')[0];
+      this.classForm.reset({
+        date: today,
+        status: 'active',
+        duration_minutes: '60',
+        max_capacity: '20',
+        is_recurring: true,
+        allow_online_booking: true,
+      });
+      this.errorMessage.set('');
+      this.onClose.emit();
+    }
+  }
+}

@@ -26,4 +26,30 @@ class UserController extends Controller
         $user->load([]);
         return $user;
     }
+
+    public function store(Request $request)
+    {
+        // Validar datos requeridos mínimos
+        $validated = $request->validate([
+            'fullName' => 'required|string|max:255',
+            'document' => 'required|string|max:50',
+            'phone' => 'required|string|max:20',
+            'email' => 'nullable|email|max:255',
+            'status' => 'nullable|string|in:active,inactive,pending,expired',
+        ]);
+
+        // Crear usuario con los datos del request
+        // TODO: Extender tabla users con campos adicionales si es necesario
+        // Campos adicionales disponibles en $request: birthDate, gender, address, plan, etc.
+        $user = User::create([
+            'name' => $validated['fullName'],
+            'email' => $validated['email'] ?? 'user-' . time() . '@ironbody.local',
+            'password' => bcrypt('default-password'), // TODO: Generar contraseña aleatoria
+            'document' => $validated['document'],
+            'phone' => $validated['phone'],
+            'status' => $validated['status'] ?? 'active',
+        ]);
+
+        return response()->json($user->only(['id', 'name', 'email', 'document', 'phone', 'status', 'created_at']), 201);
+    }
 }
