@@ -75,85 +75,82 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
             </div>
           </div>
 
-          <div class="table-wrapper">
-            <table class="members-table">
-              <thead>
-                <tr>
-                  <th class="col-name">Nombre</th>
-                  <th class="col-document">Documento</th>
-                  <th class="col-phone">Teléfono</th>
-                  <th class="col-email">Correo</th>
-                  <th class="col-plan">Plan</th>
-                  <th class="col-status">Estado</th>
-                  <th class="col-expiry">Vencimiento</th>
-                  <th class="col-actions">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let member of filteredMembers()" class="table-row">
-                  <td class="col-name">
-                    <div class="member-name">
-                      <div class="avatar">{{ getInitials(member.name) }}</div>
-                      <span>{{ member.name }}</span>
+          <div class="members-cards">
+            <article
+              *ngFor="let member of filteredMembers()"
+              class="member-flight-card"
+              [ngClass]="'member-' + (member.status || 'active')"
+            >
+              <div class="member-card-top">
+                <span class="badge" [class]="'status-' + (member.status || 'active')">
+                  {{ getStatusLabel(member.status) }}
+                </span>
+                <span class="member-document">{{ member.document || 'Sin documento' }}</span>
+              </div>
+
+              <div class="member-card-grid">
+                <div class="member-profile">
+                  <div class="avatar large">{{ getInitials(member.name) }}</div>
+                  <div>
+                    <strong>{{ member.name }}</strong>
+                    <span>{{ member.email || 'Sin correo' }}</span>
+                    <button type="button" class="link-btn" (click)="viewMember(member)">
+                      Ver detalles
+                    </button>
+                  </div>
+                </div>
+
+                <div class="membership-timeline">
+                  <div class="timeline-point">
+                    <strong>{{ member.created_at | date: 'dd MMM' }}</strong>
+                    <span>Registro</span>
+                  </div>
+                  <div class="timeline-line">
+                    <span>{{ membershipDuration(member) }}</span>
+                    <div class="line">
+                      <i [class.visible]="member.status !== 'active'"></i>
                     </div>
-                  </td>
-                  <td class="col-document">
-                    <code class="document-code">{{ member.document || '—' }}</code>
-                  </td>
-                  <td class="col-phone">{{ member.phone || '—' }}</td>
-                  <td class="col-email">
-                    <span class="email-text"
-                      >{{ member.email | slice: 0 : 25
-                      }}{{ member.email.length > 25 ? '...' : '' }}</span
+                    <strong>{{ membershipStateText(member) }}</strong>
+                  </div>
+                  <div class="timeline-point">
+                    <strong>{{ member.membershipEndDate ? (member.membershipEndDate | date: 'dd MMM') : '—' }}</strong>
+                    <span>Vence</span>
+                  </div>
+                </div>
+
+                <div class="member-side">
+                  <div class="plan-price">
+                    <strong>{{ member.plan || 'Sin plan' }}</strong>
+                    <span>{{ member.phone || 'Sin teléfono' }}</span>
+                  </div>
+                  <p class="member-offer">{{ membershipHint(member) }}</p>
+                  <div class="member-actions">
+                    <button type="button" class="book-btn" (click)="editMember(member)">
+                      Editar
+                      <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="round-btn"
+                      title="Cambiar estado"
+                      (click)="toggleStatus(member)"
                     >
-                  </td>
-                  <td class="col-plan">
-                    <span class="badge badge-plan" [class]="'plan-' + (member.plan || 'none')">
-                      {{ member.plan || 'Sin plan' }}
-                    </span>
-                  </td>
-                  <td class="col-status">
-                    <span class="badge" [class]="'status-' + (member.status || 'active')">
-                      {{ getStatusLabel(member.status) }}
-                    </span>
-                  </td>
-                  <td class="col-expiry">
-                    <span *ngIf="member.membershipEndDate; else noDate" class="date-text">
-                      {{ member.membershipEndDate | date: 'short' }}
-                    </span>
-                    <ng-template #noDate>
-                      <span class="text-muted">—</span>
-                    </ng-template>
-                  </td>
-                  <td class="col-actions">
-                    <div class="action-buttons">
-                      <button class="action-btn" title="Ver perfil" (click)="viewMember(member)">
-                        <span class="material-symbols-outlined">visibility</span>
-                      </button>
-                      <button class="action-btn" title="Editar" (click)="editMember(member)">
-                        <span class="material-symbols-outlined">edit</span>
-                      </button>
-                      <button
-                        class="action-btn"
-                        title="Cambiar estado"
-                        (click)="toggleStatus(member)"
-                      >
-                        <span class="material-symbols-outlined">{{
-                          member.status === 'active' ? 'block' : 'check_circle'
-                        }}</span>
-                      </button>
-                      <button
-                        class="action-btn delete"
-                        title="Eliminar"
-                        (click)="deleteMember(member)"
-                      >
-                        <span class="material-symbols-outlined">delete</span>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                      <span class="material-symbols-outlined">{{
+                        member.status === 'active' ? 'block' : 'check_circle'
+                      }}</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="round-btn danger"
+                      title="Eliminar"
+                      (click)="deleteMember(member)"
+                    >
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </article>
           </div>
         </section>
       </ng-container>
@@ -345,6 +342,268 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
         transform: translateY(-50%);
         color: #999;
         pointer-events: none;
+      }
+
+      .members-cards {
+        display: grid;
+        gap: 1rem;
+      }
+
+      .member-flight-card {
+        width: 100%;
+        border: 1px solid #e5e5e5;
+        border-radius: 14px;
+        background: #ffffff;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.05);
+        padding: 1.2rem;
+        transition:
+          transform 0.18s ease,
+          box-shadow 0.18s ease,
+          border-color 0.18s ease;
+      }
+
+      .member-flight-card:hover {
+        transform: translateY(-2px);
+        border-color: #d0d0d0;
+        box-shadow: 0 16px 34px rgba(0, 0, 0, 0.08);
+      }
+
+      .member-card-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+      }
+
+      .member-document {
+        padding: 0.35rem 0.65rem;
+        border-radius: 999px;
+        background: #f5f5f5;
+        color: #666;
+        font-size: 0.78rem;
+        font-weight: 800;
+      }
+
+      .member-card-grid {
+        display: grid;
+        grid-template-columns: minmax(220px, 1.1fr) minmax(260px, 1.5fr) minmax(210px, 0.9fr);
+        gap: 1.4rem;
+        align-items: center;
+      }
+
+      .member-profile {
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+        min-width: 0;
+      }
+
+      .avatar.large {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        font-size: 0.95rem;
+        font-weight: 900;
+      }
+
+      .member-profile strong,
+      .member-profile span {
+        display: block;
+        overflow-wrap: anywhere;
+      }
+
+      .member-profile strong {
+        font-size: 1rem;
+        font-weight: 900;
+      }
+
+      .member-profile span {
+        color: #666;
+        font-size: 0.86rem;
+        margin-top: 0.2rem;
+      }
+
+      .link-btn {
+        border: 0;
+        background: transparent;
+        color: #ca8a04;
+        padding: 0;
+        margin-top: 0.45rem;
+        font-size: 0.82rem;
+        font-weight: 850;
+        cursor: pointer;
+      }
+
+      .link-btn:hover {
+        text-decoration: underline;
+      }
+
+      .membership-timeline {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 0.75rem;
+        align-items: center;
+      }
+
+      .timeline-point {
+        text-align: center;
+        min-width: 58px;
+      }
+
+      .timeline-point strong {
+        display: block;
+        font-size: 1.05rem;
+        font-weight: 950;
+      }
+
+      .timeline-point span {
+        color: #999;
+        font-size: 0.74rem;
+        font-weight: 800;
+      }
+
+      .timeline-line {
+        display: grid;
+        gap: 0.3rem;
+        text-align: center;
+        min-width: 0;
+      }
+
+      .timeline-line span {
+        color: #666;
+        font-size: 0.78rem;
+        font-weight: 800;
+      }
+
+      .timeline-line strong {
+        color: #ca8a04;
+        font-size: 0.78rem;
+        font-weight: 900;
+      }
+
+      .line {
+        position: relative;
+        height: 1px;
+        background: #e5e5e5;
+      }
+
+      .line::before,
+      .line::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: #fbbf24;
+        transform: translateY(-50%);
+      }
+
+      .line::before {
+        left: 0;
+      }
+
+      .line::after {
+        right: 0;
+      }
+
+      .line i {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: #0a0a0a;
+        transform: translate(-50%, -50%);
+        opacity: 0;
+      }
+
+      .line i.visible {
+        opacity: 1;
+      }
+
+      .member-side {
+        display: grid;
+        gap: 0.55rem;
+        justify-items: end;
+        text-align: right;
+        min-width: 0;
+      }
+
+      .plan-price strong {
+        display: block;
+        font-size: 1.45rem;
+        line-height: 1.1;
+        font-weight: 950;
+        overflow-wrap: anywhere;
+      }
+
+      .plan-price span {
+        display: block;
+        color: #666;
+        font-size: 0.86rem;
+        margin-top: 0.25rem;
+      }
+
+      .member-offer {
+        color: #16a34a;
+        font-size: 0.82rem;
+        font-weight: 750;
+      }
+
+      .member-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.4rem;
+        flex-wrap: wrap;
+      }
+
+      .book-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        min-height: 38px;
+        padding: 0.65rem 0.9rem;
+        border: 0;
+        border-radius: 10px;
+        background: #fbbf24;
+        color: #0a0a0a;
+        font-weight: 900;
+        cursor: pointer;
+      }
+
+      .book-btn:hover {
+        background: #f9a825;
+      }
+
+      .book-btn .material-symbols-outlined {
+        font-size: 1rem;
+      }
+
+      .round-btn {
+        width: 38px;
+        height: 38px;
+        display: grid;
+        place-items: center;
+        border: 1px solid #e5e5e5;
+        border-radius: 10px;
+        background: #ffffff;
+        color: #666;
+        cursor: pointer;
+      }
+
+      .round-btn:hover {
+        border-color: #fbbf24;
+        color: #ca8a04;
+      }
+
+      .round-btn.danger:hover {
+        border-color: #fecaca;
+        background: #fee2e2;
+        color: #991b1b;
       }
 
       /* Table Wrapper */
@@ -561,6 +820,20 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
         .col-actions {
           width: 12%;
         }
+
+        .member-card-grid {
+          grid-template-columns: 1fr;
+          align-items: stretch;
+        }
+
+        .member-side {
+          justify-items: start;
+          text-align: left;
+        }
+
+        .member-actions {
+          justify-content: flex-start;
+        }
       }
 
       @media (max-width: 768px) {
@@ -599,6 +872,23 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
         .filter-group {
           min-width: 100%;
         }
+
+        .membership-timeline {
+          grid-template-columns: 1fr;
+          gap: 0.55rem;
+        }
+
+        .timeline-point {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          min-width: 0;
+          text-align: left;
+        }
+
+        .timeline-line {
+          order: 3;
+        }
       }
 
       @media (max-width: 480px) {
@@ -629,6 +919,29 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
           width: 28px;
           height: 28px;
           font-size: 0.9rem;
+        }
+
+        .member-flight-card {
+          padding: 1rem;
+        }
+
+        .member-profile {
+          align-items: flex-start;
+        }
+
+        .book-btn,
+        .round-btn {
+          width: 100%;
+        }
+
+        .round-btn {
+          height: 38px;
+        }
+
+        .member-actions {
+          display: grid;
+          grid-template-columns: 1fr;
+          width: 100%;
         }
       }
     `,
@@ -708,6 +1021,45 @@ export class UsersList implements OnInit {
       expired: 'Vencido',
     };
     return labels[status] || 'Desconocido';
+  }
+
+  membershipDuration(member: any): string {
+    if (!member.membershipEndDate) return 'Sin vigencia';
+
+    const start = member.created_at ? new Date(member.created_at) : new Date();
+    const end = new Date(member.membershipEndDate);
+    if (Number.isNaN(end.getTime())) return 'Sin vigencia';
+
+    const days = Math.max(0, Math.ceil((end.getTime() - start.getTime()) / 86400000));
+    if (days >= 365) return 'Plan anual';
+    if (days >= 180) return 'Plan semestral';
+    if (days >= 90) return 'Plan trimestral';
+    if (days >= 28) return 'Plan mensual';
+    return `${days} días`;
+  }
+
+  membershipStateText(member: any): string {
+    const status = String(member.status || 'active');
+    if (status === 'expired') return 'Membresía vencida';
+    if (status === 'pending') return 'Pendiente de activar';
+    if (status === 'inactive') return 'Miembro inactivo';
+    if (!member.membershipEndDate) return 'Sin fecha final';
+
+    const end = new Date(member.membershipEndDate);
+    const today = new Date();
+    const daysLeft = Math.ceil((end.getTime() - today.getTime()) / 86400000);
+    if (daysLeft < 0) return 'Membresía vencida';
+    if (daysLeft <= 7) return 'Por vencer';
+    return 'Membresía activa';
+  }
+
+  membershipHint(member: any): string {
+    const state = this.membershipStateText(member);
+    if (state === 'Membresía activa') return 'Acceso habilitado';
+    if (state === 'Por vencer') return 'Recomendar renovación';
+    if (state === 'Pendiente de activar') return 'Validar pago o registro';
+    if (state === 'Miembro inactivo') return 'Campaña de reactivación';
+    return 'Revisar membresía';
   }
 
   viewMember(member: any): void {
