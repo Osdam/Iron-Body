@@ -12,6 +12,7 @@ import {
 } from '@angular/forms';
 
 import type { Trainer, TrainerAvailability } from './trainer-card';
+import { DateWheelPickerComponent } from '../../shared/components/date-wheel-picker/date-wheel-picker.component';
 
 export type TrainerModalMode = 'create' | 'edit' | 'detail';
 
@@ -33,7 +34,7 @@ const emailValidator = (control: AbstractControl): ValidationErrors | null => {
 @Component({
   selector: 'app-trainer-modal',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, DateWheelPickerComponent],
   template: `
     <div *ngIf="isOpen" class="overlay" (click)="onOverlay($event)" role="dialog" aria-modal="true">
       <section class="drawer" [class.drawer-detail]="mode === 'detail'">
@@ -106,12 +107,12 @@ const emailValidator = (control: AbstractControl): ValidationErrors | null => {
 
                 <div class="field">
                   <label class="label">Fecha de nacimiento</label>
-                  <input
-                    class="input"
-                    type="date"
+                  <app-date-wheel-picker
                     formControlName="birthDate"
-                    [disabled]="readonly || isSaving"
-                  />
+                    [maxYear]="currentYear"
+                    size="sm"
+                    ariaLabel="Fecha de nacimiento"
+                  ></app-date-wheel-picker>
                 </div>
               </div>
             </div>
@@ -667,6 +668,8 @@ export default class TrainerModalComponent implements OnChanges {
 
   @Output() close = new EventEmitter<void>();
   @Output() save = new EventEmitter<Partial<Trainer>>();
+
+  currentYear = new Date().getFullYear();
 
   specialties = [
     'Musculación',

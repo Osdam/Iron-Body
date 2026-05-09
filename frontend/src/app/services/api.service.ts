@@ -258,6 +258,7 @@ export class ApiService {
       end_time: string;
       duration_minutes: number;
       max_capacity: number;
+      enrolled_count: number;
       location: string;
       status: string;
       description: string;

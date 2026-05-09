@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input, Output, EventEmitter, OnInit, signal, Signal } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, OnInit, signal, Signal } from '@angular/core';
 import {
   ReactiveFormsModule,
   FormsModule,
@@ -7,12 +7,13 @@ import {
   FormGroup,
   Validators,
 } from '@angular/forms';
-import { ApiService } from '../../services/api.service';
+import { ApiService, ClassSummary } from '../../services/api.service';
+import { DateWheelPickerComponent } from '../../shared/components/date-wheel-picker/date-wheel-picker.component';
 
 @Component({
   selector: 'app-create-class-modal',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, FormsModule],
+  imports: [CommonModule, ReactiveFormsModule, FormsModule, DateWheelPickerComponent],
   template: `
     <!-- Modal Backdrop -->
     <div *ngIf="isOpen()" class="modal-backdrop" (click)="close()" aria-hidden="true"></div>
@@ -27,7 +28,7 @@ import { ApiService } from '../../services/api.service';
               <span class="material-symbols-outlined" aria-hidden="true">school</span>
             </div>
             <div class="header-text">
-              <h2 class="modal-title">Crear nueva clase</h2>
+              <h2 class="modal-title">{{ classToEdit ? 'Editar clase' : 'Crear nueva clase' }}</h2>
               <p class="modal-subtitle">
                 Define horario, entrenador, cupos y configuración de la clase.
               </p>
@@ -47,7 +48,7 @@ import { ApiService } from '../../services/api.service';
         <div *ngIf="errorMessage()" class="error-message">
           <span class="material-symbols-outlined" aria-hidden="true">error</span>
           <div>
-            <strong>Error al crear clase</strong>
+            <strong>{{ classToEdit ? 'Error al editar clase' : 'Error al crear clase' }}</strong>
             <p>{{ errorMessage() }}</p>
           </div>
         </div>
@@ -138,13 +139,14 @@ import { ApiService } from '../../services/api.service';
               <!-- Fecha de la clase -->
               <div class="form-group">
                 <label for="date" class="form-label">Fecha de la clase *</label>
-                <input
-                  id="date"
-                  type="date"
+                <app-date-wheel-picker
                   formControlName="date"
-                  class="form-input"
-                  aria-required="true"
-                />
+                  [minYear]="currentYear - 1"
+                  [maxYear]="currentYear + 3"
+                  size="sm"
+                  ariaLabel="Fecha de la clase"
+                  (dateChange)="syncDayOfWeek($event)"
+                ></app-date-wheel-picker>
                 <span
                   *ngIf="
                     classForm.get('date')?.hasError('required') && classForm.get('date')?.touched
@@ -223,15 +225,18 @@ import { ApiService } from '../../services/api.service';
 
               <!-- Duración -->
               <div class="form-group">
-                <label for="duration_minutes" class="form-label">Duración (minutos)</label>
+                <label for="duration_minutes" class="form-label">Duración automática</label>
                 <input
                   id="duration_minutes"
                   type="number"
                   formControlName="duration_minutes"
-                  class="form-input"
-                  placeholder="Ej: 60"
+                  class="form-input readonly-input"
+                  placeholder="Calculada por horario"
                   min="15"
+                  readonly
+                  tabindex="-1"
                 />
+                <small class="form-hint">Se calcula con la hora de inicio y fin.</small>
               </div>
             </div>
           </div>
@@ -373,8 +378,8 @@ import { ApiService } from '../../services/api.service';
               [disabled]="!classForm.valid || isSaving()"
               [class.loading]="isSaving()"
             >
-              <span *ngIf="!isSaving()">Crear clase</span>
-              <span *ngIf="isSaving()">Creando...</span>
+              <span *ngIf="!isSaving()">{{ classToEdit ? 'Guardar cambios' : 'Crear clase' }}</span>
+              <span *ngIf="isSaving()">{{ classToEdit ? 'Guardando...' : 'Creando...' }}</span>
             </button>
           </div>
         </form>
@@ -588,6 +593,20 @@ import { ApiService } from '../../services/api.service';
         color: #999;
       }
 
+      .readonly-input {
+        background: #f8fafc;
+        color: #52525b;
+        cursor: not-allowed;
+      }
+
+      .form-hint {
+        display: block;
+        margin-top: 0.35rem;
+        color: #71717a;
+        font-size: 0.78rem;
+        font-weight: 600;
+      }
+
       .form-input:focus,
       .form-select:focus {
         outline: none;
@@ -731,8 +750,9 @@ import { ApiService } from '../../services/api.service';
     `,
   ],
 })
-export class CreateClassModalComponent implements OnInit {
+export class CreateClassModalComponent implements OnChanges, OnInit {
   @Input() isOpen!: Signal<boolean>;
+  @Input() classToEdit: ClassSummary | null = null;
   @Output() onClose = new EventEmitter<void>();
   @Output() onClassCreated = new EventEmitter<any>();
 
@@ -740,6 +760,7 @@ export class CreateClassModalComponent implements OnInit {
   isSaving = signal(false);
   errorMessage = signal('');
   trainers = signal<{ id: number; name: string }[]>([]);
+  currentYear = new Date().getFullYear();
 
   constructor(
     private fb: FormBuilder,
@@ -749,8 +770,14 @@ export class CreateClassModalComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.initializeForm();
     this.loadTrainers();
+  }
+
+  ngOnChanges(): void {
+    if (!this.classForm) return;
+    if (this.isOpen?.()) {
+      this.fillForm();
+    }
   }
 
   private loadTrainers(): void {
@@ -790,6 +817,71 @@ export class CreateClassModalComponent implements OnInit {
       allow_online_booking: [true],
       requires_active_plan: [false],
     });
+    this.syncDayOfWeek(today);
+    this.classForm.get('start_time')?.valueChanges.subscribe(() => this.updateDuration());
+    this.classForm.get('end_time')?.valueChanges.subscribe(() => this.updateDuration());
+  }
+
+  private fillForm(): void {
+    const cls = this.classToEdit;
+    const today = new Date().toISOString().split('T')[0];
+
+    this.classForm.reset({
+      name: cls?.name || '',
+      type: cls?.type || '',
+      date: (cls as any)?.date || today,
+      day_of_week: cls?.day_of_week || '',
+      start_time: this.normalizeTime(cls?.start_time || ''),
+      end_time: this.normalizeTime(cls?.end_time || ''),
+      duration_minutes: cls?.duration_minutes || '',
+      max_capacity: cls?.max_capacity || '20',
+      location: cls?.location || '',
+      status: cls?.status || 'active',
+      trainer_id: cls?.trainer_id || '',
+      description: cls?.description || '',
+      notes: (cls as any)?.notes || '',
+      is_recurring: (cls as any)?.is_recurring ?? true,
+      allow_online_booking: (cls as any)?.allow_online_booking ?? true,
+      requires_active_plan: (cls as any)?.requires_active_plan ?? false,
+    });
+
+    if (!cls) this.syncDayOfWeek(today);
+    this.updateDuration();
+  }
+
+  syncDayOfWeek(dateValue: string): void {
+    if (!dateValue || !this.classForm) return;
+
+    const [year, month, day] = dateValue.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    if (Number.isNaN(date.getTime())) return;
+
+    const dayLabels = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    this.classForm.get('day_of_week')?.setValue(dayLabels[date.getDay()]);
+  }
+
+  private updateDuration(): void {
+    const start = this.classForm.get('start_time')?.value;
+    const end = this.classForm.get('end_time')?.value;
+    const minutes = this.calculateDuration(start, end);
+    this.classForm.get('duration_minutes')?.setValue(minutes ? String(minutes) : '', {
+      emitEvent: false,
+    });
+  }
+
+  private calculateDuration(start?: string, end?: string): number | null {
+    if (!start || !end) return null;
+    const [startHour, startMinute] = start.split(':').map(Number);
+    const [endHour, endMinute] = end.split(':').map(Number);
+    if ([startHour, startMinute, endHour, endMinute].some((n) => Number.isNaN(n))) return null;
+    const startTotal = startHour * 60 + startMinute;
+    const endTotal = endHour * 60 + endMinute;
+    const diff = endTotal - startTotal;
+    return diff > 0 ? diff : null;
+  }
+
+  private normalizeTime(value: string): string {
+    return value ? value.slice(0, 5) : '';
   }
 
   onSubmit(): void {
@@ -804,6 +896,12 @@ export class CreateClassModalComponent implements OnInit {
     this.errorMessage.set('');
 
     const formData = this.classForm.value;
+    const duration = this.calculateDuration(formData.start_time, formData.end_time);
+    if (!duration || duration < 15) {
+      this.isSaving.set(false);
+      this.errorMessage.set('La hora de fin debe ser posterior a la hora de inicio y durar mínimo 15 minutos.');
+      return;
+    }
 
     const payload: any = {
       name: formData.name || '',
@@ -815,9 +913,7 @@ export class CreateClassModalComponent implements OnInit {
       status: formData.status || 'active',
     };
 
-    if (formData.duration_minutes) {
-      payload.duration_minutes = parseInt(formData.duration_minutes, 10);
-    }
+    payload.duration_minutes = duration;
     if (formData.trainer_id) payload.trainer_id = parseInt(formData.trainer_id, 10);
     if (formData.location) payload.location = formData.location;
     if (formData.description) payload.description = formData.description;
@@ -828,7 +924,11 @@ export class CreateClassModalComponent implements OnInit {
     if (formData.requires_active_plan !== undefined)
       payload.requires_active_plan = formData.requires_active_plan === true;
 
-    this.api.createClass(payload).subscribe({
+    const request$ = this.classToEdit
+      ? this.api.updateClass(this.classToEdit.id, payload)
+      : this.api.createClass(payload);
+
+    request$.subscribe({
       next: (created: any) => {
         // El backend no almacena `date` (solo day_of_week); el padre lo calcula al normalizar.
         const enriched = {
@@ -847,7 +947,9 @@ export class CreateClassModalComponent implements OnInit {
           err?.error?.message ||
           (err?.status === 422
             ? 'Datos inválidos. Revisa los campos del formulario.'
-            : 'No se pudo crear la clase. Intenta de nuevo.');
+            : this.classToEdit
+              ? 'No se pudo editar la clase. Intenta de nuevo.'
+              : 'No se pudo crear la clase. Intenta de nuevo.');
         this.errorMessage.set(msg);
       },
     });
@@ -866,7 +968,7 @@ export class CreateClassModalComponent implements OnInit {
       this.classForm.reset({
         date: today,
         status: 'active',
-        duration_minutes: '60',
+        duration_minutes: '',
         max_capacity: '20',
         is_recurring: true,
         allow_online_booking: true,

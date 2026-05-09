@@ -17,11 +17,12 @@ import {
 } from '@angular/forms';
 import { ApiService, UserSummary } from '../../services/api.service';
 import { LottieIconComponent } from '../../shared/components/lottie-icon/lottie-icon.component';
+import { DateWheelPickerComponent } from '../../shared/components/date-wheel-picker/date-wheel-picker.component';
 
 @Component({
   selector: 'app-edit-member-modal',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, LottieIconComponent],
+  imports: [CommonModule, ReactiveFormsModule, LottieIconComponent, DateWheelPickerComponent],
   template: `
     <div *ngIf="isOpen" class="modal-backdrop" (click)="close()" aria-hidden="true"></div>
 
@@ -91,12 +92,24 @@ import { LottieIconComponent } from '../../shared/components/lottie-icon/lottie-
 
             <div class="form-group">
               <label>Fecha de inicio</label>
-              <input type="date" formControlName="membershipStartDate" class="form-input" />
+              <app-date-wheel-picker
+                formControlName="membershipStartDate"
+                [minYear]="currentYear - 2"
+                [maxYear]="currentYear + 3"
+                size="sm"
+                ariaLabel="Fecha de inicio de membresia"
+              ></app-date-wheel-picker>
             </div>
 
             <div class="form-group">
               <label>Fecha de vencimiento</label>
-              <input type="date" formControlName="membershipEndDate" class="form-input" />
+              <app-date-wheel-picker
+                formControlName="membershipEndDate"
+                [minYear]="currentYear - 2"
+                [maxYear]="currentYear + 5"
+                size="sm"
+                ariaLabel="Fecha de vencimiento de membresia"
+              ></app-date-wheel-picker>
             </div>
           </div>
 
@@ -330,6 +343,7 @@ export class EditMemberModalComponent implements OnChanges {
 
   saving = signal(false);
   errorMessage = signal('');
+  currentYear = new Date().getFullYear();
 
   form: FormGroup = this.fb.group({
     name: ['', [Validators.required, Validators.maxLength(255)]],

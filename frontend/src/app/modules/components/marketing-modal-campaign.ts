@@ -8,13 +8,14 @@ import {
   Validators,
 } from '@angular/forms';
 import { Campaign } from './campaign-card';
+import { DateWheelPickerComponent } from '../../shared/components/date-wheel-picker/date-wheel-picker.component';
 
 export type CampaignModalMode = 'create' | 'edit' | 'detail';
 
 @Component({
   selector: 'app-marketing-modal-campaign',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, FormsModule],
+  imports: [CommonModule, ReactiveFormsModule, FormsModule, DateWheelPickerComponent],
   template: `
     <div *ngIf="isOpen" class="modal-overlay" (click)="onClose()" role="dialog" aria-modal="true">
       <div class="modal-drawer" (click)="$event.stopPropagation()">
@@ -121,24 +122,26 @@ export type CampaignModalMode = 'create' | 'edit' | 'detail';
               <div class="form-row">
                 <div class="form-field">
                   <label for="startDate">Fecha de inicio</label>
-                  <input
-                    type="date"
-                    id="startDate"
+                  <app-date-wheel-picker
                     formControlName="startDate"
-                    class="form-input"
-                    [readonly]="mode === 'detail'"
-                  />
+                    [minYear]="currentYear - 1"
+                    [maxYear]="currentYear + 3"
+                    size="sm"
+                    ariaLabel="Fecha de inicio de campana"
+                    [disabled]="mode === 'detail'"
+                  ></app-date-wheel-picker>
                 </div>
 
                 <div class="form-field">
                   <label for="endDate">Fecha de finalización</label>
-                  <input
-                    type="date"
-                    id="endDate"
+                  <app-date-wheel-picker
                     formControlName="endDate"
-                    class="form-input"
-                    [readonly]="mode === 'detail'"
-                  />
+                    [minYear]="currentYear - 1"
+                    [maxYear]="currentYear + 3"
+                    size="sm"
+                    ariaLabel="Fecha de finalizacion de campana"
+                    [disabled]="mode === 'detail'"
+                  ></app-date-wheel-picker>
                 </div>
               </div>
             </fieldset>
@@ -495,6 +498,7 @@ export default class MarketingModalCampaignComponent implements OnInit {
   @Output() save = new EventEmitter<Partial<Campaign>>();
 
   campaignForm!: FormGroup;
+  currentYear = new Date().getFullYear();
 
   campaignTypes = [
     'Promoción',

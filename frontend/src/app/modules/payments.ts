@@ -1,5 +1,5 @@
 import { CommonModule, DatePipe } from '@angular/common';
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, ElementRef, HostListener, OnInit, inject, signal, computed } from '@angular/core';
 import {
   FormsModule,
   ReactiveFormsModule,
@@ -9,11 +9,19 @@ import {
 import { ApiService, PaymentSummary, PlanSummary, UserSummary } from '../services/api.service';
 import { firstValueFrom } from 'rxjs';
 import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-icon.component';
+import { DateWheelPickerComponent } from '../shared/components/date-wheel-picker/date-wheel-picker.component';
 
 @Component({
   selector: 'module-payments',
   standalone: true,
-  imports: [CommonModule, DatePipe, FormsModule, ReactiveFormsModule, LottieIconComponent],
+  imports: [
+    CommonModule,
+    DatePipe,
+    FormsModule,
+    ReactiveFormsModule,
+    LottieIconComponent,
+    DateWheelPickerComponent,
+  ],
   template: `
     <section class="payments-page">
       <!-- Toast -->
@@ -254,6 +262,14 @@ import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-ico
                         <span class="material-symbols-outlined">check_circle</span>
                       </button>
                       <button
+                        *ngIf="canCancelPayments() && payment.status !== 'cancelled'"
+                        class="action-btn action-cancel"
+                        (click)="cancelPayment(payment)"
+                        title="Anular pago"
+                      >
+                        <span class="material-symbols-outlined">block</span>
+                      </button>
+                      <button
                         class="action-btn action-view"
                         (click)="viewPayment(payment)"
                         title="Ver detalle"
@@ -382,13 +398,48 @@ import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-ico
           <div class="form-grid">
             <!-- Miembro -->
             <div class="form-group full-width">
-              <label for="pay-user" class="form-label">Miembro *</label>
-              <select id="pay-user" formControlName="user_id" class="form-select">
-                <option value="">Seleccionar miembro...</option>
-                <option *ngFor="let u of users()" [value]="u.id">
-                  {{ u.name }} {{ u.email ? '— ' + u.email : '' }}
-                </option>
-              </select>
+              <label class="form-label">Cliente *</label>
+              <div class="pretty-select" [class.open]="openSelect() === 'user'">
+                <button type="button" class="pretty-trigger" (click)="toggleSelect('user')">
+                  <span>{{ selectedUserLabel() }}</span>
+                  <span class="select-chevron" aria-hidden="true"></span>
+                </button>
+                <div *ngIf="openSelect() === 'user'" class="pretty-menu user-menu">
+                  <div class="user-search-box">
+                    <span class="material-symbols-outlined" aria-hidden="true">search</span>
+                    <input
+                      type="text"
+                      class="user-search-input"
+                      placeholder="Buscar por nombre, cédula o correo..."
+                      [value]="userSearchQuery()"
+                      (input)="onUserSearch($event)"
+                      (click)="$event.stopPropagation()"
+                    />
+                  </div>
+                  <div class="user-result-count">
+                    {{ filteredModalUsers().length }} cliente(s)
+                  </div>
+                  <button
+                    type="button"
+                    *ngFor="let u of filteredModalUsers()"
+                    class="pretty-option"
+                    [class.selected]="isSelectedControl('user_id', u.id)"
+                    (click)="choosePaymentOption('user', u.id)"
+                  >
+                    <span class="option-main">
+                      <span class="option-icon avatar-icon" aria-hidden="true">{{ getInitials(u.name) }}</span>
+                      <span class="option-copy">
+                        <strong>{{ u.name }}</strong>
+                        <small>{{ u.email || u.document || 'Cliente registrado' }}</small>
+                      </span>
+                    </span>
+                    <span class="option-check" aria-hidden="true"></span>
+                  </button>
+                  <div *ngIf="filteredModalUsers().length === 0" class="user-empty">
+                    No hay clientes que coincidan con la búsqueda.
+                  </div>
+                </div>
+              </div>
               <span
                 *ngIf="paymentForm.get('user_id')?.invalid && paymentForm.get('user_id')?.touched"
                 class="error-text"
@@ -402,27 +453,70 @@ import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-ico
 
             <!-- Plan -->
             <div class="form-group full-width">
-              <label for="pay-plan" class="form-label">Plan (opcional)</label>
-              <select id="pay-plan" formControlName="plan_id" class="form-select">
-                <option value="">Sin plan asociado</option>
-                <option *ngFor="let p of plans()" [value]="p.id">
-                  {{ p.name }} — {{ formatCurrency(p.price) }}
-                </option>
-              </select>
+              <label class="form-label">Plan (opcional)</label>
+              <div class="pretty-select" [class.open]="openSelect() === 'plan'">
+                <button type="button" class="pretty-trigger" (click)="toggleSelect('plan')">
+                  <span>{{ selectedPlanLabel() }}</span>
+                  <span class="select-chevron" aria-hidden="true"></span>
+                </button>
+                <div *ngIf="openSelect() === 'plan'" class="pretty-menu plan-menu">
+                  <button
+                    type="button"
+                    class="pretty-option"
+                    [class.selected]="!paymentForm.get('plan_id')?.value"
+                    (click)="choosePaymentOption('plan', '')"
+                  >
+                    <span class="option-main">
+                      <span class="option-icon" aria-hidden="true">
+                        <svg class="option-svg" viewBox="0 0 24 24">
+                          <path [attr.d]="svgIcon('minus-circle')"></path>
+                        </svg>
+                      </span>
+                      <span class="option-copy">
+                        <strong>Sin plan asociado</strong>
+                        <small>Registrar pago libre</small>
+                      </span>
+                    </span>
+                    <span class="option-check" aria-hidden="true"></span>
+                  </button>
+                  <button
+                    type="button"
+                    *ngFor="let p of plans()"
+                    class="pretty-option"
+                    [class.selected]="isSelectedControl('plan_id', p.id)"
+                    (click)="choosePaymentOption('plan', p.id)"
+                  >
+                    <span class="option-main">
+                      <span class="option-icon" aria-hidden="true">
+                        <svg class="option-svg" viewBox="0 0 24 24">
+                          <path [attr.d]="svgIcon('badge')"></path>
+                        </svg>
+                      </span>
+                      <span class="option-copy">
+                        <strong>{{ p.name }}</strong>
+                        <small>{{ formatCurrency(p.price) }} · {{ p.duration_days }} días</small>
+                      </span>
+                    </span>
+                    <span class="option-check" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </div>
             </div>
 
             <!-- Monto -->
             <div class="form-group">
-              <label for="pay-amount" class="form-label">Monto en COP *</label>
+              <label for="pay-amount" class="form-label">Monto *</label>
               <div class="input-prefix">
                 <span class="prefix">$</span>
                 <input
                   id="pay-amount"
                   type="number"
                   formControlName="amount"
-                  class="form-input"
-                  placeholder="Ej: 80000"
+                  class="form-input readonly-input"
+                  placeholder="Selecciona un plan"
                   min="1"
+                  readonly
+                  tabindex="-1"
                 />
               </div>
               <span
@@ -435,16 +529,35 @@ import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-ico
 
             <!-- Método -->
             <div class="form-group">
-              <label for="pay-method" class="form-label">Método de pago *</label>
-              <select id="pay-method" formControlName="method" class="form-select">
-                <option value="">Seleccionar...</option>
-                <option value="cash">Efectivo</option>
-                <option value="transfer">Transferencia</option>
-                <option value="card">Tarjeta</option>
-                <option value="pse">PSE</option>
-                <option value="nequi">Nequi / Daviplata</option>
-                <option value="other">Otro</option>
-              </select>
+              <label class="form-label">Método de pago *</label>
+              <div class="pretty-select" [class.open]="openSelect() === 'method'">
+                <button type="button" class="pretty-trigger" (click)="toggleSelect('method')">
+                  <span>{{ optionLabel(methodOptions, paymentForm.get('method')?.value) }}</span>
+                  <span class="select-chevron" aria-hidden="true"></span>
+                </button>
+                <div *ngIf="openSelect() === 'method'" class="pretty-menu">
+                  <button
+                    type="button"
+                    *ngFor="let option of methodOptions"
+                    class="pretty-option"
+                    [class.selected]="paymentForm.get('method')?.value === option.value"
+                    (click)="choosePaymentOption('method', option.value)"
+                  >
+                    <span class="option-main">
+                      <span class="option-icon" aria-hidden="true">
+                        <svg class="option-svg" viewBox="0 0 24 24">
+                          <path [attr.d]="svgIcon(option.icon)"></path>
+                        </svg>
+                      </span>
+                      <span class="option-copy">
+                        <strong>{{ option.label }}</strong>
+                        <small>{{ option.description }}</small>
+                      </span>
+                    </span>
+                    <span class="option-check" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </div>
               <span
                 *ngIf="paymentForm.get('method')?.invalid && paymentForm.get('method')?.touched"
                 class="error-text"
@@ -467,22 +580,47 @@ import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-ico
 
             <!-- Estado -->
             <div class="form-group">
-              <label for="pay-status" class="form-label">Estado *</label>
-              <select id="pay-status" formControlName="status" class="form-select">
-                <option value="paid">Pagado</option>
-                <option value="pending">Pendiente</option>
-              </select>
+              <label class="form-label">Estado *</label>
+              <div class="pretty-select" [class.open]="openSelect() === 'status'">
+                <button type="button" class="pretty-trigger" (click)="toggleSelect('status')">
+                  <span>{{ optionLabel(statusOptions, paymentForm.get('status')?.value) }}</span>
+                  <span class="select-chevron" aria-hidden="true"></span>
+                </button>
+                <div *ngIf="openSelect() === 'status'" class="pretty-menu">
+                  <button
+                    type="button"
+                    *ngFor="let option of statusOptions"
+                    class="pretty-option"
+                    [class.selected]="paymentForm.get('status')?.value === option.value"
+                    (click)="choosePaymentOption('status', option.value)"
+                  >
+                    <span class="option-main">
+                      <span class="option-icon" aria-hidden="true">
+                        <svg class="option-svg" viewBox="0 0 24 24">
+                          <path [attr.d]="svgIcon(option.icon)"></path>
+                        </svg>
+                      </span>
+                      <span class="option-copy">
+                        <strong>{{ option.label }}</strong>
+                        <small>{{ option.description }}</small>
+                      </span>
+                    </span>
+                    <span class="option-check" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </div>
             </div>
 
             <!-- Fecha de pago -->
             <div class="form-group full-width" *ngIf="paymentForm.get('status')?.value === 'paid'">
               <label for="pay-date" class="form-label">Fecha de pago</label>
-              <input
-                id="pay-date"
-                type="date"
+              <app-date-wheel-picker
                 formControlName="paid_at"
-                class="form-input"
-              />
+                [minYear]="currentYear - 2"
+                [maxYear]="currentYear + 1"
+                size="sm"
+                ariaLabel="Fecha de pago"
+              ></app-date-wheel-picker>
             </div>
           </div>
 
@@ -1069,6 +1207,12 @@ import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-ico
         color: #047857;
       }
 
+      .action-cancel:hover {
+        background: #fef2f2;
+        border-color: #fecaca;
+        color: #b91c1c;
+      }
+
       /* Pagination */
       .pagination {
         display: flex;
@@ -1246,10 +1390,10 @@ import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-ico
       .modal-card {
         background: #fff;
         border: 1px solid #e5e5e5;
-        border-radius: 14px;
+        border-radius: 16px;
         box-shadow: 0 20px 60px rgba(0,0,0,0.15);
         width: 100%;
-        max-width: 580px;
+        max-width: 760px;
         max-height: 90vh;
         display: flex;
         flex-direction: column;
@@ -1363,6 +1507,12 @@ import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-ico
 
       .form-input::placeholder { color: #999; }
 
+      .readonly-input {
+        background: #f8fafc;
+        color: #52525b;
+        cursor: not-allowed;
+      }
+
       .form-input:focus,
       .form-select:focus {
         outline: none;
@@ -1385,6 +1535,255 @@ import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-ico
       }
 
       .input-prefix .form-input { padding-left: 1.75rem; }
+
+      .pretty-select {
+        position: relative;
+      }
+
+      .pretty-trigger {
+        width: 100%;
+        min-height: 46px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.78rem 0.85rem;
+        border: 1px solid #e5e5e5;
+        border-radius: 8px;
+        background: #fff;
+        color: #0a0a0a;
+        font: 700 0.9rem Inter, sans-serif;
+        text-align: left;
+        cursor: pointer;
+        transition:
+          border-color 160ms ease,
+          box-shadow 160ms ease,
+          background 160ms ease;
+      }
+
+      .pretty-trigger > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .select-chevron {
+        width: 0.55rem;
+        height: 0.55rem;
+        border-bottom: 2px solid #a16207;
+        border-right: 2px solid #a16207;
+        transform: rotate(45deg) translateY(-1px);
+        transition: transform 160ms ease;
+      }
+
+      .pretty-select.open .pretty-trigger,
+      .pretty-trigger:hover {
+        border-color: #facc15;
+        background: #fffdf4;
+        box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.12);
+      }
+
+      .pretty-select.open .select-chevron {
+        transform: rotate(225deg) translateY(-1px);
+      }
+
+      .pretty-menu {
+        position: absolute;
+        top: calc(100% + 0.35rem);
+        left: 0;
+        right: 0;
+        z-index: 80;
+        display: grid;
+        gap: 0.2rem;
+        max-height: 260px;
+        overflow-y: auto;
+        padding: 0.35rem;
+        border: 1px solid #e5e5e5;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.98);
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16);
+      }
+
+      .user-menu,
+      .plan-menu {
+        max-height: 310px;
+      }
+
+      .user-menu {
+        padding-top: 0.45rem;
+      }
+
+      .user-search-box {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        align-items: center;
+        gap: 0.55rem;
+        margin: 0 0 0.35rem;
+        padding: 0.58rem 0.7rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        background: #ffffff;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+      }
+
+      .user-search-box .material-symbols-outlined {
+        color: #a16207;
+        font-size: 1.1rem;
+      }
+
+      .user-search-input {
+        width: 100%;
+        min-width: 0;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: #18181b;
+        font: 700 0.86rem Inter, sans-serif;
+      }
+
+      .user-search-input::placeholder {
+        color: #a1a1aa;
+      }
+
+      .user-result-count {
+        padding: 0.15rem 0.3rem 0.35rem;
+        color: #71717a;
+        font: 750 0.74rem Inter, sans-serif;
+      }
+
+      .user-empty {
+        padding: 0.9rem 0.7rem;
+        color: #71717a;
+        font: 700 0.84rem Inter, sans-serif;
+        text-align: center;
+      }
+
+      .pretty-option {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.85rem;
+        min-height: 54px;
+        padding: 0.6rem 0.7rem;
+        border: 0;
+        border-radius: 9px;
+        background: transparent;
+        color: #27272a;
+        text-align: left;
+        cursor: pointer;
+        transition:
+          background 160ms ease,
+          color 160ms ease,
+          transform 160ms ease;
+      }
+
+      .pretty-option:hover {
+        background: #fafafa;
+      }
+
+      .pretty-option.selected {
+        background: #fef3c7;
+        color: #111827;
+      }
+
+      .option-main {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        min-width: 0;
+      }
+
+      .option-icon {
+        width: 2rem;
+        height: 2rem;
+        display: grid;
+        place-items: center;
+        border-radius: 8px;
+        background: #f4f4f5;
+        color: #a16207;
+        flex-shrink: 0;
+      }
+
+      .avatar-icon {
+        background: #111827;
+        color: #facc15;
+        font: 900 0.72rem Inter, sans-serif;
+        letter-spacing: 0.02em;
+      }
+
+      .pretty-option.selected .option-icon {
+        background: #facc15;
+        color: #111827;
+      }
+
+      .option-svg {
+        width: 1.12rem;
+        height: 1.12rem;
+        display: block;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .option-copy {
+        display: grid;
+        gap: 0.12rem;
+        min-width: 0;
+      }
+
+      .option-copy strong,
+      .option-copy small {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .option-copy strong {
+        color: inherit;
+        font: 850 0.9rem Inter, sans-serif;
+      }
+
+      .option-copy small {
+        color: #71717a;
+        font: 650 0.75rem Inter, sans-serif;
+      }
+
+      .pretty-option.selected .option-copy small {
+        color: #854d0e;
+      }
+
+      .option-check {
+        width: 1.15rem;
+        height: 1.15rem;
+        position: relative;
+        display: block;
+        border: 2px solid transparent;
+        border-radius: 999px;
+        flex-shrink: 0;
+      }
+
+      .pretty-option.selected .option-check {
+        border-color: #ca8a04;
+        background: #ca8a04;
+      }
+
+      .pretty-option.selected .option-check::after {
+        content: '';
+        position: absolute;
+        left: 0.31rem;
+        top: 0.16rem;
+        width: 0.3rem;
+        height: 0.58rem;
+        border: solid #fff;
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
+      }
 
       .error-text {
         display: block;
@@ -1457,6 +1856,7 @@ import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-ico
 export default class PaymentsModule implements OnInit {
   private api = inject(ApiService);
   private fb = inject(FormBuilder);
+  private elementRef = inject(ElementRef<HTMLElement>);
 
   // Estado
   payments = signal<PaymentSummary[]>([]);
@@ -1522,6 +1922,73 @@ export default class PaymentsModule implements OnInit {
   loadingModalData = signal(false);
   users = signal<UserSummary[]>([]);
   plans = signal<PlanSummary[]>([]);
+  userSearchQuery = signal('');
+  openSelect = signal<'user' | 'plan' | 'method' | 'status' | null>(null);
+  currentYear = new Date().getFullYear();
+
+  filteredModalUsers = computed(() => {
+    const query = this.normalizeSearch(this.userSearchQuery());
+    if (!query) return this.users();
+
+    return this.users().filter((user) => {
+      const searchable = this.normalizeSearch(
+        `${user.name || ''} ${user.document || ''} ${user.email || ''} ${user.phone || ''}`,
+      );
+      return searchable.includes(query);
+    });
+  });
+
+  methodOptions = [
+    { value: '', label: 'Seleccionar...', icon: 'circle-help', description: 'Método sin definir' },
+    { value: 'cash', label: 'Efectivo', icon: 'banknote', description: 'Pago en caja' },
+    { value: 'transfer', label: 'Transferencia', icon: 'building', description: 'Cuenta bancaria' },
+    { value: 'card', label: 'Tarjeta', icon: 'credit-card', description: 'Débito o crédito' },
+    { value: 'pse', label: 'PSE', icon: 'link', description: 'Pago electrónico' },
+    { value: 'nequi', label: 'Nequi / Daviplata', icon: 'phone', description: 'Billetera digital' },
+    { value: 'other', label: 'Otro', icon: 'receipt', description: 'Método alternativo' },
+  ];
+
+  paymentRules(): {
+    defaultStatus: string;
+    autoGenerateReference: boolean;
+    requireReference: boolean;
+    receiptPrefix: string;
+    nextReceiptNumber: number;
+    allowCancellation: boolean;
+  } {
+    const defaults = {
+      defaultStatus: 'paid',
+      autoGenerateReference: true,
+      requireReference: false,
+      receiptPrefix: 'REC',
+      nextReceiptNumber: 1001,
+      allowCancellation: true,
+    };
+
+    try {
+      const saved = localStorage.getItem('crmSettings');
+      if (!saved) return defaults;
+      const parsed = JSON.parse(saved);
+      return {
+        defaultStatus: parsed?.payments?.defaultStatus || defaults.defaultStatus,
+        autoGenerateReference:
+          parsed?.payments?.autoGenerateReference ?? defaults.autoGenerateReference,
+        requireReference: parsed?.payments?.requireReference ?? defaults.requireReference,
+        receiptPrefix: parsed?.payments?.receiptPrefix || defaults.receiptPrefix,
+        nextReceiptNumber: Number(
+          parsed?.payments?.nextReceiptNumber || defaults.nextReceiptNumber,
+        ),
+        allowCancellation: parsed?.payments?.allowCancellation ?? defaults.allowCancellation,
+      };
+    } catch {
+      return defaults;
+    }
+  }
+
+  statusOptions = [
+    { value: 'paid', label: 'Pagado', icon: 'check-circle', description: 'Pago confirmado' },
+    { value: 'pending', label: 'Pendiente', icon: 'clock', description: 'Por confirmar' },
+  ];
 
   paymentForm = this.fb.nonNullable.group({
     user_id: ['', Validators.required],
@@ -1539,6 +2006,14 @@ export default class PaymentsModule implements OnInit {
   // Notificación
   notification = signal<{ type: 'success' | 'error'; message: string } | null>(null);
   private notifTimer: any;
+
+  @HostListener('document:click', ['$event'])
+  closeSelectOnOutsideClick(event: MouseEvent): void {
+    if (!this.openSelect()) return;
+    if (!this.elementRef.nativeElement.contains(event.target as Node)) {
+      this.openSelect.set(null);
+    }
+  }
 
   ngOnInit(): void {
     this.loadPayments();
@@ -1563,18 +2038,26 @@ export default class PaymentsModule implements OnInit {
     this.isModalOpen.set(true);
     this.loadingModalData.set(true);
     this.modalError.set('');
+    this.openSelect.set(null);
+    this.userSearchQuery.set('');
+    const rules = this.paymentRules();
     this.paymentForm.reset({
-      status: 'paid',
+      user_id: '',
+      plan_id: '',
+      amount: '',
+      method: '',
+      reference: rules.autoGenerateReference ? this.buildPaymentReference(rules) : '',
+      status: rules.defaultStatus,
       paid_at: new Date().toISOString().split('T')[0],
     });
 
     try {
       const [usersRes, plansRes] = await Promise.all([
-        firstValueFrom(this.api.getUsers(1)),
-        firstValueFrom(this.api.getPlans(1)),
+        this.loadAllUsers(),
+        this.loadAllPlans(),
       ]);
-      this.users.set(usersRes.data || []);
-      this.plans.set(plansRes.data || []);
+      this.users.set(usersRes);
+      this.plans.set(plansRes.filter((plan) => plan.active));
     } catch {
       this.modalError.set('No se pudieron cargar los miembros y planes.');
     } finally {
@@ -1586,7 +2069,147 @@ export default class PaymentsModule implements OnInit {
     if (!this.modalLoading()) {
       this.isModalOpen.set(false);
       this.modalError.set('');
+      this.openSelect.set(null);
+      this.userSearchQuery.set('');
     }
+  }
+
+  private async loadAllUsers(): Promise<UserSummary[]> {
+    const first = await firstValueFrom(this.api.getUsers(1));
+    const users = [...(first.data || [])];
+
+    for (let page = 2; page <= first.last_page; page++) {
+      const next = await firstValueFrom(this.api.getUsers(page));
+      users.push(...(next.data || []));
+    }
+
+    return users;
+  }
+
+  private async loadAllPlans(): Promise<PlanSummary[]> {
+    const first = await firstValueFrom(this.api.getPlans(1));
+    const plans = [...(first.data || [])];
+
+    for (let page = 2; page <= first.last_page; page++) {
+      const next = await firstValueFrom(this.api.getPlans(page));
+      plans.push(...(next.data || []));
+    }
+
+    return plans;
+  }
+
+  toggleSelect(select: 'user' | 'plan' | 'method' | 'status'): void {
+    this.openSelect.update((current) => (current === select ? null : select));
+  }
+
+  onUserSearch(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.userSearchQuery.set(input.value || '');
+  }
+
+  choosePaymentOption(
+    control: 'user' | 'plan' | 'method' | 'status',
+    value: string | number,
+  ): void {
+    const normalized = String(value);
+
+    if (control === 'user') {
+      this.paymentForm.patchValue({ user_id: normalized });
+      this.userSearchQuery.set('');
+      this.applyUserPlan(Number(value));
+    } else if (control === 'plan') {
+      this.paymentForm.patchValue({ plan_id: normalized });
+      this.applyPlanAmount(Number(value));
+    } else {
+      this.paymentForm.get(control)?.setValue(normalized);
+      if (control === 'status' && normalized === 'paid' && !this.paymentForm.get('paid_at')?.value) {
+        this.paymentForm.patchValue({ paid_at: new Date().toISOString().split('T')[0] });
+      }
+    }
+
+    this.paymentForm.get(control === 'user' ? 'user_id' : control === 'plan' ? 'plan_id' : control)?.markAsTouched();
+    this.openSelect.set(null);
+  }
+
+  private applyUserPlan(userId: number): void {
+    const user = this.users().find((item) => item.id === userId);
+    const userPlan = (user?.plan || '').toLowerCase().trim();
+    if (!userPlan) return;
+
+    const matchingPlan = this.plans().find((plan) => plan.name.toLowerCase().trim() === userPlan);
+    if (!matchingPlan) return;
+
+    this.paymentForm.patchValue({ plan_id: String(matchingPlan.id) });
+    this.applyPlanAmount(matchingPlan.id);
+  }
+
+  private applyPlanAmount(planId: number): void {
+    const plan = this.plans().find((item) => item.id === planId);
+    if (!plan) return;
+    this.paymentForm.patchValue({ amount: String(plan.price || '') });
+  }
+
+  isSelectedControl(control: 'user_id' | 'plan_id', id: number): boolean {
+    return Number(this.paymentForm.get(control)?.value) === id;
+  }
+
+  selectedUserLabel(): string {
+    const userId = Number(this.paymentForm.get('user_id')?.value);
+    return this.users().find((user) => user.id === userId)?.name || 'Seleccionar cliente...';
+  }
+
+  selectedPlanLabel(): string {
+    const planId = Number(this.paymentForm.get('plan_id')?.value);
+    const plan = this.plans().find((item) => item.id === planId);
+    return plan ? `${plan.name} · ${this.formatCurrency(plan.price)}` : 'Sin plan asociado';
+  }
+
+  optionLabel(options: { value: string; label: string }[], value?: string | null): string {
+    return options.find((option) => option.value === (value || ''))?.label || 'Seleccionar...';
+  }
+
+  private buildPaymentReference(rules = this.paymentRules()): string {
+    const prefix = String(rules.receiptPrefix || 'REC').trim().toUpperCase();
+    return `${prefix}-${rules.nextReceiptNumber}`;
+  }
+
+  private incrementReceiptNumber(): void {
+    const saved = localStorage.getItem('crmSettings');
+    if (!saved) return;
+
+    const parsed = JSON.parse(saved);
+    parsed.payments = {
+      ...(parsed.payments || {}),
+      nextReceiptNumber: Number(parsed?.payments?.nextReceiptNumber || 1001) + 1,
+      currency: 'COP',
+    };
+    localStorage.setItem('crmSettings', JSON.stringify(parsed));
+  }
+
+  private normalizeSearch(value: string): string {
+    return value
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+  }
+
+  svgIcon(icon: string): string {
+    const icons: Record<string, string> = {
+      'circle-help': 'M9.09 9a3 3 0 1 1 5.82 1c0 2-3 2-3 4 M12 17h.01 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0',
+      banknote: 'M3 6h18v12H3z M7 12h.01 M17 12h.01 M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6',
+      building: 'M3 21h18 M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16 M9 8h.01 M15 8h.01 M9 12h.01 M15 12h.01 M9 16h.01 M15 16h.01',
+      'credit-card': 'M3 6h18v12H3z M3 10h18 M7 15h3',
+      link: 'M10 13a5 5 0 0 0 7.07 0l2-2a5 5 0 0 0-7.07-7.07l-1.15 1.15 M14 11a5 5 0 0 0-7.07 0l-2 2a5 5 0 0 0 7.07 7.07l1.15-1.15',
+      phone: 'M22 16.92v3a2 2 0 0 1-2.18 2A19.8 19.8 0 0 1 3 5.18 2 2 0 0 1 5 3h3a2 2 0 0 1 2 1.72c.12.9.32 1.77.57 2.61a2 2 0 0 1-.45 2.11L9 10.56a16 16 0 0 0 4.44 4.44l1.12-1.12a2 2 0 0 1 2.11-.45c.84.25 1.71.45 2.61.57A2 2 0 0 1 22 16.92',
+      receipt: 'M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1z M8 7h8 M8 12h8 M8 17h5',
+      'check-circle': 'M9 12l2 2 4-4 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0',
+      clock: 'M12 6v6l4 2 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0',
+      badge: 'M15 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0 M8.2 11.5 7 21l5-3 5 3-1.2-9.5 M6 11h12',
+      'minus-circle': 'M8 12h8 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0',
+    };
+
+    return icons[icon] || icons['circle-help'];
   }
 
   onSubmitPayment(): void {
@@ -1595,10 +2218,18 @@ export default class PaymentsModule implements OnInit {
       return;
     }
 
+    const val = this.paymentForm.getRawValue();
+    const rules = this.paymentRules();
+
+    if (rules.requireReference && !String(val.reference || '').trim()) {
+      this.modalError.set('La referencia es obligatoria según la configuración de pagos.');
+      this.paymentForm.get('reference')?.markAsTouched();
+      return;
+    }
+
     this.modalLoading.set(true);
     this.modalError.set('');
 
-    const val = this.paymentForm.getRawValue();
     const data = {
       user_id: Number(val.user_id),
       plan_id: val.plan_id ? Number(val.plan_id) : undefined,
@@ -1611,6 +2242,9 @@ export default class PaymentsModule implements OnInit {
 
     this.api.createPayment(data).subscribe({
       next: (payment) => {
+        if (rules.autoGenerateReference && val.reference === this.buildPaymentReference(rules)) {
+          this.incrementReceiptNumber();
+        }
         this.payments.update((list) => [payment, ...list]);
         this.currentPage.set(1);
         this.closeModal();
@@ -1634,6 +2268,24 @@ export default class PaymentsModule implements OnInit {
         this.showNotification('success', `Pago de ${payment.user?.name || '#' + payment.id} marcado como pagado.`);
       },
       error: () => this.showNotification('error', 'No se pudo actualizar el estado del pago.'),
+    });
+  }
+
+  canCancelPayments(): boolean {
+    return this.paymentRules().allowCancellation;
+  }
+
+  cancelPayment(payment: PaymentSummary): void {
+    const ok = window.confirm(`¿Anular el pago #${payment.id}?`);
+    if (!ok) return;
+
+    this.api.updatePayment(payment.id, { status: 'cancelled' }).subscribe({
+      next: (updated) => {
+        this.payments.update((list) => list.map((p) => (p.id === updated.id ? updated : p)));
+        if (this.selectedPayment()?.id === payment.id) this.selectedPayment.set(updated);
+        this.showNotification('success', `Pago #${payment.id} anulado.`);
+      },
+      error: () => this.showNotification('error', 'No se pudo anular el pago.'),
     });
   }
 

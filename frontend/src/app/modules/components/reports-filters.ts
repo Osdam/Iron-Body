@@ -1,6 +1,7 @@
 import { Component, Output, EventEmitter, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { DateWheelPickerComponent } from '../../shared/components/date-wheel-picker/date-wheel-picker.component';
 
 export interface ReportsFilter {
   dateRange: 'today' | 'week' | 'month' | 'thisMonth' | 'lastMonth' | 'custom';
@@ -21,7 +22,7 @@ export interface ReportsFilter {
 @Component({
   selector: 'app-reports-filters',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, DateWheelPickerComponent],
   template: `
     <div class="filters-container">
       <div class="filters-grid">
@@ -45,22 +46,26 @@ export interface ReportsFilter {
         <!-- Custom date range (if needed) -->
         <div *ngIf="currentFilter.dateRange === 'custom'" class="filter-group">
           <label class="filter-label">Desde</label>
-          <input
-            type="date"
+          <app-date-wheel-picker
             [(ngModel)]="currentFilter.startDate"
-            (change)="onFilterChange()"
-            class="filter-input"
-          />
+            (dateChange)="onFilterChange()"
+            [minYear]="currentYear - 5"
+            [maxYear]="currentYear + 1"
+            size="sm"
+            ariaLabel="Fecha inicial del reporte"
+          ></app-date-wheel-picker>
         </div>
 
         <div *ngIf="currentFilter.dateRange === 'custom'" class="filter-group">
           <label class="filter-label">Hasta</label>
-          <input
-            type="date"
+          <app-date-wheel-picker
             [(ngModel)]="currentFilter.endDate"
-            (change)="onFilterChange()"
-            class="filter-input"
-          />
+            (dateChange)="onFilterChange()"
+            [minYear]="currentYear - 5"
+            [maxYear]="currentYear + 1"
+            size="sm"
+            ariaLabel="Fecha final del reporte"
+          ></app-date-wheel-picker>
         </div>
 
         <!-- Report Type -->
@@ -188,6 +193,7 @@ export default class ReportsFiltersComponent {
   @Output() filterChange = new EventEmitter<ReportsFilter>();
 
   currentFilter: ReportsFilter = { ...this.filter };
+  currentYear = new Date().getFullYear();
 
   ngOnInit() {
     this.currentFilter = { ...this.filter };

@@ -64,7 +64,7 @@ export class App {
       },
       error: () => {
         this.backendStatus.set('No se pudo conectar con Laravel');
-        this.backendDetail.set('Revisa que el backend esté ejecutándose en http://127.0.0.1:8080');
+        this.backendDetail.set('Revisa que el backend esté ejecutándose en http://127.0.0.1:800');
       },
     });
   }

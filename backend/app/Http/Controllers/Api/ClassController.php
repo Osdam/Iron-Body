@@ -42,7 +42,7 @@ class ClassController extends Controller
         // Cargar relación con entrenador
         $query->with('trainer:id,full_name');
 
-        return $query->select('id', 'name', 'type', 'trainer_id', 'day_of_week', 'start_time', 'end_time', 'duration_minutes', 'max_capacity', 'enrolled_count', 'location', 'status', 'description', 'created_at')->paginate(20);
+        return $query->select('id', 'name', 'type', 'trainer_id', 'day_of_week', 'start_time', 'end_time', 'duration_minutes', 'max_capacity', 'enrolled_count', 'location', 'status', 'description', 'notes', 'is_recurring', 'allow_online_booking', 'requires_active_plan', 'created_at')->paginate(20);
     }
 
     public function show(MyClass $myClass)
@@ -91,7 +91,7 @@ class ClassController extends Controller
             'type' => 'sometimes|string|max:100',
             'day_of_week' => 'sometimes|string|in:Lunes,Martes,Miércoles,Jueves,Viernes,Sábado,Domingo',
             'start_time' => 'sometimes|date_format:H:i',
-            'end_time' => 'sometimes|date_format:H:i',
+            'end_time' => 'sometimes|date_format:H:i|after:start_time',
             'duration_minutes' => 'nullable|integer|min:15',
             'max_capacity' => 'sometimes|integer|min:1',
             'enrolled_count' => 'nullable|integer|min:0',
@@ -104,6 +104,18 @@ class ClassController extends Controller
             'allow_online_booking' => 'nullable|boolean',
             'requires_active_plan' => 'nullable|boolean',
         ]);
+
+        if (
+            (empty($validated['duration_minutes'])) &&
+            !empty($validated['start_time']) &&
+            !empty($validated['end_time'])
+        ) {
+            $start = \DateTime::createFromFormat('H:i', $validated['start_time']);
+            $end = \DateTime::createFromFormat('H:i', $validated['end_time']);
+            if ($start && $end && $end > $start) {
+                $validated['duration_minutes'] = $end->diff($start)->i + ($end->diff($start)->h * 60);
+            }
+        }
 
         $myClass->update($validated);
 

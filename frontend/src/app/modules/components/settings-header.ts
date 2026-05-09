@@ -10,7 +10,7 @@ import { CommonModule } from '@angular/common';
       <div class="header-left">
         <h1>Configuración</h1>
         <p>
-          Administra los ajustes globales, seguridad, permisos, integraciones y operación del CRM.
+          Administra solo los ajustes globales que afectan la operación real del sistema.
         </p>
       </div>
 

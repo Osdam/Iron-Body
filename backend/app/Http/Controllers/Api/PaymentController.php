@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Payment;
+use App\Models\Plan;
+use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class PaymentController extends Controller
@@ -57,6 +60,10 @@ class PaymentController extends Controller
 
         $payment = Payment::create($data);
 
+        if ($payment->status === 'paid') {
+            $this->applyMembershipExtension($payment);
+        }
+
         return response()->json($payment->load(['user:id,name,email', 'plan:id,name']), 201);
     }
 
@@ -70,12 +77,54 @@ class PaymentController extends Controller
             'amount'    => 'nullable|numeric|min:0',
         ]);
 
+        $wasPaid = $payment->status === 'paid';
+
         if (isset($data['status']) && $data['status'] === 'paid' && empty($data['paid_at'])) {
             $data['paid_at'] = now();
         }
 
         $payment->update($data);
 
+        if (!$wasPaid && $payment->status === 'paid') {
+            $this->applyMembershipExtension($payment);
+        }
+
         return response()->json($payment->load(['user:id,name,email', 'plan:id,name']));
+    }
+
+    private function applyMembershipExtension(Payment $payment): void
+    {
+        if (!$payment->plan_id) {
+            return;
+        }
+
+        /** @var User|null $user */
+        $user = User::find($payment->user_id);
+        /** @var Plan|null $plan */
+        $plan = Plan::find($payment->plan_id);
+
+        if (!$user || !$plan || (int) $plan->duration_days <= 0) {
+            return;
+        }
+
+        $paidDate = $payment->paid_at
+            ? Carbon::parse($payment->paid_at)->startOfDay()
+            : Carbon::today();
+        $currentEnd = $user->membership_end_date
+            ? Carbon::parse($user->membership_end_date)->startOfDay()
+            : null;
+
+        $baseDate = $currentEnd && $currentEnd->greaterThan($paidDate)
+            ? $currentEnd
+            : $paidDate;
+
+        if (!$currentEnd || $currentEnd->lessThan($paidDate) || !$user->membership_start_date) {
+            $user->membership_start_date = $paidDate->toDateString();
+        }
+
+        $user->membership_end_date = $baseDate->copy()->addDays((int) $plan->duration_days)->toDateString();
+        $user->plan = $plan->name;
+        $user->status = 'active';
+        $user->save();
     }
 }

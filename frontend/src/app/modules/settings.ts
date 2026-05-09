@@ -3,17 +3,10 @@ import { CommonModule } from '@angular/common';
 import SettingsHeaderComponent from './components/settings-header';
 import SettingsGeneralComponent from './components/settings-general';
 import SettingsGymComponent from './components/settings-gym';
-import SettingsBrandingComponent from './components/settings-branding';
 import SettingsRolesComponent from './components/settings-roles';
 import SettingsPaymentsComponent from './components/settings-payments';
-import SettingsMembershipsComponent from './components/settings-memberships';
-import SettingsClassesComponent from './components/settings-classes';
-import SettingsRoutinesComponent from './components/settings-routines';
-import SettingsTrainersComponent from './components/settings-trainers';
-import SettingsMarketingComponent from './components/settings-marketing';
 import SettingsNotificationsComponent from './components/settings-notifications';
 import SettingsSecurityComponent from './components/settings-security';
-import SettingsIntegrationsComponent from './components/settings-integrations';
 import SettingsSystemComponent from './components/settings-system';
 
 interface SettingsTab {
@@ -30,17 +23,10 @@ interface SettingsTab {
     SettingsHeaderComponent,
     SettingsGeneralComponent,
     SettingsGymComponent,
-    SettingsBrandingComponent,
     SettingsRolesComponent,
     SettingsPaymentsComponent,
-    SettingsMembershipsComponent,
-    SettingsClassesComponent,
-    SettingsRoutinesComponent,
-    SettingsTrainersComponent,
-    SettingsMarketingComponent,
     SettingsNotificationsComponent,
     SettingsSecurityComponent,
-    SettingsIntegrationsComponent,
     SettingsSystemComponent,
   ],
   template: `
@@ -84,13 +70,6 @@ interface SettingsTab {
             ></app-settings-gym>
           </div>
 
-          <!-- Branding -->
-          <div *ngIf="selectedTab() === 'branding'" class="tab-pane">
-            <app-settings-branding
-              (settingsChange)="updateSettings('branding', $event)"
-            ></app-settings-branding>
-          </div>
-
           <!-- Roles -->
           <div *ngIf="selectedTab() === 'roles'" class="tab-pane">
             <app-settings-roles></app-settings-roles>
@@ -104,46 +83,6 @@ interface SettingsTab {
             ></app-settings-payments>
           </div>
 
-          <!-- Memberships -->
-          <div *ngIf="selectedTab() === 'memberships'" class="tab-pane">
-            <app-settings-memberships
-              [settings]="currentSettings().memberships"
-              (settingsChange)="updateSettings('memberships', $event)"
-            ></app-settings-memberships>
-          </div>
-
-          <!-- Classes -->
-          <div *ngIf="selectedTab() === 'classes'" class="tab-pane">
-            <app-settings-classes
-              [settings]="currentSettings().classes"
-              (settingsChange)="updateSettings('classes', $event)"
-            ></app-settings-classes>
-          </div>
-
-          <!-- Routines -->
-          <div *ngIf="selectedTab() === 'routines'" class="tab-pane">
-            <app-settings-routines
-              [settings]="currentSettings().routines"
-              (settingsChange)="updateSettings('routines', $event)"
-            ></app-settings-routines>
-          </div>
-
-          <!-- Trainers -->
-          <div *ngIf="selectedTab() === 'trainers'" class="tab-pane">
-            <app-settings-trainers
-              [settings]="currentSettings().trainers"
-              (settingsChange)="updateSettings('trainers', $event)"
-            ></app-settings-trainers>
-          </div>
-
-          <!-- Marketing -->
-          <div *ngIf="selectedTab() === 'marketing'" class="tab-pane">
-            <app-settings-marketing
-              [settings]="currentSettings().marketing"
-              (settingsChange)="updateSettings('marketing', $event)"
-            ></app-settings-marketing>
-          </div>
-
           <!-- Notifications -->
           <div *ngIf="selectedTab() === 'notifications'" class="tab-pane">
             <app-settings-notifications></app-settings-notifications>
@@ -152,11 +91,6 @@ interface SettingsTab {
           <!-- Security -->
           <div *ngIf="selectedTab() === 'security'" class="tab-pane">
             <app-settings-security></app-settings-security>
-          </div>
-
-          <!-- Integrations -->
-          <div *ngIf="selectedTab() === 'integrations'" class="tab-pane">
-            <app-settings-integrations></app-settings-integrations>
           </div>
 
           <!-- System -->
@@ -327,17 +261,10 @@ export default class SettingsModule implements OnInit {
   tabs: SettingsTab[] = [
     { id: 'general', label: 'General', icon: 'settings' },
     { id: 'gym', label: 'Gimnasio', icon: 'business' },
-    { id: 'branding', label: 'Identidad', icon: 'palette' },
-    { id: 'roles', label: 'Usuarios', icon: 'security' },
     { id: 'payments', label: 'Pagos', icon: 'payments' },
-    { id: 'memberships', label: 'Membresías', icon: 'card_membership' },
-    { id: 'classes', label: 'Clases', icon: 'fitness_center' },
-    { id: 'routines', label: 'Rutinas', icon: 'list_alt' },
-    { id: 'trainers', label: 'Entrenadores', icon: 'person' },
-    { id: 'marketing', label: 'Mercadeo', icon: 'campaign' },
+    { id: 'roles', label: 'Usuarios', icon: 'security' },
     { id: 'notifications', label: 'Notificaciones', icon: 'notifications' },
     { id: 'security', label: 'Seguridad', icon: 'lock' },
-    { id: 'integrations', label: 'Integraciones', icon: 'integration_instructions' },
     { id: 'system', label: 'Sistema', icon: 'memory' },
   ];
 
@@ -352,17 +279,36 @@ export default class SettingsModule implements OnInit {
   }
 
   private loadSettings(): void {
-    // TODO: Cargar desde API /api/settings si existe backend
-    // Por ahora cargar desde localStorage
+    const defaults = this.getDefaultSettings();
     const saved = localStorage.getItem('crmSettings');
     if (saved) {
-      this.currentSettings.set(JSON.parse(saved));
-      this.originalSettings.set(JSON.parse(saved));
+      const settings = this.mergeSettings(defaults, JSON.parse(saved));
+      this.currentSettings.set(settings);
+      this.originalSettings.set(JSON.parse(JSON.stringify(settings)));
     } else {
-      const defaultSettings = this.getDefaultSettings();
-      this.currentSettings.set(defaultSettings);
-      this.originalSettings.set(defaultSettings);
+      this.currentSettings.set(defaults);
+      this.originalSettings.set(defaults);
     }
+  }
+
+  private mergeSettings(defaults: any, saved: any): any {
+    const settings = {
+      ...defaults,
+      ...saved,
+      general: { ...defaults.general, ...(saved?.general || {}) },
+      gym: { ...defaults.gym, ...(saved?.gym || {}) },
+      payments: { ...defaults.payments, ...(saved?.payments || {}) },
+    };
+
+    settings.payments.defaultStatus = settings.payments.defaultStatus || 'paid';
+    settings.payments.autoGenerateReference =
+      settings.payments.autoGenerateReference ?? settings.payments.receiptPrefix !== undefined;
+    settings.payments.requireReference = settings.payments.requireReference ?? false;
+    settings.payments.receiptPrefix = settings.payments.receiptPrefix || 'REC';
+    settings.payments.nextReceiptNumber =
+      Number(settings.payments.nextReceiptNumber || settings.payments.initialNumber || 1001);
+
+    return settings;
   }
 
   private getDefaultSettings(): any {
@@ -393,80 +339,16 @@ export default class SettingsModule implements OnInit {
         maxCapacity: 150,
         description: 'Centro de entrenamiento premium',
       },
-      branding: {
-        logoUrl: '',
-        sidebarLogoUrl: '',
-        bannerUrl: '',
-        primaryColor: '#fbbf24',
-        secondaryColor: '#1f2937',
-      },
       payments: {
         currency: 'COP',
-        defaultMethod: 'Cash',
-        graceDays: 3,
-        reminderDays: 5,
-        taxPercentage: 19,
-        receiptPrefix: 'FACT',
-        initialNumber: 1001,
-        allowPartialPayments: true,
+        defaultStatus: 'paid',
+        autoGenerateReference: true,
+        requireReference: false,
+        receiptPrefix: 'REC',
+        nextReceiptNumber: 1001,
+        allowPartialPayments: false,
         allowCancellation: true,
         requireReason: true,
-        enabledMethods: ['Efectivo', 'Transferencia', 'Tarjeta'],
-      },
-      memberships: {
-        defaultDuration: 30,
-        expirationReminder: 5,
-        defaultStatus: 'Activa',
-        maxFreezeDays: 30,
-        autoRenewalEnabled: true,
-        noExpirationAllowed: false,
-        notificationsEnabled: true,
-        discountsEnabled: true,
-        freezeAllowed: true,
-      },
-      classes: {
-        defaultCapacity: 30,
-        defaultDuration: 60,
-        cancellationMinHours: 12,
-        onlineBookingEnabled: true,
-        requireActivePlan: true,
-        recurringEnabled: true,
-        notificationEnabled: true,
-        defaultView: 'weekly',
-        defaultStatus: 'Activa',
-        showMonthly: true,
-        showWeekly: true,
-      },
-      routines: {
-        defaultDuration: 60,
-        defaultLevel: 'Intermedio',
-        defaultObjective: 'Hipertrofia',
-        weightUnit: 'kg',
-        allowGeneralTemplates: true,
-        allowMultipleAssignments: true,
-        requireTrainer: false,
-        exerciseLibraryEnabled: true,
-        allowDuplicate: true,
-      },
-      trainers: {
-        defaultSpecialty: 'Musculación',
-        defaultContract: 'Tiempo completo',
-        defaultStatus: 'Activo',
-        weeklyAvailabilityEnabled: true,
-        allowMemberAssignment: true,
-        allowClassAssignment: true,
-        ratingEnabled: true,
-        certificationsRequired: false,
-      },
-      marketing: {
-        defaultChannel: 'WhatsApp',
-        defaultSegment: 'Todos los miembros',
-        defaultCouponDays: 30,
-        defaultCouponUsage: 100,
-        automaticCampaignsEnabled: true,
-        couponsEnabled: true,
-        expirationCampaignEnabled: true,
-        inactiveMembersCampaignEnabled: true,
       },
     };
   }

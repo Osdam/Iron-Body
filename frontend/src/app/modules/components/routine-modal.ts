@@ -397,30 +397,51 @@ const nonNegativeNumber = (control: AbstractControl): ValidationErrors | null =>
       .overlay {
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.5);
+        background: rgba(15, 23, 42, 0.54);
+        backdrop-filter: blur(4px);
         display: flex;
-        justify-content: flex-end;
-        z-index: 60;
+        align-items: center;
+        justify-content: center;
+        z-index: 3000;
+        padding: 1.25rem;
       }
 
       .drawer {
-        width: 560px;
-        max-width: 100vw;
-        height: 100vh;
-        background: #ffffff;
-        border-left: 1px solid rgba(255, 255, 255, 0.12);
+        width: min(100%, 720px);
+        max-height: min(92vh, 940px);
+        background:
+          linear-gradient(rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.96)),
+          url('/assets/crm/clases1.png') center / cover no-repeat;
+        border: 1px solid rgba(229, 229, 229, 0.9);
+        border-radius: 18px;
         display: flex;
         flex-direction: column;
-        box-shadow: -18px 0 50px rgba(0, 0, 0, 0.22);
+        box-shadow: 0 26px 70px rgba(15, 23, 42, 0.28);
+        overflow: hidden;
+        animation: modalIn 220ms ease;
       }
 
       .drawer-wide {
-        width: 860px;
+        width: min(100%, 980px);
+      }
+
+      @keyframes modalIn {
+        from {
+          opacity: 0;
+          transform: translateY(18px) scale(0.98);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
       }
 
       .drawer-header {
-        padding: 1.25rem 1.25rem;
-        border-bottom: 1px solid #f0f0f0;
+        padding: 1.35rem 1.5rem;
+        border-bottom: 1px solid rgba(229, 229, 229, 0.9);
+        background:
+          linear-gradient(135deg, rgba(250, 204, 21, 0.17), rgba(255, 255, 255, 0.9)),
+          #ffffff;
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -435,13 +456,19 @@ const nonNegativeNumber = (control: AbstractControl): ValidationErrors | null =>
       }
 
       .header-icon {
-        width: 46px;
-        height: 46px;
-        border-radius: 14px;
+        width: 50px;
+        height: 50px;
+        border-radius: 12px;
         display: grid;
         place-items: center;
-        border: 1px solid rgba(251, 191, 36, 0.45);
-        background: rgba(251, 191, 36, 0.12);
+        border: 1px solid rgba(17, 24, 39, 0.08);
+        background: #facc15;
+        color: #111827;
+        box-shadow: 0 12px 22px rgba(250, 204, 21, 0.22);
+      }
+
+      .header-icon .material-symbols-outlined {
+        font-size: 1.45rem;
       }
 
       .drawer-header h2 {
@@ -453,13 +480,15 @@ const nonNegativeNumber = (control: AbstractControl): ValidationErrors | null =>
 
       .drawer-header p {
         margin: 0.25rem 0 0;
-        color: #666;
+        color: #52525b;
+        font-weight: 600;
+        line-height: 1.45;
       }
 
       .close {
-        width: 44px;
-        height: 44px;
-        border-radius: 12px;
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
         border: 1px solid #ededed;
         background: #ffffff;
         cursor: pointer;
@@ -478,7 +507,7 @@ const nonNegativeNumber = (control: AbstractControl): ValidationErrors | null =>
       }
 
       .drawer-body {
-        padding: 1.15rem 1.25rem;
+        padding: 1.25rem 1.5rem 0;
         overflow: auto;
         flex: 1;
       }
@@ -492,7 +521,12 @@ const nonNegativeNumber = (control: AbstractControl): ValidationErrors | null =>
       .grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.9rem;
+        gap: 1rem;
+        padding: 1rem;
+        border: 1px solid rgba(229, 229, 229, 0.9);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.86);
+        box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05);
       }
 
       .span-2 {
@@ -507,19 +541,19 @@ const nonNegativeNumber = (control: AbstractControl): ValidationErrors | null =>
       }
 
       .label {
-        font-size: 0.72rem;
+        font-size: 0.78rem;
         font-weight: 900;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: #666;
+        color: #3f3f46;
+        letter-spacing: 0;
       }
 
       .input,
       .select,
       .textarea {
-        border-radius: 12px;
-        border: 1px solid #e5e5e5;
-        background: #fbfbfb;
+        min-height: 44px;
+        border-radius: 9px;
+        border: 1px solid #d4d4d8;
+        background: #ffffff;
         padding: 0.75rem 0.9rem;
         font-weight: 750;
         color: #0a0a0a;
@@ -557,11 +591,11 @@ const nonNegativeNumber = (control: AbstractControl): ValidationErrors | null =>
       }
 
       .builder {
-        border: 1px solid #ededed;
-        border-radius: 16px;
+        border: 1px solid rgba(229, 229, 229, 0.9);
+        border-radius: 14px;
         padding: 1rem;
-        background: #ffffff;
-        box-shadow: 0 10px 22px rgba(0, 0, 0, 0.04);
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05);
       }
 
       .builder-header {
@@ -590,7 +624,7 @@ const nonNegativeNumber = (control: AbstractControl): ValidationErrors | null =>
         gap: 0.45rem;
         height: 40px;
         padding: 0 0.9rem;
-        border-radius: 12px;
+        border-radius: 10px;
         border: 1px solid #e5e5e5;
         background: #ffffff;
         font-weight: 800;
@@ -614,8 +648,8 @@ const nonNegativeNumber = (control: AbstractControl): ValidationErrors | null =>
 
       .exercise-card {
         border: 1px solid #f0f0f0;
-        background: #fbfbfb;
-        border-radius: 16px;
+        background: #ffffff;
+        border-radius: 12px;
         padding: 0.9rem;
       }
 
@@ -675,11 +709,11 @@ const nonNegativeNumber = (control: AbstractControl): ValidationErrors | null =>
       }
 
       .library {
-        border: 1px solid #ededed;
-        border-radius: 16px;
+        border: 1px solid rgba(229, 229, 229, 0.9);
+        border-radius: 14px;
         padding: 1rem;
-        background: #ffffff;
-        box-shadow: 0 10px 22px rgba(0, 0, 0, 0.04);
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05);
       }
 
       .library-header h3 {
@@ -703,8 +737,8 @@ const nonNegativeNumber = (control: AbstractControl): ValidationErrors | null =>
 
       .lib-card {
         border: 1px solid #f0f0f0;
-        border-radius: 16px;
-        background: #fbfbfb;
+        border-radius: 12px;
+        background: #ffffff;
         padding: 0.9rem;
         display: flex;
         flex-direction: column;
@@ -764,9 +798,10 @@ const nonNegativeNumber = (control: AbstractControl): ValidationErrors | null =>
       .drawer-footer {
         position: sticky;
         bottom: 0;
-        background: linear-gradient(to top, rgba(255, 255, 255, 1), rgba(255, 255, 255, 0.86));
+        background: linear-gradient(to top, rgba(255, 255, 255, 1), rgba(255, 255, 255, 0.92));
         border-top: 1px solid #f0f0f0;
-        padding: 1rem 0;
+        padding: 1rem 1.5rem;
+        margin-inline: -1.5rem;
         margin-top: 1rem;
         display: flex;
         align-items: center;
@@ -782,7 +817,7 @@ const nonNegativeNumber = (control: AbstractControl): ValidationErrors | null =>
       .btn-secondary,
       .btn-primary {
         height: 44px;
-        border-radius: 12px;
+        border-radius: 10px;
         padding: 0 1.05rem;
         font-weight: 900;
         cursor: pointer;
@@ -826,10 +861,10 @@ const nonNegativeNumber = (control: AbstractControl): ValidationErrors | null =>
 
       .assign-block {
         border: 1px solid #ededed;
-        border-radius: 16px;
+        border-radius: 14px;
         padding: 1rem;
-        background: #ffffff;
-        box-shadow: 0 10px 22px rgba(0, 0, 0, 0.04);
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05);
       }
 
       .assign-footer {
@@ -837,8 +872,12 @@ const nonNegativeNumber = (control: AbstractControl): ValidationErrors | null =>
       }
 
       @media (max-width: 980px) {
+        .overlay {
+          padding: 0.75rem;
+        }
+
         .drawer-wide {
-          width: 100vw;
+          width: min(100%, 920px);
         }
 
         .exercise-grid {

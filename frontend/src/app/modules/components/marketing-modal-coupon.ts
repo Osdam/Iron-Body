@@ -7,6 +7,7 @@ import {
   ReactiveFormsModule,
   Validators,
 } from '@angular/forms';
+import { DateWheelPickerComponent } from '../../shared/components/date-wheel-picker/date-wheel-picker.component';
 
 export type CouponModalMode = 'create' | 'edit';
 
@@ -28,7 +29,7 @@ export interface Coupon {
 @Component({
   selector: 'app-marketing-modal-coupon',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, FormsModule],
+  imports: [CommonModule, ReactiveFormsModule, FormsModule, DateWheelPickerComponent],
   template: `
     <div *ngIf="isOpen" class="modal-overlay" (click)="onClose()" role="dialog" aria-modal="true">
       <div class="modal-drawer" (click)="$event.stopPropagation()">
@@ -105,17 +106,24 @@ export interface Coupon {
               <div class="form-row">
                 <div class="form-field">
                   <label for="startDate">Fecha de inicio</label>
-                  <input
-                    type="date"
-                    id="startDate"
+                  <app-date-wheel-picker
                     formControlName="startDate"
-                    class="form-input"
-                  />
+                    [minYear]="currentYear - 1"
+                    [maxYear]="currentYear + 3"
+                    size="sm"
+                    ariaLabel="Fecha de inicio del cupon"
+                  ></app-date-wheel-picker>
                 </div>
 
                 <div class="form-field">
                   <label for="endDate">Fecha de fin</label>
-                  <input type="date" id="endDate" formControlName="endDate" class="form-input" />
+                  <app-date-wheel-picker
+                    formControlName="endDate"
+                    [minYear]="currentYear - 1"
+                    [maxYear]="currentYear + 3"
+                    size="sm"
+                    ariaLabel="Fecha de fin del cupon"
+                  ></app-date-wheel-picker>
                 </div>
               </div>
 
@@ -406,6 +414,7 @@ export default class MarketingModalCouponComponent implements OnInit {
   @Output() save = new EventEmitter<Partial<Coupon>>();
 
   couponForm!: FormGroup;
+  currentYear = new Date().getFullYear();
 
   constructor(private fb: FormBuilder) {}
 

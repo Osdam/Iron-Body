@@ -220,9 +220,54 @@ type ViewType = 'calendar' | 'cards';
     <!-- Create Class Modal -->
     <app-create-class-modal
       [isOpen]="isModalOpen"
+      [classToEdit]="classBeingEdited()"
       (onClose)="closeModal()"
       (onClassCreated)="handleClassCreated($event)"
     ></app-create-class-modal>
+
+    <div
+      *ngIf="enrollmentClass()"
+      class="enrollment-backdrop"
+      (click)="closeEnrollments()"
+      aria-hidden="true"
+    ></div>
+    <section *ngIf="enrollmentClass() as cls" class="enrollment-modal" role="dialog" aria-modal="true">
+      <header class="enrollment-header">
+        <div>
+          <h2>Inscritos</h2>
+          <p>{{ cls.name }} · {{ cls.day_of_week }} {{ cls.start_time }} - {{ cls.end_time }}</p>
+        </div>
+        <button type="button" class="enrollment-close" (click)="closeEnrollments()" aria-label="Cerrar">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </header>
+
+      <div class="enrollment-body">
+        <div class="enrollment-stat">
+          <strong>{{ cls.enrolled_count || 0 }}</strong>
+          <span>Inscritos</span>
+        </div>
+        <div class="enrollment-stat">
+          <strong>{{ cls.max_capacity || 0 }}</strong>
+          <span>Cupos totales</span>
+        </div>
+        <div class="enrollment-stat">
+          <strong>{{ remainingSlots(cls) }}</strong>
+          <span>Disponibles</span>
+        </div>
+      </div>
+
+      <div class="enrollment-actions">
+        <button type="button" class="btn-secondary" (click)="adjustEnrollment(cls, -1)" [disabled]="(cls.enrolled_count || 0) <= 0">
+          <span class="material-symbols-outlined" aria-hidden="true">remove</span>
+          Quitar inscrito
+        </button>
+        <button type="button" class="btn-primary" (click)="adjustEnrollment(cls, 1)" [disabled]="remainingSlots(cls) <= 0">
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
+          Agregar inscrito
+        </button>
+      </div>
+    </section>
   `,
   styles: [
     `
@@ -435,6 +480,124 @@ type ViewType = 'calendar' | 'cards';
         cursor: not-allowed;
       }
 
+      .enrollment-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 70;
+        background: rgba(15, 23, 42, 0.52);
+        backdrop-filter: blur(3px);
+      }
+
+      .enrollment-modal {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        z-index: 80;
+        width: min(92vw, 520px);
+        transform: translate(-50%, -50%);
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        background: #ffffff;
+        box-shadow: 0 24px 70px rgba(15, 23, 42, 0.25);
+        overflow: hidden;
+      }
+
+      .enrollment-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1.35rem 1.5rem;
+        border-bottom: 1px solid #f0f0f0;
+        background: linear-gradient(135deg, rgba(250, 204, 21, 0.2), #ffffff);
+      }
+
+      .enrollment-header h2 {
+        margin: 0;
+        color: #111827;
+        font: 900 1.25rem Inter, sans-serif;
+      }
+
+      .enrollment-header p {
+        margin: 0.25rem 0 0;
+        color: #52525b;
+        font: 650 0.9rem Inter, sans-serif;
+      }
+
+      .enrollment-close {
+        width: 38px;
+        height: 38px;
+        display: grid;
+        place-items: center;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        background: #fff;
+        cursor: pointer;
+      }
+
+      .enrollment-body {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.85rem;
+        padding: 1.25rem 1.5rem;
+      }
+
+      .enrollment-stat {
+        display: grid;
+        gap: 0.25rem;
+        padding: 1rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        background: #fafafa;
+        text-align: center;
+      }
+
+      .enrollment-stat strong {
+        font: 900 1.55rem Inter, sans-serif;
+        color: #111827;
+      }
+
+      .enrollment-stat span {
+        color: #71717a;
+        font: 750 0.78rem Inter, sans-serif;
+      }
+
+      .enrollment-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+        padding: 1rem 1.5rem 1.35rem;
+      }
+
+      .enrollment-actions .btn-primary,
+      .enrollment-actions .btn-secondary {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        min-height: 40px;
+        padding: 0 1rem;
+        border-radius: 10px;
+        font-weight: 850;
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+
+      .enrollment-actions .btn-primary {
+        background: #facc15;
+        color: #111827;
+      }
+
+      .enrollment-actions .btn-secondary {
+        background: #ffffff;
+        color: #111827;
+        border-color: #d4d4d8;
+      }
+
+      .enrollment-actions button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
       .view-toggle {
         display: flex;
         gap: 1rem;
@@ -550,6 +713,8 @@ export default class ClassesModule implements OnInit {
   isLoading = signal(false);
   isModalOpen = signal(false);
   allClasses = signal<ClassExtended[]>([]);
+  classBeingEdited = signal<ClassExtended | null>(null);
+  enrollmentClass = signal<ClassExtended | null>(null);
 
   // Filters
   searchTerm = signal('');
@@ -692,7 +857,7 @@ export default class ClassesModule implements OnInit {
       next: (res) => {
         const list = (res?.data || []).map((c: any) => ({
           ...c,
-          trainerName: c.trainer?.name || c.trainerName || '',
+          trainerName: c.trainer?.full_name || c.trainer?.name || c.trainerName || '',
           date: c.date || this.getNextDateForDayOfWeek(c.day_of_week),
           enrolled_count: c.enrolled_count ?? 0,
         }));
@@ -847,11 +1012,13 @@ export default class ClassesModule implements OnInit {
   }
 
   openCreateModal(): void {
+    this.classBeingEdited.set(null);
     this.isModalOpen.set(true);
   }
 
   closeModal(): void {
     this.isModalOpen.set(false);
+    this.classBeingEdited.set(null);
   }
 
   handleClassCreated(_newClass: any): void {
@@ -862,16 +1029,37 @@ export default class ClassesModule implements OnInit {
   }
 
   editClass(cls: ClassExtended): void {
-    // El modal actual es create-only; mostramos info hasta que exista edit modal.
-    alert(
-      `Para editar la clase "${cls.name}" usa el modal de creación con sus mismos datos. Edición avanzada disponible próximamente.`,
-    );
+    this.classBeingEdited.set(cls);
+    this.isModalOpen.set(true);
   }
 
   viewEnrollments(cls: ClassExtended): void {
-    alert(
-      `Inscritos en "${cls.name}": ${cls.enrolled_count}/${cls.max_capacity}. Detalle por miembro disponible próximamente.`,
-    );
+    this.enrollmentClass.set(cls);
+  }
+
+  closeEnrollments(): void {
+    this.enrollmentClass.set(null);
+  }
+
+  remainingSlots(cls: ClassExtended): number {
+    return Math.max(0, (cls.max_capacity || 0) - (cls.enrolled_count || 0));
+  }
+
+  adjustEnrollment(cls: ClassExtended, delta: number): void {
+    const nextCount = Math.max(0, Math.min(cls.max_capacity || 0, (cls.enrolled_count || 0) + delta));
+    this.api.updateClass(cls.id, { enrolled_count: nextCount }).subscribe({
+      next: (updated: any) => {
+        const normalized = {
+          ...cls,
+          ...updated,
+          trainerName: updated.trainer?.full_name || updated.trainer?.name || cls.trainerName,
+          date: cls.date,
+        };
+        this.allClasses.update((list) => list.map((c) => (c.id === cls.id ? normalized : c)));
+        this.enrollmentClass.set(normalized);
+      },
+      error: () => alert('No se pudo actualizar el número de inscritos.'),
+    });
   }
 
   duplicateClass(cls: ClassExtended): void {

@@ -298,10 +298,10 @@ interface CreatePlanFormData {
       .modal-backdrop {
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.5);
-        backdrop-filter: blur(2px);
-        z-index: 40;
-        animation: fadeIn 200ms ease;
+        background: rgba(10, 10, 10, 0.55);
+        backdrop-filter: blur(5px);
+        z-index: 999;
+        animation: fadeIn 180ms ease;
       }
 
       @keyframes fadeIn {
@@ -316,12 +316,12 @@ interface CreatePlanFormData {
       .modal-container {
         position: fixed;
         inset: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 50;
-        padding: 1rem;
-        animation: slideUp 300ms cubic-bezier(0.4, 0, 0.2, 1);
+        display: grid;
+        place-items: center;
+        z-index: 1000;
+        padding: 1.25rem;
+        animation: slideUp 220ms cubic-bezier(0.4, 0, 0.2, 1);
+        overflow-y: auto;
       }
 
       @keyframes slideUp {
@@ -337,12 +337,12 @@ interface CreatePlanFormData {
 
       .modal-card {
         background: #fff;
-        border: 1px solid #e5e5e5;
-        border-radius: 14px;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+        border: 1px solid #e4e4e7;
+        border-radius: 10px;
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.24);
         width: 100%;
-        max-width: 600px;
-        max-height: 90vh;
+        max-width: 860px;
+        max-height: calc(100vh - 2.5rem);
         display: flex;
         flex-direction: column;
         overflow: hidden;
@@ -353,8 +353,8 @@ interface CreatePlanFormData {
         align-items: flex-start;
         justify-content: space-between;
         gap: 1.5rem;
-        padding: 2rem;
-        border-bottom: 1px solid #f0f0f0;
+        padding: 2rem 2rem 1rem;
+        border-bottom: 0;
       }
 
       .header-content {
@@ -366,11 +366,11 @@ interface CreatePlanFormData {
       .header-icon {
         display: grid;
         place-items: center;
-        width: 48px;
-        height: 48px;
-        border-radius: 10px;
-        background: rgba(250, 204, 21, 0.1);
-        color: #ca8a04;
+        width: 44px;
+        height: 44px;
+        border-radius: 8px;
+        background: #18181b;
+        color: #facc15;
         font-size: 1.5rem;
         flex-shrink: 0;
       }
@@ -381,16 +381,16 @@ interface CreatePlanFormData {
 
       .modal-title {
         font-family: Inter, sans-serif;
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #0a0a0a;
-        margin: 0 0 0.4rem;
-        letter-spacing: -0.01em;
+        font-size: 1.35rem;
+        font-weight: 750;
+        color: #18181b;
+        margin: 0 0 0.35rem;
+        letter-spacing: 0;
       }
 
       .modal-subtitle {
         font-size: 0.9rem;
-        color: #666;
+        color: #71717a;
         margin: 0;
         line-height: 1.5;
       }
@@ -402,8 +402,9 @@ interface CreatePlanFormData {
         height: 36px;
         border: none;
         border-radius: 8px;
-        background: #f5f5f5;
-        color: #666;
+        border: 1px solid #e4e4e7;
+        background: #fafafa;
+        color: #52525b;
         cursor: pointer;
         transition: all 200ms ease;
         font-size: 1.2rem;
@@ -412,8 +413,9 @@ interface CreatePlanFormData {
       }
 
       .btn-close:hover {
-        background: #e8e8e8;
-        color: #0a0a0a;
+        background: #f4f4f5;
+        border-color: #d4d4d8;
+        color: #18181b;
       }
 
       .error-message {
@@ -422,8 +424,8 @@ interface CreatePlanFormData {
         padding: 1.25rem 2rem;
         background: #fee2e2;
         border: 1px solid #fecaca;
-        margin: 1.5rem 2rem 0;
-        border-radius: 10px;
+        margin: 1rem 2rem 0;
+        border-radius: 8px;
         color: #991b1b;
       }
 
@@ -446,14 +448,14 @@ interface CreatePlanFormData {
       .modal-form {
         flex: 1;
         overflow-y: auto;
-        padding: 2rem;
+        padding: 1rem 2rem 1.35rem;
       }
 
       .form-grid {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
-        gap: 1.5rem;
-        margin-bottom: 2rem;
+        gap: 0.85rem;
+        margin-bottom: 1rem;
       }
 
       .form-group.full-width {
@@ -462,22 +464,23 @@ interface CreatePlanFormData {
 
       .form-label {
         display: block;
-        font-size: 0.9rem;
-        font-weight: 600;
-        color: #0a0a0a;
-        margin-bottom: 0.5rem;
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #3f3f46;
+        margin-bottom: 0.4rem;
         font-family: Inter, sans-serif;
       }
 
       .form-input,
       .form-select {
         width: 100%;
-        padding: 0.875rem;
-        border: 1px solid #e5e5e5;
+        min-height: 2.65rem;
+        padding: 0.72rem 0.78rem;
+        border: 1px solid #d4d4d8;
         border-radius: 8px;
         font-family: Inter, sans-serif;
-        font-size: 0.95rem;
-        color: #0a0a0a;
+        font-size: 0.92rem;
+        color: #18181b;
         background: #fff;
         transition: all 200ms ease;
       }
@@ -489,8 +492,8 @@ interface CreatePlanFormData {
       .form-input:focus,
       .form-select:focus {
         outline: none;
-        border-color: #facc15;
-        box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.1);
+        border-color: #eab308;
+        box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.16);
       }
 
       .form-input.textarea {
@@ -508,9 +511,10 @@ interface CreatePlanFormData {
 
       .beneficios-section {
         grid-column: 1 / -1;
-        margin-bottom: 2rem;
-        padding: 1.5rem;
-        background: #f9f9f9;
+        margin-bottom: 1rem;
+        padding: 1rem;
+        background: #fafafa;
+        border: 1px solid #e4e4e7;
         border-radius: 10px;
       }
 
@@ -522,9 +526,9 @@ interface CreatePlanFormData {
       }
 
       .beneficios-title {
-        font-size: 0.95rem;
-        font-weight: 600;
-        color: #0a0a0a;
+        font-size: 0.82rem;
+        font-weight: 800;
+        color: #18181b;
         margin: 0;
         font-family: 'Space Grotesk', sans-serif;
         text-transform: uppercase;
@@ -538,7 +542,7 @@ interface CreatePlanFormData {
         padding: 0.6rem 1rem;
         border: 1px solid #facc15;
         border-radius: 8px;
-        background: rgba(250, 204, 21, 0.05);
+        background: #ffffff;
         color: #ca8a04;
         font-size: 0.85rem;
         font-weight: 600;
@@ -563,7 +567,7 @@ interface CreatePlanFormData {
         gap: 0.75rem;
         padding: 0.75rem;
         background: #fff;
-        border: 1px solid #e5e5e5;
+        border: 1px solid #e4e4e7;
         border-radius: 8px;
       }
 
@@ -662,18 +666,19 @@ interface CreatePlanFormData {
         align-items: center;
         justify-content: flex-end;
         gap: 1rem;
-        padding: 1.5rem 2rem;
-        border-top: 1px solid #f0f0f0;
-        background: #f9f9f9;
+        padding: 1rem;
+        border-top: 1px solid #e4e4e7;
+        background: #f4f4f5;
       }
 
       .btn-primary,
       .btn-secondary {
-        padding: 0.875rem 1.75rem;
+        min-height: 2.75rem;
+        padding: 0.75rem 1.75rem;
         border-radius: 8px;
         font-family: Inter, sans-serif;
-        font-weight: 600;
-        font-size: 0.95rem;
+        font-weight: 800;
+        font-size: 0.92rem;
         cursor: pointer;
         transition: all 200ms ease;
         border: none;
@@ -698,8 +703,8 @@ interface CreatePlanFormData {
 
       .btn-secondary {
         background: #fff;
-        color: #0a0a0a;
-        border: 1.5px solid #d0d0d0;
+        color: #18181b;
+        border: 1px solid #d4d4d8;
       }
 
       .btn-secondary:hover:not(:disabled) {
