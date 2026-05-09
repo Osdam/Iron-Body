@@ -1,26 +1,59 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ApiService } from './services/api.service';
+import { ApiService, UserSummary } from './services/api.service';
 import { CreateMemberModalComponent } from './modules/components/create-member-modal';
 import { MembersEmptyComponent } from './modules/components/members-empty';
+import { EditMemberModalComponent } from './modules/components/edit-member-modal';
+import { MemberDetailsModalComponent } from './modules/components/member-details-modal';
+import { LottieIconComponent } from './shared/components/lottie-icon/lottie-icon.component';
 
 @Component({
   selector: 'users-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, CreateMemberModalComponent, MembersEmptyComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    CreateMemberModalComponent,
+    MembersEmptyComponent,
+    EditMemberModalComponent,
+    MemberDetailsModalComponent,
+    LottieIconComponent,
+  ],
   template: `
     <section class="users-page">
+      <!-- Toast -->
+      <div *ngIf="notification()" class="toast" [class]="'toast-' + notification()!.type">
+        <span class="material-symbols-outlined">
+          {{ notification()!.type === 'success' ? 'check_circle' : 'error' }}
+        </span>
+        <span>{{ notification()!.message }}</span>
+      </div>
+
       <!-- Header premium -->
       <header class="users-header">
         <div class="header-content">
           <h1>Miembros</h1>
           <p>Administra y registra los miembros del gimnasio, sus membresías y datos personales.</p>
         </div>
-        <button type="button" class="btn-primary" (click)="openCreateMember()">
-          <span class="material-symbols-outlined" aria-hidden="true">person_add</span>
-          Nuevo miembro
-        </button>
+        <div class="header-actions">
+          <button type="button" class="btn-secondary" (click)="toggleView()">
+            <span class="btn-lottie btn-lottie-light">
+              <app-lottie-icon
+                src="/assets/crm/vistatablavistacard.json"
+                [size]="22"
+                [loop]="true"
+              ></app-lottie-icon>
+            </span>
+            {{ viewMode() === 'cards' ? 'Vista tabla' : 'Vista cards' }}
+          </button>
+          <button type="button" class="btn-primary" (click)="openCreateMember()">
+            <span class="btn-lottie">
+              <app-lottie-icon src="/assets/crm/nuevomiembro.json" [size]="22" [loop]="true"></app-lottie-icon>
+            </span>
+            Nuevo miembro
+          </button>
+        </div>
       </header>
 
       <!-- Loading State -->
@@ -75,9 +108,9 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
             </div>
           </div>
 
-          <div class="members-cards">
+          <div class="members-cards" *ngIf="viewMode() === 'cards'">
             <article
-              *ngFor="let member of filteredMembers()"
+              *ngFor="let member of filteredMembers(); trackBy: trackById"
               class="member-flight-card"
               [ngClass]="'member-' + (member.status || 'active')"
             >
@@ -91,7 +124,7 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
               <div class="member-card-grid">
                 <div class="member-profile">
                   <div class="avatar large">{{ getInitials(member.name) }}</div>
-                  <div>
+                  <div class="member-profile-text">
                     <strong>{{ member.name }}</strong>
                     <span>{{ member.email || 'Sin correo' }}</span>
                     <button type="button" class="link-btn" (click)="viewMember(member)">
@@ -102,8 +135,8 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
 
                 <div class="membership-timeline">
                   <div class="timeline-point">
-                    <strong>{{ member.created_at | date: 'dd MMM' }}</strong>
-                    <span>Registro</span>
+                    <strong>{{ membershipStartLabel(member) }}</strong>
+                    <span>{{ member.membershipStartDate ? 'Inicio' : 'Registro' }}</span>
                   </div>
                   <div class="timeline-line">
                     <span>{{ membershipDuration(member) }}</span>
@@ -132,44 +165,220 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
                     <button
                       type="button"
                       class="round-btn"
-                      title="Cambiar estado"
+                      [title]="member.status === 'active' ? 'Desactivar miembro' : 'Activar miembro'"
+                      [disabled]="busyMemberId() === member.id"
                       (click)="toggleStatus(member)"
                     >
-                      <span class="material-symbols-outlined">{{
-                        member.status === 'active' ? 'block' : 'check_circle'
-                      }}</span>
+                      <app-lottie-icon
+                        [src]="member.status === 'active' ? '/assets/crm/cancelar.json' : '/assets/crm/activar.json'"
+                        [size]="22"
+                        [loop]="true"
+                      ></app-lottie-icon>
                     </button>
                     <button
                       type="button"
                       class="round-btn danger"
-                      title="Eliminar"
-                      (click)="deleteMember(member)"
+                      title="Eliminar miembro"
+                      [disabled]="busyMemberId() === member.id"
+                      (click)="requestDelete(member)"
                     >
-                      <span class="material-symbols-outlined">delete</span>
+                      <app-lottie-icon
+                        src="/assets/crm/delete.json"
+                        [size]="22"
+                        [loop]="true"
+                      ></app-lottie-icon>
                     </button>
                   </div>
                 </div>
               </div>
             </article>
           </div>
+
+          <!-- Vista tabla -->
+          <div class="members-table-wrapper" *ngIf="viewMode() === 'table'">
+            <table class="members-table">
+              <thead>
+                <tr>
+                  <th>Miembro</th>
+                  <th>Documento</th>
+                  <th>Teléfono</th>
+                  <th>Plan</th>
+                  <th>Vence</th>
+                  <th>Estado</th>
+                  <th class="col-actions">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let member of filteredMembers(); trackBy: trackById">
+                  <td>
+                    <div class="cell-member">
+                      <div class="avatar small">{{ getInitials(member.name) }}</div>
+                      <div>
+                        <strong>{{ member.name }}</strong>
+                        <span>{{ member.email || 'Sin correo' }}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td>{{ member.document || '—' }}</td>
+                  <td>{{ member.phone || '—' }}</td>
+                  <td>{{ member.plan || 'Sin plan' }}</td>
+                  <td>
+                    {{ member.membershipEndDate ? (member.membershipEndDate | date: 'dd MMM yyyy') : '—' }}
+                  </td>
+                  <td>
+                    <span class="badge" [class]="'status-' + (member.status || 'active')">
+                      {{ getStatusLabel(member.status) }}
+                    </span>
+                  </td>
+                  <td class="col-actions">
+                    <div class="row-actions">
+                      <button
+                        type="button"
+                        class="row-btn"
+                        title="Ver detalles"
+                        (click)="viewMember(member)"
+                      >
+                        <span class="material-symbols-outlined">visibility</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="row-btn"
+                        title="Editar"
+                        (click)="editMember(member)"
+                      >
+                        <span class="material-symbols-outlined">edit</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="row-btn"
+                        [title]="member.status === 'active' ? 'Desactivar' : 'Activar'"
+                        [disabled]="busyMemberId() === member.id"
+                        (click)="toggleStatus(member)"
+                      >
+                        <app-lottie-icon
+                          [src]="member.status === 'active' ? '/assets/crm/cancelar.json' : '/assets/crm/activar.json'"
+                          [size]="20"
+                          [loop]="true"
+                        ></app-lottie-icon>
+                      </button>
+                      <button
+                        type="button"
+                        class="row-btn danger"
+                        title="Eliminar"
+                        [disabled]="busyMemberId() === member.id"
+                        (click)="requestDelete(member)"
+                      >
+                        <app-lottie-icon
+                          src="/assets/crm/delete.json"
+                          [size]="20"
+                          [loop]="true"
+                        ></app-lottie-icon>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </section>
       </ng-container>
     </section>
 
-    <!-- Modal -->
+    <!-- Modal: crear -->
     <app-create-member-modal
       [isOpen]="isCreateMemberOpen"
       (onClose)="onCreateMemberModalClose()"
       (onMemberCreated)="onMemberCreated($event)"
     ></app-create-member-modal>
+
+    <!-- Modal: detalles -->
+    <app-member-details-modal
+      [isOpen]="isDetailsOpen()"
+      [member]="selectedMember()"
+      (onClose)="closeDetails()"
+      (onEdit)="editFromDetails($event)"
+    ></app-member-details-modal>
+
+    <!-- Modal: editar -->
+    <app-edit-member-modal
+      [isOpen]="isEditOpen()"
+      [member]="memberToEdit()"
+      (onClose)="closeEdit()"
+      (onUpdated)="onMemberUpdated($event)"
+    ></app-edit-member-modal>
+
+    <!-- Confirm: eliminar -->
+    <div *ngIf="memberToDelete()" class="confirm-backdrop" (click)="cancelDelete()" aria-hidden="true"></div>
+    <div *ngIf="memberToDelete() as m" class="confirm-container">
+      <div class="confirm-card">
+        <div class="confirm-icon">
+          <app-lottie-icon src="/assets/crm/delete.json" [size]="44" [loop]="true"></app-lottie-icon>
+        </div>
+        <h3>Eliminar miembro</h3>
+        <p>
+          ¿Seguro que deseas eliminar a <strong>{{ m.name }}</strong>? Esta acción no se puede deshacer.
+        </p>
+        <div class="confirm-actions">
+          <button type="button" class="btn-secondary" (click)="cancelDelete()" [disabled]="deleting()">
+            Cancelar
+          </button>
+          <button type="button" class="btn-danger" (click)="confirmDelete()" [disabled]="deleting()">
+            <span *ngIf="!deleting()">Eliminar</span>
+            <span *ngIf="deleting()">Eliminando…</span>
+          </button>
+        </div>
+      </div>
+    </div>
   `,
   styles: [
     `
       .users-page {
         max-width: 1400px;
         margin: 0 auto;
-        padding: 0;
+        padding: 1.25rem 1.25rem 2rem;
         color: #0a0a0a;
+        background:
+          linear-gradient(rgba(250, 250, 250, 0.74), rgba(250, 250, 250, 0.74)),
+          url('/assets/crm/fondomiembro.png') center / cover no-repeat;
+        border-radius: 16px;
+        position: relative;
+      }
+
+      /* Toast */
+      .toast {
+        position: fixed;
+        top: 1.25rem;
+        right: 1.25rem;
+        z-index: 1100;
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        padding: 0.85rem 1.2rem;
+        border-radius: 12px;
+        font: 600 0.9rem Inter, sans-serif;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+        animation: toastIn 220ms ease;
+      }
+
+      .toast-success {
+        background: #16a34a;
+        color: #fff;
+      }
+
+      .toast-error {
+        background: #dc2626;
+        color: #fff;
+      }
+
+      @keyframes toastIn {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
       }
 
       /* Header */
@@ -181,7 +390,7 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
         margin-bottom: 2.5rem;
         flex-wrap: wrap;
         padding-bottom: 1.75rem;
-        border-bottom: 2px solid #f0f0f0;
+        border-bottom: 2px solid rgba(0, 0, 0, 0.07);
       }
 
       .header-content h1 {
@@ -196,7 +405,7 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
       .header-content p {
         font-size: 1.05rem;
         line-height: 1.6;
-        color: #666;
+        color: #555;
         margin: 0;
         max-width: 600px;
       }
@@ -204,8 +413,8 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
       .btn-primary {
         display: inline-flex;
         align-items: center;
-        gap: 0.75rem;
-        padding: 0.95rem 2rem;
+        gap: 0.6rem;
+        padding: 0.85rem 1.6rem;
         background: #facc15;
         color: #000;
         border: none;
@@ -215,17 +424,188 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
         font-size: 0.95rem;
         cursor: pointer;
         transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: 0 4px 12px rgba(250, 204, 21, 0.2);
+        box-shadow: 0 4px 12px rgba(250, 204, 21, 0.25);
       }
 
       .btn-primary:hover {
         background: #f0c00e;
         transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(250, 204, 21, 0.3);
+        box-shadow: 0 6px 20px rgba(250, 204, 21, 0.35);
       }
 
       .btn-primary:active {
         transform: translateY(0);
+      }
+
+      .header-actions {
+        display: flex;
+        gap: 0.65rem;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .btn-secondary {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.85rem 1.4rem;
+        background: rgba(255, 255, 255, 0.95);
+        color: #0a0a0a;
+        border: 1px solid #e5e5e5;
+        border-radius: 10px;
+        font-family: Inter, sans-serif;
+        font-weight: 600;
+        font-size: 0.95rem;
+        cursor: pointer;
+        transition: all 200ms ease;
+      }
+
+      .btn-secondary:hover {
+        background: #fff;
+        border-color: #facc15;
+        transform: translateY(-1px);
+      }
+
+      .btn-lottie-light {
+        background: rgba(0, 0, 0, 0.05) !important;
+      }
+
+      /* ── Vista tabla ── */
+      .members-table-wrapper {
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid #ededed;
+        border-radius: 14px;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.05);
+        overflow-x: auto;
+      }
+
+      .members-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.92rem;
+      }
+
+      .members-table thead {
+        background: #fafafa;
+        border-bottom: 1px solid #ededed;
+      }
+
+      .members-table th {
+        padding: 0.95rem 1rem;
+        text-align: left;
+        font-weight: 700;
+        color: #555;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .members-table tbody tr {
+        border-bottom: 1px solid #f3f3f3;
+        transition: background 150ms ease;
+      }
+
+      .members-table tbody tr:hover {
+        background: #fffbeb;
+      }
+
+      .members-table td {
+        padding: 0.85rem 1rem;
+        vertical-align: middle;
+        color: #0a0a0a;
+      }
+
+      .cell-member {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+      }
+
+      .cell-member strong {
+        display: block;
+        font-weight: 700;
+      }
+
+      .cell-member span {
+        display: block;
+        color: #666;
+        font-size: 0.82rem;
+        margin-top: 0.15rem;
+      }
+
+      .avatar.small {
+        width: 36px;
+        height: 36px;
+        border-radius: 9px;
+        display: grid;
+        place-items: center;
+        font-size: 0.78rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #facc15, #f0c00e);
+        color: #000;
+        flex-shrink: 0;
+      }
+
+      .col-actions {
+        text-align: right;
+      }
+
+      .row-actions {
+        display: inline-flex;
+        gap: 0.35rem;
+        justify-content: flex-end;
+      }
+
+      .row-btn {
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        border: 1px solid #e5e5e5;
+        border-radius: 8px;
+        background: #fff;
+        color: #555;
+        cursor: pointer;
+        transition: all 150ms ease;
+        overflow: hidden;
+      }
+
+      .row-btn:hover:not(:disabled) {
+        border-color: #facc15;
+        background: #fffbeb;
+      }
+
+      .row-btn.danger:hover:not(:disabled) {
+        border-color: #fecaca;
+        background: #fee2e2;
+      }
+
+      .row-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .row-btn .material-symbols-outlined {
+        font-size: 1.1rem;
+      }
+
+      @media (max-width: 720px) {
+        .members-table th:nth-child(3),
+        .members-table td:nth-child(3),
+        .members-table th:nth-child(5),
+        .members-table td:nth-child(5) {
+          display: none;
+        }
+      }
+
+      .btn-lottie {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.08);
       }
 
       /* Loading State */
@@ -320,7 +700,8 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
         font-family: Inter, sans-serif;
         font-size: 0.95rem;
         color: #0a0a0a;
-        background: #fff;
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(2px);
         transition: all 200ms ease;
       }
 
@@ -351,10 +732,12 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
 
       .member-flight-card {
         width: 100%;
-        border: 1px solid #e5e5e5;
+        border: 1px solid rgba(229, 229, 229, 0.6);
         border-radius: 14px;
-        background: #ffffff;
-        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.05);
+        background:
+          linear-gradient(rgba(255, 255, 255, 0.82), rgba(255, 252, 225, 0.76)),
+          url('/assets/crm/cardmiembro.png') center / cover no-repeat;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.06);
         padding: 1.2rem;
         transition:
           transform 0.18s ease,
@@ -364,8 +747,8 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
 
       .member-flight-card:hover {
         transform: translateY(-2px);
-        border-color: #d0d0d0;
-        box-shadow: 0 16px 34px rgba(0, 0, 0, 0.08);
+        border-color: #facc15;
+        box-shadow: 0 16px 34px rgba(250, 204, 21, 0.14);
       }
 
       .member-card-top {
@@ -380,8 +763,8 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
       .member-document {
         padding: 0.35rem 0.65rem;
         border-radius: 999px;
-        background: #f5f5f5;
-        color: #666;
+        background: rgba(245, 245, 245, 0.95);
+        color: #555;
         font-size: 0.78rem;
         font-weight: 800;
       }
@@ -397,6 +780,10 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
         display: flex;
         align-items: center;
         gap: 0.85rem;
+        min-width: 0;
+      }
+
+      .member-profile-text {
         min-width: 0;
       }
 
@@ -420,7 +807,7 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
       }
 
       .member-profile span {
-        color: #666;
+        color: #555;
         font-size: 0.86rem;
         margin-top: 0.2rem;
       }
@@ -459,7 +846,7 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
       }
 
       .timeline-point span {
-        color: #999;
+        color: #888;
         font-size: 0.74rem;
         font-weight: 800;
       }
@@ -472,7 +859,7 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
       }
 
       .timeline-line span {
-        color: #666;
+        color: #555;
         font-size: 0.78rem;
         font-weight: 800;
       }
@@ -486,7 +873,7 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
       .line {
         position: relative;
         height: 1px;
-        background: #e5e5e5;
+        background: rgba(0, 0, 0, 0.12);
       }
 
       .line::before,
@@ -543,7 +930,7 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
 
       .plan-price span {
         display: block;
-        color: #666;
+        color: #555;
         font-size: 0.86rem;
         margin-top: 0.25rem;
       }
@@ -552,6 +939,7 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
         color: #16a34a;
         font-size: 0.82rem;
         font-weight: 750;
+        margin: 0;
       }
 
       .member-actions {
@@ -573,6 +961,7 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
         color: #0a0a0a;
         font-weight: 900;
         cursor: pointer;
+        transition: background 180ms ease;
       }
 
       .book-btn:hover {
@@ -584,135 +973,31 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
       }
 
       .round-btn {
-        width: 38px;
+        width: 40px;
         height: 38px;
         display: grid;
         place-items: center;
-        border: 1px solid #e5e5e5;
+        border: 1px solid rgba(229, 229, 229, 0.8);
         border-radius: 10px;
-        background: #ffffff;
-        color: #666;
+        background: rgba(255, 255, 255, 0.95);
+        color: #555;
         cursor: pointer;
+        transition: all 180ms ease;
       }
 
-      .round-btn:hover {
+      .round-btn:hover:not(:disabled) {
         border-color: #fbbf24;
-        color: #ca8a04;
+        background: #fffbeb;
       }
 
-      .round-btn.danger:hover {
+      .round-btn.danger:hover:not(:disabled) {
         border-color: #fecaca;
         background: #fee2e2;
-        color: #991b1b;
       }
 
-      /* Table Wrapper */
-      .table-wrapper {
-        overflow-x: auto;
-        border: 1px solid #e5e5e5;
-        border-radius: 10px;
-        background: #fff;
-      }
-
-      .members-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.95rem;
-      }
-
-      .members-table thead {
-        background: #f9f9f9;
-        border-bottom: 1px solid #e5e5e5;
-      }
-
-      .members-table th {
-        padding: 1rem;
-        text-align: left;
-        font-weight: 600;
-        color: #666;
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        font-family: 'Space Grotesk', sans-serif;
-      }
-
-      .members-table td {
-        padding: 1.25rem 1rem;
-        border-bottom: 1px solid #f0f0f0;
-        vertical-align: middle;
-      }
-
-      .table-row:hover {
-        background: #f9f9f9;
-      }
-
-      .col-name {
-        width: 20%;
-      }
-
-      .col-document {
-        width: 12%;
-      }
-
-      .col-phone {
-        width: 12%;
-      }
-
-      .col-email {
-        width: 18%;
-      }
-
-      .col-plan {
-        width: 12%;
-      }
-
-      .col-status {
-        width: 10%;
-      }
-
-      .col-expiry {
-        width: 12%;
-      }
-
-      .col-actions {
-        width: 14%;
-      }
-
-      /* Member Name */
-      .member-name {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-      }
-
-      .avatar {
-        display: grid;
-        place-items: center;
-        width: 36px;
-        height: 36px;
-        border-radius: 8px;
-        background: linear-gradient(135deg, #facc15, #f0c00e);
-        color: #000;
-        font-weight: 600;
-        font-size: 0.8rem;
-        flex-shrink: 0;
-      }
-
-      .document-code {
-        background: #f5f5f5;
-        padding: 0.35rem 0.75rem;
-        border-radius: 6px;
-        font-family: 'Monaco', 'Courier New', monospace;
-        font-size: 0.85rem;
-        color: #0a0a0a;
-      }
-
-      .email-text {
-        color: #666;
-      }
-
-      .text-muted {
-        color: #999;
+      .round-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
       }
 
       /* Badges */
@@ -723,11 +1008,6 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
         font-size: 0.8rem;
         font-weight: 600;
         text-transform: capitalize;
-      }
-
-      .badge-plan {
-        background: #f0f0f0;
-        color: #666;
       }
 
       .status-active {
@@ -750,50 +1030,108 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
         color: #3730a3;
       }
 
-      .plan-monthly,
-      .plan-quarterly,
-      .plan-semi_annual,
-      .plan-annual,
-      .plan-vip {
-        background: rgba(250, 204, 21, 0.1);
-        color: #ca8a04;
+      /* Confirm modal */
+      .confirm-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        backdrop-filter: blur(4px);
+        z-index: 999;
       }
 
-      /* Date Text */
-      .date-text {
-        color: #666;
-      }
-
-      /* Action Buttons */
-      .action-buttons {
-        display: flex;
-        gap: 0.5rem;
-        justify-content: flex-end;
-      }
-
-      .action-btn {
+      .confirm-container {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
         display: grid;
         place-items: center;
-        width: 32px;
-        height: 32px;
-        border: 1px solid #e5e5e5;
-        border-radius: 6px;
+        padding: 1.5rem;
+      }
+
+      .confirm-card {
+        width: 100%;
+        max-width: 420px;
         background: #fff;
-        color: #666;
-        cursor: pointer;
-        transition: all 200ms ease;
+        border-radius: 16px;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+        padding: 1.75rem;
+        text-align: center;
+        animation: slideUp 220ms cubic-bezier(0.4, 0, 0.2, 1);
       }
 
-      .action-btn:hover {
-        border-color: #facc15;
-        background: rgba(250, 204, 21, 0.1);
-        color: #ca8a04;
+      @keyframes slideUp {
+        from {
+          opacity: 0;
+          transform: translateY(14px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
       }
 
-      .action-btn.delete:hover {
-        border-color: #dc2626;
+      .confirm-icon {
+        width: 64px;
+        height: 64px;
+        margin: 0 auto 1rem;
+        border-radius: 16px;
         background: #fee2e2;
-        color: #dc2626;
+        display: grid;
+        place-items: center;
+      }
+
+      .confirm-card h3 {
+        font: 700 1.2rem Inter, sans-serif;
+        margin: 0 0 0.5rem;
+        color: #0a0a0a;
+      }
+
+      .confirm-card p {
+        font: 400 0.92rem Inter, sans-serif;
+        color: #666;
+        margin: 0 0 1.5rem;
+        line-height: 1.5;
+      }
+
+      .confirm-actions {
+        display: flex;
+        gap: 0.65rem;
+        justify-content: center;
+      }
+
+      .btn-secondary,
+      .btn-danger {
+        padding: 0.7rem 1.4rem;
+        border-radius: 9px;
+        font: 600 0.92rem Inter, sans-serif;
+        cursor: pointer;
+        border: none;
+        transition: all 180ms ease;
+      }
+
+      .btn-secondary {
+        background: #f5f5f5;
+        color: #333;
+      }
+
+      .btn-secondary:hover:not(:disabled) {
+        background: #e5e5e5;
+      }
+
+      .btn-danger {
+        background: #dc2626;
+        color: #fff;
+        font-weight: 700;
+      }
+
+      .btn-danger:hover:not(:disabled) {
+        background: #b91c1c;
+      }
+
+      .btn-danger:disabled,
+      .btn-secondary:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
       }
 
       /* Responsive */
@@ -807,18 +1145,6 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
         .btn-primary {
           width: 100%;
           justify-content: center;
-        }
-
-        .col-email {
-          width: 15%;
-        }
-
-        .col-expiry {
-          width: 10%;
-        }
-
-        .col-actions {
-          width: 12%;
         }
 
         .member-card-grid {
@@ -843,25 +1169,6 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
 
         .header-content p {
           font-size: 0.95rem;
-        }
-
-        .members-table {
-          font-size: 0.85rem;
-        }
-
-        .members-table th,
-        .members-table td {
-          padding: 0.75rem 0.5rem;
-        }
-
-        .col-phone,
-        .col-document {
-          display: none;
-        }
-
-        .member-name,
-        .col-name {
-          width: auto;
         }
 
         .filters-section {
@@ -892,6 +1199,10 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
       }
 
       @media (max-width: 480px) {
+        .users-page {
+          padding: 1rem 0.85rem 1.5rem;
+        }
+
         .header-content h1 {
           font-size: 1.5rem;
         }
@@ -899,26 +1210,6 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
         .users-header {
           margin-bottom: 1.75rem;
           padding-bottom: 1.25rem;
-        }
-
-        .members-table {
-          font-size: 0.8rem;
-        }
-
-        .members-table th,
-        .members-table td {
-          padding: 0.65rem 0.4rem;
-        }
-
-        .col-email,
-        .col-plan {
-          display: none;
-        }
-
-        .action-btn {
-          width: 28px;
-          height: 28px;
-          font-size: 0.9rem;
         }
 
         .member-flight-card {
@@ -929,19 +1220,25 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
           align-items: flex-start;
         }
 
-        .book-btn,
-        .round-btn {
+        .book-btn {
           width: 100%;
+          justify-content: center;
         }
 
         .round-btn {
-          height: 38px;
+          width: 100%;
+          height: 40px;
         }
 
         .member-actions {
           display: grid;
-          grid-template-columns: 1fr;
+          grid-template-columns: 1fr 1fr;
+          gap: 0.5rem;
           width: 100%;
+        }
+
+        .book-btn {
+          grid-column: 1 / -1;
         }
       }
     `,
@@ -950,13 +1247,35 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
 export class UsersList implements OnInit {
   private api = inject(ApiService);
 
-  // Signals
-  members = signal<any[]>([]);
+  members = signal<UserSummary[]>([]);
   loading = signal(true);
   error = signal('');
   isCreateMemberOpen = signal(false);
   searchQuery = signal('');
   filterStatus = signal('');
+  viewMode = signal<'cards' | 'table'>('cards');
+
+  toggleView(): void {
+    this.viewMode.set(this.viewMode() === 'cards' ? 'table' : 'cards');
+  }
+
+  // Detail / edit modal state
+  selectedMember = signal<UserSummary | null>(null);
+  isDetailsOpen = signal(false);
+  memberToEdit = signal<UserSummary | null>(null);
+  isEditOpen = signal(false);
+
+  // Delete confirm state
+  memberToDelete = signal<UserSummary | null>(null);
+  deleting = signal(false);
+
+  // Per-row busy id (for toggleStatus / delete in-flight)
+  busyMemberId = signal<number | null>(null);
+
+  // Toast
+  notification = signal<{ type: 'success' | 'error'; message: string } | null>(null);
+  private toastTimer?: ReturnType<typeof setTimeout>;
+
   filteredMembers = computed(() => {
     const search = this.searchQuery().toLowerCase();
     const status = this.filterStatus();
@@ -976,6 +1295,11 @@ export class UsersList implements OnInit {
   });
 
   ngOnInit(): void {
+    this.loadMembers();
+  }
+
+  loadMembers(): void {
+    this.loading.set(true);
     this.api.getUsers().subscribe({
       next: (res) => {
         this.members.set(res.data || []);
@@ -986,7 +1310,10 @@ export class UsersList implements OnInit {
         this.loading.set(false);
       },
     });
+  }
 
+  trackById(_index: number, member: UserSummary): number {
+    return member.id;
   }
 
   openCreateMember(): void {
@@ -997,10 +1324,10 @@ export class UsersList implements OnInit {
     this.isCreateMemberOpen.set(false);
   }
 
-  onMemberCreated(newMember: any): void {
-    // Agregar miembro a la lista
+  onMemberCreated(newMember: UserSummary): void {
     this.members.update((members) => [newMember, ...members]);
     this.isCreateMemberOpen.set(false);
+    this.showToast('success', 'Miembro registrado correctamente.');
   }
 
   getInitials(name: string): string {
@@ -1013,22 +1340,31 @@ export class UsersList implements OnInit {
       .toUpperCase();
   }
 
-  getStatusLabel(status: string): string {
+  getStatusLabel(status?: string): string {
     const labels: { [key: string]: string } = {
       active: 'Activo',
       inactive: 'Inactivo',
       pending: 'Pendiente',
       expired: 'Vencido',
     };
-    return labels[status] || 'Desconocido';
+    return labels[status || 'active'] || 'Desconocido';
   }
 
-  membershipDuration(member: any): string {
+  membershipStartLabel(member: UserSummary): string {
+    const dateString = member.membershipStartDate || member.created_at;
+    if (!dateString) return '—';
+    const d = new Date(dateString);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' });
+  }
+
+  membershipDuration(member: UserSummary): string {
     if (!member.membershipEndDate) return 'Sin vigencia';
 
-    const start = member.created_at ? new Date(member.created_at) : new Date();
+    const startSrc = member.membershipStartDate || member.created_at;
+    const start = startSrc ? new Date(startSrc) : new Date();
     const end = new Date(member.membershipEndDate);
-    if (Number.isNaN(end.getTime())) return 'Sin vigencia';
+    if (Number.isNaN(end.getTime()) || Number.isNaN(start.getTime())) return 'Sin vigencia';
 
     const days = Math.max(0, Math.ceil((end.getTime() - start.getTime()) / 86400000));
     if (days >= 365) return 'Plan anual';
@@ -1038,7 +1374,7 @@ export class UsersList implements OnInit {
     return `${days} días`;
   }
 
-  membershipStateText(member: any): string {
+  membershipStateText(member: UserSummary): string {
     const status = String(member.status || 'active');
     if (status === 'expired') return 'Membresía vencida';
     if (status === 'pending') return 'Pendiente de activar';
@@ -1053,7 +1389,7 @@ export class UsersList implements OnInit {
     return 'Membresía activa';
   }
 
-  membershipHint(member: any): string {
+  membershipHint(member: UserSummary): string {
     const state = this.membershipStateText(member);
     if (state === 'Membresía activa') return 'Acceso habilitado';
     if (state === 'Por vencer') return 'Recomendar renovación';
@@ -1062,25 +1398,93 @@ export class UsersList implements OnInit {
     return 'Revisar membresía';
   }
 
-  viewMember(member: any): void {
-    console.log('Ver perfil:', member);
-    alert(`Ver perfil de ${member.name}`);
+  // ─── Acciones ──────────────────────────────────────────────
+  viewMember(member: UserSummary): void {
+    this.selectedMember.set(member);
+    this.isDetailsOpen.set(true);
   }
 
-  editMember(member: any): void {
-    console.log('Editar:', member);
-    alert(`Editar ${member.name}`);
+  closeDetails(): void {
+    this.isDetailsOpen.set(false);
+    this.selectedMember.set(null);
   }
 
-  toggleStatus(member: any): void {
-    console.log('Cambiar estado:', member);
+  editMember(member: UserSummary): void {
+    this.memberToEdit.set(member);
+    this.isEditOpen.set(true);
+  }
+
+  editFromDetails(member: UserSummary): void {
+    this.closeDetails();
+    this.editMember(member);
+  }
+
+  closeEdit(): void {
+    this.isEditOpen.set(false);
+    this.memberToEdit.set(null);
+  }
+
+  onMemberUpdated(updated: UserSummary): void {
+    this.members.update((list) =>
+      list.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)),
+    );
+    this.closeEdit();
+    this.showToast('success', 'Miembro actualizado correctamente.');
+  }
+
+  toggleStatus(member: UserSummary): void {
     const newStatus = member.status === 'active' ? 'inactive' : 'active';
-    alert(`Cambiar estado de ${member.name} a ${newStatus}`);
+    this.busyMemberId.set(member.id);
+
+    this.api.updateUser(member.id, { status: newStatus }).subscribe({
+      next: (updated) => {
+        this.members.update((list) =>
+          list.map((m) => (m.id === member.id ? { ...m, ...updated } : m)),
+        );
+        this.busyMemberId.set(null);
+        this.showToast(
+          'success',
+          newStatus === 'active' ? 'Miembro activado.' : 'Miembro desactivado.',
+        );
+      },
+      error: () => {
+        this.busyMemberId.set(null);
+        this.showToast('error', 'No se pudo cambiar el estado. Intenta de nuevo.');
+      },
+    });
   }
 
-  deleteMember(member: any): void {
-    if (confirm(`¿Eliminar a ${member.name}? Esta acción no se puede deshacer.`)) {
-      this.members.update((members) => members.filter((m) => m.id !== member.id));
-    }
+  requestDelete(member: UserSummary): void {
+    this.memberToDelete.set(member);
+  }
+
+  cancelDelete(): void {
+    if (this.deleting()) return;
+    this.memberToDelete.set(null);
+  }
+
+  confirmDelete(): void {
+    const member = this.memberToDelete();
+    if (!member) return;
+
+    this.deleting.set(true);
+    this.api.deleteUser(member.id).subscribe({
+      next: () => {
+        this.members.update((list) => list.filter((m) => m.id !== member.id));
+        this.deleting.set(false);
+        this.memberToDelete.set(null);
+        this.showToast('success', `${member.name} fue eliminado.`);
+      },
+      error: () => {
+        this.deleting.set(false);
+        this.showToast('error', 'No se pudo eliminar el miembro. Intenta de nuevo.');
+      },
+    });
+  }
+
+  private showToast(type: 'success' | 'error', message: string): void {
+    this.notification.set({ type, message });
+    if (this.toastTimer) clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => this.notification.set(null), 4500);
   }
 }

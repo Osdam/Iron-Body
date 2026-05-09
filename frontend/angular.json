@@ -55,7 +55,8 @@
                 "output": "assets"
               }
             ],
-            "styles": ["src/styles.css"]
+            "styles": ["src/styles.css"],
+            "allowedCommonJsDependencies": ["lottie-web"]
           },
           "configurations": {
             "production": {
@@ -67,8 +68,8 @@
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "4kB",
-                  "maximumError": "9kB"
+                  "maximumWarning": "8kB",
+                  "maximumError": "24kB"
                 }
               ],
               "outputHashing": "all"

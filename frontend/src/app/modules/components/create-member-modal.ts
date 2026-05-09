@@ -797,45 +797,27 @@ export class CreateMemberModalComponent implements OnInit {
 
     const formData = this.memberForm.value;
 
-    // TODO: Conectar con API real de Laravel
-    // this.api.createMember(formData).subscribe({
-    //   next: (response) => {
-    //     this.isSaving.set(false);
-    //     this.successMessage.set(`${formData.fullName} ha sido registrado correctamente.`);
-    //     setTimeout(() => {
-    //       this.onMemberCreated.emit(response);
-    //       this.close();
-    //     }, 1500);
-    //   },
-    //   error: (error) => {
-    //     this.isSaving.set(false);
-    //     const message = error?.error?.message || 'No se pudo registrar el miembro. Intenta de nuevo.';
-    //     this.errorMessage.set(message);
-    //   },
-    // });
-
-    // MOCK: Por ahora usamos datos locales
-    setTimeout(() => {
-      this.isSaving.set(false);
-      this.successMessage.set(`${formData.fullName} ha sido registrado correctamente.`);
-
-      // Crear objeto miembro simulado
-      const newMember = {
-        id: Math.floor(Math.random() * 10000),
-        name: formData.fullName,
-        email: formData.email || 'sin-correo@example.com',
-        document: formData.document,
-        phone: formData.phone,
-        status: formData.status,
-        plan: formData.plan || 'Sin plan',
-        created_at: new Date().toISOString(),
-      };
-
-      setTimeout(() => {
-        this.onMemberCreated.emit(newMember);
-        this.close();
-      }, 1500);
-    }, 1200);
+    this.api.createMember(formData).subscribe({
+      next: (response) => {
+        this.isSaving.set(false);
+        this.successMessage.set(
+          `${formData.fullName} ha sido registrado correctamente.`,
+        );
+        setTimeout(() => {
+          this.onMemberCreated.emit(response);
+          this.close();
+        }, 900);
+      },
+      error: (error) => {
+        this.isSaving.set(false);
+        const message =
+          error?.error?.message ||
+          (error?.status === 422
+            ? 'Datos inválidos. Revisa los campos del formulario.'
+            : 'No se pudo registrar el miembro. Intenta de nuevo.');
+        this.errorMessage.set(message);
+      },
+    });
   }
 
   close(): void {

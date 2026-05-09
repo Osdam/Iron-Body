@@ -817,7 +817,8 @@ export default class TrainerModalComponent implements OnChanges {
   private resetForm(): void {
     this.trainerForm.reset({
       rating: 4.5,
-      availability: this.days.map(() => ({
+      availability: this.days.map((day) => ({
+        day,
         enabled: false,
         startTime: '08:00',
         endTime: '18:00',

@@ -1,10 +1,13 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, computed, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+import { ApiService } from '../services/api.service';
 import TrainersKpiComponent from './components/trainers-kpi';
 import TrainersFiltersComponent, { TrainerFilters } from './components/trainers-filters';
 import TrainerCardComponent, { Trainer, TrainerAvailability } from './components/trainer-card';
 import TrainersTableComponent from './components/trainers-table';
 import TrainerModalComponent, { TrainerModalMode } from './components/trainer-modal';
+import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-icon.component';
 
 @Component({
   selector: 'module-trainers',
@@ -16,6 +19,7 @@ import TrainerModalComponent, { TrainerModalMode } from './components/trainer-mo
     TrainerCardComponent,
     TrainersTableComponent,
     TrainerModalComponent,
+    LottieIconComponent,
   ],
   template: `
     <section class="trainers-page">
@@ -29,14 +33,20 @@ import TrainerModalComponent, { TrainerModalMode } from './components/trainer-mo
 
         <div class="header-right">
           <button type="button" class="btn-secondary" (click)="toggleView()">
-            <span class="material-symbols-outlined" aria-hidden="true">{{
-              selectedView() === 'cards' ? 'table_rows' : 'grid_view'
-            }}</span>
+            <span class="btn-lottie">
+              <app-lottie-icon
+                src="/assets/crm/vistatablavistacard.json"
+                [size]="22"
+                [loop]="true"
+              ></app-lottie-icon>
+            </span>
             {{ selectedView() === 'cards' ? 'Vista tabla' : 'Vista cards' }}
           </button>
 
           <button type="button" class="btn-primary" (click)="openCreateTrainerModal()">
-            <span class="material-symbols-outlined" aria-hidden="true">person_add</span>
+            <span class="btn-lottie">
+              <app-lottie-icon src="/assets/crm/mas.json" [size]="22" [loop]="true"></app-lottie-icon>
+            </span>
             Nuevo entrenador
           </button>
         </div>
@@ -53,28 +63,28 @@ import TrainerModalComponent, { TrainerModalMode } from './components/trainer-mo
       <section class="kpis">
         <app-trainers-kpi
           title="Entrenadores activos"
-          icon="check_circle"
+          lottie="/assets/crm/entrenadores.json"
           color="success"
           [value]="kpis().active"
           subtitle="Estado Activo"
         ></app-trainers-kpi>
         <app-trainers-kpi
           title="Clases asignadas"
-          icon="school"
+          lottie="/assets/crm/rutinasasignadas.json"
           color="info"
           [value]="kpis().classes"
           subtitle="Total del equipo"
         ></app-trainers-kpi>
         <app-trainers-kpi
           title="Miembros asignados"
-          icon="group"
+          lottie="/assets/crm/miembros.json"
           color="primary"
           [value]="kpis().members"
           subtitle="Bajo supervisión"
         ></app-trainers-kpi>
         <app-trainers-kpi
           title="Disponibles hoy"
-          icon="schedule"
+          lottie="/assets/crm/hoy.json"
           color="warning"
           [value]="kpis().available"
           subtitle="Listos para entrenar"
@@ -231,6 +241,22 @@ import TrainerModalComponent, { TrainerModalMode } from './components/trainer-mo
         border-color: #d0d0d0;
       }
 
+      .btn-lottie {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 7px;
+        background: rgba(0, 0, 0, 0.05);
+        overflow: hidden;
+        flex-shrink: 0;
+      }
+
+      .btn-primary .btn-lottie {
+        background: rgba(0, 0, 0, 0.08);
+      }
+
       .kpis {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -372,6 +398,45 @@ import TrainerModalComponent, { TrainerModalMode } from './components/trainer-mo
   ],
 })
 export default class TrainersModule implements OnInit {
+  private api = inject(ApiService);
+
+  /**
+   * Mapeo de status frontend ↔ backend.
+   * Frontend usa "Activo"/"Inactivo" en español; backend usa "active"/"inactive".
+   */
+  private toBackendStatus(s?: string): string {
+    const v = (s || '').toLowerCase();
+    if (v.includes('inact')) return 'inactive';
+    return 'active';
+  }
+  private toFrontendStatus(s?: string): string {
+    const v = (s || '').toLowerCase();
+    if (v === 'inactive' || v === 'inactivo') return 'Inactivo';
+    return 'Activo';
+  }
+  private fromBackend(t: any): Trainer {
+    const defaultDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const rawAvail = Array.isArray(t?.availability) ? t.availability : [];
+    const availability = defaultDays.map((day, idx) => {
+      const slot = rawAvail[idx] || {};
+      return {
+        day: typeof slot.day === 'string' && slot.day ? slot.day : day,
+        enabled: !!slot.enabled,
+        startTime: slot.startTime || '08:00',
+        endTime: slot.endTime || '18:00',
+      };
+    });
+    return {
+      ...t,
+      id: String(t.id),
+      status: this.toFrontendStatus(t.status),
+      availability,
+      specialties: Array.isArray(t?.specialties) ? t.specialties : [],
+      assignedClasses: Number(t?.assignedClasses ?? 0),
+      assignedMembers: Number(t?.assignedMembers ?? 0),
+    } as Trainer;
+  }
+
   trainers = signal<Trainer[]>([]);
 
   selectedView = signal<'cards' | 'table'>('cards');
@@ -395,8 +460,21 @@ export default class TrainersModule implements OnInit {
   kpis = computed(() => this.calculateTrainerKpis(this.filteredTrainers()));
 
   ngOnInit(): void {
-    // Backend no tiene entrenadores todavía. Cargamos mock para visualizar el módulo.
-    this.trainers.set(this.buildMockTrainers());
+    this.loadTrainers();
+  }
+
+  async loadTrainers(): Promise<void> {
+    try {
+      const list = await firstValueFrom(this.api.getTrainers());
+      this.trainers.set((list || []).map((t) => this.fromBackend(t)));
+    } catch (e: any) {
+      // Fallback al mock solo si el backend no responde
+      this.trainers.set(this.buildMockTrainers());
+      this.notice.set({
+        kind: 'info',
+        message: 'Backend no disponible; mostrando datos de ejemplo.',
+      });
+    }
   }
 
   toggleView(): void {
@@ -439,78 +517,89 @@ export default class TrainersModule implements OnInit {
     this.notice.set(null);
 
     try {
-      await new Promise((r) => setTimeout(r, 450));
+      const body: any = {
+        fullName: String(payload.fullName || '').trim(),
+        document: payload.document || null,
+        phone: payload.phone || null,
+        email: payload.email || null,
+        birthDate: payload.birthDate || null,
+        mainSpecialty: payload.mainSpecialty || null,
+        specialties: payload.specialties || [],
+        experienceYears: Number(payload.experienceYears || 0),
+        contractType: payload.contractType || null,
+        status: this.toBackendStatus(payload.status),
+        rating: Number(payload.rating || 0),
+        bio: payload.bio || null,
+        certifications: payload.certifications || null,
+        availability: this.normalizeAvailability(payload.availability || []),
+      };
 
       const mode = this.modalMode();
       if (mode === 'edit') {
         const current = this.selectedTrainer();
         if (!current) throw new Error('Entrenador no encontrado para edición.');
 
-        const updated: Trainer = {
-          ...current,
-          ...payload,
-          availability: this.normalizeAvailability(payload.availability || current.availability),
-          updatedAt: new Date().toISOString(),
-        };
-
-        this.trainers.set(this.trainers().map((t) => (t.id === current.id ? updated : t)));
+        const updated = (await firstValueFrom(
+          this.api.updateTrainer(current.id, body),
+        )) as any;
+        const mapped = this.fromBackend(updated);
+        this.trainers.set(this.trainers().map((t) => (t.id === current.id ? mapped : t)));
         this.notice.set({ kind: 'success', message: 'Entrenador actualizado correctamente.' });
         this.closeTrainerModal();
         return;
       }
 
-      // Create
-      const now = new Date().toISOString();
-      const trainer: Trainer = {
-        id: this.newId('trainer'),
-        fullName: String(payload.fullName || '').trim(),
-        document: String(payload.document || '').trim(),
-        phone: String(payload.phone || '').trim(),
-        email: String(payload.email || '').trim(),
-        birthDate: payload.birthDate || '',
-        mainSpecialty: String(payload.mainSpecialty || ''),
-        specialties: (payload.specialties || []) as string[],
-        experienceYears: Number(payload.experienceYears || 0),
-        contractType: String(payload.contractType || ''),
-        status: payload.status || 'Activo',
-        rating: Number(payload.rating || 4.5),
-        bio: payload.bio || '',
-        certifications: payload.certifications || '',
-        availability: this.normalizeAvailability(payload.availability || []),
-        assignedClasses: 0,
-        assignedMembers: 0,
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      this.trainers.set([trainer, ...this.trainers()]);
+      const created = (await firstValueFrom(this.api.createTrainer(body))) as any;
+      const mapped = this.fromBackend(created);
+      this.trainers.set([mapped, ...this.trainers()]);
       this.notice.set({ kind: 'success', message: 'Entrenador registrado correctamente.' });
       this.closeTrainerModal();
     } catch (e: any) {
-      this.notice.set({
-        kind: 'error',
-        message: e?.message || 'No se pudo guardar el entrenador.',
-      });
+      const msg =
+        e?.error?.message ||
+        (e?.status === 422 ? 'Datos inválidos. Revisa el formulario.' : null) ||
+        e?.message ||
+        'No se pudo guardar el entrenador.';
+      this.notice.set({ kind: 'error', message: msg });
     } finally {
       this.isSavingTrainer.set(false);
     }
   }
 
-  toggleTrainerStatus(trainer: Trainer): void {
+  async toggleTrainerStatus(trainer: Trainer): Promise<void> {
     const current = (trainer.status || '').toLowerCase();
-    const next = current.includes('activo') ? 'Inactivo' : 'Activo';
-    const updated: Trainer = { ...trainer, status: next, updatedAt: new Date().toISOString() };
-    this.trainers.set(this.trainers().map((t) => (t.id === trainer.id ? updated : t)));
-    this.notice.set({ kind: 'success', message: `Estado actualizado a ${next}.` });
+    const nextLabel = current.includes('activo') ? 'Inactivo' : 'Activo';
+    const nextBackend = this.toBackendStatus(nextLabel);
+    try {
+      const updated = (await firstValueFrom(
+        this.api.updateTrainer(trainer.id, { status: nextBackend }),
+      )) as any;
+      const mapped = this.fromBackend(updated);
+      this.trainers.set(this.trainers().map((t) => (t.id === trainer.id ? mapped : t)));
+      this.notice.set({ kind: 'success', message: `Estado actualizado a ${nextLabel}.` });
+    } catch (e: any) {
+      this.notice.set({
+        kind: 'error',
+        message: e?.error?.message || e?.message || 'No se pudo cambiar el estado.',
+      });
+    }
   }
 
-  deleteTrainer(trainer: Trainer): void {
+  async deleteTrainer(trainer: Trainer): Promise<void> {
     const ok = window.confirm(
       `¿Eliminar el entrenador "${trainer.fullName}"? Esta acción no se puede deshacer.`,
     );
     if (!ok) return;
-    this.trainers.set(this.trainers().filter((t) => t.id !== trainer.id));
-    this.notice.set({ kind: 'success', message: 'Entrenador eliminado.' });
+    try {
+      await firstValueFrom(this.api.deleteTrainer(trainer.id));
+      this.trainers.set(this.trainers().filter((t) => t.id !== trainer.id));
+      this.notice.set({ kind: 'success', message: 'Entrenador eliminado.' });
+    } catch (e: any) {
+      this.notice.set({
+        kind: 'error',
+        message: e?.error?.message || e?.message || 'No se pudo eliminar el entrenador.',
+      });
+    }
   }
 
   bookmarkTrainer(trainer: Trainer): void {

@@ -1,14 +1,23 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { LottieIconComponent } from '../../shared/components/lottie-icon/lottie-icon.component';
 
 @Component({
   selector: 'app-trainers-kpi',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, LottieIconComponent],
   template: `
     <div class="kpi-card">
       <div class="kpi-icon" [ngClass]="'kpi-' + color">
-        <span class="material-symbols-outlined" aria-hidden="true">{{ icon }}</span>
+        <app-lottie-icon
+          *ngIf="lottie; else materialIcon"
+          [src]="lottie"
+          [size]="34"
+          [loop]="true"
+        ></app-lottie-icon>
+        <ng-template #materialIcon>
+          <span class="material-symbols-outlined" aria-hidden="true">{{ icon }}</span>
+        </ng-template>
       </div>
       <div class="kpi-content">
         <p class="kpi-title">{{ title }}</p>
@@ -43,6 +52,7 @@ import { CommonModule } from '@angular/common';
         display: grid;
         place-items: center;
         flex-shrink: 0;
+        overflow: hidden;
       }
 
       .kpi-icon.kpi-success {
@@ -112,5 +122,6 @@ export default class TrainersKpiComponent {
   @Input() value: number = 0;
   @Input() subtitle: string = '';
   @Input() icon: string = 'person';
+  @Input() lottie: string = '';
   @Input() color: 'success' | 'info' | 'primary' | 'warning' = 'info';
 }

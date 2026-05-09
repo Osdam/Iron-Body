@@ -15,7 +15,7 @@ export interface ActivityRecord {
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="table-card">
+    <div class="table-card" [style.background]="cardBackground">
       <div class="table-header">
         <h3>Actividad reciente</h3>
         <p class="table-subtitle">Últimos 20 registros</p>
@@ -235,6 +235,12 @@ export interface ActivityRecord {
 })
 export default class ReportsTableComponent {
   @Input() records: ActivityRecord[] = [];
+  @Input() bgImage: string = '';
+
+  get cardBackground(): string {
+    if (!this.bgImage) return '';
+    return `linear-gradient(rgba(255, 255, 255, 0.93), rgba(255, 252, 235, 0.88)), url('${this.bgImage}') center / cover no-repeat`;
+  }
 
   formatDate(date: string): string {
     const d = new Date(date);

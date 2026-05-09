@@ -150,7 +150,9 @@ interface CalendarDay {
         grid-template-columns: minmax(0, 820px);
         gap: 1.5rem;
         padding: 1.5rem;
-        background: #fff;
+        background:
+          linear-gradient(rgba(255, 255, 255, 0.88), rgba(255, 252, 230, 0.82)),
+          url('/assets/crm/fondocalendarioclases.png') center / cover no-repeat;
         border-radius: 12px;
         border: 1px solid #e5e5e5;
         min-width: 0;

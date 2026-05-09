@@ -1,5 +1,6 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { LottieIconComponent } from '../../shared/components/lottie-icon/lottie-icon.component';
 
 export interface Trainer {
   id: string;
@@ -35,7 +36,7 @@ export interface TrainerAvailability {
 @Component({
   selector: 'app-trainer-card',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, LottieIconComponent],
   template: `
     <article class="trainer-card">
       <!-- Banner -->
@@ -150,7 +151,13 @@ export interface TrainerAvailability {
 
         <!-- Action Button -->
         <button type="button" class="btn-primary" (click)="onViewProfile()">
-          <span class="material-symbols-outlined" aria-hidden="true">person</span>
+          <span class="btn-lottie">
+            <app-lottie-icon
+              src="/assets/crm/entrenadores.json"
+              [size]="22"
+              [loop]="true"
+            ></app-lottie-icon>
+          </span>
           Ver perfil
         </button>
       </div>
@@ -474,6 +481,18 @@ export interface TrainerAvailability {
         box-shadow: 0 8px 16px rgba(251, 191, 36, 0.3);
       }
 
+      .btn-lottie {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 7px;
+        background: rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+        flex-shrink: 0;
+      }
+
       .card-actions {
         display: flex;
         gap: 0.5rem;
@@ -566,14 +585,13 @@ export default class TrainerCardComponent {
   }
 
   getAvailabilityDays(): string {
-    if (!this.trainer?.availability || this.trainer.availability.length === 0) {
-      return 'Sin configurar';
-    }
+    const list = Array.isArray(this.trainer?.availability) ? this.trainer.availability : [];
+    if (list.length === 0) return 'Sin configurar';
 
-    const available = this.trainer.availability.filter((a) => a.enabled);
+    const available = list.filter((a) => a && a.enabled && !!a.day);
     if (available.length === 0) return 'Sin disponibilidad';
 
-    const days = available.map((a) => a.day.slice(0, 3)).join(', ');
+    const days = available.map((a) => String(a.day).slice(0, 3)).join(', ');
     return days.length > 30 ? `${days.slice(0, 27)}...` : days;
   }
 }

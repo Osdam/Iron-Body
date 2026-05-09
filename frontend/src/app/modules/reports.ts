@@ -16,6 +16,7 @@ import ReportsFiltersComponent, { ReportsFilter } from './components/reports-fil
 import ReportsChartComponent from './components/reports-chart';
 import ReportsTableComponent, { ActivityRecord } from './components/reports-table';
 import ReportsQuickActionsComponent, { QuickReport } from './components/reports-quick-actions';
+import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-icon.component';
 
 Chart.register(...registerables);
 
@@ -87,6 +88,7 @@ interface ReportsPayload {
     ReportsChartComponent,
     ReportsTableComponent,
     ReportsQuickActionsComponent,
+    LottieIconComponent,
   ],
   template: `
     <section class="reports-page">
@@ -124,7 +126,9 @@ interface ReportsPayload {
             (click)="refreshReports()"
             [disabled]="isRefreshingReports()"
           >
-            <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+            <span class="btn-lottie">
+              <app-lottie-icon src="/assets/crm/reload.json" [size]="22" [loop]="true"></app-lottie-icon>
+            </span>
             {{ isRefreshingReports() ? 'Actualizando...' : 'Actualizar datos' }}
           </button>
 
@@ -134,7 +138,9 @@ interface ReportsPayload {
             (click)="exportReport()"
             [disabled]="isExportingReport()"
           >
-            <span class="material-symbols-outlined" aria-hidden="true">download</span>
+            <span class="btn-lottie">
+              <app-lottie-icon src="/assets/crm/exportar.json" [size]="22" [loop]="true"></app-lottie-icon>
+            </span>
             {{ isExportingReport() ? 'Exportando...' : 'Exportar reporte' }}
           </button>
         </div>
@@ -199,6 +205,7 @@ interface ReportsPayload {
               [value]="formatCurrency(kpis().totalRevenue)"
               suffix="acumulado"
               color="primary"
+              bgImage="/assets/crm/fondo2.png"
             ></app-reports-kpi>
             <app-reports-kpi
               label="Ingreso mensual"
@@ -207,6 +214,7 @@ interface ReportsPayload {
               suffix="período"
               color="success"
               [trend]="revenueGrowth()"
+              bgImage="/assets/crm/fondo3.png"
             ></app-reports-kpi>
             <app-reports-kpi
               label="Miembros activos"
@@ -214,6 +222,7 @@ interface ReportsPayload {
               [value]="kpis().activeMembers"
               suffix="activos"
               color="info"
+              bgImage="/assets/crm/fondo4.png"
             ></app-reports-kpi>
             <app-reports-kpi
               label="Nuevos miembros"
@@ -221,6 +230,7 @@ interface ReportsPayload {
               [value]="kpis().newMembers"
               suffix="en el período"
               color="success"
+              bgImage="/assets/crm/fondo5.png"
             ></app-reports-kpi>
             <app-reports-kpi
               label="Membresías vencidas"
@@ -228,6 +238,7 @@ interface ReportsPayload {
               [value]="kpis().expiredMemberships"
               suffix="vencidas"
               color="danger"
+              bgImage="/assets/crm/fondo6.png"
             ></app-reports-kpi>
             <app-reports-kpi
               label="Por vencer"
@@ -235,6 +246,7 @@ interface ReportsPayload {
               [value]="kpis().expiringSoon"
               suffix="próximas"
               color="warning"
+              bgImage="/assets/crm/fondo7.png"
             ></app-reports-kpi>
             <app-reports-kpi
               label="Pagos pendientes"
@@ -242,6 +254,7 @@ interface ReportsPayload {
               [value]="kpis().pendingPayments"
               suffix="pendientes"
               color="warning"
+              bgImage="/assets/crm/fondo2.png"
             ></app-reports-kpi>
             <app-reports-kpi
               label="Clases realizadas"
@@ -249,6 +262,7 @@ interface ReportsPayload {
               [value]="kpis().completedClasses"
               suffix="realizadas"
               color="primary"
+              bgImage="/assets/crm/fondo3.png"
             ></app-reports-kpi>
             <app-reports-kpi
               label="Asistencia promedio"
@@ -256,6 +270,7 @@ interface ReportsPayload {
               [value]="formatPercentage(kpis().averageAttendance)"
               suffix="promedio"
               color="success"
+              bgImage="/assets/crm/fondo4.png"
             ></app-reports-kpi>
           </section>
 
@@ -272,6 +287,7 @@ interface ReportsPayload {
               [subtitle]="mainChartSubtitle()"
               [chartData]="revenueChartData()"
               [stats]="revenueStats()"
+              bgImage="/assets/crm/fondo7.png"
             ></app-reports-chart>
 
             <div class="main-chart-metrics">
@@ -319,29 +335,33 @@ interface ReportsPayload {
               title="Ventas por plan"
               subtitle="Membresías vendidas"
               [chartData]="planSalesChartData()"
+              bgImage="/assets/crm/fondo6.png"
             ></app-reports-chart>
             <app-reports-chart
               type="doughnut"
               title="Miembros por estado"
               subtitle="Distribución"
               [chartData]="membersStatusChartData()"
+              bgImage="/assets/crm/fondo7.png"
             ></app-reports-chart>
             <app-reports-chart
               type="bar"
               title="Asistencia a clases"
               subtitle="Promedio por clase"
               [chartData]="attendanceChartData()"
+              bgImage="/assets/crm/fondo2.png"
             ></app-reports-chart>
             <app-reports-chart
               type="doughnut"
               title="Pagos por estado"
               subtitle="Distribución"
               [chartData]="paymentsStatusChartData()"
+              bgImage="/assets/crm/fondo3.png"
             ></app-reports-chart>
           </section>
 
           <!-- Tabla de actividad -->
-          <app-reports-table [records]="activityRecords()"></app-reports-table>
+          <app-reports-table [records]="activityRecords()" bgImage="/assets/crm/fondo4.png"></app-reports-table>
         </ng-container>
       </ng-container>
     </section>
@@ -351,8 +371,12 @@ interface ReportsPayload {
       .reports-page {
         max-width: 1400px;
         margin: 0 auto;
-        padding: 0;
+        padding: 1.25rem 1.25rem 2rem;
         color: #0a0a0a;
+        background:
+          linear-gradient(rgba(248, 248, 248, 0.82), rgba(248, 248, 248, 0.82)),
+          url('/assets/crm/fondo1.png') center / cover no-repeat;
+        border-radius: 16px;
       }
 
       .reports-header {
@@ -430,7 +454,8 @@ interface ReportsPayload {
 
       .btn-primary,
       .btn-secondary,
-      .btn-outline {
+      .btn-outline,
+      .btn-primary {
         display: inline-flex;
         align-items: center;
         gap: 0.5rem;
@@ -441,6 +466,22 @@ interface ReportsPayload {
         cursor: pointer;
         transition: all 0.2s ease;
         border: 1px solid transparent;
+      }
+
+      .btn-lottie {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 7px;
+        background: rgba(0, 0, 0, 0.06);
+        overflow: hidden;
+        flex-shrink: 0;
+      }
+
+      .btn-primary .btn-lottie {
+        background: rgba(0, 0, 0, 0.08);
       }
 
       .btn-primary {
@@ -595,7 +636,9 @@ interface ReportsPayload {
       }
 
       .main-chart-metrics {
-        background: #ffffff;
+        background:
+          linear-gradient(rgba(255, 255, 255, 0.93), rgba(255, 252, 235, 0.88)),
+          url('/assets/crm/fondo5.png') center / cover no-repeat;
         border: 1px solid #e5e5e5;
         border-radius: 12px;
         padding: 1.5rem;

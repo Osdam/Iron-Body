@@ -8,7 +8,7 @@ type KPIColor = 'primary' | 'success' | 'warning' | 'danger' | 'info';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div [ngClass]="['kpi-card', 'kpi-' + color]">
+    <div [ngClass]="['kpi-card', 'kpi-' + color]" [style.background]="cardBackground">
       <div class="kpi-header">
         <h3 class="kpi-label">{{ label }}</h3>
         <span class="material-symbols-outlined kpi-icon">{{ icon }}</span>
@@ -152,8 +152,14 @@ export default class ReportsKPIComponent {
   @Input() suffix: string = '';
   @Input() color: KPIColor = 'primary';
   @Input() trend?: number; // porcentaje, positivo o negativo
+  @Input() bgImage: string = '';
 
   Math = Math;
+
+  get cardBackground(): string {
+    if (!this.bgImage) return '';
+    return `linear-gradient(rgba(255, 255, 255, 0.92), rgba(255, 252, 235, 0.86)), url('${this.bgImage}') center / cover no-repeat`;
+  }
 
   get formattedValue(): string {
     if (typeof this.value === 'string') return this.value;

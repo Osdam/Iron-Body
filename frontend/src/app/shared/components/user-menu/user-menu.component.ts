@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, signal, inject, Input, Output, EventEmitter } from '@angular/core';
 import { Router } from '@angular/router';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
+import { AuthService } from '../../../services/auth.service';
 
 interface User {
   id: string;
@@ -139,6 +140,7 @@ interface MenuItem {
 export class UserMenuComponent {
   private router = inject(Router);
   private fb = inject(FormBuilder);
+  private auth = inject(AuthService);
 
   @Input() isOpen = false;
   @Output() close = new EventEmitter<void>();
@@ -248,10 +250,21 @@ export class UserMenuComponent {
   }
 
   handleLogout(): void {
-    if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
-      // TODO: Call logout API and clear auth state
-      this.router.navigate(['/login']);
-    }
+    if (!confirm('¿Estás seguro de que deseas cerrar sesión?')) return;
+
+    // Cierra el menú desplegable y delega en AuthService.logout(),
+    // que limpia token + usuario + storage y redirige a /login.
+    this.close.emit();
+    this.auth.logout().subscribe({
+      next: () => {
+        // Garantiza redirección incluso si el observable termina sin tap.
+        this.router.navigate(['/login']);
+      },
+      error: () => {
+        // Si el backend falla, limpiamos igual y redirigimos para no atrapar al usuario.
+        this.router.navigate(['/login']);
+      },
+    });
   }
 
   getError(fieldName: string): string | null {

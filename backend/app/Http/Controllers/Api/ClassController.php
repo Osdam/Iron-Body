@@ -40,14 +40,14 @@ class ClassController extends Controller
         }
 
         // Cargar relación con entrenador
-        $query->with('trainer:id,name');
+        $query->with('trainer:id,full_name');
 
         return $query->select('id', 'name', 'type', 'trainer_id', 'day_of_week', 'start_time', 'end_time', 'duration_minutes', 'max_capacity', 'enrolled_count', 'location', 'status', 'description', 'created_at')->paginate(20);
     }
 
     public function show(MyClass $myClass)
     {
-        $myClass->load('trainer:id,name');
+        $myClass->load('trainer:id,full_name');
         return $myClass;
     }
 
@@ -64,7 +64,7 @@ class ClassController extends Controller
             'max_capacity' => 'required|integer|min:1',
             'location' => 'nullable|string|max:255',
             'status' => 'nullable|string|in:active,inactive,finished',
-            'trainer_id' => 'nullable|exists:users,id',
+            'trainer_id' => 'nullable|exists:trainers,id',
             'description' => 'nullable|string',
             'notes' => 'nullable|string',
             'is_recurring' => 'nullable|boolean',
@@ -73,7 +73,7 @@ class ClassController extends Controller
         ]);
 
         // Calcular duración en minutos si no se proporciona
-        if (!$validated['duration_minutes']) {
+        if (empty($validated['duration_minutes'])) {
             $start = \DateTime::createFromFormat('H:i', $validated['start_time']);
             $end = \DateTime::createFromFormat('H:i', $validated['end_time']);
             $validated['duration_minutes'] = $end->diff($start)->i + ($end->diff($start)->h * 60);
@@ -81,7 +81,7 @@ class ClassController extends Controller
 
         $classe = MyClass::create($validated);
 
-        return response()->json($classe->load('trainer:id,name'), 201);
+        return response()->json($classe->load('trainer:id,full_name'), 201);
     }
 
     public function update(Request $request, MyClass $myClass)
@@ -97,7 +97,7 @@ class ClassController extends Controller
             'enrolled_count' => 'nullable|integer|min:0',
             'location' => 'nullable|string|max:255',
             'status' => 'sometimes|string|in:active,inactive,finished',
-            'trainer_id' => 'nullable|exists:users,id',
+            'trainer_id' => 'nullable|exists:trainers,id',
             'description' => 'nullable|string',
             'notes' => 'nullable|string',
             'is_recurring' => 'nullable|boolean',
@@ -107,7 +107,7 @@ class ClassController extends Controller
 
         $myClass->update($validated);
 
-        return $myClass->load('trainer:id,name');
+        return $myClass->load('trainer:id,full_name');
     }
 
     public function destroy(MyClass $myClass)

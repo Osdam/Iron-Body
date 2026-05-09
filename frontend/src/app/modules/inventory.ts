@@ -1,6 +1,7 @@
 import { CommonModule, CurrencyPipe, DatePipe } from '@angular/common';
 import { Component, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-icon.component';
 
 type StockStatus = 'Disponible' | 'Stock bajo' | 'Agotado';
 type MovementType = 'Entrada' | 'Salida';
@@ -37,7 +38,7 @@ interface CartItem {
 @Component({
   selector: 'module-inventory',
   standalone: true,
-  imports: [CommonModule, FormsModule, CurrencyPipe, DatePipe],
+  imports: [CommonModule, FormsModule, CurrencyPipe, DatePipe, LottieIconComponent],
   template: `
     <section class="inventory-page">
       <header class="inventory-header">
@@ -47,15 +48,21 @@ interface CartItem {
         </div>
         <div class="header-actions">
           <button type="button" class="btn-secondary" (click)="openMovementPanel('Entrada')">
-            <span class="material-symbols-outlined" aria-hidden="true">add_box</span>
+            <span class="btn-lottie">
+              <app-lottie-icon src="/assets/crm/entrada.json" [size]="22" [loop]="true"></app-lottie-icon>
+            </span>
             Registrar entrada
           </button>
           <button type="button" class="btn-secondary" (click)="openMovementPanel('Salida')">
-            <span class="material-symbols-outlined" aria-hidden="true">outbox</span>
+            <span class="btn-lottie">
+              <app-lottie-icon src="/assets/crm/salida.json" [size]="22" [loop]="true"></app-lottie-icon>
+            </span>
             Registrar salida
           </button>
           <button type="button" class="btn-primary" (click)="openProductPanel()">
-            <span class="material-symbols-outlined" aria-hidden="true">add</span>
+            <span class="btn-lottie">
+              <app-lottie-icon src="/assets/crm/mas.json" [size]="22" [loop]="true"></app-lottie-icon>
+            </span>
             Nuevo producto
           </button>
         </div>
@@ -63,7 +70,9 @@ interface CartItem {
 
       <section class="kpis-grid">
         <article class="kpi-card">
-          <span class="material-symbols-outlined kpi-icon primary" aria-hidden="true">inventory_2</span>
+          <span class="kpi-icon primary">
+            <app-lottie-icon src="/assets/crm/productos.json" [size]="32" [loop]="true"></app-lottie-icon>
+          </span>
           <div>
             <p class="kpi-label">Productos</p>
             <strong>{{ products().length }}</strong>
@@ -71,7 +80,9 @@ interface CartItem {
           </div>
         </article>
         <article class="kpi-card">
-          <span class="material-symbols-outlined kpi-icon success" aria-hidden="true">payments</span>
+          <span class="kpi-icon success">
+            <app-lottie-icon src="/assets/crm/valorinventario.json" [size]="32" [loop]="true"></app-lottie-icon>
+          </span>
           <div>
             <p class="kpi-label">Valor inventario</p>
             <strong>{{ inventoryValue() | currency: 'COP' : 'symbol' : '1.0-0' }}</strong>
@@ -79,7 +90,9 @@ interface CartItem {
           </div>
         </article>
         <article class="kpi-card">
-          <span class="material-symbols-outlined kpi-icon warning" aria-hidden="true">warning</span>
+          <span class="kpi-icon warning">
+            <app-lottie-icon src="/assets/crm/stock.json" [size]="32" [loop]="true"></app-lottie-icon>
+          </span>
           <div>
             <p class="kpi-label">Stock bajo</p>
             <strong>{{ lowStockCount() }}</strong>
@@ -87,7 +100,9 @@ interface CartItem {
           </div>
         </article>
         <article class="kpi-card">
-          <span class="material-symbols-outlined kpi-icon info" aria-hidden="true">point_of_sale</span>
+          <span class="kpi-icon info">
+            <app-lottie-icon src="/assets/crm/ventas.json" [size]="32" [loop]="true"></app-lottie-icon>
+          </span>
           <div>
             <p class="kpi-label">Ventas registradas</p>
             <strong>{{ totalSales() | currency: 'COP' : 'symbol' : '1.0-0' }}</strong>
@@ -127,7 +142,7 @@ interface CartItem {
             <p>Agrega productos al carrito y registra la venta como salida de inventario.</p>
           </div>
           <span class="checkout-pill">
-            <span class="material-symbols-outlined" aria-hidden="true">shopping_cart</span>
+            <app-lottie-icon src="/assets/crm/puntoventa.json" [size]="20" [loop]="true"></app-lottie-icon>
             {{ cartTotalItems() }} artículos
           </span>
         </header>
@@ -170,7 +185,7 @@ interface CartItem {
 
           <aside class="cart-panel">
             <div class="cart-title">
-              <span class="material-symbols-outlined" aria-hidden="true">shopping_bag</span>
+              <app-lottie-icon src="/assets/crm/carrito.json" [size]="22" [loop]="true"></app-lottie-icon>
               <strong>Carrito</strong>
             </div>
 
@@ -337,7 +352,7 @@ interface CartItem {
       </section>
 
       <div *ngIf="panelMode()" class="drawer-backdrop" (click)="closePanel()"></div>
-      <aside *ngIf="panelMode()" class="drawer">
+      <aside *ngIf="panelMode()" class="drawer" [ngClass]="drawerClass()">
         <header class="drawer-header">
           <div>
             <h2>{{ panelMode() === 'product' ? 'Nuevo producto' : panelTitle() }}</h2>
@@ -431,7 +446,28 @@ interface CartItem {
         min-width: 0;
         max-width: 1400px;
         margin: 0 auto;
+        padding: 1.25rem 1.25rem 2rem;
         color: #0a0a0a;
+        background:
+          linear-gradient(rgba(248, 248, 248, 0.80), rgba(248, 248, 248, 0.80)),
+          url('/assets/crm/fondoinventario.png') center / cover no-repeat;
+        border-radius: 16px;
+      }
+
+      .btn-lottie {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 7px;
+        background: rgba(0, 0, 0, 0.06);
+        overflow: hidden;
+        flex-shrink: 0;
+      }
+
+      .btn-primary .btn-lottie {
+        background: rgba(0, 0, 0, 0.08);
       }
 
       .inventory-header,
@@ -512,6 +548,7 @@ interface CartItem {
         border-color: #d0d0d0;
       }
 
+
       .kpis-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -540,6 +577,7 @@ interface CartItem {
         border-radius: 12px;
         background: #f7f7f7;
         font-size: 1.35rem;
+        overflow: hidden;
       }
 
       .kpi-icon.primary {
@@ -650,8 +688,23 @@ interface CartItem {
         min-width: 0;
       }
 
+      .table-card {
+        background:
+          linear-gradient(rgba(255, 255, 255, 0.90), rgba(255, 252, 230, 0.84)),
+          url('/assets/crm/productoscard.png') center / cover no-repeat;
+      }
+
+      .activity-card {
+        background:
+          linear-gradient(rgba(255, 255, 255, 0.90), rgba(255, 252, 230, 0.84)),
+          url('/assets/crm/movientos.png') center / cover no-repeat;
+      }
+
       .checkout-card {
         margin-bottom: 1.5rem;
+        background:
+          linear-gradient(rgba(255, 255, 255, 0.90), rgba(255, 252, 230, 0.84)),
+          url('/assets/crm/puntoventa.png') center / cover no-repeat;
       }
 
       .checkout-header {
@@ -786,7 +839,9 @@ interface CartItem {
         max-height: 560px;
         border: 1px solid #e5e5e5;
         border-radius: 12px;
-        background: #fafafa;
+        background:
+          linear-gradient(rgba(250, 250, 250, 0.92), rgba(255, 252, 230, 0.86)),
+          url('/assets/crm/carrito.png') center / cover no-repeat;
         overflow: hidden;
       }
 
@@ -944,7 +999,9 @@ interface CartItem {
         padding: 1.15rem;
         border: 1px solid #ededed;
         border-radius: 16px;
-        background: #ffffff;
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.90) 0%, rgba(255, 252, 235, 0.84) 100%),
+          url('/assets/crm/productoscards.png') center / cover no-repeat;
         box-shadow: 0 10px 22px rgba(0, 0, 0, 0.05);
         transition:
           border-color 0.16s ease,
@@ -959,27 +1016,39 @@ interface CartItem {
       }
 
       .product-service-card.card-supplements {
-        background: linear-gradient(135deg, #ffffff 0%, #f6f0ff 100%);
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.90) 0%, rgba(246, 240, 255, 0.84) 100%),
+          url('/assets/crm/productoscards.png') center / cover no-repeat;
       }
 
       .product-service-card.card-drinks {
-        background: linear-gradient(135deg, #ffffff 0%, #eaf7ff 100%);
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.90) 0%, rgba(234, 247, 255, 0.84) 100%),
+          url('/assets/crm/productoscards.png') center / cover no-repeat;
       }
 
       .product-service-card.card-accessories {
-        background: linear-gradient(135deg, #ffffff 0%, #fff7df 100%);
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.90) 0%, rgba(255, 247, 223, 0.84) 100%),
+          url('/assets/crm/productoscards.png') center / cover no-repeat;
       }
 
       .product-service-card.card-apparel {
-        background: linear-gradient(135deg, #ffffff 0%, #fff0f7 100%);
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.90) 0%, rgba(255, 240, 247, 0.84) 100%),
+          url('/assets/crm/productoscards.png') center / cover no-repeat;
       }
 
       .product-service-card.card-equipment {
-        background: linear-gradient(135deg, #ffffff 0%, #f3f4f6 100%);
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.90) 0%, rgba(243, 244, 246, 0.84) 100%),
+          url('/assets/crm/productoscards.png') center / cover no-repeat;
       }
 
       .product-service-card.card-snacks {
-        background: linear-gradient(135deg, #ffffff 0%, #fff1e5 100%);
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.90) 0%, rgba(255, 241, 229, 0.84) 100%),
+          url('/assets/crm/productoscards.png') center / cover no-repeat;
       }
 
       .product-service-card.card-hygiene {
@@ -1445,6 +1514,25 @@ interface CartItem {
         box-shadow: -16px 0 34px rgba(0, 0, 0, 0.18);
         display: flex;
         flex-direction: column;
+        overflow: hidden;
+      }
+
+      .drawer-entrada {
+        background:
+          linear-gradient(rgba(255, 255, 255, 0.92), rgba(255, 252, 230, 0.88)),
+          url('/assets/crm/entrada.png') center / cover no-repeat;
+      }
+
+      .drawer-salida {
+        background:
+          linear-gradient(rgba(255, 255, 255, 0.92), rgba(255, 252, 230, 0.88)),
+          url('/assets/crm/salida.png') center / cover no-repeat;
+      }
+
+      .drawer-product {
+        background:
+          linear-gradient(rgba(255, 255, 255, 0.92), rgba(255, 252, 230, 0.88)),
+          url('/assets/crm/nuevoproducto.png') center / cover no-repeat;
       }
 
       .drawer-header {
@@ -1986,6 +2074,14 @@ export default class InventoryModule {
 
   panelTitle(): string {
     return this.movementForm.type === 'Entrada' ? 'Registrar entrada' : 'Registrar salida';
+  }
+
+  drawerClass(): string {
+    if (this.panelMode() === 'product') return 'drawer-product';
+    if (this.panelMode() === 'movement') {
+      return this.movementForm.type === 'Entrada' ? 'drawer-entrada' : 'drawer-salida';
+    }
+    return '';
   }
 
   closePanel(): void {

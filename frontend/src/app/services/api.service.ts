@@ -17,8 +17,9 @@ export interface UserSummary {
   document?: string;
   phone?: string;
   status?: string;
-  plan?: string;
-  membershipEndDate?: string;
+  plan?: string | null;
+  membershipStartDate?: string | null;
+  membershipEndDate?: string | null;
   created_at: string;
 }
 
@@ -86,12 +87,81 @@ export class ApiService {
     return this.http.get<PaginatedResponse<UserSummary>>(`${this.base}/users?page=${page}`);
   }
 
+  getUser(id: number): Observable<UserSummary> {
+    return this.http.get<UserSummary>(`${this.base}/users/${id}`);
+  }
+
+  updateUser(
+    id: number,
+    data: Partial<{
+      name: string;
+      email: string;
+      document: string;
+      phone: string;
+      status: string;
+      plan: string | null;
+      membershipStartDate: string | null;
+      membershipEndDate: string | null;
+    }>,
+  ): Observable<UserSummary> {
+    return this.http.patch<UserSummary>(`${this.base}/users/${id}`, data);
+  }
+
+  deleteUser(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.base}/users/${id}`);
+  }
+
   getPlans(page = 1): Observable<PaginatedResponse<PlanSummary>> {
     return this.http.get<PaginatedResponse<PlanSummary>>(`${this.base}/plans?page=${page}`);
   }
 
-  getPayments(page = 1): Observable<PaginatedResponse<PaymentSummary>> {
-    return this.http.get<PaginatedResponse<PaymentSummary>>(`${this.base}/payments?page=${page}`);
+  getPayments(
+    page = 1,
+    filters?: { status?: string; search?: string; user_id?: number },
+  ): Observable<PaginatedResponse<PaymentSummary>> {
+    let url = `${this.base}/payments?page=${page}`;
+    if (filters?.status) url += `&status=${filters.status}`;
+    if (filters?.search) url += `&search=${encodeURIComponent(filters.search)}`;
+    if (filters?.user_id) url += `&user_id=${filters.user_id}`;
+    return this.http.get<PaginatedResponse<PaymentSummary>>(url);
+  }
+
+  createPayment(data: {
+    user_id: number;
+    plan_id?: number | null;
+    amount: number;
+    method?: string;
+    reference?: string;
+    status?: string;
+    paid_at?: string;
+  }): Observable<PaymentSummary> {
+    return this.http.post<PaymentSummary>(`${this.base}/payments`, data);
+  }
+
+  updatePayment(
+    id: number,
+    data: { status?: string; paid_at?: string; method?: string; reference?: string; amount?: number },
+  ): Observable<PaymentSummary> {
+    return this.http.patch<PaymentSummary>(`${this.base}/payments/${id}`, data);
+  }
+
+  updatePlan(
+    id: number,
+    data: Partial<{
+      name: string;
+      price: number;
+      duration_days: number;
+      benefits: string;
+      active: boolean;
+      access_classes: boolean;
+      reservations_limit: number;
+    }>,
+  ): Observable<PlanSummary> {
+    return this.http.patch<PlanSummary>(`${this.base}/plans/${id}`, data);
+  }
+
+  deletePlan(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.base}/plans/${id}`);
   }
 
   createPlan(data: {
@@ -203,5 +273,61 @@ export class ApiService {
 
   deleteClass(id: number): Observable<void> {
     return this.http.delete<void>(`${this.base}/classes/${id}`);
+  }
+
+  // ─── Routines ─────────────────────────────────────
+  getRoutines(filters?: {
+    status?: string;
+    level?: string;
+    search?: string;
+  }): Observable<any[]> {
+    let url = `${this.base}/routines`;
+    const params: string[] = [];
+    if (filters?.status) params.push(`status=${encodeURIComponent(filters.status)}`);
+    if (filters?.level) params.push(`level=${encodeURIComponent(filters.level)}`);
+    if (filters?.search) params.push(`search=${encodeURIComponent(filters.search)}`);
+    if (params.length) url += '?' + params.join('&');
+    return this.http.get<any[]>(url);
+  }
+
+  createRoutine(data: any): Observable<any> {
+    return this.http.post<any>(`${this.base}/routines`, data);
+  }
+
+  updateRoutine(id: string | number, data: any): Observable<any> {
+    return this.http.patch<any>(`${this.base}/routines/${id}`, data);
+  }
+
+  deleteRoutine(id: string | number): Observable<void> {
+    return this.http.delete<void>(`${this.base}/routines/${id}`);
+  }
+
+  assignRoutine(
+    id: string | number,
+    data: { assignedMemberName?: string | null; assignedMemberId?: number | null },
+  ): Observable<any> {
+    return this.http.patch<any>(`${this.base}/routines/${id}/assign`, data);
+  }
+
+  // ─── Trainers ─────────────────────────────────────
+  getTrainers(filters?: { status?: string; search?: string }): Observable<any[]> {
+    let url = `${this.base}/trainers`;
+    const params: string[] = [];
+    if (filters?.status) params.push(`status=${encodeURIComponent(filters.status)}`);
+    if (filters?.search) params.push(`search=${encodeURIComponent(filters.search)}`);
+    if (params.length) url += '?' + params.join('&');
+    return this.http.get<any[]>(url);
+  }
+
+  createTrainer(data: any): Observable<any> {
+    return this.http.post<any>(`${this.base}/trainers`, data);
+  }
+
+  updateTrainer(id: string | number, data: any): Observable<any> {
+    return this.http.patch<any>(`${this.base}/trainers/${id}`, data);
+  }
+
+  deleteTrainer(id: string | number): Observable<void> {
+    return this.http.delete<void>(`${this.base}/trainers/${id}`);
   }
 }

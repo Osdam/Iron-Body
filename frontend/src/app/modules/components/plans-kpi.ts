@@ -1,9 +1,11 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { LottieIconComponent } from '../../shared/components/lottie-icon/lottie-icon.component';
 
 export interface KPIData {
   label: string;
-  icon: string;
+  icon?: string;
+  lottie?: string;
   value: string | number;
   suffix?: string;
   color?: 'success' | 'primary' | 'warning';
@@ -12,11 +14,19 @@ export interface KPIData {
 @Component({
   selector: 'app-plans-kpi',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, LottieIconComponent],
   template: `
     <article class="kpi-card" [class]="'color-' + (color || 'primary')">
       <div class="kpi-icon">
-        <span class="material-symbols-outlined" aria-hidden="true">{{ icon }}</span>
+        <app-lottie-icon
+          *ngIf="lottie; else materialIcon"
+          [src]="lottie"
+          [size]="36"
+          [loop]="true"
+        ></app-lottie-icon>
+        <ng-template #materialIcon>
+          <span class="material-symbols-outlined" aria-hidden="true">{{ icon }}</span>
+        </ng-template>
       </div>
       <div class="kpi-content">
         <div class="kpi-label">{{ label }}</div>
@@ -56,6 +66,7 @@ export interface KPIData {
         background: #f5f5f5;
         color: #404040;
         flex-shrink: 0;
+        overflow: hidden;
         transition: all 200ms ease;
       }
 
@@ -156,6 +167,7 @@ export interface KPIData {
 export class PlansKPIComponent {
   @Input() label: string = '';
   @Input() icon: string = 'info';
+  @Input() lottie: string = '';
   @Input() value: string | number = 0;
   @Input() suffix: string = '';
   @Input() color: 'success' | 'primary' | 'warning' = 'primary';

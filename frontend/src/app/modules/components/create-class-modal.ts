@@ -109,10 +109,10 @@ import { ApiService } from '../../services/api.service';
                 <label for="trainer_id" class="form-label">Entrenador asignado</label>
                 <select formControlName="trainer_id" class="form-select">
                   <option value="">Sin asignar</option>
-                  <option value="1">Carlos Ruiz</option>
-                  <option value="2">Laura Gómez</option>
-                  <option value="3">Andrés Martínez</option>
-                  <option value="4">Camila Torres</option>
+                  <option *ngFor="let t of trainers()" [value]="t.id">{{ t.name }}</option>
+                  <option *ngIf="trainers().length === 0" value="" disabled>
+                    (No hay entrenadores registrados aún)
+                  </option>
                 </select>
               </div>
 
@@ -739,6 +739,7 @@ export class CreateClassModalComponent implements OnInit {
   classForm!: FormGroup;
   isSaving = signal(false);
   errorMessage = signal('');
+  trainers = signal<{ id: number; name: string }[]>([]);
 
   constructor(
     private fb: FormBuilder,
@@ -749,6 +750,24 @@ export class CreateClassModalComponent implements OnInit {
 
   ngOnInit(): void {
     this.initializeForm();
+    this.loadTrainers();
+  }
+
+  private loadTrainers(): void {
+    // Sin filtro de status: el formulario de clases debe poder asignar cualquier
+    // entrenador registrado, independiente del label del status (Activo/active/etc).
+    this.api.getTrainers().subscribe({
+      next: (list) => {
+        const trainers = (list || []).map((t: any) => ({
+          id: typeof t.id === 'string' ? parseInt(t.id, 10) : t.id,
+          name: t.fullName || t.name || 'Sin nombre',
+        }));
+        this.trainers.set(trainers);
+      },
+      error: () => {
+        this.trainers.set([]);
+      },
+    });
   }
 
   private initializeForm(): void {
@@ -786,59 +805,59 @@ export class CreateClassModalComponent implements OnInit {
 
     const formData = this.classForm.value;
 
-    // TODO: Conectar con API real de Laravel
-    // this.api.createClass(formData).subscribe({...})
+    const payload: any = {
+      name: formData.name || '',
+      type: formData.type || '',
+      day_of_week: formData.day_of_week || '',
+      start_time: formData.start_time || '',
+      end_time: formData.end_time || '',
+      max_capacity: formData.max_capacity ? parseInt(formData.max_capacity, 10) : 20,
+      status: formData.status || 'active',
+    };
 
-    // MOCK: Por ahora usamos datos locales
-    setTimeout(() => {
-      try {
-        // Construir objeto con estructura correcta (snake_case)
-        const newClass = {
-          id: Math.floor(Math.random() * 10000),
-          name: formData.name || '',
-          type: formData.type || '',
-          trainer_id: formData.trainer_id ? parseInt(formData.trainer_id, 10) : null,
-          trainerName: formData.trainer_id
-            ? this.getTrainerName(formData.trainer_id)
-            : 'Sin asignar',
+    if (formData.duration_minutes) {
+      payload.duration_minutes = parseInt(formData.duration_minutes, 10);
+    }
+    if (formData.trainer_id) payload.trainer_id = parseInt(formData.trainer_id, 10);
+    if (formData.location) payload.location = formData.location;
+    if (formData.description) payload.description = formData.description;
+    if (formData.notes) payload.notes = formData.notes;
+    if (formData.is_recurring !== undefined) payload.is_recurring = formData.is_recurring === true;
+    if (formData.allow_online_booking !== undefined)
+      payload.allow_online_booking = formData.allow_online_booking === true;
+    if (formData.requires_active_plan !== undefined)
+      payload.requires_active_plan = formData.requires_active_plan === true;
+
+    this.api.createClass(payload).subscribe({
+      next: (created: any) => {
+        // El backend no almacena `date` (solo day_of_week); el padre lo calcula al normalizar.
+        const enriched = {
+          ...created,
           date: formData.date || '',
-          day_of_week: formData.day_of_week || '',
-          start_time: formData.start_time || '',
-          end_time: formData.end_time || '',
-          duration_minutes: formData.duration_minutes
-            ? parseInt(formData.duration_minutes, 10)
-            : 60,
-          max_capacity: formData.max_capacity ? parseInt(formData.max_capacity, 10) : 20,
-          enrolled_count: 0,
-          location: formData.location || '',
-          status: formData.status || 'active',
-          description: formData.description || '',
-          notes: formData.notes || '',
-          is_recurring: formData.is_recurring === true,
-          allow_online_booking: formData.allow_online_booking === true,
-          requires_active_plan: formData.requires_active_plan === true,
-          created_at: new Date().toISOString(),
+          trainerName: created.trainer?.name || this.getTrainerName(formData.trainer_id || ''),
+          enrolled_count: created.enrolled_count ?? 0,
         };
-
-        this.onClassCreated.emit(newClass);
-        this.close();
-      } catch (error) {
-        console.error('Error al crear clase:', error);
-        this.errorMessage.set('Error al procesar los datos. Por favor intenta nuevamente.');
-      } finally {
         this.isSaving.set(false);
-      }
-    }, 1200);
+        this.onClassCreated.emit(enriched);
+        this.close();
+      },
+      error: (err) => {
+        this.isSaving.set(false);
+        const msg =
+          err?.error?.message ||
+          (err?.status === 422
+            ? 'Datos inválidos. Revisa los campos del formulario.'
+            : 'No se pudo crear la clase. Intenta de nuevo.');
+        this.errorMessage.set(msg);
+      },
+    });
   }
 
-  private getTrainerName(trainerId: string): string {
-    const trainers: { [key: string]: string } = {
-      '1': 'Carlos Ruiz',
-      '2': 'Laura Gómez',
-      '3': 'Andrés Martínez',
-      '4': 'Camila Torres',
-    };
-    return trainers[trainerId] || 'Sin asignar';
+  private getTrainerName(trainerId: string | number): string {
+    if (!trainerId) return 'Sin asignar';
+    const id = typeof trainerId === 'string' ? parseInt(trainerId, 10) : trainerId;
+    const found = this.trainers().find((t) => t.id === id);
+    return found ? found.name : 'Sin asignar';
   }
 
   close(): void {

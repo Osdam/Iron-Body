@@ -7,6 +7,7 @@ import { ClassCardComponent, ClassCardData } from './components/class-card';
 import { ClassesEmptyComponent } from './components/classes-empty';
 import { CreateClassModalComponent } from './components/create-class-modal';
 import { ClassCalendarComponent } from './components/class-calendar';
+import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-icon.component';
 
 interface ClassExtended extends ClassSummary {
   trainerName?: string;
@@ -26,6 +27,7 @@ type ViewType = 'calendar' | 'cards';
     ClassesEmptyComponent,
     CreateClassModalComponent,
     ClassCalendarComponent,
+    LottieIconComponent,
   ],
   template: `
     <div class="classes-container">
@@ -47,7 +49,7 @@ type ViewType = 'calendar' | 'cards';
       <div class="kpi-section">
         <app-classes-kpi
           label="Clases Activas"
-          icon="school"
+          lottie="/assets/crm/clasesactivas.json"
           [value]="activeClassesCount()"
           suffix="clases"
           color="primary"
@@ -55,7 +57,7 @@ type ViewType = 'calendar' | 'cards';
 
         <app-classes-kpi
           label="Hoy"
-          icon="today"
+          lottie="/assets/crm/hoy.json"
           [value]="todayClassesCount()"
           suffix="clases"
           color="success"
@@ -63,7 +65,7 @@ type ViewType = 'calendar' | 'cards';
 
         <app-classes-kpi
           label="Slots Disponibles"
-          icon="event_seat"
+          lottie="/assets/crm/curps.json"
           [value]="availableSlotsCount()"
           suffix="cupos"
           color="warning"
@@ -71,7 +73,7 @@ type ViewType = 'calendar' | 'cards';
 
         <app-classes-kpi
           label="Inscritos Totales"
-          icon="group"
+          lottie="/assets/crm/insctiros.json"
           [value]="totalEnrolledCount()"
           suffix="personas"
           color="primary"
@@ -151,7 +153,13 @@ type ViewType = 'calendar' | 'cards';
           class="toggle-btn"
           aria-label="Vista calendario"
         >
-          <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+          <span class="toggle-lottie">
+            <app-lottie-icon
+              src="/assets/crm/calendario.json"
+              [size]="22"
+              [loop]="true"
+            ></app-lottie-icon>
+          </span>
           Calendario
         </button>
         <button
@@ -160,7 +168,13 @@ type ViewType = 'calendar' | 'cards';
           class="toggle-btn"
           aria-label="Vista tarjetas"
         >
-          <span class="material-symbols-outlined" aria-hidden="true">view_agenda</span>
+          <span class="toggle-lottie">
+            <app-lottie-icon
+              src="/assets/crm/vistatablavistacard.json"
+              [size]="22"
+              [loop]="true"
+            ></app-lottie-icon>
+          </span>
           Tarjetas
         </button>
       </div>
@@ -219,8 +233,26 @@ type ViewType = 'calendar' | 'cards';
         margin: 0 auto;
         box-sizing: border-box;
         padding: 2rem;
-        background: #f5f5f5;
+        background:
+          linear-gradient(rgba(248, 248, 248, 0.80), rgba(248, 248, 248, 0.80)),
+          url('/assets/crm/fondoclases.png') center / cover no-repeat;
+        border-radius: 16px;
         min-height: 100vh;
+      }
+
+      .toggle-lottie {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 7px;
+        background: rgba(0, 0, 0, 0.05);
+        overflow: hidden;
+      }
+
+      .toggle-btn.active .toggle-lottie {
+        background: rgba(0, 0, 0, 0.08);
       }
 
       .module-header {
@@ -656,10 +688,26 @@ export default class ClassesModule implements OnInit {
   private loadClasses(): void {
     this.isLoading.set(true);
 
-    // TODO: Cambiar por API real cuando el backend esté disponible
-    // this.api.getClasses().subscribe({...})
+    this.api.getClasses(1).subscribe({
+      next: (res) => {
+        const list = (res?.data || []).map((c: any) => ({
+          ...c,
+          trainerName: c.trainer?.name || c.trainerName || '',
+          date: c.date || this.getNextDateForDayOfWeek(c.day_of_week),
+          enrolled_count: c.enrolled_count ?? 0,
+        }));
+        this.allClasses.set(list as ClassExtended[]);
+        this.isLoading.set(false);
+      },
+      error: (err) => {
+        console.error('No se pudo cargar la lista de clases desde el backend:', err);
+        this.allClasses.set([]);
+        this.isLoading.set(false);
+      },
+    });
+  }
 
-    // MOCK: Datos de ejemplo
+  private loadMockClasses(): void {
     setTimeout(() => {
       this.allClasses.set([
         {
@@ -806,69 +854,73 @@ export default class ClassesModule implements OnInit {
     this.isModalOpen.set(false);
   }
 
-  handleClassCreated(newClass: any): void {
-    try {
-      // Validar y normalizar el objeto de la clase
-      if (!newClass || !newClass.id || !newClass.name || !newClass.type) {
-        console.error('Objeto de clase incompleto:', newClass);
-        return;
-      }
-
-      // Asegurar que todos los campos definidos tengan valores válidos
-      const normalizedClass: ClassExtended = {
-        id: newClass.id,
-        name: newClass.name || '',
-        type: newClass.type || '',
-        trainer_id: newClass.trainer_id || null,
-        day_of_week: newClass.day_of_week || '',
-        date: newClass.date || this.getNextDateForDayOfWeek(newClass.day_of_week || 'Lunes'),
-        start_time: newClass.start_time || '',
-        end_time: newClass.end_time || '',
-        duration_minutes: newClass.duration_minutes || 60,
-        max_capacity: newClass.max_capacity || 20,
-        enrolled_count: newClass.enrolled_count || 0,
-        location: newClass.location || '',
-        status: (newClass.status || 'active') as 'active' | 'inactive',
-        description: newClass.description || '',
-        notes: newClass.notes || '',
-        is_recurring: newClass.is_recurring === true,
-        allow_online_booking: newClass.allow_online_booking === true,
-        requires_active_plan: newClass.requires_active_plan === true,
-        created_at: newClass.created_at || new Date().toISOString(),
-        trainerName: newClass.trainerName || 'Sin asignar',
-      };
-
-      // Agregar a la lista
-      this.allClasses.update((classes) => [normalizedClass, ...classes]);
-      this.closeModal();
-    } catch (error) {
-      console.error('Error al procesar clase creada:', error);
-    }
+  handleClassCreated(_newClass: any): void {
+    // Cerrar modal y recargar desde backend para mantener una sola fuente de verdad.
+    // Esto refresca la lista, el calendario y las métricas (computed signals) automáticamente.
+    this.closeModal();
+    this.loadClasses();
   }
 
   editClass(cls: ClassExtended): void {
-    console.log('Editar clase:', cls);
-    // TODO: Implementar edición de clase
+    // El modal actual es create-only; mostramos info hasta que exista edit modal.
+    alert(
+      `Para editar la clase "${cls.name}" usa el modal de creación con sus mismos datos. Edición avanzada disponible próximamente.`,
+    );
   }
 
   viewEnrollments(cls: ClassExtended): void {
-    console.log('Ver inscritos:', cls);
-    // TODO: Implementar vista de inscritos
+    alert(
+      `Inscritos en "${cls.name}": ${cls.enrolled_count}/${cls.max_capacity}. Detalle por miembro disponible próximamente.`,
+    );
   }
 
   duplicateClass(cls: ClassExtended): void {
-    console.log('Duplicar clase:', cls);
-    // TODO: Implementar duplicación de clase
+    const payload: any = {
+      name: `Copia de ${cls.name}`,
+      type: cls.type,
+      day_of_week: cls.day_of_week,
+      start_time: cls.start_time,
+      end_time: cls.end_time,
+      duration_minutes: cls.duration_minutes,
+      max_capacity: cls.max_capacity,
+      location: cls.location,
+      status: 'inactive',
+      description: cls.description,
+      is_recurring: cls.is_recurring,
+      allow_online_booking: cls.allow_online_booking,
+      requires_active_plan: cls.requires_active_plan,
+      trainer_id: cls.trainer_id,
+    };
+    this.api.createClass(payload).subscribe({
+      next: (created: any) => {
+        this.allClasses.update((list) => [
+          { ...created, trainerName: cls.trainerName, date: cls.date },
+          ...list,
+        ]);
+      },
+      error: () => alert('No se pudo duplicar la clase. Intenta de nuevo.'),
+    });
   }
 
   toggleClassStatus(cls: ClassExtended): void {
-    console.log('Cambiar estado:', cls);
-    // TODO: Implementar cambio de estado
+    const next = cls.status === 'active' ? 'inactive' : 'active';
+    this.api.updateClass(cls.id, { status: next }).subscribe({
+      next: (updated: any) => {
+        this.allClasses.update((list) =>
+          list.map((c) => (c.id === cls.id ? { ...c, ...updated } : c)),
+        );
+      },
+      error: () => alert('No se pudo cambiar el estado de la clase.'),
+    });
   }
 
   deleteClass(cls: ClassExtended): void {
-    if (confirm(`¿Deseas eliminar la clase "${cls.name}"?`)) {
-      this.allClasses.update((classes) => classes.filter((c) => c.id !== cls.id));
-    }
+    if (!confirm(`¿Deseas eliminar la clase "${cls.name}"?`)) return;
+    this.api.deleteClass(cls.id).subscribe({
+      next: () => {
+        this.allClasses.update((classes) => classes.filter((c) => c.id !== cls.id));
+      },
+      error: () => alert('No se pudo eliminar la clase.'),
+    });
   }
 }

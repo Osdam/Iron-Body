@@ -21,7 +21,7 @@ export interface ChartData {
   standalone: true,
   imports: [CommonModule, BaseChartDirective],
   template: `
-    <div class="chart-card">
+    <div class="chart-card" [style.background]="cardBackground">
       <div class="chart-header">
         <div>
           <h3 class="chart-title">{{ title }}</h3>
@@ -134,6 +134,12 @@ export default class ReportsChartComponent {
   @Input() subtitle: string = '';
   @Input() chartData: ChartData = { labels: [], datasets: [] };
   @Input() stats?: { max: number; min: number; avg: number };
+  @Input() bgImage: string = '';
+
+  get cardBackground(): string {
+    if (!this.bgImage) return '';
+    return `linear-gradient(rgba(255, 255, 255, 0.93), rgba(255, 252, 235, 0.88)), url('${this.bgImage}') center / cover no-repeat`;
+  }
 
   chartOptions: ChartConfiguration['options'] = {
     responsive: true,

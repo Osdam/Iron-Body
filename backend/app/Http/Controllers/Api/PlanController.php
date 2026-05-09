@@ -33,7 +33,25 @@ class PlanController extends Controller
 
     public function update(Request $request, Plan $plan)
     {
-        $plan->update($request->all());
-        return $plan;
+        $data = $request->validate([
+            'name'               => 'sometimes|required|string|max:255',
+            'price'              => 'sometimes|required|numeric|min:0',
+            'duration_days'      => 'sometimes|required|integer|min:1',
+            'benefits'           => 'nullable|string',
+            'access_classes'     => 'nullable|boolean',
+            'reservations_limit' => 'nullable|integer|min:0',
+            'access_locations'   => 'nullable|string',
+            'restrictions'       => 'nullable|string',
+            'active'             => 'nullable|boolean',
+        ]);
+
+        $plan->update($data);
+        return response()->json($plan);
+    }
+
+    public function destroy(Plan $plan)
+    {
+        $plan->delete();
+        return response()->json(null, 204);
     }
 }

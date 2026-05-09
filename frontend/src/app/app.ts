@@ -8,6 +8,7 @@ import { NotificationsPoperoverComponent } from './shared/components/notificatio
 import { MessagesPoperoverComponent } from './shared/components/messages-popover/messages-popover.component';
 import { QuickAccessMenuComponent } from './shared/components/quick-access-menu/quick-access-menu.component';
 import { UserMenuComponent } from './shared/components/user-menu/user-menu.component';
+import { LottieIconComponent } from './shared/components/lottie-icon/lottie-icon.component';
 import { AuthService } from './services/auth.service';
 import { SupportService } from './shared/services/support.service';
 import { NotificationsService } from './shared/services/notifications.service';
@@ -32,6 +33,7 @@ type BackendHealthResponse = {
     MessagesPoperoverComponent,
     QuickAccessMenuComponent,
     UserMenuComponent,
+    LottieIconComponent,
   ],
   templateUrl: './app.html',
   styleUrls: ['./app.css'],

@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { PlanSummary } from '../../services/api.service';
+import { LottieIconComponent } from '../../shared/components/lottie-icon/lottie-icon.component';
 
 export type BadgeType =
   | 'active'
@@ -23,7 +24,7 @@ export interface PlanCardData extends PlanSummary {
 @Component({
   selector: 'app-plan-card',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, LottieIconComponent],
   template: `
     <div class="plan-card" [class.featured]="isFeatured()">
       <!-- Badge de estado -->
@@ -43,9 +44,7 @@ export interface PlanCardData extends PlanSummary {
 
       <!-- Icono del plan -->
       <div class="card-icon" [class.featured]="isFeatured()">
-        <span class="material-symbols-outlined" aria-hidden="true">
-          {{ getPlanIcon() }}
-        </span>
+        <app-lottie-icon src="/assets/crm/gym.json" [size]="44" [loop]="true"></app-lottie-icon>
       </div>
 
       <!-- Nombre del plan -->
@@ -139,7 +138,9 @@ export interface PlanCardData extends PlanSummary {
         display: flex;
         flex-direction: column;
         min-width: 0;
-        background: #fff;
+        background:
+          linear-gradient(rgba(255, 255, 255, 0.88), rgba(255, 252, 230, 0.82)),
+          url('/assets/crm/cardspalnes.png') center / cover no-repeat;
         border: 1px solid #e5e5e5;
         border-radius: 14px;
         padding: 2rem;
@@ -255,25 +256,25 @@ export interface PlanCardData extends PlanSummary {
       }
 
       .card-icon {
+        position: relative;
+        z-index: 1;
         display: grid;
         place-items: center;
-        width: 60px;
-        height: 60px;
-        border-radius: 12px;
-        background: #f5f5f5;
-        color: #404040;
-        font-size: 1.8rem;
+        width: 64px;
+        height: 64px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.85);
         margin-bottom: 1.25rem;
+        overflow: hidden;
         transition: all 300ms ease;
       }
 
       .card-icon.featured {
-        background: #0a0a0a;
-        color: #facc15;
+        background: rgba(250, 204, 21, 0.18);
       }
 
       .plan-card:hover .card-icon {
-        transform: scale(1.08);
+        transform: scale(1.06);
       }
 
       .plan-name {

@@ -1,10 +1,11 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
+import { LottieIconComponent } from '../../shared/components/lottie-icon/lottie-icon.component';
 
 @Component({
   selector: 'app-classes-kpi',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, LottieIconComponent],
   template: `
     <div class="kpi-card">
       <div class="kpi-header">
@@ -13,7 +14,15 @@ import { Component, Input } from '@angular/core';
           [style.backgroundColor]="'var(--color-' + color + ')'"
           [style.color]="getIconColor()"
         >
-          <span class="material-symbols-outlined" aria-hidden="true">{{ icon }}</span>
+          <app-lottie-icon
+            *ngIf="lottie; else materialIcon"
+            [src]="lottie"
+            [size]="32"
+            [loop]="true"
+          ></app-lottie-icon>
+          <ng-template #materialIcon>
+            <span class="material-symbols-outlined" aria-hidden="true">{{ icon }}</span>
+          </ng-template>
         </div>
         <span class="kpi-label">{{ label }}</span>
       </div>
@@ -72,6 +81,7 @@ import { Component, Input } from '@angular/core';
         border-radius: 10px;
         font-size: 1.5rem;
         flex-shrink: 0;
+        overflow: hidden;
       }
 
       .kpi-label {
@@ -116,6 +126,7 @@ import { Component, Input } from '@angular/core';
 export class ClassesKPIComponent {
   @Input() label: string = '';
   @Input() icon: string = 'school';
+  @Input() lottie: string = '';
   @Input() value: string | number = '0';
   @Input() suffix: string = '';
   @Input() color: 'primary' | 'success' | 'warning' = 'primary';

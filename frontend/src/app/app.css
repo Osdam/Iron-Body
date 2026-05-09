@@ -224,6 +224,21 @@
   color: var(--gold);
 }
 
+.topbar-lottie {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.top-actions button:hover .topbar-lottie {
+  background: rgba(250, 204, 21, 0.10);
+}
+
 .top-actions button.has-badge .badge {
   position: absolute;
   top: -4px;

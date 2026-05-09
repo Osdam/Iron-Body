@@ -1,12 +1,15 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject, signal, effect } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { ApiService, PlanSummary } from '../services/api.service';
 import { PlansKPIComponent } from './components/plans-kpi';
 import { PlanCardComponent, PlanCardData, BadgeType } from './components/plan-card';
 import { PlansTableComponent, PlanTableData } from './components/plans-table';
 import { PlansEmptyComponent } from './components/plans-empty';
 import { CreatePlanModalComponent } from './components/create-plan-modal';
+import { EditPlanModalComponent } from './components/edit-plan-modal';
+import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-icon.component';
 
 @Component({
   selector: 'module-plans',
@@ -19,9 +22,28 @@ import { CreatePlanModalComponent } from './components/create-plan-modal';
     PlansTableComponent,
     PlansEmptyComponent,
     CreatePlanModalComponent,
+    EditPlanModalComponent,
+    LottieIconComponent,
   ],
   template: `
     <section class="plans-page">
+      <!-- Toast de notificación -->
+      <div
+        *ngIf="notification()"
+        class="toast-notification"
+        [class.toast-success]="notification()?.type === 'success'"
+        [class.toast-error]="notification()?.type === 'error'"
+        role="alert"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">
+          {{ notification()?.type === 'success' ? 'check_circle' : 'error' }}
+        </span>
+        <span>{{ notification()?.message }}</span>
+        <button class="toast-close" (click)="clearNotification()" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
       <!-- Header premium -->
       <header class="plans-header">
         <div class="header-content">
@@ -30,53 +52,61 @@ import { CreatePlanModalComponent } from './components/create-plan-modal';
         </div>
         <div class="header-actions">
           <button type="button" class="btn-secondary" (click)="toggleView()">
-            <span class="material-symbols-outlined" aria-hidden="true">{{
-              isCardView() ? 'table_rows' : 'dashboard'
-            }}</span>
+            <span class="btn-lottie">
+              <app-lottie-icon
+                src="/assets/crm/vistatablavistacard.json"
+                [size]="22"
+                [loop]="true"
+              ></app-lottie-icon>
+            </span>
             {{ isCardView() ? 'Vista de tabla' : 'Vista de cards' }}
           </button>
           <button type="button" class="btn-primary" (click)="openCreatePlan()">
-            <span class="material-symbols-outlined" aria-hidden="true">add</span>
+            <span class="btn-lottie">
+              <app-lottie-icon src="/assets/crm/mas.json" [size]="22" [loop]="true"></app-lottie-icon>
+            </span>
             Crear plan
           </button>
         </div>
       </header>
 
-      <!-- Estados de carga y error -->
+      <!-- Estado de carga -->
       <div *ngIf="loading()" class="loading-state">
         <div class="spinner"></div>
         <p>Cargando planes...</p>
       </div>
 
+      <!-- Error -->
       <div *ngIf="error()" class="error-alert">
         <span class="material-symbols-outlined">error</span>
         <div>
           <strong>Error al cargar planes</strong>
           <p>{{ error() }}</p>
         </div>
+        <button class="btn-retry" (click)="loadPlans()">Reintentar</button>
       </div>
 
       <!-- Contenido principal -->
       <ng-container *ngIf="!loading() && !error()">
-        <!-- KPIs Premium -->
+        <!-- KPIs -->
         <section class="kpis-section">
           <app-plans-kpi
             label="Planes activos"
-            icon="loyalty"
+            lottie="/assets/crm/planesactivos.json"
             [value]="activePlans()"
             suffix="Disponibles"
             color="primary"
           ></app-plans-kpi>
           <app-plans-kpi
             label="Suscriptores"
-            icon="group"
+            lottie="/assets/crm/suscripcion.json"
             [value]="estimatedSubscribers()"
             suffix="Estimado"
             color="success"
           ></app-plans-kpi>
           <app-plans-kpi
             label="Ingreso mensual"
-            icon="trending_up"
+            lottie="/assets/crm/ingresomensual.json"
             [value]="formatCurrencyShort(monthlyMrr())"
             suffix="MRR"
             color="warning"
@@ -85,7 +115,8 @@ import { CreatePlanModalComponent } from './components/create-plan-modal';
 
         <!-- Filtros y búsqueda -->
         <section class="filters-section">
-          <div class="filter-group">
+          <div class="filter-group search-group">
+            <span class="material-symbols-outlined filter-icon">search</span>
             <input
               type="text"
               class="search-input"
@@ -93,7 +124,6 @@ import { CreatePlanModalComponent } from './components/create-plan-modal';
               [(ngModel)]="searchQuery"
               aria-label="Buscar planes"
             />
-            <span class="material-symbols-outlined">search</span>
           </div>
           <div class="filter-group">
             <select
@@ -119,6 +149,9 @@ import { CreatePlanModalComponent } from './components/create-plan-modal';
               <option value="annual">Anual</option>
             </select>
           </div>
+          <div class="filter-results" *ngIf="plans().length > 0">
+            <span>{{ filteredPlans().length }} de {{ plans().length }} plan(es)</span>
+          </div>
         </section>
 
         <!-- Estado vacío -->
@@ -136,7 +169,7 @@ import { CreatePlanModalComponent } from './components/create-plan-modal';
               (onViewMembers)="viewMembers($event)"
               (onDuplicate)="duplicatePlan($event)"
               (onToggleStatus)="toggleStatus($event)"
-              (onDelete)="deletePlan($event)"
+              (onDelete)="requestDelete($event)"
             ></app-plan-card>
           </div>
         </section>
@@ -148,18 +181,53 @@ import { CreatePlanModalComponent } from './components/create-plan-modal';
             (onEdit)="editPlan($event)"
             (onViewMembers)="viewMembers($event)"
             (onDuplicate)="duplicatePlan($event)"
-            (onDelete)="deletePlan($event)"
+            (onDelete)="requestDelete($event)"
           ></app-plans-table>
         </section>
       </ng-container>
     </section>
 
-    <!-- Modal -->
+    <!-- Diálogo de confirmación de eliminación -->
+    <div *ngIf="planToDelete()" class="modal-backdrop" (click)="cancelDelete()" aria-hidden="true"></div>
+    <div *ngIf="planToDelete()" class="confirm-dialog" role="alertdialog" aria-modal="true">
+      <div class="confirm-card">
+        <div class="confirm-icon">
+          <span class="material-symbols-outlined">delete_forever</span>
+        </div>
+        <h3>¿Eliminar plan?</h3>
+        <p>
+          Estás por eliminar el plan <strong>{{ planToDelete()?.name }}</strong>. Esta acción no se
+          puede deshacer.
+        </p>
+        <div class="confirm-actions">
+          <button class="btn-secondary" (click)="cancelDelete()" [disabled]="isDeleting()">
+            Cancelar
+          </button>
+          <button class="btn-danger" (click)="confirmDelete()" [disabled]="isDeleting()">
+            <span *ngIf="!isDeleting()">
+              <span class="material-symbols-outlined" style="font-size:1rem">delete</span>
+              Sí, eliminar
+            </span>
+            <span *ngIf="isDeleting()">Eliminando...</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Crear -->
     <app-create-plan-modal
       [isOpen]="isCreatePlanOpen"
       (onClose)="onCreatePlanModalClose()"
       (onPlanCreated)="onPlanCreated($event)"
     ></app-create-plan-modal>
+
+    <!-- Modal Editar -->
+    <app-edit-plan-modal
+      [isOpen]="isEditPlanOpen"
+      [plan]="planToEdit()"
+      (onClose)="onEditPlanModalClose()"
+      (onPlanUpdated)="onPlanUpdated($event)"
+    ></app-edit-plan-modal>
   `,
 
   styles: [
@@ -169,9 +237,81 @@ import { CreatePlanModalComponent } from './components/create-plan-modal';
         min-width: 0;
         max-width: 1400px;
         margin: 0 auto;
-        padding: 0;
+        padding: 1.25rem 1.25rem 2rem;
         color: #0a0a0a;
+        background:
+          linear-gradient(rgba(250, 250, 250, 0.78), rgba(250, 250, 250, 0.78)),
+          url('/assets/crm/cardpalnesmembresia.png') center / cover no-repeat;
+        border-radius: 16px;
       }
+
+      .btn-lottie {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 7px;
+        background: rgba(0, 0, 0, 0.06);
+        overflow: hidden;
+      }
+
+      .btn-primary .btn-lottie {
+        background: rgba(0, 0, 0, 0.08);
+      }
+
+      /* Toast */
+      .toast-notification {
+        position: fixed;
+        bottom: 2rem;
+        right: 2rem;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1rem 1.25rem;
+        border-radius: 12px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+        animation: slideInRight 300ms cubic-bezier(0.4, 0, 0.2, 1);
+        max-width: 380px;
+      }
+
+      @keyframes slideInRight {
+        from { opacity: 0; transform: translateX(50px); }
+        to { opacity: 1; transform: translateX(0); }
+      }
+
+      .toast-success {
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        color: #166534;
+      }
+
+      .toast-error {
+        background: #fee2e2;
+        border: 1px solid #fecaca;
+        color: #991b1b;
+      }
+
+      .toast-close {
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        color: currentColor;
+        opacity: 0.6;
+        border-radius: 6px;
+        transition: all 200ms ease;
+        margin-left: auto;
+        flex-shrink: 0;
+      }
+
+      .toast-close:hover { opacity: 1; background: rgba(0,0,0,0.05); }
 
       /* Header */
       .plans-header {
@@ -246,7 +386,22 @@ import { CreatePlanModalComponent } from './components/create-plan-modal';
         background: #f9f9f9;
       }
 
-      /* Loading y Error States */
+      .btn-retry {
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        border: 1px solid #fecaca;
+        background: transparent;
+        color: #991b1b;
+        cursor: pointer;
+        font-size: 0.85rem;
+        font-weight: 600;
+        transition: all 200ms ease;
+        margin-left: auto;
+      }
+
+      .btn-retry:hover { background: #fef2f2; }
+
+      /* Loading */
       .loading-state {
         display: flex;
         flex-direction: column;
@@ -266,11 +421,7 @@ import { CreatePlanModalComponent } from './components/create-plan-modal';
         animation: spin 1s linear infinite;
       }
 
-      @keyframes spin {
-        to {
-          transform: rotate(360deg);
-        }
-      }
+      @keyframes spin { to { transform: rotate(360deg); } }
 
       .error-alert {
         display: flex;
@@ -281,24 +432,13 @@ import { CreatePlanModalComponent } from './components/create-plan-modal';
         border-radius: 10px;
         color: #991b1b;
         margin-bottom: 2rem;
+        align-items: center;
       }
 
-      .error-alert span {
-        flex-shrink: 0;
-        font-size: 1.5rem;
-      }
+      .error-alert strong { display: block; margin-bottom: 0.25rem; }
+      .error-alert p { margin: 0; font-size: 0.9rem; }
 
-      .error-alert strong {
-        display: block;
-        margin-bottom: 0.25rem;
-      }
-
-      .error-alert p {
-        margin: 0;
-        font-size: 0.9rem;
-      }
-
-      /* KPIs Section */
+      /* KPIs */
       .kpis-section {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -306,18 +446,31 @@ import { CreatePlanModalComponent } from './components/create-plan-modal';
         margin-bottom: 2.5rem;
       }
 
-      /* Filters Section */
+      /* Filters */
       .filters-section {
         display: flex;
         gap: 1rem;
         margin-bottom: 2.5rem;
         flex-wrap: wrap;
+        align-items: center;
       }
 
       .filter-group {
         position: relative;
         flex: 1;
         min-width: 200px;
+      }
+
+      .search-group { flex: 2; min-width: 240px; }
+
+      .filter-icon {
+        position: absolute;
+        left: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #999;
+        pointer-events: none;
+        font-size: 1.1rem;
       }
 
       .search-input,
@@ -331,11 +484,20 @@ import { CreatePlanModalComponent } from './components/create-plan-modal';
         color: #0a0a0a;
         background: #fff;
         transition: all 200ms ease;
+        box-sizing: border-box;
       }
 
-      .search-input::placeholder {
-        color: #999;
+      .filter-select {
+        padding-left: 1rem;
+        cursor: pointer;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23999' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14L2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.75rem center;
+        padding-right: 2.5rem;
       }
+
+      .search-input::placeholder { color: #999; }
 
       .search-input:focus,
       .filter-select:focus {
@@ -344,142 +506,177 @@ import { CreatePlanModalComponent } from './components/create-plan-modal';
         box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.1);
       }
 
-      .filter-group span {
-        position: absolute;
-        left: 1rem;
-        top: 50%;
-        transform: translateY(-50%);
+      .filter-results {
+        font-size: 0.85rem;
         color: #999;
-        pointer-events: none;
+        white-space: nowrap;
+        font-weight: 500;
       }
 
-      /* Cards Section */
-      .cards-section {
-        animation: fadeIn 300ms ease;
-      }
+      /* Cards */
+      .cards-section { animation: fadeIn 300ms ease; }
 
       @keyframes fadeIn {
-        from {
-          opacity: 0;
-          transform: translateY(10px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
       }
 
       .cards-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
         gap: 1.5rem;
         margin-bottom: 2rem;
       }
 
-      /* Table Section */
-      .table-section {
-        animation: fadeIn 300ms ease;
+      .table-section { animation: fadeIn 300ms ease; }
+
+      /* Confirm Dialog */
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(2px);
+        z-index: 40;
       }
 
-      /* Responsivo */
+      .confirm-dialog {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 50;
+        padding: 1rem;
+      }
+
+      .confirm-card {
+        background: #fff;
+        border-radius: 14px;
+        border: 1px solid #e5e5e5;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+        padding: 2.5rem 2rem;
+        max-width: 420px;
+        width: 100%;
+        text-align: center;
+        animation: slideUp 300ms cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      @keyframes slideUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      .confirm-icon {
+        display: grid;
+        place-items: center;
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        background: #fee2e2;
+        color: #dc2626;
+        font-size: 1.75rem;
+        margin: 0 auto 1.25rem;
+      }
+
+      .confirm-card h3 {
+        font-family: Inter, sans-serif;
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: #0a0a0a;
+        margin: 0 0 0.75rem;
+      }
+
+      .confirm-card p {
+        color: #666;
+        line-height: 1.6;
+        margin: 0 0 2rem;
+        font-size: 0.95rem;
+      }
+
+      .confirm-actions {
+        display: flex;
+        gap: 0.75rem;
+        justify-content: center;
+      }
+
+      .btn-danger {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.875rem 1.5rem;
+        border-radius: 8px;
+        font-family: Inter, sans-serif;
+        font-weight: 600;
+        font-size: 0.95rem;
+        cursor: pointer;
+        transition: all 200ms ease;
+        border: none;
+        background: #dc2626;
+        color: #fff;
+      }
+
+      .btn-danger:hover:not(:disabled) {
+        background: #b91c1c;
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+      }
+
+      .btn-danger:disabled { opacity: 0.6; cursor: not-allowed; }
+
+      /* Responsive */
       @media (max-width: 1024px) {
-        .plans-header {
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 1.5rem;
-        }
-
-        .header-actions {
-          width: 100%;
-        }
-
-        .btn-primary,
-        .btn-secondary {
-          flex: 1;
-        }
-
-        .cards-grid {
-          grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
-          gap: 1.5rem;
-        }
-
-        .filters-section {
-          flex-direction: column;
-        }
-
-        .filter-group {
-          min-width: 100%;
-        }
+        .plans-header { flex-direction: column; align-items: flex-start; gap: 1.5rem; }
+        .header-actions { width: 100%; }
+        .btn-primary, .btn-secondary { flex: 1; justify-content: center; }
+        .cards-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); }
+        .filters-section { flex-direction: column; }
+        .filter-group, .search-group { min-width: 100%; }
       }
 
       @media (max-width: 768px) {
-        .header-content h1 {
-          font-size: 1.75rem;
-        }
-
-        .header-content p {
-          font-size: 0.95rem;
-        }
-
-        .kpis-section {
-          grid-template-columns: 1fr;
-        }
-
-        .cards-grid {
-          grid-template-columns: 1fr;
-          gap: 1.25rem;
-        }
-
-        .btn-primary,
-        .btn-secondary {
-          width: 100%;
-          justify-content: center;
-        }
+        .header-content h1 { font-size: 1.75rem; }
+        .header-content p { font-size: 0.95rem; }
+        .kpis-section { grid-template-columns: 1fr; }
+        .cards-grid { grid-template-columns: 1fr; gap: 1.25rem; }
       }
 
       @media (max-width: 480px) {
-        .header-content h1 {
-          font-size: 1.5rem;
-        }
-
-        .header-content p {
-          font-size: 0.9rem;
-        }
-
-        .plans-header {
-          margin-bottom: 1.75rem;
-          padding-bottom: 1.25rem;
-        }
-
-        .filters-section {
-          flex-direction: column;
-          gap: 0.75rem;
-        }
-
-        .kpis-section {
-          gap: 1rem;
-          margin-bottom: 1.75rem;
-        }
+        .header-content h1 { font-size: 1.5rem; }
+        .plans-header { margin-bottom: 1.75rem; padding-bottom: 1.25rem; }
+        .kpis-section { gap: 1rem; margin-bottom: 1.75rem; }
+        .toast-notification { right: 1rem; left: 1rem; bottom: 1rem; max-width: none; }
       }
     `,
   ],
 })
 export default class PlansModule implements OnInit {
   private api = inject(ApiService);
+  private router = inject(Router);
 
   // Estado
   plans = signal<PlanSummary[]>([]);
   loading = signal(true);
   error = signal('');
-  isCreatePlanOpen = signal(false);
 
-  // Controles de vista y filtros
+  // Notificación
+  notification = signal<{ type: 'success' | 'error'; message: string } | null>(null);
+  private notifTimer: any;
+
+  // Modales
+  isCreatePlanOpen = signal(false);
+  isEditPlanOpen = signal(false);
+  planToEdit = signal<PlanCardData | null>(null);
+
+  // Confirmación de eliminación
+  planToDelete = signal<PlanCardData | null>(null);
+  isDeleting = signal(false);
+
+  // Vista y filtros
   isCardView = signal(true);
   searchQuery = signal('');
   filterStatus = signal('');
   filterDuration = signal('');
 
-  // Datos enriquecidos con estimaciones
+  // Estimaciones por índice
   private readonly planEstimates = [
     { badge: 'recommended' as BadgeType, members: 24, income: 1920000, cycle: 'mensual' },
     { badge: 'bestseller' as BadgeType, members: 12, income: 2520000, cycle: 'trimestral' },
@@ -487,14 +684,24 @@ export default class PlansModule implements OnInit {
     { badge: 'premium' as BadgeType, members: 6, income: 900000, cycle: 'mensual' },
   ];
 
-  // Computados
   activePlans = signal(0);
   estimatedSubscribers = signal(0);
   monthlyMrr = signal(0);
-
   filteredPlans = signal<PlanSummary[]>([]);
 
+  constructor() {
+    effect(() => { this.searchQuery(); this.applyFilters(); });
+    effect(() => { this.filterStatus(); this.applyFilters(); });
+    effect(() => { this.filterDuration(); this.applyFilters(); });
+  }
+
   ngOnInit(): void {
+    this.loadPlans();
+  }
+
+  loadPlans(): void {
+    this.loading.set(true);
+    this.error.set('');
     this.api.getPlans().subscribe({
       next: (res) => {
         this.plans.set(res.data || []);
@@ -503,61 +710,112 @@ export default class PlansModule implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.error.set('No se pudieron cargar los planes desde Laravel.');
+        this.error.set('No se pudieron cargar los planes desde el servidor.');
         this.loading.set(false);
       },
     });
   }
 
-  toggleView(): void {
-    this.isCardView.update((v) => !v);
-  }
+  toggleView(): void { this.isCardView.update((v) => !v); }
 
-  openCreatePlan(): void {
-    this.isCreatePlanOpen.set(true);
-  }
+  openCreatePlan(): void { this.isCreatePlanOpen.set(true); }
 
-  onCreatePlanModalClose(): void {
-    this.isCreatePlanOpen.set(false);
-  }
+  onCreatePlanModalClose(): void { this.isCreatePlanOpen.set(false); }
 
   onPlanCreated(newPlan: PlanSummary): void {
-    // Agregar nuevo plan a la lista
     this.plans.update((plans) => [newPlan, ...plans]);
-
-    // Actualizar métricas
     this.updateMetrics();
-
-    // Aplicar filtros
     this.applyFilters();
-
-    // Cerrar modal
     this.isCreatePlanOpen.set(false);
+    this.showNotification('success', `Plan "${newPlan.name}" creado correctamente.`);
   }
 
   editPlan(plan: PlanCardData): void {
-    console.log('Editando plan:', plan);
-    alert(`Editar plan: ${plan.name}`);
+    this.planToEdit.set(plan);
+    this.isEditPlanOpen.set(true);
+  }
+
+  onEditPlanModalClose(): void {
+    this.isEditPlanOpen.set(false);
+    this.planToEdit.set(null);
+  }
+
+  onPlanUpdated(updated: PlanSummary): void {
+    this.plans.update((list) => list.map((p) => (p.id === updated.id ? updated : p)));
+    this.updateMetrics();
+    this.applyFilters();
+    this.isEditPlanOpen.set(false);
+    this.planToEdit.set(null);
+    this.showNotification('success', `Plan "${updated.name}" actualizado correctamente.`);
   }
 
   viewMembers(plan: PlanCardData): void {
-    console.log('Ver miembros del plan:', plan);
-    alert(`Ver ${plan.estimatedMembers} miembros del plan ${plan.name}`);
+    this.router.navigate(['/users'], { queryParams: { plan: plan.id } });
   }
 
   duplicatePlan(plan: PlanCardData): void {
-    console.log('Duplicando plan:', plan);
-    alert(`Duplicar plan: ${plan.name}`);
+    const duplicateData = {
+      name: `${plan.name} (copia)`,
+      price: plan.price,
+      duration_days: plan.duration_days,
+      benefits: plan.benefits || '',
+      active: true,
+      billing_cycle: plan.billingCycle || 'monthly',
+      plan_type: 'general',
+      description: plan.description || '',
+    };
+    this.api.createPlan(duplicateData as any).subscribe({
+      next: (newPlan) => {
+        this.plans.update((list) => [newPlan, ...list]);
+        this.updateMetrics();
+        this.applyFilters();
+        this.showNotification('success', `Plan "${plan.name}" duplicado correctamente.`);
+      },
+      error: () => this.showNotification('error', 'No se pudo duplicar el plan. Intenta de nuevo.'),
+    });
   }
 
   toggleStatus(plan: PlanCardData): void {
-    console.log('Cambiar estado:', plan);
-    alert(`${plan.active ? 'Desactivar' : 'Activar'} plan: ${plan.name}`);
+    const newActive = !plan.active;
+    this.api.updatePlan(plan.id, { active: newActive }).subscribe({
+      next: (updated) => {
+        this.plans.update((list) => list.map((p) => (p.id === updated.id ? updated : p)));
+        this.updateMetrics();
+        this.applyFilters();
+        const label = newActive ? 'activado' : 'desactivado';
+        this.showNotification('success', `Plan "${plan.name}" ${label} correctamente.`);
+      },
+      error: () => this.showNotification('error', 'No se pudo cambiar el estado del plan.'),
+    });
   }
 
-  deletePlan(plan: PlanCardData): void {
-    console.log('Eliminar plan:', plan);
-    alert(`¿Eliminar plan: ${plan.name}?`);
+  requestDelete(plan: PlanCardData): void {
+    this.planToDelete.set(plan);
+  }
+
+  cancelDelete(): void {
+    if (!this.isDeleting()) this.planToDelete.set(null);
+  }
+
+  confirmDelete(): void {
+    const plan = this.planToDelete();
+    if (!plan) return;
+    this.isDeleting.set(true);
+    this.api.deletePlan(plan.id).subscribe({
+      next: () => {
+        this.plans.update((list) => list.filter((p) => p.id !== plan.id));
+        this.updateMetrics();
+        this.applyFilters();
+        this.isDeleting.set(false);
+        this.planToDelete.set(null);
+        this.showNotification('success', `Plan "${plan.name}" eliminado.`);
+      },
+      error: () => {
+        this.isDeleting.set(false);
+        this.planToDelete.set(null);
+        this.showNotification('error', 'No se pudo eliminar el plan. Puede estar siendo usado por miembros.');
+      },
+    });
   }
 
   applyFilters(): void {
@@ -566,26 +824,15 @@ export default class PlansModule implements OnInit {
     const duration = this.filterDuration();
 
     const filtered = this.plans().filter((plan) => {
-      // Filtro por búsqueda
-      if (search && !plan.name.toLowerCase().includes(search)) {
-        return false;
-      }
-
-      // Filtro por estado
+      if (search && !plan.name.toLowerCase().includes(search)) return false;
       if (status === 'active' && !plan.active) return false;
       if (status === 'inactive' && plan.active) return false;
-
-      // Filtro por duración
       if (duration) {
-        if (duration === 'monthly' && (plan.duration_days < 28 || plan.duration_days > 31))
-          return false;
-        if (duration === 'quarterly' && (plan.duration_days < 85 || plan.duration_days > 95))
-          return false;
-        if (duration === 'semi' && (plan.duration_days < 170 || plan.duration_days > 190))
-          return false;
+        if (duration === 'monthly' && (plan.duration_days < 28 || plan.duration_days > 31)) return false;
+        if (duration === 'quarterly' && (plan.duration_days < 85 || plan.duration_days > 95)) return false;
+        if (duration === 'semi' && (plan.duration_days < 170 || plan.duration_days > 190)) return false;
         if (duration === 'annual' && plan.duration_days < 360) return false;
       }
-
       return true;
     });
 
@@ -595,29 +842,20 @@ export default class PlansModule implements OnInit {
   updateMetrics(): void {
     const allPlans = this.plans();
     this.activePlans.set(allPlans.filter((p) => p.active).length);
-
-    let totalSubscribers = 0;
+    let totalSubs = 0;
     let totalIncome = 0;
-
     allPlans.forEach((plan, index) => {
       const estimate = this.planEstimates[index] || { members: 5, income: 500000 };
-      totalSubscribers += estimate.members;
+      totalSubs += estimate.members;
       totalIncome += estimate.income;
     });
-
-    this.estimatedSubscribers.set(totalSubscribers);
+    this.estimatedSubscribers.set(totalSubs);
     this.monthlyMrr.set(totalIncome);
   }
 
-  enrichPlanData(plan: PlanSummary, index?: number): PlanCardData {
-    const idx = index ?? this.plans().indexOf(plan);
-    const estimate = this.planEstimates[idx] || {
-      badge: undefined,
-      members: 5,
-      income: 500000,
-      cycle: 'mes',
-    };
-
+  enrichPlanData(plan: PlanSummary): PlanCardData {
+    const idx = this.plans().indexOf(plan);
+    const estimate = this.planEstimates[idx] || { badge: undefined, members: 5, income: 500000, cycle: 'mes' };
     return {
       ...plan,
       badge: estimate.badge,
@@ -629,16 +867,10 @@ export default class PlansModule implements OnInit {
   }
 
   enrichPlansTableData(plansToEnrich: PlanSummary[]): PlanTableData[] {
-    return plansToEnrich.map((plan, idx) => {
+    return plansToEnrich.map((plan) => {
       const allIdx = this.plans().indexOf(plan);
       const estimate = this.planEstimates[allIdx] || { members: 5, income: 500000, cycle: 'mes' };
-
-      return {
-        ...plan,
-        estimatedMembers: estimate.members,
-        estimatedIncome: estimate.income,
-        billingCycle: estimate.cycle,
-      };
+      return { ...plan, estimatedMembers: estimate.members, estimatedIncome: estimate.income, billingCycle: estimate.cycle };
     });
   }
 
@@ -648,24 +880,14 @@ export default class PlansModule implements OnInit {
     return '$' + amount.toLocaleString('es-CO');
   }
 
-  // Watchers para aplicar filtros cuando cambian
-  constructor() {
-    // Watch para búsqueda
-    effect(() => {
-      this.searchQuery();
-      this.applyFilters();
-    });
+  showNotification(type: 'success' | 'error', message: string): void {
+    clearTimeout(this.notifTimer);
+    this.notification.set({ type, message });
+    this.notifTimer = setTimeout(() => this.notification.set(null), 4500);
+  }
 
-    // Watch para filtro de estado
-    effect(() => {
-      this.filterStatus();
-      this.applyFilters();
-    });
-
-    // Watch para filtro de duración
-    effect(() => {
-      this.filterDuration();
-      this.applyFilters();
-    });
+  clearNotification(): void {
+    clearTimeout(this.notifTimer);
+    this.notification.set(null);
   }
 }

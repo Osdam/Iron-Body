@@ -1,10 +1,13 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, computed, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+import { ApiService } from '../services/api.service';
 import RoutinesKpiComponent from './components/routines-kpi';
 import RoutinesFiltersComponent, { RoutineFilters } from './components/routines-filters';
 import RoutineCardComponent, { Routine, RoutineExercise } from './components/routine-card';
 import RoutinesTableComponent from './components/routines-table';
 import RoutineModalComponent, { RoutineModalMode } from './components/routine-modal';
+import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-icon.component';
 
 @Component({
   selector: 'module-routines',
@@ -16,6 +19,7 @@ import RoutineModalComponent, { RoutineModalMode } from './components/routine-mo
     RoutineCardComponent,
     RoutinesTableComponent,
     RoutineModalComponent,
+    LottieIconComponent,
   ],
   template: `
     <section class="routines-page">
@@ -27,14 +31,20 @@ import RoutineModalComponent, { RoutineModalMode } from './components/routine-mo
 
         <div class="header-right">
           <button type="button" class="btn-secondary" (click)="toggleView()">
-            <span class="material-symbols-outlined" aria-hidden="true">{{
-              selectedView() === 'cards' ? 'table_rows' : 'grid_view'
-            }}</span>
+            <span class="btn-lottie">
+              <app-lottie-icon
+                src="/assets/crm/vistatablavistacard.json"
+                [size]="22"
+                [loop]="true"
+              ></app-lottie-icon>
+            </span>
             {{ selectedView() === 'cards' ? 'Vista tabla' : 'Vista cards' }}
           </button>
 
           <button type="button" class="btn-primary" (click)="openCreateRoutineModal()">
-            <span class="material-symbols-outlined" aria-hidden="true">add</span>
+            <span class="btn-lottie">
+              <app-lottie-icon src="/assets/crm/mas.json" [size]="22" [loop]="true"></app-lottie-icon>
+            </span>
             Crear rutina
           </button>
         </div>
@@ -51,28 +61,28 @@ import RoutineModalComponent, { RoutineModalMode } from './components/routine-mo
       <section class="kpis">
         <app-routines-kpi
           title="Rutinas activas"
-          icon="check_circle"
+          lottie="/assets/crm/rutinasactivas.json"
           color="success"
           [value]="kpis().active"
           subtitle="En estado Activa"
         ></app-routines-kpi>
         <app-routines-kpi
           title="Rutinas asignadas"
-          icon="group"
+          lottie="/assets/crm/rutinasasignadas.json"
           color="info"
           [value]="kpis().assigned"
           subtitle="Asignadas a miembro"
         ></app-routines-kpi>
         <app-routines-kpi
           title="Plantillas disponibles"
-          icon="loyalty"
+          lottie="/assets/crm/plantilla.json"
           color="primary"
           [value]="kpis().templates"
           subtitle="Plantilla general"
         ></app-routines-kpi>
         <app-routines-kpi
           title="Ejercicios registrados"
-          icon="fitness_center"
+          lottie="/assets/crm/registroejercicio.json"
           color="warning"
           [value]="kpis().exercises"
           subtitle="Únicos en rutinas"
@@ -154,8 +164,13 @@ import RoutineModalComponent, { RoutineModalMode } from './components/routine-mo
       .routines-page {
         max-width: 1400px;
         margin: 0 auto;
-        padding: 0;
+        padding: 1.5rem 1.5rem 2rem;
         color: #0a0a0a;
+        background:
+          linear-gradient(rgba(250, 250, 250, 0.72), rgba(250, 250, 250, 0.72)),
+          url('/assets/crm/clases1.png') center / cover no-repeat;
+        border-radius: 16px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
       }
 
       .header {
@@ -235,6 +250,22 @@ import RoutineModalComponent, { RoutineModalMode } from './components/routine-mo
       .btn-secondary:hover {
         background: #f9f9f9;
         border-color: #d0d0d0;
+      }
+
+      .btn-lottie {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 7px;
+        background: rgba(0, 0, 0, 0.05);
+        overflow: hidden;
+        flex-shrink: 0;
+      }
+
+      .btn-primary .btn-lottie {
+        background: rgba(0, 0, 0, 0.08);
       }
 
       .kpis {
@@ -378,6 +409,8 @@ import RoutineModalComponent, { RoutineModalMode } from './components/routine-mo
   ],
 })
 export default class RoutinesModule implements OnInit {
+  private api = inject(ApiService);
+
   trainerOptions = [
     'Sin asignar',
     'Carlos Ruiz',
@@ -417,8 +450,21 @@ export default class RoutinesModule implements OnInit {
   kpis = computed(() => this.calculateRoutineKpis(this.filteredRoutines()));
 
   ngOnInit(): void {
-    // Backend no tiene rutinas todavía. Cargamos mock para visualizar el módulo.
-    this.routines.set(this.buildMockRoutines());
+    this.loadRoutines();
+  }
+
+  async loadRoutines(): Promise<void> {
+    try {
+      const list = await firstValueFrom(this.api.getRoutines());
+      this.routines.set((list || []) as Routine[]);
+    } catch (e: any) {
+      // Fallback al mock si el backend no responde
+      this.routines.set(this.buildMockRoutines());
+      this.notice.set({
+        kind: 'info',
+        message: 'Backend no disponible; mostrando datos de ejemplo.',
+      });
+    }
   }
 
   toggleView(): void {
@@ -468,19 +514,28 @@ export default class RoutinesModule implements OnInit {
     this.notice.set(null);
 
     try {
-      await new Promise((r) => setTimeout(r, 450));
-
       const mode = this.modalMode();
+      const body = {
+        name: String(payload.name || '').trim(),
+        objective: payload.objective ?? null,
+        level: payload.level ?? null,
+        durationMinutes: Number(payload.durationMinutes || 0),
+        daysPerWeek: Number(payload.daysPerWeek || 0),
+        trainerName: payload.trainerName ?? null,
+        assignedMemberName: payload.assignedMemberName ?? null,
+        status: payload.status || 'Activa',
+        description: payload.description ?? null,
+        notes: payload.notes ?? null,
+        exercises: this.normalizeExercises(payload.exercises || []),
+      };
+
       if (mode === 'edit') {
         const current = this.selectedRoutine();
         if (!current) throw new Error('Rutina no encontrada para edición.');
 
-        const updated: Routine = {
-          ...current,
-          ...payload,
-          exercises: this.normalizeExercises(payload.exercises || current.exercises),
-          updatedAt: new Date().toISOString(),
-        };
+        const updated = (await firstValueFrom(
+          this.api.updateRoutine(current.id, body),
+        )) as Routine;
 
         this.routines.set(this.routines().map((r) => (r.id === current.id ? updated : r)));
         this.notice.set({ kind: 'success', message: 'Rutina actualizada correctamente.' });
@@ -488,30 +543,17 @@ export default class RoutinesModule implements OnInit {
         return;
       }
 
-      // Create
-      const now = new Date().toISOString();
-      const routine: Routine = {
-        id: this.newId('routine'),
-        name: String(payload.name || '').trim(),
-        objective: String(payload.objective || ''),
-        level: String(payload.level || ''),
-        durationMinutes: Number(payload.durationMinutes || 0),
-        daysPerWeek: Number(payload.daysPerWeek || 0),
-        trainerName: payload.trainerName || 'Sin asignar',
-        assignedMemberName: payload.assignedMemberName || 'Plantilla general',
-        status: payload.status || 'Activa',
-        description: payload.description || '',
-        notes: payload.notes || '',
-        exercises: this.normalizeExercises(payload.exercises || []),
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      this.routines.set([routine, ...this.routines()]);
+      const created = (await firstValueFrom(this.api.createRoutine(body))) as Routine;
+      this.routines.set([created, ...this.routines()]);
       this.notice.set({ kind: 'success', message: 'Rutina creada correctamente.' });
       this.closeRoutineModal();
     } catch (e: any) {
-      this.notice.set({ kind: 'error', message: e?.message || 'No se pudo guardar la rutina.' });
+      const msg =
+        e?.error?.message ||
+        (e?.status === 422 ? 'Datos inválidos. Revisa el formulario.' : null) ||
+        e?.message ||
+        'No se pudo guardar la rutina.';
+      this.notice.set({ kind: 'error', message: msg });
     } finally {
       this.isSavingRoutine.set(false);
     }
@@ -522,63 +564,89 @@ export default class RoutinesModule implements OnInit {
     this.notice.set(null);
 
     try {
-      await new Promise((r) => setTimeout(r, 350));
-
       const current = this.selectedRoutine();
       if (!current) throw new Error('Rutina no encontrada para asignación.');
 
-      const updated: Routine = {
-        ...current,
-        assignedMemberName: payload.assignedMemberName || 'Plantilla general',
-        updatedAt: new Date().toISOString(),
-      };
+      const updated = (await firstValueFrom(
+        this.api.assignRoutine(current.id, {
+          assignedMemberName: payload.assignedMemberName || null,
+        }),
+      )) as Routine;
 
       this.routines.set(this.routines().map((r) => (r.id === current.id ? updated : r)));
       this.notice.set({ kind: 'success', message: 'Asignación actualizada correctamente.' });
       this.closeRoutineModal();
     } catch (e: any) {
-      this.notice.set({ kind: 'error', message: e?.message || 'No se pudo asignar la rutina.' });
+      this.notice.set({
+        kind: 'error',
+        message: e?.error?.message || e?.message || 'No se pudo asignar la rutina.',
+      });
     } finally {
       this.isSavingRoutine.set(false);
     }
   }
 
-  duplicateRoutine(routine: Routine): void {
-    const now = new Date().toISOString();
-    const copy: Routine = {
-      ...routine,
-      id: this.newId('routine'),
-      name: `Copia de ${routine.name}`,
-      status: 'Borrador',
-      assignedMemberName: 'Plantilla general',
-      exercises: (routine.exercises || []).map((e, idx) => ({
-        ...e,
-        id: this.newId('ex'),
-        order: idx + 1,
-      })),
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    this.routines.set([copy, ...this.routines()]);
-    this.notice.set({ kind: 'success', message: 'Rutina duplicada como borrador.' });
+  async duplicateRoutine(routine: Routine): Promise<void> {
+    try {
+      const body = {
+        name: `Copia de ${routine.name}`,
+        objective: routine.objective,
+        level: routine.level,
+        durationMinutes: routine.durationMinutes,
+        daysPerWeek: routine.daysPerWeek,
+        trainerName: routine.trainerName,
+        assignedMemberName: 'Plantilla general',
+        status: 'Borrador',
+        description: routine.description,
+        notes: routine.notes,
+        exercises: (routine.exercises || []).map((e, idx) => ({
+          ...e,
+          order: idx + 1,
+        })),
+      };
+      const created = (await firstValueFrom(this.api.createRoutine(body))) as Routine;
+      this.routines.set([created, ...this.routines()]);
+      this.notice.set({ kind: 'success', message: 'Rutina duplicada como borrador.' });
+    } catch (e: any) {
+      this.notice.set({
+        kind: 'error',
+        message: e?.error?.message || e?.message || 'No se pudo duplicar la rutina.',
+      });
+    }
   }
 
-  toggleRoutineStatus(routine: Routine): void {
+  async toggleRoutineStatus(routine: Routine): Promise<void> {
     const current = (routine.status || '').toLowerCase();
     const next = current.includes('activa') ? 'Inactiva' : 'Activa';
-    const updated: Routine = { ...routine, status: next, updatedAt: new Date().toISOString() };
-    this.routines.set(this.routines().map((r) => (r.id === routine.id ? updated : r)));
-    this.notice.set({ kind: 'success', message: `Estado actualizado a ${next}.` });
+    try {
+      const updated = (await firstValueFrom(
+        this.api.updateRoutine(routine.id, { status: next }),
+      )) as Routine;
+      this.routines.set(this.routines().map((r) => (r.id === routine.id ? updated : r)));
+      this.notice.set({ kind: 'success', message: `Estado actualizado a ${next}.` });
+    } catch (e: any) {
+      this.notice.set({
+        kind: 'error',
+        message: e?.error?.message || e?.message || 'No se pudo cambiar el estado.',
+      });
+    }
   }
 
-  deleteRoutine(routine: Routine): void {
+  async deleteRoutine(routine: Routine): Promise<void> {
     const ok = window.confirm(
       `¿Eliminar la rutina "${routine.name}"? Esta acción no se puede deshacer.`,
     );
     if (!ok) return;
-    this.routines.set(this.routines().filter((r) => r.id !== routine.id));
-    this.notice.set({ kind: 'success', message: 'Rutina eliminada.' });
+    try {
+      await firstValueFrom(this.api.deleteRoutine(routine.id));
+      this.routines.set(this.routines().filter((r) => r.id !== routine.id));
+      this.notice.set({ kind: 'success', message: 'Rutina eliminada.' });
+    } catch (e: any) {
+      this.notice.set({
+        kind: 'error',
+        message: e?.error?.message || e?.message || 'No se pudo eliminar la rutina.',
+      });
+    }
   }
 
   trackRoutine = (_: number, r: Routine) => r.id;

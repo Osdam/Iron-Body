@@ -1,24 +1,21 @@
 import { CommonModule } from '@angular/common';
 import { Component, Output, EventEmitter } from '@angular/core';
+import { LottieIconComponent } from '../../shared/components/lottie-icon/lottie-icon.component';
 
 @Component({
   selector: 'app-members-empty',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, LottieIconComponent],
   template: `
     <div class="empty-state">
       <div class="empty-icon">
-        <span class="material-symbols-outlined" aria-hidden="true">people</span>
+        <app-lottie-icon src="/assets/crm/miembros.json" [size]="64" [loop]="true"></app-lottie-icon>
       </div>
       <h3 class="empty-title">Todavía no hay miembros registrados</h3>
       <p class="empty-description">
         Registra tu primer miembro para comenzar a gestionar datos personales, contacto, membresía y
         estado dentro del gimnasio.
       </p>
-      <button type="button" class="btn-register-first" (onClick)="onCreate.emit()">
-        <span class="material-symbols-outlined" aria-hidden="true">person_add</span>
-        Registrar primer miembro
-      </button>
     </div>
   `,
   styles: [
@@ -51,13 +48,11 @@ import { Component, Output, EventEmitter } from '@angular/core';
       .empty-icon {
         display: grid;
         place-items: center;
-        width: 80px;
-        height: 80px;
+        width: 96px;
+        height: 96px;
         background: rgba(250, 204, 21, 0.1);
-        border-radius: 16px;
+        border-radius: 20px;
         margin-bottom: 1.5rem;
-        font-size: 2.5rem;
-        color: #ca8a04;
       }
 
       .empty-title {
@@ -72,40 +67,9 @@ import { Component, Output, EventEmitter } from '@angular/core';
       .empty-description {
         font-size: 0.95rem;
         color: #666;
-        margin: 0 0 2rem;
+        margin: 0;
         max-width: 400px;
         line-height: 1.6;
-      }
-
-      .btn-register-first {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.75rem;
-        padding: 1rem 2rem;
-        background: #facc15;
-        color: #000;
-        border: none;
-        border-radius: 10px;
-        font-family: Inter, sans-serif;
-        font-weight: 600;
-        font-size: 1rem;
-        cursor: pointer;
-        transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: 0 4px 12px rgba(250, 204, 21, 0.2);
-      }
-
-      .btn-register-first:hover {
-        background: #f0c00e;
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(250, 204, 21, 0.3);
-      }
-
-      .btn-register-first:active {
-        transform: translateY(0);
-      }
-
-      .btn-register-first span {
-        font-size: 1.25rem;
       }
 
       @media (max-width: 640px) {
@@ -115,9 +79,8 @@ import { Component, Output, EventEmitter } from '@angular/core';
         }
 
         .empty-icon {
-          width: 60px;
-          height: 60px;
-          font-size: 2rem;
+          width: 76px;
+          height: 76px;
           margin-bottom: 1rem;
         }
 
@@ -126,11 +89,6 @@ import { Component, Output, EventEmitter } from '@angular/core';
         }
 
         .empty-description {
-          font-size: 0.9rem;
-        }
-
-        .btn-register-first {
-          padding: 0.875rem 1.5rem;
           font-size: 0.9rem;
         }
       }

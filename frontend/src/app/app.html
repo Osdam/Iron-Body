@@ -95,19 +95,43 @@
           (click)="toggleNotifications()"
           [class.has-badge]="notificationsService.unreadCount() > 0"
         >
-          <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
+          <span class="topbar-lottie">
+            <app-lottie-icon
+              src="/assets/crm/notificacion.json"
+              [size]="26"
+              [loop]="true"
+            ></app-lottie-icon>
+          </span>
           <span *ngIf="notificationsService.unreadCount() > 0" class="badge">
             {{ notificationsService.unreadCount() }}
           </span>
         </button>
         <button type="button" aria-label="Mensajes" (click)="toggleMessages()">
-          <span class="material-symbols-outlined" aria-hidden="true">chat_bubble</span>
+          <span class="topbar-lottie">
+            <app-lottie-icon
+              src="/assets/crm/mesajes.json"
+              [size]="26"
+              [loop]="true"
+            ></app-lottie-icon>
+          </span>
         </button>
         <button type="button" aria-label="Acceso rápido" (click)="toggleQuickAccess()">
-          <span class="material-symbols-outlined" aria-hidden="true">apps</span>
+          <span class="topbar-lottie">
+            <app-lottie-icon
+              src="/assets/crm/accesosrapidos.json"
+              [size]="26"
+              [loop]="true"
+            ></app-lottie-icon>
+          </span>
         </button>
         <button type="button" aria-label="Menú de usuario" (click)="toggleUserMenu()">
-          <span class="material-symbols-outlined" aria-hidden="true">account_circle</span>
+          <span class="topbar-lottie">
+            <app-lottie-icon
+              src="/assets/crm/user.json"
+              [size]="26"
+              [loop]="true"
+            ></app-lottie-icon>
+          </span>
         </button>
       </div>
     </header>

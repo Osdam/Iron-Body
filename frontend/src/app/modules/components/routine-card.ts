@@ -141,7 +141,9 @@ export interface Routine {
       .card {
         border: 1px solid #ededed;
         border-radius: 18px;
-        background: #ffffff;
+        background:
+          linear-gradient(rgba(255, 255, 255, 0.80), rgba(255, 252, 226, 0.74)),
+          url('/assets/crm/clases2.png') center / cover no-repeat;
         box-shadow: 0 14px 34px rgba(0, 0, 0, 0.05);
         padding: 1.25rem;
         display: flex;
