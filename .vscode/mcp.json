@@ -1,0 +1,10 @@
+{
+  "servers": {
+    "stitch": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@_davideast/stitch-mcp", "proxy"],
+      "envFile": "${workspaceFolder}/.env"
+    }
+  }
+}
