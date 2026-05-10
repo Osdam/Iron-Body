@@ -27,19 +27,7 @@ String lottieForProduct(ProductModel p) {
   }
 }
 
-Widget _productObjectFor(
-    ProductModel p, VoidCallback onAdd, VoidCallback onTap) {
-  switch (p.category) {
-    case 'Bebidas':
-      return _DrinkObject(product: p, onAdd: onAdd, onTap: onTap);
-    case 'Snacks':
-      return _SnackObject(product: p, onAdd: onAdd, onTap: onTap);
-    default:
-      return _SupplementObject(product: p, onAdd: onAdd, onTap: onTap);
-  }
-}
-
-// ── StoreScreen ─────────────────────────────────────────────────────────────
+// ── StoreScreen ──────────────────────────────────────────────────────────────
 
 class StoreScreen extends StatefulWidget {
   const StoreScreen({super.key});
@@ -130,7 +118,7 @@ class _StoreScreenState extends State<StoreScreen> {
       ),
       body: Column(
         children: [
-          // ── Búsqueda ───────────────────────────────────────────────────
+          // ── Search ──────────────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
             child: TextField(
@@ -138,8 +126,7 @@ class _StoreScreenState extends State<StoreScreen> {
               style: GoogleFonts.inter(fontSize: 14),
               decoration: InputDecoration(
                 hintText: 'Buscar producto...',
-                hintStyle:
-                    GoogleFonts.inter(color: AppColors.textDisabled),
+                hintStyle: GoogleFonts.inter(color: AppColors.textDisabled),
                 prefixIcon: const Icon(Icons.search_rounded,
                     color: AppColors.textSecondary, size: 20),
                 filled: true,
@@ -147,14 +134,14 @@ class _StoreScreenState extends State<StoreScreen> {
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 12),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
             ),
           ),
           const Gap(10),
 
-          // ── Categorías ─────────────────────────────────────────────────
+          // ── Categories ──────────────────────────────────────────────────
           SizedBox(
             height: 36,
             child: ListView.separated(
@@ -177,9 +164,7 @@ class _StoreScreenState extends State<StoreScreen> {
                           : AppColors.surfaceContainerLow,
                       borderRadius: BorderRadius.circular(99),
                       border: Border.all(
-                          color: active
-                              ? AppColors.dark
-                              : AppColors.border),
+                          color: active ? AppColors.dark : AppColors.border),
                     ),
                     child: Text(c,
                         style: GoogleFonts.lexend(
@@ -195,13 +180,12 @@ class _StoreScreenState extends State<StoreScreen> {
           ),
           const Gap(12),
 
-          // ── Stack deck ─────────────────────────────────────────────────
+          // ── Stack deck ──────────────────────────────────────────────────
           Expanded(
             child: products.isEmpty
                 ? _emptyState()
                 : Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 24),
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: _StackDeck(
                       key: ValueKey('${_search}_$_category'),
                       products: products,
@@ -210,8 +194,7 @@ class _StoreScreenState extends State<StoreScreen> {
                         context,
                         MaterialPageRoute(
                           builder: (_) => ProductDetailScreen(
-                              product: p,
-                              onAdd: () => _addToCart(p)),
+                              product: p, onAdd: () => _addToCart(p)),
                         ),
                       ),
                     ),
@@ -245,14 +228,11 @@ class _StoreScreenState extends State<StoreScreen> {
 
 // ── Stack Deck ───────────────────────────────────────────────────────────────
 //
-// Slot transforms at rest (more pronounced than before):
-//   slot 0 (front): ty=0,  scale=1.00, opacity=1.00
-//   slot 1 (mid):   ty=22, scale=0.86, opacity=0.70
-//   slot 2 (back):  ty=40, scale=0.74, opacity=0.45
-//
-// Swipe DOWN → next   (front exits down, ghosts rise)
-// Swipe UP   → prev   (prev card descends from above)
-// Release < threshold → animated snap-back
+// cardH = 63% of available height → leaves 37% as visible stack zone.
+// ScaleX-only: ghost cards keep full height so peek = ty exactly.
+//   slot 0 (front): ty=0,  sx=1.00, op=1.00
+//   slot 1 (mid):   ty=52, sx=0.93, op=0.72  → 52 px peeking below front
+//   slot 2 (back):  ty=90, sx=0.86, op=0.44  → 90 px peeking below front
 
 class _StackDeck extends StatefulWidget {
   final List<ProductModel> products;
@@ -269,8 +249,7 @@ class _StackDeck extends StatefulWidget {
   State<_StackDeck> createState() => _StackDeckState();
 }
 
-class _StackDeckState extends State<_StackDeck>
-    with TickerProviderStateMixin {
+class _StackDeckState extends State<_StackDeck> with TickerProviderStateMixin {
   int _idx = 0;
   double _drag = 0;
   double _dragSnapshot = 0;
@@ -281,21 +260,19 @@ class _StackDeckState extends State<_StackDeck>
   bool _committing = false;
   bool _snapping = false;
   double _snapStart = 0;
-  int _dir = 0; // 1=next, -1=prev
+  int _dir = 0;
 
-  static const _thresh = 68.0;
-  // Pronounced stack visual separation
-  static const _kTY = [0.0, 22.0, 40.0];
-  static const _kSC = [1.00, 0.86, 0.74];
-  static const _kOP = [1.00, 0.70, 0.45];
+  static const _thresh = 72.0;
+  static const _kTY = [0.0, 52.0, 90.0];
+  static const _kSX = [1.00, 0.93, 0.86];
+  static const _kOP = [1.00, 0.72, 0.44];
 
   @override
   void initState() {
     super.initState();
 
     _commitCtrl = AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 390))
+        vsync: this, duration: const Duration(milliseconds: 390))
       ..addListener(() => setState(() {}))
       ..addStatusListener((s) {
         if (s == AnimationStatus.completed) {
@@ -312,13 +289,12 @@ class _StackDeckState extends State<_StackDeck>
       });
 
     _snapCtrl = AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 300))
+        vsync: this, duration: const Duration(milliseconds: 300))
       ..addListener(() {
         if (!_snapping) return;
         setState(() {
-          _drag = _lerp(_snapStart, 0,
-              Curves.easeOutQuart.transform(_snapCtrl.value));
+          _drag = _lerp(
+              _snapStart, 0, Curves.easeOutQuart.transform(_snapCtrl.value));
         });
       })
       ..addStatusListener((s) {
@@ -381,20 +357,17 @@ class _StackDeckState extends State<_StackDeck>
     _commitCtrl.forward(from: 0);
   }
 
-  double get _animP =>
-      Curves.easeInOutCubic.transform(_commitCtrl.value);
-
-  double get _dragP =>
-      (_drag.abs() / _thresh).clamp(0.0, 1.0);
+  double get _animP => Curves.easeInOutCubic.transform(_commitCtrl.value);
+  double get _dragP => (_drag.abs() / _thresh).clamp(0.0, 1.0);
 
   @override
   Widget build(BuildContext context) {
     final ps = widget.products;
     return LayoutBuilder(builder: (_, box) {
-      final cardH = box.maxHeight - 44;
-      return Column(
+      final cardH = (box.maxHeight * 0.63).clamp(240.0, 420.0);
+      return Stack(
         children: [
-          Expanded(
+          Positioned.fill(
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
               onVerticalDragUpdate: _onDragUpdate,
@@ -406,9 +379,17 @@ class _StackDeckState extends State<_StackDeck>
               ),
             ),
           ),
-          const Gap(6),
-          _buildCounter(ps),
-          const Gap(6),
+          Positioned(
+            right: 0,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: _SwipeIndicator(
+                canGoUp: _idx > 0,
+                canGoDown: _idx < ps.length - 1,
+              ),
+            ),
+          ),
         ],
       );
     });
@@ -416,8 +397,7 @@ class _StackDeckState extends State<_StackDeck>
 
   List<Widget> _buildLayers(List<ProductModel> ps, double cardH) {
     final layers = <({int z, Widget w})>[];
-    final goingNext =
-        _dir == 1 || (_dir == 0 && _drag >= 0);
+    final goingNext = _dir == 1 || (_dir == 0 && _drag >= 0);
 
     if (goingNext) {
       final p = _committing ? _animP : _dragP;
@@ -426,70 +406,66 @@ class _StackDeckState extends State<_StackDeck>
         final pi = _idx + slot;
         if (pi >= ps.length) break;
 
-        double ty, sc, op;
+        double ty, sx, op;
         if (slot == 0) {
           if (_committing) {
             ty = _lerp(_dragSnapshot, cardH + 120, _animP);
-            sc = _kSC[1];
+            sx = _kSX[1];
             op = 0.0;
           } else {
             ty = _drag;
-            sc = _lerp(_kSC[0], _kSC[1], p);
+            sx = _lerp(_kSX[0], _kSX[1], p);
             op = _lerp(1.0, 0.0, (p * 1.3).clamp(0, 1));
           }
         } else {
           ty = _lerp(_kTY[slot], _kTY[slot - 1], p);
-          sc = _lerp(_kSC[slot], _kSC[slot - 1], p);
+          sx = _lerp(_kSX[slot], _kSX[slot - 1], p);
           op = _lerp(_kOP[slot], _kOP[slot - 1], p);
         }
 
         layers.add((
           z: 2 - slot,
-          w: _card(ps[pi], ty, sc, op, cardH,
+          w: _card(ps[pi], ty, sx, op, cardH,
               interactive: slot == 0 && !_committing)
         ));
       }
 
-      // New card rising from back during commit
       if (_committing && _idx + 3 < ps.length) {
-        final ty = _lerp(_kTY[2] + 16, _kTY[2], _animP);
-        final sc = _lerp(_kSC[2] - 0.06, _kSC[2], _animP);
+        final ty = _lerp(_kTY[2] + 50, _kTY[2], _animP);
+        final sx = _lerp(_kSX[2] - 0.08, _kSX[2], _animP);
         final op = _lerp(0.0, _kOP[2], _animP);
-        layers.add((z: 0, w: _card(ps[_idx + 3], ty, sc, op, cardH)));
+        layers.add((z: 0, w: _card(ps[_idx + 3], ty, sx, op, cardH)));
       }
     } else {
-      // Going prev
       final p = _committing ? _animP : _dragP;
 
-      // Prev card enters from above
       if (_idx > 0) {
         final ty = _lerp(-cardH * 0.32, _kTY[0], p);
-        final sc = _lerp(_kSC[1], _kSC[0], p);
+        final sx = _lerp(_kSX[1], _kSX[0], p);
         final op = _lerp(0.0, _kOP[0], p);
         layers.add((
           z: 3,
-          w: _card(ps[_idx - 1], ty, sc, op, cardH,
+          w: _card(ps[_idx - 1], ty, sx, op, cardH,
               interactive: _committing && _commitCtrl.value > 0.7)
         ));
       }
 
-      // Existing cards push into stack
       for (int slot = 0; slot < 3; slot++) {
         final pi = _idx + slot;
         if (pi >= ps.length) break;
 
-        double ty, sc, op;
+        double ty, sx, op;
         if (slot == 2) {
           ty = _lerp(_kTY[2], _kTY[2] + 12, p);
-          sc = _lerp(_kSC[2], _kSC[2] - 0.05, p);
+          sx = _lerp(_kSX[2], _kSX[2] - 0.05, p);
           op = _lerp(_kOP[2], 0.0, p);
         } else {
           ty = _lerp(_kTY[slot], _kTY[slot + 1], p);
-          sc = _lerp(_kSC[slot], _kSC[slot + 1], p);
+          sx = _lerp(_kSX[slot], _kSX[slot + 1], p);
           op = _lerp(_kOP[slot], _kOP[slot + 1], p);
         }
 
-        layers.add((z: 2 - slot, w: _card(ps[pi], ty, sc, op, cardH)));
+        layers.add((z: 2 - slot, w: _card(ps[pi], ty, sx, op, cardH)));
       }
     }
 
@@ -497,13 +473,13 @@ class _StackDeckState extends State<_StackDeck>
     return layers.map((l) => l.w).toList();
   }
 
-  Widget _card(ProductModel p, double ty, double sc, double op,
-      double cardH,
+  Widget _card(ProductModel p, double ty, double sx, double op, double cardH,
       {bool interactive = false}) {
     return Transform.translate(
       offset: Offset(0, ty),
       child: Transform.scale(
-        scale: sc,
+        scaleX: sx,
+        scaleY: 1.0,
         alignment: Alignment.topCenter,
         child: Opacity(
           opacity: op.clamp(0.0, 1.0),
@@ -512,10 +488,10 @@ class _StackDeckState extends State<_StackDeck>
             child: SizedBox(
               width: double.infinity,
               height: cardH,
-              child: _productObjectFor(
-                p,
-                () => widget.onAdd(p),
-                () => widget.onTap(p),
+              child: _ProductCard(
+                product: p,
+                onAdd: () => widget.onAdd(p),
+                onTap: () => widget.onTap(p),
               ),
             ),
           ),
@@ -524,795 +500,385 @@ class _StackDeckState extends State<_StackDeck>
     );
   }
 
-  Widget _buildCounter(List<ProductModel> ps) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        GestureDetector(
-          onTap: (!_committing && !_snapping && _idx > 0)
-              ? () => _commit(-1)
-              : null,
-          child: Icon(Icons.keyboard_arrow_up_rounded,
-              size: 24,
-              color: _idx > 0
-                  ? AppColors.textSecondary
-                  : AppColors.textDisabled),
-        ),
-        const Gap(16),
-        // Dot indicators
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: List.generate(ps.length, (i) {
-            final active = i == _idx;
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 280),
-              width: active ? 22 : 7,
-              height: 7,
-              margin: const EdgeInsets.symmetric(horizontal: 2),
-              decoration: BoxDecoration(
-                color: active ? AppColors.dark : AppColors.border,
-                borderRadius: BorderRadius.circular(4),
+}
+
+// ── Swipe Indicator ───────────────────────────────────────────────────────────
+
+class _SwipeIndicator extends StatefulWidget {
+  final bool canGoUp;
+  final bool canGoDown;
+  const _SwipeIndicator({required this.canGoUp, required this.canGoDown});
+
+  @override
+  State<_SwipeIndicator> createState() => _SwipeIndicatorState();
+}
+
+class _SwipeIndicatorState extends State<_SwipeIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1800))
+      ..repeat(reverse: true);
+    _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, _) {
+        final t = _anim.value;
+        return Container(
+          width: 30,
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 5),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.82),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: const Color(0xFFE4E0D8)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.07),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
-            );
-          }),
-        ),
-        const Gap(16),
-        GestureDetector(
-          onTap: (!_committing &&
-                  !_snapping &&
-                  _idx < ps.length - 1)
-              ? () => _commit(1)
-              : null,
-          child: Icon(Icons.keyboard_arrow_down_rounded,
-              size: 24,
-              color: _idx < ps.length - 1
-                  ? AppColors.textSecondary
-                  : AppColors.textDisabled),
-        ),
-      ],
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Transform.translate(
+                offset: Offset(0, widget.canGoUp ? -(t * 2.5) : 0),
+                child: Icon(
+                  Icons.keyboard_arrow_up_rounded,
+                  size: 16,
+                  color: AppColors.dark.withValues(
+                      alpha: widget.canGoUp ? 0.32 + t * 0.52 : 0.15),
+                ),
+              ),
+              const SizedBox(height: 4),
+              ...List.generate(
+                3,
+                (i) => Container(
+                  width: 3,
+                  height: 3,
+                  margin: const EdgeInsets.symmetric(vertical: 2),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.dark
+                        .withValues(alpha: 0.10 + t * 0.14),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Transform.translate(
+                offset: Offset(0, widget.canGoDown ? t * 2.5 : 0),
+                child: Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 16,
+                  color: AppColors.dark.withValues(
+                      alpha: widget.canGoDown ? 0.32 + t * 0.52 : 0.15),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
 
-// ── Supplement Object — tarro de proteína ────────────────────────────────────
+// ── Product Card — light elegant catalog style ────────────────────────────────
 
-class _SupplementObject extends StatelessWidget {
+class _ProductCard extends StatelessWidget {
   final ProductModel product;
   final VoidCallback onAdd;
   final VoidCallback onTap;
-  const _SupplementObject(
+
+  const _ProductCard(
       {required this.product, required this.onAdd, required this.onTap});
+
+  static _CategoryStyle _styleFor(String category) {
+    switch (category) {
+      case 'Suplementos':
+        return const _CategoryStyle(
+          gradientColors: [Color(0xFFF9F6EE), Color(0xFFEDE6D0)],
+          glowColor: Color(0xFFFFF4CC),
+          badgeLabel: 'SUPLEMENTO',
+          badgeBg: Color(0xFFF5EDD0),
+          badgeText: Color(0xFF7A5800),
+        );
+      case 'Bebidas':
+        return const _CategoryStyle(
+          gradientColors: [Color(0xFFECF4FD), Color(0xFFD5E8F8)],
+          glowColor: Color(0xFFD0E8FF),
+          badgeLabel: 'BEBIDA',
+          badgeBg: Color(0xFFD4EAFB),
+          badgeText: Color(0xFF1A528A),
+        );
+      case 'Snacks':
+        return const _CategoryStyle(
+          gradientColors: [Color(0xFFF9F4E8), Color(0xFFEDE2C8)],
+          glowColor: Color(0xFFFFEAC0),
+          badgeLabel: 'SNACK',
+          badgeBg: Color(0xFFF5E4C0),
+          badgeText: Color(0xFF7A4800),
+        );
+      default:
+        return const _CategoryStyle(
+          gradientColors: [Color(0xFFF5F5F5), Color(0xFFEAEAEA)],
+          glowColor: Color(0xFFE8E8E8),
+          badgeLabel: 'PRODUCTO',
+          badgeBg: Color(0xFFEAEAEA),
+          badgeText: Color(0xFF555555),
+        );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final p = product;
-    return LayoutBuilder(builder: (_, box) {
-      final w = box.maxWidth;
-      final h = box.maxHeight;
+    final style = _styleFor(p.category);
 
-      final tw = w * 0.74;
-      final th = h * 0.93;
-      final tx = (w - tw) / 2;
-      final ty = (h - th) / 2;
-      final lidH = th * 0.125;
-      final lidW = tw + 10;
-      final lidX = tx - 5;
-
-      return GestureDetector(
-        onTap: onTap,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            // Ground shadow
-            Positioned(
-              bottom: ty + th * 0.015,
-              left: tx + tw * 0.08,
-              child: Container(
-                width: tw * 0.84,
-                height: 26,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(100),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.42),
-                      blurRadius: 30,
-                      spreadRadius: 4,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFFE8E4DC), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.07),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 5,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ── Top: gradient bg + Lottie ──────────────────────────────
+              Expanded(
+                flex: 6,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: style.gradientColors,
                     ),
-                  ],
+                  ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Soft radial glow behind lottie
+                      Container(
+                        width: 140,
+                        height: 140,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: style.glowColor.withValues(alpha: 0.55),
+                        ),
+                      ),
+                      // Second smaller glow
+                      Container(
+                        width: 90,
+                        height: 90,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withValues(alpha: 0.45),
+                        ),
+                      ),
+                      Lottie.asset(
+                        lottieForProduct(p),
+                        width: 120,
+                        height: 120,
+                        fit: BoxFit.contain,
+                        repeat: true,
+                      ),
+                      // IRON BODY watermark top-left
+                      Positioned(
+                        top: 14,
+                        left: 16,
+                        child: Text(
+                          'IRON BODY',
+                          style: GoogleFonts.lexend(
+                            fontSize: 8,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.black.withValues(alpha: 0.12),
+                            letterSpacing: 2.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
 
-            // Tub body
-            Positioned(
-              left: tx,
-              top: ty + lidH * 0.62,
-              child: Container(
-                width: tw,
-                height: th - lidH * 0.62,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [
-                      Color(0xFF0A0A0A),
-                      Color(0xFF1A1A1A),
-                      Color(0xFF252525),
-                      Color(0xFF1A1A1A),
-                      Color(0xFF0A0A0A),
-                    ],
-                    stops: [0.0, 0.14, 0.50, 0.86, 1.0],
-                  ),
-                  borderRadius: BorderRadius.vertical(
-                    bottom: Radius.circular(tw * 0.11),
-                  ),
-                ),
+              // ── Separator ─────────────────────────────────────────────
+              Container(
+                height: 1,
+                color: const Color(0xFFF0ECE4),
+              ),
+
+              // ── Bottom: info ───────────────────────────────────────────
+              Expanded(
+                flex: 4,
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(
-                      16, lidH * 0.42 + 10, 16, 18),
+                  padding: const EdgeInsets.fromLTRB(16, 11, 16, 14),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('IRON BODY',
-                          style: GoogleFonts.lexend(
-                            fontSize: 8,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.primary,
-                            letterSpacing: 3.0,
-                          )),
-                      const Gap(5),
-                      Text(p.name,
-                          style: GoogleFonts.lexend(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            height: 1.2,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis),
-                      const Gap(7),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 9, vertical: 3),
-                        decoration: BoxDecoration(
-                          color:
-                              Colors.white.withValues(alpha: 0.07),
-                          borderRadius: BorderRadius.circular(99),
-                          border: Border.all(
-                              color: Colors.white
-                                  .withValues(alpha: 0.12)),
-                        ),
-                        child: Text('SUPLEMENTO',
-                            style: GoogleFonts.lexend(
-                              fontSize: 7,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white54,
-                              letterSpacing: 1.5,
-                            )),
-                      ),
-                      const Spacer(),
-                      if (p.isLowStock)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 7),
-                          child: Text('⚠  Poco stock · ${p.stock} uds',
-                              style: GoogleFonts.inter(
-                                  fontSize: 9.5,
-                                  color: const Color(0xFFFFAA33))),
-                        ),
-                      if (!p.isAvailable)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 7),
-                          child: Text('✕  Agotado',
-                              style: GoogleFonts.inter(
-                                  fontSize: 9.5,
-                                  color: const Color(0xFFFF5555))),
-                        ),
+                      // Category badge + status
                       Row(
-                        mainAxisAlignment:
-                            MainAxisAlignment.spaceBetween,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: style.badgeBg,
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                            child: Text(
+                              style.badgeLabel,
+                              style: GoogleFonts.lexend(
+                                fontSize: 7.5,
+                                fontWeight: FontWeight.w700,
+                                color: style.badgeText,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                          ),
+                          const Spacer(),
+                          if (p.isLowStock)
+                            _StatusPill(
+                              label: 'Poco stock',
+                              bg: const Color(0xFFFFF3E0),
+                              fg: const Color(0xFFB85C00),
+                            ),
+                          if (!p.isAvailable)
+                            _StatusPill(
+                              label: 'Agotado',
+                              bg: const Color(0xFFFFEEEE),
+                              fg: const Color(0xFFCC2200),
+                            ),
+                        ],
+                      ),
+
+                      const Gap(6),
+
+                      // Product name
+                      Text(
+                        p.name,
+                        style: GoogleFonts.lexend(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                          height: 1.2,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+
+                      const Spacer(),
+
+                      // Price + add button
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text('precio',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 8,
-                                    color: Colors.white38,
-                                    letterSpacing: 0.5,
-                                  )),
-                              Text(CurrencyFormatter.format(p.price),
-                                  style: GoogleFonts.lexend(
-                                    fontSize: 19,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.primary,
-                                  )),
+                              Text(
+                                'precio',
+                                style: GoogleFonts.inter(
+                                  fontSize: 9,
+                                  color: AppColors.textDisabled,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                              Text(
+                                CurrencyFormatter.format(p.price),
+                                style: GoogleFonts.lexend(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.dark,
+                                ),
+                              ),
                             ],
                           ),
                           _AddButton(
-                              isAvailable: p.isAvailable,
-                              onTap: onAdd),
+                              isAvailable: p.isAvailable, onTap: onAdd),
                         ],
                       ),
                     ],
                   ),
                 ),
               ),
-            ),
-
-            // Lid
-            Positioned(
-              left: lidX,
-              top: ty,
-              child: Container(
-                width: lidW,
-                height: lidH * 1.38,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Color(0xFFFFEA68),
-                      Color(0xFFFFD700),
-                      Color(0xFFBB8C00),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(11),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFFFD700)
-                          .withValues(alpha: 0.22),
-                      blurRadius: 18,
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: Text('PROTEÍNA',
-                      style: GoogleFonts.lexend(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w900,
-                        color: const Color(0xFF1A1000),
-                        letterSpacing: 2.5,
-                      )),
-                ),
-              ),
-            ),
-
-            // Left edge highlight (3D cylinder feel)
-            Positioned(
-              left: tx + tw * 0.04,
-              top: ty + lidH,
-              child: Container(
-                width: tw * 0.06,
-                height: th - lidH * 1.2,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [
-                      Colors.white.withValues(alpha: 0.07),
-                      Colors.transparent,
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
-      );
-    });
+      ),
+    );
   }
 }
 
-// ── Drink Object — botella premium ───────────────────────────────────────────
+class _CategoryStyle {
+  final List<Color> gradientColors;
+  final Color glowColor;
+  final String badgeLabel;
+  final Color badgeBg;
+  final Color badgeText;
 
-class _DrinkObject extends StatelessWidget {
-  final ProductModel product;
-  final VoidCallback onAdd;
-  final VoidCallback onTap;
-  const _DrinkObject(
-      {required this.product, required this.onAdd, required this.onTap});
+  const _CategoryStyle({
+    required this.gradientColors,
+    required this.glowColor,
+    required this.badgeLabel,
+    required this.badgeBg,
+    required this.badgeText,
+  });
+}
+
+class _StatusPill extends StatelessWidget {
+  final String label;
+  final Color bg;
+  final Color fg;
+
+  const _StatusPill({required this.label, required this.bg, required this.fg});
 
   @override
   Widget build(BuildContext context) {
-    final p = product;
-    return LayoutBuilder(builder: (_, box) {
-      final w = box.maxWidth;
-      final h = box.maxHeight;
-
-      final bw = w * 0.58;
-      final bx = (w - bw) / 2;
-
-      return GestureDetector(
-        onTap: onTap,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            // Ground shadow
-            Positioned(
-              bottom: h * 0.015,
-              left: bx + bw * 0.12,
-              child: Container(
-                width: bw * 0.76,
-                height: 22,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(100),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.44),
-                      blurRadius: 28,
-                      spreadRadius: 3,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Bottle body (ClipPath)
-            Positioned(
-              left: bx,
-              top: 0,
-              child: ClipPath(
-                clipper: _BottleClipper(),
-                child: Container(
-                  width: bw,
-                  height: h,
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: [
-                        Color(0xFF0A0A0A),
-                        Color(0xFF181818),
-                        Color(0xFF222222),
-                        Color(0xFF181818),
-                        Color(0xFF0A0A0A),
-                      ],
-                      stops: [0.0, 0.14, 0.50, 0.86, 1.0],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            // Label sticker
-            Positioned(
-              left: bx + bw * 0.07,
-              top: h * 0.31,
-              child: Container(
-                width: bw * 0.86,
-                height: h * 0.46,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF181818),
-                  borderRadius: BorderRadius.circular(9),
-                  border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.07)),
-                ),
-                padding:
-                    const EdgeInsets.fromLTRB(11, 11, 11, 11),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('IRON BODY',
-                        style: GoogleFonts.lexend(
-                          fontSize: 7,
-                          fontWeight: FontWeight.w900,
-                          color: AppColors.primary,
-                          letterSpacing: 2.5,
-                        )),
-                    const Gap(4),
-                    Text(p.name,
-                        style: GoogleFonts.lexend(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          height: 1.2,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                    const Gap(5),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color:
-                            Colors.white.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                      child: Text('BEBIDA',
-                          style: GoogleFonts.lexend(
-                            fontSize: 6.5,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white38,
-                            letterSpacing: 1.5,
-                          )),
-                    ),
-                    const Spacer(),
-                    if (p.isLowStock)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 5),
-                        child: Text('⚠  Poco stock',
-                            style: GoogleFonts.inter(
-                                fontSize: 8.5,
-                                color: const Color(0xFFFFAA33))),
-                      ),
-                    if (!p.isAvailable)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 5),
-                        child: Text('✕  Agotado',
-                            style: GoogleFonts.inter(
-                                fontSize: 8.5,
-                                color: const Color(0xFFFF5555))),
-                      ),
-                    Row(
-                      mainAxisAlignment:
-                          MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment:
-                          CrossAxisAlignment.end,
-                      children: [
-                        Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('precio',
-                                style: GoogleFonts.inter(
-                                    fontSize: 7,
-                                    color: Colors.white38)),
-                            Text(
-                                CurrencyFormatter.format(p.price),
-                                style: GoogleFonts.lexend(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.primary,
-                                )),
-                          ],
-                        ),
-                        SizedBox(
-                          width: 40,
-                          height: 40,
-                          child: _AddButton(
-                              isAvailable: p.isAvailable,
-                              onTap: onAdd),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Bottle cap (gold)
-            Positioned(
-              left: bx + bw * 0.32,
-              top: 0,
-              child: Container(
-                width: bw * 0.36,
-                height: h * 0.085,
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Color(0xFFFFEA68),
-                      Color(0xFFFFD700),
-                      Color(0xFFBB8C00),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(5)),
-                ),
-              ),
-            ),
-
-            // Left highlight
-            Positioned(
-              left: bx + bw * 0.07,
-              top: h * 0.10,
-              child: Container(
-                width: bw * 0.07,
-                height: h * 0.62,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [
-                      Colors.white.withValues(alpha: 0.06),
-                      Colors.transparent,
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    });
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: Text(label,
+          style: GoogleFonts.inter(
+              fontSize: 7.5, fontWeight: FontWeight.w600, color: fg)),
+    );
   }
-}
-
-class _BottleClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final w = size.width;
-    final h = size.height;
-    final path = Path();
-
-    // Neck (32-68% width, top 26%)
-    final nL = w * 0.32;
-    final nR = w * 0.68;
-    // Body (3-97% width)
-    final bL = w * 0.03;
-    final bR = w * 0.97;
-
-    path.moveTo(nL, 0);
-    path.lineTo(nR, 0);
-    path.quadraticBezierTo(bR, h * 0.21, bR, h * 0.29);
-    path.lineTo(bR, h * 0.90);
-    path.quadraticBezierTo(bR, h * 0.97, bR - w * 0.06, h * 0.97);
-    path.lineTo(bL + w * 0.06, h * 0.97);
-    path.quadraticBezierTo(bL, h * 0.97, bL, h * 0.90);
-    path.lineTo(bL, h * 0.29);
-    path.quadraticBezierTo(bL, h * 0.21, nL, 0);
-    path.close();
-    return path;
-  }
-
-  @override
-  bool shouldReclip(_BottleClipper old) => false;
-}
-
-// ── Snack Object — empaque premium ───────────────────────────────────────────
-
-class _SnackObject extends StatelessWidget {
-  final ProductModel product;
-  final VoidCallback onAdd;
-  final VoidCallback onTap;
-  const _SnackObject(
-      {required this.product, required this.onAdd, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final p = product;
-    return LayoutBuilder(builder: (_, box) {
-      final w = box.maxWidth;
-      final h = box.maxHeight;
-
-      final bw = w * 0.86;
-      final bh = h * 0.91;
-      final bx = (w - bw) / 2;
-      final by = (h - bh) / 2;
-
-      return GestureDetector(
-        onTap: onTap,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            // Ground shadow
-            Positioned(
-              bottom: by - 2,
-              left: bx + bw * 0.10,
-              child: Container(
-                width: bw * 0.80,
-                height: 24,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(100),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.40),
-                      blurRadius: 26,
-                      spreadRadius: 3,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Bag shape
-            Positioned(
-              left: bx,
-              top: by,
-              child: ClipPath(
-                clipper: _BagClipper(),
-                child: Container(
-                  width: bw,
-                  height: bh,
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Color(0xFF0E0E0E),
-                        Color(0xFF1B1B1B),
-                        Color(0xFF222222),
-                        Color(0xFF141414),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            // Gold top seal accent
-            Positioned(
-              left: bx + bw * 0.16,
-              top: by + bh * 0.01,
-              child: Container(
-                width: bw * 0.68,
-                height: bh * 0.07,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.transparent,
-                      const Color(0xFFFFD700)
-                          .withValues(alpha: 0.38),
-                      Colors.transparent,
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ),
-
-            // Front panel (label)
-            Positioned(
-              left: bx + bw * 0.07,
-              top: by + bh * 0.14,
-              child: Container(
-                width: bw * 0.86,
-                height: bh * 0.68,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF191919),
-                  borderRadius: BorderRadius.circular(11),
-                  border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.07)),
-                ),
-                padding:
-                    const EdgeInsets.fromLTRB(14, 13, 14, 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('IRON BODY',
-                        style: GoogleFonts.lexend(
-                          fontSize: 7.5,
-                          fontWeight: FontWeight.w900,
-                          color: AppColors.primary,
-                          letterSpacing: 3.0,
-                        )),
-                    const Gap(5),
-                    Text(p.name,
-                        style: GoogleFonts.lexend(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          height: 1.2,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                    const Gap(7),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 9, vertical: 3),
-                      decoration: BoxDecoration(
-                        color:
-                            Colors.white.withValues(alpha: 0.07),
-                        borderRadius: BorderRadius.circular(99),
-                        border: Border.all(
-                            color: Colors.white
-                                .withValues(alpha: 0.10)),
-                      ),
-                      child: Text('SNACK',
-                          style: GoogleFonts.lexend(
-                            fontSize: 7,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white38,
-                            letterSpacing: 1.5,
-                          )),
-                    ),
-                    const Spacer(),
-                    if (p.isLowStock)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 7),
-                        child: Text('⚠  Poco stock · ${p.stock}',
-                            style: GoogleFonts.inter(
-                                fontSize: 9.5,
-                                color: const Color(0xFFFFAA33))),
-                      ),
-                    if (!p.isAvailable)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 7),
-                        child: Text('✕  Agotado',
-                            style: GoogleFonts.inter(
-                                fontSize: 9.5,
-                                color: const Color(0xFFFF5555))),
-                      ),
-                    Row(
-                      mainAxisAlignment:
-                          MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment:
-                          CrossAxisAlignment.end,
-                      children: [
-                        Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('precio',
-                                style: GoogleFonts.inter(
-                                  fontSize: 8,
-                                  color: Colors.white38,
-                                  letterSpacing: 0.5,
-                                )),
-                            Text(
-                                CurrencyFormatter.format(p.price),
-                                style: GoogleFonts.lexend(
-                                  fontSize: 19,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.primary,
-                                )),
-                          ],
-                        ),
-                        _AddButton(
-                            isAvailable: p.isAvailable,
-                            onTap: onAdd),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Plastic sheen diagonal
-            Positioned(
-              left: bx + bw * 0.04,
-              top: by + bh * 0.04,
-              child: Container(
-                width: bw * 0.20,
-                height: bh * 0.22,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.white.withValues(alpha: 0.07),
-                      Colors.transparent,
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    });
-  }
-}
-
-class _BagClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final w = size.width;
-    final h = size.height;
-    final path = Path();
-
-    // Top: slightly concave seal
-    path.moveTo(0, h * 0.08);
-    path.quadraticBezierTo(w * 0.5, h * 0.01, w, h * 0.08);
-    path.lineTo(w, h * 0.91);
-    // Bottom: slightly concave seal
-    path.quadraticBezierTo(w * 0.5, h * 0.98, 0, h * 0.91);
-    path.lineTo(0, h * 0.08);
-    path.close();
-    return path;
-  }
-
-  @override
-  bool shouldReclip(_BagClipper old) => false;
 }
 
 // ── Add Button ────────────────────────────────────────────────────────────────
@@ -1335,10 +901,9 @@ class _AddButtonState extends State<_AddButton>
   void initState() {
     super.initState();
     _ctrl = AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 110));
-    _scale = Tween<double>(begin: 1.0, end: 0.78).animate(
-        CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+        vsync: this, duration: const Duration(milliseconds: 110));
+    _scale = Tween<double>(begin: 1.0, end: 0.78)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
   }
 
   @override
@@ -1361,18 +926,18 @@ class _AddButtonState extends State<_AddButton>
         scale: _scale,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          width: 44,
-          height: 44,
+          width: 46,
+          height: 46,
           decoration: BoxDecoration(
             color: widget.isAvailable
-                ? AppColors.primary
-                : Colors.white.withValues(alpha: 0.12),
+                ? AppColors.dark
+                : const Color(0xFFEAEAEA),
             borderRadius: BorderRadius.circular(14),
             boxShadow: widget.isAvailable
                 ? [
                     BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.35),
-                      blurRadius: 14,
+                      color: AppColors.dark.withValues(alpha: 0.22),
+                      blurRadius: 10,
                       offset: const Offset(0, 4),
                     )
                   ]
@@ -1381,9 +946,7 @@ class _AddButtonState extends State<_AddButton>
           child: Icon(
             Icons.add_rounded,
             size: 22,
-            color: widget.isAvailable
-                ? AppColors.dark
-                : Colors.white38,
+            color: widget.isAvailable ? AppColors.primary : AppColors.textDisabled,
           ),
         ),
       ),
