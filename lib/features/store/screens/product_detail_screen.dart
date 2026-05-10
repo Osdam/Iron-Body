@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lottie/lottie.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/product_model.dart';
@@ -9,6 +10,7 @@ import '../../../shared/widgets/iron_app_bar.dart';
 import '../../../shared/widgets/iron_button.dart';
 import '../../../shared/widgets/iron_card.dart';
 import '../../../shared/widgets/status_badge.dart';
+import 'store_screen.dart' show lottieForProduct;
 
 class ProductDetailScreen extends StatefulWidget {
   final ProductModel product;
@@ -36,8 +38,23 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             Container(
               width: double.infinity,
               height: 200,
-              decoration: BoxDecoration(color: AppColors.surfaceContainerLow, borderRadius: BorderRadius.circular(20)),
-              child: Center(child: Icon(p.iconData, size: 80, color: AppColors.textSecondary)),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFFF7F3E0), Color(0xFFFFF8CC)],
+                ),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Center(
+                child: Lottie.asset(
+                  lottieForProduct(p),
+                  width: 110,
+                  height: 110,
+                  repeat: true,
+                  fit: BoxFit.contain,
+                ),
+              ),
             ).animate().fadeIn(),
             const Gap(20),
             Row(

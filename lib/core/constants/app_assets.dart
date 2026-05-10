@@ -73,6 +73,19 @@ class AppAssets {
   static const String lottieFuncional = 'assets/animations/funcional.json';
   static const String lottieCheckGreen = 'assets/animations/checkgreen.json';
 
+  // Lottie animations – métodos de pago
+  static const String lottieCredito = 'assets/animations/credito.json';
+  static const String lottieDebito = 'assets/animations/debito.json';
+  static const String lottiePse = 'assets/animations/pse.json';
+  static const String lottieNequi = 'assets/animations/nequi.json';
+  static const String lottieDaviplata = 'assets/animations/daviplata.json';
+
+  // Lottie animations – tienda (por categoría de producto)
+  static const String lottieProductoSuplemento = 'assets/animations/gym.json';
+  static const String lottieProductoAccesorio = 'assets/animations/funcional.json';
+  static const String lottieProductoBebida = 'assets/animations/comida.json';
+  static const String lottieProductoSnack = 'assets/animations/comida.json';
+
   // Lottie animations – formularios y perfil
   static const String lottieUser = 'assets/animations/user.json';
   static const String lottieEditUser = 'assets/animations/edituser.json';
