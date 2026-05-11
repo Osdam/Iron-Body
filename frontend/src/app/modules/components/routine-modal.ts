@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, OnChanges, Output, inject } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output, inject, signal } from '@angular/core';
 import {
   FormArray,
   FormBuilder,
@@ -55,9 +55,35 @@ const nonNegativeNumber = (control: AbstractControl): ValidationErrors | null =>
         <div class="drawer-body">
           <div *ngIf="mode === 'assign'" class="assign-block">
             <label class="label">Miembro asignado</label>
-            <select class="select" [formControl]="assignedMemberControl" [disabled]="isSaving">
-              <option *ngFor="let m of members" [value]="m">{{ m }}</option>
-            </select>
+            <div class="pretty-select" [class.open]="openSelect() === 'assign-member'">
+              <button
+                type="button"
+                class="pretty-trigger"
+                (click)="toggleSelect('assign-member')"
+                [disabled]="isSaving"
+              >
+                <span>{{ assignedMemberControl.value }}</span>
+                <span class="select-chevron" aria-hidden="true"></span>
+              </button>
+              <div *ngIf="openSelect() === 'assign-member'" class="pretty-menu">
+                <button
+                  type="button"
+                  *ngFor="let m of members"
+                  class="pretty-option"
+                  [class.selected]="assignedMemberControl.value === m"
+                  (click)="chooseAssignedMember(m)"
+                >
+                  <span class="option-main">
+                    <span class="option-icon material-symbols-outlined" aria-hidden="true">person</span>
+                    <span class="option-copy">
+                      <strong>{{ m }}</strong>
+                      <small>{{ m === 'Plantilla general' ? 'Rutina reutilizable' : 'Asignar a miembro' }}</small>
+                    </span>
+                  </span>
+                  <span class="option-check" aria-hidden="true"></span>
+                </button>
+              </div>
+            </div>
             <p class="hint">Selecciona el miembro o deja como Plantilla general.</p>
           </div>
 
@@ -81,23 +107,69 @@ const nonNegativeNumber = (control: AbstractControl): ValidationErrors | null =>
 
               <div class="field">
                 <label class="label">Objetivo</label>
-                <select
-                  class="select"
-                  formControlName="objective"
-                  [disabled]="readonly || isSaving"
-                >
-                  <option value="">Selecciona</option>
-                  <option *ngFor="let o of objectives" [value]="o">{{ o }}</option>
-                </select>
+                <div class="pretty-select" [class.open]="openSelect() === 'objective'">
+                  <button
+                    type="button"
+                    class="pretty-trigger"
+                    (click)="toggleSelect('objective')"
+                    [disabled]="readonly || isSaving"
+                  >
+                    <span>{{ controlValue('objective') || 'Selecciona' }}</span>
+                    <span class="select-chevron" aria-hidden="true"></span>
+                  </button>
+                  <div *ngIf="openSelect() === 'objective'" class="pretty-menu">
+                    <button
+                      type="button"
+                      class="pretty-option"
+                      *ngFor="let o of objectives"
+                      [class.selected]="controlValue('objective') === o"
+                      (click)="chooseFormOption('objective', o)"
+                    >
+                      <span class="option-main">
+                        <span class="option-icon material-symbols-outlined" aria-hidden="true">flag</span>
+                        <span class="option-copy">
+                          <strong>{{ o }}</strong>
+                          <small>{{ optionHint('objective', o) }}</small>
+                        </span>
+                      </span>
+                      <span class="option-check" aria-hidden="true"></span>
+                    </button>
+                  </div>
+                </div>
                 <p class="error" *ngIf="showError('objective')">El objetivo es obligatorio.</p>
               </div>
 
               <div class="field">
                 <label class="label">Nivel</label>
-                <select class="select" formControlName="level" [disabled]="readonly || isSaving">
-                  <option value="">Selecciona</option>
-                  <option *ngFor="let l of levels" [value]="l">{{ l }}</option>
-                </select>
+                <div class="pretty-select" [class.open]="openSelect() === 'level'">
+                  <button
+                    type="button"
+                    class="pretty-trigger"
+                    (click)="toggleSelect('level')"
+                    [disabled]="readonly || isSaving"
+                  >
+                    <span>{{ controlValue('level') || 'Selecciona' }}</span>
+                    <span class="select-chevron" aria-hidden="true"></span>
+                  </button>
+                  <div *ngIf="openSelect() === 'level'" class="pretty-menu">
+                    <button
+                      type="button"
+                      class="pretty-option"
+                      *ngFor="let l of levels"
+                      [class.selected]="controlValue('level') === l"
+                      (click)="chooseFormOption('level', l)"
+                    >
+                      <span class="option-main">
+                        <span class="option-icon material-symbols-outlined" aria-hidden="true">speed</span>
+                        <span class="option-copy">
+                          <strong>{{ l }}</strong>
+                          <small>{{ optionHint('level', l) }}</small>
+                        </span>
+                      </span>
+                      <span class="option-check" aria-hidden="true"></span>
+                    </button>
+                  </div>
+                </div>
                 <p class="error" *ngIf="showError('level')">El nivel es obligatorio.</p>
               </div>
 
@@ -129,32 +201,101 @@ const nonNegativeNumber = (control: AbstractControl): ValidationErrors | null =>
 
               <div class="field">
                 <label class="label">Entrenador asignado</label>
-                <select
-                  class="select"
-                  formControlName="trainerName"
-                  [disabled]="readonly || isSaving"
-                >
-                  <option *ngFor="let t of trainers" [value]="t">{{ t }}</option>
-                </select>
+                <div class="pretty-select" [class.open]="openSelect() === 'trainerName'">
+                  <button
+                    type="button"
+                    class="pretty-trigger"
+                    (click)="toggleSelect('trainerName')"
+                    [disabled]="readonly || isSaving"
+                  >
+                    <span>{{ controlValue('trainerName') || 'Sin asignar' }}</span>
+                    <span class="select-chevron" aria-hidden="true"></span>
+                  </button>
+                  <div *ngIf="openSelect() === 'trainerName'" class="pretty-menu">
+                    <button
+                      type="button"
+                      class="pretty-option"
+                      *ngFor="let t of trainers"
+                      [class.selected]="controlValue('trainerName') === t"
+                      (click)="chooseFormOption('trainerName', t)"
+                    >
+                      <span class="option-main">
+                        <span class="option-icon material-symbols-outlined" aria-hidden="true">badge</span>
+                        <span class="option-copy">
+                          <strong>{{ t }}</strong>
+                          <small>{{ t === 'Sin asignar' ? 'Definir después' : 'Entrenador responsable' }}</small>
+                        </span>
+                      </span>
+                      <span class="option-check" aria-hidden="true"></span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div class="field">
                 <label class="label">Miembro asignado</label>
-                <select
-                  class="select"
-                  formControlName="assignedMemberName"
-                  [disabled]="readonly || isSaving"
-                >
-                  <option *ngFor="let m of members" [value]="m">{{ m }}</option>
-                </select>
+                <div class="pretty-select" [class.open]="openSelect() === 'assignedMemberName'">
+                  <button
+                    type="button"
+                    class="pretty-trigger"
+                    (click)="toggleSelect('assignedMemberName')"
+                    [disabled]="readonly || isSaving"
+                  >
+                    <span>{{ controlValue('assignedMemberName') || 'Plantilla general' }}</span>
+                    <span class="select-chevron" aria-hidden="true"></span>
+                  </button>
+                  <div *ngIf="openSelect() === 'assignedMemberName'" class="pretty-menu">
+                    <button
+                      type="button"
+                      class="pretty-option"
+                      *ngFor="let m of members"
+                      [class.selected]="controlValue('assignedMemberName') === m"
+                      (click)="chooseFormOption('assignedMemberName', m)"
+                    >
+                      <span class="option-main">
+                        <span class="option-icon material-symbols-outlined" aria-hidden="true">person</span>
+                        <span class="option-copy">
+                          <strong>{{ m }}</strong>
+                          <small>{{ m === 'Plantilla general' ? 'Rutina reutilizable' : 'Asignar rutina' }}</small>
+                        </span>
+                      </span>
+                      <span class="option-check" aria-hidden="true"></span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div class="field">
                 <label class="label">Estado</label>
-                <select class="select" formControlName="status" [disabled]="readonly || isSaving">
-                  <option value="">Selecciona</option>
-                  <option *ngFor="let s of statuses" [value]="s">{{ s }}</option>
-                </select>
+                <div class="pretty-select" [class.open]="openSelect() === 'status'">
+                  <button
+                    type="button"
+                    class="pretty-trigger"
+                    (click)="toggleSelect('status')"
+                    [disabled]="readonly || isSaving"
+                  >
+                    <span>{{ controlValue('status') || 'Selecciona' }}</span>
+                    <span class="select-chevron" aria-hidden="true"></span>
+                  </button>
+                  <div *ngIf="openSelect() === 'status'" class="pretty-menu">
+                    <button
+                      type="button"
+                      class="pretty-option"
+                      *ngFor="let s of statuses"
+                      [class.selected]="controlValue('status') === s"
+                      (click)="chooseFormOption('status', s)"
+                    >
+                      <span class="option-main">
+                        <span class="option-icon material-symbols-outlined" aria-hidden="true">task_alt</span>
+                        <span class="option-copy">
+                          <strong>{{ s }}</strong>
+                          <small>{{ optionHint('status', s) }}</small>
+                        </span>
+                      </span>
+                      <span class="option-check" aria-hidden="true"></span>
+                    </button>
+                  </div>
+                </div>
                 <p class="error" *ngIf="showError('status')">El estado es obligatorio.</p>
               </div>
 
@@ -247,14 +388,39 @@ const nonNegativeNumber = (control: AbstractControl): ValidationErrors | null =>
 
                     <div class="field">
                       <label class="label">Grupo muscular</label>
-                      <select
-                        class="select"
-                        formControlName="muscleGroup"
-                        [disabled]="readonly || isSaving"
+                      <div
+                        class="pretty-select"
+                        [class.open]="openSelect() === muscleGroupSelectId(i)"
+                        [class.drop-up]="shouldDropUp(i)"
                       >
-                        <option value="">Selecciona</option>
-                        <option *ngFor="let g of muscleGroups" [value]="g">{{ g }}</option>
-                      </select>
+                        <button
+                          type="button"
+                          class="pretty-trigger"
+                          (click)="toggleSelect(muscleGroupSelectId(i))"
+                          [disabled]="readonly || isSaving"
+                        >
+                          <span>{{ exerciseValue(i, 'muscleGroup') || 'Selecciona' }}</span>
+                          <span class="select-chevron" aria-hidden="true"></span>
+                        </button>
+                        <div *ngIf="openSelect() === muscleGroupSelectId(i)" class="pretty-menu">
+                          <button
+                            type="button"
+                            class="pretty-option"
+                            *ngFor="let g of muscleGroups"
+                            [class.selected]="exerciseValue(i, 'muscleGroup') === g"
+                            (click)="chooseExerciseOption(i, 'muscleGroup', g)"
+                          >
+                            <span class="option-main">
+                              <span class="option-icon material-symbols-outlined" aria-hidden="true">fitness_center</span>
+                              <span class="option-copy">
+                                <strong>{{ g }}</strong>
+                                <small>Grupo de trabajo principal</small>
+                              </span>
+                            </span>
+                            <span class="option-check" aria-hidden="true"></span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
                     <div class="field">
@@ -508,7 +674,8 @@ const nonNegativeNumber = (control: AbstractControl): ValidationErrors | null =>
 
       .drawer-body {
         padding: 1.25rem 1.5rem 0;
-        overflow: auto;
+        overflow-y: auto;
+        overflow-x: visible;
         flex: 1;
       }
 
@@ -570,6 +737,207 @@ const nonNegativeNumber = (control: AbstractControl): ValidationErrors | null =>
         border-color: #fbbf24;
         background: #ffffff;
         box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.12);
+      }
+
+      .pretty-select {
+        position: relative;
+        width: 100%;
+      }
+
+      .pretty-trigger {
+        width: 100%;
+        min-height: 44px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.75rem 0.9rem;
+        border: 1px solid #d4d4d8;
+        border-radius: 9px;
+        background: #ffffff;
+        color: #0a0a0a;
+        font-weight: 800;
+        text-align: left;
+        cursor: pointer;
+        transition:
+          border-color 0.15s ease,
+          box-shadow 0.15s ease,
+          background 0.15s ease;
+      }
+
+      .pretty-trigger:disabled {
+        cursor: not-allowed;
+        opacity: 0.7;
+      }
+
+      .pretty-trigger > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .select-chevron {
+        width: 0.55rem;
+        height: 0.55rem;
+        border-bottom: 2px solid #a16207;
+        border-right: 2px solid #a16207;
+        justify-self: end;
+        transform: rotate(45deg) translateY(-1px);
+        transition: transform 160ms ease;
+      }
+
+      .pretty-select.open .pretty-trigger,
+      .pretty-trigger:hover:not(:disabled) {
+        border-color: #fbbf24;
+        background: #fffdf4;
+        box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.14);
+      }
+
+      .pretty-select.open .select-chevron {
+        transform: rotate(225deg) translateY(-1px);
+      }
+
+      .pretty-menu {
+        position: absolute;
+        top: calc(100% + 0.35rem);
+        left: 0;
+        right: 0;
+        z-index: 3300;
+        display: grid;
+        gap: 0.2rem;
+        max-height: 260px;
+        overflow-y: auto;
+        padding: 0.45rem;
+        border: 1px solid #e4e4e7;
+        border-radius: 10px;
+        background: #ffffff;
+        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18);
+        animation: selectIn 140ms ease;
+      }
+
+      .pretty-select.drop-up .pretty-menu {
+        top: auto;
+        bottom: calc(100% + 0.35rem);
+      }
+
+      @keyframes selectIn {
+        from {
+          opacity: 0;
+          transform: translateY(-4px) scale(0.98);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      .pretty-option {
+        min-height: 3.35rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.85rem;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: #3f3f46;
+        text-align: left;
+        padding: 0.62rem 0.7rem;
+        cursor: pointer;
+        transition:
+          background 140ms ease,
+          color 140ms ease,
+          transform 140ms ease;
+      }
+
+      .pretty-option:hover {
+        background: #fffbeb;
+        color: #18181b;
+        transform: translateY(-1px);
+      }
+
+      .pretty-option.selected {
+        background: rgba(250, 204, 21, 0.18);
+        color: #111827;
+      }
+
+      .option-main {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        min-width: 0;
+      }
+
+      .option-icon {
+        width: 2rem;
+        height: 2rem;
+        display: grid;
+        place-items: center;
+        border-radius: 8px;
+        background: #f4f4f5;
+        color: #a16207;
+        flex-shrink: 0;
+        font-size: 1.12rem;
+      }
+
+      .pretty-option.selected .option-icon {
+        background: #facc15;
+        color: #111827;
+      }
+
+      .option-copy {
+        display: grid;
+        gap: 0.12rem;
+        min-width: 0;
+      }
+
+      .option-copy strong {
+        color: inherit;
+        font-weight: 900;
+        font-size: 0.9rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .option-copy small {
+        color: #71717a;
+        font-weight: 650;
+        font-size: 0.75rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .pretty-option.selected .option-copy small {
+        color: #854d0e;
+      }
+
+      .option-check {
+        width: 1.15rem;
+        height: 1.15rem;
+        position: relative;
+        display: block;
+        border: 2px solid transparent;
+        border-radius: 999px;
+        flex-shrink: 0;
+      }
+
+      .pretty-option.selected .option-check {
+        border-color: #ca8a04;
+        background: #ca8a04;
+      }
+
+      .pretty-option.selected .option-check::after {
+        content: '';
+        position: absolute;
+        left: 0.31rem;
+        top: 0.16rem;
+        width: 0.3rem;
+        height: 0.58rem;
+        border: solid #ffffff;
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
       }
 
       .textarea {
@@ -644,13 +1012,20 @@ const nonNegativeNumber = (control: AbstractControl): ValidationErrors | null =>
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 0.9rem;
+        overflow: visible;
       }
 
       .exercise-card {
+        position: relative;
         border: 1px solid #f0f0f0;
         background: #ffffff;
         border-radius: 12px;
         padding: 0.9rem;
+        overflow: visible;
+      }
+
+      .exercise-card:has(.pretty-select.open) {
+        z-index: 30;
       }
 
       .exercise-top {
@@ -909,13 +1284,7 @@ export default class RoutineModalComponent implements OnChanges {
   @Input() routine: Routine | null = null;
   @Input() isSaving: boolean = false;
 
-  @Input() trainers: string[] = [
-    'Sin asignar',
-    'Carlos Ruiz',
-    'Laura Gómez',
-    'Andrés Martínez',
-    'Camila Torres',
-  ];
+  @Input() trainers: string[] = ['Sin asignar'];
   @Input() members: string[] = [
     'Plantilla general',
     'Alejandro Gómez',
@@ -1016,6 +1385,7 @@ export default class RoutineModalComponent implements OnChanges {
   ];
 
   formError: string = '';
+  openSelect = signal<string | null>(null);
 
   assignedMemberControl = new FormControl('Plantilla general', { nonNullable: true });
 
@@ -1037,6 +1407,7 @@ export default class RoutineModalComponent implements OnChanges {
     if (!this.isOpen) return;
 
     this.formError = '';
+    this.openSelect.set(null);
 
     if (this.mode === 'assign') {
       this.assignedMemberControl.setValue(this.routine?.assignedMemberName || 'Plantilla general');
@@ -1117,6 +1488,68 @@ export default class RoutineModalComponent implements OnChanges {
 
   getExerciseGroup(index: number): FormGroup {
     return this.exercises.at(index) as FormGroup;
+  }
+
+  toggleSelect(select: string): void {
+    if (this.readonly || this.isSaving) return;
+    this.openSelect.update((current) => (current === select ? null : select));
+  }
+
+  chooseFormOption(controlName: string, value: string): void {
+    const control = this.routineForm.get(controlName);
+    control?.setValue(value);
+    control?.markAsDirty();
+    control?.markAsTouched();
+    this.openSelect.set(null);
+  }
+
+  chooseAssignedMember(member: string): void {
+    this.assignedMemberControl.setValue(member);
+    this.openSelect.set(null);
+  }
+
+  chooseExerciseOption(index: number, controlName: string, value: string): void {
+    const control = this.getExerciseGroup(index).get(controlName);
+    control?.setValue(value);
+    control?.markAsDirty();
+    control?.markAsTouched();
+    this.openSelect.set(null);
+  }
+
+  controlValue(controlName: string): string {
+    return String(this.routineForm.get(controlName)?.value || '');
+  }
+
+  exerciseValue(index: number, controlName: string): string {
+    return String(this.getExerciseGroup(index).get(controlName)?.value || '');
+  }
+
+  muscleGroupSelectId(index: number): string {
+    return `muscleGroup-${index}`;
+  }
+
+  shouldDropUp(index: number): boolean {
+    return index >= Math.max(1, this.exercises.length - 2);
+  }
+
+  optionHint(type: 'objective' | 'level' | 'status', value: string): string {
+    const hints: Record<string, string> = {
+      Hipertrofia: 'Aumento de masa muscular',
+      Fuerza: 'Trabajo de cargas y progresión',
+      'Pérdida de grasa': 'Enfoque metabólico y adherencia',
+      Resistencia: 'Capacidad cardiovascular y muscular',
+      Funcional: 'Movimiento, potencia y coordinación',
+      Rehabilitación: 'Progresión controlada',
+      Mantenimiento: 'Conservar hábitos y condición',
+      Principiante: 'Base técnica y adaptación',
+      Intermedio: 'Progresión estructurada',
+      Avanzado: 'Mayor volumen e intensidad',
+      Activa: 'Disponible para seguimiento',
+      Inactiva: 'Pausada temporalmente',
+      Borrador: 'Pendiente por completar',
+    };
+
+    return hints[value] || (type === 'status' ? 'Estado de la rutina' : 'Seleccionar opción');
   }
 
   onOverlay(event: MouseEvent): void {

@@ -55,6 +55,11 @@ export const routes: Routes = [
     loadComponent: () => import('./modules/classes').then((m) => m.default),
   },
   {
+    path: 'attendance',
+    canActivate: [AuthGuard],
+    loadComponent: () => import('./modules/attendance').then((m) => m.default),
+  },
+  {
     path: 'trainers',
     canActivate: [AuthGuard],
     loadComponent: () => import('./modules/trainers').then((m) => m.default),

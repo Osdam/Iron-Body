@@ -1,8 +1,16 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject, signal, effect } from '@angular/core';
+import { Component, ElementRef, HostListener, OnInit, inject, signal, effect } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { ApiService, PlanSummary } from '../services/api.service';
+import { firstValueFrom } from 'rxjs';
+import { Observable } from 'rxjs';
+import {
+  ApiService,
+  PaginatedResponse,
+  PaymentSummary,
+  PlanSummary,
+  UserSummary,
+} from '../services/api.service';
 import { PlansKPIComponent } from './components/plans-kpi';
 import { PlanCardComponent, PlanCardData, BadgeType } from './components/plan-card';
 import { PlansTableComponent, PlanTableData } from './components/plans-table';
@@ -10,6 +18,15 @@ import { PlansEmptyComponent } from './components/plans-empty';
 import { CreatePlanModalComponent } from './components/create-plan-modal';
 import { EditPlanModalComponent } from './components/edit-plan-modal';
 import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-icon.component';
+
+type PlanFilterSelect = 'status' | 'duration';
+
+interface PlanFilterOption {
+  value: string;
+  label: string;
+  description: string;
+  icon: string;
+}
 
 @Component({
   selector: 'module-plans',
@@ -101,14 +118,14 @@ import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-ico
             label="Suscriptores"
             lottie="/assets/crm/suscripcion.json"
             [value]="estimatedSubscribers()"
-            suffix="Estimado"
+            suffix="Reales"
             color="success"
           ></app-plans-kpi>
           <app-plans-kpi
             label="Ingreso mensual"
             lottie="/assets/crm/ingresomensual.json"
             [value]="formatCurrencyShort(monthlyMrr())"
-            suffix="MRR"
+            suffix="Pagado este mes"
             color="warning"
           ></app-plans-kpi>
         </section>
@@ -126,28 +143,56 @@ import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-ico
             />
           </div>
           <div class="filter-group">
-            <select
-              [(ngModel)]="filterStatus"
-              class="filter-select"
-              aria-label="Filtrar por estado"
-            >
-              <option value="">Todos los estados</option>
-              <option value="active">Activos</option>
-              <option value="inactive">Inactivos</option>
-            </select>
+            <div class="pretty-select" [class.open]="openSelect() === 'status'">
+              <button type="button" class="pretty-trigger" (click)="toggleSelect('status')" aria-label="Filtrar por estado">
+                <span>{{ filterLabel('status') }}</span>
+                <span class="select-chevron" aria-hidden="true"></span>
+              </button>
+              <div class="pretty-menu" *ngIf="openSelect() === 'status'">
+                <button
+                  type="button"
+                  class="pretty-option"
+                  *ngFor="let option of statusFilterOptions"
+                  [class.selected]="filterStatus() === option.value"
+                  (click)="chooseFilter('status', option.value)"
+                >
+                  <span class="option-main">
+                    <span class="option-icon material-symbols-outlined" aria-hidden="true">{{ option.icon }}</span>
+                    <span class="option-copy">
+                      <strong>{{ option.label }}</strong>
+                      <small>{{ option.description }}</small>
+                    </span>
+                  </span>
+                  <span class="option-check" aria-hidden="true"></span>
+                </button>
+              </div>
+            </div>
           </div>
           <div class="filter-group">
-            <select
-              [(ngModel)]="filterDuration"
-              class="filter-select"
-              aria-label="Filtrar por duración"
-            >
-              <option value="">Todas las duraciones</option>
-              <option value="monthly">Mensual</option>
-              <option value="quarterly">Trimestral</option>
-              <option value="semi">Semestral</option>
-              <option value="annual">Anual</option>
-            </select>
+            <div class="pretty-select" [class.open]="openSelect() === 'duration'">
+              <button type="button" class="pretty-trigger" (click)="toggleSelect('duration')" aria-label="Filtrar por duración">
+                <span>{{ filterLabel('duration') }}</span>
+                <span class="select-chevron" aria-hidden="true"></span>
+              </button>
+              <div class="pretty-menu" *ngIf="openSelect() === 'duration'">
+                <button
+                  type="button"
+                  class="pretty-option"
+                  *ngFor="let option of durationFilterOptions"
+                  [class.selected]="filterDuration() === option.value"
+                  (click)="chooseFilter('duration', option.value)"
+                >
+                  <span class="option-main">
+                    <span class="option-icon material-symbols-outlined" aria-hidden="true">{{ option.icon }}</span>
+                    <span class="option-copy">
+                      <strong>{{ option.label }}</strong>
+                      <small>{{ option.description }}</small>
+                    </span>
+                  </span>
+                  <span class="option-check" aria-hidden="true"></span>
+                </button>
+              </div>
+            </div>
           </div>
           <div class="filter-results" *ngIf="plans().length > 0">
             <span>{{ filteredPlans().length }} de {{ plans().length }} plan(es)</span>
@@ -453,6 +498,9 @@ import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-ico
         margin-bottom: 2.5rem;
         flex-wrap: wrap;
         align-items: center;
+        position: relative;
+        z-index: 30;
+        overflow: visible;
       }
 
       .filter-group {
@@ -473,8 +521,7 @@ import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-ico
         font-size: 1.1rem;
       }
 
-      .search-input,
-      .filter-select {
+      .search-input {
         width: 100%;
         padding: 0.875rem 1rem 0.875rem 2.75rem;
         border: 1px solid #e5e5e5;
@@ -487,23 +534,207 @@ import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-ico
         box-sizing: border-box;
       }
 
-      .filter-select {
-        padding-left: 1rem;
-        cursor: pointer;
-        appearance: none;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23999' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14L2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
-        background-repeat: no-repeat;
-        background-position: right 0.75rem center;
-        padding-right: 2.5rem;
-      }
-
       .search-input::placeholder { color: #999; }
 
-      .search-input:focus,
-      .filter-select:focus {
+      .search-input:focus {
         outline: none;
         border-color: #facc15;
         box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.1);
+      }
+
+      .pretty-select {
+        position: relative;
+        width: 100%;
+        min-width: 0;
+      }
+
+      .pretty-select.open {
+        z-index: 80;
+      }
+
+      .pretty-trigger {
+        width: 100%;
+        min-height: 46px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        border: 1px solid #e5e5e5;
+        border-radius: 10px;
+        background: #ffffff;
+        color: #0a0a0a;
+        padding: 0 0.9rem;
+        font-family: Inter, sans-serif;
+        font-size: 0.95rem;
+        font-weight: 850;
+        text-align: left;
+        cursor: pointer;
+        transition:
+          border-color 0.15s ease,
+          box-shadow 0.15s ease,
+          background 0.15s ease;
+      }
+
+      .pretty-trigger > span:first-child {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .pretty-trigger:hover,
+      .pretty-select.open .pretty-trigger {
+        border-color: #facc15;
+        background: #fffdf4;
+        box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.12);
+      }
+
+      .select-chevron {
+        width: 0.52rem;
+        height: 0.52rem;
+        border-bottom: 2px solid #a16207;
+        border-right: 2px solid #a16207;
+        transform: rotate(45deg) translateY(-1px);
+        transition: transform 160ms ease;
+        flex-shrink: 0;
+      }
+
+      .pretty-select.open .select-chevron {
+        transform: rotate(225deg) translateY(-1px);
+      }
+
+      .pretty-menu {
+        position: absolute;
+        top: calc(100% + 0.35rem);
+        left: 0;
+        width: max(100%, 280px);
+        min-width: 250px;
+        z-index: 5000;
+        display: grid;
+        gap: 0.2rem;
+        max-height: 280px;
+        overflow-y: auto;
+        padding: 0.45rem;
+        border: 1px solid #e4e4e7;
+        border-radius: 12px;
+        background: #ffffff;
+        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18);
+        animation: selectIn 140ms ease;
+      }
+
+      .filter-group:nth-last-child(-n + 2) .pretty-menu {
+        left: auto;
+        right: 0;
+      }
+
+      @keyframes selectIn {
+        from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      .pretty-option {
+        min-height: 3.35rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.85rem;
+        border: 0;
+        border-radius: 9px;
+        background: transparent;
+        color: #3f3f46;
+        text-align: left;
+        padding: 0.62rem 0.7rem;
+        cursor: pointer;
+        transition:
+          background 140ms ease,
+          color 140ms ease,
+          transform 140ms ease;
+      }
+
+      .pretty-option:hover {
+        background: #fffbeb;
+        color: #18181b;
+        transform: translateY(-1px);
+      }
+
+      .pretty-option.selected {
+        background: rgba(250, 204, 21, 0.18);
+        color: #111827;
+      }
+
+      .option-main {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        min-width: 0;
+      }
+
+      .option-icon {
+        width: 2rem;
+        height: 2rem;
+        display: grid;
+        place-items: center;
+        border-radius: 8px;
+        background: #f4f4f5;
+        color: #a16207;
+        flex-shrink: 0;
+        font-size: 1.12rem;
+      }
+
+      .pretty-option.selected .option-icon {
+        background: #facc15;
+        color: #111827;
+      }
+
+      .option-copy {
+        display: grid;
+        gap: 0.12rem;
+        min-width: 0;
+      }
+
+      .option-copy strong {
+        color: inherit;
+        font-weight: 900;
+        font-size: 0.9rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .option-copy small {
+        color: #71717a;
+        font-weight: 650;
+        font-size: 0.75rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .option-check {
+        width: 1.15rem;
+        height: 1.15rem;
+        position: relative;
+        display: block;
+        border: 2px solid transparent;
+        border-radius: 999px;
+        flex-shrink: 0;
+      }
+
+      .pretty-option.selected .option-check {
+        border-color: #ca8a04;
+        background: #ca8a04;
+      }
+
+      .pretty-option.selected .option-check::after {
+        content: '';
+        position: absolute;
+        left: 0.31rem;
+        top: 0.16rem;
+        width: 0.3rem;
+        height: 0.58rem;
+        border: solid #ffffff;
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
       }
 
       .filter-results {
@@ -651,9 +882,12 @@ import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-ico
 export default class PlansModule implements OnInit {
   private api = inject(ApiService);
   private router = inject(Router);
+  private elementRef = inject(ElementRef<HTMLElement>);
 
   // Estado
   plans = signal<PlanSummary[]>([]);
+  users = signal<UserSummary[]>([]);
+  payments = signal<PaymentSummary[]>([]);
   loading = signal(true);
   error = signal('');
 
@@ -675,14 +909,21 @@ export default class PlansModule implements OnInit {
   searchQuery = signal('');
   filterStatus = signal('');
   filterDuration = signal('');
-
-  // Estimaciones por índice
-  private readonly planEstimates = [
-    { badge: 'recommended' as BadgeType, members: 24, income: 1920000, cycle: 'mensual' },
-    { badge: 'bestseller' as BadgeType, members: 12, income: 2520000, cycle: 'trimestral' },
-    { badge: 'featured' as BadgeType, members: 8, income: 5760000, cycle: 'anual' },
-    { badge: 'premium' as BadgeType, members: 6, income: 900000, cycle: 'mensual' },
+  openSelect = signal<PlanFilterSelect | null>(null);
+  readonly statusFilterOptions: PlanFilterOption[] = [
+    { value: '', label: 'Todos los estados', description: 'Mostrar todos los planes', icon: 'select_all' },
+    { value: 'active', label: 'Activos', description: 'Planes disponibles para venta', icon: 'check_circle' },
+    { value: 'inactive', label: 'Inactivos', description: 'Planes ocultos o pausados', icon: 'pause_circle' },
   ];
+  readonly durationFilterOptions: PlanFilterOption[] = [
+    { value: '', label: 'Todas las duraciones', description: 'Cualquier ciclo de membresía', icon: 'apps' },
+    { value: 'monthly', label: 'Mensual', description: 'Planes entre 28 y 31 días', icon: 'calendar_month' },
+    { value: 'quarterly', label: 'Trimestral', description: 'Planes cercanos a 90 días', icon: 'date_range' },
+    { value: 'semi', label: 'Semestral', description: 'Planes cercanos a 180 días', icon: 'event_repeat' },
+    { value: 'annual', label: 'Anual', description: 'Planes de 360 días o más', icon: 'event_available' },
+  ];
+
+  private readonly planBadges: BadgeType[] = ['recommended', 'bestseller', 'featured', 'premium'];
 
   activePlans = signal(0);
   estimatedSubscribers = signal(0);
@@ -699,21 +940,49 @@ export default class PlansModule implements OnInit {
     this.loadPlans();
   }
 
-  loadPlans(): void {
+  @HostListener('document:click', ['$event'])
+  closeSelectOnOutsideClick(event: MouseEvent): void {
+    if (!this.openSelect()) return;
+    if (!this.elementRef.nativeElement.contains(event.target as Node)) {
+      this.openSelect.set(null);
+    }
+  }
+
+  toggleSelect(select: PlanFilterSelect): void {
+    this.openSelect.update((current) => (current === select ? null : select));
+  }
+
+  chooseFilter(select: PlanFilterSelect, value: string): void {
+    if (select === 'status') this.filterStatus.set(value);
+    if (select === 'duration') this.filterDuration.set(value);
+    this.openSelect.set(null);
+  }
+
+  filterLabel(select: PlanFilterSelect): string {
+    const options = select === 'status' ? this.statusFilterOptions : this.durationFilterOptions;
+    const value = select === 'status' ? this.filterStatus() : this.filterDuration();
+    return options.find((option) => option.value === value)?.label || options[0].label;
+  }
+
+  async loadPlans(): Promise<void> {
     this.loading.set(true);
     this.error.set('');
-    this.api.getPlans().subscribe({
-      next: (res) => {
-        this.plans.set(res.data || []);
-        this.updateMetrics();
-        this.applyFilters();
-        this.loading.set(false);
-      },
-      error: () => {
-        this.error.set('No se pudieron cargar los planes desde el servidor.');
-        this.loading.set(false);
-      },
-    });
+    try {
+      const [plans, users, payments] = await Promise.all([
+        this.fetchAllPages<PlanSummary>((page) => this.api.getPlans(page)),
+        this.fetchAllPages<UserSummary>((page) => this.api.getUsers(page)),
+        this.fetchAllPages<PaymentSummary>((page) => this.api.getPayments(page)),
+      ]);
+      this.plans.set(plans);
+      this.users.set(users);
+      this.payments.set(payments);
+      this.updateMetrics();
+      this.applyFilters();
+    } catch {
+      this.error.set('No se pudieron cargar planes, miembros o pagos desde el servidor.');
+    } finally {
+      this.loading.set(false);
+    }
   }
 
   toggleView(): void { this.isCardView.update((v) => !v); }
@@ -723,8 +992,8 @@ export default class PlansModule implements OnInit {
   onCreatePlanModalClose(): void { this.isCreatePlanOpen.set(false); }
 
   onPlanCreated(newPlan: PlanSummary): void {
-    this.plans.update((plans) => [newPlan, ...plans]);
-    this.updateMetrics();
+        this.plans.update((plans) => [newPlan, ...plans]);
+        this.updateMetrics();
     this.applyFilters();
     this.isCreatePlanOpen.set(false);
     this.showNotification('success', `Plan "${newPlan.name}" creado correctamente.`);
@@ -842,26 +1111,20 @@ export default class PlansModule implements OnInit {
   updateMetrics(): void {
     const allPlans = this.plans();
     this.activePlans.set(allPlans.filter((p) => p.active).length);
-    let totalSubs = 0;
-    let totalIncome = 0;
-    allPlans.forEach((plan, index) => {
-      const estimate = this.planEstimates[index] || { members: 5, income: 500000 };
-      totalSubs += estimate.members;
-      totalIncome += estimate.income;
-    });
-    this.estimatedSubscribers.set(totalSubs);
-    this.monthlyMrr.set(totalIncome);
+    this.estimatedSubscribers.set(
+      this.users().filter((user) => this.isActiveSubscriber(user) && this.findPlanForUser(user)).length,
+    );
+    this.monthlyMrr.set(this.currentMonthPaidPayments().reduce((sum, payment) => sum + this.paymentAmount(payment), 0));
   }
 
   enrichPlanData(plan: PlanSummary): PlanCardData {
     const idx = this.plans().indexOf(plan);
-    const estimate = this.planEstimates[idx] || { badge: undefined, members: 5, income: 500000, cycle: 'mes' };
     return {
       ...plan,
-      badge: estimate.badge,
-      estimatedMembers: estimate.members,
-      estimatedIncome: estimate.income,
-      billingCycle: estimate.cycle,
+      badge: this.planBadges[idx],
+      estimatedMembers: this.subscribersForPlan(plan),
+      estimatedIncome: this.currentMonthIncomeForPlan(plan),
+      billingCycle: this.getBillingCycleLabel(plan.duration_days),
       description: plan.benefits || 'Plan de membresía para acceso al gimnasio',
     };
   }
@@ -869,9 +1132,107 @@ export default class PlansModule implements OnInit {
   enrichPlansTableData(plansToEnrich: PlanSummary[]): PlanTableData[] {
     return plansToEnrich.map((plan) => {
       const allIdx = this.plans().indexOf(plan);
-      const estimate = this.planEstimates[allIdx] || { members: 5, income: 500000, cycle: 'mes' };
-      return { ...plan, estimatedMembers: estimate.members, estimatedIncome: estimate.income, billingCycle: estimate.cycle };
+      return {
+        ...plan,
+        estimatedMembers: this.subscribersForPlan(plan),
+        estimatedIncome: this.currentMonthIncomeForPlan(plan),
+        billingCycle: this.getBillingCycleLabel(plan.duration_days),
+      };
     });
+  }
+
+  private async fetchAllPages<T>(
+    loader: (page: number) => Observable<PaginatedResponse<T>>,
+  ): Promise<T[]> {
+    const first = await firstValueFrom(loader(1));
+    const rows = [...(first?.data || [])];
+
+    for (let page = 2; page <= (first?.last_page || 1); page++) {
+      const next = await firstValueFrom(loader(page));
+      rows.push(...(next?.data || []));
+    }
+
+    return rows;
+  }
+
+  private isActiveSubscriber(user: UserSummary): boolean {
+    const status = String(user.status || '').toLowerCase();
+    return !status || status === 'active' || status === 'activo';
+  }
+
+  private findPlanForUser(user: UserSummary): PlanSummary | undefined {
+    const userPlan = this.normalizePlanKey(user.plan);
+    if (!userPlan) return undefined;
+
+    return this.plans().find((plan) => {
+      const idMatch = String(plan.id) === String(user.plan);
+      const nameMatch = this.normalizePlanKey(plan.name) === userPlan;
+      return idMatch || nameMatch;
+    });
+  }
+
+  private subscribersForPlan(plan: PlanSummary): number {
+    return this.users().filter((user) => this.isActiveSubscriber(user) && this.findPlanForUser(user)?.id === plan.id).length;
+  }
+
+  private currentMonthIncomeForPlan(plan: PlanSummary): number {
+    return this.currentMonthPaidPayments()
+      .filter((payment) => this.paymentBelongsToPlan(payment, plan))
+      .reduce((sum, payment) => sum + this.paymentAmount(payment), 0);
+  }
+
+  private currentMonthPaidPayments(): PaymentSummary[] {
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth();
+
+    return this.payments().filter((payment) => {
+      if (this.paymentStatusKey(payment.status) !== 'paid') return false;
+      const date = this.paymentDate(payment);
+      return !!date && date.getFullYear() === currentYear && date.getMonth() === currentMonth;
+    });
+  }
+
+  private paymentBelongsToPlan(payment: PaymentSummary, plan: PlanSummary): boolean {
+    if (payment.plan?.id && Number(payment.plan.id) === Number(plan.id)) return true;
+    if (payment.plan?.name && this.normalizePlanKey(payment.plan.name) === this.normalizePlanKey(plan.name)) return true;
+    if (payment.user?.id) {
+      const user = this.users().find((item) => Number(item.id) === Number(payment.user?.id));
+      return this.findPlanForUser(user as UserSummary)?.id === plan.id;
+    }
+    return false;
+  }
+
+  private paymentDate(payment: PaymentSummary): Date | null {
+    const raw = payment.paid_at || payment.created_at;
+    if (!raw) return null;
+    const date = new Date(raw);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  private paymentAmount(payment: PaymentSummary): number {
+    return Number(payment.amount) || 0;
+  }
+
+  private paymentStatusKey(status: string | null | undefined): string {
+    const key = String(status || '').toLowerCase().trim();
+    if (key === 'pagado' || key === 'aprobado' || key === 'approved') return 'paid';
+    return key;
+  }
+
+  private normalizePlanKey(value: string | number | null | undefined): string {
+    return String(value || '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+  }
+
+  private getBillingCycleLabel(durationDays: number): string {
+    if (durationDays >= 360) return 'año';
+    if (durationDays >= 170) return 'semestre';
+    if (durationDays >= 85) return 'trimestre';
+    return 'mes';
   }
 
   formatCurrencyShort(amount: number): string {

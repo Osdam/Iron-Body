@@ -7,6 +7,7 @@ import {
   DashboardStats,
   PaginatedResponse,
   PaymentSummary,
+  PlanSummary,
   UserSummary,
 } from '../services/api.service';
 import { Chart, registerables } from 'chart.js';
@@ -276,17 +277,27 @@ interface ReportsPayload {
 
           <!-- Reportes rápidos -->
           <app-reports-quick-actions
+            [selectedReportId]="selectedQuickReportId()"
             (reportSelect)="onQuickReport($event)"
           ></app-reports-quick-actions>
+
+          <div *ngIf="activeQuickReport() as quick" class="quick-report-status">
+            <span class="material-symbols-outlined" aria-hidden="true">{{ quick.icon }}</span>
+            <div>
+              <strong>{{ quick.title }}</strong>
+              <p>{{ quick.description }}. Los filtros, KPIs, gráficos y la tabla ya están ajustados.</p>
+            </div>
+          </div>
 
           <!-- Gráfico principal inspirado en line-charts-9 -->
           <section class="main-chart">
             <app-reports-chart
-              type="line"
-              title="Ingresos por período"
+              [type]="mainChartType()"
+              [title]="mainChartTitle()"
               [subtitle]="mainChartSubtitle()"
-              [chartData]="revenueChartData()"
-              [stats]="revenueStats()"
+              [chartData]="mainChartData()"
+              [stats]="mainChartStats()"
+              [valueType]="mainChartValueType()"
               bgImage="/assets/crm/fondo7.png"
             ></app-reports-chart>
 
@@ -747,6 +758,42 @@ interface ReportsPayload {
         flex-wrap: wrap;
       }
 
+      .quick-report-status {
+        display: flex;
+        align-items: center;
+        gap: 0.9rem;
+        margin: -0.75rem 0 1.75rem;
+        padding: 1rem 1.15rem;
+        border: 1px solid #fde68a;
+        border-radius: 12px;
+        background: #fffbeb;
+        color: #0a0a0a;
+      }
+
+      .quick-report-status > span {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        background: #fbbf24;
+        color: #0a0a0a;
+        flex-shrink: 0;
+      }
+
+      .quick-report-status strong {
+        display: block;
+        font-size: 0.95rem;
+        font-weight: 800;
+      }
+
+      .quick-report-status p {
+        margin: 0.2rem 0 0;
+        color: #666;
+        font-weight: 650;
+      }
+
       @media (max-width: 1200px) {
         .kpis-grid {
           grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -792,6 +839,7 @@ export default class ReportsModule implements OnInit {
   reportsError = signal<string>('');
 
   reportsNotice = signal<{ kind: 'success' | 'info' | 'error'; message: string } | null>(null);
+  selectedQuickReportId = signal<string>('');
 
   selectedFilters = signal<ReportsFilter>({
     dateRange: 'month',
@@ -818,6 +866,11 @@ export default class ReportsModule implements OnInit {
   );
 
   mainChartSubtitle = computed(() => {
+    const quickReportId = this.selectedQuickReportId();
+    if (quickReportId && quickReportId !== 'income' && quickReportId !== 'class-attendance') {
+      return 'Todos los registros vinculados';
+    }
+
     const range = this.selectedFilters().dateRange;
     const labels: Record<ReportsFilter['dateRange'], string> = {
       today: 'Hoy',
@@ -839,6 +892,141 @@ export default class ReportsModule implements OnInit {
   paymentsStatusChartData = computed(() =>
     this.buildPaymentsStatusChartData(this.filteredReportsData()),
   );
+
+  mainChartKey = computed(() => this.selectedQuickReportId() || this.selectedFilters().reportType);
+
+  mainChartTitle = computed(() => {
+    const titles: Record<string, string> = {
+      general: 'Ingresos por período',
+      income: 'Ingresos por período',
+      payments: 'Pagos por estado',
+      'pending-payments': 'Pagos pendientes',
+      members: 'Miembros por estado',
+      'active-members': 'Miembros activos',
+      'pending-members': 'Miembros pendientes',
+      memberships: 'Membresías por estado',
+      'expired-memberships': 'Membresías vencidas',
+      'best-plans': 'Planes populares',
+      classes: 'Asistencia a clases',
+      attendance: 'Asistencia a clases',
+      'class-attendance': 'Asistencia a clases',
+    };
+
+    return titles[this.mainChartKey()] || 'Ingresos por período';
+  });
+
+  mainChartType = computed(() => {
+    const key = this.mainChartKey();
+    if (
+      key === 'payments' ||
+      key === 'pending-payments' ||
+      key === 'members' ||
+      key === 'memberships' ||
+      key === 'expired-memberships'
+    ) {
+      return 'doughnut';
+    }
+
+    if (
+      key === 'active-members' ||
+      key === 'pending-members' ||
+      key === 'best-plans' ||
+      key === 'classes' ||
+      key === 'attendance' ||
+      key === 'class-attendance'
+    ) {
+      return 'bar';
+    }
+
+    return 'line';
+  });
+
+  mainChartValueType = computed<'currency' | 'number' | 'percent'>(() => {
+    const key = this.mainChartKey();
+    if (key === 'general' || key === 'income') return 'currency';
+    if (key === 'classes' || key === 'attendance' || key === 'class-attendance') return 'percent';
+    return 'number';
+  });
+
+  mainChartData = computed(() => {
+    const key = this.mainChartKey();
+    if (key === 'pending-payments') {
+      return this.buildActivityGroupChartData('Pago', 'Pendiente', 'Pagos pendientes');
+    }
+    if (key === 'active-members') {
+      return this.buildActivityGroupChartData('Miembro', 'Activo', 'Miembros activos');
+    }
+    if (key === 'pending-members') {
+      return this.buildActivityGroupChartData('Miembro', 'Pendiente', 'Miembros pendientes');
+    }
+    if (key === 'expired-memberships') {
+      return this.buildActivityGroupChartData('Membresía', 'Vencida', 'Membresías vencidas');
+    }
+    if (key === 'payments') return this.paymentsStatusChartData();
+    if (
+      key === 'members' ||
+      key === 'active-members' ||
+      key === 'memberships' ||
+      key === 'expired-memberships'
+    ) {
+      return this.membersStatusChartData();
+    }
+    if (key === 'best-plans') return this.planSalesChartData();
+    if (key === 'classes' || key === 'attendance' || key === 'class-attendance') {
+      return this.attendanceChartData();
+    }
+    return this.revenueChartData();
+  });
+
+  mainChartStats = computed(() => this.statsFromChartData(this.mainChartData()));
+
+  activeQuickReport = computed(() => {
+    const id = this.selectedQuickReportId();
+    if (!id) return null;
+
+    return this.quickReportLabels[id] || null;
+  });
+
+  private readonly quickReportLabels: Record<
+    string,
+    Pick<QuickReport, 'title' | 'description' | 'icon'>
+  > = {
+    income: {
+      title: 'Ingresos',
+      description: 'Resumen de ingresos totales',
+      icon: 'trending_up',
+    },
+    'pending-payments': {
+      title: 'Pagos Pendientes',
+      description: 'Cobros pendientes de realizar',
+      icon: 'pending_actions',
+    },
+    'active-members': {
+      title: 'Miembros Activos',
+      description: 'Miembros con membresía vigente',
+      icon: 'group',
+    },
+    'pending-members': {
+      title: 'Miembros Pendientes',
+      description: 'Registros pendientes de activar',
+      icon: 'person_alert',
+    },
+    'expired-memberships': {
+      title: 'Membresías Vencidas',
+      description: 'Membresías sin renovar',
+      icon: 'event_busy',
+    },
+    'best-plans': {
+      title: 'Planes Populares',
+      description: 'Planes más vendidos',
+      icon: 'star',
+    },
+    'class-attendance': {
+      title: 'Asistencia a Clases',
+      description: 'Promedio por clase',
+      icon: 'people',
+    },
+  };
 
   revenueStats = computed(() => {
     const series = this.filteredReportsData()?.revenueSeries || [];
@@ -930,6 +1118,7 @@ export default class ReportsModule implements OnInit {
 
   onFiltersChanged(next: ReportsFilter): void {
     this.selectedFilters.set(next);
+    this.selectedQuickReportId.set('');
   }
 
   onHeaderDateRangeChange(event: Event): void {
@@ -940,15 +1129,61 @@ export default class ReportsModule implements OnInit {
 
   onQuickReport(report: QuickReport): void {
     const current = this.selectedFilters();
-    const map: Record<string, ReportType> = {
-      income: 'income',
-      'pending-payments': 'payments',
-      'active-members': 'members',
-      'expired-memberships': 'memberships',
-      'best-plans': 'memberships',
-      'class-attendance': 'attendance',
+    const quickFilters: Record<
+      string,
+      Pick<ReportsFilter, 'dateRange' | 'reportType' | 'plan' | 'status'>
+    > = {
+      income: { dateRange: current.dateRange, reportType: 'income', plan: 'all', status: 'all' },
+      'pending-payments': {
+        dateRange: current.dateRange,
+        reportType: 'payments',
+        plan: 'all',
+        status: 'pending',
+      },
+      'active-members': {
+        dateRange: current.dateRange,
+        reportType: 'members',
+        plan: 'all',
+        status: 'active',
+      },
+      'pending-members': {
+        dateRange: current.dateRange,
+        reportType: 'members',
+        plan: 'all',
+        status: 'pending',
+      },
+      'expired-memberships': {
+        dateRange: current.dateRange,
+        reportType: 'memberships',
+        plan: 'all',
+        status: 'expired',
+      },
+      'best-plans': {
+        dateRange: current.dateRange,
+        reportType: 'memberships',
+        plan: 'all',
+        status: 'all',
+      },
+      'class-attendance': {
+        dateRange: current.dateRange,
+        reportType: 'attendance',
+        plan: 'all',
+        status: 'all',
+      },
     };
-    this.selectedFilters.set({ ...current, reportType: map[report.id] || 'general' });
+    const nextFilters = quickFilters[report.id] || {
+      dateRange: current.dateRange,
+      reportType: 'general',
+      plan: 'all',
+      status: 'all',
+    };
+
+    this.selectedFilters.set({ ...current, ...nextFilters });
+    this.selectedQuickReportId.set(report.id);
+    this.reportsNotice.set({
+      kind: 'success',
+      message: `Reporte rápido aplicado: ${report.title}.`,
+    });
   }
 
   async exportReport(): Promise<void> {
@@ -1039,8 +1274,16 @@ export default class ReportsModule implements OnInit {
     if (!payload) return null;
 
     const { start, end } = this.resolveDateRange(filters);
+    const quickReportId = this.selectedQuickReportId();
+    const ignoresDateRange =
+      quickReportId === 'pending-payments' ||
+      quickReportId === 'active-members' ||
+      quickReportId === 'pending-members' ||
+      quickReportId === 'expired-memberships' ||
+      quickReportId === 'best-plans';
 
     const withinRange = (date: string) => {
+      if (ignoresDateRange) return true;
       const d = new Date(date);
       return d.getTime() >= start.getTime() && d.getTime() <= end.getTime();
     };
@@ -1276,6 +1519,54 @@ export default class ReportsModule implements OnInit {
     };
   }
 
+  private statsFromChartData(chartData: { datasets: { data: number[] }[] }) {
+    const values = chartData.datasets.flatMap((dataset) => dataset.data || []);
+    const max = values.length ? Math.max(...values) : 0;
+    const min = values.length ? Math.min(...values) : 0;
+    const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+    return { max, min, avg };
+  }
+
+  private buildActivityGroupChartData(
+    type: ActivityRow['type'],
+    status: string,
+    label: string,
+  ) {
+    const rows = this.filteredReportsData()?.activity || [];
+    const groups = new Map<string, number>();
+
+    rows
+      .filter((row) => row.type === type && row.status === status)
+      .forEach((row) => {
+        const group = this.extractPlanFromActivity(row.description);
+        groups.set(group, (groups.get(group) || 0) + 1);
+      });
+
+    const entries = Array.from(groups.entries()).sort((a, b) => b[1] - a[1]);
+
+    return {
+      labels: entries.length ? entries.map(([name]) => name) : ['Sin registros'],
+      datasets: [
+        {
+          label,
+          data: entries.length ? entries.map(([, value]) => value) : [0],
+          backgroundColor: 'rgba(251, 191, 36, 0.85)',
+          borderColor: '#fbbf24',
+          borderWidth: 1,
+        },
+      ],
+    };
+  }
+
+  private extractPlanFromActivity(description: string): string {
+    const text = String(description || '').trim();
+    const afterDash = text.includes(' - ') ? text.split(' - ').pop()?.trim() : '';
+    if (afterDash) return afterDash;
+    const planMatch = text.match(/Plan\s+([^-,]+)/i);
+    if (planMatch?.[1]) return planMatch[1].trim();
+    return 'Sin plan';
+  }
+
   private buildPlanSalesChartData(payload: ReportsPayload | null) {
     const rows = payload?.planSales || [];
     return {
@@ -1461,14 +1752,15 @@ export default class ReportsModule implements OnInit {
   }
 
   private async tryLoadFromApi(): Promise<ReportsPayload> {
-    const [dashboard, payments, classes, users] = await Promise.all([
+    const [dashboard, payments, classes, users, plans] = await Promise.all([
       firstValueFrom(this.apiService.getDashboardStats()),
       this.fetchAllPages<PaymentSummary>((page) => this.apiService.getPayments(page)),
       this.fetchAllPages<ClassSummary>((page) => this.apiService.getClasses(page)),
       this.fetchAllPages<UserSummary>((page) => this.apiService.getUsers(page)),
+      this.fetchAllPages<PlanSummary>((page) => this.apiService.getPlans(page)),
     ]);
 
-    return this.buildPayloadFromApi(dashboard, payments, classes, users);
+    return this.buildPayloadFromApi(dashboard, payments, classes, users, plans);
   }
 
   private buildPayloadFromApi(
@@ -1476,6 +1768,7 @@ export default class ReportsModule implements OnInit {
     payments: PaymentSummary[],
     classes: ClassSummary[],
     users: UserSummary[],
+    plans: PlanSummary[],
   ): ReportsPayload {
     const fallback = this.buildMockPayload();
     const filters = this.selectedFilters();
@@ -1490,7 +1783,34 @@ export default class ReportsModule implements OnInit {
 
     const paymentDate = (p: PaymentSummary) => getDateKey(p.paid_at || p.created_at);
 
-    const paidPayments = payments.filter((p) => String(p.status).toLowerCase() === 'paid');
+    const paymentStatusKey = (status?: string | null) => {
+      const s = String(status || '').toLowerCase().trim();
+      if (['paid', 'pagado', 'pagada', 'completed', 'completado'].includes(s)) return 'paid';
+      if (['pending', 'pendiente', 'overdue', 'vencido', 'vencida'].includes(s)) return 'pending';
+      if (['failed', 'refunded', 'cancelled', 'canceled', 'anulado', 'anulada'].includes(s)) {
+        return 'cancelled';
+      }
+      return s || 'pending';
+    };
+
+    const memberStatusKey = (status?: string | null) => {
+      const s = String(status || '').toLowerCase().trim();
+      if (['active', 'activo', 'activa'].includes(s)) return 'active';
+      if (['expired', 'vencido', 'vencida'].includes(s)) return 'expired';
+      if (['pending', 'pendiente'].includes(s)) return 'pending';
+      if (['inactive', 'inactivo', 'inactiva'].includes(s)) return 'inactive';
+      return s || 'active';
+    };
+
+    const isExpiredMembership = (user: UserSummary) => {
+      const status = memberStatusKey(user.status);
+      if (status === 'expired') return true;
+      if (!user.membershipEndDate) return false;
+      const endDate = new Date(user.membershipEndDate);
+      return !Number.isNaN(endDate.getTime()) && endDate.getTime() < Date.now();
+    };
+
+    const paidPayments = payments.filter((p) => paymentStatusKey(p.status) === 'paid');
     const totalRevenueFromPayments = paidPayments.reduce(
       (acc, p) => acc + (Number(p.amount) || 0),
       0,
@@ -1535,10 +1855,20 @@ export default class ReportsModule implements OnInit {
       });
     }
 
+    const planNames = new Set((plans || []).map((plan) => plan.name.trim()).filter(Boolean));
     const planCounts = new Map<string, number>();
+    planNames.forEach((name) => planCounts.set(name, 0));
+
     paidPayments.forEach((p) => {
       const planName = (p.plan?.name || 'Sin plan').trim();
       planCounts.set(planName, (planCounts.get(planName) || 0) + 1);
+    });
+
+    users.forEach((u) => {
+      const planName = (u.plan || '').trim();
+      if (planName && !planCounts.has(planName)) {
+        planCounts.set(planName, 0);
+      }
     });
 
     const planSales: PlanSalesPoint[] = Array.from(planCounts.entries())
@@ -1568,10 +1898,10 @@ export default class ReportsModule implements OnInit {
       };
 
       payments.forEach((p) => {
-        const s = String(p.status || '').toLowerCase();
+        const s = paymentStatusKey(p.status);
         if (s === 'paid') map.Pagados += 1;
         else if (s === 'pending') map.Pendientes += 1;
-        else if (s === 'failed' || s === 'refunded') map.Anulados += 1;
+        else if (s === 'cancelled') map.Anulados += 1;
       });
 
       return (Object.keys(map) as PaymentStatusLabel[]).map((status) => ({
@@ -1589,16 +1919,15 @@ export default class ReportsModule implements OnInit {
         const db = new Date(b.paid_at || b.created_at).getTime();
         return db - da;
       })
-      .slice(0, 20)
       .forEach((p) => {
         const dateKey = paymentDate(p) || new Date().toISOString().split('T')[0];
         const planName = p.plan?.name ? `Plan ${p.plan.name}` : 'Pago';
         const userName = p.user?.name ? ` - ${p.user.name}` : '';
         const statusLabel = (() => {
-          const s = String(p.status || '').toLowerCase();
+          const s = paymentStatusKey(p.status);
           if (s === 'paid') return 'Pagado';
           if (s === 'pending') return 'Pendiente';
-          if (s === 'failed' || s === 'refunded') return 'Anulado';
+          if (s === 'cancelled') return 'Anulado';
           return 'Pendiente';
         })();
 
@@ -1614,22 +1943,29 @@ export default class ReportsModule implements OnInit {
     users
       .slice()
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .slice(0, 10)
       .forEach((u) => {
         const dateKey = getDateKey(u.created_at) || new Date().toISOString().split('T')[0];
+        const expired = isExpiredMembership(u);
         activity.push({
-          date: dateKey,
-          type: 'Miembro',
-          description: `Nuevo miembro: ${u.name}`,
+          date: getDateKey(u.membershipEndDate) || dateKey,
+          type: expired ? 'Membresía' : 'Miembro',
+          description: expired
+            ? `Membresía vencida: ${u.name}${u.plan ? ` - ${u.plan}` : ''}`
+            : memberStatusKey(u.status) === 'pending'
+              ? `Miembro pendiente: ${u.name}${u.plan ? ` - ${u.plan}` : ''}`
+              : `Miembro activo: ${u.name}${u.plan ? ` - ${u.plan}` : ''}`,
           value: 0,
-          status: 'Activo',
+          status: expired
+            ? 'Vencida'
+            : memberStatusKey(u.status) === 'pending'
+              ? 'Pendiente'
+              : 'Activo',
         });
       });
 
     classes
       .slice()
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .slice(0, 10)
       .forEach((c) => {
         const dateKey = getDateKey(c.created_at) || new Date().toISOString().split('T')[0];
         activity.push({
@@ -1654,26 +1990,36 @@ export default class ReportsModule implements OnInit {
         )
       : fallback.kpis.averageAttendance;
 
-    const pendingPayments = payments.filter(
-      (p) => String(p.status || '').toLowerCase() === 'pending',
+    const activeMembers = users.filter(
+      (u) => memberStatusKey(u.status) === 'active' && !isExpiredMembership(u),
     ).length;
+    const inactiveMembers = users.filter((u) => memberStatusKey(u.status) === 'inactive').length;
+    const expiredMemberships = users.filter((u) => isExpiredMembership(u)).length;
+    const pendingMemberships = users.filter((u) => memberStatusKey(u.status) === 'pending').length;
+    const pendingPayments = payments.filter((p) => paymentStatusKey(p.status) === 'pending').length;
+    const membersByStatus: MembersStatusPoint[] = [
+      { status: 'Activos', value: activeMembers },
+      { status: 'Inactivos', value: inactiveMembers },
+      { status: 'Vencidos', value: expiredMemberships },
+      { status: 'Pendientes', value: pendingMemberships },
+    ];
 
     return {
       ...fallback,
       kpis: {
         ...fallback.kpis,
-        totalRevenue: Math.round(
-          Number(dashboard?.revenue) || totalRevenueFromPayments || fallback.kpis.totalRevenue,
-        ),
-        monthlyRevenue: Math.round(periodRevenue || fallback.kpis.monthlyRevenue),
-        activeMembers: Number(dashboard?.users) || fallback.kpis.activeMembers,
+        totalRevenue: Math.round(Number(dashboard?.revenue) || totalRevenueFromPayments || 0),
+        monthlyRevenue: Math.round(periodRevenue || 0),
+        activeMembers,
         newMembers: newMembersInPeriod,
+        expiredMemberships,
         pendingPayments,
         averageAttendance: avgAttendance,
         completedClasses: Number(dashboard?.classes) || fallback.kpis.completedClasses,
       },
       revenueSeries,
       planSales: planSales.length ? planSales : fallback.planSales,
+      membersByStatus,
       attendanceByClass: attendanceByClass.length ? attendanceByClass : fallback.attendanceByClass,
       paymentsByStatus,
       activity: activity.length ? activity : fallback.activity,

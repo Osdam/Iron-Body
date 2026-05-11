@@ -138,19 +138,34 @@ import { DateWheelPickerComponent } from '../shared/components/date-wheel-picker
             </button>
           </div>
           <div class="filter-group">
-            <select
-              [ngModel]="filterStatus()"
-              (ngModelChange)="onStatusChange($event)"
-              class="filter-select"
-              aria-label="Filtrar por estado"
-            >
-              <option value="">Todos los estados</option>
-              <option value="paid">Pagados</option>
-              <option value="pending">Pendientes</option>
-              <option value="failed">Fallidos</option>
-              <option value="cancelled">Cancelados</option>
-              <option value="refunded">Reembolsados</option>
-            </select>
+            <div class="pretty-select" [class.open]="openSelect() === 'filterStatus'">
+              <button type="button" class="pretty-trigger" (click)="toggleSelect('filterStatus')" aria-label="Filtrar por estado">
+                <span>{{ paymentStatusFilterLabel() }}</span>
+                <span class="select-chevron" aria-hidden="true"></span>
+              </button>
+              <div *ngIf="openSelect() === 'filterStatus'" class="pretty-menu filter-menu">
+                <button
+                  type="button"
+                  *ngFor="let option of paymentStatusFilterOptions"
+                  class="pretty-option"
+                  [class.selected]="filterStatus() === option.value"
+                  (click)="choosePaymentStatusFilter(option.value)"
+                >
+                  <span class="option-main">
+                    <span class="option-icon" aria-hidden="true">
+                      <svg class="option-svg" viewBox="0 0 24 24">
+                        <path [attr.d]="svgIcon(option.icon)"></path>
+                      </svg>
+                    </span>
+                    <span class="option-copy">
+                      <strong>{{ option.label }}</strong>
+                      <small>{{ option.description }}</small>
+                    </span>
+                  </span>
+                  <span class="option-check" aria-hidden="true"></span>
+                </button>
+              </div>
+            </div>
           </div>
           <div class="filter-stats" *ngIf="payments().length > 0">
             <span>{{ filteredPayments().length }} resultado(s)</span>
@@ -897,6 +912,9 @@ import { DateWheelPickerComponent } from '../shared/components/date-wheel-picker
         margin-bottom: 2rem;
         flex-wrap: wrap;
         align-items: center;
+        position: relative;
+        z-index: 30;
+        overflow: visible;
       }
 
       .filter-group { position: relative; flex: 1; min-width: 200px; }
@@ -963,6 +981,17 @@ import { DateWheelPickerComponent } from '../shared/components/date-wheel-picker
       }
 
       .search-clear:hover { background: #e0e0e0; color: #0a0a0a; }
+
+      .filters-section .pretty-select {
+        width: 100%;
+      }
+
+      .filters-section .pretty-menu {
+        right: auto;
+        width: max(100%, 280px);
+        min-width: 250px;
+        z-index: 5000;
+      }
 
       .filter-stats {
         font-size: 0.85rem;
@@ -1923,7 +1952,7 @@ export default class PaymentsModule implements OnInit {
   users = signal<UserSummary[]>([]);
   plans = signal<PlanSummary[]>([]);
   userSearchQuery = signal('');
-  openSelect = signal<'user' | 'plan' | 'method' | 'status' | null>(null);
+  openSelect = signal<'user' | 'plan' | 'method' | 'status' | 'filterStatus' | null>(null);
   currentYear = new Date().getFullYear();
 
   filteredModalUsers = computed(() => {
@@ -1988,6 +2017,14 @@ export default class PaymentsModule implements OnInit {
   statusOptions = [
     { value: 'paid', label: 'Pagado', icon: 'check-circle', description: 'Pago confirmado' },
     { value: 'pending', label: 'Pendiente', icon: 'clock', description: 'Por confirmar' },
+  ];
+  paymentStatusFilterOptions = [
+    { value: '', label: 'Todos los estados', icon: 'list-filter', description: 'Mostrar todos los pagos' },
+    { value: 'paid', label: 'Pagados', icon: 'check-circle', description: 'Transacciones confirmadas' },
+    { value: 'pending', label: 'Pendientes', icon: 'clock', description: 'Pagos por confirmar' },
+    { value: 'failed', label: 'Fallidos', icon: 'circle-x', description: 'Intentos sin completar' },
+    { value: 'cancelled', label: 'Cancelados', icon: 'ban', description: 'Pagos anulados' },
+    { value: 'refunded', label: 'Reembolsados', icon: 'rotate-ccw', description: 'Dinero devuelto' },
   ];
 
   paymentForm = this.fb.nonNullable.group({
@@ -2098,8 +2135,20 @@ export default class PaymentsModule implements OnInit {
     return plans;
   }
 
-  toggleSelect(select: 'user' | 'plan' | 'method' | 'status'): void {
+  toggleSelect(select: 'user' | 'plan' | 'method' | 'status' | 'filterStatus'): void {
     this.openSelect.update((current) => (current === select ? null : select));
+  }
+
+  choosePaymentStatusFilter(value: string): void {
+    this.onStatusChange(value);
+    this.openSelect.set(null);
+  }
+
+  paymentStatusFilterLabel(): string {
+    return (
+      this.paymentStatusFilterOptions.find((option) => option.value === this.filterStatus())?.label ||
+      'Todos los estados'
+    );
   }
 
   onUserSearch(event: Event): void {
@@ -2205,6 +2254,10 @@ export default class PaymentsModule implements OnInit {
       receipt: 'M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1z M8 7h8 M8 12h8 M8 17h5',
       'check-circle': 'M9 12l2 2 4-4 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0',
       clock: 'M12 6v6l4 2 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0',
+      'list-filter': 'M3 6h18 M7 12h10 M10 18h4',
+      'circle-x': 'M15 9l-6 6 M9 9l6 6 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0',
+      ban: 'M4.93 4.93l14.14 14.14 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0',
+      'rotate-ccw': 'M3 12a9 9 0 1 0 3-6.7L3 8 M3 3v5h5',
       badge: 'M15 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0 M8.2 11.5 7 21l5-3 5 3-1.2-9.5 M6 11h12',
       'minus-circle': 'M8 12h8 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0',
     };

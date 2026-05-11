@@ -22,7 +22,7 @@ export interface PlanTableData extends PlanSummary {
             <th class="col-duration">Duración</th>
             <th class="col-cycle">Ciclo</th>
             <th class="col-members">Miembros</th>
-            <th class="col-income">Ingreso est.</th>
+            <th class="col-income">Ingreso mes</th>
             <th class="col-status">Estado</th>
             <th class="col-actions">Acciones</th>
           </tr>

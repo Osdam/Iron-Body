@@ -9,7 +9,14 @@ export interface ChartData {
     label: string;
     data: number[];
     borderColor?: string;
-    backgroundColor?: string | string[];
+    backgroundColor?: string | string[] | ((context: any) => string | CanvasGradient);
+    hoverBackgroundColor?: string | string[] | ((context: any) => string | CanvasGradient);
+    hoverBorderColor?: string | string[] | ((context: any) => string);
+    borderRadius?: number;
+    borderSkipped?: boolean;
+    barPercentage?: number;
+    categoryPercentage?: number;
+    maxBarThickness?: number;
     fill?: boolean;
     tension?: number;
     borderWidth?: number;
@@ -24,27 +31,41 @@ export interface ChartData {
     <div class="chart-card" [style.background]="cardBackground">
       <div class="chart-header">
         <div>
-          <h3 class="chart-title">{{ title }}</h3>
+          <h3 class="chart-title">
+            <span>{{ title }}</span>
+            <span *ngIf="stats" class="chart-badge">
+              <span class="material-symbols-outlined" aria-hidden="true">trending_up</span>
+              {{ formatValue(stats.avg) }}
+            </span>
+          </h3>
           <p class="chart-subtitle">{{ subtitle }}</p>
         </div>
         <div class="chart-stats" *ngIf="stats">
           <div class="stat">
             <span class="stat-label">Máximo</span>
-            <span class="stat-value">{{ formatCurrency(stats.max) }}</span>
+            <span class="stat-value">{{ formatValue(stats.max) }}</span>
           </div>
           <div class="stat">
             <span class="stat-label">Mínimo</span>
-            <span class="stat-value">{{ formatCurrency(stats.min) }}</span>
+            <span class="stat-value">{{ formatValue(stats.min) }}</span>
           </div>
           <div class="stat">
             <span class="stat-label">Promedio</span>
-            <span class="stat-value">{{ formatCurrency(stats.avg) }}</span>
+            <span class="stat-value">{{ formatValue(stats.avg) }}</span>
           </div>
         </div>
       </div>
 
-      <div class="chart-container">
-        <canvas baseChart [data]="chartData" [options]="chartOptions" [type]="type"></canvas>
+      <div class="chart-content">
+        <div class="chart-container">
+          <canvas
+            baseChart
+            [data]="styledChartData"
+            [options]="chartOptions"
+            [plugins]="chartPlugins"
+            [type]="type"
+          ></canvas>
+        </div>
       </div>
     </div>
   `,
@@ -53,11 +74,13 @@ export interface ChartData {
       .chart-card {
         background: #ffffff;
         border: 1px solid #e5e5e5;
-        border-radius: 12px;
-        padding: 1.5rem;
+        border-radius: 8px;
+        padding: 0;
         display: flex;
         flex-direction: column;
-        gap: 1.5rem;
+        gap: 0;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+        overflow: hidden;
       }
 
       .chart-header {
@@ -66,54 +89,87 @@ export interface ChartData {
         align-items: flex-start;
         gap: 1.5rem;
         flex-wrap: wrap;
+        padding: 1.5rem 1.5rem 0.75rem;
       }
 
       .chart-title {
-        font-size: 1.125rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        font-size: 1.5rem;
         font-weight: 600;
         color: #0a0a0a;
-        margin: 0 0 0.25rem;
+        line-height: 1;
+        letter-spacing: 0;
+        margin: 0 0 0.5rem;
       }
 
       .chart-subtitle {
-        font-size: 0.85rem;
-        color: #999;
+        font-size: 0.875rem;
+        color: #71717a;
         margin: 0;
       }
 
+      .chart-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        border: 0;
+        border-radius: 999px;
+        background: rgba(34, 197, 94, 0.1);
+        color: #22c55e;
+        padding: 0.2rem 0.55rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        line-height: 1;
+      }
+
+      .chart-badge .material-symbols-outlined {
+        font-size: 1rem;
+      }
+
       .chart-stats {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-        gap: 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        flex-wrap: wrap;
       }
 
       .stat {
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
-        padding: 0.75rem;
-        background: #f9f9f9;
-        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.4rem 0.55rem;
+        background: #ffffff;
+        border-radius: 999px;
         border: 1px solid #e5e5e5;
       }
 
       .stat-label {
-        font-size: 0.75rem;
-        color: #999;
-        text-transform: uppercase;
-        font-weight: 500;
-        letter-spacing: 0.5px;
+        font-size: 0.72rem;
+        color: #71717a;
+        text-transform: none;
+        font-weight: 650;
+        letter-spacing: 0;
       }
 
       .stat-value {
-        font-size: 1rem;
+        font-size: 0.78rem;
         font-weight: 700;
         color: #0a0a0a;
+      }
+
+      .chart-content {
+        padding: 0 1.5rem 1.5rem;
       }
 
       .chart-container {
         position: relative;
         height: 350px;
+        border-radius: 12px;
+        overflow: hidden;
       }
 
       @media (max-width: 768px) {
@@ -134,16 +190,90 @@ export default class ReportsChartComponent {
   @Input() subtitle: string = '';
   @Input() chartData: ChartData = { labels: [], datasets: [] };
   @Input() stats?: { max: number; min: number; avg: number };
+  @Input() valueType: 'currency' | 'number' | 'percent' = 'currency';
   @Input() bgImage: string = '';
+
+  private readonly barColor = '#fbbf24';
+  private readonly mutedBarColor = 'rgba(251, 191, 36, 0.3)';
 
   get cardBackground(): string {
     if (!this.bgImage) return '';
     return `linear-gradient(rgba(255, 255, 255, 0.93), rgba(255, 252, 235, 0.88)), url('${this.bgImage}') center / cover no-repeat`;
   }
 
+  get styledChartData(): ChartData {
+    if (this.type !== 'bar') return this.chartData;
+
+    return {
+      ...this.chartData,
+      datasets: this.chartData.datasets.map((dataset) => ({
+        ...dataset,
+        borderRadius: 12,
+        borderSkipped: false,
+        barPercentage: 0.55,
+        categoryPercentage: 0.7,
+        maxBarThickness: 54,
+        borderWidth: 0,
+        borderColor: 'transparent',
+        hoverBorderColor: '#f59e0b',
+        backgroundColor: (context: any) => {
+          const activeIndex = context.chart.getActiveElements()?.[0]?.index;
+          const isMuted = activeIndex !== undefined && activeIndex !== context.dataIndex;
+          return this.barGradient(context, isMuted);
+        },
+        hoverBackgroundColor: (context: any) => this.barGradient(context, false),
+      })),
+    };
+  }
+
+  private barGradient(context: any, muted: boolean): string | CanvasGradient {
+    const chart = context.chart;
+    const { ctx, chartArea } = chart;
+
+    if (!chartArea) return muted ? this.mutedBarColor : this.barColor;
+
+    const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+    if (muted) {
+      gradient.addColorStop(0, 'rgba(251, 191, 36, 0.34)');
+      gradient.addColorStop(1, 'rgba(245, 158, 11, 0.2)');
+      return gradient;
+    }
+
+    gradient.addColorStop(0, '#fde68a');
+    gradient.addColorStop(0.45, '#fbbf24');
+    gradient.addColorStop(1, '#f59e0b');
+    return gradient;
+  }
+
+  chartPlugins = [
+    {
+      id: 'dottedBarBackground',
+      beforeDatasetsDraw: (chart: any) => {
+        if (chart.config.type !== 'bar') return;
+        const { ctx, chartArea } = chart;
+        if (!chartArea) return;
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(156, 163, 175, 0.18)';
+        for (let x = chartArea.left; x < chartArea.right; x += 10) {
+          for (let y = chartArea.top; y < chartArea.bottom; y += 10) {
+            ctx.beginPath();
+            ctx.arc(x + 2, y + 2, 1, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        ctx.restore();
+      },
+    },
+  ];
+
   chartOptions: ChartConfiguration['options'] = {
     responsive: true,
     maintainAspectRatio: false,
+    interaction: {
+      mode: 'nearest',
+      intersect: true,
+    },
     plugins: {
       legend: {
         display: true,
@@ -159,8 +289,12 @@ export default class ReportsChartComponent {
         },
       },
       tooltip: {
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-        padding: 12,
+        backgroundColor: '#ffffff',
+        borderColor: 'rgba(229, 229, 229, 0.9)',
+        borderWidth: 1,
+        titleColor: '#0a0a0a',
+        bodyColor: '#0a0a0a',
+        padding: 10,
         titleFont: {
           size: 13,
           weight: 'bold' as any,
@@ -168,14 +302,16 @@ export default class ReportsChartComponent {
         bodyFont: {
           size: 12,
         },
-        cornerRadius: 8,
+        cornerRadius: 10,
         displayColors: true,
+        boxPadding: 4,
         callbacks: {
           label: (context: any) => {
             let label = context.dataset.label || '';
             if (label) label += ': ';
-            if (context.parsed.y !== null) {
-              label += this.formatCurrency(context.parsed.y);
+            const value = context.parsed?.y ?? context.parsed;
+            if (value !== null && value !== undefined) {
+              label += this.formatValue(value);
             }
             return label;
           },
@@ -185,7 +321,7 @@ export default class ReportsChartComponent {
     scales: {
       x: {
         grid: {
-          color: 'rgba(0, 0, 0, 0.05)',
+          display: false,
         },
         border: {
           display: false,
@@ -200,7 +336,7 @@ export default class ReportsChartComponent {
       y: {
         beginAtZero: true,
         grid: {
-          color: 'rgba(0, 0, 0, 0.05)',
+          color: 'rgba(229, 229, 229, 0.8)',
         },
         border: {
           display: false,
@@ -210,7 +346,7 @@ export default class ReportsChartComponent {
           font: {
             size: 11,
           },
-          callback: (value: any) => this.formatCurrency(value),
+          callback: (value: any) => this.formatValue(Number(value)),
         },
       },
     },
@@ -220,5 +356,11 @@ export default class ReportsChartComponent {
     if (value >= 1000000) return '$' + (value / 1000000).toFixed(1) + 'M';
     if (value >= 1000) return '$' + (value / 1000).toFixed(0) + 'K';
     return '$' + value.toLocaleString();
+  }
+
+  formatValue(value: number): string {
+    if (this.valueType === 'currency') return this.formatCurrency(value);
+    if (this.valueType === 'percent') return `${Number(value || 0).toFixed(0)}%`;
+    return new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(value || 0);
   }
 }

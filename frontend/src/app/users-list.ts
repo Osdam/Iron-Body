@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService, UserSummary } from './services/api.service';
@@ -7,6 +7,15 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
 import { EditMemberModalComponent } from './modules/components/edit-member-modal';
 import { MemberDetailsModalComponent } from './modules/components/member-details-modal';
 import { LottieIconComponent } from './shared/components/lottie-icon/lottie-icon.component';
+
+type UserFilterSelect = 'status';
+
+interface UserFilterOption {
+  value: string;
+  label: string;
+  description: string;
+  icon: string;
+}
 
 @Component({
   selector: 'users-list',
@@ -90,21 +99,33 @@ import { LottieIconComponent } from './shared/components/lottie-icon/lottie-icon
                 (ngModelChange)="searchQuery.set($event)"
                 aria-label="Buscar miembros"
               />
-              <span class="material-symbols-outlined">search</span>
+              <span class="search-icon material-symbols-outlined" aria-hidden="true">search</span>
             </div>
             <div class="filter-group">
-              <select
-                [ngModel]="filterStatus()"
-                (ngModelChange)="filterStatus.set($event)"
-                class="filter-select"
-                aria-label="Filtrar por estado"
-              >
-                <option value="">Todos los estados</option>
-                <option value="active">Activos</option>
-                <option value="inactive">Inactivos</option>
-                <option value="pending">Pendientes</option>
-                <option value="expired">Vencidos</option>
-              </select>
+              <div class="pretty-select" [class.open]="openSelect() === 'status'">
+                <button type="button" class="pretty-trigger" (click)="toggleSelect('status')" aria-label="Filtrar por estado">
+                  <span>{{ statusFilterLabel() }}</span>
+                  <span class="select-chevron" aria-hidden="true"></span>
+                </button>
+                <div class="pretty-menu" *ngIf="openSelect() === 'status'">
+                  <button
+                    type="button"
+                    class="pretty-option"
+                    *ngFor="let option of statusFilterOptions"
+                    [class.selected]="filterStatus() === option.value"
+                    (click)="chooseStatusFilter(option.value)"
+                  >
+                    <span class="option-main">
+                      <span class="option-icon material-symbols-outlined">{{ option.icon }}</span>
+                      <span class="option-copy">
+                        <strong>{{ option.label }}</strong>
+                        <small>{{ option.description }}</small>
+                      </span>
+                    </span>
+                    <span class="option-check" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -683,6 +704,9 @@ import { LottieIconComponent } from './shared/components/lottie-icon/lottie-icon
         gap: 1rem;
         margin-bottom: 2rem;
         flex-wrap: wrap;
+        position: relative;
+        z-index: 30;
+        overflow: visible;
       }
 
       .filter-group {
@@ -691,8 +715,7 @@ import { LottieIconComponent } from './shared/components/lottie-icon/lottie-icon
         min-width: 200px;
       }
 
-      .search-input,
-      .filter-select {
+      .search-input {
         width: 100%;
         padding: 0.875rem 1rem 0.875rem 2.75rem;
         border: 1px solid #e5e5e5;
@@ -709,20 +732,224 @@ import { LottieIconComponent } from './shared/components/lottie-icon/lottie-icon
         color: #999;
       }
 
-      .search-input:focus,
-      .filter-select:focus {
+      .search-input:focus {
         outline: none;
         border-color: #facc15;
         box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.1);
       }
 
-      .filter-group span {
+      .search-icon {
         position: absolute;
         left: 1rem;
         top: 50%;
         transform: translateY(-50%);
         color: #999;
         pointer-events: none;
+      }
+
+      .pretty-select {
+        position: relative;
+        width: 100%;
+        min-width: 0;
+      }
+
+      .pretty-select.open {
+        z-index: 80;
+      }
+
+      .pretty-trigger {
+        width: 100%;
+        min-height: 46px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        border: 1px solid #e5e5e5;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.95);
+        color: #0a0a0a;
+        padding: 0 0.9rem;
+        font-weight: 850;
+        text-align: left;
+        cursor: pointer;
+        transition:
+          border-color 0.15s ease,
+          box-shadow 0.15s ease,
+          background 0.15s ease;
+      }
+
+      .pretty-trigger > span:first-child {
+        position: static;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        transform: none;
+        color: inherit;
+        pointer-events: auto;
+      }
+
+      .pretty-trigger:hover,
+      .pretty-select.open .pretty-trigger {
+        border-color: #facc15;
+        background: #fffdf4;
+        box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.12);
+      }
+
+      .select-chevron {
+        position: static;
+        width: 0.52rem;
+        height: 0.52rem;
+        border-bottom: 2px solid #a16207;
+        border-right: 2px solid #a16207;
+        transform: rotate(45deg) translateY(-1px);
+        transition: transform 160ms ease;
+        flex-shrink: 0;
+        pointer-events: auto;
+      }
+
+      .pretty-select.open .select-chevron {
+        transform: rotate(225deg) translateY(-1px);
+      }
+
+      .pretty-menu {
+        position: absolute;
+        top: calc(100% + 0.35rem);
+        left: 0;
+        width: max(100%, 280px);
+        min-width: 250px;
+        z-index: 5000;
+        display: grid;
+        gap: 0.2rem;
+        max-height: 280px;
+        overflow-y: auto;
+        padding: 0.45rem;
+        border: 1px solid #e4e4e7;
+        border-radius: 12px;
+        background: #ffffff;
+        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18);
+        animation: selectIn 140ms ease;
+      }
+
+      @keyframes selectIn {
+        from {
+          opacity: 0;
+          transform: translateY(-4px) scale(0.98);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      .pretty-option {
+        min-height: 3.35rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.85rem;
+        border: 0;
+        border-radius: 9px;
+        background: transparent;
+        color: #3f3f46;
+        text-align: left;
+        padding: 0.62rem 0.7rem;
+        cursor: pointer;
+        transition:
+          background 140ms ease,
+          color 140ms ease,
+          transform 140ms ease;
+      }
+
+      .pretty-option:hover {
+        background: #fffbeb;
+        color: #18181b;
+        transform: translateY(-1px);
+      }
+
+      .pretty-option.selected {
+        background: rgba(250, 204, 21, 0.18);
+        color: #111827;
+      }
+
+      .option-main {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        min-width: 0;
+      }
+
+      .option-icon {
+        position: static;
+        width: 2rem;
+        height: 2rem;
+        display: grid;
+        place-items: center;
+        border-radius: 8px;
+        background: #f4f4f5;
+        color: #a16207;
+        flex-shrink: 0;
+        font-size: 1.12rem;
+        transform: none;
+        pointer-events: auto;
+      }
+
+      .pretty-option.selected .option-icon {
+        background: #facc15;
+        color: #111827;
+      }
+
+      .option-copy {
+        display: grid;
+        gap: 0.12rem;
+        min-width: 0;
+      }
+
+      .option-copy strong {
+        color: inherit;
+        font-weight: 900;
+        font-size: 0.9rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .option-copy small {
+        color: #71717a;
+        font-weight: 650;
+        font-size: 0.75rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .option-check {
+        position: relative;
+        width: 1.15rem;
+        height: 1.15rem;
+        display: block;
+        border: 2px solid transparent;
+        border-radius: 999px;
+        flex-shrink: 0;
+        transform: none;
+        pointer-events: auto;
+      }
+
+      .pretty-option.selected .option-check {
+        border-color: #ca8a04;
+        background: #ca8a04;
+      }
+
+      .pretty-option.selected .option-check::after {
+        content: '';
+        position: absolute;
+        left: 0.31rem;
+        top: 0.16rem;
+        width: 0.3rem;
+        height: 0.58rem;
+        border: solid #ffffff;
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
       }
 
       .members-cards {
@@ -1246,6 +1473,7 @@ import { LottieIconComponent } from './shared/components/lottie-icon/lottie-icon
 })
 export class UsersList implements OnInit {
   private api = inject(ApiService);
+  private elementRef = inject(ElementRef<HTMLElement>);
 
   members = signal<UserSummary[]>([]);
   loading = signal(true);
@@ -1253,7 +1481,15 @@ export class UsersList implements OnInit {
   isCreateMemberOpen = signal(false);
   searchQuery = signal('');
   filterStatus = signal('');
+  openSelect = signal<UserFilterSelect | null>(null);
   viewMode = signal<'cards' | 'table'>('cards');
+  readonly statusFilterOptions: UserFilterOption[] = [
+    { value: '', label: 'Todos los estados', description: 'Mostrar todos los miembros', icon: 'select_all' },
+    { value: 'active', label: 'Activos', description: 'Miembros con acceso vigente', icon: 'check_circle' },
+    { value: 'inactive', label: 'Inactivos', description: 'Miembros desactivados', icon: 'pause_circle' },
+    { value: 'pending', label: 'Pendientes', description: 'Pagos o activación pendientes', icon: 'schedule' },
+    { value: 'expired', label: 'Vencidos', description: 'Membresía fuera de vigencia', icon: 'event_busy' },
+  ];
 
   toggleView(): void {
     this.viewMode.set(this.viewMode() === 'cards' ? 'table' : 'cards');
@@ -1298,6 +1534,14 @@ export class UsersList implements OnInit {
     this.loadMembers();
   }
 
+  @HostListener('document:click', ['$event'])
+  closeSelectOnOutsideClick(event: MouseEvent): void {
+    if (!this.openSelect()) return;
+    if (!this.elementRef.nativeElement.contains(event.target as Node)) {
+      this.openSelect.set(null);
+    }
+  }
+
   loadMembers(): void {
     this.loading.set(true);
     this.api.getUsers().subscribe({
@@ -1314,6 +1558,22 @@ export class UsersList implements OnInit {
 
   trackById(_index: number, member: UserSummary): number {
     return member.id;
+  }
+
+  toggleSelect(select: UserFilterSelect): void {
+    this.openSelect.update((current) => (current === select ? null : select));
+  }
+
+  chooseStatusFilter(value: string): void {
+    this.filterStatus.set(value);
+    this.openSelect.set(null);
+  }
+
+  statusFilterLabel(): string {
+    return (
+      this.statusFilterOptions.find((option) => option.value === this.filterStatus())?.label ||
+      'Todos los estados'
+    );
   }
 
   openCreateMember(): void {

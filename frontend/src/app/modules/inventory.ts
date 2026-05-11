@@ -1,10 +1,18 @@
 import { CommonModule, CurrencyPipe, DatePipe } from '@angular/common';
-import { Component, computed, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-icon.component';
 
 type StockStatus = 'Disponible' | 'Stock bajo' | 'Agotado';
 type MovementType = 'Entrada' | 'Salida';
+type InventoryFilterSelect = 'category' | 'status';
+
+interface InventoryFilterOption {
+  value: string;
+  label: string;
+  description: string;
+  icon: string;
+}
 
 interface InventoryProduct {
   id: number;
@@ -122,17 +130,55 @@ interface CartItem {
           />
         </label>
 
-        <select [ngModel]="categoryFilter()" (ngModelChange)="categoryFilter.set($event)">
-          <option value="all">Todas las categorías</option>
-          <option *ngFor="let category of categories()" [value]="category">{{ category }}</option>
-        </select>
+        <div class="pretty-select" [class.open]="openSelect() === 'category'">
+          <button type="button" class="pretty-trigger" (click)="toggleSelect('category')" aria-label="Filtrar por categoría">
+            <span>{{ inventoryFilterLabel('category') }}</span>
+            <span class="select-chevron" aria-hidden="true"></span>
+          </button>
+          <div class="pretty-menu" *ngIf="openSelect() === 'category'">
+            <button
+              type="button"
+              class="pretty-option"
+              *ngFor="let option of categoryFilterOptions()"
+              [class.selected]="categoryFilter() === option.value"
+              (click)="chooseInventoryFilter('category', option.value)"
+            >
+              <span class="option-main">
+                <span class="option-icon material-symbols-outlined" aria-hidden="true">{{ option.icon }}</span>
+                <span class="option-copy">
+                  <strong>{{ option.label }}</strong>
+                  <small>{{ option.description }}</small>
+                </span>
+              </span>
+              <span class="option-check" aria-hidden="true"></span>
+            </button>
+          </div>
+        </div>
 
-        <select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
-          <option value="all">Todos los estados</option>
-          <option value="Disponible">Disponible</option>
-          <option value="Stock bajo">Stock bajo</option>
-          <option value="Agotado">Agotado</option>
-        </select>
+        <div class="pretty-select" [class.open]="openSelect() === 'status'">
+          <button type="button" class="pretty-trigger" (click)="toggleSelect('status')" aria-label="Filtrar por estado">
+            <span>{{ inventoryFilterLabel('status') }}</span>
+            <span class="select-chevron" aria-hidden="true"></span>
+          </button>
+          <div class="pretty-menu" *ngIf="openSelect() === 'status'">
+            <button
+              type="button"
+              class="pretty-option"
+              *ngFor="let option of statusFilterOptions"
+              [class.selected]="statusFilter() === option.value"
+              (click)="chooseInventoryFilter('status', option.value)"
+            >
+              <span class="option-main">
+                <span class="option-icon material-symbols-outlined" aria-hidden="true">{{ option.icon }}</span>
+                <span class="option-copy">
+                  <strong>{{ option.label }}</strong>
+                  <small>{{ option.description }}</small>
+                </span>
+              </span>
+              <span class="option-check" aria-hidden="true"></span>
+            </button>
+          </div>
+        </div>
       </section>
 
       <section class="checkout-card">
@@ -622,6 +668,8 @@ interface CartItem {
       }
 
       .filters-card {
+        position: relative;
+        z-index: 30;
         display: grid;
         grid-template-columns: minmax(260px, 1fr) 220px 200px;
         gap: 0.75rem;
@@ -630,6 +678,7 @@ interface CartItem {
         border: 1px solid #ededed;
         border-radius: 14px;
         background: #ffffff;
+        overflow: visible;
       }
 
       .search-field {
@@ -668,6 +717,201 @@ interface CartItem {
       textarea:focus {
         border-color: #fbbf24;
         box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.12);
+      }
+
+      .pretty-select {
+        position: relative;
+        width: 100%;
+        min-width: 0;
+      }
+
+      .pretty-select.open {
+        z-index: 80;
+      }
+
+      .pretty-trigger {
+        width: 100%;
+        min-height: 46px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        border: 1px solid #e5e5e5;
+        border-radius: 10px;
+        background: #ffffff;
+        color: #0a0a0a;
+        padding: 0 0.9rem;
+        font: inherit;
+        font-weight: 850;
+        text-align: left;
+        cursor: pointer;
+        transition:
+          border-color 0.15s ease,
+          box-shadow 0.15s ease,
+          background 0.15s ease;
+      }
+
+      .pretty-trigger > span:first-child {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .pretty-trigger:hover,
+      .pretty-select.open .pretty-trigger {
+        border-color: #fbbf24;
+        background: #fffdf4;
+        box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.12);
+      }
+
+      .select-chevron {
+        width: 0.52rem;
+        height: 0.52rem;
+        border-bottom: 2px solid #a16207;
+        border-right: 2px solid #a16207;
+        transform: rotate(45deg) translateY(-1px);
+        transition: transform 160ms ease;
+        flex-shrink: 0;
+      }
+
+      .pretty-select.open .select-chevron {
+        transform: rotate(225deg) translateY(-1px);
+      }
+
+      .pretty-menu {
+        position: absolute;
+        top: calc(100% + 0.35rem);
+        left: 0;
+        width: max(100%, 280px);
+        min-width: 250px;
+        z-index: 5000;
+        display: grid;
+        gap: 0.2rem;
+        max-height: 280px;
+        overflow-y: auto;
+        padding: 0.45rem;
+        border: 1px solid #e4e4e7;
+        border-radius: 12px;
+        background: #ffffff;
+        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18);
+        animation: selectIn 140ms ease;
+      }
+
+      .pretty-select:last-child .pretty-menu {
+        left: auto;
+        right: 0;
+      }
+
+      @keyframes selectIn {
+        from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      .pretty-option {
+        min-height: 3.35rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.85rem;
+        border: 0;
+        border-radius: 9px;
+        background: transparent;
+        color: #3f3f46;
+        text-align: left;
+        padding: 0.62rem 0.7rem;
+        cursor: pointer;
+        transition:
+          background 140ms ease,
+          color 140ms ease,
+          transform 140ms ease;
+      }
+
+      .pretty-option:hover {
+        background: #fffbeb;
+        color: #18181b;
+        transform: translateY(-1px);
+      }
+
+      .pretty-option.selected {
+        background: rgba(250, 204, 21, 0.18);
+        color: #111827;
+      }
+
+      .option-main {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        min-width: 0;
+      }
+
+      .option-icon {
+        width: 2rem;
+        height: 2rem;
+        display: grid;
+        place-items: center;
+        border-radius: 8px;
+        background: #f4f4f5;
+        color: #a16207;
+        flex-shrink: 0;
+        font-size: 1.12rem;
+      }
+
+      .pretty-option.selected .option-icon {
+        background: #facc15;
+        color: #111827;
+      }
+
+      .option-copy {
+        display: grid;
+        gap: 0.12rem;
+        min-width: 0;
+      }
+
+      .option-copy strong,
+      .option-copy small {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .option-copy strong {
+        color: inherit;
+        font-weight: 900;
+        font-size: 0.9rem;
+      }
+
+      .option-copy small {
+        color: #71717a;
+        font-weight: 650;
+        font-size: 0.75rem;
+      }
+
+      .option-check {
+        width: 1.15rem;
+        height: 1.15rem;
+        position: relative;
+        display: block;
+        border: 2px solid transparent;
+        border-radius: 999px;
+        flex-shrink: 0;
+      }
+
+      .pretty-option.selected .option-check {
+        border-color: #ca8a04;
+        background: #ca8a04;
+      }
+
+      .pretty-option.selected .option-check::after {
+        content: '';
+        position: absolute;
+        left: 0.31rem;
+        top: 0.16rem;
+        width: 0.3rem;
+        height: 0.58rem;
+        border: solid #ffffff;
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
       }
 
       .inventory-layout {
@@ -1689,6 +1933,8 @@ interface CartItem {
   ],
 })
 export default class InventoryModule {
+  private elementRef = inject(ElementRef<HTMLElement>);
+
   products = signal<InventoryProduct[]>([
     {
       id: 1,
@@ -1776,8 +2022,15 @@ export default class InventoryModule {
   searchTerm = signal('');
   categoryFilter = signal('all');
   statusFilter = signal('all');
+  openSelect = signal<InventoryFilterSelect | null>(null);
   panelMode = signal<'product' | 'movement' | null>(null);
   cart = signal<CartItem[]>([]);
+  readonly statusFilterOptions: InventoryFilterOption[] = [
+    { value: 'all', label: 'Todos los estados', description: 'Mostrar todo el inventario', icon: 'select_all' },
+    { value: 'Disponible', label: 'Disponible', description: 'Productos con stock suficiente', icon: 'check_circle' },
+    { value: 'Stock bajo', label: 'Stock bajo', description: 'Productos por reponer', icon: 'warning' },
+    { value: 'Agotado', label: 'Agotado', description: 'Sin unidades disponibles', icon: 'remove_shopping_cart' },
+  ];
 
   productForm = {
     name: '',
@@ -1808,6 +2061,16 @@ export default class InventoryModule {
     return Array.from(new Set(this.products().map((product) => product.category))).sort();
   });
 
+  categoryFilterOptions = computed<InventoryFilterOption[]>(() => [
+    { value: 'all', label: 'Todas las categorías', description: 'Cualquier línea de producto', icon: 'category' },
+    ...this.categories().map((category) => ({
+      value: category,
+      label: category,
+      description: this.categoryDescription(category),
+      icon: this.productIcon(category),
+    })),
+  ]);
+
   filteredProducts = computed(() => {
     const term = this.searchTerm().trim().toLowerCase();
     const category = this.categoryFilter();
@@ -1826,6 +2089,35 @@ export default class InventoryModule {
       return matchesTerm && matchesCategory && matchesStatus;
     });
   });
+
+  @HostListener('document:click', ['$event'])
+  closeSelectOnOutsideClick(event: MouseEvent): void {
+    if (!this.openSelect()) return;
+    if (!this.elementRef.nativeElement.contains(event.target as Node)) {
+      this.openSelect.set(null);
+    }
+  }
+
+  toggleSelect(select: InventoryFilterSelect): void {
+    this.openSelect.update((current) => (current === select ? null : select));
+  }
+
+  chooseInventoryFilter(select: InventoryFilterSelect, value: string): void {
+    if (select === 'category') this.categoryFilter.set(value);
+    if (select === 'status') this.statusFilter.set(value);
+    this.openSelect.set(null);
+  }
+
+  inventoryFilterLabel(select: InventoryFilterSelect): string {
+    const options = select === 'category' ? this.categoryFilterOptions() : this.statusFilterOptions;
+    const value = select === 'category' ? this.categoryFilter() : this.statusFilter();
+    return options.find((option) => option.value === value)?.label || options[0].label;
+  }
+
+  private categoryDescription(category: string): string {
+    const count = this.products().filter((product) => product.category === category).length;
+    return `${count} producto${count === 1 ? '' : 's'} registrado${count === 1 ? '' : 's'}`;
+  }
 
   inventoryValue = computed(() => {
     return this.products().reduce((sum, product) => sum + product.stock * product.purchasePrice, 0);

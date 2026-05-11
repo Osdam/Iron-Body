@@ -276,6 +276,8 @@ import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-ico
       }
 
       .cards {
+        position: relative;
+        z-index: 1;
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 1.1rem;
@@ -411,20 +413,8 @@ import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-ico
 export default class RoutinesModule implements OnInit {
   private api = inject(ApiService);
 
-  trainerOptions = [
-    'Sin asignar',
-    'Carlos Ruiz',
-    'Laura Gómez',
-    'Andrés Martínez',
-    'Camila Torres',
-  ];
-  memberOptions = [
-    'Plantilla general',
-    'Alejandro Gómez',
-    'Juan Pérez',
-    'María Rodríguez',
-    'Carlos Martínez',
-  ];
+  trainerOptions = ['Sin asignar'];
+  memberOptions = ['Plantilla general'];
 
   routines = signal<Routine[]>([]);
 
@@ -451,6 +441,32 @@ export default class RoutinesModule implements OnInit {
 
   ngOnInit(): void {
     this.loadRoutines();
+    this.loadTrainerOptions();
+    this.loadMemberOptions();
+  }
+
+  async loadTrainerOptions(): Promise<void> {
+    try {
+      const trainers = await firstValueFrom(this.api.getTrainers());
+      const names = (trainers || [])
+        .map((trainer: any) => String(trainer?.fullName || trainer?.name || '').trim())
+        .filter(Boolean);
+      this.trainerOptions = ['Sin asignar', ...Array.from(new Set(names))];
+    } catch {
+      this.trainerOptions = ['Sin asignar'];
+    }
+  }
+
+  async loadMemberOptions(): Promise<void> {
+    try {
+      const response = await firstValueFrom(this.api.getUsers(1));
+      const names = (response?.data || [])
+        .map((member: any) => String(member?.name || '').trim())
+        .filter(Boolean);
+      this.memberOptions = ['Plantilla general', ...Array.from(new Set(names))];
+    } catch {
+      this.memberOptions = ['Plantilla general'];
+    }
   }
 
   async loadRoutines(): Promise<void> {

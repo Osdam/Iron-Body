@@ -1,4 +1,4 @@
-import { Component, Output, EventEmitter } from '@angular/core';
+import { Component, Output, EventEmitter, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 export interface QuickReport {
@@ -19,8 +19,13 @@ export interface QuickReport {
       <div class="quick-actions-grid">
         <button
           *ngFor="let report of quickReports"
+          type="button"
           (click)="onReportSelect(report)"
-          [ngClass]="['quick-action-card', 'quick-action-' + report.color]"
+          [ngClass]="[
+            'quick-action-card',
+            'quick-action-' + report.color,
+            selectedReportId === report.id ? 'quick-action-active' : ''
+          ]"
         >
           <span class="material-symbols-outlined quick-icon">{{ report.icon }}</span>
           <h4 class="quick-title">{{ report.title }}</h4>
@@ -70,6 +75,16 @@ export interface QuickReport {
         border-color: #d0d0d0;
         box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
         transform: translateY(-2px);
+      }
+
+      .quick-action-active {
+        border-color: #fbbf24;
+        background: #fff8e1;
+        box-shadow: 0 10px 20px rgba(251, 191, 36, 0.18);
+      }
+
+      .quick-action-active .quick-arrow {
+        transform: translateX(4px);
       }
 
       .quick-action-card::before {
@@ -164,6 +179,7 @@ export interface QuickReport {
   ],
 })
 export default class ReportsQuickActionsComponent {
+  @Input() selectedReportId = '';
   @Output() reportSelect = new EventEmitter<QuickReport>();
 
   quickReports: QuickReport[] = [
@@ -187,6 +203,13 @@ export default class ReportsQuickActionsComponent {
       description: 'Miembros con membresía vigente',
       icon: 'group',
       color: 'success',
+    },
+    {
+      id: 'pending-members',
+      title: 'Miembros Pendientes',
+      description: 'Registros pendientes de activar',
+      icon: 'person_alert',
+      color: 'warning',
     },
     {
       id: 'expired-memberships',

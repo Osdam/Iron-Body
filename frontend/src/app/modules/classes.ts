@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, signal, Signal, computed, inject } from '@angular/core';
+import { Component, ElementRef, HostListener, OnInit, signal, Signal, computed, inject } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
 import { ApiService, ClassSummary } from '../services/api.service';
 import { ClassesKPIComponent } from './components/classes-kpi';
@@ -15,6 +15,14 @@ interface ClassExtended extends ClassSummary {
 }
 
 type ViewType = 'calendar' | 'cards';
+type ClassFilterSelect = 'status' | 'day' | 'type';
+
+interface ClassFilterOption {
+  value: string;
+  label: string;
+  description: string;
+  icon: string;
+}
 
 @Component({
   selector: 'module-classes',
@@ -87,6 +95,7 @@ type ViewType = 'calendar' | 'cards';
           <input
             type="text"
             placeholder="Buscar por nombre, tipo o entrenador..."
+            [value]="searchTerm()"
             (input)="onSearchChange($event)"
             class="search-input"
             aria-label="Buscar clases"
@@ -94,45 +103,80 @@ type ViewType = 'calendar' | 'cards';
         </div>
 
         <div class="filter-group">
-          <select
-            (change)="onStatusFilterChange($event)"
-            class="filter-select"
-            aria-label="Filtrar por estado"
-          >
-            <option value="">Todos los estados</option>
-            <option value="active">Activas</option>
-            <option value="inactive">Inactivas</option>
-          </select>
+          <div class="pretty-select" [class.open]="openSelect() === 'status'">
+            <button type="button" class="pretty-trigger" (click)="toggleSelect('status')" aria-label="Filtrar por estado">
+              <span>{{ filterLabel('status') }}</span>
+              <span class="select-chevron" aria-hidden="true"></span>
+            </button>
+            <div *ngIf="openSelect() === 'status'" class="pretty-menu">
+              <button
+                type="button"
+                class="pretty-option"
+                *ngFor="let option of statusFilterOptions"
+                [class.selected]="statusFilter() === option.value"
+                (click)="chooseFilter('status', option.value)"
+              >
+                <span class="option-main">
+                  <span class="option-icon material-symbols-outlined" aria-hidden="true">{{ option.icon }}</span>
+                  <span class="option-copy">
+                    <strong>{{ option.label }}</strong>
+                    <small>{{ option.description }}</small>
+                  </span>
+                </span>
+                <span class="option-check" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
 
-          <select
-            (change)="onDayFilterChange($event)"
-            class="filter-select"
-            aria-label="Filtrar por día"
-          >
-            <option value="">Todos los días</option>
-            <option value="Lunes">Lunes</option>
-            <option value="Martes">Martes</option>
-            <option value="Miércoles">Miércoles</option>
-            <option value="Jueves">Jueves</option>
-            <option value="Viernes">Viernes</option>
-            <option value="Sábado">Sábado</option>
-            <option value="Domingo">Domingo</option>
-          </select>
+          <div class="pretty-select" [class.open]="openSelect() === 'day'">
+            <button type="button" class="pretty-trigger" (click)="toggleSelect('day')" aria-label="Filtrar por día">
+              <span>{{ filterLabel('day') }}</span>
+              <span class="select-chevron" aria-hidden="true"></span>
+            </button>
+            <div *ngIf="openSelect() === 'day'" class="pretty-menu">
+              <button
+                type="button"
+                class="pretty-option"
+                *ngFor="let option of dayFilterOptions"
+                [class.selected]="dayFilter() === option.value"
+                (click)="chooseFilter('day', option.value)"
+              >
+                <span class="option-main">
+                  <span class="option-icon material-symbols-outlined" aria-hidden="true">{{ option.icon }}</span>
+                  <span class="option-copy">
+                    <strong>{{ option.label }}</strong>
+                    <small>{{ option.description }}</small>
+                  </span>
+                </span>
+                <span class="option-check" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
 
-          <select
-            (change)="onTypeFilterChange($event)"
-            class="filter-select"
-            aria-label="Filtrar por tipo"
-          >
-            <option value="">Todos los tipos</option>
-            <option value="Spinning">Spinning</option>
-            <option value="Funcional">Funcional</option>
-            <option value="Cross Training">Cross Training</option>
-            <option value="Yoga">Yoga</option>
-            <option value="Pilates">Pilates</option>
-            <option value="Boxeo">Boxeo</option>
-            <option value="Cardio">Cardio</option>
-          </select>
+          <div class="pretty-select" [class.open]="openSelect() === 'type'">
+            <button type="button" class="pretty-trigger" (click)="toggleSelect('type')" aria-label="Filtrar por tipo">
+              <span>{{ filterLabel('type') }}</span>
+              <span class="select-chevron" aria-hidden="true"></span>
+            </button>
+            <div *ngIf="openSelect() === 'type'" class="pretty-menu">
+              <button
+                type="button"
+                class="pretty-option"
+                *ngFor="let option of typeFilterOptions"
+                [class.selected]="typeFilter() === option.value"
+                (click)="chooseFilter('type', option.value)"
+              >
+                <span class="option-main">
+                  <span class="option-icon material-symbols-outlined" aria-hidden="true">{{ option.icon }}</span>
+                  <span class="option-copy">
+                    <strong>{{ option.label }}</strong>
+                    <small>{{ option.description }}</small>
+                  </span>
+                </span>
+                <span class="option-check" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
 
           <button
             class="btn-reset-filters"
@@ -393,6 +437,9 @@ type ViewType = 'calendar' | 'cards';
         padding: 1.5rem;
         border-radius: 12px;
         border: 1px solid #e5e5e5;
+        position: relative;
+        z-index: 30;
+        overflow: visible;
       }
 
       .search-box {
@@ -438,21 +485,200 @@ type ViewType = 'calendar' | 'cards';
         flex-wrap: wrap;
       }
 
-      .filter-select {
-        padding: 0.75rem 1rem;
+      .pretty-select {
+        position: relative;
+        flex: 1 1 200px;
+        min-width: 200px;
+        z-index: 1;
+      }
+
+      .pretty-select.open {
+        z-index: 80;
+      }
+
+      .pretty-trigger {
+        width: 100%;
+        min-height: 46px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
         border: 1px solid #e5e5e5;
         border-radius: 8px;
         background: #fff;
-        font-family: Inter, sans-serif;
-        font-size: 0.9rem;
         color: #0a0a0a;
+        padding: 0 0.9rem;
+        font-family: Inter, sans-serif;
+        font-size: 0.95rem;
+        font-weight: 850;
+        text-align: left;
         cursor: pointer;
-        transition: all 200ms ease;
+        transition:
+          border-color 0.15s ease,
+          box-shadow 0.15s ease,
+          background 0.15s ease;
       }
 
-      .filter-select:hover,
-      .filter-select:focus {
+      .pretty-trigger > span:first-child {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .pretty-trigger:hover,
+      .pretty-select.open .pretty-trigger {
         border-color: #facc15;
+        background: #fffdf4;
+        box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.12);
+      }
+
+      .select-chevron {
+        width: 0.52rem;
+        height: 0.52rem;
+        border-bottom: 2px solid #a16207;
+        border-right: 2px solid #a16207;
+        transform: rotate(45deg) translateY(-1px);
+        transition: transform 160ms ease;
+        flex-shrink: 0;
+      }
+
+      .pretty-select.open .select-chevron {
+        transform: rotate(225deg) translateY(-1px);
+      }
+
+      .pretty-menu {
+        position: absolute;
+        top: calc(100% + 0.35rem);
+        left: 0;
+        width: max(100%, 280px);
+        min-width: 250px;
+        z-index: 5000;
+        display: grid;
+        gap: 0.2rem;
+        max-height: 280px;
+        overflow-y: auto;
+        padding: 0.45rem;
+        border: 1px solid #e4e4e7;
+        border-radius: 12px;
+        background: #ffffff;
+        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18);
+        animation: selectIn 140ms ease;
+      }
+
+      .pretty-select:nth-last-of-type(-n + 1) .pretty-menu {
+        left: auto;
+        right: 0;
+      }
+
+      @keyframes selectIn {
+        from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      .pretty-option {
+        min-height: 3.35rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.85rem;
+        border: 0;
+        border-radius: 9px;
+        background: transparent;
+        color: #3f3f46;
+        text-align: left;
+        padding: 0.62rem 0.7rem;
+        cursor: pointer;
+        transition:
+          background 140ms ease,
+          color 140ms ease,
+          transform 140ms ease;
+      }
+
+      .pretty-option:hover {
+        background: #fffbeb;
+        color: #18181b;
+        transform: translateY(-1px);
+      }
+
+      .pretty-option.selected {
+        background: rgba(250, 204, 21, 0.18);
+        color: #111827;
+      }
+
+      .option-main {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        min-width: 0;
+      }
+
+      .option-icon {
+        width: 2rem;
+        height: 2rem;
+        display: grid;
+        place-items: center;
+        border-radius: 8px;
+        background: #f4f4f5;
+        color: #a16207;
+        flex-shrink: 0;
+        font-size: 1.12rem;
+      }
+
+      .pretty-option.selected .option-icon {
+        background: #facc15;
+        color: #111827;
+      }
+
+      .option-copy {
+        display: grid;
+        gap: 0.12rem;
+        min-width: 0;
+      }
+
+      .option-copy strong {
+        color: inherit;
+        font-weight: 900;
+        font-size: 0.9rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .option-copy small {
+        color: #71717a;
+        font-weight: 650;
+        font-size: 0.75rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .option-check {
+        width: 1.15rem;
+        height: 1.15rem;
+        position: relative;
+        display: block;
+        border: 2px solid transparent;
+        border-radius: 999px;
+        flex-shrink: 0;
+      }
+
+      .pretty-option.selected .option-check {
+        border-color: #ca8a04;
+        background: #ca8a04;
+      }
+
+      .pretty-option.selected .option-check::after {
+        content: '';
+        position: absolute;
+        left: 0.31rem;
+        top: 0.16rem;
+        width: 0.3rem;
+        height: 0.58rem;
+        border: solid #ffffff;
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
       }
 
       .btn-reset-filters {
@@ -708,6 +934,7 @@ type ViewType = 'calendar' | 'cards';
 export default class ClassesModule implements OnInit {
   private api = inject(ApiService);
   private fb = inject(FormBuilder);
+  private elementRef = inject(ElementRef<HTMLElement>);
 
   // Signals
   isLoading = signal(false);
@@ -721,7 +948,33 @@ export default class ClassesModule implements OnInit {
   statusFilter = signal('');
   dayFilter = signal('');
   typeFilter = signal('');
+  openSelect = signal<ClassFilterSelect | null>(null);
   currentView = signal<ViewType>('calendar');
+  readonly statusFilterOptions: ClassFilterOption[] = [
+    { value: '', label: 'Todos los estados', description: 'Mostrar todas las clases', icon: 'select_all' },
+    { value: 'active', label: 'Activas', description: 'Disponibles en agenda', icon: 'check_circle' },
+    { value: 'inactive', label: 'Inactivas', description: 'Pausadas u ocultas', icon: 'pause_circle' },
+  ];
+  readonly dayFilterOptions: ClassFilterOption[] = [
+    { value: '', label: 'Todos los días', description: 'Cualquier día de la semana', icon: 'calendar_month' },
+    { value: 'Lunes', label: 'Lunes', description: 'Clases del lunes', icon: 'event' },
+    { value: 'Martes', label: 'Martes', description: 'Clases del martes', icon: 'event' },
+    { value: 'Miércoles', label: 'Miércoles', description: 'Clases del miércoles', icon: 'event' },
+    { value: 'Jueves', label: 'Jueves', description: 'Clases del jueves', icon: 'event' },
+    { value: 'Viernes', label: 'Viernes', description: 'Clases del viernes', icon: 'event' },
+    { value: 'Sábado', label: 'Sábado', description: 'Clases del sábado', icon: 'event_available' },
+    { value: 'Domingo', label: 'Domingo', description: 'Clases del domingo', icon: 'event_available' },
+  ];
+  readonly typeFilterOptions: ClassFilterOption[] = [
+    { value: '', label: 'Todos los tipos', description: 'Cualquier modalidad', icon: 'apps' },
+    { value: 'Spinning', label: 'Spinning', description: 'Cardio en bicicleta', icon: 'directions_bike' },
+    { value: 'Funcional', label: 'Funcional', description: 'Trabajo físico integral', icon: 'fitness_center' },
+    { value: 'Cross Training', label: 'Cross Training', description: 'Entrenamiento de alta intensidad', icon: 'bolt' },
+    { value: 'Yoga', label: 'Yoga', description: 'Movilidad y respiración', icon: 'self_improvement' },
+    { value: 'Pilates', label: 'Pilates', description: 'Control y estabilidad', icon: 'accessibility_new' },
+    { value: 'Boxeo', label: 'Boxeo', description: 'Técnica y acondicionamiento', icon: 'sports_mma' },
+    { value: 'Cardio', label: 'Cardio', description: 'Resistencia cardiovascular', icon: 'monitor_heart' },
+  ];
 
   // Computed
   filteredClasses = computed(() => {
@@ -822,6 +1075,37 @@ export default class ClassesModule implements OnInit {
 
   ngOnInit(): void {
     this.loadClasses();
+  }
+
+  @HostListener('document:click', ['$event'])
+  closeSelectOnOutsideClick(event: MouseEvent): void {
+    if (!this.openSelect()) return;
+    if (!this.elementRef.nativeElement.contains(event.target as Node)) {
+      this.openSelect.set(null);
+    }
+  }
+
+  toggleSelect(select: ClassFilterSelect): void {
+    this.openSelect.update((current) => (current === select ? null : select));
+  }
+
+  chooseFilter(select: ClassFilterSelect, value: string): void {
+    if (select === 'status') this.statusFilter.set(value);
+    if (select === 'day') this.dayFilter.set(value);
+    if (select === 'type') this.typeFilter.set(value);
+    this.openSelect.set(null);
+  }
+
+  filterLabel(select: ClassFilterSelect): string {
+    const options =
+      select === 'status'
+        ? this.statusFilterOptions
+        : select === 'day'
+          ? this.dayFilterOptions
+          : this.typeFilterOptions;
+    const value =
+      select === 'status' ? this.statusFilter() : select === 'day' ? this.dayFilter() : this.typeFilter();
+    return options.find((option) => option.value === value)?.label || options[0].label;
   }
 
   private getNextDateForDayOfWeek(dayOfWeek: string): string {

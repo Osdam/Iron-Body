@@ -83,7 +83,7 @@ export interface PlanCardData extends PlanSummary {
         <div class="detail-item">
           <span class="detail-icon material-symbols-outlined">trending_up</span>
           <div>
-            <span class="detail-label">Ingreso est.</span>
+            <span class="detail-label">Ingreso mes</span>
             <span class="detail-value">{{ formatCurrency(plan.estimatedIncome || 0) }}</span>
           </div>
         </div>
