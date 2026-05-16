@@ -215,6 +215,57 @@ export interface ActivityRecord {
         color: #991b1b;
       }
 
+      .table-card {
+        background: #1c1b1b !important;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .table-header h3,
+      .type-cell,
+      .description-cell {
+        color: #e5e2e1;
+      }
+
+      .table-subtitle,
+      th,
+      .date-cell,
+      .value-neutral {
+        color: #b4afa6;
+      }
+
+      th,
+      tbody tr:hover {
+        background: #151515;
+      }
+
+      thead tr,
+      tbody tr {
+        border-color: #353534;
+      }
+
+      .date-badge {
+        background: #252423;
+        color: #d1c5ac;
+      }
+
+      .status-completed,
+      .status-active,
+      .status-paid {
+        background: rgba(34, 197, 94, 0.14);
+        color: #86efac;
+      }
+
+      .status-pending {
+        background: rgba(245, 197, 24, 0.14);
+        color: #ffe08b;
+      }
+
+      .status-expired {
+        background: rgba(255, 180, 171, 0.14);
+        color: #ffb4ab;
+      }
+
       @media (max-width: 768px) {
         .table-container {
           overflow-x: scroll;
@@ -239,7 +290,7 @@ export default class ReportsTableComponent {
 
   get cardBackground(): string {
     if (!this.bgImage) return '';
-    return `linear-gradient(rgba(255, 255, 255, 0.93), rgba(255, 252, 235, 0.88)), url('${this.bgImage}') center / cover no-repeat`;
+    return `linear-gradient(rgba(28, 27, 27, 0.92), rgba(17, 17, 17, 0.90)), url('${this.bgImage}') center / cover no-repeat`;
   }
 
   formatDate(date: string): string {

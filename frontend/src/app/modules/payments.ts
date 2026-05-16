@@ -10,6 +10,8 @@ import { ApiService, PaymentSummary, PlanSummary, UserSummary } from '../service
 import { firstValueFrom } from 'rxjs';
 import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-icon.component';
 import { DateWheelPickerComponent } from '../shared/components/date-wheel-picker/date-wheel-picker.component';
+import { AuthService } from '../services/auth.service';
+import { Permission } from '../models/permissions.enum';
 
 @Component({
   selector: 'module-payments',
@@ -47,7 +49,7 @@ import { DateWheelPickerComponent } from '../shared/components/date-wheel-picker
           <h1>Pagos</h1>
           <p>Seguimiento de transacciones, referencias y estado de cobros de membresías.</p>
         </div>
-        <button type="button" class="btn-primary" (click)="openModal()">
+        <button *ngIf="canCreatePayments()" type="button" class="btn-primary" (click)="openModal()">
           <span class="btn-lottie">
             <app-lottie-icon src="/assets/crm/mas.json" [size]="22" [loop]="true"></app-lottie-icon>
           </span>
@@ -186,7 +188,7 @@ import { DateWheelPickerComponent } from '../shared/components/date-wheel-picker
             Aún no hay transacciones en el sistema. Registra el primer pago para comenzar a
             llevar un control de los cobros del gimnasio.
           </p>
-          <button class="btn-primary" (click)="openModal()">
+          <button *ngIf="canCreatePayments()" class="btn-primary" (click)="openModal()">
             <span class="btn-lottie">
               <app-lottie-icon src="/assets/crm/mas.json" [size]="22" [loop]="true"></app-lottie-icon>
             </span>
@@ -1858,6 +1860,332 @@ import { DateWheelPickerComponent } from '../shared/components/date-wheel-picker
       .btn-secondary:hover:not(:disabled) { border-color: #a0a0a0; background: #f5f5f5; }
       .btn-secondary:disabled { opacity: 0.6; cursor: not-allowed; }
 
+      .kpi-card {
+        background:
+          linear-gradient(135deg, rgba(14, 14, 14, 0.94), rgba(32, 31, 31, 0.9)),
+          linear-gradient(rgba(19, 19, 19, 0.82), rgba(19, 19, 19, 0.9)),
+          url('/assets/crm/cardpago.png') center / cover no-repeat;
+        border-color: #353534;
+      }
+
+      .kpi-value {
+        color: #e5e2e1;
+      }
+
+      .kpi-label {
+        color: #d1c5ac;
+      }
+
+      .kpi-sub {
+        color: #b4afa6;
+      }
+
+      .kpi-icon {
+        background: rgba(245, 197, 24, 0.14);
+        border: 1px solid rgba(245, 197, 24, 0.24);
+      }
+
+      .filters-section {
+        background: #1c1b1b;
+        border-color: #353534;
+      }
+
+      .search-input,
+      .filter-select {
+        background: #151515;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .search-input::placeholder {
+        color: #77716a;
+      }
+
+      .filter-icon,
+      .filter-stats {
+        color: #d1c5ac;
+      }
+
+      .table-container {
+        background:
+          linear-gradient(135deg, rgba(14, 14, 14, 0.95), rgba(32, 31, 31, 0.9)),
+          linear-gradient(rgba(19, 19, 19, 0.84), rgba(19, 19, 19, 0.92)),
+          url('/assets/crm/cardpago.png') center / cover no-repeat;
+        border-color: #353534;
+      }
+
+      .payments-table thead {
+        background: rgba(42, 42, 42, 0.86);
+        border-bottom-color: #353534;
+      }
+
+      .payments-table th {
+        color: #d1c5ac;
+      }
+
+      .payments-table td {
+        border-bottom-color: rgba(53, 53, 52, 0.86);
+        color: #e5e2e1;
+      }
+
+      .payments-table .client-cell,
+      .payments-table .method-cell {
+        display: table-cell;
+      }
+
+      .payments-table .client-avatar {
+        display: inline-grid;
+        vertical-align: middle;
+        margin-right:.8rem;
+      }
+
+      .payments-table .client-info { display: inline-block; vertical-align: middle; }
+
+      .payments-table .method-icon { margin-right: .45rem; vertical-align: middle; }
+
+      .id-cell .payment-id,
+      .client-ref,
+      .no-plan,
+      .date-cell .date-time {
+        color: #b4afa6;
+      }
+
+      .client-name,
+      .amount-cell strong,
+      .date-cell .date-main {
+        color: #e5e2e1;
+      }
+
+      .client-avatar {
+        background: #f5c518;
+        color: #241a00;
+        border: 1px solid rgba(255, 224, 139, 0.38);
+      }
+
+      .plan-badge {
+        background: rgba(245, 197, 24, 0.12);
+        border: 1px solid rgba(245, 197, 24, 0.24);
+        color: #ffe08b;
+      }
+
+      .method-cell {
+        color: #d1c5ac;
+      }
+
+      .status-paid {
+        background: rgba(245, 197, 24, 0.12);
+        border: 1px solid rgba(245, 197, 24, 0.26);
+        color: #ffe08b;
+      }
+
+      .status-pending {
+        background: rgba(255, 224, 139, 0.12);
+        border: 1px solid rgba(255, 224, 139, 0.22);
+        color: #ffe5a0;
+      }
+
+      .status-failed,
+      .status-cancelled {
+        background: rgba(255, 180, 171, 0.12);
+        border: 1px solid rgba(255, 180, 171, 0.24);
+        color: #ffb4ab;
+      }
+
+      .status-refunded {
+        background: rgba(198, 198, 199, 0.14);
+        border: 1px solid rgba(198, 198, 199, 0.24);
+        color: #c6c6c7;
+      }
+
+      .action-btn,
+      .page-btn,
+      .btn-secondary-sm {
+        background: #201f1f;
+        border-color: #353534;
+        color: #d1c5ac;
+      }
+
+      .action-btn:hover,
+      .page-btn:hover:not(:disabled),
+      .btn-secondary-sm:hover {
+        background: #2a2a2a;
+        border-color: rgba(245, 197, 24, 0.36);
+        color: #ffe08b;
+      }
+
+      .pagination {
+        border-top-color: #353534;
+      }
+
+      .modal-backdrop {
+        background: rgba(0, 0, 0, 0.58);
+        backdrop-filter: none;
+      }
+
+      .modal-container { z-index: 10001; }
+
+      .modal-card {
+        background: linear-gradient(145deg, #1c1b1b, #111);
+        border-color: rgba(245, 197, 24, 0.16);
+        box-shadow:
+          inset 0 -18px 24px rgba(255, 255, 255, 0.04),
+          0 28px 70px rgba(0, 0, 0, 0.58);
+      }
+
+      .modal-header {
+        border-bottom-color: #353534;
+        background: rgba(14, 14, 14, 0.52);
+      }
+
+      .header-icon {
+        background: #f5c518;
+        color: #241a00;
+        box-shadow: 0 0 18px rgba(245, 197, 24, 0.18);
+      }
+
+      .modal-title,
+      .form-label {
+        color: #e5e2e1;
+      }
+
+      .modal-subtitle,
+      .form-hint {
+        color: #b4afa6;
+      }
+
+      .btn-close {
+        background: #2a2a2a;
+        border: 1px solid #353534;
+        color: #d1c5ac;
+      }
+
+      .btn-close:hover {
+        background: rgba(245, 197, 24, 0.12);
+        border-color: rgba(245, 197, 24, 0.35);
+        color: #ffe08b;
+      }
+
+      .modal-form {
+        background: transparent;
+      }
+
+      .form-input,
+      .form-select,
+      .readonly-input {
+        background: #151515;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .form-input::placeholder {
+        color: #77716a;
+      }
+
+      .prefix {
+        color: #ffe08b;
+      }
+
+      .pretty-trigger {
+        background: #151515;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .select-chevron {
+        border-color: #f5c518;
+      }
+
+      .pretty-menu {
+        background: rgba(21, 21, 21, 0.98);
+        border-color: #353534;
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+      }
+
+      .user-search-box {
+        background: #201f1f;
+        border-color: #353534;
+        box-shadow: none;
+      }
+
+      .user-search-box .material-symbols-outlined {
+        color: #f5c518;
+      }
+
+      .user-search-input {
+        color: #e5e2e1;
+      }
+
+      .user-search-input::placeholder,
+      .user-result-count,
+      .user-empty,
+      .option-copy small {
+        color: #b4afa6;
+      }
+
+      .pretty-option {
+        color: #e5e2e1;
+      }
+
+      .pretty-option:hover {
+        background: #201f1f;
+      }
+
+      .pretty-option.selected {
+        background: rgba(245, 197, 24, 0.14);
+        color: #ffe08b;
+      }
+
+      .option-icon {
+        background: #2a2a2a;
+        color: #ffe08b;
+      }
+
+      .avatar-icon {
+        background: #f5c518;
+        color: #241a00;
+      }
+
+      .pretty-option.selected .option-icon {
+        background: #f5c518;
+        color: #241a00;
+      }
+
+      .pretty-option.selected .option-copy small {
+        color: #d1c5ac;
+      }
+
+      .pretty-option.selected .option-check {
+        border-color: #f5c518;
+        background: #f5c518;
+      }
+
+      .pretty-option.selected .option-check::after {
+        border-color: #241a00;
+      }
+
+      .modal-footer {
+        border-top-color: #353534;
+        background: #151515;
+      }
+
+      .btn-secondary {
+        background: #201f1f;
+        border-color: #353534;
+        color: #d1c5ac;
+      }
+
+      .btn-secondary:hover:not(:disabled) {
+        background: #2a2a2a;
+        border-color: rgba(245, 197, 24, 0.35);
+        color: #ffe08b;
+      }
+
+      .modal-error {
+        background: rgba(147, 0, 10, 0.28);
+        border-color: rgba(255, 180, 171, 0.3);
+        color: #ffdad6;
+      }
+
       /* Responsive */
       @media (max-width: 1200px) {
         .kpis-grid { grid-template-columns: repeat(2, 1fr); }
@@ -1886,6 +2214,7 @@ export default class PaymentsModule implements OnInit {
   private api = inject(ApiService);
   private fb = inject(FormBuilder);
   private elementRef = inject(ElementRef<HTMLElement>);
+  private auth = inject(AuthService);
 
   // Estado
   payments = signal<PaymentSummary[]>([]);
@@ -2072,6 +2401,7 @@ export default class PaymentsModule implements OnInit {
   }
 
   async openModal(): Promise<void> {
+    if (!this.requirePermission(Permission.PAYMENTS_CREATE, 'No tienes permiso para registrar pagos.')) return;
     this.isModalOpen.set(true);
     this.loadingModalData.set(true);
     this.modalError.set('');
@@ -2266,6 +2596,7 @@ export default class PaymentsModule implements OnInit {
   }
 
   onSubmitPayment(): void {
+    if (!this.requirePermission(Permission.PAYMENTS_CREATE, 'No tienes permiso para registrar pagos.')) return;
     if (!this.paymentForm.valid) {
       this.paymentForm.markAllAsTouched();
       return;
@@ -2313,6 +2644,7 @@ export default class PaymentsModule implements OnInit {
   }
 
   markAsPaid(payment: PaymentSummary): void {
+    if (!this.requirePermission(Permission.PAYMENTS_CREATE, 'No tienes permiso para confirmar pagos.')) return;
     const now = new Date().toISOString();
     this.api.updatePayment(payment.id, { status: 'paid', paid_at: now }).subscribe({
       next: (updated) => {
@@ -2325,10 +2657,11 @@ export default class PaymentsModule implements OnInit {
   }
 
   canCancelPayments(): boolean {
-    return this.paymentRules().allowCancellation;
+    return this.paymentRules().allowCancellation && this.auth.hasPermission(Permission.PAYMENTS_CANCEL);
   }
 
   cancelPayment(payment: PaymentSummary): void {
+    if (!this.requirePermission(Permission.PAYMENTS_CANCEL, 'No tienes permiso para anular pagos.')) return;
     const ok = window.confirm(`¿Anular el pago #${payment.id}?`);
     if (!ok) return;
 
@@ -2384,6 +2717,16 @@ export default class PaymentsModule implements OnInit {
   clearNotification(): void {
     clearTimeout(this.notifTimer);
     this.notification.set(null);
+  }
+
+  canCreatePayments(): boolean {
+    return this.auth.hasPermission(Permission.PAYMENTS_CREATE);
+  }
+
+  private requirePermission(permission: Permission, message: string): boolean {
+    if (this.auth.hasPermission(permission)) return true;
+    this.showNotification('error', message);
+    return false;
   }
 
   getInitials(name?: string | null): string {

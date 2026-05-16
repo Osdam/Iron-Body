@@ -1035,6 +1035,189 @@ export interface MemberFormData {
         cursor: not-allowed;
       }
 
+      /* Dark CRM skin */
+      .member-modal-backdrop {
+        background: rgba(0, 0, 0, 0.72);
+      }
+
+      .signup-panel {
+        border-color: rgba(245, 197, 24, 0.12);
+        background: #1c1b1b;
+        color: #e5e2e1;
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
+      }
+
+      .close-button,
+      .ghost-button,
+      .outline-action {
+        border-color: #353534;
+        background: #1a1a1a;
+        color: #e5e2e1;
+      }
+
+      .close-button:hover:not(:disabled),
+      .ghost-button:hover:not(:disabled),
+      .outline-action:hover:not(:disabled) {
+        border-color: #f5c518;
+        background: #2a2a2a;
+        color: #ffe08b;
+      }
+
+      .brand-mark {
+        background: #f5c518;
+        color: #241a00;
+        box-shadow: 0 0 18px rgba(245, 197, 24, 0.2);
+      }
+
+      .eyebrow,
+      .link-action {
+        color: #ffe08b;
+      }
+
+      .signup-header h2,
+      .block-title h3,
+      .readonly-date strong,
+      .option-copy strong {
+        color: #e5e2e1;
+      }
+
+      .intro,
+      .signup-footer p,
+      .field span,
+      .field-readonly small,
+      .option-copy small {
+        color: #b4afa6;
+      }
+
+      .quick-actions,
+      .form-stack {
+        background: transparent;
+      }
+
+      .separator,
+      .signup-footer,
+      .form-block,
+      .block-title {
+        border-color: #353534;
+      }
+
+      .signup-footer {
+        background: #201f1f;
+      }
+
+      .form-block {
+        background: #201f1f;
+        box-shadow: none;
+      }
+
+      .block-title > .material-symbols-outlined {
+        background: rgba(245, 197, 24, 0.12);
+        color: #ffe08b;
+      }
+
+      .field input,
+      .field select,
+      .field textarea,
+      .pretty-trigger,
+      .readonly-date {
+        border-color: #353534;
+        background: #1a1a1a;
+        color: #e5e2e1;
+      }
+
+      .field input:hover,
+      .field select:hover,
+      .field textarea:hover,
+      .pretty-trigger:hover,
+      .pretty-select.open .pretty-trigger {
+        border-color: #f5c518;
+        background: #2a2a2a;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.14);
+      }
+
+      .field input::placeholder,
+      .field textarea::placeholder {
+        color: #8f8a82;
+      }
+
+      .field select option {
+        background: #201f1f;
+        color: #e5e2e1;
+      }
+
+      .select-chevron {
+        border-bottom-color: #ffe08b;
+        border-right-color: #ffe08b;
+      }
+
+      .pretty-menu {
+        border-color: #4e4633;
+        background: #201f1f;
+        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.44);
+      }
+
+      .pretty-option {
+        color: #d1c5ac;
+      }
+
+      .pretty-option:hover {
+        background: rgba(245, 197, 24, 0.1);
+        color: #ffe08b;
+      }
+
+      .pretty-option.selected {
+        background: rgba(245, 197, 24, 0.16);
+        color: #ffe08b;
+      }
+
+      .option-icon {
+        background: #2a2a2a;
+        color: #f5c518;
+      }
+
+      .option-svg {
+        stroke: currentColor;
+      }
+
+      .pretty-option.selected .option-icon {
+        background: #f5c518;
+        color: #241a00;
+      }
+
+      .pretty-option.selected .option-copy small {
+        color: #d1c5ac;
+      }
+
+      .pretty-option.selected .option-check {
+        border-color: #f5c518;
+        background: #f5c518;
+      }
+
+      .pretty-option.selected .option-check::after {
+        border-color: #241a00;
+      }
+
+      .readonly-date .material-symbols-outlined {
+        color: #ffe08b;
+      }
+
+      .continue-button {
+        border-color: #f5c518;
+        background: #f5c518;
+        color: #241a00;
+        box-shadow: 0 0 18px rgba(245, 197, 24, 0.18);
+      }
+
+      .continue-button:hover:not(:disabled) {
+        background: #ffd43b;
+      }
+
+      .feedback {
+        border-color: rgba(245, 197, 24, 0.18);
+        background: #201f1f;
+        color: #e5e2e1;
+      }
+
       @keyframes fadeIn {
         from {
           opacity: 0;

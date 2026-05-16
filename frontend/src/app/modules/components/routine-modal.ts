@@ -1246,6 +1246,163 @@ const nonNegativeNumber = (control: AbstractControl): ValidationErrors | null =>
         padding: 1rem 1.25rem;
       }
 
+      .overlay {
+        background: rgba(0, 0, 0, 0.68);
+      }
+
+      .drawer {
+        background:
+          linear-gradient(rgba(28, 27, 27, 0.95), rgba(17, 17, 17, 0.94)),
+          url('/assets/crm/clases1.png') center / cover no-repeat;
+        border-color: #353534;
+        color: #e5e2e1;
+        box-shadow: 0 26px 70px rgba(0, 0, 0, 0.58);
+      }
+
+      .drawer-header {
+        background:
+          linear-gradient(135deg, rgba(245, 197, 24, 0.16), rgba(28, 27, 27, 0.94)),
+          #1c1b1b;
+        border-color: #353534;
+      }
+
+      .drawer-header h2,
+      .builder-header h3,
+      .library-header h3,
+      .lib-name {
+        color: #e5e2e1;
+      }
+
+      .drawer-header p,
+      .builder-header p,
+      .library-header p,
+      .lib-desc,
+      .hint,
+      .ex-index,
+      .option-copy small,
+      .pretty-option.selected .option-copy small {
+        color: #b4afa6;
+      }
+
+      .close,
+      .grid,
+      .builder,
+      .exercise-card,
+      .library,
+      .lib-card,
+      .assign-block,
+      .btn-secondary,
+      .btn-outline,
+      .tiny {
+        background: #1c1b1b;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .input,
+      .select,
+      .textarea,
+      .pretty-trigger {
+        background: #151515;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .input::placeholder,
+      .textarea::placeholder {
+        color: #77716a;
+      }
+
+      .input:disabled,
+      .select:disabled,
+      .textarea:disabled,
+      .pretty-trigger:disabled {
+        background: #181716;
+        color: #cfcac2;
+        opacity: 1;
+      }
+
+      .label {
+        color: #cfcac2;
+      }
+
+      .input:focus,
+      .select:focus,
+      .textarea:focus,
+      .pretty-select.open .pretty-trigger,
+      .pretty-trigger:hover:not(:disabled) {
+        background: #201f1f;
+        border-color: #f5c518;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.13);
+      }
+
+      .pretty-menu {
+        background: #151515;
+        border-color: #3f3d39;
+        box-shadow: 0 22px 54px rgba(0, 0, 0, 0.48);
+      }
+
+      .pretty-option {
+        color: #e5e2e1;
+      }
+
+      .pretty-option:hover,
+      .pretty-option.selected {
+        background: rgba(245, 197, 24, 0.13);
+        color: #ffe08b;
+      }
+
+      .option-icon,
+      .pretty-option.selected .option-icon {
+        background: rgba(245, 197, 24, 0.14);
+        color: #ffe08b;
+      }
+
+      .pretty-option.selected .option-check {
+        border-color: #f5c518;
+        background: #f5c518;
+      }
+
+      .select-chevron {
+        border-color: #f5c518;
+      }
+
+      .drawer-footer {
+        background: linear-gradient(to top, rgba(17, 17, 17, 1), rgba(17, 17, 17, 0.92));
+        border-color: #353534;
+      }
+
+      .close:hover,
+      .btn-secondary:hover,
+      .btn-outline:hover,
+      .tiny:hover {
+        background: #201f1f;
+        border-color: #f5c518;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.12);
+      }
+
+      .lib-group,
+      .btn-add {
+        background: rgba(245, 197, 24, 0.14);
+        color: #ffe08b;
+        border-color: rgba(245, 197, 24, 0.28);
+      }
+
+      .btn-add:hover {
+        background: rgba(245, 197, 24, 0.22);
+      }
+
+      .tiny.danger {
+        background: rgba(255, 180, 171, 0.1);
+        color: #ffb4ab;
+        border-color: rgba(255, 180, 171, 0.24);
+      }
+
+      .tiny.danger:hover {
+        background: rgba(255, 180, 171, 0.16);
+        border-color: rgba(255, 180, 171, 0.38);
+      }
+
       @media (max-width: 980px) {
         .overlay {
           padding: 0.75rem;

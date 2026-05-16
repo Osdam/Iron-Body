@@ -27,112 +27,90 @@ export interface PlanCardData extends PlanSummary {
   imports: [CommonModule, LottieIconComponent],
   template: `
     <div class="plan-card" [class.featured]="isFeatured()">
-      <!-- Badge de estado -->
-      <div class="card-badges">
-        <span class="status-badge" [class]="'status-' + (plan.active ? 'active' : 'inactive')">
-          <i></i>
-          {{ plan.active ? 'Activo' : 'Inactivo' }}
-        </span>
-        <span
-          *ngIf="plan.badge && plan.badge !== 'active' && plan.badge !== 'inactive'"
-          class="feature-badge"
-          [class]="'badge-' + plan.badge"
-        >
-          {{ getBadgeLabel(plan.badge) }}
-        </span>
-      </div>
+      <div class="rotating-border" aria-hidden="true"></div>
 
-      <!-- Icono del plan -->
-      <div class="card-icon" [class.featured]="isFeatured()">
-        <app-lottie-icon src="/assets/crm/gym.json" [size]="44" [loop]="true"></app-lottie-icon>
-      </div>
+      <div *ngIf="isFeatured()" class="popular-pill">Recomendado</div>
 
-      <!-- Nombre del plan -->
-      <h3 class="plan-name">{{ plan.name }}</h3>
-
-      <!-- Descripción -->
-      <p class="plan-description">
-        {{ plan.description || plan.benefits || 'Plan de membresía para acceso al gimnasio' }}
-      </p>
-
-      <!-- Precio protagonista -->
-      <div class="price-section">
-        <div class="price-display">
-          <span class="currency">$</span>
-          <strong class="amount">{{ formatNumber(plan.price) }}</strong>
-          <span class="period">{{ plan.billingCycle || 'mes' }}</span>
-        </div>
-      </div>
-
-      <!-- Detalle de duración -->
-      <div class="plan-details">
-        <div class="detail-item">
-          <span class="detail-icon material-symbols-outlined">schedule</span>
-          <div>
-            <span class="detail-label">Duración</span>
-            <span class="detail-value">{{ getDurationLabel(plan.duration_days) }}</span>
+      <div class="card-shell">
+        <div class="pricing-head">
+          <div class="plan-identity">
+            <div class="card-icon" [class.featured]="isFeatured()">
+              <app-lottie-icon src="/assets/crm/gym.json" [size]="34" [loop]="true"></app-lottie-icon>
+            </div>
+            <div class="identity-copy">
+              <h3 class="plan-name">{{ plan.name }}</h3>
+              <p class="plan-description">
+                {{ plan.description || plan.benefits || 'Membresía de acceso al gimnasio' }}
+              </p>
+            </div>
           </div>
+          <span class="status-dot" [class.active]="plan.active" [class.inactive]="!plan.active"></span>
         </div>
-        <div class="detail-item">
-          <span class="detail-icon material-symbols-outlined">group</span>
-          <div>
-            <span class="detail-label">Miembros</span>
-            <span class="detail-value">{{ plan.estimatedMembers || 0 }}</span>
-          </div>
-        </div>
-        <div class="detail-item">
-          <span class="detail-icon material-symbols-outlined">trending_up</span>
-          <div>
-            <span class="detail-label">Ingreso mes</span>
-            <span class="detail-value">{{ formatCurrency(plan.estimatedIncome || 0) }}</span>
-          </div>
-        </div>
-      </div>
 
-      <!-- Beneficios -->
-      <div class="benefits-section">
-        <h4 class="benefits-title">Incluye:</h4>
+        <div class="price-section">
+          <div class="price-display">
+            <span class="currency">$</span>
+            <strong class="amount">{{ formatNumber(plan.price) }}</strong>
+            <span class="period">/ {{ plan.billingCycle || 'mes' }}</span>
+          </div>
+          <p class="price-note">{{ getDurationLabel(plan.duration_days) }}</p>
+        </div>
+
         <ul class="benefits-list">
           <li *ngFor="let benefit of getPlanBenefits()">
-            <span class="benefit-icon material-symbols-outlined">check_circle</span>
+            <span class="benefit-check material-symbols-outlined">check</span>
             <span>{{ benefit }}</span>
           </li>
         </ul>
-      </div>
 
-      <!-- Acciones administrativas -->
-      <div class="card-actions">
-        <button class="action-btn primary" (click)="onEdit.emit(plan)" title="Editar plan">
+        <div class="plan-metrics">
+          <div class="metric-item">
+            <span class="material-symbols-outlined">group</span>
+            <strong>{{ plan.estimatedMembers || 0 }}</strong>
+            <small>Miembros</small>
+          </div>
+          <div class="metric-item">
+            <span class="material-symbols-outlined">trending_up</span>
+            <strong>{{ formatCurrency(plan.estimatedIncome || 0) }}</strong>
+            <small>Ingreso mes</small>
+          </div>
+        </div>
+
+        <button class="primary-cta" (click)="onEdit.emit(plan)" title="Editar plan">
           <span class="material-symbols-outlined">edit</span>
           <span>Editar</span>
         </button>
-        <button class="action-btn" (click)="onViewMembers.emit(plan)" title="Ver miembros">
-          <span class="material-symbols-outlined">group</span>
-          <span>Miembros</span>
-        </button>
-        <button class="action-btn" (click)="onDuplicate.emit(plan)" title="Duplicar plan">
-          <span class="material-symbols-outlined">content_copy</span>
-          <span>Duplicar</span>
-        </button>
-        <button
-          class="action-btn danger"
-          (click)="onToggleStatus.emit(plan)"
-          title="Cambiar estado"
-        >
-          <span class="material-symbols-outlined">{{
-            plan.active ? 'visibility_off' : 'visibility'
-          }}</span>
-          <span>{{ plan.active ? 'Desactivar' : 'Activar' }}</span>
-        </button>
-        <button class="action-btn danger" (click)="onDelete.emit(plan)" title="Eliminar plan">
-          <span class="material-symbols-outlined">delete</span>
-          <span>Eliminar</span>
-        </button>
+
+        <div class="card-actions">
+          <button class="action-btn" (click)="onViewMembers.emit(plan)" title="Ver miembros">
+            <span class="material-symbols-outlined">group</span>
+            <span>Miembros</span>
+          </button>
+          <button class="action-btn" (click)="onDuplicate.emit(plan)" title="Duplicar plan">
+            <span class="material-symbols-outlined">content_copy</span>
+            <span>Duplicar</span>
+          </button>
+          <button class="action-btn" (click)="onToggleStatus.emit(plan)" title="Cambiar estado">
+            <span class="material-symbols-outlined">{{
+              plan.active ? 'visibility_off' : 'visibility'
+            }}</span>
+            <span>{{ plan.active ? 'Desactivar' : 'Activar' }}</span>
+          </button>
+          <button class="action-btn danger" (click)="onDelete.emit(plan)" title="Eliminar plan">
+            <span class="material-symbols-outlined">delete</span>
+            <span>Eliminar</span>
+          </button>
+        </div>
       </div>
     </div>
   `,
   styles: [
     `
+      :host {
+        display: block;
+        align-self: start;
+      }
+
       .plan-card {
         position: relative;
         display: flex;
@@ -484,6 +462,483 @@ export interface PlanCardData extends PlanSummary {
         color: #991b1b;
       }
 
+      /* Dark CRM skin */
+      .plan-card {
+        background:
+          radial-gradient(circle at 88% 40%, rgba(24, 24, 27, 1) 0, transparent 42%),
+          radial-gradient(circle at 0% 64%, rgba(117, 86, 12, 0.82) 0, transparent 36%),
+          radial-gradient(circle at 41% 94%, rgba(245, 197, 24, 0.28) 0, transparent 40%),
+          radial-gradient(circle at 100% 99%, rgba(94, 82, 0, 0.55) 0, transparent 42%),
+          linear-gradient(145deg, rgba(15, 15, 15, 0.98), rgba(28, 27, 27, 0.92)),
+          url('/assets/crm/cardspalnes.png') center / cover no-repeat;
+        border-color: rgba(245, 197, 24, 0.14);
+        box-shadow:
+          inset 0 -16px 24px rgba(255, 255, 255, 0.08),
+          0 18px 42px rgba(0, 0, 0, 0.34);
+      }
+
+      .plan-card::before {
+        background:
+          linear-gradient(90deg, rgba(245, 197, 24, 0.42), transparent 48%),
+          linear-gradient(135deg, rgba(255, 255, 255, 0.03), transparent);
+        height: 2px;
+        bottom: auto;
+        opacity: 1;
+      }
+
+      .plan-card:hover {
+        border-color: #f5c518;
+        box-shadow: 0 0 18px rgba(245, 197, 24, 0.14), 0 18px 42px rgba(0, 0, 0, 0.4);
+      }
+
+      .plan-card.featured {
+        border-color: #f5c518;
+        box-shadow:
+          inset 0 -16px 24px rgba(255, 255, 255, 0.09),
+          0 0 20px rgba(245, 197, 24, 0.16),
+          0 18px 42px rgba(0, 0, 0, 0.38);
+      }
+
+      .plan-name,
+      .currency,
+      .amount,
+      .detail-value {
+        color: #e5e2e1;
+      }
+
+      .plan-description,
+      .period,
+      .benefits-title,
+      .benefits-list li {
+        color: #b4afa6;
+      }
+
+      .price-section,
+      .card-actions {
+        border-color: #353534;
+      }
+
+      .status-active,
+      .feature-badge,
+      .badge-featured,
+      .badge-recommended,
+      .badge-bestseller {
+        background: rgba(245, 197, 24, 0.14);
+        border: 1px solid rgba(245, 197, 24, 0.28);
+        color: #ffe08b;
+      }
+
+      .status-inactive {
+        background: rgba(180, 181, 181, 0.12);
+        border: 1px solid rgba(180, 181, 181, 0.24);
+        color: #c6c6c7;
+      }
+
+      .badge-new {
+        background: rgba(158, 197, 255, 0.14);
+        color: #d6e3ff;
+      }
+
+      .badge-premium {
+        background: rgba(255, 224, 139, 0.14);
+        color: #ffe08b;
+      }
+
+      .card-icon,
+      .plan-details {
+        background: rgba(42, 42, 42, 0.82);
+        border: 1px solid #353534;
+      }
+
+      .card-icon.featured {
+        background: rgba(245, 197, 24, 0.16);
+        border-color: rgba(245, 197, 24, 0.28);
+      }
+
+      .detail-icon,
+      .benefit-icon {
+        color: #ffe08b;
+      }
+
+      .detail-label {
+        color: #d1c5ac;
+      }
+
+      .benefits-list li:hover {
+        color: #e5e2e1;
+      }
+
+      .action-btn {
+        background: #1a1a1a;
+        border-color: #353534;
+        color: #d1c5ac;
+      }
+
+      .action-btn:hover {
+        background: #2a2a2a;
+        border-color: #f5c518;
+        color: #ffe08b;
+      }
+
+      .action-btn.primary {
+        background: #f5c518;
+        border-color: #f5c518;
+        color: #241a00;
+      }
+
+      .action-btn.primary:hover {
+        background: #ffd43b;
+        border-color: #ffd43b;
+      }
+
+      .action-btn.danger {
+        color: #ffb4ab;
+      }
+
+      .action-btn.danger:hover {
+        background: rgba(255, 180, 171, 0.1);
+        border-color: rgba(255, 180, 171, 0.35);
+        color: #ffdad6;
+      }
+
+      /* Pricing reference layout */
+      .plan-card {
+        isolation: isolate;
+        min-height: 0;
+        height: fit-content;
+        align-self: start;
+        margin-top: 0.7rem;
+        padding: 0;
+        border: 0;
+        border-radius: 16px;
+        background:
+          radial-gradient(at 88% 40%, rgba(15, 15, 15, 1) 0, transparent 85%),
+          radial-gradient(at 49% 30%, rgba(15, 15, 15, 1) 0, transparent 85%),
+          radial-gradient(at 14% 26%, rgba(20, 19, 19, 1) 0, transparent 85%),
+          radial-gradient(at 0% 64%, rgba(116, 91, 0, 0.92) 0, transparent 75%),
+          radial-gradient(at 41% 94%, rgba(245, 197, 24, 0.45) 0, transparent 78%),
+          radial-gradient(at 100% 99%, rgba(255, 224, 139, 0.26) 0, transparent 72%),
+          #0f0f0f;
+        box-shadow:
+          inset 0 -16px 24px rgba(255, 255, 255, 0.14),
+          0 18px 45px rgba(0, 0, 0, 0.42);
+        overflow: visible;
+      }
+
+      .plan-card::before {
+        display: none;
+      }
+
+      .plan-card:hover {
+        transform: translateY(-4px);
+        box-shadow:
+          inset 0 -16px 24px rgba(255, 255, 255, 0.16),
+          0 0 0 1px rgba(245, 197, 24, 0.16),
+          0 24px 54px rgba(0, 0, 0, 0.48);
+      }
+
+      .plan-card.featured {
+        border: 0;
+        box-shadow:
+          inset 0 -16px 24px rgba(255, 255, 255, 0.18),
+          0 0 26px rgba(245, 197, 24, 0.18),
+          0 24px 54px rgba(0, 0, 0, 0.48);
+      }
+
+      .rotating-border {
+        position: absolute;
+        inset: 0;
+        z-index: 3;
+        overflow: hidden;
+        border-radius: 16px;
+        pointer-events: none;
+        padding: 1px;
+        background: rgba(245, 197, 24, 0.1);
+        -webkit-mask:
+          linear-gradient(#000 0 0) content-box,
+          linear-gradient(#000 0 0);
+        -webkit-mask-composite: xor;
+        mask-composite: exclude;
+      }
+
+      .rotating-border::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 200%;
+        height: 10rem;
+        transform: translate(-50%, -50%) rotate(0deg);
+        transform-origin: left;
+        background: linear-gradient(
+          0deg,
+          rgba(245, 197, 24, 0) 0%,
+          rgba(245, 197, 24, 0.9) 42%,
+          rgba(255, 229, 160, 0.92) 58%,
+          rgba(245, 197, 24, 0) 100%
+        );
+        animation: pricingRotate 8s linear infinite;
+      }
+
+      @keyframes pricingRotate {
+        to { transform: translate(-50%, -50%) rotate(360deg); }
+      }
+
+      .card-shell {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        height: auto;
+        box-sizing: border-box;
+        padding: 1.45rem;
+        border-radius: 16px;
+        background:
+          linear-gradient(180deg, rgba(19, 19, 19, 0.88), rgba(14, 14, 14, 0.94)),
+          radial-gradient(circle at 80% 0%, rgba(245, 197, 24, 0.14), transparent 36%);
+        border: 1px solid rgba(245, 197, 24, 0.12);
+        box-shadow:
+          inset 0 0 0 1px rgba(245, 197, 24, 0.08),
+          inset 0 -16px 24px rgba(255, 255, 255, 0.08);
+        overflow: hidden;
+      }
+
+      .popular-pill {
+        position: absolute;
+        top: 1px;
+        left: 50%;
+        z-index: 4;
+        transform: translate(-50%, -62%);
+        padding: 0.35rem 0.85rem;
+        border-radius: 999px;
+        background: #f5c518;
+        color: #241a00;
+        font-size: 0.68rem;
+        font-weight: 800;
+        line-height: 1;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        box-shadow: 0 8px 18px rgba(245, 197, 24, 0.2);
+      }
+
+      .pricing-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1.55rem;
+      }
+
+      .plan-identity {
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+        min-width: 0;
+      }
+
+      .identity-copy {
+        min-width: 0;
+      }
+
+      .card-icon {
+        width: 42px;
+        height: 42px;
+        margin: 0;
+        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(245, 197, 24, 0.22), rgba(255, 224, 139, 0.08));
+        border: 1px solid rgba(255, 255, 255, 0.18);
+      }
+
+      .card-icon.featured {
+        background: linear-gradient(135deg, rgba(245, 197, 24, 0.34), rgba(255, 224, 139, 0.12));
+      }
+
+      .plan-name {
+        margin: 0;
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: #ffffff;
+        letter-spacing: 0;
+      }
+
+      .plan-description {
+        display: -webkit-box;
+        min-height: 0;
+        margin: 0.2rem 0 0;
+        overflow: hidden;
+        color: #8f8b85;
+        font-size: 0.78rem;
+        line-height: 1.35;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+      }
+
+      .status-dot {
+        width: 20px;
+        height: 20px;
+        border: 2px solid rgba(255, 255, 255, 0.28);
+        border-radius: 999px;
+        flex-shrink: 0;
+      }
+
+      .status-dot.active {
+        border-color: rgba(245, 197, 24, 0.9);
+        background: radial-gradient(circle, #f5c518 0 38%, transparent 42%);
+        box-shadow: 0 0 14px rgba(245, 197, 24, 0.35);
+      }
+
+      .status-dot.inactive {
+        border-color: rgba(198, 198, 199, 0.42);
+      }
+
+      .price-section {
+        margin: 0 0 1.35rem;
+        padding: 0;
+        border: 0;
+      }
+
+      .price-display {
+        gap: 0.35rem;
+      }
+
+      .currency {
+        color: #ffffff;
+        font-size: 1.25rem;
+      }
+
+      .amount {
+        color: #ffffff;
+        font-size: clamp(2.2rem, 5vw, 3rem);
+        font-weight: 650;
+        letter-spacing: 0;
+      }
+
+      .period {
+        color: #b4afa6;
+        font-size: 0.9rem;
+      }
+
+      .price-note {
+        margin: 0.35rem 0 0;
+        color: #77716a;
+        font-size: 0.78rem;
+      }
+
+      .benefits-list {
+        gap: 0.82rem;
+        margin-bottom: 1.35rem;
+      }
+
+      .benefits-list li {
+        align-items: flex-start;
+        gap: 0.75rem;
+        color: #d7d2cd;
+        font-size: 0.88rem;
+        line-height: 1.35;
+      }
+
+      .benefit-check {
+        display: inline-grid;
+        place-items: center;
+        width: 1rem;
+        height: 1rem;
+        margin-top: 0.08rem;
+        border-radius: 999px;
+        background: #f5c518;
+        color: #241a00;
+        font-size: 0.72rem;
+        font-weight: 800;
+        flex-shrink: 0;
+      }
+
+      .plan-metrics {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem;
+        margin-top: auto;
+        margin-bottom: 1rem;
+      }
+
+      .metric-item {
+        min-width: 0;
+        padding: 0.78rem;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.035);
+      }
+
+      .metric-item .material-symbols-outlined {
+        display: block;
+        margin-bottom: 0.4rem;
+        color: #f5c518;
+        font-size: 1.05rem;
+      }
+
+      .metric-item strong {
+        display: block;
+        color: #ffffff;
+        font-size: 0.98rem;
+        overflow-wrap: anywhere;
+      }
+
+      .metric-item small {
+        display: block;
+        margin-top: 0.12rem;
+        color: #8f8b85;
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .primary-cta {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        width: 100%;
+        height: 3rem;
+        border: 0;
+        border-radius: 10px;
+        background: #ffffff;
+        color: #151515;
+        font-family: Inter, sans-serif;
+        font-size: 0.92rem;
+        font-weight: 800;
+        cursor: pointer;
+        transition: background 180ms ease, transform 180ms ease;
+      }
+
+      .primary-cta:hover {
+        background: #ffe08b;
+        transform: translateY(-1px);
+      }
+
+      .primary-cta .material-symbols-outlined {
+        font-size: 1.1rem;
+      }
+
+      .card-actions {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.45rem;
+        margin-top: 0.7rem;
+        padding-top: 0;
+        border-top: 0;
+      }
+
+      .action-btn {
+        min-height: 2.45rem;
+        padding: 0.45rem 0.35rem;
+        border-color: rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.035);
+        color: #b4afa6;
+        font-size: 0.62rem;
+      }
+
+      .action-btn span:first-child {
+        font-size: 1rem;
+      }
+
       @media (max-width: 1200px) {
         .plan-details {
           grid-template-columns: 1fr;
@@ -571,6 +1026,33 @@ export interface PlanCardData extends PlanSummary {
 
         .action-btn span:first-child {
           font-size: 0.9rem;
+        }
+      }
+
+      @media (max-width: 1200px) {
+        .plan-card { padding: 1px; }
+        .card-shell { padding: 1.35rem; }
+        .card-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .action-btn {
+          flex-direction: column;
+          justify-content: center;
+          padding: 0.45rem 0.35rem;
+        }
+        .action-btn span:last-child { display: inline; }
+      }
+
+      @media (max-width: 640px) {
+        .card-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .plan-metrics { grid-template-columns: 1fr; }
+      }
+
+      @media (max-width: 420px) {
+        .pricing-head { align-items: flex-start; }
+        .plan-identity { align-items: flex-start; }
+        .card-actions { grid-template-columns: 1fr; }
+        .action-btn {
+          flex-direction: row;
+          justify-content: flex-start;
         }
       }
     `,

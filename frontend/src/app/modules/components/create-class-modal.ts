@@ -711,6 +711,96 @@ import { DateWheelPickerComponent } from '../../shared/components/date-wheel-pic
         cursor: not-allowed;
       }
 
+      .modal-backdrop {
+        background: rgba(0, 0, 0, 0.62);
+        backdrop-filter: none;
+        z-index: 10000;
+      }
+
+      .modal-container {
+        z-index: 10001;
+        overflow-y: auto;
+      }
+
+      .modal-card {
+        background: linear-gradient(145deg, #1c1b1b 0%, #111111 100%);
+        border-color: rgba(245, 197, 24, 0.16);
+        color: #e5e2e1;
+        box-shadow: 0 28px 80px rgba(0, 0, 0, 0.58);
+        overflow: visible;
+      }
+
+      .modal-header,
+      .modal-footer {
+        background: #151515;
+        border-color: #353534;
+      }
+
+      .header-icon,
+      .btn-primary {
+        background: #f5c518;
+        color: #241a00;
+      }
+
+      .modal-title,
+      .section-title,
+      .form-label,
+      .checkbox-label {
+        color: #e5e2e1;
+      }
+
+      .modal-subtitle,
+      .form-hint {
+        color: #b4afa6;
+      }
+
+      .section-title {
+        border-color: #353534;
+      }
+
+      .btn-close,
+      .btn-secondary,
+      .form-input,
+      .form-select,
+      .readonly-input {
+        background: #151515;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .form-input,
+      .form-select {
+        color-scheme: dark;
+      }
+
+      .form-select option {
+        background: #151515;
+        color: #e5e2e1;
+      }
+
+      .form-input::placeholder {
+        color: #77716a;
+      }
+
+      .form-input:focus,
+      .form-select:focus {
+        border-color: #f5c518;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.14);
+      }
+
+      .btn-close:hover:not(:disabled),
+      .btn-secondary:hover:not(:disabled) {
+        background: #201f1f;
+        border-color: #f5c518;
+        color: #ffe08b;
+      }
+
+      .error-message {
+        background: rgba(147, 0, 10, 0.20);
+        border-color: rgba(255, 180, 171, 0.32);
+        color: #ffb4ab;
+      }
+
       @media (max-width: 640px) {
         .modal-container {
           padding: 0.5rem;

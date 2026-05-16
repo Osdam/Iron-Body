@@ -1253,10 +1253,33 @@ interface CartItem {
           transform 0.16s ease;
       }
 
+      .product-service-card::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        pointer-events: none;
+        border-radius: inherit;
+        border: 1px solid transparent;
+        background:
+          linear-gradient(135deg, rgba(245, 197, 24, 0), rgba(245, 197, 24, 0)) padding-box,
+          linear-gradient(135deg, rgba(245, 197, 24, 0), rgba(245, 197, 24, 0.72), rgba(255, 255, 255, 0.2), rgba(245, 197, 24, 0)) border-box;
+        opacity: 0;
+        transform: scale(0.985);
+        transition:
+          opacity 0.2s ease,
+          transform 0.2s ease;
+      }
+
       .product-service-card:hover {
         border-color: #ededed;
         box-shadow: 0 16px 34px rgba(0, 0, 0, 0.08);
         transform: translateY(-2px);
+      }
+
+      .product-service-card:hover::before {
+        opacity: 1;
+        transform: scale(1);
       }
 
       .product-service-card.card-supplements {
@@ -1821,6 +1844,236 @@ interface CartItem {
       .full {
         width: 100%;
         margin-top: 0.25rem;
+      }
+
+      .inventory-page {
+        color: #e5e2e1;
+        background:
+          linear-gradient(rgba(12, 12, 12, 0.88), rgba(12, 12, 12, 0.91)),
+          url('/assets/crm/fondoinventario.png') center / cover no-repeat;
+        border: 1px solid rgba(245, 197, 24, 0.08);
+      }
+
+      .inventory-header {
+        border-color: #353534;
+      }
+
+      h1,
+      h2,
+      .kpi-card strong,
+      .sale-product-title strong,
+      .cart-title strong,
+      .cart-line-total,
+      .cart-footer strong,
+      .product-card-title h3,
+      .metric strong,
+      .movement-item strong,
+      .movement-total,
+      .drawer-header h2 {
+        color: #e5e2e1;
+      }
+
+      .inventory-header p,
+      .section-header p,
+      .kpi-label,
+      .kpi-card span:not(.material-symbols-outlined),
+      .sale-product-info p,
+      .sale-product-title span,
+      .cart-empty,
+      .cart-item span,
+      .cart-footer span,
+      .product-card-title p,
+      .category-chip,
+      .metric span,
+      .movement-item p,
+      .movement-item small,
+      .drawer-header p,
+      .drawer-form label,
+      .option-copy small {
+        color: #b4afa6;
+      }
+
+      .btn-secondary,
+      .kpi-card,
+      .filters-card,
+      .table-card,
+      .activity-card,
+      .checkout-card,
+      .sale-product,
+      .cart-panel,
+      .cart-item,
+      .cart-footer,
+      .product-service-card,
+      .metric,
+      .item-action,
+      .add-cart-btn,
+      .quantity-control,
+      .movement-item,
+      .icon-btn,
+      input,
+      select,
+      textarea,
+      .pretty-trigger,
+      .pretty-menu {
+        background-color: #1c1b1b;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .table-card {
+        background:
+          linear-gradient(rgba(28, 27, 27, 0.90), rgba(17, 17, 17, 0.88)),
+          url('/assets/crm/productoscard.png') center / cover no-repeat;
+      }
+
+      .activity-card {
+        background:
+          linear-gradient(rgba(28, 27, 27, 0.90), rgba(17, 17, 17, 0.88)),
+          url('/assets/crm/movientos.png') center / cover no-repeat;
+      }
+
+      .checkout-card,
+      .cart-panel {
+        background:
+          linear-gradient(rgba(28, 27, 27, 0.90), rgba(17, 17, 17, 0.88)),
+          url('/assets/crm/puntoventa.png') center / cover no-repeat;
+      }
+
+      .product-service-card,
+      .product-service-card.card-supplements,
+      .product-service-card.card-drinks,
+      .product-service-card.card-accessories,
+      .product-service-card.card-apparel,
+      .product-service-card.card-equipment,
+      .product-service-card.card-snacks,
+      .product-service-card.card-hygiene,
+      .product-service-card.card-services,
+      .product-service-card.is-out {
+        background:
+          linear-gradient(rgba(28, 27, 27, 0.88), rgba(17, 17, 17, 0.86)),
+          url('/assets/crm/productoscards.png') center / cover no-repeat;
+      }
+
+      .btn-primary {
+        background: #f5c518;
+        color: #241a00;
+      }
+
+      .btn-secondary:hover,
+      .item-action:hover:not(:disabled),
+      .add-cart-btn:hover:not(:disabled),
+      .sale-product:hover,
+      input:focus,
+      select:focus,
+      textarea:focus,
+      .pretty-trigger:hover,
+      .pretty-select.open .pretty-trigger {
+        background: #201f1f;
+        border-color: #f5c518;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.13);
+      }
+
+      .product-service-card:hover {
+        border-color: rgba(245, 197, 24, 0.42);
+        box-shadow:
+          0 18px 36px rgba(0, 0, 0, 0.26),
+          0 0 0 3px rgba(245, 197, 24, 0.08);
+      }
+
+      tr:hover td {
+        background: rgba(245, 197, 24, 0.08);
+      }
+
+      input::placeholder,
+      textarea::placeholder {
+        color: #77716a;
+      }
+
+      select,
+      select option {
+        background: #151515;
+        color: #e5e2e1;
+        color-scheme: dark;
+      }
+
+      .pretty-menu {
+        background: #151515;
+        box-shadow: 0 22px 54px rgba(0, 0, 0, 0.44);
+      }
+
+      .pretty-option {
+        color: #e5e2e1;
+      }
+
+      .pretty-option:hover,
+      .pretty-option.selected {
+        background: rgba(245, 197, 24, 0.13);
+        color: #ffe08b;
+      }
+
+      .option-icon,
+      .kpi-icon,
+      .product-icon {
+        background: rgba(245, 197, 24, 0.12);
+        color: #ffe08b;
+      }
+
+      .select-chevron {
+        border-color: #f5c518;
+      }
+
+      .category-chip,
+      .sale-product-title span {
+        background: #252423;
+      }
+
+      .status-ok {
+        background: rgba(34, 197, 94, 0.14);
+        color: #86efac;
+      }
+
+      .status-low,
+      .stock-low,
+      .checkout-pill,
+      .item-action.primary {
+        background: rgba(245, 197, 24, 0.14);
+        color: #ffe08b;
+        border-color: rgba(245, 197, 24, 0.26);
+      }
+
+      .status-out,
+      .stock-out {
+        background: rgba(255, 180, 171, 0.14);
+        color: #ffb4ab;
+        border-color: rgba(255, 180, 171, 0.28);
+      }
+
+      .stock-ok,
+      .stock-number {
+        background: #151515;
+        border-color: #353534;
+      }
+
+      .drawer-backdrop {
+        background: rgba(0, 0, 0, 0.62);
+      }
+
+      .drawer,
+      .drawer-entrada,
+      .drawer-salida,
+      .drawer-product {
+        background:
+          linear-gradient(rgba(28, 27, 27, 0.94), rgba(17, 17, 17, 0.92)),
+          url('/assets/crm/nuevoproducto.png') center / cover no-repeat;
+        color: #e5e2e1;
+        box-shadow: -16px 0 40px rgba(0, 0, 0, 0.54);
+      }
+
+      .drawer-header,
+      .section-header,
+      .cart-title,
+      .cart-footer {
+        border-color: #353534;
       }
 
       @media (max-width: 1180px) {

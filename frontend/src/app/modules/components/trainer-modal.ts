@@ -632,6 +632,104 @@ const emailValidator = (control: AbstractControl): ValidationErrors | null => {
         cursor: not-allowed;
       }
 
+      .overlay {
+        background: rgba(0, 0, 0, 0.68);
+      }
+
+      .drawer {
+        background:
+          linear-gradient(rgba(28, 27, 27, 0.95), rgba(17, 17, 17, 0.94)),
+          url('/assets/crm/clases2.png') center / cover no-repeat;
+        border: 1px solid #353534;
+        color: #e5e2e1;
+        box-shadow: 0 26px 70px rgba(0, 0, 0, 0.58);
+      }
+
+      .drawer-header,
+      .drawer-footer {
+        background:
+          linear-gradient(135deg, rgba(245, 197, 24, 0.14), rgba(28, 27, 27, 0.94)),
+          #1c1b1b;
+        border-color: #353534;
+      }
+
+      .drawer-header h2,
+      .section-title,
+      .label,
+      .checkbox-label span,
+      .day-name {
+        color: #e5e2e1;
+      }
+
+      .drawer-header p {
+        color: #b4afa6;
+      }
+
+      .close,
+      .btn-secondary,
+      .availability-day,
+      .checkbox-label {
+        background: #1c1b1b;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .input,
+      .select,
+      .textarea,
+      .time-input {
+        background: #151515;
+        border-color: #353534;
+        color: #e5e2e1;
+        color-scheme: dark;
+      }
+
+      .select option {
+        background: #151515;
+        color: #e5e2e1;
+      }
+
+      .input::placeholder,
+      .textarea::placeholder {
+        color: #77716a;
+      }
+
+      .input:disabled,
+      .select:disabled,
+      .textarea:disabled,
+      .time-input:disabled {
+        background: #181716;
+        color: #cfcac2;
+        opacity: 1;
+      }
+
+      .input:focus,
+      .select:focus,
+      .textarea:focus,
+      .time-input:focus {
+        background: #201f1f;
+        border-color: #f5c518;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.13);
+      }
+
+      .close:hover,
+      .btn-secondary:hover:not(:disabled),
+      .checkbox-label:hover {
+        background: #201f1f;
+        border-color: #f5c518;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.12);
+      }
+
+      .header-icon {
+        background: rgba(245, 197, 24, 0.14);
+        color: #ffe08b;
+        border-color: rgba(245, 197, 24, 0.28);
+      }
+
+      .time-sep {
+        color: #b4afa6;
+      }
+
       @media (max-width: 640px) {
         .drawer {
           max-width: 100%;

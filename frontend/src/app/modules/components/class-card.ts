@@ -328,6 +328,77 @@ export interface ClassCardData {
         color: #dc2626;
       }
 
+      .class-card {
+        background: #1c1b1b;
+        border-color: #353534;
+        color: #e5e2e1;
+        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.22);
+      }
+
+      .class-card:hover {
+        border-color: #f5c518;
+        box-shadow: 0 18px 48px rgba(245, 197, 24, 0.12);
+      }
+
+      .card-header,
+      .card-footer {
+        background: #151515;
+        border-color: #353534;
+      }
+
+      .class-name,
+      .detail-value {
+        color: #e5e2e1;
+      }
+
+      .class-description,
+      .detail-label,
+      .capacity-text {
+        color: #b4afa6;
+      }
+
+      .type-badge {
+        background: rgba(245, 197, 24, 0.13);
+        color: #ffe08b;
+      }
+
+      .bar-background {
+        background: #353534;
+      }
+
+      .status-active {
+        background: rgba(34, 197, 94, 0.14);
+        color: #86efac;
+      }
+
+      .status-inactive {
+        background: rgba(255, 180, 171, 0.14);
+        color: #ffb4ab;
+      }
+
+      .status-finished {
+        background: rgba(245, 197, 24, 0.13);
+        color: #ffe08b;
+      }
+
+      .action-btn {
+        background: #201f1f;
+        border-color: #353534;
+        color: #d1c5ac;
+      }
+
+      .action-btn:hover {
+        background: rgba(245, 197, 24, 0.12);
+        border-color: #f5c518;
+        color: #ffe08b;
+      }
+
+      .action-btn.delete:hover {
+        background: rgba(255, 180, 171, 0.12);
+        border-color: #ffb4ab;
+        color: #ffb4ab;
+      }
+
       @media (max-width: 768px) {
         .class-card {
           border-radius: 10px;

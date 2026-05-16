@@ -385,6 +385,58 @@ import MarketingCommunicationComponent, {
         background: #fef2f2;
       }
 
+      .marketing-page {
+        color: #e5e2e1;
+      }
+
+      .header {
+        border-color: #353534;
+      }
+
+      .header-left h1,
+      .empty h2,
+      .notice-message {
+        color: #e5e2e1;
+      }
+
+      .header-left p,
+      .empty p,
+      .notice-close {
+        color: #b4afa6;
+      }
+
+      .btn-secondary,
+      .btn-tertiary,
+      .empty,
+      .notice {
+        background: #1c1b1b;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .btn-secondary:hover,
+      .btn-tertiary:hover,
+      .notice-close:hover {
+        background: #201f1f;
+        border-color: #f5c518;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.13);
+      }
+
+      .notice-success {
+        border-color: rgba(34, 197, 94, 0.34);
+        background: rgba(34, 197, 94, 0.12);
+      }
+
+      .notice-info {
+        border-color: rgba(245, 197, 24, 0.24);
+        background: rgba(245, 197, 24, 0.1);
+      }
+
+      .notice-error {
+        border-color: rgba(255, 180, 171, 0.32);
+        background: rgba(255, 180, 171, 0.1);
+      }
+
       @media (max-width: 1100px) {
         .campaigns-container {
           grid-template-columns: 1fr;

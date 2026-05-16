@@ -162,6 +162,32 @@ export interface QuickReport {
         transform: translateX(4px);
       }
 
+      .section-title,
+      .quick-title {
+        color: #e5e2e1;
+      }
+
+      .quick-action-card {
+        background: #1c1b1b;
+        border-color: #353534;
+        color: #e5e2e1;
+        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.18);
+      }
+
+      .quick-action-card:hover {
+        border-color: #f5c518;
+        box-shadow: 0 16px 38px rgba(245, 197, 24, 0.12);
+      }
+
+      .quick-action-active {
+        border-color: #f5c518;
+        background: rgba(245, 197, 24, 0.12);
+      }
+
+      .quick-description {
+        color: #b4afa6;
+      }
+
       @media (max-width: 768px) {
         .quick-actions-grid {
           grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));

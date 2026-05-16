@@ -254,6 +254,56 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angula
         background: #f59e0b;
       }
 
+      .settings-section {
+        background:
+          linear-gradient(rgba(28, 27, 27, 0.92), rgba(17, 17, 17, 0.9)),
+          url('/assets/crm/clases2.png') center / cover no-repeat;
+        border-color: #353534;
+        color: #e5e2e1;
+        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24);
+      }
+
+      .section-header,
+      .separator,
+      .password-section {
+        border-color: #353534;
+      }
+
+      .separator {
+        background: #353534;
+      }
+
+      .section-title h2,
+      .password-section h3 {
+        color: #e5e2e1;
+      }
+
+      .section-title p {
+        color: #b4afa6;
+      }
+
+      label,
+      .checkbox span {
+        color: #cfcac2;
+      }
+
+      input {
+        background: #151515;
+        border-color: #353534;
+        color: #e5e2e1;
+        color-scheme: dark;
+      }
+
+      input::placeholder {
+        color: #77716a;
+      }
+
+      input:focus {
+        background: #201f1f;
+        border-color: #f5c518;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.13);
+      }
+
       @media (max-width: 768px) {
         .form-grid {
           grid-template-columns: 1fr;

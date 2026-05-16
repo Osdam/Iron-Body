@@ -9,54 +9,67 @@
         <span class="material-symbols-outlined" aria-hidden="true">dashboard</span>
         <span>Inicio</span>
       </a>
-      <a routerLink="/users" routerLinkActive="active">
+      <a *ngIf="hasPermission(Permission.MEMBERS_VIEW)" routerLink="/users" routerLinkActive="active">
         <span class="material-symbols-outlined" aria-hidden="true">group</span>
         <span>Miembros</span>
       </a>
-      <a routerLink="/plans" routerLinkActive="active">
+      <a *ngIf="hasPermission(Permission.PLANS_VIEW)" routerLink="/plans" routerLinkActive="active">
         <span class="material-symbols-outlined" aria-hidden="true">payments</span>
         <span>Planes</span>
       </a>
-      <a routerLink="/payments" routerLinkActive="active">
+      <a *ngIf="hasPermission(Permission.PAYMENTS_VIEW)" routerLink="/payments" routerLinkActive="active">
         <span class="material-symbols-outlined" aria-hidden="true">point_of_sale</span>
         <span>Pagos</span>
       </a>
-      <a routerLink="/classes" routerLinkActive="active">
+      <a *ngIf="hasPermission(Permission.CLASSES_VIEW)" routerLink="/classes" routerLinkActive="active">
         <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
         <span>Clases</span>
       </a>
-      <a routerLink="/attendance" routerLinkActive="active">
+      <a *ngIf="hasPermission(Permission.CLASSES_VIEW)" routerLink="/attendance" routerLinkActive="active">
         <span class="material-symbols-outlined" aria-hidden="true">fact_check</span>
         <span>Asistencia</span>
       </a>
-      <a routerLink="/inventory" routerLinkActive="active">
+      <a *ngIf="hasPermission(Permission.INVENTORY_VIEW)" routerLink="/inventory" routerLinkActive="active">
         <span class="material-symbols-outlined" aria-hidden="true">inventory_2</span>
         <span>Inventario</span>
       </a>
-      <a routerLink="/reports" routerLinkActive="active">
+      <a *ngIf="hasPermission(Permission.REPORTS_VIEW)" routerLink="/reports" routerLinkActive="active">
         <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
         <span>Analítica</span>
       </a>
-      <a routerLink="/routines" routerLinkActive="active">
+      <a
+        *ngIf="isSuperAdmin() && hasPermission(Permission.AUDIT_LOGS_VIEW)"
+        routerLink="/logs"
+        routerLinkActive="active"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">manage_search</span>
+        <span>Logs</span>
+      </a>
+      <a *ngIf="hasPermission(Permission.ROUTINES_VIEW)" routerLink="/routines" routerLinkActive="active">
         <span class="material-symbols-outlined" aria-hidden="true">fitness_center</span>
         <span>Rutinas</span>
       </a>
-      <a routerLink="/trainers" routerLinkActive="active">
+      <a *ngIf="hasPermission(Permission.TRAINERS_VIEW)" routerLink="/trainers" routerLinkActive="active">
         <span class="material-symbols-outlined" aria-hidden="true">badge</span>
         <span>Entrenadores</span>
       </a>
-      <a routerLink="/marketing" routerLinkActive="active">
+      <a *ngIf="hasPermission(Permission.MARKETING_VIEW)" routerLink="/marketing" routerLinkActive="active">
         <span class="material-symbols-outlined" aria-hidden="true">campaign</span>
         <span>Mercadeo</span>
       </a>
-      <a routerLink="/settings" routerLinkActive="active">
+      <a *ngIf="hasPermission(Permission.SETTINGS_VIEW)" routerLink="/settings" routerLinkActive="active">
         <span class="material-symbols-outlined" aria-hidden="true">settings</span>
         <span>Configuración</span>
       </a>
     </nav>
 
     <div class="side-footer">
-      <button class="primary-action" type="button" (click)="openNewMemberModal()">
+      <button
+        *ngIf="hasPermission(Permission.MEMBERS_CREATE)"
+        class="primary-action"
+        type="button"
+        (click)="openNewMemberModal()"
+      >
         Nuevo miembro
       </button>
       <section class="backend-card" aria-label="Estado del backend">

@@ -274,6 +274,76 @@ export interface PlanTableData extends PlanSummary {
         transform: scale(0.95);
       }
 
+      /* Dark CRM skin */
+      .table-wrapper {
+        border-color: #353534;
+        background: #1c1b1b;
+        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
+      }
+
+      .table-head {
+        background: #2a2a2a;
+        border-bottom-color: #353534;
+      }
+
+      .table-head th {
+        color: #d1c5ac;
+      }
+
+      .table-body tr {
+        background: #1c1b1b;
+        border-bottom-color: #353534;
+      }
+
+      .table-body tr:hover {
+        background: rgba(245, 197, 24, 0.08);
+      }
+
+      .table-body td,
+      .plan-name,
+      .col-price strong,
+      .col-duration,
+      .col-cycle,
+      .col-income {
+        color: #e5e2e1;
+      }
+
+      .cycle-text {
+        color: #b4afa6;
+      }
+
+      .plan-icon,
+      .action-icon {
+        background: #1a1a1a;
+        border: 1px solid #353534;
+        color: #ffe08b;
+      }
+
+      .table-row:hover .plan-icon,
+      .action-icon:hover {
+        background: #f5c518;
+        border-color: #f5c518;
+        color: #241a00;
+      }
+
+      .badge-count {
+        background: rgba(245, 197, 24, 0.14);
+        border: 1px solid rgba(245, 197, 24, 0.28);
+        color: #ffe08b;
+      }
+
+      .status-pill.active {
+        background: rgba(245, 197, 24, 0.14);
+        border: 1px solid rgba(245, 197, 24, 0.28);
+        color: #ffe08b;
+      }
+
+      .status-pill.inactive {
+        background: rgba(180, 181, 181, 0.12);
+        border: 1px solid rgba(180, 181, 181, 0.24);
+        color: #c6c6c7;
+      }
+
       @media (max-width: 1200px) {
         .table-head th,
         .table-body td {

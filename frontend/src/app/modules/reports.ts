@@ -794,6 +794,114 @@ interface ReportsPayload {
         font-weight: 650;
       }
 
+      .reports-page {
+        color: #e5e2e1;
+        background:
+          linear-gradient(rgba(12, 12, 12, 0.90), rgba(12, 12, 12, 0.92)),
+          url('/assets/crm/fondo1.png') center / cover no-repeat;
+        border: 1px solid rgba(245, 197, 24, 0.08);
+      }
+
+      .reports-header {
+        border-color: #353534;
+      }
+
+      .header-left h1,
+      .metric-value,
+      .metric-mini strong,
+      .empty-state h2,
+      .quick-report-status strong {
+        color: #e5e2e1;
+      }
+
+      .header-left p,
+      .header-range-label,
+      .metric-label,
+      .metric-sub .muted,
+      .metric-mini .muted,
+      .empty-state p,
+      .quick-report-status p,
+      .loading-state p {
+        color: #b4afa6;
+      }
+
+      .header-range-select,
+      .btn-secondary,
+      .btn-outline,
+      .loading-state,
+      .notice,
+      .main-chart-metrics,
+      .metric-mini,
+      .empty-state,
+      .quick-report-status {
+        background: #1c1b1b;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .header-range-select,
+      .header-range-select option {
+        color-scheme: dark;
+        background: #151515;
+        color: #e5e2e1;
+      }
+
+      .header-range-select:hover,
+      .header-range-select:focus,
+      .btn-secondary:hover:not(:disabled),
+      .btn-outline:hover {
+        background: #201f1f;
+        border-color: #f5c518;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.13);
+      }
+
+      .btn-primary {
+        background: #f5c518;
+        color: #241a00;
+      }
+
+      .main-chart-metrics {
+        background:
+          linear-gradient(rgba(28, 27, 27, 0.92), rgba(17, 17, 17, 0.90)),
+          url('/assets/crm/fondo5.png') center / cover no-repeat;
+      }
+
+      .notice-message,
+      .notice-close {
+        color: #e5e2e1;
+      }
+
+      .notice-success {
+        background: rgba(34, 197, 94, 0.12);
+        border-color: rgba(34, 197, 94, 0.30);
+      }
+
+      .notice-info {
+        background: rgba(245, 197, 24, 0.10);
+        border-color: rgba(245, 197, 24, 0.24);
+      }
+
+      .notice-error,
+      .error-alert {
+        background: rgba(147, 0, 10, 0.20);
+        border-color: rgba(255, 180, 171, 0.32);
+        color: #ffb4ab;
+      }
+
+      .error-alert strong,
+      .error-alert p {
+        color: #ffb4ab;
+      }
+
+      .empty-state span.material-symbols-outlined,
+      .quick-report-status > span {
+        color: #ffe08b;
+      }
+
+      .quick-report-status > span {
+        background: rgba(245, 197, 24, 0.14);
+      }
+
       @media (max-width: 1200px) {
         .kpis-grid {
           grid-template-columns: repeat(3, minmax(0, 1fr));

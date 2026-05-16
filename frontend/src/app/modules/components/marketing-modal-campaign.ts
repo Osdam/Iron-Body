@@ -470,6 +470,86 @@ export type CampaignModalMode = 'create' | 'edit' | 'detail';
         animation: pulse 0.8s infinite;
       }
 
+      .modal-overlay {
+        background: rgba(0, 0, 0, 0.68);
+      }
+
+      .modal-drawer {
+        background:
+          linear-gradient(rgba(28, 27, 27, 0.95), rgba(17, 17, 17, 0.94)),
+          url('/assets/crm/clases2.png') center / cover no-repeat;
+        border-left: 1px solid #353534;
+        color: #e5e2e1;
+        box-shadow: -16px 0 48px rgba(0, 0, 0, 0.58);
+      }
+
+      .modal-header,
+      .modal-footer {
+        background:
+          linear-gradient(135deg, rgba(245, 197, 24, 0.14), rgba(28, 27, 27, 0.94)),
+          #1c1b1b;
+        border-color: #353534;
+      }
+
+      .modal-title,
+      .form-group legend,
+      label {
+        color: #e5e2e1;
+      }
+
+      .modal-subtitle {
+        color: #b4afa6;
+      }
+
+      .modal-close,
+      .btn-secondary {
+        background: #1c1b1b;
+        border: 1px solid #353534;
+        color: #e5e2e1;
+      }
+
+      .modal-close:hover,
+      .btn-secondary:hover:not(:disabled) {
+        background: #201f1f;
+        border-color: #f5c518;
+        color: #ffe08b;
+      }
+
+      .form-input,
+      .form-select,
+      .form-textarea {
+        background: #151515;
+        border-color: #353534;
+        color: #e5e2e1;
+        color-scheme: dark;
+      }
+
+      .form-select option {
+        background: #151515;
+        color: #e5e2e1;
+      }
+
+      .form-input::placeholder,
+      .form-textarea::placeholder {
+        color: #77716a;
+      }
+
+      .form-input[readonly],
+      .form-textarea[readonly],
+      .form-select:disabled {
+        background: #181716;
+        color: #cfcac2;
+        opacity: 1;
+      }
+
+      .form-input:focus,
+      .form-select:focus,
+      .form-textarea:focus {
+        background: #201f1f;
+        border-color: #f5c518;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.13);
+      }
+
       @keyframes pulse {
         0%,
         100% {

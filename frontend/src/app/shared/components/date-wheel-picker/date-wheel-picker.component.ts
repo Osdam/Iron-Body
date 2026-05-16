@@ -139,10 +139,10 @@ interface CalendarDay {
         align-items: center;
         gap: 0.55rem;
         padding: 0.68rem 0.78rem;
-        border: 1px solid #d4d4d8;
+        border: 1px solid #353534;
         border-radius: 8px;
-        background: #ffffff;
-        color: #18181b;
+        background: #1a1a1a;
+        color: #e5e2e1;
         font: 700 0.9rem Inter, sans-serif;
         text-align: left;
         cursor: pointer;
@@ -154,13 +154,14 @@ interface CalendarDay {
 
       .date-trigger:hover:not(:disabled),
       .date-trigger:focus-visible {
-        border-color: #eab308;
-        box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.14);
+        border-color: #f5c518;
+        background: #2a2a2a;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.14);
         outline: none;
       }
 
       .date-trigger .material-symbols-outlined {
-        color: #ca8a04;
+        color: #ffe08b;
         font-size: 1.15rem;
       }
 
@@ -183,14 +184,14 @@ interface CalendarDay {
         position: absolute;
         top: calc(100% + 0.5rem);
         left: 0;
-        z-index: 3000;
+        z-index: 10020;
         width: 318px;
         padding: 0.75rem;
-        border: 1px solid #e4e4e7;
+        border: 1px solid #4e4633;
         border-radius: 12px;
-        background: #ffffff;
-        color: #18181b;
-        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.24);
+        background: #201f1f;
+        color: #e5e2e1;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.48);
         animation: popoverIn 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
       }
 
@@ -221,7 +222,7 @@ interface CalendarDay {
         border: 0;
         border-radius: 9px;
         background: transparent;
-        color: #71717a;
+        color: #d1c5ac;
         cursor: pointer;
         transition:
           background 150ms ease,
@@ -229,8 +230,8 @@ interface CalendarDay {
       }
 
       .nav-button:hover {
-        background: #f4f4f5;
-        color: #18181b;
+        background: rgba(245, 197, 24, 0.1);
+        color: #ffe08b;
       }
 
       .caption-controls {
@@ -242,10 +243,10 @@ interface CalendarDay {
       .caption-select {
         min-width: 0;
         height: 2.25rem;
-        border: 1px solid #e4e4e7;
+        border: 1px solid #353534;
         border-radius: 9px;
-        background: #fff;
-        color: #18181b;
+        background: #1a1a1a;
+        color: #e5e2e1;
         font: 800 0.84rem Inter, sans-serif;
         text-transform: capitalize;
         padding: 0 0.55rem;
@@ -253,8 +254,13 @@ interface CalendarDay {
       }
 
       .caption-select:focus {
-        border-color: #eab308;
-        box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.14);
+        border-color: #f5c518;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.14);
+      }
+
+      .caption-select option {
+        background: #201f1f;
+        color: #e5e2e1;
       }
 
       .weekdays,
@@ -272,7 +278,7 @@ interface CalendarDay {
         display: grid;
         place-items: center;
         height: 2rem;
-        color: #71717a;
+        color: #b4afa6;
         font: 800 0.72rem Inter, sans-serif;
         text-transform: uppercase;
       }
@@ -286,7 +292,7 @@ interface CalendarDay {
         border: 1px solid transparent;
         border-radius: 9px;
         background: transparent;
-        color: #18181b;
+        color: #e5e2e1;
         font: 750 0.88rem Inter, sans-serif;
         cursor: pointer;
         transition:
@@ -297,12 +303,13 @@ interface CalendarDay {
       }
 
       .calendar-day:hover:not(:disabled) {
-        background: #f4f4f5;
+        background: rgba(245, 197, 24, 0.1);
+        color: #ffe08b;
         transform: translateY(-1px);
       }
 
       .calendar-day.outside {
-        color: #a1a1aa;
+        color: #6f6a62;
       }
 
       .calendar-day.today::after {
@@ -313,19 +320,19 @@ interface CalendarDay {
         width: 4px;
         height: 4px;
         border-radius: 999px;
-        background: #ca8a04;
+        background: #f5c518;
         transform: translateX(-50%);
       }
 
       .calendar-day.selected {
-        background: #facc15;
-        color: #111827;
-        border-color: #eab308;
+        background: #f5c518;
+        color: #241a00;
+        border-color: #ffe08b;
         font-weight: 950;
       }
 
       .calendar-day.selected.today::after {
-        background: #111827;
+        background: #241a00;
       }
 
       .calendar-day:disabled {
@@ -339,7 +346,7 @@ interface CalendarDay {
         gap: 0.55rem;
         padding-top: 0.7rem;
         margin-top: 0.65rem;
-        border-top: 1px solid #f0f0f0;
+        border-top: 1px solid #353534;
       }
 
       .ghost-action,
@@ -355,20 +362,30 @@ interface CalendarDay {
       }
 
       .ghost-action {
-        border: 1px solid #d4d4d8;
-        background: #fff;
-        color: #18181b;
+        border: 1px solid #353534;
+        background: #1a1a1a;
+        color: #e5e2e1;
       }
 
       .primary-action {
-        border: 1px solid #eab308;
-        background: #facc15;
-        color: #111827;
+        border: 1px solid #f5c518;
+        background: #f5c518;
+        color: #241a00;
       }
 
       .ghost-action:hover,
       .primary-action:hover {
         transform: translateY(-1px);
+      }
+
+      .ghost-action:hover {
+        border-color: #f5c518;
+        background: #2a2a2a;
+        color: #ffe08b;
+      }
+
+      .primary-action:hover {
+        background: #ffd43b;
       }
 
       .disabled {

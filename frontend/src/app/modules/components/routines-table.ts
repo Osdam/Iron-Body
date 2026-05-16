@@ -255,6 +255,87 @@ import type { Routine } from './routine-card';
         color: #666;
       }
 
+      .table-card {
+        background:
+          linear-gradient(rgba(28, 27, 27, 0.92), rgba(17, 17, 17, 0.9)),
+          url('/assets/crm/clases2.png') center / cover no-repeat;
+        border-color: #353534;
+        color: #e5e2e1;
+        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24);
+      }
+
+      .table-header {
+        border-color: #353534;
+      }
+
+      .table-header h3,
+      .col-title .name,
+      td {
+        color: #e5e2e1;
+      }
+
+      .table-header p,
+      .muted,
+      .table-empty {
+        color: #b4afa6;
+      }
+
+      th {
+        background: rgba(21, 21, 21, 0.92);
+        color: #b4afa6;
+      }
+
+      th,
+      td {
+        border-color: #353534;
+      }
+
+      tr:hover td {
+        background: rgba(245, 197, 24, 0.08);
+      }
+
+      .action {
+        background: #1c1b1b;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .action:hover {
+        background: #201f1f;
+        border-color: #f5c518;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.12);
+      }
+
+      .pill,
+      .status-draft {
+        background: rgba(245, 197, 24, 0.14);
+        color: #ffe08b;
+        border-color: rgba(245, 197, 24, 0.28);
+      }
+
+      .status-active {
+        background: rgba(34, 197, 94, 0.14);
+        color: #86efac;
+        border-color: rgba(34, 197, 94, 0.28);
+      }
+
+      .status-inactive {
+        background: rgba(156, 163, 175, 0.15);
+        color: #d4d4d8;
+        border-color: rgba(156, 163, 175, 0.25);
+      }
+
+      .action.danger {
+        background: rgba(255, 180, 171, 0.1);
+        color: #ffb4ab;
+        border-color: rgba(255, 180, 171, 0.24);
+      }
+
+      .action.danger:hover {
+        background: rgba(255, 180, 171, 0.16);
+        border-color: rgba(255, 180, 171, 0.38);
+      }
+
       @media (max-width: 640px) {
         .table {
           min-width: 920px;
@@ -277,8 +358,8 @@ export default class RoutinesTableComponent {
 
   statusClass(status: string | null | undefined): string {
     const s = String(status || '').toLowerCase();
-    if (s.includes('act')) return 'status-active';
     if (s.includes('inact')) return 'status-inactive';
+    if (s.includes('act')) return 'status-active';
     return 'status-draft';
   }
 }

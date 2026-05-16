@@ -118,6 +118,40 @@ import { Component, Input } from '@angular/core';
         color: #f97316;
         background: rgba(249, 115, 22, 0.1);
       }
+
+      .kpi-card {
+        background:
+          linear-gradient(135deg, rgba(28, 27, 27, 0.92), rgba(17, 17, 17, 0.88)),
+          url('/assets/crm/clases2.png') center / cover no-repeat;
+        border-color: #353534;
+        color: #e5e2e1;
+        box-shadow: 0 14px 32px rgba(0, 0, 0, 0.22);
+      }
+
+      .kpi-card:hover {
+        border-color: rgba(245, 197, 24, 0.48);
+        box-shadow:
+          0 18px 36px rgba(0, 0, 0, 0.28),
+          0 0 0 3px rgba(245, 197, 24, 0.08);
+      }
+
+      .kpi-icon,
+      .kpi-success .kpi-icon,
+      .kpi-info .kpi-icon,
+      .kpi-primary .kpi-icon,
+      .kpi-warning .kpi-icon {
+        background: rgba(245, 197, 24, 0.12);
+        color: #ffe08b;
+      }
+
+      .kpi-title,
+      .kpi-subtitle {
+        color: #b4afa6;
+      }
+
+      .kpi-value {
+        color: #e5e2e1;
+      }
     `,
   ],
 })

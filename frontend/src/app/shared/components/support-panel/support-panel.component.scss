@@ -488,3 +488,114 @@ $error: #ef4444;
     flex: 1;
   }
 }
+
+/* Dark CRM skin */
+.support-overlay {
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.support-drawer {
+  background: #1c1b1b;
+  border-left: 1px solid #353534;
+  box-shadow: -8px 0 42px rgba(0, 0, 0, 0.48);
+}
+
+.support-header,
+.support-form-header,
+.support-form-actions,
+.support-system-info {
+  border-color: #353534;
+}
+
+.support-title,
+.support-form-title,
+.support-card-title,
+.support-section-title,
+.system-status strong,
+.info-value,
+.form-label {
+  color: #e5e2e1;
+}
+
+.support-subtitle,
+.support-form-subtitle,
+.support-card-description,
+.system-status,
+.info-label {
+  color: #b4afa6;
+}
+
+.support-close-btn,
+.support-back-btn {
+  color: #d1c5ac;
+}
+
+.support-close-btn:hover,
+.support-back-btn:hover {
+  background: #2a2a2a;
+  color: #ffe08b;
+}
+
+.support-header-icon,
+.support-form-header-icon {
+  background: rgba(245, 197, 24, 0.14);
+}
+
+.support-card,
+.info-item {
+  background: #201f1f;
+  border-color: #353534;
+}
+
+.support-card:hover {
+  background: rgba(245, 197, 24, 0.08);
+  border-color: #f5c518;
+  box-shadow: 0 0 16px rgba(245, 197, 24, 0.12);
+}
+
+.support-system-info {
+  background: #171717;
+}
+
+.form-control {
+  background: #1a1a1a;
+  border-color: #353534;
+  color: #e5e2e1;
+}
+
+.form-control:disabled {
+  background: #2a2a2a;
+  color: #b4afa6;
+}
+
+.form-control:focus {
+  border-color: #f5c518;
+  box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.14);
+}
+
+.form-control option {
+  background: #201f1f;
+  color: #e5e2e1;
+}
+
+.support-btn-secondary {
+  background: #1a1a1a;
+  color: #e5e2e1;
+  border-color: #353534;
+}
+
+.support-btn-secondary:hover:not(:disabled) {
+  background: #2a2a2a;
+  border-color: #f5c518;
+  color: #ffe08b;
+}
+
+.support-alert-success {
+  background: rgba(139, 220, 159, 0.12);
+  border-color: rgba(139, 220, 159, 0.28);
+}
+
+.support-alert-error {
+  background: rgba(255, 180, 171, 0.12);
+  border-color: rgba(255, 180, 171, 0.28);
+}

@@ -413,6 +413,114 @@ export interface Routine {
         line-height: 1.45;
       }
 
+      .card {
+        position: relative;
+        overflow: hidden;
+        background:
+          linear-gradient(rgba(28, 27, 27, 0.9), rgba(17, 17, 17, 0.88)),
+          url('/assets/crm/clases2.png') center / cover no-repeat;
+        border-color: #353534;
+        color: #e5e2e1;
+        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24);
+      }
+
+      .card::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        border-radius: inherit;
+        border: 1px solid rgba(245, 197, 24, 0);
+        opacity: 0;
+        transition:
+          opacity 0.18s ease,
+          border-color 0.18s ease;
+      }
+
+      .card:hover {
+        border-color: rgba(245, 197, 24, 0.42);
+        box-shadow:
+          0 18px 42px rgba(0, 0, 0, 0.3),
+          0 0 0 3px rgba(245, 197, 24, 0.08);
+      }
+
+      .card:hover::before {
+        opacity: 1;
+        border-color: rgba(245, 197, 24, 0.5);
+      }
+
+      .date,
+      .sub,
+      .muted,
+      .label,
+      .count,
+      .ex-notes {
+        color: #b4afa6;
+      }
+
+      .title,
+      .sub strong,
+      .value,
+      .exercises-header h4,
+      .ex-name,
+      .ex-meta,
+      .assignment span {
+        color: #e5e2e1;
+      }
+
+      .assignment,
+      .exercise {
+        background: rgba(20, 20, 20, 0.72);
+        border-color: #353534;
+      }
+
+      .exercises {
+        border-color: #353534;
+      }
+
+      .action,
+      .chip {
+        background: #1c1b1b;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .action:hover {
+        background: #201f1f;
+        border-color: #f5c518;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.12);
+      }
+
+      .pill,
+      .status-draft {
+        background: rgba(245, 197, 24, 0.14);
+        color: #ffe08b;
+        border-color: rgba(245, 197, 24, 0.28);
+      }
+
+      .status-active {
+        background: rgba(34, 197, 94, 0.14);
+        color: #86efac;
+        border-color: rgba(34, 197, 94, 0.28);
+      }
+
+      .status-inactive {
+        background: rgba(156, 163, 175, 0.15);
+        color: #d4d4d8;
+        border-color: rgba(156, 163, 175, 0.25);
+      }
+
+      .action.danger {
+        background: rgba(255, 180, 171, 0.1);
+        color: #ffb4ab;
+        border-color: rgba(255, 180, 171, 0.24);
+      }
+
+      .action.danger:hover {
+        background: rgba(255, 180, 171, 0.16);
+        border-color: rgba(255, 180, 171, 0.38);
+      }
+
       @media (max-width: 900px) {
         .card-header {
           flex-direction: column;
@@ -457,8 +565,8 @@ export default class RoutineCardComponent {
 
   get statusClass(): string {
     const s = (this.routine?.status || '').toLowerCase();
-    if (s.includes('act')) return 'status-active';
     if (s.includes('inact')) return 'status-inactive';
+    if (s.includes('act')) return 'status-active';
     return 'status-draft';
   }
 

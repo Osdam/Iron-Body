@@ -1,6 +1,8 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { tap } from 'rxjs/operators';
+import { AuditLogService } from './audit-log.service';
 
 export interface PaginatedResponse<T> {
   data: T[];
@@ -77,6 +79,7 @@ export interface DashboardStats {
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private http = inject(HttpClient);
+  private audit = inject(AuditLogService);
   private base = 'http://127.0.0.1:8080/api';
 
   getDashboardStats(): Observable<DashboardStats> {
@@ -104,11 +107,33 @@ export class ApiService {
       membershipEndDate: string | null;
     }>,
   ): Observable<UserSummary> {
-    return this.http.patch<UserSummary>(`${this.base}/users/${id}`, data);
+    return this.http.patch<UserSummary>(`${this.base}/users/${id}`, data).pipe(
+      tap((updated) =>
+        this.audit.record({
+          action: 'update',
+          module: 'Miembros',
+          entity: 'cliente',
+          entityId: id,
+          targetName: updated.name,
+          after: data as Record<string, unknown>,
+          metadata: { response: updated },
+        }),
+      ),
+    );
   }
 
   deleteUser(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.base}/users/${id}`);
+    return this.http.delete<void>(`${this.base}/users/${id}`).pipe(
+      tap(() =>
+        this.audit.record({
+          action: 'delete',
+          module: 'Miembros',
+          entity: 'cliente',
+          entityId: id,
+          summary: `eliminó cliente #${id}`,
+        }),
+      ),
+    );
   }
 
   getPlans(page = 1): Observable<PaginatedResponse<PlanSummary>> {
@@ -135,14 +160,38 @@ export class ApiService {
     status?: string;
     paid_at?: string;
   }): Observable<PaymentSummary> {
-    return this.http.post<PaymentSummary>(`${this.base}/payments`, data);
+    return this.http.post<PaymentSummary>(`${this.base}/payments`, data).pipe(
+      tap((payment) =>
+        this.audit.record({
+          action: 'create',
+          module: 'Pagos',
+          entity: 'pago',
+          entityId: payment.id,
+          targetName: payment.user?.name || `cliente #${data.user_id}`,
+          after: data as Record<string, unknown>,
+          metadata: { payment },
+        }),
+      ),
+    );
   }
 
   updatePayment(
     id: number,
     data: { status?: string; paid_at?: string; method?: string; reference?: string; amount?: number },
   ): Observable<PaymentSummary> {
-    return this.http.patch<PaymentSummary>(`${this.base}/payments/${id}`, data);
+    return this.http.patch<PaymentSummary>(`${this.base}/payments/${id}`, data).pipe(
+      tap((payment) =>
+        this.audit.record({
+          action: data.status ? 'status' : 'update',
+          module: 'Pagos',
+          entity: 'pago',
+          entityId: id,
+          targetName: payment.user?.name || payment.reference || `pago #${id}`,
+          after: data as Record<string, unknown>,
+          metadata: { payment },
+        }),
+      ),
+    );
   }
 
   updatePlan(
@@ -157,11 +206,33 @@ export class ApiService {
       reservations_limit: number;
     }>,
   ): Observable<PlanSummary> {
-    return this.http.patch<PlanSummary>(`${this.base}/plans/${id}`, data);
+    return this.http.patch<PlanSummary>(`${this.base}/plans/${id}`, data).pipe(
+      tap((plan) =>
+        this.audit.record({
+          action: 'update',
+          module: 'Planes',
+          entity: 'plan',
+          entityId: id,
+          targetName: plan.name,
+          after: data as Record<string, unknown>,
+          metadata: { plan },
+        }),
+      ),
+    );
   }
 
   deletePlan(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.base}/plans/${id}`);
+    return this.http.delete<void>(`${this.base}/plans/${id}`).pipe(
+      tap(() =>
+        this.audit.record({
+          action: 'delete',
+          module: 'Planes',
+          entity: 'plan',
+          entityId: id,
+          summary: `eliminó plan #${id}`,
+        }),
+      ),
+    );
   }
 
   createPlan(data: {
@@ -174,7 +245,19 @@ export class ApiService {
     benefits?: string;
     active: boolean;
   }): Observable<PlanSummary> {
-    return this.http.post<PlanSummary>(`${this.base}/plans`, data);
+    return this.http.post<PlanSummary>(`${this.base}/plans`, data).pipe(
+      tap((plan) =>
+        this.audit.record({
+          action: 'create',
+          module: 'Planes',
+          entity: 'plan',
+          entityId: plan.id,
+          targetName: plan.name,
+          after: data as Record<string, unknown>,
+          metadata: { plan },
+        }),
+      ),
+    );
   }
 
   createMember(data: {
@@ -200,7 +283,19 @@ export class ApiService {
     // TODO: Cambiar a endpoint POST real de Laravel
     // Actualmente usa mock. Descomenta cuando el backend esté listo:
     // return this.http.post<UserSummary>(`${this.base}/users`, data);
-    return this.http.post<UserSummary>(`${this.base}/users`, data);
+    return this.http.post<UserSummary>(`${this.base}/users`, data).pipe(
+      tap((member) =>
+        this.audit.record({
+          action: 'create',
+          module: 'Miembros',
+          entity: 'cliente',
+          entityId: member.id,
+          targetName: member.name || data.fullName,
+          after: data as Record<string, unknown>,
+          metadata: { member },
+        }),
+      ),
+    );
   }
 
   getClasses(
@@ -245,7 +340,19 @@ export class ApiService {
     requires_active_plan?: boolean;
     trainer_id?: number | null;
   }): Observable<ClassSummary> {
-    return this.http.post<ClassSummary>(`${this.base}/classes`, data);
+    return this.http.post<ClassSummary>(`${this.base}/classes`, data).pipe(
+      tap((cls) =>
+        this.audit.record({
+          action: 'create',
+          module: 'Clases',
+          entity: 'clase',
+          entityId: cls.id,
+          targetName: cls.name,
+          after: data as Record<string, unknown>,
+          metadata: { class: cls },
+        }),
+      ),
+    );
   }
 
   updateClass(
@@ -269,11 +376,33 @@ export class ApiService {
       trainer_id: number | null;
     }>,
   ): Observable<ClassSummary> {
-    return this.http.patch<ClassSummary>(`${this.base}/classes/${id}`, data);
+    return this.http.patch<ClassSummary>(`${this.base}/classes/${id}`, data).pipe(
+      tap((cls) =>
+        this.audit.record({
+          action: data.status ? 'status' : 'update',
+          module: 'Clases',
+          entity: 'clase',
+          entityId: id,
+          targetName: cls.name,
+          after: data as Record<string, unknown>,
+          metadata: { class: cls },
+        }),
+      ),
+    );
   }
 
   deleteClass(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.base}/classes/${id}`);
+    return this.http.delete<void>(`${this.base}/classes/${id}`).pipe(
+      tap(() =>
+        this.audit.record({
+          action: 'delete',
+          module: 'Clases',
+          entity: 'clase',
+          entityId: id,
+          summary: `eliminó clase #${id}`,
+        }),
+      ),
+    );
   }
 
   // ─── Routines ─────────────────────────────────────
@@ -292,22 +421,68 @@ export class ApiService {
   }
 
   createRoutine(data: any): Observable<any> {
-    return this.http.post<any>(`${this.base}/routines`, data);
+    return this.http.post<any>(`${this.base}/routines`, data).pipe(
+      tap((routine) =>
+        this.audit.record({
+          action: 'create',
+          module: 'Rutinas',
+          entity: 'rutina',
+          entityId: routine?.id,
+          targetName: routine?.name || data?.name,
+          after: data,
+          metadata: { routine },
+        }),
+      ),
+    );
   }
 
   updateRoutine(id: string | number, data: any): Observable<any> {
-    return this.http.patch<any>(`${this.base}/routines/${id}`, data);
+    return this.http.patch<any>(`${this.base}/routines/${id}`, data).pipe(
+      tap((routine) =>
+        this.audit.record({
+          action: data?.status ? 'status' : 'update',
+          module: 'Rutinas',
+          entity: 'rutina',
+          entityId: id,
+          targetName: routine?.name || data?.name,
+          after: data,
+          metadata: { routine },
+        }),
+      ),
+    );
   }
 
   deleteRoutine(id: string | number): Observable<void> {
-    return this.http.delete<void>(`${this.base}/routines/${id}`);
+    return this.http.delete<void>(`${this.base}/routines/${id}`).pipe(
+      tap(() =>
+        this.audit.record({
+          action: 'delete',
+          module: 'Rutinas',
+          entity: 'rutina',
+          entityId: id,
+          summary: `eliminó rutina #${id}`,
+        }),
+      ),
+    );
   }
 
   assignRoutine(
     id: string | number,
     data: { assignedMemberName?: string | null; assignedMemberId?: number | null },
   ): Observable<any> {
-    return this.http.patch<any>(`${this.base}/routines/${id}/assign`, data);
+    return this.http.patch<any>(`${this.base}/routines/${id}/assign`, data).pipe(
+      tap((routine) =>
+        this.audit.record({
+          action: 'assign',
+          module: 'Rutinas',
+          entity: 'rutina',
+          entityId: id,
+          targetName: data.assignedMemberName || `cliente #${data.assignedMemberId}`,
+          after: data,
+          metadata: { routine },
+        }),
+      ),
+    );
   }
 
   // ─── Trainers ─────────────────────────────────────
@@ -321,14 +496,48 @@ export class ApiService {
   }
 
   createTrainer(data: any): Observable<any> {
-    return this.http.post<any>(`${this.base}/trainers`, data);
+    return this.http.post<any>(`${this.base}/trainers`, data).pipe(
+      tap((trainer) =>
+        this.audit.record({
+          action: 'create',
+          module: 'Entrenadores',
+          entity: 'entrenador',
+          entityId: trainer?.id,
+          targetName: trainer?.name || data?.name,
+          after: data,
+          metadata: { trainer },
+        }),
+      ),
+    );
   }
 
   updateTrainer(id: string | number, data: any): Observable<any> {
-    return this.http.patch<any>(`${this.base}/trainers/${id}`, data);
+    return this.http.patch<any>(`${this.base}/trainers/${id}`, data).pipe(
+      tap((trainer) =>
+        this.audit.record({
+          action: data?.status ? 'status' : 'update',
+          module: 'Entrenadores',
+          entity: 'entrenador',
+          entityId: id,
+          targetName: trainer?.name || data?.name,
+          after: data,
+          metadata: { trainer },
+        }),
+      ),
+    );
   }
 
   deleteTrainer(id: string | number): Observable<void> {
-    return this.http.delete<void>(`${this.base}/trainers/${id}`);
+    return this.http.delete<void>(`${this.base}/trainers/${id}`).pipe(
+      tap(() =>
+        this.audit.record({
+          action: 'delete',
+          module: 'Entrenadores',
+          entity: 'entrenador',
+          entityId: id,
+          summary: `eliminó entrenador #${id}`,
+        }),
+      ),
+    );
   }
 }

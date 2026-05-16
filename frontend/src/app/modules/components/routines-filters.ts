@@ -466,6 +466,75 @@ export interface RoutineFilters {
         min-width: 0;
       }
 
+      .filters {
+        background: #1c1b1b;
+        border-color: #353534;
+        box-shadow: 0 14px 32px rgba(0, 0, 0, 0.22);
+      }
+
+      .filter label {
+        color: #b4afa6;
+      }
+
+      .input,
+      .select,
+      .pretty-trigger,
+      .search-wrap {
+        background: #151515;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .input::placeholder {
+        color: #77716a;
+      }
+
+      .input:focus,
+      .select:focus,
+      .pretty-select.open .pretty-trigger,
+      .pretty-trigger:hover,
+      .search-wrap:focus-within {
+        background: #201f1f;
+        border-color: #f5c518;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.13);
+      }
+
+      .pretty-menu {
+        background: #151515;
+        border-color: #3f3d39;
+        box-shadow: 0 22px 54px rgba(0, 0, 0, 0.48);
+      }
+
+      .pretty-option {
+        color: #e5e2e1;
+      }
+
+      .pretty-option:hover,
+      .pretty-option.selected {
+        background: rgba(245, 197, 24, 0.13);
+        color: #ffe08b;
+      }
+
+      .option-icon,
+      .pretty-option.selected .option-icon {
+        background: rgba(245, 197, 24, 0.14);
+        color: #ffe08b;
+      }
+
+      .option-copy small,
+      .pretty-option.selected .option-copy small {
+        color: #b4afa6;
+      }
+
+      .select-chevron {
+        border-color: #f5c518;
+      }
+
+      .pretty-option.selected .option-check {
+        border-color: #f5c518;
+        background: #f5c518;
+      }
+
       @media (max-width: 1100px) {
         .filters {
           grid-template-columns: 1fr 1fr;

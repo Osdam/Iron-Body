@@ -172,6 +172,32 @@ export interface ChartData {
         overflow: hidden;
       }
 
+      .chart-card {
+        background: #1c1b1b !important;
+        border-color: #353534;
+        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.20);
+      }
+
+      .chart-title,
+      .stat-value {
+        color: #e5e2e1;
+      }
+
+      .chart-subtitle,
+      .stat-label {
+        color: #b4afa6;
+      }
+
+      .stat {
+        background: #151515;
+        border-color: #353534;
+      }
+
+      .chart-badge {
+        background: rgba(245, 197, 24, 0.13);
+        color: #ffe08b;
+      }
+
       @media (max-width: 768px) {
         .chart-header {
           flex-direction: column;
@@ -198,7 +224,7 @@ export default class ReportsChartComponent {
 
   get cardBackground(): string {
     if (!this.bgImage) return '';
-    return `linear-gradient(rgba(255, 255, 255, 0.93), rgba(255, 252, 235, 0.88)), url('${this.bgImage}') center / cover no-repeat`;
+    return `linear-gradient(rgba(28, 27, 27, 0.92), rgba(17, 17, 17, 0.90)), url('${this.bgImage}') center / cover no-repeat`;
   }
 
   get styledChartData(): ChartData {
@@ -283,17 +309,17 @@ export default class ReportsChartComponent {
             size: 12,
             weight: 'bold' as any,
           },
-          color: '#0a0a0a',
+          color: '#d1c5ac',
           padding: 15,
           usePointStyle: true,
         },
       },
       tooltip: {
-        backgroundColor: '#ffffff',
-        borderColor: 'rgba(229, 229, 229, 0.9)',
+        backgroundColor: '#151515',
+        borderColor: 'rgba(245, 197, 24, 0.24)',
         borderWidth: 1,
-        titleColor: '#0a0a0a',
-        bodyColor: '#0a0a0a',
+        titleColor: '#e5e2e1',
+        bodyColor: '#e5e2e1',
         padding: 10,
         titleFont: {
           size: 13,
@@ -327,7 +353,7 @@ export default class ReportsChartComponent {
           display: false,
         },
         ticks: {
-          color: '#999',
+          color: '#b4afa6',
           font: {
             size: 11,
           },
@@ -336,13 +362,13 @@ export default class ReportsChartComponent {
       y: {
         beginAtZero: true,
         grid: {
-          color: 'rgba(229, 229, 229, 0.8)',
+          color: 'rgba(78, 70, 51, 0.75)',
         },
         border: {
           display: false,
         },
         ticks: {
-          color: '#999',
+          color: '#b4afa6',
           font: {
             size: 11,
           },

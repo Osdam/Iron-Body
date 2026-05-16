@@ -382,3 +382,87 @@
     background-color: #eab308;
   }
 }
+
+/* Dark CRM skin */
+.messages-overlay {
+  background: rgba(0, 0, 0, 0.46);
+}
+
+.messages-popover {
+  background: #1c1b1b;
+  border-color: #353534;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.46);
+}
+
+.messages-header,
+.messages-tabs,
+.message-item {
+  border-color: #353534;
+}
+
+.messages-title,
+.message-title,
+.form-label,
+.feedback-alert strong {
+  color: #e5e2e1;
+}
+
+.message-text,
+.message-footer,
+.tickets-info,
+.empty-state,
+.feedback-alert p {
+  color: #b4afa6;
+}
+
+.messages-close-btn {
+  color: #d1c5ac;
+}
+
+.messages-close-btn:hover,
+.message-item:hover {
+  background: #2a2a2a;
+  color: #ffe08b;
+}
+
+.tab-btn {
+  color: #b4afa6;
+}
+
+.tab-btn:hover,
+.tab-btn.active {
+  color: #ffe08b;
+}
+
+.message-icon {
+  background: rgba(245, 197, 24, 0.14);
+  color: #ffe08b;
+}
+
+.message-status {
+  background: rgba(139, 220, 159, 0.12);
+  color: #8bdc9f;
+}
+
+.form-control {
+  background-color: #1a1a1a;
+  border-color: #353534;
+  color: #e5e2e1;
+}
+
+.form-control:focus {
+  border-color: #f5c518;
+  box-shadow: 0 0 0 2px rgba(245, 197, 24, 0.14);
+}
+
+.feedback-alert.success {
+  background-color: rgba(139, 220, 159, 0.12);
+  border-color: rgba(139, 220, 159, 0.28);
+  color: #8bdc9f;
+}
+
+.feedback-alert.error {
+  background-color: rgba(255, 180, 171, 0.12);
+  border-color: rgba(255, 180, 171, 0.28);
+  color: #ffb4ab;
+}

@@ -444,6 +444,64 @@ interface ReportFilterOption {
         transform: rotate(45deg);
       }
 
+      .filters-container {
+        background: #1c1b1b;
+        border-color: #353534;
+        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.20);
+      }
+
+      .filter-label {
+        color: #b4afa6;
+      }
+
+      .filter-input,
+      .pretty-trigger,
+      .pretty-menu {
+        background: #151515;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .pretty-trigger:hover,
+      .pretty-select.open .pretty-trigger,
+      .filter-input:focus {
+        background: #201f1f;
+        border-color: #f5c518;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.13);
+      }
+
+      .select-chevron {
+        border-color: #f5c518;
+      }
+
+      .pretty-menu {
+        box-shadow: 0 22px 54px rgba(0, 0, 0, 0.44);
+      }
+
+      .pretty-option {
+        color: #e5e2e1;
+      }
+
+      .pretty-option:hover,
+      .pretty-option.selected {
+        background: rgba(245, 197, 24, 0.13);
+        color: #ffe08b;
+      }
+
+      .option-icon {
+        background: #252423;
+        color: #ffe08b;
+      }
+
+      .pretty-option.selected .option-icon {
+        background: #f5c518;
+        color: #241a00;
+      }
+
+      .option-copy small {
+        color: #b4afa6;
+      }
+
       @media (max-width: 768px) {
         .filters-grid {
           grid-template-columns: 1fr;

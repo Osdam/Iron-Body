@@ -8,6 +8,8 @@ import TrainerCardComponent, { Trainer, TrainerAvailability } from './components
 import TrainersTableComponent from './components/trainers-table';
 import TrainerModalComponent, { TrainerModalMode } from './components/trainer-modal';
 import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-icon.component';
+import { AuthService } from '../services/auth.service';
+import { Permission } from '../models/permissions.enum';
 
 @Component({
   selector: 'module-trainers',
@@ -43,7 +45,7 @@ import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-ico
             {{ selectedView() === 'cards' ? 'Vista tabla' : 'Vista cards' }}
           </button>
 
-          <button type="button" class="btn-primary" (click)="openCreateTrainerModal()">
+          <button *ngIf="canCreateTrainers()" type="button" class="btn-primary" (click)="openCreateTrainerModal()">
             <span class="btn-lottie">
               <app-lottie-icon src="/assets/crm/mas.json" [size]="22" [loop]="true"></app-lottie-icon>
             </span>
@@ -106,7 +108,7 @@ import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-ico
             Registra tu primer entrenador para gestionar especialidades, disponibilidad, clases y
             miembros asignados.
           </p>
-          <button type="button" class="btn-primary" (click)="openCreateTrainerModal()">
+          <button *ngIf="canCreateTrainers()" type="button" class="btn-primary" (click)="openCreateTrainerModal()">
             <span class="material-symbols-outlined" aria-hidden="true">person_add</span>
             Registrar primer entrenador
           </button>
@@ -371,6 +373,62 @@ import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-ico
         background: #fef2f2;
       }
 
+      .trainers-page {
+        color: #e5e2e1;
+      }
+
+      .header {
+        border-color: #353534;
+      }
+
+      .header-left h1,
+      .empty h2,
+      .notice-message {
+        color: #e5e2e1;
+      }
+
+      .header-left p,
+      .empty p,
+      .no-results,
+      .notice-close {
+        color: #b4afa6;
+      }
+
+      .btn-secondary,
+      .empty,
+      .no-results,
+      .notice {
+        background: #1c1b1b;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .btn-secondary:hover,
+      .notice-close:hover {
+        background: #201f1f;
+        border-color: #f5c518;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.13);
+      }
+
+      .btn-lottie {
+        background: rgba(245, 197, 24, 0.12);
+      }
+
+      .notice-success {
+        border-color: rgba(34, 197, 94, 0.34);
+        background: rgba(34, 197, 94, 0.12);
+      }
+
+      .notice-info {
+        border-color: rgba(245, 197, 24, 0.24);
+        background: rgba(245, 197, 24, 0.1);
+      }
+
+      .notice-error {
+        border-color: rgba(255, 180, 171, 0.32);
+        background: rgba(255, 180, 171, 0.1);
+      }
+
       @media (max-width: 1100px) {
         .cards {
           grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -399,6 +457,7 @@ import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-ico
 })
 export default class TrainersModule implements OnInit {
   private api = inject(ApiService);
+  private auth = inject(AuthService);
 
   /**
    * Mapeo de status frontend ↔ backend.
@@ -486,6 +545,7 @@ export default class TrainersModule implements OnInit {
   }
 
   openCreateTrainerModal(): void {
+    if (!this.requirePermission(Permission.TRAINERS_CREATE, 'No tienes permiso para crear entrenadores.')) return;
     this.dismissNotice();
     this.modalMode.set('create');
     this.selectedTrainer.set(null);
@@ -506,6 +566,7 @@ export default class TrainersModule implements OnInit {
   }
 
   editTrainer(trainer: Trainer): void {
+    if (!this.requirePermission(Permission.TRAINERS_EDIT, 'No tienes permiso para editar entrenadores.')) return;
     this.dismissNotice();
     this.modalMode.set('edit');
     this.selectedTrainer.set(trainer);
@@ -513,6 +574,9 @@ export default class TrainersModule implements OnInit {
   }
 
   async submitTrainer(payload: Partial<Trainer>): Promise<void> {
+    const mode = this.modalMode();
+    const permission = mode === 'edit' ? Permission.TRAINERS_EDIT : Permission.TRAINERS_CREATE;
+    if (!this.requirePermission(permission, 'No tienes permiso para guardar entrenadores.')) return;
     this.isSavingTrainer.set(true);
     this.notice.set(null);
 
@@ -534,7 +598,6 @@ export default class TrainersModule implements OnInit {
         availability: this.normalizeAvailability(payload.availability || []),
       };
 
-      const mode = this.modalMode();
       if (mode === 'edit') {
         const current = this.selectedTrainer();
         if (!current) throw new Error('Entrenador no encontrado para edición.');
@@ -567,8 +630,9 @@ export default class TrainersModule implements OnInit {
   }
 
   async toggleTrainerStatus(trainer: Trainer): Promise<void> {
+    if (!this.requirePermission(Permission.TRAINERS_EDIT, 'No tienes permiso para cambiar estado de entrenadores.')) return;
     const current = (trainer.status || '').toLowerCase();
-    const nextLabel = current.includes('activo') ? 'Inactivo' : 'Activo';
+    const nextLabel = current.includes('inactivo') ? 'Activo' : 'Inactivo';
     const nextBackend = this.toBackendStatus(nextLabel);
     try {
       const updated = (await firstValueFrom(
@@ -586,6 +650,7 @@ export default class TrainersModule implements OnInit {
   }
 
   async deleteTrainer(trainer: Trainer): Promise<void> {
+    if (!this.requirePermission(Permission.TRAINERS_DELETE, 'No tienes permiso para eliminar entrenadores.')) return;
     const ok = window.confirm(
       `¿Eliminar el entrenador "${trainer.fullName}"? Esta acción no se puede deshacer.`,
     );
@@ -610,6 +675,16 @@ export default class TrainersModule implements OnInit {
 
   dismissNotice(): void {
     this.notice.set(null);
+  }
+
+  canCreateTrainers(): boolean {
+    return this.auth.hasPermission(Permission.TRAINERS_CREATE);
+  }
+
+  private requirePermission(permission: Permission, message: string): boolean {
+    if (this.auth.hasPermission(permission)) return true;
+    this.notice.set({ kind: 'error', message });
+    return false;
   }
 
   noticeIcon(kind: 'success' | 'info' | 'error'): string {

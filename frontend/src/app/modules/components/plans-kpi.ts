@@ -125,6 +125,40 @@ export interface KPIData {
         font-size: 0.95rem;
       }
 
+      /* Dark CRM skin */
+      .kpi-card {
+        background: #1c1b1b;
+        border-color: #353534;
+        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.3);
+      }
+
+      .kpi-card:hover {
+        border-color: #f5c518;
+        box-shadow: 0 0 18px rgba(245, 197, 24, 0.14), 0 18px 42px rgba(0, 0, 0, 0.34);
+      }
+
+      .kpi-icon,
+      .kpi-card.color-primary .kpi-icon,
+      .kpi-card.color-success .kpi-icon,
+      .kpi-card.color-warning .kpi-icon {
+        background: #f5c518;
+        color: #241a00;
+        border: 1px solid rgba(255, 224, 139, 0.35);
+        box-shadow: 0 0 14px rgba(245, 197, 24, 0.14);
+      }
+
+      .kpi-label {
+        color: #d1c5ac;
+      }
+
+      .kpi-value strong {
+        color: #e5e2e1;
+      }
+
+      .kpi-value span {
+        color: #b4afa6;
+      }
+
       @media (max-width: 1024px) {
         .kpi-card {
           padding: 1.5rem;

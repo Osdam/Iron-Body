@@ -14,6 +14,8 @@ import { SupportService } from './shared/services/support.service';
 import { NotificationsService } from './shared/services/notifications.service';
 import { MessagesService } from './shared/services/messages.service';
 import { QuickActionsService } from './shared/services/quick-actions.service';
+import { Permission } from './models/permissions.enum';
+import { UserRole } from './models/user-role.enum';
 
 type BackendHealthResponse = {
   message: string;
@@ -54,6 +56,7 @@ export class App {
   protected readonly isMessagesOpen = signal(false);
   protected readonly isQuickAccessOpen = signal(false);
   protected readonly isUserMenuOpen = signal(false);
+  protected readonly Permission = Permission;
 
   constructor() {
     this.checkAuthenticationStatus();
@@ -80,6 +83,14 @@ export class App {
 
   protected openNewMemberModal(): void {
     this.isCreateMemberOpen.set(true);
+  }
+
+  protected hasPermission(permission: Permission): boolean {
+    return this.authService.hasPermission(permission);
+  }
+
+  protected isSuperAdmin(): boolean {
+    return this.authService.hasRole(UserRole.SUPER_ADMIN);
   }
 
   protected closeNewMemberModal(): void {

@@ -81,8 +81,8 @@ import { UserSummary } from '../../services/api.service';
       .modal-backdrop {
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.55);
-        backdrop-filter: blur(4px);
+        background: rgba(0, 0, 0, 0.72);
+        backdrop-filter: blur(6px);
         z-index: 999;
       }
 
@@ -98,9 +98,11 @@ import { UserSummary } from '../../services/api.service';
       .modal-card {
         width: 100%;
         max-width: 540px;
-        background: #fff;
+        background: #1c1b1b;
+        border: 1px solid rgba(245, 197, 24, 0.12);
+        color: #e5e2e1;
         border-radius: 16px;
-        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
         overflow: hidden;
         animation: slideUp 220ms cubic-bezier(0.4, 0, 0.2, 1);
       }
@@ -136,7 +138,7 @@ import { UserSummary } from '../../services/api.service';
         height: 48px;
         border-radius: 12px;
         background: linear-gradient(135deg, #facc15, #f0c00e);
-        color: #000;
+        color: #241a00;
         font-weight: 800;
         font-size: 1rem;
         display: grid;
@@ -147,34 +149,35 @@ import { UserSummary } from '../../services/api.service';
       .header-title h2 {
         font: 700 1.15rem Inter, sans-serif;
         margin: 0 0 0.2rem;
-        color: #0a0a0a;
+        color: #e5e2e1;
         overflow-wrap: anywhere;
       }
 
       .header-title p {
         font: 400 0.85rem Inter, sans-serif;
-        color: #666;
+        color: #b4afa6;
         margin: 0;
         overflow-wrap: anywhere;
       }
 
       .btn-close {
-        background: #f5f5f5;
-        border: none;
+        background: #1a1a1a;
+        border: 1px solid #353534;
         border-radius: 8px;
         width: 36px;
         height: 36px;
         cursor: pointer;
         display: grid;
         place-items: center;
-        color: #555;
+        color: #e5e2e1;
         transition: all 150ms ease;
         flex-shrink: 0;
       }
 
       .btn-close:hover {
-        background: #e5e5e5;
-        color: #0a0a0a;
+        background: #2a2a2a;
+        border-color: #f5c518;
+        color: #ffe08b;
       }
 
       .status-row {
@@ -182,7 +185,7 @@ import { UserSummary } from '../../services/api.service';
         align-items: center;
         justify-content: space-between;
         padding: 0 1.75rem 1rem;
-        border-bottom: 1px solid #f0f0f0;
+        border-bottom: 1px solid #353534;
       }
 
       .badge {
@@ -193,25 +196,29 @@ import { UserSummary } from '../../services/api.service';
       }
 
       .status-active {
-        background: #dcfce7;
-        color: #166534;
+        background: rgba(245, 197, 24, 0.14);
+        border: 1px solid rgba(245, 197, 24, 0.28);
+        color: #ffe08b;
       }
       .status-inactive {
-        background: #fee2e2;
-        color: #991b1b;
+        background: rgba(180, 181, 181, 0.12);
+        border: 1px solid rgba(180, 181, 181, 0.24);
+        color: #c6c6c7;
       }
       .status-pending {
-        background: #fef3c7;
-        color: #a16207;
+        background: rgba(245, 197, 24, 0.12);
+        border: 1px solid rgba(245, 197, 24, 0.24);
+        color: #ffe08b;
       }
       .status-expired {
-        background: #e0e7ff;
-        color: #3730a3;
+        background: rgba(158, 197, 255, 0.12);
+        border: 1px solid rgba(158, 197, 255, 0.24);
+        color: #d6e3ff;
       }
 
       .member-id {
         font: 600 0.78rem 'Space Grotesk', sans-serif;
-        color: #999;
+        color: #b4afa6;
         letter-spacing: 0.05em;
       }
 
@@ -231,13 +238,13 @@ import { UserSummary } from '../../services/api.service';
         font: 600 0.74rem 'Space Grotesk', sans-serif;
         text-transform: uppercase;
         letter-spacing: 0.06em;
-        color: #999;
+        color: #d1c5ac;
         margin-bottom: 0.35rem;
       }
 
       .detail-item strong {
         font: 600 0.95rem Inter, sans-serif;
-        color: #0a0a0a;
+        color: #e5e2e1;
         overflow-wrap: anywhere;
       }
 
@@ -246,7 +253,7 @@ import { UserSummary } from '../../services/api.service';
         justify-content: flex-end;
         gap: 0.65rem;
         padding: 1rem 1.75rem 1.5rem;
-        border-top: 1px solid #f0f0f0;
+        border-top: 1px solid #353534;
       }
 
       .btn-secondary,
@@ -263,22 +270,25 @@ import { UserSummary } from '../../services/api.service';
       }
 
       .btn-secondary {
-        background: #f5f5f5;
-        color: #333;
+        border: 1px solid #353534;
+        background: #1a1a1a;
+        color: #e5e2e1;
       }
 
       .btn-secondary:hover {
-        background: #e5e5e5;
+        border-color: #f5c518;
+        background: #2a2a2a;
+        color: #ffe08b;
       }
 
       .btn-primary {
-        background: #facc15;
-        color: #0a0a0a;
+        background: #f5c518;
+        color: #241a00;
         font-weight: 700;
       }
 
       .btn-primary:hover {
-        background: #f0c00e;
+        background: #ffd43b;
       }
 
       .btn-primary .material-symbols-outlined {

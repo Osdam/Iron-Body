@@ -215,6 +215,67 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angula
         cursor: pointer;
       }
 
+      .settings-section {
+        background:
+          linear-gradient(rgba(28, 27, 27, 0.92), rgba(17, 17, 17, 0.9)),
+          url('/assets/crm/clases2.png') center / cover no-repeat;
+        border-color: #353534;
+        color: #e5e2e1;
+        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24);
+      }
+
+      .section-header {
+        border-color: #353534;
+      }
+
+      .section-title h2,
+      .info-card strong {
+        color: #e5e2e1;
+      }
+
+      .section-title p,
+      .info-card p,
+      small {
+        color: #b4afa6;
+      }
+
+      .currency-pill,
+      .info-card {
+        background: rgba(245, 197, 24, 0.1);
+        border-color: rgba(245, 197, 24, 0.28);
+        color: #ffe08b;
+      }
+
+      label {
+        color: #cfcac2;
+      }
+
+      input,
+      select {
+        background: #151515;
+        border-color: #353534;
+        color: #e5e2e1;
+        color-scheme: dark;
+      }
+
+      select option {
+        background: #151515;
+        color: #e5e2e1;
+      }
+
+      input:focus,
+      select:focus {
+        background: #201f1f;
+        border-color: #f5c518;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.13);
+      }
+
+      .checkbox {
+        background: #1c1b1b;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
       @media (max-width: 768px) {
         .form-grid {
           grid-template-columns: 1fr;

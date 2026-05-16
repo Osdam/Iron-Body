@@ -1,5 +1,15 @@
 import { CommonModule } from '@angular/common';
-import { Component, ElementRef, HostListener, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  HostListener,
+  OnDestroy,
+  OnInit,
+  ViewChild,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom, Observable } from 'rxjs';
 import { ApiService, PaginatedResponse, PaymentSummary, UserSummary } from '../services/api.service';
@@ -38,6 +48,8 @@ interface MemberAttendanceView extends UserSummary {
   attendanceState: 'today' | 'recent' | 'warning' | 'critical' | 'none';
   planState: 'active' | 'soon' | 'expired' | 'unknown';
 }
+
+type CameraTerminal = 'entry' | 'exit';
 
 @Component({
   selector: 'module-attendance',
@@ -111,6 +123,110 @@ interface MemberAttendanceView extends UserSummary {
           <span [class.inside]="member.currentlyInside">
             {{ member.currentlyInside ? 'Próxima lectura: salida' : 'Próxima lectura: entrada' }}
           </span>
+        </div>
+      </section>
+
+      <section class="camera-control">
+        <div class="camera-header">
+          <div>
+            <h2>Terminales faciales</h2>
+            <p>Conecta una cámara para entrada y otra para salida. Las predeterminadas se guardan en este navegador.</p>
+          </div>
+          <button type="button" class="btn-secondary" (click)="refreshCameraDevices()">
+            <span class="material-symbols-outlined" aria-hidden="true">sync</span>
+            Buscar cámaras
+          </button>
+        </div>
+
+        <div *ngIf="cameraError()" class="camera-alert">
+          <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+          {{ cameraError() }}
+        </div>
+
+        <div class="camera-grid">
+          <article class="camera-card" [class.connected]="entryCameraStatus() === 'Conectada'">
+            <div class="camera-card-head">
+              <div>
+                <span class="camera-type">Entrada</span>
+                <h3>Cámara de ingreso</h3>
+                <p>{{ entryCameraStatus() }}</p>
+              </div>
+              <span class="material-symbols-outlined">login</span>
+            </div>
+
+            <video #entryVideo muted playsinline></video>
+
+            <label>
+              <span>Dispositivo</span>
+              <select [ngModel]="entryCameraId()" (ngModelChange)="selectCamera('entry', $event)">
+                <option value="">Seleccionar cámara</option>
+                <option *ngFor="let camera of cameraDevices()" [value]="camera.deviceId">
+                  {{ camera.label || 'Cámara disponible' }}
+                </option>
+              </select>
+            </label>
+
+            <div class="camera-actions">
+              <button type="button" class="btn-secondary" (click)="startCamera('entry')">
+                <span class="material-symbols-outlined">videocam</span>
+                Conectar
+              </button>
+              <button type="button" class="btn-secondary" (click)="stopCamera('entry')">
+                <span class="material-symbols-outlined">videocam_off</span>
+                Detener
+              </button>
+              <button type="button" class="btn-primary" (click)="recognizeFromCamera('entry')">
+                <span class="material-symbols-outlined">face</span>
+                Registrar entrada
+              </button>
+            </div>
+
+            <button type="button" class="default-link" (click)="setDefaultCamera('entry')">
+              Dejar como predeterminada de entrada
+            </button>
+          </article>
+
+          <article class="camera-card" [class.connected]="exitCameraStatus() === 'Conectada'">
+            <div class="camera-card-head">
+              <div>
+                <span class="camera-type exit">Salida</span>
+                <h3>Cámara de salida</h3>
+                <p>{{ exitCameraStatus() }}</p>
+              </div>
+              <span class="material-symbols-outlined">logout</span>
+            </div>
+
+            <video #exitVideo muted playsinline></video>
+
+            <label>
+              <span>Dispositivo</span>
+              <select [ngModel]="exitCameraId()" (ngModelChange)="selectCamera('exit', $event)">
+                <option value="">Seleccionar cámara</option>
+                <option *ngFor="let camera of cameraDevices()" [value]="camera.deviceId">
+                  {{ camera.label || 'Cámara disponible' }}
+                </option>
+              </select>
+            </label>
+
+            <div class="camera-actions">
+              <button type="button" class="btn-secondary" (click)="startCamera('exit')">
+                <span class="material-symbols-outlined">videocam</span>
+                Conectar
+              </button>
+              <button type="button" class="btn-secondary" (click)="stopCamera('exit')">
+                <span class="material-symbols-outlined">videocam_off</span>
+                Detener
+              </button>
+              <button type="button" class="btn-primary" (click)="recognizeFromCamera('exit')">
+                <span class="material-symbols-outlined">face</span>
+                Registrar salida
+              </button>
+            </div>
+
+            <button type="button" class="default-link" (click)="setDefaultCamera('exit')">
+              Dejar como predeterminada de salida
+            </button>
+          </article>
         </div>
       </section>
 
@@ -493,6 +609,129 @@ interface MemberAttendanceView extends UserSummary {
       .terminal-state span,
       .inside {
         color: #16a34a;
+      }
+
+      .camera-control {
+        display: grid;
+        gap: 1rem;
+        padding: 1.2rem;
+        border-radius: 16px;
+        background: #ffffff;
+        border: 1px solid #e5e5e5;
+      }
+
+      .camera-header,
+      .camera-card-head,
+      .camera-actions {
+        display: flex;
+        gap: 1rem;
+      }
+
+      .camera-header {
+        align-items: flex-start;
+        justify-content: space-between;
+      }
+
+      .camera-header p,
+      .camera-card p {
+        color: #666;
+        margin-top: 0.3rem;
+      }
+
+      .camera-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+      }
+
+      .camera-card {
+        display: grid;
+        gap: 0.85rem;
+        padding: 1rem;
+        border: 1px solid #e5e5e5;
+        border-radius: 14px;
+        background: #fafafa;
+      }
+
+      .camera-card.connected {
+        border-color: rgba(34, 197, 94, 0.45);
+        box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+      }
+
+      .camera-card-head {
+        align-items: flex-start;
+        justify-content: space-between;
+      }
+
+      .camera-card-head > .material-symbols-outlined {
+        color: #fbbf24;
+        font-size: 2rem;
+      }
+
+      .camera-type {
+        display: inline-flex;
+        margin-bottom: 0.35rem;
+        padding: 0.25rem 0.55rem;
+        border-radius: 999px;
+        background: #dcfce7;
+        color: #166534;
+        font-size: 0.72rem;
+        font-weight: 900;
+        text-transform: uppercase;
+      }
+
+      .camera-type.exit {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+
+      .camera-card video {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        object-fit: cover;
+        border-radius: 12px;
+        background: #111;
+        border: 1px solid #2b2a29;
+      }
+
+      .camera-card label {
+        display: grid;
+        gap: 0.4rem;
+        font-weight: 800;
+      }
+
+      .camera-card select {
+        min-height: 42px;
+        padding: 0.65rem 0.8rem;
+        border-radius: 10px;
+        border: 1px solid #ddd;
+        background: #fff;
+        color: #0a0a0a;
+      }
+
+      .camera-actions {
+        flex-wrap: wrap;
+      }
+
+      .default-link {
+        justify-self: start;
+        border: 0;
+        background: transparent;
+        color: #a16207;
+        cursor: pointer;
+        font-weight: 800;
+        padding: 0;
+      }
+
+      .camera-alert {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.85rem 1rem;
+        border-radius: 12px;
+        background: #fef3c7;
+        color: #78350f;
+        font-weight: 700;
       }
 
       .kpi-grid {
@@ -1192,8 +1431,227 @@ interface MemberAttendanceView extends UserSummary {
         padding: 0.7rem;
       }
 
+      .attendance-page {
+        color: #e5e2e1;
+      }
+
+      .attendance-header {
+        background:
+          linear-gradient(rgba(12, 12, 12, 0.91), rgba(12, 12, 12, 0.94)),
+          url('/assets/crm/fondo7.png') center / cover no-repeat;
+        border-color: rgba(245, 197, 24, 0.10);
+        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.24);
+      }
+
+      .attendance-header h1,
+      .panel h2,
+      .access-terminal h2,
+      .camera-header h2,
+      .camera-card h3,
+      .terminal-state strong,
+      .kpi-card strong,
+      .member-cell strong,
+      .member-card-plan strong,
+      .call-item strong,
+      .timeline-item strong {
+        color: #e5e2e1;
+      }
+
+      .attendance-header p,
+      .panel p,
+      .camera-header p,
+      .camera-card p,
+      label,
+      .kpi-card small,
+      .member-cell small,
+      .timeline small,
+      .call-item small,
+      .member-card-plan small,
+      .metric-box small,
+      .option-copy small,
+      .select-empty,
+      .empty-mini {
+        color: #b4afa6;
+      }
+
+      .btn-secondary,
+      .terminal-state,
+      .camera-control,
+      .camera-card,
+      .kpi-card,
+      .checkin-panel,
+      .panel,
+      .notice,
+      input,
+      .camera-card select,
+      .pretty-trigger,
+      .member-search-box,
+      .pretty-menu,
+      .member-card,
+      .metric-box,
+      .call-item,
+      .timeline-item {
+        background: #1c1b1b;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .btn-primary,
+      .action-btn.enter {
+        background: #f5c518;
+        color: #241a00;
+      }
+
+      .btn-secondary:hover:not(:disabled),
+      input:focus,
+      .pretty-trigger:hover,
+      .pretty-select.open .pretty-trigger {
+        background: #201f1f;
+        border-color: #f5c518;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.13);
+        outline: none;
+      }
+
+      input::placeholder {
+        color: #77716a;
+      }
+
+      .camera-card video {
+        background: #090909;
+        border-color: #353534;
+      }
+
+      .camera-card.connected {
+        border-color: rgba(34, 197, 94, 0.38);
+        box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.08);
+      }
+
+      .default-link {
+        color: #ffe08b;
+      }
+
+      .access-terminal {
+        background:
+          radial-gradient(circle at 16px 16px, rgba(245, 197, 24, 0.12) 1.5px, transparent 1.5px) 0 0 / 12px 12px,
+          linear-gradient(135deg, #1c1b1b, #111);
+        border-color: rgba(245, 197, 24, 0.22);
+      }
+
+      .terminal-visual,
+      .avatar {
+        background: #0e0e0e;
+        border: 1px solid rgba(245, 197, 24, 0.18);
+        color: #ffe08b;
+      }
+
+      .kpi-card > span,
+      .option-icon,
+      .member-card-plan .material-symbols-outlined,
+      .metric-box .material-symbols-outlined,
+      .member-search-box .material-symbols-outlined {
+        background: rgba(245, 197, 24, 0.12);
+        color: #ffe08b;
+      }
+
+      .pretty-menu {
+        box-shadow: 0 22px 54px rgba(0, 0, 0, 0.44);
+      }
+
+      .member-search-box {
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.32);
+      }
+
+      .pretty-option {
+        color: #e5e2e1;
+      }
+
+      .pretty-option:hover,
+      .pretty-option.selected {
+        background: rgba(245, 197, 24, 0.13);
+        color: #ffe08b;
+      }
+
+      .pretty-option.denied-option {
+        background: rgba(255, 180, 171, 0.10);
+      }
+
+      .pretty-option.denied-option .option-icon {
+        background: rgba(255, 180, 171, 0.14);
+        color: #ffb4ab;
+      }
+
+      .pretty-option.selected .option-copy small {
+        color: #d1c5ac;
+      }
+
+      .select-chevron {
+        border-color: #f5c518;
+      }
+
+      .notice {
+        background: rgba(34, 197, 94, 0.12);
+        border-color: rgba(34, 197, 94, 0.30);
+        color: #86efac;
+      }
+
+      .member-card {
+        background:
+          linear-gradient(135deg, rgba(28, 27, 27, 0.96), rgba(17, 17, 17, 0.92)),
+          radial-gradient(circle at top right, rgba(245, 197, 24, 0.16), transparent 34%);
+        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.22);
+      }
+
+      .member-card:hover {
+        border-color: #f5c518;
+        box-shadow: 0 18px 44px rgba(245, 197, 24, 0.12);
+      }
+
+      .access-pill {
+        background: #2a2a2a;
+        color: #d1c5ac;
+      }
+
+      .access-pill.inside {
+        background: rgba(34, 197, 94, 0.14);
+        color: #86efac;
+      }
+
+      .access-pill.denied,
+      .action-btn.enter.blocked,
+      .action-btn.exit {
+        background: rgba(255, 180, 171, 0.14);
+        color: #ffb4ab;
+      }
+
+      .member-card-plan,
+      .metric-box {
+        background: rgba(21, 21, 21, 0.78);
+        border-color: #353534;
+      }
+
+      .visit-times span {
+        background: #151515;
+        color: #d1c5ac;
+      }
+
+      .visit-times b {
+        color: #e5e2e1;
+      }
+
+      .visit-times em {
+        color: #b4afa6;
+      }
+
+      .visit-times .pending-exit,
+      .warning-panel {
+        background: rgba(245, 197, 24, 0.10);
+        border-color: rgba(245, 197, 24, 0.22);
+        color: #ffe08b;
+      }
+
       @media (max-width: 1180px) {
         .kpi-grid,
+        .camera-grid,
         .checkin-form,
         .content-grid {
           grid-template-columns: 1fr;
@@ -1206,6 +1664,7 @@ interface MemberAttendanceView extends UserSummary {
 
       @media (max-width: 720px) {
         .attendance-header,
+        .camera-header,
         .panel-header,
         .access-terminal {
           flex-direction: column;
@@ -1233,14 +1692,27 @@ interface MemberAttendanceView extends UserSummary {
     `,
   ],
 })
-export default class AttendanceModule implements OnInit {
+export default class AttendanceModule implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
   private readonly elementRef = inject(ElementRef<HTMLElement>);
   private readonly storageKey = 'iron-body-attendance-records';
+  private readonly entryCameraKey = 'iron-body-attendance-entry-camera';
+  private readonly exitCameraKey = 'iron-body-attendance-exit-camera';
+  private entryStream: MediaStream | null = null;
+  private exitStream: MediaStream | null = null;
+
+  @ViewChild('entryVideo') entryVideo?: ElementRef<HTMLVideoElement>;
+  @ViewChild('exitVideo') exitVideo?: ElementRef<HTMLVideoElement>;
 
   members = signal<UserSummary[]>([]);
   payments = signal<PaymentSummary[]>([]);
   records = signal<AttendanceRecord[]>([]);
+  cameraDevices = signal<MediaDeviceInfo[]>([]);
+  entryCameraId = signal('');
+  exitCameraId = signal('');
+  entryCameraStatus = signal('Sin conectar');
+  exitCameraStatus = signal('Sin conectar');
+  cameraError = signal('');
   selectedUserId = signal<number>(0);
   attendanceNote = signal('');
   absenceThreshold = signal(7);
@@ -1331,7 +1803,14 @@ export default class AttendanceModule implements OnInit {
 
   ngOnInit(): void {
     this.loadRecords();
+    this.loadCameraDefaults();
+    void this.refreshCameraDevices(true);
     this.loadAccessData();
+  }
+
+  ngOnDestroy(): void {
+    this.stopCamera('entry');
+    this.stopCamera('exit');
   }
 
   markSelectedAttendance(): void {
@@ -1352,6 +1831,121 @@ export default class AttendanceModule implements OnInit {
     }
 
     this.registerAccess(member, 'facial');
+  }
+
+  async refreshCameraDevices(autoStart = false): Promise<void> {
+    if (!navigator.mediaDevices?.enumerateDevices) {
+      this.cameraError.set('Este navegador no permite listar cámaras. Usa Chrome/Edge en localhost o HTTPS.');
+      return;
+    }
+
+    try {
+      this.cameraError.set('');
+      await this.ensureCameraPermission();
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cameras = devices.filter((device) => device.kind === 'videoinput');
+      this.cameraDevices.set(cameras);
+
+      if (!this.entryCameraId() && cameras[0]) this.entryCameraId.set(cameras[0].deviceId);
+      if (!this.exitCameraId() && cameras[1]) this.exitCameraId.set(cameras[1].deviceId);
+      if (!this.exitCameraId() && cameras[0]) this.exitCameraId.set(cameras[0].deviceId);
+
+      if (autoStart) {
+        if (this.entryCameraId()) await this.startCamera('entry');
+        if (this.exitCameraId()) await this.startCamera('exit');
+      }
+    } catch (error) {
+      this.cameraError.set(this.cameraErrorMessage(error));
+    }
+  }
+
+  selectCamera(terminal: CameraTerminal, deviceId: string): void {
+    if (terminal === 'entry') {
+      this.entryCameraId.set(deviceId);
+      if (this.entryStream) void this.startCamera('entry');
+      return;
+    }
+
+    this.exitCameraId.set(deviceId);
+    if (this.exitStream) void this.startCamera('exit');
+  }
+
+  async startCamera(terminal: CameraTerminal): Promise<void> {
+    const deviceId = terminal === 'entry' ? this.entryCameraId() : this.exitCameraId();
+    if (!deviceId) {
+      this.showNotice('Selecciona una cámara antes de conectar.');
+      return;
+    }
+
+    this.setCameraStatus(terminal, 'Conectando...');
+    this.stopCamera(terminal);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: deviceId } },
+        audio: false,
+      });
+      const video = terminal === 'entry' ? this.entryVideo?.nativeElement : this.exitVideo?.nativeElement;
+      if (video) {
+        video.srcObject = stream;
+        await video.play();
+      }
+
+      if (terminal === 'entry') this.entryStream = stream;
+      else this.exitStream = stream;
+
+      this.setCameraStatus(terminal, 'Conectada');
+      this.cameraError.set('');
+    } catch (error) {
+      this.setCameraStatus(terminal, 'Error de conexión');
+      this.cameraError.set(this.cameraErrorMessage(error));
+    }
+  }
+
+  stopCamera(terminal: CameraTerminal): void {
+    const stream = terminal === 'entry' ? this.entryStream : this.exitStream;
+    stream?.getTracks().forEach((track) => track.stop());
+
+    const video = terminal === 'entry' ? this.entryVideo?.nativeElement : this.exitVideo?.nativeElement;
+    if (video) video.srcObject = null;
+
+    if (terminal === 'entry') {
+      this.entryStream = null;
+      this.entryCameraStatus.set('Sin conectar');
+      return;
+    }
+
+    this.exitStream = null;
+    this.exitCameraStatus.set('Sin conectar');
+  }
+
+  setDefaultCamera(terminal: CameraTerminal): void {
+    const deviceId = terminal === 'entry' ? this.entryCameraId() : this.exitCameraId();
+    if (!deviceId) {
+      this.showNotice('Selecciona una cámara antes de guardarla como predeterminada.');
+      return;
+    }
+
+    localStorage.setItem(terminal === 'entry' ? this.entryCameraKey : this.exitCameraKey, deviceId);
+    this.showNotice(
+      `Cámara predeterminada de ${terminal === 'entry' ? 'entrada' : 'salida'} guardada.`,
+    );
+  }
+
+  recognizeFromCamera(terminal: CameraTerminal): void {
+    const isConnected = terminal === 'entry' ? !!this.entryStream : !!this.exitStream;
+    if (!isConnected) {
+      this.showNotice(`Conecta primero la cámara de ${terminal === 'entry' ? 'entrada' : 'salida'}.`);
+      return;
+    }
+
+    const member = this.members().find((item) => item.id === this.selectedUserId());
+    if (!member) {
+      this.showNotice('Selecciona el miembro identificado para completar la lectura facial.');
+      return;
+    }
+
+    this.registerAccess(member, 'facial', terminal === 'entry' ? 'entry' : 'exit');
   }
 
   toggleSelect(select: 'member' | 'absence'): void {
@@ -1483,6 +2077,35 @@ export default class AttendanceModule implements OnInit {
     } catch {
       this.records.set([]);
     }
+  }
+
+  private loadCameraDefaults(): void {
+    this.entryCameraId.set(localStorage.getItem(this.entryCameraKey) || '');
+    this.exitCameraId.set(localStorage.getItem(this.exitCameraKey) || '');
+  }
+
+  private async ensureCameraPermission(): Promise<void> {
+    const hasKnownLabels = (await navigator.mediaDevices.enumerateDevices()).some(
+      (device) => device.kind === 'videoinput' && device.label,
+    );
+    if (hasKnownLabels) return;
+
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    stream.getTracks().forEach((track) => track.stop());
+  }
+
+  private setCameraStatus(terminal: CameraTerminal, status: string): void {
+    if (terminal === 'entry') this.entryCameraStatus.set(status);
+    else this.exitCameraStatus.set(status);
+  }
+
+  private cameraErrorMessage(error: unknown): string {
+    const name = error instanceof DOMException ? error.name : '';
+    if (name === 'NotAllowedError') return 'Permiso de cámara denegado. Autoriza el acceso en el navegador.';
+    if (name === 'NotFoundError') return 'No se encontró una cámara conectada.';
+    if (name === 'NotReadableError') return 'La cámara está ocupada por otra aplicación.';
+    if (name === 'OverconstrainedError') return 'La cámara seleccionada no está disponible.';
+    return 'No se pudo conectar la cámara. Revisa permisos, conexión o navegador.';
   }
 
   private saveRecords(): void {

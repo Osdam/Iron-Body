@@ -1,15 +1,26 @@
 @import 'bootstrap/dist/css/bootstrap.min.css';
 
 :root {
-	--ib-bg: #fbf8ff;
-	--ib-panel: #ffffff;
-	--ib-panel-soft: #f4f2fd;
-	--ib-line: #e7e5e4;
-	--ib-gold: #eab308;
-	--ib-text: #121212;
-	--ib-muted: #5f5e5e;
-	--ib-soft-text: #3f3f46;
-	--ib-danger: #ba1a1a;
+	--ib-bg: #0f0f0f;
+	--ib-surface: #131313;
+	--ib-panel: #1c1b1b;
+	--ib-panel-soft: #201f1f;
+	--ib-panel-high: #2a2a2a;
+	--ib-panel-highest: #353534;
+	--ib-line: #353534;
+	--ib-line-strong: #4e4633;
+	--ib-gold: #f5c518;
+	--ib-gold-soft: #ffe08b;
+	--ib-gold-muted: #9a7b00;
+	--ib-text: #e5e2e1;
+	--ib-muted: #b4afa6;
+	--ib-soft-text: #d1c5ac;
+	--ib-danger: #ffb4ab;
+	--ib-success: #8bdc9f;
+	--ib-info: #9ec5ff;
+	--ib-warning: #ffd666;
+	--ib-shadow: 0 18px 42px rgba(0, 0, 0, 0.36);
+	--ib-glow: 0 0 18px rgba(245, 197, 24, 0.16);
 }
 
 html,
@@ -35,7 +46,7 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-	background: #f5f5f5;
+	background: #111;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -52,7 +63,7 @@ body {
 
 .btn-primary:hover {
 	background: #facc15;
-	color: var(--ib-text);
+	color: #241a00;
 }
 
 .card {
@@ -74,11 +85,11 @@ body {
 }
 
 .table thead {
-	background: #f5f5f5;
+	background: var(--ib-panel-high);
 }
 
 .table tbody tr:hover {
-	background: rgba(234, 179, 8, 0.08);
+	background: rgba(245, 197, 24, 0.08);
 }
 
 .text-muted {
@@ -137,6 +148,410 @@ small,
 	color: var(--ib-text);
 }
 
+/* Tema CRM oscuro global.
+   Muchos módulos tienen estilos inline encapsulados; estas reglas adaptan
+   la piel visual sin tocar su estructura ni su lógica. */
+body,
+app-root {
+	background:
+		radial-gradient(circle at top right, rgba(245, 197, 24, 0.08), transparent 34rem),
+		linear-gradient(180deg, #0e0e0e 0%, #131313 100%);
+	color: var(--ib-text);
+}
+
+a {
+	color: var(--ib-gold-soft);
+}
+
+::selection {
+	background: var(--ib-gold);
+	color: #241a00;
+}
+
+input,
+select,
+textarea,
+.form-control,
+.form-select {
+	background-color: #1a1a1a !important;
+	border-color: var(--ib-line) !important;
+	color: var(--ib-text) !important;
+}
+
+input::placeholder,
+textarea::placeholder,
+.form-control::placeholder {
+	color: #8f8a82 !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+.form-control:focus,
+.form-select:focus {
+	border-color: var(--ib-gold) !important;
+	box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.15) !important;
+}
+
+.btn-primary,
+.gold-btn,
+.primary-action,
+.book-btn,
+.save-btn,
+.submit-btn,
+.create-btn,
+.add-btn {
+	background: var(--ib-gold) !important;
+	border-color: var(--ib-gold) !important;
+	color: #241a00 !important;
+	box-shadow: var(--ib-glow) !important;
+}
+
+.btn-primary:hover,
+.gold-btn:hover,
+.primary-action:hover,
+.book-btn:hover,
+.save-btn:hover,
+.submit-btn:hover,
+.create-btn:hover,
+.add-btn:hover {
+	background: #ffd43b !important;
+	color: #241a00 !important;
+}
+
+.btn-secondary,
+.outline-btn,
+.cancel-btn,
+.row-btn,
+.round-btn,
+.filter-btn,
+.tab-btn,
+.quick-action,
+.secondary-btn {
+	background: #1a1a1a !important;
+	border-color: var(--ib-line) !important;
+	color: var(--ib-text) !important;
+}
+
+.btn-secondary:hover,
+.outline-btn:hover,
+.cancel-btn:hover,
+.row-btn:hover,
+.round-btn:hover,
+.filter-btn:hover,
+.tab-btn:hover,
+.quick-action:hover,
+.secondary-btn:hover {
+	background: var(--ib-panel-high) !important;
+	border-color: var(--ib-gold) !important;
+	color: var(--ib-gold-soft) !important;
+}
+
+.dashboard-page,
+.users-page,
+.module-page,
+.plans-page,
+.payments-page,
+.classes-page,
+.attendance-page,
+.inventory-page,
+.reports-page,
+.routines-page,
+.trainers-page,
+.marketing-page,
+.settings-page {
+	color: var(--ib-text) !important;
+	background:
+		linear-gradient(rgba(19, 19, 19, 0.88), rgba(19, 19, 19, 0.88)),
+		var(--page-bg, none) !important;
+	border: 1px solid rgba(245, 197, 24, 0.08) !important;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03) !important;
+}
+
+.dashboard-header,
+.users-header,
+.module-header,
+.page-header,
+.settings-header {
+	border-color: var(--ib-line) !important;
+	color: var(--ib-text) !important;
+}
+
+.header-overlay,
+.hero-overlay {
+	background:
+		linear-gradient(135deg, rgba(14, 14, 14, 0.9) 0%, rgba(32, 31, 31, 0.78) 54%, rgba(245, 197, 24, 0.16) 100%) !important;
+}
+
+.header-content h1,
+.header-text h1,
+.module-header h1,
+.page-title,
+h1,
+h2,
+h3,
+h4,
+.card-title,
+.panel-title h3,
+.feature-main h2,
+.metric-text strong,
+.quick-text strong,
+.task-text strong,
+.module-text strong,
+.cell-member strong,
+.member-profile strong,
+.plan-price strong {
+	color: var(--ib-text) !important;
+}
+
+.header-content p,
+.header-text p,
+.module-header p,
+.page-subtitle,
+p,
+small,
+.card-text,
+.text-muted,
+.metric-text p,
+.metric-text small,
+.quick-text small,
+.task-text small,
+.module-text small,
+.cell-member span,
+.member-profile span,
+.plan-price span,
+.member-document,
+.timeline-line span,
+.timeline-point span {
+	color: var(--ib-muted) !important;
+}
+
+.eyebrow,
+.panel-link,
+.progress-link,
+.link-btn,
+.timeline-line strong {
+	color: var(--ib-gold-soft) !important;
+}
+
+.card,
+.metric-card,
+.feature-card,
+.panel-card,
+.quick-item,
+.task-item,
+.module-item,
+.state-panel,
+.data-row,
+.responsive-table,
+.filters-section,
+.members-table-wrapper,
+.member-flight-card,
+.confirm-card,
+.modal-content,
+.empty-state,
+.kpi-card,
+.stat-card,
+.settings-card,
+.trainer-card,
+.plan-card,
+.routine-card,
+.class-card,
+.campaign-card,
+.report-card,
+.payment-card,
+.inventory-card {
+	background: var(--ib-panel) !important;
+	border-color: var(--ib-line) !important;
+	color: var(--ib-text) !important;
+	box-shadow: var(--ib-shadow) !important;
+}
+
+.feature-card,
+.quick-actions-card,
+.tasks-card,
+.modules-card,
+.resumen-card {
+	background:
+		linear-gradient(135deg, rgba(28, 27, 27, 0.92), rgba(32, 31, 31, 0.78)),
+		var(--card-bg, none) !important;
+}
+
+.metric-lottie,
+.feature-lottie-wrap,
+.panel-title-icon,
+.quick-lottie,
+.task-lottie,
+.module-lottie,
+.btn-lottie-light,
+.confirm-icon,
+.avatar,
+.icon-wrap,
+.lottie-wrap {
+	background: var(--ib-panel-high) !important;
+	color: var(--ib-gold-soft) !important;
+}
+
+.metric-card:hover,
+.panel-card:hover,
+.quick-item:hover,
+.task-item:hover,
+.module-item:hover,
+.member-flight-card:hover,
+.plan-card:hover,
+.trainer-card:hover,
+.routine-card:hover,
+.class-card:hover,
+.campaign-card:hover {
+	background: var(--ib-panel-soft) !important;
+	border-color: var(--ib-gold) !important;
+	box-shadow: var(--ib-glow), var(--ib-shadow) !important;
+}
+
+.table,
+.members-table,
+.plans-table,
+.reports-table,
+.routines-table,
+.trainers-table {
+	color: var(--ib-text) !important;
+}
+
+.table thead,
+.members-table thead,
+.plans-table thead,
+.reports-table thead,
+.routines-table thead,
+.trainers-table thead {
+	background: rgba(42, 42, 42, 0.72) !important;
+	border-color: var(--ib-line) !important;
+}
+
+.table th,
+.members-table th,
+.plans-table th,
+.reports-table th,
+.routines-table th,
+.trainers-table th {
+	color: var(--ib-soft-text) !important;
+}
+
+.table td,
+.members-table td,
+.plans-table td,
+.reports-table td,
+.routines-table td,
+.trainers-table td {
+	color: var(--ib-text) !important;
+	border-color: var(--ib-line) !important;
+}
+
+.table tbody tr,
+.members-table tbody tr,
+.plans-table tbody tr,
+.reports-table tbody tr,
+.routines-table tbody tr,
+.trainers-table tbody tr {
+	border-color: var(--ib-line) !important;
+}
+
+.table tbody tr:hover,
+.members-table tbody tr:hover,
+.plans-table tbody tr:hover,
+.reports-table tbody tr:hover,
+.routines-table tbody tr:hover,
+.trainers-table tbody tr:hover {
+	background: rgba(245, 197, 24, 0.08) !important;
+}
+
+.search-input,
+.pretty-trigger,
+.pretty-menu,
+.pretty-option,
+.filter-group input,
+.filter-group select,
+.date-field,
+.select-field {
+	background: #1a1a1a !important;
+	border-color: var(--ib-line) !important;
+	color: var(--ib-text) !important;
+}
+
+.pretty-menu,
+.dropdown-menu,
+.popover-panel,
+.menu-panel {
+	background: var(--ib-panel-high) !important;
+	border-color: var(--ib-line-strong) !important;
+	box-shadow: var(--ib-shadow) !important;
+}
+
+.pretty-option:hover,
+.pretty-option.selected,
+.dropdown-item:hover {
+	background: rgba(245, 197, 24, 0.12) !important;
+	color: var(--ib-gold-soft) !important;
+}
+
+.badge,
+.status-active,
+.status-pending,
+.tag-amber {
+	background: rgba(245, 197, 24, 0.12) !important;
+	border: 1px solid rgba(245, 197, 24, 0.24) !important;
+	color: var(--ib-gold-soft) !important;
+}
+
+.status-inactive,
+.status-expired {
+	background: rgba(180, 181, 181, 0.12) !important;
+	border-color: rgba(180, 181, 181, 0.24) !important;
+	color: #c6c6c7 !important;
+}
+
+.tag-green,
+.text-success {
+	background-color: rgba(139, 220, 159, 0.12) !important;
+	color: var(--ib-success) !important;
+}
+
+.tag-blue,
+.text-info {
+	background-color: rgba(158, 197, 255, 0.12) !important;
+	color: var(--ib-info) !important;
+}
+
+.tag-red,
+.text-danger,
+.text-error,
+.btn-danger,
+.danger {
+	color: var(--ib-danger) !important;
+}
+
+.btn-danger {
+	background: #93000a !important;
+	border-color: #93000a !important;
+	color: #ffdad6 !important;
+}
+
+.line,
+.progress-track {
+	background: var(--ib-line) !important;
+}
+
+.line::before,
+.line::after,
+.progress-track i {
+	background: linear-gradient(90deg, var(--ib-gold), var(--ib-gold-soft)) !important;
+}
+
+.confirm-backdrop,
+.modal-backdrop {
+	background: rgba(0, 0, 0, 0.72) !important;
+	backdrop-filter: blur(6px);
+}
+
 .data-list {
 	display: grid;
 	gap: 0.85rem;
@@ -166,7 +581,7 @@ small,
 .shadow { box-shadow: 0 12px 28px rgba(2, 6, 23, 0.22) !important; }
 .bg-cyan-500 { background-color: var(--ib-gold) !important; }
 .hover\:bg-cyan-600:hover { background-color: #facc15 !important; }
-.bg-slate-800\/40 { background-color: #fff !important; }
+.bg-slate-800\/40 { background-color: var(--ib-panel) !important; }
 .text-2xl { font-size: 1.5rem !important; line-height: 2rem !important; }
 .text-sm { font-size: 0.875rem !important; line-height: 1.25rem !important; }
 .font-semibold { font-weight: 600 !important; }
@@ -182,7 +597,9 @@ small,
 .btn-outline-danger,
 .btn-outline-success,
 .btn-outline-primary {
-	background: #fff;
+	background: #1a1a1a;
+	border-color: var(--ib-line);
+	color: var(--ib-text);
 }
 
 .btn-outline-primary {
@@ -193,7 +610,7 @@ small,
 .btn-outline-primary:hover {
 	background: var(--ib-gold);
 	border-color: var(--ib-gold);
-	color: var(--ib-text);
+	color: #241a00;
 }
 
 .display-5,
@@ -202,7 +619,7 @@ small,
 }
 
 .text-success {
-	color: #059669 !important;
+	color: var(--ib-success) !important;
 }
 
 .text-danger,

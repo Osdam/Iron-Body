@@ -107,6 +107,32 @@ import { LottieIconComponent } from '../../shared/components/lottie-icon/lottie-
         color: #999;
       }
 
+      .kpi-card {
+        background: #1c1b1b;
+        border-color: #353534;
+        color: #e5e2e1;
+        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.20);
+      }
+
+      .kpi-card:hover {
+        border-color: #f5c518;
+        box-shadow: 0 16px 38px rgba(245, 197, 24, 0.12);
+      }
+
+      .kpi-icon {
+        border: 1px solid rgba(245, 197, 24, 0.16);
+        background: rgba(245, 197, 24, 0.12) !important;
+      }
+
+      .kpi-label,
+      .kpi-suffix {
+        color: #b4afa6;
+      }
+
+      .kpi-value {
+        color: #e5e2e1;
+      }
+
       @media (max-width: 768px) {
         .kpi-card {
           padding: 1.25rem;

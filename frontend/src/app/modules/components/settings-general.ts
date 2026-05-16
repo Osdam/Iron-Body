@@ -219,6 +219,55 @@ export interface GeneralSettings {
         color: #9ca3af;
       }
 
+      .settings-section {
+        background:
+          linear-gradient(rgba(28, 27, 27, 0.92), rgba(17, 17, 17, 0.9)),
+          url('/assets/crm/clases2.png') center / cover no-repeat;
+        border-color: #353534;
+        color: #e5e2e1;
+        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24);
+      }
+
+      .section-header {
+        border-color: #353534;
+      }
+
+      .section-title h2 {
+        color: #e5e2e1;
+      }
+
+      .section-title p {
+        color: #b4afa6;
+      }
+
+      label {
+        color: #cfcac2;
+      }
+
+      input,
+      select {
+        background: #151515;
+        border-color: #353534;
+        color: #e5e2e1;
+        color-scheme: dark;
+      }
+
+      select option {
+        background: #151515;
+        color: #e5e2e1;
+      }
+
+      input:focus,
+      select:focus {
+        background: #201f1f;
+        border-color: #f5c518;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.13);
+      }
+
+      input::placeholder {
+        color: #77716a;
+      }
+
       @media (max-width: 768px) {
         .form-grid {
           grid-template-columns: 1fr;

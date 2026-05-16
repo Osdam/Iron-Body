@@ -7,6 +7,8 @@ import { MembersEmptyComponent } from './modules/components/members-empty';
 import { EditMemberModalComponent } from './modules/components/edit-member-modal';
 import { MemberDetailsModalComponent } from './modules/components/member-details-modal';
 import { LottieIconComponent } from './shared/components/lottie-icon/lottie-icon.component';
+import { AuthService } from './services/auth.service';
+import { Permission } from './models/permissions.enum';
 
 type UserFilterSelect = 'status';
 
@@ -56,7 +58,7 @@ interface UserFilterOption {
             </span>
             {{ viewMode() === 'cards' ? 'Vista tabla' : 'Vista cards' }}
           </button>
-          <button type="button" class="btn-primary" (click)="openCreateMember()">
+          <button *ngIf="canCreateMembers()" type="button" class="btn-primary" (click)="openCreateMember()">
             <span class="btn-lottie">
               <app-lottie-icon src="/assets/crm/nuevomiembro.json" [size]="22" [loop]="true"></app-lottie-icon>
             </span>
@@ -84,7 +86,7 @@ interface UserFilterOption {
       <ng-container *ngIf="!loading() && !error()">
         <!-- Empty State -->
         <ng-container *ngIf="members().length === 0">
-          <app-members-empty (onCreate)="openCreateMember()"></app-members-empty>
+          <app-members-empty *ngIf="canCreateMembers()" (onCreate)="openCreateMember()"></app-members-empty>
         </ng-container>
 
         <!-- Members Table -->
@@ -179,13 +181,14 @@ interface UserFilterOption {
                   </div>
                   <p class="member-offer">{{ membershipHint(member) }}</p>
                   <div class="member-actions">
-                    <button type="button" class="book-btn" (click)="editMember(member)">
+                    <button *ngIf="canEditMembers()" type="button" class="book-btn" (click)="editMember(member)">
                       Editar
                       <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
                     </button>
                     <button
                       type="button"
                       class="round-btn"
+                      *ngIf="canEditMembers()"
                       [title]="member.status === 'active' ? 'Desactivar miembro' : 'Activar miembro'"
                       [disabled]="busyMemberId() === member.id"
                       (click)="toggleStatus(member)"
@@ -199,6 +202,7 @@ interface UserFilterOption {
                     <button
                       type="button"
                       class="round-btn danger"
+                      *ngIf="canDeleteMembers()"
                       title="Eliminar miembro"
                       [disabled]="busyMemberId() === member.id"
                       (click)="requestDelete(member)"
@@ -254,6 +258,7 @@ interface UserFilterOption {
                   <td class="col-actions">
                     <div class="row-actions">
                       <button
+                        *ngIf="canEditMembers()"
                         type="button"
                         class="row-btn"
                         title="Ver detalles"
@@ -262,6 +267,7 @@ interface UserFilterOption {
                         <span class="material-symbols-outlined">visibility</span>
                       </button>
                       <button
+                        *ngIf="canEditMembers()"
                         type="button"
                         class="row-btn"
                         title="Editar"
@@ -270,6 +276,7 @@ interface UserFilterOption {
                         <span class="material-symbols-outlined">edit</span>
                       </button>
                       <button
+                        *ngIf="canDeleteMembers()"
                         type="button"
                         class="row-btn"
                         [title]="member.status === 'active' ? 'Desactivar' : 'Activar'"
@@ -488,7 +495,8 @@ interface UserFilterOption {
       }
 
       .btn-lottie-light {
-        background: rgba(0, 0, 0, 0.05) !important;
+        background: #f5c518 !important;
+        box-shadow: 0 0 12px rgba(245, 197, 24, 0.16);
       }
 
       /* ── Vista tabla ── */
@@ -626,7 +634,7 @@ interface UserFilterOption {
         width: 28px;
         height: 28px;
         border-radius: 8px;
-        background: rgba(0, 0, 0, 0.08);
+        background: rgba(245, 197, 24, 0.18);
       }
 
       /* Loading State */
@@ -764,10 +772,10 @@ interface UserFilterOption {
         align-items: center;
         justify-content: space-between;
         gap: 0.75rem;
-        border: 1px solid #e5e5e5;
+        border: 1px solid #353534;
         border-radius: 10px;
-        background: rgba(255, 255, 255, 0.95);
-        color: #0a0a0a;
+        background: #1a1a1a;
+        color: #e5e2e1;
         padding: 0 0.9rem;
         font-weight: 850;
         text-align: left;
@@ -791,17 +799,17 @@ interface UserFilterOption {
 
       .pretty-trigger:hover,
       .pretty-select.open .pretty-trigger {
-        border-color: #facc15;
-        background: #fffdf4;
-        box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.12);
+        border-color: #f5c518;
+        background: #2a2a2a;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.14);
       }
 
       .select-chevron {
         position: static;
         width: 0.52rem;
         height: 0.52rem;
-        border-bottom: 2px solid #a16207;
-        border-right: 2px solid #a16207;
+        border-bottom: 2px solid #ffe08b;
+        border-right: 2px solid #ffe08b;
         transform: rotate(45deg) translateY(-1px);
         transition: transform 160ms ease;
         flex-shrink: 0;
@@ -824,10 +832,10 @@ interface UserFilterOption {
         max-height: 280px;
         overflow-y: auto;
         padding: 0.45rem;
-        border: 1px solid #e4e4e7;
+        border: 1px solid #4e4633;
         border-radius: 12px;
-        background: #ffffff;
-        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18);
+        background: #201f1f;
+        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.42);
         animation: selectIn 140ms ease;
       }
 
@@ -851,7 +859,7 @@ interface UserFilterOption {
         border: 0;
         border-radius: 9px;
         background: transparent;
-        color: #3f3f46;
+        color: #d1c5ac;
         text-align: left;
         padding: 0.62rem 0.7rem;
         cursor: pointer;
@@ -862,14 +870,14 @@ interface UserFilterOption {
       }
 
       .pretty-option:hover {
-        background: #fffbeb;
-        color: #18181b;
+        background: rgba(245, 197, 24, 0.1);
+        color: #ffe08b;
         transform: translateY(-1px);
       }
 
       .pretty-option.selected {
-        background: rgba(250, 204, 21, 0.18);
-        color: #111827;
+        background: rgba(245, 197, 24, 0.16);
+        color: #ffe08b;
       }
 
       .option-main {
@@ -886,8 +894,8 @@ interface UserFilterOption {
         display: grid;
         place-items: center;
         border-radius: 8px;
-        background: #f4f4f5;
-        color: #a16207;
+        background: #2a2a2a;
+        color: #f5c518;
         flex-shrink: 0;
         font-size: 1.12rem;
         transform: none;
@@ -895,8 +903,8 @@ interface UserFilterOption {
       }
 
       .pretty-option.selected .option-icon {
-        background: #facc15;
-        color: #111827;
+        background: #f5c518;
+        color: #241a00;
       }
 
       .option-copy {
@@ -915,7 +923,7 @@ interface UserFilterOption {
       }
 
       .option-copy small {
-        color: #71717a;
+        color: #b4afa6;
         font-weight: 650;
         font-size: 0.75rem;
         overflow: hidden;
@@ -936,8 +944,8 @@ interface UserFilterOption {
       }
 
       .pretty-option.selected .option-check {
-        border-color: #ca8a04;
-        background: #ca8a04;
+        border-color: #f5c518;
+        background: #f5c518;
       }
 
       .pretty-option.selected .option-check::after {
@@ -947,7 +955,7 @@ interface UserFilterOption {
         top: 0.16rem;
         width: 0.3rem;
         height: 0.58rem;
-        border: solid #ffffff;
+        border: solid #241a00;
         border-width: 0 2px 2px 0;
         transform: rotate(45deg);
       }
@@ -959,12 +967,12 @@ interface UserFilterOption {
 
       .member-flight-card {
         width: 100%;
-        border: 1px solid rgba(229, 229, 229, 0.6);
+        border: 1px solid rgba(245, 197, 24, 0.12);
         border-radius: 14px;
         background:
-          linear-gradient(rgba(255, 255, 255, 0.82), rgba(255, 252, 225, 0.76)),
+          linear-gradient(rgba(28, 27, 27, 0.92), rgba(32, 31, 31, 0.84)),
           url('/assets/crm/cardmiembro.png') center / cover no-repeat;
-        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.06);
+        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
         padding: 1.2rem;
         transition:
           transform 0.18s ease,
@@ -990,10 +998,12 @@ interface UserFilterOption {
       .member-document {
         padding: 0.35rem 0.65rem;
         border-radius: 999px;
-        background: rgba(245, 245, 245, 0.95);
-        color: #555;
+        background: rgba(245, 197, 24, 0.14);
+        border: 1px solid rgba(245, 197, 24, 0.28);
+        color: #ffe08b;
         font-size: 0.78rem;
         font-weight: 800;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
       }
 
       .member-card-grid {
@@ -1017,9 +1027,16 @@ interface UserFilterOption {
       .avatar.large {
         width: 48px;
         height: 48px;
+        display: grid;
+        place-items: center;
         border-radius: 12px;
         font-size: 0.95rem;
         font-weight: 900;
+        line-height: 1;
+        background: linear-gradient(135deg, #f5c518, #ffe08b);
+        color: #241a00;
+        box-shadow: 0 0 14px rgba(245, 197, 24, 0.18);
+        flex-shrink: 0;
       }
 
       .member-profile strong,
@@ -1474,6 +1491,7 @@ interface UserFilterOption {
 export class UsersList implements OnInit {
   private api = inject(ApiService);
   private elementRef = inject(ElementRef<HTMLElement>);
+  private auth = inject(AuthService);
 
   members = signal<UserSummary[]>([]);
   loading = signal(true);
@@ -1577,6 +1595,7 @@ export class UsersList implements OnInit {
   }
 
   openCreateMember(): void {
+    if (!this.requirePermission(Permission.MEMBERS_CREATE, 'No tienes permiso para crear miembros.')) return;
     this.isCreateMemberOpen.set(true);
   }
 
@@ -1670,6 +1689,7 @@ export class UsersList implements OnInit {
   }
 
   editMember(member: UserSummary): void {
+    if (!this.requirePermission(Permission.MEMBERS_EDIT, 'No tienes permiso para editar miembros.')) return;
     this.memberToEdit.set(member);
     this.isEditOpen.set(true);
   }
@@ -1685,6 +1705,7 @@ export class UsersList implements OnInit {
   }
 
   onMemberUpdated(updated: UserSummary): void {
+    if (!this.requirePermission(Permission.MEMBERS_EDIT, 'No tienes permiso para guardar cambios de miembros.')) return;
     this.members.update((list) =>
       list.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)),
     );
@@ -1693,6 +1714,7 @@ export class UsersList implements OnInit {
   }
 
   toggleStatus(member: UserSummary): void {
+    if (!this.requirePermission(Permission.MEMBERS_EDIT, 'No tienes permiso para cambiar el estado de miembros.')) return;
     const newStatus = member.status === 'active' ? 'inactive' : 'active';
     this.busyMemberId.set(member.id);
 
@@ -1715,6 +1737,7 @@ export class UsersList implements OnInit {
   }
 
   requestDelete(member: UserSummary): void {
+    if (!this.requirePermission(Permission.MEMBERS_DELETE, 'No tienes permiso para eliminar miembros.')) return;
     this.memberToDelete.set(member);
   }
 
@@ -1724,6 +1747,7 @@ export class UsersList implements OnInit {
   }
 
   confirmDelete(): void {
+    if (!this.requirePermission(Permission.MEMBERS_DELETE, 'No tienes permiso para eliminar miembros.')) return;
     const member = this.memberToDelete();
     if (!member) return;
 
@@ -1746,5 +1770,23 @@ export class UsersList implements OnInit {
     this.notification.set({ type, message });
     if (this.toastTimer) clearTimeout(this.toastTimer);
     this.toastTimer = setTimeout(() => this.notification.set(null), 4500);
+  }
+
+  canCreateMembers(): boolean {
+    return this.auth.hasPermission(Permission.MEMBERS_CREATE);
+  }
+
+  canEditMembers(): boolean {
+    return this.auth.hasPermission(Permission.MEMBERS_EDIT);
+  }
+
+  canDeleteMembers(): boolean {
+    return this.auth.hasPermission(Permission.MEMBERS_DELETE);
+  }
+
+  private requirePermission(permission: Permission, message: string): boolean {
+    if (this.auth.hasPermission(permission)) return true;
+    this.showToast('error', message);
+    return false;
   }
 }

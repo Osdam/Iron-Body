@@ -37,6 +37,12 @@ export enum Permission {
   TRAINERS_EDIT = 'trainers.edit',
   TRAINERS_DELETE = 'trainers.delete',
 
+  // Inventario
+  INVENTORY_VIEW = 'inventory.view',
+  INVENTORY_CREATE = 'inventory.create',
+  INVENTORY_EDIT = 'inventory.edit',
+  INVENTORY_DELETE = 'inventory.delete',
+
   // Mercadeo
   MARKETING_VIEW = 'marketing.view',
   MARKETING_CREATE = 'marketing.create',
@@ -55,4 +61,7 @@ export enum Permission {
   SETTINGS_INTEGRATIONS = 'settings.integrations',
   SETTINGS_SECURITY = 'settings.security',
   SETTINGS_BACKUPS = 'settings.backups',
+
+  // Auditoría
+  AUDIT_LOGS_VIEW = 'audit.logs.view',
 }

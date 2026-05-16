@@ -553,6 +553,90 @@ interface CalendarDay {
         text-align: center;
       }
 
+      .calendar-container {
+        background:
+          linear-gradient(rgba(20, 20, 20, 0.91), rgba(14, 14, 14, 0.93)),
+          url('/assets/crm/fondocalendarioclases.png') center / cover no-repeat;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .calendar-header,
+      .selected-day-header {
+        border-color: #353534;
+      }
+
+      .month-year h3,
+      .selected-day-title,
+      .class-time,
+      .class-name {
+        color: #e5e2e1;
+      }
+
+      .weekday,
+      .class-meta,
+      .capacity-text,
+      .empty-day {
+        color: #b4afa6;
+      }
+
+      .nav-btn,
+      .today-btn,
+      .calendar-day,
+      .day-details,
+      .class-item {
+        background: #151515;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .nav-btn:hover,
+      .calendar-day:hover,
+      .class-item:hover {
+        background: #201f1f;
+        border-color: #f5c518;
+      }
+
+      .today-btn {
+        background: rgba(245, 197, 24, 0.13);
+        color: #ffe08b;
+      }
+
+      .calendar-day.other-month {
+        background: #111;
+        color: #5d5952;
+      }
+
+      .calendar-day.today {
+        border-color: #f5c518;
+        background: rgba(245, 197, 24, 0.10);
+      }
+
+      .calendar-day.has-classes {
+        border-color: #f5c518;
+      }
+
+      .calendar-day.selected {
+        background: #f5c518;
+        border-color: #f5c518;
+        color: #241a00;
+      }
+
+      .dot-indicator,
+      .class-count-badge,
+      .capacity-fill {
+        background: #f5c518;
+      }
+
+      .class-count,
+      .class-type-badge {
+        color: #ffe08b;
+      }
+
+      .capacity-bar {
+        background: #353534;
+      }
+
       @media (max-width: 640px) {
         .calendar-container {
           padding: 1rem;

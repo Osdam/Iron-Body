@@ -18,6 +18,8 @@ import { PlansEmptyComponent } from './components/plans-empty';
 import { CreatePlanModalComponent } from './components/create-plan-modal';
 import { EditPlanModalComponent } from './components/edit-plan-modal';
 import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-icon.component';
+import { AuthService } from '../services/auth.service';
+import { Permission } from '../models/permissions.enum';
 
 type PlanFilterSelect = 'status' | 'duration';
 
@@ -78,7 +80,7 @@ interface PlanFilterOption {
             </span>
             {{ isCardView() ? 'Vista de tabla' : 'Vista de cards' }}
           </button>
-          <button type="button" class="btn-primary" (click)="openCreatePlan()">
+          <button *ngIf="canCreatePlans()" type="button" class="btn-primary" (click)="openCreatePlan()">
             <span class="btn-lottie">
               <app-lottie-icon src="/assets/crm/mas.json" [size]="22" [loop]="true"></app-lottie-icon>
             </span>
@@ -201,7 +203,7 @@ interface PlanFilterOption {
 
         <!-- Estado vacío -->
         <ng-container *ngIf="filteredPlans().length === 0">
-          <app-plans-empty (onCreate)="openCreatePlan()"></app-plans-empty>
+          <app-plans-empty *ngIf="canCreatePlans()" (onCreate)="openCreatePlan()"></app-plans-empty>
         </ng-container>
 
         <!-- Vista de Cards -->
@@ -853,6 +855,143 @@ interface PlanFilterOption {
 
       .btn-danger:disabled { opacity: 0.6; cursor: not-allowed; }
 
+      /* Dark CRM skin */
+      .plans-page {
+        color: #e5e2e1;
+        background:
+          linear-gradient(rgba(19, 19, 19, 0.9), rgba(19, 19, 19, 0.88)),
+          url('/assets/crm/cardpalnesmembresia.png') center / cover no-repeat;
+        border: 1px solid rgba(245, 197, 24, 0.08);
+      }
+
+      .plans-header {
+        border-bottom-color: #353534;
+      }
+
+      .header-content h1,
+      .confirm-card h3 {
+        color: #e5e2e1;
+      }
+
+      .header-content p,
+      .loading-state,
+      .filter-results,
+      .confirm-card p {
+        color: #b4afa6;
+      }
+
+      .btn-lottie {
+        background: rgba(245, 197, 24, 0.16);
+      }
+
+      .btn-primary .btn-lottie {
+        background: rgba(36, 26, 0, 0.14);
+      }
+
+      .btn-secondary,
+      .btn-retry {
+        background: #1a1a1a;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .btn-secondary:hover,
+      .btn-retry:hover {
+        border-color: #f5c518;
+        background: #2a2a2a;
+        color: #ffe08b;
+      }
+
+      .search-input,
+      .pretty-trigger {
+        background: #1a1a1a;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .search-input::placeholder {
+        color: #8f8a82;
+      }
+
+      .filter-icon {
+        color: #ffe08b;
+      }
+
+      .search-input:focus,
+      .pretty-trigger:hover,
+      .pretty-select.open .pretty-trigger {
+        border-color: #f5c518;
+        background: #2a2a2a;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.14);
+      }
+
+      .select-chevron {
+        border-bottom-color: #ffe08b;
+        border-right-color: #ffe08b;
+      }
+
+      .pretty-menu {
+        background: #201f1f;
+        border-color: #4e4633;
+        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.44);
+      }
+
+      .pretty-option {
+        color: #d1c5ac;
+      }
+
+      .pretty-option:hover {
+        background: rgba(245, 197, 24, 0.1);
+        color: #ffe08b;
+      }
+
+      .pretty-option.selected {
+        background: rgba(245, 197, 24, 0.16);
+        color: #ffe08b;
+      }
+
+      .option-icon {
+        background: #2a2a2a;
+        color: #f5c518;
+      }
+
+      .pretty-option.selected .option-icon {
+        background: #f5c518;
+        color: #241a00;
+      }
+
+      .option-copy small {
+        color: #b4afa6;
+      }
+
+      .pretty-option.selected .option-check {
+        border-color: #f5c518;
+        background: #f5c518;
+      }
+
+      .pretty-option.selected .option-check::after {
+        border-color: #241a00;
+      }
+
+      .confirm-card {
+        background: #1c1b1b;
+        border-color: #353534;
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
+      }
+
+      .error-alert,
+      .toast-error {
+        background: rgba(255, 180, 171, 0.12);
+        border-color: rgba(255, 180, 171, 0.28);
+        color: #ffdad6;
+      }
+
+      .toast-success {
+        background: rgba(139, 220, 159, 0.12);
+        border-color: rgba(139, 220, 159, 0.28);
+        color: #8bdc9f;
+      }
+
       /* Responsive */
       @media (max-width: 1024px) {
         .plans-header { flex-direction: column; align-items: flex-start; gap: 1.5rem; }
@@ -883,6 +1022,7 @@ export default class PlansModule implements OnInit {
   private api = inject(ApiService);
   private router = inject(Router);
   private elementRef = inject(ElementRef<HTMLElement>);
+  private auth = inject(AuthService);
 
   // Estado
   plans = signal<PlanSummary[]>([]);
@@ -987,11 +1127,15 @@ export default class PlansModule implements OnInit {
 
   toggleView(): void { this.isCardView.update((v) => !v); }
 
-  openCreatePlan(): void { this.isCreatePlanOpen.set(true); }
+  openCreatePlan(): void {
+    if (!this.requirePermission(Permission.PLANS_CREATE, 'No tienes permiso para crear planes.')) return;
+    this.isCreatePlanOpen.set(true);
+  }
 
   onCreatePlanModalClose(): void { this.isCreatePlanOpen.set(false); }
 
   onPlanCreated(newPlan: PlanSummary): void {
+    if (!this.requirePermission(Permission.PLANS_CREATE, 'No tienes permiso para crear planes.')) return;
         this.plans.update((plans) => [newPlan, ...plans]);
         this.updateMetrics();
     this.applyFilters();
@@ -1000,6 +1144,7 @@ export default class PlansModule implements OnInit {
   }
 
   editPlan(plan: PlanCardData): void {
+    if (!this.requirePermission(Permission.PLANS_EDIT, 'No tienes permiso para editar planes.')) return;
     this.planToEdit.set(plan);
     this.isEditPlanOpen.set(true);
   }
@@ -1010,6 +1155,7 @@ export default class PlansModule implements OnInit {
   }
 
   onPlanUpdated(updated: PlanSummary): void {
+    if (!this.requirePermission(Permission.PLANS_EDIT, 'No tienes permiso para guardar cambios de planes.')) return;
     this.plans.update((list) => list.map((p) => (p.id === updated.id ? updated : p)));
     this.updateMetrics();
     this.applyFilters();
@@ -1023,6 +1169,7 @@ export default class PlansModule implements OnInit {
   }
 
   duplicatePlan(plan: PlanCardData): void {
+    if (!this.requirePermission(Permission.PLANS_CREATE, 'No tienes permiso para duplicar planes.')) return;
     const duplicateData = {
       name: `${plan.name} (copia)`,
       price: plan.price,
@@ -1045,6 +1192,7 @@ export default class PlansModule implements OnInit {
   }
 
   toggleStatus(plan: PlanCardData): void {
+    if (!this.requirePermission(Permission.PLANS_EDIT, 'No tienes permiso para cambiar el estado de planes.')) return;
     const newActive = !plan.active;
     this.api.updatePlan(plan.id, { active: newActive }).subscribe({
       next: (updated) => {
@@ -1059,6 +1207,7 @@ export default class PlansModule implements OnInit {
   }
 
   requestDelete(plan: PlanCardData): void {
+    if (!this.requirePermission(Permission.PLANS_DELETE, 'No tienes permiso para eliminar planes.')) return;
     this.planToDelete.set(plan);
   }
 
@@ -1067,6 +1216,7 @@ export default class PlansModule implements OnInit {
   }
 
   confirmDelete(): void {
+    if (!this.requirePermission(Permission.PLANS_DELETE, 'No tienes permiso para eliminar planes.')) return;
     const plan = this.planToDelete();
     if (!plan) return;
     this.isDeleting.set(true);
@@ -1250,5 +1400,15 @@ export default class PlansModule implements OnInit {
   clearNotification(): void {
     clearTimeout(this.notifTimer);
     this.notification.set(null);
+  }
+
+  canCreatePlans(): boolean {
+    return this.auth.hasPermission(Permission.PLANS_CREATE);
+  }
+
+  private requirePermission(permission: Permission, message: string): boolean {
+    if (this.auth.hasPermission(permission)) return true;
+    this.showNotification('error', message);
+    return false;
   }
 }

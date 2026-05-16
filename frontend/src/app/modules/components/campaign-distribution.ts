@@ -230,6 +230,47 @@ export interface CampaignSegment {
       .alert-action:hover {
         background: #f9a825;
       }
+
+      .distribution-card {
+        background:
+          linear-gradient(rgba(28, 27, 27, 0.92), rgba(17, 17, 17, 0.9)),
+          url('/assets/crm/clases2.png') center / cover no-repeat;
+        border-color: #353534;
+        color: #e5e2e1;
+        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24);
+      }
+
+      .distribution-title,
+      .stat-label,
+      .stat-value,
+      .alert-message {
+        color: #e5e2e1;
+      }
+
+      .progress-text {
+        color: #b4afa6;
+      }
+
+      .distribution-action {
+        background: #1c1b1b;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .distribution-action:hover {
+        background: #201f1f;
+        border-color: #f5c518;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.12);
+      }
+
+      .progress-bar {
+        background: #151515;
+      }
+
+      .alert {
+        background: rgba(245, 197, 24, 0.1);
+        border-color: rgba(245, 197, 24, 0.26);
+      }
     `,
   ],
 })

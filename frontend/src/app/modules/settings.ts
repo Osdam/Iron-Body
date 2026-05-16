@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import SettingsHeaderComponent from './components/settings-header';
 import SettingsGeneralComponent from './components/settings-general';
@@ -8,6 +8,7 @@ import SettingsPaymentsComponent from './components/settings-payments';
 import SettingsNotificationsComponent from './components/settings-notifications';
 import SettingsSecurityComponent from './components/settings-security';
 import SettingsSystemComponent from './components/settings-system';
+import { AuditLogService } from '../services/audit-log.service';
 
 interface SettingsTab {
   id: string;
@@ -191,6 +192,38 @@ interface SettingsTab {
         }
       }
 
+      .settings-page {
+        background:
+          linear-gradient(rgba(12, 12, 12, 0.9), rgba(12, 12, 12, 0.92)),
+          url('/assets/crm/clases2.png') center / cover fixed no-repeat;
+        color: #e5e2e1;
+      }
+
+      .settings-tabs {
+        padding: 0.75rem;
+        border: 1px solid #353534;
+        border-radius: 0.75rem;
+        background: rgba(28, 27, 27, 0.88);
+      }
+
+      .tab-button {
+        background: #1c1b1b;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .tab-button:hover {
+        background: #201f1f;
+        border-color: #f5c518;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.12);
+      }
+
+      .tab-button.active {
+        background: #f5c518;
+        border-color: #f5c518;
+        color: #241a00;
+      }
+
       @media (max-width: 1024px) {
         .settings-container {
           flex-direction: column;
@@ -226,8 +259,9 @@ interface SettingsTab {
 
         .settings-tabs {
           gap: 0;
-          border-bottom: 1px solid #e5e7eb;
-          background: #ffffff;
+          border-color: #353534;
+          border-bottom: 1px solid #353534;
+          background: rgba(28, 27, 27, 0.94);
           padding: 0 1rem;
           margin: 0 -1rem;
         }
@@ -236,13 +270,17 @@ interface SettingsTab {
           border: none;
           border-bottom: 2px solid transparent;
           border-radius: 0;
+          background: transparent;
+          color: #b8b3b1;
           padding: 1rem 0.75rem;
           flex: 1;
         }
 
         .tab-button.active {
           background: transparent;
-          border-bottom-color: #fbbf24;
+          border-bottom-color: #f5c518;
+          color: #f5c518;
+          box-shadow: none;
         }
 
         .settings-content {
@@ -253,6 +291,8 @@ interface SettingsTab {
   ],
 })
 export default class SettingsModule implements OnInit {
+  private readonly auditLog = inject(AuditLogService);
+
   selectedTab = signal('general');
   isSaving = signal(false);
   currentSettings = signal<any>({});
@@ -367,8 +407,18 @@ export default class SettingsModule implements OnInit {
 
       // TODO: Guardar en API /api/settings si existe backend
       // Por ahora guardar en localStorage
+      const before = JSON.parse(JSON.stringify(this.originalSettings()));
+      const after = JSON.parse(JSON.stringify(this.currentSettings()));
       localStorage.setItem('crmSettings', JSON.stringify(this.currentSettings()));
       this.originalSettings.set(JSON.parse(JSON.stringify(this.currentSettings())));
+      this.auditLog.record({
+        action: 'settings',
+        module: 'Configuración',
+        entity: 'ajustes generales',
+        targetName: this.selectedTab(),
+        before,
+        after,
+      });
 
       alert('Configuración guardada exitosamente ✓');
     } catch (error) {

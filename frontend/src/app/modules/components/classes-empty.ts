@@ -108,6 +108,31 @@ import { Component, Output, EventEmitter } from '@angular/core';
         font-size: 1.25rem;
       }
 
+      .empty-state {
+        background: linear-gradient(135deg, #1c1b1b 0%, #111 100%);
+        border-color: #353534;
+        color: #e5e2e1;
+        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.22);
+      }
+
+      .empty-icon {
+        background: rgba(245, 197, 24, 0.13);
+        color: #ffe08b;
+      }
+
+      .empty-title {
+        color: #e5e2e1;
+      }
+
+      .empty-description {
+        color: #b4afa6;
+      }
+
+      .btn-create-first {
+        background: #f5c518;
+        color: #241a00;
+      }
+
       @media (max-width: 640px) {
         .empty-state {
           min-height: 400px;

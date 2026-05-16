@@ -250,6 +250,63 @@ import { CommonModule } from '@angular/common';
         color: #78350f;
       }
 
+      .settings-section {
+        background:
+          linear-gradient(rgba(28, 27, 27, 0.92), rgba(17, 17, 17, 0.9)),
+          url('/assets/crm/clases2.png') center / cover no-repeat;
+        border-color: #353534;
+        color: #e5e2e1;
+        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24);
+      }
+
+      .section-header,
+      .actions-section {
+        border-color: #353534;
+      }
+
+      .section-title h2,
+      .actions-section h3,
+      .info-card .value {
+        color: #e5e2e1;
+      }
+
+      .section-title p,
+      .info-card .label {
+        color: #b4afa6;
+      }
+
+      .info-card,
+      .action-btn {
+        background: #1c1b1b;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .action-btn:hover {
+        background: #201f1f;
+        border-color: #f5c518;
+      }
+
+      .action-btn.active {
+        background: rgba(245, 197, 24, 0.14);
+        color: #ffe08b;
+      }
+
+      .action-btn.danger:hover {
+        background: rgba(255, 180, 171, 0.14);
+        border-color: rgba(255, 180, 171, 0.38);
+        color: #ffb4ab;
+      }
+
+      .info-box.warning {
+        background: rgba(245, 197, 24, 0.1);
+        border-color: rgba(245, 197, 24, 0.28);
+      }
+
+      .info-box p {
+        color: #e5e2e1;
+      }
+
       @media (max-width: 768px) {
         .system-info-grid {
           grid-template-columns: repeat(2, 1fr);

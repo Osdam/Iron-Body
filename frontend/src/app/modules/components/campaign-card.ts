@@ -421,6 +421,112 @@ export interface Campaign {
         box-shadow: 0 8px 16px rgba(251, 191, 36, 0.2);
       }
 
+      .campaign-card {
+        position: relative;
+        background:
+          linear-gradient(rgba(28, 27, 27, 0.92), rgba(17, 17, 17, 0.9)),
+          url('/assets/crm/clases2.png') center / cover no-repeat;
+        border-color: #353534;
+        color: #e5e2e1;
+        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24);
+      }
+
+      .campaign-card:hover {
+        border-color: rgba(245, 197, 24, 0.42);
+        box-shadow:
+          0 18px 42px rgba(0, 0, 0, 0.3),
+          0 0 0 3px rgba(245, 197, 24, 0.08);
+      }
+
+      .campaign-title,
+      .meta-value,
+      .stat-value {
+        color: #e5e2e1;
+      }
+
+      .meta-label,
+      .campaign-dates,
+      .campaign-message,
+      .stat-label {
+        color: #b4afa6;
+      }
+
+      .campaign-meta {
+        border-color: #353534;
+      }
+
+      .campaign-message,
+      .campaign-stats,
+      .action-btn,
+      .btn-secondary {
+        background: #1c1b1b;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .action-btn:hover,
+      .btn-secondary:hover {
+        background: #201f1f;
+        border-color: #f5c518;
+        color: #ffe08b;
+      }
+
+      .action-menu {
+        background: #151515;
+        border-color: #3f3d39;
+        box-shadow: 0 22px 54px rgba(0, 0, 0, 0.48);
+      }
+
+      .menu-item {
+        color: #e5e2e1;
+      }
+
+      .menu-item:hover {
+        background: rgba(245, 197, 24, 0.12);
+        color: #ffe08b;
+      }
+
+      .menu-item.danger,
+      .menu-item.danger:hover {
+        color: #ffb4ab;
+      }
+
+      .menu-item.danger:hover {
+        background: rgba(255, 180, 171, 0.14);
+      }
+
+      .campaign-type,
+      .meta-status {
+        background: rgba(245, 197, 24, 0.14);
+        color: #ffe08b;
+        border: 1px solid rgba(245, 197, 24, 0.28);
+      }
+
+      .status-Activa {
+        background: rgba(34, 197, 94, 0.14);
+        color: #86efac;
+        border-color: rgba(34, 197, 94, 0.28);
+      }
+
+      .status-Programada {
+        background: rgba(59, 130, 246, 0.15);
+        color: #93c5fd;
+        border-color: rgba(59, 130, 246, 0.28);
+      }
+
+      .status-Borrador,
+      .status-Finalizada {
+        background: rgba(156, 163, 175, 0.15);
+        color: #d4d4d8;
+        border-color: rgba(156, 163, 175, 0.25);
+      }
+
+      .status-Pausada {
+        background: rgba(245, 158, 11, 0.15);
+        color: #fcd34d;
+        border-color: rgba(245, 158, 11, 0.28);
+      }
+
       @media (max-width: 768px) {
         .campaign-meta {
           grid-template-columns: 1fr;

@@ -6,6 +6,7 @@ import { tap, catchError } from 'rxjs/operators';
 import { User, LoginCredentials, AuthResponse } from '../models/user.model';
 import { UserRole } from '../models/user-role.enum';
 import { Permission } from '../models/permissions.enum';
+import { AccessControlService } from './access-control.service';
 
 /**
  * AuthService maneja autenticación v, gestión de sesión y permisos
@@ -18,6 +19,7 @@ import { Permission } from '../models/permissions.enum';
 export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
+  private readonly accessControl = inject(AccessControlService);
 
   // Signals
   private currentUserSubject = new BehaviorSubject<User | null>(null);
@@ -191,7 +193,12 @@ export class AuthService {
    */
   hasPermission(permission: Permission): boolean {
     const user = this.getCurrentUser();
-    return user?.permissions?.includes(permission) ?? false;
+    if (!user) return false;
+
+    const configuredPermissions = this.accessControl.permissionsForRole(user.role);
+    if (configuredPermissions.length > 0) return configuredPermissions.includes(permission);
+
+    return user.permissions?.includes(permission) ?? false;
   }
 
   /**

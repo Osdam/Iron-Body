@@ -212,3 +212,54 @@
     font-size: 14px;
   }
 }
+
+/* Dark CRM skin */
+.quick-overlay {
+  background: rgba(0, 0, 0, 0.46);
+}
+
+.quick-menu-popover {
+  background: #1c1b1b;
+  border-color: #353534;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.46);
+}
+
+.quick-header {
+  border-color: #353534;
+}
+
+.quick-title,
+.quick-label {
+  color: #e5e2e1;
+}
+
+.quick-description,
+.empty-quick-state {
+  color: #b4afa6;
+}
+
+.quick-close-btn {
+  color: #d1c5ac;
+}
+
+.quick-close-btn:hover {
+  background: #2a2a2a;
+  color: #ffe08b;
+}
+
+.quick-action-item {
+  background: #201f1f;
+  border-color: #353534;
+  color: #e5e2e1;
+}
+
+.quick-action-item:hover {
+  background: rgba(245, 197, 24, 0.08);
+  border-color: #f5c518;
+  box-shadow: 0 0 16px rgba(245, 197, 24, 0.14);
+}
+
+.quick-icon {
+  background: rgba(245, 197, 24, 0.14);
+  color: #ffe08b;
+}

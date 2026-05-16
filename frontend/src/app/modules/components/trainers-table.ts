@@ -299,6 +299,100 @@ import type { Trainer } from './trainer-card';
         color: #999;
         font-size: 0.95rem;
       }
+
+      .table-wrap {
+        background:
+          linear-gradient(rgba(28, 27, 27, 0.92), rgba(17, 17, 17, 0.9)),
+          url('/assets/crm/clases2.png') center / cover no-repeat;
+        border-color: #353534;
+        color: #e5e2e1;
+        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24);
+      }
+
+      .admin-table thead {
+        background: rgba(21, 21, 21, 0.92);
+        border-color: #353534;
+      }
+
+      .admin-table th,
+      .trainer-doc,
+      .cell-specialty,
+      .cell-availability,
+      .table-empty {
+        color: #b4afa6;
+      }
+
+      .admin-table td {
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .admin-table tbody tr:hover {
+        background: rgba(245, 197, 24, 0.08);
+      }
+
+      .cell-name,
+      .cell-centered,
+      .trainer-name {
+        color: #e5e2e1;
+      }
+
+      .cell-phone a,
+      .cell-email a {
+        color: #ffe08b;
+      }
+
+      .cell-phone a:hover,
+      .cell-email a:hover {
+        color: #f5c518;
+      }
+
+      .specialty-badge,
+      .avail-text {
+        background: rgba(245, 197, 24, 0.14);
+        color: #ffe08b;
+        border: 1px solid rgba(245, 197, 24, 0.28);
+      }
+
+      .status-badge.status-activo {
+        background: rgba(34, 197, 94, 0.14);
+        color: #86efac;
+        border-color: rgba(34, 197, 94, 0.28);
+      }
+
+      .status-badge.status-inactivo {
+        background: rgba(156, 163, 175, 0.15);
+        color: #d4d4d8;
+        border-color: rgba(156, 163, 175, 0.25);
+      }
+
+      .status-badge.status-pendiente {
+        background: rgba(245, 158, 11, 0.15);
+        color: #fcd34d;
+        border-color: rgba(245, 158, 11, 0.28);
+      }
+
+      .action-cell-btn {
+        background: #1c1b1b;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .action-cell-btn:hover,
+      .action-cell-btn.view:hover,
+      .action-cell-btn.edit:hover,
+      .action-cell-btn.toggle:hover {
+        background: #201f1f;
+        border-color: #f5c518;
+        color: #ffe08b;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.12);
+      }
+
+      .action-cell-btn.delete:hover {
+        background: rgba(255, 180, 171, 0.16);
+        border-color: rgba(255, 180, 171, 0.38);
+        color: #ffb4ab;
+      }
     `,
   ],
 })

@@ -8,6 +8,8 @@ import { ClassesEmptyComponent } from './components/classes-empty';
 import { CreateClassModalComponent } from './components/create-class-modal';
 import { ClassCalendarComponent } from './components/class-calendar';
 import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-icon.component';
+import { AuthService } from '../services/auth.service';
+import { Permission } from '../models/permissions.enum';
 
 interface ClassExtended extends ClassSummary {
   trainerName?: string;
@@ -47,7 +49,7 @@ interface ClassFilterOption {
             <p>Programa, organiza e inscribe miembros en las clases de tu gimnasio</p>
           </div>
         </div>
-        <button class="btn-create" (click)="openCreateModal()">
+        <button *ngIf="canCreateClasses()" class="btn-create" (click)="openCreateModal()">
           <span class="material-symbols-outlined" aria-hidden="true">add</span>
           Crear clase
         </button>
@@ -227,7 +229,7 @@ interface ClassFilterOption {
       <div class="content-area">
         <!-- Empty State -->
         <app-classes-empty
-          *ngIf="!isLoading() && filteredClasses().length === 0"
+          *ngIf="!isLoading() && filteredClasses().length === 0 && canCreateClasses()"
           (onCreate)="openCreateModal()"
         ></app-classes-empty>
 
@@ -900,6 +902,142 @@ interface ClassFilterOption {
         font-size: 0.95rem;
       }
 
+      .classes-container {
+        background:
+          linear-gradient(rgba(12, 12, 12, 0.90), rgba(12, 12, 12, 0.92)),
+          url('/assets/crm/fondoclases.png') center / cover no-repeat;
+        color: #e5e2e1;
+        border: 1px solid rgba(245, 197, 24, 0.08);
+      }
+
+      .header-title h1,
+      .loading-state p {
+        color: #e5e2e1;
+      }
+
+      .header-title p {
+        color: #b4afa6;
+      }
+
+      .filters-section,
+      .loading-state {
+        background: rgba(28, 27, 27, 0.94);
+        border-color: #353534;
+        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.22);
+      }
+
+      .search-box,
+      .pretty-trigger,
+      .btn-reset-filters,
+      .toggle-btn {
+        background: #151515;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .search-box:focus-within,
+      .pretty-trigger:hover,
+      .pretty-select.open .pretty-trigger {
+        background: #1f1f1f;
+        border-color: #f5c518;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.13);
+      }
+
+      .search-box span,
+      .search-input::placeholder {
+        color: #8e8675;
+      }
+
+      .search-input {
+        color: #e5e2e1;
+      }
+
+      .select-chevron {
+        border-color: #f5c518;
+      }
+
+      .pretty-menu {
+        background: #151515;
+        border-color: #353534;
+        box-shadow: 0 22px 54px rgba(0, 0, 0, 0.44);
+      }
+
+      .pretty-option {
+        color: #e5e2e1;
+      }
+
+      .pretty-option:hover,
+      .pretty-option.selected {
+        background: rgba(245, 197, 24, 0.13);
+        color: #ffe08b;
+      }
+
+      .option-icon {
+        background: #252423;
+        color: #ffe08b;
+      }
+
+      .option-copy small {
+        color: #a9a197;
+      }
+
+      .btn-reset-filters:hover:not(:disabled),
+      .toggle-btn:hover {
+        border-color: #f5c518;
+        color: #ffe08b;
+        background: #201f1f;
+      }
+
+      .toggle-lottie {
+        background: rgba(245, 197, 24, 0.12);
+      }
+
+      .toggle-btn.active {
+        border-color: #f5c518;
+        background: rgba(245, 197, 24, 0.15);
+        color: #ffe08b;
+      }
+
+      .enrollment-backdrop {
+        background: rgba(0, 0, 0, 0.62);
+        backdrop-filter: none;
+      }
+
+      .enrollment-modal {
+        background: #1c1b1b;
+        border-color: #353534;
+        color: #e5e2e1;
+        box-shadow: 0 26px 80px rgba(0, 0, 0, 0.58);
+      }
+
+      .enrollment-header {
+        background: linear-gradient(135deg, rgba(245, 197, 24, 0.14), #151515);
+        border-color: #353534;
+      }
+
+      .enrollment-header h2,
+      .enrollment-stat strong {
+        color: #e5e2e1;
+      }
+
+      .enrollment-header p,
+      .enrollment-stat span {
+        color: #b4afa6;
+      }
+
+      .enrollment-close,
+      .enrollment-stat,
+      .enrollment-actions .btn-secondary {
+        background: #151515;
+        border-color: #353534;
+        color: #d1c5ac;
+      }
+
+      .enrollment-actions .btn-primary {
+        background: #f5c518;
+        color: #241a00;
+      }
+
       @media (max-width: 640px) {
         .classes-container {
           padding: 1rem;
@@ -935,6 +1073,7 @@ export default class ClassesModule implements OnInit {
   private api = inject(ApiService);
   private fb = inject(FormBuilder);
   private elementRef = inject(ElementRef<HTMLElement>);
+  private auth = inject(AuthService);
 
   // Signals
   isLoading = signal(false);
@@ -1296,6 +1435,7 @@ export default class ClassesModule implements OnInit {
   }
 
   openCreateModal(): void {
+    if (!this.requirePermission(Permission.CLASSES_CREATE, 'No tienes permiso para crear clases.')) return;
     this.classBeingEdited.set(null);
     this.isModalOpen.set(true);
   }
@@ -1306,6 +1446,8 @@ export default class ClassesModule implements OnInit {
   }
 
   handleClassCreated(_newClass: any): void {
+    const permission = this.classBeingEdited() ? Permission.CLASSES_EDIT : Permission.CLASSES_CREATE;
+    if (!this.requirePermission(permission, 'No tienes permiso para guardar clases.')) return;
     // Cerrar modal y recargar desde backend para mantener una sola fuente de verdad.
     // Esto refresca la lista, el calendario y las métricas (computed signals) automáticamente.
     this.closeModal();
@@ -1313,6 +1455,7 @@ export default class ClassesModule implements OnInit {
   }
 
   editClass(cls: ClassExtended): void {
+    if (!this.requirePermission(Permission.CLASSES_EDIT, 'No tienes permiso para editar clases.')) return;
     this.classBeingEdited.set(cls);
     this.isModalOpen.set(true);
   }
@@ -1330,6 +1473,7 @@ export default class ClassesModule implements OnInit {
   }
 
   adjustEnrollment(cls: ClassExtended, delta: number): void {
+    if (!this.requirePermission(Permission.CLASSES_ENROLLMENTS, 'No tienes permiso para modificar inscripciones.')) return;
     const nextCount = Math.max(0, Math.min(cls.max_capacity || 0, (cls.enrolled_count || 0) + delta));
     this.api.updateClass(cls.id, { enrolled_count: nextCount }).subscribe({
       next: (updated: any) => {
@@ -1347,6 +1491,7 @@ export default class ClassesModule implements OnInit {
   }
 
   duplicateClass(cls: ClassExtended): void {
+    if (!this.requirePermission(Permission.CLASSES_CREATE, 'No tienes permiso para duplicar clases.')) return;
     const payload: any = {
       name: `Copia de ${cls.name}`,
       type: cls.type,
@@ -1375,6 +1520,7 @@ export default class ClassesModule implements OnInit {
   }
 
   toggleClassStatus(cls: ClassExtended): void {
+    if (!this.requirePermission(Permission.CLASSES_EDIT, 'No tienes permiso para cambiar el estado de clases.')) return;
     const next = cls.status === 'active' ? 'inactive' : 'active';
     this.api.updateClass(cls.id, { status: next }).subscribe({
       next: (updated: any) => {
@@ -1387,6 +1533,7 @@ export default class ClassesModule implements OnInit {
   }
 
   deleteClass(cls: ClassExtended): void {
+    if (!this.requirePermission(Permission.CLASSES_DELETE, 'No tienes permiso para eliminar clases.')) return;
     if (!confirm(`¿Deseas eliminar la clase "${cls.name}"?`)) return;
     this.api.deleteClass(cls.id).subscribe({
       next: () => {
@@ -1394,5 +1541,15 @@ export default class ClassesModule implements OnInit {
       },
       error: () => alert('No se pudo eliminar la clase.'),
     });
+  }
+
+  canCreateClasses(): boolean {
+    return this.auth.hasPermission(Permission.CLASSES_CREATE);
+  }
+
+  private requirePermission(permission: Permission, message: string): boolean {
+    if (this.auth.hasPermission(permission)) return true;
+    alert(message);
+    return false;
   }
 }

@@ -71,14 +71,23 @@ import { PlanCardData } from './plan-card';
             </div>
 
             <div class="form-group full-width">
-              <label for="edit-benefits" class="form-label">Descripción / Beneficios</label>
+              <label for="edit-benefits" class="form-label">Descripción / Beneficios *</label>
               <textarea
                 id="edit-benefits"
                 formControlName="benefits"
                 class="form-input textarea"
-                placeholder="Describe los beneficios separados por coma"
+                placeholder="Ej: Reserva de clases, acceso a rutinas asignadas..."
                 rows="3"
               ></textarea>
+              <span
+                *ngIf="
+                  planForm.get('benefits')?.hasError('required') &&
+                  planForm.get('benefits')?.touched
+                "
+                class="error-text"
+              >
+                Los beneficios son obligatorios
+              </span>
             </div>
 
             <div class="form-group">
@@ -430,6 +439,129 @@ import { PlanCardData } from './plan-card';
         cursor: not-allowed;
       }
 
+      /* Dark CRM skin */
+      .modal-backdrop {
+        background: rgba(0, 0, 0, 0.72);
+        backdrop-filter: blur(6px);
+        z-index: 10000;
+      }
+
+      .modal-container {
+        z-index: 10001;
+      }
+
+      .modal-card {
+        background:
+          radial-gradient(circle at 82% 0%, rgba(245, 197, 24, 0.1), transparent 34%),
+          linear-gradient(145deg, #1c1b1b 0%, #111111 100%);
+        border: 1px solid rgba(245, 197, 24, 0.16);
+        box-shadow:
+          inset 0 -18px 24px rgba(255, 255, 255, 0.04),
+          0 28px 70px rgba(0, 0, 0, 0.58);
+        color: #e5e2e1;
+      }
+
+      .modal-header {
+        border-bottom-color: #353534;
+        background: rgba(14, 14, 14, 0.52);
+      }
+
+      .header-icon {
+        background: #f5c518;
+        color: #241a00;
+        box-shadow: 0 0 18px rgba(245, 197, 24, 0.18);
+      }
+
+      .modal-title,
+      .form-label {
+        color: #e5e2e1;
+      }
+
+      .modal-subtitle {
+        color: #b4afa6;
+      }
+
+      .btn-close {
+        background: #2a2a2a;
+        border: 1px solid #353534;
+        color: #d1c5ac;
+      }
+
+      .btn-close:hover {
+        background: rgba(245, 197, 24, 0.12);
+        border-color: rgba(245, 197, 24, 0.35);
+        color: #ffe08b;
+      }
+
+      .modal-form {
+        background: transparent;
+      }
+
+      .form-input,
+      .form-select {
+        background: #151515;
+        border-color: #353534;
+        color: #e5e2e1;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+      }
+
+      .form-input::placeholder {
+        color: #77716a;
+      }
+
+      .form-input:focus,
+      .form-select:focus {
+        border-color: #f5c518;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.14);
+      }
+
+      .form-select {
+        color-scheme: dark;
+        cursor: pointer;
+      }
+
+      .form-select option {
+        background: #151515;
+        color: #e5e2e1;
+      }
+
+      .modal-footer {
+        border-top-color: #353534;
+        background: #151515;
+      }
+
+      .btn-secondary {
+        background: #201f1f;
+        border-color: #353534;
+        color: #d1c5ac;
+      }
+
+      .btn-secondary:hover:not(:disabled) {
+        background: #2a2a2a;
+        border-color: rgba(245, 197, 24, 0.35);
+        color: #ffe08b;
+      }
+
+      .btn-primary {
+        background: #f5c518;
+        color: #241a00;
+        box-shadow: 0 0 18px rgba(245, 197, 24, 0.16);
+      }
+
+      .btn-primary:hover:not(:disabled) {
+        background: #ffd43b;
+      }
+
+      .error-message {
+        background: rgba(147, 0, 10, 0.28);
+        border-color: rgba(255, 180, 171, 0.3);
+        color: #ffdad6;
+      }
+
+      .error-text {
+        color: #ffb4ab;
+      }
+
       @media (max-width: 640px) {
         .modal-container { padding: 0.5rem; }
         .modal-card { border-radius: 10px; }
@@ -456,6 +588,11 @@ export class EditPlanModalComponent implements OnChanges {
   planForm!: FormGroup;
   isSaving = signal(false);
   errorMessage = signal('');
+  private readonly defaultBenefits = [
+    'Acceso al gimnasio durante la vigencia del plan',
+    'Reserva de clases grupales disponibles',
+    'Acceso a rutinas asignadas en la app móvil',
+  ].join(', ');
 
   constructor(
     private fb: FormBuilder,
@@ -463,7 +600,7 @@ export class EditPlanModalComponent implements OnChanges {
   ) {
     this.planForm = this.fb.group({
       name: ['', Validators.required],
-      benefits: [''],
+      benefits: [this.defaultBenefits, Validators.required],
       price: ['', [Validators.required, Validators.min(1)]],
       duration_days: ['', [Validators.required, Validators.min(1)]],
       active: [true, Validators.required],
@@ -477,7 +614,7 @@ export class EditPlanModalComponent implements OnChanges {
       this.errorMessage.set('');
       this.planForm.patchValue({
         name: this.plan.name || '',
-        benefits: this.plan.benefits || '',
+        benefits: this.plan.benefits || this.defaultBenefits,
         price: this.plan.price || '',
         duration_days: this.plan.duration_days || '',
         active: this.plan.active ?? true,
@@ -488,6 +625,11 @@ export class EditPlanModalComponent implements OnChanges {
   }
 
   onSubmit(): void {
+    const benefitsControl = this.planForm.get('benefits');
+    if (!String(benefitsControl?.value || '').trim()) {
+      benefitsControl?.setErrors({ required: true });
+    }
+
     if (!this.planForm.valid) {
       Object.keys(this.planForm.controls).forEach((key) =>
         this.planForm.get(key)?.markAsTouched(),
@@ -503,7 +645,7 @@ export class EditPlanModalComponent implements OnChanges {
     const val = this.planForm.value;
     const data = {
       name: val.name,
-      benefits: val.benefits || '',
+      benefits: String(val.benefits || '').trim(),
       price: Number(val.price),
       duration_days: Number(val.duration_days),
       active: val.active,

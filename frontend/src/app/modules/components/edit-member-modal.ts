@@ -131,8 +131,8 @@ import { DateWheelPickerComponent } from '../../shared/components/date-wheel-pic
       .modal-backdrop {
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.55);
-        backdrop-filter: blur(4px);
+        background: rgba(0, 0, 0, 0.72);
+        backdrop-filter: blur(6px);
         z-index: 999;
       }
 
@@ -148,10 +148,12 @@ import { DateWheelPickerComponent } from '../../shared/components/date-wheel-pic
       .modal-card {
         width: 100%;
         max-width: 560px;
-        background: #fff;
+        background: #1c1b1b;
+        border: 1px solid rgba(245, 197, 24, 0.12);
+        color: #e5e2e1;
         border-radius: 16px;
-        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
-        overflow: hidden;
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
+        overflow: visible;
         animation: slideUp 220ms cubic-bezier(0.4, 0, 0.2, 1);
       }
 
@@ -172,7 +174,7 @@ import { DateWheelPickerComponent } from '../../shared/components/date-wheel-pic
         justify-content: space-between;
         gap: 1rem;
         padding: 1.5rem 1.75rem;
-        border-bottom: 1px solid #f0f0f0;
+        border-bottom: 1px solid #353534;
       }
 
       .header-title {
@@ -187,38 +189,40 @@ import { DateWheelPickerComponent } from '../../shared/components/date-wheel-pic
         display: grid;
         place-items: center;
         border-radius: 11px;
-        background: rgba(250, 204, 21, 0.14);
+        background: rgba(245, 197, 24, 0.16);
+        border: 1px solid rgba(245, 197, 24, 0.24);
         overflow: hidden;
       }
 
       .header-title h2 {
         font: 700 1.15rem Inter, sans-serif;
         margin: 0 0 0.2rem;
-        color: #0a0a0a;
+        color: #e5e2e1;
       }
 
       .header-title p {
         font: 400 0.85rem Inter, sans-serif;
-        color: #666;
+        color: #b4afa6;
         margin: 0;
       }
 
       .btn-close {
-        background: #f5f5f5;
-        border: none;
+        background: #1a1a1a;
+        border: 1px solid #353534;
         border-radius: 8px;
         width: 36px;
         height: 36px;
         cursor: pointer;
         display: grid;
         place-items: center;
-        color: #555;
+        color: #e5e2e1;
         transition: all 150ms ease;
       }
 
       .btn-close:hover {
-        background: #e5e5e5;
-        color: #0a0a0a;
+        background: #2a2a2a;
+        border-color: #f5c518;
+        color: #ffe08b;
       }
 
       .message {
@@ -232,9 +236,9 @@ import { DateWheelPickerComponent } from '../../shared/components/date-wheel-pic
       }
 
       .message.error {
-        background: #fee2e2;
-        color: #991b1b;
-        border: 1px solid #fecaca;
+        background: rgba(255, 180, 171, 0.12);
+        color: #ffdad6;
+        border: 1px solid rgba(255, 180, 171, 0.28);
       }
 
       .message p {
@@ -260,25 +264,35 @@ import { DateWheelPickerComponent } from '../../shared/components/date-wheel-pic
         font: 600 0.78rem 'Space Grotesk', sans-serif;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: #555;
+        color: #d1c5ac;
         margin-bottom: 0.4rem;
       }
 
       .form-input {
         width: 100%;
         padding: 0.75rem 0.95rem;
-        border: 1px solid #e5e5e5;
+        border: 1px solid #353534;
         border-radius: 9px;
         font: 400 0.92rem Inter, sans-serif;
-        color: #0a0a0a;
-        background: #fff;
+        color: #e5e2e1;
+        background: #1a1a1a;
         transition: all 180ms ease;
       }
 
       .form-input:focus {
         outline: none;
-        border-color: #facc15;
-        box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.18);
+        border-color: #f5c518;
+        background: #2a2a2a;
+        box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.16);
+      }
+
+      .form-input::placeholder {
+        color: #8f8a82;
+      }
+
+      .form-input option {
+        background: #201f1f;
+        color: #e5e2e1;
       }
 
       .modal-footer {
@@ -299,22 +313,26 @@ import { DateWheelPickerComponent } from '../../shared/components/date-wheel-pic
       }
 
       .btn-secondary {
-        background: #f5f5f5;
-        color: #333;
+        border: 1px solid #353534;
+        background: #1a1a1a;
+        color: #e5e2e1;
       }
 
       .btn-secondary:hover:not(:disabled) {
-        background: #e5e5e5;
+        border-color: #f5c518;
+        background: #2a2a2a;
+        color: #ffe08b;
       }
 
       .btn-primary {
-        background: #facc15;
-        color: #0a0a0a;
+        background: #f5c518;
+        color: #241a00;
         font-weight: 700;
+        box-shadow: 0 0 18px rgba(245, 197, 24, 0.18);
       }
 
       .btn-primary:hover:not(:disabled) {
-        background: #f0c00e;
+        background: #ffd43b;
       }
 
       .btn-primary:disabled,

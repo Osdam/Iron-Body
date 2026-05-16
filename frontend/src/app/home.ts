@@ -455,14 +455,27 @@ interface SystemModule {
         align-self: flex-end;
         min-width: 200px;
         flex-shrink: 0;
+        padding: 1rem;
+        border: 1px solid rgba(245, 197, 24, 0.18);
+        border-radius: 12px;
+        background: rgba(14, 14, 14, 0.58);
+        backdrop-filter: blur(4px);
       }
 
       .progress-header {
         display: flex;
         justify-content: space-between;
         font: 600 0.9rem Inter, sans-serif;
-        color: #0a0a0a;
+        color: #e5e2e1;
         margin-bottom: 0.5rem;
+      }
+
+      .progress-header span {
+        color: #d1c5ac;
+      }
+
+      .progress-header strong {
+        color: #ffe08b;
       }
 
       .progress-track {
@@ -485,13 +498,13 @@ interface SystemModule {
         display: inline-flex;
         align-items: center;
         gap: 0.35rem;
-        color: #735c00;
+        color: #ffe08b;
         font: 600 0.9rem Inter, sans-serif;
         text-decoration: none;
         transition: all 200ms ease;
       }
 
-      .progress-link:hover { color: #4a3900; gap: 0.6rem; }
+      .progress-link:hover { color: #f5c518; gap: 0.6rem; }
       .progress-link .material-symbols-outlined { font-size: 1rem; }
 
       /* ══════════════════════════════════════════════
@@ -534,9 +547,15 @@ interface SystemModule {
         width: 34px;
         height: 34px;
         border-radius: 8px;
-        background: #f5f5f5;
+        background: #f5c518 !important;
+        border: 1px solid rgba(255, 224, 139, 0.45) !important;
+        box-shadow: 0 0 14px rgba(245, 197, 24, 0.18) !important;
         overflow: hidden;
         flex-shrink: 0;
+      }
+
+      .panel-title-icon app-lottie-icon {
+        filter: brightness(0) saturate(100%);
       }
 
       .panel-link {
@@ -664,15 +683,36 @@ interface SystemModule {
         font-style: normal;
         border-radius: 20px;
         padding: 0.3rem 0.75rem;
-        font: 600 0.73rem Inter, sans-serif;
+        border: 1px solid transparent;
+        font: 800 0.73rem Inter, sans-serif;
         white-space: nowrap;
         flex-shrink: 0;
+        letter-spacing: 0.01em;
       }
 
-      .tag-amber { background: #fff7e8; color: #92400e; }
-      .tag-red { background: #fee2e2; color: #991b1b; }
-      .tag-blue { background: #dbeafe; color: #1e40af; }
-      .tag-green { background: #ecfdf5; color: #065f46; }
+      .tag-amber {
+        background: rgba(245, 197, 24, 0.16) !important;
+        border-color: rgba(245, 197, 24, 0.32) !important;
+        color: #ffe08b !important;
+      }
+
+      .tag-red {
+        background: rgba(255, 180, 171, 0.16) !important;
+        border-color: rgba(255, 180, 171, 0.35) !important;
+        color: #ffdad6 !important;
+      }
+
+      .tag-blue {
+        background: rgba(158, 197, 255, 0.16) !important;
+        border-color: rgba(158, 197, 255, 0.35) !important;
+        color: #d6e3ff !important;
+      }
+
+      .tag-green {
+        background: rgba(139, 220, 159, 0.16) !important;
+        border-color: rgba(139, 220, 159, 0.35) !important;
+        color: #b9f6c8 !important;
+      }
 
       /* ══════════════════════════════════════════════
          Módulos

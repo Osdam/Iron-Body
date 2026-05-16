@@ -532,6 +532,120 @@ export interface TrainerAvailability {
       .action-btn span {
         font-size: 1rem;
       }
+
+      .trainer-card {
+        background:
+          linear-gradient(rgba(28, 27, 27, 0.92), rgba(17, 17, 17, 0.9)),
+          url('/assets/crm/clases2.png') center / cover no-repeat;
+        border-color: #353534;
+        color: #e5e2e1;
+        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24);
+      }
+
+      .trainer-card::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        border-radius: inherit;
+        border: 1px solid rgba(245, 197, 24, 0);
+        opacity: 0;
+        transition:
+          opacity 0.18s ease,
+          border-color 0.18s ease;
+      }
+
+      .trainer-card:hover {
+        border-color: rgba(245, 197, 24, 0.42);
+        box-shadow:
+          0 18px 42px rgba(0, 0, 0, 0.3),
+          0 0 0 3px rgba(245, 197, 24, 0.08);
+      }
+
+      .trainer-card:hover::before {
+        opacity: 1;
+        border-color: rgba(245, 197, 24, 0.5);
+      }
+
+      .card-name,
+      .stat-value {
+        color: #e5e2e1;
+      }
+
+      .card-specialty,
+      .stat-label,
+      .spec-label,
+      .meta-item,
+      .meta-text {
+        color: #b4afa6;
+      }
+
+      .card-stats,
+      .card-actions,
+      .contact-link,
+      .action-btn {
+        background: #1c1b1b;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .stat-divider {
+        background: #353534;
+      }
+
+      .card-bookmark {
+        background: rgba(28, 27, 27, 0.88);
+        color: #ffe08b;
+        border: 1px solid rgba(245, 197, 24, 0.22);
+      }
+
+      .card-bookmark:hover,
+      .action-btn:hover {
+        background: #201f1f;
+        border-color: #f5c518;
+        color: #ffe08b;
+      }
+
+      .contact-link:hover {
+        background: #f5c518;
+        border-color: #f5c518;
+        color: #241a00;
+      }
+
+      .spec-badge {
+        background: rgba(245, 197, 24, 0.14);
+        color: #ffe08b;
+        border-color: rgba(245, 197, 24, 0.28);
+      }
+
+      .card-status.status-activo {
+        background: rgba(34, 197, 94, 0.14);
+        color: #86efac;
+        border-color: rgba(34, 197, 94, 0.28);
+      }
+
+      .card-status.status-inactivo {
+        background: rgba(156, 163, 175, 0.15);
+        color: #d4d4d8;
+        border-color: rgba(156, 163, 175, 0.25);
+      }
+
+      .card-status.status-pendiente {
+        background: rgba(245, 158, 11, 0.15);
+        color: #fcd34d;
+        border-color: rgba(245, 158, 11, 0.28);
+      }
+
+      .action-btn.danger {
+        background: rgba(255, 180, 171, 0.1);
+        color: #ffb4ab;
+        border-color: rgba(255, 180, 171, 0.24);
+      }
+
+      .action-btn.danger:hover {
+        background: rgba(255, 180, 171, 0.16);
+        border-color: rgba(255, 180, 171, 0.38);
+      }
     `,
   ],
 })

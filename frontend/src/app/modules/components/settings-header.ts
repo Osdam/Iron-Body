@@ -136,6 +136,48 @@ import { CommonModule } from '@angular/common';
         }
       }
 
+      .settings-header {
+        background:
+          linear-gradient(135deg, rgba(28, 27, 27, 0.94), rgba(17, 17, 17, 0.9)),
+          url('/assets/crm/clases2.png') center / cover no-repeat;
+        border-bottom-color: #353534;
+      }
+
+      .header-left h1 {
+        color: #e5e2e1;
+      }
+
+      .header-left p {
+        color: #b4afa6;
+      }
+
+      .unsaved-indicator {
+        background: rgba(245, 197, 24, 0.14);
+        border-color: rgba(245, 197, 24, 0.28);
+        color: #ffe08b;
+      }
+
+      .btn-secondary {
+        background: #1c1b1b;
+        border: 1px solid #353534;
+        color: #e5e2e1;
+      }
+
+      .btn-secondary:hover:not(:disabled) {
+        background: #201f1f;
+        border-color: #f5c518;
+      }
+
+      .btn-primary {
+        background: #f5c518;
+        color: #241a00;
+        box-shadow: 0 10px 22px rgba(245, 197, 24, 0.2);
+      }
+
+      .btn-primary:hover:not(:disabled) {
+        background: #f9a825;
+      }
+
       @media (max-width: 768px) {
         .settings-header {
           flex-direction: column;

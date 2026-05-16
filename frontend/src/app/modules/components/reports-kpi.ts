@@ -142,6 +142,26 @@ type KPIColor = 'primary' | 'success' | 'warning' | 'danger' | 'info';
       .kpi-info .kpi-icon {
         color: #06b6d4;
       }
+
+      .kpi-card {
+        background: #1c1b1b !important;
+        border-color: #353534;
+        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.20);
+      }
+
+      .kpi-card:hover {
+        border-color: #f5c518;
+        box-shadow: 0 16px 38px rgba(245, 197, 24, 0.12);
+      }
+
+      .kpi-label,
+      .kpi-suffix {
+        color: #b4afa6;
+      }
+
+      .kpi-value {
+        color: #e5e2e1;
+      }
     `,
   ],
 })
@@ -158,7 +178,7 @@ export default class ReportsKPIComponent {
 
   get cardBackground(): string {
     if (!this.bgImage) return '';
-    return `linear-gradient(rgba(255, 255, 255, 0.92), rgba(255, 252, 235, 0.86)), url('${this.bgImage}') center / cover no-repeat`;
+    return `linear-gradient(rgba(28, 27, 27, 0.92), rgba(17, 17, 17, 0.88)), url('${this.bgImage}') center / cover no-repeat`;
   }
 
   get formattedValue(): string {

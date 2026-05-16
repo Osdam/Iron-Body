@@ -159,6 +159,34 @@ export interface ChannelMetric {
         transform: translateX(2px);
         color: #fbbf24;
       }
+
+      .channels-card {
+        background:
+          linear-gradient(rgba(28, 27, 27, 0.92), rgba(17, 17, 17, 0.9)),
+          url('/assets/crm/clases2.png') center / cover no-repeat;
+        border-color: #353534;
+        color: #e5e2e1;
+        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24);
+      }
+
+      .channels-title,
+      .channel-name {
+        color: #e5e2e1;
+      }
+
+      .channel-count,
+      .channel-chevron {
+        color: #b4afa6;
+      }
+
+      .channel-item {
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .channel-item:hover {
+        background: rgba(245, 197, 24, 0.08);
+      }
     `,
   ],
 })
