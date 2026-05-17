@@ -103,7 +103,7 @@ class _CartScreenState extends State<CartScreen> {
                       ),
                       const Gap(14),
                       IronButton(
-                        label: 'PROCEDER AL PAGO',
+                        label: 'Realizar pago',
                         onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StoreCheckoutScreen(cart: widget.cart, total: _total))),
                       ),
                     ],

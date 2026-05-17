@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gap/gap.dart';
@@ -9,7 +10,6 @@ import '../../../core/utils/currency_formatter.dart';
 import '../../../data/mock/mock_data.dart';
 import '../../../data/models/product_model.dart';
 import '../../../shared/widgets/iron_app_bar.dart';
-import 'product_detail_screen.dart';
 import 'cart_screen.dart';
 
 double _lerp(double a, double b, double t) => a + (b - a) * t;
@@ -51,25 +51,28 @@ class _StoreScreenState extends State<StoreScreen> {
         return matchSearch && matchCat;
       }).toList();
 
-  void _addToCart(ProductModel p) {
+  void _addToCart(ProductModel p, [int qty = 1]) {
     setState(() {
       final existing = _cart.where((c) => c.product.id == p.id).firstOrNull;
       if (existing != null) {
-        existing.quantity++;
+        existing.quantity += qty;
       } else {
-        _cart.add(CartItem(product: p));
+        _cart.add(CartItem(product: p, quantity: qty));
       }
     });
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content:
-          Text('${p.name} agregado al carrito', style: GoogleFonts.inter()),
+      content: Text(
+        qty > 1 ? '${p.name} ×$qty agregado' : '${p.name} agregado al carrito',
+        style: GoogleFonts.inter(),
+      ),
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       backgroundColor: AppColors.dark,
       action: SnackBarAction(
-          label: 'Ver',
-          textColor: AppColors.primary,
-          onPressed: _openCart),
+        label: 'Ver',
+        textColor: AppColors.primary,
+        onPressed: _openCart,
+      ),
     ));
   }
 
@@ -189,14 +192,7 @@ class _StoreScreenState extends State<StoreScreen> {
                     child: _StackDeck(
                       key: ValueKey('${_search}_$_category'),
                       products: products,
-                      onAdd: _addToCart,
-                      onTap: (p) => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ProductDetailScreen(
-                              product: p, onAdd: () => _addToCart(p)),
-                        ),
-                      ),
+                      onAdd: (p, qty) => _addToCart(p, qty),
                     ),
                   ),
           ),
@@ -227,23 +223,16 @@ class _StoreScreenState extends State<StoreScreen> {
 }
 
 // ── Stack Deck ───────────────────────────────────────────────────────────────
-//
-// cardH = 63% of available height → leaves 37% as visible stack zone.
-// ScaleX-only: ghost cards keep full height so peek = ty exactly.
-//   slot 0 (front): ty=0,  sx=1.00, op=1.00
-//   slot 1 (mid):   ty=52, sx=0.93, op=0.72  → 52 px peeking below front
-//   slot 2 (back):  ty=90, sx=0.86, op=0.44  → 90 px peeking below front
 
 class _StackDeck extends StatefulWidget {
   final List<ProductModel> products;
-  final void Function(ProductModel) onAdd;
-  final void Function(ProductModel) onTap;
+  final void Function(ProductModel, int qty) onAdd;
 
-  const _StackDeck(
-      {super.key,
-      required this.products,
-      required this.onAdd,
-      required this.onTap});
+  const _StackDeck({
+    super.key,
+    required this.products,
+    required this.onAdd,
+  });
 
   @override
   State<_StackDeck> createState() => _StackDeckState();
@@ -263,7 +252,7 @@ class _StackDeckState extends State<_StackDeck> with TickerProviderStateMixin {
   int _dir = 0;
 
   static const _thresh = 72.0;
-  static const _kTY = [0.0, 52.0, 90.0];
+  static const _kTY = [88.0, 36.0, 0.0];
   static const _kSX = [1.00, 0.93, 0.86];
   static const _kOP = [1.00, 0.72, 0.44];
 
@@ -272,13 +261,12 @@ class _StackDeckState extends State<_StackDeck> with TickerProviderStateMixin {
     super.initState();
 
     _commitCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 390))
+        vsync: this, duration: const Duration(milliseconds: 460))
       ..addListener(() => setState(() {}))
       ..addStatusListener((s) {
         if (s == AnimationStatus.completed) {
           setState(() {
-            _idx =
-                (_idx + _dir).clamp(0, widget.products.length - 1);
+            _idx = (_idx + _dir).clamp(0, widget.products.length - 1);
             _drag = 0;
             _dragSnapshot = 0;
             _committing = false;
@@ -289,7 +277,7 @@ class _StackDeckState extends State<_StackDeck> with TickerProviderStateMixin {
       });
 
     _snapCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 300))
+        vsync: this, duration: const Duration(milliseconds: 320))
       ..addListener(() {
         if (!_snapping) return;
         setState(() {
@@ -331,7 +319,7 @@ class _StackDeckState extends State<_StackDeck> with TickerProviderStateMixin {
 
   void _onDragUpdate(DragUpdateDetails d) {
     if (_committing || _snapping) return;
-    setState(() => _drag += d.delta.dy);
+    setState(() => _drag += d.delta.dy * 0.88);
   }
 
   void _onDragEnd(DragEndDetails d) {
@@ -358,7 +346,12 @@ class _StackDeckState extends State<_StackDeck> with TickerProviderStateMixin {
   }
 
   double get _animP => Curves.easeInOutCubic.transform(_commitCtrl.value);
-  double get _dragP => (_drag.abs() / _thresh).clamp(0.0, 1.0);
+  double get _animPExit => Curves.easeInCubic.transform(_commitCtrl.value);
+  double get _animPEnter => Curves.easeOutCubic.transform(_commitCtrl.value);
+  double get _dragP {
+    final raw = (_drag.abs() / _thresh).clamp(0.0, 1.0);
+    return Curves.easeOut.transform(raw);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -409,18 +402,19 @@ class _StackDeckState extends State<_StackDeck> with TickerProviderStateMixin {
         double ty, sx, op;
         if (slot == 0) {
           if (_committing) {
-            ty = _lerp(_dragSnapshot, cardH + 120, _animP);
-            sx = _kSX[1];
-            op = 0.0;
+            ty = _lerp(_kTY[0] + _dragSnapshot, cardH + 120, _animPExit);
+            sx = _lerp(_kSX[0], _kSX[1], _animPExit);
+            op = (1.0 - _animPExit * 2.5).clamp(0.0, 1.0);
           } else {
-            ty = _drag;
+            ty = _kTY[0] + _drag;
             sx = _lerp(_kSX[0], _kSX[1], p);
             op = _lerp(1.0, 0.0, (p * 1.3).clamp(0, 1));
           }
         } else {
-          ty = _lerp(_kTY[slot], _kTY[slot - 1], p);
-          sx = _lerp(_kSX[slot], _kSX[slot - 1], p);
-          op = _lerp(_kOP[slot], _kOP[slot - 1], p);
+          final ep = _committing ? _animPEnter : p;
+          ty = _lerp(_kTY[slot], _kTY[slot - 1], ep);
+          sx = _lerp(_kSX[slot], _kSX[slot - 1], ep);
+          op = _lerp(_kOP[slot], _kOP[slot - 1], ep);
         }
 
         layers.add((
@@ -431,16 +425,16 @@ class _StackDeckState extends State<_StackDeck> with TickerProviderStateMixin {
       }
 
       if (_committing && _idx + 3 < ps.length) {
-        final ty = _lerp(_kTY[2] + 50, _kTY[2], _animP);
-        final sx = _lerp(_kSX[2] - 0.08, _kSX[2], _animP);
-        final op = _lerp(0.0, _kOP[2], _animP);
+        final ty = _lerp(_kTY[2] - 30, _kTY[2], _animPEnter);
+        final sx = _lerp(_kSX[2] - 0.08, _kSX[2], _animPEnter);
+        final op = _lerp(0.0, _kOP[2], _animPEnter);
         layers.add((z: 0, w: _card(ps[_idx + 3], ty, sx, op, cardH)));
       }
     } else {
       final p = _committing ? _animP : _dragP;
 
       if (_idx > 0) {
-        final ty = _lerp(-cardH * 0.32, _kTY[0], p);
+        final ty = _lerp(cardH * 0.6, _kTY[0], p);
         final sx = _lerp(_kSX[1], _kSX[0], p);
         final op = _lerp(0.0, _kOP[0], p);
         layers.add((
@@ -456,7 +450,7 @@ class _StackDeckState extends State<_StackDeck> with TickerProviderStateMixin {
 
         double ty, sx, op;
         if (slot == 2) {
-          ty = _lerp(_kTY[2], _kTY[2] + 12, p);
+          ty = _lerp(_kTY[2], _kTY[2] - 8, p);
           sx = _lerp(_kSX[2], _kSX[2] - 0.05, p);
           op = _lerp(_kOP[2], 0.0, p);
         } else {
@@ -489,9 +483,9 @@ class _StackDeckState extends State<_StackDeck> with TickerProviderStateMixin {
               width: double.infinity,
               height: cardH,
               child: _ProductCard(
+                key: ValueKey(p.id),
                 product: p,
-                onAdd: () => widget.onAdd(p),
-                onTap: () => widget.onTap(p),
+                onAdd: (qty) => widget.onAdd(p, qty),
               ),
             ),
           ),
@@ -499,7 +493,6 @@ class _StackDeckState extends State<_StackDeck> with TickerProviderStateMixin {
       ),
     );
   }
-
 }
 
 // ── Swipe Indicator ───────────────────────────────────────────────────────────
@@ -562,8 +555,8 @@ class _SwipeIndicatorState extends State<_SwipeIndicator>
                 child: Icon(
                   Icons.keyboard_arrow_up_rounded,
                   size: 16,
-                  color: AppColors.dark.withValues(
-                      alpha: widget.canGoUp ? 0.32 + t * 0.52 : 0.15),
+                  color: AppColors.dark
+                      .withValues(alpha: widget.canGoUp ? 0.32 + t * 0.52 : 0.15),
                 ),
               ),
               const SizedBox(height: 4),
@@ -575,8 +568,7 @@ class _SwipeIndicatorState extends State<_SwipeIndicator>
                   margin: const EdgeInsets.symmetric(vertical: 2),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: AppColors.dark
-                        .withValues(alpha: 0.10 + t * 0.14),
+                    color: AppColors.dark.withValues(alpha: 0.10 + t * 0.14),
                   ),
                 ),
               ),
@@ -598,15 +590,55 @@ class _SwipeIndicatorState extends State<_SwipeIndicator>
   }
 }
 
-// ── Product Card — light elegant catalog style ────────────────────────────────
+// ── Product Card (with 3D flip) ───────────────────────────────────────────────
 
-class _ProductCard extends StatelessWidget {
+class _ProductCard extends StatefulWidget {
   final ProductModel product;
-  final VoidCallback onAdd;
-  final VoidCallback onTap;
+  final void Function(int qty) onAdd;
 
-  const _ProductCard(
-      {required this.product, required this.onAdd, required this.onTap});
+  const _ProductCard({
+    super.key,
+    required this.product,
+    required this.onAdd,
+  });
+
+  @override
+  State<_ProductCard> createState() => _ProductCardState();
+}
+
+class _ProductCardState extends State<_ProductCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _flipCtrl;
+  int _qty = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _flipCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    )..addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _flipCtrl.dispose();
+    super.dispose();
+  }
+
+  void _flip() {
+    if (_flipCtrl.isAnimating) return;
+    HapticFeedback.lightImpact();
+    _flipCtrl.isDismissed ? _flipCtrl.forward() : _flipCtrl.reverse();
+  }
+
+  void _addAndFlipBack() {
+    widget.onAdd(_qty);
+    _flip();
+    Future.delayed(const Duration(milliseconds: 520), () {
+      if (mounted) setState(() => _qty = 1);
+    });
+  }
 
   static _CategoryStyle _styleFor(String category) {
     switch (category) {
@@ -647,25 +679,40 @@ class _ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = product;
+    final isBack = _flipCtrl.value >= 0.5;
+    final angle = _flipCtrl.value * math.pi;
+
+    return Transform(
+      alignment: Alignment.center,
+      transform: Matrix4.identity()
+        ..setEntry(3, 2, 0.0014)
+        ..rotateY(isBack ? angle - math.pi : angle),
+      child: isBack ? _buildBack() : _buildFront(),
+    );
+  }
+
+  // ── Front ─────────────────────────────────────────────────────────────────
+
+  Widget _buildFront() {
+    final p = widget.product;
     final style = _styleFor(p.category);
 
     return GestureDetector(
-      onTap: onTap,
+      onTap: _flip,
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0xFFE8E4DC), width: 1),
+          border: Border.all(color: const Color(0xFFD4CFC7), width: 1.2),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.07),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
+              color: Colors.black.withValues(alpha: 0.11),
+              blurRadius: 28,
+              offset: const Offset(0, 10),
             ),
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 5,
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 6,
               offset: const Offset(0, 2),
             ),
           ],
@@ -675,69 +722,72 @@ class _ProductCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // ── Top: gradient bg + Lottie ──────────────────────────────
+              // ── Top: background image + gradient + Lottie ─────────────
               Expanded(
                 flex: 6,
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: style.gradientColors,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.asset('assets/images/tienda.png', fit: BoxFit.cover),
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            style.gradientColors[0].withValues(alpha: 0.60),
+                            style.gradientColors[1].withValues(alpha: 0.60),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Soft radial glow behind lottie
-                      Container(
-                        width: 140,
-                        height: 140,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: style.glowColor.withValues(alpha: 0.55),
-                        ),
-                      ),
-                      // Second smaller glow
-                      Container(
-                        width: 90,
-                        height: 90,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.45),
-                        ),
-                      ),
-                      Lottie.asset(
-                        lottieForProduct(p),
-                        width: 120,
-                        height: 120,
-                        fit: BoxFit.contain,
-                        repeat: true,
-                      ),
-                      // IRON BODY watermark top-left
-                      Positioned(
-                        top: 14,
-                        left: 16,
-                        child: Text(
-                          'IRON BODY',
-                          style: GoogleFonts.lexend(
-                            fontSize: 8,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.black.withValues(alpha: 0.12),
-                            letterSpacing: 2.5,
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Container(
+                          width: 140,
+                          height: 140,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: style.glowColor.withValues(alpha: 0.55),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
+                        Container(
+                          width: 90,
+                          height: 90,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white.withValues(alpha: 0.45),
+                          ),
+                        ),
+                        Lottie.asset(
+                          lottieForProduct(p),
+                          width: 120,
+                          height: 120,
+                          fit: BoxFit.contain,
+                          repeat: true,
+                        ),
+                        Positioned(
+                          top: 14,
+                          left: 16,
+                          child: Text(
+                            'IRON BODY',
+                            style: GoogleFonts.lexend(
+                              fontSize: 8,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.black.withValues(alpha: 0.12),
+                              letterSpacing: 2.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
 
               // ── Separator ─────────────────────────────────────────────
-              Container(
-                height: 1,
-                color: const Color(0xFFF0ECE4),
-              ),
+              Container(height: 1, color: const Color(0xFFF0ECE4)),
 
               // ── Bottom: info ───────────────────────────────────────────
               Expanded(
@@ -747,7 +797,6 @@ class _ProductCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Category badge + status
                       Row(
                         children: [
                           Container(
@@ -782,10 +831,7 @@ class _ProductCard extends StatelessWidget {
                             ),
                         ],
                       ),
-
                       const Gap(6),
-
-                      // Product name
                       Text(
                         p.name,
                         style: GoogleFonts.lexend(
@@ -797,10 +843,7 @@ class _ProductCard extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
-
                       const Spacer(),
-
-                      // Price + add button
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         crossAxisAlignment: CrossAxisAlignment.end,
@@ -827,8 +870,11 @@ class _ProductCard extends StatelessWidget {
                               ),
                             ],
                           ),
+                          // Quick-add button — absorbs tap so the card doesn't flip
                           _AddButton(
-                              isAvailable: p.isAvailable, onTap: onAdd),
+                            isAvailable: p.isAvailable,
+                            onTap: () => widget.onAdd(1),
+                          ),
                         ],
                       ),
                     ],
@@ -841,7 +887,303 @@ class _ProductCard extends StatelessWidget {
       ),
     );
   }
+
+  // ── Back ──────────────────────────────────────────────────────────────────
+
+  Widget _buildBack() {
+    final p = widget.product;
+    final maxQty = p.stock.clamp(1, 99);
+    final total = p.price * _qty;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFD4CFC7), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.11),
+            blurRadius: 28,
+            offset: const Offset(0, 10),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ── Header ───────────────────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.fromLTRB(18, 16, 12, 16),
+              color: AppColors.dark,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          p.category.toUpperCase(),
+                          style: GoogleFonts.lexend(
+                            fontSize: 8,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primary,
+                            letterSpacing: 1.8,
+                          ),
+                        ),
+                        const Gap(3),
+                        Text(
+                          p.name,
+                          style: GoogleFonts.lexend(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            height: 1.2,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Gap(8),
+                  GestureDetector(
+                    onTap: _flip,
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.close_rounded,
+                          size: 18, color: Colors.white70),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Content ───────────────────────────────────────────────────
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Description
+                    Text(
+                      'Descripción',
+                      style: GoogleFonts.lexend(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textSecondary,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const Gap(4),
+                    Text(
+                      p.description,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                        height: 1.5,
+                      ),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+
+                    const Gap(14),
+
+                    // Price + quantity selector
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 11),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'precio unit.',
+                                style: GoogleFonts.inter(
+                                    fontSize: 9,
+                                    color: AppColors.textDisabled),
+                              ),
+                              Text(
+                                CurrencyFormatter.format(p.price),
+                                style: GoogleFonts.lexend(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Spacer(),
+                          // Quantity selector
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _QtyButton(
+                                icon: Icons.remove_rounded,
+                                enabled: _qty > 1,
+                                onTap: () =>
+                                    setState(() => _qty = (_qty - 1).clamp(1, maxQty)),
+                              ),
+                              Container(
+                                width: 40,
+                                alignment: Alignment.center,
+                                child: Text(
+                                  '$_qty',
+                                  style: GoogleFonts.lexend(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                              ),
+                              _QtyButton(
+                                icon: Icons.add_rounded,
+                                enabled: _qty < maxQty && p.isAvailable,
+                                onTap: () =>
+                                    setState(() => _qty = (_qty + 1).clamp(1, maxQty)),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const Gap(10),
+
+                    // Total row
+                    Row(
+                      children: [
+                        Text(
+                          'Total',
+                          style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: AppColors.textSecondary),
+                        ),
+                        const Spacer(),
+                        Text(
+                          CurrencyFormatter.format(total),
+                          style: GoogleFonts.lexend(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const Spacer(),
+
+                    // Add to cart button
+                    GestureDetector(
+                      onTap: p.isAvailable ? _addAndFlipBack : null,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: p.isAvailable
+                              ? AppColors.dark
+                              : AppColors.surfaceContainer,
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: p.isAvailable
+                              ? [
+                                  BoxShadow(
+                                    color:
+                                        AppColors.dark.withValues(alpha: 0.20),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ]
+                              : [],
+                        ),
+                        alignment: Alignment.center,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.shopping_bag_rounded,
+                              size: 16,
+                              color: p.isAvailable
+                                  ? AppColors.primary
+                                  : AppColors.textDisabled,
+                            ),
+                            const Gap(8),
+                            Text(
+                              p.isAvailable ? 'Agregar al carrito' : 'Agotado',
+                              style: GoogleFonts.lexend(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: p.isAvailable
+                                    ? AppColors.primary
+                                    : AppColors.textDisabled,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const Gap(16),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
+
+// ── Qty Button ────────────────────────────────────────────────────────────────
+
+class _QtyButton extends StatelessWidget {
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onTap;
+  const _QtyButton(
+      {required this.icon, required this.enabled, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: enabled ? AppColors.dark : AppColors.surfaceContainer,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(
+          icon,
+          size: 15,
+          color: enabled ? AppColors.primary : AppColors.textDisabled,
+        ),
+      ),
+    );
+  }
+}
+
+// ── Category Style ────────────────────────────────────────────────────────────
 
 class _CategoryStyle {
   final List<Color> gradientColors;
@@ -881,7 +1223,7 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
-// ── Add Button ────────────────────────────────────────────────────────────────
+// ── Add Button (quick +1 on front) ───────────────────────────────────────────
 
 class _AddButton extends StatefulWidget {
   final bool isAvailable;
@@ -946,7 +1288,9 @@ class _AddButtonState extends State<_AddButton>
           child: Icon(
             Icons.add_rounded,
             size: 22,
-            color: widget.isAvailable ? AppColors.primary : AppColors.textDisabled,
+            color: widget.isAvailable
+                ? AppColors.primary
+                : AppColors.textDisabled,
           ),
         ),
       ),

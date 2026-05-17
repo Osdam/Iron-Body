@@ -66,18 +66,21 @@ class CardFormData {
   String holder = '';
   String expiry = '';
   String cvv = '';
+  int dues = 1; // cuotas — default 1
 
   CardFormData copyWith({
     String? number,
     String? holder,
     String? expiry,
     String? cvv,
+    int? dues,
   }) =>
       CardFormData()
         ..number = number ?? this.number
         ..holder = holder ?? this.holder
         ..expiry = expiry ?? this.expiry
-        ..cvv = cvv ?? this.cvv;
+        ..cvv = cvv ?? this.cvv
+        ..dues = dues ?? this.dues;
 }
 
 class PseFormData {

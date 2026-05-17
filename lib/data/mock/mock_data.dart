@@ -356,6 +356,7 @@ List<ClassSessionModel> get mockClasses {
       durationMinutes: 45,
       totalSpots: 20,
       bookedSpots: 18,
+      description: 'Clase de ciclismo indoor de alta intensidad. Mejora resistencia cardiovascular y quema calorías al ritmo de la música.',
     ),
     ClassSessionModel(
       id: 'c2',
@@ -367,6 +368,7 @@ List<ClassSessionModel> get mockClasses {
       totalSpots: 15,
       bookedSpots: 8,
       isReserved: true,
+      description: 'Entrenamiento con peso corporal y herramientas funcionales. Mejora fuerza, coordinación y movilidad articular.',
     ),
     ClassSessionModel(
       id: 'c3',
@@ -377,6 +379,7 @@ List<ClassSessionModel> get mockClasses {
       durationMinutes: 60,
       totalSpots: 12,
       bookedSpots: 12,
+      description: 'Entrenamiento de alta intensidad combinando levantamiento olímpico, gimnasia y cardio. Apto para niveles intermedios.',
     ),
     ClassSessionModel(
       id: 'c4',
@@ -387,6 +390,7 @@ List<ClassSessionModel> get mockClasses {
       durationMinutes: 40,
       totalSpots: 20,
       bookedSpots: 5,
+      description: 'Intervalos de alta intensidad con períodos de recuperación activa. Maximiza la quema de grasa y mejora el acondicionamiento.',
     ),
     ClassSessionModel(
       id: 'c5',
@@ -397,6 +401,7 @@ List<ClassSessionModel> get mockClasses {
       durationMinutes: 60,
       totalSpots: 16,
       bookedSpots: 10,
+      description: 'Sesión de yoga y movilidad para mejorar la flexibilidad, reducir tensiones y recuperar el cuerpo tras entrenamientos intensos.',
     ),
     ClassSessionModel(
       id: 'c6',
@@ -407,6 +412,7 @@ List<ClassSessionModel> get mockClasses {
       durationMinutes: 30,
       totalSpots: 20,
       bookedSpots: 3,
+      description: 'Rutina intensiva de 30 minutos enfocada en el core: abdomen, oblicuos y zona lumbar. Sin equipamiento, solo peso corporal.',
     ),
   ];
 }

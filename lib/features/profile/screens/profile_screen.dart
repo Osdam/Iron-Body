@@ -13,6 +13,7 @@ import '../../../shared/widgets/iron_button.dart';
 import '../../auth/screens/login_screen.dart';
 import '../../memberships/screens/memberships_screen.dart';
 import '../../onboarding/app_tour.dart';
+import '../../payments/screens/payment_history_screen.dart';
 import '../../progress/screens/physical_evaluation_screen.dart';
 import '../../store/screens/store_screen.dart';
 
@@ -104,6 +105,17 @@ class ProfileScreen extends StatelessWidget {
                     ),
                   ),
                 ).animate().fadeIn(delay: 230.ms),
+                const Gap(8),
+                _MenuItem(
+                  lottiePath: AppAssets.lottieMembresias,
+                  label: 'Historial de pagos',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const PaymentHistoryScreen(),
+                    ),
+                  ),
+                ).animate().fadeIn(delay: 245.ms),
                 const Gap(8),
                 _MenuItem(
                   lottiePath: AppAssets.lottieTienda,

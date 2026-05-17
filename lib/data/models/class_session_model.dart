@@ -12,6 +12,8 @@ class ClassSessionModel {
   ClassStatus status;
   bool isReserved;
 
+  final String description;
+
   ClassSessionModel({
     required this.id,
     required this.name,
@@ -21,6 +23,7 @@ class ClassSessionModel {
     required this.durationMinutes,
     required this.totalSpots,
     required this.bookedSpots,
+    this.description = '',
     ClassStatus? status,
     this.isReserved = false,
   }) : status = status ?? computeStatus(bookedSpots, totalSpots);

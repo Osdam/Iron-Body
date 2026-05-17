@@ -7,6 +7,7 @@ import 'features/workouts/screens/workouts_screen.dart';
 import 'features/progress/screens/progress_screen.dart';
 import 'features/classes/screens/classes_screen.dart';
 import 'features/profile/screens/profile_screen.dart';
+import 'features/trainers/screens/trainers_screen.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
@@ -21,8 +22,9 @@ class _AppShellState extends State<AppShell> {
   final _screens = const [
     HomeScreen(),
     WorkoutsScreen(),
-    ProgressScreen(),
+    TrainersScreen(),
     ClassesScreen(),
+    ProgressScreen(),
     ProfileScreen(),
   ];
 

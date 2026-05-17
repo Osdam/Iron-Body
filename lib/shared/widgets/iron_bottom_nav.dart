@@ -15,11 +15,12 @@ class IronBottomNav extends StatelessWidget {
   });
 
   static const _items = [
-    (AppAssets.lottieHome,     'Inicio'),
-    (AppAssets.lottieGym,      'Entrenar'),
-    (AppAssets.lottieProgreso, 'Progreso'),
-    (AppAssets.lottieAgenda,   'Clases'),
-    (AppAssets.lottieUser,     'Perfil'),
+    (AppAssets.lottieHome,       'Inicio'),
+    (AppAssets.lottieGym,        'Entrenar'),
+    (AppAssets.lottieEvaluacion, 'Ranking'),
+    (AppAssets.lottieAgenda,     'Clases'),
+    (AppAssets.lottieProgreso,   'Progreso'),
+    (AppAssets.lottieUser,       'Perfil'),
   ];
 
   @override

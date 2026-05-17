@@ -1,108 +1,74 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
-import 'package:gap/gap.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/utils/currency_formatter.dart';
-import '../../../data/models/membership_plan_model.dart';
-import '../../../shared/widgets/iron_button.dart';
-import '../../../app_shell.dart';
+import 'package:intl/intl.dart';
 
+import '../../../core/utils/currency_formatter.dart';
+import '../../../data/mock/mock_data.dart';
+import '../../../data/models/membership_plan_model.dart';
+import '../../payments/models/payment_record.dart';
+import '../../payments/models/payment_transaction.dart';
+import '../../payments/widgets/receipt_card.dart';
+import '../../payments/widgets/success_view.dart';
+
+/// Pago de membresía confirmado — comprobante premium tipo ticket.
 class PaymentSuccessScreen extends StatelessWidget {
   final MembershipPlanModel plan;
-  const PaymentSuccessScreen({super.key, required this.plan});
+  final PaymentTransaction? tx;
+  final String? userName;
+  final String? methodCode; // 'card'|'pse'|'nequi'|'daviplata'
+
+  const PaymentSuccessScreen({
+    super.key,
+    required this.plan,
+    this.tx,
+    this.userName,
+    this.methodCode,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final expiry = DateTime.now().add(Duration(days: 30 * plan.months));
+    final now = DateTime.now();
+    final expiry = now.add(Duration(days: 30 * plan.months));
+    final f = DateFormat('dd/MM/yyyy');
+    final amount = tx?.amount ?? plan.price;
+    final reference =
+        tx?.reference ?? 'IRON-${now.millisecondsSinceEpoch}';
 
-    return Scaffold(
-      backgroundColor: AppColors.surface0,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              const Spacer(),
+    final u = AppSession.currentUser;
+    final record = PaymentRecord(
+      reference: reference,
+      status: 'approved',
+      amount: amount,
+      currency: tx?.currency ?? 'COP',
+      provider: 'epayco',
+      method: methodCode,
+      providerRef: tx?.providerRef,
+      description: 'Membresía ${plan.name} · Iron Body',
+      product: 'Membresía ${plan.name}',
+      userName: userName ?? u?.fullName,
+      document: u?.document,
+      email: u?.email,
+      phone: u?.phone,
+      paidAt: tx?.paidAt ?? now.toIso8601String(),
+      createdAt: now.toIso8601String(),
+      membershipExpiry: f.format(expiry),
+    );
 
-              // Checkmark
-              Container(
-                width: 100,
-                height: 100,
-                decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
-                child: const Icon(Icons.check_rounded, size: 56, color: AppColors.dark),
-              ).animate().scale(begin: const Offset(0, 0), curve: Curves.elasticOut, duration: 800.ms),
-
-              const Gap(24),
-              Text(
-                'Pago confirmado',
-                style: GoogleFonts.lexend(fontSize: 28, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-              ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.2),
-              const Gap(8),
-              Text(
-                '¡Tu membresía está activa!',
-                style: GoogleFonts.inter(fontSize: 15, color: AppColors.textSecondary),
-              ).animate().fadeIn(delay: 400.ms),
-
-              const Gap(32),
-
-              // Detalles
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  children: [
-                    _detail('Plan', plan.name),
-                    const Gap(12),
-                    _detail('Valor pagado', CurrencyFormatter.format(plan.price)),
-                    const Gap(12),
-                    _detail('Fecha de pago', '${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}'),
-                    const Gap(12),
-                    _detail('Vence el', '${expiry.day}/${expiry.month}/${expiry.year}'),
-                    const Gap(12),
-                    _detail('Referencia', 'WP-${DateTime.now().millisecondsSinceEpoch}'),
-                  ],
-                ),
-              ).animate().fadeIn(delay: 500.ms),
-
-              const Spacer(),
-
-              IronButton(
-                label: 'IR AL INICIO',
-                onPressed: () => Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AppShell()),
-                  (_) => false,
-                ),
-              ).animate().fadeIn(delay: 600.ms),
-              const Gap(12),
-              IronButton(
-                label: 'EMPEZAR ENTRENAMIENTO',
-                isPrimary: false,
-                onPressed: () => Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AppShell()),
-                  (_) => false,
-                ),
-              ).animate().fadeIn(delay: 700.ms),
-              const Gap(16),
-            ],
-          ),
-        ),
-      ),
+    return PaymentSuccessView(
+      title: 'Pago confirmado',
+      subtitle: '¡Tu membresía ${plan.name} está activa!',
+      barcodeValue: reference,
+      record: record,
+      rows: [
+        ReceiptRow('Plan', plan.name),
+        ReceiptRow('Referencia Iron Body', reference),
+        ReceiptRow('Ref ePayco', tx?.providerRef ?? 'No disponible'),
+        ReceiptRow('Monto', CurrencyFormatter.format(amount)),
+        ReceiptRow('Método', record.methodLabel),
+        ReceiptRow('Fecha', f.format(now)),
+        ReceiptRow('Hora', DateFormat('HH:mm').format(now)),
+        ReceiptRow('Usuario', userName ?? 'No disponible'),
+        ReceiptRow('Vence el', f.format(expiry)),
+      ],
     );
   }
-
-  Widget _detail(String label, String value) => Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary)),
-          Text(value, style: GoogleFonts.lexend(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-        ],
-      );
 }

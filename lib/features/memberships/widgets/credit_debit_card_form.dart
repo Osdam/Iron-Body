@@ -30,6 +30,7 @@ class _CreditDebitCardFormState extends State<CreditDebitCardForm> {
   final _cvvFocus = FocusNode();
 
   bool _cvvFocused = false;
+  int _dues = 1; // cuotas, default 1
   final _data = CardFormData();
 
   @override
@@ -49,6 +50,7 @@ class _CreditDebitCardFormState extends State<CreditDebitCardForm> {
     _data.holder = _holderCtrl.text;
     _data.expiry = _expiryCtrl.text;
     _data.cvv = _cvvCtrl.text;
+    _data.dues = _dues;
     widget.onChanged(_data);
   }
 
@@ -203,6 +205,43 @@ class _CreditDebitCardFormState extends State<CreditDebitCardForm> {
               ),
             ),
           ],
+        ),
+        const Gap(14),
+        _buildDuesField(),
+      ],
+    );
+  }
+
+  Widget _buildDuesField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Cuotas',
+          style: GoogleFonts.lexend(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary),
+        ),
+        const Gap(6),
+        DropdownButtonFormField<int>(
+          initialValue: _dues,
+          isExpanded: true,
+          icon: const Icon(Icons.expand_more_rounded,
+              size: 20, color: AppColors.textSecondary),
+          style: GoogleFonts.inter(fontSize: 14, color: AppColors.textPrimary),
+          decoration: _deco('1 cuota', Icons.account_balance_wallet_outlined),
+          items: const [1, 3, 6, 12, 24, 36]
+              .map((n) => DropdownMenuItem(
+                    value: n,
+                    child: Text(n == 1 ? '1 cuota' : '$n cuotas'),
+                  ))
+              .toList(),
+          onChanged: (v) {
+            if (v == null) return;
+            setState(() => _dues = v);
+            _notify();
+          },
         ),
       ],
     );

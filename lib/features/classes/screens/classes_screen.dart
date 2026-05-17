@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gap/gap.dart';
@@ -7,7 +8,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../data/mock/mock_data.dart';
 import '../../../data/models/class_session_model.dart';
 import '../../../shared/widgets/status_badge.dart';
-import 'class_detail_screen.dart';
 
 double _lerpC(double a, double b, double t) => a + (b - a) * t;
 
@@ -58,7 +58,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
       content:
           Text(session.isReserved ? 'Clase reservada' : 'Reserva cancelada'),
       backgroundColor: session.isReserved
-          ? const Color(0xFF155724)
+          ? AppColors.dark
           : AppColors.textSecondary,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -133,15 +133,6 @@ class _ClassesScreenState extends State<ClassesScreen> {
                       key: ValueKey(_filter),
                       sessions: sessions,
                       onReserve: _reserve,
-                      onTap: (s) => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ClassDetailScreen(
-                            session: s,
-                            onReserve: () => _reserve(s),
-                          ),
-                        ),
-                      ),
                     ),
                   ),
           ),
@@ -176,13 +167,12 @@ class _ClassesScreenState extends State<ClassesScreen> {
 class _ClassDeck extends StatefulWidget {
   final List<ClassSessionModel> sessions;
   final void Function(ClassSessionModel) onReserve;
-  final void Function(ClassSessionModel) onTap;
 
-  const _ClassDeck(
-      {super.key,
-      required this.sessions,
-      required this.onReserve,
-      required this.onTap});
+  const _ClassDeck({
+    super.key,
+    required this.sessions,
+    required this.onReserve,
+  });
 
   @override
   State<_ClassDeck> createState() => _ClassDeckState();
@@ -202,7 +192,7 @@ class _ClassDeckState extends State<_ClassDeck> with TickerProviderStateMixin {
   int _dir = 0;
 
   static const _thresh = 72.0;
-  static const _kTY = [0.0, 52.0, 90.0];
+  static const _kTY = [88.0, 36.0, 0.0];
   static const _kSX = [1.00, 0.93, 0.86];
   static const _kOP = [1.00, 0.72, 0.44];
 
@@ -211,13 +201,12 @@ class _ClassDeckState extends State<_ClassDeck> with TickerProviderStateMixin {
     super.initState();
 
     _commitCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 370))
+        vsync: this, duration: const Duration(milliseconds: 460))
       ..addListener(() => setState(() {}))
       ..addStatusListener((s) {
         if (s == AnimationStatus.completed) {
           setState(() {
-            _idx =
-                (_idx + _dir).clamp(0, widget.sessions.length - 1);
+            _idx = (_idx + _dir).clamp(0, widget.sessions.length - 1);
             _drag = 0;
             _dragSnapshot = 0;
             _committing = false;
@@ -228,7 +217,7 @@ class _ClassDeckState extends State<_ClassDeck> with TickerProviderStateMixin {
       });
 
     _snapCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 300))
+        vsync: this, duration: const Duration(milliseconds: 320))
       ..addListener(() {
         if (!_snapping) return;
         setState(() {
@@ -270,7 +259,7 @@ class _ClassDeckState extends State<_ClassDeck> with TickerProviderStateMixin {
 
   void _onDragUpdate(DragUpdateDetails d) {
     if (_committing || _snapping) return;
-    setState(() => _drag += d.delta.dy);
+    setState(() => _drag += d.delta.dy * 0.88);
   }
 
   void _onDragEnd(DragEndDetails d) {
@@ -297,7 +286,12 @@ class _ClassDeckState extends State<_ClassDeck> with TickerProviderStateMixin {
   }
 
   double get _animP => Curves.easeInOutCubic.transform(_commitCtrl.value);
-  double get _dragP => (_drag.abs() / _thresh).clamp(0.0, 1.0);
+  double get _animPExit => Curves.easeInCubic.transform(_commitCtrl.value);
+  double get _animPEnter => Curves.easeOutCubic.transform(_commitCtrl.value);
+  double get _dragP {
+    final raw = (_drag.abs() / _thresh).clamp(0.0, 1.0);
+    return Curves.easeOut.transform(raw);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -348,18 +342,19 @@ class _ClassDeckState extends State<_ClassDeck> with TickerProviderStateMixin {
         double ty, sx, op;
         if (slot == 0) {
           if (_committing) {
-            ty = _lerpC(_dragSnapshot, cardH + 120, _animP);
-            sx = _kSX[1];
-            op = 0.0;
+            ty = _lerpC(_kTY[0] + _dragSnapshot, cardH + 120, _animPExit);
+            sx = _lerpC(_kSX[0], _kSX[1], _animPExit);
+            op = (1.0 - _animPExit * 2.5).clamp(0.0, 1.0);
           } else {
-            ty = _drag;
+            ty = _kTY[0] + _drag;
             sx = _lerpC(_kSX[0], _kSX[1], p);
             op = _lerpC(1.0, 0.0, (p * 1.3).clamp(0, 1));
           }
         } else {
-          ty = _lerpC(_kTY[slot], _kTY[slot - 1], p);
-          sx = _lerpC(_kSX[slot], _kSX[slot - 1], p);
-          op = _lerpC(_kOP[slot], _kOP[slot - 1], p);
+          final ep = _committing ? _animPEnter : p;
+          ty = _lerpC(_kTY[slot], _kTY[slot - 1], ep);
+          sx = _lerpC(_kSX[slot], _kSX[slot - 1], ep);
+          op = _lerpC(_kOP[slot], _kOP[slot - 1], ep);
         }
 
         layers.add((
@@ -370,16 +365,16 @@ class _ClassDeckState extends State<_ClassDeck> with TickerProviderStateMixin {
       }
 
       if (_committing && _idx + 3 < ss.length) {
-        final ty = _lerpC(_kTY[2] + 50, _kTY[2], _animP);
-        final sx = _lerpC(_kSX[2] - 0.08, _kSX[2], _animP);
-        final op = _lerpC(0.0, _kOP[2], _animP);
+        final ty = _lerpC(_kTY[2] - 30, _kTY[2], _animPEnter);
+        final sx = _lerpC(_kSX[2] - 0.08, _kSX[2], _animPEnter);
+        final op = _lerpC(0.0, _kOP[2], _animPEnter);
         layers.add((z: 0, w: _card(ss[_idx + 3], ty, sx, op, cardH)));
       }
     } else {
       final p = _committing ? _animP : _dragP;
 
       if (_idx > 0) {
-        final ty = _lerpC(-cardH * 0.32, _kTY[0], p);
+        final ty = _lerpC(cardH * 0.6, _kTY[0], p);
         final sx = _lerpC(_kSX[1], _kSX[0], p);
         final op = _lerpC(0.0, _kOP[0], p);
         layers.add((
@@ -395,7 +390,7 @@ class _ClassDeckState extends State<_ClassDeck> with TickerProviderStateMixin {
 
         double ty, sx, op;
         if (slot == 2) {
-          ty = _lerpC(_kTY[2], _kTY[2] + 12, p);
+          ty = _lerpC(_kTY[2], _kTY[2] - 8, p);
           sx = _lerpC(_kSX[2], _kSX[2] - 0.05, p);
           op = _lerpC(_kOP[2], 0.0, p);
         } else {
@@ -429,9 +424,9 @@ class _ClassDeckState extends State<_ClassDeck> with TickerProviderStateMixin {
               width: double.infinity,
               height: cardH,
               child: _StackClassCard(
+                key: ValueKey(s.id),
                 session: s,
                 onReserve: () => widget.onReserve(s),
-                onTap: () => widget.onTap(s),
               ),
             ),
           ),
@@ -515,8 +510,7 @@ class _ClassSwipeIndicatorState extends State<_ClassSwipeIndicator>
                   margin: const EdgeInsets.symmetric(vertical: 2),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color:
-                        AppColors.dark.withValues(alpha: 0.10 + t * 0.14),
+                    color: AppColors.dark.withValues(alpha: 0.10 + t * 0.14),
                   ),
                 ),
               ),
@@ -538,17 +532,48 @@ class _ClassSwipeIndicatorState extends State<_ClassSwipeIndicator>
   }
 }
 
-// ── Stack Class Card ──────────────────────────────────────────────────────────
+// ── Stack Class Card (with 3D flip) ───────────────────────────────────────────
 
-class _StackClassCard extends StatelessWidget {
+class _StackClassCard extends StatefulWidget {
   final ClassSessionModel session;
   final VoidCallback onReserve;
-  final VoidCallback onTap;
 
-  const _StackClassCard(
-      {required this.session, required this.onReserve, required this.onTap});
+  const _StackClassCard({
+    super.key,
+    required this.session,
+    required this.onReserve,
+  });
 
-  (String, BadgeVariant) get _statusInfo => switch (session.status) {
+  @override
+  State<_StackClassCard> createState() => _StackClassCardState();
+}
+
+class _StackClassCardState extends State<_StackClassCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _flipCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _flipCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    )..addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _flipCtrl.dispose();
+    super.dispose();
+  }
+
+  void _flip() {
+    if (_flipCtrl.isAnimating) return;
+    HapticFeedback.lightImpact();
+    _flipCtrl.isDismissed ? _flipCtrl.forward() : _flipCtrl.reverse();
+  }
+
+  (String, BadgeVariant) get _statusInfo => switch (widget.session.status) {
         ClassStatus.available => ('Disponible', BadgeVariant.success),
         ClassStatus.fewSpots => ('Pocos cupos', BadgeVariant.warning),
         ClassStatus.waitlist => ('Lista de espera', BadgeVariant.info),
@@ -556,17 +581,36 @@ class _StackClassCard extends StatelessWidget {
         ClassStatus.full => ('Lleno', BadgeVariant.error),
       };
 
-  @override
-  Widget build(BuildContext context) {
-    final (statusLabel, variant) = _statusInfo;
-    final h = session.dateTime.hour;
-    final m = session.dateTime.minute.toString().padLeft(2, '0');
+  String _timeStr() {
+    final h = widget.session.dateTime.hour;
+    final m = widget.session.dateTime.minute.toString().padLeft(2, '0');
     final ampm = h >= 12 ? 'PM' : 'AM';
     final hour = h > 12 ? h - 12 : (h == 0 ? 12 : h);
-    final timeStr = '$hour:$m $ampm';
+    return '$hour:$m $ampm';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isBack = _flipCtrl.value >= 0.5;
+    final angle = _flipCtrl.value * math.pi;
+
+    return Transform(
+      alignment: Alignment.center,
+      transform: Matrix4.identity()
+        ..setEntry(3, 2, 0.0014)
+        ..rotateY(isBack ? angle - math.pi : angle),
+      child: isBack ? _buildBack() : _buildFront(),
+    );
+  }
+
+  // ── Front ─────────────────────────────────────────────────────────────────
+
+  Widget _buildFront() {
+    final s = widget.session;
+    final (statusLabel, variant) = _statusInfo;
 
     return GestureDetector(
-      onTap: onTap,
+      onTap: _flip,
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -574,18 +618,18 @@ class _StackClassCard extends StatelessWidget {
           image: DecorationImage(
             image: AssetImage(AppAssets.backgroundClases),
             fit: BoxFit.cover,
-            opacity: 0.10,
+            opacity: 0.25,
           ),
-          border: Border.all(color: const Color(0xFFE8E4DC)),
+          border: Border.all(color: const Color(0xFFD4CFC7), width: 1.2),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.07),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
+              color: Colors.black.withValues(alpha: 0.11),
+              blurRadius: 28,
+              offset: const Offset(0, 10),
             ),
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 5,
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 6,
               offset: const Offset(0, 2),
             ),
           ],
@@ -595,20 +639,16 @@ class _StackClassCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Type badge + status ──────────────────────────────────
               Row(
                 children: [
-                  _TypeBadge(type: session.type),
+                  _TypeBadge(type: s.type),
                   const Spacer(),
                   StatusBadge(label: statusLabel, variant: variant),
                 ],
               ),
-
               const Gap(14),
-
-              // ── Class name ───────────────────────────────────────────
               Text(
-                session.name,
+                s.name,
                 style: GoogleFonts.lexend(
                   fontSize: 22,
                   fontWeight: FontWeight.w700,
@@ -618,10 +658,7 @@ class _StackClassCard extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-
               const Spacer(),
-
-              // ── Info row ─────────────────────────────────────────────
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -630,28 +667,22 @@ class _StackClassCard extends StatelessWidget {
                 ),
                 child: Column(
                   children: [
-                    _infoRow(
-                        Icons.person_outline_rounded, session.instructor),
+                    _infoRow(Icons.person_outline_rounded, s.instructor),
                     const Gap(8),
                     Row(
                       children: [
                         Expanded(
-                          child: _infoRow(
-                              Icons.access_time_rounded, timeStr),
-                        ),
+                            child: _infoRow(
+                                Icons.access_time_rounded, _timeStr())),
                         Expanded(
-                          child: _infoRow(Icons.timer_outlined,
-                              '${session.durationMinutes} min'),
-                        ),
+                            child: _infoRow(Icons.timer_outlined,
+                                '${s.durationMinutes} min')),
                       ],
                     ),
                   ],
                 ),
               ),
-
               const Gap(14),
-
-              // ── Spots + reserve button ────────────────────────────────
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -661,7 +692,7 @@ class _StackClassCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        '${session.availableSpots}',
+                        '${s.availableSpots}',
                         style: GoogleFonts.lexend(
                           fontSize: 22,
                           fontWeight: FontWeight.w700,
@@ -677,47 +708,263 @@ class _StackClassCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  GestureDetector(
-                    onTap: session.status == ClassStatus.full &&
-                            !session.isReserved
-                        ? null
-                        : onReserve,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 11),
-                      decoration: BoxDecoration(
-                        color: session.isReserved
-                            ? AppColors.surfaceContainerLow
-                            : AppColors.dark,
-                        borderRadius: BorderRadius.circular(99),
-                        boxShadow: session.isReserved
-                            ? []
-                            : [
-                                BoxShadow(
-                                  color: AppColors.dark
-                                      .withValues(alpha: 0.22),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                      ),
-                      child: Text(
-                        session.isReserved ? 'Cancelar' : 'Reservar',
-                        style: GoogleFonts.lexend(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: session.isReserved
-                              ? AppColors.textSecondary
-                              : AppColors.onDark,
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.touch_app_rounded,
+                          size: 12, color: AppColors.textDisabled),
+                      const Gap(4),
+                      Text(
+                        'Ver detalle',
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          color: AppColors.textDisabled,
                         ),
                       ),
-                    ),
+                    ],
                   ),
                 ],
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  // ── Back ──────────────────────────────────────────────────────────────────
+
+  Widget _buildBack() {
+    final s = widget.session;
+    final (statusLabel, variant) = _statusInfo;
+    final canReserve =
+        s.status != ClassStatus.full || s.isReserved;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFD4CFC7), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.11),
+            blurRadius: 28,
+            offset: const Offset(0, 10),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ── Back header ───────────────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.fromLTRB(18, 16, 12, 16),
+              color: AppColors.dark,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _TypeBadge(type: s.type),
+                        const Gap(6),
+                        Text(
+                          s.name,
+                          style: GoogleFonts.lexend(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            height: 1.2,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Gap(8),
+                  GestureDetector(
+                    onTap: _flip,
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.close_rounded,
+                          size: 18, color: Colors.white70),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Back detail ───────────────────────────────────────────────
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Info grid
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Column(
+                        children: [
+                          _backInfoRow(Icons.person_outline_rounded,
+                              'Instructor', s.instructor),
+                          const Gap(8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _backInfoRow(
+                                    Icons.access_time_rounded,
+                                    'Hora',
+                                    _timeStr()),
+                              ),
+                              Expanded(
+                                child: _backInfoRow(
+                                    Icons.timer_outlined,
+                                    'Duración',
+                                    '${s.durationMinutes} min'),
+                              ),
+                            ],
+                          ),
+                          const Gap(8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _backInfoRow(
+                                    Icons.group_outlined,
+                                    'Cupos',
+                                    '${s.availableSpots} / ${s.totalSpots}'),
+                              ),
+                              Expanded(
+                                child: _backInfoRow(
+                                    Icons.flag_outlined,
+                                    'Estado',
+                                    statusLabel),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const Gap(14),
+
+                    // Description
+                    if (s.description.isNotEmpty) ...[
+                      Text(
+                        'Sobre la clase',
+                        style: GoogleFonts.lexend(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textSecondary,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const Gap(6),
+                      Text(
+                        s.description,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                          height: 1.55,
+                        ),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+
+                    const Spacer(),
+
+                    // Status badge + reserve button
+                    Row(
+                      children: [
+                        StatusBadge(label: statusLabel, variant: variant),
+                        const Spacer(),
+                      ],
+                    ),
+                    const Gap(10),
+                    GestureDetector(
+                      onTap: canReserve ? widget.onReserve : null,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: s.isReserved
+                              ? AppColors.surfaceContainerLow
+                              : canReserve
+                                  ? AppColors.dark
+                                  : AppColors.surfaceContainer,
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: (!s.isReserved && canReserve)
+                              ? [
+                                  BoxShadow(
+                                    color:
+                                        AppColors.dark.withValues(alpha: 0.18),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ]
+                              : [],
+                        ),
+                        alignment: Alignment.center,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              s.isReserved
+                                  ? Icons.cancel_outlined
+                                  : Icons.check_circle_outline_rounded,
+                              size: 16,
+                              color: s.isReserved
+                                  ? AppColors.textSecondary
+                                  : canReserve
+                                      ? AppColors.primary
+                                      : AppColors.textDisabled,
+                            ),
+                            const Gap(7),
+                            Text(
+                              s.isReserved
+                                  ? 'Cancelar reserva'
+                                  : canReserve
+                                      ? 'Reservar clase'
+                                      : 'Sin cupos',
+                              style: GoogleFonts.lexend(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: s.isReserved
+                                    ? AppColors.textSecondary
+                                    : canReserve
+                                        ? AppColors.primary
+                                        : AppColors.textDisabled,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const Gap(16),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -736,35 +983,53 @@ class _StackClassCard extends StatelessWidget {
           ),
         ],
       );
+
+  Widget _backInfoRow(IconData icon, String label, String value) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: AppColors.textSecondary),
+          const Gap(6),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(label,
+                    style: GoogleFonts.inter(
+                        fontSize: 9,
+                        color: AppColors.textDisabled,
+                        fontWeight: FontWeight.w600)),
+                Text(value,
+                    style: GoogleFonts.inter(
+                        fontSize: 12, color: AppColors.textPrimary),
+                    overflow: TextOverflow.ellipsis),
+              ],
+            ),
+          ),
+        ],
+      );
 }
 
 class _TypeBadge extends StatelessWidget {
   final String type;
   const _TypeBadge({required this.type});
 
-  static const _colors = {
-    'Cardio': (Color(0xFFFFEBEB), Color(0xFFCC2200)),
-    'Fuerza': (Color(0xFFEBF0FF), Color(0xFF1A3ACC)),
-    'CrossFit': (Color(0xFFEBFFF0), Color(0xFF005522)),
-    'Core': (Color(0xFFFFF3EB), Color(0xFFBB5500)),
-    'Flexibilidad': (Color(0xFFF5EBFF), Color(0xFF6600CC)),
-  };
-
   @override
   Widget build(BuildContext context) {
-    final colors = _colors[type] ?? (const Color(0xFFF0F0F0), const Color(0xFF555555));
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: colors.$1,
+        color: Colors.white.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(99),
+        border: Border.all(
+            color: Colors.white.withValues(alpha: 0.30), width: 1),
       ),
       child: Text(
         type.toUpperCase(),
         style: GoogleFonts.lexend(
           fontSize: 8,
           fontWeight: FontWeight.w700,
-          color: colors.$2,
+          color: Colors.white,
           letterSpacing: 1.5,
         ),
       ),

@@ -7,8 +7,9 @@ import '../../../data/mock/mock_data.dart';
 import '../../../data/models/membership_plan_model.dart';
 import '../../../data/models/payment_model.dart';
 import '../../../shared/widgets/iron_app_bar.dart';
+import '../../payments/screens/payment_processing_screen.dart';
+import '../../payments/services/epayco_payment_service.dart';
 import '../models/payment_form_models.dart';
-import '../services/mock_payment_service.dart';
 import '../widgets/credit_debit_card_form.dart';
 import '../widgets/payment_method_selector.dart';
 import '../widgets/payment_summary_card.dart';
@@ -38,7 +39,7 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
   // ── Payment state ─────────────────────────────────────────────────────────
   bool _processing = false;
   PaymentStatus? _lastStatus;
-  String _reference = '';
+  final String _reference = '';
   String _statusMessage = '';
 
   // ── Coupon ────────────────────────────────────────────────────────────────
@@ -47,6 +48,9 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
   double _discount = 0;
 
   late final String _payRef;
+  // Cambia tras cada intento para reconstruir los formularios y BORRAR los
+  // datos sensibles (PAN/CVV) de la UI.
+  int _formEpoch = 0;
 
   @override
   void initState() {
@@ -115,35 +119,123 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
   Future<void> _pay() async {
     if (!_isFormValid || _processing) return;
     FocusScope.of(context).unfocus();
-    setState(() {
-      _processing = true;
-      _lastStatus = null;
-      _statusMessage = '';
-    });
 
-    final result = await MockPaymentService.instance.processPayment(
-      planId: widget.plan.id,
+    // Datos obligatorios para ePayco (se completan desde perfil/mock). Si
+    // faltan, avisar ANTES de llamar a ePayco.
+    final missing = _missingBillingData();
+    if (missing != null) {
+      _showSnack(missing, success: false);
+      return;
+    }
+
+    setState(() => _processing = true); // anti doble-tap
+
+    final request = _buildRequest(
       amount: widget.plan.price - _discount,
-      paymentMethod: _method.fullLabel,
+      description: 'Membresía ${widget.plan.name} · Iron Body',
+      // Clave nueva por intento → un reintento no choca con la anterior.
+      idempotencyKey: newIdempotencyKey(),
     );
 
-    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PaymentProcessingScreen(
+          request: request,
+          onApproved: (tx) => PaymentSuccessScreen(
+            plan: widget.plan,
+            tx: tx,
+            userName: AppSession.currentUser?.fullName,
+            methodCode: request.method.name,
+          ),
+        ),
+      ),
+    );
 
-    setState(() {
-      _processing = false;
-      _lastStatus = result.status;
-      _reference = result.reference;
-      _statusMessage = result.message;
-    });
-
-    if (result.isApproved) {
-      // TODO: Notify backend to activate membership for this user
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-            builder: (_) => PaymentSuccessScreen(plan: widget.plan)),
-      );
+    // Limpiar datos sensibles de la UI tras el intento + reactivar el botón.
+    if (mounted) {
+      setState(() {
+        _cardData = CardFormData();
+        _processing = false;
+        _formEpoch++;
+      });
     }
+  }
+
+  /// Verifica los datos obligatorios para ePayco (email + documento), que se
+  /// completan desde el perfil/mock. Devuelve un mensaje si falta algo.
+  String? _missingBillingData() {
+    final user = AppSession.currentUser;
+    final email = (user?.email ?? _pseData.email).trim();
+    final doc = (user?.document ??
+            (_method == PaymentMethodType.pse
+                ? _pseData.docNumber
+                : _walletData.docNumber))
+        .trim();
+    if (email.isEmpty || !email.contains('@')) {
+      return 'Falta el correo de facturación. Complétalo en tu perfil.';
+    }
+    if (doc.isEmpty) {
+      return 'Falta el número de documento. Complétalo en tu perfil.';
+    }
+    return null;
+  }
+
+  PaymentRequest _buildRequest({
+    required double amount,
+    required String description,
+    required String idempotencyKey,
+  }) {
+    final user = AppSession.currentUser;
+    final method = switch (_method) {
+      PaymentMethodType.credit || PaymentMethodType.debit =>
+        PaymentMethod.card,
+      PaymentMethodType.pse => PaymentMethod.pse,
+      PaymentMethodType.nequi => PaymentMethod.nequi,
+      PaymentMethodType.daviplata => PaymentMethod.daviplata,
+    };
+    final exp = _cardData.expiry.split('/'); // "MM/YY"
+    return PaymentRequest(
+      method: method,
+      amount: amount,
+      description: description,
+      // Estable por intento: el backend lo usa para no duplicar el pago.
+      idempotencyKey: idempotencyKey,
+      // plan_id/user_id quedan nulos: el usuario de la app es mock y los ids
+      // de plan son locales. El backend acepta ambos como opcionales.
+      customerName: user?.fullName,
+      customerEmail: user?.email ?? _pseData.email,
+      customerPhone: user?.phone,
+      customerDoc: user?.document ??
+          (method == PaymentMethod.pse
+              ? _pseData.docNumber
+              : _walletData.docNumber),
+      customerDocType: method == PaymentMethod.pse
+          ? _pseData.docType
+          : 'CC',
+      // Completados desde perfil/mock; no hay backend de direcciones aún.
+      customerCity: 'Neiva',
+      customerAddress: 'Neiva, Huila',
+      customerCountry: 'CO',
+      cardNumber: method == PaymentMethod.card ? _cardData.number : null,
+      cardExpMonth:
+          method == PaymentMethod.card && exp.isNotEmpty ? exp[0] : null,
+      cardExpYear: method == PaymentMethod.card && exp.length > 1
+          ? '20${exp[1]}'
+          : null,
+      cardCvc: method == PaymentMethod.card ? _cardData.cvv : null,
+      dues: _cardData.dues,
+      walletPhone: (method == PaymentMethod.nequi ||
+              method == PaymentMethod.daviplata)
+          ? _walletData.phone
+          : null,
+      pseBank: method == PaymentMethod.pse ? _pseData.bankCode : null,
+      psePersonType: method == PaymentMethod.pse
+          ? (_pseData.personType == PersonType.juridica
+              ? 'juridica'
+              : 'natural')
+          : null,
+    );
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -258,7 +350,7 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
       case PaymentMethodType.credit:
       case PaymentMethodType.debit:
         return CreditDebitCardForm(
-          key: const ValueKey('card'),
+          key: ValueKey('card-$_formEpoch'),
           type: _cardType,
           onTypeChanged: (t) => setState(() {
             _cardType = t;
@@ -528,7 +620,7 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
           const Icon(Icons.lock_rounded, size: 13, color: AppColors.textDisabled),
           const Gap(5),
           Text(
-            'Pago seguro procesado por Wompi',
+            'Pago seguro procesado por ePayco',
             style: GoogleFonts.inter(fontSize: 12, color: AppColors.textDisabled),
           ),
         ],
