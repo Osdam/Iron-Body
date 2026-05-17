@@ -54,6 +54,10 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    // URL pública del backend (IP LAN) para construir enlaces accesibles desde
+    // dispositivos físicos, p. ej. el proxy de GIF de ejercicios.
+    'public_url' => env('APP_PUBLIC_URL'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone
