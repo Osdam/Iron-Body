@@ -41,6 +41,26 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | IRON IA — asistente con OpenAI
+    |--------------------------------------------------------------------------
+    | Arquitectura: Flutter → Laravel → OpenAI. La API key vive SOLO aquí
+    | (backend). Flutter jamás la ve ni llama a OpenAI: consume únicamente los
+    | endpoints internos /api/iron-ai de este backend.
+    */
+    'openai' => [
+        'api_key'              => env('OPENAI_API_KEY'),
+        'model'                => env('OPENAI_MODEL', 'gpt-4.1-mini'),
+        'base_url'             => rtrim(env('OPENAI_BASE_URL', 'https://api.openai.com'), '/'),
+        // IRON IA — interruptor general y parámetros de generación.
+        'enabled'              => filter_var(env('IRON_AI_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+        'max_context_messages' => (int) env('IRON_AI_MAX_CONTEXT_MESSAGES', 12),
+        'temperature'          => (float) env('IRON_AI_TEMPERATURE', 0.4),
+        'max_tokens'           => (int) env('IRON_AI_MAX_TOKENS', 600),
+        'timeout'              => (int) env('IRON_AI_TIMEOUT', 30),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | WorkoutX — referencias visuales de ejercicios (GIF)
     |--------------------------------------------------------------------------
     | Proveedor principal de GIFs/metadatos de ejercicios. La API key vive SOLO

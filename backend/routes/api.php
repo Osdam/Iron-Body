@@ -14,6 +14,8 @@ use App\Http\Controllers\Api\AppExerciseController;
 use App\Http\Controllers\Api\AppRoutineController;
 use App\Http\Controllers\Api\MemberRegistrationController;
 use App\Http\Controllers\Api\MembershipPlanController;
+use App\Http\Controllers\Api\IronAiController;
+use App\Http\Controllers\Api\IronAiConversationController;
 use App\Models\Member;
 use App\Models\Payment;
 use App\Models\Plan;
@@ -75,6 +77,23 @@ Route::post('payments/epayco/confirmation', [EpaycoPaymentController::class, 'co
 Route::get('payments/epayco/response', [EpaycoPaymentController::class, 'response']);
 Route::get('payments/epayco/history', [EpaycoPaymentController::class, 'history']);
 Route::get('payments/{reference}/status', [EpaycoPaymentController::class, 'status']);
+
+// ── IRON IA — asistente con OpenAI (Flutter → Laravel → OpenAI) ──────────────
+// El usuario se resuelve de forma flexible dentro del servicio (Bearer
+// access_hash de Member, member_id, documento o email). Sin identificación,
+// IRON responde igual pero sin contexto personal. La API key vive solo aquí.
+Route::get('iron-ai/access', [IronAiController::class, 'access']);
+Route::get('iron-ai/quota', [IronAiController::class, 'quota']);
+Route::post('iron-ai/chat', [IronAiController::class, 'chat']);
+Route::get('iron-ai/recommendations', [IronAiController::class, 'recommendations']);
+
+// ── IRON IA — centro de conversaciones (CRUD; no consume OpenAI/cuota) ────────
+Route::get('iron-ai/conversations', [IronAiConversationController::class, 'index']);
+Route::post('iron-ai/conversations', [IronAiConversationController::class, 'store']);
+Route::get('iron-ai/conversations/{uuid}/messages', [IronAiConversationController::class, 'messages']);
+Route::post('iron-ai/conversations/{uuid}/archive', [IronAiConversationController::class, 'archive']);
+Route::post('iron-ai/conversations/{uuid}/clear', [IronAiConversationController::class, 'clear']);
+Route::delete('iron-ai/conversations/{uuid}', [IronAiConversationController::class, 'destroy']);
 
 Route::get('plans/features', [PlanController::class, 'allFeatures']);
 Route::put('plans/{plan}/features', [PlanController::class, 'updateFeatures']);
