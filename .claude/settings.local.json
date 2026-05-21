@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /d d:\\\\Github\\\\Iron-Body\\\\backend)",
+      "Bash(Get-ChildItem -Path . -Depth 1 -Directory)",
+      "Bash(Select-Object Name)",
+      "Bash(cd /d/Github/Iron-Body/backend && find . -maxdepth 1 -type d | head -20)",
+      "Read(//d/d/Github/Iron-Body/**)"
+    ]
+  }
+}

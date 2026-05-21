@@ -1,0 +1,318 @@
+<div class="login-container">
+  <!-- Left Section: Branding & Visual (Hidden on Mobile) -->
+  <div class="login-left">
+    <div class="branding-section">
+      <!-- Logo Real Iron Body -->
+      <div class="logo-wrapper">
+        <img src="/assets/Logo_Iron_Body.png" alt="Iron Body Logo" class="logo-image" />
+      </div>
+
+      <!-- Title & Subtitle -->
+      <div class="branding-content">
+        <h1 class="branding-title">Iron Body</h1>
+        <h2 class="branding-subtitle-title">Panel Administrativo</h2>
+        <p class="branding-subtitle">
+          Sistema integral para gimnasios: miembros, pagos, clases y operaciones.
+        </p>
+      </div>
+    </div>
+
+    <!-- Animated Visual Section -->
+    <div class="visual-section">
+      <!-- Decorative Gym Equipment Shapes -->
+      <div class="shapes-container">
+        <!-- Dumbbell 1 - Left -->
+        <svg class="gym-shape dumbbell-1" viewBox="0 0 100 30" xmlns="http://www.w3.org/2000/svg">
+          <!-- Weight Plates -->
+          <circle
+            cx="15"
+            cy="15"
+            r="12"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            opacity="0.4"
+          />
+          <circle
+            cx="85"
+            cy="15"
+            r="12"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            opacity="0.4"
+          />
+          <!-- Bar -->
+          <rect x="35" y="12" width="30" height="6" fill="currentColor" opacity="0.3" rx="3" />
+        </svg>
+
+        <!-- Weight Plate - Center Top -->
+        <svg
+          class="gym-shape weight-plate-1"
+          viewBox="0 0 40 40"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <circle
+            cx="20"
+            cy="20"
+            r="18"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            opacity="0.35"
+          />
+          <circle
+            cx="20"
+            cy="20"
+            r="14"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1"
+            opacity="0.25"
+          />
+        </svg>
+
+        <!-- Kettlebell - Right -->
+        <svg class="gym-shape kettlebell-1" viewBox="0 0 30 40" xmlns="http://www.w3.org/2000/svg">
+          <!-- Handle -->
+          <path
+            d="M 8 12 Q 8 2 15 2 Q 22 2 22 12"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            opacity="0.4"
+          />
+          <!-- Ball -->
+          <circle
+            cx="15"
+            cy="26"
+            r="10"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            opacity="0.4"
+          />
+        </svg>
+
+        <!-- Barbell - Left Bottom -->
+        <svg class="gym-shape barbell-1" viewBox="0 0 120 20" xmlns="http://www.w3.org/2000/svg">
+          <!-- Left Plate -->
+          <rect
+            x="5"
+            y="6"
+            width="8"
+            height="8"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1"
+            opacity="0.3"
+            rx="1"
+          />
+          <!-- Center Bar -->
+          <rect x="20" y="8" width="80" height="4" fill="currentColor" opacity="0.25" rx="2" />
+          <!-- Right Plate -->
+          <rect
+            x="107"
+            y="6"
+            width="8"
+            height="8"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1"
+            opacity="0.3"
+            rx="1"
+          />
+        </svg>
+
+        <!-- Weight Plate - Bottom Right -->
+        <svg
+          class="gym-shape weight-plate-2"
+          viewBox="0 0 50 50"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <circle
+            cx="25"
+            cy="25"
+            r="22"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            opacity="0.3"
+          />
+          <circle
+            cx="25"
+            cy="25"
+            r="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1"
+            opacity="0.2"
+          />
+        </svg>
+
+        <!-- Animated Accent Lines -->
+        <div class="animated-lines">
+          <div class="line line-1"></div>
+          <div class="line line-2"></div>
+          <div class="line line-3"></div>
+        </div>
+      </div>
+
+      <!-- Footer links -->
+      <div class="footer-links">
+        <a href="#" class="link">Política de privacidad</a>
+        <span class="separator">•</span>
+        <a href="#" class="link">Términos de servicio</a>
+        <span class="separator">•</span>
+        <a href="#" class="link">Contacto</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Section: Login Form -->
+  <div class="login-right">
+    <div class="form-container">
+      <!-- Mobile Logo -->
+      <div class="mobile-logo">
+        <img src="/assets/Logo_Iron_Body.png" alt="Iron Body Logo" class="logo-image-sm" />
+      </div>
+
+      <!-- Form Header -->
+      <div class="form-header">
+        <h2 class="form-title">Iniciar sesión</h2>
+        <p class="form-subtitle">Accede a tu panel administrativo de Iron Body.</p>
+      </div>
+
+      <!-- Session Expired Message -->
+      @if (sessionExpired()) {
+        <div class="alert alert-info">
+          Tu sesión ha expirado. Por favor, inicia sesión nuevamente.
+        </div>
+      }
+
+      <!-- Login Form -->
+      <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="login-form">
+        <!-- Email Field -->
+        <div class="form-group">
+          <label for="email" class="form-label">Correo electrónico</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <rect x="2" y="4" width="20" height="16" rx="2" />
+              <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+            </svg>
+            <input
+              id="email"
+              type="email"
+              formControlName="email"
+              class="form-input"
+              [class.is-invalid]="isFieldInvalid('email')"
+              placeholder="admin@ironbody.com"
+              autocomplete="email"
+            />
+          </div>
+          @if (isFieldInvalid('email')) {
+            <span class="error-text">{{ getFieldError('email') }}</span>
+          }
+        </div>
+
+        <!-- Password Field -->
+        <div class="form-group">
+          <label for="password" class="form-label">Contraseña</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            <input
+              id="password"
+              [type]="getPasswordFieldType()"
+              formControlName="password"
+              class="form-input"
+              [class.is-invalid]="isFieldInvalid('password')"
+              placeholder="••••••••"
+              autocomplete="current-password"
+            />
+            <button
+              type="button"
+              class="toggle-password"
+              (click)="togglePasswordVisibility()"
+              tabindex="-1"
+              title="Mostrar/ocultar contraseña"
+            >
+              @if (showPassword()) {
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              } @else {
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path
+                    d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"
+                  />
+                  <line x1="1" y1="1" x2="23" y2="23" />
+                </svg>
+              }
+            </button>
+          </div>
+          @if (isFieldInvalid('password')) {
+            <span class="error-text">{{ getFieldError('password') }}</span>
+          }
+        </div>
+
+        <!-- Remember Me & Forgot Password -->
+        <div class="form-options">
+          <div class="checkbox-wrapper">
+            <input id="rememberMe" type="checkbox" formControlName="rememberMe" class="checkbox" />
+            <label for="rememberMe" class="checkbox-label"> Recordarme por 30 días </label>
+          </div>
+          <a routerLink="/forgot-password" class="forgot-link"> ¿Olvidé mi contraseña? </a>
+        </div>
+
+        <!-- Error Message -->
+        @if (errorMessage()) {
+          <div class="alert alert-error">
+            {{ errorMessage() }}
+          </div>
+        }
+
+        <!-- Success Message -->
+        @if (successMessage()) {
+          <div class="alert alert-success">
+            {{ successMessage() }}
+          </div>
+        }
+
+        <!-- Submit Button -->
+        <button type="submit" class="btn btn-primary" [disabled]="isLoading() || loginForm.invalid">
+          @if (isLoading()) {
+            <span class="btn-loading">
+              <span class="spinner"></span>
+              Ingresando...
+            </span>
+          } @else {
+            Ingresar
+          }
+        </button>
+      </form>
+
+      <!-- Demo Credentials (Development Only) -->
+      <div class="demo-section">
+        <p class="demo-title">Credenciales de prueba:</p>
+        <div class="demo-credentials">
+          <div class="credential">
+            <strong>Super Admin:</strong>
+            <code>superadmin@ironbody.com</code>
+            <span>/</span>
+            <code>admin123</code>
+          </div>
+          <div class="credential">
+            <strong>Admin:</strong>
+            <code>admin@ironbody.com</code>
+            <span>/</span>
+            <code>admin123</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,154 @@
+<?php
+
+namespace App\Models;
+
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+
+class Member extends Model
+{
+    public const STATUS_PENDING_REGISTRATION = 'pending_registration';
+    public const STATUS_INCOMPLETE = 'incomplete';
+    public const STATUS_ACTIVE = 'active';
+    public const STATUS_FAILED = 'failed';
+
+    protected $fillable = [
+        'member_uuid',
+        'user_id',
+        'access_hash',
+        'full_name',
+        'email',
+        'document_number',
+        'phone',
+        'gender',
+        'goal',
+        'training_level',
+        'injuries',
+        'birth_date',
+        'is_minor',
+        'status',
+    ];
+
+    protected $hidden = [
+        'access_hash',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'birth_date' => 'date:Y-m-d',
+            'is_minor' => 'boolean',
+        ];
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (Member $member): void {
+            $member->member_uuid ??= (string) Str::uuid();
+            $member->access_hash ??= self::makeAccessHash($member->member_uuid);
+        });
+    }
+
+    public static function makeAccessHash(string $memberUuid): string
+    {
+        return hash_hmac('sha256', $memberUuid, Config::get('app.key'));
+    }
+
+    public static function normalizeDocumentNumber(?string $documentNumber): ?string
+    {
+        if ($documentNumber === null) {
+            return null;
+        }
+
+        $normalized = trim($documentNumber);
+        $normalized = preg_replace('/[\s\.\-]+/', '', $normalized);
+
+        return $normalized === '' ? null : $normalized;
+    }
+
+    public function isRegistrationResumable(): bool
+    {
+        return $this->status !== self::STATUS_ACTIVE;
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function deleteStoredFiles(): void
+    {
+        $this->loadMissing(['identityDocument', 'signature', 'biometric']);
+
+        foreach ([
+            $this->identityDocument?->front_path,
+            $this->identityDocument?->back_path,
+            $this->signature?->signature_path,
+            $this->biometric?->face_path,
+        ] as $path) {
+            if ($path) {
+                Storage::disk('local')->delete($path);
+            }
+        }
+
+        Storage::disk('local')->deleteDirectory("members/{$this->member_uuid}");
+    }
+
+    public function identityDocument(): HasOne
+    {
+        return $this->hasOne(MemberIdentityDocument::class);
+    }
+
+    public function legalConsent(): HasOne
+    {
+        return $this->hasOne(MemberLegalConsent::class);
+    }
+
+    public function guardian(): HasOne
+    {
+        return $this->hasOne(MemberGuardian::class);
+    }
+
+    public function signature(): HasOne
+    {
+        return $this->hasOne(MemberSignature::class);
+    }
+
+    public function biometric(): HasOne
+    {
+        return $this->hasOne(MemberBiometric::class);
+    }
+
+    /**
+     * Devuelve los feature flags resueltos para este miembro.
+     * Delega en el Plan del User vinculado; si no hay plan activo o
+     * la membresía venció, solo workouts queda en true.
+     */
+    public function resolvedFeatures(): array
+    {
+        $this->loadMissing('user');
+        $user = $this->user;
+
+        if (! $user) {
+            return array_merge(
+                array_map(fn () => false, Plan::defaultFeatures()),
+                ['workouts' => true],
+            );
+        }
+
+        $plan      = $user->plan ? Plan::where('name', $user->plan)->first() : null;
+        $expiresAt = $user->membershipEndDate
+            ? Carbon::parse($user->membershipEndDate)->endOfDay()
+            : null;
+        $isExpired = $expiresAt && $expiresAt->isPast();
+
+        return ($isExpired || ! $plan)
+            ? array_merge(array_map(fn () => false, Plan::defaultFeatures()), ['workouts' => true])
+            : $plan->resolvedFeatures();
+    }
+}
