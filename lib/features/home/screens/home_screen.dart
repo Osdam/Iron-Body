@@ -11,7 +11,7 @@ import '../../workouts/screens/active_workout_screen.dart';
 import '../../classes/screens/classes_screen.dart';
 import '../../progress/screens/progress_screen.dart';
 import '../../notifications/screens/notifications_screen.dart';
-import '../../iron_ai/screens/iron_ai_chat_screen.dart';
+import '../../iron_ai/screens/iron_ai_home_screen.dart';
 import '../../store/screens/store_screen.dart';
 import '../../profile/screens/profile_screen.dart';
 import '../../nutrition/widgets/nutrition_home_card.dart';
@@ -141,7 +141,7 @@ class HomeScreen extends StatelessWidget {
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => const IronAiChatScreen(),
+                          builder: (_) => const IronAiHomeScreen(),
                         ),
                       ),
                     ),
@@ -193,7 +193,7 @@ class HomeScreen extends StatelessWidget {
           'IRON IA',
           () => Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const IronAiChatScreen()),
+            MaterialPageRoute(builder: (_) => const IronAiHomeScreen()),
           ),
         ),
         (

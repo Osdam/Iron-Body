@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/mock/mock_data.dart';
 import '../../../data/models/notification_model.dart';
+import '../../../features/iron_ai/services/iron_ai_service.dart';
 import '../../../shared/widgets/iron_app_bar.dart';
 import '../../../shared/widgets/iron_card.dart';
 
@@ -25,6 +26,34 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   void initState() {
     super.initState();
     _notifications = mockNotifications;
+    _loadIronRecommendations();
+  }
+
+  /// Recomendaciones inteligentes de IRON IA (base inicial, sin push).
+  /// Error-safe: si falla o no hay, la pantalla queda igual.
+  Future<void> _loadIronRecommendations() async {
+    final recs = await IronAiService.instance.fetchRecommendations();
+    if (!mounted || recs.isEmpty) return;
+    final mapped = recs.map((r) => NotificationModel(
+          id: 'iron-${r.id}',
+          title: r.title,
+          body: r.message,
+          type: _typeFor(r.type),
+          createdAt: DateTime.now(),
+        ));
+    setState(() => _notifications = [...mapped, ..._notifications]);
+  }
+
+  NotificationType _typeFor(String type) {
+    switch (type) {
+      case 'membership':
+      case 'reminder':
+        return NotificationType.payment;
+      case 'class':
+        return NotificationType.classes;
+      default:
+        return NotificationType.system;
+    }
   }
 
   List<NotificationModel> get _filtered {

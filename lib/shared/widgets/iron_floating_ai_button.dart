@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lottie/lottie.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/theme/app_colors.dart';
-import '../../features/iron_ai/screens/iron_ai_chat_screen.dart';
+import '../../features/iron_ai/screens/iron_ai_home_screen.dart';
 
 class IronFloatingAiButton extends StatelessWidget {
   const IronFloatingAiButton({super.key});
@@ -14,7 +14,7 @@ class IronFloatingAiButton extends StatelessWidget {
       onTap: () => Navigator.push(
         context,
         PageRouteBuilder(
-          pageBuilder: (context, animation, secondary) => const IronAiChatScreen(),
+          pageBuilder: (context, animation, secondary) => const IronAiHomeScreen(),
           transitionDuration: const Duration(milliseconds: 350),
           transitionsBuilder: (context, animation, secondary, child) => SlideTransition(
             position: Tween<Offset>(
