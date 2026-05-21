@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class Trainer extends Model
 {
@@ -45,8 +47,79 @@ class Trainer extends Model
         return $this->hasMany(MyClass::class, 'trainer_id');
     }
 
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(TrainerReview::class);
+    }
+
+    // Alias para TrainerResource y el endpoint de calificaciones de la app
+    public function ratings(): HasMany
+    {
+        return $this->hasMany(TrainerReview::class);
+    }
+
+    public function getIsActiveAttribute(): bool
+    {
+        return $this->isActive();
+    }
+
     public function getNameAttribute(): string
     {
         return (string) ($this->attributes['full_name'] ?? '');
+    }
+
+    public function isActive(): bool
+    {
+        $status = Str::lower((string) ($this->status ?? 'active'));
+
+        return in_array($status, ['active', 'activo'], true);
+    }
+
+    public function certificationsArray(): array
+    {
+        $value = $this->certifications;
+
+        if (is_array($value)) {
+            return $this->cleanList($value);
+        }
+
+        if (! is_string($value) || trim($value) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+
+        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+            return $this->cleanList($decoded);
+        }
+
+        return $this->cleanList(preg_split('/\r\n|\r|\n|,/', $value) ?: []);
+    }
+
+    public function publicPhotoUrl(): ?string
+    {
+        $url = $this->avatar_url ?: $this->banner_url;
+
+        if (! $url) {
+            return null;
+        }
+
+        if (Str::startsWith($url, ['http://', 'https://'])) {
+            return $url;
+        }
+
+        if (Str::startsWith($url, ['/'])) {
+            return url($url);
+        }
+
+        return Storage::disk('public')->url($url);
+    }
+
+    private function cleanList(array $items): array
+    {
+        return array_values(array_filter(array_map(
+            fn (mixed $item): string => trim((string) $item),
+            $items
+        )));
     }
 }

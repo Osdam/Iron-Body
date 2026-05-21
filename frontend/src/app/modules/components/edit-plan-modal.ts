@@ -16,7 +16,7 @@ import {
   FormGroup,
   Validators,
 } from '@angular/forms';
-import { ApiService, PlanSummary } from '../../services/api.service';
+import { ApiService, PlanFeatures, PlanSummary } from '../../services/api.service';
 import { PlanCardData } from './plan-card';
 
 @Component({
@@ -161,6 +161,36 @@ import { PlanCardData } from './plan-card';
                 placeholder="Dejar vacío para ilimitado"
                 min="0"
               />
+            </div>
+          </div>
+
+          <!-- ── Módulos de la app ─────────────────────────────────────── -->
+          <div class="features-section">
+            <div class="features-header">
+              <span class="material-symbols-outlined" aria-hidden="true">phone_android</span>
+              <div>
+                <h3 class="features-title">Módulos de la app</h3>
+                <p class="features-subtitle">Activa o desactiva cada sección para los usuarios de este plan.</p>
+              </div>
+            </div>
+            <div class="features-grid">
+              <label class="feature-toggle" *ngFor="let feat of featureList">
+                <div class="feature-info">
+                  <span class="material-symbols-outlined feature-icon" aria-hidden="true">{{ feat.icon }}</span>
+                  <span class="feature-label">{{ feat.label }}</span>
+                </div>
+                <div
+                  class="toggle-track"
+                  [class.on]="planForm.get(feat.key)?.value"
+                  (click)="toggleFeature(feat.key)"
+                  role="switch"
+                  [attr.aria-checked]="planForm.get(feat.key)?.value"
+                  tabindex="0"
+                  (keydown.space)="toggleFeature(feat.key)"
+                >
+                  <div class="toggle-thumb"></div>
+                </div>
+              </label>
             </div>
           </div>
 
@@ -562,12 +592,121 @@ import { PlanCardData } from './plan-card';
         color: #ffb4ab;
       }
 
+      /* ── Feature toggles ──────────────────────────────────────────── */
+      .features-section {
+        border: 1px solid #353534;
+        border-radius: 10px;
+        padding: 1.25rem;
+        margin-bottom: 1.5rem;
+        background: rgba(255,255,255,0.02);
+      }
+
+      .features-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        margin-bottom: 1.25rem;
+      }
+
+      .features-header .material-symbols-outlined {
+        font-size: 1.4rem;
+        color: #f5c518;
+        margin-top: 2px;
+      }
+
+      .features-title {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #e5e2e1;
+        margin: 0 0 0.2rem;
+        font-family: Inter, sans-serif;
+      }
+
+      .features-subtitle {
+        font-size: 0.8rem;
+        color: #8a847d;
+        margin: 0;
+      }
+
+      .features-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+      }
+
+      .feature-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        border: 1px solid #2a2a2a;
+        border-radius: 8px;
+        background: #151515;
+        cursor: pointer;
+        transition: border-color 200ms;
+      }
+
+      .feature-toggle:hover { border-color: rgba(245,197,24,0.3); }
+
+      .feature-info {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-width: 0;
+      }
+
+      .feature-icon {
+        font-size: 1.1rem;
+        color: #77716a;
+        flex-shrink: 0;
+      }
+
+      .feature-label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #c8c0b4;
+        white-space: nowrap;
+        font-family: Inter, sans-serif;
+      }
+
+      .toggle-track {
+        width: 40px;
+        height: 22px;
+        border-radius: 11px;
+        background: #333;
+        position: relative;
+        cursor: pointer;
+        transition: background 200ms;
+        flex-shrink: 0;
+        outline: none;
+      }
+
+      .toggle-track.on { background: #f5c518; }
+
+      .toggle-track:focus-visible { box-shadow: 0 0 0 3px rgba(245,197,24,0.3); }
+
+      .toggle-thumb {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #fff;
+        transition: transform 200ms;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+      }
+
+      .toggle-track.on .toggle-thumb { transform: translateX(18px); }
+
       @media (max-width: 640px) {
         .modal-container { padding: 0.5rem; }
         .modal-card { border-radius: 10px; }
         .modal-header { padding: 1.5rem; }
         .modal-form { padding: 1.5rem; }
         .form-grid { grid-template-columns: 1fr; gap: 1.25rem; }
+        .features-grid { grid-template-columns: 1fr; }
         .modal-footer {
           flex-direction: column;
           padding: 1.25rem 1.5rem;
@@ -588,6 +727,17 @@ export class EditPlanModalComponent implements OnChanges {
   planForm!: FormGroup;
   isSaving = signal(false);
   errorMessage = signal('');
+
+  readonly featureList = [
+    { key: 'feat_iron_ia',          label: 'Iron IA',      icon: 'psychology' },
+    { key: 'feat_workouts',         label: 'Entrenar',     icon: 'fitness_center' },
+    { key: 'feat_custom_routines',  label: 'Mis rutinas',  icon: 'edit_note' },
+    { key: 'feat_ranking',          label: 'Ranking',      icon: 'leaderboard' },
+    { key: 'feat_classes',          label: 'Clases',       icon: 'calendar_month' },
+    { key: 'feat_progress',         label: 'Progreso',     icon: 'trending_up' },
+    { key: 'feat_nutrition',        label: 'Nutrición',    icon: 'restaurant' },
+  ];
+
   private readonly defaultBenefits = [
     'Acceso al gimnasio durante la vigencia del plan',
     'Reserva de clases grupales disponibles',
@@ -606,12 +756,20 @@ export class EditPlanModalComponent implements OnChanges {
       active: [true, Validators.required],
       access_classes: [true],
       reservations_limit: [null],
+      feat_iron_ia:         [false],
+      feat_workouts:        [true],
+      feat_custom_routines: [false],
+      feat_ranking:         [false],
+      feat_classes:         [false],
+      feat_progress:        [true],
+      feat_nutrition:       [false],
     });
   }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['plan'] && this.plan) {
       this.errorMessage.set('');
+      const f = (this.plan as any).features as PlanFeatures | null | undefined;
       this.planForm.patchValue({
         name: this.plan.name || '',
         benefits: this.plan.benefits || this.defaultBenefits,
@@ -620,8 +778,20 @@ export class EditPlanModalComponent implements OnChanges {
         active: this.plan.active ?? true,
         access_classes: true,
         reservations_limit: null,
+        feat_iron_ia:         f?.iron_ia         ?? false,
+        feat_workouts:        f?.workouts        ?? true,
+        feat_custom_routines: f?.custom_routines ?? false,
+        feat_ranking:         f?.ranking         ?? false,
+        feat_classes:         f?.classes         ?? false,
+        feat_progress:        f?.progress        ?? true,
+        feat_nutrition:       f?.nutrition       ?? false,
       });
     }
+  }
+
+  toggleFeature(key: string): void {
+    const ctrl = this.planForm.get(key);
+    if (ctrl) ctrl.setValue(!ctrl.value);
   }
 
   onSubmit(): void {
@@ -643,7 +813,7 @@ export class EditPlanModalComponent implements OnChanges {
     this.errorMessage.set('');
 
     const val = this.planForm.value;
-    const data = {
+    const planData = {
       name: val.name,
       benefits: String(val.benefits || '').trim(),
       price: Number(val.price),
@@ -652,8 +822,17 @@ export class EditPlanModalComponent implements OnChanges {
       access_classes: val.access_classes,
       reservations_limit: val.reservations_limit ? Number(val.reservations_limit) : null,
     };
+    const features: PlanFeatures = {
+      iron_ia:         val.feat_iron_ia,
+      workouts:        val.feat_workouts,
+      custom_routines: val.feat_custom_routines,
+      ranking:         val.feat_ranking,
+      classes:         val.feat_classes,
+      progress:        val.feat_progress,
+      nutrition:       val.feat_nutrition,
+    };
 
-    this.api.updatePlan(this.plan.id, data as any).subscribe({
+    this.api.updatePlan(this.plan.id, { ...planData, features } as any).subscribe({
       next: (updated) => {
         this.isSaving.set(false);
         this.onPlanUpdated.emit(updated);

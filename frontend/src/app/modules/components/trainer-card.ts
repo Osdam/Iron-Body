@@ -2,6 +2,13 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { LottieIconComponent } from '../../shared/components/lottie-icon/lottie-icon.component';
 
+export interface TrainerReview {
+  memberName: string;
+  rating: number;
+  comment: string;
+  createdAt: string;
+}
+
 export interface Trainer {
   id: string;
   fullName: string;
@@ -14,7 +21,6 @@ export interface Trainer {
   experienceYears: number;
   contractType: string;
   status: string;
-  rating: number;
   bio?: string;
   certifications?: string;
   avatarUrl?: string;
@@ -22,6 +28,9 @@ export interface Trainer {
   availability: TrainerAvailability[];
   assignedClasses: number;
   assignedMembers: number;
+  reviewsAvgRating?: number;
+  reviewsCount?: number;
+  recentReviews?: TrainerReview[];
   createdAt: string;
   updatedAt: string;
 }
@@ -81,8 +90,8 @@ export interface TrainerAvailability {
           <div class="stat-item">
             <span class="stat-icon material-symbols-outlined">star</span>
             <div class="stat-content">
-              <div class="stat-value">{{ trainer.rating.toFixed(1) }}</div>
-              <div class="stat-label">Evaluación</div>
+              <div class="stat-value">{{ (trainer.reviewsAvgRating ?? 0).toFixed(1) }}</div>
+              <div class="stat-label">{{ (trainer.reviewsCount ?? 0) }} reseñas</div>
             </div>
           </div>
 
@@ -115,6 +124,30 @@ export interface TrainerAvailability {
               <div class="stat-label">Miembros</div>
             </div>
           </div>
+        </div>
+
+        <!-- Reviews from App -->
+        <div class="card-reviews">
+          <div class="reviews-header">
+            <span class="material-symbols-outlined reviews-icon">reviews</span>
+            <span class="reviews-title">Calificaciones de la app</span>
+          </div>
+          <ng-container *ngIf="trainer.recentReviews?.length; else noReviews">
+            <div *ngFor="let review of trainer.recentReviews!.slice(0, 2)" class="review-item">
+              <div class="review-meta">
+                <span class="review-member">{{ review.memberName }}</span>
+                <span class="review-stars-mini">
+                  <span *ngFor="let i of ratingStars"
+                    [class.star-filled]="i <= review.rating"
+                    [class.star-empty]="i > review.rating">{{ i <= review.rating ? '★' : '☆' }}</span>
+                </span>
+              </div>
+              <p class="review-comment" *ngIf="review.comment">{{ review.comment }}</p>
+            </div>
+          </ng-container>
+          <ng-template #noReviews>
+            <p class="no-reviews">Sin calificaciones aún</p>
+          </ng-template>
         </div>
 
         <!-- Specialties -->
@@ -646,12 +679,97 @@ export interface TrainerAvailability {
         background: rgba(255, 180, 171, 0.16);
         border-color: rgba(255, 180, 171, 0.38);
       }
+
+      .card-reviews {
+        border: 1px solid #353534;
+        border-radius: 12px;
+        padding: 0.65rem 0.8rem;
+        background: #151515;
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+      }
+
+      .reviews-header {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        margin-bottom: 0.1rem;
+      }
+
+      .reviews-icon {
+        font-size: 0.8rem;
+        color: #f5c518;
+      }
+
+      .reviews-title {
+        font-size: 0.65rem;
+        font-weight: 900;
+        color: #b4afa6;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .review-item {
+        border-top: 1px solid #2a2929;
+        padding-top: 0.38rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+      }
+
+      .review-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+      }
+
+      .review-member {
+        font-size: 0.73rem;
+        font-weight: 700;
+        color: #e5e2e1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 110px;
+      }
+
+      .review-stars-mini {
+        font-size: 0.7rem;
+        white-space: nowrap;
+        letter-spacing: 1px;
+      }
+
+      .star-filled { color: #f5c518; }
+      .star-empty  { color: #3a3838; }
+
+      .review-comment {
+        margin: 0;
+        font-size: 0.7rem;
+        color: #b4afa6;
+        line-height: 1.35;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+
+      .no-reviews {
+        margin: 0;
+        font-size: 0.7rem;
+        color: #77716a;
+        text-align: center;
+        padding: 0.2rem 0;
+      }
     `,
   ],
 })
 export default class TrainerCardComponent {
   @Input() trainer!: Trainer;
   @Output() view = new EventEmitter<Trainer>();
+
+  ratingStars = [1, 2, 3, 4, 5];
   @Output() edit = new EventEmitter<Trainer>();
   @Output() toggleStatus = new EventEmitter<Trainer>();
   @Output() delete = new EventEmitter<Trainer>();

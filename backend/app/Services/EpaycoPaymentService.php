@@ -6,6 +6,7 @@ use App\Models\Payment;
 use App\Models\PaymentTransaction;
 use App\Models\Plan;
 use App\Models\User;
+use App\Models\Member;
 use Carbon\Carbon;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -94,6 +95,7 @@ class EpaycoPaymentService
                 'reference'       => $reference,
                 'idempotency_key' => $idem ?: (string) Str::uuid(),
                 'order_id'        => $orderId,
+                'member_id'       => $data['member_id'] ?? null,
                 'user_id'         => $data['user_id'] ?? null,
                 'plan_id'         => $data['plan_id'] ?? null,
                 'amount'          => round((float) ($data['amount'] ?? 0), 2),
@@ -404,12 +406,20 @@ class EpaycoPaymentService
     }
 
     /**
-     * Al aprobarse: crea el registro legado en `payments` y extiende membresía,
-     * SOLO si hay un user_id real. Best-effort: nunca rompe la confirmación.
+     * Al aprobarse: crea el registro legado en `payments` y extiende membresía.
+     * Si llega member_id, usa su user_id enlazado para mantener una sola ficha
+     * CRM. Best-effort: nunca rompe la confirmación.
      */
     protected function onApproved(PaymentTransaction $tx): void
     {
         try {
+            if (!$tx->user_id && $tx->member_id) {
+                $member = Member::with('user')->find($tx->member_id);
+                if ($member?->user_id) {
+                    $tx->forceFill(['user_id' => $member->user_id])->save();
+                }
+            }
+
             if (!$tx->user_id || !User::whereKey($tx->user_id)->exists()) {
                 return; // app con usuario mock: no hay a quién asociar
             }
@@ -418,6 +428,7 @@ class EpaycoPaymentService
                 ['reference' => $tx->reference],
                 [
                     'user_id' => $tx->user_id,
+                    'member_id' => $tx->member_id,
                     'plan_id' => $tx->plan_id,
                     'amount'  => $tx->amount,
                     'method'  => 'epayco',
@@ -427,6 +438,10 @@ class EpaycoPaymentService
             );
             if ($payment->wasRecentlyCreated && $tx->plan_id) {
                 $this->extendMembership($payment);
+            }
+
+            if ($tx->member_id) {
+                Member::whereKey($tx->member_id)->update(['status' => Member::STATUS_ACTIVE]);
             }
         } catch (Throwable $e) {
             Log::warning('ePayco onApproved post-proceso falló', [

@@ -9,10 +9,23 @@ use App\Http\Controllers\Api\RoutineController;
 use App\Http\Controllers\Api\TrainerController;
 use App\Http\Controllers\Api\EpaycoPaymentController;
 use App\Http\Controllers\Api\ExerciseController;
+use App\Http\Controllers\Api\AppClassController;
+use App\Http\Controllers\Api\AppExerciseController;
+use App\Http\Controllers\Api\AppRoutineController;
+use App\Http\Controllers\Api\MemberRegistrationController;
+use App\Http\Controllers\Api\MembershipPlanController;
+use App\Models\Member;
 use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\User;
 use App\Models\MyClass;
+
+Route::bind('member', function (string $value): Member {
+    return Member::query()
+        ->where('id', $value)
+        ->orWhere('member_uuid', $value)
+        ->firstOrFail();
+});
 
 Route::get('/health', function () {
     return response()->json([
@@ -35,9 +48,22 @@ Route::get('/dashboard', function () {
 Route::get('users', [UserController::class, 'index']);
 Route::post('users', [UserController::class, 'store']);
 Route::get('users/{user}', [UserController::class, 'show']);
+Route::get('users/{user}/plan-features', [UserController::class, 'planFeatures']);
 Route::patch('users/{user}', [UserController::class, 'update']);
 Route::put('users/{user}', [UserController::class, 'update']);
 Route::delete('users/{user}', [UserController::class, 'destroy']);
+
+Route::middleware('member.registration.token')->group(function () {
+    Route::get('members/incomplete', [MemberRegistrationController::class, 'incomplete']);
+    Route::post('members/login', [MemberRegistrationController::class, 'login']);
+    Route::post('members/register', [MemberRegistrationController::class, 'register']);
+    Route::post('members/{member}/identity', [MemberRegistrationController::class, 'identity']);
+    Route::post('members/{member}/legal-consent', [MemberRegistrationController::class, 'legalConsent']);
+    Route::post('members/{member}/signature', [MemberRegistrationController::class, 'signature']);
+    Route::post('members/{member}/biometric', [MemberRegistrationController::class, 'biometric']);
+    Route::delete('members/{member}', [MemberRegistrationController::class, 'destroy']);
+
+});
 
 // ── ePayco — pago 100% IN-APP por API (sin navegador/WebView) ───────────────
 Route::post('payments/epayco/create', [EpaycoPaymentController::class, 'create']);
@@ -50,13 +76,39 @@ Route::get('payments/epayco/response', [EpaycoPaymentController::class, 'respons
 Route::get('payments/epayco/history', [EpaycoPaymentController::class, 'history']);
 Route::get('payments/{reference}/status', [EpaycoPaymentController::class, 'status']);
 
+Route::get('plans/features', [PlanController::class, 'allFeatures']);
+Route::put('plans/{plan}/features', [PlanController::class, 'updateFeatures']);
 Route::apiResource('plans', PlanController::class)->only(['index','show','store','update','destroy']);
+Route::get('membership-plans', [MembershipPlanController::class, 'index']);
+Route::get('membership-plans/{plan}', [MembershipPlanController::class, 'show']);
 Route::apiResource('payments', PaymentController::class)->only(['index','show','store','update']);
 Route::apiResource('classes', ClassController::class)
     ->only(['index','show','store','update','destroy'])
     ->parameters(['classes' => 'myClass']);
+Route::get('classes/{myClass}/reservations', [ClassController::class, 'reservations']);
+
+// ── Catálogo de ejercicios para la app (público) ─────────────────────────────
+Route::get('app/exercises', [AppExerciseController::class, 'index']);
+
+// ── App: clases y entrenadores para miembros (autenticación por access_hash) ──
+Route::middleware('auth.member')->group(function (): void {
+    Route::get('app/classes', [AppClassController::class, 'index']);
+    Route::post('app/classes/{myClass}/reserve', [AppClassController::class, 'reserve']);
+    Route::delete('app/classes/{myClass}/reserve', [AppClassController::class, 'cancel']);
+    // Rutas alias en /classes para compatibilidad con la app móvil
+    Route::post('classes/{myClass}/reserve', [ClassController::class, 'reserve']);
+    Route::post('classes/{myClass}/cancel',  [ClassController::class, 'cancel']);
+    // Calificación de entrenadores
+    Route::post('trainers/{trainer}/rate', [TrainerController::class, 'rate']);
+    // Rutinas para miembros
+    Route::get('app/routines/assigned', [AppRoutineController::class, 'assigned']);
+    Route::get('app/routines/custom',   [AppRoutineController::class, 'custom']);
+    Route::post('app/routines',         [AppRoutineController::class, 'store']);
+    Route::delete('app/routines/{routine}', [AppRoutineController::class, 'destroy']);
+});
 Route::apiResource('routines', RoutineController::class)->only(['index','show','store','update','destroy']);
 Route::patch('routines/{routine}/assign', [RoutineController::class, 'assign']);
+Route::post('trainers/{trainer}/reviews', [TrainerController::class, 'review']);
 Route::apiResource('trainers', TrainerController::class)->only(['index','show','store','update','destroy']);
 
 // ── Ejercicios — referencias visuales (GIF) vía WorkoutX ────────────────────

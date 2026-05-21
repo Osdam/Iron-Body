@@ -5,6 +5,7 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -57,5 +58,10 @@ class User extends Authenticatable
     {
         $value = $this->attributes['membership_end_date'] ?? null;
         return $value ? substr($value, 0, 10) : null;
+    }
+
+    public function appMember(): HasOne
+    {
+        return $this->hasOne(Member::class);
     }
 }

@@ -35,6 +35,10 @@ return [
         ],
     ],
 
+    'member_registration' => [
+        'token' => env('MEMBER_REGISTRATION_TOKEN'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | WorkoutX — referencias visuales de ejercicios (GIF)

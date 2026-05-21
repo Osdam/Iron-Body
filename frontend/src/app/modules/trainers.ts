@@ -493,6 +493,9 @@ export default class TrainersModule implements OnInit {
       specialties: Array.isArray(t?.specialties) ? t.specialties : [],
       assignedClasses: Number(t?.assignedClasses ?? 0),
       assignedMembers: Number(t?.assignedMembers ?? 0),
+      reviewsAvgRating: Number(t?.reviewsAvgRating ?? 0),
+      reviewsCount: Number(t?.reviewsCount ?? 0),
+      recentReviews: Array.isArray(t?.recentReviews) ? t.recentReviews : [],
     } as Trainer;
   }
 
@@ -592,7 +595,6 @@ export default class TrainersModule implements OnInit {
         experienceYears: Number(payload.experienceYears || 0),
         contractType: payload.contractType || null,
         status: this.toBackendStatus(payload.status),
-        rating: Number(payload.rating || 0),
         bio: payload.bio || null,
         certifications: payload.certifications || null,
         availability: this.normalizeAvailability(payload.availability || []),
@@ -788,7 +790,6 @@ export default class TrainersModule implements OnInit {
         experienceYears: 6,
         contractType: 'Tiempo completo',
         status: 'Activo',
-        rating: 4.8,
         bio: 'Especialista en hipertrofia y desarrollo de fuerza. Experiencia de 6 años con atletas de competencia.',
         certifications: 'Entrenamiento funcional, nutrición deportiva, primeros auxilios',
         availability: [
@@ -802,6 +803,9 @@ export default class TrainersModule implements OnInit {
         ],
         assignedClasses: 5,
         assignedMembers: 24,
+        reviewsAvgRating: 0,
+        reviewsCount: 0,
+        recentReviews: [],
         createdAt: now,
         updatedAt: now,
       },
@@ -817,7 +821,6 @@ export default class TrainersModule implements OnInit {
         experienceYears: 4,
         contractType: 'Medio tiempo',
         status: 'Activo',
-        rating: 4.7,
         bio: 'Entrenadora funcional con enfoque en entrenamiento en circuito. Certificada en CrossFit.',
         certifications: 'CrossFit Level 2, nutrición deportiva',
         availability: [
@@ -831,6 +834,9 @@ export default class TrainersModule implements OnInit {
         ],
         assignedClasses: 4,
         assignedMembers: 18,
+        reviewsAvgRating: 0,
+        reviewsCount: 0,
+        recentReviews: [],
         createdAt: now,
         updatedAt: now,
       },
@@ -846,7 +852,6 @@ export default class TrainersModule implements OnInit {
         experienceYears: 8,
         contractType: 'Por horas',
         status: 'Pendiente',
-        rating: 4.5,
         bio: 'Entrenador de Cross Training y boxeo con experiencia en competiciones internacionales.',
         certifications: 'Boxeo profesional, CrossFit, entrenamiento táctico',
         availability: [
@@ -860,6 +865,9 @@ export default class TrainersModule implements OnInit {
         ],
         assignedClasses: 2,
         assignedMembers: 10,
+        reviewsAvgRating: 0,
+        reviewsCount: 0,
+        recentReviews: [],
         createdAt: now,
         updatedAt: now,
       },

@@ -19,7 +19,7 @@ class PaymentTransaction extends Model
     public const STATUS_EXPIRED    = 'expired';
 
     protected $fillable = [
-        'reference', 'idempotency_key', 'order_id', 'user_id', 'plan_id',
+        'reference', 'idempotency_key', 'order_id', 'member_id', 'user_id', 'plan_id',
         'amount', 'currency', 'status', 'provider', 'method', 'provider_ref',
         'checkout_url', 'description', 'failure_reason', 'customer',
         'raw_response', 'paid_at',
@@ -35,6 +35,11 @@ class PaymentTransaction extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function member()
+    {
+        return $this->belongsTo(Member::class);
     }
 
     /** Estado finalizado: no admite reintento sobre la misma referencia. */
@@ -61,8 +66,13 @@ class PaymentTransaction extends Model
     public function toPublicArray(): array
     {
         return [
+            'ok'           => !in_array($this->status, [self::STATUS_FAILED, self::STATUS_CANCELLED, self::STATUS_EXPIRED], true),
+            'transaction_id' => $this->provider_ref ?: (string) $this->id,
             'reference'    => $this->reference,
             'status'       => $this->status,
+            'member_id'    => $this->member_id,
+            'user_id'      => $this->user_id,
+            'plan_id'      => $this->plan_id,
             'amount'       => $this->amount,
             'currency'     => $this->currency,
             'provider'     => $this->provider,

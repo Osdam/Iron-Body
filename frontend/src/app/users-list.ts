@@ -1,7 +1,7 @@
 import { Component, ElementRef, HostListener, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ApiService, UserSummary } from './services/api.service';
+import { ApiService, IncompleteMemberRegistration, UserSummary } from './services/api.service';
 import { CreateMemberModalComponent } from './modules/components/create-member-modal';
 import { MembersEmptyComponent } from './modules/components/members-empty';
 import { EditMemberModalComponent } from './modules/components/edit-member-modal';
@@ -84,6 +84,67 @@ interface UserFilterOption {
 
       <!-- Main Content -->
       <ng-container *ngIf="!loading() && !error()">
+        <section *ngIf="incompleteRegistrations().length > 0" class="table-section incomplete-section">
+          <div class="section-heading">
+            <div>
+              <h2>Registros incompletos</h2>
+              <p>Miembros creados desde la app que aun no completan identidad, firma o biometría.</p>
+            </div>
+            <span class="pending-count">{{ incompleteRegistrations().length }}</span>
+          </div>
+
+          <div class="members-table-wrapper">
+            <table class="members-table">
+              <thead>
+                <tr>
+                  <th>Miembro</th>
+                  <th>Documento</th>
+                  <th>Teléfono</th>
+                  <th>Estado registro</th>
+                  <th>Creado</th>
+                  <th class="col-actions">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let registration of incompleteRegistrations(); trackBy: trackByRegistrationId">
+                  <td>
+                    <div class="cell-member">
+                      <div class="avatar small">{{ getInitials(registration.name) }}</div>
+                      <div>
+                        <strong>{{ registration.name }}</strong>
+                        <span>{{ registration.email || registration.member_uuid }}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td>{{ registration.document || '—' }}</td>
+                  <td>{{ registration.phone || '—' }}</td>
+                  <td>
+                    <span class="badge" [class]="'status-' + registration.registration_status">
+                      {{ getStatusLabel(registration.registration_status) }}
+                    </span>
+                  </td>
+                  <td>{{ registration.created_at | date: 'dd MMM yyyy, HH:mm' }}</td>
+                  <td class="col-actions">
+                    <button
+                      type="button"
+                      class="row-btn danger"
+                      title="Eliminar registro incompleto"
+                      [disabled]="busyMemberId() === registration.member_id"
+                      (click)="deleteIncompleteRegistration(registration)"
+                    >
+                      <app-lottie-icon
+                        src="/assets/crm/delete.json"
+                        [size]="20"
+                        [loop]="true"
+                      ></app-lottie-icon>
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
         <!-- Empty State -->
         <ng-container *ngIf="members().length === 0">
           <app-members-empty *ngIf="canCreateMembers()" (onCreate)="openCreateMember()"></app-members-empty>
@@ -695,6 +756,41 @@ interface UserFilterOption {
         animation: fadeIn 300ms ease;
       }
 
+      .incomplete-section {
+        margin-bottom: 1.5rem;
+      }
+
+      .section-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 1rem;
+        margin-bottom: 0.85rem;
+      }
+
+      .section-heading h2 {
+        margin: 0 0 0.25rem;
+        font: 800 1.15rem Inter, sans-serif;
+        color: #0a0a0a;
+      }
+
+      .section-heading p {
+        margin: 0;
+        color: #666;
+        font-size: 0.9rem;
+      }
+
+      .pending-count {
+        min-width: 2.25rem;
+        height: 2.25rem;
+        display: inline-grid;
+        place-items: center;
+        border-radius: 10px;
+        background: #fef3c7;
+        color: #92400e;
+        font-weight: 900;
+      }
+
       @keyframes fadeIn {
         from {
           opacity: 0;
@@ -1269,6 +1365,17 @@ interface UserFilterOption {
         color: #a16207;
       }
 
+      .status-pending_registration,
+      .status-incomplete {
+        background: #fef3c7;
+        color: #92400e;
+      }
+
+      .status-failed {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+
       .status-expired {
         background: #e0e7ff;
         color: #3730a3;
@@ -1494,6 +1601,7 @@ export class UsersList implements OnInit {
   private auth = inject(AuthService);
 
   members = signal<UserSummary[]>([]);
+  incompleteRegistrations = signal<IncompleteMemberRegistration[]>([]);
   loading = signal(true);
   error = signal('');
   isCreateMemberOpen = signal(false);
@@ -1572,10 +1680,19 @@ export class UsersList implements OnInit {
         this.loading.set(false);
       },
     });
+
+    this.api.getIncompleteMemberRegistrations().subscribe({
+      next: (res) => this.incompleteRegistrations.set(res.data || []),
+      error: () => this.incompleteRegistrations.set([]),
+    });
   }
 
   trackById(_index: number, member: UserSummary): number {
     return member.id;
+  }
+
+  trackByRegistrationId(_index: number, registration: IncompleteMemberRegistration): number {
+    return registration.member_id;
   }
 
   toggleSelect(select: UserFilterSelect): void {
@@ -1624,6 +1741,9 @@ export class UsersList implements OnInit {
       active: 'Activo',
       inactive: 'Inactivo',
       pending: 'Pendiente',
+      pending_registration: 'Registro pendiente',
+      incomplete: 'Incompleto',
+      failed: 'Fallido',
       expired: 'Vencido',
     };
     return labels[status || 'active'] || 'Desconocido';
@@ -1762,6 +1882,28 @@ export class UsersList implements OnInit {
       error: () => {
         this.deleting.set(false);
         this.showToast('error', 'No se pudo eliminar el miembro. Intenta de nuevo.');
+      },
+    });
+  }
+
+  deleteIncompleteRegistration(registration: IncompleteMemberRegistration): void {
+    if (!this.requirePermission(Permission.MEMBERS_DELETE, 'No tienes permiso para eliminar miembros.')) return;
+
+    this.busyMemberId.set(registration.member_id);
+    this.api.deleteIncompleteMemberRegistration(registration.member_id).subscribe({
+      next: () => {
+        this.incompleteRegistrations.update((list) =>
+          list.filter((item) => item.member_id !== registration.member_id),
+        );
+        this.members.update((list) =>
+          list.filter((member) => member.document !== registration.document),
+        );
+        this.busyMemberId.set(null);
+        this.showToast('success', 'Registro incompleto eliminado.');
+      },
+      error: () => {
+        this.busyMemberId.set(null);
+        this.showToast('error', 'No se pudo eliminar el registro incompleto.');
       },
     });
   }

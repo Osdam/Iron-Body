@@ -198,19 +198,6 @@ const emailValidator = (control: AbstractControl): ValidationErrors | null => {
                   <p class="error" *ngIf="showError('status')">El estado es obligatorio.</p>
                 </div>
 
-                <div class="field span-2">
-                  <label class="label">Evaluación / Rating (0-5)</label>
-                  <input
-                    class="input"
-                    type="number"
-                    formControlName="rating"
-                    placeholder="Ej: 4.5"
-                    min="0"
-                    max="5"
-                    step="0.1"
-                    [disabled]="readonly || isSaving"
-                  />
-                </div>
               </div>
             </div>
 
@@ -877,7 +864,6 @@ export default class TrainerModalComponent implements OnChanges {
       experienceYears: Number(this.trainerForm.get('experienceYears')?.value || 0),
       contractType: this.trainerForm.get('contractType')?.value,
       status: this.trainerForm.get('status')?.value,
-      rating: Number(this.trainerForm.get('rating')?.value || 0),
       bio: this.trainerForm.get('bio')?.value,
       certifications: this.trainerForm.get('certifications')?.value,
       availability: this.trainerForm.get('availability')?.value || [],
@@ -908,7 +894,6 @@ export default class TrainerModalComponent implements OnChanges {
       experienceYears: [0, [Validators.required, nonNegativeNumber]],
       contractType: ['', Validators.required],
       status: ['', Validators.required],
-      rating: [4.5, nonNegativeNumber],
       bio: [''],
       certifications: [''],
       availability: this.fb.array(availability),
@@ -917,7 +902,6 @@ export default class TrainerModalComponent implements OnChanges {
 
   private resetForm(): void {
     this.trainerForm.reset({
-      rating: 4.5,
       availability: this.days.map((day) => ({
         day,
         enabled: false,
@@ -959,7 +943,6 @@ export default class TrainerModalComponent implements OnChanges {
       experienceYears: trainer.experienceYears,
       contractType: trainer.contractType,
       status: trainer.status,
-      rating: trainer.rating,
       bio: trainer.bio || '',
       certifications: trainer.certifications || '',
       specialties,

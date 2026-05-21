@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { tap } from 'rxjs/operators';
+import { map, tap } from 'rxjs/operators';
 import { AuditLogService } from './audit-log.service';
 
 export interface PaginatedResponse<T> {
@@ -25,6 +25,31 @@ export interface UserSummary {
   created_at: string;
 }
 
+export interface IncompleteMemberRegistration {
+  id: number;
+  member_id: number;
+  member_uuid: string;
+  name: string;
+  email?: string | null;
+  document?: string | null;
+  phone?: string | null;
+  status: string;
+  registration_status: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface PlanFeatures {
+  iron_ia: boolean;
+  workouts: boolean;
+  custom_routines: boolean;
+  ranking: boolean;
+  classes: boolean;
+  progress: boolean;
+  nutrition: boolean;
+  [key: string]: boolean;
+}
+
 export interface PlanSummary {
   id: number;
   name: string;
@@ -32,6 +57,7 @@ export interface PlanSummary {
   duration_days: number;
   benefits?: string | null;
   active: boolean;
+  features?: PlanFeatures | null;
 }
 
 export interface PaymentSummary {
@@ -88,6 +114,14 @@ export class ApiService {
 
   getUsers(page = 1): Observable<PaginatedResponse<UserSummary>> {
     return this.http.get<PaginatedResponse<UserSummary>>(`${this.base}/users?page=${page}`);
+  }
+
+  getIncompleteMemberRegistrations(page = 1): Observable<PaginatedResponse<IncompleteMemberRegistration>> {
+    return this.http.get<PaginatedResponse<IncompleteMemberRegistration>>(`${this.base}/members/incomplete?page=${page}`);
+  }
+
+  deleteIncompleteMemberRegistration(memberId: number): Observable<void> {
+    return this.http.delete<void>(`${this.base}/members/${memberId}`);
   }
 
   getUser(id: number): Observable<UserSummary> {
@@ -216,6 +250,24 @@ export class ApiService {
           targetName: plan.name,
           after: data as Record<string, unknown>,
           metadata: { plan },
+        }),
+      ),
+    );
+  }
+
+  updatePlanFeatures(id: number, features: Partial<PlanFeatures>): Observable<{ planId: string; planName: string; features: PlanFeatures }> {
+    return this.http.put<{ planId: string; planName: string; features: PlanFeatures }>(
+      `${this.base}/plans/${id}/features`,
+      { features },
+    ).pipe(
+      tap(() =>
+        this.audit.record({
+          action: 'update',
+          module: 'Planes',
+          entity: 'plan',
+          entityId: id,
+          summary: `actualizó módulos de la app para plan #${id}`,
+          after: { features } as Record<string, unknown>,
         }),
       ),
     );
@@ -487,12 +539,14 @@ export class ApiService {
 
   // ─── Trainers ─────────────────────────────────────
   getTrainers(filters?: { status?: string; search?: string }): Observable<any[]> {
-    let url = `${this.base}/trainers`;
+    let url = `${this.base}/trainers?admin=1`;
     const params: string[] = [];
     if (filters?.status) params.push(`status=${encodeURIComponent(filters.status)}`);
     if (filters?.search) params.push(`search=${encodeURIComponent(filters.search)}`);
-    if (params.length) url += '?' + params.join('&');
-    return this.http.get<any[]>(url);
+    if (params.length) url += '&' + params.join('&');
+    return this.http.get<any[] | { ok: boolean; data: any[] }>(url).pipe(
+      map((response) => Array.isArray(response) ? response : response.data || []),
+    );
   }
 
   createTrainer(data: any): Observable<any> {

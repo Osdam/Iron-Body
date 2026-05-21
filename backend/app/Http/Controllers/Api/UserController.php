@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Member;
+use App\Models\Plan;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
@@ -25,7 +28,33 @@ class UserController extends Controller
 
     public function show(User $user)
     {
-        return $user->only(array_merge($this->memberFields(), ['membershipStartDate', 'membershipEndDate']));
+        return array_merge(
+            $user->only(array_merge($this->memberFields(), ['membershipStartDate', 'membershipEndDate'])),
+            ['features' => $this->featuresFor($user)]
+        );
+    }
+
+    /** GET /api/users/{user}/plan-features */
+    public function planFeatures(User $user)
+    {
+        $plan = $user->plan ? Plan::where('name', $user->plan)->first() : null;
+
+        $expiresAt = $user->membershipEndDate
+            ? Carbon::parse($user->membershipEndDate)->endOfDay()
+            : null;
+        $isExpired = $expiresAt && $expiresAt->isPast();
+
+        $features = ($isExpired || ! $plan)
+            ? array_merge(array_map(fn () => false, Plan::defaultFeatures()), ['workouts' => true])
+            : $plan->resolvedFeatures();
+
+        return response()->json([
+            'userId'    => (string) $user->id,
+            'planId'    => $plan ? (string) $plan->id : null,
+            'planName'  => $plan ? $plan->name : $user->plan,
+            'features'  => $features,
+            'expiresAt' => $expiresAt?->toIso8601String(),
+        ]);
     }
 
     public function store(Request $request)
@@ -84,11 +113,40 @@ class UserController extends Controller
 
         $user->save();
 
+        if ($user->appMember) {
+            $memberUpdates = [];
+
+            if (array_key_exists('name', $validated)) {
+                $memberUpdates['full_name'] = $validated['name'];
+            }
+            if (array_key_exists('email', $validated)) {
+                $memberUpdates['email'] = $validated['email'];
+            }
+            if (array_key_exists('document', $validated) && filled($validated['document'])) {
+                $memberUpdates['document_number'] = Member::normalizeDocumentNumber($validated['document']);
+            }
+            if (array_key_exists('phone', $validated)) {
+                $memberUpdates['phone'] = $validated['phone'];
+            }
+            if (($validated['status'] ?? null) === 'active') {
+                $memberUpdates['status'] = Member::STATUS_ACTIVE;
+            }
+
+            if ($memberUpdates !== []) {
+                $user->appMember()->update($memberUpdates);
+            }
+        }
+
         return response()->json($this->serialize($user));
     }
 
     public function destroy(User $user)
     {
+        if ($user->appMember) {
+            $user->appMember->deleteStoredFiles();
+            $user->appMember->delete();
+        }
+
         $user->delete();
         return response()->json(null, 204);
     }
@@ -118,16 +176,31 @@ class UserController extends Controller
     private function serialize(User $user): array
     {
         return [
-            'id' => $user->id,
-            'name' => $user->name,
-            'email' => $user->email,
-            'document' => $user->document,
-            'phone' => $user->phone,
-            'status' => $user->status,
-            'plan' => $user->plan,
+            'id'                  => $user->id,
+            'name'                => $user->name,
+            'email'               => $user->email,
+            'document'            => $user->document,
+            'phone'               => $user->phone,
+            'status'              => $user->status,
+            'plan'                => $user->plan,
             'membershipStartDate' => $user->membershipStartDate,
-            'membershipEndDate' => $user->membershipEndDate,
-            'created_at' => $user->created_at,
+            'membershipEndDate'   => $user->membershipEndDate,
+            'features'            => $this->featuresFor($user),
+            'created_at'          => $user->created_at,
         ];
+    }
+
+    private function featuresFor(User $user): array
+    {
+        $plan = $user->plan ? Plan::where('name', $user->plan)->first() : null;
+
+        $expiresAt = $user->membershipEndDate
+            ? Carbon::parse($user->membershipEndDate)->endOfDay()
+            : null;
+        $isExpired = $expiresAt && $expiresAt->isPast();
+
+        return ($isExpired || ! $plan)
+            ? array_merge(array_map(fn () => false, Plan::defaultFeatures()), ['workouts' => true])
+            : $plan->resolvedFeatures();
     }
 }

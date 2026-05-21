@@ -3,11 +3,15 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Member;
 use App\Models\PaymentTransaction;
+use App\Models\User;
 use App\Services\EpaycoApiClient;
 use App\Services\EpaycoPaymentService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 /**
@@ -32,7 +36,8 @@ class EpaycoPaymentController extends Controller
         'reference'           => 'nullable|string|max:120',
         'idempotency_key'     => 'nullable|string|max:120',
         'order_id'            => 'nullable|integer',
-        'user_id'             => 'nullable|integer|exists:users,id',
+        'member_id'           => 'nullable|integer|exists:members,id',
+        'user_id'             => 'nullable|integer',
         'plan_id'             => 'nullable|integer|exists:plans,id',
         'customer'            => 'nullable|array',
         'customer.name'       => 'nullable|string|max:120',
@@ -51,6 +56,7 @@ class EpaycoPaymentController extends Controller
     public function create(Request $request)
     {
         $data = $request->validate($this->createRules);
+        $data = $this->resolvePaymentSubject($data);
         try {
             $tx = $this->epayco->createOrReuse($data);
             return response()->json($tx->toPublicArray(), 201);
@@ -117,12 +123,103 @@ class EpaycoPaymentController extends Controller
     private function runPay(string $method, array $data, ?string $ip)
     {
         $data['ip'] = $ip ?? '127.0.0.1';
+        $data = $this->resolvePaymentSubject($data);
         try {
             $tx = $this->epayco->payInApp($method, $data, $this->api);
             return response()->json($tx->toPublicArray());
         } catch (Throwable $e) {
             return $this->failSafe($e, $data['idempotency_key'] ?? null);
         }
+    }
+
+    private function resolvePaymentSubject(array $data): array
+    {
+        if (empty($data['plan_id'])) {
+            throw ValidationException::withMessages([
+                'plan_id' => ['El plan de membresia es obligatorio para procesar el pago.'],
+            ]);
+        }
+
+        if (!empty($data['member_id'])) {
+            $member = Member::query()->with('user')->find($data['member_id']);
+
+            if (!$member) {
+                throw ValidationException::withMessages([
+                    'member_id' => ['El miembro seleccionado no existe.'],
+                ]);
+            }
+
+            $user = $this->ensureUserForMember($member);
+            $data['member_id'] = $member->id;
+            $data['user_id'] = $user->id;
+
+            if (empty($data['customer'])) {
+                $data['customer'] = [];
+            }
+
+            $data['customer'] = array_merge([
+                'name' => $member->full_name,
+                'email' => $member->email ?: $user->email,
+                'phone' => $member->phone,
+                'doc_number' => $member->document_number,
+                'doc_type' => 'CC',
+                'country' => 'CO',
+            ], $data['customer']);
+
+            return $data;
+        }
+
+        if (!empty($data['user_id'])) {
+            if (!User::whereKey($data['user_id'])->exists()) {
+                throw ValidationException::withMessages([
+                    'user_id' => ['El usuario seleccionado no existe. Envia member_id para pagos creados desde la app.'],
+                ]);
+            }
+
+            return $data;
+        }
+
+        throw ValidationException::withMessages([
+            'member_id' => ['Debes enviar member_id o user_id para asociar el pago.'],
+        ]);
+    }
+
+    private function ensureUserForMember(Member $member): User
+    {
+        if ($member->user) {
+            return $member->user;
+        }
+
+        $user = User::query()
+            ->where('document', $member->document_number)
+            ->first();
+
+        if (!$user && $member->email) {
+            $user = User::query()
+                ->where('email', $member->email)
+                ->first();
+        }
+
+        if (!$user) {
+            $email = $member->email ?: "member-{$member->id}@ironbody.local";
+
+            if (User::query()->where('email', $email)->exists()) {
+                $email = "member-{$member->id}-{$member->document_number}@ironbody.local";
+            }
+
+            $user = User::create([
+                'name' => $member->full_name,
+                'email' => $email,
+                'password' => Hash::make('default-password'),
+                'document' => $member->document_number,
+                'phone' => $member->phone,
+                'status' => 'pending',
+            ]);
+        }
+
+        $member->forceFill(['user_id' => $user->id])->save();
+
+        return $user;
     }
 
     /**
