@@ -21,6 +21,7 @@
         <a href="{{ route('crm.exercises.index') }}" class="text-white text-decoration-none small">Ejercicios</a>
         <a href="{{ route('crm.routines.index') }}" class="text-white text-decoration-none small">Rutinas</a>
         <a href="{{ route('crm.routines.custom') }}" class="text-secondary text-decoration-none small">Rutinas App</a>
+        <a href="{{ route('crm.member-routines.index') }}" class="text-white text-decoration-none small">Rutinas por cliente</a>
     </div>
 </nav>
 

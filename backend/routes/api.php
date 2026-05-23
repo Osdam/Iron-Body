@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\AppClassController;
 use App\Http\Controllers\Api\AppExerciseController;
 use App\Http\Controllers\Api\AppRoutineController;
 use App\Http\Controllers\Api\MemberRegistrationController;
+use App\Http\Controllers\Api\MemberRoutineController;
 use App\Http\Controllers\Api\MembershipPlanController;
 use App\Http\Controllers\Api\IronAiController;
 use App\Http\Controllers\Api\IronAiConversationController;
@@ -106,8 +107,16 @@ Route::apiResource('classes', ClassController::class)
     ->parameters(['classes' => 'myClass']);
 Route::get('classes/{myClass}/reservations', [ClassController::class, 'reservations']);
 
-// ── Catálogo de ejercicios para la app (público) ─────────────────────────────
+// ── Catálogo de ejercicios (público para la app; CRUD sin auth para el CRM) ──
 Route::get('app/exercises', [AppExerciseController::class, 'index']);
+Route::get('exercises/catalog', [AppExerciseController::class, 'index']);
+
+// ── Rutinas por miembro (CRM) ────────────────────────────────────────────────
+Route::get('members/{member}/routines',                [MemberRoutineController::class, 'index']);
+Route::post('members/{member}/routines',               [MemberRoutineController::class, 'store']);
+Route::put('members/{member}/routines/{routine}',      [MemberRoutineController::class, 'update']);
+Route::patch('members/{member}/routines/{routine}',    [MemberRoutineController::class, 'update']);
+Route::delete('members/{member}/routines/{routine}',   [MemberRoutineController::class, 'destroy']);
 
 // ── App: clases y entrenadores para miembros (autenticación por access_hash) ──
 Route::middleware('auth.member')->group(function (): void {
@@ -120,10 +129,11 @@ Route::middleware('auth.member')->group(function (): void {
     // Calificación de entrenadores
     Route::post('trainers/{trainer}/rate', [TrainerController::class, 'rate']);
     // Rutinas para miembros
-    Route::get('app/routines/assigned', [AppRoutineController::class, 'assigned']);
-    Route::get('app/routines/custom',   [AppRoutineController::class, 'custom']);
-    Route::post('app/routines',         [AppRoutineController::class, 'store']);
-    Route::delete('app/routines/{routine}', [AppRoutineController::class, 'destroy']);
+    Route::get('app/routines/assigned',           [AppRoutineController::class, 'assigned']);
+    Route::get('app/routines/custom',             [AppRoutineController::class, 'custom']);
+    Route::post('app/routines',                   [AppRoutineController::class, 'store']);
+    Route::delete('app/routines/{routine}',       [AppRoutineController::class, 'destroy']);
+    Route::post('app/routines/{routine}/delete',  [AppRoutineController::class, 'destroy']);
 });
 Route::apiResource('routines', RoutineController::class)->only(['index','show','store','update','destroy']);
 Route::patch('routines/{routine}/assign', [RoutineController::class, 'assign']);

@@ -3,14 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Member;
+use App\Models\MemberRoutineAssignment;
 use App\Models\Routine;
+use App\Models\User;
 use Illuminate\Http\Request;
 
 class RoutineController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Routine::query();
+        $query = Routine::where('created_by_admin', true);
 
         if ($request->filled('status')) {
             $query->where('status', $request->input('status'));
@@ -40,8 +43,33 @@ class RoutineController extends Controller
 
     public function store(Request $request)
     {
-        $data = $this->validateInput($request, true);
-        $routine = Routine::create($this->mapInput($data));
+        $data   = $this->validateInput($request, true);
+        $mapped = $this->mapInput($data);
+
+        $member = $this->resolveMember(
+            $data['assignedMemberId'] ?? null,
+            $data['assignedMemberName'] ?? null,
+        );
+
+        if ($member) {
+            $mapped['is_assigned']         = true;
+            $mapped['member_id']           = $member->id;
+            $mapped['assigned_member_id']  = $member->id;
+            $mapped['assigned_member_name'] = $mapped['assigned_member_name'] ?? $member->full_name;
+        }
+
+        $routine = Routine::create(array_merge($mapped, [
+            'created_by_admin' => true,
+            'status'           => 'Activa',
+        ]));
+
+        if ($member) {
+            MemberRoutineAssignment::firstOrCreate(
+                ['routine_id' => $routine->id, 'member_id' => $member->id],
+                ['assigned_at' => now()]
+            );
+        }
+
         return response()->json($this->serialize($routine), 201);
     }
 
@@ -63,12 +91,72 @@ class RoutineController extends Controller
     {
         $validated = $request->validate([
             'assignedMemberName' => 'nullable|string|max:255',
-            'assignedMemberId' => 'nullable|integer',
+            'assignedMemberId'   => 'nullable|integer',
         ]);
-        $routine->assigned_member_name = $validated['assignedMemberName'] ?? 'Plantilla general';
-        $routine->assigned_member_id = $validated['assignedMemberId'] ?? null;
+
+        $member = $this->resolveMember(
+            $validated['assignedMemberId'] ?? null,
+            $validated['assignedMemberName'] ?? null,
+        );
+
+        if ($member) {
+            $routine->assigned_member_name = $validated['assignedMemberName'] ?? $member->full_name;
+            $routine->assigned_member_id   = $member->id;
+            $routine->member_id            = $member->id;
+            $routine->is_assigned          = true;
+        } else {
+            $routine->assigned_member_name = $validated['assignedMemberName'] ?? 'Plantilla general';
+            $routine->assigned_member_id   = null;
+            $routine->member_id            = null;
+            $routine->is_assigned          = false;
+        }
         $routine->save();
+
+        if ($member) {
+            MemberRoutineAssignment::firstOrCreate(
+                ['routine_id' => $routine->id, 'member_id' => $member->id],
+                ['assigned_at' => now()]
+            );
+        }
+
         return response()->json($this->serialize($routine));
+    }
+
+    /**
+     * Resuelve un Member desde:
+     *  1) ID explícito (assignedMemberId)
+     *  2) Member.full_name == $name
+     *  3) User.name == $name → Member via user_id (la migración
+     *     000008_link_members_to_users sincroniza ambos campos).
+     */
+    private function resolveMember(?int $id, ?string $name): ?Member
+    {
+        if ($id) {
+            $member = Member::find($id);
+            if ($member) {
+                return $member;
+            }
+        }
+
+        $name = $name !== null ? trim($name) : null;
+        if ($name === null || $name === '' || strcasecmp($name, 'Plantilla general') === 0) {
+            return null;
+        }
+
+        $member = Member::where('full_name', $name)->first();
+        if ($member) {
+            return $member;
+        }
+
+        $user = User::where('name', $name)->first();
+        if ($user) {
+            $member = Member::where('user_id', $user->id)->first();
+            if ($member) {
+                return $member;
+            }
+        }
+
+        return null;
     }
 
     private function validateInput(Request $request, bool $required): array

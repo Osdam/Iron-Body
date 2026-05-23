@@ -19,7 +19,6 @@ class RoutineExercise extends Model
 
     protected $casts = [
         'sets'       => 'integer',
-        'reps'       => 'integer',
         'sort_order' => 'integer',
     ];
 

@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\RoutineResource;
-use App\Models\Member;
 use App\Models\MemberRoutineAssignment;
+use App\Models\Plan;
 use App\Models\Routine;
 use App\Models\RoutineExercise;
 use Illuminate\Http\JsonResponse;
@@ -14,17 +14,17 @@ use Illuminate\Http\Request;
 class AppRoutineController extends Controller
 {
     /**
-     * Rutinas asignadas al miembro por el administrador.
-     * Incluye rutinas vinculadas vía member_routine_assignments
-     * o rutinas con member_id + is_assigned = true.
+     * Rutinas asignadas al miembro por el administrador,
+     * incluyendo las que el propio miembro creó con is_assigned = true.
      */
     public function assigned(Request $request): JsonResponse
     {
         $member = $request->attributes->get('auth_member');
 
-        $viaAssignment = Routine::whereHas('assignments', fn ($q) => $q->where('member_id', $member->id))
-            ->with(['routineExercises.exercise'])
-            ->get();
+        $viaAssignment = Routine::whereHas(
+            'assignments',
+            fn ($q) => $q->where('member_id', $member->id)
+        )->with(['routineExercises.exercise'])->get();
 
         $viaMemberId = Routine::where('member_id', $member->id)
             ->where('is_assigned', true)
@@ -60,38 +60,44 @@ class AppRoutineController extends Controller
 
     /**
      * El miembro crea su propia rutina personalizada.
+     * Requiere feature flag custom_routines = true en el plan.
      */
     public function store(Request $request): JsonResponse
     {
         $member = $request->attributes->get('auth_member');
 
+        if (! $this->memberCanCreateRoutines($member)) {
+            return response()->json([
+                'message' => 'Tu plan no incluye la creación de rutinas personalizadas.',
+            ], 403);
+        }
+
         $data = $request->validate([
             'name'              => 'required|string|max:255',
             'objective'         => 'nullable|string|max:255',
-            'level'             => 'nullable|string|max:50',
+            'level'             => 'nullable|in:Principiante,Intermedio,Avanzado',
             'muscle_group'      => 'nullable|string|max:100',
             'estimated_minutes' => 'nullable|integer|min:0|max:1440',
-            'days_per_week'     => 'nullable|integer|min:0|max:7',
             'description'       => 'nullable|string',
             'notes'             => 'nullable|string',
+            // Simplified: just exercise IDs (app selects from catalog)
             'exercise_ids'      => 'nullable|array',
-            'exercise_ids.*'    => 'integer|exists:exercises,id',
-            'exercises'         => 'nullable|array',
-            'exercises.*.exercise_id' => 'required_with:exercises|integer|exists:exercises,id',
-            'exercises.*.sets'        => 'nullable|integer|min:1|max:20',
-            'exercises.*.reps'        => 'nullable|integer|min:1|max:200',
-            'exercises.*.weight'      => 'nullable|string|max:50',
-            'exercises.*.notes'       => 'nullable|string|max:500',
-            'exercises.*.sort_order'  => 'nullable|integer|min:0',
+            'exercise_ids.*'    => 'exists:exercises,id',
+            // Full detail (from app with sets/reps/weight)
+            'exercises'                   => 'nullable|array',
+            'exercises.*.exercise_id'     => 'required_with:exercises|exists:exercises,id',
+            'exercises.*.sets'            => 'nullable|integer|min:1|max:20',
+            'exercises.*.reps'            => 'nullable|string|max:20',
+            'exercises.*.weight'          => 'nullable|numeric|min:0',
+            'exercises.*.notes'           => 'nullable|string|max:500',
         ]);
 
         $routine = Routine::create([
             'name'              => $data['name'],
             'objective'         => $data['objective'] ?? null,
-            'level'             => $data['level'] ?? null,
+            'level'             => $data['level'] ?? 'Principiante',
             'muscle_group'      => $data['muscle_group'] ?? null,
-            'estimated_minutes' => $data['estimated_minutes'] ?? 0,
-            'days_per_week'     => $data['days_per_week'] ?? 0,
+            'estimated_minutes' => (int) ($data['estimated_minutes'] ?? 0),
             'description'       => $data['description'] ?? null,
             'notes'             => $data['notes'] ?? null,
             'member_id'         => $member->id,
@@ -112,7 +118,8 @@ class AppRoutineController extends Controller
     }
 
     /**
-     * El miembro elimina una rutina personalizada propia.
+     * El miembro elimina su propia rutina personalizada.
+     * Acepta DELETE y POST (alias para clientes que no soporten DELETE).
      */
     public function destroy(Request $request, Routine $routine): JsonResponse
     {
@@ -124,32 +131,49 @@ class AppRoutineController extends Controller
 
         $routine->delete();
 
-        return response()->json(null, 204);
+        return response()->json(['ok' => true], 200);
+    }
+
+    private function memberCanCreateRoutines($member): bool
+    {
+        if (! $member->user_id) {
+            return false;
+        }
+
+        $user = $member->user ?? \App\Models\User::find($member->user_id);
+        if (! $user || ! $user->plan) {
+            return false;
+        }
+
+        $plan = Plan::where('name', $user->plan)->first();
+
+        return $plan && ($plan->resolvedFeatures()['custom_routines'] ?? false);
     }
 
     private function syncExercises(Routine $routine, array $data): void
     {
-        if (isset($data['exercises']) && is_array($data['exercises'])) {
-            $routine->routineExercises()->delete();
+        $routine->routineExercises()->delete();
+
+        if (! empty($data['exercises'])) {
             foreach ($data['exercises'] as $i => $ex) {
                 RoutineExercise::create([
                     'routine_id'  => $routine->id,
                     'exercise_id' => $ex['exercise_id'],
-                    'sets'        => $ex['sets'] ?? 3,
-                    'reps'        => $ex['reps'] ?? 10,
-                    'weight'      => $ex['weight'] ?? null,
+                    'sets'        => (int) ($ex['sets'] ?? 3),
+                    'reps'        => (string) ($ex['reps'] ?? '10'),
+                    'weight'      => isset($ex['weight']) ? (float) $ex['weight'] : null,
                     'notes'       => $ex['notes'] ?? null,
-                    'sort_order'  => $ex['sort_order'] ?? $i,
+                    'sort_order'  => $i,
                 ]);
             }
-        } elseif (isset($data['exercise_ids']) && is_array($data['exercise_ids'])) {
-            $routine->routineExercises()->delete();
+        } elseif (! empty($data['exercise_ids'])) {
             foreach ($data['exercise_ids'] as $i => $exerciseId) {
+                $ex = \App\Models\Exercise::find($exerciseId);
                 RoutineExercise::create([
                     'routine_id'  => $routine->id,
                     'exercise_id' => $exerciseId,
-                    'sets'        => 3,
-                    'reps'        => 10,
+                    'sets'        => $ex?->suggested_sets ?? 3,
+                    'reps'        => $ex?->suggested_reps ?? '8-12',
                     'sort_order'  => $i,
                 ]);
             }
