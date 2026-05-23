@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class IronAiMessage extends Model
 {
@@ -42,5 +43,10 @@ class IronAiMessage extends Model
     public function conversation(): BelongsTo
     {
         return $this->belongsTo(IronAiConversation::class, 'iron_ai_conversation_id');
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(IronAiMessageAttachment::class, 'message_id');
     }
 }

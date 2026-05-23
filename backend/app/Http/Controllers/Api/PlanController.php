@@ -3,13 +3,19 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\MembershipAiCapability;
 use App\Models\Plan;
 use App\Models\User;
+use App\Services\IronAiMembershipAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
 class PlanController extends Controller
 {
+    public function __construct(private readonly IronAiMembershipAccessService $aiAccess)
+    {
+    }
+
     public function index()
     {
         return Plan::query()->paginate(20);
@@ -99,6 +105,141 @@ class PlanController extends Controller
             'planName' => $plan->name,
             'features' => $plan->resolvedFeatures(),
         ]);
+    }
+
+    /**
+     * GET /api/plans/{plan}/ai-capabilities
+     * Capacidades de IRON IA del plan (fila en membership_ai_capabilities o,
+     * si no existe, los valores por defecto del tier inferido). El CRM las edita.
+     */
+    public function aiCapabilities(Plan $plan)
+    {
+        $caps = $this->aiAccess->getAiCapabilities([
+            'active'    => true,
+            'plan_id'   => $plan->id,
+            'plan_name' => $plan->name,
+            'plan'      => $plan,
+            'end_date'  => null,
+        ]);
+
+        return response()->json([
+            'planId'       => (string) $plan->id,
+            'planName'     => $plan->name,
+            'capabilities' => $this->capabilitiesToApi($caps),
+        ]);
+    }
+
+    /**
+     * PUT /api/plans/{plan}/ai-capabilities
+     * Guarda las capacidades de IRON IA del plan en membership_ai_capabilities
+     * (NO crea un sistema de planes paralelo). Flutter las consume vía /access.
+     */
+    public function updateAiCapabilities(Request $request, Plan $plan)
+    {
+        $d = $request->validate([
+            'ai_enabled'                        => ['sometimes', 'boolean'],
+            'ai_chat_enabled'                   => ['sometimes', 'boolean'],
+            'ai_image_analysis_enabled'         => ['sometimes', 'boolean'],
+            'ai_voice_chat_enabled'             => ['sometimes', 'boolean'],
+            'ai_realtime_voice_enabled'         => ['sometimes', 'boolean'],
+            'ai_progress_analysis_enabled'      => ['sometimes', 'boolean'],
+            'ai_smart_recommendations_enabled'  => ['sometimes', 'boolean'],
+            'ai_weekly_summary_enabled'         => ['sometimes', 'boolean'],
+            'ai_proactive_notifications_enabled'=> ['sometimes', 'boolean'],
+            'ai_monthly_messages_limit'         => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'ai_daily_messages_limit'           => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'ai_monthly_image_limit'            => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'ai_monthly_audio_limit'            => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'ai_max_audio_seconds'              => ['sometimes', 'integer', 'min:5', 'max:600'],
+            'ai_max_image_size_mb'              => ['sometimes', 'integer', 'min:1', 'max:50'],
+            'ai_context_level'                  => ['sometimes', 'string', 'in:basic,personalized,full'],
+        ]);
+
+        // Mapea el contrato del CRM (ai_*) a las columnas reales.
+        $map = [
+            'ai_enabled'                         => 'ai_enabled',
+            'ai_chat_enabled'                    => 'ai_chat_enabled',
+            'ai_image_analysis_enabled'          => 'ai_image_analysis_enabled',
+            'ai_voice_chat_enabled'              => 'ai_voice_chat_enabled',
+            'ai_realtime_voice_enabled'          => 'ai_realtime_voice_enabled',
+            'ai_progress_analysis_enabled'       => 'progress_analysis_enabled',
+            'ai_smart_recommendations_enabled'   => 'smart_recommendations_enabled',
+            'ai_weekly_summary_enabled'          => 'weekly_summary_enabled',
+            'ai_proactive_notifications_enabled' => 'proactive_notifications_enabled',
+            'ai_monthly_messages_limit'          => 'monthly_messages_limit',
+            'ai_daily_messages_limit'            => 'daily_messages_limit',
+            'ai_monthly_image_limit'             => 'ai_image_monthly_limit',
+            'ai_monthly_audio_limit'             => 'ai_audio_monthly_limit',
+            'ai_max_audio_seconds'               => 'ai_max_audio_seconds',
+            'ai_max_image_size_mb'               => 'ai_max_image_size_mb',
+            'ai_context_level'                   => 'context_level',
+        ];
+
+        $columns = [];
+        foreach ($map as $apiKey => $col) {
+            if (array_key_exists($apiKey, $d)) {
+                $columns[$col] = $d[$apiKey];
+            }
+        }
+
+        $row = MembershipAiCapability::updateOrCreate(
+            ['membership_plan_id' => $plan->id],
+            array_merge($columns, [
+                'plan_code' => $this->planSlug($plan->name),
+                'is_active' => true,
+            ]),
+        );
+
+        // Notifica a los miembros activos del plan (SSE) para refrescar acceso.
+        $this->bustMemberFeatureCache($plan);
+
+        return response()->json([
+            'planId'       => (string) $plan->id,
+            'planName'     => $plan->name,
+            'capabilities' => $this->capabilitiesToApi($row->toCapabilities()),
+        ]);
+    }
+
+    /** Convierte capacidades internas (config/fila) al contrato del CRM (ai_*). */
+    private function capabilitiesToApi(array $c): array
+    {
+        return [
+            'ai_enabled'                         => (bool) ($c['ai_enabled'] ?? true),
+            'ai_chat_enabled'                    => (bool) ($c['ai_chat_enabled'] ?? true),
+            'ai_image_analysis_enabled'          => (bool) ($c['ai_image_analysis_enabled'] ?? false),
+            'ai_voice_chat_enabled'              => (bool) ($c['ai_voice_chat_enabled'] ?? false),
+            'ai_realtime_voice_enabled'          => (bool) ($c['ai_realtime_voice_enabled'] ?? false),
+            'ai_progress_analysis_enabled'       => (bool) ($c['progress_analysis_enabled'] ?? false),
+            'ai_smart_recommendations_enabled'   => (bool) ($c['smart_recommendations_enabled'] ?? false),
+            'ai_weekly_summary_enabled'          => (bool) ($c['weekly_summary_enabled'] ?? false),
+            'ai_proactive_notifications_enabled' => (bool) ($c['proactive_notifications_enabled'] ?? false),
+            'ai_monthly_messages_limit'          => $c['monthly_messages_limit'] ?? null,
+            'ai_daily_messages_limit'            => $c['daily_messages_limit'] ?? null,
+            'ai_monthly_image_limit'             => $c['ai_image_monthly_limit'] ?? 0,
+            'ai_monthly_audio_limit'             => $c['ai_audio_monthly_limit'] ?? 0,
+            'ai_max_audio_seconds'               => (int) ($c['ai_max_audio_seconds'] ?? 60),
+            'ai_max_image_size_mb'               => (int) ($c['ai_max_image_size_mb'] ?? 5),
+            'ai_context_level'                   => $c['context_level'] ?? 'basic',
+        ];
+    }
+
+    private function planSlug(string $name): string
+    {
+        $s = mb_strtolower(trim($name));
+        $s = str_replace(['á','é','í','ó','ú','ü','ñ'], ['a','e','i','o','u','u','n'], $s);
+
+        return trim(preg_replace('/[^a-z0-9]+/', '_', $s), '_');
+    }
+
+    private function bustMemberFeatureCache(Plan $plan): void
+    {
+        User::where('plan', $plan->name)
+            ->whereHas('appMember')
+            ->with('appMember')
+            ->get()
+            ->each(function (User $user): void {
+                Cache::put("features_changed_{$user->appMember->id}", true, now()->addMinutes(5));
+            });
     }
 
     private function validatedData(Request $request, bool $updating): array

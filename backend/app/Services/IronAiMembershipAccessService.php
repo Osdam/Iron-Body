@@ -232,7 +232,11 @@ class IronAiMembershipAccessService
     /**
      * Conteo de mensajes consumidos (success + fallback) por identidad.
      *
-     * @return array{lifetime: int, today: int, month: int}
+     * `month` cuenta TODOS los tipos (texto+audio+imagen) → cuota general
+     * mensual. `audio_month`/`image_month` cuentan solo su tipo → cuota
+     * específica por tipo (audios/mes, imágenes/mes).
+     *
+     * @return array{lifetime: int, today: int, month: int, audio_month: int, image_month: int}
      */
     public function usageCounts(array $ctx): array
     {
@@ -257,10 +261,14 @@ class IronAiMembershipAccessService
                 }
             });
 
+        $monthStart = Carbon::now()->startOfMonth();
+
         return [
-            'lifetime' => (clone $base())->count(),
-            'today'    => (clone $base())->whereDate('created_at', Carbon::today())->count(),
-            'month'    => (clone $base())->where('created_at', '>=', Carbon::now()->startOfMonth())->count(),
+            'lifetime'    => (clone $base())->count(),
+            'today'       => (clone $base())->whereDate('created_at', Carbon::today())->count(),
+            'month'       => (clone $base())->where('created_at', '>=', $monthStart)->count(),
+            'audio_month' => (clone $base())->where('kind', IronAiUsageLog::KIND_AUDIO)->where('created_at', '>=', $monthStart)->count(),
+            'image_month' => (clone $base())->where('kind', IronAiUsageLog::KIND_IMAGE)->where('created_at', '>=', $monthStart)->count(),
         ];
     }
 
@@ -289,8 +297,8 @@ class IronAiMembershipAccessService
         $active = (bool) ($membership['active'] ?? false);
         $accessType = $active ? 'membership' : 'free_trial';
 
-        // IA apagada para este plan.
-        if (! ($caps['ai_enabled'] ?? true)) {
+        // IA apagada (master) o chat de texto deshabilitado para este plan.
+        if (! ($caps['ai_enabled'] ?? true) || ! ($caps['ai_chat_enabled'] ?? true)) {
             return [
                 'access_type'      => $accessType,
                 'can_use_chat'     => false,
@@ -360,6 +368,108 @@ class IronAiMembershipAccessService
         ];
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Multimodal — decisiones de voz e imagen (gating por plan + cuota por tipo)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * ¿Puede usar el chat por VOZ? Requiere: capacidad habilitada en el plan +
+     * cuota general disponible (el audio consume cuota general) + cuota de audio
+     * disponible. Nunca llama a OpenAI: solo decide.
+     *
+     * @return array{can: bool, remaining: ?int, block: ?array}
+     */
+    public function decideAudio(array $access): array
+    {
+        $caps = $access['capabilities'] ?? [];
+        $usage = $access['usage'] ?? [];
+
+        if (! ($caps['ai_voice_chat_enabled'] ?? false)) {
+            return ['can' => false, 'remaining' => 0, 'block' => $this->block('VOICE_LOCKED')];
+        }
+        // El audio consume la cuota general: si está agotada, también se bloquea.
+        if (! ($access['can_use_chat'] ?? false)) {
+            return ['can' => false, 'remaining' => 0, 'block' => $access['block'] ?? $this->block('MONTHLY_LIMIT_REACHED')];
+        }
+
+        $limit = $caps['ai_audio_monthly_limit'] ?? null;
+        $used = (int) ($usage['audio_month'] ?? 0);
+        if ($limit !== null && $used >= (int) $limit) {
+            return ['can' => false, 'remaining' => 0, 'block' => $this->block('AUDIO_LIMIT_REACHED')];
+        }
+
+        return [
+            'can'       => true,
+            'remaining' => $limit !== null ? max(0, (int) $limit - $used) : null,
+            'block'     => null,
+        ];
+    }
+
+    /**
+     * ¿Puede usar el análisis de IMAGEN? Requiere: capacidad habilitada + cuota
+     * general disponible + cuota de imagen disponible. Nunca llama a OpenAI.
+     *
+     * @return array{can: bool, remaining: ?int, block: ?array}
+     */
+    public function decideImage(array $access): array
+    {
+        $caps = $access['capabilities'] ?? [];
+        $usage = $access['usage'] ?? [];
+
+        if (! ($caps['ai_image_analysis_enabled'] ?? false)) {
+            return ['can' => false, 'remaining' => 0, 'block' => $this->block('IMAGE_LOCKED')];
+        }
+        if (! ($access['can_use_chat'] ?? false)) {
+            return ['can' => false, 'remaining' => 0, 'block' => $access['block'] ?? $this->block('MONTHLY_LIMIT_REACHED')];
+        }
+
+        $limit = $caps['ai_image_analysis_enabled'] ? ($caps['ai_image_monthly_limit'] ?? null) : 0;
+        $used = (int) ($usage['image_month'] ?? 0);
+        if ($limit !== null && $used >= (int) $limit) {
+            return ['can' => false, 'remaining' => 0, 'block' => $this->block('IMAGE_LIMIT_REACHED')];
+        }
+
+        return [
+            'can'       => true,
+            'remaining' => $limit !== null ? max(0, (int) $limit - $used) : null,
+            'block'     => null,
+        ];
+    }
+
+    /**
+     * ¿Puede iniciar conversación de voz EN VIVO (realtime)? Requiere capacidad
+     * realtime_voice_enabled + acceso general (consume cuota). Nunca conecta a
+     * OpenAI: solo decide.
+     *
+     * @return array{can: bool, block: ?array}
+     */
+    public function decideRealtime(array $access): array
+    {
+        $caps = $access['capabilities'] ?? [];
+
+        if (! ($caps['ai_realtime_voice_enabled'] ?? false)) {
+            return ['can' => false, 'block' => $this->block('REALTIME_LOCKED')];
+        }
+        if (! ($access['can_use_chat'] ?? false)) {
+            return ['can' => false, 'block' => $access['block'] ?? $this->block('MONTHLY_LIMIT_REACHED')];
+        }
+
+        return ['can' => true, 'block' => null];
+    }
+
+    /** Restante de un tipo multimedia para serializar (0 si bloqueado, null=ilimitado). */
+    private function mediaRemaining(bool $enabled, ?int $limit, int $used): ?int
+    {
+        if (! $enabled) {
+            return 0;
+        }
+        if ($limit === null) {
+            return null; // ilimitado dentro de la cuota general
+        }
+
+        return max(0, $limit - $used);
+    }
+
     /** Construye el bloque de bloqueo (mensaje + CTA) por código. */
     public function block(string $code, ?int $limit = null): array
     {
@@ -399,6 +509,41 @@ class IronAiMembershipAccessService
                 'cta'              => ['title' => 'Mejorar plan', 'action' => 'Ver membresías'],
                 'suggestions'      => ['Mejorar plan', 'Ver membresías'],
             ],
+            'VOICE_LOCKED' => [
+                'code'             => $code,
+                'reply'            => 'El chat por voz está disponible en planes superiores. Habla con IRON y recibe respuestas inteligentes sin escribir.',
+                'upgrade_required' => true,
+                'cta'              => ['title' => 'Desbloquea chat por voz', 'action' => 'Ver membresías'],
+                'suggestions'      => ['Ver membresías', 'Ahora no'],
+            ],
+            'IMAGE_LOCKED' => [
+                'code'             => $code,
+                'reply'            => 'El análisis con imagen está disponible en planes superiores. Sube fotos de ejercicios, comidas o progreso para recibir orientación personalizada de IRON.',
+                'upgrade_required' => true,
+                'cta'              => ['title' => 'Desbloquea análisis con imagen', 'action' => 'Ver membresías'],
+                'suggestions'      => ['Ver membresías', 'Ahora no'],
+            ],
+            'REALTIME_LOCKED' => [
+                'code'             => $code,
+                'reply'            => 'La conversación en vivo con IRON está disponible en planes superiores. Habla con IRON como en una llamada, sin escribir.',
+                'upgrade_required' => true,
+                'cta'              => ['title' => 'Desbloquea conversación en vivo', 'action' => 'Ver membresías'],
+                'suggestions'      => ['Ver membresías', 'Ahora no'],
+            ],
+            'AUDIO_LIMIT_REACHED' => [
+                'code'             => $code,
+                'reply'            => 'Alcanzaste el límite de audios de IRON IA de tu membresía este mes. Mejora tu plan para más chat por voz.',
+                'upgrade_required' => true,
+                'cta'              => ['title' => 'Mejorar plan', 'action' => 'Ver membresías'],
+                'suggestions'      => ['Mejorar plan', 'Ver membresías'],
+            ],
+            'IMAGE_LIMIT_REACHED' => [
+                'code'             => $code,
+                'reply'            => 'Alcanzaste el límite de análisis de imagen de IRON IA de tu membresía este mes. Mejora tu plan para analizar más imágenes.',
+                'upgrade_required' => true,
+                'cta'              => ['title' => 'Mejorar plan', 'action' => 'Ver membresías'],
+                'suggestions'      => ['Mejorar plan', 'Ver membresías'],
+            ],
             default => [ // AI_DISABLED u otros.
                 'code'             => $code,
                 'reply'            => 'IRON IA no está disponible para tu plan actual. Adquiere o mejora tu membresía para usar el asistente.',
@@ -415,7 +560,8 @@ class IronAiMembershipAccessService
 
     /**
      * Registra una fila en iron_ai_usage_logs. $metadata acepta: model,
-     * input_tokens, output_tokens, message_id, block_reason.
+     * input_tokens, output_tokens, message_id, block_reason, kind
+     * (text|audio|image; por defecto text).
      */
     public function registerUsage(array $ctx, string $status, array $metadata = []): IronAiUsageLog
     {
@@ -433,6 +579,7 @@ class IronAiMembershipAccessService
             'output_tokens'      => $output,
             'estimated_cost'     => $this->estimateCost($input, $output),
             'status'             => $status,
+            'kind'               => $metadata['kind'] ?? IronAiUsageLog::KIND_TEXT,
             'block_reason'       => $metadata['block_reason'] ?? null,
         ]);
     }
@@ -459,26 +606,34 @@ class IronAiMembershipAccessService
         $caps = $access['capabilities'];
         $usage = $this->usageCounts($access); // recalcula tras registrar uso
 
+        // Cuota multimedia por tipo (común a free_trial y membresía).
+        $voiceEnabled = (bool) ($caps['ai_voice_chat_enabled'] ?? false);
+        $imageEnabled = (bool) ($caps['ai_image_analysis_enabled'] ?? false);
+        $media = [
+            'audio_remaining' => $this->mediaRemaining($voiceEnabled, $caps['ai_audio_monthly_limit'] ?? null, (int) ($usage['audio_month'] ?? 0)),
+            'image_remaining' => $this->mediaRemaining($imageEnabled, $caps['ai_image_monthly_limit'] ?? null, (int) ($usage['image_month'] ?? 0)),
+        ];
+
         if (($access['access_type'] ?? 'free_trial') === 'free_trial') {
             $limit = (int) ($caps['free_trial_messages'] ?? 5);
             $used = $usage['lifetime'];
 
-            return [
+            return array_merge([
                 'access_type' => 'free_trial',
                 'used'        => $used,
                 'limit'       => $limit,
                 'remaining'   => max(0, $limit - $used),
-            ];
+            ], $media);
         }
 
         $monthly = $caps['monthly_messages_limit'] ?? null;
 
-        return [
+        return array_merge([
             'access_type' => 'membership',
             'used'        => $usage['month'],
             'limit'       => $monthly,
             'remaining'   => $monthly !== null ? max(0, (int) $monthly - $usage['month']) : null,
-        ];
+        ], $media);
     }
 
     /** Objeto completo de acceso para GET /access. */
@@ -491,6 +646,15 @@ class IronAiMembershipAccessService
 
         $freeLimit = (int) ($caps['free_trial_messages'] ?? 5);
         $monthly = $caps['monthly_messages_limit'] ?? null;
+
+        // Multimodal — flags + cuota por tipo (todo del backend; Flutter no decide).
+        $chatEnabled     = (bool) ($caps['ai_chat_enabled'] ?? true);
+        $voiceEnabled    = (bool) ($caps['ai_voice_chat_enabled'] ?? false);
+        $realtimeEnabled = (bool) ($caps['ai_realtime_voice_enabled'] ?? false);
+        $imageEnabled    = (bool) ($caps['ai_image_analysis_enabled'] ?? false);
+        $fileEnabled     = (bool) ($caps['ai_file_upload_enabled'] ?? false);
+        $audioLimit      = $caps['ai_audio_monthly_limit'] ?? null;
+        $imageLimit      = $caps['ai_image_monthly_limit'] ?? null;
 
         return [
             'ok'                            => true,
@@ -506,6 +670,21 @@ class IronAiMembershipAccessService
             'smart_recommendations_enabled' => (bool) ($caps['smart_recommendations_enabled'] ?? false),
             'weekly_summary_enabled'        => (bool) ($caps['weekly_summary_enabled'] ?? false),
             'proactive_notifications_enabled' => (bool) ($caps['proactive_notifications_enabled'] ?? false),
+
+            // Multimodal — capacidades y cuota por tipo (para el composer premium).
+            'chat_enabled'          => $chatEnabled,
+            'voice_chat_enabled'    => $voiceEnabled,
+            'realtime_voice_enabled'=> $realtimeEnabled,
+            'image_analysis_enabled'=> $imageEnabled,
+            'file_upload_enabled'   => $fileEnabled,
+            'audio_monthly_limit'   => $audioLimit,
+            'image_monthly_limit'   => $imageLimit,
+            'audio_used'            => $usage['audio_month'] ?? 0,
+            'image_used'            => $usage['image_month'] ?? 0,
+            'audio_remaining'       => $this->mediaRemaining($voiceEnabled, $audioLimit, (int) ($usage['audio_month'] ?? 0)),
+            'image_remaining'       => $this->mediaRemaining($imageEnabled, $imageLimit, (int) ($usage['image_month'] ?? 0)),
+            'max_audio_seconds'     => (int) ($caps['ai_max_audio_seconds'] ?? config('iron_ai.media.max_audio_seconds', 60)),
+            'max_image_size_mb'     => (int) ($caps['ai_max_image_size_mb'] ?? config('iron_ai.media.max_image_size_mb', 5)),
 
             // Prueba gratuita.
             'used_messages'      => $usage['lifetime'],

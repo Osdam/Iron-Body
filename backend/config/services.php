@@ -57,6 +57,28 @@ return [
         'temperature'          => (float) env('IRON_AI_TEMPERATURE', 0.4),
         'max_tokens'           => (int) env('IRON_AI_MAX_TOKENS', 600),
         'timeout'              => (int) env('IRON_AI_TIMEOUT', 30),
+
+        // IRON IA multimodal — modelos configurables (NO se queman en código).
+        //  - transcription_model: chat por voz (audio → texto). Whisper o
+        //    cualquier modelo de transcripción compatible (gpt-4o-transcribe…).
+        //  - vision_model: análisis de imágenes. Por defecto reusa el modelo de
+        //    chat (gpt-4.1-mini ya soporta visión); se puede separar por env.
+        'transcription_model'  => env('OPENAI_TRANSCRIPTION_MODEL', 'whisper-1'),
+        'vision_model'         => env('OPENAI_VISION_MODEL', env('OPENAI_MODEL', 'gpt-4.1-mini')),
+        // Timeout específico para subidas multimedia (más holgado que el chat).
+        'media_timeout'        => (int) env('IRON_AI_MEDIA_TIMEOUT', 60),
+
+        // IRON IA — conversación de voz EN VIVO (OpenAI Realtime, GA).
+        // Flutter → Laravel (token efímero) → OpenAI Realtime vía WebRTC. La
+        // API key real NUNCA sale del backend; Flutter usa el client_secret
+        // efímero (ek_...) que devuelve este backend.
+        'realtime_enabled'     => filter_var(env('IRON_AI_REALTIME_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+        'realtime_model'       => env('OPENAI_REALTIME_MODEL', 'gpt-realtime'),
+        'realtime_voice'       => env('OPENAI_REALTIME_VOICE', 'alloy'),
+        // Endpoint GA para acuñar el token efímero (client_secrets).
+        'realtime_secret_url'  => env('OPENAI_REALTIME_SECRET_URL', rtrim(env('OPENAI_BASE_URL', 'https://api.openai.com'), '/') . '/v1/realtime/client_secrets'),
+        // Endpoint GA de intercambio SDP (WebRTC) que usará Flutter con el ek_.
+        'realtime_webrtc_url'  => env('OPENAI_REALTIME_WEBRTC_URL', rtrim(env('OPENAI_BASE_URL', 'https://api.openai.com'), '/') . '/v1/realtime/calls'),
     ],
 
     /*

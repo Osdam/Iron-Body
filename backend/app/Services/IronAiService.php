@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\IronAiConversation;
 use App\Models\IronAiMessage;
+use App\Models\IronAiMessageAttachment;
 use App\Models\IronAiRecommendation;
 use App\Models\Member;
 use App\Models\Payment;
@@ -43,6 +44,31 @@ Usa el contexto del usuario cuando esté disponible, pero no inventes datos. Si 
 Mantén las respuestas enfocadas en fitness, entrenamiento y uso de Iron Body. No ayudes con temas peligrosos, ilegales o fuera del alcance. No recomiendes esteroides, sustancias ilegales, dietas extremas, deshidratación, ayunos peligrosos ni sobreentrenamiento. Da recomendaciones prácticas, seguras y adaptadas al nivel del usuario.
 TXT;
 
+    /** Instrucciones de seguridad adicionales cuando el usuario adjunta imagen. */
+    private const IMAGE_SAFETY_PROMPT = <<<'TXT'
+
+El usuario adjuntó una IMAGEN. Analízala SOLO en el contexto de fitness, entrenamiento o nutrición general. Reglas estrictas:
+- No diagnostiques lesiones ni des conclusiones médicas.
+- Si observas señales de dolor, lesión o riesgo, recomienda consultar a un profesional de la salud.
+- Para técnica de ejercicio: da recomendaciones generales y seguras de postura.
+- Para comida: orientación nutricional general (no dietas clínicas ni planes médicos).
+- Si la imagen no es clara o no se relaciona con fitness, dilo con amabilidad y pide otra foto.
+TXT;
+
+    /** Mensaje amable cuando no se pudo transcribir el audio. */
+    public const AUDIO_ERROR =
+        'No pude procesar el audio. Intenta grabarlo nuevamente.';
+
+    /** Mensaje amable cuando no se pudo analizar la imagen. */
+    public const IMAGE_ERROR =
+        'No pude analizar la imagen en este momento. Intenta con otra foto más clara.';
+
+    /** System prompt oficial (para reusar en realtime/visión). */
+    public function systemPrompt(): string
+    {
+        return self::SYSTEM_PROMPT;
+    }
+
     /** Sugerencias rápidas por defecto que se devuelven a Flutter. */
     private const DEFAULT_SUGGESTIONS = [
         'Ayúdame con mi rutina de hoy',
@@ -50,6 +76,13 @@ TXT;
         'Recomiéndame una rutina',
         'Consejo de nutrición general',
     ];
+
+    public function __construct(
+        private readonly IronAiMediaService $media,
+        private readonly IronAiTranscriptionService $transcription,
+        private readonly IronAiVisionService $vision,
+    ) {
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Resolución del usuario actual (auth aún no unificado → mecanismo flexible)
@@ -157,13 +190,140 @@ TXT;
     ): array {
         $message = trim($message);
         $contextLevel = $capabilities['context_level'] ?? 'full';
-        $maxTokens = isset($capabilities['max_output_tokens'])
-            ? (int) $capabilities['max_output_tokens']
-            : null;
+        $maxTokens = $this->maxTokensFrom($capabilities);
 
         // Guarda el mensaje del usuario (historial de ESTA conversación).
         $userMsg = $this->store($conversation, $member, $user, IronAiMessage::ROLE_USER, $message);
 
+        $payload = $this->buildTextPayload($conversation, $member, $user, $contextLevel);
+        $ai = $this->callOpenAi($payload, $member, $user, $maxTokens);
+
+        return $this->finalizeReply($conversation, $member, $user, $message, $userMsg, $ai);
+    }
+
+    /**
+     * Chat por VOZ: transcribe el audio (OpenAI) y lo procesa como un mensaje de
+     * texto normal. El audio queda como adjunto del mensaje del usuario. Si la
+     * transcripción falla, devuelve un resultado con `transcription_failed`.
+     *
+     * @return array{transcription_failed?: bool, transcript?: string, ...}
+     */
+    public function audioChat(
+        IronAiConversation $conversation,
+        ?Member $member,
+        ?User $user,
+        IronAiMessageAttachment $audio,
+        array $capabilities = [],
+    ): array {
+        $path = $this->media->absolutePath($audio);
+        $tr = $path ? $this->transcription->transcribe($path, $audio->original_name ?: 'audio.m4a') : null;
+
+        if ($tr === null || trim($tr['text'] ?? '') === '') {
+            // No se pudo transcribir → no consumimos cuota ni llamamos al chat.
+            return [
+                'transcription_failed' => true,
+                'reply'                => self::AUDIO_ERROR,
+                'conversation_id'      => $conversation->uuid,
+                'conversation_uuid'    => $conversation->uuid,
+                'transcript'           => null,
+                'suggestions'          => [],
+                'is_fallback'          => true,
+                'message_id'           => null,
+                'model'                => config('services.openai.transcription_model'),
+                'input_tokens'         => null,
+                'output_tokens'        => null,
+            ];
+        }
+
+        $transcript = trim($tr['text']);
+        $this->media->setTranscript($audio, $transcript);
+
+        $contextLevel = $capabilities['context_level'] ?? 'full';
+        $maxTokens = $this->maxTokensFrom($capabilities);
+
+        $userMsg = $this->store(
+            $conversation, $member, $user, IronAiMessage::ROLE_USER, $transcript,
+            ['via' => 'audio', 'duration_seconds' => $audio->duration_seconds],
+        );
+        $this->media->attachToMessage($audio, $userMsg);
+
+        $payload = $this->buildTextPayload($conversation, $member, $user, $contextLevel);
+        $ai = $this->callOpenAi($payload, $member, $user, $maxTokens);
+
+        $result = $this->finalizeReply($conversation, $member, $user, $transcript, $userMsg, $ai);
+        $result['transcript'] = $transcript;
+        $result['transcription_failed'] = false;
+        $result['duration_seconds'] = $audio->duration_seconds;
+
+        return $result;
+    }
+
+    /**
+     * Análisis de IMAGEN (visión). La imagen se envía inline (base64) con un
+     * prompt de seguridad reforzado. La imagen queda como adjunto del mensaje
+     * del usuario.
+     */
+    public function imageChat(
+        IronAiConversation $conversation,
+        ?Member $member,
+        ?User $user,
+        IronAiMessageAttachment $image,
+        ?string $message,
+        array $capabilities = [],
+    ): array {
+        $contextLevel = $capabilities['context_level'] ?? 'full';
+        $maxTokens = $this->maxTokensFrom($capabilities);
+        $userText = trim((string) $message);
+        $promptText = $userText !== '' ? $userText : 'Analiza esta imagen relacionada con mi entrenamiento.';
+
+        // Historial PREVIO (sin el turno actual) → se añade como texto.
+        $history = $this->recentHistory($conversation);
+
+        // Persiste el mensaje del usuario (texto) y asocia la imagen.
+        $userMsg = $this->store(
+            $conversation, $member, $user, IronAiMessage::ROLE_USER,
+            $userText !== '' ? $userText : '[Imagen adjunta]',
+            ['via' => 'image'],
+        );
+        $this->media->attachToMessage($image, $userMsg);
+
+        $dataUrl = $this->media->imageDataUrl($image);
+        if ($dataUrl === null) {
+            return $this->finalizeReply($conversation, $member, $user, $promptText, $userMsg, null, self::IMAGE_ERROR);
+        }
+
+        $context = $this->buildUserContext($member, $user, $contextLevel);
+        $payload = [['role' => 'system', 'content' => self::SYSTEM_PROMPT . self::IMAGE_SAFETY_PROMPT]];
+        if ($context !== '') {
+            $payload[] = ['role' => 'system', 'content' => "CONTEXTO DEL USUARIO (datos reales; no inventes lo que no esté aquí):\n" . $context];
+        }
+        foreach ($history as $h) {
+            $payload[] = ['role' => $h->role, 'content' => $h->content];
+        }
+        $payload[] = [
+            'role'    => 'user',
+            'content' => [
+                ['type' => 'text', 'text' => $promptText],
+                ['type' => 'image_url', 'image_url' => ['url' => $dataUrl]],
+            ],
+        ];
+
+        $ai = $this->vision->complete($payload, $maxTokens);
+
+        return $this->finalizeReply($conversation, $member, $user, $promptText, $userMsg, $ai, self::IMAGE_ERROR);
+    }
+
+    /** Resuelve max_output_tokens desde las capacidades (null = default config). */
+    private function maxTokensFrom(array $capabilities): ?int
+    {
+        return isset($capabilities['max_output_tokens'])
+            ? (int) $capabilities['max_output_tokens']
+            : null;
+    }
+
+    /** Construye el payload de texto (system + contexto + historial). */
+    private function buildTextPayload(IronAiConversation $conversation, ?Member $member, ?User $user, string $contextLevel): array
+    {
         $context = $this->buildUserContext($member, $user, $contextLevel);
         $history = $this->recentHistory($conversation);
 
@@ -180,15 +340,28 @@ TXT;
             $payload[] = ['role' => $h->role, 'content' => $h->content];
         }
 
-        $ai = $this->callOpenAi($payload, $member, $user, $maxTokens);
+        return $payload;
+    }
 
+    /**
+     * Persiste la respuesta del asistente (o fallback) y arma el resultado común
+     * a chat/audio/imagen. $ai null → fallback amable (no rompe la UI).
+     */
+    private function finalizeReply(
+        IronAiConversation $conversation,
+        ?Member $member,
+        ?User $user,
+        string $userMessageForMeta,
+        IronAiMessage $userMsg,
+        ?array $ai,
+        ?string $fallbackReply = null,
+    ): array {
         if ($ai === null || ($ai['content'] ?? '') === '') {
-            // No persistimos la respuesta de error como historial real, pero el
-            // mensaje del usuario sí queda → actualizamos meta de la conversación.
-            $this->updateConversationMeta($conversation, $message, null);
+            // El mensaje del usuario sí queda → actualizamos meta de la conversación.
+            $this->updateConversationMeta($conversation, $userMessageForMeta, null);
 
             return [
-                'reply'             => self::FRIENDLY_ERROR,
+                'reply'             => $fallbackReply ?? self::FRIENDLY_ERROR,
                 'conversation_id'   => $conversation->uuid,
                 'conversation_uuid' => $conversation->uuid,
                 'suggestions'       => self::DEFAULT_SUGGESTIONS,
@@ -201,7 +374,7 @@ TXT;
         }
 
         $assistantMsg = $this->store($conversation, $member, $user, IronAiMessage::ROLE_ASSISTANT, $ai['content']);
-        $this->updateConversationMeta($conversation, $message, $ai['content']);
+        $this->updateConversationMeta($conversation, $userMessageForMeta, $ai['content']);
 
         return [
             'reply'             => $ai['content'],
@@ -230,7 +403,7 @@ TXT;
             ->values();
     }
 
-    private function store(IronAiConversation $conversation, ?Member $member, ?User $user, string $role, string $content): IronAiMessage
+    private function store(IronAiConversation $conversation, ?Member $member, ?User $user, string $role, string $content, array $metadata = []): IronAiMessage
     {
         return IronAiMessage::create([
             'user_id'                 => $user?->id,
@@ -240,6 +413,7 @@ TXT;
             'conversation_id'         => $conversation->uuid, // legacy string = uuid
             'role'                    => $role,
             'content'                 => $content,
+            'metadata'                => $metadata !== [] ? $metadata : null,
         ]);
     }
 
@@ -341,19 +515,61 @@ TXT;
         return $this->createConversation($ctx, $title, $topic);
     }
 
-    /** Mensajes reales de una conversación (orden cronológico). */
+    /** Mensajes reales de una conversación (orden cronológico, con adjuntos). */
     public function conversationMessages(IronAiConversation $conversation): array
     {
         return $conversation->messages()
             ->whereIn('role', [IronAiMessage::ROLE_USER, IronAiMessage::ROLE_ASSISTANT])
+            ->with('attachments')
             ->orderBy('id')
             ->get()
             ->map(fn (IronAiMessage $m) => [
-                'role'       => $m->role,
-                'content'    => $m->content,
-                'created_at' => optional($m->created_at)->toIso8601String(),
+                'role'        => $m->role,
+                'content'     => $m->content,
+                'created_at'  => optional($m->created_at)->toIso8601String(),
+                'attachments' => $m->attachments
+                    ->map(fn (IronAiMessageAttachment $a) => $a->toPublicArray())
+                    ->all(),
             ])
             ->all();
+    }
+
+    /**
+     * Persiste los turnos de una conversación de voz EN VIVO (realtime). No
+     * llama a OpenAI ni consume cuota de chat: solo guarda la transcripción
+     * (la sesión realtime ya se cobró al crearse). $turns: [{role, content}].
+     */
+    public function appendRealtimeTurns(IronAiConversation $conversation, ?Member $member, ?User $user, array $turns): int
+    {
+        $count = 0;
+        $lastUser = '';
+        $lastAssistant = null;
+
+        foreach ($turns as $t) {
+            if (! is_array($t)) {
+                continue;
+            }
+            $role = ($t['role'] ?? '') === 'assistant'
+                ? IronAiMessage::ROLE_ASSISTANT
+                : IronAiMessage::ROLE_USER;
+            $content = trim((string) ($t['content'] ?? ''));
+            if ($content === '') {
+                continue;
+            }
+            $this->store($conversation, $member, $user, $role, $content, ['via' => 'realtime']);
+            if ($role === IronAiMessage::ROLE_USER) {
+                $lastUser = $content;
+            } else {
+                $lastAssistant = $content;
+            }
+            $count++;
+        }
+
+        if ($count > 0) {
+            $this->updateConversationMeta($conversation, $lastUser !== '' ? $lastUser : 'Conversación en vivo', $lastAssistant);
+        }
+
+        return $count;
     }
 
     public function archiveConversation(IronAiConversation $conversation): void

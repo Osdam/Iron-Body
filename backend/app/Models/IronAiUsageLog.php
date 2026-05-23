@@ -11,6 +11,12 @@ class IronAiUsageLog extends Model
     public const STATUS_BLOCKED = 'blocked';
     public const STATUS_ERROR = 'error';
 
+    /** Tipo de consumo (para cuotas por tipo). */
+    public const KIND_TEXT = 'text';
+    public const KIND_AUDIO = 'audio';
+    public const KIND_IMAGE = 'image';
+    public const KIND_REALTIME = 'realtime';
+
     /** Estados que consumen cuota (un mensaje "usado"). */
     public const CONSUMING = [self::STATUS_SUCCESS, self::STATUS_FALLBACK];
 
@@ -25,6 +31,7 @@ class IronAiUsageLog extends Model
         'output_tokens',
         'estimated_cost',
         'status',
+        'kind',
         'block_reason',
     ];
 

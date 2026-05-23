@@ -16,7 +16,7 @@ import {
   FormGroup,
   Validators,
 } from '@angular/forms';
-import { ApiService, PlanFeatures, PlanSummary } from '../../services/api.service';
+import { ApiService, PlanAiCapabilities, PlanFeatures, PlanSummary } from '../../services/api.service';
 import { PlanCardData } from './plan-card';
 
 @Component({
@@ -191,6 +191,68 @@ import { PlanCardData } from './plan-card';
                   <div class="toggle-thumb"></div>
                 </div>
               </label>
+            </div>
+          </div>
+
+          <!-- ── Capacidades de IRON IA ────────────────────────────────── -->
+          <div class="features-section ai-section">
+            <div class="features-header">
+              <span class="material-symbols-outlined" aria-hidden="true">psychology</span>
+              <div>
+                <h3 class="features-title">Capacidades de IRON IA</h3>
+                <p class="features-subtitle">Controla qué funciones de IRON IA incluye este plan.</p>
+              </div>
+            </div>
+
+            <div *ngIf="aiLoading()" class="ai-loading">Cargando capacidades…</div>
+
+            <div class="ai-group" *ngFor="let group of aiToggleGroups">
+              <div class="ai-group-title">{{ group.title }}</div>
+              <p class="ai-group-help">{{ group.help }}</p>
+              <div class="features-grid">
+                <label class="feature-toggle" *ngFor="let t of group.toggles">
+                  <div class="feature-info">
+                    <span class="material-symbols-outlined feature-icon" aria-hidden="true">{{ t.icon }}</span>
+                    <span class="feature-label">{{ t.label }}</span>
+                  </div>
+                  <div
+                    class="toggle-track"
+                    [class.on]="planForm.get('ai.' + t.key)?.value"
+                    (click)="toggleFeature('ai.' + t.key)"
+                    role="switch"
+                    [attr.aria-checked]="planForm.get('ai.' + t.key)?.value"
+                    tabindex="0"
+                    (keydown.space)="toggleFeature('ai.' + t.key)"
+                  >
+                    <div class="toggle-thumb"></div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div class="ai-group" formGroupName="ai">
+              <div class="ai-group-title">Límites</div>
+              <p class="ai-group-help">Cuotas de uso. Deja vacío para ilimitado donde aplique.</p>
+              <div class="ai-limits-grid">
+                <div class="form-group" *ngFor="let lim of aiLimits">
+                  <label class="form-label">{{ lim.label }}</label>
+                  <input
+                    type="number"
+                    min="0"
+                    class="form-input"
+                    [formControlName]="lim.key"
+                    [placeholder]="lim.placeholder"
+                  />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Nivel de contexto</label>
+                  <select class="form-input" formControlName="ai_context_level">
+                    <option value="basic">Básico</option>
+                    <option value="personalized">Personalizado</option>
+                    <option value="full">Completo</option>
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -700,7 +762,36 @@ import { PlanCardData } from './plan-card';
 
       .toggle-track.on .toggle-thumb { transform: translateX(18px); }
 
+      /* ── Capacidades de IRON IA ───────────────────────────────────── */
+      .ai-section { border-color: rgba(245,197,24,0.25); }
+      .ai-loading {
+        font-size: 0.85rem;
+        color: rgba(255,255,255,0.55);
+        padding: 0.25rem 0 0.75rem;
+      }
+      .ai-group { margin-top: 1.1rem; }
+      .ai-group:first-of-type { margin-top: 0.5rem; }
+      .ai-group-title {
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #f5c518;
+      }
+      .ai-group-help {
+        margin: 0.15rem 0 0.7rem;
+        font-size: 0.78rem;
+        color: rgba(255,255,255,0.5);
+      }
+      .ai-limits-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.9rem 1rem;
+      }
+      .ai-limits-grid .form-group { margin: 0; }
+
       @media (max-width: 640px) {
+        .ai-limits-grid { grid-template-columns: 1fr; }
         .modal-container { padding: 0.5rem; }
         .modal-card { border-radius: 10px; }
         .modal-header { padding: 1.5rem; }
@@ -726,6 +817,7 @@ export class EditPlanModalComponent implements OnChanges {
 
   planForm!: FormGroup;
   isSaving = signal(false);
+  aiLoading = signal(false);
   errorMessage = signal('');
 
   readonly featureList = [
@@ -736,6 +828,46 @@ export class EditPlanModalComponent implements OnChanges {
     { key: 'feat_classes',          label: 'Clases',       icon: 'calendar_month' },
     { key: 'feat_progress',         label: 'Progreso',     icon: 'trending_up' },
     { key: 'feat_nutrition',        label: 'Nutrición',    icon: 'restaurant' },
+  ];
+
+  // Capacidades de IRON IA agrupadas para el modal (toggles).
+  readonly aiToggleGroups = [
+    {
+      title: 'Acceso IA',
+      help: 'Disponibilidad general del asistente para este plan.',
+      toggles: [
+        { key: 'ai_enabled',      label: 'IRON IA activo', icon: 'smart_toy' },
+        { key: 'ai_chat_enabled', label: 'Chat de texto',  icon: 'chat' },
+      ],
+    },
+    {
+      title: 'Multimodal',
+      help: 'Voz, imagen y conversación en vivo.',
+      toggles: [
+        { key: 'ai_image_analysis_enabled', label: 'Análisis con imagen', icon: 'image' },
+        { key: 'ai_voice_chat_enabled',     label: 'Chat por voz',        icon: 'mic' },
+        { key: 'ai_realtime_voice_enabled', label: 'Conversación en vivo', icon: 'graphic_eq' },
+      ],
+    },
+    {
+      title: 'Automatización y seguimiento',
+      help: 'Funciones inteligentes y proactivas.',
+      toggles: [
+        { key: 'ai_progress_analysis_enabled',       label: 'Análisis de progreso',        icon: 'insights' },
+        { key: 'ai_smart_recommendations_enabled',   label: 'Recomendaciones inteligentes', icon: 'tips_and_updates' },
+        { key: 'ai_weekly_summary_enabled',          label: 'Resumen semanal',             icon: 'calendar_view_week' },
+        { key: 'ai_proactive_notifications_enabled', label: 'Notificaciones proactivas',   icon: 'notifications_active' },
+      ],
+    },
+  ];
+
+  // Límites numéricos de IRON IA.
+  readonly aiLimits = [
+    { key: 'ai_monthly_messages_limit', label: 'Consultas IA / mes', placeholder: 'Vacío = ilimitado' },
+    { key: 'ai_daily_messages_limit',   label: 'Consultas IA / día', placeholder: 'Vacío = ilimitado' },
+    { key: 'ai_monthly_image_limit',    label: 'Imágenes / mes',     placeholder: '0' },
+    { key: 'ai_monthly_audio_limit',    label: 'Audios / mes',       placeholder: '0' },
+    { key: 'ai_max_audio_seconds',      label: 'Duración máx. audio (seg)', placeholder: '60' },
   ];
 
   private readonly defaultBenefits = [
@@ -763,6 +895,24 @@ export class EditPlanModalComponent implements OnChanges {
       feat_classes:         [false],
       feat_progress:        [true],
       feat_nutrition:       [false],
+      // Capacidades detalladas de IRON IA (membership_ai_capabilities).
+      ai: this.fb.group({
+        ai_enabled:                         [true],
+        ai_chat_enabled:                    [true],
+        ai_image_analysis_enabled:          [false],
+        ai_voice_chat_enabled:              [false],
+        ai_realtime_voice_enabled:          [false],
+        ai_progress_analysis_enabled:       [false],
+        ai_smart_recommendations_enabled:   [false],
+        ai_weekly_summary_enabled:          [false],
+        ai_proactive_notifications_enabled: [false],
+        ai_monthly_messages_limit:          [null],
+        ai_daily_messages_limit:            [null],
+        ai_monthly_image_limit:             [0],
+        ai_monthly_audio_limit:             [0],
+        ai_max_audio_seconds:               [60],
+        ai_context_level:                   ['basic'],
+      }),
     });
   }
 
@@ -786,7 +936,21 @@ export class EditPlanModalComponent implements OnChanges {
         feat_progress:        f?.progress        ?? true,
         feat_nutrition:       f?.nutrition       ?? false,
       });
+      this.loadAiCapabilities(this.plan.id);
     }
+  }
+
+  /** Carga las capacidades de IRON IA del plan desde el backend. */
+  private loadAiCapabilities(planId: number | undefined): void {
+    if (!planId) return;
+    this.aiLoading.set(true);
+    this.api.getPlanAiCapabilities(planId).subscribe({
+      next: (res) => {
+        this.planForm.get('ai')?.patchValue(res.capabilities);
+        this.aiLoading.set(false);
+      },
+      error: () => this.aiLoading.set(false),
+    });
   }
 
   toggleFeature(key: string): void {
@@ -832,11 +996,25 @@ export class EditPlanModalComponent implements OnChanges {
       nutrition:       val.feat_nutrition,
     };
 
-    this.api.updatePlan(this.plan.id, { ...planData, features } as any).subscribe({
+    const planId = this.plan.id;
+    this.api.updatePlan(planId, { ...planData, features } as any).subscribe({
       next: (updated) => {
-        this.isSaving.set(false);
-        this.onPlanUpdated.emit(updated);
-        this.close();
+        // Tras guardar el plan, persiste las capacidades de IRON IA.
+        this.api.updatePlanAiCapabilities(planId, this.buildAiPayload()).subscribe({
+          next: () => {
+            this.isSaving.set(false);
+            this.onPlanUpdated.emit(updated);
+            this.close();
+          },
+          error: (err) => {
+            this.isSaving.set(false);
+            // El plan ya se guardó; informamos el fallo solo de las capacidades.
+            this.onPlanUpdated.emit(updated);
+            const message = err?.error?.message
+              || 'El plan se guardó, pero no se pudieron guardar las capacidades de IRON IA.';
+            this.errorMessage.set(message);
+          },
+        });
       },
       error: (err) => {
         this.isSaving.set(false);
@@ -844,6 +1022,31 @@ export class EditPlanModalComponent implements OnChanges {
         this.errorMessage.set(message);
       },
     });
+  }
+
+  /** Construye el payload de capacidades IA (coerciona límites numéricos). */
+  private buildAiPayload(): Partial<PlanAiCapabilities> {
+    const a = this.planForm.get('ai')?.value ?? {};
+    const num = (v: unknown, def: number | null): number | null =>
+      v === '' || v === null || v === undefined ? def : Number(v);
+
+    return {
+      ai_enabled: !!a.ai_enabled,
+      ai_chat_enabled: !!a.ai_chat_enabled,
+      ai_image_analysis_enabled: !!a.ai_image_analysis_enabled,
+      ai_voice_chat_enabled: !!a.ai_voice_chat_enabled,
+      ai_realtime_voice_enabled: !!a.ai_realtime_voice_enabled,
+      ai_progress_analysis_enabled: !!a.ai_progress_analysis_enabled,
+      ai_smart_recommendations_enabled: !!a.ai_smart_recommendations_enabled,
+      ai_weekly_summary_enabled: !!a.ai_weekly_summary_enabled,
+      ai_proactive_notifications_enabled: !!a.ai_proactive_notifications_enabled,
+      ai_monthly_messages_limit: num(a.ai_monthly_messages_limit, null),
+      ai_daily_messages_limit: num(a.ai_daily_messages_limit, null),
+      ai_monthly_image_limit: num(a.ai_monthly_image_limit, 0) ?? 0,
+      ai_monthly_audio_limit: num(a.ai_monthly_audio_limit, 0) ?? 0,
+      ai_max_audio_seconds: num(a.ai_max_audio_seconds, 60) ?? 60,
+      ai_context_level: a.ai_context_level ?? 'basic',
+    };
   }
 
   close(): void {

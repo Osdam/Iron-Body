@@ -17,6 +17,8 @@ use App\Http\Controllers\Api\MemberRoutineController;
 use App\Http\Controllers\Api\MembershipPlanController;
 use App\Http\Controllers\Api\IronAiController;
 use App\Http\Controllers\Api\IronAiConversationController;
+use App\Http\Controllers\Api\IronAiMediaController;
+use App\Http\Controllers\Api\IronAiRealtimeController;
 use App\Models\Member;
 use App\Models\Payment;
 use App\Models\Plan;
@@ -88,6 +90,18 @@ Route::get('iron-ai/quota', [IronAiController::class, 'quota']);
 Route::post('iron-ai/chat', [IronAiController::class, 'chat']);
 Route::get('iron-ai/recommendations', [IronAiController::class, 'recommendations']);
 
+// ── IRON IA multimodal — voz (transcripción) e imagen (visión) ───────────────
+// Multipart. Consumen cuota IA (kind=audio|image) y dependen del plan: si la
+// función está bloqueada o se agotó la cuota, NO se llama a OpenAI.
+Route::post('iron-ai/audio-chat', [IronAiMediaController::class, 'audioChat']);
+Route::post('iron-ai/image-chat', [IronAiMediaController::class, 'imageChat']);
+
+// ── IRON IA — conversación de voz EN VIVO (OpenAI Realtime / WebRTC) ──────────
+// session: acuña token efímero (gated por plan; consume cuota realtime).
+// transcript: persiste turnos (no llama a OpenAI ni consume cuota de chat).
+Route::post('iron-ai/realtime/session', [IronAiRealtimeController::class, 'session']);
+Route::post('iron-ai/realtime/transcript', [IronAiRealtimeController::class, 'transcript']);
+
 // ── IRON IA — centro de conversaciones (CRUD; no consume OpenAI/cuota) ────────
 Route::get('iron-ai/conversations', [IronAiConversationController::class, 'index']);
 Route::post('iron-ai/conversations', [IronAiConversationController::class, 'store']);
@@ -98,6 +112,9 @@ Route::delete('iron-ai/conversations/{uuid}', [IronAiConversationController::cla
 
 Route::get('plans/features', [PlanController::class, 'allFeatures']);
 Route::put('plans/{plan}/features', [PlanController::class, 'updateFeatures']);
+// IRON IA — capacidades detalladas por plan (CRM ↔ membership_ai_capabilities).
+Route::get('plans/{plan}/ai-capabilities', [PlanController::class, 'aiCapabilities']);
+Route::put('plans/{plan}/ai-capabilities', [PlanController::class, 'updateAiCapabilities']);
 Route::apiResource('plans', PlanController::class)->only(['index','show','store','update','destroy']);
 Route::get('membership-plans', [MembershipPlanController::class, 'index']);
 Route::get('membership-plans/{plan}', [MembershipPlanController::class, 'show']);

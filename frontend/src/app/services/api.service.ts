@@ -60,6 +60,32 @@ export interface PlanSummary {
   features?: PlanFeatures | null;
 }
 
+/** Capacidades detalladas de IRON IA por plan (membership_ai_capabilities). */
+export interface PlanAiCapabilities {
+  ai_enabled: boolean;
+  ai_chat_enabled: boolean;
+  ai_image_analysis_enabled: boolean;
+  ai_voice_chat_enabled: boolean;
+  ai_realtime_voice_enabled: boolean;
+  ai_progress_analysis_enabled: boolean;
+  ai_smart_recommendations_enabled: boolean;
+  ai_weekly_summary_enabled: boolean;
+  ai_proactive_notifications_enabled: boolean;
+  ai_monthly_messages_limit: number | null;
+  ai_daily_messages_limit: number | null;
+  ai_monthly_image_limit: number;
+  ai_monthly_audio_limit: number;
+  ai_max_audio_seconds: number;
+  ai_max_image_size_mb?: number;
+  ai_context_level: 'basic' | 'personalized' | 'full';
+}
+
+export interface PlanAiCapabilitiesResponse {
+  planId: string;
+  planName: string;
+  capabilities: PlanAiCapabilities;
+}
+
 export interface PaymentSummary {
   id: number;
   amount: number;
@@ -271,6 +297,32 @@ export class ApiService {
         }),
       ),
     );
+  }
+
+  /** GET capacidades de IRON IA del plan (fila o defaults del tier). */
+  getPlanAiCapabilities(id: number): Observable<PlanAiCapabilitiesResponse> {
+    return this.http.get<PlanAiCapabilitiesResponse>(`${this.base}/plans/${id}/ai-capabilities`);
+  }
+
+  /** PUT capacidades de IRON IA del plan → membership_ai_capabilities. */
+  updatePlanAiCapabilities(
+    id: number,
+    capabilities: Partial<PlanAiCapabilities>,
+  ): Observable<PlanAiCapabilitiesResponse> {
+    return this.http
+      .put<PlanAiCapabilitiesResponse>(`${this.base}/plans/${id}/ai-capabilities`, capabilities)
+      .pipe(
+        tap(() =>
+          this.audit.record({
+            action: 'update',
+            module: 'Planes',
+            entity: 'plan',
+            entityId: id,
+            summary: `actualizó capacidades de IRON IA para plan #${id}`,
+            after: { capabilities } as Record<string, unknown>,
+          }),
+        ),
+      );
   }
 
   deletePlan(id: number): Observable<void> {
