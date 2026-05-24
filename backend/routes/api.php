@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\IronAiConversationController;
 use App\Http\Controllers\Api\IronAiMediaController;
 use App\Http\Controllers\Api\IronAiRealtimeController;
 use App\Http\Controllers\Api\AttendanceController;
+use App\Http\Controllers\Api\TurnstileController;
 use App\Models\Member;
 use App\Models\Payment;
 use App\Models\Plan;
@@ -120,6 +121,11 @@ Route::post('attendances', [AttendanceController::class, 'store']);
 Route::get('attendances/face-references', [AttendanceController::class, 'faceReferences']);
 Route::get('attendances/face-image/{userId}', [AttendanceController::class, 'faceImage'])
     ->where('userId', '[0-9]+');
+
+// ── Torniquete — relé HTTP (ESP32, Sonoff, Shelly, ZKTeco, Hikvision, etc.)
+Route::get('turnstile', [TurnstileController::class, 'show']);
+Route::put('turnstile', [TurnstileController::class, 'update']);
+Route::post('turnstile/trigger', [TurnstileController::class, 'trigger']);
 
 Route::get('plans/features', [PlanController::class, 'allFeatures']);
 Route::put('plans/{plan}/features', [PlanController::class, 'updateFeatures']);

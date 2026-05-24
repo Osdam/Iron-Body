@@ -17,9 +17,21 @@ import {
   AttendanceSummary,
   PaginatedResponse,
   PaymentSummary,
+  TurnstileResult,
+  TurnstileSettings,
   UserSummary,
 } from '../services/api.service';
 import { FaceMatch, FaceRecognitionService } from '../services/face-recognition.service';
+
+interface AccessBanner {
+  type: 'granted' | 'denied';
+  memberName: string;
+  message: string;
+  detail?: string;
+  plan?: string | null;
+  source: 'facial' | 'manual';
+  action: 'entry' | 'exit';
+}
 
 interface AttendanceRecord {
   id: string;
@@ -64,6 +76,20 @@ type CameraTerminal = 'entry' | 'exit';
   imports: [CommonModule, FormsModule],
   template: `
     <section class="attendance-page">
+      <div *ngIf="accessBanner() as banner" class="access-banner" [attr.data-type]="banner.type">
+        <span class="access-banner-icon material-symbols-outlined" aria-hidden="true">
+          {{ banner.type === 'granted' ? 'check_circle' : 'block' }}
+        </span>
+        <div class="access-banner-text">
+          <strong>{{ banner.message }}</strong>
+          <span>{{ banner.memberName }}<em *ngIf="banner.plan"> · {{ banner.plan }}</em></span>
+          <small *ngIf="banner.detail">{{ banner.detail }}</small>
+        </div>
+        <span class="access-banner-action" aria-hidden="true">
+          {{ banner.action === 'entry' ? 'ENTRADA' : 'SALIDA' }}
+        </span>
+      </div>
+
       <header class="attendance-header">
         <div>
           <h1>Control de asistencia</h1>
@@ -72,6 +98,17 @@ type CameraTerminal = 'entry' | 'exit';
           </p>
         </div>
         <div class="header-actions">
+          <button type="button" class="btn-secondary" (click)="toggleTurnstilePanel()">
+            <span class="material-symbols-outlined" aria-hidden="true">door_sliding</span>
+            {{ showTurnstilePanel() ? 'Ocultar torniquete' : 'Configurar torniquete' }}
+          </button>
+          <button type="button" class="btn-secondary"
+                  [disabled]="turnstileTriggering() || !turnstileSettings()?.enabled"
+                  (click)="triggerTurnstileManually()"
+                  [title]="!turnstileSettings()?.enabled ? 'Activa el torniquete para abrir manualmente' : 'Abre el torniquete ahora'">
+            <span class="material-symbols-outlined" aria-hidden="true">lock_open_right</span>
+            {{ turnstileTriggering() ? 'Abriendo...' : 'Abrir torniquete' }}
+          </button>
           <button type="button" class="btn-secondary" (click)="simulateFacialAccess()">
             <span class="material-symbols-outlined" aria-hidden="true">face</span>
             Lectura facial
@@ -262,6 +299,106 @@ type CameraTerminal = 'entry' | 'exit';
               Dejar como predeterminada de salida
             </button>
           </article>
+        </div>
+      </section>
+
+      <section *ngIf="showTurnstilePanel()" class="turnstile-panel">
+        <header class="turnstile-header">
+          <div>
+            <h2>Torniquete (relé HTTP)</h2>
+            <p>
+              Compatible con ESP32, Sonoff, Shelly, ZKTeco o cualquier dispositivo que reciba un GET/POST para abrir el relé.
+              El backend dispara el webhook cada vez que se aprueba una asistencia.
+            </p>
+          </div>
+          <div class="turnstile-status" *ngIf="turnstileSettings() as t">
+            <span class="dot-status" [attr.data-state]="t.last_status || (t.enabled ? 'idle' : 'disabled')"></span>
+            <div>
+              <strong>{{ t.enabled ? 'Activo' : 'Deshabilitado' }}</strong>
+              <small *ngIf="t.last_triggered_at">
+                Última activación: {{ t.last_triggered_at | date: 'short' }}
+                <em *ngIf="t.last_http_code"> · HTTP {{ t.last_http_code }}</em>
+              </small>
+              <small *ngIf="t.last_status === 'error' && t.last_error" class="error-line">
+                Error: {{ t.last_error }}
+              </small>
+            </div>
+          </div>
+        </header>
+
+        <div class="turnstile-grid">
+          <label class="check-row">
+            <input type="checkbox" [(ngModel)]="turnstileForm.enabled" />
+            <span>Habilitar torniquete</span>
+          </label>
+          <label class="check-row">
+            <input type="checkbox" [(ngModel)]="turnstileForm.fire_on_entry" />
+            <span>Disparar al registrar <b>entrada</b></span>
+          </label>
+          <label class="check-row">
+            <input type="checkbox" [(ngModel)]="turnstileForm.fire_on_exit" />
+            <span>Disparar al registrar <b>salida</b></span>
+          </label>
+          <label class="check-row">
+            <input type="checkbox" [(ngModel)]="turnstileForm.sound_enabled" />
+            <span>Sonido de aviso (granted / denied)</span>
+          </label>
+
+          <label class="field-wide">
+            <span>Nombre del dispositivo</span>
+            <input type="text" [(ngModel)]="turnstileForm.name" placeholder="Torniquete principal" />
+          </label>
+
+          <label>
+            <span>Método HTTP</span>
+            <select [(ngModel)]="turnstileForm.http_method">
+              <option value="POST">POST</option>
+              <option value="GET">GET</option>
+              <option value="PUT">PUT</option>
+              <option value="PATCH">PATCH</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Duración de apertura (ms)</span>
+            <input type="number" min="200" max="30000" step="100" [(ngModel)]="turnstileForm.open_duration_ms" />
+          </label>
+
+          <label class="field-wide">
+            <span>URL del webhook</span>
+            <input type="url" [(ngModel)]="turnstileForm.webhook_url"
+                   placeholder="http://192.168.1.50/relay/on?ms={duration_ms}" />
+          </label>
+
+          <label class="field-wide">
+            <span>Header de autenticación (opcional)</span>
+            <input type="text" [(ngModel)]="turnstileForm.auth_header"
+                   placeholder="Authorization: Bearer abcdef" />
+          </label>
+
+          <label class="field-wide">
+            <span>Payload JSON (opcional)</span>
+            <textarea rows="3" [(ngModel)]="turnstileForm.request_payload"
+                      placeholder='{"action":"open","duration":{duration_ms},"member":"{member_name}"}'></textarea>
+          </label>
+
+          <div class="placeholders-hint">
+            Placeholders disponibles: <code>{{ '{member_name}' }}</code>, <code>{{ '{user_id}' }}</code>,
+            <code>{{ '{action}' }}</code>, <code>{{ '{duration_ms}' }}</code>, <code>{{ '{timestamp}' }}</code>
+          </div>
+
+          <div class="turnstile-actions">
+            <button type="button" class="btn-primary" [disabled]="turnstileSaving()" (click)="saveTurnstileSettings()">
+              <span class="material-symbols-outlined" aria-hidden="true">save</span>
+              {{ turnstileSaving() ? 'Guardando...' : 'Guardar configuración' }}
+            </button>
+            <button type="button" class="btn-secondary"
+                    [disabled]="turnstileTriggering() || !turnstileForm.enabled || !turnstileForm.webhook_url"
+                    (click)="triggerTurnstileManually()">
+              <span class="material-symbols-outlined" aria-hidden="true">bolt</span>
+              {{ turnstileTriggering() ? 'Probando...' : 'Probar disparo' }}
+            </button>
+          </div>
         </div>
       </section>
 
@@ -499,6 +636,224 @@ type CameraTerminal = 'entry' | 'exit';
         color: #0a0a0a;
         display: grid;
         gap: 1.25rem;
+        position: relative;
+      }
+
+      .access-banner {
+        position: sticky;
+        top: 0;
+        z-index: 200;
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 1.1rem;
+        padding: 1.1rem 1.5rem;
+        border-radius: 16px;
+        color: #ffffff;
+        font-weight: 900;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.32);
+        animation: bannerSlideDown 220ms ease-out;
+        border: 2px solid transparent;
+      }
+
+      .access-banner[data-type='granted'] {
+        background: linear-gradient(135deg, #16a34a, #15803d);
+        border-color: rgba(255, 255, 255, 0.18);
+      }
+
+      .access-banner[data-type='denied'] {
+        background: linear-gradient(135deg, #dc2626, #991b1b);
+        border-color: rgba(255, 255, 255, 0.18);
+      }
+
+      .access-banner-icon {
+        font-size: 3rem;
+        flex-shrink: 0;
+      }
+
+      .access-banner-text {
+        display: grid;
+        gap: 0.18rem;
+        line-height: 1.2;
+        min-width: 0;
+      }
+
+      .access-banner-text strong {
+        font-size: 1.6rem;
+        letter-spacing: 0.04em;
+      }
+
+      .access-banner-text span {
+        font-size: 1.05rem;
+        font-weight: 800;
+      }
+
+      .access-banner-text em {
+        font-style: normal;
+        opacity: 0.85;
+        font-weight: 700;
+      }
+
+      .access-banner-text small {
+        font-size: 0.82rem;
+        font-weight: 700;
+        opacity: 0.92;
+      }
+
+      .access-banner-action {
+        padding: 0.45rem 0.85rem;
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.22);
+        font-size: 0.78rem;
+        letter-spacing: 0.12em;
+      }
+
+      @keyframes bannerSlideDown {
+        from { transform: translateY(-12px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+      }
+
+      .turnstile-panel {
+        display: grid;
+        gap: 1rem;
+        padding: 1.2rem;
+        border-radius: 16px;
+        background: #ffffff;
+        border: 1px solid #e5e5e5;
+      }
+
+      .turnstile-header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        justify-content: space-between;
+        align-items: flex-start;
+      }
+
+      .turnstile-header p {
+        color: #666;
+        margin-top: 0.3rem;
+        max-width: 56ch;
+      }
+
+      .turnstile-status {
+        display: flex;
+        gap: 0.6rem;
+        align-items: center;
+        padding: 0.7rem 0.9rem;
+        border-radius: 12px;
+        background: #fafafa;
+        border: 1px solid #e5e5e5;
+        min-width: 240px;
+      }
+
+      .turnstile-status strong {
+        display: block;
+        font-weight: 900;
+      }
+
+      .turnstile-status small {
+        display: block;
+        color: #71717a;
+        font-weight: 700;
+        margin-top: 0.18rem;
+      }
+
+      .turnstile-status .error-line {
+        color: #b91c1c;
+        max-width: 28ch;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .dot-status {
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+        background: #d4d4d8;
+        flex-shrink: 0;
+      }
+
+      .dot-status[data-state='success'] { background: #16a34a; box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.18); }
+      .dot-status[data-state='error']   { background: #dc2626; box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.18); }
+      .dot-status[data-state='idle']    { background: #f59e0b; }
+      .dot-status[data-state='disabled']{ background: #a1a1aa; }
+
+      .turnstile-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.85rem;
+      }
+
+      .turnstile-grid label {
+        display: grid;
+        gap: 0.35rem;
+      }
+
+      .turnstile-grid .field-wide {
+        grid-column: 1 / -1;
+      }
+
+      .turnstile-grid select,
+      .turnstile-grid textarea {
+        min-height: 42px;
+        padding: 0.65rem 0.8rem;
+        border-radius: 10px;
+        border: 1px solid #e5e5e5;
+        background: #ffffff;
+        color: #0a0a0a;
+        font-weight: 650;
+        font-family: inherit;
+      }
+
+      .turnstile-grid textarea {
+        font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.82rem;
+      }
+
+      .check-row {
+        display: flex !important;
+        align-items: center;
+        gap: 0.55rem;
+        padding: 0.6rem 0.7rem;
+        border: 1px solid #e5e5e5;
+        border-radius: 10px;
+        background: #fafafa;
+        font-weight: 750;
+        text-transform: none;
+        color: #18181b;
+        cursor: pointer;
+      }
+
+      .check-row input[type='checkbox'] {
+        width: 18px;
+        height: 18px;
+        accent-color: #facc15;
+      }
+
+      .placeholders-hint {
+        grid-column: 1 / -1;
+        font-size: 0.78rem;
+        color: #71717a;
+        font-weight: 700;
+      }
+
+      .placeholders-hint code {
+        background: #f4f4f5;
+        padding: 0.15rem 0.4rem;
+        border-radius: 6px;
+        font-size: 0.78rem;
+        color: #a16207;
+      }
+
+      .turnstile-actions {
+        grid-column: 1 / -1;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        padding-top: 0.3rem;
+        border-top: 1px dashed #e5e5e5;
       }
 
       .attendance-header {
@@ -1737,6 +2092,31 @@ type CameraTerminal = 'entry' | 'exit';
         color: #ffe08b;
       }
 
+      .turnstile-panel,
+      .turnstile-status,
+      .turnstile-grid select,
+      .turnstile-grid textarea,
+      .check-row {
+        background: #1c1b1b;
+        border-color: #353534;
+        color: #e5e2e1;
+      }
+
+      .turnstile-header p,
+      .turnstile-status small,
+      .placeholders-hint {
+        color: #b4afa6;
+      }
+
+      .placeholders-hint code {
+        background: #2a2a2a;
+        color: #ffe08b;
+      }
+
+      .check-row {
+        background: #201f1f;
+      }
+
       @media (max-width: 1180px) {
         .kpi-grid,
         .camera-grid,
@@ -1793,6 +2173,8 @@ export default class AttendanceModule implements OnInit, OnDestroy {
   private exitRecognitionTimer: ReturnType<typeof setInterval> | null = null;
   private entryMatchInFlight = false;
   private exitMatchInFlight = false;
+  private bannerTimeout: ReturnType<typeof setTimeout> | null = null;
+  private audioContext: AudioContext | null = null;
 
   @ViewChild('entryVideo') entryVideo?: ElementRef<HTMLVideoElement>;
   @ViewChild('exitVideo') exitVideo?: ElementRef<HTMLVideoElement>;
@@ -1817,6 +2199,35 @@ export default class AttendanceModule implements OnInit, OnDestroy {
   faceReferencesStatus = signal<'idle' | 'loading' | 'ready' | 'empty' | 'error'>('idle');
   faceReferencesCount = signal(0);
   lastRecognition = signal<{ name: string; confidence: number; terminal: CameraTerminal; at: number } | null>(null);
+  accessBanner = signal<AccessBanner | null>(null);
+  turnstileSettings = signal<TurnstileSettings | null>(null);
+  turnstileSaving = signal(false);
+  turnstileTriggering = signal(false);
+  lastTurnstileResult = signal<TurnstileResult | null>(null);
+  showTurnstilePanel = signal(false);
+  turnstileForm: {
+    name: string;
+    enabled: boolean;
+    webhook_url: string;
+    http_method: 'GET' | 'POST' | 'PUT' | 'PATCH';
+    auth_header: string;
+    request_payload: string;
+    open_duration_ms: number;
+    fire_on_entry: boolean;
+    fire_on_exit: boolean;
+    sound_enabled: boolean;
+  } = {
+    name: 'Torniquete principal',
+    enabled: false,
+    webhook_url: '',
+    http_method: 'POST',
+    auth_header: '',
+    request_payload: '',
+    open_duration_ms: 3000,
+    fire_on_entry: true,
+    fire_on_exit: false,
+    sound_enabled: true,
+  };
   readonly absenceOptions = [3, 5, 7, 15];
 
   activeMembers = computed(() =>
@@ -1904,12 +2315,82 @@ export default class AttendanceModule implements OnInit, OnDestroy {
     void this.loadAccessData();
     void this.loadRecords();
     void this.bootstrapFaceRecognition();
+    void this.loadTurnstileSettings();
   }
 
   ngOnDestroy(): void {
     this.stopCamera('entry');
     this.stopCamera('exit');
     this.faceService.reset();
+    if (this.bannerTimeout) clearTimeout(this.bannerTimeout);
+    if (this.audioContext) {
+      void this.audioContext.close().catch(() => {});
+      this.audioContext = null;
+    }
+  }
+
+  toggleTurnstilePanel(): void {
+    this.showTurnstilePanel.update((v) => !v);
+  }
+
+  saveTurnstileSettings(): void {
+    if (this.turnstileSaving()) return;
+    this.turnstileSaving.set(true);
+
+    this.api.updateTurnstile(this.turnstileForm).subscribe({
+      next: (response) => {
+        this.turnstileSettings.set(response.data);
+        this.applyTurnstileToForm(response.data);
+        this.showNotice('Configuración del torniquete guardada.');
+      },
+      error: () => this.showNotice('No se pudo guardar la configuración del torniquete.'),
+      complete: () => this.turnstileSaving.set(false),
+    });
+  }
+
+  triggerTurnstileManually(): void {
+    if (this.turnstileTriggering()) return;
+    this.turnstileTriggering.set(true);
+
+    this.api.triggerTurnstile({ action: 'entry', reason: 'Apertura manual desde el CRM' }).subscribe({
+      next: (response) => {
+        this.turnstileSettings.set(response.data);
+        this.lastTurnstileResult.set(response.result);
+        if (response.ok) {
+          this.showAccessBanner({
+            type: 'granted',
+            memberName: 'Apertura manual',
+            message: 'TORNIQUETE ABIERTO',
+            detail: `HTTP ${response.result.status ?? '—'}`,
+            source: 'manual',
+            action: 'entry',
+          }, 2500);
+          this.playGrantedSound();
+        } else {
+          this.showAccessBanner({
+            type: 'denied',
+            memberName: 'Torniquete',
+            message: 'NO RESPONDE',
+            detail: this.describeTurnstileError(response.result),
+            source: 'manual',
+            action: 'entry',
+          }, 4500);
+          this.playDeniedSound();
+        }
+      },
+      error: () => {
+        this.showAccessBanner({
+          type: 'denied',
+          memberName: 'Torniquete',
+          message: 'ERROR DE CONEXIÓN',
+          detail: 'El backend no pudo contactar al dispositivo.',
+          source: 'manual',
+          action: 'entry',
+        }, 4500);
+        this.playDeniedSound();
+      },
+      complete: () => this.turnstileTriggering.set(false),
+    });
   }
 
   markSelectedAttendance(): void {
@@ -2086,8 +2567,20 @@ export default class AttendanceModule implements OnInit, OnDestroy {
     options: { confidence?: number; silent?: boolean } = {},
   ): void {
     const nextAction = action || (this.isMemberInside(member.id) ? 'exit' : 'entry');
+
     if (nextAction === 'entry' && !this.canEnter(member)) {
-      if (!options.silent) this.showNotice(this.accessDeniedMessage(member));
+      const reason = this.accessDeniedMessage(member);
+      this.showAccessBanner({
+        type: 'denied',
+        memberName: member.name,
+        message: 'ACCESO DENEGADO',
+        detail: reason,
+        plan: member.plan,
+        source,
+        action: nextAction,
+      }, 5000);
+      this.playDeniedSound();
+      if (!options.silent) this.showNotice(reason);
       return;
     }
 
@@ -2103,10 +2596,31 @@ export default class AttendanceModule implements OnInit, OnDestroy {
       })
       .subscribe({
         next: (response) => {
-          if (response.deduplicated) return;
+          if (response.deduplicated) {
+            // Si el backend reutilizó un registro reciente solo refrescamos el
+            // estado del torniquete (puede haber respondido distinto).
+            if (response.turnstile) this.lastTurnstileResult.set(response.turnstile);
+            return;
+          }
+
           this.records.update((records) => [this.toLocalRecord(response.attendance), ...records]);
           this.attendanceNote.set('');
           if (source === 'manual') this.selectedUserId.set(0);
+
+          const banner: AccessBanner = {
+            type: 'granted',
+            memberName: member.name,
+            message: nextAction === 'entry' ? 'ACCESO PERMITIDO' : 'SALIDA REGISTRADA',
+            detail: this.buildBannerDetail(source, options.confidence, response.turnstile),
+            plan: member.plan,
+            source,
+            action: nextAction,
+          };
+          this.showAccessBanner(banner, 3500);
+          this.playGrantedSound();
+
+          if (response.turnstile) this.lastTurnstileResult.set(response.turnstile);
+
           if (!options.silent) {
             this.showNotice(
               `${nextAction === 'entry' ? 'Entrada' : 'Salida'} registrada para ${member.name} (${source === 'facial' ? 'facial' : 'manual'}).`,
@@ -2330,6 +2844,109 @@ export default class AttendanceModule implements OnInit, OnDestroy {
   private showNotice(message: string): void {
     this.notice.set(message);
     window.setTimeout(() => this.notice.set(''), 2800);
+  }
+
+  private async loadTurnstileSettings(): Promise<void> {
+    try {
+      const response = await firstValueFrom(this.api.getTurnstile());
+      this.turnstileSettings.set(response.data);
+      this.applyTurnstileToForm(response.data);
+    } catch {
+      // Silencioso: el panel sigue mostrando los defaults locales.
+    }
+  }
+
+  private applyTurnstileToForm(settings: TurnstileSettings): void {
+    this.turnstileForm = {
+      name: settings.name ?? 'Torniquete principal',
+      enabled: !!settings.enabled,
+      webhook_url: settings.webhook_url ?? '',
+      http_method: settings.http_method ?? 'POST',
+      auth_header: settings.auth_header ?? '',
+      request_payload: settings.request_payload ?? '',
+      open_duration_ms: settings.open_duration_ms ?? 3000,
+      fire_on_entry: !!settings.fire_on_entry,
+      fire_on_exit: !!settings.fire_on_exit,
+      sound_enabled: !!settings.sound_enabled,
+    };
+  }
+
+  private showAccessBanner(banner: AccessBanner, durationMs = 3500): void {
+    if (this.bannerTimeout) clearTimeout(this.bannerTimeout);
+    this.accessBanner.set(banner);
+    this.bannerTimeout = setTimeout(() => this.accessBanner.set(null), durationMs);
+  }
+
+  private buildBannerDetail(
+    source: AttendanceRecord['source'],
+    confidence: number | undefined,
+    turnstile: TurnstileResult | undefined,
+  ): string {
+    const parts: string[] = [];
+    if (source === 'facial' && typeof confidence === 'number') {
+      parts.push(`${Math.round(confidence * 100)}% reconocimiento`);
+    } else if (source === 'manual') {
+      parts.push('Registro manual');
+    }
+    if (turnstile?.fired) {
+      parts.push(turnstile.ok ? 'Torniquete abierto' : 'Torniquete sin responder');
+    } else if (turnstile && !turnstile.fired) {
+      parts.push('Torniquete deshabilitado');
+    }
+    return parts.join(' · ');
+  }
+
+  private describeTurnstileError(result: TurnstileResult): string {
+    if (result.error) return result.error;
+    if (result.status) return `HTTP ${result.status}`;
+    if (result.reason === 'no_webhook_url') return 'Falta configurar la URL del dispositivo.';
+    if (result.reason === 'disabled') return 'El torniquete está deshabilitado.';
+    return 'El dispositivo no respondió.';
+  }
+
+  private getAudioContext(): AudioContext | null {
+    if (typeof window === 'undefined') return null;
+    if (this.audioContext) return this.audioContext;
+    const Ctor =
+      (window as unknown as { AudioContext?: typeof AudioContext }).AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctor) return null;
+    try {
+      this.audioContext = new Ctor();
+      return this.audioContext;
+    } catch {
+      return null;
+    }
+  }
+
+  private playTone(frequency: number, durationMs: number, volume = 0.18): void {
+    if (this.turnstileSettings() && !this.turnstileSettings()?.sound_enabled) return;
+    const ctx = this.getAudioContext();
+    if (!ctx) return;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = frequency;
+
+    const now = ctx.currentTime;
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(volume, now + 0.01);
+    gain.gain.linearRampToValueAtTime(0, now + durationMs / 1000);
+
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + durationMs / 1000 + 0.02);
+  }
+
+  private playGrantedSound(): void {
+    this.playTone(880, 130);
+    setTimeout(() => this.playTone(1320, 200), 140);
+  }
+
+  private playDeniedSound(): void {
+    this.playTone(220, 220, 0.22);
+    setTimeout(() => this.playTone(160, 280, 0.22), 230);
   }
 
   private buildVisitSessions(): AttendanceVisit[] {

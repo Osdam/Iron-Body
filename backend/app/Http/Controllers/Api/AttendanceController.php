@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\Member;
+use App\Models\TurnstileSetting;
 use App\Models\User;
+use App\Services\TurnstileService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,6 +18,10 @@ use Throwable;
 
 class AttendanceController extends Controller
 {
+    public function __construct(private readonly TurnstileService $turnstile)
+    {
+    }
+
     /**
      * Listado paginado de asistencias para el CRM. Filtros opcionales:
      * - user_id: solo asistencias de un miembro.
@@ -94,9 +100,12 @@ class AttendanceController extends Controller
                 'captured_at' => now(),
             ]);
 
+            $turnstileResult = $this->maybeOpenTurnstile($attendance, $user);
+
             return response()->json([
                 'ok' => true,
                 'attendance' => $this->serialize($attendance->load('user:id,name,plan')),
+                'turnstile' => $turnstileResult,
             ], 201);
         } catch (Throwable $e) {
             return response()->json([
@@ -173,6 +182,32 @@ class AttendanceController extends Controller
             'Content-Type' => $biometric->face_mime ?: 'image/jpeg',
             'Cache-Control' => 'private, max-age=3600',
         ]);
+    }
+
+    /**
+     * Si la configuración lo permite, dispara el torniquete tras un check-in.
+     * Devuelve siempre algo serializable (incluso en error/desactivado) para
+     * que el frontend pueda mostrar el estado al operador.
+     */
+    private function maybeOpenTurnstile(Attendance $attendance, User $user): array
+    {
+        $settings = TurnstileSetting::current();
+
+        $shouldFire = $settings->enabled
+            && (($attendance->action === 'entry' && $settings->fire_on_entry)
+                || ($attendance->action === 'exit' && $settings->fire_on_exit));
+
+        if (! $shouldFire) {
+            return ['fired' => false, 'reason' => $settings->enabled ? 'action_disabled' : 'disabled'];
+        }
+
+        $result = $this->turnstile->trigger($settings, [
+            'member_name' => $user->name ?: 'Miembro',
+            'user_id' => $user->id,
+            'action' => $attendance->action,
+        ]);
+
+        return array_merge(['fired' => true], $result);
     }
 
     /** Última acción registrada para un usuario, para deducir entry vs exit. */

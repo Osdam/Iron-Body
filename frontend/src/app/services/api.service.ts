@@ -153,6 +153,40 @@ export interface FaceReferencePayload {
   captured_at?: string | null;
 }
 
+export interface TurnstileSettings {
+  id: number;
+  name: string;
+  enabled: boolean;
+  webhook_url: string | null;
+  http_method: 'GET' | 'POST' | 'PUT' | 'PATCH';
+  auth_header: string | null;
+  request_payload: string | null;
+  open_duration_ms: number;
+  fire_on_entry: boolean;
+  fire_on_exit: boolean;
+  sound_enabled: boolean;
+  last_triggered_at: string | null;
+  last_status: 'success' | 'error' | null;
+  last_error: string | null;
+  last_http_code: number | null;
+}
+
+export interface TurnstileResult {
+  fired?: boolean;
+  ok?: boolean;
+  reason?: string;
+  status?: number;
+  body?: string;
+  error?: string;
+}
+
+export interface CreateAttendanceResponse {
+  ok: boolean;
+  deduplicated?: boolean;
+  attendance: AttendanceSummary;
+  turnstile?: TurnstileResult;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private http = inject(HttpClient);
@@ -677,12 +711,9 @@ export class ApiService {
     source?: 'facial' | 'manual';
     confidence?: number;
     note?: string;
-  }): Observable<{ ok: boolean; deduplicated?: boolean; attendance: AttendanceSummary }> {
+  }): Observable<CreateAttendanceResponse> {
     return this.http
-      .post<{ ok: boolean; deduplicated?: boolean; attendance: AttendanceSummary }>(
-        `${this.base}/attendances`,
-        data,
-      )
+      .post<CreateAttendanceResponse>(`${this.base}/attendances`, data)
       .pipe(
         tap((response) => {
           if (response.deduplicated) return;
@@ -703,6 +734,51 @@ export class ApiService {
     return this.http.get<{ ok: boolean; count: number; data: FaceReferencePayload[] }>(
       `${this.base}/attendances/face-references`,
     );
+  }
+
+  // ─── Turnstile (torniquete) ──────────────────────
+  getTurnstile(): Observable<{ ok: boolean; data: TurnstileSettings }> {
+    return this.http.get<{ ok: boolean; data: TurnstileSettings }>(`${this.base}/turnstile`);
+  }
+
+  updateTurnstile(
+    data: Partial<Omit<TurnstileSettings, 'id' | 'last_triggered_at' | 'last_status' | 'last_error' | 'last_http_code'>>,
+  ): Observable<{ ok: boolean; data: TurnstileSettings }> {
+    return this.http
+      .put<{ ok: boolean; data: TurnstileSettings }>(`${this.base}/turnstile`, data)
+      .pipe(
+        tap(() =>
+          this.audit.record({
+            action: 'update',
+            module: 'Asistencias',
+            entity: 'torniquete',
+            summary: 'actualizó configuración del torniquete',
+            after: data as Record<string, unknown>,
+          }),
+        ),
+      );
+  }
+
+  triggerTurnstile(
+    data: { action?: 'entry' | 'exit'; reason?: string } = {},
+  ): Observable<{ ok: boolean; result: TurnstileResult; data: TurnstileSettings }> {
+    return this.http
+      .post<{ ok: boolean; result: TurnstileResult; data: TurnstileSettings }>(
+        `${this.base}/turnstile/trigger`,
+        data,
+      )
+      .pipe(
+        tap((response) =>
+          this.audit.record({
+            action: 'status',
+            module: 'Asistencias',
+            entity: 'torniquete',
+            summary: response.ok ? 'abrió torniquete manualmente' : 'intento fallido de apertura',
+            after: data as Record<string, unknown>,
+            metadata: { result: response.result },
+          }),
+        ),
+      );
   }
 
   deleteTrainer(id: string | number): Observable<void> {
