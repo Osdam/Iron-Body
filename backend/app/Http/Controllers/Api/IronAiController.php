@@ -103,6 +103,24 @@ class IronAiController extends Controller
                 ],
             );
 
+            // Si OpenAI falló (key faltante, timeout, http error, respuesta vacía),
+            // el service devuelve is_fallback=true con FRIENDLY_ERROR como reply.
+            // No lo pintamos como respuesta del bot: lo reportamos como error real
+            // para que la app pueda mostrar el estado correcto y para que la
+            // diagnóstico no se enmascare detrás de un reply inventado.
+            if ($result['is_fallback'] ?? false) {
+                return response()->json([
+                    'ok'                => false,
+                    'code'              => 'AI_SERVICE_UNAVAILABLE',
+                    'message'           => $result['reply'] ?? IronAiService::FRIENDLY_ERROR,
+                    'reply'             => null,
+                    'conversation_id'   => $result['conversation_uuid'],
+                    'conversation_uuid' => $result['conversation_uuid'],
+                    'quota'             => $this->access->quotaSnapshot($access),
+                    'suggestions'       => $result['suggestions'] ?? [],
+                ], 200);
+            }
+
             return response()->json([
                 'ok'                => true,
                 'reply'             => $result['reply'],
@@ -114,12 +132,17 @@ class IronAiController extends Controller
         } catch (Throwable $e) {
             report($e);
 
+            // Catch-all: misma forma que el path is_fallback (ok:false con código
+            // específico). Antes devolvía ok:true con reply=FRIENDLY_ERROR, lo que
+            // hacía que la app pintara el error como un mensaje del bot.
             return response()->json([
-                'ok'              => true,
-                'reply'           => IronAiService::FRIENDLY_ERROR,
+                'ok'              => false,
+                'code'            => 'AI_SERVICE_UNAVAILABLE',
+                'message'         => IronAiService::FRIENDLY_ERROR,
+                'reply'           => null,
                 'conversation_id' => $request->input('conversation_uuid'),
                 'suggestions'     => [],
-            ]);
+            ], 200);
         }
     }
 
@@ -129,23 +152,50 @@ class IronAiController extends Controller
         try {
             $access = $this->access->resolveAccess($request);
 
-            return response()->json($this->access->serializeAccess($access));
+            return response()
+                ->json($this->access->serializeAccess($access))
+                ->header('Cache-Control', 'no-store, max-age=0, must-revalidate');
         } catch (Throwable $e) {
             report($e);
 
-            // Fallback conservador: deja probar la prueba gratuita.
+            // Fallback de SEGURIDAD: si la resolución falla, devolvemos el contrato
+            // COMPLETO con TODO bloqueado. Antes este bloque solo devolvía 9 claves
+            // y dejaba ai_enabled/can_use_chat en `true`, lo que provocaba que la
+            // app interpretara cualquier excepción transitoria como "plan completo
+            // habilitado" — opuesto a lo que el admin hubiese configurado en el CRM.
+            $freeMessages = (int) config('iron_ai.free_trial.free_trial_messages', 5);
+
             return response()->json([
-                'ok'                 => true,
-                'has_active_membership' => false,
-                'access_type'        => 'free_trial',
-                'ai_enabled'         => true,
-                'can_use_chat'       => true,
-                'upgrade_required'   => false,
-                'used_messages'      => 0,
-                'message_limit'      => (int) config('iron_ai.free_trial.free_trial_messages', 5),
-                'remaining_messages' => (int) config('iron_ai.free_trial.free_trial_messages', 5),
-                'context_level'      => 'basic',
-            ]);
+                'ok'                              => true,
+                'has_active_membership'           => false,
+                'plan_name'                       => null,
+                'access_type'                    => 'free_trial',
+                'ai_enabled'                     => false,
+                'can_use_chat'                   => false,
+                'upgrade_required'               => true,
+                'context_level'                  => 'basic',
+                'chat_enabled'                   => false,
+                'voice_chat_enabled'             => false,
+                'image_analysis_enabled'         => false,
+                'realtime_voice_enabled'         => false,
+                'file_upload_enabled'            => false,
+                'progress_analysis_enabled'      => false,
+                'smart_recommendations_enabled'  => false,
+                'weekly_summary_enabled'         => false,
+                'proactive_notifications_enabled'=> false,
+                'audio_remaining'                => 0,
+                'image_remaining'                => 0,
+                'max_audio_seconds'              => (int) config('iron_ai.media.max_audio_seconds', 60),
+                'max_image_size_mb'              => (int) config('iron_ai.media.max_image_size_mb', 5),
+                'used_messages'                  => 0,
+                'message_limit'                  => $freeMessages,
+                'remaining_messages'             => $freeMessages,
+                'used_month'                     => 0,
+                'daily_limit'                    => null,
+                'monthly_limit'                  => null,
+                'remaining_month'                => null,
+                'cta'                            => null,
+            ], 200, ['Cache-Control' => 'no-store, max-age=0, must-revalidate']);
         }
     }
 

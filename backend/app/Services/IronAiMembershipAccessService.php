@@ -102,8 +102,19 @@ class IronAiMembershipAccessService
             }
             $active = ! $expired;
 
-            // Intenta enlazar con un plan del catálogo existente (por nombre).
-            $plan = Plan::whereRaw('lower(name) = ?', [mb_strtolower(trim($planName))])->first();
+            // Enlazar con un plan del catálogo. Primero por igualdad exacta
+            // (case-insensitive); si falla, por nombre normalizado (sin acentos)
+            // para tolerar diferencias entre users.plan (string libre, importado)
+            // y plans.name. Sin esto, una diferencia de acentos hace que la app
+            // caiga al fallback de config en vez de leer la fila que editó el CRM.
+            $needle = mb_strtolower(trim($planName));
+            $plan = Plan::whereRaw('lower(name) = ?', [$needle])->first();
+            if (! $plan) {
+                $normalized = $this->normalize($planName);
+                $plan = Plan::all()->first(
+                    fn (Plan $p) => $this->normalize($p->name) === $normalized,
+                );
+            }
         }
 
         return [
@@ -457,14 +468,20 @@ class IronAiMembershipAccessService
         return ['can' => true, 'block' => null];
     }
 
-    /** Restante de un tipo multimedia para serializar (0 si bloqueado, null=ilimitado). */
+    /**
+     * Restante de un tipo multimedia para serializar.
+     * - limit null  → null (ilimitado dentro de la cuota general).
+     * - limit set   → max(0, limit - used).
+     *
+     * NO se gatea por `enabled`: si la capacidad está apagada la app lo sabe por
+     * el flag (voice_chat_enabled/image_analysis_enabled) — pisar el remaining a 0
+     * cuando hay quota real disponible engaña al cliente sobre cuánta cuota queda.
+     * El segundo arg queda en la firma por compatibilidad con llamadores.
+     */
     private function mediaRemaining(bool $enabled, ?int $limit, int $used): ?int
     {
-        if (! $enabled) {
-            return 0;
-        }
         if ($limit === null) {
-            return null; // ilimitado dentro de la cuota general
+            return null;
         }
 
         return max(0, $limit - $used);
@@ -686,10 +703,13 @@ class IronAiMembershipAccessService
             'max_audio_seconds'     => (int) ($caps['ai_max_audio_seconds'] ?? config('iron_ai.media.max_audio_seconds', 60)),
             'max_image_size_mb'     => (int) ($caps['ai_max_image_size_mb'] ?? config('iron_ai.media.max_image_size_mb', 5)),
 
-            // Prueba gratuita.
-            'used_messages'      => $usage['lifetime'],
+            // Prueba gratuita. Para miembros con membresía estos quedan null/null:
+            // los números reales viven en `monthly_limit`/`remaining_month`. Antes
+            // se ponía `message_limit: null` pero `remaining_messages: <número>`,
+            // que el cliente leía como "N restantes de ilimitado" — incongruente.
+            'used_messages'      => $isFree ? $usage['lifetime'] : 0,
             'message_limit'      => $isFree ? $freeLimit : null,
-            'remaining_messages' => $isFree ? max(0, $freeLimit - $usage['lifetime']) : ($access['remaining'] ?? null),
+            'remaining_messages' => $isFree ? max(0, $freeLimit - $usage['lifetime']) : null,
 
             // Membresía.
             'used_today'      => $usage['today'],

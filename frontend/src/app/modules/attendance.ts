@@ -12,7 +12,14 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom, Observable } from 'rxjs';
-import { ApiService, PaginatedResponse, PaymentSummary, UserSummary } from '../services/api.service';
+import {
+  ApiService,
+  AttendanceSummary,
+  PaginatedResponse,
+  PaymentSummary,
+  UserSummary,
+} from '../services/api.service';
+import { FaceMatch, FaceRecognitionService } from '../services/face-recognition.service';
 
 interface AttendanceRecord {
   id: string;
@@ -130,12 +137,40 @@ type CameraTerminal = 'entry' | 'exit';
         <div class="camera-header">
           <div>
             <h2>Terminales faciales</h2>
-            <p>Conecta una cámara para entrada y otra para salida. Las predeterminadas se guardan en este navegador.</p>
+            <p>Conecta una cámara para entrada y otra para salida. El reconocimiento es automático mientras la cámara esté activa.</p>
           </div>
           <button type="button" class="btn-secondary" (click)="refreshCameraDevices()">
             <span class="material-symbols-outlined" aria-hidden="true">sync</span>
             Buscar cámaras
           </button>
+        </div>
+
+        <div class="face-status-row">
+          <span class="face-status" [attr.data-state]="faceModelsStatus()">
+            <span class="material-symbols-outlined" aria-hidden="true">memory</span>
+            Modelos:
+            <strong>
+              {{ faceModelsStatus() === 'ready' ? 'Listos' :
+                 faceModelsStatus() === 'loading' ? 'Cargando...' :
+                 faceModelsStatus() === 'error' ? 'Error' : 'En espera' }}
+            </strong>
+          </span>
+          <span class="face-status" [attr.data-state]="faceReferencesStatus()">
+            <span class="material-symbols-outlined" aria-hidden="true">groups</span>
+            Rostros indexados:
+            <strong>
+              {{ faceReferencesStatus() === 'ready' ? faceReferencesCount() + ' miembros' :
+                 faceReferencesStatus() === 'loading' ? 'Indexando...' :
+                 faceReferencesStatus() === 'empty' ? 'Sin rostros guardados' :
+                 faceReferencesStatus() === 'error' ? 'Error al cargar' : 'En espera' }}
+            </strong>
+          </span>
+          <span class="face-status" *ngIf="lastRecognition() as last" data-state="ready">
+            <span class="material-symbols-outlined" aria-hidden="true">verified</span>
+            Último reconocido:
+            <strong>{{ last.name }}</strong>
+            <em>({{ (last.confidence * 100) | number: '1.0-0' }}% · {{ last.terminal === 'entry' ? 'entrada' : 'salida' }})</em>
+          </span>
         </div>
 
         <div *ngIf="cameraError()" class="camera-alert">
@@ -732,6 +767,59 @@ type CameraTerminal = 'entry' | 'exit';
         background: #fef3c7;
         color: #78350f;
         font-weight: 700;
+      }
+
+      .face-status-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+
+      .face-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.45rem 0.7rem;
+        border-radius: 999px;
+        background: #f4f4f5;
+        color: #3f3f46;
+        font-size: 0.78rem;
+        font-weight: 750;
+      }
+
+      .face-status strong {
+        font-weight: 900;
+      }
+
+      .face-status em {
+        color: #71717a;
+        font-style: normal;
+        font-weight: 650;
+      }
+
+      .face-status .material-symbols-outlined {
+        font-size: 1rem;
+        color: #a16207;
+      }
+
+      .face-status[data-state="loading"] {
+        background: #fef3c7;
+        color: #78350f;
+      }
+
+      .face-status[data-state="ready"] {
+        background: #dcfce7;
+        color: #166534;
+      }
+
+      .face-status[data-state="empty"] {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+
+      .face-status[data-state="error"] {
+        background: #fee2e2;
+        color: #991b1b;
       }
 
       .kpi-grid {
@@ -1694,12 +1782,17 @@ type CameraTerminal = 'entry' | 'exit';
 })
 export default class AttendanceModule implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
+  private readonly faceService = inject(FaceRecognitionService);
   private readonly elementRef = inject(ElementRef<HTMLElement>);
-  private readonly storageKey = 'iron-body-attendance-records';
   private readonly entryCameraKey = 'iron-body-attendance-entry-camera';
   private readonly exitCameraKey = 'iron-body-attendance-exit-camera';
+  private readonly recognitionIntervalMs = 800;
   private entryStream: MediaStream | null = null;
   private exitStream: MediaStream | null = null;
+  private entryRecognitionTimer: ReturnType<typeof setInterval> | null = null;
+  private exitRecognitionTimer: ReturnType<typeof setInterval> | null = null;
+  private entryMatchInFlight = false;
+  private exitMatchInFlight = false;
 
   @ViewChild('entryVideo') entryVideo?: ElementRef<HTMLVideoElement>;
   @ViewChild('exitVideo') exitVideo?: ElementRef<HTMLVideoElement>;
@@ -1720,6 +1813,10 @@ export default class AttendanceModule implements OnInit, OnDestroy {
   memberSelectSearch = signal('');
   searchTerm = signal('');
   notice = signal('');
+  faceModelsStatus = signal<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  faceReferencesStatus = signal<'idle' | 'loading' | 'ready' | 'empty' | 'error'>('idle');
+  faceReferencesCount = signal(0);
+  lastRecognition = signal<{ name: string; confidence: number; terminal: CameraTerminal; at: number } | null>(null);
   readonly absenceOptions = [3, 5, 7, 15];
 
   activeMembers = computed(() =>
@@ -1802,15 +1899,17 @@ export default class AttendanceModule implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    this.loadRecords();
     this.loadCameraDefaults();
     void this.refreshCameraDevices(true);
-    this.loadAccessData();
+    void this.loadAccessData();
+    void this.loadRecords();
+    void this.bootstrapFaceRecognition();
   }
 
   ngOnDestroy(): void {
     this.stopCamera('entry');
     this.stopCamera('exit');
+    this.faceService.reset();
   }
 
   markSelectedAttendance(): void {
@@ -1896,6 +1995,7 @@ export default class AttendanceModule implements OnInit, OnDestroy {
 
       this.setCameraStatus(terminal, 'Conectada');
       this.cameraError.set('');
+      this.startRecognitionLoop(terminal);
     } catch (error) {
       this.setCameraStatus(terminal, 'Error de conexión');
       this.cameraError.set(this.cameraErrorMessage(error));
@@ -1903,6 +2003,8 @@ export default class AttendanceModule implements OnInit, OnDestroy {
   }
 
   stopCamera(terminal: CameraTerminal): void {
+    this.stopRecognitionLoop(terminal);
+
     const stream = terminal === 'entry' ? this.entryStream : this.exitStream;
     stream?.getTracks().forEach((track) => track.stop());
 
@@ -1932,20 +2034,33 @@ export default class AttendanceModule implements OnInit, OnDestroy {
     );
   }
 
-  recognizeFromCamera(terminal: CameraTerminal): void {
+  async recognizeFromCamera(terminal: CameraTerminal): Promise<void> {
     const isConnected = terminal === 'entry' ? !!this.entryStream : !!this.exitStream;
     if (!isConnected) {
       this.showNotice(`Conecta primero la cámara de ${terminal === 'entry' ? 'entrada' : 'salida'}.`);
       return;
     }
 
-    const member = this.members().find((item) => item.id === this.selectedUserId());
-    if (!member) {
-      this.showNotice('Selecciona el miembro identificado para completar la lectura facial.');
+    if (this.faceModelsStatus() !== 'ready') {
+      this.showNotice('Aún se están cargando los modelos de reconocimiento facial.');
       return;
     }
 
-    this.registerAccess(member, 'facial', terminal === 'entry' ? 'entry' : 'exit');
+    if (this.faceReferencesStatus() !== 'ready') {
+      this.showNotice('No hay rostros de referencia cargados todavía.');
+      return;
+    }
+
+    const video = terminal === 'entry' ? this.entryVideo?.nativeElement : this.exitVideo?.nativeElement;
+    if (!video) return;
+
+    const match = await this.faceService.matchFromVideo(video);
+    if (!match) {
+      this.showNotice('No se reconoció ningún miembro. Mira de frente y vuelve a intentar.');
+      return;
+    }
+
+    this.handleFaceMatch(match, terminal, /* fromLoop */ false);
   }
 
   toggleSelect(select: 'member' | 'absence'): void {
@@ -1968,33 +2083,40 @@ export default class AttendanceModule implements OnInit, OnDestroy {
     member: UserSummary,
     source: AttendanceRecord['source'],
     action?: AttendanceRecord['action'],
+    options: { confidence?: number; silent?: boolean } = {},
   ): void {
-    const now = new Date();
     const nextAction = action || (this.isMemberInside(member.id) ? 'exit' : 'entry');
     if (nextAction === 'entry' && !this.canEnter(member)) {
-      this.showNotice(this.accessDeniedMessage(member));
+      if (!options.silent) this.showNotice(this.accessDeniedMessage(member));
       return;
     }
 
-    const record: AttendanceRecord = {
-      id: `${member.id}-${now.getTime()}`,
-      userId: member.id,
-      memberName: member.name,
-      plan: member.plan,
-      action: nextAction,
-      source,
-      date: this.toDateKey(now),
-      time: now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
-      note: this.attendanceNote().trim() || undefined,
-    };
+    const note = this.attendanceNote().trim() || undefined;
 
-    this.records.update((records) => [record, ...records]);
-    this.saveRecords();
-    this.attendanceNote.set('');
-    this.selectedUserId.set(0);
-    this.showNotice(
-      `${nextAction === 'entry' ? 'Entrada' : 'Salida'} registrada para ${member.name} (${source === 'facial' ? 'facial' : 'manual'}).`,
-    );
+    this.api
+      .createAttendance({
+        user_id: member.id,
+        action: nextAction,
+        source,
+        confidence: options.confidence,
+        note,
+      })
+      .subscribe({
+        next: (response) => {
+          if (response.deduplicated) return;
+          this.records.update((records) => [this.toLocalRecord(response.attendance), ...records]);
+          this.attendanceNote.set('');
+          if (source === 'manual') this.selectedUserId.set(0);
+          if (!options.silent) {
+            this.showNotice(
+              `${nextAction === 'entry' ? 'Entrada' : 'Salida'} registrada para ${member.name} (${source === 'facial' ? 'facial' : 'manual'}).`,
+            );
+          }
+        },
+        error: () => {
+          this.showNotice('No se pudo registrar la asistencia. Revisa la conexión con el servidor.');
+        },
+      });
   }
 
   trackByMember(_index: number, member: MemberAttendanceView): number {
@@ -2047,6 +2169,109 @@ export default class AttendanceModule implements OnInit, OnDestroy {
     }
   }
 
+  private async bootstrapFaceRecognition(): Promise<void> {
+    this.faceModelsStatus.set('loading');
+    try {
+      await this.faceService.loadModels();
+      this.faceModelsStatus.set('ready');
+    } catch {
+      this.faceModelsStatus.set('error');
+      this.showNotice('No se pudieron cargar los modelos de reconocimiento facial.');
+      return;
+    }
+
+    this.faceReferencesStatus.set('loading');
+    try {
+      const response = await firstValueFrom(this.api.getFaceReferences());
+      const loaded = await this.faceService.buildReferences(response.data || []);
+      this.faceReferencesCount.set(loaded);
+      this.faceReferencesStatus.set(loaded > 0 ? 'ready' : 'empty');
+    } catch {
+      this.faceReferencesStatus.set('error');
+      this.showNotice('No se pudo cargar el catálogo de rostros desde el servidor.');
+    }
+  }
+
+  private startRecognitionLoop(terminal: CameraTerminal): void {
+    this.stopRecognitionLoop(terminal);
+
+    const timer = setInterval(() => {
+      void this.tickRecognition(terminal);
+    }, this.recognitionIntervalMs);
+
+    if (terminal === 'entry') this.entryRecognitionTimer = timer;
+    else this.exitRecognitionTimer = timer;
+  }
+
+  private stopRecognitionLoop(terminal: CameraTerminal): void {
+    const timer = terminal === 'entry' ? this.entryRecognitionTimer : this.exitRecognitionTimer;
+    if (timer) clearInterval(timer);
+
+    if (terminal === 'entry') {
+      this.entryRecognitionTimer = null;
+      this.entryMatchInFlight = false;
+      return;
+    }
+
+    this.exitRecognitionTimer = null;
+    this.exitMatchInFlight = false;
+  }
+
+  private async tickRecognition(terminal: CameraTerminal): Promise<void> {
+    if (this.faceModelsStatus() !== 'ready') return;
+    if (this.faceReferencesStatus() !== 'ready') return;
+
+    const inFlight = terminal === 'entry' ? this.entryMatchInFlight : this.exitMatchInFlight;
+    if (inFlight) return;
+
+    const video = terminal === 'entry' ? this.entryVideo?.nativeElement : this.exitVideo?.nativeElement;
+    if (!video) return;
+
+    if (terminal === 'entry') this.entryMatchInFlight = true;
+    else this.exitMatchInFlight = true;
+
+    try {
+      const match = await this.faceService.matchFromVideo(video);
+      if (match) this.handleFaceMatch(match, terminal, true);
+    } catch {
+      // Silenciamos errores transitorios del detector para no spamear notices.
+    } finally {
+      if (terminal === 'entry') this.entryMatchInFlight = false;
+      else this.exitMatchInFlight = false;
+    }
+  }
+
+  private handleFaceMatch(match: FaceMatch, terminal: CameraTerminal, fromLoop: boolean): void {
+    const member = this.members().find((item) => item.id === match.userId);
+    if (!member) return;
+
+    this.lastRecognition.set({
+      name: match.name,
+      confidence: match.confidence,
+      terminal,
+      at: Date.now(),
+    });
+
+    this.registerAccess(member, 'facial', terminal, {
+      confidence: match.confidence,
+      silent: fromLoop,
+    });
+  }
+
+  private toLocalRecord(record: AttendanceSummary): AttendanceRecord {
+    return {
+      id: `srv-${record.id}`,
+      userId: record.user_id,
+      memberName: record.member_name,
+      plan: record.plan,
+      action: record.action,
+      source: record.source,
+      date: record.date,
+      time: record.time,
+      note: record.note || undefined,
+    };
+  }
+
   private async fetchAllPages<T>(
     loader: (page: number) => Observable<PaginatedResponse<T>>,
   ): Promise<T[]> {
@@ -2061,21 +2286,15 @@ export default class AttendanceModule implements OnInit, OnDestroy {
     return rows;
   }
 
-  private loadRecords(): void {
+  private async loadRecords(): Promise<void> {
     try {
-      const raw = localStorage.getItem(this.storageKey);
-      const parsed = raw ? JSON.parse(raw) : [];
-      this.records.set(
-        Array.isArray(parsed)
-          ? parsed.map((record) => ({
-              ...record,
-              action: record.action || 'entry',
-              source: record.source || 'manual',
-            }))
-          : [],
+      const response = await firstValueFrom(
+        this.api.getAttendances(1, { per_page: 200 }),
       );
+      this.records.set((response.data || []).map((entry) => this.toLocalRecord(entry)));
     } catch {
       this.records.set([]);
+      this.showNotice('No se pudo cargar el historial de asistencias.');
     }
   }
 
@@ -2106,10 +2325,6 @@ export default class AttendanceModule implements OnInit, OnDestroy {
     if (name === 'NotReadableError') return 'La cámara está ocupada por otra aplicación.';
     if (name === 'OverconstrainedError') return 'La cámara seleccionada no está disponible.';
     return 'No se pudo conectar la cámara. Revisa permisos, conexión o navegador.';
-  }
-
-  private saveRecords(): void {
-    localStorage.setItem(this.storageKey, JSON.stringify(this.records()));
   }
 
   private showNotice(message: string): void {

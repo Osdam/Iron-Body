@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\IronAiController;
 use App\Http\Controllers\Api\IronAiConversationController;
 use App\Http\Controllers\Api\IronAiMediaController;
 use App\Http\Controllers\Api\IronAiRealtimeController;
+use App\Http\Controllers\Api\AttendanceController;
 use App\Models\Member;
 use App\Models\Payment;
 use App\Models\Plan;
@@ -110,6 +111,15 @@ Route::get('iron-ai/conversations/{uuid}/messages', [IronAiConversationControlle
 Route::post('iron-ai/conversations/{uuid}/archive', [IronAiConversationController::class, 'archive']);
 Route::post('iron-ai/conversations/{uuid}/clear', [IronAiConversationController::class, 'clear']);
 Route::delete('iron-ai/conversations/{uuid}', [IronAiConversationController::class, 'destroy']);
+
+// ── Asistencias — registro facial/manual (CRM web) ───────────────────────────
+// El reconocimiento facial corre 100% en el navegador del CRM con face-api.js.
+// El backend solo persiste, sirve el catálogo de rostros y la imagen.
+Route::get('attendances', [AttendanceController::class, 'index']);
+Route::post('attendances', [AttendanceController::class, 'store']);
+Route::get('attendances/face-references', [AttendanceController::class, 'faceReferences']);
+Route::get('attendances/face-image/{userId}', [AttendanceController::class, 'faceImage'])
+    ->where('userId', '[0-9]+');
 
 Route::get('plans/features', [PlanController::class, 'allFeatures']);
 Route::put('plans/{plan}/features', [PlanController::class, 'updateFeatures']);

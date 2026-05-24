@@ -128,6 +128,31 @@ export interface DashboardStats {
   classes?: number;
 }
 
+export interface AttendanceSummary {
+  id: number;
+  user_id: number;
+  member_id: number | null;
+  member_name: string;
+  plan?: string | null;
+  action: 'entry' | 'exit';
+  source: 'facial' | 'manual';
+  confidence?: number | null;
+  note?: string | null;
+  captured_at: string;
+  date: string;
+  time: string;
+}
+
+export interface FaceReferencePayload {
+  user_id: number;
+  member_id: number;
+  member_uuid: string;
+  name: string;
+  plan?: string | null;
+  face_url: string;
+  captured_at?: string | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private http = inject(HttpClient);
@@ -630,6 +655,53 @@ export class ApiService {
           metadata: { trainer },
         }),
       ),
+    );
+  }
+
+  // ─── Attendances ─────────────────────────────────
+  getAttendances(
+    page = 1,
+    filters?: { user_id?: number; from?: string; to?: string; per_page?: number },
+  ): Observable<PaginatedResponse<AttendanceSummary>> {
+    let url = `${this.base}/attendances?page=${page}`;
+    if (filters?.user_id) url += `&user_id=${filters.user_id}`;
+    if (filters?.from) url += `&from=${encodeURIComponent(filters.from)}`;
+    if (filters?.to) url += `&to=${encodeURIComponent(filters.to)}`;
+    if (filters?.per_page) url += `&per_page=${filters.per_page}`;
+    return this.http.get<PaginatedResponse<AttendanceSummary>>(url);
+  }
+
+  createAttendance(data: {
+    user_id: number;
+    action?: 'entry' | 'exit';
+    source?: 'facial' | 'manual';
+    confidence?: number;
+    note?: string;
+  }): Observable<{ ok: boolean; deduplicated?: boolean; attendance: AttendanceSummary }> {
+    return this.http
+      .post<{ ok: boolean; deduplicated?: boolean; attendance: AttendanceSummary }>(
+        `${this.base}/attendances`,
+        data,
+      )
+      .pipe(
+        tap((response) => {
+          if (response.deduplicated) return;
+          this.audit.record({
+            action: 'create',
+            module: 'Asistencias',
+            entity: 'asistencia',
+            entityId: response.attendance.id,
+            targetName: response.attendance.member_name,
+            summary: `${response.attendance.action === 'entry' ? 'Entrada' : 'Salida'} ${response.attendance.source === 'facial' ? 'facial' : 'manual'}`,
+            after: data as Record<string, unknown>,
+          });
+        }),
+      );
+  }
+
+  getFaceReferences(): Observable<{ ok: boolean; count: number; data: FaceReferencePayload[] }> {
+    return this.http.get<{ ok: boolean; count: number; data: FaceReferencePayload[] }>(
+      `${this.base}/attendances/face-references`,
     );
   }
 
