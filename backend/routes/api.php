@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\EpaycoPaymentController;
 use App\Http\Controllers\Api\ExerciseController;
 use App\Http\Controllers\Api\AppClassController;
 use App\Http\Controllers\Api\AppExerciseController;
+use App\Http\Controllers\Api\AppPaymentController;
 use App\Http\Controllers\Api\AppRoutineController;
 use App\Http\Controllers\Api\MemberRegistrationController;
 use App\Http\Controllers\Api\MemberRoutineController;
@@ -151,6 +152,14 @@ Route::middleware('auth.member')->group(function (): void {
     Route::post('app/routines',                   [AppRoutineController::class, 'store']);
     Route::delete('app/routines/{routine}',       [AppRoutineController::class, 'destroy']);
     Route::post('app/routines/{routine}/delete',  [AppRoutineController::class, 'destroy']);
+    // Historial de pagos del miembro autenticado (lee `payments` — la misma
+    // tabla del CRM, una sola fuente de verdad).
+    Route::get('app/payments', [AppPaymentController::class, 'index']);
+    // Detalle de un pago del miembro. Refresca contra ePayco si está en vuelo
+    // (pending/processing) reutilizando EpaycoPaymentService::statusFor. 404
+    // tanto si la referencia no existe como si no pertenece al miembro.
+    Route::get('app/payments/{reference}', [AppPaymentController::class, 'show'])
+        ->where('reference', '[A-Za-z0-9_\-]+');
 });
 Route::apiResource('routines', RoutineController::class)->only(['index','show','store','update','destroy']);
 Route::patch('routines/{routine}/assign', [RoutineController::class, 'assign']);

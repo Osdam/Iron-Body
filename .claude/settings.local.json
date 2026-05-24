@@ -5,7 +5,11 @@
       "Bash(Get-ChildItem -Path . -Depth 1 -Directory)",
       "Bash(Select-Object Name)",
       "Bash(cd /d/Github/Iron-Body/backend && find . -maxdepth 1 -type d | head -20)",
-      "Read(//d/d/Github/Iron-Body/**)"
+      "Read(//d/d/Github/Iron-Body/**)",
+      "Bash(php -l app/Models/Payment.php)",
+      "Bash(php -l app/Http/Controllers/Api/AppPaymentController.php)",
+      "Bash(php -l database/migrations/2026_05_23_000010_add_member_history_indexes_to_payments.php)",
+      "Bash(php -l routes/api.php)"
     ]
   }
 }

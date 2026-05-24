@@ -1,17 +1,17 @@
-# ironbody
+# Iron Body
 
-A new Flutter project.
+Plataforma de gestión para gimnasio Iron Body.
 
-## Getting Started
+## Estructura del repositorio
 
-This project is a starting point for a Flutter application.
+- **`backend/`** — API en Laravel 12 (PHP 8.2), con integración de pagos ePayco.
+- **`frontend/`** — Panel administrativo en Angular 21.
 
-A few resources to get you started if this is your first Flutter project:
+## Documentación
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+- [`DOCUMENTACION_MODULOS_CRM.md`](DOCUMENTACION_MODULOS_CRM.md) — Estructura de módulos del CRM administrativo.
+- [`IMPLEMENTACION_RUTINAS.md`](IMPLEMENTACION_RUTINAS.md) — Implementación del módulo de rutinas en el panel admin.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Desarrollo
+
+Consulta el `README.md` de cada carpeta (`backend/`, `frontend/`) para instrucciones de instalación y ejecución.
