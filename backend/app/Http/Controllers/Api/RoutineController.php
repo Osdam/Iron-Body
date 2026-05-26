@@ -7,6 +7,7 @@ use App\Models\Member;
 use App\Models\MemberRoutineAssignment;
 use App\Models\Routine;
 use App\Models\User;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 
 class RoutineController extends Controller
@@ -63,11 +64,19 @@ class RoutineController extends Controller
             'status'           => 'Activa',
         ]));
 
+        // Aviso operativo al CRM de rutina creada (ADITIVO; idempotente).
+        app(NotificationService::class)->notifyRoutineCreated($routine);
+
         if ($member) {
-            MemberRoutineAssignment::firstOrCreate(
+            $assignment = MemberRoutineAssignment::firstOrCreate(
                 ['routine_id' => $routine->id, 'member_id' => $member->id],
                 ['assigned_at' => now()]
             );
+
+            // Notificación de rutina asignada (ADITIVO; solo en asignación nueva).
+            if ($assignment->wasRecentlyCreated) {
+                app(NotificationService::class)->notifyRoutineAssigned($member, $routine);
+            }
         }
 
         return response()->json($this->serialize($routine), 201);
@@ -78,11 +87,24 @@ class RoutineController extends Controller
         $data = $this->validateInput($request, false);
         $routine->fill($this->mapInput($data));
         $routine->save();
+
+        // Si la rutina está asignada a un miembro, notifícale la actualización.
+        if ($routine->member_id) {
+            $member = Member::find($routine->member_id);
+            if ($member) {
+                app(NotificationService::class)->notifyRoutineUpdated($member, $routine);
+            }
+        }
+
         return response()->json($this->serialize($routine));
     }
 
     public function destroy(Routine $routine)
     {
+        // Notifica ANTES de borrar (admin + miembro si estaba asignada).
+        $member = $routine->member_id ? Member::find($routine->member_id) : null;
+        app(NotificationService::class)->notifyRoutineDeleted($routine, $member);
+
         $routine->delete();
         return response()->json(null, 204);
     }
@@ -113,10 +135,15 @@ class RoutineController extends Controller
         $routine->save();
 
         if ($member) {
-            MemberRoutineAssignment::firstOrCreate(
+            $assignment = MemberRoutineAssignment::firstOrCreate(
                 ['routine_id' => $routine->id, 'member_id' => $member->id],
                 ['assigned_at' => now()]
             );
+
+            // Notificación de rutina asignada (ADITIVO; solo en asignación nueva).
+            if ($assignment->wasRecentlyCreated) {
+                app(NotificationService::class)->notifyRoutineAssigned($member, $routine);
+            }
         }
 
         return response()->json($this->serialize($routine));

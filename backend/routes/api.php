@@ -13,14 +13,19 @@ use App\Http\Controllers\Api\AppClassController;
 use App\Http\Controllers\Api\AppExerciseController;
 use App\Http\Controllers\Api\AppPaymentController;
 use App\Http\Controllers\Api\AppRoutineController;
+use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\MemberRegistrationController;
 use App\Http\Controllers\Api\MemberRoutineController;
+use App\Http\Controllers\Api\MemberTrainerController;
+use App\Http\Controllers\Api\AppNutritionController;
 use App\Http\Controllers\Api\MembershipPlanController;
 use App\Http\Controllers\Api\IronAiController;
 use App\Http\Controllers\Api\IronAiConversationController;
 use App\Http\Controllers\Api\IronAiMediaController;
 use App\Http\Controllers\Api\IronAiRealtimeController;
 use App\Http\Controllers\Api\AttendanceController;
+use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Crm\NotificationController as AdminNotificationController;
 use App\Models\Member;
 use App\Models\Payment;
 use App\Models\Plan;
@@ -62,7 +67,14 @@ Route::delete('users/{user}', [UserController::class, 'destroy']);
 
 Route::middleware('member.registration.token')->group(function () {
     Route::get('members/incomplete', [MemberRegistrationController::class, 'incomplete']);
-    Route::post('members/login', [MemberRegistrationController::class, 'login']);
+    // ── Login con verificación en dos pasos (OTP por SMS) ─────────────────────
+    Route::post('members/login', [AuthController::class, 'login']);
+    Route::post('members/login/verify', [AuthController::class, 'verifyOtp']);
+    Route::post('members/login/resend', [AuthController::class, 'resendOtp']);
+    // Tercer factor: reconocimiento facial del titular (match on-device).
+    Route::post('members/login/face-reference', [AuthController::class, 'faceReference']);
+    Route::post('members/login/face-verify', [AuthController::class, 'faceVerify']);
+    Route::post('members/biometric-unlock', [AuthController::class, 'biometricUnlock']);
     Route::post('members/register', [MemberRegistrationController::class, 'register']);
     Route::post('members/{member}/identity', [MemberRegistrationController::class, 'identity']);
     Route::post('members/{member}/legal-consent', [MemberRegistrationController::class, 'legalConsent']);
@@ -148,18 +160,31 @@ Route::delete('members/{member}/routines/{routine}',   [MemberRoutineController:
 
 // ── App: clases y entrenadores para miembros (autenticación por access_hash) ──
 Route::middleware('auth.member')->group(function (): void {
+    // ── Seguridad: sesiones / dispositivos del miembro ────────────────────────
+    Route::get('members/devices', [AuthController::class, 'devices']);
+    Route::post('members/devices/{uuid}/revoke', [AuthController::class, 'revokeDevice']);
+    Route::post('members/logout', [AuthController::class, 'logout']);
+    // Push nativo (FCM): registrar/baja del token del dispositivo.
+    Route::post('members/push-token', [AuthController::class, 'registerPushToken']);
+    Route::post('members/push-token/remove', [AuthController::class, 'removePushToken']);
+
     Route::get('app/classes', [AppClassController::class, 'index']);
     Route::post('app/classes/{myClass}/reserve', [AppClassController::class, 'reserve']);
     Route::delete('app/classes/{myClass}/reserve', [AppClassController::class, 'cancel']);
     // Rutas alias en /classes para compatibilidad con la app móvil
     Route::post('classes/{myClass}/reserve', [ClassController::class, 'reserve']);
     Route::post('classes/{myClass}/cancel',  [ClassController::class, 'cancel']);
+    // Entrenador asignado al miembro autenticado (antes de trainers/{trainer}).
+    Route::get('trainers/mine', [MemberTrainerController::class, 'mine']);
     // Calificación de entrenadores
     Route::post('trainers/{trainer}/rate', [TrainerController::class, 'rate']);
     // Rutinas para miembros
     Route::get('app/routines/assigned',           [AppRoutineController::class, 'assigned']);
     Route::get('app/routines/custom',             [AppRoutineController::class, 'custom']);
     Route::post('app/routines',                   [AppRoutineController::class, 'store']);
+    Route::post('app/routines/{routine}/complete',[AppRoutineController::class, 'complete']);
+    // Resumen nutricional diario (sincroniza desde la app → push al cumplir meta)
+    Route::post('app/nutrition/day',              [AppNutritionController::class, 'store']);
     Route::delete('app/routines/{routine}',       [AppRoutineController::class, 'destroy']);
     Route::post('app/routines/{routine}/delete',  [AppRoutineController::class, 'destroy']);
     // Historial de pagos del miembro autenticado (lee `payments` — la misma
@@ -188,6 +213,36 @@ Route::get('exercises/fitgif/video/{file}', [ExerciseController::class, 'fitgifV
 Route::post('exercises/sync', [ExerciseController::class, 'sync']);
 Route::get('exercises', [ExerciseController::class, 'index']);
 Route::get('exercises/{id}', [ExerciseController::class, 'show']);
+
+// ── Notificaciones — APP Flutter (audience=member; por documento o access_hash) ─
+// Rutas estáticas ANTES de las que llevan {uuid} para evitar colisiones.
+Route::get('notifications/unread-count', [NotificationController::class, 'unreadCount']);
+Route::get('notifications/stream', [NotificationController::class, 'stream']); // SSE tiempo real
+Route::get('notifications/popup-pending', [NotificationController::class, 'popupPending']);
+Route::post('notifications/read-all',    [NotificationController::class, 'readAll']);
+Route::get('notifications',              [NotificationController::class, 'index']);
+Route::post('notifications/{uuid}/popup-shown', [NotificationController::class, 'popupShown']);
+Route::post('notifications/{uuid}/read', [NotificationController::class, 'markRead']);
+Route::delete('notifications/{uuid}',    [NotificationController::class, 'destroy']);
+
+// ── Notificaciones — CRM Angular (audience=admin) ─────────────────────────────
+Route::prefix('admin/notifications')->group(function (): void {
+    Route::get('unread-count',   [AdminNotificationController::class, 'unreadCount']);
+    Route::get('stream',         [AdminNotificationController::class, 'stream']); // SSE tiempo real
+
+    Route::post('read-all',      [AdminNotificationController::class, 'readAll']);
+    Route::get('/',              [AdminNotificationController::class, 'index']);
+    Route::post('/',             [AdminNotificationController::class, 'store']);
+    Route::post('{uuid}/read',   [AdminNotificationController::class, 'markRead']);
+});
+
+// ── Entrenador ↔ miembro (CRM admin) ──────────────────────────────────────────
+// Liberar el vínculo dispositivo↔cuenta (anti-uso-compartido) desde el CRM.
+Route::post('admin/devices/{deviceId}/release', [AuthController::class, 'releaseDeviceBinding']);
+
+Route::post('admin/members/{member}/assign-trainer',   [MemberTrainerController::class, 'assign']);
+Route::post('admin/members/{member}/unassign-trainer', [MemberTrainerController::class, 'unassign']);
+Route::get('admin/members/{member}/trainer',           [MemberTrainerController::class, 'showAdmin']);
 
 Route::get('/reports/stats', function () {
     $totalRevenue = (float) Payment::where('status', 'paid')->sum('amount');

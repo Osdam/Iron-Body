@@ -1,4 +1,4 @@
-# Iron Body
+npm o# Iron Body
 
 Plataforma de gestión para gimnasio Iron Body.
 

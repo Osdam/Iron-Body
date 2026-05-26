@@ -7,6 +7,7 @@ use App\Http\Resources\ClassResource;
 use App\Models\ClassReservation;
 use App\Models\Member;
 use App\Models\MyClass;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -97,6 +98,9 @@ class ClassController extends Controller
 
         $class = MyClass::create($validated);
 
+        // Notificación de clase creada (ADITIVO; no afecta la creación).
+        app(NotificationService::class)->notifyClassCreated($class);
+
         return (new ClassResource($class->load('trainer:id,full_name')))->response()->setStatusCode(201);
     }
 
@@ -137,11 +141,21 @@ class ClassController extends Controller
 
         $myClass->update($validated);
 
+        // Notifica a los miembros inscritos de los cambios (ADITIVO).
+        $members = $myClass->reservations()->with('member')->get()
+            ->pluck('member')->filter()->values();
+        app(NotificationService::class)->notifyClassUpdated($myClass, $members);
+
         return new ClassResource($myClass->loadCount('reservations')->load('trainer:id,full_name'));
     }
 
     public function destroy(MyClass $myClass)
     {
+        // Captura inscritos ANTES de eliminar para poder avisarles (ADITIVO).
+        $members = $myClass->reservations()->with('member')->get()
+            ->pluck('member')->filter()->values();
+        app(NotificationService::class)->notifyClassCancelled($myClass, $members);
+
         $myClass->delete();
         return response()->json(['message' => 'Clase eliminada correctamente'], 200);
     }
@@ -227,6 +241,6 @@ class ClassController extends Controller
         if (! $token) {
             return null;
         }
-        return Member::where('access_hash', $token)->first();
+        return Member::resolveByToken($token);
     }
 }

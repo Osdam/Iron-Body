@@ -7,6 +7,42 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## Notificaciones — Scheduler / Cron (despliegue)
+
+Iron Body genera notificaciones automáticas (p. ej. **membresías próximas a
+vencer**) mediante el **Laravel Scheduler**. Para que las tareas programadas se
+ejecuten en producción, el sistema operativo debe llamar a `schedule:run` **una
+vez por minuto**; Laravel decide internamente qué tarea corresponde ejecutar en
+ese minuto (no corre todo cada minuto).
+
+**Cron a configurar (una sola entrada):**
+
+```cron
+* * * * * cd /home/alejandro/Documentos/IRON-BODY/CRM/Iron-Body/backend && php artisan schedule:run >> /dev/null 2>&1
+```
+
+- **Para qué sirve:** activa el Laravel Scheduler. El cron del SO corre cada
+  minuto; Laravel dispara cada tarea en su horario configurado.
+- **Ruta del backend:** `/home/alejandro/Documentos/IRON-BODY/CRM/Iron-Body/backend`
+  (ajústala a la ruta real del servidor en despliegue).
+- **Ya programado:** la tarea `notifications:membership-expiring --days=3` está
+  registrada en `routes/console.php` para correr **a diario a las 08:00**
+  (`->dailyAt('08:00')->withoutOverlapping()->onOneServer()`). No requiere una
+  línea de cron propia: basta con el `schedule:run` de arriba.
+
+**Prueba manual (local / desarrollo):**
+
+```bash
+cd /home/alejandro/Documentos/IRON-BODY/CRM/Iron-Body/backend
+php artisan notifications:membership-expiring --days=3
+```
+
+- **No duplica notificaciones:** el comando es idempotente. Cada notificación
+  usa un `event_key` (`membership_expiring_MEMBERID_FECHA`), por lo que correrlo
+  varias veces —o a diario— no genera duplicados para la misma membresía y fecha
+  de vencimiento.
+- Ver las tareas programadas en cualquier momento con: `php artisan schedule:list`.
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

@@ -82,6 +82,10 @@ class UserController extends Controller
             'membership_end_date' => $validated['membershipEndDate'] ?? null,
         ]);
 
+        // Auditoría: miembro creado desde el CRM (ADITIVO).
+        app(\App\Services\NotificationService::class)
+            ->notifyMemberCreated($user, $user->name, $user->document);
+
         return response()->json($this->serialize($user), 201);
     }
 
@@ -97,6 +101,10 @@ class UserController extends Controller
             'membershipStartDate' => 'sometimes|nullable|date',
             'membershipEndDate' => 'sometimes|nullable|date',
         ]);
+
+        // Estado anterior para detectar cambios reales (notificaciones).
+        $originalPlan = $user->plan;
+        $originalStatus = $user->status;
 
         foreach (['name', 'email', 'document', 'phone', 'status', 'plan'] as $field) {
             if (array_key_exists($field, $validated)) {
@@ -135,6 +143,24 @@ class UserController extends Controller
             if ($memberUpdates !== []) {
                 $user->appMember()->update($memberUpdates);
             }
+
+            $notifier = app(\App\Services\NotificationService::class);
+
+            // Si el admin cambió el plan, notifica al miembro (ADITIVO).
+            if (array_key_exists('plan', $validated) && $validated['plan'] !== $originalPlan) {
+                $notifier->notifyMembershipPlanChanged($user->appMember, $validated['plan']);
+            }
+
+            // Si el estado pasó a inactivo/vencido, notifica membresía cancelada.
+            $newStatus = $validated['status'] ?? null;
+            if ($newStatus !== null
+                && $newStatus !== $originalStatus
+                && in_array($newStatus, ['inactive', 'expired'], true)) {
+                $notifier->notifyMembershipCancelled($user->appMember, $user->plan);
+            }
+
+            // Auditoría de actualización de miembro para el CRM.
+            $notifier->notifyMemberUpdated($user->appMember, $user->name);
         }
 
         return response()->json($this->serialize($user));
@@ -142,6 +168,10 @@ class UserController extends Controller
 
     public function destroy(User $user)
     {
+        // Auditoría: miembro eliminado (ANTES de borrar, conserva nombre/doc).
+        app(\App\Services\NotificationService::class)
+            ->notifyMemberDeleted($user, $user->name, $user->document);
+
         if ($user->appMember) {
             $user->appMember->deleteStoredFiles();
             $user->appMember->delete();

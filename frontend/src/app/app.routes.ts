@@ -32,6 +32,11 @@ export const routes: Routes = [
     loadComponent: () => import('./users-list').then((m) => m.UsersList),
   },
   {
+    path: 'notifications',
+    canActivate: [AuthGuard],
+    loadComponent: () => import('./modules/notifications').then((m) => m.default),
+  },
+  {
     path: 'plans',
     canActivate: [AuthGuard],
     data: { permissions: [Permission.PLANS_VIEW] },

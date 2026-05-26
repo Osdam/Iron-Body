@@ -134,6 +134,9 @@ class MemberRegistrationController extends Controller
                 $member->user_id = $this->syncCrmUser($member, $validated)->id;
                 $member->save();
 
+                // Aviso operativo al CRM de nuevo registro (ADITIVO; idempotente).
+                app(\App\Services\NotificationService::class)->notifyNewMemberRegistered($member);
+
                 return response()->json($this->memberResponse($member, 'Miembro creado correctamente.', [
                     'status' => Member::STATUS_PENDING_REGISTRATION,
                     'registration_status' => Member::STATUS_PENDING_REGISTRATION,

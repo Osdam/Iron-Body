@@ -5,6 +5,7 @@ namespace App\Models;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Storage;
@@ -59,6 +60,31 @@ class Member extends Model
         return hash_hmac('sha256', $memberUuid, Config::get('app.key'));
     }
 
+    /**
+     * Resuelve el miembro a partir del bearer entrante. Primero por
+     * `session_token` de dispositivo (2FA / sesiones revocables), y como
+     * compatibilidad por el `access_hash` permanente. Lo usan los endpoints que
+     * resuelven al miembro fuera del middleware `auth.member` (notificaciones,
+     * IRON IA, clases).
+     */
+    public static function resolveByToken(?string $token): ?self
+    {
+        if ($token === null || $token === '') {
+            return null;
+        }
+
+        $session = MemberDeviceSession::query()
+            ->whereNull('revoked_at')
+            ->where('token_hash', MemberDeviceSession::hashToken($token))
+            ->first();
+
+        if ($session) {
+            return $session->member;
+        }
+
+        return self::where('access_hash', $token)->first();
+    }
+
     public static function normalizeDocumentNumber(?string $documentNumber): ?string
     {
         if ($documentNumber === null) {
@@ -79,6 +105,23 @@ class Member extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    // ── Seguridad / sesiones (2FA, dispositivos) ─────────────────────────────
+
+    public function deviceSessions(): HasMany
+    {
+        return $this->hasMany(MemberDeviceSession::class);
+    }
+
+    public function authChallenges(): HasMany
+    {
+        return $this->hasMany(MemberAuthChallenge::class);
+    }
+
+    public function securityEvents(): HasMany
+    {
+        return $this->hasMany(MemberSecurityEvent::class);
     }
 
     public function deleteStoredFiles(): void
@@ -122,6 +165,19 @@ class Member extends Model
     public function biometric(): HasOne
     {
         return $this->hasOne(MemberBiometric::class);
+    }
+
+    public function trainerAssignments(): HasMany
+    {
+        return $this->hasMany(MemberTrainerAssignment::class);
+    }
+
+    /** Asignación de entrenador vigente (status=active), la más reciente. */
+    public function activeTrainerAssignment(): HasOne
+    {
+        return $this->hasOne(MemberTrainerAssignment::class)
+            ->where('status', MemberTrainerAssignment::STATUS_ACTIVE)
+            ->latestOfMany();
     }
 
     /**

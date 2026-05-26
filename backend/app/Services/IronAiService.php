@@ -11,6 +11,7 @@ use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\Routine;
 use App\Models\User;
+use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -102,9 +103,9 @@ TXT;
         $member = null;
         $user = null;
 
-        // 1) Bearer token = access_hash del Member (igual que auth.member).
+        // 1) Bearer token = session_token de dispositivo (2FA) o access_hash.
         if ($token = $request->bearerToken()) {
-            $member = Member::where('access_hash', $token)->first();
+            $member = Member::resolveByToken($token);
         }
 
         // 2) member_id explícito.
@@ -1013,8 +1014,14 @@ TXT;
             return [];
         }
 
+        // Tipos de coaching propios de IRON IA (progreso, constancia, hábitos,
+        // sugerencias personalizadas). Solo estos generan notificación: el
+        // vencimiento de membresía lo maneja el comando y las clases su hook,
+        // así cada módulo notifica lo suyo y no se duplica al usuario.
+        $coachingTypes = ['motivation', 'progress'];
+
         foreach ($this->computeRecommendations($member, $user) as $rec) {
-            IronAiRecommendation::updateOrCreate(
+            $record = IronAiRecommendation::updateOrCreate(
                 [
                     'member_id' => $member?->id,
                     'user_id'   => $user?->id,
@@ -1026,6 +1033,14 @@ TXT;
                     'message' => $rec['message'],
                 ],
             );
+
+            // Notifica SOLO recomendaciones de coaching y SOLO a miembros
+            // (targeted). Idempotente por event_key iron_ai_{memberId}_{recId}:
+            // aunque /recommendations se llame muchas veces, la notificación se
+            // crea una sola vez por recomendación (no por cada mensaje de chat).
+            if ($member && in_array($rec['type'], $coachingTypes, true)) {
+                app(NotificationService::class)->notifyIronAiRecommendation($member, $record);
+            }
         }
 
         return IronAiRecommendation::query()

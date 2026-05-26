@@ -7,6 +7,7 @@ use App\Models\PaymentTransaction;
 use App\Models\Plan;
 use App\Models\User;
 use App\Models\Member;
+use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -401,6 +402,17 @@ class EpaycoPaymentService
                 $this->onApproved($fresh);
             }
 
+            // Pago rechazado/fallido → notifica al miembro y al CRM (ADITIVO,
+            // best-effort, idempotente por event_key payment_rejected_REF).
+            if ($status === PaymentTransaction::STATUS_FAILED) {
+                try {
+                    $member = $fresh->member_id ? Member::find($fresh->member_id) : null;
+                    app(NotificationService::class)->notifyPaymentRejected($member, $fresh);
+                } catch (Throwable $e) {
+                    Log::warning('Notificación de pago rechazado falló', ['error' => $e->getMessage()]);
+                }
+            }
+
             return $fresh;
         });
     }
@@ -442,6 +454,22 @@ class EpaycoPaymentService
 
             if ($tx->member_id) {
                 Member::whereKey($tx->member_id)->update(['status' => Member::STATUS_ACTIVE]);
+            }
+
+            // Notificaciones (ADITIVO; no altera el resultado del pago). El
+            // NotificationService es idempotente por event_key: aunque el
+            // webhook reintente, la notificación se crea una sola vez.
+            $member   = $tx->member_id ? Member::find($tx->member_id) : null;
+            $notifier = app(NotificationService::class);
+            $notifier->notifyPaymentApproved($member, $tx);
+            if ($tx->plan_id) {
+                $plan = Plan::find($tx->plan_id);
+                $endDate = $tx->user_id ? optional(User::find($tx->user_id))->membership_end_date : null;
+                $notifier->notifyMembershipActivated($member, [
+                    'name'                => $plan?->name,
+                    'id'                  => $tx->plan_id,
+                    'membership_end_date' => $endDate,
+                ]);
             }
         } catch (Throwable $e) {
             Log::warning('ePayco onApproved post-proceso falló', [
