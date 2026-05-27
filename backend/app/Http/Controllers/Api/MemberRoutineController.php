@@ -8,6 +8,7 @@ use App\Models\Member;
 use App\Models\MemberRoutineAssignment;
 use App\Models\Routine;
 use App\Models\RoutineExercise;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -54,10 +55,15 @@ class MemberRoutineController extends Controller
 
         $this->syncExercises($routine, $data);
 
-        MemberRoutineAssignment::firstOrCreate(
+        $assignment = MemberRoutineAssignment::firstOrCreate(
             ['member_id' => $member->id, 'routine_id' => $routine->id],
             ['assigned_at' => now()]
         );
+
+        // Notificación de rutina asignada (ADITIVO; solo en asignación nueva).
+        if ($assignment->wasRecentlyCreated) {
+            app(NotificationService::class)->notifyRoutineAssigned($member, $routine);
+        }
 
         $routine->load('routineExercises.exercise');
 
@@ -86,6 +92,9 @@ class MemberRoutineController extends Controller
             $this->syncExercises($routine, $data);
         }
 
+        // Notificación de rutina actualizada (ADITIVO; no afecta la actualización).
+        app(NotificationService::class)->notifyRoutineUpdated($member, $routine);
+
         $routine->load('routineExercises.exercise');
 
         return response()->json([
@@ -97,6 +106,9 @@ class MemberRoutineController extends Controller
     /** DELETE /api/members/{member}/routines/{routine} */
     public function destroy(Member $member, Routine $routine): JsonResponse
     {
+        // Avisa al miembro que su rutina asignada ya no estará disponible.
+        app(NotificationService::class)->notifyRoutineDeleted($routine, $member);
+
         $routine->assignments()->where('member_id', $member->id)->delete();
 
         // Only hard-delete if this routine belongs exclusively to this member

@@ -7,7 +7,9 @@ use App\Http\Resources\RoutineResource;
 use App\Models\MemberRoutineAssignment;
 use App\Models\Plan;
 use App\Models\Routine;
+use App\Models\RoutineCompletion;
 use App\Models\RoutineExercise;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -132,6 +134,45 @@ class AppRoutineController extends Controller
         $routine->delete();
 
         return response()->json(['ok' => true], 200);
+    }
+
+    /**
+     * POST /api/app/routines/{routine}/complete
+     * Registra que el miembro completó la rutina y dispara la notificación/push
+     * "Rutina completada". Solo rutinas propias o asignadas al miembro.
+     */
+    public function complete(Request $request, Routine $routine): JsonResponse
+    {
+        $member = $request->attributes->get('auth_member');
+
+        $owns = (int) $routine->member_id === (int) $member->id
+            || MemberRoutineAssignment::where('routine_id', $routine->id)
+                ->where('member_id', $member->id)
+                ->exists();
+
+        if (! $owns) {
+            return response()->json(['message' => 'No autorizado.'], 403);
+        }
+
+        $completion = RoutineCompletion::create([
+            'member_id'    => $member->id,
+            'routine_id'   => $routine->id,
+            'completed_at' => now(),
+            'source'       => 'app',
+            'notes'        => $request->input('notes'),
+        ]);
+
+        // Notificación + push interno por CADA guardado real (event_key con el
+        // id de la finalización → cada entrenamiento es un evento nuevo).
+        app(NotificationService::class)->notifyRoutineCompleted($member, $routine, $completion->id);
+
+        return response()->json([
+            'ok'   => true,
+            'data' => [
+                'completion_id' => $completion->id,
+                'completed_at'  => $completion->completed_at->toIso8601String(),
+            ],
+        ], 201);
     }
 
     private function memberCanCreateRoutines($member): bool

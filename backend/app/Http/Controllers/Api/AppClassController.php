@@ -7,6 +7,7 @@ use App\Http\Resources\ClassResource;
 use App\Models\ClassReservation;
 use App\Models\Member;
 use App\Models\MyClass;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -63,6 +64,15 @@ class AppClassController extends Controller
             'reserved_at' => now(),
         ]);
 
+        // Notificación de clase reservada (ADITIVO; no afecta la reserva).
+        $notifier = app(NotificationService::class);
+        $notifier->notifyClassReserved($member, $myClass);
+
+        // Si esta reserva agotó el cupo, avisa al CRM (idempotente por clase).
+        if (($bookedSpots + 1) >= $myClass->max_capacity) {
+            $notifier->notifyClassFull($myClass);
+        }
+
         $myClass->loadCount('reservations')->load('trainer:id,full_name');
 
         return response()->json(['data' => new ClassResource($myClass, true)]);
@@ -79,6 +89,9 @@ class AppClassController extends Controller
         if (! $deleted) {
             return response()->json(['message' => 'No tienes reserva en esta clase.'], 422);
         }
+
+        // Notificación de reserva cancelada (ADITIVO; no afecta la cancelación).
+        app(NotificationService::class)->notifyClassReservationCancelled($member, $myClass);
 
         $myClass->loadCount('reservations')->load('trainer:id,full_name');
 

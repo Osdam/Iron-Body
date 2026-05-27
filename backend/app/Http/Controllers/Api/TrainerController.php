@@ -7,6 +7,7 @@ use App\Http\Resources\TrainerResource;
 use App\Models\Member;
 use App\Models\Trainer;
 use App\Models\TrainerReview;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -95,6 +96,10 @@ class TrainerController extends Controller
     {
         $validated = $this->validateInput($request, true);
         $trainer = Trainer::create($this->mapInput($validated));
+
+        // Notificación de entrenador creado (ADITIVO; no afecta la creación).
+        app(NotificationService::class)->notifyTrainerCreated($trainer);
+
         $trainer->loadAvg('reviews', 'rating')->loadCount('reviews');
         return response()->json($this->serialize($trainer), 201);
     }
@@ -104,12 +109,19 @@ class TrainerController extends Controller
         $validated = $this->validateInput($request, false);
         $trainer->fill($this->mapInput($validated));
         $trainer->save();
+
+        // Notificación de entrenador actualizado (ADITIVO; idempotente por hash).
+        app(NotificationService::class)->notifyTrainerUpdated($trainer);
+
         $trainer->loadAvg('reviews', 'rating')->loadCount('reviews');
         return response()->json($this->serialize($trainer));
     }
 
     public function destroy(Trainer $trainer)
     {
+        // Notifica ANTES de borrar para conservar nombre/id (ADITIVO).
+        app(NotificationService::class)->notifyTrainerDeleted($trainer);
+
         $trainer->delete();
         return response()->json(null, 204);
     }

@@ -47,6 +47,11 @@ class Trainer extends Model
         return $this->hasMany(MyClass::class, 'trainer_id');
     }
 
+    public function memberAssignments(): HasMany
+    {
+        return $this->hasMany(MemberTrainerAssignment::class);
+    }
+
     public function reviews(): HasMany
     {
         return $this->hasMany(TrainerReview::class);
