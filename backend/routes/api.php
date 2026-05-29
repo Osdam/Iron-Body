@@ -34,10 +34,17 @@ use App\Models\User;
 use App\Models\MyClass;
 
 Route::bind('member', function (string $value): Member {
-    return Member::query()
-        ->where('id', $value)
-        ->orWhere('member_uuid', $value)
-        ->firstOrFail();
+    // El parámetro {member} acepta id numérico o member_uuid (UUID). En
+    // PostgreSQL la columna `member_uuid` es de tipo UUID y no acepta enteros:
+    // hay que ramificar por formato antes de consultar para no provocar
+    // SQLSTATE[22P02].
+    if (\Illuminate\Support\Str::isUuid($value)) {
+        return Member::where('member_uuid', $value)->firstOrFail();
+    }
+    if (ctype_digit($value)) {
+        return Member::where('id', (int) $value)->firstOrFail();
+    }
+    abort(404);
 });
 
 Route::get('/health', function () {
@@ -251,36 +258,33 @@ Route::post('admin/members/{member}/unassign-trainer', [MemberTrainerController:
 Route::get('admin/members/{member}/trainer',           [MemberTrainerController::class, 'showAdmin']);
 
 Route::get('/reports/stats', function () {
-    $totalRevenue = (float) Payment::where('status', 'paid')->sum('amount');
-    $pendingCount = Payment::where('status', 'pending')->count();
-    $activeUsers  = User::where('status', 'active')->count();
-    $totalUsers   = User::count();
-    $activePlans  = Plan::where('active', true)->count();
-    $activeClasses = MyClass::where('status', 'active')->count();
+    // 8 agregaciones pesadas que se piden cada vez que el CRM abre el dashboard.
+    // Cachear 60s reduce esto a 1 hit DB por minuto sin perder utilidad.
+    return response()->json(\Illuminate\Support\Facades\Cache::remember('reports.stats', 60, function () {
+        $driver = \DB::connection()->getDriverName();
+        // Expresión de "año-mes" según motor: SQLite, PostgreSQL y MySQL la
+        // implementan distinto. Sin esto, Postgres devolvía 500.
+        $monthExpr = match ($driver) {
+            'sqlite' => "strftime('%Y-%m', paid_at)",
+            'pgsql'  => "TO_CHAR(paid_at, 'YYYY-MM')",
+            default  => "DATE_FORMAT(paid_at, '%Y-%m')",
+        };
 
-    $driver = \DB::connection()->getDriverName();
-    $monthExpr = $driver === 'sqlite'
-        ? "strftime('%Y-%m', paid_at)"
-        : "DATE_FORMAT(paid_at, '%Y-%m')";
-
-    $revenueByMonth = Payment::where('status', 'paid')
-        ->selectRaw("$monthExpr as month, SUM(amount) as total")
-        ->groupBy('month')
-        ->orderBy('month')
-        ->get();
-
-    $paymentsByStatus = Payment::selectRaw('status, COUNT(*) as count')
-        ->groupBy('status')
-        ->get();
-
-    return response()->json([
-        'total_revenue'     => $totalRevenue,
-        'pending_payments'  => $pendingCount,
-        'active_members'    => $activeUsers,
-        'total_members'     => $totalUsers,
-        'active_plans'      => $activePlans,
-        'active_classes'    => $activeClasses,
-        'revenue_by_month'  => $revenueByMonth,
-        'payments_by_status'=> $paymentsByStatus,
-    ]);
+        return [
+            'total_revenue'     => (float) Payment::where('status', 'paid')->sum('amount'),
+            'pending_payments'  => Payment::where('status', 'pending')->count(),
+            'active_members'    => User::where('status', 'active')->count(),
+            'total_members'     => User::count(),
+            'active_plans'      => Plan::where('active', true)->count(),
+            'active_classes'    => MyClass::where('status', 'active')->count(),
+            'revenue_by_month'  => Payment::where('status', 'paid')
+                ->selectRaw("$monthExpr as month, SUM(amount) as total")
+                ->groupBy('month')
+                ->orderBy('month')
+                ->get(),
+            'payments_by_status'=> Payment::selectRaw('status, COUNT(*) as count')
+                ->groupBy('status')
+                ->get(),
+        ];
+    }));
 });

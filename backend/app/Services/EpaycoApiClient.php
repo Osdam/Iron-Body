@@ -222,7 +222,18 @@ class EpaycoApiClient
         $chargeArr = $this->toArray($chargeResp);
         // Siempre dejamos rastro sanitizado de la respuesta real de ePayco.
         $this->logStage('charge', null, $chargeArr);
-        return $this->normalize($chargeArr, true);
+        $normalized = $this->normalize($chargeArr, true);
+        // Dump extra (sin PAN/CVV/token/llaves) cuando el charge no fue
+        // success: ayuda a diagnosticar "Error validando datos" y similares.
+        if (!$normalized['ok']) {
+            Log::warning('ePayco charge response (debug)', [
+                'reference' => $p['reference'] ?? null,
+                'response'  => $this->redact(
+                    $this->toArray($chargeArr['data'] ?? $chargeArr)
+                ),
+            ]);
+        }
+        return $normalized;
     }
 
     /**

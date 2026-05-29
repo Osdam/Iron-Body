@@ -9,7 +9,9 @@
       "Bash(php -l app/Models/Payment.php)",
       "Bash(php -l app/Http/Controllers/Api/AppPaymentController.php)",
       "Bash(php -l database/migrations/2026_05_23_000010_add_member_history_indexes_to_payments.php)",
-      "Bash(php -l routes/api.php)"
+      "Bash(php -l routes/api.php)",
+      "PowerShell(Start-Sleep -Seconds 2; \"=== Apache estado ===\"; Get-Process httpd -ErrorAction SilentlyContinue | Select-Object Id | Format-Table; try { \\(Invoke-WebRequest -Uri \"http://127.0.0.1:8080/api/health\" -UseBasicParsing -TimeoutSec 5\\).StatusCode } catch { \"ERROR: $_\" }; \"---\"; $env:PGPASSWORD = \"admin123\"; $psql = \"C:\\\\Program Files\\\\PostgreSQL\\\\18\\\\bin\\\\psql.exe\"; \"=== Member id=1 ===\"; & $psql -U postgres -h 127.0.0.1 -p 5433 -d iron_body -c \"SELECT id, member_uuid, full_name, document_number, email, phone FROM members LIMIT 5;\" 2>&1; \"=== Transacción IRON-20260527-ZV0WI3-19454 ===\"; & $psql -U postgres -h 127.0.0.1 -p 5433 -d iron_body -c \"SELECT reference, status, amount, currency, customer, failure_reason FROM payment_transactions WHERE reference LIKE 'IRON-20260527%' ORDER BY id DESC LIMIT 3;\" 2>&1)",
+      "PowerShell(\"Apache apagado\")"
     ]
   }
 }

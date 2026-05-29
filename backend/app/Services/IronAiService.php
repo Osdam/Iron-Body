@@ -108,12 +108,14 @@ TXT;
             $member = Member::resolveByToken($token);
         }
 
-        // 2) member_id explícito.
+        // 2) member_id explícito. Ramificamos por formato: PostgreSQL no
+        // acepta enteros donde la columna es UUID (SQLSTATE 22P02).
         if (! $member && ($memberId = $request->input('member_id'))) {
-            $member = Member::query()
-                ->where('id', $memberId)
-                ->orWhere('member_uuid', $memberId)
-                ->first();
+            if (\Illuminate\Support\Str::isUuid($memberId)) {
+                $member = Member::where('member_uuid', $memberId)->first();
+            } elseif (ctype_digit((string) $memberId)) {
+                $member = Member::where('id', (int) $memberId)->first();
+            }
         }
 
         // 3) Documento (la app inicia sesión por documento).

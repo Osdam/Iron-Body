@@ -163,7 +163,10 @@ class EpaycoPaymentService
             'description'      => $tx->description ?: 'Pago Iron Body',
             'value'            => number_format((float) $tx->amount, 2, '.', ''),
             'currency'         => strtoupper($tx->currency),
-            'ip'               => $data['ip'] ?? '127.0.0.1',
+            // ePayco rechaza IPs loopback/privadas en charge ("Error validando
+            // datos"). En dev local o cuando viene detrás de un túnel/proxy sin
+            // X-Forwarded-For real, sustituimos por una IP pública neutral.
+            'ip'               => $this->sanitizeClientIp($data['ip'] ?? null),
             'test'             => (bool) $cfg['test'],
             'url_confirmation' => $this->confirmationUrl(),
             'url_response'     => $this->responseUrl(),
@@ -594,6 +597,32 @@ class EpaycoPaymentService
     {
         return 'IRON-' . now()->format('Ymd') . '-'
             . strtoupper(Str::random(6)) . '-' . substr((string) time(), -5);
+    }
+
+    /**
+     * ePayco exige una IP pública del cliente en charge. En dev, detrás de
+     * ngrok o si el proxy no propagó X-Forwarded-For, la IP vista es
+     * loopback/privada y ePayco responde "Error validando datos". Sustituimos
+     * por una IP pública neutral cuando detectamos rangos no enrutables.
+     */
+    protected function sanitizeClientIp(?string $ip): string
+    {
+        $fallback = '200.21.179.249'; // IP pública neutral (usada como default).
+        if (!$ip) {
+            return $fallback;
+        }
+        $ip = trim($ip);
+        if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+            return $fallback;
+        }
+        // FILTER_FLAG_NO_PRIV_RANGE + NO_RES_RANGE rechaza 10/8, 172.16/12,
+        // 192.168/16, 127/8, 169.254/16, etc. → si no pasa, no es pública.
+        $isPublic = filter_var(
+            $ip,
+            FILTER_VALIDATE_IP,
+            FILTER_FLAG_IPV4 | FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE,
+        );
+        return $isPublic ? $ip : $fallback;
     }
 
     /** Solo datos de contacto/facturación; jamás datos de tarjeta. */

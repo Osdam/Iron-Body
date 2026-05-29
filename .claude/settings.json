@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(php artisan *)",
-      "Bash(php -r ' *)"
+      "Bash(php -r ' *)",
+      "PowerShell($php = Get-Command php -ErrorAction SilentlyContinue; if \\($php\\) { \"php: $\\($php.Source\\)\"; & php --version | Select-Object -First 1; \"---\"; \"Extensiones PostgreSQL:\"; & php -m | Select-String -Pattern \"pgsql|pdo\" } else { \"php NO en PATH\" })"
     ]
   }
 }
