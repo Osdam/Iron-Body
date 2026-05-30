@@ -157,6 +157,13 @@ export interface TurnstileSettings {
   id: number;
   name: string;
   enabled: boolean;
+  mode: 'webhook' | 'zkteco' | 'serial';
+  device_host: string | null;
+  device_port: number | null;
+  device_comm_key: string | null;
+  serial_port: string | null;
+  serial_baud: number | null;
+  serial_command: string | null;
   webhook_url: string | null;
   http_method: 'GET' | 'POST' | 'PUT' | 'PATCH';
   auth_header: string | null;
@@ -178,6 +185,13 @@ export interface TurnstileResult {
   status?: number;
   body?: string;
   error?: string;
+  host?: string;
+  port?: number | string;
+  duration_seconds?: number;
+  session_id?: number;
+  baud?: number;
+  command?: string;
+  output?: string;
 }
 
 export interface CreateAttendanceResponse {
@@ -774,6 +788,76 @@ export class ApiService {
             module: 'Asistencias',
             entity: 'torniquete',
             summary: response.ok ? 'abrió torniquete manualmente' : 'intento fallido de apertura',
+            after: data as Record<string, unknown>,
+            metadata: { result: response.result },
+          }),
+        ),
+      );
+  }
+
+  // Disparo ad-hoc de un webhook (Sonoff / ESP32 / Shelly). El backend hace
+  // el HTTP por nosotros para evitar CORS desde el navegador.
+  triggerTurnstileWebhook(
+    data: { url: string; method?: 'GET' | 'POST' | 'PUT' | 'PATCH'; payload?: string | null },
+  ): Observable<{ ok: boolean; result: TurnstileResult; data: TurnstileSettings }> {
+    return this.http
+      .post<{ ok: boolean; result: TurnstileResult; data: TurnstileSettings }>(
+        `${this.base}/turnstile/webhook/fire`,
+        data,
+      )
+      .pipe(
+        tap((response) =>
+          this.audit.record({
+            action: 'status',
+            module: 'Asistencias',
+            entity: 'torniquete',
+            summary: response.ok ? 'abrió torniquete (relé HTTP)' : 'falló apertura del relé',
+            after: data as Record<string, unknown>,
+            metadata: { result: response.result },
+          }),
+        ),
+      );
+  }
+
+  // Apertura por COM (replica NetGymValidator: PULSE 3000\r\n al puerto serie).
+  openSerialTurnstile(
+    data: { port?: string; baud?: number; command?: string } = {},
+  ): Observable<{ ok: boolean; result: TurnstileResult; data: TurnstileSettings }> {
+    return this.http
+      .post<{ ok: boolean; result: TurnstileResult; data: TurnstileSettings }>(
+        `${this.base}/turnstile/serial/open`,
+        data,
+      )
+      .pipe(
+        tap((response) =>
+          this.audit.record({
+            action: 'status',
+            module: 'Asistencias',
+            entity: 'torniquete',
+            summary: response.ok ? 'abrió torniquete por COM' : 'falló apertura por COM',
+            after: data as Record<string, unknown>,
+            metadata: { result: response.result },
+          }),
+        ),
+      );
+  }
+
+  // Apertura directa ZKTeco — no requiere enabled=true ni configurar webhook.
+  openZktecoTurnstile(
+    data: { host?: string; port?: number; comm_key?: string | null; duration_seconds?: number } = {},
+  ): Observable<{ ok: boolean; result: TurnstileResult; data: TurnstileSettings }> {
+    return this.http
+      .post<{ ok: boolean; result: TurnstileResult; data: TurnstileSettings }>(
+        `${this.base}/turnstile/zkteco/open`,
+        data,
+      )
+      .pipe(
+        tap((response) =>
+          this.audit.record({
+            action: 'status',
+            module: 'Asistencias',
+            entity: 'torniquete',
+            summary: response.ok ? 'abrió torniquete ZKTeco' : 'intento fallido apertura ZKTeco',
             after: data as Record<string, unknown>,
             metadata: { result: response.result },
           }),

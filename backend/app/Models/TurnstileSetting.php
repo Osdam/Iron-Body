@@ -9,6 +9,13 @@ class TurnstileSetting extends Model
     protected $fillable = [
         'name',
         'enabled',
+        'mode',
+        'device_host',
+        'device_port',
+        'device_comm_key',
+        'serial_port',
+        'serial_baud',
+        'serial_command',
         'webhook_url',
         'http_method',
         'auth_header',
@@ -31,6 +38,8 @@ class TurnstileSetting extends Model
             'fire_on_exit' => 'boolean',
             'sound_enabled' => 'boolean',
             'open_duration_ms' => 'integer',
+            'device_port' => 'integer',
+            'serial_baud' => 'integer',
             'last_http_code' => 'integer',
             'last_triggered_at' => 'datetime',
         ];
@@ -44,6 +53,8 @@ class TurnstileSetting extends Model
             [
                 'name' => 'Torniquete principal',
                 'enabled' => false,
+                'mode' => 'webhook',
+                'device_port' => 4370,
                 'http_method' => 'POST',
                 'open_duration_ms' => 3000,
                 'fire_on_entry' => true,

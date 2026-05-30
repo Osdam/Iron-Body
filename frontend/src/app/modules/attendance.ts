@@ -98,17 +98,25 @@ type CameraTerminal = 'entry' | 'exit';
           </p>
         </div>
         <div class="header-actions">
-          <button type="button" class="btn-secondary" (click)="toggleTurnstilePanel()">
-            <span class="material-symbols-outlined" aria-hidden="true">door_sliding</span>
-            {{ showTurnstilePanel() ? 'Ocultar torniquete' : 'Configurar torniquete' }}
-          </button>
-          <button type="button" class="btn-secondary"
-                  [disabled]="turnstileTriggering() || !turnstileSettings()?.enabled"
-                  (click)="triggerTurnstileManually()"
-                  [title]="!turnstileSettings()?.enabled ? 'Activa el torniquete para abrir manualmente' : 'Abre el torniquete ahora'">
-            <span class="material-symbols-outlined" aria-hidden="true">lock_open_right</span>
-            {{ turnstileTriggering() ? 'Abriendo...' : 'Abrir torniquete' }}
-          </button>
+          <div class="turnstile-quick">
+            <input type="text"
+                   class="turnstile-ip-input"
+                   placeholder="Puerto COM (ej. COM4)"
+                   [(ngModel)]="turnstileQuickHost"
+                   [disabled]="turnstileTriggering()" />
+            <button type="button" class="btn-primary"
+                    [disabled]="turnstileTriggering() || !turnstileQuickHost.trim()"
+                    (click)="openZktecoDoor('entry')">
+              <span class="material-symbols-outlined" aria-hidden="true">login</span>
+              {{ turnstileTriggering() === 'entry' ? 'Abriendo...' : 'Entrada' }}
+            </button>
+            <button type="button" class="btn-secondary turnstile-exit-btn"
+                    [disabled]="turnstileTriggering() || !turnstileQuickHost.trim()"
+                    (click)="openZktecoDoor('exit')">
+              <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+              {{ turnstileTriggering() === 'exit' ? 'Abriendo...' : 'Salida' }}
+            </button>
+          </div>
           <button type="button" class="btn-secondary" (click)="simulateFacialAccess()">
             <span class="material-symbols-outlined" aria-hidden="true">face</span>
             Lectura facial
@@ -302,105 +310,6 @@ type CameraTerminal = 'entry' | 'exit';
         </div>
       </section>
 
-      <section *ngIf="showTurnstilePanel()" class="turnstile-panel">
-        <header class="turnstile-header">
-          <div>
-            <h2>Torniquete (relé HTTP)</h2>
-            <p>
-              Compatible con ESP32, Sonoff, Shelly, ZKTeco o cualquier dispositivo que reciba un GET/POST para abrir el relé.
-              El backend dispara el webhook cada vez que se aprueba una asistencia.
-            </p>
-          </div>
-          <div class="turnstile-status" *ngIf="turnstileSettings() as t">
-            <span class="dot-status" [attr.data-state]="t.last_status || (t.enabled ? 'idle' : 'disabled')"></span>
-            <div>
-              <strong>{{ t.enabled ? 'Activo' : 'Deshabilitado' }}</strong>
-              <small *ngIf="t.last_triggered_at">
-                Última activación: {{ t.last_triggered_at | date: 'short' }}
-                <em *ngIf="t.last_http_code"> · HTTP {{ t.last_http_code }}</em>
-              </small>
-              <small *ngIf="t.last_status === 'error' && t.last_error" class="error-line">
-                Error: {{ t.last_error }}
-              </small>
-            </div>
-          </div>
-        </header>
-
-        <div class="turnstile-grid">
-          <label class="check-row">
-            <input type="checkbox" [(ngModel)]="turnstileForm.enabled" />
-            <span>Habilitar torniquete</span>
-          </label>
-          <label class="check-row">
-            <input type="checkbox" [(ngModel)]="turnstileForm.fire_on_entry" />
-            <span>Disparar al registrar <b>entrada</b></span>
-          </label>
-          <label class="check-row">
-            <input type="checkbox" [(ngModel)]="turnstileForm.fire_on_exit" />
-            <span>Disparar al registrar <b>salida</b></span>
-          </label>
-          <label class="check-row">
-            <input type="checkbox" [(ngModel)]="turnstileForm.sound_enabled" />
-            <span>Sonido de aviso (granted / denied)</span>
-          </label>
-
-          <label class="field-wide">
-            <span>Nombre del dispositivo</span>
-            <input type="text" [(ngModel)]="turnstileForm.name" placeholder="Torniquete principal" />
-          </label>
-
-          <label>
-            <span>Método HTTP</span>
-            <select [(ngModel)]="turnstileForm.http_method">
-              <option value="POST">POST</option>
-              <option value="GET">GET</option>
-              <option value="PUT">PUT</option>
-              <option value="PATCH">PATCH</option>
-            </select>
-          </label>
-
-          <label>
-            <span>Duración de apertura (ms)</span>
-            <input type="number" min="200" max="30000" step="100" [(ngModel)]="turnstileForm.open_duration_ms" />
-          </label>
-
-          <label class="field-wide">
-            <span>URL del webhook</span>
-            <input type="url" [(ngModel)]="turnstileForm.webhook_url"
-                   placeholder="http://192.168.1.50/relay/on?ms={duration_ms}" />
-          </label>
-
-          <label class="field-wide">
-            <span>Header de autenticación (opcional)</span>
-            <input type="text" [(ngModel)]="turnstileForm.auth_header"
-                   placeholder="Authorization: Bearer abcdef" />
-          </label>
-
-          <label class="field-wide">
-            <span>Payload JSON (opcional)</span>
-            <textarea rows="3" [(ngModel)]="turnstileForm.request_payload"
-                      placeholder='{"action":"open","duration":{duration_ms},"member":"{member_name}"}'></textarea>
-          </label>
-
-          <div class="placeholders-hint">
-            Placeholders disponibles: <code>{{ '{member_name}' }}</code>, <code>{{ '{user_id}' }}</code>,
-            <code>{{ '{action}' }}</code>, <code>{{ '{duration_ms}' }}</code>, <code>{{ '{timestamp}' }}</code>
-          </div>
-
-          <div class="turnstile-actions">
-            <button type="button" class="btn-primary" [disabled]="turnstileSaving()" (click)="saveTurnstileSettings()">
-              <span class="material-symbols-outlined" aria-hidden="true">save</span>
-              {{ turnstileSaving() ? 'Guardando...' : 'Guardar configuración' }}
-            </button>
-            <button type="button" class="btn-secondary"
-                    [disabled]="turnstileTriggering() || !turnstileForm.enabled || !turnstileForm.webhook_url"
-                    (click)="triggerTurnstileManually()">
-              <span class="material-symbols-outlined" aria-hidden="true">bolt</span>
-              {{ turnstileTriggering() ? 'Probando...' : 'Probar disparo' }}
-            </button>
-          </div>
-        </div>
-      </section>
 
       <section class="checkin-panel">
         <div class="checkin-form">
@@ -873,6 +782,33 @@ type CameraTerminal = 'entry' | 'exit';
         display: flex;
         gap: 0.75rem;
         flex-wrap: wrap;
+      }
+
+      .turnstile-quick {
+        display: flex;
+        align-items: stretch;
+        gap: 0.5rem;
+      }
+      .turnstile-ip-input {
+        width: 180px;
+        padding: 0.55rem 0.75rem;
+        border: 1px solid #cbd5e1;
+        border-radius: 0.5rem;
+        font-size: 0.95rem;
+        font-family: inherit;
+      }
+      .turnstile-ip-input:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+      }
+      .turnstile-exit-btn {
+        background: #fef3c7;
+        color: #92400e;
+        border-color: #fcd34d;
+      }
+      .turnstile-exit-btn:hover:not(:disabled) {
+        background: #fde68a;
       }
 
       h1,
@@ -2201,33 +2137,9 @@ export default class AttendanceModule implements OnInit, OnDestroy {
   lastRecognition = signal<{ name: string; confidence: number; terminal: CameraTerminal; at: number } | null>(null);
   accessBanner = signal<AccessBanner | null>(null);
   turnstileSettings = signal<TurnstileSettings | null>(null);
-  turnstileSaving = signal(false);
-  turnstileTriggering = signal(false);
+  turnstileTriggering = signal<false | 'entry' | 'exit'>(false);
   lastTurnstileResult = signal<TurnstileResult | null>(null);
-  showTurnstilePanel = signal(false);
-  turnstileForm: {
-    name: string;
-    enabled: boolean;
-    webhook_url: string;
-    http_method: 'GET' | 'POST' | 'PUT' | 'PATCH';
-    auth_header: string;
-    request_payload: string;
-    open_duration_ms: number;
-    fire_on_entry: boolean;
-    fire_on_exit: boolean;
-    sound_enabled: boolean;
-  } = {
-    name: 'Torniquete principal',
-    enabled: false,
-    webhook_url: '',
-    http_method: 'POST',
-    auth_header: '',
-    request_payload: '',
-    open_duration_ms: 3000,
-    fire_on_entry: true,
-    fire_on_exit: false,
-    sound_enabled: true,
-  };
+  turnstileQuickHost = '';
   readonly absenceOptions = [3, 5, 7, 15];
 
   activeMembers = computed(() =>
@@ -2329,68 +2241,94 @@ export default class AttendanceModule implements OnInit, OnDestroy {
     }
   }
 
-  toggleTurnstilePanel(): void {
-    this.showTurnstilePanel.update((v) => !v);
-  }
-
-  saveTurnstileSettings(): void {
-    if (this.turnstileSaving()) return;
-    this.turnstileSaving.set(true);
-
-    this.api.updateTurnstile(this.turnstileForm).subscribe({
-      next: (response) => {
-        this.turnstileSettings.set(response.data);
-        this.applyTurnstileToForm(response.data);
-        this.showNotice('Configuración del torniquete guardada.');
-      },
-      error: () => this.showNotice('No se pudo guardar la configuración del torniquete.'),
-      complete: () => this.turnstileSaving.set(false),
-    });
-  }
-
-  triggerTurnstileManually(): void {
+  /**
+   * Apertura del torniquete por puerto COM (replica NetGymValidator).
+   * El campo acepta el nombre del puerto (ej. `COM4`). El backend manda
+   * `PULSE 3000\r\n` vía PowerShell System.IO.Ports.SerialPort al USB-CH340
+   * → RS485 → placa SATT → motor TS1000.
+   */
+  openZktecoDoor(direction: 'entry' | 'exit' = 'entry'): void {
     if (this.turnstileTriggering()) return;
-    this.turnstileTriggering.set(true);
 
-    this.api.triggerTurnstile({ action: 'entry', reason: 'Apertura manual desde el CRM' }).subscribe({
-      next: (response) => {
-        this.turnstileSettings.set(response.data);
-        this.lastTurnstileResult.set(response.result);
-        if (response.ok) {
-          this.showAccessBanner({
-            type: 'granted',
-            memberName: 'Apertura manual',
-            message: 'TORNIQUETE ABIERTO',
-            detail: `HTTP ${response.result.status ?? '—'}`,
-            source: 'manual',
-            action: 'entry',
-          }, 2500);
-          this.playGrantedSound();
-        } else {
+    const raw = this.turnstileQuickHost.trim().toUpperCase()
+      || this.turnstileSettings()?.serial_port || '';
+    if (!raw) {
+      this.showNotice('Escribe el puerto COM (ej. COM4) antes de abrir.');
+      return;
+    }
+    if (!/^COM\d{1,3}$/.test(raw)) {
+      this.showNotice('Formato inválido. Debe ser COM<n>, ej. COM4.');
+      return;
+    }
+
+    this.turnstileTriggering.set(direction);
+    const label = direction === 'entry' ? 'Entrada manual' : 'Salida manual';
+    const verb  = direction === 'entry' ? 'ENTRADA ABIERTA' : 'SALIDA ABIERTA';
+
+    this.api
+      .openSerialTurnstile({
+        port: raw,
+      })
+      .subscribe({
+        next: (response) => {
+          this.turnstileSettings.set(response.data);
+          this.lastTurnstileResult.set(response.result);
+          if (response.ok) {
+            this.showAccessBanner({
+              type: 'granted',
+              memberName: label,
+              message: verb,
+              detail: `${raw} @ ${response.result.baud ?? 9600}`,
+              source: 'manual',
+              action: direction,
+            }, 2500);
+            this.playGrantedSound();
+            void this.persistSerialPort(raw);
+          } else {
+            this.showAccessBanner({
+              type: 'denied',
+              memberName: 'Torniquete',
+              message: 'NO RESPONDE',
+              detail: this.describeTurnstileError(response.result),
+              source: 'manual',
+              action: direction,
+            }, 4500);
+            this.playDeniedSound();
+          }
+        },
+        error: () => {
           this.showAccessBanner({
             type: 'denied',
             memberName: 'Torniquete',
-            message: 'NO RESPONDE',
-            detail: this.describeTurnstileError(response.result),
+            message: 'ERROR DE CONEXIÓN',
+            detail: 'El backend no pudo abrir el puerto COM.',
             source: 'manual',
-            action: 'entry',
+            action: direction,
           }, 4500);
           this.playDeniedSound();
-        }
-      },
-      error: () => {
-        this.showAccessBanner({
-          type: 'denied',
-          memberName: 'Torniquete',
-          message: 'ERROR DE CONEXIÓN',
-          detail: 'El backend no pudo contactar al dispositivo.',
-          source: 'manual',
-          action: 'entry',
-        }, 4500);
-        this.playDeniedSound();
-      },
-      complete: () => this.turnstileTriggering.set(false),
-    });
+        },
+        complete: () => this.turnstileTriggering.set(false),
+      });
+  }
+
+  /** Persiste el puerto COM en settings.serial_port para futuras aperturas. */
+  private async persistSerialPort(port: string): Promise<void> {
+    const current = this.turnstileSettings();
+    if (current?.serial_port === port && current?.mode === 'serial' && current?.enabled) return;
+    try {
+      const response = await firstValueFrom(
+        this.api.updateTurnstile({
+          mode: 'serial',
+          serial_port: port,
+          serial_baud: 9600,
+          serial_command: 'PULSE 3000',
+          enabled: true,
+        }),
+      );
+      this.turnstileSettings.set(response.data);
+    } catch {
+      // silencioso: la apertura ya funcionó
+    }
   }
 
   markSelectedAttendance(): void {
@@ -2850,25 +2788,12 @@ export default class AttendanceModule implements OnInit, OnDestroy {
     try {
       const response = await firstValueFrom(this.api.getTurnstile());
       this.turnstileSettings.set(response.data);
-      this.applyTurnstileToForm(response.data);
+      if (!this.turnstileQuickHost && response.data.device_host) {
+        this.turnstileQuickHost = response.data.device_host;
+      }
     } catch {
-      // Silencioso: el panel sigue mostrando los defaults locales.
+      // silencioso
     }
-  }
-
-  private applyTurnstileToForm(settings: TurnstileSettings): void {
-    this.turnstileForm = {
-      name: settings.name ?? 'Torniquete principal',
-      enabled: !!settings.enabled,
-      webhook_url: settings.webhook_url ?? '',
-      http_method: settings.http_method ?? 'POST',
-      auth_header: settings.auth_header ?? '',
-      request_payload: settings.request_payload ?? '',
-      open_duration_ms: settings.open_duration_ms ?? 3000,
-      fire_on_entry: !!settings.fire_on_entry,
-      fire_on_exit: !!settings.fire_on_exit,
-      sound_enabled: !!settings.sound_enabled,
-    };
   }
 
   private showAccessBanner(banner: AccessBanner, durationMs = 3500): void {

@@ -22,10 +22,24 @@ class TurnstileService
 {
     private const TIMEOUT_SECONDS = 3;
 
+    public function __construct(
+        private readonly ZktecoTurnstileService $zkteco,
+        private readonly SerialTurnstileService $serial,
+    ) {
+    }
+
     public function trigger(TurnstileSetting $settings, array $context = []): array
     {
         if (! $settings->enabled) {
             return ['ok' => false, 'reason' => 'disabled'];
+        }
+
+        if ($settings->mode === 'serial') {
+            return $this->triggerSerial($settings);
+        }
+
+        if ($settings->mode === 'zkteco') {
+            return $this->triggerZkteco($settings);
         }
 
         if (! $settings->webhook_url) {
@@ -100,6 +114,62 @@ class TurnstileService
 
             return ['ok' => false, 'reason' => 'exception', 'error' => $e->getMessage()];
         }
+    }
+
+    /**
+     * Dispara la apertura por puerto COM (replica NetGymValidator: ASCII
+     * "PULSE 3000\r\n" → USB-CH340 → RS485 → placa SATT).
+     */
+    private function triggerSerial(TurnstileSetting $settings): array
+    {
+        if (! $settings->serial_port) {
+            return ['ok' => false, 'reason' => 'no_serial_port'];
+        }
+
+        $result = $this->serial->open(
+            port: $settings->serial_port,
+            baud: $settings->serial_baud ?: 9600,
+            command: $settings->serial_command ?: 'PULSE 3000',
+        );
+
+        $settings->forceFill([
+            'last_triggered_at' => now(),
+            'last_status'       => $result['ok'] ? 'success' : 'error',
+            'last_http_code'    => null,
+            'last_error'        => $result['ok'] ? null : substr((string) ($result['error'] ?? 'unknown'), 0, 480),
+        ])->save();
+
+        return $result;
+    }
+
+    /**
+     * Dispara la apertura vía SDK standalone ZKTeco (TCP puerto 4370).
+     * Convierte open_duration_ms a segundos enteros (mínimo 1).
+     */
+    private function triggerZkteco(TurnstileSetting $settings): array
+    {
+        if (! $settings->device_host) {
+            return ['ok' => false, 'reason' => 'no_device_host'];
+        }
+
+        $durationSeconds = max(1, (int) round(($settings->open_duration_ms ?: 3000) / 1000));
+
+        $result = $this->zkteco->openDoor(
+            host: $settings->device_host,
+            port: $settings->device_port ?: 4370,
+            durationSeconds: $durationSeconds,
+            commKey: $settings->device_comm_key,
+            timeoutSeconds: self::TIMEOUT_SECONDS,
+        );
+
+        $settings->forceFill([
+            'last_triggered_at' => now(),
+            'last_status'       => $result['ok'] ? 'success' : 'error',
+            'last_http_code'    => null,
+            'last_error'        => $result['ok'] ? null : substr((string) ($result['error'] ?? 'unknown'), 0, 480),
+        ])->save();
+
+        return $result;
     }
 
     private function interpolate(string $template, array $vars): string

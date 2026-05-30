@@ -145,6 +145,12 @@ Route::get('attendances/face-image/{userId}', [AttendanceController::class, 'fac
 Route::get('turnstile', [TurnstileController::class, 'show']);
 Route::put('turnstile', [TurnstileController::class, 'update']);
 Route::post('turnstile/trigger', [TurnstileController::class, 'trigger']);
+// Disparo directo de un webhook HTTP (Sonoff / ESP32 / Shelly).
+Route::post('turnstile/webhook/fire', [TurnstileController::class, 'fireWebhook']);
+// ZKTeco Eco — apertura directa (SDK standalone, TCP 4370).
+Route::post('turnstile/zkteco/open', [TurnstileController::class, 'openZkteco']);
+// Serial COM (replica NetGymValidator → USB-CH340 → RS485 → placa SATT).
+Route::post('turnstile/serial/open', [TurnstileController::class, 'openSerial']);
 
 Route::get('plans/features', [PlanController::class, 'allFeatures']);
 Route::put('plans/{plan}/features', [PlanController::class, 'updateFeatures']);
