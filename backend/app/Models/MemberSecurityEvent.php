@@ -29,6 +29,10 @@ class MemberSecurityEvent extends Model
     public const TYPE_DEVICE_BOUND      = 'device_bound';
     public const TYPE_DEVICE_MISMATCH   = 'device_account_mismatch';
     public const TYPE_DEVICE_RELEASED   = 'device_binding_released';
+    public const TYPE_FACE_REENROLL_REQUIRED  = 'biometric_reenrollment_required';
+    public const TYPE_FACE_REENROLL_REQUESTED = 'biometric_reenrollment_requested';
+    public const TYPE_FACE_REENROLL_COMPLETED = 'biometric_reenrollment_completed';
+    public const TYPE_FACE_LOCKED             = 'biometric_locked';
 
     protected $fillable = [
         'member_id',

@@ -83,6 +83,22 @@ return [
         'max_attempts' => (int) env('OTP_FACE_MAX_ATTEMPTS', 3),
         // Guardar el selfie de cada verificación para auditoría (privado).
         'store_selfie' => filter_var(env('OTP_FACE_STORE_SELFIE', false), FILTER_VALIDATE_BOOLEAN),
+
+        /*
+        | Re-enrolamiento biométrico cross-platform.
+        | Cuando una referencia LEGACY (sin normalizer_version) falla con un
+        | score "casi" (banda controlada), se ofrece actualizar el rostro tras
+        | un segundo factor (OTP). NO baja el umbral de match ni acepta a otra
+        | persona: si la distancia es enorme se trata como low_score normal.
+        |   - reenroll.score_max: distancia máxima (euclídea) para considerarlo
+        |     "incompatibilidad de plantilla" y ofrecer re-enrolamiento.
+        |   - reenroll.token_ttl: vida del token de un solo uso (seg).
+        */
+        'reenroll' => [
+            'enabled'    => filter_var(env('OTP_FACE_REENROLL_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+            'score_max'  => (float) env('OTP_FACE_REENROLL_SCORE_MAX', 1.6),
+            'token_ttl'  => (int) env('OTP_FACE_REENROLL_TOKEN_TTL', 300),
+        ],
     ],
 
     /*

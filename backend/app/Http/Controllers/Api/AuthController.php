@@ -7,9 +7,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginMemberRequest;
 use App\Models\Member;
 use App\Models\MemberAuthChallenge;
+use App\Models\MemberBiometric;
 use App\Models\MemberDeviceBinding;
 use App\Models\MemberDeviceSession;
 use App\Models\MemberDeviceToken;
+use App\Models\MemberReenrollmentToken;
 use App\Models\MemberSecurityEvent;
 use App\Services\DeviceSessionService;
 use App\Services\NotificationService;
@@ -18,7 +20,9 @@ use App\Services\SecurityEventService;
 use App\Support\MemberPayload;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * Autenticación de miembros con verificación en dos pasos (OTP por SMS) y
@@ -179,13 +183,23 @@ class AuthController extends Controller
         ]);
     }
 
-    /** POST members/login/face-verify — recibe el veredicto on-device y decide. */
+    /**
+     * POST members/login/face-verify — recibe el veredicto del match on-device
+     * y DECIDE con una respuesta estructurada (sin "Acceso Denegado" genérico).
+     *
+     * Devuelve 200 también cuando no coincide: el cuerpo trae `approved=false`
+     * con `reason` (low_score | re_enrollment_required | too_many_attempts) y
+     * las banderas can_retry / can_reenroll / requires_additional_factor para
+     * que la app muestre el flujo correcto. Los errores duros (ticket vencido,
+     * concurrencia) siguen como respuestas no-2xx.
+     */
     public function faceVerify(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'ticket'  => ['required', 'string'],
-            'matched' => ['required', 'boolean'],
-            'score'   => ['nullable', 'numeric'],
+            'ticket'             => ['required', 'string'],
+            'matched'            => ['required', 'boolean'],
+            'score'              => ['nullable', 'numeric'],
+            'normalizer_version' => ['nullable', 'string', 'max:40'],
         ]);
 
         $challenge = $this->validFaceTicket($validated['ticket']);
@@ -204,41 +218,292 @@ class AuthController extends Controller
         $matched = (bool) $validated['matched'];
         $score   = isset($validated['score']) ? (float) $validated['score'] : null;
 
+        $member?->loadMissing('biometric');
+        $bio = $member?->biometric;
+
+        $this->logFaceDecision('start', $member, $challenge, $bio, $score, null);
+
+        // ── Coincide → emitir sesión ─────────────────────────────────────────
+        if ($matched) {
+            $challenge->update(['status' => MemberAuthChallenge::STATUS_COMPLETED]);
+            $bio?->update(['last_biometric_verified_at' => now()]);
+            if ($member) {
+                $this->security->record($member, MemberSecurityEvent::TYPE_FACE_VERIFIED, $context, array_filter(['score' => $score]));
+            }
+            $this->logFaceDecision('approved', $member, $challenge, $bio, $score, 'approved');
+
+            return $this->grantSession($member, $context, otpVerified: true, faceVerified: true);
+        }
+
+        // ── No coincide → auditar y decidir el motivo ────────────────────────
+        $challenge->increment('attempts');
+
         $selfiePath = null;
-        if ($matched === false && config('otp.face.store_selfie', false) && $request->hasFile('selfie') && $member) {
+        if (config('otp.face.store_selfie', false) && $request->hasFile('selfie') && $member) {
             try {
                 $selfiePath = $request->file('selfie')->store("members/{$member->member_uuid}/face_attempts", 'local');
             } catch (\Throwable) {
                 $selfiePath = null;
             }
         }
+        if ($member) {
+            $this->security->record($member, MemberSecurityEvent::TYPE_FACE_FAILED, $context, array_filter([
+                'score'  => $score,
+                'selfie' => $selfiePath,
+            ]));
+            $this->notifications->notifyFaceMismatch($member, $context['device_name'] ?? null, $context['device_id'] ?? null);
+        }
 
-        if (! $matched) {
-            $challenge->increment('attempts');
+        // Demasiados intentos → bloquear el ticket.
+        if ($challenge->attempts >= (int) config('otp.face.max_attempts', 3)) {
+            $challenge->update(['status' => MemberAuthChallenge::STATUS_BLOCKED]);
             if ($member) {
-                $this->security->record($member, MemberSecurityEvent::TYPE_FACE_FAILED, $context, array_filter([
-                    'score'  => $score,
-                    'selfie' => $selfiePath,
-                ]));
-                $this->notifications->notifyFaceMismatch($member, $context['device_name'] ?? null, $context['device_id'] ?? null);
+                $this->security->record($member, MemberSecurityEvent::TYPE_FACE_LOCKED, $context, ['attempts' => $challenge->attempts]);
             }
-            if ($challenge->attempts >= (int) config('otp.face.max_attempts', 3)) {
-                $challenge->update(['status' => MemberAuthChallenge::STATUS_BLOCKED]);
-            }
+            $this->logFaceDecision('denied', $member, $challenge, $bio, $score, 'too_many_attempts');
 
+            return $this->faceDecision('too_many_attempts',
+                'Demasiados intentos. Intenta más tarde o contacta al gimnasio.',
+                canRetry: false, canReenroll: false, requiresAdditionalFactor: false);
+        }
+
+        // ¿Referencia legacy + "casi" coincide → ofrecer re-enrolamiento? Sólo
+        // un near-miss (banda controlada) cuenta como incompatibilidad de
+        // plantilla; una distancia enorme es otra persona → low_score normal.
+        $reenrollEnabled = (bool) config('otp.face.reenroll.enabled', true);
+        $scoreMax        = (float) config('otp.face.reenroll.score_max', 1.6);
+        $isLegacy        = $bio && $bio->isLegacy();
+        $nearMiss        = $score !== null && $score <= $scoreMax;
+
+        if ($reenrollEnabled && $isLegacy && $nearMiss) {
+            $bio->update([
+                'biometric_reference_status' => MemberBiometric::STATUS_RE_ENROLLMENT_REQUIRED,
+                'biometric_legacy_reason'    => 'cross_platform_template',
+            ]);
+            if ($member) {
+                $this->security->record($member, MemberSecurityEvent::TYPE_FACE_REENROLL_REQUIRED, $context, array_filter([
+                    'score'    => $score,
+                    'platform' => $context['platform'] ?? null,
+                ]));
+            }
+            $this->logFaceDecision('denied', $member, $challenge, $bio, $score, 're_enrollment_required');
+
+            return $this->faceDecision('re_enrollment_required',
+                'Tu verificación facial debe actualizarse para este dispositivo.',
+                canRetry: false, canReenroll: true, requiresAdditionalFactor: true);
+        }
+
+        // Caso normal: no coincide y no aplica re-enrolamiento → reintentar.
+        $this->logFaceDecision('denied', $member, $challenge, $bio, $score, 'low_score');
+
+        return $this->faceDecision('low_score',
+            'No pudimos confirmar que seas tú. Intenta con mejor luz.',
+            canRetry: true, canReenroll: false, requiresAdditionalFactor: false);
+    }
+
+    /**
+     * POST members/login/face-reenroll/request — paso 1 del re-enrolamiento.
+     * Sólo para una referencia legacy/incompatible. Exige un SEGUNDO FACTOR:
+     * envía un OTP fresco por SMS. No cambia el rostro todavía.
+     */
+    public function faceReenrollRequest(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'ticket' => ['required', 'string'],
+            'reason' => ['nullable', 'string', 'max:60'],
+        ]);
+
+        if (! config('otp.face.reenroll.enabled', true)) {
+            return response()->json(['ok' => false, 'message' => 'El re-enrolamiento no está disponible.'], 403);
+        }
+
+        $challenge = $this->validFaceTicket($validated['ticket']);
+        if (! $challenge || ! $challenge->member) {
+            return response()->json(['ok' => false, 'message' => 'La verificación expiró. Inicia sesión nuevamente.'], 410);
+        }
+
+        $member  = $challenge->member;
+        $context = $this->context($request);
+
+        $member->loadMissing('biometric');
+        $bio = $member->biometric;
+        if (! $bio || ! $bio->isLegacy()) {
+            // Sólo se re-enrola una referencia legacy/incompatible.
+            return response()->json(['ok' => false, 'message' => 'Tu verificación facial no requiere actualización.'], 422);
+        }
+
+        if (! $this->otp->canChallenge($member)) {
             return response()->json([
                 'ok'      => false,
-                'code'    => 'face_mismatch',
-                'message' => 'Acceso denegado: cuenta asociada a otro usuario.',
-            ], 403);
+                'message' => 'Tu cuenta no tiene teléfono para enviar el código. Contacta a recepción.',
+            ], 422);
         }
 
-        // El rostro coincide con el titular → emitir sesión.
+        // Segundo factor: OTP fresco. No afecta al ticket facial (verificado).
+        $result    = $this->otp->startChallenge($member, $context);
+        $otpChall  = $result['challenge'];
+
+        $this->security->record($member, MemberSecurityEvent::TYPE_FACE_REENROLL_REQUESTED, $context, array_filter([
+            'reason' => $validated['reason'] ?? null,
+        ]));
+
+        $data = [
+            'reenroll_challenge_id' => $otpChall->uuid,
+            'destination'           => $otpChall->maskedDestination(),
+            'expires_in'            => (int) config('otp.ttl', 300),
+            'resend_cooldown'       => (int) config('otp.resend_cooldown', 60),
+            'channel'               => 'sms',
+        ];
+        if ($this->otp->exposeCode()) {
+            $data['dev_code'] = $result['code'];
+        } elseif (! $result['sent']) {
+            $data['delivery_warning'] = 'No pudimos confirmar el envío del SMS. Puedes reenviar el código.';
+        }
+
+        return response()->json(['ok' => true, 'data' => $data]);
+    }
+
+    /**
+     * POST members/login/face-reenroll/confirm — paso 2: valida el OTP y emite
+     * un re_enrollment_token de UN SOLO USO y vida corta, atado al miembro y al
+     * ticket facial. Sin este token no se puede sustituir el rostro.
+     */
+    public function faceReenrollConfirm(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'ticket'                => ['required', 'string'],
+            'reenroll_challenge_id' => ['required', 'string'],
+            'otp_code'              => ['required', 'string'],
+        ]);
+
+        $challenge = $this->validFaceTicket($validated['ticket']);
+        if (! $challenge || ! $challenge->member) {
+            return response()->json(['ok' => false, 'message' => 'La verificación expiró. Inicia sesión nuevamente.'], 410);
+        }
+        $member  = $challenge->member;
+        $context = $this->context($request);
+
+        try {
+            $res = $this->otp->verify($validated['reenroll_challenge_id'], $validated['otp_code'], $context);
+        } catch (OtpException $e) {
+            return response()->json(array_merge(['ok' => false, 'message' => $e->getMessage()], $e->extra), $e->status);
+        }
+
+        // El OTP confirmado debe pertenecer al MISMO miembro del ticket facial.
+        if (! $res['member'] || $res['member']->id !== $member->id) {
+            return response()->json(['ok' => false, 'message' => 'No pudimos validar el código para esta cuenta.'], 422);
+        }
+
+        // Token de un solo uso. Se persiste sólo su hash (sha256 del secreto).
+        $secret = Str::random(64);
+        $ttl    = (int) config('otp.face.reenroll.token_ttl', 300);
+        MemberReenrollmentToken::create([
+            'member_id'      => $member->id,
+            'challenge_uuid' => $challenge->uuid,
+            'token_hash'     => hash('sha256', $secret),
+            'reason'         => 'template_legacy',
+            'status'         => MemberReenrollmentToken::STATUS_PENDING,
+            'device_id'      => $context['device_id'] ?? null,
+            'ip_address'     => $context['ip_address'] ?? null,
+            'expires_at'     => now()->addSeconds($ttl),
+        ]);
+
+        return response()->json([
+            'ok'   => true,
+            'data' => [
+                're_enrollment_token' => $secret,
+                'expires_in'          => $ttl,
+            ],
+        ]);
+    }
+
+    /**
+     * POST members/login/face-reenroll/complete — paso 3 (multipart): con el
+     * re_enrollment_token válido, sustituye la referencia facial por la nueva
+     * (ya normalizada en el cliente con normalizer_version actual), marca la
+     * anterior como reemplazada y emite la sesión. Token de un solo uso.
+     */
+    public function faceReenrollComplete(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            're_enrollment_token' => ['required', 'string'],
+            'face'                => ['required', 'file', 'mimes:jpg,jpeg,png', 'max:8192'],
+            'normalizer_version'  => ['required', 'string', 'max:40'],
+            'platform'            => ['nullable', 'string', 'max:20'],
+            'camera'              => ['nullable', 'string', 'max:20'],
+            'image_width'         => ['nullable', 'integer', 'min:0'],
+            'image_height'        => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        $context = $this->context($request);
+
+        $token = MemberReenrollmentToken::query()
+            ->where('token_hash', hash('sha256', $validated['re_enrollment_token']))
+            ->first();
+
+        if (! $token || ! $token->isUsable()) {
+            return response()->json(['ok' => false, 'message' => 'La autorización para actualizar tu rostro expiró. Vuelve a solicitarla.'], 410);
+        }
+
+        $challenge = $this->validFaceTicket($token->challenge_uuid);
+        $member    = $challenge?->member ?? $token->member;
+        if (! $member || ! $challenge || $challenge->member?->id !== $member->id) {
+            return response()->json(['ok' => false, 'message' => 'La verificación expiró. Inicia sesión nuevamente.'], 410);
+        }
+
+        // Concurrencia: por si la cuenta se activó en otro equipo entretanto.
+        if ($active = $this->sessions->concurrentActiveSession($member, $context['device_id'] ?? null)) {
+            return $this->concurrencyBlocked($member, $active, $context);
+        }
+
+        // Consumir el token (un solo uso) ANTES de tocar la referencia.
+        $token->update(['status' => MemberReenrollmentToken::STATUS_USED, 'used_at' => now()]);
+
+        $member->loadMissing('biometric');
+        $oldPath = $member->biometric?->face_path;
+
+        try {
+            $stored = $request->file('face')->store("members/{$member->member_uuid}/biometrics/faces", 'local');
+        } catch (\Throwable) {
+            return response()->json(['ok' => false, 'message' => 'No pudimos guardar tu nueva referencia facial.'], 500);
+        }
+
+        $disk = Storage::disk('local');
+        $member->biometric()->updateOrCreate(
+            ['member_id' => $member->id],
+            [
+                'face_path'                   => $stored,
+                'face_mime'                   => $request->file('face')->getClientMimeType() ?: 'image/jpeg',
+                'face_size'                   => $disk->exists($stored) ? $disk->size($stored) : null,
+                'captured_at'                 => now(),
+                'bytes_length'                => $disk->exists($stored) ? $disk->size($stored) : null,
+                'normalizer_version'          => $validated['normalizer_version'],
+                'enrolled_platform'           => $validated['platform'] ?? ($context['platform'] ?? null),
+                'enrolled_device_type'        => $context['device_name'] ?? null,
+                'biometric_reference_status'  => MemberBiometric::STATUS_ACTIVE,
+                'biometric_legacy_reason'     => null,
+                'last_biometric_enrolled_at'  => now(),
+            ],
+        );
+
+        // Borra la referencia anterior (no acumular biometría innecesaria).
+        if ($oldPath && $oldPath !== $stored) {
+            try {
+                $disk->delete($oldPath);
+            } catch (\Throwable) {/* best-effort */}
+        }
+
         $challenge->update(['status' => MemberAuthChallenge::STATUS_COMPLETED]);
-        if ($member) {
-            $this->security->record($member, MemberSecurityEvent::TYPE_FACE_VERIFIED, $context, array_filter(['score' => $score]));
-        }
+        $this->security->record($member, MemberSecurityEvent::TYPE_FACE_REENROLL_COMPLETED, $context, array_filter([
+            'normalizer_version' => $validated['normalizer_version'],
+            'platform'           => $validated['platform'] ?? null,
+        ]));
+        $this->security->record($member, MemberSecurityEvent::TYPE_FACE_VERIFIED, $context, []);
 
+        Log::info('2fa:face', ['stage' => 'reenroll_completed', 'member_id' => $member->id, 'decision' => 'approved']);
+
+        // El segundo factor (OTP) + nueva referencia recién capturada autorizan
+        // la sesión; no hace falta re-escanear contra sí misma.
         return $this->grantSession($member, $context, otpVerified: true, faceVerified: true);
     }
 
@@ -422,6 +687,60 @@ class AuthController extends Controller
     }
 
     // ── Internos ─────────────────────────────────────────────────────────────
+
+    /** Respuesta estructurada de rechazo facial (HTTP 200, evaluado). */
+    private function faceDecision(
+        string $reason,
+        string $message,
+        bool $canRetry,
+        bool $canReenroll,
+        bool $requiresAdditionalFactor,
+    ): JsonResponse {
+        return response()->json([
+            'ok'                         => false,
+            'approved'                   => false,
+            'reason'                     => $reason,
+            'message'                    => $message,
+            'can_retry'                  => $canRetry,
+            'can_reenroll'               => $canReenroll,
+            'requires_additional_factor' => $requiresAdditionalFactor,
+        ], 200);
+    }
+
+    /**
+     * Log seguro de la decisión facial (Fase 4). NO registra imagen, biometría
+     * cruda, tokens ni el código OTP; sólo metadata y el score redondeado.
+     */
+    private function logFaceDecision(
+        string $stage,
+        ?Member $member,
+        MemberAuthChallenge $challenge,
+        ?MemberBiometric $bio,
+        ?float $score,
+        ?string $decision,
+    ): void {
+        Log::info('2fa:face', [
+            'stage'              => $stage, // start | approved | denied
+            'member_id'          => $member?->id,
+            'challenge'          => $this->maskUuid($challenge->uuid),
+            'reference_exists'   => $bio !== null,
+            'reference_platform' => $bio?->enrolled_platform,
+            'reference_status'   => $bio?->biometric_reference_status,
+            'normalizer_version' => $bio?->normalizer_version,
+            'match_score'        => $score !== null ? round($score, 3) : null,
+            'reenroll_score_max' => (float) config('otp.face.reenroll.score_max', 1.6),
+            'decision'           => $decision,
+        ]);
+    }
+
+    private function maskUuid(?string $uuid): ?string
+    {
+        if ($uuid === null || $uuid === '') {
+            return null;
+        }
+
+        return substr($uuid, 0, 8) . '…';
+    }
 
     /** Emite la sesión del dispositivo y dispara avisos de seguridad. */
     private function grantSession(Member $member, array $context, bool $otpVerified, bool $faceVerified = false): JsonResponse

@@ -10,6 +10,7 @@ use App\Http\Requests\StoreMemberIdentityRequest;
 use App\Http\Requests\StoreMemberLegalConsentRequest;
 use App\Http\Requests\StoreMemberSignatureRequest;
 use App\Models\Member;
+use App\Models\MemberBiometric;
 use App\Models\Plan;
 use App\Models\User;
 use Carbon\Carbon;
@@ -268,6 +269,12 @@ class MemberRegistrationController extends Controller
                     'face_size' => $face['size'],
                     'captured_at' => $validated['captured_at'] ?? now(),
                     'bytes_length' => $validated['bytes_length'] ?? $face['size'],
+                    // Versionado cross-platform: si el cliente envía la metadata
+                    // del normalizador, la referencia nace "active" y no legacy.
+                    'normalizer_version' => $validated['normalizer_version'] ?? null,
+                    'enrolled_platform' => $validated['platform'] ?? null,
+                    'biometric_reference_status' => MemberBiometric::STATUS_ACTIVE,
+                    'last_biometric_enrolled_at' => now(),
                 ]
             );
 

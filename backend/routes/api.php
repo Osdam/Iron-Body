@@ -82,6 +82,13 @@ Route::middleware('member.registration.token')->group(function () {
     // Tercer factor: reconocimiento facial del titular (match on-device).
     Route::post('members/login/face-reference', [AuthController::class, 'faceReference']);
     Route::post('members/login/face-verify', [AuthController::class, 'faceVerify']);
+    // Re-enrolamiento biométrico cross-platform (gated por OTP + token de un solo uso).
+    Route::post('members/login/face-reenroll/request', [AuthController::class, 'faceReenrollRequest'])
+        ->middleware('throttle:6,1');
+    Route::post('members/login/face-reenroll/confirm', [AuthController::class, 'faceReenrollConfirm'])
+        ->middleware('throttle:10,1');
+    Route::post('members/login/face-reenroll/complete', [AuthController::class, 'faceReenrollComplete'])
+        ->middleware('throttle:6,1');
     Route::post('members/biometric-unlock', [AuthController::class, 'biometricUnlock']);
     Route::post('members/register', [MemberRegistrationController::class, 'register']);
     Route::post('members/{member}/identity', [MemberRegistrationController::class, 'identity']);
