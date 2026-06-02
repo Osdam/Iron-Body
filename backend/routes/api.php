@@ -109,9 +109,16 @@ Route::middleware('member.registration.token')->group(function () {
     Route::post('members/{member}/legal-consent', [MemberRegistrationController::class, 'legalConsent']);
     Route::post('members/{member}/signature', [MemberRegistrationController::class, 'signature']);
     Route::post('members/{member}/biometric', [MemberRegistrationController::class, 'biometric']);
+    // Biometría OPCIONAL: el usuario puede omitirla al crear cuenta (Apple).
+    Route::post('members/{member}/biometric-skip', [MemberRegistrationController::class, 'skipBiometric']);
     Route::delete('members/{member}', [MemberRegistrationController::class, 'destroy']);
 
 });
+
+// Plantilla de consentimiento (PÚBLICA, solo config estática: textos de
+// checkboxes + URLs). La usa la creación de cuenta para mostrar el contrato
+// real ANTES de que exista el miembro. No expone datos personales.
+Route::get('contracts/consent-template', [MemberContractController::class, 'consentTemplate']);
 
 // ── ePayco — pago 100% IN-APP por API (sin navegador/WebView) ───────────────
 Route::post('payments/epayco/create', [EpaycoPaymentController::class, 'create']);

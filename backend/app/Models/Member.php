@@ -18,6 +18,12 @@ class Member extends Model
     public const STATUS_ACTIVE = 'active';
     public const STATUS_FAILED = 'failed';
 
+    // Estado de inscripción biométrica facial (la biometría es OPCIONAL).
+    public const BIOMETRIC_PENDING = 'pending';
+    public const BIOMETRIC_REGISTERED = 'registered';
+    public const BIOMETRIC_SKIPPED = 'skipped';
+    public const BIOMETRIC_MANUAL_REQUIRED = 'manual_required';
+
     protected $fillable = [
         'member_uuid',
         'user_id',
@@ -32,6 +38,7 @@ class Member extends Model
         'injuries',
         'birth_date',
         'is_minor',
+        'biometric_status',
         'status',
     ];
 

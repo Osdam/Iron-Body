@@ -295,8 +295,24 @@ class MemberContractService
             'signed_at'        => optional($contract->signed_at)->toIso8601String(),
             'checksum'         => $contract->signed_pdf_checksum,
             'has_pdf'          => ! empty($contract->signed_pdf_path),
+            'image_authorized' => $this->imageAuthorized($contract),
             'created_at'       => optional($contract->created_at)->toIso8601String(),
         ];
+    }
+
+    /**
+     * Estado de la autorización de uso de imagen (checkbox opcional) leída del
+     * acceptance_snapshot. Devuelve null si el contrato aún no se ha firmado.
+     */
+    public function imageAuthorized(MemberContract $contract): ?bool
+    {
+        foreach ((array) $contract->acceptance_snapshot as $item) {
+            if (($item['key'] ?? null) === 'image_use') {
+                return (bool) ($item['value'] ?? false);
+            }
+        }
+
+        return null;
     }
 
     // ── Helpers internos ──────────────────────────────────────────────────────

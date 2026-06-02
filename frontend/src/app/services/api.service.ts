@@ -213,7 +213,16 @@ export interface MemberContractSummary {
   signed_at?: string | null;
   checksum?: string | null;
   has_pdf: boolean;
+  /** Autorización de uso de imagen (checkbox opcional). null si sin firmar. */
+  image_authorized?: boolean | null;
   created_at?: string | null;
+}
+
+/** Resumen legal del miembro (estado biométrico / minoría de edad). */
+export interface MemberLegalSummary {
+  id: number;
+  is_minor: boolean;
+  biometric_status: 'pending' | 'registered' | 'skipped' | 'manual_required' | string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -897,8 +906,10 @@ export class ApiService {
 
   // ─── Contratos firmados (consentimiento + firma electrónica) ──────────────
   /** Contratos del miembro vinculado a un usuario del CRM (por user_id). */
-  getUserContracts(userId: number): Observable<{ data: MemberContractSummary[] }> {
-    return this.http.get<{ data: MemberContractSummary[] }>(
+  getUserContracts(
+    userId: number,
+  ): Observable<{ data: MemberContractSummary[]; member: MemberLegalSummary | null }> {
+    return this.http.get<{ data: MemberContractSummary[]; member: MemberLegalSummary | null }>(
       `${this.adminBase}/users/${userId}/contracts`,
     );
   }

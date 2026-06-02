@@ -8,7 +8,12 @@ import {
   SimpleChanges,
   inject,
 } from '@angular/core';
-import { ApiService, MemberContractSummary, UserSummary } from '../../services/api.service';
+import {
+  ApiService,
+  MemberContractSummary,
+  MemberLegalSummary,
+  UserSummary,
+} from '../../services/api.service';
 
 @Component({
   selector: 'app-member-details-modal',
@@ -75,7 +80,14 @@ import { ApiService, MemberContractSummary, UserSummary } from '../../services/a
         </section>
 
         <section class="contracts-section">
-          <h3>Contratos</h3>
+          <h3>Contratos y estado legal</h3>
+
+          <div *ngIf="memberLegal" class="legal-status">
+            <span class="legal-chip">
+              Biometría: <strong>{{ biometricLabel(memberLegal.biometric_status) }}</strong>
+            </span>
+            <span class="legal-chip" *ngIf="memberLegal.is_minor">Menor de edad</span>
+          </div>
 
           <div *ngIf="contractsLoading" class="contracts-empty">Cargando contratos…</div>
 
@@ -105,6 +117,7 @@ import { ApiService, MemberContractSummary, UserSummary } from '../../services/a
               <span>Folio: {{ c.folio || '—' }}</span>
               <span>Versión: {{ c.template_version || '—' }}</span>
               <span>Firmado: {{ c.signed_at ? (c.signed_at | date: 'dd MMM yyyy, HH:mm') : '—' }}</span>
+              <span>Imagen: {{ imageAuthLabel(c) }}</span>
               <span *ngIf="c.checksum" class="hash">Hash: {{ c.checksum.slice(0, 16) }}…</span>
             </div>
             <div class="contract-actions">
@@ -385,6 +398,27 @@ import { ApiService, MemberContractSummary, UserSummary } from '../../services/a
         padding: 0.5rem 0;
       }
 
+      .legal-status {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 0.85rem;
+      }
+
+      .legal-chip {
+        padding: 0.3rem 0.7rem;
+        border-radius: 8px;
+        background: #1a1a1a;
+        border: 1px solid #353534;
+        font: 400 0.78rem Inter, sans-serif;
+        color: #b4afa6;
+      }
+
+      .legal-chip strong {
+        color: #e5e2e1;
+        font-weight: 600;
+      }
+
       .contracts-empty.error {
         color: #f1a8a8;
       }
@@ -493,6 +527,7 @@ export class MemberDetailsModalComponent implements OnChanges {
   private api = inject(ApiService);
 
   contracts: MemberContractSummary[] = [];
+  memberLegal: MemberLegalSummary | null = null;
   contractsLoading = false;
   contractsError: string | null = null;
   downloadingUuid: string | null = null;
@@ -519,6 +554,7 @@ export class MemberDetailsModalComponent implements OnChanges {
     this.api.getUserContracts(userId).subscribe({
       next: (res) => {
         this.contracts = res.data ?? [];
+        this.memberLegal = res.member ?? null;
         this.contractsLoading = false;
       },
       error: () => {
@@ -526,6 +562,22 @@ export class MemberDetailsModalComponent implements OnChanges {
         this.contractsLoading = false;
       },
     });
+  }
+
+  biometricLabel(status?: string): string {
+    const labels: { [key: string]: string } = {
+      registered: 'Verificada',
+      pending: 'Pendiente',
+      skipped: 'Omitida',
+      manual_required: 'Verificación presencial',
+    };
+    return labels[status || 'pending'] || 'Pendiente';
+  }
+
+  imageAuthLabel(c: MemberContractSummary): string {
+    if (c.image_authorized === true) return 'Sí';
+    if (c.image_authorized === false) return 'No';
+    return '—';
   }
 
   contractTypeLabel(type: string): string {

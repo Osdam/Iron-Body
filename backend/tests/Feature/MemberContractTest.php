@@ -227,6 +227,32 @@ class MemberContractTest extends TestCase
             ->assertOk()->assertJsonPath('data.status', 'void');
     }
 
+    public function test_public_consent_template(): void
+    {
+        // Sin auth: solo textos de checkboxes + URLs (sin datos personales).
+        $adult = $this->getJson('/api/contracts/consent-template');
+        $adult->assertOk()
+            ->assertJsonPath('contract_type', 'workout_registration')
+            ->assertJsonPath('is_minor', false);
+        $this->assertNotEmpty($adult->json('checkboxes'));
+
+        $this->getJson('/api/contracts/consent-template?is_minor=1')
+            ->assertOk()
+            ->assertJsonPath('contract_type', 'minor_release')
+            ->assertJsonPath('is_minor', true);
+    }
+
+    public function test_image_authorized_reflected_in_present(): void
+    {
+        $member = $this->makeMember();
+        $uuid = $this->postJson('/api/member/contracts/draft', [], $this->auth($member))->json('data.uuid');
+        $this->postJson("/api/member/contracts/{$uuid}/sign", [
+            'signature_image' => $this->signaturePngBase64(),
+            'acceptance' => ['truthfulness' => true, 'terms_and_conditions' => true, 'data_processing' => true,
+                'health_data' => true, 'inform_injuries' => true, 'commercial_policies' => true, 'image_use' => false],
+        ], $this->auth($member))->assertOk()->assertJsonPath('data.image_authorized', false);
+    }
+
     public function test_admin_user_contracts_endpoint(): void
     {
         // Sin miembro vinculado a ese user_id → lista vacía, no error.

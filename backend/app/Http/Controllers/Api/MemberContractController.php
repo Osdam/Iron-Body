@@ -34,6 +34,30 @@ class MemberContractController extends Controller
         return $request->attributes->get('auth_member');
     }
 
+    /**
+     * GET /api/contracts/consent-template  (PÚBLICO, sin auth)
+     * Devuelve SOLO la configuración estática del consentimiento (textos de
+     * checkboxes + URLs) para que la creación de cuenta muestre el contrato
+     * real ANTES de que exista el miembro. No expone ningún dato personal.
+     */
+    public function consentTemplate(Request $request): JsonResponse
+    {
+        $isMinor = filter_var($request->query('is_minor', false), FILTER_VALIDATE_BOOLEAN);
+        $type = $isMinor
+            ? 'minor_release'
+            : (string) config('contracts.default_registration_template', 'workout_registration');
+
+        return response()->json([
+            'contract_type'      => $type,
+            'template_name'      => config("contracts.templates.{$type}.name", $type),
+            'is_minor'           => $isMinor,
+            'checkboxes'         => $this->templates->checkboxes($type),
+            'privacy_policy_url' => config('contracts.privacy_policy_url'),
+            'terms_url'          => config('contracts.terms_url'),
+            'support_contact'    => config('contracts.support_contact'),
+        ]);
+    }
+
     /** GET /api/member/contracts/status */
     public function status(Request $request): JsonResponse
     {

@@ -33,7 +33,20 @@ class ContractAdminController extends Controller
         $list = $member->contracts()->latest()->get()
             ->map(fn (MemberContract $c) => $this->contracts->present($c))->values();
 
-        return response()->json(['data' => $list]);
+        return response()->json([
+            'data'   => $list,
+            'member' => $this->memberSummary($member),
+        ]);
+    }
+
+    /** Resumen del miembro para el panel legal del CRM (estado biometría/menor). */
+    private function memberSummary(Member $member): array
+    {
+        return [
+            'id'               => $member->id,
+            'is_minor'         => (bool) $member->is_minor,
+            'biometric_status' => $member->biometric_status ?? 'pending',
+        ];
     }
 
     /**
@@ -46,13 +59,16 @@ class ContractAdminController extends Controller
     {
         $member = Member::where('user_id', $user)->first();
         if (! $member) {
-            return response()->json(['data' => []]);
+            return response()->json(['data' => [], 'member' => null]);
         }
 
         $list = $member->contracts()->latest()->get()
             ->map(fn (MemberContract $c) => $this->contracts->present($c))->values();
 
-        return response()->json(['data' => $list]);
+        return response()->json([
+            'data'   => $list,
+            'member' => $this->memberSummary($member),
+        ]);
     }
 
     /** GET /api/admin/contracts/{contract} */

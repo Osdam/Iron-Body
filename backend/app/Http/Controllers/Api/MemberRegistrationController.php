@@ -278,6 +278,10 @@ class MemberRegistrationController extends Controller
                 ]
             );
 
+            // La biometría quedó registrada (Apple: estado explícito, opcional).
+            $member->biometric_status = Member::BIOMETRIC_REGISTERED;
+            $member->save();
+
             $this->updateRegistrationStatus($member, Member::STATUS_ACTIVE);
             $this->deleteOldFiles($old?->face_path);
 
@@ -285,6 +289,22 @@ class MemberRegistrationController extends Controller
         } catch (Throwable) {
             return $this->serverError();
         }
+    }
+
+    /**
+     * Marca la biometría como OMITIDA en la creación de cuenta (Apple: el
+     * usuario puede crear cuenta sin facial; se verifica luego o presencialmente
+     * en el gimnasio). No guarda ningún dato biométrico.
+     */
+    public function skipBiometric(Member $member): JsonResponse
+    {
+        if ($member->biometric_status !== Member::BIOMETRIC_REGISTERED) {
+            $member->biometric_status = Member::BIOMETRIC_SKIPPED;
+            $member->save();
+        }
+        $this->updateRegistrationStatus($member, Member::STATUS_ACTIVE);
+
+        return response()->json($this->memberResponse($member->fresh(), 'Biometria pendiente.'));
     }
 
     public function destroy(Member $member): JsonResponse
