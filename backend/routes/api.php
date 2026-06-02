@@ -427,6 +427,16 @@ Route::middleware(['automation.internal', 'throttle:120,1'])->prefix('internal/a
     Route::post('notify-trainer', [\App\Http\Controllers\Api\Internal\NotifyTrainerController::class, 'notify']);
 });
 
+// ── Asesor comercial IA (F3) — disparado por n8n, firmado HMAC ────────────────
+// Seguro con META_ENABLED=false (no envía mensajes vivos). Opera marketing_*.
+Route::middleware(['automation.internal', 'throttle:120,1'])->prefix('internal/marketing')->group(function (): void {
+    Route::post('ai-action',      [\App\Http\Controllers\Api\Internal\InternalMarketingController::class, 'aiAction']);
+    Route::post('send-message',   [\App\Http\Controllers\Api\Internal\InternalMarketingController::class, 'sendMessage']);
+    Route::post('human-takeover', [\App\Http\Controllers\Api\Internal\InternalMarketingController::class, 'humanTakeover']);
+    Route::post('followups',      [\App\Http\Controllers\Api\Internal\InternalMarketingController::class, 'followups']);
+    Route::get('context/{lead}',  [\App\Http\Controllers\Api\Internal\InternalMarketingController::class, 'context'])->where('lead', '[0-9]+');
+});
+
 // ── Coach humano — tareas del entrenador (CRM admin) ──────────────────────────
 // Patrón del resto del CRM: rutas /admin/* sin auth propia (protegidas por la
 // capa de red/front del CRM). Los entrenadores aún no tienen login en backend,
