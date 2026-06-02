@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../../environments/environment';
 
 /** Tarea/alerta del entrenador humano (espejo de TrainerTask::toPublicArray). */
 export interface TrainerTask {
@@ -57,8 +58,8 @@ export interface TrainerTasksQuery {
 export class TrainerTasksService {
   private readonly http = inject(HttpClient);
 
-  /** Misma base que el resto del CRM admin. */
-  private readonly base = 'http://127.0.0.1:8080/api/admin';
+  /** API base del CRM admin (centralizado en environment). */
+  private readonly base = environment.adminApiBaseUrl;
 
   /** Lista paginada de tareas de un entrenador (filtros opcionales). */
   listTasks(trainerId: number | string, query: TrainerTasksQuery = {}): Observable<TrainerTasksPage> {
