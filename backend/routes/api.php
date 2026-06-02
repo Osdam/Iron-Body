@@ -166,6 +166,13 @@ Route::put('turnstile', [TurnstileController::class, 'update']);
 Route::post('turnstile/trigger', [TurnstileController::class, 'trigger']);
 // Disparo directo de un webhook HTTP (Sonoff / ESP32 / Shelly).
 Route::post('turnstile/webhook/fire', [TurnstileController::class, 'fireWebhook']);
+
+// ── Webhook público de Meta (Instagram / Facebook / WhatsApp) ──────────────────
+// Sin auth de sesión (lo llama Meta): GET verifica con verify_token; POST valida
+// la firma X-Hub-Signature-256 y procesa en cola. Requiere dominio HTTPS público
+// (no ngrok) en producción. Ver WebhookMetaController.
+Route::get('webhooks/meta',  [\App\Http\Controllers\Api\WebhookMetaController::class, 'verify']);
+Route::post('webhooks/meta', [\App\Http\Controllers\Api\WebhookMetaController::class, 'receive']);
 // ZKTeco Eco — apertura directa (SDK standalone, TCP 4370).
 Route::post('turnstile/zkteco/open', [TurnstileController::class, 'openZkteco']);
 // Serial COM (replica NetGymValidator → USB-CH340 → RS485 → placa SATT).
