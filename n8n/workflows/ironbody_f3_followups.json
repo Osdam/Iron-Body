@@ -1,0 +1,83 @@
+{
+  "name": "Iron Body - F3 - Follow-up Comercial",
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "meta": {
+    "description": "Procesa follow-ups vencidos. Trigger por cron (o webhook desde Laravel). Pide contexto, decide si enviar plantilla/mensaje permitido (gated por META_ENABLED y ventana WhatsApp), registra accion y evita spam. Placeholders sin secretos."
+  },
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 30 }] } },
+      "id": "node-cron",
+      "name": "Cron 30m",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-720, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.LARAVEL_BASE_URL || '{{LARAVEL_BASE_URL}}' }}/api/admin/marketing/followups?status=pending&per_page=50",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [ { "name": "Accept", "value": "application/json" } ] },
+        "options": { "timeout": 20000 }
+      },
+      "id": "node-due",
+      "name": "Listar Follow-ups Pendientes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-500, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filtra los vencidos (due_at <= ahora). Evita spam: 1 por lead por corrida.\nconst now = Date.now();\nconst rows = ($json.data || []).filter(f => f.due_at && Date.parse(f.due_at) <= now);\nconst seen = new Set();\nconst out = [];\nfor (const f of rows) { if (seen.has(f.lead_id)) continue; seen.add(f.lead_id); out.push({ json: f }); }\nreturn out;"
+      },
+      "id": "node-filter",
+      "name": "Filtrar Vencidos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-280, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LARAVEL_BASE_URL || '{{LARAVEL_BASE_URL}}' }}/api/internal/marketing/send-message",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [ { "name": "Authorization", "value": "=Bearer {{ $env.INTERNAL_HMAC_SECRET || '{{INTERNAL_HMAC_SECRET}}' }}" } ] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"conversation_id\": {{ $json.conversation_id || 0 }},\n  \"body\": {{ JSON.stringify($json.message_template || 'Hola, seguimos a tu disposicion en Iron Body. Cuando quieras te ayudo a dar el siguiente paso.') }}\n}",
+        "options": { "timeout": 20000 }
+      },
+      "id": "node-send",
+      "name": "Enviar Plantilla (gated)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-40, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LARAVEL_BASE_URL || '{{LARAVEL_BASE_URL}}' }}/api/internal/marketing/ai-action",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [ { "name": "Authorization", "value": "=Bearer {{ $env.INTERNAL_HMAC_SECRET || '{{INTERNAL_HMAC_SECRET}}' }}" } ] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"lead_id\": {{ $json.lead_id }},\n  \"action_type\": \"followup_sent\",\n  \"reason\": \"follow-up comercial automatico\",\n  \"status\": \"executed\"\n}",
+        "options": { "timeout": 20000 }
+      },
+      "id": "node-aiaction",
+      "name": "Registrar Accion",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [200, 0]
+    }
+  ],
+  "connections": {
+    "Cron 30m": { "main": [[{ "node": "Listar Follow-ups Pendientes", "type": "main", "index": 0 }]] },
+    "Listar Follow-ups Pendientes": { "main": [[{ "node": "Filtrar Vencidos", "type": "main", "index": 0 }]] },
+    "Filtrar Vencidos": { "main": [[{ "node": "Enviar Plantilla (gated)", "type": "main", "index": 0 }]] },
+    "Enviar Plantilla (gated)": { "main": [[{ "node": "Registrar Accion", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {}
+}

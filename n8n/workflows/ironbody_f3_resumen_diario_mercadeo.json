@@ -1,0 +1,56 @@
+{
+  "name": "Iron Body - F3 - Resumen Diario Mercadeo",
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "meta": {
+    "description": "Resumen comercial diario: consulta el overview de Mercadeo y genera un resumen interno (leads nuevos, calientes, campanas bajas, conversaciones pendientes, ingresos atribuidos, acciones IA). Entrega a log/CRM/n8n. Placeholders sin secretos."
+  },
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "0 8 * * *" }] } },
+      "id": "node-cron",
+      "name": "Cron Diario 08:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-640, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.LARAVEL_BASE_URL || '{{LARAVEL_BASE_URL}}' }}/api/admin/marketing/overview",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [ { "name": "Accept", "value": "application/json" } ] },
+        "options": { "timeout": 20000 }
+      },
+      "id": "node-overview",
+      "name": "Overview Mercadeo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-420, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Arma un resumen legible a partir del overview real.\nconst o = ($json.data) || {};\nconst resumen = [\n  `Leads totales: ${o.leads_total ?? 0}`,\n  `Leads calientes: ${o.hot_leads ?? 0}`,\n  `Conversaciones: ${o.conversations_total ?? 0}`,\n  `Seguimientos pendientes: ${o.pending_followups ?? 0}`,\n  `Convertidos: ${o.converted_leads ?? 0}`,\n  `Ingresos atribuidos: ${o.revenue_total ?? 0}`,\n  `ROAS: ${o.roas ?? '-'}`,\n  `Acciones IA: ${o.ai_actions_count ?? 0}`,\n  `Control humano: ${o.human_takeover_count ?? 0}`\n].join(' | ');\nreturn [{ json: { resumen, overview: o, generated_at: new Date().toISOString() } }];"
+      },
+      "id": "node-build",
+      "name": "Construir Resumen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-200, 0]
+    },
+    {
+      "parameters": {},
+      "id": "node-out",
+      "name": "Salida (conectar destino: log/Slack/email)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [40, 0]
+    }
+  ],
+  "connections": {
+    "Cron Diario 08:00": { "main": [[{ "node": "Overview Mercadeo", "type": "main", "index": 0 }]] },
+    "Overview Mercadeo": { "main": [[{ "node": "Construir Resumen", "type": "main", "index": 0 }]] },
+    "Construir Resumen": { "main": [[{ "node": "Salida (conectar destino: log/Slack/email)", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {}
+}

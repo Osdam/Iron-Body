@@ -1,0 +1,204 @@
+{
+  "name": "Iron Body - F3 - Asesor IA Comercial",
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "meta": {
+    "description": "Asesor comercial IA. Recibe eventos de leads/conversaciones desde Laravel, clasifica intencion/objecion/temperatura con OpenAI, decide la siguiente mejor accion y la ejecuta via endpoints internos HMAC de Laravel. Placeholders: {{LARAVEL_BASE_URL}}, {{INTERNAL_HMAC_SECRET}}, {{OPENAI_CREDENTIAL}}. NO contiene secretos."
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ironbody/marketing-lead-event",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook",
+      "name": "Webhook Lead Event",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-820, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validacion minima del payload (sin datos sensibles en logs).\nconst b = $json.body || $json;\nif (!b.lead_id || !b.event_type) {\n  throw new Error('payload invalido: faltan lead_id/event_type');\n}\nreturn [{ json: b }];"
+      },
+      "id": "node-validate",
+      "name": "Validar Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-620, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.LARAVEL_BASE_URL || '{{LARAVEL_BASE_URL}}' }}/api/internal/marketing/context/{{ $json.lead_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.INTERNAL_HMAC_SECRET || '{{INTERNAL_HMAC_SECRET}}' }}" },
+            { "name": "Accept", "value": "application/json" }
+          ]
+        },
+        "options": { "timeout": 15000 }
+      },
+      "id": "node-context",
+      "name": "Obtener Contexto CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-420, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4.1-mini\",\n  \"temperature\": 0.4,\n  \"response_format\": { \"type\": \"json_object\" },\n  \"messages\": [\n    { \"role\": \"system\", \"content\": $node['Prompt Asesor'].json.system },\n    { \"role\": \"user\", \"content\": $node['Prompt Asesor'].json.user }\n  ]\n}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "node-openai",
+      "name": "OpenAI Clasificar+Responder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-20, 0],
+      "credentials": { "openAiApi": { "id": "{{OPENAI_CREDENTIAL}}", "name": "OpenAI Iron Body" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Construye el prompt del asesor (system + user con contexto real del CRM).\nconst ev = $node['Validar Payload'].json;\nconst ctx = ($node['Obtener Contexto CRM'].json && $node['Obtener Contexto CRM'].json.data) || {};\nconst system = `Eres el asesor comercial IA de Iron Body Neiva. Ayudas al prospecto de forma estrategica, natural y util, no vendes de forma agresiva. Espanol colombiano cercano y profesional, directo, no robotico, no acosador. Reglas: no inventes precios, promociones ni horarios (usa solo membership_plans del contexto; si falta info dilo y ofrece que un asesor confirma). No des diagnostico medico. No comentarios ofensivos sobre el cuerpo. Respeta politicas/ventana de WhatsApp. Si el lead esta muy caliente, pide hablar con persona, o pregunta por pagos/contratos/casos sensibles -> escala a humano. Devuelve SIEMPRE solo un JSON con: intent (pricing|location|schedule|plans|trial|objection|general|human_request|unknown), objection (price|time|location|trust|already_member|no_money|just_looking|none), temperature (hot|warm|cold|unqualified), recommended_action (reply|ask_question|create_followup|human_takeover|do_nothing), reply_text, followup_delay_minutes (entero), human_reason (string|null), confidence (0..1).`;\nconst user = `EVENTO: ${ev.event_type}\\nMENSAJE: ${ev.message || ''}\\nCONTEXTO: ${JSON.stringify(ctx)}`;\nreturn [{ json: { system, user } }];"
+      },
+      "id": "node-prompt",
+      "name": "Prompt Asesor",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-220, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parsea la salida JSON del modelo de forma segura.\nlet content = '';\ntry { content = $json.choices[0].message.content; } catch (e) { content = '{}'; }\nlet ai;\ntry { ai = JSON.parse(content); } catch (e) { ai = { recommended_action: 'do_nothing', confidence: 0 }; }\nconst ev = $node['Validar Payload'].json;\nreturn [{ json: { ai, ev } }];"
+      },
+      "id": "node-parse",
+      "name": "Parsear Decision IA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [180, 0]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            { "conditions": { "options": { "caseSensitive": true }, "conditions": [ { "leftValue": "={{ $json.ai.recommended_action }}", "rightValue": "reply", "operator": { "type": "string", "operation": "equals" } } ] }, "outputKey": "reply" },
+            { "conditions": { "options": { "caseSensitive": true }, "conditions": [ { "leftValue": "={{ $json.ai.recommended_action }}", "rightValue": "human_takeover", "operator": { "type": "string", "operation": "equals" } } ] }, "outputKey": "human" },
+            { "conditions": { "options": { "caseSensitive": true }, "conditions": [ { "leftValue": "={{ $json.ai.recommended_action }}", "rightValue": "create_followup", "operator": { "type": "string", "operation": "equals" } } ] }, "outputKey": "followup" }
+          ]
+        },
+        "options": { "fallbackOutput": "extra" }
+      },
+      "id": "node-switch",
+      "name": "Decidir Accion",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [380, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LARAVEL_BASE_URL || '{{LARAVEL_BASE_URL}}' }}/api/internal/marketing/send-message",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [ { "name": "Authorization", "value": "=Bearer {{ $env.INTERNAL_HMAC_SECRET || '{{INTERNAL_HMAC_SECRET}}' }}" } ] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"conversation_id\": {{ $json.ev.conversation_id }},\n  \"body\": {{ JSON.stringify($json.ai.reply_text) }}\n}",
+        "options": { "timeout": 20000 }
+      },
+      "id": "node-send",
+      "name": "Enviar Mensaje (gated)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [620, -180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LARAVEL_BASE_URL || '{{LARAVEL_BASE_URL}}' }}/api/internal/marketing/human-takeover",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [ { "name": "Authorization", "value": "=Bearer {{ $env.INTERNAL_HMAC_SECRET || '{{INTERNAL_HMAC_SECRET}}' }}" } ] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"conversation_id\": {{ $json.ev.conversation_id }},\n  \"reason\": {{ JSON.stringify($json.ai.human_reason || 'lead caliente / caso sensible') }}\n}",
+        "options": { "timeout": 20000 }
+      },
+      "id": "node-human",
+      "name": "Escalar a Humano",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [620, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LARAVEL_BASE_URL || '{{LARAVEL_BASE_URL}}' }}/api/internal/marketing/followups",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [ { "name": "Authorization", "value": "=Bearer {{ $env.INTERNAL_HMAC_SECRET || '{{INTERNAL_HMAC_SECRET}}' }}" } ] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"lead_id\": {{ $json.ev.lead_id }},\n  \"type\": \"message\",\n  \"message_template\": {{ JSON.stringify($json.ai.reply_text || '') }}\n}",
+        "options": { "timeout": 20000 }
+      },
+      "id": "node-followup",
+      "name": "Crear Follow-up",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [620, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LARAVEL_BASE_URL || '{{LARAVEL_BASE_URL}}' }}/api/internal/marketing/ai-action",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [ { "name": "Authorization", "value": "=Bearer {{ $env.INTERNAL_HMAC_SECRET || '{{INTERNAL_HMAC_SECRET}}' }}" } ] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"lead_id\": {{ $json.ev.lead_id }},\n  \"conversation_id\": {{ $json.ev.conversation_id }},\n  \"action_type\": {{ JSON.stringify($json.ai.recommended_action || 'do_nothing') }},\n  \"reason\": {{ JSON.stringify($json.ai.human_reason || '') }},\n  \"confidence\": {{ $json.ai.confidence || 0 }},\n  \"status\": \"executed\",\n  \"intent\": {{ JSON.stringify($json.ai.intent || 'unknown') }},\n  \"objection\": {{ JSON.stringify($json.ai.objection || 'none') }},\n  \"temperature\": {{ JSON.stringify($json.ai.temperature || 'cold') }}\n}",
+        "options": { "timeout": 20000 }
+      },
+      "id": "node-aiaction",
+      "name": "Registrar Decision (marketing_ai_actions)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [860, 0]
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={ \"ok\": true }" },
+      "id": "node-respond",
+      "name": "Responder 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1080, 0]
+    }
+  ],
+  "connections": {
+    "Webhook Lead Event": { "main": [[{ "node": "Validar Payload", "type": "main", "index": 0 }]] },
+    "Validar Payload": { "main": [[{ "node": "Obtener Contexto CRM", "type": "main", "index": 0 }]] },
+    "Obtener Contexto CRM": { "main": [[{ "node": "Prompt Asesor", "type": "main", "index": 0 }]] },
+    "Prompt Asesor": { "main": [[{ "node": "OpenAI Clasificar+Responder", "type": "main", "index": 0 }]] },
+    "OpenAI Clasificar+Responder": { "main": [[{ "node": "Parsear Decision IA", "type": "main", "index": 0 }]] },
+    "Parsear Decision IA": { "main": [[{ "node": "Decidir Accion", "type": "main", "index": 0 }]] },
+    "Decidir Accion": {
+      "main": [
+        [{ "node": "Enviar Mensaje (gated)", "type": "main", "index": 0 }],
+        [{ "node": "Escalar a Humano", "type": "main", "index": 0 }],
+        [{ "node": "Crear Follow-up", "type": "main", "index": 0 }],
+        [{ "node": "Registrar Decision (marketing_ai_actions)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Enviar Mensaje (gated)": { "main": [[{ "node": "Registrar Decision (marketing_ai_actions)", "type": "main", "index": 0 }]] },
+    "Escalar a Humano": { "main": [[{ "node": "Registrar Decision (marketing_ai_actions)", "type": "main", "index": 0 }]] },
+    "Crear Follow-up": { "main": [[{ "node": "Registrar Decision (marketing_ai_actions)", "type": "main", "index": 0 }]] },
+    "Registrar Decision (marketing_ai_actions)": { "main": [[{ "node": "Responder 200", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {}
+}
