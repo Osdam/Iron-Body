@@ -1,6 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../../environments/environment';
 
 /** Beneficio/recompensa por racha (config desde CRM). */
 export interface WeeklyStreakReward {
@@ -61,7 +62,7 @@ export class WeeklyStreakService {
   private readonly http = inject(HttpClient);
 
   /** Misma base que el resto del CRM admin. */
-  private readonly base = 'http://127.0.0.1:8080/api/admin/weekly-streak';
+  private readonly base = `${environment.adminApiBaseUrl}/weekly-streak`;
 
   private readonly _configs = signal<WeeklyStreakConfig[]>([]);
   public readonly configs = this._configs.asReadonly();

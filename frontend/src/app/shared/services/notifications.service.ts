@@ -1,5 +1,6 @@
 import { Injectable, signal, computed, inject, NgZone, OnDestroy } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { environment } from '../../../environments/environment';
 import { Subject, of } from 'rxjs';
 import { catchError, debounceTime, switchMap } from 'rxjs/operators';
 
@@ -74,7 +75,7 @@ export class NotificationsService implements OnDestroy {
   private readonly zone = inject(NgZone);
 
   /** Misma base que ApiService (backend local; el túnel ngrok apunta aquí). */
-  private readonly base = 'http://127.0.0.1:8080/api/admin/notifications';
+  private readonly base = `${environment.adminApiBaseUrl}/notifications`;
 
   // ── Estado reactivo ──
   private readonly _items = signal<AdminNotification[]>([]);

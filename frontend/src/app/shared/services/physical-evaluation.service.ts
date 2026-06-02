@@ -1,6 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../../environments/environment';
 
 export interface MemberOption {
   id: number;
@@ -39,7 +40,7 @@ interface ItemResponse { ok: boolean; data: PhysicalEvaluation }
 @Injectable({ providedIn: 'root' })
 export class PhysicalEvaluationService {
   private readonly http = inject(HttpClient);
-  private readonly base = 'http://127.0.0.1:8080/api/admin';
+  private readonly base = environment.adminApiBaseUrl;
 
   private readonly _members = signal<MemberOption[]>([]);
   public readonly members = this._members.asReadonly();

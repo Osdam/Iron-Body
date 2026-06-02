@@ -1,6 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../../environments/environment';
 import { MemberOption } from './physical-evaluation.service';
 
 export interface NutritionGoal {
@@ -39,7 +40,7 @@ export interface AiRecommendation {
 @Injectable({ providedIn: 'root' })
 export class NutritionAdminService {
   private readonly http = inject(HttpClient);
-  private readonly base = 'http://127.0.0.1:8080/api/admin';
+  private readonly base = environment.adminApiBaseUrl;
 
   private readonly _data = signal<NutritionAdminData | null>(null);
   public readonly data = this._data.asReadonly();
