@@ -219,6 +219,15 @@ export interface TrainerAvailability {
         </button>
         <button
           type="button"
+          class="action-btn"
+          (click)="onTasks()"
+          title="Tareas del entrenador"
+          aria-label="Tareas del entrenador"
+        >
+          <span class="material-symbols-outlined">assignment</span>
+        </button>
+        <button
+          type="button"
           class="action-btn danger"
           (click)="onDelete()"
           title="Eliminar"
@@ -774,9 +783,14 @@ export default class TrainerCardComponent {
   @Output() toggleStatus = new EventEmitter<Trainer>();
   @Output() delete = new EventEmitter<Trainer>();
   @Output() bookmark = new EventEmitter<Trainer>();
+  @Output() tasks = new EventEmitter<Trainer>();
 
   onViewProfile(): void {
     this.view.emit(this.trainer);
+  }
+
+  onTasks(): void {
+    this.tasks.emit(this.trainer);
   }
 
   onEdit(): void {

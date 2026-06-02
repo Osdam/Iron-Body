@@ -7,6 +7,7 @@ import TrainersFiltersComponent, { TrainerFilters } from './components/trainers-
 import TrainerCardComponent, { Trainer, TrainerAvailability } from './components/trainer-card';
 import TrainersTableComponent from './components/trainers-table';
 import TrainerModalComponent, { TrainerModalMode } from './components/trainer-modal';
+import TrainerTasksModalComponent from './components/trainer-tasks-modal';
 import { LottieIconComponent } from '../shared/components/lottie-icon/lottie-icon.component';
 import { AuthService } from '../services/auth.service';
 import { Permission } from '../models/permissions.enum';
@@ -21,6 +22,7 @@ import { Permission } from '../models/permissions.enum';
     TrainerCardComponent,
     TrainersTableComponent,
     TrainerModalComponent,
+    TrainerTasksModalComponent,
     LottieIconComponent,
   ],
   template: `
@@ -126,6 +128,7 @@ import { Permission } from '../models/permissions.enum';
               (toggleStatus)="toggleTrainerStatus($event)"
               (delete)="deleteTrainer($event)"
               (bookmark)="bookmarkTrainer($event)"
+              (tasks)="openTrainerTasks($event)"
             ></app-trainer-card>
           </section>
 
@@ -141,6 +144,7 @@ import { Permission } from '../models/permissions.enum';
             (edit)="editTrainer($event)"
             (toggleStatus)="toggleTrainerStatus($event)"
             (delete)="deleteTrainer($event)"
+            (tasks)="openTrainerTasks($event)"
           ></app-trainers-table>
         </ng-container>
       </ng-template>
@@ -153,6 +157,13 @@ import { Permission } from '../models/permissions.enum';
         (close)="closeTrainerModal()"
         (save)="submitTrainer($event)"
       ></app-trainer-modal>
+
+      <app-trainer-tasks-modal
+        [open]="isTasksModalOpen()"
+        [trainerId]="tasksTrainer()?.id ?? null"
+        [trainerName]="tasksTrainer()?.fullName ?? null"
+        (close)="closeTasksModal()"
+      ></app-trainer-tasks-modal>
     </section>
   `,
   styles: [
@@ -518,6 +529,10 @@ export default class TrainersModule implements OnInit {
   modalMode = signal<TrainerModalMode>('create');
   selectedTrainer = signal<Trainer | null>(null);
 
+  // Modal de tareas del entrenador (seguimiento de alumnos asignados).
+  isTasksModalOpen = signal<boolean>(false);
+  tasksTrainer = signal<Trainer | null>(null);
+
   filteredTrainers = computed(() => this.filterTrainers(this.trainers(), this.filters()));
   kpis = computed(() => this.calculateTrainerKpis(this.filteredTrainers()));
 
@@ -559,6 +574,18 @@ export default class TrainersModule implements OnInit {
     if (this.isSavingTrainer()) return;
     this.isTrainerModalOpen.set(false);
     this.selectedTrainer.set(null);
+  }
+
+  /** Abre el modal de tareas del entrenador (seguimiento de alumnos). */
+  openTrainerTasks(trainer: Trainer): void {
+    this.dismissNotice();
+    this.tasksTrainer.set(trainer);
+    this.isTasksModalOpen.set(true);
+  }
+
+  closeTasksModal(): void {
+    this.isTasksModalOpen.set(false);
+    this.tasksTrainer.set(null);
   }
 
   viewTrainerProfile(trainer: Trainer): void {

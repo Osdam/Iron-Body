@@ -82,6 +82,15 @@ import type { Trainer } from './trainer-card';
               </button>
               <button
                 type="button"
+                class="action-cell-btn tasks"
+                (click)="onTasks(t)"
+                title="Tareas del entrenador"
+                aria-label="Tareas del entrenador"
+              >
+                <span class="material-symbols-outlined">assignment</span>
+              </button>
+              <button
+                type="button"
                 class="action-cell-btn delete"
                 (click)="onDelete(t)"
                 title="Eliminar"
@@ -402,6 +411,7 @@ export default class TrainersTableComponent {
   @Output() edit = new EventEmitter<Trainer>();
   @Output() toggleStatus = new EventEmitter<Trainer>();
   @Output() delete = new EventEmitter<Trainer>();
+  @Output() tasks = new EventEmitter<Trainer>();
 
   trackTrainer = (_: number, t: Trainer) => t.id;
 
@@ -419,6 +429,10 @@ export default class TrainersTableComponent {
 
   onDelete(trainer: Trainer): void {
     this.delete.emit(trainer);
+  }
+
+  onTasks(trainer: Trainer): void {
+    this.tasks.emit(trainer);
   }
 
   truncateEmail(email: string): string {
