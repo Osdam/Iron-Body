@@ -2,6 +2,7 @@ import { Injectable, signal, computed, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
+import { environment } from '../../../environments/environment';
 
 export interface SupportTicket {
   type: 'technical' | 'error' | 'improvement' | 'usage' | 'admin' | 'integration';
@@ -48,7 +49,8 @@ export class SupportService {
   private readonly _backendStatus = signal<SystemStatus>({
     backendConnected: false,
     lastCheck: '',
-    apiUrl: 'http://127.0.0.1:8080',
+    // Host raíz (sin /api): los endpoints concatenan /api/... más abajo.
+    apiUrl: environment.apiBaseUrl.replace(/\/api$/, ''),
   });
   public readonly backendStatus = this._backendStatus.asReadonly();
 

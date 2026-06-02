@@ -2,6 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { RouterModule } from '@angular/router';
+import { environment } from '../environments/environment';
 import { CreateMemberModalComponent } from './modules/components/create-member-modal';
 import { SupportPanelComponent } from './shared/components/support-panel/support-panel.component';
 import { NotificationsPoperoverComponent } from './shared/components/notifications-popover/notifications-popover.component';
@@ -60,7 +61,7 @@ export class App {
 
   constructor() {
     this.checkAuthenticationStatus();
-    this.http.get<BackendHealthResponse>('http://127.0.0.1:8080/api/health').subscribe({
+    this.http.get<BackendHealthResponse>(`${environment.apiBaseUrl}/health`).subscribe({
       next: (response) => {
         this.backendStatus.set(this.backendMessage(response.message));
         this.backendDetail.set(`${response.status} · ${response.timestamp}`);
