@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, computed, signal } from '@angular/core';
 import MarketingKpiComponent from './components/marketing-kpi';
+import MarketingDigitalPanelComponent from './components/marketing-digital-panel';
 import MarketingFiltersComponent, { MarketingFilters } from './components/marketing-filters';
 import CampaignDistributionComponent, { CampaignSegment } from './components/campaign-distribution';
 import MarketingChannelsComponent, { ChannelMetric } from './components/marketing-channels';
@@ -22,6 +23,7 @@ import MarketingCommunicationComponent, {
   imports: [
     CommonModule,
     MarketingKpiComponent,
+    MarketingDigitalPanelComponent,
     MarketingFiltersComponent,
     CampaignDistributionComponent,
     MarketingChannelsComponent,
@@ -94,6 +96,9 @@ import MarketingCommunicationComponent, {
           subtitle="Sobre campañas totales"
         ></app-marketing-kpi>
       </section>
+
+      <!-- Mercadeo digital (Meta): datos reales, aditivo, sin tocar promos/cupones. -->
+      <app-marketing-digital-panel></app-marketing-digital-panel>
 
       <app-marketing-filters
         [filters]="filters()"

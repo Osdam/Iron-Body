@@ -437,3 +437,14 @@ Route::post('admin/trainer-tasks/{id}/seen',     [\App\Http\Controllers\Api\Admi
 Route::post('admin/trainer-tasks/{id}/complete', [\App\Http\Controllers\Api\Admin\TrainerTaskController::class, 'complete'])->where('id', '[0-9]+');
 Route::post('admin/trainer-tasks/{id}/dismiss',  [\App\Http\Controllers\Api\Admin\TrainerTaskController::class, 'dismiss'])->where('id', '[0-9]+');
 Route::get('admin/members/{member}/coach-timeline', [\App\Http\Controllers\Api\Admin\TrainerTaskController::class, 'memberTimeline']);
+
+// ── Mercadeo digital (Meta) — datos reales de las tablas marketing_* (CRM admin) ─
+// Patrón /admin/* del CRM. Sirven datos reales; si no hay registros → vacío/0/null.
+Route::get('admin/marketing/overview',                       [\App\Http\Controllers\Api\Admin\MarketingController::class, 'overview']);
+Route::get('admin/marketing/campaigns',                      [\App\Http\Controllers\Api\Admin\MarketingController::class, 'campaigns']);
+Route::get('admin/marketing/leads',                          [\App\Http\Controllers\Api\Admin\MarketingController::class, 'leads']);
+Route::get('admin/marketing/conversations',                  [\App\Http\Controllers\Api\Admin\MarketingController::class, 'conversations']);
+Route::get('admin/marketing/conversations/{id}/messages',    [\App\Http\Controllers\Api\Admin\MarketingController::class, 'conversationMessages'])->where('id', '[0-9]+');
+Route::get('admin/marketing/followups',                      [\App\Http\Controllers\Api\Admin\MarketingController::class, 'followups']);
+Route::get('admin/marketing/ai-actions',                     [\App\Http\Controllers\Api\Admin\MarketingController::class, 'aiActions']);
+Route::get('admin/marketing/attribution',                    [\App\Http\Controllers\Api\Admin\MarketingController::class, 'attribution']);
