@@ -37,6 +37,8 @@ return [
 
     'whatsapp_business_account_id' => env('META_WHATSAPP_BUSINESS_ACCOUNT_ID'),
     'whatsapp_phone_number_id'     => env('META_WHATSAPP_PHONE_NUMBER_ID'),
+    // Número visible de WhatsApp (informativo; el envío usa el phone_number_id).
+    'whatsapp_display_phone'       => env('WHATSAPP_DISPLAY_PHONE'),
 
     'timeout' => (int) env('META_API_TIMEOUT', 20),
 ];
