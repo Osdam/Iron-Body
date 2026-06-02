@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { map, tap } from 'rxjs/operators';
 import { AuditLogService } from './audit-log.service';
+import { environment } from '../../environments/environment';
 
 export interface PaginatedResponse<T> {
   data: T[];
@@ -205,7 +206,7 @@ export interface CreateAttendanceResponse {
 export class ApiService {
   private http = inject(HttpClient);
   private audit = inject(AuditLogService);
-  private base = 'http://127.0.0.1:8080/api';
+  private base = environment.apiBaseUrl;
 
   getDashboardStats(): Observable<DashboardStats> {
     return this.http.get<DashboardStats>(`${this.base}/dashboard`);
