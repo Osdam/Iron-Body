@@ -412,7 +412,21 @@ Route::get('/reports/stats', function () {
 // ── Automatización interna (disparada por n8n, firmada HMAC) ───────────────────
 // n8n solo coordina: NO accede a PostgreSQL ni construye contexto. Laravel
 // genera el resumen y emite iron_ai.weekly_summary_ready.
-Route::middleware('automation.internal')->prefix('internal/automation')->group(function (): void {
+// throttle: defensa extra al HMAC (limita el abuso si el secreto se filtra).
+Route::middleware(['automation.internal', 'throttle:120,1'])->prefix('internal/automation')->group(function (): void {
     Route::post('weekly-summary', [\App\Http\Controllers\Api\Internal\WeeklySummaryController::class, 'generate']);
     Route::post('notify-member',  [\App\Http\Controllers\Api\Internal\NotifyMemberController::class, 'notify']);
+    // Coach humano: crea/enriquece la tarea del entrenador asignado.
+    Route::post('notify-trainer', [\App\Http\Controllers\Api\Internal\NotifyTrainerController::class, 'notify']);
 });
+
+// ── Coach humano — tareas del entrenador (CRM admin) ──────────────────────────
+// Patrón del resto del CRM: rutas /admin/* sin auth propia (protegidas por la
+// capa de red/front del CRM). Los entrenadores aún no tienen login en backend,
+// por eso el consumo principal es el CRM/admin. Ver TrainerTaskController.
+Route::get('admin/trainers/{trainer}/tasks',              [\App\Http\Controllers\Api\Admin\TrainerTaskController::class, 'index']);
+Route::get('admin/trainers/{trainer}/tasks/unread-count', [\App\Http\Controllers\Api\Admin\TrainerTaskController::class, 'unreadCount']);
+Route::post('admin/trainer-tasks/{id}/seen',     [\App\Http\Controllers\Api\Admin\TrainerTaskController::class, 'seen'])->where('id', '[0-9]+');
+Route::post('admin/trainer-tasks/{id}/complete', [\App\Http\Controllers\Api\Admin\TrainerTaskController::class, 'complete'])->where('id', '[0-9]+');
+Route::post('admin/trainer-tasks/{id}/dismiss',  [\App\Http\Controllers\Api\Admin\TrainerTaskController::class, 'dismiss'])->where('id', '[0-9]+');
+Route::get('admin/members/{member}/coach-timeline', [\App\Http\Controllers\Api\Admin\TrainerTaskController::class, 'memberTimeline']);

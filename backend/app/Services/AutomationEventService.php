@@ -52,6 +52,19 @@ class AutomationEventService
             'status' => $event->status,
         ]);
 
+        // Coach humano: si el evento es relevante para seguimiento y el miembro
+        // tiene entrenador activo, se crea una tarea accionable. Es INDEPENDIENTE
+        // de n8n (el seguimiento del entrenador no debe depender del webhook) y
+        // best-effort: nunca rompe la emisión del evento.
+        try {
+            app(TrainerTaskService::class)->createFromEvent($event);
+        } catch (\Throwable $e) {
+            Log::warning('automation.event.trainer_task_failed', [
+                'event_id' => $event->id,
+                'reason'   => class_basename($e),
+            ]);
+        }
+
         if ($enabled) {
             $this->dispatch($event);
         }
