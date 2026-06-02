@@ -15,6 +15,8 @@ use App\Http\Controllers\Api\AppPaymentController;
 use App\Http\Controllers\Api\AppRoutineController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\MemberRegistrationController;
+use App\Http\Controllers\Api\MemberContractController;
+use App\Http\Controllers\Api\Admin\ContractAdminController;
 use App\Http\Controllers\Api\MemberRoutineController;
 use App\Http\Controllers\Api\MemberTrainerController;
 use App\Http\Controllers\Api\AppNutritionController;
@@ -205,6 +207,17 @@ Route::delete('members/{member}/routines/{routine}',   [MemberRoutineController:
 
 // ── App: clases y entrenadores para miembros (autenticación por access_hash) ──
 Route::middleware('auth.member')->group(function (): void {
+    // ── Contratos / consentimiento informado / firma electrónica ──────────────
+    // El miembro solo ve/firma/descarga SUS contratos. PDFs en disco privado.
+    Route::get('member/contracts/status',              [MemberContractController::class, 'status']);
+    Route::get('member/contracts',                     [MemberContractController::class, 'index']);
+    Route::post('member/contracts/draft',              [MemberContractController::class, 'draft']);
+    Route::get('member/contracts/{contract}/preview',  [MemberContractController::class, 'preview']);
+    Route::post('member/contracts/{contract}/sign',    [MemberContractController::class, 'sign'])
+        ->middleware('throttle:10,1');
+    Route::get('member/contracts/{contract}/download', [MemberContractController::class, 'download'])
+        ->middleware('throttle:30,1');
+
     // ── Seguridad: sesiones / dispositivos del miembro ────────────────────────
     Route::get('members/devices', [AuthController::class, 'devices']);
     Route::post('members/devices/{uuid}/revoke', [AuthController::class, 'revokeDevice']);
@@ -305,6 +318,14 @@ Route::middleware('auth.member')->group(function (): void {
     Route::get('app/physical-evaluations/{id}',   [PhysicalEvaluationController::class, 'show'])
         ->where('id', '[0-9]+');
 });
+
+// ── Contratos firmados (CRM admin — patrón del resto del CRM) ──────────────
+// PDFs servidos por streaming privado; cada descarga queda auditada.
+Route::get('admin/members/{member}/contracts',     [ContractAdminController::class, 'forMember']);
+Route::get('admin/users/{user}/contracts',          [ContractAdminController::class, 'forUser'])->whereNumber('user');
+Route::get('admin/contracts/{contract}',           [ContractAdminController::class, 'show']);
+Route::get('admin/contracts/{contract}/download',  [ContractAdminController::class, 'download']);
+Route::post('admin/contracts/{contract}/void',     [ContractAdminController::class, 'void']);
 
 // ── Stories CRM admin (sin auth — patrón del resto del CRM) ────────────────
 Route::get('admin/stories',         [StoriesController::class, 'indexAsAdmin']);

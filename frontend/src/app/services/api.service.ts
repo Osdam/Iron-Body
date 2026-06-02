@@ -202,11 +202,26 @@ export interface CreateAttendanceResponse {
   turnstile?: TurnstileResult;
 }
 
+/** Contrato firmado de un miembro (consentimiento + firma electrónica). */
+export interface MemberContractSummary {
+  id: number;
+  uuid: string;
+  folio?: string | null;
+  contract_type: string;
+  status: 'draft' | 'pending_signature' | 'signed' | 'void';
+  template_version?: string | null;
+  signed_at?: string | null;
+  checksum?: string | null;
+  has_pdf: boolean;
+  created_at?: string | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private http = inject(HttpClient);
   private audit = inject(AuditLogService);
   private base = environment.apiBaseUrl;
+  private adminBase = environment.adminApiBaseUrl;
 
   getDashboardStats(): Observable<DashboardStats> {
     return this.http.get<DashboardStats>(`${this.base}/dashboard`);
@@ -878,5 +893,37 @@ export class ApiService {
         }),
       ),
     );
+  }
+
+  // ─── Contratos firmados (consentimiento + firma electrónica) ──────────────
+  /** Contratos del miembro vinculado a un usuario del CRM (por user_id). */
+  getUserContracts(userId: number): Observable<{ data: MemberContractSummary[] }> {
+    return this.http.get<{ data: MemberContractSummary[] }>(
+      `${this.adminBase}/users/${userId}/contracts`,
+    );
+  }
+
+  /** Descarga el PDF firmado (blob privado). El backend audita cada descarga. */
+  downloadContract(uuid: string): Observable<Blob> {
+    return this.http.get(`${this.adminBase}/contracts/${uuid}/download`, {
+      responseType: 'blob',
+    });
+  }
+
+  /** Anula un contrato firmado (solo admin, con motivo). El PDF no se borra. */
+  voidContract(uuid: string, reason: string): Observable<{ data: MemberContractSummary }> {
+    return this.http
+      .post<{ data: MemberContractSummary }>(`${this.adminBase}/contracts/${uuid}/void`, { reason })
+      .pipe(
+        tap(() =>
+          this.audit.record({
+            action: 'delete',
+            module: 'Miembros',
+            entity: 'contrato',
+            summary: `anuló el contrato ${uuid}`,
+            after: { reason } as Record<string, unknown>,
+          }),
+        ),
+      );
   }
 }

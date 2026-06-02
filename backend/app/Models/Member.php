@@ -172,6 +172,12 @@ class Member extends Model
         return $this->hasMany(MemberTrainerAssignment::class);
     }
 
+    /** Contratos / consentimientos (borrador, pendientes o firmados) del miembro. */
+    public function contracts(): HasMany
+    {
+        return $this->hasMany(MemberContract::class);
+    }
+
     /** Asignación de entrenador vigente (status=active), la más reciente. */
     public function activeTrainerAssignment(): HasOne
     {

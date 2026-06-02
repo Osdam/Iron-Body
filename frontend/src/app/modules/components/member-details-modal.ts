@@ -1,6 +1,14 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { UserSummary } from '../../services/api.service';
+import {
+  Component,
+  EventEmitter,
+  Input,
+  Output,
+  OnChanges,
+  SimpleChanges,
+  inject,
+} from '@angular/core';
+import { ApiService, MemberContractSummary, UserSummary } from '../../services/api.service';
 
 @Component({
   selector: 'app-member-details-modal',
@@ -63,6 +71,62 @@ import { UserSummary } from '../../services/api.service';
           <div class="detail-item full">
             <span class="label">Registrado</span>
             <strong>{{ member.created_at | date: 'dd MMM yyyy, HH:mm' }}</strong>
+          </div>
+        </section>
+
+        <section class="contracts-section">
+          <h3>Contratos</h3>
+
+          <div *ngIf="contractsLoading" class="contracts-empty">Cargando contratos…</div>
+
+          <div *ngIf="!contractsLoading && contractsError" class="contracts-empty error">
+            {{ contractsError }}
+          </div>
+
+          <div
+            *ngIf="!contractsLoading && !contractsError && contracts.length === 0"
+            class="contracts-empty"
+          >
+            Este miembro aún no tiene contratos firmados.
+          </div>
+
+          <div
+            *ngFor="let c of contracts"
+            class="contract-card"
+            [class.voided]="c.status === 'void'"
+          >
+            <div class="contract-head">
+              <strong>{{ contractTypeLabel(c.contract_type) }}</strong>
+              <span class="contract-badge" [class.void]="c.status === 'void'">
+                {{ c.status === 'void' ? 'Anulado' : 'Firmado' }}
+              </span>
+            </div>
+            <div class="contract-meta">
+              <span>Folio: {{ c.folio || '—' }}</span>
+              <span>Versión: {{ c.template_version || '—' }}</span>
+              <span>Firmado: {{ c.signed_at ? (c.signed_at | date: 'dd MMM yyyy, HH:mm') : '—' }}</span>
+              <span *ngIf="c.checksum" class="hash">Hash: {{ c.checksum.slice(0, 16) }}…</span>
+            </div>
+            <div class="contract-actions">
+              <button
+                type="button"
+                class="btn-secondary sm"
+                [disabled]="!c.has_pdf || downloadingUuid === c.uuid"
+                (click)="downloadContract(c)"
+              >
+                <span class="material-symbols-outlined">picture_as_pdf</span>
+                {{ downloadingUuid === c.uuid ? 'Descargando…' : 'Descargar PDF' }}
+              </button>
+              <button
+                type="button"
+                class="btn-danger sm"
+                *ngIf="c.status !== 'void'"
+                (click)="voidContract(c)"
+              >
+                <span class="material-symbols-outlined">block</span>
+                Anular
+              </button>
+            </div>
           </div>
         </section>
 
@@ -300,14 +364,217 @@ import { UserSummary } from '../../services/api.service';
           grid-template-columns: 1fr;
         }
       }
+
+      /* ── Contratos ───────────────────────────────────────────── */
+      .contracts-section {
+        padding: 0 1.75rem 1.25rem;
+        border-top: 1px solid #353534;
+      }
+
+      .contracts-section h3 {
+        font: 700 0.78rem 'Space Grotesk', sans-serif;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #d1c5ac;
+        margin: 1.1rem 0 0.75rem;
+      }
+
+      .contracts-empty {
+        font: 400 0.85rem Inter, sans-serif;
+        color: #b4afa6;
+        padding: 0.5rem 0;
+      }
+
+      .contracts-empty.error {
+        color: #f1a8a8;
+      }
+
+      .contract-card {
+        background: #1a1a1a;
+        border: 1px solid #353534;
+        border-radius: 10px;
+        padding: 0.85rem 1rem;
+        margin-bottom: 0.65rem;
+      }
+
+      .contract-card.voided {
+        opacity: 0.7;
+      }
+
+      .contract-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        margin-bottom: 0.45rem;
+      }
+
+      .contract-head strong {
+        font: 600 0.9rem Inter, sans-serif;
+        color: #e5e2e1;
+      }
+
+      .contract-badge {
+        padding: 0.2rem 0.6rem;
+        border-radius: 999px;
+        font: 700 0.68rem Inter, sans-serif;
+        background: rgba(245, 197, 24, 0.14);
+        border: 1px solid rgba(245, 197, 24, 0.28);
+        color: #ffe08b;
+        white-space: nowrap;
+      }
+
+      .contract-badge.void {
+        background: rgba(241, 168, 168, 0.12);
+        border-color: rgba(241, 168, 168, 0.3);
+        color: #f1a8a8;
+      }
+
+      .contract-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem 1rem;
+        font: 400 0.78rem Inter, sans-serif;
+        color: #b4afa6;
+        margin-bottom: 0.7rem;
+      }
+
+      .contract-meta .hash {
+        font-family: 'Space Grotesk', monospace;
+      }
+
+      .contract-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+
+      .btn-secondary.sm,
+      .btn-danger.sm {
+        padding: 0.5rem 0.85rem;
+        font-size: 0.82rem;
+        border-radius: 8px;
+      }
+
+      .btn-secondary.sm .material-symbols-outlined,
+      .btn-danger.sm .material-symbols-outlined {
+        font-size: 1rem;
+      }
+
+      .btn-secondary.sm:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .btn-danger {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        border: 1px solid rgba(241, 168, 168, 0.35);
+        background: rgba(241, 168, 168, 0.08);
+        color: #f1a8a8;
+        cursor: pointer;
+        transition: all 180ms ease;
+      }
+
+      .btn-danger:hover {
+        background: rgba(241, 168, 168, 0.16);
+        border-color: #f1a8a8;
+      }
     `,
   ],
 })
-export class MemberDetailsModalComponent {
+export class MemberDetailsModalComponent implements OnChanges {
   @Input() isOpen = false;
   @Input() member: UserSummary | null = null;
   @Output() onClose = new EventEmitter<void>();
   @Output() onEdit = new EventEmitter<UserSummary>();
+
+  private api = inject(ApiService);
+
+  contracts: MemberContractSummary[] = [];
+  contractsLoading = false;
+  contractsError: string | null = null;
+  downloadingUuid: string | null = null;
+  private loadedForUserId: number | null = null;
+
+  ngOnChanges(changes: SimpleChanges): void {
+    // Carga los contratos cuando se abre el modal con un miembro (una vez por id).
+    if ((changes['isOpen'] || changes['member']) && this.isOpen && this.member) {
+      if (this.loadedForUserId !== this.member.id) {
+        this.loadContracts(this.member.id);
+      }
+    }
+    if (changes['isOpen'] && !this.isOpen) {
+      this.loadedForUserId = null;
+      this.contracts = [];
+      this.contractsError = null;
+    }
+  }
+
+  private loadContracts(userId: number): void {
+    this.contractsLoading = true;
+    this.contractsError = null;
+    this.loadedForUserId = userId;
+    this.api.getUserContracts(userId).subscribe({
+      next: (res) => {
+        this.contracts = res.data ?? [];
+        this.contractsLoading = false;
+      },
+      error: () => {
+        this.contractsError = 'No se pudieron cargar los contratos.';
+        this.contractsLoading = false;
+      },
+    });
+  }
+
+  contractTypeLabel(type: string): string {
+    const labels: { [key: string]: string } = {
+      workout_registration: 'Inscripción IRONBODY WORKOUT',
+      basic_registration: 'Inscripción IRONBODY',
+      minor_release: 'Liberación de responsabilidad (menor)',
+    };
+    return labels[type] || type;
+  }
+
+  downloadContract(c: MemberContractSummary): void {
+    if (!c.has_pdf || this.downloadingUuid === c.uuid) return;
+    this.downloadingUuid = c.uuid;
+    this.api.downloadContract(c.uuid).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `contrato_${c.contract_type}_${c.folio || c.uuid}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.downloadingUuid = null;
+      },
+      error: () => {
+        this.downloadingUuid = null;
+        this.contractsError = 'No se pudo descargar el PDF.';
+      },
+    });
+  }
+
+  voidContract(c: MemberContractSummary): void {
+    const reason = window.prompt(
+      'Motivo de anulación (mínimo 5 caracteres). El PDF firmado no se elimina, solo se marca como anulado:',
+    );
+    if (reason === null) return;
+    if (reason.trim().length < 5) {
+      this.contractsError = 'El motivo de anulación debe tener al menos 5 caracteres.';
+      return;
+    }
+    this.api.voidContract(c.uuid, reason.trim()).subscribe({
+      next: () => {
+        if (this.member) this.loadContracts(this.member.id);
+      },
+      error: () => {
+        this.contractsError = 'No se pudo anular el contrato.';
+      },
+    });
+  }
 
   close(): void {
     this.onClose.emit();
