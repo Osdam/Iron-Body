@@ -85,6 +85,24 @@ export const routes: Routes = [
     loadComponent: () => import('./modules/marketing').then((m) => m.default),
   },
   {
+    path: 'weekly-streak',
+    canActivate: [AuthGuard],
+    data: { permissions: [Permission.MARKETING_VIEW] },
+    loadComponent: () => import('./modules/weekly-streak').then((m) => m.default),
+  },
+  {
+    path: 'physical-evaluations',
+    canActivate: [AuthGuard],
+    data: { permissions: [Permission.MEMBERS_VIEW] },
+    loadComponent: () => import('./modules/physical-evaluations').then((m) => m.default),
+  },
+  {
+    path: 'nutrition',
+    canActivate: [AuthGuard],
+    data: { permissions: [Permission.MEMBERS_VIEW] },
+    loadComponent: () => import('./modules/nutrition').then((m) => m.default),
+  },
+  {
     path: 'reports',
     canActivate: [AuthGuard],
     data: { permissions: [Permission.REPORTS_VIEW] },

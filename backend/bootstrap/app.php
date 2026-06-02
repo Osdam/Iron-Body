@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\AuthenticateMember;
 use App\Http\Middleware\EnsureMemberRegistrationToken;
+use App\Http\Middleware\VerifyInternalAutomationSignature;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -17,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'member.registration.token' => EnsureMemberRegistrationToken::class,
             'auth.member'               => AuthenticateMember::class,
+            'automation.internal'       => VerifyInternalAutomationSignature::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

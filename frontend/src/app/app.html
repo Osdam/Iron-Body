@@ -57,6 +57,18 @@
         <span class="material-symbols-outlined" aria-hidden="true">campaign</span>
         <span>Mercadeo</span>
       </a>
+      <a *ngIf="hasPermission(Permission.MARKETING_VIEW)" routerLink="/weekly-streak" routerLinkActive="active">
+        <span class="material-symbols-outlined" aria-hidden="true">local_fire_department</span>
+        <span>Esta semana</span>
+      </a>
+      <a *ngIf="hasPermission(Permission.MEMBERS_VIEW)" routerLink="/physical-evaluations" routerLinkActive="active">
+        <span class="material-symbols-outlined" aria-hidden="true">monitor_weight</span>
+        <span>Evaluaciones</span>
+      </a>
+      <a *ngIf="hasPermission(Permission.MEMBERS_VIEW)" routerLink="/nutrition" routerLinkActive="active">
+        <span class="material-symbols-outlined" aria-hidden="true">restaurant</span>
+        <span>Nutrición</span>
+      </a>
       <a *ngIf="hasPermission(Permission.SETTINGS_VIEW)" routerLink="/settings" routerLinkActive="active">
         <span class="material-symbols-outlined" aria-hidden="true">settings</span>
         <span>Configuración</span>

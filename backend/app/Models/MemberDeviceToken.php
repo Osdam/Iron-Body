@@ -15,14 +15,26 @@ class MemberDeviceToken extends Model
         'token',
         'device_id',
         'platform',
+        'device_name',
+        'app_version',
+        'notification_permission',
+        'is_active',
         'last_used_at',
+        'last_seen_at',
     ];
 
     protected function casts(): array
     {
         return [
+            'is_active' => 'boolean',
             'last_used_at' => 'datetime',
+            'last_seen_at' => 'datetime',
         ];
+    }
+
+    public function scopeActive($q)
+    {
+        return $q->where('is_active', true);
     }
 
     public function member(): BelongsTo

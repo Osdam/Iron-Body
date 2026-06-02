@@ -41,6 +41,31 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Firebase — service account (Auth custom token, Storage server-side, FCM)
+    |--------------------------------------------------------------------------
+    | El service-account.json vive SOLO en el backend y firma: (1) custom tokens
+    | de Firebase Auth (FirebaseCustomTokenService), (2) borrado físico de
+    | objetos en Storage (FirebaseStorageService). NO se configura un disk de
+    | Laravel para Firebase: los binarios los sube la app directo a Storage; el
+    | backend solo guarda metadata y, si hace falta, borra vía service account.
+    |
+    | `credentials` reutiliza el mismo JSON del FCM. `storage_bucket` es el del
+    | proyecto (mismo que usan los reels).
+    */
+    'firebase' => [
+        'credentials' => env(
+            'FIREBASE_CREDENTIALS',
+            env('FCM_CREDENTIALS', 'storage/app/firebase/service-account.json')
+        ),
+        'storage_bucket' => env(
+            'FIREBASE_STORAGE_BUCKET',
+            'iron-body-85fc3.firebasestorage.app'
+        ),
+        'project_id' => env('FIREBASE_PROJECT_ID', env('FCM_PROJECT_ID', 'iron-body-85fc3')),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | IRON IA — asistente con OpenAI
     |--------------------------------------------------------------------------
     | Arquitectura: Flutter → Laravel → OpenAI. La API key vive SOLO aquí
@@ -79,6 +104,12 @@ return [
         'realtime_secret_url'  => env('OPENAI_REALTIME_SECRET_URL', rtrim(env('OPENAI_BASE_URL', 'https://api.openai.com'), '/') . '/v1/realtime/client_secrets'),
         // Endpoint GA de intercambio SDP (WebRTC) que usará Flutter con el ek_.
         'realtime_webrtc_url'  => env('OPENAI_REALTIME_WEBRTC_URL', rtrim(env('OPENAI_BASE_URL', 'https://api.openai.com'), '/') . '/v1/realtime/calls'),
+
+        // IRON IA como coach nutricional (recomendaciones desde contexto real).
+        'nutrition_enabled'    => filter_var(env('IRON_AI_NUTRITION_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+
+        // IRON IA Coach contextual global (plan del día desde contexto + memoria).
+        'coach_enabled'        => filter_var(env('IRON_AI_COACH_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
     ],
 
     /*

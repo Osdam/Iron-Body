@@ -1412,4 +1412,43 @@ class NotificationService
             return null;
         }
     }
+
+    /**
+     * Nuevo story disponible (stories tipo Instagram/WhatsApp).
+     *
+     * Broadcast a todos los miembros. Idempotente por `event_key` único del
+     * story id. La capa SSE recoge el insert; la capa FCM dispatchea push.
+     */
+    public function notifyStoryCreated($story): void
+    {
+        $this->safe(function () use ($story): void {
+            $storyId = $this->attr($story, 'id');
+            $author = $this->attr($story, 'author_name') ?? 'Iron Body';
+            $type = $this->attr($story, 'type') ?? 'image';
+
+            $title = 'Nueva story';
+            $message = $type === 'video'
+                ? "$author publicó un video en stories"
+                : "$author publicó una nueva story";
+
+            $payload = array_filter(['story_id' => $storyId]);
+            $meta = array_filter([
+                'story_id' => $storyId,
+                'author' => $author,
+                'type' => $type,
+            ]);
+
+            // Broadcast (member_id=null en createMemberNotification dispara a todos).
+            $this->createMemberNotification(null, [
+                'type' => 'story',
+                'title' => $title,
+                'message' => $message,
+                'priority' => 'low',
+                'action_type' => 'story_open',
+                'action_payload' => $payload,
+                'metadata' => $meta,
+                'event_key' => $storyId ? "story_created_{$storyId}" : null,
+            ]);
+        });
+    }
 }

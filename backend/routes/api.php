@@ -26,6 +26,18 @@ use App\Http\Controllers\Api\IronAiRealtimeController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\TurnstileController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\StoriesController;
+use App\Http\Controllers\Api\FirebaseAuthController;
+use App\Http\Controllers\Api\WeeklyStreakController;
+use App\Http\Controllers\Api\Admin\WeeklyStreakAdminController;
+use App\Http\Controllers\Api\ProgressController;
+use App\Http\Controllers\Api\PhysicalEvaluationController;
+use App\Http\Controllers\Api\Admin\PhysicalEvaluationAdminController;
+use App\Http\Controllers\Api\NutritionController;
+use App\Http\Controllers\Api\Admin\NutritionAdminController;
+use App\Http\Controllers\Api\IronAiContextController;
+use App\Http\Controllers\Api\AppNotificationController;
+use App\Http\Controllers\Api\DeviceTokenController;
 use App\Http\Controllers\Crm\NotificationController as AdminNotificationController;
 use App\Models\Member;
 use App\Models\Payment;
@@ -221,7 +233,76 @@ Route::middleware('auth.member')->group(function (): void {
     // tanto si la referencia no existe como si no pertenece al miembro.
     Route::get('app/payments/{reference}', [AppPaymentController::class, 'show'])
         ->where('reference', '[A-Za-z0-9_\-]+');
+
+    // ── Stories tipo Instagram/WhatsApp (autenticadas como member) ────────────
+    // ── Firebase Auth integration ─────────────────────────────────────────
+    // Custom token firmado con el service-account.json. La app lo usa para
+    // signInWithCustomToken y habilitar uploads seguros a Firebase Storage.
+    Route::post('app/firebase/custom-token', [FirebaseAuthController::class, 'customToken']);
+
+    Route::get('app/stories',              [StoriesController::class, 'indexAsMember']);
+    Route::post('app/stories',             [StoriesController::class, 'storeAsMember']);
+    // Story cuyo media ya se subió a Firebase Storage (metadata-only).
+    Route::post('app/stories/firebase',    [StoriesController::class, 'storeAsMemberFirebase']);
+    Route::post('app/stories/{id}/view',   [StoriesController::class, 'recordView']);
+    Route::get('app/stories/{id}/viewers', [StoriesController::class, 'listViewers']);
+    Route::post('app/stories/{id}/react',     [StoriesController::class, 'react']);
+    Route::delete('app/stories/{id}/react',   [StoriesController::class, 'unreact']);
+    Route::get('app/stories/{id}/reactions',  [StoriesController::class, 'listReactions']);
+    Route::delete('app/stories/{id}',      [StoriesController::class, 'destroyAsMember']);
+
+    // ── Racha semanal "Esta semana" ────────────────────────────────────────
+    Route::post('app/weekly-streak/touch', [WeeklyStreakController::class, 'touch']);
+    Route::get('app/weekly-streak',        [WeeklyStreakController::class, 'show']);
+
+    // ── Nutrición ───────────────────────────────────────────────────────────
+    Route::get('app/nutrition/today',  [NutritionController::class, 'today']);
+    Route::get('app/nutrition/day',    [NutritionController::class, 'day']);
+    Route::get('app/nutrition/goals',  [NutritionController::class, 'getGoals']);
+    Route::post('app/nutrition/goals', [NutritionController::class, 'saveGoals']);
+    Route::get('app/nutrition/history',[NutritionController::class, 'history']);
+    Route::get('app/nutrition/foods',  [NutritionController::class, 'foods']);
+    Route::post('app/nutrition/foods', [NutritionController::class, 'createFood']);
+    Route::post('app/nutrition/meals/{mealType}/items', [NutritionController::class, 'addItem']);
+    Route::delete('app/nutrition/meals/items/{id}',     [NutritionController::class, 'deleteItem'])
+        ->where('id', '[0-9]+');
+    // IRON IA coach nutricional (OpenAI desde Laravel).
+    Route::post('app/nutrition/ai/recommendation', [NutritionController::class, 'aiRecommendation']);
+    Route::get('app/nutrition/ai/last',            [NutritionController::class, 'aiLast']);
+
+    // IRON IA — contexto seguro del usuario (debug/uso interno).
+    Route::get('app/iron-ai/context-summary', [IronAiContextController::class, 'summary']);
+    // IRON IA Coach contextual (plan del día, OpenAI desde Laravel).
+    Route::post('app/iron-ai/coach', [IronAiContextController::class, 'coach']);
+
+    // ── Centro de notificaciones del coach (app_notifications) ────────────────
+    Route::get('app/notifications',                 [AppNotificationController::class, 'index']);
+    Route::get('app/notifications/unread-count',     [AppNotificationController::class, 'unreadCount']);
+    Route::post('app/notifications/read-all',        [AppNotificationController::class, 'readAll']);
+    Route::post('app/notifications/{id}/read',       [AppNotificationController::class, 'markRead'])
+        ->where('id', '[0-9]+');
+
+    // ── Tokens FCM del dispositivo ────────────────────────────────────────────
+    Route::post('app/device-tokens',                    [DeviceTokenController::class, 'store']);
+    Route::post('app/device-tokens/deactivate-current', [DeviceTokenController::class, 'deactivateCurrent']);
+    Route::delete('app/device-tokens/{id}',             [DeviceTokenController::class, 'destroy'])
+        ->where('id', '[0-9]+');
+
+    // ── Progreso ────────────────────────────────────────────────────────────
+    Route::get('app/progress/summary',     [ProgressController::class, 'summary']);
+
+    // ── Evaluación física (rutas estáticas ANTES de {id}) ───────────────────
+    Route::get('app/physical-evaluations/latest', [PhysicalEvaluationController::class, 'latest']);
+    Route::get('app/physical-evaluations',        [PhysicalEvaluationController::class, 'index']);
+    Route::post('app/physical-evaluations',       [PhysicalEvaluationController::class, 'store']);
+    Route::get('app/physical-evaluations/{id}',   [PhysicalEvaluationController::class, 'show'])
+        ->where('id', '[0-9]+');
 });
+
+// ── Stories CRM admin (sin auth — patrón del resto del CRM) ────────────────
+Route::get('admin/stories',         [StoriesController::class, 'indexAsAdmin']);
+Route::post('admin/stories',        [StoriesController::class, 'storeAsAdmin']);
+Route::delete('admin/stories/{id}', [StoriesController::class, 'destroyAsAdmin']);
 Route::apiResource('routines', RoutineController::class)->only(['index','show','store','update','destroy']);
 Route::patch('routines/{routine}/assign', [RoutineController::class, 'assign']);
 Route::post('trainers/{trainer}/reviews', [TrainerController::class, 'review']);
@@ -262,6 +343,32 @@ Route::prefix('admin/notifications')->group(function (): void {
     Route::post('{uuid}/read',   [AdminNotificationController::class, 'markRead']);
 });
 
+// ── Módulo "Esta semana" — configuración y beneficios (CRM admin) ──────────────
+Route::prefix('admin/weekly-streak')->group(function (): void {
+    Route::get('configs',                  [WeeklyStreakAdminController::class, 'index']);
+    Route::post('configs',                 [WeeklyStreakAdminController::class, 'storeConfig']);
+    Route::match(['put', 'patch'], 'configs/{config}', [WeeklyStreakAdminController::class, 'updateConfig']);
+    Route::delete('configs/{config}',      [WeeklyStreakAdminController::class, 'destroyConfig']);
+
+    Route::post('rewards',                 [WeeklyStreakAdminController::class, 'storeReward']);
+    Route::match(['put', 'patch'], 'rewards/{reward}', [WeeklyStreakAdminController::class, 'updateReward']);
+    Route::delete('rewards/{reward}',      [WeeklyStreakAdminController::class, 'destroyReward']);
+
+    Route::post('upload',                  [WeeklyStreakAdminController::class, 'uploadImage']);
+});
+
+// ── Nutrición (CRM admin) ─────────────────────────────────────────────────────
+Route::get('admin/members/{member}/nutrition',                 [NutritionAdminController::class, 'show']);
+Route::post('admin/members/{member}/nutrition/goals',          [NutritionAdminController::class, 'saveGoals']);
+Route::get('admin/members/{member}/nutrition/recommendations', [NutritionAdminController::class, 'recommendations']);
+
+// ── Evaluaciones físicas (CRM admin) ──────────────────────────────────────────
+Route::get('admin/physical-evaluations/members', [PhysicalEvaluationAdminController::class, 'members']);
+Route::get('admin/members/{member}/physical-evaluations',  [PhysicalEvaluationAdminController::class, 'index']);
+Route::post('admin/members/{member}/physical-evaluations', [PhysicalEvaluationAdminController::class, 'store']);
+Route::match(['put', 'patch'], 'admin/physical-evaluations/{evaluation}', [PhysicalEvaluationAdminController::class, 'update']);
+Route::delete('admin/physical-evaluations/{evaluation}',   [PhysicalEvaluationAdminController::class, 'destroy']);
+
 // ── Entrenador ↔ miembro (CRM admin) ──────────────────────────────────────────
 // Liberar el vínculo dispositivo↔cuenta (anti-uso-compartido) desde el CRM.
 Route::post('admin/devices/{deviceId}/release', [AuthController::class, 'releaseDeviceBinding']);
@@ -300,4 +407,12 @@ Route::get('/reports/stats', function () {
                 ->get(),
         ];
     }));
+});
+
+// ── Automatización interna (disparada por n8n, firmada HMAC) ───────────────────
+// n8n solo coordina: NO accede a PostgreSQL ni construye contexto. Laravel
+// genera el resumen y emite iron_ai.weekly_summary_ready.
+Route::middleware('automation.internal')->prefix('internal/automation')->group(function (): void {
+    Route::post('weekly-summary', [\App\Http\Controllers\Api\Internal\WeeklySummaryController::class, 'generate']);
+    Route::post('notify-member',  [\App\Http\Controllers\Api\Internal\NotifyMemberController::class, 'notify']);
 });

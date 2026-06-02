@@ -23,6 +23,12 @@
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
+        <!-- TOOLING DE TEST ÚNICAMENTE (no producción). La suite usa SQLite
+             en memoria efímera: rápida, aislada y sin tocar PostgreSQL. El
+             código de producción/desarrollo corre SIEMPRE sobre PostgreSQL
+             (ver .env → DB_CONNECTION=pgsql). El usuario de BD `ironbody` no
+             tiene permiso CREATE DATABASE, por lo que no se provisiona una BD
+             de test en Postgres; esta DB en memoria no es fuente de verdad. -->
         <env name="DB_CONNECTION" value="sqlite"/>
         <env name="DB_DATABASE" value=":memory:"/>
         <env name="DB_URL" value=""/>
