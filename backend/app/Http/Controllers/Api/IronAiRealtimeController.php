@@ -51,13 +51,21 @@ class IronAiRealtimeController extends Controller
             if ($uuid && ! $conversation) {
                 return $this->forbidden();
             }
-            $conversation ??= $this->service->createConversation($accessState, 'Conversación en vivo', 'realtime');
+            // Modo visión: sesión multimodal (voz + cámara). Solo enriquece las
+            // instrucciones; el gating y la cuota siguen siendo los de realtime.
+            $vision = filter_var($request->input('vision', false), FILTER_VALIDATE_BOOLEAN);
+            $conversation ??= $this->service->createConversation(
+                $accessState,
+                $vision ? 'Conversación con cámara' : 'Conversación en vivo',
+                'realtime',
+            );
 
             // 3) Acuña el token efímero (la key real no sale del backend).
             $session = $this->realtime->createSession(
                 $accessState['member'],
                 $accessState['user'],
                 $accessState['capabilities'],
+                $vision,
             );
 
             // Si falla, NO se presenta como disponible (regla del producto).
