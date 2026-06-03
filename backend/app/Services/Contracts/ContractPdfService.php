@@ -3,6 +3,7 @@
 namespace App\Services\Contracts;
 
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Log;
 use setasign\Fpdi\Tcpdf\Fpdi;
 
 /**
@@ -36,6 +37,7 @@ class ContractPdfService
     ): string {
         $def = $this->templates->definition($templateKey);
         $source = $this->templates->sourceAbsolutePath($templateKey);
+        Log::info('contract:pdf:generate:start', ['template' => $templateKey]);
 
         $pdf = new Fpdi('P', 'pt', 'LETTER', true, 'UTF-8', false);
         $pdf->setPrintHeader(false);
@@ -94,7 +96,10 @@ class ContractPdfService
         // 2) Página de constancia/auditoría (NO altera las páginas originales).
         $this->appendAuditPage($pdf, $def, $audit);
 
-        return $pdf->Output('contract.pdf', 'S');
+        $out = $pdf->Output('contract.pdf', 'S');
+        Log::info('contract:pdf:generate:success', ['template' => $templateKey, 'bytes' => strlen($out)]);
+
+        return $out;
     }
 
     /** Estampa un texto de una línea ajustado al ancho del campo (auto-shrink). */

@@ -12,9 +12,11 @@ use App\Services\Contracts\ContractTemplateService;
 use App\Services\Contracts\MemberContractService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
 
 /**
  * Endpoints de contratos para el miembro autenticado (auth.member). El miembro
@@ -88,11 +90,15 @@ class MemberContractController extends Controller
             return response()->json(['message' => "Tipo de contrato no válido: {$type}."], 422);
         }
 
+        Log::info('contract:onboarding:draft:start', ['member_id' => $member->id, 'type' => $type]);
         try {
             $contract = $this->contracts->createOrGetDraft($member, $type, $request);
         } catch (ContractTemplateException $e) {
+            Log::warning('contract:onboarding:draft:error', ['type' => $type, 'message' => $e->getMessage()]);
+
             return response()->json(['message' => $e->getMessage()], 503);
         }
+        Log::info('contract:onboarding:draft:success', ['contract_uuid' => $contract->contract_uuid]);
 
         return response()->json(['data' => $this->contracts->present($contract)], 201);
     }
@@ -120,17 +126,38 @@ class MemberContractController extends Controller
     public function sign(SignMemberContractRequest $request, string $contract): JsonResponse
     {
         $model = $this->resolveOwned($request, $contract);
+        Log::info('contract:onboarding:sign:start', ['contract_uuid' => $model->contract_uuid]);
 
-        $png = $this->normalizeSignaturePng($request);
+        [$png, $reason] = $this->normalizeSignaturePng($request);
         if ($png === null) {
-            return response()->json(['message' => 'Firma inválida o vacía.'], 422);
+            Log::warning('contract:onboarding:sign:error', ['reason' => $reason]);
+
+            return response()->json(['message' => $reason], 422);
         }
 
         try {
             $signed = $this->contracts->sign($model, $request->all(), $png, $request);
         } catch (ContractTemplateException $e) {
+            Log::warning('contract:onboarding:sign:error', ['type' => 'template', 'message' => $e->getMessage()]);
+
             return response()->json(['message' => $e->getMessage()], 503);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e; // 422 con errores de validación (checkboxes, etc.)
+        } catch (Throwable $e) {
+            // Cualquier fallo (p. ej. generación de PDF): NO se marca signed; se
+            // devuelve JSON de error claro (nunca respuesta corrupta) y se loguea.
+            Log::error('contract:onboarding:sign:error', [
+                'type' => $e::class,
+                'message' => $e->getMessage(),
+                'file' => basename($e->getFile()).':'.$e->getLine(),
+            ]);
+
+            return response()->json([
+                'message' => 'No pudimos generar el contrato firmado. Intenta de nuevo.',
+            ], 500);
         }
+
+        Log::info('contract:onboarding:sign:success', ['contract_uuid' => $signed->contract_uuid]);
 
         return response()->json(['data' => $this->contracts->present($signed)]);
     }
@@ -174,7 +201,16 @@ class MemberContractController extends Controller
      * Normaliza la firma entrante (archivo o base64) a bytes PNG. Devuelve null
      * si no se pudo decodificar una imagen válida.
      */
-    private function normalizeSignaturePng(Request $request): ?string
+    /**
+     * Normaliza la firma a un PNG embebible por TCPDF. Devuelve [png, error].
+     *
+     * Clave: TCPDF SOLO puede incrustar PNG con canal alfa si hay GD/Imagick.
+     * Por eso: un PNG sin alfa se acepta tal cual (TCPDF lo parsea en PHP puro);
+     * si llega un PNG con alfa u otro formato, se intenta aplanar sobre blanco
+     * con GD/Imagick; y si no hay ninguna de las dos, se rechaza con 422 claro
+     * (nunca se deja que TCPDF aborte y corrompa la respuesta).
+     */
+    private function normalizeSignaturePng(Request $request): array
     {
         $raw = null;
 
@@ -190,28 +226,73 @@ class MemberContractController extends Controller
         }
 
         if ($raw === null || $raw === '') {
-            return null;
+            return [null, 'La firma es obligatoria.'];
         }
 
-        // Si ya es PNG, devolver tal cual.
-        if (str_starts_with($raw, "\x89PNG")) {
-            return $raw;
+        $isPng = str_starts_with($raw, "\x89PNG");
+        $hasGd = function_exists('imagecreatefromstring');
+        $hasImagick = class_exists('Imagick');
+
+        // PNG sin canal alfa → embebible directamente (no requiere GD).
+        if ($isPng && ! $this->pngHasAlpha($raw)) {
+            return [$raw, null];
         }
 
-        // Convertir a PNG con GD (si está disponible) para garantizar el formato.
-        if (function_exists('imagecreatefromstring')) {
+        // GD disponible: aplanar sobre fondo blanco (quita alfa) y re-encodear.
+        if ($hasGd) {
             $img = @imagecreatefromstring($raw);
             if ($img !== false) {
+                $w = imagesx($img);
+                $h = imagesy($img);
+                $flat = imagecreatetruecolor($w, $h);
+                $white = imagecolorallocate($flat, 255, 255, 255);
+                imagefilledrectangle($flat, 0, 0, $w, $h, $white);
+                imagecopy($flat, $img, 0, 0, 0, 0, $w, $h);
                 ob_start();
-                imagesavealpha($img, true);
-                imagepng($img);
+                imagepng($flat);
                 $png = (string) ob_get_clean();
                 imagedestroy($img);
+                imagedestroy($flat);
 
-                return $png !== '' ? $png : null;
+                return $png !== '' ? [$png, null] : [null, 'No pudimos procesar la firma.'];
             }
         }
 
-        return null;
+        // Imagick disponible: aplanar alfa.
+        if ($hasImagick) {
+            try {
+                $im = new \Imagick();
+                $im->setBackgroundColor('white');
+                $im->readImageBlob($raw);
+                $im->setImageBackgroundColor('white');
+                $im = $im->mergeImageLayers(\Imagick::LAYERMETHOD_FLATTEN);
+                $im->setImageFormat('png24');
+
+                return [$im->getImageBlob(), null];
+            } catch (Throwable) {
+                // cae al rechazo controlado
+            }
+        }
+
+        // PNG con alfa (u otro formato) y sin GD/Imagick: no embebible de forma
+        // segura. Rechazo claro en vez de dejar que TCPDF aborte la respuesta.
+        return [null, 'No pudimos procesar la firma. Vuelve a firmar e inténtalo de nuevo.'];
+    }
+
+    /** ¿El PNG tiene canal alfa (gray+alpha=4, RGBA=6, o paleta con tRNS)? */
+    private function pngHasAlpha(string $raw): bool
+    {
+        if (strlen($raw) < 26) {
+            return false;
+        }
+        $colorType = ord($raw[25]); // byte de color-type del chunk IHDR
+        if ($colorType === 4 || $colorType === 6) {
+            return true;
+        }
+        if ($colorType === 3 && str_contains($raw, 'tRNS')) {
+            return true;
+        }
+
+        return false;
     }
 }

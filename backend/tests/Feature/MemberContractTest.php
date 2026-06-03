@@ -130,6 +130,28 @@ class MemberContractTest extends TestCase
             ->assertJsonPath('requires_contract', false);
     }
 
+    public function test_alpha_png_signature_without_gd_is_rejected_cleanly(): void
+    {
+        // Sin GD/Imagick, una firma PNG con canal alfa NO debe abortar TCPDF ni
+        // corromper la respuesta: se rechaza con 422 claro (JSON).
+        if (function_exists('imagecreatefromstring') || class_exists('Imagick')) {
+            $this->markTestSkipped('GD/Imagick disponibles: el alfa se aplana en vez de rechazarse.');
+        }
+        $member = $this->makeMember();
+        $uuid = $this->postJson('/api/member/contracts/draft', [], $this->auth($member))->json('data.uuid');
+        $alpha = base64_encode(file_get_contents(base_path('tests/fixtures/signature_alpha.png')));
+
+        $res = $this->postJson("/api/member/contracts/{$uuid}/sign", [
+            'signature_image' => 'data:image/png;base64,'.$alpha,
+            'acceptance' => ['truthfulness' => true, 'terms_and_conditions' => true, 'data_processing' => true,
+                'health_data' => true, 'inform_injuries' => true, 'commercial_policies' => true],
+        ], $this->auth($member));
+
+        $res->assertStatus(422);
+        // El contrato NO quedó firmado.
+        $this->assertDatabaseMissing('member_contracts', ['contract_uuid' => $uuid, 'status' => 'signed']);
+    }
+
     public function test_empty_signature_rejected(): void
     {
         $member = $this->makeMember();
