@@ -26,9 +26,11 @@ class MemberRegistrationTest extends TestCase
             'phone' => '3215542105',
         ]);
 
+        // Un registro pendiente con el mismo documento normalizado se REANUDA
+        // (idempotente), no se duplica ni se rechaza.
         $response
             ->assertOk()
-            ->assertJsonPath('status', 'duplicate_document')
+            ->assertJsonPath('status', 'resumed')
             ->assertJsonPath('member_id', $member->id)
             ->assertJsonPath('registration_status', Member::STATUS_PENDING_REGISTRATION);
 
@@ -57,6 +59,6 @@ class MemberRegistrationTest extends TestCase
             ->assertStatus(409)
             ->assertJsonPath('status', 'duplicate_document')
             ->assertJsonPath('member_id', $member->id)
-            ->assertJsonPath('message', 'Ya existe un miembro activo con este documento.');
+            ->assertJsonPath('message', 'Ya existe una cuenta registrada con este documento o correo.');
     }
 }

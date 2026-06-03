@@ -38,15 +38,16 @@ class MemberLoginTest extends TestCase
             'document_number' => '1.004 301-550',
         ]);
 
+        // El documento con separadores se normaliza y encuentra al miembro.
+        // Como tiene teléfono, el login emite el reto de verificación (OTP/2FA)
+        // en lugar de una sesión directa: aún no hay token ni payload de miembro.
         $response
             ->assertOk()
             ->assertJsonPath('ok', true)
             ->assertJsonPath('data.token', null)
-            ->assertJsonPath('data.member.id', $member->id)
-            ->assertJsonPath('data.member.document_number', '1004301550')
-            ->assertJsonPath('data.member.plan_name', 'Mensual')
-            ->assertJsonPath('data.member.membership_expiry', '2026-06-18')
-            ->assertJsonPath('data.member.status', Member::STATUS_ACTIVE);
+            ->assertJsonPath('data.requires_otp', true)
+            ->assertJsonPath('data.channel', 'sms');
+        $this->assertNotNull($response->json('data.challenge_id'));
     }
 
     public function test_member_login_returns_404_when_document_does_not_exist(): void

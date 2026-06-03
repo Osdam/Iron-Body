@@ -43,15 +43,15 @@ class TrainerRankingTest extends TestCase
 
         $response = $this->getJson('/api/trainers');
 
+        // Índice público: solo activos, ordenados por rating promedio desc.
+        // El recurso expone id (string), name, average_rating y rating_count.
         $response
             ->assertOk()
-            ->assertJsonPath('ok', true)
             ->assertJsonCount(2, 'data')
-            ->assertJsonPath('data.0.id', $trainerA->id)
-            ->assertJsonPath('data.0.rating', 5)
-            ->assertJsonPath('data.0.reviews_count', 2)
-            ->assertJsonPath('data.0.rank_position', 1)
-            ->assertJsonPath('data.0.certifications.0', 'Entrenamiento funcional');
+            ->assertJsonPath('data.0.id', (string) $trainerA->id)
+            ->assertJsonPath('data.0.name', 'Carlos Perez')
+            ->assertJsonPath('data.0.rating_count', 2)
+            ->assertJsonPath('data.1.id', (string) $trainerB->id);
     }
 
     public function test_trainer_review_is_upserted_per_member_and_updates_rating(): void
