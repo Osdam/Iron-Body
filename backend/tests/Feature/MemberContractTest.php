@@ -247,6 +247,61 @@ class MemberContractTest extends TestCase
         ]);
     }
 
+    public function test_register_is_idempotent_on_retry(): void
+    {
+        $doc = '7'.random_int(1000000, 9999999);
+        $payload = [
+            'full_name' => 'Reintento', 'document_number' => $doc, 'phone' => '3001112233',
+            'email' => 'idem'.random_int(1, 99999).'@example.com', 'is_minor' => false,
+            'biometric_status' => 'skipped',
+        ];
+        $first = $this->postJson('/api/members/register', $payload);
+        $first->assertCreated();
+        $memberId = $first->json('member_id');
+
+        // Reintento con los MISMOS datos → no 500; reanuda el mismo miembro.
+        $second = $this->postJson('/api/members/register', $payload);
+        $second->assertOk()->assertJsonPath('member_id', $memberId);
+        $this->assertDatabaseCount('members', 1);
+    }
+
+    public function test_register_resumes_when_user_already_has_member(): void
+    {
+        // Reproduce el 500 real: el usuario ya existe (por email) y TIENE un
+        // miembro; un nuevo intento con documento distinto pero mismo correo NO
+        // debe insertar otro miembro (members_user_id_unique) ni devolver 500.
+        $email = 'sameuser'.random_int(1, 99999).'@example.com';
+        $first = $this->postJson('/api/members/register', [
+            'full_name' => 'Usuario A', 'document_number' => '7'.random_int(1000000, 9999999),
+            'phone' => '3001112233', 'email' => $email, 'is_minor' => false,
+            'biometric_status' => 'skipped',
+        ]);
+        $first->assertCreated();
+        $memberId = $first->json('member_id');
+
+        $second = $this->postJson('/api/members/register', [
+            'full_name' => 'Usuario A', 'document_number' => '8'.random_int(1000000, 9999999),
+            'phone' => '3001112233', 'email' => $email, 'is_minor' => false,
+        ]);
+        $second->assertOk()->assertJsonPath('member_id', $memberId);
+        $this->assertDatabaseCount('members', 1);
+    }
+
+    public function test_register_active_document_returns_409_not_500(): void
+    {
+        $doc = '7'.random_int(1000000, 9999999);
+        $payload = [
+            'full_name' => 'Activo', 'document_number' => $doc, 'phone' => '3001112233',
+            'email' => 'act'.random_int(1, 99999).'@example.com', 'is_minor' => false,
+        ];
+        $first = $this->postJson('/api/members/register', $payload);
+        $first->assertCreated();
+        Member::find($first->json('member_id'))->update(['status' => Member::STATUS_ACTIVE]);
+
+        // Documento de una cuenta ya activa → 409 claro, nunca 500.
+        $this->postJson('/api/members/register', $payload)->assertStatus(409);
+    }
+
     public function test_public_legal_pages(): void
     {
         // Páginas legales servidas por el backend (HTML), nunca dominio muerto.

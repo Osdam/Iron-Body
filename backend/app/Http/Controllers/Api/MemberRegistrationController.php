@@ -14,6 +14,7 @@ use App\Models\MemberBiometric;
 use App\Models\Plan;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -104,49 +105,47 @@ class MemberRegistrationController extends Controller
             unset($validated['biometric_status']);
 
             $response = DB::transaction(function () use ($validated, $biometricStatus): JsonResponse {
-                $existingMember = Member::query()
+                // (1) ¿Ya hay un miembro con este documento?
+                $member = Member::query()
                     ->where('document_number', $validated['document_number'])
                     ->first();
 
-                if ($existingMember) {
-                    if (! $existingMember->isRegistrationResumable()) {
-                        return response()->json([
-                            'ok' => false,
-                            'message' => 'Ya existe un miembro activo con este documento.',
-                            'status' => 'duplicate_document',
-                            'member_id' => $existingMember->id,
-                            'member_uuid' => $existingMember->member_uuid,
-                            'user_id' => $existingMember->user_id,
-                            'registration_status' => $existingMember->status,
-                        ], 409);
-                    }
+                // (2) Resolver/crear el usuario CRM. Si no hubo match por
+                //     documento, el usuario podría existir ya (por email o
+                //     documento) y TENER un miembro: en ese caso se reanuda ese
+                //     miembro en vez de insertar otro (lo que violaba
+                //     members_user_id_unique y devolvía 500).
+                $user = $this->syncCrmUser($member ?? new Member($validated), $validated);
 
-                    $existingMember->fill($validated);
-                    if ($biometricStatus !== null
-                        && $existingMember->biometric_status !== Member::BIOMETRIC_REGISTERED) {
-                        $existingMember->biometric_status = $biometricStatus;
-                    }
-
-                    if ($existingMember->status === 'created') {
-                        $existingMember->status = Member::STATUS_PENDING_REGISTRATION;
-                    }
-
-                    $existingMember->user_id = $this->syncCrmUser($existingMember, $validated)->id;
-                    $existingMember->save();
-
-                    return response()->json($this->memberResponse($existingMember->fresh(), 'Ya existe un registro pendiente o incompleto con este documento. Continua el registro con este member_id.', [
-                        'status' => 'duplicate_document',
-                        'registration_status' => $existingMember->status,
-                    ]));
+                if (! $member) {
+                    $member = Member::query()->where('user_id', $user->id)->first();
                 }
 
+                // (3) Resumir un registro existente (idempotente) o rechazar
+                //     claramente si la cuenta ya está activa.
+                if ($member) {
+                    if (! $member->isRegistrationResumable()) {
+                        Log::info('member:register:duplicate-document', ['member_id' => $member->id]);
+
+                        return $this->duplicateResponse($member);
+                    }
+
+                    Log::info('member:register:existing-member', [
+                        'user_id' => $user->id,
+                        'member_id' => $member->id,
+                    ]);
+
+                    return $this->resumeRegistration($member, $validated, $biometricStatus, $user);
+                }
+
+                // (4) Miembro nuevo.
                 $member = new Member(array_merge($validated, [
                     'status' => Member::STATUS_PENDING_REGISTRATION,
                 ]));
                 if ($biometricStatus !== null) {
                     $member->biometric_status = $biometricStatus;
                 }
-                $member->user_id = $this->syncCrmUser($member, $validated)->id;
+                $member->user_id = $user->id;
                 $member->save();
 
                 // Aviso operativo al CRM de nuevo registro (ADITIVO; idempotente).
@@ -161,9 +160,76 @@ class MemberRegistrationController extends Controller
             });
 
             return $response;
+        } catch (UniqueConstraintViolationException $e) {
+            // Duplicado esperable (documento/correo/usuario ya registrados):
+            // 409 claro, nunca 500. Se loguea solo el nombre de la restricción.
+            Log::warning('member:register:duplicate', ['constraint' => $this->constraintNameFrom($e)]);
+
+            return response()->json([
+                'ok' => false,
+                'message' => 'Ya existe una cuenta registrada con este documento o correo.',
+                'status' => 'duplicate_account',
+            ], 409);
         } catch (Throwable $e) {
             return $this->serverError($e, 'member:register');
         }
+    }
+
+    /**
+     * Reanuda un registro pendiente/incompleto con el miembro existente, sin
+     * insertar otro. Idempotente: actualiza datos permitidos y asegura el
+     * estado biométrico si llega skipped/manual_required.
+     */
+    private function resumeRegistration(Member $member, array $validated, ?string $biometricStatus, User $user): JsonResponse
+    {
+        // No reasignar un documento que pertenece a OTRO miembro (evita 23505).
+        $incomingDoc = $validated['document_number'] ?? null;
+        if ($incomingDoc
+            && $incomingDoc !== $member->document_number
+            && Member::query()->where('document_number', $incomingDoc)->whereKeyNot($member->id)->exists()) {
+            return $this->duplicateResponse($member);
+        }
+
+        $member->fill($validated);
+        if ($biometricStatus !== null && $member->biometric_status !== Member::BIOMETRIC_REGISTERED) {
+            $member->biometric_status = $biometricStatus;
+        }
+        if ($member->status === 'created') {
+            $member->status = Member::STATUS_PENDING_REGISTRATION;
+        }
+        $member->user_id = $user->id;
+        $member->save();
+
+        Log::info('member:register:success', ['member_id' => $member->id, 'resumed' => true]);
+
+        return response()->json($this->memberResponse($member->fresh(), 'Registro reanudado con el miembro existente. Continua con este member_id.', [
+            'status' => 'resumed',
+            'registration_status' => $member->status,
+        ]));
+    }
+
+    /** Respuesta 409 para cuenta ya registrada (no resumible). */
+    private function duplicateResponse(Member $member): JsonResponse
+    {
+        return response()->json([
+            'ok' => false,
+            'message' => 'Ya existe una cuenta registrada con este documento o correo.',
+            'status' => 'duplicate_document',
+            'member_id' => $member->id,
+            'member_uuid' => $member->member_uuid,
+            'user_id' => $member->user_id,
+            'registration_status' => $member->status,
+        ], 409);
+    }
+
+    /** Nombre de la restricción única violada (para log seguro, sin datos). */
+    private function constraintNameFrom(UniqueConstraintViolationException $e): string
+    {
+        if (preg_match('/constraint "([^"]+)"/', $e->getMessage(), $m)) {
+            return $m[1];
+        }
+
+        return 'unique';
     }
 
     public function identity(StoreMemberIdentityRequest $request, Member $member): JsonResponse
