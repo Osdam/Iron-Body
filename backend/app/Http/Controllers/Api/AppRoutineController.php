@@ -42,6 +42,47 @@ class AppRoutineController extends Controller
     }
 
     /**
+     * "Entrenamiento de hoy" del miembro autenticado. Toma sus rutinas
+     * asignadas (mismas que assigned()) y selecciona una de forma determinista
+     * por día, de modo que el miembro recorra su programa día a día. Sin
+     * rutinas asignadas devuelve has_workout=false (estado vacío real, sin mock).
+     */
+    public function today(Request $request): JsonResponse
+    {
+        $member = $request->attributes->get('auth_member');
+
+        $viaAssignment = Routine::whereHas(
+            'assignments',
+            fn ($q) => $q->where('member_id', $member->id)
+        )->with(['routineExercises.exercise'])->get();
+
+        $viaMemberId = Routine::where('member_id', $member->id)
+            ->where('is_assigned', true)
+            ->with(['routineExercises.exercise'])
+            ->get();
+
+        $routines = $viaAssignment->merge($viaMemberId)
+            ->unique('id')->sortBy('id')->values();
+
+        if ($routines->isEmpty()) {
+            return response()->json([
+                'ok'          => true,
+                'has_workout' => false,
+                'message'     => 'Aún no tienes entrenamiento asignado para hoy.',
+            ]);
+        }
+
+        // Selección determinista por día (rota el programa asignado).
+        $index = ((int) now()->dayOfYear) % $routines->count();
+
+        return response()->json([
+            'ok'          => true,
+            'has_workout' => true,
+            'workout'     => new RoutineResource($routines[$index]),
+        ]);
+    }
+
+    /**
      * Rutinas personalizadas creadas por el propio miembro.
      */
     public function custom(Request $request): JsonResponse

@@ -260,6 +260,8 @@ Route::middleware('auth.member')->group(function (): void {
     // Calificación de entrenadores
     Route::post('trainers/{trainer}/rate', [TrainerController::class, 'rate']);
     // Rutinas para miembros
+    // "Entrenamiento de hoy" del Home (rutina asignada del día, sin mock).
+    Route::get('member/training/today',           [AppRoutineController::class, 'today']);
     Route::get('app/routines/assigned',           [AppRoutineController::class, 'assigned']);
     Route::get('app/routines/custom',             [AppRoutineController::class, 'custom']);
     Route::post('app/routines',                   [AppRoutineController::class, 'store']);
