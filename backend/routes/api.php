@@ -230,6 +230,10 @@ Route::middleware('auth.member')->group(function (): void {
     Route::get('member/contracts/{contract}/download', [MemberContractController::class, 'download'])
         ->middleware('throttle:30,1');
 
+    // ── Estado de cuenta: fuente de verdad del gate de acceso (ActivationGate).
+    // El Home solo es accesible con membresía activa O pago aprobado/verificado.
+    Route::get('member/account/status', [\App\Http\Controllers\Api\MemberAccountController::class, 'status']);
+
     // ── Seguridad: sesiones / dispositivos del miembro ────────────────────────
     Route::get('members/devices', [AuthController::class, 'devices']);
     Route::post('members/devices/{uuid}/revoke', [AuthController::class, 'revokeDevice']);
