@@ -73,8 +73,11 @@ class AuthController extends Controller
 
         // Control de concurrencia: si la cuenta ya está activa en otro
         // dispositivo, se bloquea el ingreso (no se le roba la sesión al
-        // dispositivo principal) y ni siquiera se envía el OTP.
-        if ($active = $this->sessions->concurrentActiveSession($member, $context['device_id'] ?? null)) {
+        // dispositivo principal) y ni siquiera se envía el OTP. El usuario puede
+        // reintentar con force=true ("cerrar sesión en otros dispositivos y
+        // continuar"), que SÍ revoca la sesión anterior del MISMO miembro.
+        if (! $request->boolean('force')
+            && $active = $this->sessions->concurrentActiveSession($member, $context['device_id'] ?? null)) {
             return $this->concurrencyBlocked($member, $active, $context);
         }
 
@@ -137,8 +140,10 @@ class AuthController extends Controller
         $member = $res['member'];
 
         // Re-chequeo de concurrencia (otro dispositivo pudo activarse durante el
-        // tiempo del OTP): si la cuenta ya está en uso, bloquear el ingreso.
-        if ($member && ($active = $this->sessions->concurrentActiveSession($member, $context['device_id'] ?? null))) {
+        // tiempo del OTP): si la cuenta ya está en uso, bloquear el ingreso —
+        // salvo force=true (el usuario eligió cerrar las otras sesiones).
+        if (! $request->boolean('force')
+            && $member && ($active = $this->sessions->concurrentActiveSession($member, $context['device_id'] ?? null))) {
             return $this->concurrencyBlocked($member, $active, $context);
         }
 

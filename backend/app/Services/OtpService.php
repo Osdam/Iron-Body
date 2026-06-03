@@ -203,7 +203,10 @@ class OtpService
 
     public function exposeCode(): bool
     {
-        return (bool) config('otp.expose_code', false);
+        // Defensa: aunque la config lo active, NUNCA se expone el código en
+        // producción (solo en desarrollo local/testing).
+        return (bool) config('otp.expose_code', false)
+            && ! app()->environment('production');
     }
 
     public function resolvePhone(Member $member): ?string
