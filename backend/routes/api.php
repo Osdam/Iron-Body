@@ -234,6 +234,13 @@ Route::middleware('auth.member')->group(function (): void {
     // El Home solo es accesible con membresía activa O pago aprobado/verificado.
     Route::get('member/account/status', [\App\Http\Controllers\Api\MemberAccountController::class, 'status']);
 
+    // ── Eliminación de cuenta/datos iniciada desde la app (App Store 5.1.1(v)).
+    Route::get('member/account/deletion-status', [\App\Http\Controllers\Api\MemberAccountController::class, 'deletionStatus']);
+    Route::post('member/account/delete-request', [\App\Http\Controllers\Api\MemberAccountController::class, 'deleteRequest'])
+        ->middleware('throttle:10,1');
+    Route::post('member/account/delete-confirm', [\App\Http\Controllers\Api\MemberAccountController::class, 'deleteConfirm'])
+        ->middleware('throttle:6,1');
+
     // ── Seguridad: sesiones / dispositivos del miembro ────────────────────────
     Route::get('members/devices', [AuthController::class, 'devices']);
     Route::post('members/devices/{uuid}/revoke', [AuthController::class, 'revokeDevice']);

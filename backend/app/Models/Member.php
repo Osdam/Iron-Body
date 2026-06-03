@@ -17,6 +17,8 @@ class Member extends Model
     public const STATUS_INCOMPLETE = 'incomplete';
     public const STATUS_ACTIVE = 'active';
     public const STATUS_FAILED = 'failed';
+    // Cuenta eliminada/anonimizada por solicitud del usuario: bloquea el login.
+    public const STATUS_DELETED = 'deleted';
 
     // Estado de inscripción biométrica facial (la biometría es OPCIONAL).
     public const BIOMETRIC_PENDING = 'pending';
@@ -40,6 +42,7 @@ class Member extends Model
         'is_minor',
         'biometric_status',
         'status',
+        'anonymized_at',
     ];
 
     protected $hidden = [
@@ -51,6 +54,7 @@ class Member extends Model
         return [
             'birth_date' => 'date:Y-m-d',
             'is_minor' => 'boolean',
+            'anonymized_at' => 'datetime',
         ];
     }
 

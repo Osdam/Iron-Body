@@ -60,6 +60,15 @@ class AuthController extends Controller
             return response()->json(['ok' => false, 'message' => 'Documento no encontrado.'], 404);
         }
 
+        // Cuenta eliminada/anonimizada por el usuario: no se permite reactivarla.
+        if ($member->status === Member::STATUS_DELETED) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'account_deleted',
+                'message' => 'Esta cuenta fue eliminada. Crea una cuenta nueva para usar la app.',
+            ], 403);
+        }
+
         $context = $this->context($request);
 
         // Control de concurrencia: si la cuenta ya está activa en otro

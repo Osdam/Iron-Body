@@ -44,6 +44,9 @@ class AuthenticateMember
             if (! $member) {
                 return $this->unauthorized($request, 'invalid_session', 'Sesión inválida.');
             }
+            if ($member->status === Member::STATUS_DELETED) {
+                return $this->unauthorized($request, 'account_deleted', 'Esta cuenta fue eliminada.');
+            }
             $this->sessions->touch($session);
             $request->attributes->set('auth_member', $member);
             $request->attributes->set('auth_device_session', $session);
@@ -69,6 +72,9 @@ class AuthenticateMember
         $member = Member::where('access_hash', $token)->first();
         if (! $member) {
             return $this->unauthorized($request, 'invalid_token', 'Token inválido.');
+        }
+        if ($member->status === Member::STATUS_DELETED) {
+            return $this->unauthorized($request, 'account_deleted', 'Esta cuenta fue eliminada.');
         }
 
         $request->attributes->set('auth_member', $member);
