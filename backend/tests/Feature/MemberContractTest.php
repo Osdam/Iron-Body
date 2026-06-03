@@ -227,6 +227,46 @@ class MemberContractTest extends TestCase
             ->assertOk()->assertJsonPath('data.status', 'void');
     }
 
+    public function test_register_with_biometric_skip_returns_201(): void
+    {
+        // Reproduce el flujo "Omitir biometría": registro con estado skipped.
+        // No debe ser 500; el miembro queda creado con biometric_status=skipped.
+        $doc = '7'.random_int(1000000, 9999999);
+        $res = $this->postJson('/api/members/register', [
+            'full_name'        => 'Usuario Skip',
+            'document_number'  => $doc,
+            'phone'            => '3001112233',
+            'email'            => 'skip'.random_int(1, 99999).'@example.com',
+            'is_minor'         => false,
+            'biometric_status' => 'skipped',
+        ]);
+        $res->assertCreated();
+        $this->assertDatabaseHas('members', [
+            'document_number'  => $doc,
+            'biometric_status' => 'skipped',
+        ]);
+    }
+
+    public function test_public_legal_pages(): void
+    {
+        // Páginas legales servidas por el backend (HTML), nunca dominio muerto.
+        $priv = $this->get('/api/legal/privacy');
+        $priv->assertOk();
+        $this->assertStringContainsString('text/html', $priv->headers->get('content-type'));
+        $this->assertStringContainsString('Privacidad', $priv->getContent());
+
+        $this->get('/api/legal/terms')->assertOk();
+    }
+
+    public function test_consent_template_urls_fall_back_to_backend(): void
+    {
+        // Sin PRIVACY_POLICY_URL configurada → apunta al legal del backend.
+        $res = $this->getJson('/api/contracts/consent-template');
+        $res->assertOk();
+        $this->assertStringContainsString('/api/legal/privacy', (string) $res->json('privacy_policy_url'));
+        $this->assertStringContainsString('/api/legal/terms', (string) $res->json('terms_url'));
+    }
+
     public function test_public_consent_template(): void
     {
         // Sin auth: solo textos de checkboxes + URLs (sin datos personales).

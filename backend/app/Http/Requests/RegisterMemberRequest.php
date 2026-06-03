@@ -32,6 +32,8 @@ class RegisterMemberRequest extends FormRequest
             'injuries' => ['nullable', 'string', 'max:2000'],
             'birth_date' => ['nullable', 'date'],
             'is_minor' => ['sometimes', 'boolean'],
+            // Intención de biometría (opcional, Apple). Validación clara (no 500).
+            'biometric_status' => ['sometimes', 'nullable', 'in:pending,registered,skipped,manual_required'],
         ];
     }
 }

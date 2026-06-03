@@ -61,8 +61,8 @@ class MemberContractService
             'signed_contracts'          => $signed->map(fn ($c) => $this->present($c))->values(),
             'missing_required_fields'   => $this->missingMemberFields($member),
             'checkboxes'                => $this->templates->checkboxes($recommended),
-            'privacy_policy_url'        => Config::get('contracts.privacy_policy_url'),
-            'terms_url'                 => Config::get('contracts.terms_url'),
+            'privacy_policy_url'        => Config::get('contracts.privacy_policy_url') ?: url('/api/legal/privacy'),
+            'terms_url'                 => Config::get('contracts.terms_url') ?: url('/api/legal/terms'),
             'support_contact'           => Config::get('contracts.support_contact'),
         ];
     }

@@ -52,8 +52,8 @@ class MemberContractController extends Controller
             'template_name'      => config("contracts.templates.{$type}.name", $type),
             'is_minor'           => $isMinor,
             'checkboxes'         => $this->templates->checkboxes($type),
-            'privacy_policy_url' => config('contracts.privacy_policy_url'),
-            'terms_url'          => config('contracts.terms_url'),
+            'privacy_policy_url' => config('contracts.privacy_policy_url') ?: url('/api/legal/privacy'),
+            'terms_url'          => config('contracts.terms_url') ?: url('/api/legal/terms'),
             'support_contact'    => config('contracts.support_contact'),
         ]);
     }

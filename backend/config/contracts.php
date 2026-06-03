@@ -28,9 +28,11 @@ return [
     'templates_path' => 'contract_templates/source',
 
     // URLs de privacidad/términos y contacto de soporte (visibles desde la app
-    // antes de firmar). Configurables por entorno; documentadas en .env.example.
-    'privacy_policy_url' => env('PRIVACY_POLICY_URL', 'https://ironbody.com.co/privacidad'),
-    'terms_url'          => env('TERMS_URL', 'https://ironbody.com.co/terminos'),
+    // antes de firmar). Si no se configura un dominio real por entorno, se sirven
+    // las páginas legales del propio backend (/api/legal/*) — nunca un dominio
+    // muerto. En producción, define PRIVACY_POLICY_URL/TERMS_URL con el dominio real.
+    'privacy_policy_url' => env('PRIVACY_POLICY_URL'),
+    'terms_url'          => env('TERMS_URL'),
     'support_contact'    => env('SUPPORT_CONTACT', 'Ironbodyneiva@gmail.com'),
 
     // Plantilla de inscripción por defecto para mayores de edad.

@@ -120,6 +120,11 @@ Route::middleware('member.registration.token')->group(function () {
 // real ANTES de que exista el miembro. No expone datos personales.
 Route::get('contracts/consent-template', [MemberContractController::class, 'consentTemplate']);
 
+// Páginas legales públicas servidas por el backend (HTML). La app las muestra
+// en un visor interno (WebView), nunca abre un dominio externo muerto.
+Route::get('legal/privacy', [\App\Http\Controllers\Api\LegalController::class, 'privacy']);
+Route::get('legal/terms',   [\App\Http\Controllers\Api\LegalController::class, 'terms']);
+
 // ── ePayco — pago 100% IN-APP por API (sin navegador/WebView) ───────────────
 Route::post('payments/epayco/create', [EpaycoPaymentController::class, 'create']);
 Route::post('payments/epayco/pay-card', [EpaycoPaymentController::class, 'payCard']);

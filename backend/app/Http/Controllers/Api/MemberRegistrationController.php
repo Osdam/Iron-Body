@@ -18,6 +18,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 
@@ -94,9 +95,15 @@ class MemberRegistrationController extends Controller
 
     public function register(RegisterMemberRequest $request): JsonResponse
     {
+        Log::info('member:register:start', ['has_document' => filled($request->input('document_number'))]);
         try {
             $validated = $request->validated();
-            $response = DB::transaction(function () use ($validated): JsonResponse {
+            // Intención de biometría capturada en el registro (Apple: opcional).
+            // Si el usuario eligió omitirla, no se requiere captura facial.
+            $biometricStatus = $validated['biometric_status'] ?? null;
+            unset($validated['biometric_status']);
+
+            $response = DB::transaction(function () use ($validated, $biometricStatus): JsonResponse {
                 $existingMember = Member::query()
                     ->where('document_number', $validated['document_number'])
                     ->first();
@@ -115,6 +122,10 @@ class MemberRegistrationController extends Controller
                     }
 
                     $existingMember->fill($validated);
+                    if ($biometricStatus !== null
+                        && $existingMember->biometric_status !== Member::BIOMETRIC_REGISTERED) {
+                        $existingMember->biometric_status = $biometricStatus;
+                    }
 
                     if ($existingMember->status === 'created') {
                         $existingMember->status = Member::STATUS_PENDING_REGISTRATION;
@@ -132,11 +143,16 @@ class MemberRegistrationController extends Controller
                 $member = new Member(array_merge($validated, [
                     'status' => Member::STATUS_PENDING_REGISTRATION,
                 ]));
+                if ($biometricStatus !== null) {
+                    $member->biometric_status = $biometricStatus;
+                }
                 $member->user_id = $this->syncCrmUser($member, $validated)->id;
                 $member->save();
 
                 // Aviso operativo al CRM de nuevo registro (ADITIVO; idempotente).
                 app(\App\Services\NotificationService::class)->notifyNewMemberRegistered($member);
+
+                Log::info('member:register:success', ['member_id' => $member->id]);
 
                 return response()->json($this->memberResponse($member, 'Miembro creado correctamente.', [
                     'status' => Member::STATUS_PENDING_REGISTRATION,
@@ -145,8 +161,8 @@ class MemberRegistrationController extends Controller
             });
 
             return $response;
-        } catch (Throwable) {
-            return $this->serverError();
+        } catch (Throwable $e) {
+            return $this->serverError($e, 'member:register');
         }
     }
 
@@ -298,13 +314,19 @@ class MemberRegistrationController extends Controller
      */
     public function skipBiometric(Member $member): JsonResponse
     {
-        if ($member->biometric_status !== Member::BIOMETRIC_REGISTERED) {
-            $member->biometric_status = Member::BIOMETRIC_SKIPPED;
-            $member->save();
-        }
-        $this->updateRegistrationStatus($member, Member::STATUS_ACTIVE);
+        Log::info('biometric:skip:start', ['member_id' => $member->id]);
+        try {
+            if ($member->biometric_status !== Member::BIOMETRIC_REGISTERED) {
+                $member->biometric_status = Member::BIOMETRIC_SKIPPED;
+                $member->save();
+            }
+            $this->updateRegistrationStatus($member, Member::STATUS_ACTIVE);
+            Log::info('biometric:skip:success', ['member_id' => $member->id]);
 
-        return response()->json($this->memberResponse($member->fresh(), 'Biometria pendiente.'));
+            return response()->json($this->memberResponse($member->fresh(), 'Biometria pendiente.'));
+        } catch (Throwable $e) {
+            return $this->serverError($e, 'biometric:skip');
+        }
     }
 
     public function destroy(Member $member): JsonResponse
@@ -418,8 +440,22 @@ class MemberRegistrationController extends Controller
         return filter_var($value, FILTER_VALIDATE_BOOLEAN);
     }
 
-    private function serverError(): JsonResponse
+    /**
+     * Respuesta 500 genérica para el cliente, pero registra la EXCEPCIÓN REAL
+     * en logs (tipo/mensaje/código + ubicación) para diagnóstico. Nunca expone
+     * el detalle al cliente ni loguea datos sensibles (firma/tokens/documentos).
+     */
+    private function serverError(?Throwable $e = null, string $context = 'member:register'): JsonResponse
     {
+        if ($e !== null) {
+            Log::error("{$context}:error", [
+                'type'    => $e::class,
+                'message' => $e->getMessage(),
+                'code'    => $e->getCode(),
+                'file'    => basename($e->getFile()).':'.$e->getLine(),
+            ]);
+        }
+
         return response()->json([
             'ok' => false,
             'message' => 'No fue posible procesar la solicitud.',
