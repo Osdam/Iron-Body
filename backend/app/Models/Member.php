@@ -43,6 +43,7 @@ class Member extends Model
         'injuries',
         'birth_date',
         'is_minor',
+        'is_staff',
         'biometric_status',
         'status',
         'anonymized_at',
@@ -60,6 +61,7 @@ class Member extends Model
         return [
             'birth_date' => 'date:Y-m-d',
             'is_minor' => 'boolean',
+            'is_staff' => 'boolean',
             'anonymized_at' => 'datetime',
             'profile_photo_updated_at' => 'datetime',
         ];

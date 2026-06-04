@@ -257,6 +257,15 @@ Route::middleware('auth.member')->group(function (): void {
     Route::get('member/events',         [\App\Http\Controllers\Api\AppEventController::class, 'index']);
     Route::get('member/events/{event}', [\App\Http\Controllers\Api\AppEventController::class, 'show']);
 
+    // ── Story Live / transmisiones en vivo (Bloque 5) ─────────────────────────
+    // 'active' antes de {live}; {live} solo numérico (route-model binding).
+    Route::get('member/live/active',            [\App\Http\Controllers\Api\LiveController::class, 'active']);
+    Route::post('member/live/create',           [\App\Http\Controllers\Api\LiveController::class, 'create']);
+    Route::get('member/live/{live}',            [\App\Http\Controllers\Api\LiveController::class, 'show'])->whereNumber('live');
+    Route::post('member/live/{live}/start',     [\App\Http\Controllers\Api\LiveController::class, 'start'])->whereNumber('live');
+    Route::post('member/live/{live}/end',       [\App\Http\Controllers\Api\LiveController::class, 'end'])->whereNumber('live');
+    Route::post('member/live/{live}/join-token',[\App\Http\Controllers\Api\LiveController::class, 'joinToken'])->whereNumber('live');
+
     // ── Perfil editable + foto (subida a Firebase por el cliente, aquí se
     // guarda la URL/ruta tras validar ownership).
     Route::get('member/profile', [\App\Http\Controllers\Api\MemberProfileController::class, 'show']);
@@ -445,6 +454,10 @@ Route::match(['patch', 'post'], 'admin/events/{event}', [\App\Http\Controllers\A
 Route::delete('admin/events/{event}',       [\App\Http\Controllers\Api\Admin\EventController::class, 'destroy']);
 Route::post('admin/events/{event}/activate',  [\App\Http\Controllers\Api\Admin\EventController::class, 'activate']);
 Route::post('admin/events/{event}/deactivate',[\App\Http\Controllers\Api\Admin\EventController::class, 'deactivate']);
+
+// ── Story Live (CRM admin): historial + finalizar — Bloque 5 ────────────────
+Route::get('admin/lives',             [\App\Http\Controllers\Api\Admin\LiveController::class, 'index']);
+Route::post('admin/lives/{live}/end', [\App\Http\Controllers\Api\Admin\LiveController::class, 'end']);
 
 // ── Stories CRM admin (sin auth — patrón del resto del CRM) ────────────────
 Route::get('admin/stories',         [StoriesController::class, 'indexAsAdmin']);

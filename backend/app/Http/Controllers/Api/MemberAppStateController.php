@@ -94,6 +94,7 @@ class MemberAppStateController extends Controller
                 'profile_photo_url' => $photoUrl,
                 'status' => $member->status,
                 'biometric_status' => $member->biometric_status,
+                'is_staff' => (bool) $member->is_staff,
             ],
             'membership' => $membershipSnapshot,
             'payment' => [
