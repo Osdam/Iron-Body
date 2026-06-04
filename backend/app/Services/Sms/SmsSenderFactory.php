@@ -12,6 +12,17 @@ class SmsSenderFactory
     {
         $driver ??= (string) config('otp.driver', 'dev');
 
+        // Producción: el driver `dev` (no envía SMS reales) NO se permite. Falla
+        // cerrado para forzar una configuración segura (twilio/labsmobile) y que
+        // nunca quede un OTP "de mentira" en producción.
+        if (app()->environment('production')
+            && ! in_array($driver, ['twilio', 'labsmobile'], true)) {
+            throw new \RuntimeException(
+                "OTP_DRIVER='{$driver}' no está permitido en producción. "
+                .'Configura OTP_DRIVER=twilio (o labsmobile) con sus credenciales.'
+            );
+        }
+
         return match ($driver) {
             'twilio'     => new TwilioSmsSender(),
             'labsmobile' => new LabsMobileSmsSender(),
