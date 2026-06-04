@@ -43,6 +43,9 @@ class Member extends Model
         'biometric_status',
         'status',
         'anonymized_at',
+        'profile_photo_url',
+        'profile_photo_path',
+        'profile_photo_updated_at',
     ];
 
     protected $hidden = [
@@ -55,6 +58,7 @@ class Member extends Model
             'birth_date' => 'date:Y-m-d',
             'is_minor' => 'boolean',
             'anonymized_at' => 'datetime',
+            'profile_photo_updated_at' => 'datetime',
         ];
     }
 

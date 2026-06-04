@@ -238,6 +238,13 @@ Route::middleware('auth.member')->group(function (): void {
     // estado vivo de la app: membresía/días/pago/entreno/racha/seguridad).
     Route::get('member/app-state', [\App\Http\Controllers\Api\MemberAppStateController::class, 'show']);
 
+    // ── Perfil editable + foto (subida a Firebase por el cliente, aquí se
+    // guarda la URL/ruta tras validar ownership).
+    Route::get('member/profile', [\App\Http\Controllers\Api\MemberProfileController::class, 'show']);
+    Route::patch('member/profile', [\App\Http\Controllers\Api\MemberProfileController::class, 'update']);
+    Route::post('member/profile/photo', [\App\Http\Controllers\Api\MemberProfileController::class, 'updatePhoto'])
+        ->middleware('throttle:20,1');
+
     // ── Eliminación de cuenta/datos iniciada desde la app (App Store 5.1.1(v)).
     Route::get('member/account/deletion-status', [\App\Http\Controllers\Api\MemberAccountController::class, 'deletionStatus']);
     Route::post('member/account/delete-request', [\App\Http\Controllers\Api\MemberAccountController::class, 'deleteRequest'])
