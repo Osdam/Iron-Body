@@ -35,6 +35,11 @@
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
+        <!-- Baseline DETERMINISTA de integraciones externas: la suite NO depende
+             del .env real (que ya trae credenciales LiveKit/Twilio). Los tests de
+             proveedor activo fuerzan su propia config en tiempo de ejecución. -->
+        <env name="LIVE_ENABLED" value="false"/>
+        <env name="OTP_DRIVER" value="dev"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>

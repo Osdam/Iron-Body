@@ -7,6 +7,7 @@ use App\Models\Member;
 use App\Models\MemberAuthChallenge;
 use App\Models\MemberSecurityEvent;
 use App\Services\Sms\SmsSenderFactory;
+use App\Services\Sms\TwilioVerifyService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 
@@ -22,6 +23,12 @@ class OtpService
 {
     public function __construct(private SecurityEventService $security)
     {
+    }
+
+    /** ¿El OTP se delega a Twilio Verify? (genera/envía/valida el código). */
+    private function usesTwilioVerify(): bool
+    {
+        return app(TwilioVerifyService::class)->isActive();
     }
 
     /**
@@ -69,7 +76,11 @@ class OtpService
             'expires_at'   => now()->addSeconds($this->ttl()),
         ]);
 
-        $sent = $this->dispatch($phone, $code);
+        // Twilio Verify: Twilio genera/envía/valida el código (no usamos el
+        // nuestro). En el resto de modos enviamos nuestro código generado.
+        $sent = $this->usesTwilioVerify()
+            ? app(TwilioVerifyService::class)->start($phone)
+            : $this->dispatch($phone, $code);
 
         $this->security->record($member, MemberSecurityEvent::TYPE_OTP_SENT, $context, [
             'challenge' => $challenge->uuid,
@@ -218,7 +229,11 @@ class OtpService
             throw new OtpException('El código expiró. Solicita uno nuevo.', 410);
         }
 
-        if (! Hash::check($code, $challenge->code_hash)) {
+        $accepted = $this->usesTwilioVerify()
+            ? app(TwilioVerifyService::class)->check($challenge->destination, $code)
+            : Hash::check($code, $challenge->code_hash);
+
+        if (! $accepted) {
             $challenge->increment('attempts');
             $remaining = max($this->maxAttempts() - $challenge->attempts, 0);
 
@@ -294,7 +309,9 @@ class OtpService
             'attempts'     => 0,
         ]);
 
-        $sent = $this->dispatch($phone, $code);
+        $sent = $this->usesTwilioVerify()
+            ? app(TwilioVerifyService::class)->start($phone)
+            : $this->dispatch($phone, $code);
 
         if ($challenge->member) {
             $this->security->record($challenge->member, MemberSecurityEvent::TYPE_OTP_RESENT, $context, [

@@ -118,12 +118,22 @@ return [
     | Credenciales de proveedores (rellenar sólo el que se vaya a usar)
     |--------------------------------------------------------------------------
     */
+    // Twilio. Acepta los nombres clásicos (TWILIO_SID/TOKEN) y los de la consola
+    // (TWILIO_ACCOUNT_SID/AUTH_TOKEN). Dos modos:
+    //   - Verify API (recomendado): define TWILIO_VERIFY_SERVICE_SID. Twilio
+    //     genera/envía/valida el código (no necesita un número `from`).
+    //   - Messages API: define TWILIO_FROM (número E.164) sin Verify SID.
     'twilio' => [
-        'sid'   => env('TWILIO_SID'),
-        'token' => env('TWILIO_TOKEN'),
-        'from'  => env('TWILIO_FROM'),
-        'base'  => env('TWILIO_BASE', 'https://api.twilio.com'),
+        'sid'               => env('TWILIO_SID', env('TWILIO_ACCOUNT_SID')),
+        'token'             => env('TWILIO_TOKEN', env('TWILIO_AUTH_TOKEN')),
+        'from'              => env('TWILIO_FROM'),
+        'base'              => env('TWILIO_BASE', 'https://api.twilio.com'),
+        'verify_service_sid'=> env('TWILIO_VERIFY_SERVICE_SID'),
+        'verify_base'       => env('TWILIO_VERIFY_BASE', 'https://verify.twilio.com'),
     ],
+
+    // Prefijo de país por defecto para normalizar a E.164 (Colombia = 57).
+    'default_country_code' => (string) env('OTP_DEFAULT_COUNTRY_CODE', '57'),
 
     'labsmobile' => [
         'username' => env('LABSMOBILE_USERNAME'),
