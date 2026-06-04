@@ -258,6 +258,9 @@ Route::middleware('auth.member')->group(function (): void {
     // ── Seguridad: sesiones / dispositivos del miembro ────────────────────────
     Route::get('members/devices', [AuthController::class, 'devices']);
     Route::post('members/devices/{uuid}/revoke', [AuthController::class, 'revokeDevice']);
+    // Cerrar todas las demás sesiones (conserva la actual). Dos alias.
+    Route::post('member/devices/revoke-others', [AuthController::class, 'revokeOthers']);
+    Route::post('member/sessions/logout-others', [AuthController::class, 'revokeOthers']);
     Route::post('members/logout', [AuthController::class, 'logout']);
     // Push nativo (FCM): registrar/baja del token del dispositivo.
     Route::post('members/push-token', [AuthController::class, 'registerPushToken']);

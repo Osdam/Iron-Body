@@ -625,6 +625,46 @@ class AuthController extends Controller
         return response()->json(['ok' => true, 'message' => 'Sesión cerrada en ese dispositivo.']);
     }
 
+    /**
+     * POST members/devices/revoke-others (alias sessions/logout-others):
+     * cierra TODAS las sesiones del miembro EXCEPTO la del dispositivo actual.
+     * Solo afecta al propio miembro autenticado.
+     */
+    public function revokeOthers(Request $request): JsonResponse
+    {
+        $member = $request->attributes->get('auth_member');
+        $current = $request->attributes->get('auth_device_session');
+        $currentId = $current instanceof MemberDeviceSession ? $current->id : null;
+        // Conservar también por device_id (cuando se autentica con access_hash
+        // no hay auth_device_session, pero el cliente envía su device_id).
+        $currentDeviceId = $this->currentDeviceId($request);
+
+        $count = 0;
+        foreach ($this->sessions->activeSessions($member) as $session) {
+            $isCurrent = ($currentId !== null && $session->id === $currentId)
+                || ($currentDeviceId !== null && $session->device_id === $currentDeviceId);
+            if ($isCurrent) {
+                continue; // conserva la sesión actual
+            }
+            $this->sessions->revoke($session, 'revoked_others_by_user');
+            $count++;
+        }
+
+        $this->security->record($member, MemberSecurityEvent::TYPE_DEVICE_REVOKED, $this->context($request), [
+            'scope'         => 'others',
+            'revoked_count' => $count,
+        ]);
+        Log::info('session:logout-others', ['member_id' => $member->id, 'count' => $count]);
+
+        return response()->json([
+            'ok'            => true,
+            'revoked_count' => $count,
+            'message'       => $count > 0
+                ? 'Se cerraron las sesiones en los demás dispositivos.'
+                : 'No había otras sesiones activas.',
+        ]);
+    }
+
     /** POST members/logout — cierra la sesión del dispositivo actual. */
     public function logout(Request $request): JsonResponse
     {
