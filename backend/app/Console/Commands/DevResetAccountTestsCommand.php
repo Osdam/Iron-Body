@@ -53,6 +53,10 @@ class DevResetAccountTestsCommand extends Command
         'notifications',
         'automation_events',
         'account_deletion_requests',
+        // Device trust / seguridad sin FK cascada (Bloques 3a/2): evita huérfanos
+        // que podrían reaparecer como bloqueos al recrear/probar cuentas.
+        'member_risk_locks',
+        'support_security_reports',
     ];
 
     /** Tablas que SÍ cascadan al borrar el member (solo para reporte). */

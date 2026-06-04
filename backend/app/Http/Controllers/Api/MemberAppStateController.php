@@ -128,12 +128,7 @@ class MemberAppStateController extends Controller
                 'active_devices_count' => $activeDevices->count(),
                 'current_device_trusted' => $currentSession !== null,
             ],
-            'features' => [
-                'can_access_home' => $canAccessHome,
-                'requires_activation' => ! $canAccessHome,
-                'can_use_ai' => (bool) ($features['iron_ia'] ?? false) && $canAccessHome,
-                'can_use_training' => (bool) ($features['workouts'] ?? false) && $canAccessHome,
-            ],
+            'features' => $this->buildFeatures($features, $canAccessHome, $membershipActive),
             'versions' => [
                 'profile' => $this->ver($member->updated_at),
                 'membership' => $this->ver($user?->updated_at ?? $lastPayment?->updated_at),
@@ -142,6 +137,54 @@ class MemberAppStateController extends Controller
                 'security' => $this->ver($activeDevices->max('updated_at')),
             ],
         ]);
+    }
+
+    /**
+     * Contrato de features que la app obedece (backend = fuente de verdad, sin
+     * hardcode en Flutter). Las features gateadas por plan (IA, entrenamiento,
+     * progreso, nutrición, clases, rutinas) salen del mapa del plan; las secciones
+     * base (perfil, seguridad, membresía, stories, biblioteca, store, notifs) se
+     * habilitan con el acceso. `can_use_full_app` = acceso + plan premium completo
+     * (todas las features núcleo del plan en true → p. ej. Plan Total).
+     *
+     * @param array<string,bool> $features  mapa de Member::resolvedFeatures()
+     */
+    private function buildFeatures(array $features, bool $canAccessHome, bool $membershipActive): array
+    {
+        $f = fn (string $k) => (bool) ($features[$k] ?? false);
+
+        // Features núcleo que definen una experiencia premium completa. `ranking`
+        // se excluye a propósito (Plan Total lo trae en false por diseño y no es
+        // un módulo bloqueante de la app).
+        $premiumCoreKeys = ['iron_ia', 'workouts', 'custom_routines', 'classes', 'progress', 'nutrition'];
+        $hasFullPremium = $canAccessHome
+            && collect($premiumCoreKeys)->every(fn ($k) => $f($k));
+
+        return [
+            'can_access_home'             => $canAccessHome,
+            'requires_activation'         => ! $canAccessHome,
+            // Gateadas por plan:
+            'can_use_ai'                  => $f('iron_ia') && $canAccessHome,
+            'can_use_training'            => $f('workouts') && $canAccessHome,
+            'can_use_progress'            => $f('progress') && $canAccessHome,
+            'can_use_nutrition'           => $f('nutrition') && $canAccessHome,
+            'can_use_classes'             => $f('classes') && $canAccessHome,
+            'can_use_custom_routines'     => $f('custom_routines') && $canAccessHome,
+            'can_use_ranking'             => $f('ranking') && $canAccessHome,
+            // Secciones base (disponibles con acceso a la app):
+            'can_use_exercise_library'    => $canAccessHome,
+            'can_use_stories'             => $canAccessHome,
+            'can_use_reels'               => $canAccessHome,
+            'can_use_profile'             => $canAccessHome,
+            'can_use_security_devices'    => $canAccessHome,
+            'can_use_membership_details'  => $canAccessHome,
+            'can_use_store'               => $canAccessHome,
+            'can_use_notifications_center'=> $canAccessHome,
+            // Resumen:
+            'can_use_full_app'            => $hasFullPremium,
+            // Mapa crudo del plan para gating fino del cliente (no hardcode).
+            'plan_features'               => $features,
+        ];
     }
 
     /**

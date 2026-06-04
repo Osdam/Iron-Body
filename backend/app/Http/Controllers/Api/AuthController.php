@@ -1192,10 +1192,20 @@ class AuthController extends Controller
         }
 
         return response()->json([
-            'ok'      => false,
-            'code'    => 'account_mismatch',
-            'message' => 'Acceso denegado: cuenta asociada a otro usuario.',
-            'data'    => ['owner_device' => $binding->device_name],
+            'ok'          => false,
+            'code'        => 'account_mismatch',
+            'reason_code' => 'device_bound_to_another_member',
+            'message'     => 'Acceso denegado: cuenta asociada a otro usuario.',
+            'data'        => [
+                // Solo el nombre genérico del equipo ("iPhone"); NUNCA el
+                // email/nombre/documento del titular del binding.
+                'owner_device'     => $binding->device_name,
+                'recovery_options' => [
+                    'support_report'          => true,  // abrir flujo de soporte
+                    'can_reset_local_session' => true,  // limpiar sesión local del device
+                    'can_request_rebind'      => false, // rebind exige OTP+cara o revisión CRM
+                ],
+            ],
         ], 403);
     }
 
