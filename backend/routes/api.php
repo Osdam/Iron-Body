@@ -273,6 +273,13 @@ Route::middleware('auth.member')->group(function (): void {
         Route::post('members/logout/unbind-request',          [AuthController::class, 'logoutUnbindRequest']);
         Route::post('members/logout/unbind-confirm',          [AuthController::class, 'logoutUnbindConfirm']);
     });
+    // Cambio de número de teléfono con 2FA (Fase 5): OTP al número NUEVO.
+    Route::middleware('throttle:10,1')->group(function (): void {
+        Route::post('member/security/phone-change/request',         [\App\Http\Controllers\Api\MemberAccountController::class, 'phoneChangeRequest']);
+        Route::post('member/security/phone-change/verify',          [\App\Http\Controllers\Api\MemberAccountController::class, 'phoneChangeVerify']);
+        Route::post('member/security/phone-change/support-request', [\App\Http\Controllers\Api\MemberAccountController::class, 'phoneChangeSupportRequest']);
+    });
+
     // Push nativo (FCM): registrar/baja del token del dispositivo.
     Route::post('members/push-token', [AuthController::class, 'registerPushToken']);
     Route::post('members/push-token/remove', [AuthController::class, 'removePushToken']);
@@ -379,6 +386,17 @@ Route::get('admin/users/{user}/contracts',          [ContractAdminController::cl
 Route::get('admin/contracts/{contract}',           [ContractAdminController::class, 'show']);
 Route::get('admin/contracts/{contract}/download',  [ContractAdminController::class, 'download']);
 Route::post('admin/contracts/{contract}/void',     [ContractAdminController::class, 'void']);
+
+// ── Seguridad: reporte de acceso/robo PÚBLICO desde el login (sin sesión) ──
+// Rate-limit por IP; no revela si la cuenta existe (Fase 9).
+Route::post('security/support-report', [\App\Http\Controllers\Api\SecuritySupportController::class, 'submit'])
+    ->middleware('throttle:6,1');
+
+// ── Seguridad: bandeja de reportes (CRM admin — patrón del resto del CRM) ──
+Route::get('admin/security/reports',                       [\App\Http\Controllers\Api\SecuritySupportController::class, 'adminIndex']);
+Route::get('admin/security/reports/{report}',              [\App\Http\Controllers\Api\SecuritySupportController::class, 'adminShow']);
+Route::patch('admin/security/reports/{report}',            [\App\Http\Controllers\Api\SecuritySupportController::class, 'adminUpdate']);
+Route::post('admin/security/reports/{report}/revoke-devices', [\App\Http\Controllers\Api\SecuritySupportController::class, 'adminRevokeDevices']);
 
 // ── Stories CRM admin (sin auth — patrón del resto del CRM) ────────────────
 Route::get('admin/stories',         [StoriesController::class, 'indexAsAdmin']);

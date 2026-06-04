@@ -40,6 +40,11 @@ class MemberSecurityEvent extends Model
     public const TYPE_ACCOUNT_DELETED         = 'account_deleted';
     public const TYPE_DEVICE_UNBOUND          = 'device_unbound';
 
+    // Cambio de número + soporte de acceso (Bloque 2).
+    public const TYPE_PHONE_CHANGE_REQUESTED = 'phone_change_requested';
+    public const TYPE_PHONE_CHANGED          = 'phone_changed';
+    public const TYPE_SUPPORT_REPORT         = 'support_security_report';
+
     protected $fillable = [
         'member_id',
         'type',

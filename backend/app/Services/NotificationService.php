@@ -1277,6 +1277,64 @@ class NotificationService
         });
     }
 
+    /**
+     * Nuevo reporte de seguridad/acceso (robo, pérdida, cambio de número). Va a
+     * la bandeja del CRM. No notifica al supuesto miembro (puede no ser él).
+     */
+    public function notifySecuritySupportReport($report, $member = null): void
+    {
+        $this->safe(function () use ($report, $member): void {
+            $type = $report->report_type ?? 'other';
+            $who  = $member?->full_name ?? ($report->name ?: ($report->document_number ?: 'Solicitante'));
+
+            $this->createAdminNotification([
+                'type'     => 'security',
+                'title'    => 'Nuevo reporte de seguridad de acceso',
+                'message'  => "{$who} reportó: {$type}. Revisa la bandeja de seguridad.",
+                'priority' => 'high',
+                'member'   => $member,
+                'metadata' => array_filter([
+                    'report_id'    => $report->id,
+                    'report_type'  => $type,
+                    'document'     => $report->document_number,
+                    'phone'        => $report->phone,
+                    'source_event' => 'security_support_report',
+                ]),
+            ]);
+        });
+    }
+
+    /** El miembro cambió su número de teléfono de forma verificada. */
+    public function notifyPhoneChanged($member, ?string $maskedNew = null): void
+    {
+        $this->safe(function () use ($member, $maskedNew): void {
+            $dest = $maskedNew ?: 'un nuevo número';
+            $name = $member?->full_name ?? 'Miembro';
+
+            $this->createMemberNotification($member, [
+                'type'         => 'security',
+                'title'        => 'Número de teléfono actualizado',
+                'message'      => "El número de tu cuenta se actualizó a {$dest}. Si no fuiste tú, contacta al gimnasio de inmediato.",
+                'priority'     => 'high',
+                'should_popup' => true,
+                'action_type'  => 'security_devices',
+                'metadata'     => array_filter([
+                    'masked_phone' => $maskedNew,
+                    'source_event' => 'phone_changed',
+                ]),
+            ]);
+
+            $this->createAdminNotification([
+                'type'     => 'security',
+                'title'    => 'Cambio de número de miembro',
+                'message'  => "{$name} actualizó su número de teléfono ({$dest}).",
+                'priority' => 'medium',
+                'member'   => $member,
+                'metadata' => array_filter(['masked_phone' => $maskedNew, 'member_name' => $name]),
+            ]);
+        });
+    }
+
     // ── SISTEMA / MANUAL ─────────────────────────────────────────────────────────
 
     /** Notificación de sistema/anuncio. Por defecto va al CRM (admin). */
