@@ -15,3 +15,9 @@
 # Environment variables
 .env
 .env.local
+
+# Frontend (Angular) — artefactos de build. El código fuente (cuando exista) SÍ
+# se versiona; estos directorios NO. Ver docs/LOCAL_DEV.md.
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
