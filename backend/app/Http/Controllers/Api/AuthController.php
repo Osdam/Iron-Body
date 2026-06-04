@@ -13,6 +13,7 @@ use App\Models\MemberDeviceSession;
 use App\Models\MemberDeviceToken;
 use App\Models\MemberReenrollmentToken;
 use App\Models\MemberSecurityEvent;
+use App\Services\AccountRiskService;
 use App\Services\DeviceSessionService;
 use App\Services\NotificationService;
 use App\Services\OtpService;
@@ -45,6 +46,7 @@ class AuthController extends Controller
         private DeviceSessionService $sessions,
         private SecurityEventService $security,
         private NotificationService $notifications,
+        private AccountRiskService $risk,
     ) {
     }
 
@@ -69,7 +71,20 @@ class AuthController extends Controller
             ], 403);
         }
 
+        // Cuenta suspendida por seguridad (bloqueo manual del CRM o automático):
+        // no se permite el ingreso; el usuario puede abrir soporte.
+        if ($member->isSuspended()) {
+            return $this->suspendedResponse($member);
+        }
+
         $context = $this->context($request);
+
+        // Evaluación de riesgo (Fase 10): puede avisar o —si autosuspend está
+        // activo— suspender. Por defecto solo avisa; re-chequeamos por si acaso.
+        $this->risk->assess($member, $context);
+        if ($member->isSuspended()) {
+            return $this->suspendedResponse($member);
+        }
 
         // Control de concurrencia: si la cuenta ya está activa en otro
         // dispositivo, se bloquea el ingreso (no se le roba la sesión al
@@ -844,6 +859,19 @@ class AuthController extends Controller
         }
 
         return null;
+    }
+
+    /** Respuesta estándar para una cuenta suspendida por seguridad. */
+    private function suspendedResponse(Member $member): JsonResponse
+    {
+        $lock = $member->activeRiskLock();
+
+        return response()->json([
+            'ok'           => false,
+            'code'         => 'account_suspended',
+            'message'      => 'Por seguridad, tu cuenta fue suspendida temporalmente. Acércate al gimnasio o contacta a soporte.',
+            'locked_until' => $lock?->locked_until?->toIso8601String(),
+        ], 423);
     }
 
     /** POST members/push-token — registra/renueva el token FCM del dispositivo. */

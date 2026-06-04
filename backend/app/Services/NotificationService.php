@@ -1304,6 +1304,37 @@ class NotificationService
         });
     }
 
+    /** La cuenta fue suspendida por seguridad. Avisa al miembro + CRM. */
+    public function notifyAccountSuspended($member, ?string $reason = null, $until = null): void
+    {
+        $this->safe(function () use ($member, $reason, $until): void {
+            $name = $member?->full_name ?? 'Miembro';
+
+            $this->createMemberNotification($member, [
+                'type'         => 'security',
+                'title'        => 'Cuenta suspendida por seguridad',
+                'message'      => 'Por seguridad, tu cuenta fue suspendida temporalmente. Acércate al gimnasio o contacta a soporte para validar tu identidad.',
+                'priority'     => 'high',
+                'should_popup' => true,
+                'action_type'  => 'security_devices',
+                'metadata'     => array_filter([
+                    'reason'       => $reason,
+                    'until'        => $until,
+                    'source_event' => 'account_suspended',
+                ]),
+            ]);
+
+            $this->createAdminNotification([
+                'type'     => 'security',
+                'title'    => 'Cuenta de miembro suspendida',
+                'message'  => "Se suspendió la cuenta de {$name}" . ($reason ? " ({$reason})." : '.'),
+                'priority' => 'high',
+                'member'   => $member,
+                'metadata' => array_filter(['reason' => $reason, 'until' => $until, 'member_name' => $name]),
+            ]);
+        });
+    }
+
     /** El miembro cambió su número de teléfono de forma verificada. */
     public function notifyPhoneChanged($member, ?string $maskedNew = null): void
     {

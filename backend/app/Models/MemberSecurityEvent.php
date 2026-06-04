@@ -45,6 +45,10 @@ class MemberSecurityEvent extends Model
     public const TYPE_PHONE_CHANGED          = 'phone_changed';
     public const TYPE_SUPPORT_REPORT         = 'support_security_report';
 
+    // Suspensión por riesgo (Bloque 3a / Fase 10).
+    public const TYPE_ACCOUNT_SUSPENDED = 'account_suspended';
+    public const TYPE_ACCOUNT_UNLOCKED  = 'account_unlocked';
+
     protected $fillable = [
         'member_id',
         'type',

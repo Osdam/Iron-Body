@@ -47,6 +47,9 @@ class AuthenticateMember
             if ($member->status === Member::STATUS_DELETED) {
                 return $this->unauthorized($request, 'account_deleted', 'Esta cuenta fue eliminada.');
             }
+            if ($member->isSuspended()) {
+                return $this->unauthorized($request, 'account_suspended', 'Tu cuenta fue suspendida por seguridad.');
+            }
             $this->sessions->touch($session);
             $request->attributes->set('auth_member', $member);
             $request->attributes->set('auth_device_session', $session);
@@ -75,6 +78,9 @@ class AuthenticateMember
         }
         if ($member->status === Member::STATUS_DELETED) {
             return $this->unauthorized($request, 'account_deleted', 'Esta cuenta fue eliminada.');
+        }
+        if ($member->isSuspended()) {
+            return $this->unauthorized($request, 'account_suspended', 'Tu cuenta fue suspendida por seguridad.');
         }
 
         $request->attributes->set('auth_member', $member);

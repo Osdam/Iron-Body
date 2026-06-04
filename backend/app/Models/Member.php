@@ -19,6 +19,9 @@ class Member extends Model
     public const STATUS_FAILED = 'failed';
     // Cuenta eliminada/anonimizada por solicitud del usuario: bloquea el login.
     public const STATUS_DELETED = 'deleted';
+    // Cuenta suspendida por seguridad (manual desde el CRM o automática si se
+    // activa): bloquea login + sesiones hasta que el CRM la desbloquee.
+    public const STATUS_SUSPENDED = 'suspended';
 
     // Estado de inscripción biométrica facial (la biometría es OPCIONAL).
     public const BIOMETRIC_PENDING = 'pending';
@@ -137,6 +140,23 @@ class Member extends Model
     public function securityEvents(): HasMany
     {
         return $this->hasMany(MemberSecurityEvent::class);
+    }
+
+    public function riskLocks(): HasMany
+    {
+        return $this->hasMany(MemberRiskLock::class);
+    }
+
+    /** Bloqueo de seguridad vivo (suspensión activa) si existe. */
+    public function activeRiskLock(): ?MemberRiskLock
+    {
+        return $this->riskLocks()->live()->latest('id')->first();
+    }
+
+    /** ¿La cuenta está suspendida por seguridad (estado o bloqueo vivo)? */
+    public function isSuspended(): bool
+    {
+        return $this->status === self::STATUS_SUSPENDED || $this->activeRiskLock() !== null;
     }
 
     public function deleteStoredFiles(): void

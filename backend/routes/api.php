@@ -398,6 +398,11 @@ Route::get('admin/security/reports/{report}',              [\App\Http\Controller
 Route::patch('admin/security/reports/{report}',            [\App\Http\Controllers\Api\SecuritySupportController::class, 'adminUpdate']);
 Route::post('admin/security/reports/{report}/revoke-devices', [\App\Http\Controllers\Api\SecuritySupportController::class, 'adminRevokeDevices']);
 
+// ── Seguridad: bloqueos/suspensiones (CRM admin) ───────────────────────────
+Route::get('admin/security/locks',              [\App\Http\Controllers\Api\MemberRiskController::class, 'index']);
+Route::post('admin/members/{member}/suspend',   [\App\Http\Controllers\Api\MemberRiskController::class, 'suspend']);
+Route::post('admin/members/{member}/unlock',    [\App\Http\Controllers\Api\MemberRiskController::class, 'unlock']);
+
 // ── Stories CRM admin (sin auth — patrón del resto del CRM) ────────────────
 Route::get('admin/stories',         [StoriesController::class, 'indexAsAdmin']);
 Route::post('admin/stories',        [StoriesController::class, 'storeAsAdmin']);

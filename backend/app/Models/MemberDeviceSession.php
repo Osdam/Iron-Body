@@ -25,6 +25,9 @@ class MemberDeviceSession extends Model
         'user_agent',
         'last_seen_at',
         'trusted_at',
+        'is_primary',
+        'is_trusted',
+        'risk_score',
         'revoked_at',
         'revoked_reason',
     ];
