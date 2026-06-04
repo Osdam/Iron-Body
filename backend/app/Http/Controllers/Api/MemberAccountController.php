@@ -2,11 +2,16 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\OtpException;
 use App\Http\Controllers\Controller;
 use App\Models\AccountDeletionRequest;
 use App\Models\Member;
+use App\Models\MemberAuthChallenge;
+use App\Models\MemberSecurityEvent;
 use App\Models\Payment;
 use App\Services\DeviceSessionService;
+use App\Services\OtpService;
+use App\Services\SecurityEventService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,6 +29,12 @@ use Illuminate\Support\Facades\Storage;
  */
 class MemberAccountController extends Controller
 {
+    public function __construct(
+        private OtpService $otp,
+        private SecurityEventService $security,
+    ) {
+    }
+
     public function status(Request $request): JsonResponse
     {
         /** @var Member $member */
@@ -86,12 +97,21 @@ class MemberAccountController extends Controller
         ]);
     }
 
-    /** POST member/account/delete-request — registra la solicitud (idempotente). */
+    /**
+     * POST member/account/delete-request — registra la solicitud (idempotente) y
+     * dispara el 2FA: la eliminación de cuenta es destructiva, así que exige
+     * verificación por OTP/SMS antes de ejecutarse (Fase 7).
+     *
+     * Si el miembro no tiene teléfono para recibir OTP (la base demo tiene
+     * varios), NO se le deja atrapado: se permite el borrado sin OTP para
+     * cumplir App Store 5.1.1(v), pero queda auditado como `no_phone`.
+     */
     public function deleteRequest(Request $request): JsonResponse
     {
         /** @var Member $member */
         $member = $request->attributes->get('auth_member');
         $data = $request->validate(['reason' => ['nullable', 'string', 'max:1000']]);
+        $context = $this->securityContext($request);
 
         $req = AccountDeletionRequest::where('member_id', $member->id)
             ->whereIn('status', [
@@ -110,11 +130,42 @@ class MemberAccountController extends Controller
                 'metadata' => ['source' => 'mobile_app'],
             ]);
 
-        return response()->json([
+        $this->security->record($member, MemberSecurityEvent::TYPE_ACCOUNT_DELETE_REQUESTED, $context, [
+            'request_id' => $req->id,
+        ]);
+
+        // Sin teléfono => no hay segundo factor posible: se permite continuar.
+        if (! $this->otp->canChallenge($member)) {
+            return response()->json([
+                'ok' => true,
+                'status' => $req->status,
+                'requested_at' => $req->requested_at?->toIso8601String(),
+                'requires_otp' => false,
+            ]);
+        }
+
+        $result    = $this->otp->startChallenge($member, $context, MemberAuthChallenge::PURPOSE_ACCOUNT_DELETE);
+        $challenge = $result['challenge'];
+        $this->security->record($member, MemberSecurityEvent::TYPE_SENSITIVE_OTP_SENT, $context, [
+            'purpose'   => MemberAuthChallenge::PURPOSE_ACCOUNT_DELETE,
+            'challenge' => $challenge->uuid,
+        ]);
+
+        $payload = [
             'ok' => true,
             'status' => $req->status,
             'requested_at' => $req->requested_at?->toIso8601String(),
-        ]);
+            'requires_otp' => true,
+            'challenge_id' => $challenge->uuid,
+            'destination' => $challenge->maskedDestination(),
+            'expires_in' => (int) config('otp.ttl', 300),
+            'resend_cooldown' => (int) config('otp.resend_cooldown', 60),
+        ];
+        if ($this->otp->exposeCode()) {
+            $payload['dev_code'] = $result['code'];
+        }
+
+        return response()->json($payload);
     }
 
     /**
@@ -132,6 +183,30 @@ class MemberAccountController extends Controller
     {
         /** @var Member $member */
         $member = $request->attributes->get('auth_member');
+        $context = $this->securityContext($request);
+
+        // 2FA obligatorio si el miembro tiene teléfono: sin un OTP válido de
+        // propósito `account_delete` no se ejecuta el borrado.
+        $otpVerified = false;
+        if ($this->otp->canChallenge($member)) {
+            $validated = $request->validate([
+                'challenge_id' => ['required', 'string'],
+                'code'         => ['required', 'string'],
+            ]);
+            try {
+                $this->otp->verifyAction(
+                    $member,
+                    MemberAuthChallenge::PURPOSE_ACCOUNT_DELETE,
+                    $validated['challenge_id'],
+                    $validated['code'],
+                    $context,
+                );
+                $otpVerified = true;
+            } catch (OtpException $e) {
+                return response()->json(array_merge(['ok' => false, 'message' => $e->getMessage()], $e->extra), $e->status);
+            }
+        }
+
         $member->loadMissing(['user', 'identityDocument', 'biometric']);
         $user = $member->user;
 
@@ -222,11 +297,36 @@ class MemberAccountController extends Controller
             ])->save();
         });
 
+        $this->security->record($member, MemberSecurityEvent::TYPE_ACCOUNT_DELETED, $context, [
+            'otp_verified' => $otpVerified,
+            'request_id'   => $req->id,
+        ]);
+
         return response()->json([
             'ok' => true,
             'status' => AccountDeletionRequest::STATUS_COMPLETED,
             'message' => 'Tu cuenta y tus datos personales fueron eliminados. '
                 .'Conservamos únicamente lo exigido por obligación legal/contable.',
         ]);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /** Contexto de seguridad (dispositivo/red) para auditoría y retos OTP. */
+    private function securityContext(Request $request): array
+    {
+        $deviceId = $request->input('device_id')
+            ?? $request->header('X-Device-Id')
+            ?? $request->query('device_id');
+        $deviceId = ($deviceId !== null && trim((string) $deviceId) !== '') ? (string) $deviceId : null;
+
+        return [
+            'device_id'   => $deviceId,
+            'device_name' => $request->input('device_name') ?? $request->header('X-Device-Name'),
+            'platform'    => $request->input('platform') ?? $request->header('X-Platform'),
+            'app_version' => $request->input('app_version') ?? $request->header('X-App-Version'),
+            'ip_address'  => $request->ip(),
+            'user_agent'  => $request->userAgent(),
+        ];
     }
 }

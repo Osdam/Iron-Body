@@ -18,9 +18,18 @@ class MemberAuthChallenge extends Model
     public const STATUS_EXPIRED   = 'expired';
     public const STATUS_BLOCKED   = 'blocked';
 
+    /** Propósito del reto: el login es el por defecto; el resto son acciones sensibles. */
+    public const PURPOSE_LOGIN                = 'login';
+    public const PURPOSE_ACCOUNT_DELETE       = 'account_delete';
+    public const PURPOSE_DEVICE_REVOKE        = 'device_revoke';
+    public const PURPOSE_DEVICE_REVOKE_OTHERS = 'device_revoke_others';
+    public const PURPOSE_DEVICE_UNBIND        = 'device_unbind';
+    public const PURPOSE_PHONE_CHANGE         = 'phone_change';
+
     protected $fillable = [
         'uuid',
         'member_id',
+        'purpose',
         'code_hash',
         'channel',
         'destination',

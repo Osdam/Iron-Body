@@ -34,6 +34,12 @@ class MemberSecurityEvent extends Model
     public const TYPE_FACE_REENROLL_COMPLETED = 'biometric_reenrollment_completed';
     public const TYPE_FACE_LOCKED             = 'biometric_locked';
 
+    // Acciones sensibles con 2FA (Bloque 1).
+    public const TYPE_SENSITIVE_OTP_SENT      = 'sensitive_action_otp_sent';
+    public const TYPE_ACCOUNT_DELETE_REQUESTED = 'account_delete_requested';
+    public const TYPE_ACCOUNT_DELETED         = 'account_deleted';
+    public const TYPE_DEVICE_UNBOUND          = 'device_unbound';
+
     protected $fillable = [
         'member_id',
         'type',

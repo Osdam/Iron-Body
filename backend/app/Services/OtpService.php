@@ -30,19 +30,30 @@ class OtpService
      *
      * @return array{challenge: MemberAuthChallenge, code: string, sent: bool}
      */
-    public function startChallenge(Member $member, array $context): array
-    {
-        // Un solo reto vivo por miembro: vence los pendientes anteriores.
+    public function startChallenge(
+        Member $member,
+        array $context,
+        string $purpose = MemberAuthChallenge::PURPOSE_LOGIN,
+        ?string $destinationOverride = null,
+    ): array {
+        // Un solo reto vivo por miembro y propósito: vence los pendientes del
+        // MISMO propósito (no interfiere con un eventual reto de login activo).
         MemberAuthChallenge::query()
             ->where('member_id', $member->id)
+            ->where('purpose', $purpose)
             ->where('status', MemberAuthChallenge::STATUS_PENDING)
             ->update(['status' => MemberAuthChallenge::STATUS_EXPIRED]);
 
-        $phone = $this->resolvePhone($member);
+        // Para cambio de número el OTP va al teléfono NUEVO; en el resto, al del
+        // titular ya registrado.
+        $phone = $destinationOverride !== null
+            ? trim($destinationOverride)
+            : $this->resolvePhone($member);
         $code  = $this->generateCode();
 
         $challenge = MemberAuthChallenge::create([
             'member_id'    => $member->id,
+            'purpose'      => $purpose,
             'code_hash'    => Hash::make($code),
             'channel'      => 'sms',
             'destination'  => $phone,
@@ -86,10 +97,54 @@ class OtpService
             throw new OtpException('No encontramos esta verificación. Solicita un código nuevo.', 404);
         }
 
+        $this->assertCodeAccepted($challenge, $code, $context);
+
+        $member = $challenge->member;
+        if ($member) {
+            $this->security->record($member, MemberSecurityEvent::TYPE_LOGIN_VERIFIED, $context, [
+                'challenge' => $challenge->uuid,
+            ]);
+        }
+
+        return ['member' => $member, 'challenge' => $challenge];
+    }
+
+    /**
+     * Verifica el OTP de una ACCIÓN SENSIBLE (eliminar cuenta, desvincular
+     * dispositivos, cambio de número…). A diferencia del login, exige que el
+     * reto pertenezca al miembro autenticado y tenga el propósito esperado, de
+     * modo que un challenge_id de login no pueda reutilizarse para otra acción.
+     *
+     * @throws OtpException
+     */
+    public function verifyAction(Member $member, string $purpose, string $challengeUuid, string $code, array $context): MemberAuthChallenge
+    {
+        $challenge = MemberAuthChallenge::query()
+            ->where('uuid', $challengeUuid)
+            ->where('member_id', $member->id)
+            ->where('purpose', $purpose)
+            ->first();
+
+        if (! $challenge) {
+            throw new OtpException('No encontramos esta verificación. Solicita un código nuevo.', 404);
+        }
+
+        $this->assertCodeAccepted($challenge, $code, $context);
+
+        return $challenge;
+    }
+
+    /**
+     * Núcleo compartido de validación de un código: estados terminales, vigencia
+     * e intentos. Al pasar, marca el reto como verificado/consumido. Lanza
+     * {@see OtpException} en cualquier fallo.
+     */
+    private function assertCodeAccepted(MemberAuthChallenge $challenge, string $code, array $context): void
+    {
         $member = $challenge->member;
 
         if ($challenge->status === MemberAuthChallenge::STATUS_VERIFIED) {
-            throw new OtpException('Este código ya fue usado. Inicia sesión nuevamente.', 409);
+            throw new OtpException('Este código ya fue usado. Solicita uno nuevo.', 409);
         }
 
         if ($challenge->status === MemberAuthChallenge::STATUS_BLOCKED) {
@@ -110,6 +165,7 @@ class OtpService
                 if ($member) {
                     $this->security->record($member, MemberSecurityEvent::TYPE_OTP_BLOCKED, $context, [
                         'challenge' => $challenge->uuid,
+                        'purpose'   => $challenge->purpose,
                     ]);
                 }
                 throw new OtpException('Demasiados intentos fallidos. Solicita un código nuevo.', 423);
@@ -118,6 +174,7 @@ class OtpService
             if ($member) {
                 $this->security->record($member, MemberSecurityEvent::TYPE_LOGIN_FAILED, $context, [
                     'challenge' => $challenge->uuid,
+                    'purpose'   => $challenge->purpose,
                     'remaining' => $remaining,
                 ]);
             }
@@ -133,14 +190,6 @@ class OtpService
             'status'      => MemberAuthChallenge::STATUS_VERIFIED,
             'consumed_at' => now(),
         ]);
-
-        if ($member) {
-            $this->security->record($member, MemberSecurityEvent::TYPE_LOGIN_VERIFIED, $context, [
-                'challenge' => $challenge->uuid,
-            ]);
-        }
-
-        return ['member' => $member, 'challenge' => $challenge];
     }
 
     /**

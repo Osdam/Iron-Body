@@ -683,6 +683,169 @@ class AuthController extends Controller
         return response()->json(['ok' => true, 'message' => 'Sesión cerrada.']);
     }
 
+    // ── Acciones sensibles con 2FA (Fase 6 / Fase 8) ─────────────────────────
+
+    /** POST members/devices/{uuid}/revoke-request — dispara el OTP para revocar. */
+    public function revokeDeviceRequest(Request $request, string $uuid): JsonResponse
+    {
+        $member  = $request->attributes->get('auth_member');
+        $session = MemberDeviceSession::query()
+            ->where('member_id', $member->id)
+            ->where('uuid', $uuid)
+            ->active()
+            ->first();
+
+        if (! $session) {
+            return response()->json(['ok' => false, 'message' => 'Dispositivo no encontrado.'], 404);
+        }
+
+        return $this->sensitiveChallengeResponse(
+            $member,
+            MemberAuthChallenge::PURPOSE_DEVICE_REVOKE,
+            $this->context($request),
+            ['device' => $session->device_name],
+        );
+    }
+
+    /** POST members/devices/{uuid}/revoke-confirm — valida OTP y cierra la sesión. */
+    public function revokeDeviceConfirm(Request $request, string $uuid): JsonResponse
+    {
+        $member = $request->attributes->get('auth_member');
+        if ($err = $this->verifySensitive($request, $member, MemberAuthChallenge::PURPOSE_DEVICE_REVOKE)) {
+            return $err;
+        }
+
+        return $this->revokeDevice($request, $uuid);
+    }
+
+    /** POST member/devices/revoke-others-request — dispara el OTP para cerrar las demás. */
+    public function revokeOthersRequest(Request $request): JsonResponse
+    {
+        $member = $request->attributes->get('auth_member');
+
+        return $this->sensitiveChallengeResponse(
+            $member,
+            MemberAuthChallenge::PURPOSE_DEVICE_REVOKE_OTHERS,
+            $this->context($request),
+        );
+    }
+
+    /** POST member/devices/revoke-others-confirm — valida OTP y cierra las demás. */
+    public function revokeOthersConfirm(Request $request): JsonResponse
+    {
+        $member = $request->attributes->get('auth_member');
+        if ($err = $this->verifySensitive($request, $member, MemberAuthChallenge::PURPOSE_DEVICE_REVOKE_OTHERS)) {
+            return $err;
+        }
+
+        return $this->revokeOthers($request);
+    }
+
+    /** POST members/logout/unbind-request — dispara el OTP para cerrar sesión + desvincular este equipo. */
+    public function logoutUnbindRequest(Request $request): JsonResponse
+    {
+        $member = $request->attributes->get('auth_member');
+
+        return $this->sensitiveChallengeResponse(
+            $member,
+            MemberAuthChallenge::PURPOSE_DEVICE_UNBIND,
+            $this->context($request),
+        );
+    }
+
+    /**
+     * POST members/logout/unbind-confirm — cierra la sesión actual Y desvincula
+     * este equipo (borra su binding): el próximo ingreso desde este o cualquier
+     * dispositivo exigirá verificación completa (OTP + cara). Fase 8.
+     */
+    public function logoutUnbindConfirm(Request $request): JsonResponse
+    {
+        $member = $request->attributes->get('auth_member');
+        if ($err = $this->verifySensitive($request, $member, MemberAuthChallenge::PURPOSE_DEVICE_UNBIND)) {
+            return $err;
+        }
+
+        $session  = $request->attributes->get('auth_device_session');
+        $deviceId = $this->currentDeviceId($request)
+            ?? ($session instanceof MemberDeviceSession ? $session->device_id : null);
+
+        if ($session instanceof MemberDeviceSession) {
+            $this->sessions->revoke($session, 'logout_unbind');
+        }
+        if ($deviceId !== null) {
+            MemberDeviceBinding::query()
+                ->where('member_id', $member->id)
+                ->where('device_id', $deviceId)
+                ->delete();
+        }
+
+        $this->security->record($member, MemberSecurityEvent::TYPE_DEVICE_UNBOUND, $this->context($request), [
+            'device_id' => $deviceId,
+        ]);
+
+        return response()->json([
+            'ok'      => true,
+            'message' => 'Dispositivo desvinculado. El próximo ingreso pedirá verificación completa.',
+        ]);
+    }
+
+    /**
+     * Dispara el OTP de una acción sensible y arma la respuesta `requires_otp`.
+     * Si el miembro no tiene teléfono (no hay segundo factor posible) devuelve
+     * `requires_otp:false` para no dejarlo atrapado: el *-confirm procederá.
+     */
+    private function sensitiveChallengeResponse(Member $member, string $purpose, array $context, array $extra = []): JsonResponse
+    {
+        if (! $this->otp->canChallenge($member)) {
+            return response()->json(array_merge(['ok' => true, 'requires_otp' => false], $extra));
+        }
+
+        $result    = $this->otp->startChallenge($member, $context, $purpose);
+        $challenge = $result['challenge'];
+        $this->security->record($member, MemberSecurityEvent::TYPE_SENSITIVE_OTP_SENT, $context, [
+            'purpose'   => $purpose,
+            'challenge' => $challenge->uuid,
+        ]);
+
+        $payload = array_merge([
+            'ok'              => true,
+            'requires_otp'    => true,
+            'challenge_id'    => $challenge->uuid,
+            'destination'     => $challenge->maskedDestination(),
+            'expires_in'      => (int) config('otp.ttl', 300),
+            'resend_cooldown' => (int) config('otp.resend_cooldown', 60),
+        ], $extra);
+        if ($this->otp->exposeCode()) {
+            $payload['dev_code'] = $result['code'];
+        }
+
+        return response()->json($payload);
+    }
+
+    /**
+     * Verifica el OTP de una acción sensible. Devuelve null si todo bien (o si
+     * no hay teléfono y por tanto no hay 2FA), o un JsonResponse de error listo.
+     */
+    private function verifySensitive(Request $request, Member $member, string $purpose): ?JsonResponse
+    {
+        if (! $this->otp->canChallenge($member)) {
+            return null;
+        }
+
+        $validated = $request->validate([
+            'challenge_id' => ['required', 'string'],
+            'code'         => ['required', 'string'],
+        ]);
+
+        try {
+            $this->otp->verifyAction($member, $purpose, $validated['challenge_id'], $validated['code'], $this->context($request));
+        } catch (OtpException $e) {
+            return response()->json(array_merge(['ok' => false, 'message' => $e->getMessage()], $e->extra), $e->status);
+        }
+
+        return null;
+    }
+
     /** POST members/push-token — registra/renueva el token FCM del dispositivo. */
     public function registerPushToken(Request $request): JsonResponse
     {

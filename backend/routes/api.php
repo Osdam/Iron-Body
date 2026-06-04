@@ -262,6 +262,17 @@ Route::middleware('auth.member')->group(function (): void {
     Route::post('member/devices/revoke-others', [AuthController::class, 'revokeOthers']);
     Route::post('member/sessions/logout-others', [AuthController::class, 'revokeOthers']);
     Route::post('members/logout', [AuthController::class, 'logout']);
+
+    // Acciones sensibles de dispositivo con 2FA (Fase 6 / Fase 8): request dispara
+    // el OTP, confirm lo valida antes de ejecutar. Throttle defensivo.
+    Route::middleware('throttle:12,1')->group(function (): void {
+        Route::post('members/devices/{uuid}/revoke-request',  [AuthController::class, 'revokeDeviceRequest']);
+        Route::post('members/devices/{uuid}/revoke-confirm',  [AuthController::class, 'revokeDeviceConfirm']);
+        Route::post('member/devices/revoke-others-request',   [AuthController::class, 'revokeOthersRequest']);
+        Route::post('member/devices/revoke-others-confirm',   [AuthController::class, 'revokeOthersConfirm']);
+        Route::post('members/logout/unbind-request',          [AuthController::class, 'logoutUnbindRequest']);
+        Route::post('members/logout/unbind-confirm',          [AuthController::class, 'logoutUnbindConfirm']);
+    });
     // Push nativo (FCM): registrar/baja del token del dispositivo.
     Route::post('members/push-token', [AuthController::class, 'registerPushToken']);
     Route::post('members/push-token/remove', [AuthController::class, 'removePushToken']);
