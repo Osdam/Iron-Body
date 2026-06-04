@@ -245,6 +245,9 @@ Route::middleware('auth.member')->group(function (): void {
     Route::post('member/profile/photo', [\App\Http\Controllers\Api\MemberProfileController::class, 'updatePhoto'])
         ->middleware('throttle:20,1');
 
+    // ── Contexto saneado del miembro para el coach IRON IA (datos reales).
+    Route::get('member/ai/context', [\App\Http\Controllers\Api\MemberAiContextController::class, 'show']);
+
     // ── Eliminación de cuenta/datos iniciada desde la app (App Store 5.1.1(v)).
     Route::get('member/account/deletion-status', [\App\Http\Controllers\Api\MemberAccountController::class, 'deletionStatus']);
     Route::post('member/account/delete-request', [\App\Http\Controllers\Api\MemberAccountController::class, 'deleteRequest'])
