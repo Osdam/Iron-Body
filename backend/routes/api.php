@@ -104,6 +104,9 @@ Route::middleware('member.registration.token')->group(function () {
     Route::post('members/login/face-reenroll/complete', [AuthController::class, 'faceReenrollComplete'])
         ->middleware('throttle:6,1');
     Route::post('members/biometric-unlock', [AuthController::class, 'biometricUnlock']);
+    // Login adaptativo (Bloque 3b): canje del ticket de desbloqueo local.
+    Route::post('members/login/trusted-unlock', [AuthController::class, 'trustedUnlock'])
+        ->middleware('throttle:10,1');
     Route::post('members/register', [MemberRegistrationController::class, 'register']);
     Route::post('members/{member}/identity', [MemberRegistrationController::class, 'identity']);
     Route::post('members/{member}/legal-consent', [MemberRegistrationController::class, 'legalConsent']);

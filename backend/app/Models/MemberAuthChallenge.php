@@ -26,10 +26,16 @@ class MemberAuthChallenge extends Model
     public const PURPOSE_DEVICE_UNBIND        = 'device_unbind';
     public const PURPOSE_PHONE_CHANGE         = 'phone_change';
 
+    /** Nivel del login adaptativo (Bloque 3b). Null = login clásico. */
+    public const TIER_LOCAL    = 'local';
+    public const TIER_OTP      = 'otp';
+    public const TIER_OTP_FACE = 'otp_face';
+
     protected $fillable = [
         'uuid',
         'member_id',
         'purpose',
+        'risk_tier',
         'code_hash',
         'channel',
         'destination',

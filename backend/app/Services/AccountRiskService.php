@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Member;
+use App\Models\MemberAuthChallenge;
 use App\Models\MemberRiskLock;
 use App\Models\MemberSecurityEvent;
 
@@ -27,6 +28,33 @@ class AccountRiskService
     public function liveLock(Member $member): ?MemberRiskLock
     {
         return $member->activeRiskLock();
+    }
+
+    /**
+     * Decide el nivel del login adaptativo (Bloque 3b) según la confianza del
+     * dispositivo y el puntaje de riesgo. [$preferOtp] fuerza al menos OTP
+     * (cuando la app no pudo/quiso usar la biometría local).
+     *
+     * @return string TIER_LOCAL | TIER_OTP | TIER_OTP_FACE
+     */
+    public function loginTier(Member $member, bool $trusted, bool $preferOtp = false): string
+    {
+        if (! $trusted) {
+            return MemberAuthChallenge::TIER_OTP_FACE;
+        }
+
+        $score = $this->score($member);
+        $warn  = (int) config('security.warn_threshold', 40);
+        $local = (int) config('security.local_threshold', 1);
+
+        if ($score >= $warn) {
+            return MemberAuthChallenge::TIER_OTP_FACE; // step-up por riesgo
+        }
+        if ($preferOtp || $score >= $local) {
+            return MemberAuthChallenge::TIER_OTP;
+        }
+
+        return MemberAuthChallenge::TIER_LOCAL;
     }
 
     /** Puntaje de riesgo (0..∞) según eventos recientes y pesos configurados. */

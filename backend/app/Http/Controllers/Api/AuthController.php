@@ -102,6 +102,29 @@ class AuthController extends Controller
             return $denied;
         }
 
+        // Login adaptativo por riesgo (Bloque 3b). Con el flag APAGADO (default)
+        // $riskTier queda null y todo se comporta EXACTAMENTE como antes.
+        $riskTier = null;
+        if (config('security.adaptive_login', false)) {
+            $trusted = $this->isTrustedDevice($member, $context['device_id'] ?? null);
+            $tier    = $this->risk->loginTier($member, $trusted, $request->boolean('prefer_otp'));
+
+            // Riesgo bajo + dispositivo confiable: desbloqueo local (Face ID/huella
+            // del dispositivo) sin SMS ni match facial; la app canjea el ticket.
+            if ($tier === MemberAuthChallenge::TIER_LOCAL) {
+                $ticket = $this->otp->createLocalTicket($member, $context);
+
+                return response()->json(['ok' => true, 'data' => [
+                    'requires_otp'          => false,
+                    'requires_local_unlock' => true,
+                    'unlock_ticket'         => $ticket->uuid,
+                    'expires_in'            => (int) config('security.local_ticket_ttl', 180),
+                ]]);
+            }
+
+            $riskTier = $tier; // 'otp' (solo SMS) | 'otp_face' (SMS + cara)
+        }
+
         // Sin teléfono registrado no se puede mandar SMS.
         if (! $this->otp->canChallenge($member)) {
             if (! config('otp.skip_when_no_phone', true)) {
@@ -114,7 +137,7 @@ class AuthController extends Controller
             return $this->grantSession($member, $context, otpVerified: false);
         }
 
-        $result    = $this->otp->startChallenge($member, $context);
+        $result    = $this->otp->startChallenge($member, $context, MemberAuthChallenge::PURPOSE_LOGIN, null, $riskTier);
         $challenge = $result['challenge'];
 
         $data = [
@@ -162,11 +185,17 @@ class AuthController extends Controller
             return $this->concurrencyBlocked($member, $active, $context);
         }
 
+        // Login adaptativo: en el tier `otp` (dispositivo confiable, riesgo medio)
+        // se omite el match facial; los tiers `otp_face`/clásico (null) lo exigen
+        // si el miembro tiene rostro de referencia.
+        $skipFace = config('security.adaptive_login', false)
+            && $res['challenge']->risk_tier === MemberAuthChallenge::TIER_OTP;
+
         // Segundo factor biométrico: si el miembro tiene rostro de referencia,
         // NO se emite la sesión aún; el dispositivo debe pasar el escaneo facial
         // (reconocimiento on-device contra la referencia). El `ticket` autoriza
         // los pasos face-reference/face-verify.
-        if ($member && $this->faceRequiredFor($member)) {
+        if (! $skipFace && $member && $this->faceRequiredFor($member)) {
             return response()->json([
                 'ok'   => true,
                 'data' => [
@@ -182,6 +211,68 @@ class AuthController extends Controller
     }
 
     /** POST members/login/face-reference — entrega la referencia facial (ticket). */
+    /**
+     * POST members/login/trusted-unlock — canjea el ticket de desbloqueo local
+     * (login adaptativo, tier `local`). La app ya pasó la biometría LOCAL del
+     * dispositivo; el backend confía en el vínculo equipo↔titular + bajo riesgo y
+     * emite la sesión sin SMS ni match facial. Re-aplica todos los guardas.
+     */
+    public function trustedUnlock(Request $request): JsonResponse
+    {
+        if (! config('security.adaptive_login', false)) {
+            return response()->json(['ok' => false, 'message' => 'No disponible.'], 404);
+        }
+
+        $validated = $request->validate([
+            'ticket'          => ['required', 'string'],
+            'document_number' => ['required', 'string'],
+        ]);
+
+        $member = Member::query()->with('user')
+            ->where('document_number', $validated['document_number'])
+            ->first();
+        if (! $member) {
+            return response()->json(['ok' => false, 'message' => 'Documento no encontrado.'], 404);
+        }
+        if ($member->status === Member::STATUS_DELETED) {
+            return response()->json(['ok' => false, 'code' => 'account_deleted', 'message' => 'Esta cuenta fue eliminada.'], 403);
+        }
+        if ($member->isSuspended()) {
+            return $this->suspendedResponse($member);
+        }
+
+        $context = $this->context($request);
+
+        // El dispositivo debe seguir siendo confiable; si no, a OTP.
+        if (! $this->isTrustedDevice($member, $context['device_id'] ?? null)) {
+            return response()->json([
+                'ok'      => false,
+                'code'    => 'verification_required',
+                'message' => 'Necesitamos verificar tu identidad. Inicia sesión con tu documento.',
+            ], 409);
+        }
+
+        $challenge = $this->otp->consumeLocalTicket($member, $validated['ticket']);
+        if (! $challenge) {
+            return response()->json([
+                'ok'      => false,
+                'code'    => 'ticket_expired',
+                'message' => 'La verificación expiró. Inténtalo de nuevo.',
+            ], 410);
+        }
+
+        // Mismos guardas que el login normal.
+        if (! $request->boolean('force')
+            && $active = $this->sessions->concurrentActiveSession($member, $context['device_id'] ?? null)) {
+            return $this->concurrencyBlocked($member, $active, $context);
+        }
+        if ($denied = $this->deviceBindingDenied($member, $context)) {
+            return $denied;
+        }
+
+        return $this->grantSession($member, $context, otpVerified: true);
+    }
+
     public function faceReference(Request $request): JsonResponse
     {
         $validated = $request->validate(['ticket' => ['required', 'string']]);
@@ -1050,6 +1141,25 @@ class AuthController extends Controller
         );
 
         $this->security->record($member, MemberSecurityEvent::TYPE_DEVICE_BOUND, $context, []);
+    }
+
+    /**
+     * ¿Este dispositivo es CONFIABLE para el miembro? Lo es si ya está vinculado
+     * a ÉL (member_device_bindings), es decir, completó un login fuerte antes en
+     * este equipo. Si el binding está apagado o no hay device_id → no confiable.
+     */
+    private function isTrustedDevice(?Member $member, ?string $deviceId): bool
+    {
+        if (! $member || ! config('otp.device_binding.enabled', true)) {
+            return false;
+        }
+        if ($deviceId === null || trim($deviceId) === '') {
+            return false;
+        }
+
+        $binding = MemberDeviceBinding::forDevice($deviceId);
+
+        return $binding !== null && $binding->member_id === $member->id;
     }
 
     /**

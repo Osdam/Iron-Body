@@ -35,6 +35,7 @@ class OtpService
         array $context,
         string $purpose = MemberAuthChallenge::PURPOSE_LOGIN,
         ?string $destinationOverride = null,
+        ?string $riskTier = null,
     ): array {
         // Un solo reto vivo por miembro y propósito: vence los pendientes del
         // MISMO propósito (no interfiere con un eventual reto de login activo).
@@ -54,6 +55,7 @@ class OtpService
         $challenge = MemberAuthChallenge::create([
             'member_id'    => $member->id,
             'purpose'      => $purpose,
+            'risk_tier'    => $riskTier,
             'code_hash'    => Hash::make($code),
             'channel'      => 'sms',
             'destination'  => $phone,
@@ -79,6 +81,66 @@ class OtpService
         $this->flagSuspicious($member, $context);
 
         return ['challenge' => $challenge, 'code' => $code, 'sent' => $sent];
+    }
+
+    /**
+     * Crea un TICKET de desbloqueo local (login adaptativo, tier `local`): no
+     * envía SMS ni guarda un código usable; sólo es una autorización de corta
+     * vida que la app canjea tras pasar la biometría local del dispositivo.
+     */
+    public function createLocalTicket(Member $member, array $context): MemberAuthChallenge
+    {
+        MemberAuthChallenge::query()
+            ->where('member_id', $member->id)
+            ->where('purpose', MemberAuthChallenge::PURPOSE_LOGIN)
+            ->where('risk_tier', MemberAuthChallenge::TIER_LOCAL)
+            ->where('status', MemberAuthChallenge::STATUS_PENDING)
+            ->update(['status' => MemberAuthChallenge::STATUS_EXPIRED]);
+
+        $ttl = (int) config('security.local_ticket_ttl', 180);
+
+        return MemberAuthChallenge::create([
+            'member_id'   => $member->id,
+            'purpose'     => MemberAuthChallenge::PURPOSE_LOGIN,
+            'risk_tier'   => MemberAuthChallenge::TIER_LOCAL,
+            // Código aleatorio no derivable: este ticket no se valida con OTP.
+            'code_hash'   => Hash::make(\Illuminate\Support\Str::random(40)),
+            'channel'     => 'local',
+            'device_id'   => $context['device_id'] ?? null,
+            'device_name' => $context['device_name'] ?? null,
+            'platform'    => $context['platform'] ?? null,
+            'ip_address'  => $context['ip_address'] ?? null,
+            'user_agent'  => isset($context['user_agent']) ? mb_substr((string) $context['user_agent'], 0, 500) : null,
+            'status'      => MemberAuthChallenge::STATUS_PENDING,
+            'expires_at'  => now()->addSeconds($ttl),
+        ]);
+    }
+
+    /**
+     * Consume un ticket de desbloqueo local: válido si pertenece al miembro, es
+     * tier `local`, está pendiente y no venció. Lo marca completado. Devuelve
+     * null si no es válido (la app debe caer a OTP).
+     */
+    public function consumeLocalTicket(Member $member, string $ticketUuid): ?MemberAuthChallenge
+    {
+        $challenge = MemberAuthChallenge::query()
+            ->where('uuid', $ticketUuid)
+            ->where('member_id', $member->id)
+            ->where('purpose', MemberAuthChallenge::PURPOSE_LOGIN)
+            ->where('risk_tier', MemberAuthChallenge::TIER_LOCAL)
+            ->where('status', MemberAuthChallenge::STATUS_PENDING)
+            ->first();
+
+        if (! $challenge || $challenge->isExpired()) {
+            return null;
+        }
+
+        $challenge->update([
+            'status'      => MemberAuthChallenge::STATUS_COMPLETED,
+            'consumed_at' => now(),
+        ]);
+
+        return $challenge;
     }
 
     /**

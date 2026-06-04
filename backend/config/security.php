@@ -45,4 +45,29 @@ return [
 
     // Evita avisar en bucle: mínimo (segundos) entre warnings de un miembro.
     'warn_cooldown' => (int) env('SECURITY_WARN_COOLDOWN', 1800),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Login adaptativo por riesgo (Bloque 3b)
+    |--------------------------------------------------------------------------
+    | APAGADO por defecto: con `adaptive_login=false` el login se comporta
+    | EXACTAMENTE igual que hoy (OTP + cara siempre). Al activarlo, la fuerza del
+    | login se adapta a la confianza del dispositivo y al puntaje de riesgo:
+    |   - dispositivo NO confiable (sin vínculo)        → OTP + cara.
+    |   - confiable + riesgo alto (>= warn_threshold)    → OTP + cara (step-up).
+    |   - confiable + riesgo medio (>= local_threshold)  → solo OTP.
+    |   - confiable + riesgo bajo (< local_threshold)    → desbloqueo local
+    |       (Face ID/huella del dispositivo + ticket; sin SMS ni match facial).
+    | Un dispositivo es "confiable" si ya está vinculado a ESTE miembro
+    | (member_device_bindings), es decir, completó un login fuerte antes.
+    */
+    'adaptive_login' => filter_var(env('SECURITY_ADAPTIVE_LOGIN', false), FILTER_VALIDATE_BOOLEAN),
+
+    // Bajo este puntaje (y con dispositivo confiable) se permite desbloqueo local.
+    // Por defecto 1 ⇒ solo riesgo CERO entra con desbloqueo local; cualquier
+    // señal de riesgo exige al menos OTP.
+    'local_threshold' => (int) env('SECURITY_LOCAL_THRESHOLD', 1),
+
+    // Vigencia (segundos) del ticket de desbloqueo local.
+    'local_ticket_ttl' => (int) env('SECURITY_LOCAL_TICKET_TTL', 180),
 ];
