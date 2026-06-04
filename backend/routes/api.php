@@ -251,6 +251,12 @@ Route::middleware('auth.member')->group(function (): void {
         Route::post('member/membership/reactivate',     [\App\Http\Controllers\Api\MembershipController::class, 'reactivate']);
     });
 
+    // ── Publicidad + Eventos del gimnasio (Bloque 4) ──────────────────────────
+    Route::get('member/ads/active',     [\App\Http\Controllers\Api\AppAdController::class, 'active']);
+    Route::post('member/ads/{ad}/seen', [\App\Http\Controllers\Api\AppAdController::class, 'seen']);
+    Route::get('member/events',         [\App\Http\Controllers\Api\AppEventController::class, 'index']);
+    Route::get('member/events/{event}', [\App\Http\Controllers\Api\AppEventController::class, 'show']);
+
     // ── Perfil editable + foto (subida a Firebase por el cliente, aquí se
     // guarda la URL/ruta tras validar ownership).
     Route::get('member/profile', [\App\Http\Controllers\Api\MemberProfileController::class, 'show']);
@@ -421,6 +427,24 @@ Route::post('admin/members/{member}/unlock',    [\App\Http\Controllers\Api\Membe
 Route::get('admin/memberships/{member}',             [\App\Http\Controllers\Api\Admin\MembershipController::class, 'show']);
 Route::post('admin/memberships/{member}/cancel',     [\App\Http\Controllers\Api\Admin\MembershipController::class, 'cancel']);
 Route::post('admin/memberships/{member}/reactivate', [\App\Http\Controllers\Api\Admin\MembershipController::class, 'reactivate']);
+
+// ── Publicidad: campañas del Home (CRM admin) — Bloque 4 ────────────────────
+// Patrón del CRM (sin auth a nivel de ruta). Para subir imagen por multipart en
+// update, usar POST con _method=PATCH (method spoofing de Laravel).
+Route::get('admin/ads',                 [\App\Http\Controllers\Api\Admin\AdController::class, 'index']);
+Route::post('admin/ads',                [\App\Http\Controllers\Api\Admin\AdController::class, 'store']);
+Route::match(['patch', 'post'], 'admin/ads/{ad}', [\App\Http\Controllers\Api\Admin\AdController::class, 'update']);
+Route::delete('admin/ads/{ad}',         [\App\Http\Controllers\Api\Admin\AdController::class, 'destroy']);
+Route::post('admin/ads/{ad}/activate',  [\App\Http\Controllers\Api\Admin\AdController::class, 'activate']);
+Route::post('admin/ads/{ad}/deactivate',[\App\Http\Controllers\Api\Admin\AdController::class, 'deactivate']);
+
+// ── Eventos del gimnasio (CRM admin) — Bloque 4 ─────────────────────────────
+Route::get('admin/events',                  [\App\Http\Controllers\Api\Admin\EventController::class, 'index']);
+Route::post('admin/events',                 [\App\Http\Controllers\Api\Admin\EventController::class, 'store']);
+Route::match(['patch', 'post'], 'admin/events/{event}', [\App\Http\Controllers\Api\Admin\EventController::class, 'update']);
+Route::delete('admin/events/{event}',       [\App\Http\Controllers\Api\Admin\EventController::class, 'destroy']);
+Route::post('admin/events/{event}/activate',  [\App\Http\Controllers\Api\Admin\EventController::class, 'activate']);
+Route::post('admin/events/{event}/deactivate',[\App\Http\Controllers\Api\Admin\EventController::class, 'deactivate']);
 
 // ── Stories CRM admin (sin auth — patrón del resto del CRM) ────────────────
 Route::get('admin/stories',         [StoriesController::class, 'indexAsAdmin']);
