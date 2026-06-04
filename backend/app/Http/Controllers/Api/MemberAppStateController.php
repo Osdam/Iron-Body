@@ -7,6 +7,7 @@ use App\Models\Member;
 use App\Models\Payment;
 use App\Models\Routine;
 use App\Services\DeviceSessionService;
+use App\Services\MembershipService;
 use App\Services\WeeklyStreakService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -25,7 +26,8 @@ class MemberAppStateController extends Controller
     public function show(
         Request $request,
         WeeklyStreakService $streakService,
-        DeviceSessionService $sessions
+        DeviceSessionService $sessions,
+        MembershipService $memberships
     ): JsonResponse {
         /** @var Member $member */
         $member = $request->attributes->get('auth_member');
@@ -33,14 +35,11 @@ class MemberAppStateController extends Controller
         $user = $member->user;
 
         // ── Membresía (la verdad vive en el User: plan + fecha fin) ──────────
-        $endsAt = $user && $user->membership_end_date
-            ? Carbon::parse($user->membership_end_date)->endOfDay()
-            : null;
-        $hasPlan = (bool) ($user && $user->plan);
-        $membershipActive = $hasPlan && (! $endsAt || $endsAt->isFuture());
-        $daysRemaining = $endsAt
-            ? max(0, (int) Carbon::now()->startOfDay()->diffInDays($endsAt->copy()->startOfDay(), false))
-            : null;
+        // Una sola forma de exponer el ciclo de vida (estado/renovación/cancelación).
+        $membershipActive = $user ? $memberships->isActive($user) : false;
+        $membershipSnapshot = $user
+            ? $memberships->snapshot($user)
+            : ['status' => MembershipService::STATUS_NONE, 'is_active' => false];
 
         // ── Pago: último estado normalizado + aprobación ────────────────────
         $lastPayment = Payment::where('member_id', $member->id)->latest('id')->first();
@@ -96,14 +95,7 @@ class MemberAppStateController extends Controller
                 'status' => $member->status,
                 'biometric_status' => $member->biometric_status,
             ],
-            'membership' => [
-                'status' => $membershipActive ? 'active' : ($hasPlan ? 'expired' : 'none'),
-                'plan_name' => $hasPlan ? $user->plan : null,
-                'starts_at' => $user?->membership_start_date,
-                'ends_at' => $endsAt?->toDateString(),
-                'days_remaining' => $daysRemaining,
-                'is_active' => $membershipActive,
-            ],
+            'membership' => $membershipSnapshot,
             'payment' => [
                 'last_status' => $lastPayment ? Payment::normalizeStatus($lastPayment->status) : 'none',
                 'last_payment_id' => $lastPayment?->id,

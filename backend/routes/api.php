@@ -241,6 +241,16 @@ Route::middleware('auth.member')->group(function (): void {
     // estado vivo de la app: membresía/días/pago/entreno/racha/seguridad).
     Route::get('member/app-state', [\App\Http\Controllers\Api\MemberAppStateController::class, 'show']);
 
+    // ── Membresía: renovación / cancelación (Bloque 3) ────────────────────────
+    // cancel-request = vista previa; cancel-confirm = ejecuta (acción reversible:
+    // conserva acceso hasta fin de periodo). reactivate la deshace.
+    Route::get('member/membership/status', [\App\Http\Controllers\Api\MembershipController::class, 'status']);
+    Route::middleware('throttle:20,1')->group(function (): void {
+        Route::post('member/membership/cancel-request', [\App\Http\Controllers\Api\MembershipController::class, 'cancelRequest']);
+        Route::post('member/membership/cancel-confirm', [\App\Http\Controllers\Api\MembershipController::class, 'cancelConfirm']);
+        Route::post('member/membership/reactivate',     [\App\Http\Controllers\Api\MembershipController::class, 'reactivate']);
+    });
+
     // ── Perfil editable + foto (subida a Firebase por el cliente, aquí se
     // guarda la URL/ruta tras validar ownership).
     Route::get('member/profile', [\App\Http\Controllers\Api\MemberProfileController::class, 'show']);
@@ -405,6 +415,12 @@ Route::post('admin/security/reports/{report}/revoke-devices', [\App\Http\Control
 Route::get('admin/security/locks',              [\App\Http\Controllers\Api\MemberRiskController::class, 'index']);
 Route::post('admin/members/{member}/suspend',   [\App\Http\Controllers\Api\MemberRiskController::class, 'suspend']);
 Route::post('admin/members/{member}/unlock',    [\App\Http\Controllers\Api\MemberRiskController::class, 'unlock']);
+
+// ── Membresías: estado / cancelación / reactivación (CRM admin) ─────────────
+// Patrón del CRM (sin auth a nivel de ruta). NUNCA borra datos del miembro.
+Route::get('admin/memberships/{member}',             [\App\Http\Controllers\Api\Admin\MembershipController::class, 'show']);
+Route::post('admin/memberships/{member}/cancel',     [\App\Http\Controllers\Api\Admin\MembershipController::class, 'cancel']);
+Route::post('admin/memberships/{member}/reactivate', [\App\Http\Controllers\Api\Admin\MembershipController::class, 'reactivate']);
 
 // ── Stories CRM admin (sin auth — patrón del resto del CRM) ────────────────
 Route::get('admin/stories',         [StoriesController::class, 'indexAsAdmin']);

@@ -24,6 +24,10 @@ class User extends Authenticatable
         'plan',
         'membership_start_date',
         'membership_end_date',
+        'membership_auto_renew',
+        'membership_cancellation_requested_at',
+        'membership_cancellation_effective_at',
+        'payment_provider_subscription_id',
     ];
 
     protected $hidden = [
@@ -45,6 +49,9 @@ class User extends Authenticatable
             'password' => 'hashed',
             'membership_start_date' => 'date:Y-m-d',
             'membership_end_date' => 'date:Y-m-d',
+            'membership_auto_renew' => 'boolean',
+            'membership_cancellation_requested_at' => 'datetime',
+            'membership_cancellation_effective_at' => 'date:Y-m-d',
         ];
     }
 
