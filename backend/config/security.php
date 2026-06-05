@@ -70,4 +70,8 @@ return [
 
     // Vigencia (segundos) del ticket de desbloqueo local.
     'local_ticket_ttl' => (int) env('SECURITY_LOCAL_TICKET_TTL', 180),
+
+    // Vigencia (segundos) del ticket de recuperación de número (Face ID/huella
+    // local → cambio de teléfono verificado). Un solo uso, corto.
+    'phone_recovery_ticket_ttl' => (int) env('SECURITY_PHONE_RECOVERY_TICKET_TTL', 300),
 ];
