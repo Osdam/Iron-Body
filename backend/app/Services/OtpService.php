@@ -331,9 +331,12 @@ class OtpService
 
     public function exposeCode(): bool
     {
-        // Defensa: aunque la config lo active, NUNCA se expone el código en
-        // producción (solo en desarrollo local/testing).
+        // Defensa en profundidad: el código SOLO puede exponerse con el driver
+        // `dev` (sin SMS real), nunca en producción y nunca con un proveedor real
+        // (twilio/labsmobile). Así, aunque OTP_EXPOSE_CODE quede en true por error
+        // con Twilio activo, jamás se filtra un código a la respuesta/UI.
         return (bool) config('otp.expose_code', false)
+            && config('otp.driver') === 'dev'
             && ! app()->environment('production');
     }
 

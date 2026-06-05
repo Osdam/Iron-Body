@@ -40,6 +40,24 @@ class MemberProfileController extends Controller
             'injuries'       => ['sometimes', 'nullable', 'string', 'max:1000'],
         ]);
 
+        // El teléfono es dato VERIFICADO (OTP/2FA): NO se cambia desde la edición
+        // normal de perfil, solo por el flujo seguro "Cambiar número". Si llega un
+        // teléfono DISTINTO al actual, se bloquea (422); si es igual o vacío se
+        // ignora para no romper un guardado normal.
+        if (array_key_exists('phone', $data)) {
+            $incoming = $data['phone'] !== null ? trim((string) $data['phone']) : null;
+            $current  = $member->phone !== null ? trim((string) $member->phone) : null;
+            if ($incoming !== null && $incoming !== '' && $incoming !== $current) {
+                Log::warning('profile.phone_change_blocked', ['member_id' => $member->id]);
+
+                return response()->json([
+                    'ok'      => false,
+                    'message' => 'El teléfono solo puede cambiarse desde el flujo de cambio de número verificado.',
+                ], 422);
+            }
+            unset($data['phone']); // nunca se aplica por esta vía
+        }
+
         $member->fill($data);
         $member->save();
 
