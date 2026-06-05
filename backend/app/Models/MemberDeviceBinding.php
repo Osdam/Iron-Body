@@ -16,13 +16,31 @@ class MemberDeviceBinding extends Model
         'device_name',
         'platform',
         'bound_at',
+        'last_otp_reauth_at',
     ];
 
     protected function casts(): array
     {
         return [
             'bound_at' => 'datetime',
+            'last_otp_reauth_at' => 'datetime',
         ];
+    }
+
+    /**
+     * ¿El dispositivo confiable debe revalidar por OTP? Es así si nunca registró
+     * una revalidación (null) o si la última supera `trusted_reauth_days`.
+     * Con `trusted_reauth_days = 0` la revalidación periódica queda desactivada.
+     */
+    public function needsOtpReauth(): bool
+    {
+        $days = (int) config('security.trusted_reauth_days', 30);
+        if ($days <= 0) {
+            return false;
+        }
+
+        return $this->last_otp_reauth_at === null
+            || $this->last_otp_reauth_at->lt(now()->subDays($days));
     }
 
     public function member(): BelongsTo

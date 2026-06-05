@@ -67,6 +67,7 @@ class AdaptiveLoginTest extends TestCase
             'device_name' => 'iPhone de Ana',
             'platform' => 'ios',
             'bound_at' => now(),
+            'last_otp_reauth_at' => now(), // revalidado hace poco → dentro de ventana
         ]);
 
         $r = $this->postJson('/api/members/login', [
@@ -103,6 +104,7 @@ class AdaptiveLoginTest extends TestCase
             'device_id' => 'device-confiable',
             'member_id' => $member->id,
             'bound_at' => now(),
+            'last_otp_reauth_at' => now(), // elegible para local, pero prefer_otp manda
         ]);
 
         $r = $this->postJson('/api/members/login', [
@@ -114,6 +116,76 @@ class AdaptiveLoginTest extends TestCase
         $r->assertOk()
             ->assertJsonPath('data.requires_otp', true);
         $this->assertNull($r->json('data.requires_local_unlock'));
+    }
+
+    public function test_trusted_device_overdue_reauth_requires_otp(): void
+    {
+        $member = $this->member();
+        MemberDeviceBinding::create([
+            'device_id' => 'device-confiable',
+            'member_id' => $member->id,
+            'bound_at' => now()->subDays(60),
+            'last_otp_reauth_at' => now()->subDays(31), // supera trusted_reauth_days
+        ]);
+
+        $r = $this->postJson('/api/members/login', [
+            'document_number' => '1010101010',
+            'device_id' => 'device-confiable',
+        ]);
+
+        $r->assertOk()->assertJsonPath('data.requires_otp', true);
+        $this->assertNull($r->json('data.requires_local_unlock'));
+    }
+
+    public function test_trusted_device_without_reauth_mark_requires_otp(): void
+    {
+        $member = $this->member();
+        MemberDeviceBinding::create([
+            'device_id' => 'device-confiable',
+            'member_id' => $member->id,
+            'bound_at' => now(),
+            // last_otp_reauth_at null → se considera vencido (revalidar una vez).
+        ]);
+
+        $r = $this->postJson('/api/members/login', [
+            'document_number' => '1010101010',
+            'device_id' => 'device-confiable',
+        ]);
+
+        $r->assertOk()->assertJsonPath('data.requires_otp', true);
+        $this->assertNull($r->json('data.requires_local_unlock'));
+    }
+
+    public function test_otp_verify_refreshes_reauth_window(): void
+    {
+        $member = $this->member();
+        $binding = MemberDeviceBinding::create([
+            'device_id' => 'device-confiable',
+            'member_id' => $member->id,
+            'bound_at' => now()->subDays(60),
+            'last_otp_reauth_at' => now()->subDays(40), // vencido
+        ]);
+
+        // Vencido → pide OTP.
+        $login = $this->postJson('/api/members/login', [
+            'document_number' => '1010101010',
+            'device_id' => 'device-confiable',
+        ]);
+        $login->assertOk()->assertJsonPath('data.requires_otp', true);
+        $challengeId = $login->json('data.challenge_id');
+        $code = $login->json('data.dev_code');
+        $this->assertNotEmpty($code);
+
+        // Verifica el OTP → emite sesión y refresca la ventana de revalidación.
+        $this->postJson('/api/members/login/verify', [
+            'challenge_id' => $challengeId,
+            'code' => $code,
+            'device_id' => 'device-confiable',
+        ])->assertOk()->assertJsonPath('data.requires_otp', false);
+
+        $binding->refresh();
+        $this->assertNotNull($binding->last_otp_reauth_at);
+        $this->assertTrue($binding->last_otp_reauth_at->gt(now()->subMinute()));
     }
 
     public function test_trusted_unlock_disabled_when_flag_off(): void

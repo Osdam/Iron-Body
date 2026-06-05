@@ -106,8 +106,14 @@ class AuthController extends Controller
         // $riskTier queda null y todo se comporta EXACTAMENTE como antes.
         $riskTier = null;
         if (config('security.adaptive_login', false)) {
-            $trusted = $this->isTrustedDevice($member, $context['device_id'] ?? null);
-            $tier    = $this->risk->loginTier($member, $trusted, $request->boolean('prefer_otp'));
+            $deviceId  = $context['device_id'] ?? null;
+            $trusted   = $this->isTrustedDevice($member, $deviceId);
+            // Revalidación periódica: aunque el equipo sea confiable, si pasaron
+            // > trusted_reauth_days desde el último OTP (o nunca lo hubo), se pide
+            // un OTP una vez antes de volver al desbloqueo local.
+            $binding   = $trusted ? MemberDeviceBinding::forDevice($deviceId) : null;
+            $reauthDue = $binding !== null && $binding->needsOtpReauth();
+            $tier      = $this->risk->loginTier($member, $trusted, $request->boolean('prefer_otp'), $reauthDue);
 
             // Riesgo bajo + dispositivo confiable: desbloqueo local (Face ID/huella
             // del dispositivo) sin SMS ni match facial; la app canjea el ticket.
@@ -207,7 +213,8 @@ class AuthController extends Controller
             ]);
         }
 
-        return $this->grantSession($member, $context, otpVerified: true);
+        // OTP por SMS verificado: refresca la ventana de revalidación de 30 días.
+        return $this->grantSession($member, $context, otpVerified: true, otpReauth: true);
     }
 
     /** POST members/login/face-reference — entrega la referencia facial (ticket). */
@@ -243,8 +250,12 @@ class AuthController extends Controller
 
         $context = $this->context($request);
 
-        // El dispositivo debe seguir siendo confiable; si no, a OTP.
-        if (! $this->isTrustedDevice($member, $context['device_id'] ?? null)) {
+        // El dispositivo debe seguir siendo confiable Y no estar vencido para
+        // revalidación periódica; si no, a OTP (defensa: un ticket viejo no puede
+        // saltarse la revalidación de 30 días).
+        $binding = MemberDeviceBinding::forDevice($context['device_id'] ?? null);
+        $trusted = $binding !== null && $binding->member_id === $member->id;
+        if (! $trusted || $binding->needsOtpReauth()) {
             return response()->json([
                 'ok'      => false,
                 'code'    => 'verification_required',
@@ -270,6 +281,8 @@ class AuthController extends Controller
             return $denied;
         }
 
+        // Desbloqueo local (Face ID/huella): NO refresca la ventana de OTP — la
+        // revalidación periódica sigue contando desde el último OTP real.
         return $this->grantSession($member, $context, otpVerified: true);
     }
 
@@ -352,7 +365,7 @@ class AuthController extends Controller
             }
             $this->logFaceDecision('approved', $member, $challenge, $bio, $score, 'approved');
 
-            return $this->grantSession($member, $context, otpVerified: true, faceVerified: true);
+            return $this->grantSession($member, $context, otpVerified: true, faceVerified: true, otpReauth: true);
         }
 
         // ── No coincide → auditar y decidir el motivo ────────────────────────
@@ -624,7 +637,7 @@ class AuthController extends Controller
 
         // El segundo factor (OTP) + nueva referencia recién capturada autorizan
         // la sesión; no hace falta re-escanear contra sí misma.
-        return $this->grantSession($member, $context, otpVerified: true, faceVerified: true);
+        return $this->grantSession($member, $context, otpVerified: true, faceVerified: true, otpReauth: true);
     }
 
     /** POST members/login/resend — reenvía el código (cooldown + tope). */
@@ -1079,10 +1092,11 @@ class AuthController extends Controller
     }
 
     /** Emite la sesión del dispositivo y dispara avisos de seguridad. */
-    private function grantSession(Member $member, array $context, bool $otpVerified, bool $faceVerified = false): JsonResponse
+    private function grantSession(Member $member, array $context, bool $otpVerified, bool $faceVerified = false, bool $otpReauth = false): JsonResponse
     {
-        // Asocia el equipo a este titular (anti-uso-compartido por dispositivo).
-        $this->bindDevice($member, $context);
+        // Asocia el equipo a este titular (anti-uso-compartido por dispositivo) y,
+        // si esta entrada fue por OTP real, refresca la marca de revalidación.
+        $this->bindDevice($member, $context, $otpReauth);
 
         $issued  = $this->sessions->issueSession($member, $context);
         $token   = $issued['token'];
@@ -1115,7 +1129,7 @@ class AuthController extends Controller
     }
 
     /** Asocia el dispositivo al miembro titular si aún no lo está. */
-    private function bindDevice(?Member $member, array $context): void
+    private function bindDevice(?Member $member, array $context, bool $otpReauth = false): void
     {
         if (! $member || ! config('otp.device_binding.enabled', true)) {
             return;
@@ -1127,7 +1141,13 @@ class AuthController extends Controller
 
         $existing = MemberDeviceBinding::forDevice($deviceId);
         if ($existing && $existing->member_id === $member->id) {
-            return; // ya vinculado a este miembro
+            // Ya vinculado a este miembro: si esta entrada fue por OTP real,
+            // refresca la ventana de revalidación de 30 días.
+            if ($otpReauth) {
+                $existing->forceFill(['last_otp_reauth_at' => now()])->save();
+            }
+
+            return;
         }
 
         MemberDeviceBinding::updateOrCreate(
@@ -1137,6 +1157,9 @@ class AuthController extends Controller
                 'device_name' => $context['device_name'] ?? null,
                 'platform'    => $context['platform'] ?? null,
                 'bound_at'    => now(),
+                // Un binding nuevo siempre nace de un login fuerte (OTP); marca la
+                // revalidación para no exigir OTP de nuevo dentro de la ventana.
+                'last_otp_reauth_at' => $otpReauth ? now() : null,
             ],
         );
 

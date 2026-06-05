@@ -60,13 +60,25 @@ return [
     |       (Face ID/huella del dispositivo + ticket; sin SMS ni match facial).
     | Un dispositivo es "confiable" si ya está vinculado a ESTE miembro
     | (member_device_bindings), es decir, completó un login fuerte antes.
+    |
+    | ENCENDIDO por defecto: reduce la fricción de OTP en el dispositivo principal
+    | ya vinculado (Face ID/huella local en vez de SMS en cada login). El SMS se
+    | sigue exigiendo en dispositivo nuevo, riesgo alto, revalidación periódica
+    | (ver `trusted_reauth_days`) y acciones sensibles. Se puede desactivar con
+    | SECURITY_ADAPTIVE_LOGIN=false sin tocar código.
     */
-    'adaptive_login' => filter_var(env('SECURITY_ADAPTIVE_LOGIN', false), FILTER_VALIDATE_BOOLEAN),
+    'adaptive_login' => filter_var(env('SECURITY_ADAPTIVE_LOGIN', true), FILTER_VALIDATE_BOOLEAN),
 
     // Bajo este puntaje (y con dispositivo confiable) se permite desbloqueo local.
     // Por defecto 1 ⇒ solo riesgo CERO entra con desbloqueo local; cualquier
     // señal de riesgo exige al menos OTP.
     'local_threshold' => (int) env('SECURITY_LOCAL_THRESHOLD', 1),
+
+    // Revalidación periódica del dispositivo confiable: aunque el equipo siga
+    // vinculado, cada N días se exige UN OTP por SMS (luego vuelve al desbloqueo
+    // local por otros N días). Un binding sin marca de revalidación (null) se
+    // considera vencido ⇒ pide OTP una vez y registra la fecha. 0 = desactivado.
+    'trusted_reauth_days' => (int) env('SECURITY_TRUSTED_REAUTH_DAYS', 30),
 
     // Vigencia (segundos) del ticket de desbloqueo local.
     'local_ticket_ttl' => (int) env('SECURITY_LOCAL_TICKET_TTL', 180),

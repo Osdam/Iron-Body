@@ -33,11 +33,13 @@ class AccountRiskService
     /**
      * Decide el nivel del login adaptativo (Bloque 3b) según la confianza del
      * dispositivo y el puntaje de riesgo. [$preferOtp] fuerza al menos OTP
-     * (cuando la app no pudo/quiso usar la biometría local).
+     * (cuando la app no pudo/quiso usar la biometría local). [$reauthDue] fuerza
+     * al menos OTP por revalidación periódica del dispositivo confiable (cada
+     * `trusted_reauth_days`), aunque el riesgo sea bajo.
      *
      * @return string TIER_LOCAL | TIER_OTP | TIER_OTP_FACE
      */
-    public function loginTier(Member $member, bool $trusted, bool $preferOtp = false): string
+    public function loginTier(Member $member, bool $trusted, bool $preferOtp = false, bool $reauthDue = false): string
     {
         if (! $trusted) {
             return MemberAuthChallenge::TIER_OTP_FACE;
@@ -50,7 +52,8 @@ class AccountRiskService
         if ($score >= $warn) {
             return MemberAuthChallenge::TIER_OTP_FACE; // step-up por riesgo
         }
-        if ($preferOtp || $score >= $local) {
+        // Revalidación periódica o señal de riesgo medio/preferencia → solo OTP.
+        if ($preferOtp || $reauthDue || $score >= $local) {
             return MemberAuthChallenge::TIER_OTP;
         }
 
