@@ -44,6 +44,10 @@ bearer del dispositivo (`Authorization: Bearer <session_token|access_hash>`).
 - App (staff): `POST /api/member/live/create|{id}/start|{id}/end`.
 - App (cualquiera): `GET /api/member/live/active`, `POST /api/member/live/{id}/join-token`.
 - Staff se marca con `members.is_staff`. Proveedor LiveKit (vars `LIVE_*`/`LIVEKIT_*`).
+- **Acceso de staff (CRM):** `GET /api/admin/members/{member}` y
+  `PATCH /api/admin/members/{member}/staff-access` `{ "is_staff": true|false }`.
+- Permisos para la app en `app-state.live` (`can_create`, `can_view`…); el backend
+  decide, la app solo renderiza.
 
 ## 6. Seguridad / reportes
 - `GET  /api/admin/security/reports`, `GET /api/admin/security/reports/{report}`

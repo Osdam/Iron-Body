@@ -459,6 +459,11 @@ Route::post('admin/events/{event}/deactivate',[\App\Http\Controllers\Api\Admin\E
 Route::get('admin/lives',             [\App\Http\Controllers\Api\Admin\LiveController::class, 'index']);
 Route::post('admin/lives/{live}/end', [\App\Http\Controllers\Api\Admin\LiveController::class, 'end']);
 
+// ── Acceso de staff a Story Live (CRM admin) — otorgar/quitar is_staff ───────
+// Solo el CRM puede marcar a un miembro como staff (puede crear/transmitir lives).
+Route::get('admin/members/{member}',               [\App\Http\Controllers\Api\Admin\MemberStaffController::class, 'show']);
+Route::patch('admin/members/{member}/staff-access',[\App\Http\Controllers\Api\Admin\MemberStaffController::class, 'updateStaffAccess']);
+
 // ── Stories CRM admin (sin auth — patrón del resto del CRM) ────────────────
 Route::get('admin/stories',         [StoriesController::class, 'indexAsAdmin']);
 Route::post('admin/stories',        [StoriesController::class, 'storeAsAdmin']);

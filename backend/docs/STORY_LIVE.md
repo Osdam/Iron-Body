@@ -10,6 +10,27 @@ entran a mirar. Si no hay credenciales del proveedor, la función se presenta co
   `create`/`start`/`end` y publican cámara/mic. El CRM lo activa por miembro.
 - Cualquier miembro puede listar lives activos y entrar como espectador.
 
+## Contrato de permisos (app-state)
+El backend DECIDE; la app solo renderiza. `GET /api/member/app-state` incluye:
+```json
+"live": {
+  "enabled": true, "provider": "livekit", "is_staff": true,
+  "can_create": true, "can_start": true, "can_end_own_live": true, "can_view": true
+}
+```
+- staff + LiveKit configurado → `can_create=true`.
+- miembro normal → `can_create=false`, `can_view=true`.
+- LiveKit no configurado → todo en `false` (la app muestra "no disponible").
+La app usa `live.can_create` para mostrar "Crear Live" (no hardcodea is_staff).
+
+## Otorgar acceso de staff desde el CRM
+- `GET   /api/admin/members/{member}` — datos básicos (incluye `is_staff`).
+- `PATCH /api/admin/members/{member}/staff-access` body `{"is_staff": true}`.
+Solo el CRM puede marcar staff; el usuario móvil **nunca** se auto-marca. Cada
+cambio se audita en log: `member.staff_access.updated` (by_admin_id, member_id,
+is_staff). Tras el cambio, la app refleja el permiso en el siguiente refresh del
+app-state.
+
 ## Arquitectura
 ```
 Flutter (livekit_client) ──join-token──▶ Laravel ──mint JWT (HS256)──▶ LiveKit room

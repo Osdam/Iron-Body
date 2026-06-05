@@ -7,6 +7,7 @@ use App\Models\Member;
 use App\Models\Payment;
 use App\Models\Routine;
 use App\Services\DeviceSessionService;
+use App\Services\LiveKitService;
 use App\Services\MembershipService;
 use App\Services\WeeklyStreakService;
 use Carbon\Carbon;
@@ -27,7 +28,8 @@ class MemberAppStateController extends Controller
         Request $request,
         WeeklyStreakService $streakService,
         DeviceSessionService $sessions,
-        MembershipService $memberships
+        MembershipService $memberships,
+        LiveKitService $live
     ): JsonResponse {
         /** @var Member $member */
         $member = $request->attributes->get('auth_member');
@@ -121,6 +123,10 @@ class MemberAppStateController extends Controller
                 'active_devices_count' => $activeDevices->count(),
                 'current_device_trusted' => $currentSession !== null,
             ],
+            // ── Story Live: permisos decididos por el backend (Flutter solo
+            // renderiza). is_staff lo otorga el CRM; sin LiveKit todo queda en
+            // false salvo nada (función no disponible).
+            'live' => $this->buildLive($live, (bool) $member->is_staff),
             'features' => $this->buildFeatures($features, $canAccessHome, $membershipActive),
             'versions' => [
                 'profile' => $this->ver($member->updated_at),
@@ -130,6 +136,28 @@ class MemberAppStateController extends Controller
                 'security' => $this->ver($activeDevices->max('updated_at')),
             ],
         ]);
+    }
+
+    /**
+     * Contrato de permisos de Story Live (backend = fuente de verdad). El staff
+     * (otorgado desde el CRM con `members.is_staff`) puede crear/iniciar/finalizar
+     * sus lives; el resto solo mira. Sin LiveKit configurado, la función queda
+     * deshabilitada (todo en false) y la app muestra "no disponible" — sin crash.
+     */
+    private function buildLive(LiveKitService $live, bool $isStaff): array
+    {
+        $enabled = $live->isConfigured();
+        $staffCan = $enabled && $isStaff;
+
+        return [
+            'enabled' => $enabled,
+            'provider' => (string) config('live.provider', 'livekit'),
+            'is_staff' => $isStaff,
+            'can_create' => $staffCan,
+            'can_start' => $staffCan,
+            'can_end_own_live' => $staffCan,
+            'can_view' => $enabled,
+        ];
     }
 
     /**
