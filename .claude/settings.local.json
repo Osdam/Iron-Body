@@ -65,7 +65,15 @@
       "Bash(cmd //c \"C:\\\\\\\\xampp\\\\\\\\apache_start.bat\")",
       "Bash(curl -sS http://127.0.0.1:8080/api/health -w \"\\\\n[%{http_code} %{time_total}s]\\\\n\" --max-time 5)",
       "Bash(curl -sS -X POST http://127.0.0.1:8080/api/turnstile/serial/open -H \"Content-Type: application/json\" -d \"{\\\\\"port\\\\\":\\\\\"COM5\\\\\"}\" -w \"\\\\n[HTTP %{http_code}] [%{time_total}s]\\\\n\" --max-time 10)",
-      "Bash(curl -sS -X POST http://127.0.0.1:8080/api/turnstile/serial/open -H \"Content-Type: application/json\" -d \"{\\\\\"port\\\\\":\\\\\"COM5\\\\\"}\" -w \"  [HTTP %{http_code}] [%{time_total}s]\\\\n\" --max-time 5)"
+      "Bash(curl -sS -X POST http://127.0.0.1:8080/api/turnstile/serial/open -H \"Content-Type: application/json\" -d \"{\\\\\"port\\\\\":\\\\\"COM5\\\\\"}\" -w \"  [HTTP %{http_code}] [%{time_total}s]\\\\n\" --max-time 5)",
+      "Read(//d/Github/Iron_Body_App/lib/core/config/**)",
+      "Read(//d/Github/Iron_Body_App/**)",
+      "Read(//d/Github/**)",
+      "Bash(xargs grep -l \"install-templates\\\\|contracts:install\")",
+      "Bash([ -f \"$f\" ])"
+    ],
+    "additionalDirectories": [
+      "D:\\Github\\Iron_Body_App\\lib\\core\\config"
     ]
   }
 }
