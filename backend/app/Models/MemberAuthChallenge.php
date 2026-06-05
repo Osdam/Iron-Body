@@ -25,6 +25,10 @@ class MemberAuthChallenge extends Model
     public const PURPOSE_DEVICE_REVOKE_OTHERS = 'device_revoke_others';
     public const PURPOSE_DEVICE_UNBIND        = 'device_unbind';
     public const PURPOSE_PHONE_CHANGE         = 'phone_change';
+    // Ticket de un solo uso para recuperación de número desde el login (sin
+    // sesión): se emite tras validar dispositivo confiable y se canjea en la app
+    // tras la biometría LOCAL. No envía SMS ni actualiza nada por sí mismo.
+    public const PURPOSE_PHONE_RECOVERY_TICKET = 'phone_recovery_ticket';
 
     /** Nivel del login adaptativo (Bloque 3b). Null = login clásico. */
     public const TIER_LOCAL    = 'local';

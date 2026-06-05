@@ -420,6 +420,16 @@ Route::post('admin/contracts/{contract}/void',     [ContractAdminController::cla
 Route::post('security/support-report', [\App\Http\Controllers\Api\SecuritySupportController::class, 'submit'])
     ->middleware('throttle:6,1');
 
+// ── Recuperación SEGURA de número desde el login ("Ya no tengo este número") ──
+// Sin sesión: el backend decide si el dispositivo es confiable (vínculo previo)
+// y exige biometría local (app) + OTP al número NUEVO antes de actualizar.
+Route::middleware('throttle:10,1')->group(function (): void {
+    Route::post('member/phone-recovery/can-self-recover', [\App\Http\Controllers\Api\MemberPhoneRecoveryController::class, 'canSelfRecover']);
+    Route::post('member/phone-recovery/start',            [\App\Http\Controllers\Api\MemberPhoneRecoveryController::class, 'start']);
+    Route::post('member/phone-recovery/request',          [\App\Http\Controllers\Api\MemberPhoneRecoveryController::class, 'request']);
+    Route::post('member/phone-recovery/verify',           [\App\Http\Controllers\Api\MemberPhoneRecoveryController::class, 'verify']);
+});
+
 // ── Seguridad: bandeja de reportes (CRM admin — patrón del resto del CRM) ──
 Route::get('admin/security/reports',                       [\App\Http\Controllers\Api\SecuritySupportController::class, 'adminIndex']);
 Route::get('admin/security/reports/{report}',              [\App\Http\Controllers\Api\SecuritySupportController::class, 'adminShow']);
