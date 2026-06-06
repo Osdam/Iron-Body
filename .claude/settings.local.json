@@ -73,7 +73,8 @@
       "Bash([ -f \"$f\" ])"
     ],
     "additionalDirectories": [
-      "D:\\Github\\Iron_Body_App\\lib\\core\\config"
+      "D:\\Github\\Iron_Body_App\\lib\\core\\config",
+      "D:\\Github\\Iron_Body_App\\lib\\shared\\guide"
     ]
   }
 }
