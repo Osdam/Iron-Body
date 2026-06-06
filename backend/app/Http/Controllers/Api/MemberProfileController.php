@@ -76,6 +76,8 @@ class MemberProfileController extends Controller
         }
 
         Log::info('member:profile:updated', ['member_id' => $member->id, 'fields' => array_keys($data)]);
+        // Real-time: el perfil se refleja en otras pantallas/dispositivos sin relogin.
+        \App\Services\RealtimeEvents::profile($member->id);
 
         return response()->json([
             'ok'   => true,

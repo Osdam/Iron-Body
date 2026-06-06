@@ -241,6 +241,10 @@ Route::middleware('auth.member')->group(function (): void {
     // estado vivo de la app: membresía/días/pago/entreno/racha/seguridad).
     Route::get('member/app-state', [\App\Http\Controllers\Api\MemberAppStateController::class, 'show']);
 
+    // ── Canal real-time PRIVADO del miembro (SSE): empuja señales de cambio
+    // (membresía/pago/perfil/staff/story/seguridad) para refrescar sin polling.
+    Route::get('member/realtime', [\App\Http\Controllers\Api\MemberRealtimeController::class, 'stream']);
+
     // ── Membresía: renovación / cancelación (Bloque 3) ────────────────────────
     // cancel-request = vista previa; cancel-confirm = ejecuta (acción reversible:
     // conserva acceso hasta fin de periodo). reactivate la deshace.

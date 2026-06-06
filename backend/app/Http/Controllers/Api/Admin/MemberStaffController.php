@@ -43,6 +43,9 @@ class MemberStaffController extends Controller
             'is_staff'    => (bool) $data['is_staff'],
         ]);
 
+        // Real-time: "Transmitir en vivo" aparece/desaparece sin relogin.
+        \App\Services\RealtimeEvents::livePermissions($member->id);
+
         return response()->json([
             'ok' => true,
             'message' => $data['is_staff']
