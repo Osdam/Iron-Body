@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Member;
 use App\Models\MemberDeviceBinding;
+use App\Models\MemberSecurityEvent;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -95,6 +96,60 @@ class AdaptiveLoginTest extends TestCase
             'ticket' => $ticket,
             'device_id' => 'device-confiable',
         ])->assertStatus(410);
+    }
+
+    public function test_recent_new_device_event_still_allows_local_unlock(): void
+    {
+        // Un equipo recién vinculado SIEMPRE tiene un evento new_device reciente.
+        // Esa señal benigna NO debe expulsarlo del desbloqueo local (causa del
+        // "OTP repetido cada login" durante toda la ventana de riesgo).
+        $member = $this->member();
+        MemberDeviceBinding::create([
+            'device_id' => 'device-confiable',
+            'member_id' => $member->id,
+            'bound_at' => now(),
+            'last_otp_reauth_at' => now(),
+        ]);
+        MemberSecurityEvent::create([
+            'member_id'  => $member->id,
+            'type'       => MemberSecurityEvent::TYPE_NEW_DEVICE,
+            'created_at' => now(),
+        ]);
+
+        $r = $this->postJson('/api/members/login', [
+            'document_number' => '1010101010',
+            'device_id' => 'device-confiable',
+        ]);
+
+        $r->assertOk()
+            ->assertJsonPath('data.requires_otp', false)
+            ->assertJsonPath('data.requires_local_unlock', true);
+    }
+
+    public function test_recent_adversarial_event_forces_otp_on_trusted_device(): void
+    {
+        // Una señal ADVERSARIAL reciente (OTP fallido) sí debe forzar al menos OTP
+        // aunque el equipo sea confiable (step-up real, no se relaja).
+        $member = $this->member();
+        MemberDeviceBinding::create([
+            'device_id' => 'device-confiable',
+            'member_id' => $member->id,
+            'bound_at' => now(),
+            'last_otp_reauth_at' => now(),
+        ]);
+        MemberSecurityEvent::create([
+            'member_id'  => $member->id,
+            'type'       => MemberSecurityEvent::TYPE_LOGIN_FAILED,
+            'created_at' => now(),
+        ]);
+
+        $r = $this->postJson('/api/members/login', [
+            'document_number' => '1010101010',
+            'device_id' => 'device-confiable',
+        ]);
+
+        $r->assertOk()->assertJsonPath('data.requires_otp', true);
+        $this->assertNull($r->json('data.requires_local_unlock'));
     }
 
     public function test_prefer_otp_forces_otp_on_trusted_device(): void

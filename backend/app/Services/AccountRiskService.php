@@ -45,7 +45,13 @@ class AccountRiskService
             return MemberAuthChallenge::TIER_OTP_FACE;
         }
 
-        $score = $this->score($member);
+        // Para decidir el tier de un dispositivo YA confiable, NO contamos la
+        // señal benigna `new_device`: un equipo que acaba de vincularse SIEMPRE
+        // tiene un evento de "dispositivo nuevo" reciente y, con local_threshold
+        // bajo, eso lo expulsaba del desbloqueo local (OTP repetido cada login
+        // durante toda la ventana de riesgo). Solo cuentan señales adversariales
+        // (OTP fallidos, mismatch, concurrencia, fallos faciales, sospecha).
+        $score = $this->score($member, [MemberSecurityEvent::TYPE_NEW_DEVICE]);
         $warn  = (int) config('security.warn_threshold', 40);
         $local = (int) config('security.local_threshold', 1);
 
@@ -60,16 +66,26 @@ class AccountRiskService
         return MemberAuthChallenge::TIER_LOCAL;
     }
 
-    /** Puntaje de riesgo (0..∞) según eventos recientes y pesos configurados. */
-    public function score(Member $member): int
+    /**
+     * Puntaje de riesgo (0..∞) según eventos recientes y pesos configurados.
+     * [$excludeTypes] permite ignorar ciertos tipos de evento (p. ej. la señal
+     * benigna `new_device` al decidir el tier de un dispositivo ya confiable).
+     *
+     * @param string[] $excludeTypes
+     */
+    public function score(Member $member, array $excludeTypes = []): int
     {
         $window  = (int) config('security.window', 3600);
         $weights = (array) config('security.weights', []);
 
         $since  = now()->subSeconds($window);
-        $counts = MemberSecurityEvent::query()
+        $query  = MemberSecurityEvent::query()
             ->where('member_id', $member->id)
-            ->where('created_at', '>=', $since)
+            ->where('created_at', '>=', $since);
+        if ($excludeTypes !== []) {
+            $query->whereNotIn('type', $excludeTypes);
+        }
+        $counts = $query
             ->selectRaw('type, COUNT(*) as c')
             ->groupBy('type')
             ->pluck('c', 'type');
