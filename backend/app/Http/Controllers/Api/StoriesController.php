@@ -74,6 +74,8 @@ class StoriesController extends Controller
         // SSE + FCM: dispara el evento. NotificationService gestiona la
         // deduplicación por event_key y la entrega de push.
         app(NotificationService::class)->notifyStoryCreated($story);
+        // Real-time: el autor ve su story en la fila al instante (sin relogin).
+        \App\Services\RealtimeEvents::emit($member->id, \App\Services\RealtimeEvents::STORY_NEW, ['stories']);
 
         return response()->json([
             'ok' => true,
@@ -159,6 +161,8 @@ class StoriesController extends Controller
         ]);
 
         app(NotificationService::class)->notifyStoryCreated($story);
+        // Real-time: el autor ve su story en la fila al instante (sin relogin).
+        \App\Services\RealtimeEvents::emit($member->id, \App\Services\RealtimeEvents::STORY_NEW, ['stories']);
 
         return response()->json([
             'ok' => true,
@@ -422,6 +426,8 @@ class StoriesController extends Controller
         }
 
         $this->deleteStoryWithFile($story);
+        // Real-time: la story desaparece de la fila del autor sin relogin.
+        \App\Services\RealtimeEvents::emit($member->id, \App\Services\RealtimeEvents::STORY_DEL, ['stories']);
 
         return response()->json(['ok' => true]);
     }

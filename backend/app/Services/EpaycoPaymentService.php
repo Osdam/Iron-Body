@@ -403,6 +403,8 @@ class EpaycoPaymentService
 
             if ($status === PaymentTransaction::STATUS_APPROVED) {
                 $this->onApproved($fresh);
+                // Real-time: la app refresca membresía/pagos al instante (sin polling).
+                \App\Services\RealtimeEvents::payment($fresh->member_id);
             }
 
             // Pago rechazado/fallido → notifica al miembro y al CRM (ADITIVO,

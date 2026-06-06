@@ -268,6 +268,7 @@ class MemberPhoneRecoveryController extends Controller
             'masked_phone' => MemberAuthChallenge::maskPhone($newPhone),
         ]);
         $this->notifications->notifyPhoneChanged($member, MemberAuthChallenge::maskPhone($newPhone));
+        \App\Services\RealtimeEvents::phone($member->id);
 
         return response()->json([
             'ok'      => true,
