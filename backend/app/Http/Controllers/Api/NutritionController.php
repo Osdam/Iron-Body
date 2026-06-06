@@ -7,6 +7,7 @@ use App\Models\NutritionAiRecommendation;
 use App\Models\NutritionFoodItem;
 use App\Services\NutritionAiCoachService;
 use App\Services\NutritionService;
+use App\Services\RealtimeEvents;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -71,7 +72,12 @@ class NutritionController extends Controller
             'fat_g' => 'required|integer|min:0|max:1000',
             'goal_type' => 'nullable|string|in:lose_fat,maintain,gain_muscle',
         ]);
-        return response()->json(['success' => true, 'data' => $this->service->saveGoal($member, $data)]);
+        $goal = $this->service->saveGoal($member, $data);
+
+        // Refresco en vivo (otros dispositivos del miembro).
+        RealtimeEvents::nutrition($member->id);
+
+        return response()->json(['success' => true, 'data' => $goal]);
     }
 
     /** POST /api/app/nutrition/meals/{mealType}/items */

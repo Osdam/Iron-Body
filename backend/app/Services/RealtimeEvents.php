@@ -23,6 +23,10 @@ class RealtimeEvents
     public const STORY_DEL  = 'story.deleted';
     public const SECURITY   = 'device.security.updated';
     public const APP_STATE  = 'app_state.updated';
+    public const ROUTINE    = 'routine.updated';
+    public const CLASS_EVENT = 'class.updated';
+    public const NUTRITION  = 'nutrition.updated';
+    public const RANKING    = 'ranking.updated';
 
     /**
      * Emite una señal de cambio para un miembro. [$changed] son los módulos que
@@ -93,5 +97,74 @@ class RealtimeEvents
     public static function features(?int $memberId): void
     {
         self::emit($memberId, self::APP_STATE, ['features', 'membership']);
+    }
+
+    /** El entrenador asignó/editó una rutina del miembro (CRM). */
+    public static function routine(?int $memberId): void
+    {
+        self::emit($memberId, self::ROUTINE, ['routines']);
+    }
+
+    /** Cambió el plan/metas de nutrición del miembro (CRM/IA o el propio app). */
+    public static function nutrition(?int $memberId): void
+    {
+        self::emit($memberId, self::NUTRITION, ['nutrition']);
+    }
+
+    /**
+     * Cambio GLOBAL que afecta a todos los miembros (p.ej. horario/cupo de una
+     * clase, o el ranking de entrenadores). Inserta una señal por cada miembro
+     * activo en bloque (sin N+1) y poda lo viejo. BEST-EFFORT: nunca rompe el
+     * flujo de negocio.
+     *
+     * Nota de escala: es 1 fila por miembro activo. Para un gimnasio (cientos de
+     * miembros) es trivial; las señales se podan a los 5 min.
+     */
+    public static function broadcastToActiveMembers(string $type, array $changed = []): void
+    {
+        try {
+            $now        = now();
+            $version    = (int) (microtime(true) * 1000);
+            $changedJson = json_encode($changed);
+
+            $ids = \App\Models\Member::query()
+                ->where('status', \App\Models\Member::STATUS_ACTIVE)
+                ->pluck('id');
+
+            if ($ids->isEmpty()) {
+                return;
+            }
+
+            foreach ($ids->chunk(500) as $chunk) {
+                MemberRealtimeEvent::insert(
+                    $chunk->map(fn ($id) => [
+                        'member_id'  => (int) $id,
+                        'type'       => $type,
+                        'changed'    => $changedJson,
+                        'version'    => $version,
+                        'created_at' => $now,
+                    ])->all()
+                );
+            }
+
+            // Poda global de señales efímeras (>5 min).
+            MemberRealtimeEvent::query()
+                ->where('created_at', '<', $now->copy()->subMinutes(5))
+                ->delete();
+        } catch (\Throwable $e) {
+            Log::warning('realtime.broadcast_failed', ['type' => $type, 'error' => $e->getMessage()]);
+        }
+    }
+
+    /** Cambió una clase o sus cupos/reservas (afecta a todos). */
+    public static function classesChanged(): void
+    {
+        self::broadcastToActiveMembers(self::CLASS_EVENT, ['classes']);
+    }
+
+    /** Cambió el ranking/datos de entrenadores (afecta a todos). */
+    public static function rankingChanged(): void
+    {
+        self::broadcastToActiveMembers(self::RANKING, ['ranking']);
     }
 }

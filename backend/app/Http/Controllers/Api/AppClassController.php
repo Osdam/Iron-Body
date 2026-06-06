@@ -8,6 +8,7 @@ use App\Models\ClassReservation;
 use App\Models\Member;
 use App\Models\MyClass;
 use App\Services\NotificationService;
+use App\Services\RealtimeEvents;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -75,6 +76,9 @@ class AppClassController extends Controller
 
         $myClass->loadCount('reservations')->load('trainer:id,full_name');
 
+        // Cupo cambió → refresca el módulo de Clases para todos en vivo.
+        RealtimeEvents::classesChanged();
+
         return response()->json(['data' => new ClassResource($myClass, true)]);
     }
 
@@ -94,6 +98,9 @@ class AppClassController extends Controller
         app(NotificationService::class)->notifyClassReservationCancelled($member, $myClass);
 
         $myClass->loadCount('reservations')->load('trainer:id,full_name');
+
+        // Cupo liberado → refresca el módulo de Clases para todos en vivo.
+        RealtimeEvents::classesChanged();
 
         return response()->json(['data' => new ClassResource($myClass, false)]);
     }

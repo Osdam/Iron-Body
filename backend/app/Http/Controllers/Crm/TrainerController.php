@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
 use App\Models\Trainer;
+use App\Services\RealtimeEvents;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -31,6 +32,8 @@ class TrainerController extends Controller
         $data = $this->validateTrainer($request, true);
         Trainer::create($this->mapFields($data));
 
+        RealtimeEvents::rankingChanged();
+
         return redirect()->route('crm.trainers.index')
             ->with('success', 'Entrenador creado exitosamente.');
     }
@@ -45,6 +48,8 @@ class TrainerController extends Controller
         $data = $this->validateTrainer($request, false);
         $trainer->fill($this->mapFields($data))->save();
 
+        RealtimeEvents::rankingChanged();
+
         return redirect()->route('crm.trainers.index')
             ->with('success', 'Entrenador actualizado.');
     }
@@ -52,6 +57,8 @@ class TrainerController extends Controller
     public function destroy(Trainer $trainer): RedirectResponse
     {
         $trainer->update(['status' => 'inactive']);
+
+        RealtimeEvents::rankingChanged();
 
         return redirect()->route('crm.trainers.index')
             ->with('success', 'Entrenador desactivado.');

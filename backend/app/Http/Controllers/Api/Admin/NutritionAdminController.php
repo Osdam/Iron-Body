@@ -7,6 +7,7 @@ use App\Models\Member;
 use App\Models\NutritionAiRecommendation;
 use App\Models\NutritionGoal;
 use App\Services\NutritionService;
+use App\Services\RealtimeEvents;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -54,6 +55,9 @@ class NutritionAdminController extends Controller
         ]);
 
         $goal = $this->service->saveGoal($member, $data);
+
+        // Refresco en vivo: la app del miembro ve las nuevas metas sin reiniciar.
+        RealtimeEvents::nutrition($member->id);
 
         return response()->json(['ok' => true, 'data' => $goal]);
     }

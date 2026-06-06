@@ -8,6 +8,7 @@ use App\Models\ClassReservation;
 use App\Models\Member;
 use App\Models\MyClass;
 use App\Services\NotificationService;
+use App\Services\RealtimeEvents;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -101,6 +102,9 @@ class ClassController extends Controller
         // Notificación de clase creada (ADITIVO; no afecta la creación).
         app(NotificationService::class)->notifyClassCreated($class);
 
+        // Refresco en vivo del módulo de Clases para todos los miembros.
+        RealtimeEvents::classesChanged();
+
         return (new ClassResource($class->load('trainer:id,full_name')))->response()->setStatusCode(201);
     }
 
@@ -146,6 +150,9 @@ class ClassController extends Controller
             ->pluck('member')->filter()->values();
         app(NotificationService::class)->notifyClassUpdated($myClass, $members);
 
+        // Refresco en vivo (horario/cupo/estado) para todos los miembros.
+        RealtimeEvents::classesChanged();
+
         return new ClassResource($myClass->loadCount('reservations')->load('trainer:id,full_name'));
     }
 
@@ -157,6 +164,10 @@ class ClassController extends Controller
         app(NotificationService::class)->notifyClassCancelled($myClass, $members);
 
         $myClass->delete();
+
+        // Refresco en vivo: la clase desaparece del módulo para todos.
+        RealtimeEvents::classesChanged();
+
         return response()->json(['message' => 'Clase eliminada correctamente'], 200);
     }
 
@@ -214,6 +225,9 @@ class ClassController extends Controller
 
         $myClass->loadCount('reservations')->load('trainer:id,full_name');
 
+        // Cupo cambió → refresca el módulo de Clases para todos en vivo.
+        RealtimeEvents::classesChanged();
+
         return response()->json(['data' => new ClassResource($myClass, true)]);
     }
 
@@ -231,6 +245,9 @@ class ClassController extends Controller
         }
 
         $myClass->loadCount('reservations')->load('trainer:id,full_name');
+
+        // Cupo liberado → refresca el módulo de Clases para todos en vivo.
+        RealtimeEvents::classesChanged();
 
         return response()->json(['data' => new ClassResource($myClass, false)]);
     }

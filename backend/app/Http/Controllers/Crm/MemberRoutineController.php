@@ -8,6 +8,7 @@ use App\Models\Member;
 use App\Models\MemberRoutineAssignment;
 use App\Models\Routine;
 use App\Models\RoutineExercise;
+use App\Services\RealtimeEvents;
 use Illuminate\Http\Request;
 
 class MemberRoutineController extends Controller
@@ -98,6 +99,9 @@ class MemberRoutineController extends Controller
             ['assigned_at' => now()]
         );
 
+        // Refresco en vivo: la app del miembro ve la rutina sin reiniciar.
+        RealtimeEvents::routine($member->id);
+
         return redirect()->route('crm.member-routines.index', ['member_id' => $member->id])
             ->with('success', "Rutina \"{$routine->name}\" asignada a {$member->full_name}.");
     }
@@ -144,6 +148,9 @@ class MemberRoutineController extends Controller
 
         $this->syncExercises($routine, $request);
 
+        // Refresco en vivo de la rutina editada.
+        RealtimeEvents::routine($member->id);
+
         return redirect()->route('crm.member-routines.index', ['member_id' => $member->id])
             ->with('success', "Rutina \"{$routine->name}\" actualizada.");
     }
@@ -157,6 +164,9 @@ class MemberRoutineController extends Controller
         if ((int) $routine->member_id === $memberId && $routine->assignments()->count() === 0) {
             $routine->delete();
         }
+
+        // Refresco en vivo: la rutina desaparece de la app sin reiniciar.
+        RealtimeEvents::routine($memberId);
 
         return redirect()->route('crm.member-routines.index', ['member_id' => $memberId])
             ->with('success', 'Rutina eliminada.');

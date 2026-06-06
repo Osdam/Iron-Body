@@ -8,6 +8,7 @@ use App\Models\Member;
 use App\Models\Trainer;
 use App\Models\TrainerReview;
 use App\Services\NotificationService;
+use App\Services\RealtimeEvents;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -152,6 +153,9 @@ class TrainerController extends Controller
 
         $trainer->load('ratings');
 
+        // El ranking cambió → refresca el módulo para todos en vivo.
+        RealtimeEvents::rankingChanged();
+
         return response()->json([
             'data' => new TrainerResource($trainer),
         ]);
@@ -180,6 +184,9 @@ class TrainerController extends Controller
         );
 
         $trainer->loadAvg('reviews', 'rating')->loadCount('reviews');
+
+        // El ranking cambió → refresca el módulo para todos en vivo.
+        RealtimeEvents::rankingChanged();
 
         return response()->json([
             'ok' => true,
