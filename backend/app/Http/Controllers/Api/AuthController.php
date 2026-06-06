@@ -102,18 +102,37 @@ class AuthController extends Controller
             return $denied;
         }
 
-        // Login adaptativo por riesgo (Bloque 3b). Con el flag APAGADO (default)
+        // Login adaptativo por riesgo (Bloque 3b). Con el flag APAGADO
         // $riskTier queda null y todo se comporta EXACTAMENTE como antes.
-        $riskTier = null;
-        if (config('security.adaptive_login', false)) {
-            $deviceId  = $context['device_id'] ?? null;
-            $trusted   = $this->isTrustedDevice($member, $deviceId);
-            // Revalidación periódica: aunque el equipo sea confiable, si pasaron
-            // > trusted_reauth_days desde el último OTP (o nunca lo hubo), se pide
-            // un OTP una vez antes de volver al desbloqueo local.
-            $binding   = $trusted ? MemberDeviceBinding::forDevice($deviceId) : null;
-            $reauthDue = $binding !== null && $binding->needsOtpReauth();
-            $tier      = $this->risk->loginTier($member, $trusted, $request->boolean('prefer_otp'), $reauthDue);
+        $riskTier  = null;
+        $adaptive  = (bool) config('security.adaptive_login', false);
+        $deviceId  = $context['device_id'] ?? null;
+        $binding   = MemberDeviceBinding::forDevice($deviceId);
+        $trusted   = $this->isTrustedDevice($member, $deviceId);
+        // Revalidación periódica: aunque el equipo sea confiable, si pasaron
+        // > trusted_reauth_days desde el último OTP (o nunca lo hubo), se pide un
+        // OTP una vez antes de volver al desbloqueo local.
+        $reauthDue = $trusted && $binding !== null && $binding->needsOtpReauth();
+        $preferOtp = $request->boolean('prefer_otp');
+
+        // Log seguro de diagnóstico (sin tokens, sin códigos, sin device_id):
+        // permite verificar en producción por qué un equipo cae a OTP o a local.
+        Log::info('auth.login.adaptive', [
+            'member_id'            => $member->id,
+            'adaptive_login'       => $adaptive,
+            'trusted_device'       => $trusted,
+            'device_binding_found' => $binding !== null,
+            'binding_member_match' => $binding !== null && (int) $binding->member_id === (int) $member->id,
+            'risk_score'           => $this->risk->score($member),
+            'reauth_due'           => $reauthDue,
+            'last_otp_reauth_at'   => optional($binding?->last_otp_reauth_at)->toIso8601String(),
+            'prefer_otp'           => $preferOtp,
+            'trusted_reauth_days'  => (int) config('security.trusted_reauth_days', 30),
+        ]);
+
+        if ($adaptive) {
+            $tier = $this->risk->loginTier($member, $trusted, $preferOtp, $reauthDue);
+            Log::info('auth.login.tier', ['member_id' => $member->id, 'login_tier' => $tier]);
 
             // Riesgo bajo + dispositivo confiable: desbloqueo local (Face ID/huella
             // del dispositivo) sin SMS ni match facial; la app canjea el ticket.
