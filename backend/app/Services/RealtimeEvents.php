@@ -85,4 +85,13 @@ class RealtimeEvents
     {
         self::emit($memberId, self::SECURITY, ['security']);
     }
+
+    /**
+     * Cambió la configuración del plan (features/capacidades IA) desde el CRM.
+     * El cliente refresca app-state y reevalúa el gating de módulos al instante.
+     */
+    public static function features(?int $memberId): void
+    {
+        self::emit($memberId, self::APP_STATE, ['features', 'membership']);
+    }
 }

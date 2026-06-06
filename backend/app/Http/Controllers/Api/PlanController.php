@@ -7,8 +7,8 @@ use App\Models\MembershipAiCapability;
 use App\Models\Plan;
 use App\Models\User;
 use App\Services\IronAiMembershipAccessService;
+use App\Services\RealtimeEvents;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 
 class PlanController extends Controller
 {
@@ -86,19 +86,9 @@ class PlanController extends Controller
         $plan->features = array_merge($plan->resolvedFeatures(), $data['features']);
         $plan->save();
 
-        // Marcar en cache todos los miembros activos del plan para notificación SSE
-        // inmediata (sin esperar el próximo ciclo de polling).
-        User::where('plan', $plan->name)
-            ->whereHas('appMember')
-            ->with('appMember')
-            ->get()
-            ->each(function (User $user): void {
-                Cache::put(
-                    "features_changed_{$user->appMember->id}",
-                    true,
-                    now()->addMinutes(5),
-                );
-            });
+        // Empuja la señal de cambio por SSE a los miembros activos del plan para
+        // que la app reevalúe el gating de módulos al instante (sin reiniciar).
+        $this->notifyPlanMembers($plan);
 
         return response()->json([
             'planId'   => (string) $plan->id,
@@ -191,7 +181,7 @@ class PlanController extends Controller
         );
 
         // Notifica a los miembros activos del plan (SSE) para refrescar acceso.
-        $this->bustMemberFeatureCache($plan);
+        $this->notifyPlanMembers($plan);
 
         return response()->json([
             'planId'       => (string) $plan->id,
@@ -231,14 +221,19 @@ class PlanController extends Controller
         return trim(preg_replace('/[^a-z0-9]+/', '_', $s), '_');
     }
 
-    private function bustMemberFeatureCache(Plan $plan): void
+    /**
+     * Emite una señal real-time (SSE) a cada miembro activo del plan tras cambiar
+     * sus features o capacidades de IA. El cliente recibe `app_state.updated`,
+     * refresca /member/app-state y reevalúa el gating de módulos sin reiniciar.
+     */
+    private function notifyPlanMembers(Plan $plan): void
     {
         User::where('plan', $plan->name)
             ->whereHas('appMember')
             ->with('appMember')
             ->get()
             ->each(function (User $user): void {
-                Cache::put("features_changed_{$user->appMember->id}", true, now()->addMinutes(5));
+                RealtimeEvents::features((int) $user->appMember->id);
             });
     }
 
