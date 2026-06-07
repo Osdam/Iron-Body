@@ -92,6 +92,26 @@ class EpaycoPaymentService
                 $reference = $this->generateReference();
             }
 
+            // Monto AUTORITATIVO del backend: si hay plan, el precio real lo
+            // decide el plan en BD, NUNCA el monto que mande Flutter (anti
+            // manipulación: no se puede pagar menos para desbloquear, ni cobrar
+            // más). Si no hay plan (otros flujos), se usa el monto recibido.
+            $amount = round((float) ($data['amount'] ?? 0), 2);
+            if (!empty($data['plan_id'])) {
+                $plan = Plan::find($data['plan_id']);
+                if ($plan && (float) $plan->price > 0) {
+                    $planPrice = round((float) $plan->price, 2);
+                    if (abs($planPrice - $amount) > 0.5) {
+                        Log::warning('ePayco: monto recibido != precio del plan; se usa el del plan', [
+                            'plan_id'  => $data['plan_id'],
+                            'received' => $amount,
+                            'plan'     => $planPrice,
+                        ]);
+                    }
+                    $amount = $planPrice;
+                }
+            }
+
             $attrs = [
                 'reference'       => $reference,
                 'idempotency_key' => $idem ?: (string) Str::uuid(),
@@ -99,7 +119,7 @@ class EpaycoPaymentService
                 'member_id'       => $data['member_id'] ?? null,
                 'user_id'         => $data['user_id'] ?? null,
                 'plan_id'         => $data['plan_id'] ?? null,
-                'amount'          => round((float) ($data['amount'] ?? 0), 2),
+                'amount'          => $amount,
                 'currency'        => strtoupper($data['currency'] ?? 'COP'),
                 'status'          => PaymentTransaction::STATUS_PENDING,
                 'provider'        => 'epayco',
@@ -403,8 +423,12 @@ class EpaycoPaymentService
 
             if ($status === PaymentTransaction::STATUS_APPROVED) {
                 $this->onApproved($fresh);
-                // Real-time: la app refresca membresía/pagos al instante (sin polling).
+                // Real-time: la app refresca al instante (sin polling). Se emiten
+                // las tres señales que escucha el cliente para destrabar el Home:
+                // pago actualizado, membresía activada y snapshot global (AppState).
                 \App\Services\RealtimeEvents::payment($fresh->member_id);
+                \App\Services\RealtimeEvents::membership($fresh->member_id);
+                \App\Services\RealtimeEvents::appState($fresh->member_id);
             }
 
             // Pago rechazado/fallido → notifica al miembro y al CRM (ADITIVO,

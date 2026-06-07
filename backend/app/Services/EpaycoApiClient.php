@@ -15,7 +15,10 @@ use Throwable;
  *    abre; se guarda como metadata y queda PENDIENTE (confirma webhook).
  *  - DAVIPLATA: `daviplata->create` (APIFY `/payment/process/daviplata`).
  *    Queda PENDIENTE hasta confirmación; sin aprobación falsa.
- *  - NEQUI: el SDK/APIFY oficial no expone Nequi → "no disponible" claro.
+ *  - NEQUI: `EpaycoApifyNequi->create` (APIFY `services.epayco.nequi_path`,
+ *    default `/payment/process/pmpush`); push a la app Nequi. PENDIENTE hasta
+ *    confirmación real; sin aprobación falsa. El SDK no trae recurso Nequi: se
+ *    extiende su `Resource` para reutilizar el mismo transporte/auth APIFY.
  * Credenciales de API: PUBLIC_KEY (apiKey) + PRIVATE_KEY (privateKey).
  * `p_cust_id_cliente`/`p_key` son SOLO para la firma del webhook.
  *
@@ -290,17 +293,87 @@ class EpaycoApiClient
     }
 
     /**
-     * Nequi: el SDK oficial de ePayco NO expone un servicio Nequi por API
-     * (APIFY no lista endpoint Nequi). Se reporta como NO DISPONIBLE de forma
-     * clara, sin abrir navegador y sin simular aprobación.
+     * Nequi 100% por API (APIFY → `services.epayco.nequi_path`, default
+     * `/payment/process/pmpush`). El SDK oficial no trae recurso Nequi: usamos
+     * `EpaycoApifyNequi` (mismo transporte/auth APIFY que Daviplata). ePayco
+     * envía un push a la app Nequi del cliente; la transacción queda PENDIENTE
+     * hasta la confirmación real (webhook/consulta). Sin aprobación falsa.
+     * Datos de prueba oficiales ePayco (sandbox): teléfono 3991111111 aprueba.
      */
     public function payNequi(array $p): array
     {
-        $this->logMethod('nequi', $p['reference'] ?? null, null, null,
-            'Nequi no expuesto por el SDK/APIFY oficial');
-        return $this->unavailable(
-            'Nequi no está habilitado por ePayco para esta cuenta.'
-        );
+        $epayco = $this->sdk();
+        if (!$epayco) {
+            return $this->fail('Pago no disponible temporalmente. Intenta luego.');
+        }
+        $c = $p['customer'];
+        // Teléfono Nequi: normaliza a 10 dígitos colombianos (quita +57/57/espacios).
+        $phone = $this->normalizeCoPhone($p['phone'] ?: ($c['phone'] ?? ''));
+        if (strlen($phone) !== 10) {
+            return $this->fail('Ingresa un número Nequi válido de 10 dígitos.');
+        }
+
+        try {
+            $resp = (new \App\Services\Epayco\EpaycoApifyNequi($epayco))->create([
+                'doc_type'         => $c['doc_type'] ?? 'CC',
+                'document'         => $c['doc_number'] ?? '',
+                'name'             => $c['name'] ?? 'Cliente',
+                'last_name'        => $c['last_name'] ?? '',
+                'email'            => $c['email'] ?? 'sinemail@ironbody.co',
+                'indicative'       => '57',
+                'phone'            => $phone,
+                'value'            => $p['value'],
+                'tax'              => '0',
+                'tax_base'         => '0',
+                'currency'         => $p['currency'],
+                'dues'             => '1',
+                'ip'               => $p['ip'],
+                'description'      => $p['description'],
+                'invoice'          => $p['reference'],
+                'url_response'     => $p['url_response'],
+                'url_confirmation' => $p['url_confirmation'],
+                'test'             => $p['test'] ? 'true' : 'false',
+            ]);
+        } catch (Throwable $e) {
+            $this->logMethod('nequi', $p['reference'] ?? null, null,
+                (string) $e->getCode(), $e->getMessage());
+            return $this->unavailable(
+                'Nequi no está habilitado por ePayco para esta cuenta.'
+            );
+        }
+
+        $d = $this->toArray($resp);
+        $r = $this->normalize($d, true);
+        $ref = $r['ref_payco'] ?? $r['transaction_id'];
+        if (!$ref && !$r['ok']) {
+            return $this->unavailable(
+                'Nequi no está habilitado por ePayco para esta cuenta.'
+            );
+        }
+        // Sin aprobación falsa: si no fue rechazo/fallo explícito, queda PENDIENTE
+        // (el usuario aprueba el push en su app Nequi; confirma webhook/consulta).
+        if (!in_array($r['state'], [1, 2, 4, 6, 9, 11], true)) {
+            $r['state'] = 3;
+        }
+        if ($r['state'] !== 1) {
+            $r['message'] = 'Revisa tu app Nequi para aprobar el pago.';
+        }
+        $this->logMethod('nequi', $p['reference'] ?? null, $ref, null,
+            $r['message'] ?? 'creada');
+        return $r;
+    }
+
+    /** Normaliza un teléfono colombiano a 10 dígitos (quita +57 / 57 / símbolos). */
+    private function normalizeCoPhone(string $phone): string
+    {
+        $digits = preg_replace('/\D/', '', $phone);
+        if (strlen($digits) === 12 && str_starts_with($digits, '57')) {
+            $digits = substr($digits, 2); // 57XXXXXXXXXX → XXXXXXXXXX
+        }
+        if (strlen($digits) === 11 && str_starts_with($digits, '0')) {
+            $digits = substr($digits, 1);
+        }
+        return $digits;
     }
 
     /**

@@ -167,4 +167,10 @@ class RealtimeEvents
     {
         self::broadcastToActiveMembers(self::RANKING, ['ranking']);
     }
+
+    /** Snapshot global del miembro cambió (membresía/acceso/días/perfil). */
+    public static function appState(?int $memberId): void
+    {
+        self::emit($memberId, self::APP_STATE, ['membership', 'payment', 'profile']);
+    }
 }

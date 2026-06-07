@@ -211,6 +211,13 @@ return [
         'validation_url' => 'https://api.secure.payco.co',
         // API REST (apify) para pago in-app por token/transacción.
         'apify_base' => env('EPAYCO_APIFY_BASE', 'https://apify.epayco.co'),
+        // Ruta APIFY del cobro Nequi (push a la app Nequi). El SDK oficial NO
+        // expone un recurso Nequi; lo llamamos directamente por APIFY (mismo
+        // transporte/auth que Daviplata). Si ePayco asigna otra ruta a esta
+        // cuenta, se ajusta por env SIN tocar código (degradación segura: una
+        // ruta inválida devuelve error de ePayco → estado controlado, jamás
+        // una aprobación falsa).
+        'nequi_path' => env('EPAYCO_NEQUI_PATH', '/payment/process/pmpush'),
     ],
 
 ];
