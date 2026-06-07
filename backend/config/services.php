@@ -225,6 +225,17 @@ return [
         'checkout_js' => env('EPAYCO_CHECKOUT_JS', 'https://checkout.epayco.co/checkout-v2.js'),
         // Vigencia (segundos) de la URL firmada del bridge de checkout.
         'checkout_bridge_ttl' => (int) env('EPAYCO_CHECKOUT_BRIDGE_TTL', 900),
+        // Métodos a OCULTAR en el Smart Checkout de wallets (Nequi/DaviPlata/
+        // Davivienda). ePayco solo soporta BLACKLIST (`methodsDisable`), no
+        // allow-list. Tokens documentados: TDC (tarjetas), PSE, SP (SafetyPay),
+        // CASH (efectivo/Baloto/Efecty/etc.). Por defecto se ocultan esos para
+        // dejar visibles las billeteras/bancos objetivo. Ajustable por env (CSV)
+        // sin tocar código, p. ej. si Davivienda solo aparece vía PSE en esta
+        // cuenta, quitar PSE de la lista.
+        'checkout_methods_disable' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('EPAYCO_CHECKOUT_METHODS_DISABLE', 'TDC,PSE,SP,CASH'))
+        ), fn ($v) => $v !== '')),
     ],
 
 ];

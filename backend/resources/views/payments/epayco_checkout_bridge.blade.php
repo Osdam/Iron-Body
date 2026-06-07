@@ -38,6 +38,7 @@
         var SESSION_ID = @json($sessionId);
         var PUBLIC_KEY = @json($publicKey);
         var TEST_MODE  = @json($test);
+        var METHODS_DISABLE = @json($methodsDisable);
         var DATA = {
             reference: @json($reference),
             amount: @json($amount),
@@ -63,11 +64,13 @@
                 if (typeof ePayco === 'undefined' || !ePayco.checkout) { showManual(); return; }
                 var handler;
                 if (SESSION_ID) {
-                    // Modo Smart Checkout Session v2.
+                    // Modo Smart Checkout Session v2 (methodsDisable ya viaja en
+                    // la sesión; se reenvía por compatibilidad de versiones del JS).
                     handler = ePayco.checkout.configure({
                         sessionId: SESSION_ID,
                         external: 'false', // ONPAGE: imprescindible para WebView
-                        test: TEST_MODE
+                        test: TEST_MODE,
+                        methodsDisable: METHODS_DISABLE
                     });
                     opened = true;
                     if (handler && typeof handler.open === 'function') handler.open();
@@ -80,6 +83,7 @@
                 opened = true;
                 handler.open({
                     external: 'false',
+                    methodsDisable: METHODS_DISABLE, // oculta tarjeta/PSE/efectivo/SP
                     name: 'Iron Body',
                     description: DATA.description,
                     invoice: DATA.reference,

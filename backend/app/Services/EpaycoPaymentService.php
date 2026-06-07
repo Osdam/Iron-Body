@@ -294,6 +294,16 @@ class EpaycoPaymentService
             ]);
         }
 
+        // BLACKLIST de métodos: ePayco solo soporta methodsDisable (no allow-list).
+        // Ocultamos tarjeta/PSE/efectivo/SafetyPay para dejar visibles solo las
+        // billeteras/bancos objetivo (Nequi/DaviPlata/Davivienda).
+        $methodsDisable = (array) config('services.epayco.checkout_methods_disable', []);
+        Log::info('smart_checkout.disabled_methods', [
+            'reference'         => $tx->reference,
+            'method_from_app'   => $method,
+            'disabled_methods'  => $methodsDisable,
+        ]);
+
         $payload = [
             'checkout_version'         => '2',
             'name'                     => 'Iron Body',
@@ -307,7 +317,7 @@ class EpaycoPaymentService
             'country'                  => 'CO',
             'response'                 => $this->responseUrl(),
             'confirmation'             => $this->confirmationUrl(),
-            'methodsDisable'           => [],
+            'methodsDisable'           => $methodsDisable,
             'method'                   => 'POST',
             'dues'                     => 1,
             'noRedirectOnClose'        => false,

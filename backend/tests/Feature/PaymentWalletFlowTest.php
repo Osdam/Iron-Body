@@ -391,6 +391,33 @@ class PaymentWalletFlowTest extends TestCase
         $this->assertSame(80000, $captured['amount']);
     }
 
+    public function test_apify_payload_disables_card_pse_cash_methods(): void
+    {
+        // El Smart Checkout de wallets debe OCULTAR tarjeta/PSE/efectivo/SafetyPay
+        // (blacklist methodsDisable) → solo quedan Nequi/DaviPlata/Davivienda.
+        config(['services.epayco.checkout_methods_disable' => ['TDC', 'PSE', 'SP', 'CASH']]);
+        $plan = $this->plan();
+        $member = $this->member();
+        $captured = null;
+        $this->mock(EpaycoApiClient::class, function ($m) use (&$captured) {
+            $m->shouldReceive('createCheckoutSession')->andReturnUsing(function ($payload) use (&$captured) {
+                $captured = $payload;
+                return ['ok' => true, 'session_id' => 'sess_X', 'checkout_url' => null, 'message' => null, 'raw' => []];
+            });
+        });
+
+        $this->postJson('/api/payments/epayco/pay-nequi', [
+            'amount' => 80000, 'plan_id' => $plan->id, 'member_id' => $member->id,
+            'idempotency_key' => 'idem-methods',
+        ])->assertOk();
+
+        $this->assertIsArray($captured['methodsDisable']);
+        $this->assertContains('TDC', $captured['methodsDisable']);
+        $this->assertContains('PSE', $captured['methodsDisable']);
+        $this->assertContains('CASH', $captured['methodsDisable']);
+        $this->assertContains('SP', $captured['methodsDisable']);
+    }
+
     public function test_apify_rejects_invalid_amount_before_request(): void
     {
         // Plan por debajo del mínimo de ePayco (5000) → falla ANTES de llamar APIFY.
@@ -429,6 +456,8 @@ class PaymentWalletFlowTest extends TestCase
         $res->assertOk();
         $res->assertSee('checkout-v2.js', false);
         $res->assertSee('sess_ABC123', false); // sessionId en el HTML
+        $res->assertSee('methodsDisable', false); // filtro de métodos presente
+        $res->assertSee('TDC', false); // oculta tarjetas (y PSE/SP/CASH)
         // Token firmado inválido → 403.
         $this->get(parse_url($bridgeUrl, PHP_URL_PATH) . '?exp=1&t=bad')->assertStatus(403);
     }

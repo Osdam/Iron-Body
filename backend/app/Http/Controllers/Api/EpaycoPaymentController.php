@@ -422,6 +422,9 @@ class EpaycoPaymentController extends Controller
                 'responseUrl'  => $this->epayco->responseUrl(),
                 'confirmationUrl' => $this->epayco->confirmationUrl(),
                 'reference'    => $tx->reference,
+                // Métodos a ocultar (blacklist ePayco). Para el modo sessionId ya
+                // viaja en la sesión; en fallback se pasa a checkout.open().
+                'methodsDisable' => array_values((array) ($cfg['checkout_methods_disable'] ?? [])),
                 // Datos NO sensibles para el modo fallback (amount autoritativo).
                 'amount'       => number_format((float) $tx->amount, 0, '.', ''),
                 'currency'     => strtoupper((string) $tx->currency),
