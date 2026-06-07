@@ -348,6 +348,74 @@ class PaymentWalletFlowTest extends TestCase
         $this->getJson('/api/payments/NO-EXISTE/status')->assertStatus(404);
     }
 
+    public function test_bridge_url_is_web_route_without_api_and_no_double_slash(): void
+    {
+        config(['app.url' => 'https://api.ironbodyneiva.cloud']);
+        $url = app(\App\Services\EpaycoPaymentService::class)->checkoutBridgeUrl('IRON-X');
+
+        $this->assertStringStartsWith(
+            'https://api.ironbodyneiva.cloud/payments/epayco/checkout-bridge/IRON-X?', $url);
+        $this->assertStringNotContainsString('/api/payments/epayco/checkout-bridge', $url);
+        // Sin doble slash tras el dominio.
+        $this->assertStringNotContainsString('cloud//payments', $url);
+    }
+
+    public function test_bridge_url_has_no_double_slash_when_app_url_has_trailing_slash(): void
+    {
+        config(['app.url' => 'https://api.ironbodyneiva.cloud/']);
+        $url = app(\App\Services\EpaycoPaymentService::class)->checkoutBridgeUrl('IRON-Y');
+
+        $this->assertStringContainsString('cloud/payments/epayco/checkout-bridge/IRON-Y', $url);
+        $this->assertStringNotContainsString('cloud//payments', $url);
+    }
+
+    public function test_apify_payload_amount_is_integer_from_plan(): void
+    {
+        $plan = $this->plan(); // 80000
+        $member = $this->member();
+        $captured = null;
+        $this->mock(EpaycoApiClient::class, function ($m) use (&$captured) {
+            $m->shouldReceive('createCheckoutSession')->andReturnUsing(function ($payload) use (&$captured) {
+                $captured = $payload;
+                return ['ok' => true, 'session_id' => 'sess_X', 'checkout_url' => null, 'message' => null, 'raw' => []];
+            });
+        });
+
+        // Flutter manda amount string raro; el backend usa el del plan, entero.
+        $this->postJson('/api/payments/epayco/pay-nequi', [
+            'amount' => 999, 'plan_id' => $plan->id, 'member_id' => $member->id,
+            'idempotency_key' => 'idem-amt',
+        ])->assertOk();
+
+        $this->assertIsInt($captured['amount']);
+        $this->assertSame(80000, $captured['amount']);
+    }
+
+    public function test_apify_rejects_invalid_amount_before_request(): void
+    {
+        // Plan por debajo del mínimo de ePayco (5000) → falla ANTES de llamar APIFY.
+        $plan = Plan::create(['name' => 'Mini', 'price' => 1000, 'duration_days' => 30, 'active' => true]);
+        $member = $this->member();
+        $this->mock(EpaycoApiClient::class, function ($m) {
+            $m->shouldReceive('createCheckoutSession')->never();
+        });
+
+        $r = $this->postJson('/api/payments/epayco/pay-nequi', [
+            'amount' => 1000, 'plan_id' => $plan->id, 'member_id' => $member->id,
+            'idempotency_key' => 'idem-bad-amt',
+        ]);
+        $r->assertOk()->assertJsonPath('status', 'failed');
+        $member->refresh();
+        $this->assertNotSame(Member::STATUS_ACTIVE, $member->status);
+    }
+
+    public function test_bridge_route_returns_controlled_not_generic_404(): void
+    {
+        // La ruta web del bridge EXISTE: con token inválido responde 403 (no 404).
+        $this->get('/payments/epayco/checkout-bridge/CUALQUIERA?exp=1&t=bad')
+            ->assertStatus(403);
+    }
+
     public function test_checkout_bridge_renders_valid_html(): void
     {
         $plan = $this->plan();

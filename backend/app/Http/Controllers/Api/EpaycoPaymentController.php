@@ -391,13 +391,16 @@ class EpaycoPaymentController extends Controller
     {
         $exp = (int) $request->query('exp', 0);
         $token = (string) $request->query('t', '');
+        // Firma inválida/expirada → 403 CONTROLADO (no 404 genérico): confirma
+        // que la RUTA existe y el problema es el enlace.
         if (! $this->epayco->verifyBridgeToken($reference, $exp, $token)) {
             abort(403, 'Enlace de pago inválido o expirado.');
         }
 
         $tx = PaymentTransaction::where('reference', $reference)->first();
+        // Transacción inexistente o ya finalizada → 410 GONE controlado.
         if (! $tx || ! $tx->isInFlight()) {
-            abort(404, 'Sesión de pago no encontrada o ya finalizada.');
+            abort(410, 'Sesión de pago no encontrada o ya finalizada.');
         }
 
         $raw = is_array($tx->raw_response) ? $tx->raw_response : [];
@@ -405,9 +408,9 @@ class EpaycoPaymentController extends Controller
         $cfg = config('services.epayco');
         $publicKey = (string) ($cfg['public_key'] ?? '');
 
-        // Sin sessionId NI llave pública no hay forma de abrir el checkout.
+        // Sin sessionId NI llave pública no hay forma de abrir el checkout → 410.
         if (! $sessionId && $publicKey === '') {
-            abort(404, 'No fue posible iniciar el pago.');
+            abort(410, 'No fue posible iniciar el pago.');
         }
 
         return response()

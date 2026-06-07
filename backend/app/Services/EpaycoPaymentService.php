@@ -279,12 +279,27 @@ class EpaycoPaymentService
         $plan   = $tx->plan_id ? Plan::find($tx->plan_id) : null;
         $c      = is_array($tx->customer) ? $tx->customer : [];
 
+        // Monto AUTORITATIVO como ENTERO puro desde BD (ePayco APIFY exige que
+        // `amount` sea un NÚMERO entre 5000 y 5000000; enviar "120000.00" string
+        // dispara "property Amount must be a number..."). Se ignora el de Flutter.
+        $amount = (int) round((float) $tx->amount);
+        Log::info('epayco.apify.session.amount', [
+            'reference'    => $tx->reference,
+            'amount_type'  => 'integer',
+            'amount_value' => $amount,
+        ]);
+        if ($amount < 5000 || $amount > 5000000) {
+            return $this->transitionTo($tx, PaymentTransaction::STATUS_FAILED, [
+                'failure_reason' => 'El monto del plan no es válido para el pago en línea.',
+            ]);
+        }
+
         $payload = [
             'checkout_version'         => '2',
             'name'                     => 'Iron Body',
             'currency'                 => strtoupper($tx->currency),
-            // Monto AUTORITATIVO (precio del plan en BD; ver createOrReuse).
-            'amount'                   => number_format((float) $tx->amount, 2, '.', ''),
+            // Monto como NÚMERO entero (no string, no decimales).
+            'amount'                   => $amount,
             'description'              => $tx->description
                 ?: ('Membresía Iron Body' . ($plan ? ' - ' . $plan->name : '')),
             'lang'                     => 'ES',
@@ -356,14 +371,20 @@ class EpaycoPaymentService
         return $tx;
     }
 
-    /** URL FIRMADA del bridge de checkout (TTL corto). No expone el sessionId. */
+    /**
+     * URL FIRMADA del bridge de checkout (TTL corto). Apunta a la RUTA WEB
+     * pública `/payments/epayco/checkout-bridge/{ref}` (SIN `/api`). Se construye
+     * con rtrim(APP_URL) para evitar doble slash y no depender del host de la
+     * request. No expone el sessionId.
+     */
     public function checkoutBridgeUrl(string $reference): string
     {
         $ttl = (int) config('services.epayco.checkout_bridge_ttl', 900);
         $exp = time() + max(60, $ttl);
         $token = $this->bridgeToken($reference, $exp);
+        $base = rtrim((string) config('app.url'), '/');
 
-        return url('/payments/epayco/checkout-bridge/' . rawurlencode($reference))
+        return $base . '/payments/epayco/checkout-bridge/' . rawurlencode($reference)
             . '?exp=' . $exp . '&t=' . $token;
     }
 
