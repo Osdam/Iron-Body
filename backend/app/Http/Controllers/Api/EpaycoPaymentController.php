@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Member;
+use App\Models\Payment;
 use App\Models\PaymentTransaction;
 use App\Models\User;
 use App\Services\EpaycoApiClient;
 use App\Services\EpaycoPaymentService;
+use App\Services\MembershipService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -26,6 +28,7 @@ class EpaycoPaymentController extends Controller
     public function __construct(
         private EpaycoPaymentService $epayco,
         private EpaycoApiClient $api,
+        private MembershipService $memberships,
     ) {
     }
 
@@ -79,14 +82,37 @@ class EpaycoPaymentController extends Controller
         return $this->runPay('card', $data, $request->ip());
     }
 
-    /** POST /api/payments/epayco/pay-nequi — push a la app Nequi (sin navegador). */
+    /**
+     * POST /api/payments/epayco/pay-nequi — Smart Checkout v2. NO fuerza el
+     * endpoint directo de Nequi (la cuenta puede no tenerlo habilitado): crea una
+     * sesión y el usuario completa el pago en el checkout OFICIAL de ePayco.
+     */
     public function payNequi(Request $request)
     {
         $data = $request->validate($this->createRules + [
-            'phone' => 'required|string|min:10|max:10',
+            // El teléfono es opcional (solo prefill del checkout): el usuario
+            // completa el pago dentro de ePayco.
+            'phone' => 'nullable|string|min:10|max:13',
         ]);
 
-        return $this->runPay('nequi', $data, $request->ip());
+        return $this->runCheckout('nequi', $data, $request->ip());
+    }
+
+    /**
+     * POST /api/payments/epayco/checkout-session — flujo genérico Smart Checkout
+     * v2 (método solicitado en `method`, default nequi). Mismo contrato que las
+     * rutas por billetera.
+     */
+    public function checkoutSession(Request $request)
+    {
+        $data = $request->validate($this->createRules + [
+            'method' => 'nullable|string|in:nequi,daviplata',
+            'phone'  => 'nullable|string|min:10|max:13',
+        ]);
+        $method = $data['method'] ?? 'nequi';
+        unset($data['method']);
+
+        return $this->runCheckout($method, $data, $request->ip());
     }
 
     /**
@@ -106,14 +132,17 @@ class EpaycoPaymentController extends Controller
         return $this->runPay('pse', $data, $request->ip());
     }
 
-    /** POST /api/payments/epayco/pay-daviplata — requiere validación externa. */
+    /**
+     * POST /api/payments/epayco/pay-daviplata — Smart Checkout v2 (igual que
+     * Nequi: no fuerza endpoint directo; el usuario paga en el checkout oficial).
+     */
     public function payDaviplata(Request $request)
     {
         $data = $request->validate($this->createRules + [
-            'phone' => 'nullable|string|min:10|max:10',
+            'phone' => 'nullable|string|min:10|max:13',
         ]);
 
-        return $this->runPay('daviplata', $data, $request->ip());
+        return $this->runCheckout('daviplata', $data, $request->ip());
     }
 
     /**
@@ -130,6 +159,38 @@ class EpaycoPaymentController extends Controller
         } catch (Throwable $e) {
             return $this->failSafe($e, $data['idempotency_key'] ?? null);
         }
+    }
+
+    /**
+     * Smart Checkout v2 para billeteras (Nequi/DaviPlata): crea la sesión y
+     * devuelve el contrato con flow=smart_checkout + session_id + bridge URL.
+     */
+    private function runCheckout(string $method, array $data, ?string $ip)
+    {
+        $data['ip'] = $ip ?? '127.0.0.1';
+        $data = $this->resolvePaymentSubject($data);
+        try {
+            $tx = $this->epayco->startCheckoutSession($method, $data, $this->api);
+            return response()->json($this->checkoutResponse($tx, $method));
+        } catch (Throwable $e) {
+            return $this->failSafe($e, $data['idempotency_key'] ?? null);
+        }
+    }
+
+    /** Contrato que espera Flutter para abrir el Smart Checkout. */
+    private function checkoutResponse(PaymentTransaction $tx, string $method): array
+    {
+        $pub = $tx->toPublicArray();
+        $ok = $tx->status !== PaymentTransaction::STATUS_FAILED && !empty($pub['session_id']);
+
+        return array_merge($pub, [
+            'ok'                  => $ok,
+            'method'              => $method,
+            'flow'                => 'smart_checkout',
+            'message'             => $ok
+                ? 'Continúa en ePayco para completar el pago.'
+                : ($tx->failure_reason ?: 'No pudimos iniciar el pago. Intenta nuevamente.'),
+        ]);
     }
 
     private function resolvePaymentSubject(array $data): array
@@ -279,7 +340,72 @@ class EpaycoPaymentController extends Controller
             return response()->json(['message' => 'Transacción no encontrada'], 404);
         }
 
-        return response()->json($tx->toPublicArray());
+        // Acceso REAL al Home: nunca depende del estado local de Flutter. Misma
+        // regla que /member/app-state: member activo O membresía vigente O pago
+        // aprobado. El Home solo se desbloquea si esto es true.
+        $member = $tx->member_id ? Member::find($tx->member_id) : null;
+        $user   = $tx->user_id ? User::find($tx->user_id) : ($member?->user);
+        $membershipActive = $user ? $this->memberships->isActive($user) : false;
+        $hasApprovedPayment = $tx->member_id
+            ? Payment::where('member_id', $tx->member_id)
+                ->whereRaw('LOWER(status) IN (?, ?)', ['approved', 'paid'])->exists()
+            : false;
+        $canAccessHome = ($member && $member->status === Member::STATUS_ACTIVE)
+            || $membershipActive
+            || $hasApprovedPayment;
+
+        return response()->json(array_merge($tx->toPublicArray(), [
+            'membership_active' => $membershipActive,
+            'can_access_home'   => $canAccessHome,
+            'message'           => $this->statusMessage($tx->status),
+        ]));
+    }
+
+    /** Mensaje funcional mínimo por estado (la app puede usar el suyo). */
+    private function statusMessage(string $status): string
+    {
+        return match ($status) {
+            PaymentTransaction::STATUS_APPROVED  => 'Pago confirmado. Tu membresía fue activada.',
+            PaymentTransaction::STATUS_FAILED    => 'No pudimos procesar el pago.',
+            PaymentTransaction::STATUS_CANCELLED => 'El pago fue cancelado.',
+            PaymentTransaction::STATUS_EXPIRED   => 'El pago expiró. Genera uno nuevo.',
+            default                              => 'Tu pago está pendiente de confirmación.',
+        };
+    }
+
+    /**
+     * GET /payments/epayco/checkout-bridge/{reference} — página WEB que abre el
+     * Smart Checkout v2 de ePayco (checkout-v2.js) con el sessionId de la
+     * transacción. Protegida por firma+TTL (?exp&t). NO recibe el sessionId por
+     * query (se lee de la transacción) y NUNCA expone llaves. No activa membresía.
+     */
+    public function checkoutBridge(Request $request, string $reference)
+    {
+        $exp = (int) $request->query('exp', 0);
+        $token = (string) $request->query('t', '');
+        if (! $this->epayco->verifyBridgeToken($reference, $exp, $token)) {
+            abort(403, 'Enlace de pago inválido o expirado.');
+        }
+
+        $tx = PaymentTransaction::where('reference', $reference)->first();
+        $sessionId = $tx && is_array($tx->raw_response)
+            ? ($tx->raw_response['session_id'] ?? null)
+            : null;
+        if (! $tx || ! $sessionId) {
+            abort(404, 'Sesión de pago no encontrada.');
+        }
+
+        $cfg = config('services.epayco');
+
+        return response()
+            ->view('payments.epayco_checkout_bridge', [
+                'sessionId'   => $sessionId,
+                'test'        => (bool) $cfg['test'],
+                'checkoutJs'  => $cfg['checkout_js'] ?? 'https://checkout.epayco.co/checkout-v2.js',
+                'responseUrl' => $this->epayco->responseUrl(),
+                'reference'   => $tx->reference,
+            ])
+            ->header('Cache-Control', 'no-store');
     }
 
     /** POST /api/payments/epayco/confirmation — webhook ePayco (idempotente). */

@@ -245,6 +245,145 @@ class EpaycoPaymentService
     }
 
     /**
+     * Smart Checkout v2 (Nequi/DaviPlata). En vez de forzar un endpoint directo
+     * de billetera (que la cuenta puede no tener habilitado), crea una SESIÓN de
+     * checkout en ePayco y devuelve la transacción PENDIENTE con la URL del
+     * bridge (WebView). El pago lo completa el usuario en el checkout OFICIAL de
+     * ePayco; la confirmación REAL llega por webhook. Nunca activa membresía aquí.
+     *
+     * @param  string  $method  nequi|daviplata (método SOLICITADO; ePayco mostrará
+     *                          los que tenga disponibles).
+     */
+    public function startCheckoutSession(string $method, array $data, EpaycoApiClient $api): PaymentTransaction
+    {
+        $tx = $this->createOrReuse($data);
+
+        // Anti doble pago / idempotencia: si ya está aprobada o ya hay una sesión
+        // viva creada para esta transacción, se REUTILIZA (no se crea otra).
+        if ($tx->status === PaymentTransaction::STATUS_APPROVED) {
+            return $tx;
+        }
+        $existingSession = is_array($tx->raw_response) ? ($tx->raw_response['session_id'] ?? null) : null;
+        if ($tx->isInFlight() && $existingSession && $tx->checkout_url) {
+            return $tx;
+        }
+
+        $this->transitionTo($tx, PaymentTransaction::STATUS_PENDING, [
+            'failure_reason' => null,
+            'method'         => $method,
+        ]);
+
+        $member = $tx->member_id ? Member::find($tx->member_id) : null;
+        $plan   = $tx->plan_id ? Plan::find($tx->plan_id) : null;
+        $c      = is_array($tx->customer) ? $tx->customer : [];
+
+        $payload = [
+            'checkout_version'         => '2',
+            'name'                     => 'Iron Body',
+            'currency'                 => strtoupper($tx->currency),
+            // Monto AUTORITATIVO (precio del plan en BD; ver createOrReuse).
+            'amount'                   => number_format((float) $tx->amount, 2, '.', ''),
+            'description'              => $tx->description
+                ?: ('Membresía Iron Body' . ($plan ? ' - ' . $plan->name : '')),
+            'lang'                     => 'ES',
+            'invoice'                  => $tx->reference,
+            'country'                  => 'CO',
+            'response'                 => $this->responseUrl(),
+            'confirmation'             => $this->confirmationUrl(),
+            'methodsDisable'           => [],
+            'method'                   => 'POST',
+            'dues'                     => 1,
+            'noRedirectOnClose'        => false,
+            'uniqueTransactionPerBill' => true,
+            'billing' => [
+                'email'       => $c['email'] ?? ($member?->email),
+                'name'        => $c['name'] ?? ($member?->full_name),
+                'address'     => $c['address'] ?? null,
+                'typeDoc'     => $c['doc_type'] ?? 'CC',
+                'numberDoc'   => $c['doc_number'] ?? ($member?->document_number),
+                'callingCode' => '+57',
+                'mobilePhone' => $this->normalizeCoPhone($c['phone'] ?? ($member?->phone ?? '')),
+            ],
+            'extras' => [
+                // extra1 = referencia interna → el webhook encuentra la transacción.
+                'extra1' => $tx->reference,
+                'extra2' => (string) $tx->plan_id,
+                'extra3' => $method, // método solicitado (no se fuerza en ePayco)
+                'extra4' => (string) $tx->member_id,
+            ],
+        ];
+
+        $r = $api->createCheckoutSession($payload);
+
+        if (! $r['ok'] || empty($r['session_id'])) {
+            // Sesión no creada → fallo CONTROLADO, sin activar membresía.
+            return $this->transitionTo($tx, PaymentTransaction::STATUS_FAILED, [
+                'failure_reason' => $r['message'] ?? 'No pudimos iniciar el pago con ePayco.',
+                'raw_response'   => $this->safeRaw((array) ($r['raw'] ?? [])),
+            ]);
+        }
+
+        $bridgeUrl = $this->checkoutBridgeUrl($tx->reference);
+        $raw = is_array($tx->raw_response) ? $tx->raw_response : [];
+        $raw['flow'] = 'smart_checkout';
+        $raw['session_id'] = $r['session_id'];
+        $raw['requested_method'] = $method;
+
+        $tx = $this->transitionTo($tx, PaymentTransaction::STATUS_PENDING, [
+            'failure_reason' => null,
+            'checkout_url'   => $bridgeUrl,
+            'raw_response'   => $raw,
+        ]);
+
+        Log::info('ePayco smart checkout session creada', [
+            'reference' => $tx->reference,
+            'method'    => $method,
+            'has_session' => true,
+        ]);
+
+        return $tx;
+    }
+
+    /** URL FIRMADA del bridge de checkout (TTL corto). No expone el sessionId. */
+    public function checkoutBridgeUrl(string $reference): string
+    {
+        $ttl = (int) config('services.epayco.checkout_bridge_ttl', 900);
+        $exp = time() + max(60, $ttl);
+        $token = $this->bridgeToken($reference, $exp);
+
+        return url('/payments/epayco/checkout-bridge/' . rawurlencode($reference))
+            . '?exp=' . $exp . '&t=' . $token;
+    }
+
+    /** Firma HMAC del bridge (clave de app, NUNCA p_key). */
+    protected function bridgeToken(string $reference, int $exp): string
+    {
+        return hash_hmac('sha256', $reference . '|' . $exp, (string) config('app.key'));
+    }
+
+    /** Valida la firma + vigencia de una URL de bridge. */
+    public function verifyBridgeToken(string $reference, int $exp, string $token): bool
+    {
+        if ($exp < time()) {
+            return false;
+        }
+        return hash_equals($this->bridgeToken($reference, $exp), $token);
+    }
+
+    /** Normaliza un teléfono colombiano a 10 dígitos (quita +57/57/símbolos). */
+    protected function normalizeCoPhone(?string $phone): string
+    {
+        $digits = preg_replace('/\D/', '', (string) $phone);
+        if (strlen($digits) === 12 && str_starts_with($digits, '57')) {
+            $digits = substr($digits, 2);
+        }
+        if (strlen($digits) === 11 && str_starts_with($digits, '0')) {
+            $digits = substr($digits, 1);
+        }
+        return $digits;
+    }
+
+    /**
      * Devuelve la transacción por referencia, refrescando desde ePayco si sigue
      * en curso (permite recuperar el estado aunque la app perdiera internet).
      */
@@ -277,11 +416,21 @@ class EpaycoPaymentService
         $reference = $payload['x_extra1']
             ?? $payload['x_id_invoice']
             ?? $payload['x_invoice']
+            ?? $payload['x_extra4']
             ?? null;
 
         $tx = $reference
             ? PaymentTransaction::where('reference', $reference)->first()
             : null;
+
+        // Fallback: ubicar por ref_payco/transaction_id ya guardado (Smart
+        // Checkout puede no devolver el invoice en algunos webhooks).
+        if (!$tx) {
+            $providerRef = $payload['x_ref_payco'] ?? $payload['x_transaction_id'] ?? null;
+            if ($providerRef) {
+                $tx = PaymentTransaction::where('provider_ref', $providerRef)->first();
+            }
+        }
 
         if (!$tx) {
             Log::warning('ePayco confirmation: transacción no encontrada', [
@@ -339,6 +488,21 @@ class EpaycoPaymentService
             ]);
             return $this->transitionTo($tx, PaymentTransaction::STATUS_FAILED, [
                 'failure_reason' => 'Monto no coincide con el esperado',
+                'provider_ref'   => $providerRef,
+                'raw_response'   => $this->safeRaw($payload),
+            ]);
+        }
+
+        // Validar moneda: solo COP. Otra moneda con monto presente = no confiable.
+        $currency = strtoupper((string) ($payload['x_currency_code'] ?? ($remote['x_currency_code'] ?? '')));
+        if ($currency !== '' && $currency !== strtoupper((string) $tx->currency)) {
+            Log::warning('ePayco confirmation: moneda no coincide', [
+                'reference' => $tx->reference,
+                'expected'  => $tx->currency,
+                'got'       => $currency,
+            ]);
+            return $this->transitionTo($tx, PaymentTransaction::STATUS_FAILED, [
+                'failure_reason' => 'Moneda no coincide con la esperada',
                 'provider_ref'   => $providerRef,
                 'raw_response'   => $this->safeRaw($payload),
             ]);

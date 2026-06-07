@@ -128,12 +128,14 @@ Route::get('contracts/consent-template', [MemberContractController::class, 'cons
 Route::get('legal/privacy', [\App\Http\Controllers\Api\LegalController::class, 'privacy']);
 Route::get('legal/terms',   [\App\Http\Controllers\Api\LegalController::class, 'terms']);
 
-// ── ePayco — pago 100% IN-APP por API (sin navegador/WebView) ───────────────
+// ── ePayco — tarjeta/PSE in-app por API; billeteras por Smart Checkout v2 ─────
 Route::post('payments/epayco/create', [EpaycoPaymentController::class, 'create']);
 Route::post('payments/epayco/pay-card', [EpaycoPaymentController::class, 'payCard']);
 Route::post('payments/epayco/pay-pse', [EpaycoPaymentController::class, 'payPse']);
+// Billeteras (Nequi/DaviPlata): Smart Checkout v2 (sesión + bridge WebView).
 Route::post('payments/epayco/pay-nequi', [EpaycoPaymentController::class, 'payNequi']);
 Route::post('payments/epayco/pay-daviplata', [EpaycoPaymentController::class, 'payDaviplata']);
+Route::post('payments/epayco/checkout-session', [EpaycoPaymentController::class, 'checkoutSession']);
 Route::post('payments/epayco/confirmation', [EpaycoPaymentController::class, 'confirmation']);
 Route::get('payments/epayco/response', [EpaycoPaymentController::class, 'response']);
 Route::get('payments/epayco/history', [EpaycoPaymentController::class, 'history']);

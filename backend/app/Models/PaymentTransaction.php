@@ -79,6 +79,13 @@ class PaymentTransaction extends Model
             'method'       => $this->method,
             'provider_ref' => $this->provider_ref,
             'checkout_url' => $this->checkout_url,
+            // Smart Checkout v2 (Nequi/DaviPlata): flujo + sesión + URL del bridge
+            // (WebView). Aditivo; null en tarjeta/PSE.
+            'flow' => is_array($this->raw_response) ? ($this->raw_response['flow'] ?? null) : null,
+            'session_id' => is_array($this->raw_response) ? ($this->raw_response['session_id'] ?? null) : null,
+            'checkout_bridge_url' => is_array($this->raw_response) && ($this->raw_response['flow'] ?? null) === 'smart_checkout'
+                ? $this->checkout_url
+                : null,
             // URL del portal del banco (PSE) para autorizar DENTRO de la app
             // (WebView interno). No es un secreto; no se loguea completa.
             'authorization_url' => is_array($this->raw_response)

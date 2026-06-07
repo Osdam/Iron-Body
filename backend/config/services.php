@@ -218,6 +218,13 @@ return [
         // ruta inválida devuelve error de ePayco → estado controlado, jamás
         // una aprobación falsa).
         'nequi_path' => env('EPAYCO_NEQUI_PATH', '/payment/process/pmpush'),
+        // Smart Checkout v2: las billeteras (Nequi/DaviPlata) ya no fuerzan un
+        // endpoint directo (la cuenta puede no tenerlos habilitados). Se crea una
+        // sesión (`/payment/session/create`) y el usuario completa el pago en el
+        // checkout OFICIAL de ePayco, que muestra los métodos disponibles.
+        'checkout_js' => env('EPAYCO_CHECKOUT_JS', 'https://checkout.epayco.co/checkout-v2.js'),
+        // Vigencia (segundos) de la URL firmada del bridge de checkout.
+        'checkout_bridge_ttl' => (int) env('EPAYCO_CHECKOUT_BRIDGE_TTL', 900),
     ],
 
 ];

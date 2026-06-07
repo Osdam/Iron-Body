@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -67,6 +69,161 @@ class EpaycoApiClient
             return json_decode($resp, true) ?: [];
         }
         return [];
+    }
+
+    // ── APIFY: Smart Checkout v2 (login → session/create) ───────────────────────
+
+    /**
+     * Token APIFY (cacheado). Login con Basic base64(PUBLIC:PRIVATE) contra
+     * `{apify_base}/login`. Cachea hasta el `exp` que devuelva ePayco (con margen)
+     * o, si no viene, un TTL corto seguro. NUNCA loguea llaves ni el token.
+     *
+     * @param  bool  $forceRefresh  ignora la caché (p. ej. tras un 401).
+     * @return string|null  token o null si el login falló (credenciales/red).
+     */
+    public function apifyToken(bool $forceRefresh = false): ?string
+    {
+        $cfg = config('services.epayco');
+        $pub = (string) ($cfg['public_key'] ?? '');
+        $priv = (string) ($cfg['private_key'] ?? '');
+        if ($pub === '' || $priv === '') {
+            return null;
+        }
+        $cacheKey = 'epayco:apify:token:' . substr(hash('sha256', $pub), 0, 12);
+        if (! $forceRefresh) {
+            $cached = Cache::get($cacheKey);
+            if (is_string($cached) && $cached !== '') {
+                return $cached;
+            }
+        }
+
+        $base = rtrim((string) ($cfg['apify_base'] ?? 'https://apify.epayco.co'), '/');
+        // Retry corto SOLO para errores transitorios (red/5xx); nunca en 401.
+        $attempts = 0;
+        $lastTransient = false;
+        do {
+            $attempts++;
+            $lastTransient = false;
+            try {
+                $resp = Http::asJson()
+                    ->withHeaders([
+                        'Authorization' => 'Basic ' . base64_encode($pub . ':' . $priv),
+                    ])
+                    ->timeout(15)
+                    ->post($base . '/login', []);
+            } catch (Throwable $e) {
+                $lastTransient = true; // timeout/conexión
+                Log::warning('ePayco APIFY login error de red', ['attempt' => $attempts]);
+                continue;
+            }
+            if ($resp->status() === 401 || $resp->status() === 403) {
+                Log::warning('ePayco APIFY login no autorizado (credenciales)');
+                return null; // credenciales inválidas: NO reintentar
+            }
+            if ($resp->serverError()) {
+                $lastTransient = true;
+                continue;
+            }
+            $body = $resp->json();
+            $token = is_array($body)
+                ? ($body['token'] ?? ($body['data']['token'] ?? ($body['bearer'] ?? null)))
+                : null;
+            if (! $token) {
+                Log::warning('ePayco APIFY login sin token en respuesta', [
+                    'http_status' => $resp->status(),
+                ]);
+                return null;
+            }
+            $ttl = $this->tokenTtlFrom($body);
+            Cache::put($cacheKey, (string) $token, now()->addSeconds($ttl));
+            return (string) $token;
+        } while ($attempts < 2 && $lastTransient);
+
+        return null;
+    }
+
+    /** Calcula un TTL seguro de caché del token a partir del `exp` si viene. */
+    private function tokenTtlFrom($body): int
+    {
+        $exp = is_array($body) ? ($body['exp'] ?? ($body['data']['exp'] ?? null)) : null;
+        if (is_numeric($exp)) {
+            // exp puede venir en segundos epoch o en ms.
+            $expSec = (int) $exp > 9999999999 ? (int) ((int) $exp / 1000) : (int) $exp;
+            $delta = $expSec - time() - 60; // margen de 60s
+            if ($delta > 30) {
+                return min($delta, 3600); // tope 1h
+            }
+        }
+        return 300; // sin exp confiable → caché corta segura (5 min)
+    }
+
+    /**
+     * Crea una sesión de Smart Checkout v2 en `{apify_base}/payment/session/create`
+     * con Bearer del token APIFY. Reintenta UNA vez si el token expiró (401).
+     * Devuelve ['ok'=>bool, 'session_id'=>?string, 'message'=>?string, 'raw'=>array].
+     * NUNCA loguea llaves ni el token.
+     */
+    public function createCheckoutSession(array $payload): array
+    {
+        $cfg = config('services.epayco');
+        $base = rtrim((string) ($cfg['apify_base'] ?? 'https://apify.epayco.co'), '/');
+
+        for ($i = 0; $i < 2; $i++) {
+            $token = $this->apifyToken($i > 0);
+            if (! $token) {
+                return ['ok' => false, 'session_id' => null,
+                    'message' => 'No pudimos autenticar el pago. Intenta nuevamente.', 'raw' => []];
+            }
+            try {
+                $resp = Http::asJson()
+                    ->withToken($token)
+                    ->timeout(20)
+                    ->post($base . '/payment/session/create', $payload);
+            } catch (Throwable $e) {
+                Log::warning('ePayco session/create error de red', [
+                    'reference' => $payload['invoice'] ?? null,
+                ]);
+                return ['ok' => false, 'session_id' => null,
+                    'message' => 'No pudimos iniciar el pago. Intenta nuevamente.', 'raw' => []];
+            }
+            if ($resp->status() === 401 && $i === 0) {
+                continue; // token vencido: reintenta una vez con token fresco
+            }
+            $body = (array) ($resp->json() ?? []);
+            $data = (array) ($body['data'] ?? $body);
+            $sessionId = $data['sessionId']
+                ?? $data['session_id']
+                ?? ($data['id'] ?? null);
+            $success = ! (($body['success'] ?? true) === false
+                || (is_string($body['success'] ?? null) && strtolower($body['success']) === 'false'));
+
+            if ($resp->successful() && $success && $sessionId) {
+                Log::info('ePayco session/create OK', [
+                    'reference' => $payload['invoice'] ?? null,
+                    'has_session' => true,
+                ]);
+                return [
+                    'ok' => true,
+                    'session_id' => (string) $sessionId,
+                    'message' => null,
+                    'raw' => $this->redact($data),
+                ];
+            }
+
+            Log::warning('ePayco session/create falló', [
+                'reference' => $payload['invoice'] ?? null,
+                'http_status' => $resp->status(),
+                'epayco_msg' => isset($body['text_response'])
+                    ? mb_substr((string) $body['text_response'], 0, 160)
+                    : (isset($data['message']) ? mb_substr((string) $data['message'], 0, 160) : null),
+            ]);
+            return ['ok' => false, 'session_id' => null,
+                'message' => 'No pudimos iniciar el pago con ePayco. Intenta nuevamente.',
+                'raw' => $this->redact($data)];
+        }
+
+        return ['ok' => false, 'session_id' => null,
+            'message' => 'No pudimos iniciar el pago. Intenta nuevamente.', 'raw' => []];
     }
 
     /**
