@@ -141,6 +141,21 @@ Route::get('payments/epayco/response', [EpaycoPaymentController::class, 'respons
 Route::get('payments/epayco/history', [EpaycoPaymentController::class, 'history']);
 Route::get('payments/{reference}/status', [EpaycoPaymentController::class, 'status']);
 
+// ── Nequi DIRECTO (Pagos con notificación Push) — proveedor independiente ──────
+// push/status/reverse exigen sesión de miembro; confirmation/response son S2S.
+// Deshabilitado por defecto (responde `unavailable`). La membresía solo se
+// activa por `approved` (webhook/consulta), nunca desde la app.
+Route::post('payments/nequi/confirmation', [\App\Http\Controllers\Api\NequiPaymentController::class, 'confirmation']);
+Route::get('payments/nequi/response', [\App\Http\Controllers\Api\NequiPaymentController::class, 'response']);
+Route::middleware('auth.member')->group(function (): void {
+    Route::post('payments/nequi/push', [\App\Http\Controllers\Api\NequiPaymentController::class, 'push'])
+        ->middleware('throttle:10,1');
+    Route::get('payments/nequi/{reference}/status', [\App\Http\Controllers\Api\NequiPaymentController::class, 'status'])
+        ->where('reference', '[A-Za-z0-9_\-]+');
+    Route::post('payments/nequi/{reference}/reverse', [\App\Http\Controllers\Api\NequiPaymentController::class, 'reverse'])
+        ->where('reference', '[A-Za-z0-9_\-]+')->middleware('throttle:6,1');
+});
+
 // ── IRON IA — asistente con OpenAI (Flutter → Laravel → OpenAI) ──────────────
 // El usuario se resuelve de forma flexible dentro del servicio (Bearer
 // access_hash de Member, member_id, documento o email). Sin identificación,

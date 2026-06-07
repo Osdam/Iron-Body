@@ -53,16 +53,20 @@ class MemberAccountController extends Controller
         $hasPlan = (bool) ($user && $user->plan);
         $membershipActive = $hasPlan && (! $endsAt || $endsAt->isFuture());
 
-        // Pago aprobado/verificado del miembro (el CRM usa "paid" == "approved").
+        // Pago aprobado/verificado del miembro (solo informativo; NO habilita el
+        // Home por sí mismo: un pago aprobado en el pasado no implica membresía
+        // vigente — debe reflejarse como membresía activa, que sí expira).
         $hasApprovedPayment = Payment::where('member_id', $member->id)
             ->whereRaw('LOWER(status) IN (?, ?)', ['approved', 'paid'])
             ->exists();
 
-        // Regla de negocio: membresía activa O pago aprobado (o el CRM ya marcó
-        // al miembro como activo) habilita el acceso completo a la app.
-        $canAccessApp = $member->status === Member::STATUS_ACTIVE
-            || $membershipActive
-            || $hasApprovedPayment;
+        // REGLA CENTRAL DE ACCESO (única fuente de verdad): el Home solo se
+        // desbloquea con MEMBRESÍA ACTIVA y vigente. Ni el flag CRM
+        // member.status=ACTIVE (no expira) ni "tuvo algún pago aprobado" (no
+        // expira) habilitan el Home: ambos dejarían entrar a usuarios sin
+        // membresía vigente. El único desbloqueo válido es un pago aprobado por
+        // webhook → MembershipService extiende la membresía → isActive()=true.
+        $canAccessApp = $membershipActive;
 
         $daysRemaining = $endsAt
             ? max(0, (int) Carbon::now()->startOfDay()->diffInDays($endsAt->copy()->startOfDay(), false))

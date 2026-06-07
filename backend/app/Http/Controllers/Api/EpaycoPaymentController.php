@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Member;
-use App\Models\Payment;
 use App\Models\PaymentTransaction;
 use App\Models\User;
 use App\Services\EpaycoApiClient;
@@ -343,19 +342,15 @@ class EpaycoPaymentController extends Controller
             return response()->json(['message' => 'Transacción no encontrada'], 404);
         }
 
-        // Acceso REAL al Home: nunca depende del estado local de Flutter. Misma
-        // regla que /member/app-state: member activo O membresía vigente O pago
-        // aprobado. El Home solo se desbloquea si esto es true.
+        // Acceso REAL al Home: nunca depende del estado local de Flutter ni de
+        // un pago aprobado en el pasado. REGLA CENTRAL: el Home solo se
+        // desbloquea con MEMBRESÍA ACTIVA y vigente (misma regla que
+        // /member/app-state y /member/account/status). El pago aprobado se
+        // refleja como membresía activa vía webhook → MembershipService.
         $member = $tx->member_id ? Member::find($tx->member_id) : null;
         $user   = $tx->user_id ? User::find($tx->user_id) : ($member?->user);
         $membershipActive = $user ? $this->memberships->isActive($user) : false;
-        $hasApprovedPayment = $tx->member_id
-            ? Payment::where('member_id', $tx->member_id)
-                ->whereRaw('LOWER(status) IN (?, ?)', ['approved', 'paid'])->exists()
-            : false;
-        $canAccessHome = ($member && $member->status === Member::STATUS_ACTIVE)
-            || $membershipActive
-            || $hasApprovedPayment;
+        $canAccessHome = $membershipActive;
 
         return response()->json(array_merge($tx->toPublicArray(), [
             'membership_active' => $membershipActive,

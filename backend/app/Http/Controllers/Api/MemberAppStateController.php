@@ -43,16 +43,15 @@ class MemberAppStateController extends Controller
             ? $memberships->snapshot($user)
             : ['status' => MembershipService::STATUS_NONE, 'is_active' => false];
 
-        // ── Pago: último estado normalizado + aprobación ────────────────────
+        // ── Pago: último estado normalizado (informativo) ──────────────────
         $lastPayment = Payment::where('member_id', $member->id)->latest('id')->first();
-        $hasApprovedPayment = Payment::where('member_id', $member->id)
-            ->whereRaw('LOWER(status) IN (?, ?)', ['approved', 'paid'])
-            ->exists();
 
-        // ── Acceso: membresía activa O pago aprobado O member activo ────────
-        $canAccessHome = $member->status === Member::STATUS_ACTIVE
-            || $membershipActive
-            || $hasApprovedPayment;
+        // ── REGLA CENTRAL DE ACCESO: el Home solo se desbloquea con MEMBRESÍA
+        // ACTIVA y vigente. NO se usan member.status=ACTIVE ni "tuvo algún pago
+        // aprobado": ninguno expira y dejarían entrar a usuarios sin membresía
+        // vigente. El único desbloqueo válido es pago aprobado por webhook →
+        // MembershipService extiende la membresía → isActive()=true. ────────
+        $canAccessHome = $membershipActive;
 
         // ── Features resueltas por plan (gating de IA/entrenamiento) ────────
         $features = $member->resolvedFeatures();

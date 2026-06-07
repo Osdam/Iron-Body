@@ -2,13 +2,10 @@
 
 namespace App\Services;
 
-use App\Models\Payment;
 use App\Models\PaymentTransaction;
 use App\Models\Plan;
-use App\Models\User;
 use App\Models\Member;
 use App\Services\NotificationService;
-use Carbon\Carbon;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -654,92 +651,14 @@ class EpaycoPaymentService
     }
 
     /**
-     * Al aprobarse: crea el registro legado en `payments` y extiende membresía.
-     * Si llega member_id, usa su user_id enlazado para mantener una sola ficha
-     * CRM. Best-effort: nunca rompe la confirmación.
+     * Al aprobarse: delega en el activador COMPARTIDO (mismo flujo idempotente
+     * que usa Nequi directo): registro legado en `payments` + extensión de
+     * membresía. Best-effort: nunca rompe la confirmación.
      */
     protected function onApproved(PaymentTransaction $tx): void
     {
-        try {
-            if (!$tx->user_id && $tx->member_id) {
-                $member = Member::with('user')->find($tx->member_id);
-                if ($member?->user_id) {
-                    $tx->forceFill(['user_id' => $member->user_id])->save();
-                }
-            }
-
-            if (!$tx->user_id || !User::whereKey($tx->user_id)->exists()) {
-                return; // app con usuario mock: no hay a quién asociar
-            }
-            // Evitar duplicado legado por la misma referencia.
-            $payment = Payment::firstOrCreate(
-                ['reference' => $tx->reference],
-                [
-                    'user_id' => $tx->user_id,
-                    'member_id' => $tx->member_id,
-                    'plan_id' => $tx->plan_id,
-                    'amount'  => $tx->amount,
-                    'method'  => 'epayco',
-                    'status'  => 'paid',
-                    'paid_at' => $tx->paid_at ?? now(),
-                ]
-            );
-            if ($payment->wasRecentlyCreated && $tx->plan_id) {
-                $this->extendMembership($payment);
-            }
-
-            if ($tx->member_id) {
-                Member::whereKey($tx->member_id)->update(['status' => Member::STATUS_ACTIVE]);
-            }
-
-            // Notificaciones (ADITIVO; no altera el resultado del pago). El
-            // NotificationService es idempotente por event_key: aunque el
-            // webhook reintente, la notificación se crea una sola vez.
-            $member   = $tx->member_id ? Member::find($tx->member_id) : null;
-            $notifier = app(NotificationService::class);
-            $notifier->notifyPaymentApproved($member, $tx);
-            if ($tx->plan_id) {
-                $plan = Plan::find($tx->plan_id);
-                $endDate = $tx->user_id ? optional(User::find($tx->user_id))->membership_end_date : null;
-                $notifier->notifyMembershipActivated($member, [
-                    'name'                => $plan?->name,
-                    'id'                  => $tx->plan_id,
-                    'membership_end_date' => $endDate,
-                ]);
-            }
-        } catch (Throwable $e) {
-            Log::warning('ePayco onApproved post-proceso falló', [
-                'reference' => $tx->reference,
-                'error'     => $e->getMessage(),
-            ]);
-        }
-    }
-
-    /** Espejo de PaymentController::applyMembershipExtension (sin tocarlo). */
-    protected function extendMembership(Payment $payment): void
-    {
-        $user = User::find($payment->user_id);
-        $plan = $payment->plan_id ? Plan::find($payment->plan_id) : null;
-        if (!$user || !$plan || (int) $plan->duration_days <= 0) {
-            return;
-        }
-        $paidDate = $payment->paid_at
-            ? Carbon::parse($payment->paid_at)->startOfDay()
-            : Carbon::today();
-        $currentEnd = $user->membership_end_date
-            ? Carbon::parse($user->membership_end_date)->startOfDay()
-            : null;
-        $baseDate = $currentEnd && $currentEnd->greaterThan($paidDate)
-            ? $currentEnd
-            : $paidDate;
-        if (!$currentEnd || $currentEnd->lessThan($paidDate) || !$user->membership_start_date) {
-            $user->membership_start_date = $paidDate->toDateString();
-        }
-        $user->membership_end_date = $baseDate->copy()
-            ->addDays((int) $plan->duration_days)->toDateString();
-        $user->plan = $plan->name;
-        $user->status = 'active';
-        $user->save();
+        app(\App\Services\Payments\PaymentMembershipActivator::class)
+            ->activate($tx, 'epayco');
     }
 
     /**

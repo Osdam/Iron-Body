@@ -238,4 +238,34 @@ return [
         ), fn ($v) => $v !== '')),
     ],
 
+    // ── Nequi DIRECTO (Pagos con notificación Push de Nequi Negocios/Conecta) ──
+    // Proveedor INDEPENDIENTE de ePayco. El comercio inicia el pago por API, el
+    // cliente aprueba/cancela en su app Nequi y el backend confirma por webhook
+    // o consulta de estado para activar la membresía. Deshabilitado por defecto:
+    // sin credenciales reales el endpoint responde `unavailable` (jamás un cobro
+    // ni aprobación falsa). NUNCA se loguean llaves ni tokens.
+    'nequi' => [
+        'enabled'          => filter_var(env('NEQUI_DIRECT_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'env'              => env('NEQUI_ENV', 'sandbox'),
+        'base_url'         => env('NEQUI_API_BASE'),
+        'auth_url'         => env('NEQUI_AUTH_URL'),
+        'client_id'        => env('NEQUI_CLIENT_ID'),
+        'client_secret'    => env('NEQUI_CLIENT_SECRET'),
+        'api_key'          => env('NEQUI_API_KEY'),
+        'merchant_id'      => env('NEQUI_MERCHANT_ID'),
+        'webhook_secret'   => env('NEQUI_WEBHOOK_SECRET'),
+        'confirmation_url' => env('NEQUI_CONFIRMATION_URL'),
+        'response_url'     => env('NEQUI_RESPONSE_URL'),
+        'ttl_minutes'      => (int) env('NEQUI_PAYMENT_TTL_MINUTES', 15),
+    ],
+
+    // Proveedor activo para el método Nequi en la app:
+    //   direct                → Nequi push directo (services.nequi).
+    //   epayco_smart_checkout → fallback técnico por el Smart Checkout de ePayco.
+    //   disabled (default)    → Nequi no disponible (usar PSE/tarjeta/DaviPlata).
+    // El Smart Checkout deja de ser el flujo PRINCIPAL de Nequi.
+    'payments' => [
+        'nequi_provider' => env('PAYMENT_NEQUI_PROVIDER', 'disabled'),
+    ],
+
 ];
