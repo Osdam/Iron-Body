@@ -78,6 +78,23 @@ class NequiPushFlowTest extends TestCase
         ]);
     }
 
+    public function test_nequi_push_route_exists_and_disabled_returns_unavailable(): void
+    {
+        // La RUTA existe (no 404): deshabilitada responde JSON controlado 200.
+        $member = $this->member();
+        $plan = $this->plan();
+        config(['services.payments.nequi_provider' => 'disabled', 'services.nequi.enabled' => false]);
+
+        $res = $this->postJson('/api/payments/nequi/push', [
+            'plan_id' => $plan->id, 'phone' => '3001234567',
+        ], $this->auth($member));
+
+        $res->assertStatus(200) // NUNCA 404
+            ->assertJsonPath('ok', false)
+            ->assertJsonPath('status', 'unavailable')
+            ->assertJsonPath('message', 'Nequi directo está en proceso de activación. Usa PSE, tarjeta o DaviPlata.');
+    }
+
     public function test_nequi_disabled_returns_unavailable(): void
     {
         // Default: PAYMENT_NEQUI_PROVIDER=disabled → unavailable, sin crear tx.
