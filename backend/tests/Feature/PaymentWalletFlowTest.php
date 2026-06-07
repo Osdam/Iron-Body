@@ -456,8 +456,11 @@ class PaymentWalletFlowTest extends TestCase
         $res->assertOk();
         $res->assertSee('checkout-v2.js', false);
         $res->assertSee('sess_ABC123', false); // sessionId en el HTML
-        $res->assertSee('methodsDisable', false); // filtro de métodos presente
-        $res->assertSee('TDC', false); // oculta tarjetas (y PSE/SP/CASH)
+        // Modo session: el SDK checkout-v2.js RECHAZA methodsDisable ("Expected
+        // never"). El filtro NO debe aparecer en el JS del bridge (vive solo en
+        // el payload de session/create). El string no aparece en ningún caso.
+        $res->assertDontSee('methodsDisable', false);
+        $res->assertDontSee('TDC', false);
         // Fix botón inerte: nace deshabilitado y se habilita por JS al cargar la SDK.
         $res->assertSee('id="openBtn"', false);
         $res->assertSee('disabled', false);

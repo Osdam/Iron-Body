@@ -49,7 +49,9 @@
         var SESSION_ID  = @json($sessionId);
         var PUBLIC_KEY  = @json($publicKey);
         var TEST_MODE   = @json($test);
-        var METHODS_DISABLE = @json($methodsDisable);
+        {{-- El filtro de métodos (blacklist) NO se envía al SDK: checkout-v2.js lo
+             rechaza (schema "Expected never"). El filtrado vive SOLO en el payload
+             backend de session/create (APIFY). Aquí el JS no debe incluirlo. --}}
         var DATA = {
             reference: @json($reference),
             amount: @json($amount),
@@ -120,15 +122,15 @@
         /* Construye el handler de ePayco (configure) según el modo disponible. */
         function buildHandler() {
             if (SESSION_ID) {
-                // Smart Checkout Session v2: methodsDisable ya viaja en la sesión;
-                // se reenvía por compatibilidad de versiones del JS. external:false
-                // => ONPAGE (iframe embebido), imprescindible para WKWebView/WebView.
+                // Smart Checkout Session v2: configuración MÍNIMA. El filtro de
+                // métodos ya viaja en la sesión (session/create). NO se pasa al SDK
+                // aquí: checkout-v2.js lo rechaza con schema "Expected never".
+                // external:false => ONPAGE (iframe embebido), clave para WKWebView.
                 bridgeLog('checkout_configure_start', { mode: 'session' });
                 var h = ePayco.checkout.configure({
                     sessionId: SESSION_ID,
                     external: 'false',
-                    test: TEST_MODE,
-                    methodsDisable: METHODS_DISABLE
+                    test: TEST_MODE
                 });
                 bridgeLog('checkout_configure_ok', { mode: 'session' });
                 return h;
@@ -169,7 +171,9 @@
                 } else {
                     handler.open({
                         external: 'false',          // ONPAGE: nunca pestaña nueva
-                        methodsDisable: METHODS_DISABLE,
+                        // Sin filtro de métodos: checkout-v2.js lo rechaza (schema
+                        // "Expected never"). Prioridad: pago funcional; el fallback
+                        // puede mostrar más métodos, pero abre de forma fiable.
                         name: 'Iron Body',
                         description: DATA.description,
                         invoice: DATA.reference,
