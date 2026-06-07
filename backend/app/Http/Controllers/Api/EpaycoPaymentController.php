@@ -413,6 +413,16 @@ class EpaycoPaymentController extends Controller
             abort(410, 'No fue posible iniciar el pago.');
         }
 
+        // Diagnóstico seguro (BLOQUE 3): sin secretos, solo presencia de credenciales.
+        Log::info('checkout_bridge.render', [
+            'reference'        => $tx->reference,
+            'method'          => (string) ($raw['requested_method'] ?? ''),
+            'has_session_id'  => (bool) $sessionId,
+            'has_public_key'  => $publicKey !== '',
+            'test'            => (bool) $cfg['test'],
+            'disabled_methods' => array_values((array) ($cfg['checkout_methods_disable'] ?? [])),
+        ]);
+
         return response()
             ->view('payments.epayco_checkout_bridge', [
                 'sessionId'    => $sessionId,

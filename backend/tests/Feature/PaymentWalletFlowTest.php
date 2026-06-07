@@ -458,6 +458,17 @@ class PaymentWalletFlowTest extends TestCase
         $res->assertSee('sess_ABC123', false); // sessionId en el HTML
         $res->assertSee('methodsDisable', false); // filtro de métodos presente
         $res->assertSee('TDC', false); // oculta tarjetas (y PSE/SP/CASH)
+        // Fix botón inerte: nace deshabilitado y se habilita por JS al cargar la SDK.
+        $res->assertSee('id="openBtn"', false);
+        $res->assertSee('disabled', false);
+        // Canal de diagnóstico JS→Flutter presente.
+        $res->assertSee('IronPayBridge', false);
+        // ONPAGE estricto: jamás abre pestaña/popup que WKWebView bloquea.
+        $res->assertDontSee('window.open', false);
+        $res->assertDontSee('openNew', false);
+        // Jamás se filtran llaves privadas al HTML.
+        $res->assertDontSee('private_key', false);
+        $res->assertDontSee('p_key', false);
         // Token firmado inválido → 403.
         $this->get(parse_url($bridgeUrl, PHP_URL_PATH) . '?exp=1&t=bad')->assertStatus(403);
     }
