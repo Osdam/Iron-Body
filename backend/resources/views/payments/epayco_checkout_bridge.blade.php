@@ -30,15 +30,26 @@
         <div class="muted">Pago protegido por ePayco · Iron Body</div>
     </div>
 
-    {{-- checkout-v2.js oficial de ePayco (Smart Checkout v2). NUNCA se incluyen
-         llaves privadas/P_KEY: el cobro va atado al sessionId acuñado en backend. --}}
+    {{-- checkout-v2.js oficial. NUNCA se incluyen llaves privadas/P_KEY. En modo
+         fallback se usa la LLAVE PÚBLICA (no es secreta, está diseñada para el
+         cliente). El cobro queda atado a la referencia/confirmation del backend. --}}
     <script src="{{ $checkoutJs }}"></script>
     <script>
-        // Datos mínimos no sensibles: sessionId (de un solo uso), modo test y la
-        // URL de retorno (la app detecta esta navegación para consultar estado).
         var SESSION_ID = @json($sessionId);
+        var PUBLIC_KEY = @json($publicKey);
         var TEST_MODE  = @json($test);
-        var RESPONSE_URL = @json($responseUrl);
+        var DATA = {
+            reference: @json($reference),
+            amount: @json($amount),
+            currency: @json($currency),
+            description: @json($description),
+            memberId: @json($memberId),
+            planId: @json($planId),
+            method: @json($method),
+            response: @json($responseUrl),
+            confirmation: @json($confirmationUrl),
+            billing: @json($billing)
+        };
         var opened = false;
 
         function showManual() {
@@ -50,27 +61,53 @@
         function openCheckout() {
             try {
                 if (typeof ePayco === 'undefined' || !ePayco.checkout) { showManual(); return; }
-                var handler = ePayco.checkout.configure({
-                    sessionId: SESSION_ID,
-                    external: 'false', // ONPAGE: imprescindible para WebView (iOS/Android)
-                    test: TEST_MODE
-                });
-                opened = true;
-                // PREFERIR open() onpage. openNew() abre pestaña nueva y el WKWebView
-                // de iOS no la muestra → el checkout no aparecería.
-                if (handler && typeof handler.open === 'function') {
-                    handler.open();
-                } else if (typeof ePayco.checkout.open === 'function') {
-                    ePayco.checkout.open({ sessionId: SESSION_ID });
-                } else if (handler && typeof handler.openNew === 'function') {
-                    handler.openNew();
+                var handler;
+                if (SESSION_ID) {
+                    // Modo Smart Checkout Session v2.
+                    handler = ePayco.checkout.configure({
+                        sessionId: SESSION_ID,
+                        external: 'false', // ONPAGE: imprescindible para WebView
+                        test: TEST_MODE
+                    });
+                    opened = true;
+                    if (handler && typeof handler.open === 'function') handler.open();
+                    else if (typeof ePayco.checkout.open === 'function') ePayco.checkout.open({ sessionId: SESSION_ID });
+                    else if (handler && typeof handler.openNew === 'function') handler.openNew();
+                    return;
                 }
+                // Modo fallback con LLAVE PÚBLICA + datos del backend.
+                handler = ePayco.checkout.configure({ key: PUBLIC_KEY, test: TEST_MODE });
+                opened = true;
+                handler.open({
+                    external: 'false',
+                    name: 'Iron Body',
+                    description: DATA.description,
+                    invoice: DATA.reference,
+                    currency: DATA.currency,
+                    amount: DATA.amount,
+                    tax_base: '0',
+                    tax: '0',
+                    country: 'co',
+                    lang: 'es',
+                    response: DATA.response,
+                    confirmation: DATA.confirmation,
+                    methodconfirmation: 'POST',
+                    // Trazabilidad (el webhook ubica la tx por extra1=reference).
+                    extra1: DATA.reference,
+                    extra2: DATA.memberId,
+                    extra3: DATA.planId,
+                    extra4: DATA.method,
+                    email_billing: (DATA.billing && DATA.billing.email) || '',
+                    name_billing: (DATA.billing && DATA.billing.name) || '',
+                    type_doc_billing: (DATA.billing && DATA.billing.doc_type) || 'CC',
+                    number_doc_billing: (DATA.billing && DATA.billing.doc_number) || '',
+                    mobilephone_billing: (DATA.billing && DATA.billing.phone) || ''
+                });
             } catch (e) {
                 showManual();
             }
         }
 
-        // Auto-abrir cuando el script cargue. Si no aparece, mostrar botón manual.
         window.addEventListener('load', function () {
             setTimeout(function () {
                 openCheckout();

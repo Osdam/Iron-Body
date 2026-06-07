@@ -176,6 +176,34 @@ class PaymentWalletFlowTest extends TestCase
         $this->assertDatabaseMissing('payments', ['reference' => $r->json('reference')]);
     }
 
+    public function test_session_failure_with_public_key_falls_back_to_bridge(): void
+    {
+        // session/create falla (200 sin sessionId) PERO hay llave pública → NO se
+        // marca failed: el bridge abrirá el checkout con la llave pública. La
+        // wallet SIEMPRE puede abrir el WebView.
+        config(['services.epayco.public_key' => 'pub_real']);
+        $plan = $this->plan();
+        $member = $this->member();
+        $this->fakeSessionFail();
+
+        $r = $this->postJson('/api/payments/epayco/pay-nequi', [
+            'amount' => 80000,
+            'plan_id' => $plan->id,
+            'member_id' => $member->id,
+            'idempotency_key' => 'idem-fallback',
+        ]);
+
+        $r->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('flow', 'smart_checkout')
+            ->assertJsonPath('status', 'pending');
+        $this->assertNotEmpty($r->json('checkout_bridge_url'));
+        $this->assertNull($r->json('session_id')); // sin sesión → bridge fallback
+
+        $member->refresh();
+        $this->assertNotSame(Member::STATUS_ACTIVE, $member->status);
+    }
+
     public function test_backend_overrides_manipulated_amount_with_plan_price(): void
     {
         $plan = $this->plan(); // 80000
@@ -318,5 +346,22 @@ class PaymentWalletFlowTest extends TestCase
     public function test_status_unknown_reference_is_404(): void
     {
         $this->getJson('/api/payments/NO-EXISTE/status')->assertStatus(404);
+    }
+
+    public function test_checkout_bridge_renders_valid_html(): void
+    {
+        $plan = $this->plan();
+        $member = $this->member();
+        $this->fakeSessionOk();
+        $bridgeUrl = $this->startWallet('nequi', $plan, $member)['checkout_bridge_url'];
+
+        // GET al bridge (ruta web firmada) → HTML válido con checkout-v2.js.
+        $path = parse_url($bridgeUrl, PHP_URL_PATH) . '?' . parse_url($bridgeUrl, PHP_URL_QUERY);
+        $res = $this->get($path);
+        $res->assertOk();
+        $res->assertSee('checkout-v2.js', false);
+        $res->assertSee('sess_ABC123', false); // sessionId en el HTML
+        // Token firmado inválido → 403.
+        $this->get(parse_url($bridgeUrl, PHP_URL_PATH) . '?exp=1&t=bad')->assertStatus(403);
     }
 }

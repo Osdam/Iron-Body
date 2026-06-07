@@ -181,7 +181,10 @@ class EpaycoPaymentController extends Controller
     private function checkoutResponse(PaymentTransaction $tx, string $method): array
     {
         $pub = $tx->toPublicArray();
-        $ok = $tx->status !== PaymentTransaction::STATUS_FAILED && !empty($pub['session_id']);
+        // ok = se puede ABRIR el checkout: hay bridge URL (con sessionId o con
+        // fallback de llave pública) y la transacción no falló.
+        $ok = $tx->status !== PaymentTransaction::STATUS_FAILED
+            && ! empty($pub['checkout_bridge_url']);
 
         return array_merge($pub, [
             'ok'                  => $ok,
@@ -375,9 +378,14 @@ class EpaycoPaymentController extends Controller
 
     /**
      * GET /payments/epayco/checkout-bridge/{reference} — página WEB que abre el
-     * Smart Checkout v2 de ePayco (checkout-v2.js) con el sessionId de la
-     * transacción. Protegida por firma+TTL (?exp&t). NO recibe el sessionId por
-     * query (se lee de la transacción) y NUNCA expone llaves. No activa membresía.
+     * Smart Checkout de ePayco (checkout-v2.js). Protegida por firma+TTL (?exp&t).
+     *
+     * Dos modos (definitivo y a prueba de fallos de session/create):
+     *  1) Con sessionId (Smart Checkout Session v2): configure({sessionId}).
+     *  2) Fallback con LLAVE PÚBLICA (no es secreta) + datos del backend:
+     *     configure({key}) + checkout.open({...invoice/amount/...}). Así el pago
+     *     SIEMPRE se puede abrir aunque session/create no devuelva sessionId.
+     * NUNCA incluye private_key ni p_key. No activa membresía (solo webhook).
      */
     public function checkoutBridge(Request $request, string $reference)
     {
@@ -388,22 +396,37 @@ class EpaycoPaymentController extends Controller
         }
 
         $tx = PaymentTransaction::where('reference', $reference)->first();
-        $sessionId = $tx && is_array($tx->raw_response)
-            ? ($tx->raw_response['session_id'] ?? null)
-            : null;
-        if (! $tx || ! $sessionId) {
-            abort(404, 'Sesión de pago no encontrada.');
+        if (! $tx || ! $tx->isInFlight()) {
+            abort(404, 'Sesión de pago no encontrada o ya finalizada.');
         }
 
+        $raw = is_array($tx->raw_response) ? $tx->raw_response : [];
+        $sessionId = $raw['session_id'] ?? null;
         $cfg = config('services.epayco');
+        $publicKey = (string) ($cfg['public_key'] ?? '');
+
+        // Sin sessionId NI llave pública no hay forma de abrir el checkout.
+        if (! $sessionId && $publicKey === '') {
+            abort(404, 'No fue posible iniciar el pago.');
+        }
 
         return response()
             ->view('payments.epayco_checkout_bridge', [
-                'sessionId'   => $sessionId,
-                'test'        => (bool) $cfg['test'],
-                'checkoutJs'  => $cfg['checkout_js'] ?? 'https://checkout.epayco.co/checkout-v2.js',
-                'responseUrl' => $this->epayco->responseUrl(),
-                'reference'   => $tx->reference,
+                'sessionId'    => $sessionId,
+                'publicKey'    => $sessionId ? null : $publicKey, // solo en fallback
+                'test'         => (bool) $cfg['test'],
+                'checkoutJs'   => $cfg['checkout_js'] ?? 'https://checkout.epayco.co/checkout-v2.js',
+                'responseUrl'  => $this->epayco->responseUrl(),
+                'confirmationUrl' => $this->epayco->confirmationUrl(),
+                'reference'    => $tx->reference,
+                // Datos NO sensibles para el modo fallback (amount autoritativo).
+                'amount'       => number_format((float) $tx->amount, 0, '.', ''),
+                'currency'     => strtoupper((string) $tx->currency),
+                'description'  => $tx->description ?: 'Membresía Iron Body',
+                'memberId'     => (string) ($tx->member_id ?? ''),
+                'planId'       => (string) ($tx->plan_id ?? ''),
+                'method'       => (string) ($raw['requested_method'] ?? ''),
+                'billing'      => is_array($tx->customer) ? $tx->customer : [],
             ])
             ->header('Cache-Control', 'no-store');
     }

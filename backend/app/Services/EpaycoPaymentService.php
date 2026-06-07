@@ -263,8 +263,10 @@ class EpaycoPaymentService
         if ($tx->status === PaymentTransaction::STATUS_APPROVED) {
             return $tx;
         }
-        $existingSession = is_array($tx->raw_response) ? ($tx->raw_response['session_id'] ?? null) : null;
-        if ($tx->isInFlight() && $existingSession && $tx->checkout_url) {
+        // Idempotencia: si ya hay un bridge vivo para esta transacción (con o sin
+        // sessionId, p. ej. fallback con llave pública), se REUTILIZA.
+        $existingFlow = is_array($tx->raw_response) ? ($tx->raw_response['flow'] ?? null) : null;
+        if ($tx->isInFlight() && $tx->checkout_url && $existingFlow === 'smart_checkout') {
             return $tx;
         }
 
@@ -314,22 +316,26 @@ class EpaycoPaymentService
         ];
 
         $r = $api->createCheckoutSession($payload);
+        $sessionId = $r['ok'] ? ($r['session_id'] ?? null) : null;
 
-        if (! $r['ok'] || empty($r['session_id'])) {
-            // Sesión no creada → fallo CONTROLADO, sin activar membresía.
+        // Definitivo: si session/create NO devuelve sessionId pero hay LLAVE
+        // PÚBLICA, NO se marca failed. El bridge abrirá el checkout con la llave
+        // pública + datos del backend (fallback). Solo se falla si no hay forma
+        // de abrir el checkout (sin sessionId y sin llave pública).
+        $publicKey = (string) (config('services.epayco.public_key') ?? '');
+        if (! $sessionId && $publicKey === '') {
             return $this->transitionTo($tx, PaymentTransaction::STATUS_FAILED, [
                 'failure_reason' => $r['message'] ?? 'No pudimos iniciar el pago con ePayco.',
                 'raw_response'   => $this->safeRaw((array) ($r['raw'] ?? [])),
             ]);
         }
 
-        // SIEMPRE se expone NUESTRO bridge (carga checkout-v2.js con el sessionId
-        // y permite interceptar el retorno a response_url de forma confiable). Si
-        // ePayco devolvió una URL directa, se guarda como metadata.
+        // SIEMPRE se expone NUESTRO bridge (carga checkout-v2.js; intercepta el
+        // retorno a response_url). Si ePayco dio una URL directa, se guarda meta.
         $bridgeUrl = $this->checkoutBridgeUrl($tx->reference);
         $raw = is_array($tx->raw_response) ? $tx->raw_response : [];
         $raw['flow'] = 'smart_checkout';
-        $raw['session_id'] = $r['session_id'];
+        $raw['session_id'] = $sessionId; // puede ser null → bridge usa fallback
         $raw['requested_method'] = $method;
         if (! empty($r['checkout_url'])) {
             $raw['provider_checkout_url'] = $r['checkout_url'];
@@ -341,10 +347,10 @@ class EpaycoPaymentService
             'raw_response'   => $raw,
         ]);
 
-        Log::info('ePayco smart checkout session creada', [
-            'reference' => $tx->reference,
-            'method'    => $method,
-            'has_session' => true,
+        Log::info('ePayco smart checkout listo', [
+            'reference'   => $tx->reference,
+            'method'      => $method,
+            'mode'        => $sessionId ? 'session' : 'public_key_fallback',
         ]);
 
         return $tx;
