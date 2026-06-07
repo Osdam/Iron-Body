@@ -99,18 +99,19 @@ class EpaycoPaymentController extends Controller
     }
 
     /**
-     * POST /api/payments/epayco/checkout-session — Smart Checkout v2. Solo Nequi
-     * usa este flujo (DaviPlata sigue por API directa). Mismo contrato.
+     * POST /api/payments/epayco/checkout-session — Smart Checkout v2 genérico
+     * para billeteras (nequi|daviplata, default nequi). Mismo contrato.
      */
     public function checkoutSession(Request $request)
     {
         $data = $request->validate($this->createRules + [
-            'method' => 'nullable|string|in:nequi',
+            'method' => 'nullable|string|in:nequi,daviplata',
             'phone'  => 'nullable|string|min:10|max:13',
         ]);
+        $method = $data['method'] ?? 'nequi';
         unset($data['method']);
 
-        return $this->runCheckout('nequi', $data, $request->ip());
+        return $this->runCheckout($method, $data, $request->ip());
     }
 
     /**
@@ -131,17 +132,17 @@ class EpaycoPaymentController extends Controller
     }
 
     /**
-     * POST /api/payments/epayco/pay-daviplata — API DIRECTA (APIFY
-     * `daviplata->create`). Se mantiene el flujo directo: la cuenta SÍ tiene
-     * DaviPlata habilitado. NO se migra a Smart Checkout (solo Nequi lo usa).
+     * POST /api/payments/epayco/pay-daviplata — Smart Checkout v2. La cuenta
+     * respondió "DaviPlata no habilitado" por API directa, así que (igual que
+     * Nequi) se usa el checkout OFICIAL de ePayco vía sesión + bridge WebView.
      */
     public function payDaviplata(Request $request)
     {
         $data = $request->validate($this->createRules + [
-            'phone' => 'nullable|string|min:10|max:10',
+            'phone' => 'nullable|string|min:10|max:13',
         ]);
 
-        return $this->runPay('daviplata', $data, $request->ip());
+        return $this->runCheckout('daviplata', $data, $request->ip());
     }
 
     /**

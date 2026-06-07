@@ -104,6 +104,7 @@ class EpaycoApiClient
         do {
             $attempts++;
             $lastTransient = false;
+            Log::info('epayco.apify.login.start', ['attempt' => $attempts]);
             try {
                 $resp = Http::asJson()
                     ->withHeaders([
@@ -113,29 +114,36 @@ class EpaycoApiClient
                     ->post($base . '/login', []);
             } catch (Throwable $e) {
                 $lastTransient = true; // timeout/conexión
-                Log::warning('ePayco APIFY login error de red', ['attempt' => $attempts]);
+                Log::warning('epayco.apify.login.fail', ['reason' => 'network', 'attempt' => $attempts]);
                 continue;
             }
             if ($resp->status() === 401 || $resp->status() === 403) {
-                Log::warning('ePayco APIFY login no autorizado (credenciales)');
+                Log::warning('epayco.apify.login.fail', ['reason' => 'unauthorized', 'http_status' => $resp->status()]);
                 return null; // credenciales inválidas: NO reintentar
             }
             if ($resp->serverError()) {
                 $lastTransient = true;
+                Log::warning('epayco.apify.login.fail', ['reason' => 'server_error', 'http_status' => $resp->status()]);
                 continue;
             }
             $body = $resp->json();
             $token = is_array($body)
-                ? ($body['token'] ?? ($body['data']['token'] ?? ($body['bearer'] ?? null)))
+                ? ($body['token']
+                    ?? ($body['data']['token'] ?? null)
+                    ?? ($body['bearer'] ?? null)
+                    ?? ($body['data']['bearer'] ?? null))
                 : null;
             if (! $token) {
-                Log::warning('ePayco APIFY login sin token en respuesta', [
+                Log::warning('epayco.apify.login.fail', [
+                    'reason' => 'no_token',
                     'http_status' => $resp->status(),
+                    'response_keys' => is_array($body) ? array_keys($body) : null,
                 ]);
                 return null;
             }
             $ttl = $this->tokenTtlFrom($body);
             Cache::put($cacheKey, (string) $token, now()->addSeconds($ttl));
+            Log::info('epayco.apify.login.ok', ['ttl' => $ttl]);
             return (string) $token;
         } while ($attempts < 2 && $lastTransient);
 
@@ -160,70 +168,131 @@ class EpaycoApiClient
     /**
      * Crea una sesión de Smart Checkout v2 en `{apify_base}/payment/session/create`
      * con Bearer del token APIFY. Reintenta UNA vez si el token expiró (401).
-     * Devuelve ['ok'=>bool, 'session_id'=>?string, 'message'=>?string, 'raw'=>array].
-     * NUNCA loguea llaves ni el token.
+     * Devuelve ['ok'=>bool, 'session_id'=>?string, 'checkout_url'=>?string,
+     * 'message'=>?string, 'raw'=>array]. NUNCA loguea llaves ni el token.
+     *
+     * Parser FLEXIBLE (Bloque 3): el sessionId puede venir en data.sessionId,
+     * data.session_id, data.id, sessionId, session_id, id, o `data` como string.
      */
     public function createCheckoutSession(array $payload): array
     {
         $cfg = config('services.epayco');
         $base = rtrim((string) ($cfg['apify_base'] ?? 'https://apify.epayco.co'), '/');
+        $reference = $payload['invoice'] ?? null;
 
         for ($i = 0; $i < 2; $i++) {
             $token = $this->apifyToken($i > 0);
             if (! $token) {
-                return ['ok' => false, 'session_id' => null,
+                return ['ok' => false, 'session_id' => null, 'checkout_url' => null,
                     'message' => 'No pudimos autenticar el pago. Intenta nuevamente.', 'raw' => []];
             }
+            Log::info('epayco.apify.session.create.start', ['reference' => $reference]);
             try {
                 $resp = Http::asJson()
                     ->withToken($token)
                     ->timeout(20)
                     ->post($base . '/payment/session/create', $payload);
             } catch (Throwable $e) {
-                Log::warning('ePayco session/create error de red', [
-                    'reference' => $payload['invoice'] ?? null,
+                Log::warning('epayco.apify.session.create.fail', [
+                    'reference' => $reference, 'reason' => 'network',
                 ]);
-                return ['ok' => false, 'session_id' => null,
+                return ['ok' => false, 'session_id' => null, 'checkout_url' => null,
                     'message' => 'No pudimos iniciar el pago. Intenta nuevamente.', 'raw' => []];
             }
             if ($resp->status() === 401 && $i === 0) {
                 continue; // token vencido: reintenta una vez con token fresco
             }
-            $body = (array) ($resp->json() ?? []);
-            $data = (array) ($body['data'] ?? $body);
-            $sessionId = $data['sessionId']
-                ?? $data['session_id']
-                ?? ($data['id'] ?? null);
-            $success = ! (($body['success'] ?? true) === false
-                || (is_string($body['success'] ?? null) && strtolower($body['success']) === 'false'));
+
+            $body = $resp->json();
+            $bodyArr = is_array($body) ? $body : [];
+            // `data` puede ser objeto, array o incluso un string (el propio id).
+            $rawData = $bodyArr['data'] ?? null;
+            $data = is_array($rawData) ? $rawData : $bodyArr;
+
+            $sessionId = $this->extractSessionId($bodyArr, $data, $rawData);
+            $checkoutUrl = $this->extractCheckoutUrl($bodyArr, $data);
+            $success = ! (($bodyArr['success'] ?? true) === false
+                || (is_string($bodyArr['success'] ?? null) && strtolower($bodyArr['success']) === 'false'));
+
+            // Log SEGURO de diagnóstico (Bloque 3): estructura, NO secretos.
+            Log::info('epayco.apify.session.create.parsed', [
+                'reference'       => $reference,
+                'http_status'     => $resp->status(),
+                'response_is_json'=> is_array($body),
+                'response_keys'   => array_keys($bodyArr),
+                'data_keys'       => is_array($rawData) ? array_keys($rawData) : (is_string($rawData) ? ['<string>'] : []),
+                'has_session_id'  => $sessionId !== null,
+                'has_checkout_url'=> $checkoutUrl !== null,
+                'raw_body_truncated' => mb_substr(json_encode($this->redact($bodyArr)) ?: '', 0, 1000),
+            ]);
 
             if ($resp->successful() && $success && $sessionId) {
-                Log::info('ePayco session/create OK', [
-                    'reference' => $payload['invoice'] ?? null,
-                    'has_session' => true,
+                Log::info('epayco.apify.session.create.ok', [
+                    'reference' => $reference, 'has_checkout_url' => $checkoutUrl !== null,
                 ]);
                 return [
                     'ok' => true,
                     'session_id' => (string) $sessionId,
+                    'checkout_url' => $checkoutUrl,
                     'message' => null,
                     'raw' => $this->redact($data),
                 ];
             }
 
-            Log::warning('ePayco session/create falló', [
-                'reference' => $payload['invoice'] ?? null,
-                'http_status' => $resp->status(),
-                'epayco_msg' => isset($body['text_response'])
-                    ? mb_substr((string) $body['text_response'], 0, 160)
-                    : (isset($data['message']) ? mb_substr((string) $data['message'], 0, 160) : null),
+            Log::warning('epayco.apify.session.create.fail', [
+                'reference' => $reference, 'http_status' => $resp->status(),
+                'has_session_id' => $sessionId !== null,
             ]);
-            return ['ok' => false, 'session_id' => null,
+            return ['ok' => false, 'session_id' => null, 'checkout_url' => null,
                 'message' => 'No pudimos iniciar el pago con ePayco. Intenta nuevamente.',
-                'raw' => $this->redact($data)];
+                'raw' => $this->redact(is_array($rawData) ? $rawData : $bodyArr)];
         }
 
-        return ['ok' => false, 'session_id' => null,
+        return ['ok' => false, 'session_id' => null, 'checkout_url' => null,
             'message' => 'No pudimos iniciar el pago. Intenta nuevamente.', 'raw' => []];
+    }
+
+    /** Busca el sessionId en todas las formas conocidas de la respuesta APIFY. */
+    private function extractSessionId(array $body, array $data, $rawData): ?string
+    {
+        // `data` como string suele ser el propio sessionId.
+        if (is_string($rawData) && trim($rawData) !== '') {
+            return trim($rawData);
+        }
+        foreach (['sessionId', 'session_id', 'id'] as $k) {
+            if (! empty($data[$k]) && is_scalar($data[$k])) {
+                return (string) $data[$k];
+            }
+        }
+        foreach (['sessionId', 'session_id', 'id'] as $k) {
+            if (! empty($body[$k]) && is_scalar($body[$k])) {
+                return (string) $body[$k];
+            }
+        }
+        // Anidación frecuente: data.session.id / data.checkout.sessionId.
+        foreach (['session', 'checkout'] as $nest) {
+            if (is_array($data[$nest] ?? null)) {
+                foreach (['sessionId', 'session_id', 'id'] as $k) {
+                    if (! empty($data[$nest][$k]) && is_scalar($data[$nest][$k])) {
+                        return (string) $data[$nest][$k];
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Busca una checkout_url directa si ePayco la entrega (puede no venir). */
+    private function extractCheckoutUrl(array $body, array $data): ?string
+    {
+        foreach ([$data, $body] as $src) {
+            foreach (['url', 'checkout_url', 'checkoutUrl', 'urlCheckout'] as $k) {
+                if (! empty($src[$k]) && is_string($src[$k])) {
+                    return $src[$k];
+                }
+            }
+        }
+        return null;
     }
 
     /**

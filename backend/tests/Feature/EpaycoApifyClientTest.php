@@ -74,4 +74,68 @@ class EpaycoApifyClientTest extends TestCase
         $this->assertFalse($r['ok']);
         $this->assertNull($r['session_id']);
     }
+
+    public function test_parses_session_id_from_root(): void
+    {
+        $this->withKeys();
+        Http::fake([
+            'apify.epayco.co/login' => Http::response(['token' => 'tok_123'], 200),
+            // 200 con sessionId en la RAÍZ (no en data) — caso del bug real.
+            'apify.epayco.co/payment/session/create' => Http::response([
+                'success' => true, 'sessionId' => 'sess_ROOT',
+            ], 200),
+        ]);
+
+        $r = app(EpaycoApiClient::class)->createCheckoutSession(['invoice' => 'IRON-R']);
+        $this->assertTrue($r['ok']);
+        $this->assertSame('sess_ROOT', $r['session_id']);
+    }
+
+    public function test_parses_session_id_when_data_is_string(): void
+    {
+        $this->withKeys();
+        Http::fake([
+            'apify.epayco.co/login' => Http::response(['token' => 'tok_123'], 200),
+            // 200 con data como STRING (el propio sessionId) — variante real.
+            'apify.epayco.co/payment/session/create' => Http::response([
+                'success' => true, 'data' => 'sess_STR',
+            ], 200),
+        ]);
+
+        $r = app(EpaycoApiClient::class)->createCheckoutSession(['invoice' => 'IRON-S']);
+        $this->assertTrue($r['ok']);
+        $this->assertSame('sess_STR', $r['session_id']);
+    }
+
+    public function test_parses_checkout_url_when_present(): void
+    {
+        $this->withKeys();
+        Http::fake([
+            'apify.epayco.co/login' => Http::response(['token' => 'tok_123'], 200),
+            'apify.epayco.co/payment/session/create' => Http::response([
+                'success' => true,
+                'data' => ['sessionId' => 'sess_U', 'url' => 'https://checkout.epayco.co/x'],
+            ], 200),
+        ]);
+
+        $r = app(EpaycoApiClient::class)->createCheckoutSession(['invoice' => 'IRON-U']);
+        $this->assertTrue($r['ok']);
+        $this->assertSame('sess_U', $r['session_id']);
+        $this->assertSame('https://checkout.epayco.co/x', $r['checkout_url']);
+    }
+
+    public function test_no_session_id_returns_controlled_failure(): void
+    {
+        $this->withKeys();
+        Http::fake([
+            'apify.epayco.co/login' => Http::response(['token' => 'tok_123'], 200),
+            'apify.epayco.co/payment/session/create' => Http::response([
+                'success' => true, 'data' => ['foo' => 'bar'],
+            ], 200),
+        ]);
+
+        $r = app(EpaycoApiClient::class)->createCheckoutSession(['invoice' => 'IRON-N']);
+        $this->assertFalse($r['ok']);
+        $this->assertNull($r['session_id']);
+    }
 }

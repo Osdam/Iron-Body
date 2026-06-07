@@ -52,16 +52,18 @@
                 if (typeof ePayco === 'undefined' || !ePayco.checkout) { showManual(); return; }
                 var handler = ePayco.checkout.configure({
                     sessionId: SESSION_ID,
-                    external: 'false',
+                    external: 'false', // ONPAGE: imprescindible para WebView (iOS/Android)
                     test: TEST_MODE
                 });
                 opened = true;
-                if (handler && typeof handler.openNew === 'function') {
-                    handler.openNew();
-                } else if (handler && typeof handler.open === 'function') {
+                // PREFERIR open() onpage. openNew() abre pestaña nueva y el WKWebView
+                // de iOS no la muestra → el checkout no aparecería.
+                if (handler && typeof handler.open === 'function') {
                     handler.open();
                 } else if (typeof ePayco.checkout.open === 'function') {
                     ePayco.checkout.open({ sessionId: SESSION_ID });
+                } else if (handler && typeof handler.openNew === 'function') {
+                    handler.openNew();
                 }
             } catch (e) {
                 showManual();

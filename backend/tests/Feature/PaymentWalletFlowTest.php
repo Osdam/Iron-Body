@@ -85,23 +85,6 @@ class PaymentWalletFlowTest extends TestCase
         });
     }
 
-    /** Mock: DaviPlata por API DIRECTA (no Smart Checkout) devuelve PENDIENTE. */
-    private function fakeDaviplataPending(): void
-    {
-        $this->mock(EpaycoApiClient::class, function ($m) {
-            $m->shouldReceive('payDaviplata')->andReturn([
-                'ok' => true,
-                'state' => 3, // Pendiente
-                'state_text' => null,
-                'ref_payco' => 'REF-DAVI-1',
-                'transaction_id' => 'TX-DAVI-1',
-                'message' => 'Confírmalo en tu app Daviplata.',
-                'requires_external' => false,
-                'raw' => [],
-            ]);
-        });
-    }
-
     private function startWallet(string $method, Plan $plan, Member $member, array $over = []): array
     {
         return $this->postJson("/api/payments/epayco/pay-{$method}", array_merge([
@@ -144,13 +127,13 @@ class PaymentWalletFlowTest extends TestCase
         $this->assertDatabaseMissing('payments', ['reference' => $tx->reference]);
     }
 
-    public function test_daviplata_direct_flow_remains_intact(): void
+    public function test_daviplata_creates_smart_checkout_session(): void
     {
-        // DaviPlata NO usa Smart Checkout: sigue por API directa (pay-daviplata →
-        // payInApp → payDaviplata). La respuesta NO debe ser smart_checkout.
+        // DaviPlata también falla por API directa ("no habilitado") → Smart
+        // Checkout v2, igual que Nequi.
         $plan = $this->plan();
         $member = $this->member();
-        $this->fakeDaviplataPending();
+        $this->fakeSessionOk();
 
         $r = $this->postJson('/api/payments/epayco/pay-daviplata', [
             'amount' => 80000,
@@ -160,15 +143,16 @@ class PaymentWalletFlowTest extends TestCase
             'idempotency_key' => 'idem-davi-1',
         ]);
 
-        $r->assertOk();
-        $this->assertContains($r->json('status'), ['pending', 'processing']);
-        $this->assertNotSame('smart_checkout', $r->json('flow'));
-        $this->assertNull($r->json('checkout_bridge_url'));
+        $r->assertOk()
+            ->assertJsonPath('flow', 'smart_checkout')
+            ->assertJsonPath('method', 'daviplata')
+            ->assertJsonPath('status', 'pending');
+        $this->assertNotEmpty($r->json('session_id'));
+        $this->assertNotEmpty($r->json('checkout_bridge_url'));
 
         $tx = PaymentTransaction::where('reference', $r->json('reference'))->first();
         $this->assertSame('daviplata', $tx->method);
         $this->assertTrue($tx->isInFlight());
-        // PENDIENTE no activa membresía.
         $member->refresh();
         $this->assertNotSame(Member::STATUS_ACTIVE, $member->status);
     }

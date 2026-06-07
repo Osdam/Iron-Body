@@ -307,9 +307,9 @@ class EpaycoPaymentService
             'extras' => [
                 // extra1 = referencia interna → el webhook encuentra la transacción.
                 'extra1' => $tx->reference,
-                'extra2' => (string) $tx->plan_id,
-                'extra3' => $method, // método solicitado (no se fuerza en ePayco)
-                'extra4' => (string) $tx->member_id,
+                'extra2' => (string) $tx->member_id,
+                'extra3' => (string) $tx->plan_id,
+                'extra4' => $method, // método solicitado (no se fuerza en ePayco)
             ],
         ];
 
@@ -323,11 +323,17 @@ class EpaycoPaymentService
             ]);
         }
 
+        // SIEMPRE se expone NUESTRO bridge (carga checkout-v2.js con el sessionId
+        // y permite interceptar el retorno a response_url de forma confiable). Si
+        // ePayco devolvió una URL directa, se guarda como metadata.
         $bridgeUrl = $this->checkoutBridgeUrl($tx->reference);
         $raw = is_array($tx->raw_response) ? $tx->raw_response : [];
         $raw['flow'] = 'smart_checkout';
         $raw['session_id'] = $r['session_id'];
         $raw['requested_method'] = $method;
+        if (! empty($r['checkout_url'])) {
+            $raw['provider_checkout_url'] = $r['checkout_url'];
+        }
 
         $tx = $this->transitionTo($tx, PaymentTransaction::STATUS_PENDING, [
             'failure_reason' => null,
