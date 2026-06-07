@@ -156,6 +156,39 @@ Route::middleware('auth.member')->group(function (): void {
         ->where('reference', '[A-Za-z0-9_\-]+')->middleware('throttle:6,1');
 });
 
+// ── Nutrición premium: búsqueda de alimentos / barcode / OCR / tracking ───────
+// Módulo NUEVO (tablas nutrition_foods/entries/...) independiente del nutricional
+// previo (app/nutrition/*). Flutter NUNCA llama a proveedores externos; todo pasa
+// por el backend, que cachea y calcula los macros finales. Rate-limit por método.
+Route::middleware('auth.member')->prefix('nutrition')->group(function (): void {
+    $food = \App\Http\Controllers\Api\Nutrition\NutritionFoodController::class;
+    $entry = \App\Http\Controllers\Api\Nutrition\NutritionEntryController::class;
+    $summary = \App\Http\Controllers\Api\Nutrition\NutritionSummaryController::class;
+    $ocr = \App\Http\Controllers\Api\Nutrition\NutritionOcrController::class;
+
+    Route::get('foods/search', [$food, 'search'])->middleware('throttle:30,1');
+    Route::get('foods/barcode/{barcode}', [$food, 'barcode'])
+        ->where('barcode', '[0-9]+')->middleware('throttle:20,1');
+    Route::get('favorites', [$food, 'favorites']);
+    Route::get('recent', [$food, 'recent']);
+    Route::post('foods', [$food, 'store'])->middleware('throttle:30,1');
+    Route::get('foods/{uuid}', [$food, 'show']);
+    Route::put('foods/{uuid}', [$food, 'update']);
+    Route::delete('foods/{uuid}', [$food, 'destroy']);
+    Route::post('foods/{uuid}/favorite', [$food, 'favorite']);
+    Route::delete('foods/{uuid}/favorite', [$food, 'unfavorite']);
+
+    Route::post('entries', [$entry, 'store'])->middleware('throttle:60,1');
+    Route::get('entries', [$entry, 'index']);
+    Route::delete('entries/{uuid}', [$entry, 'destroy']);
+
+    Route::get('summary', [$summary, 'show']);
+
+    Route::post('ocr/scan', [$ocr, 'scan'])->middleware('throttle:10,1');
+    Route::get('ocr/{uuid}', [$ocr, 'show']);
+    Route::post('ocr/{uuid}/confirm-food', [$ocr, 'confirmFood']);
+});
+
 // ── IRON IA — asistente con OpenAI (Flutter → Laravel → OpenAI) ──────────────
 // El usuario se resuelve de forma flexible dentro del servicio (Bearer
 // access_hash de Member, member_id, documento o email). Sin identificación,
