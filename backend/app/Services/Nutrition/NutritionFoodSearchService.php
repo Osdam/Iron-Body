@@ -46,8 +46,9 @@ class NutritionFoodSearchService
         }
 
         // Ranking Colombia: usuario → propios completos → Colombia → cadenas/
-        // marcas → OFF cacheado → USDA → incompletos al final.
-        $local = array_slice($this->rank($local, $member), 0, $limit);
+        // marcas → OFF cacheado → USDA → incompletos al final. Dentro de cada
+        // grupo: coincidencia exacta → empieza por → marca → score Colombia.
+        $local = array_slice($this->rank($local, $member, NutritionFood::normalize($query)), 0, $limit);
 
         $favoriteIds = $this->favoriteIds($member);
         return array_map(function (NutritionFood $f) use ($favoriteIds) {
@@ -105,15 +106,35 @@ class NutritionFoodSearchService
      * @param NutritionFood[] $foods
      * @return NutritionFood[]
      */
-    private function rank(array $foods, Member $member): array
+    private function rank(array $foods, Member $member, string $qnorm = ''): array
     {
-        usort($foods, function (NutritionFood $a, NutritionFood $b) use ($member) {
-            return $this->rankKey($a, $member) <=> $this->rankKey($b, $member);
+        usort($foods, function (NutritionFood $a, NutritionFood $b) use ($member, $qnorm) {
+            return $this->rankKey($a, $member, $qnorm) <=> $this->rankKey($b, $member, $qnorm);
         });
         return $foods;
     }
 
-    private function rankKey(NutritionFood $f, Member $member): array
+    /** Relevancia textual: 0 exacto, 1 empieza-por, 2 marca, 3 contiene. */
+    private function relevance(NutritionFood $f, string $qnorm): int
+    {
+        if ($qnorm === '') {
+            return 3;
+        }
+        $name = (string) $f->normalized_name;
+        if ($name === $qnorm) {
+            return 0;
+        }
+        if ($name !== '' && str_starts_with($name, $qnorm)) {
+            return 1;
+        }
+        $brand = (string) ($f->normalized_brand ?: $f->brand);
+        if ($brand !== '' && str_contains(mb_strtolower($brand), $qnorm)) {
+            return 2;
+        }
+        return 3;
+    }
+
+    private function rankKey(NutritionFood $f, Member $member, string $qnorm = ''): array
     {
         $complete = $f->isMacroComplete();
         $score = (int) ($f->imported_priority_score ?? 0);
@@ -141,7 +162,13 @@ class NutritionFoodSearchService
             $bucket = 6;
         }
 
-        return [$bucket, -$score, $f->verified ? 0 : 1, $f->calories_per_100g === null ? 1 : 0];
+        return [
+            $bucket,
+            $this->relevance($f, $qnorm), // exacto → empieza-por → marca → contiene
+            -$score,
+            $f->verified ? 0 : 1,
+            $f->calories_per_100g === null ? 1 : 0,
+        ];
     }
 
     /** @return NutritionFood[] alimentos externos normalizados y cacheados */

@@ -212,6 +212,35 @@ class NutritionCommunityTest extends TestCase
         $this->assertEquals(['create_manual', 'scan_label', 'search_by_name', 'scan_another'], $res->json('actions'));
     }
 
+    public function test_barcode_resolves_by_variant_upca_to_ean13(): void
+    {
+        $m = $this->member();
+        config(['nutrition.external_search_enabled' => false]);
+        // Guardado como EAN-13; el usuario escanea el UPC-A (12) equivalente.
+        NutritionFood::create([
+            'source' => 'community', 'name' => 'Producto Variante', 'is_public' => true,
+            'barcode' => '0036000291452', 'visibility' => 'community', 'verification_status' => 'community',
+            'serving_size' => 100, 'serving_unit' => 'g',
+            'calories_per_100g' => 100, 'protein_per_100g' => 5,
+            'carbs_per_100g' => 10, 'fat_per_100g' => 2,
+            'calories_per_serving' => 100, 'protein_per_serving' => 5,
+            'carbs_per_serving' => 10, 'fat_per_serving' => 2,
+        ]);
+
+        $res = $this->getJson('/api/nutrition/foods/barcode/036000291452', $this->auth($m))->assertOk();
+        $res->assertJsonPath('status', 'found')
+            ->assertJsonPath('food.name', 'Producto Variante');
+    }
+
+    public function test_barcode_bad_read_returns_invalid(): void
+    {
+        $m = $this->member();
+        // Código demasiado corto → lectura mala controlada (no rompe el flujo).
+        $res = $this->getJson('/api/nutrition/foods/barcode/123', $this->auth($m))->assertOk();
+        $res->assertJsonPath('status', 'invalid')
+            ->assertJsonPath('reason', 'bad_read');
+    }
+
     public function test_usda_fallback_for_generic_query(): void
     {
         $m = $this->member();

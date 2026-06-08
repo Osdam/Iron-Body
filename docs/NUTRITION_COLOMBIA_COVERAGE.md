@@ -138,7 +138,14 @@ Colombia → detectados · marcas Colombia · D1 · Éxito · Olímpica · Ara
 | `--brand-seeds`   | Solo productos cuya marca coincida con `colombia_brand_seeds`. |
 | `--limit=`        | Máximo de productos a procesar. |
 | `--resume`        | Reanuda desde el último cursor guardado. |
+| `--dry-run`       | Procesa y cuenta **sin escribir** en BD (preview). |
 | `--stats`         | Solo estadísticas (no importa). |
+
+El importador usa un **lock** (`Cache::lock`) para impedir dos ejecuciones
+simultáneas, y reporta métricas extra: `sin barcode`, `barcode inválido`
+(dígito de control; no se excluye, solo se cuenta). Ver también
+`NUTRITION_BARCODE_OCR.md` (resolución de barcode/variantes) y
+`NUTRITION_PRODUCTION_DEPLOY.md` (checklist VPS).
 
 ---
 

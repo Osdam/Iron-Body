@@ -185,6 +185,7 @@ Route::middleware('auth.member')->prefix('nutrition')->group(function (): void {
 
     Route::get('summary', [$summary, 'show']);
     Route::get('history', [$summary, 'history']);
+    Route::get('stats', [$summary, 'stats']); // constancia/adherencia premium
 
     Route::post('ocr/scan', [$ocr, 'scan'])->middleware('throttle:10,1');
     Route::get('ocr/{uuid}', [$ocr, 'show']);

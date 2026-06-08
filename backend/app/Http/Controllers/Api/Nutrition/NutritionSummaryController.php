@@ -5,14 +5,17 @@ namespace App\Http\Controllers\Api\Nutrition;
 use App\Http\Controllers\Controller;
 use App\Models\Member;
 use App\Services\Nutrition\NutritionEntryService;
+use App\Services\Nutrition\NutritionStatsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-/** Resumen diario: totales + entradas agrupadas por comida. */
+/** Resumen diario: totales + entradas agrupadas por comida + constancia. */
 class NutritionSummaryController extends Controller
 {
-    public function __construct(private NutritionEntryService $entries)
-    {
+    public function __construct(
+        private NutritionEntryService $entries,
+        private NutritionStatsService $stats,
+    ) {
     }
 
     /** GET /api/nutrition/summary?date=YYYY-MM-DD */
@@ -42,5 +45,19 @@ class NutritionSummaryController extends Controller
             'days'        => $this->entries->historyPayload($member, $days),
             'streak_days' => $this->entries->streakDays($member),
         ]);
+    }
+
+    /** GET /api/nutrition/stats?range=week|month — constancia/adherencia real. */
+    public function stats(Request $request): JsonResponse
+    {
+        $request->validate(['range' => 'nullable|in:week,month']);
+        /** @var Member $member */
+        $member = $request->attributes->get('auth_member');
+        $range = (string) ($request->query('range') ?: 'week');
+
+        return response()->json(array_merge(
+            ['ok' => true],
+            $this->stats->constancy($member, $range),
+        ));
     }
 }

@@ -33,17 +33,36 @@ class NutritionOffImport extends Command
         {--brand-seeds : Solo productos cuya marca coincida con las marcas Colombia configuradas}
         {--limit= : Máximo de productos a procesar}
         {--resume : Reanuda desde el último cursor guardado}
+        {--dry-run : Procesa y cuenta SIN escribir en BD}
         {--stats : Solo muestra estadísticas, no importa}';
 
     protected $description = 'Importa productos de Open Food Facts desde un dump local, priorizando Colombia (opcional).';
 
     private const CURSOR_KEY = 'nutrition_off_import_cursor';
+    private const LOCK_KEY = 'nutrition_off_import_lock';
 
     public function handle(NutritionFoodNormalizer $normalizer, NutritionColombiaClassifier $colombia): int
     {
         if ($this->option('stats')) {
             return $this->stats($colombia);
         }
+
+        // Lock: evita dos importadores corriendo al tiempo (corromper cursor/upsert).
+        $lock = \Illuminate\Support\Facades\Cache::lock(self::LOCK_KEY, 3600);
+        if (! $lock->get()) {
+            $this->error('Ya hay un importador en ejecución. Intenta más tarde.');
+            return self::FAILURE;
+        }
+        try {
+            return $this->runImport($normalizer, $colombia);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function runImport(NutritionFoodNormalizer $normalizer, NutritionColombiaClassifier $colombia): int
+    {
+        $dryRun = (bool) $this->option('dry-run');
 
         $file = $this->option('file') ?: config('nutrition.openfoodfacts.import.path');
         $enabled = (bool) config('nutrition.openfoodfacts.import.enabled') || $this->option('file');
@@ -69,11 +88,13 @@ class NutritionOffImport extends Command
             . ($country ? " · país={$country}" : '')
             . ($storesFilter ? ' · stores=' . implode('/', $storesFilter) : '')
             . ($brandSeedsOnly ? ' · solo marcas Colombia' : '')
+            . ($dryRun ? ' · DRY-RUN (sin escribir)' : '')
             . ($resumeFrom ? " (reanudando en línea {$resumeFrom})" : ''));
 
+        $barcodes = new \App\Services\Nutrition\BarcodeNormalizer();
         $stats = [
             'processed' => 0, 'created' => 0, 'updated' => 0, 'incomplete' => 0, 'complete' => 0,
-            'skipped' => 0, 'errors' => 0,
+            'skipped' => 0, 'no_barcode' => 0, 'invalid_barcode' => 0, 'errors' => 0,
             'colombia' => 0, 'colombian_brands' => 0,
             'D1' => 0, 'Éxito' => 0, 'Olímpica' => 0, 'Ara' => 0,
         ];
@@ -121,8 +142,14 @@ class NutritionOffImport extends Command
                 continue;
             }
             if (empty($product['code'])) {
+                $stats['no_barcode']++;
                 $stats['skipped']++;
                 continue; // sin barcode → se salta
+            }
+            // Dígito de control inválido se cuenta pero NO se excluye (recuperable).
+            $clean = $barcodes->clean((string) $product['code']);
+            if ($clean !== '' && ! $barcodes->hasValidCheckDigit($clean)) {
+                $stats['invalid_barcode']++;
             }
 
             try {
@@ -132,10 +159,17 @@ class NutritionOffImport extends Command
                     continue;
                 }
                 $exists = NutritionFood::where('barcode', $normalized['barcode'])->exists();
-                $food = $normalizer->cache($normalized);
-                $stats['processed']++;
-                $exists ? $stats['updated']++ : $stats['created']++;
-                $food->isMacroComplete() ? $stats['complete']++ : $stats['incomplete']++;
+                // Dry-run: cuenta sin escribir; usa el flag de completitud normalizado.
+                if ($dryRun) {
+                    $stats['processed']++;
+                    $exists ? $stats['updated']++ : $stats['created']++;
+                    empty($normalized['incomplete']) ? $stats['complete']++ : $stats['incomplete']++;
+                } else {
+                    $food = $normalizer->cache($normalized);
+                    $stats['processed']++;
+                    $exists ? $stats['updated']++ : $stats['created']++;
+                    $food->isMacroComplete() ? $stats['complete']++ : $stats['incomplete']++;
+                }
 
                 // Conteos de cobertura Colombia (señales del producto).
                 $c = $colombia->classify([
@@ -158,12 +192,16 @@ class NutritionOffImport extends Command
             }
 
             if ($stats['processed'] % (int) config('nutrition.openfoodfacts.import.batch_size', 500) === 0) {
-                Cache::put(self::CURSOR_KEY, $line, now()->addDays(7));
+                if (! $dryRun) {
+                    Cache::put(self::CURSOR_KEY, $line, now()->addDays(7));
+                }
                 $this->line("  … {$stats['processed']} procesados (línea {$line})");
             }
         }
         fclose($handle);
-        Cache::put(self::CURSOR_KEY, $line, now()->addDays(7));
+        if (! $dryRun) {
+            Cache::put(self::CURSOR_KEY, $line, now()->addDays(7));
+        }
 
         $this->info('Resumen → procesados: ' . $stats['processed']
             . ' · creados: ' . $stats['created']
@@ -171,6 +209,8 @@ class NutritionOffImport extends Command
             . ' · completos: ' . $stats['complete']
             . ' · incompletos: ' . $stats['incomplete']
             . ' · omitidos: ' . $stats['skipped']
+            . ' · sin barcode: ' . $stats['no_barcode']
+            . ' · barcode inválido: ' . $stats['invalid_barcode']
             . ' · errores: ' . $stats['errors']);
         $this->info('Colombia → detectados: ' . $stats['colombia']
             . ' · marcas Colombia: ' . $stats['colombian_brands']

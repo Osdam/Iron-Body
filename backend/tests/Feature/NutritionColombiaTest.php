@@ -199,6 +199,23 @@ class NutritionColombiaTest extends TestCase
         @unlink($jsonl);
     }
 
+    public function test_off_import_dry_run_writes_nothing(): void
+    {
+        $jsonl = tempnam(sys_get_temp_dir(), 'off') . '.jsonl';
+        file_put_contents($jsonl, json_encode([
+            'code' => '7700000000055', 'product_name_es' => 'Dry Run',
+            'brands' => 'D1', 'stores' => 'D1', 'countries_tags' => 'en:colombia',
+            'nutriments' => ['energy-kcal_100g' => 100, 'proteins_100g' => 1, 'carbohydrates_100g' => 1, 'fat_100g' => 1],
+        ]) . "\n");
+
+        $this->artisan('nutrition:off-import', ['--file' => $jsonl, '--country' => 'colombia', '--dry-run' => true])
+            ->assertSuccessful();
+        // Dry-run no escribe nada en BD.
+        $this->assertEquals(0, NutritionFood::where('barcode', '7700000000055')->count());
+
+        @unlink($jsonl);
+    }
+
     public function test_off_import_stores_incomplete_as_incomplete_not_zero(): void
     {
         $jsonl = tempnam(sys_get_temp_dir(), 'off') . '.jsonl';

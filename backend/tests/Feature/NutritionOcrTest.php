@@ -170,6 +170,50 @@ class NutritionOcrTest extends TestCase
         $this->assertEquals('g', $r['serving_unit']);
     }
 
+    public function test_parser_inline_format_per_100g(): void
+    {
+        $parser = new NutritionLabelParser();
+        // Texto plano de una sola línea (etiqueta sin tabla marcada).
+        $r = $parser->parse(
+            'Información Nutricional (100 g): Calorías 348, Proteína 9 g, '
+            . 'Carbohidratos totales 79 g, Grasa total 1,6 g, Sodio 5 mg'
+        );
+        $this->assertEquals(100.0, $r['serving_size']);
+        $this->assertEquals('100', $r['basis']);
+        $this->assertEquals(348.0, $r['macros']['calories']);
+        $this->assertEquals(9.0, $r['macros']['protein']);
+        $this->assertEquals(79.0, $r['macros']['carbs']);
+        $this->assertEquals(1.6, $r['macros']['fat']);
+        $this->assertEquals(5.0, $r['macros']['sodium']);
+    }
+
+    public function test_parser_serving_from_parenthesized_weight(): void
+    {
+        $parser = new NutritionLabelParser();
+        // No debe capturar el "1/3"; el peso real es 80 g.
+        $r = $parser->parse("Tamaño de porción 1/3 de paquete (80 g)\nCalorías 120");
+        $this->assertEquals(80.0, $r['serving_size']);
+        $this->assertEquals('serving', $r['basis']);
+    }
+
+    public function test_parser_extras_and_portions_per_package(): void
+    {
+        $parser = new NutritionLabelParser();
+        $r = $parser->parse(
+            "Porciones por envase 4\nTamaño de porción 30 g\nCalorías 150\n"
+            . "Grasa total 8 g\nGrasa saturada 3 g\nGrasa trans 0,2 g\n"
+            . "Carbohidratos totales 18 g\nAzúcares totales 10 g\nAzúcares añadidos 6 g"
+        );
+        $this->assertEquals(4, $r['portions_per_package']);
+        $this->assertEquals(3.0, $r['extras']['saturated_fat']);
+        $this->assertEquals(0.2, $r['extras']['trans_fat']);
+        $this->assertEquals(6.0, $r['extras']['added_sugar']);
+        // El azúcar total no se confunde con el añadido.
+        $this->assertEquals(10.0, $r['macros']['sugar']);
+        // La grasa total no se confunde con la saturada/trans.
+        $this->assertEquals(8.0, $r['macros']['fat']);
+    }
+
     // ── Confirmación humana ─────────────────────────────────────────────────
 
     public function test_confirm_food_creates_new_user_food_when_no_food_uuid(): void

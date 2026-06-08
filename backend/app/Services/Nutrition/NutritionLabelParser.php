@@ -28,25 +28,40 @@ class NutritionLabelParser
             'calories' => $this->parseCalories($t),
             'protein'  => $this->grab($t, ['prote[ií]nas?', 'proteins?', 'protein']),
             'carbs'    => $this->grab($t, [
-                'hidratos de carbono', 'carbohidratos?', 'carbohydrates?',
-                'carbohyd\w*', 'carbos?', 'carbs?',
+                'carbohidratos? totales?', 'hidratos de carbono', 'carbohidratos?',
+                'carbohydrates?', 'carbohyd\w*', 'carbos?', 'carbs?',
             ]),
             'fat'      => $this->grab($t, [
-                'grasas? totales?', 'grasas?', 'total fat', 'fat',
+                'grasas? totales?', 'grasa total', 'grasas?', 'total fat', 'fat',
             ]),
-            'sugar'    => $this->grab($t, ['az[uú]cares?', 'sugars?', 'sugar']),
+            // Azúcares: total (evita "azúcares añadidos" si el total existe).
+            'sugar'    => $this->grab($t, ['az[uú]cares? totales?', 'az[uú]cares?', 'sugars?', 'sugar']),
             'fiber'    => $this->grab($t, [
                 'fibra(?: diet[eé]tica| alimentaria)?', 'dietary fiber', 'fiber', 'fibre',
             ]),
             'sodium'   => $this->parseSodium($t),
         ];
 
-        // Confianza = macros base detectados / 4.
+        // Datos adicionales (no rompen el draft; enriquecen calidad/auditoría).
+        $extras = [
+            'saturated_fat' => $this->grab($t, ['grasas? saturadas?', 'saturated fat', 'sat\.? fat']),
+            'trans_fat'     => $this->grab($t, ['grasas? trans', 'trans fat']),
+            'added_sugar'   => $this->grab($t, ['az[uú]cares? a[nñ]adidos?', 'added sugars?']),
+        ];
+        $portionsPerPackage = $this->grab($t, [
+            'porciones por (?:envase|paquete|empaque)', 'servings per (?:container|package)',
+        ]);
+
+        // Confianza global + por campo (cada campo: 1.0 si detectado, 0 si null).
         $core = array_filter(
             [$macros['calories'], $macros['protein'], $macros['carbs'], $macros['fat']],
             static fn ($v) => $v !== null
         );
         $confidence = round(count($core) / 4, 3);
+        $fieldConfidence = [];
+        foreach ($macros as $k => $v) {
+            $fieldConfidence[$k] = $v === null ? 0.0 : 1.0;
+        }
 
         if ($confidence < 0.75) {
             $warnings[] = 'Confianza baja: revisa con cuidado los valores detectados.';
@@ -56,12 +71,15 @@ class NutritionLabelParser
         }
 
         return [
-            'serving_size' => $serving['serving_size'],
-            'serving_unit' => $serving['serving_unit'],
-            'basis'        => $serving['basis'],
-            'macros'       => $macros,
-            'confidence'   => $confidence,
-            'warnings'     => $warnings,
+            'serving_size'         => $serving['serving_size'],
+            'serving_unit'         => $serving['serving_unit'],
+            'basis'                => $serving['basis'],
+            'portions_per_package' => $portionsPerPackage !== null ? (int) round($portionsPerPackage) : null,
+            'macros'               => $macros,
+            'extras'               => $extras,
+            'confidence'           => $confidence,
+            'field_confidence'     => $fieldConfidence,
+            'warnings'             => $warnings,
         ];
     }
 
@@ -86,7 +104,8 @@ class NutritionLabelParser
     private function grab(string $t, array $labels): ?float
     {
         foreach ($labels as $label) {
-            if (preg_match('/' . $label . '\D{0,15}(\d+(?:[.,]\d+)?)\s*(mg|g)?/u', $t, $m)) {
+            // Unidad opcional (µg/mcg/mg/g) — el valor se toma tal cual aparece.
+            if (preg_match('/' . $label . '\D{0,15}(\d+(?:[.,]\d+)?)\s*(mcg|µg|mg|g)?/u', $t, $m)) {
                 return $this->toFloat($m[1]);
             }
         }
@@ -135,7 +154,20 @@ class NutritionLabelParser
     /** Detecta el tamaño de porción y la base de cálculo. */
     private function parseServing(string $t): array
     {
-        // Porción explícita con tamaño (preferida si está clara).
+        $hasPortion = (bool) preg_match('/porci[oó]n|serving/u', $t);
+
+        // 1) Cantidad entre paréntesis "(80 g)" / "(250 ml)" — peso real típico de
+        //    la porción, p.ej. "1/3 de paquete (80 g)". Evita capturar el "1/3".
+        if (preg_match('/\((\d+(?:[.,]\d+)?)\s*(ml|gr|g)\)/u', $t, $m)) {
+            $size = $this->toFloat($m[1]);
+            $unit = $this->normUnit($m[2]);
+            // "(100 g)" sin mención de porción → base por 100 g (formato en línea
+            // "Información Nutricional (100 g): …").
+            $basis = ((int) $size === 100 && ! $hasPortion) ? '100' : 'serving';
+            return ['serving_size' => $size, 'serving_unit' => $unit, 'basis' => $basis];
+        }
+
+        // 2) Porción explícita con tamaño (sin fracción): "Tamaño de porción 30 g".
         if (preg_match(
             '/(?:tama[nñ]o de porci[oó]n|tama[nñ]o porci[oó]n|cantidad por porci[oó]n|por porci[oó]n|porci[oó]n(?: de)?|serving size)\D{0,12}(\d+(?:[.,]\d+)?)\s*(ml|gr|g)?/u',
             $t,
@@ -147,8 +179,9 @@ class NutritionLabelParser
                 'basis'        => 'serving',
             ];
         }
-        // "por 100 g" / "por 100 ml" → base 100.
-        if (preg_match('/por\s*100\s*(ml|gr|g)/u', $t, $m)) {
+        // 3) "por 100 g" / "por 100 ml" / "100 g" en encabezado → base 100.
+        if (preg_match('/por\s*100\s*(ml|gr|g)/u', $t, $m)
+            || preg_match('/\b100\s*(ml|gr|g)\b/u', $t, $m)) {
             return [
                 'serving_size' => 100.0,
                 'serving_unit' => $this->normUnit($m[1]),

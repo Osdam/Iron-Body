@@ -84,6 +84,17 @@ return [
         'require_user_confirmation' => filter_var(env('NUTRITION_OCR_REQUIRE_USER_CONFIRMATION', true), FILTER_VALIDATE_BOOLEAN),
     ],
 
+    // Metas nutricionales por defecto (aún no hay metas por plan/usuario). Se usan
+    // para calcular adherencia/cumplimiento en las estadísticas de constancia.
+    'goals' => [
+        'calories'  => (float) env('NUTRITION_GOAL_CALORIES', 2200),
+        'protein'   => (float) env('NUTRITION_GOAL_PROTEIN', 150),
+        'carbs'     => (float) env('NUTRITION_GOAL_CARBS', 250),
+        'fat'       => (float) env('NUTRITION_GOAL_FAT', 70),
+        // Tolerancia ± para considerar un día "en rango" (0.10 = ±10%).
+        'tolerance' => (float) env('NUTRITION_GOAL_TOLERANCE', 0.10),
+    ],
+
     // Base comunitaria: alimentos creados por usuarios que retroalimentan la base.
     'community' => [
         // Reportes necesarios para ocultar de búsquedas un alimento NO verificado.
