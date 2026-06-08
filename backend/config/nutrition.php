@@ -38,9 +38,19 @@ return [
     ],
 
     // OCR de etiqueta nutricional (modo seguro: disabled → unavailable).
+    // Motor real: Tesseract instalado en el VPS (sin costos mensuales). El OCR
+    // SOLO propone valores; el usuario SIEMPRE confirma antes de guardar.
     'ocr' => [
         'enabled'  => filter_var(env('NUTRITION_OCR_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
-        'provider' => env('NUTRITION_OCR_PROVIDER', 'local'),
+        // 'disabled' | 'tesseract' (o 'local' legado: parsea solo texto de cliente).
+        'provider' => env('NUTRITION_OCR_PROVIDER', 'disabled'),
+        'tesseract_bin' => env('NUTRITION_OCR_TESSERACT_BIN', '/usr/bin/tesseract'),
+        'lang' => env('NUTRITION_OCR_LANG', 'spa+eng'),
+        'timeout_seconds' => (int) env('NUTRITION_OCR_TIMEOUT_SECONDS', 20),
+        'max_image_mb' => (int) env('NUTRITION_OCR_MAX_IMAGE_MB', 8),
+        // Si false, NUNCA se persiste la imagen original (solo se usa en memoria/temporal).
+        'store_original' => filter_var(env('NUTRITION_OCR_STORE_ORIGINAL', false), FILTER_VALIDATE_BOOLEAN),
+        'require_user_confirmation' => filter_var(env('NUTRITION_OCR_REQUIRE_USER_CONFIRMATION', true), FILTER_VALIDATE_BOOLEAN),
     ],
 
     // Caché de alimentos externos (días) y timeouts (segundos).

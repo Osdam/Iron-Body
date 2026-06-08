@@ -10,10 +10,12 @@ class NutritionOcrScan extends Model
     public const STATUS_PENDING = 'pending';
     public const STATUS_PROCESSED = 'processed';
     public const STATUS_FAILED = 'failed';
+    public const STATUS_CONFIRMED = 'confirmed';
 
     protected $fillable = [
-        'uuid', 'member_id', 'image_path', 'status', 'extracted_text',
-        'parsed_payload', 'confidence_score', 'error_message', 'created_food_id',
+        'uuid', 'member_id', 'provider', 'barcode', 'image_path', 'status',
+        'extracted_text', 'parsed_payload', 'confidence_score', 'error_message',
+        'created_food_id',
     ];
 
     protected $casts = [
