@@ -73,10 +73,12 @@ class NutritionBarcodeService
     {
         return [
             'status'          => 'not_found',
+            'code'            => 'food_barcode_not_found',
             'barcode'         => $barcode,
             'action_required' => 'create_or_scan',
             'message'         => 'Este producto aún no está en nuestra base Colombia. '
-                . 'Puedes crearlo en 30 segundos y quedará guardado para la próxima vez.',
+                . 'Puedes crearlo en 30 segundos y quedará disponible para próximas búsquedas.',
+            'actions'         => ['create_manual', 'scan_label', 'search_by_name', 'scan_another'],
             'options'         => ['scan_label', 'create_manual', 'search_by_name', 'scan_other'],
         ];
     }

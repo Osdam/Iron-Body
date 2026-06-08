@@ -84,6 +84,14 @@ return [
         'require_user_confirmation' => filter_var(env('NUTRITION_OCR_REQUIRE_USER_CONFIRMATION', true), FILTER_VALIDATE_BOOLEAN),
     ],
 
+    // Base comunitaria: alimentos creados por usuarios que retroalimentan la base.
+    'community' => [
+        // Reportes necesarios para ocultar de búsquedas un alimento NO verificado.
+        'reports_hide_threshold' => (int) env('NUTRITION_COMMUNITY_REPORTS_HIDE_THRESHOLD', 3),
+        // Ventana (segundos) para deduplicar creaciones idénticas (anti doble-tap).
+        'idempotency_window_seconds' => (int) env('NUTRITION_COMMUNITY_IDEMPOTENCY_WINDOW', 15),
+    ],
+
     // Caché de alimentos externos (días) y timeouts (segundos).
     'cache_ttl_days'          => (int) env('NUTRITION_CACHE_TTL_DAYS', 90),
     'search_timeout_seconds'  => (int) env('NUTRITION_SEARCH_TIMEOUT_SECONDS', 8),

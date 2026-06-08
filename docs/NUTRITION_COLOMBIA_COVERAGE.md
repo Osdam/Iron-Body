@@ -173,3 +173,49 @@ comunidad.
 > Nota: el OCR **solo propone** valores; el usuario **siempre confirma** antes de
 > guardar. Ver `app/Services/Nutrition/NutritionOcrService.php` y
 > `TesseractNutritionOcrProvider.php`.
+
+---
+
+## 8. Base comunitaria (retroalimentación con control de calidad)
+
+Cuando un usuario crea un producto con **código de barras nuevo**, ese producto
+pasa a ser una **contribución comunitaria** disponible para todos:
+
+| Caso | source | visibility | verification_status | visible a otros |
+|------|--------|-----------|---------------------|:---------------:|
+| Crea SIN barcode | `user` | `private` | `private` | No (solo él) |
+| Crea CON barcode nuevo | `community` | `community` | `community` | Sí — “Aportado por la comunidad” |
+| Staff lo verifica | — | `verified` | `verified` | Sí — “Verificado Iron Body” |
+| Reportado ≥ umbral (no verificado) | — | — | — | Oculto hasta revisión |
+| Rechazado por staff | — | — | `rejected` | No |
+
+**Calidad y duplicados:**
+- Macros validados (no negativos, topes razonables). Incompletos = `incomplete`,
+  nunca se muestran 0 como válidos.
+- **Anti-duplicado por barcode:** creación dentro de `DB::transaction` +
+  `lockForUpdate`. Si el barcode ya existe: se completa (si estaba incompleto) o
+  se devuelve el existente (**idempotente**, `deduplicated:true`), nunca duplica.
+- **Anti doble-tap** sin barcode: dedup por (miembro + nombre normalizado +
+  calorías) dentro de `NUTRITION_COMMUNITY_IDEMPOTENCY_WINDOW` segundos.
+- **Confirmaciones:** cuando OTRO usuario usa por primera vez un producto
+  comunitario, sube `community_confirmations_count` (no lo verifica).
+- **Reportes:** `POST /api/nutrition/foods/{uuid}/report` → `reports_count++`; al
+  alcanzar `NUTRITION_COMMUNITY_REPORTS_HIDE_THRESHOLD` se oculta de búsquedas
+  (salvo verificados).
+
+**Moderación (CRM admin):**
+- `GET  /api/admin/nutrition/foods/pending`
+- `GET  /api/admin/nutrition/foods/{uuid}`
+- `POST /api/admin/nutrition/foods/{uuid}/verify`
+- `POST /api/admin/nutrition/foods/{uuid}/reject`
+- `POST /api/admin/nutrition/foods/{uuid}/merge` (fusiona duplicado → canónico,
+  re-apunta entradas/favoritos/recientes).
+
+**.env comunidad:**
+```env
+NUTRITION_COMMUNITY_REPORTS_HIDE_THRESHOLD=3
+NUTRITION_COMMUNITY_IDEMPOTENCY_WINDOW=15
+```
+
+> Los datos comunitarios **no se presentan como certificados** mientras no estén
+> verificados por staff (badge “Aportado por la comunidad” vs “Verificado Iron Body”).

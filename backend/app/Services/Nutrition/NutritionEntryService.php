@@ -60,6 +60,17 @@ class NutritionEntryService
                 'sodium'             => $macros['sodium'],
                 'saturated_fat'      => $macros['saturated_fat'],
             ]);
+            // Confirmación comunitaria: si OTRO usuario usa por primera vez un
+            // alimento aportado por la comunidad, cuenta como confirmación de que
+            // el producto es real/útil (no lo verifica; eso es de staff).
+            $firstUseByMember = ! NutritionRecentFood::where('member_id', $member->id)
+                ->where('food_id', $food->id)->exists();
+            $isCommunity = $food->visibility === NutritionFood::VIS_COMMUNITY
+                || $food->verification_status === NutritionFood::VS_COMMUNITY;
+            if ($firstUseByMember && $isCommunity && $food->created_by_member_id !== $member->id) {
+                $food->increment('community_confirmations_count');
+            }
+
             $this->updateRecentFood($member, $food);
             $this->recalculateDailySummary($member, $date);
             return $entry;

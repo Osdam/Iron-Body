@@ -39,8 +39,21 @@ class NutritionOcrController extends Controller
             ]);
         }
 
+        // Límite de tamaño configurable (NUTRITION_OCR_MAX_IMAGE_MB). Si la imagen
+        // lo supera respondemos JSON 422 controlado con código estable (no el
+        // error genérico de validación) para que la app muestre el mensaje útil.
+        $maxMb = (int) config('nutrition.ocr.max_image_mb', 8);
+        $image = $request->file('image');
+        if ($image && $image->getSize() > $maxMb * 1024 * 1024) {
+            return response()->json([
+                'ok'      => false,
+                'code'    => 'ocr_image_too_large',
+                'message' => 'La imagen es demasiado pesada. Intenta con una foto más cercana o más clara.',
+            ], 422);
+        }
+
         $request->validate([
-            'image'          => 'nullable|image|mimes:jpg,jpeg,png,webp|max:8192',
+            'image'          => "nullable|image|mimes:jpg,jpeg,png,webp|max:" . ($maxMb * 1024),
             'text'           => 'nullable|string|max:8000', // OCR de cliente (opcional)
             'barcode'        => 'nullable|string|max:32',
             'food_uuid'      => 'nullable|string|max:64',

@@ -6,6 +6,8 @@ use App\Http\Middleware\VerifyInternalAutomationSignature;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\PostTooLargeException;
+use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -22,5 +24,17 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Cuerpo de request demasiado grande (p.ej. imagen OCR pesada). En rutas
+        // API SIEMPRE respondemos JSON controlado — nunca el HTML 413 de nginx
+        // ni un stack trace. El cliente ya comprime; esto es la última defensa.
+        $exceptions->render(function (PostTooLargeException $e, Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return response()->json([
+                    'ok'      => false,
+                    'code'    => 'ocr_image_too_large',
+                    'message' => 'La imagen es demasiado pesada. Intenta con una foto más cercana o más clara.',
+                ], 413);
+            }
+            return null;
+        });
     })->create();

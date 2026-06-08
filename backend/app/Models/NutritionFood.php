@@ -30,6 +30,9 @@ class NutritionFood extends Model
         'sugar_per_serving', 'fiber_per_serving', 'sodium_per_serving',
         'verified', 'confidence_score', 'created_by_member_id', 'is_public',
         'raw_payload', 'last_synced_at',
+        'visibility', 'verification_status', 'verified_by_admin_id', 'verified_at',
+        'community_confirmations_count', 'community_votes_count', 'reports_count',
+        'canonical_food_id', 'version',
     ];
 
     protected $casts = [
@@ -45,8 +48,52 @@ class NutritionFood extends Model
         'verified' => 'boolean', 'is_public' => 'boolean',
         'confidence_score' => 'float',
         'imported_priority_score' => 'integer',
+        'community_confirmations_count' => 'integer',
+        'community_votes_count' => 'integer',
+        'reports_count' => 'integer',
+        'version' => 'integer',
+        'verified_at' => 'datetime',
         'raw_payload' => 'array', 'last_synced_at' => 'datetime',
     ];
+
+    // Visibilidad de un alimento creado por el usuario.
+    public const VIS_PRIVATE = 'private';     // solo su creador
+    public const VIS_COMMUNITY = 'community'; // aporta a la base de todos
+    public const VIS_VERIFIED = 'verified';   // revisado por staff
+
+    // Estado de verificación (calidad de datos).
+    public const VS_PRIVATE = 'private';
+    public const VS_PENDING = 'pending';
+    public const VS_COMMUNITY = 'community';
+    public const VS_VERIFIED = 'verified';
+    public const VS_REJECTED = 'rejected';
+
+    /** Umbral de reportes para ocultar un alimento no verificado de búsquedas. */
+    public static function reportsHideThreshold(): int
+    {
+        return (int) config('nutrition.community.reports_hide_threshold', 3);
+    }
+
+    /**
+     * Alimentos visibles en búsquedas generales: excluye rechazados y los muy
+     * reportados que aún no están verificados. NO oculta los del propio creador.
+     */
+    public function scopeVisibleInSearch($query, Member $member)
+    {
+        $threshold = self::reportsHideThreshold();
+        return $query->where(function ($q) use ($member, $threshold) {
+            $q->where('created_by_member_id', $member->id) // lo propio SIEMPRE visible
+                ->orWhere(function ($pub) use ($threshold) {
+                    $pub->where('is_public', true)
+                        ->where('verification_status', '!=', self::VS_REJECTED)
+                        ->whereNull('canonical_food_id') // los fusionados no aparecen
+                        ->where(function ($rep) use ($threshold) {
+                            $rep->where('reports_count', '<', $threshold)
+                                ->orWhere('verification_status', self::VS_VERIFIED);
+                        });
+                });
+        });
+    }
 
     protected static function booted(): void
     {
@@ -115,6 +162,17 @@ class NutritionFood extends Model
         return $this->isMacroComplete();
     }
 
+    /** Etiqueta de calidad para la app (no certifica si no está verificado). */
+    public function communityLabel(): ?string
+    {
+        return match ($this->verification_status) {
+            self::VS_VERIFIED  => 'Verificado Iron Body',
+            self::VS_COMMUNITY => 'Aportado por la comunidad',
+            self::VS_REJECTED  => null,
+            default => $this->source === 'user' ? 'Creado por ti' : null,
+        };
+    }
+
     /** Formato unificado de alimento para la app (sin raw_payload ni internos). */
     public function toApiArray(): array
     {
@@ -146,6 +204,14 @@ class NutritionFood extends Model
             'country'          => $this->country,
             'is_colombia'      => $isColombia,
             'retailers'        => $retailers,
+            // Base comunitaria: estado de calidad para los badges de la app.
+            'visibility'           => $this->visibility,
+            'verification_status'  => $this->verification_status,
+            'is_verified_iron_body' => $this->verification_status === self::VS_VERIFIED,
+            'is_community'         => $this->visibility === self::VIS_COMMUNITY
+                || $this->verification_status === self::VS_COMMUNITY,
+            'community_label'      => $this->communityLabel(),
+            'community_confirmations' => (int) ($this->community_confirmations_count ?? 0),
             'image_url'        => $this->image_url,
             'serving_size'     => $this->serving_size,
             'serving_unit'     => $this->serving_unit ?: 'g',

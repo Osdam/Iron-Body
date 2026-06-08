@@ -55,63 +55,150 @@ class NutritionFoodController extends Controller
         return response()->json(['ok' => true, 'data' => $food->toApiArray()]);
     }
 
-    /** POST /api/nutrition/foods — crear alimento manual (privado por defecto). */
+    /**
+     * POST /api/nutrition/foods — crear alimento.
+     *
+     * - SIN barcode → alimento privado del usuario (solo él).
+     * - CON barcode nuevo → CONTRIBUCIÓN COMUNITARIA (visibility=community): queda
+     *   disponible para otros usuarios, marcado como aportado (no verificado).
+     * - CON barcode existente → NO duplica: completa el incompleto o devuelve el
+     *   que ya existe (idempotente). Usa transacción + lockForUpdate para evitar
+     *   duplicados en creación concurrente del mismo barcode.
+     */
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
             'name'         => 'required|string|max:160',
             'brand'        => 'nullable|string|max:120',
-            'barcode'      => 'nullable|string|max:20',
+            'barcode'      => 'nullable|string|max:32',
             'category'     => 'nullable|string|max:120',
             'serving_size' => 'required|numeric|gt:0',
             'serving_unit' => 'nullable|string|max:20',
-            'calories'     => 'required|numeric|min:0',
-            'protein'      => 'required|numeric|min:0',
-            'carbs'        => 'required|numeric|min:0',
-            'fat'          => 'required|numeric|min:0',
-            'sugar'        => 'nullable|numeric|min:0',
-            'fiber'        => 'nullable|numeric|min:0',
-            'sodium'       => 'nullable|numeric|min:0',
+            'calories'     => 'required|numeric|min:0|max:9000',
+            'protein'      => 'required|numeric|min:0|max:1000',
+            'carbs'        => 'required|numeric|min:0|max:1000',
+            'fat'          => 'required|numeric|min:0|max:1000',
+            'sugar'        => 'nullable|numeric|min:0|max:1000',
+            'fiber'        => 'nullable|numeric|min:0|max:1000',
+            'sodium'       => 'nullable|numeric|min:0|max:100000',
             'image_url'    => 'nullable|url|max:1024',
         ]);
         $member = $this->member($request);
+        $barcode = isset($data['barcode']) ? (preg_replace('/\D/', '', $data['barcode']) ?: null) : null;
 
         $size = (float) $data['serving_size'];
         $factor = 100 / $size;
+        $perServing = [];
         $per100 = [];
         foreach (['calories', 'protein', 'carbs', 'fat', 'sugar', 'fiber', 'sodium'] as $k) {
-            $val = isset($data[$k]) ? (float) $data[$k] : null;
+            $val = isset($data[$k]) && $data[$k] !== null ? max(0.0, (float) $data[$k]) : null;
+            $perServing[$k . '_per_serving'] = $val === null ? null : round($val, 2);
             $per100[$k . '_per_100g'] = $val === null ? null : round($val * $factor, 2);
-            $data[$k . '_per_serving'] = $val === null ? null : round($val, 2);
+        }
+
+        // ── Con barcode: anti-duplicado concurrente (lock por barcode) ──────────
+        if ($barcode) {
+            return \Illuminate\Support\Facades\DB::transaction(function () use ($member, $data, $barcode, $size, $perServing, $per100) {
+                $existing = NutritionFood::where('barcode', $barcode)->lockForUpdate()->first();
+                if ($existing) {
+                    // Ya existe: si está incompleto y es completable, se completa;
+                    // si ya está completo, se devuelve (idempotente, sin duplicar).
+                    if (! $existing->isMacroComplete()) {
+                        $this->applyMacros($existing, $data, $size, $perServing, $per100);
+                        $existing->source = $existing->source === 'iron_body' ? 'iron_body' : 'community';
+                        $existing->visibility = NutritionFood::VIS_COMMUNITY;
+                        $existing->verification_status = NutritionFood::VS_COMMUNITY;
+                        $existing->is_public = true;
+                        $existing->version = (int) $existing->version + 1;
+                        $existing->save();
+                    }
+                    return response()->json([
+                        'ok' => true, 'data' => $existing->fresh()->toApiArray(),
+                        'deduplicated' => true,
+                    ], 200);
+                }
+
+                $food = $this->createCommunityFood($member, $data, $barcode, $size, $perServing, $per100);
+                return response()->json(['ok' => true, 'data' => $food->toApiArray()], 201);
+            });
+        }
+
+        // ── Sin barcode: privado del usuario (con dedupe anti doble-tap) ────────
+        $window = (int) config('nutrition.community.idempotency_window_seconds', 15);
+        $dupe = NutritionFood::where('created_by_member_id', $member->id)
+            ->where('normalized_name', NutritionFood::normalize($data['name']))
+            ->where('calories_per_serving', $perServing['calories_per_serving'])
+            ->where('created_at', '>=', now()->subSeconds($window))
+            ->first();
+        if ($dupe) {
+            return response()->json(['ok' => true, 'data' => $dupe->toApiArray(), 'deduplicated' => true], 200);
         }
 
         $food = NutritionFood::create(array_merge([
             'source'               => 'user',
             'name'                 => $data['name'],
             'brand'                => $data['brand'] ?? null,
-            'barcode'              => $data['barcode'] ?? null,
+            'barcode'              => null,
             'category'             => $data['category'] ?? null,
             'serving_size'         => $size,
             'serving_unit'         => $data['serving_unit'] ?? 'g',
             'image_url'            => $data['image_url'] ?? null,
             'created_by_member_id' => $member->id,
             'is_public'            => false, // privado por defecto
+            'visibility'           => NutritionFood::VIS_PRIVATE,
+            'verification_status'  => NutritionFood::VS_PRIVATE,
             'verified'             => false,
             'confidence_score'     => 1.0, // datos provistos por el usuario
-            'calories_per_serving' => $data['calories_per_serving'],
-            'protein_per_serving'  => $data['protein_per_serving'],
-            'carbs_per_serving'    => $data['carbs_per_serving'],
-            'fat_per_serving'      => $data['fat_per_serving'],
-            'sugar_per_serving'    => $data['sugar_per_serving'],
-            'fiber_per_serving'    => $data['fiber_per_serving'],
-            'sodium_per_serving'   => $data['sodium_per_serving'],
-        ], $per100));
+        ], $perServing, $per100));
 
         \Illuminate\Support\Facades\Log::info('nutrition.food.created', [
-            'member_id' => $member->id, 'food' => $food->uuid, 'source' => 'user',
+            'member_id' => $member->id, 'food' => $food->uuid, 'source' => 'user', 'visibility' => 'private',
         ]);
 
         return response()->json(['ok' => true, 'data' => $food->toApiArray()], 201);
+    }
+
+    /** Crea un alimento comunitario (barcode nuevo) disponible para todos. */
+    private function createCommunityFood(Member $member, array $data, string $barcode, float $size, array $perServing, array $per100): NutritionFood
+    {
+        $food = NutritionFood::create(array_merge([
+            'source'               => 'community',
+            'name'                 => $data['name'],
+            'brand'                => $data['brand'] ?? null,
+            'barcode'              => $barcode,
+            'category'             => $data['category'] ?? null,
+            'serving_size'         => $size,
+            'serving_unit'         => $data['serving_unit'] ?? 'g',
+            'image_url'            => $data['image_url'] ?? null,
+            'created_by_member_id' => $member->id,
+            'is_public'            => true,
+            'visibility'           => NutritionFood::VIS_COMMUNITY,
+            'verification_status'  => NutritionFood::VS_COMMUNITY,
+            'verified'             => false,
+            'confidence_score'     => 0.85, // comunitario sin verificar
+        ], $perServing, $per100));
+
+        \Illuminate\Support\Facades\Log::info('nutrition.food.created', [
+            'member_id' => $member->id, 'food' => $food->uuid,
+            'source' => 'community', 'visibility' => 'community',
+        ]);
+        return $food;
+    }
+
+    /** Aplica macros (por porción + per 100g) a un alimento existente. */
+    private function applyMacros(NutritionFood $food, array $data, float $size, array $perServing, array $per100): void
+    {
+        $food->serving_size = $size;
+        $food->serving_unit = $data['serving_unit'] ?? ($food->serving_unit ?: 'g');
+        if (! empty($data['name'])) {
+            $food->name = $data['name'];
+        }
+        foreach ($perServing as $col => $val) {
+            $food->{$col} = $val;
+        }
+        foreach ($per100 as $col => $val) {
+            $food->{$col} = $val;
+        }
     }
 
     /** PUT /api/nutrition/foods/{uuid} — solo alimentos creados por el miembro. */
@@ -220,6 +307,27 @@ class NutritionFoodController extends Controller
             ->with('food')->orderByDesc('last_used_at')->limit(30)->get()
             ->map(fn ($r) => $r->food?->toApiArray())->filter()->values();
         return response()->json(['ok' => true, 'data' => $foods]);
+    }
+
+    /** POST /api/nutrition/foods/{uuid}/report — reporta datos incorrectos. */
+    public function report(Request $request, string $uuid): JsonResponse
+    {
+        $member = $this->member($request);
+        $food = $this->findVisible($uuid, $member);
+        if (! $food) {
+            return response()->json(['ok' => false, 'message' => 'Alimento no encontrado.'], 404);
+        }
+        // Un alimento verificado por staff no se oculta por reportes (sí se cuenta).
+        $food->increment('reports_count');
+        $hidden = $food->reports_count >= NutritionFood::reportsHideThreshold()
+            && $food->verification_status !== NutritionFood::VS_VERIFIED;
+        \Illuminate\Support\Facades\Log::info('nutrition.food.reported', [
+            'member_id' => $member->id, 'food' => $food->uuid,
+            'reports' => $food->reports_count, 'hidden' => $hidden,
+        ]);
+        return response()->json([
+            'ok' => true, 'message' => 'Gracias, revisaremos este producto.', 'hidden' => $hidden,
+        ]);
     }
 
     /** Alimento visible para el miembro: público o creado por él. */

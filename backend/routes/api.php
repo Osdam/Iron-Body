@@ -177,6 +177,7 @@ Route::middleware('auth.member')->prefix('nutrition')->group(function (): void {
     Route::delete('foods/{uuid}', [$food, 'destroy']);
     Route::post('foods/{uuid}/favorite', [$food, 'favorite']);
     Route::delete('foods/{uuid}/favorite', [$food, 'unfavorite']);
+    Route::post('foods/{uuid}/report', [$food, 'report'])->middleware('throttle:20,1');
 
     Route::post('entries', [$entry, 'store'])->middleware('throttle:60,1');
     Route::get('entries', [$entry, 'index']);
@@ -586,6 +587,13 @@ Route::prefix('admin/weekly-streak')->group(function (): void {
 
     Route::post('upload',                  [WeeklyStreakAdminController::class, 'uploadImage']);
 });
+
+// ── Nutrición: moderación comunitaria (CRM admin — patrón del resto del CRM) ──
+Route::get('admin/nutrition/foods/pending',          [\App\Http\Controllers\Api\Nutrition\NutritionFoodAdminController::class, 'pending']);
+Route::get('admin/nutrition/foods/{uuid}',           [\App\Http\Controllers\Api\Nutrition\NutritionFoodAdminController::class, 'show']);
+Route::post('admin/nutrition/foods/{uuid}/verify',   [\App\Http\Controllers\Api\Nutrition\NutritionFoodAdminController::class, 'verify']);
+Route::post('admin/nutrition/foods/{uuid}/reject',   [\App\Http\Controllers\Api\Nutrition\NutritionFoodAdminController::class, 'reject']);
+Route::post('admin/nutrition/foods/{uuid}/merge',    [\App\Http\Controllers\Api\Nutrition\NutritionFoodAdminController::class, 'merge']);
 
 // ── Nutrición (CRM admin) ─────────────────────────────────────────────────────
 Route::get('admin/members/{member}/nutrition',                 [NutritionAdminController::class, 'show']);

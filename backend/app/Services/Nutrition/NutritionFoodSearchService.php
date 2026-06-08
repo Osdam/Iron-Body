@@ -69,10 +69,8 @@ class NutritionFoodSearchService
         }
 
         return NutritionFood::query()
-            ->where(function ($q) use ($member) {
-                $q->where('created_by_member_id', $member->id)
-                    ->orWhere('is_public', true);
-            })
+            // Visibilidad: propios + públicos no rechazados/no muy reportados.
+            ->visibleInSearch($member)
             ->where(function ($outer) use ($tokens) {
                 foreach ($tokens as $tok) {
                     $like = '%' . $tok . '%';
@@ -121,20 +119,26 @@ class NutritionFoodSearchService
         $score = (int) ($f->imported_priority_score ?? 0);
         $isColombia = $f->country === 'colombia' || $score > 0;
 
+        $isVerified = $f->verification_status === NutritionFood::VS_VERIFIED;
+        $isCommunity = $f->visibility === NutritionFood::VIS_COMMUNITY
+            || $f->verification_status === NutritionFood::VS_COMMUNITY;
+
         if (! $complete) {
             $bucket = 9; // incompletos al final, sin importar la fuente
         } elseif ($f->created_by_member_id === $member->id) {
-            $bucket = 0;
-        } elseif ($f->source === 'iron_body') {
-            $bucket = 1;
+            $bucket = 0; // creados por el usuario
+        } elseif ($isVerified || $f->source === 'iron_body') {
+            $bucket = 1; // verificados Iron Body / base propia
+        } elseif ($isCommunity) {
+            $bucket = 2; // comunitarios completos
         } elseif ($isColombia) {
-            $bucket = 2;
+            $bucket = 3; // Colombia (cadenas/marcas suman score → ordenan dentro)
         } elseif ($f->source === 'open_food_facts') {
-            $bucket = 3;
+            $bucket = 4; // Open Food Facts cacheado
         } elseif ($f->source === 'usda') {
-            $bucket = 4;
+            $bucket = 5; // USDA genéricos
         } else {
-            $bucket = 5;
+            $bucket = 6;
         }
 
         return [$bucket, -$score, $f->verified ? 0 : 1, $f->calories_per_100g === null ? 1 : 0];
