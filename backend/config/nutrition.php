@@ -95,6 +95,30 @@ return [
         'tolerance' => (float) env('NUTRITION_GOAL_TOLERANCE', 0.10),
     ],
 
+    // ── Capa IA (OpenAI) de asistencia — NO es fuente certificada de verdad ──
+    // Solo extrae/estructura/estima(marcado)/sugiere. Nunca marca verified ni
+    // sobreescribe datos verificados. La key vive en services.openai (backend).
+    'ai' => [
+        'enabled'  => filter_var(env('NUTRITION_AI_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'provider' => env('NUTRITION_AI_PROVIDER', 'openai'),
+        // Modelos por flujo (null → cae a services.openai.vision_model/model).
+        'model_label_image' => env('NUTRITION_AI_MODEL_LABEL_IMAGE'),
+        'model_text_parser' => env('NUTRITION_AI_MODEL_TEXT'),
+        'model_estimator'   => env('NUTRITION_AI_MODEL_ESTIMATE'),
+        'model_insights'    => env('NUTRITION_AI_MODEL_INSIGHTS'),
+        'model_admin_review' => env('NUTRITION_AI_MODEL_ADMIN'),
+        'timeout_seconds'   => (int) env('NUTRITION_AI_TIMEOUT_SECONDS', 30),
+        'max_image_mb'      => (int) env('NUTRITION_AI_MAX_IMAGE_MB', 6),
+        // Límite de llamadas IA por usuario por día (anti-abuso).
+        'rate_limit_per_user' => (int) env('NUTRITION_AI_RATE_LIMIT_PER_USER', 20),
+        // Tope global de llamadas IA por día (cost guard, proxy de costo).
+        'daily_cost_guard'  => (int) env('NUTRITION_AI_DAILY_COST_GUARD', 1000),
+        'cache_enabled'     => filter_var(env('NUTRITION_AI_CACHE_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+        'min_confidence_autofill' => (float) env('NUTRITION_AI_MIN_CONFIDENCE_AUTOFILL', 0.70),
+        'min_confidence_estimate' => (float) env('NUTRITION_AI_MIN_CONFIDENCE_ESTIMATE', 0.60),
+        'prompt_version'    => env('NUTRITION_AI_PROMPT_VERSION', 'v1'),
+    ],
+
     // Base comunitaria: alimentos creados por usuarios que retroalimentan la base.
     'community' => [
         // Reportes necesarios para ocultar de búsquedas un alimento NO verificado.

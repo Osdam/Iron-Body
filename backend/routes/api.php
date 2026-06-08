@@ -190,6 +190,13 @@ Route::middleware('auth.member')->prefix('nutrition')->group(function (): void {
     Route::post('ocr/scan', [$ocr, 'scan'])->middleware('throttle:10,1');
     Route::get('ocr/{uuid}', [$ocr, 'show']);
     Route::post('ocr/{uuid}/confirm-food', [$ocr, 'confirmFood']);
+
+    // IA de Nutrición (asistencia OpenAI; key solo backend). Rate-limit estricto.
+    $ai = \App\Http\Controllers\Api\Nutrition\NutritionAiController::class;
+    Route::post('ai/label-image', [$ai, 'labelImage'])->middleware('throttle:15,1');
+    Route::post('ai/parse-text',  [$ai, 'parseText'])->middleware('throttle:20,1');
+    Route::post('ai/estimate',    [$ai, 'estimate'])->middleware('throttle:20,1');
+    Route::get('ai/insights',     [$ai, 'insights'])->middleware('throttle:30,1');
 });
 
 // ── IRON IA — asistente con OpenAI (Flutter → Laravel → OpenAI) ──────────────
@@ -595,6 +602,7 @@ Route::get('admin/nutrition/foods/{uuid}',           [\App\Http\Controllers\Api\
 Route::post('admin/nutrition/foods/{uuid}/verify',   [\App\Http\Controllers\Api\Nutrition\NutritionFoodAdminController::class, 'verify']);
 Route::post('admin/nutrition/foods/{uuid}/reject',   [\App\Http\Controllers\Api\Nutrition\NutritionFoodAdminController::class, 'reject']);
 Route::post('admin/nutrition/foods/{uuid}/merge',    [\App\Http\Controllers\Api\Nutrition\NutritionFoodAdminController::class, 'merge']);
+Route::post('admin/nutrition/foods/{uuid}/ai-review', [\App\Http\Controllers\Api\Nutrition\NutritionFoodAdminController::class, 'aiReview']);
 
 // ── Nutrición (CRM admin) ─────────────────────────────────────────────────────
 Route::get('admin/members/{member}/nutrition',                 [NutritionAdminController::class, 'show']);

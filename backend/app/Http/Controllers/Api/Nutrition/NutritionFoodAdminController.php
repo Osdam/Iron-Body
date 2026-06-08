@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Nutrition;
 
 use App\Http\Controllers\Controller;
 use App\Models\NutritionFood;
+use App\Services\Nutrition\Ai\NutritionAIAdminReviewService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -144,6 +145,17 @@ class NutritionFoodAdminController extends Controller
             'dup' => $dup->uuid, 'canonical' => $canonical->uuid, 'admin' => $data['admin_id'] ?? null,
         ]);
         return response()->json(['ok' => true, 'data' => $this->adminRow($canonical->fresh())]);
+    }
+
+    /** POST /api/admin/nutrition/foods/{uuid}/ai-review — sugerencias IA (no decide). */
+    public function aiReview(string $uuid, NutritionAIAdminReviewService $review): JsonResponse
+    {
+        $food = NutritionFood::where('uuid', $uuid)->first();
+        if (! $food) {
+            return response()->json(['ok' => false, 'message' => 'Alimento no encontrado.'], 404);
+        }
+        $result = $review->review($food);
+        return response()->json($result, ($result['ok'] ?? false) ? 200 : 200);
     }
 
     /** Fila admin (incluye metadatos de moderación, sin datos sensibles). */

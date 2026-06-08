@@ -39,7 +39,34 @@ NUTRITION_GOAL_PROTEIN=150
 NUTRITION_GOAL_CARBS=250
 NUTRITION_GOAL_FAT=70
 NUTRITION_GOAL_TOLERANCE=0.10
+
+# IA de Nutrición (OpenAI) — la key es OPENAI_API_KEY (ya existente), no nueva
+NUTRITION_AI_ENABLED=false           # poner true para activar la asistencia IA
+NUTRITION_AI_PROVIDER=openai
+NUTRITION_AI_TIMEOUT_SECONDS=30
+NUTRITION_AI_MAX_IMAGE_MB=6
+NUTRITION_AI_RATE_LIMIT_PER_USER=20
+NUTRITION_AI_DAILY_COST_GUARD=1000
+NUTRITION_AI_CACHE_ENABLED=true
+NUTRITION_AI_PROMPT_VERSION=v1
 ```
+
+### IA de Nutrición
+
+- Activar/desactivar: `NUTRITION_AI_ENABLED` (true/false) + `php artisan config:cache`.
+  Con `false`, todos los endpoints IA responden `ai_unavailable` controlado (la
+  app degrada a manual). No requiere key nueva: reutiliza `OPENAI_API_KEY`.
+- Verificar conectividad OpenAI desde el VPS:
+  `curl -s -o /dev/null -w "%{http_code}\n" https://api.openai.com/v1/models -H "Authorization: Bearer $OPENAI_API_KEY"`
+- Logs: `nutrition:ai:ok|rate_limited|timeout|http_error|cache_hit`.
+- Fallos: si OpenAI cae (timeout/429/500), el flujo NO rompe — devuelve estado
+  controlado y la app ofrece completar manualmente. Cost guard y rate-limit
+  protegen el gasto.
+- Migración nueva: `2026_06_08_000004_create_nutrition_ai_runs_table` (auditoría).
+- Rollback IA: `NUTRITION_AI_ENABLED=false` (apaga sin desplegar) y/o
+  `php artisan migrate:rollback --step=1` para revertir la tabla de auditoría.
+- Privacidad: no se envían datos personales a OpenAI; no se persisten imágenes.
+  Detalle en `NUTRITION_AI.md`.
 
 ## 2. Migraciones
 
