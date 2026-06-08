@@ -310,4 +310,126 @@ class NutritionFeatureTest extends TestCase
         $res = $this->getJson('/api/nutrition/foods/search?q=banana', $this->auth($m))->assertOk();
         $this->assertStringNotContainsString('SUPERSECRETKEY', $res->getContent());
     }
+
+    // ── Macros reales / completitud (regresión macros en 0) ──────────────────
+
+    public function test_barcode_complete_returns_found_with_macros(): void
+    {
+        $m = $this->member();
+        Http::fake([
+            '*/api/v2/product/*' => Http::response(['status' => 1, 'product' => [
+                'code' => '7700112233', 'product_name_es' => 'Arroz Blanco', 'brands' => 'Florhuila',
+                'serving_size' => '50 g',
+                'nutriments' => [
+                    'energy-kcal_100g' => 350, 'proteins_100g' => 7, 'carbohydrates_100g' => 79, 'fat_100g' => 0.8,
+                ],
+            ]]),
+        ]);
+
+        $res = $this->getJson('/api/nutrition/foods/barcode/7700112233', $this->auth($m))->assertOk();
+        $res->assertJsonPath('status', 'found')
+            ->assertJsonPath('food.is_complete', true)
+            ->assertJsonPath('food.name', 'Arroz Blanco');
+        $this->assertEquals(350.0, $res->json('food.per_100g.calories'));
+        $this->assertEquals(79.0, $res->json('food.per_100g.carbs'));
+    }
+
+    public function test_energy_in_kj_converts_to_kcal(): void
+    {
+        $m = $this->member();
+        // Solo energía en kJ (1465 kJ ≈ 350 kcal).
+        Http::fake([
+            '*/api/v2/product/*' => Http::response(['status' => 1, 'product' => [
+                'code' => '7700445566', 'product_name' => 'Cereal',
+                'nutriments' => [
+                    'energy_100g' => 1465, 'proteins_100g' => 7, 'carbohydrates_100g' => 79, 'fat_100g' => 1,
+                ],
+            ]]),
+        ]);
+
+        $res = $this->getJson('/api/nutrition/foods/barcode/7700445566', $this->auth($m))->assertOk();
+        $res->assertJsonPath('status', 'found');
+        $this->assertEqualsWithDelta(350, $res->json('food.per_100g.calories'), 2);
+    }
+
+    public function test_missing_nutriments_returns_incomplete_not_zero(): void
+    {
+        $m = $this->member();
+        Http::fake([
+            '*/api/v2/product/*' => Http::response(['status' => 1, 'product' => [
+                'code' => '7700778899', 'product_name' => 'Producto Sin Datos', 'brands' => 'X',
+                // sin nutriments
+            ]]),
+        ]);
+
+        $res = $this->getJson('/api/nutrition/foods/barcode/7700778899', $this->auth($m))->assertOk();
+        $res->assertJsonPath('status', 'incomplete')
+            ->assertJsonPath('action_required', 'complete_macros')
+            ->assertJsonPath('food.is_complete', false);
+        // NO se presentan ceros como válidos: calorías null, no 0.
+        $this->assertNull($res->json('food.per_100g.calories'));
+        $this->assertContains('calories', $res->json('food.missing_macros'));
+    }
+
+    public function test_add_entry_with_incomplete_food_returns_422(): void
+    {
+        $m = $this->member();
+        $food = NutritionFood::create([
+            'source' => 'open_food_facts', 'name' => 'Incompleto', 'is_public' => true,
+            'barcode' => '7700000001', // sin macros → incompleto
+        ]);
+
+        $this->postJson('/api/nutrition/entries', [
+            'food_uuid' => $food->uuid, 'meal_type' => 'breakfast', 'quantity' => 1, 'unit' => 'serving',
+        ], $this->auth($m))
+            ->assertStatus(422)
+            ->assertJsonPath('ok', false)
+            ->assertJsonPath('code', 'food_macros_incomplete');
+        $this->assertSame(0, NutritionEntry::count());
+    }
+
+    public function test_add_entry_complete_returns_summary(): void
+    {
+        $m = $this->member();
+        $food = $this->localFood(['calories_per_100g' => 100, 'protein_per_100g' => 10, 'carbs_per_100g' => 20, 'fat_per_100g' => 5]);
+
+        $res = $this->postJson('/api/nutrition/entries', [
+            'food_uuid' => $food->uuid, 'meal_type' => 'breakfast',
+            'entry_date' => '2026-06-08', 'quantity' => 100, 'unit' => 'g',
+        ], $this->auth($m))->assertStatus(201);
+
+        $res->assertJsonPath('ok', true)
+            ->assertJsonPath('message', 'Alimento agregado a desayuno.');
+        $this->assertEquals(100.0, $res->json('summary.totals.calories'));
+        $this->assertCount(1, $res->json('summary.meals.breakfast'));
+    }
+
+    public function test_complete_external_food_via_put(): void
+    {
+        $m = $this->member();
+        $food = NutritionFood::create([
+            'source' => 'open_food_facts', 'name' => 'Arroz X', 'is_public' => true,
+            'barcode' => '7700000002', 'serving_size' => 50,
+        ]);
+        $this->assertFalse($food->isMacroComplete());
+
+        $this->putJson("/api/nutrition/foods/{$food->uuid}", [
+            'calories' => 175, 'protein' => 3.5, 'carbs' => 39.5, 'fat' => 0.4, 'serving_size' => 50,
+        ], $this->auth($m))
+            ->assertOk()
+            ->assertJsonPath('data.is_complete', true);
+
+        $this->assertTrue($food->fresh()->isMacroComplete());
+    }
+
+    public function test_search_spanish_normalized_finds_by_name_and_brand(): void
+    {
+        $m = $this->member();
+        $this->localFood(['name' => 'Pechuga de Pollo', 'brand' => 'Pietrán']);
+        config(['nutrition.external_search_enabled' => false]);
+
+        // con tildes / mayúsculas → normalizado encuentra igual.
+        $this->getJson('/api/nutrition/foods/search?q=POLLO', $this->auth($m))
+            ->assertOk()->assertJsonPath('data.0.name', 'Pechuga de Pollo');
+    }
 }

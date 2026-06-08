@@ -67,11 +67,65 @@ class NutritionFood extends Model
         return $this->belongsTo(Member::class, 'created_by_member_id');
     }
 
+    /** Macros base requeridos para considerar un alimento "completo". */
+    public const CORE_MACROS = ['calories', 'protein', 'carbs', 'fat'];
+
+    /** Lista de macros base ausentes (null o todos en 0 → faltan datos). */
+    public function missingMacros(): array
+    {
+        $vals = [
+            'calories' => $this->calories_per_100g,
+            'protein'  => $this->protein_per_100g,
+            'carbs'    => $this->carbs_per_100g,
+            'fat'      => $this->fat_per_100g,
+        ];
+        // Si los 4 base son null o 0, se considera que faltan TODOS (no es válido
+        // mostrar 0 como real para un alimento normal).
+        $allZeroOrNull = true;
+        foreach ($vals as $v) {
+            if ($v !== null && (float) $v > 0) {
+                $allZeroOrNull = false;
+                break;
+            }
+        }
+        if ($allZeroOrNull) {
+            return self::CORE_MACROS;
+        }
+        $missing = [];
+        foreach ($vals as $k => $v) {
+            if ($v === null) {
+                $missing[] = $k;
+            }
+        }
+        return $missing;
+    }
+
+    /** ¿Tiene los 4 macros base con datos reales (calorías > 0)? */
+    public function isMacroComplete(): bool
+    {
+        return $this->missingMacros() === [];
+    }
+
+    /** Alias semántico. */
+    public function hasCompleteMacros(): bool
+    {
+        return $this->isMacroComplete();
+    }
+
     /** Formato unificado de alimento para la app (sin raw_payload ni internos). */
     public function toApiArray(): array
     {
         $round = fn ($v) => $v === null ? null : round((float) $v, 1);
+        $missing = $this->missingMacros();
+        $isComplete = $missing === [];
+        $warnings = [];
+        if (! $isComplete) {
+            $warnings[] = 'Faltan datos nutricionales de este producto.';
+        }
         return [
+            'is_complete'      => $isComplete,
+            'missing_macros'   => $missing,
+            'warnings'         => $warnings,
             'uuid'             => $this->uuid,
             'source'           => $this->source,
             'barcode'          => $this->barcode,

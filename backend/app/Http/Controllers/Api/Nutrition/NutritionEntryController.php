@@ -30,7 +30,7 @@ class NutritionEntryController extends Controller
             'meal_type'  => 'required|in:breakfast,lunch,dinner,snack',
             'entry_date' => 'nullable|date',
             'quantity'   => 'required|numeric|gt:0',
-            'unit'       => 'required|string|max:20',
+            'unit'       => 'required|string|in:g,gr,ml,serving,porcion,unit,unidad,tbsp,tsp,cup,oz',
         ]);
         $member = $this->member($request);
 
@@ -42,12 +42,41 @@ class NutritionEntryController extends Controller
             return response()->json(['ok' => false, 'message' => 'Alimento no encontrado.'], 404);
         }
 
+        // No se permite agregar un alimento con macros incompletos: el usuario
+        // debe completarlos antes (la app abre el flujo de completar información).
+        if (! $food->isMacroComplete()) {
+            return response()->json([
+                'ok'      => false,
+                'code'    => 'food_macros_incomplete',
+                'message' => 'Completa la información nutricional antes de agregar este alimento.',
+                'food'    => $food->toApiArray(),
+            ], 422);
+        }
+
         $entry = $this->entries->addEntry(
             $member, $food, $data['meal_type'],
             $data['entry_date'] ?? null, (float) $data['quantity'], $data['unit']
         );
+        $entry = $entry->fresh('food');
 
-        return response()->json(['ok' => true, 'data' => self::present($entry->fresh('food'))], 201);
+        $date = $entry->entry_date instanceof \Carbon\Carbon
+            ? $entry->entry_date->toDateString() : (string) $entry->entry_date;
+
+        return response()->json([
+            'ok'      => true,
+            'message' => 'Alimento agregado a ' . self::mealLabel($entry->meal_type) . '.',
+            'data'    => self::present($entry), // compat
+            'entry'   => self::present($entry),
+            'summary' => $this->entries->summaryPayload($member, $date),
+        ], 201);
+    }
+
+    private static function mealLabel(string $meal): string
+    {
+        return [
+            'breakfast' => 'desayuno', 'lunch' => 'almuerzo',
+            'dinner' => 'cena', 'snack' => 'merienda',
+        ][$meal] ?? 'comida';
     }
 
     /** GET /api/nutrition/entries?date=YYYY-MM-DD */

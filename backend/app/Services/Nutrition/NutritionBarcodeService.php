@@ -36,7 +36,7 @@ class NutritionBarcodeService
         // 1) Caché local por barcode.
         $local = NutritionFood::where('barcode', $barcode)->latest('id')->first();
         if ($local) {
-            return ['status' => 'found', 'food' => $local->toApiArray()];
+            return $this->result($local);
         }
 
         // 2) Proveedores externos (Open Food Facts primero; luego Nutritionix).
@@ -53,7 +53,7 @@ class NutritionBarcodeService
                 if ($normalized) {
                     $normalized['barcode'] = $normalized['barcode'] ?: $barcode;
                     $food = $this->normalizer->cache($normalized);
-                    return ['status' => 'found', 'food' => $food->toApiArray()];
+                    return $this->result($food);
                 }
             }
         } catch (Throwable $e) {
@@ -62,5 +62,22 @@ class NutritionBarcodeService
         }
 
         return ['status' => 'not_found', 'message' => 'No encontramos este producto.'];
+    }
+
+    /**
+     * Producto encontrado: distingue completo vs incompleto. Si faltan macros,
+     * NO se presentan ceros como válidos: status=incomplete + acción de completar.
+     */
+    private function result(NutritionFood $food): array
+    {
+        if ($food->isMacroComplete()) {
+            return ['status' => 'found', 'food' => $food->toApiArray()];
+        }
+        return [
+            'status'          => 'incomplete',
+            'action_required' => 'complete_macros',
+            'message'         => 'Encontramos el producto, pero faltan datos nutricionales.',
+            'food'            => $food->toApiArray(),
+        ];
     }
 }

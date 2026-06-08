@@ -113,6 +113,32 @@ class NutritionEntryService
         );
     }
 
+    /**
+     * Resumen del día en el formato unificado: totales + entradas por comida.
+     * Reutilizado por el endpoint /summary y por la respuesta de agregar entrada.
+     */
+    public function summaryPayload(Member $member, string $date): array
+    {
+        $entries = NutritionEntry::where('member_id', $member->id)
+            ->whereDate('entry_date', $date)
+            ->with('food')->orderBy('id')->get();
+
+        $meals = ['breakfast' => [], 'lunch' => [], 'dinner' => [], 'snack' => []];
+        $totals = ['calories' => 0.0, 'protein' => 0.0, 'carbs' => 0.0, 'fat' => 0.0];
+        foreach ($entries as $e) {
+            $meals[$e->meal_type][] = \App\Http\Controllers\Api\Nutrition\NutritionEntryController::present($e);
+            $totals['calories'] += (float) $e->calories;
+            $totals['protein'] += (float) $e->protein;
+            $totals['carbs'] += (float) $e->carbs;
+            $totals['fat'] += (float) $e->fat;
+        }
+        foreach ($totals as $k => $v) {
+            $totals[$k] = round($v, 1);
+        }
+
+        return ['date' => $date, 'totals' => $totals, 'meals' => $meals];
+    }
+
     /** Marca el alimento como reciente (incrementa uso). */
     public function updateRecentFood(Member $member, NutritionFood $food): void
     {

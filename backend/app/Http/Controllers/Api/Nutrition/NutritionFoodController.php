@@ -118,11 +118,16 @@ class NutritionFoodController extends Controller
     public function update(Request $request, string $uuid): JsonResponse
     {
         $member = $this->member($request);
-        $food = NutritionFood::where('uuid', $uuid)
-            ->where('created_by_member_id', $member->id)->first();
-        if (! $food) {
+        $food = NutritionFood::where('uuid', $uuid)->first();
+        // Se puede editar: un alimento propio, O completar uno externo público
+        // que llegó SIN macros (completar datos del producto, no duplicar).
+        $canEdit = $food
+            && ($food->created_by_member_id === $member->id
+                || ($food->is_public && ! $food->isMacroComplete()));
+        if (! $canEdit) {
             return response()->json(['ok' => false, 'message' => 'No puedes editar este alimento.'], 404);
         }
+        $completingExternal = $food->created_by_member_id !== $member->id;
         $data = $request->validate([
             'name'         => 'sometimes|string|max:160',
             'brand'        => 'nullable|string|max:120',
@@ -153,8 +158,12 @@ class NutritionFoodController extends Controller
                 $food->{$k . '_per_100g'} = $val === null ? null : round($val * $factor, 2);
             }
         }
+        // Al completar un externo con datos del usuario, sube la confianza.
+        if ($completingExternal && $food->isMacroComplete()) {
+            $food->confidence_score = max((float) ($food->confidence_score ?? 0), 0.9);
+        }
         $food->save();
-        return response()->json(['ok' => true, 'data' => $food->toApiArray()]);
+        return response()->json(['ok' => true, 'data' => $food->fresh()->toApiArray()]);
     }
 
     /** DELETE /api/nutrition/foods/{uuid} — solo alimentos del miembro. */

@@ -15,22 +15,33 @@ class NutritionFoodNormalizer
     /** Open Food Facts product → array normalizado (o null si inservible). */
     public function fromOpenFoodFacts(array $p): ?array
     {
-        $name = trim((string) ($p['product_name'] ?? $p['product_name_es'] ?? $p['generic_name'] ?? ''));
+        // Nombre: prioriza español (Colombia) y cae a genérico.
+        $name = trim((string) (
+            $p['product_name_es']
+            ?? $p['generic_name_es']
+            ?? $p['product_name']
+            ?? $p['generic_name']
+            ?? ''
+        ));
         if ($name === '') {
             return null;
         }
         $nutr = is_array($p['nutriments'] ?? null) ? $p['nutriments'] : [];
         $per100 = [
-            'calories'      => $this->num($nutr['energy-kcal_100g'] ?? $nutr['energy-kcal'] ?? null),
-            'protein'       => $this->num($nutr['proteins_100g'] ?? null),
-            'carbs'         => $this->num($nutr['carbohydrates_100g'] ?? null),
-            'fat'           => $this->num($nutr['fat_100g'] ?? null),
+            // Calorías: kcal dedicadas primero; si solo hay energía en kJ, convertir.
+            'calories'      => $this->energyKcal($nutr),
+            'protein'       => $this->num($nutr['proteins_100g'] ?? $nutr['proteins_value'] ?? null),
+            'carbs'         => $this->num($nutr['carbohydrates_100g'] ?? $nutr['carbohydrates_value'] ?? null),
+            'fat'           => $this->num($nutr['fat_100g'] ?? $nutr['fat_value'] ?? null),
             'sugar'         => $this->num($nutr['sugars_100g'] ?? null),
             'fiber'         => $this->num($nutr['fiber_100g'] ?? null),
             'sodium'        => $this->sodium($nutr['sodium_100g'] ?? null, $nutr['salt_100g'] ?? null),
             'saturated_fat' => $this->num($nutr['saturated-fat_100g'] ?? null),
         ];
-        [$servingSize, $servingUnit] = $this->parseServing((string) ($p['serving_size'] ?? ''));
+        [$servingSize, $servingUnit] = $this->parseServing(
+            (string) ($p['serving_size'] ?? ''),
+            $p['serving_quantity'] ?? null,
+        );
 
         return $this->assemble([
             'source'       => 'open_food_facts',
@@ -39,12 +50,48 @@ class NutritionFoodNormalizer
             'name'         => $this->cleanName($name),
             'brand'        => $this->firstCsv((string) ($p['brands'] ?? '')),
             'category'     => $this->firstCsv((string) ($p['categories'] ?? '')),
-            'image_url'    => $p['image_front_url'] ?? $p['image_url'] ?? null,
+            'image_url'    => $this->offImage($p),
             'serving_size' => $servingSize,
             'serving_unit' => $servingUnit,
             'per_100g'     => $per100,
             'raw'          => ['code' => $p['code'] ?? null, 'serving_size' => $p['serving_size'] ?? null],
         ]);
+    }
+
+    /**
+     * Extrae kcal/100g de OFF. Prioriza los campos en kcal; si solo hay energía
+     * en kJ (energy_100g/energy-kj_100g) la convierte (kcal = kJ / 4.184).
+     */
+    private function energyKcal(array $nutr): ?float
+    {
+        foreach (['energy-kcal_100g', 'energy-kcal_value', 'energy-kcal'] as $k) {
+            $v = $this->num($nutr[$k] ?? null);
+            if ($v !== null) {
+                return $v;
+            }
+        }
+        foreach (['energy-kj_100g', 'energy_100g', 'energy-kj', 'energy'] as $k) {
+            $v = $this->num($nutr[$k] ?? null);
+            if ($v !== null && $v > 0) {
+                return round($v / 4.184, 2); // kJ → kcal
+            }
+        }
+        return null;
+    }
+
+    /** Mejor URL de imagen disponible en OFF (incluye selected_images anidado). */
+    private function offImage(array $p): ?string
+    {
+        foreach (['image_front_url', 'image_url'] as $k) {
+            if (! empty($p[$k])) {
+                return (string) $p[$k];
+            }
+        }
+        $sel = $p['selected_images']['front']['display'] ?? null;
+        if (is_array($sel)) {
+            return $sel['es'] ?? $sel['en'] ?? (reset($sel) ?: null);
+        }
+        return null;
     }
 
     /** USDA FoodData Central item → array normalizado. */
@@ -214,13 +261,19 @@ class NutritionFoodNormalizer
     }
 
     /** "30 g" / "30g" / "1 unidad" → [30.0, 'g']. */
-    private function parseServing(string $s): array
+    private function parseServing(string $s, $servingQuantity = null): array
     {
-        if ($s === '' || ! preg_match('/([\d.,]+)\s*([a-zA-Z]+)?/', $s, $m)) {
-            return [null, null];
+        if ($s !== '' && preg_match('/([\d.,]+)\s*([a-zA-Z]+)?/', $s, $m)) {
+            $size = (float) str_replace(',', '.', $m[1]);
+            $unit = strtolower($m[2] ?? 'g');
+            if ($size > 0) {
+                return [round($size, 2), $unit];
+            }
         }
-        $size = (float) str_replace(',', '.', $m[1]);
-        $unit = strtolower($m[2] ?? 'g');
-        return [$size > 0 ? round($size, 2) : null, $unit];
+        // Fallback: serving_quantity (número, en gramos por convención de OFF).
+        if ($servingQuantity !== null && is_numeric($servingQuantity) && (float) $servingQuantity > 0) {
+            return [round((float) $servingQuantity, 2), 'g'];
+        }
+        return [null, null];
     }
 }
