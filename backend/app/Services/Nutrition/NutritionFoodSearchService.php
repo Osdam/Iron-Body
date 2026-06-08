@@ -45,6 +45,10 @@ class NutritionFoodSearchService
             $local = $this->merge($local, $external, $limit);
         }
 
+        // Ranking Colombia: usuario → propios completos → Colombia → cadenas/
+        // marcas → OFF cacheado → USDA → incompletos al final.
+        $local = array_slice($this->rank($local, $member), 0, $limit);
+
         $favoriteIds = $this->favoriteIds($member);
         return array_map(function (NutritionFood $f) use ($favoriteIds) {
             $row = $f->toApiArray();
@@ -57,25 +61,83 @@ class NutritionFoodSearchService
     private function searchLocal(string $query, Member $member, int $limit): array
     {
         $norm = NutritionFood::normalize($query);
-        $like = '%' . str_replace(' ', '%', $norm) . '%';
+        // Tokens: cada palabra debe aparecer en algún campo (name/marca/cadena/
+        // categoría/barcode). Permite "arroz d1", "leche alpina", "arroz éxito".
+        $tokens = array_values(array_filter(preg_split('/\s+/', $norm) ?: []));
+        if ($tokens === []) {
+            $tokens = [$norm];
+        }
 
         return NutritionFood::query()
             ->where(function ($q) use ($member) {
                 $q->where('created_by_member_id', $member->id)
                     ->orWhere('is_public', true);
             })
-            ->where(function ($q) use ($like, $query) {
-                $q->where('normalized_name', 'like', $like)
-                    ->orWhere('name', 'like', '%' . $query . '%')
-                    ->orWhere('brand', 'like', '%' . $query . '%');
+            ->where(function ($outer) use ($tokens) {
+                foreach ($tokens as $tok) {
+                    $like = '%' . $tok . '%';
+                    $outer->where(function ($q) use ($like) {
+                        $q->where('normalized_name', 'like', $like)
+                            ->orWhere('name', 'like', $like)
+                            ->orWhere('brand', 'like', $like)
+                            ->orWhere('normalized_brand', 'like', $like)
+                            ->orWhere('normalized_store', 'like', $like)
+                            ->orWhere('stores', 'like', $like)
+                            ->orWhere('category', 'like', $like)
+                            ->orWhere('barcode', 'like', $like);
+                    });
+                }
             })
-            // Prioridad: alimentos del usuario, verificados, con calorías.
+            // Pre-orden DB: propios, completos y con prioridad Colombia primero.
             ->orderByRaw('case when created_by_member_id = ? then 0 else 1 end', [$member->id])
-            ->orderByDesc('verified')
             ->orderByRaw('case when calories_per_100g is null then 1 else 0 end')
-            ->limit($limit)
+            ->orderByDesc('imported_priority_score')
+            ->orderByDesc('verified')
+            ->limit($limit * 2) // margen para el re-ranking en PHP
             ->get()
             ->all();
+    }
+
+    /**
+     * Re-ordena por relevancia Colombia (estable). Buckets: 0 usuario completo,
+     * 1 Iron Body completo, 2 Colombia completo (cadenas/marcas con score),
+     * 3 Open Food Facts cacheado completo, 4 USDA completo, 5 otros completos,
+     * 9 incompletos (siempre al final). Empate: mayor score Colombia, verificado.
+     *
+     * @param NutritionFood[] $foods
+     * @return NutritionFood[]
+     */
+    private function rank(array $foods, Member $member): array
+    {
+        usort($foods, function (NutritionFood $a, NutritionFood $b) use ($member) {
+            return $this->rankKey($a, $member) <=> $this->rankKey($b, $member);
+        });
+        return $foods;
+    }
+
+    private function rankKey(NutritionFood $f, Member $member): array
+    {
+        $complete = $f->isMacroComplete();
+        $score = (int) ($f->imported_priority_score ?? 0);
+        $isColombia = $f->country === 'colombia' || $score > 0;
+
+        if (! $complete) {
+            $bucket = 9; // incompletos al final, sin importar la fuente
+        } elseif ($f->created_by_member_id === $member->id) {
+            $bucket = 0;
+        } elseif ($f->source === 'iron_body') {
+            $bucket = 1;
+        } elseif ($isColombia) {
+            $bucket = 2;
+        } elseif ($f->source === 'open_food_facts') {
+            $bucket = 3;
+        } elseif ($f->source === 'usda') {
+            $bucket = 4;
+        } else {
+            $bucket = 5;
+        }
+
+        return [$bucket, -$score, $f->verified ? 0 : 1, $f->calories_per_100g === null ? 1 : 0];
     }
 
     /** @return NutritionFood[] alimentos externos normalizados y cacheados */

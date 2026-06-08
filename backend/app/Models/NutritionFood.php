@@ -22,6 +22,8 @@ class NutritionFood extends Model
         'uuid', 'source', 'external_id', 'barcode', 'name', 'normalized_name',
         'brand', 'category', 'image_url', 'serving_size', 'serving_unit',
         'package_quantity', 'package_unit',
+        'country', 'stores', 'normalized_brand', 'normalized_store',
+        'imported_region', 'imported_priority_score',
         'calories_per_100g', 'protein_per_100g', 'carbs_per_100g', 'fat_per_100g',
         'sugar_per_100g', 'fiber_per_100g', 'sodium_per_100g', 'saturated_fat_per_100g',
         'calories_per_serving', 'protein_per_serving', 'carbs_per_serving', 'fat_per_serving',
@@ -42,6 +44,7 @@ class NutritionFood extends Model
         'sodium_per_serving' => 'float',
         'verified' => 'boolean', 'is_public' => 'boolean',
         'confidence_score' => 'float',
+        'imported_priority_score' => 'integer',
         'raw_payload' => 'array', 'last_synced_at' => 'datetime',
     ];
 
@@ -122,6 +125,14 @@ class NutritionFood extends Model
         if (! $isComplete) {
             $warnings[] = 'Faltan datos nutricionales de este producto.';
         }
+        // Badges de cadenas colombianas detectadas (D1/Éxito/Olímpica/Ara…).
+        $retailers = $this->stores
+            ? app(\App\Services\Nutrition\NutritionColombiaClassifier::class)->matchedRetailers($this->stores)
+            : [];
+        $isColombia = $this->country === 'colombia'
+            || $retailers !== []
+            || (int) ($this->imported_priority_score ?? 0) > 0;
+
         return [
             'is_complete'      => $isComplete,
             'missing_macros'   => $missing,
@@ -132,6 +143,9 @@ class NutritionFood extends Model
             'name'             => $this->name,
             'brand'            => $this->brand,
             'category'         => $this->category,
+            'country'          => $this->country,
+            'is_colombia'      => $isColombia,
+            'retailers'        => $retailers,
             'image_url'        => $this->image_url,
             'serving_size'     => $this->serving_size,
             'serving_unit'     => $this->serving_unit ?: 'g',

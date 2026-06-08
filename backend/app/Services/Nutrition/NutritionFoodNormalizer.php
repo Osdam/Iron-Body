@@ -12,6 +12,10 @@ use Carbon\Carbon;
  */
 class NutritionFoodNormalizer
 {
+    public function __construct(private NutritionColombiaClassifier $colombia)
+    {
+    }
+
     /** Open Food Facts product → array normalizado (o null si inservible). */
     public function fromOpenFoodFacts(array $p): ?array
     {
@@ -54,6 +58,9 @@ class NutritionFoodNormalizer
             'serving_size' => $servingSize,
             'serving_unit' => $servingUnit,
             'per_100g'     => $per100,
+            // Señales de cobertura Colombia (país y cadenas donde se vende).
+            'countries'    => (string) ($p['countries_tags'] ?? $p['countries'] ?? '') ?: null,
+            'stores'       => (string) ($p['stores_tags'] ?? $p['stores'] ?? '') ?: null,
             'raw'          => ['code' => $p['code'] ?? null, 'serving_size' => $p['serving_size'] ?? null],
         ]);
     }
@@ -172,6 +179,8 @@ class NutritionFoodNormalizer
             'per_100g'         => $per100,
             'per_serving'      => $perServing,
             'confidence_score' => $confidence,
+            'countries'        => $d['countries'] ?? null,
+            'stores'           => $d['stores'] ?? null,
             'raw'              => $d['raw'] ?? [],
             'incomplete'       => count($core) < 4,
         ];
@@ -223,6 +232,21 @@ class NutritionFoodNormalizer
         foreach (['calories', 'protein', 'carbs', 'fat', 'sugar', 'fiber', 'sodium'] as $k) {
             $attrs[$k . '_per_serving'] = $n['per_serving'][$k] ?? null;
         }
+
+        // Columnas de cobertura Colombia (país, cadenas, marca/tienda, score).
+        $c = $this->colombia->classify([
+            'countries' => $n['countries'] ?? null,
+            'stores'    => $n['stores'] ?? null,
+            'brand'     => $n['brand'] ?? null,
+            'barcode'   => $n['barcode'] ?? null,
+        ]);
+        $attrs['country']                 = $c['country'];
+        $attrs['stores']                  = $c['stores'];
+        $attrs['normalized_brand']        = $c['normalized_brand'];
+        $attrs['normalized_store']        = $c['normalized_store'];
+        $attrs['imported_region']         = $c['imported_region'];
+        $attrs['imported_priority_score'] = $c['imported_priority_score'];
+
         return $attrs;
     }
 

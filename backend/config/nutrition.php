@@ -1,5 +1,13 @@
 <?php
 
+/** Convierte un CSV de .env ("a,b,c") en un array limpio sin vacíos. */
+$csv = static function (?string $value, array $default = []): array {
+    if ($value === null || trim($value) === '') {
+        return $default;
+    }
+    return array_values(array_filter(array_map('trim', explode(',', $value)), fn ($v) => $v !== ''));
+};
+
 return [
     // Búsqueda externa global (si false, solo BD local Iron Body / usuario).
     'external_search_enabled' => filter_var(env('NUTRITION_EXTERNAL_SEARCH_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
@@ -13,6 +21,29 @@ return [
         'user_agent' => env('NUTRITION_OFF_USER_AGENT', 'IronBodyNeiva/1.0 (soporte@ironbodyneiva.cloud)'),
         'country'    => env('NUTRITION_OFF_COUNTRY', 'colombia'),
         'language'   => env('NUTRITION_OFF_LANGUAGE', 'es'),
+
+        // ── Cobertura Colombia ───────────────────────────────────────────────
+        // Prioriza productos vendidos en Colombia (cadenas, marcas locales,
+        // prefijos de código de barras). NO garantiza 100% de los productos:
+        // la cobertura se cierra con base propia + caché + importador + OCR.
+        'colombia_enabled'  => filter_var(env('NUTRITION_OFF_COLOMBIA_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+        'colombia_retailers' => $csv(env('NUTRITION_OFF_COLOMBIA_RETAILERS'), [
+            'D1', 'Tiendas D1', 'Éxito', 'Exito', 'Carulla', 'Surtimax', 'Super Inter',
+            'Olímpica', 'Olimpica', 'Ara', 'Jumbo', 'Metro', 'Alkosto', 'PriceSmart',
+            'Colsubsidio', 'Euro', 'La 14', 'Popular',
+        ]),
+        'colombia_brand_seeds' => $csv(env('NUTRITION_OFF_COLOMBIA_BRAND_SEEDS'), [
+            'D1', 'Éxito', 'Exito', 'Carulla', 'Ara', 'Olímpica', 'Olimpica', 'Zenú', 'Zenu',
+            'Colanta', 'Alpina', 'Alquería', 'Alqueria', 'Noel', 'Ramo', 'Jet', 'Postobón',
+            'Postobon', 'Hatsu', 'Fruco', 'La Muñeca', 'Diana', 'Roa', 'Florhuila',
+            'Doña Gallina', 'Margarita', 'Nestlé', 'Nestle', 'Kellogg', 'Quaker', 'Bimbo',
+            'Colombina', 'Frutiño', 'Frutino', 'Juan Valdez', 'Sello Rojo', 'Águila Roja',
+            'Aguila Roja',
+        ]),
+        // Prefijos GS1 de Colombia (no todos los importados los tienen: solo prioriza).
+        'colombia_barcode_prefixes' => $csv(env('NUTRITION_OFF_COLOMBIA_BARCODE_PREFIXES'), ['770']),
+        'import_colombia_priority'  => filter_var(env('NUTRITION_OFF_IMPORT_COLOMBIA_PRIORITY', true), FILTER_VALIDATE_BOOLEAN),
+
         // Importador masivo opcional desde dump local (deshabilitado por defecto).
         'import' => [
             'enabled'    => filter_var(env('NUTRITION_OFF_IMPORT_ENABLED', false), FILTER_VALIDATE_BOOLEAN),

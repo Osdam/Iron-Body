@@ -41,7 +41,7 @@ class NutritionBarcodeService
 
         // 2) Proveedores externos (Open Food Facts primero; luego Nutritionix).
         if (! config('nutrition.external_search_enabled')) {
-            return ['status' => 'not_found', 'message' => 'No encontramos este producto.'];
+            return $this->notFound($barcode);
         }
 
         try {
@@ -61,7 +61,24 @@ class NutritionBarcodeService
             return ['status' => 'error', 'message' => 'No pudimos consultar el producto. Intenta de nuevo.'];
         }
 
-        return ['status' => 'not_found', 'message' => 'No encontramos este producto.'];
+        return $this->notFound($barcode);
+    }
+
+    /**
+     * Producto sin coincidencia: estado controlado con opciones útiles para
+     * cerrar el vacío (crear / etiqueta OCR / buscar por nombre). Mensaje
+     * orientado a Colombia (la base prioriza productos vendidos en el país).
+     */
+    private function notFound(string $barcode): array
+    {
+        return [
+            'status'          => 'not_found',
+            'barcode'         => $barcode,
+            'action_required' => 'create_or_scan',
+            'message'         => 'Este producto aún no está en nuestra base Colombia. '
+                . 'Puedes crearlo en 30 segundos y quedará guardado para la próxima vez.',
+            'options'         => ['scan_label', 'create_manual', 'search_by_name', 'scan_other'],
+        ];
     }
 
     /**
