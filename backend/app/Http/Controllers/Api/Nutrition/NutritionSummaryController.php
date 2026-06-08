@@ -28,4 +28,19 @@ class NutritionSummaryController extends Controller
             $this->entries->summaryPayload($member, $date),
         ));
     }
+
+    /** GET /api/nutrition/history?days=7 — historial diario + racha. */
+    public function history(Request $request): JsonResponse
+    {
+        $request->validate(['days' => 'nullable|integer|min:1|max:31']);
+        /** @var Member $member */
+        $member = $request->attributes->get('auth_member');
+        $days = (int) ($request->query('days') ?: 7);
+
+        return response()->json([
+            'ok'          => true,
+            'days'        => $this->entries->historyPayload($member, $days),
+            'streak_days' => $this->entries->streakDays($member),
+        ]);
+    }
 }

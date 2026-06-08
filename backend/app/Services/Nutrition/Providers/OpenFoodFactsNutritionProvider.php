@@ -24,6 +24,15 @@ class OpenFoodFactsNutritionProvider implements NutritionProviderContract
         return 'open_food_facts';
     }
 
+    /** User-Agent identificable exigido por Open Food Facts (configurable). */
+    public function userAgent(): string
+    {
+        return (string) config(
+            'nutrition.openfoodfacts.user_agent',
+            'IronBodyNeiva/1.0 (soporte@ironbodyneiva.cloud)'
+        );
+    }
+
     public function isEnabled(): bool
     {
         return (bool) config('nutrition.openfoodfacts.enabled');
@@ -38,7 +47,7 @@ class OpenFoodFactsNutritionProvider implements NutritionProviderContract
         $timeout = (int) config('nutrition.barcode_timeout_seconds', 8);
         try {
             $resp = Http::timeout($timeout)
-                ->withHeaders(['User-Agent' => 'IronBodyApp/1.0 (nutrition)'])
+                ->withHeaders(['User-Agent' => $this->userAgent()])
                 ->get("{$base}/api/v2/product/{$barcode}.json", [
                     'fields' => 'code,product_name,product_name_es,generic_name,generic_name_es,'
                         . 'brands,categories,image_front_url,image_url,selected_images,'
@@ -101,15 +110,15 @@ class OpenFoodFactsNutritionProvider implements NutritionProviderContract
         $timeout = (int) config('nutrition.search_timeout_seconds', 8);
         try {
             $resp = Http::timeout($timeout)
-                ->withHeaders(['User-Agent' => 'IronBodyApp/1.0 (nutrition)'])
+                ->withHeaders(['User-Agent' => $this->userAgent()])
                 ->get("{$base}/cgi/search.pl", [
                     'search_terms'   => $query,
                     'search_simple'  => 1,
                     'action'         => 'process',
                     'json'           => 1,
                     'page_size'      => $limit,
-                    'lc'             => 'es',
-                    'countries_tags' => 'colombia',
+                    'lc'             => (string) config('nutrition.openfoodfacts.language', 'es'),
+                    'countries_tags' => (string) config('nutrition.openfoodfacts.country', 'colombia'),
                     'fields'         => 'code,product_name,product_name_es,generic_name,generic_name_es,'
                         . 'brands,categories,image_front_url,image_url,selected_images,'
                         . 'serving_size,serving_quantity,nutriments',

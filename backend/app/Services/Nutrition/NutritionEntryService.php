@@ -136,7 +136,65 @@ class NutritionEntryService
             $totals[$k] = round($v, 1);
         }
 
-        return ['date' => $date, 'totals' => $totals, 'meals' => $meals];
+        return [
+            'date'        => $date,
+            'totals'      => $totals,
+            'meals'       => $meals,
+            'streak_days' => $this->streakDays($member),
+        ];
+    }
+
+    /**
+     * Historial de los últimos N días (incluye hoy). Cada día con sus totales y
+     * conteo de entradas. Útil para el gráfico semanal del dashboard.
+     */
+    public function historyPayload(Member $member, int $days = 7): array
+    {
+        $days = max(1, min(31, $days));
+        $today = Carbon::now(self::TZ)->startOfDay();
+        $from = $today->copy()->subDays($days - 1)->toDateString();
+
+        // Agregado por fecha en una sola consulta.
+        $rows = NutritionEntry::where('member_id', $member->id)
+            ->whereDate('entry_date', '>=', $from)
+            ->selectRaw('entry_date, count(*) c, '
+                . 'coalesce(sum(calories),0) cal, coalesce(sum(protein),0) pro, '
+                . 'coalesce(sum(carbs),0) car, coalesce(sum(fat),0) fat')
+            ->groupBy('entry_date')->get()
+            ->keyBy(fn ($r) => (string) Carbon::parse($r->entry_date)->toDateString());
+
+        $out = [];
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $d = $today->copy()->subDays($i)->toDateString();
+            $r = $rows->get($d);
+            $out[] = [
+                'date'        => $d,
+                'calories'    => $r ? round((float) $r->cal, 1) : 0.0,
+                'protein'     => $r ? round((float) $r->pro, 1) : 0.0,
+                'carbs'       => $r ? round((float) $r->car, 1) : 0.0,
+                'fat'         => $r ? round((float) $r->fat, 1) : 0.0,
+                'entry_count' => $r ? (int) $r->c : 0,
+            ];
+        }
+        return $out;
+    }
+
+    /** Racha: días consecutivos hasta hoy con al menos una entrada registrada. */
+    public function streakDays(Member $member): int
+    {
+        $dates = NutritionEntry::where('member_id', $member->id)
+            ->selectRaw('entry_date')->distinct()
+            ->pluck('entry_date')
+            ->map(fn ($d) => Carbon::parse($d)->toDateString())
+            ->flip();
+
+        $streak = 0;
+        $cursor = Carbon::now(self::TZ)->startOfDay();
+        while ($dates->has($cursor->toDateString())) {
+            $streak++;
+            $cursor->subDay();
+        }
+        return $streak;
     }
 
     /** Marca el alimento como reciente (incrementa uso). */

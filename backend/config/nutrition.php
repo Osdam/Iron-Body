@@ -8,6 +8,19 @@ return [
     'openfoodfacts' => [
         'enabled'  => filter_var(env('NUTRITION_OPENFOODFACTS_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
         'base_url' => env('NUTRITION_OPENFOODFACTS_BASE_URL', 'https://world.openfoodfacts.org'),
+        // User-Agent identificable (lo exige OFF), país e idioma para priorizar
+        // resultados en Colombia/español. SIEMPRE se envía en las llamadas HTTP.
+        'user_agent' => env('NUTRITION_OFF_USER_AGENT', 'IronBodyNeiva/1.0 (soporte@ironbodyneiva.cloud)'),
+        'country'    => env('NUTRITION_OFF_COUNTRY', 'colombia'),
+        'language'   => env('NUTRITION_OFF_LANGUAGE', 'es'),
+        // Importador masivo opcional desde dump local (deshabilitado por defecto).
+        'import' => [
+            'enabled'    => filter_var(env('NUTRITION_OFF_IMPORT_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+            'path'       => env('NUTRITION_OFF_IMPORT_PATH'),
+            'batch_size' => (int) env('NUTRITION_OFF_IMPORT_BATCH_SIZE', 500),
+            'limit'      => env('NUTRITION_OFF_IMPORT_LIMIT') !== null
+                ? (int) env('NUTRITION_OFF_IMPORT_LIMIT') : null,
+        ],
     ],
 
     // USDA FoodData Central — alimentos genéricos (requiere API key).

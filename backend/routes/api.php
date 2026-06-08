@@ -183,6 +183,7 @@ Route::middleware('auth.member')->prefix('nutrition')->group(function (): void {
     Route::delete('entries/{uuid}', [$entry, 'destroy']);
 
     Route::get('summary', [$summary, 'show']);
+    Route::get('history', [$summary, 'history']);
 
     Route::post('ocr/scan', [$ocr, 'scan'])->middleware('throttle:10,1');
     Route::get('ocr/{uuid}', [$ocr, 'show']);

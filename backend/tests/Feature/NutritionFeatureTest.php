@@ -432,4 +432,79 @@ class NutritionFeatureTest extends TestCase
         $this->getJson('/api/nutrition/foods/search?q=POLLO', $this->auth($m))
             ->assertOk()->assertJsonPath('data.0.name', 'Pechuga de Pollo');
     }
+
+    // ── Source of truth única: summary/history/streak ────────────────────────
+
+    public function test_summary_and_history_reflect_entry(): void
+    {
+        $m = $this->member();
+        $food = $this->localFood(['calories_per_100g' => 350, 'protein_per_100g' => 7, 'carbs_per_100g' => 79, 'fat_per_100g' => 1]);
+        $today = now('America/Bogota')->toDateString();
+
+        $this->postJson('/api/nutrition/entries', [
+            'food_uuid' => $food->uuid, 'meal_type' => 'breakfast',
+            'entry_date' => $today, 'quantity' => 100, 'unit' => 'g',
+        ], $this->auth($m))->assertStatus(201);
+
+        // summary refleja el total y la racha.
+        $sum = $this->getJson('/api/nutrition/summary?date=' . $today, $this->auth($m))->assertOk();
+        $this->assertEquals(350.0, $sum->json('totals.calories'));
+        $this->assertEquals(1, $sum->json('streak_days'));
+
+        // history del día actual trae el registro.
+        $hist = $this->getJson('/api/nutrition/history?days=7', $this->auth($m))->assertOk();
+        $this->assertEquals(1, $hist->json('streak_days'));
+        $last = $hist->json('days')[count($hist->json('days')) - 1];
+        $this->assertEquals($today, $last['date']);
+        $this->assertEquals(350.0, $last['calories']);
+        $this->assertEquals(1, $last['entry_count']);
+    }
+
+    public function test_history_empty_when_no_entries(): void
+    {
+        $m = $this->member();
+        $hist = $this->getJson('/api/nutrition/history?days=7', $this->auth($m))->assertOk();
+        $this->assertCount(7, $hist->json('days'));
+        $this->assertEquals(0, $hist->json('streak_days'));
+        $this->assertEquals(0, $hist->json('days.0.calories'));
+    }
+
+    public function test_off_user_agent_is_sent(): void
+    {
+        $m = $this->member();
+        config(['nutrition.openfoodfacts.user_agent' => 'IronBodyTest/9.9 (qa@iron)']);
+        Http::fake(['*/api/v2/product/*' => Http::response(['status' => 1, 'product' => [
+            'code' => '7700990011', 'product_name' => 'X',
+            'nutriments' => ['energy-kcal_100g' => 100, 'proteins_100g' => 1, 'carbohydrates_100g' => 1, 'fat_100g' => 1],
+        ]])]);
+
+        $this->getJson('/api/nutrition/foods/barcode/7700990011', $this->auth($m))->assertOk();
+        Http::assertSent(fn ($req) => $req->hasHeader('User-Agent', 'IronBodyTest/9.9 (qa@iron)'));
+    }
+
+    public function test_recalculate_summaries_fixes_zero_entries(): void
+    {
+        $m = $this->member();
+        $food = $this->localFood(['calories_per_100g' => 200, 'protein_per_100g' => 10, 'carbs_per_100g' => 5, 'fat_per_100g' => 2]);
+        // Entrada legada con macros en 0 (creada antes del fix).
+        $entry = \App\Models\NutritionEntry::create([
+            'member_id' => $m->id, 'food_id' => $food->id, 'meal_type' => 'lunch',
+            'entry_date' => '2026-06-08', 'quantity' => 100, 'unit' => 'g',
+            'calories' => 0, 'protein' => 0, 'carbs' => 0, 'fat' => 0,
+        ]);
+
+        $this->artisan('nutrition:recalculate-summaries', ['--member' => $m->id])
+            ->assertExitCode(0);
+
+        $this->assertEquals(200.0, (float) $entry->fresh()->calories);
+        $this->assertDatabaseHas('nutrition_daily_summaries', [
+            'member_id' => $m->id, 'summary_date' => '2026-06-08', 'calories' => 200,
+        ]);
+    }
+
+    public function test_off_import_stats_runs(): void
+    {
+        $this->localFood(['source' => 'open_food_facts', 'barcode' => '7700000099', 'is_public' => true]);
+        $this->artisan('nutrition:off-import', ['--stats' => true])->assertExitCode(0);
+    }
 }
