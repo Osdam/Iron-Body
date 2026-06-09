@@ -80,7 +80,8 @@
       "Bash(composer dump-autoload *)",
       "Bash(grep -n \"public function __construct\\\\|private readonly\\\\|use App\\\\\\\\\\\\\\\\Services\" app/Services/IronAiService.php)",
       "Bash(php -l app/Services/IronAiService.php)",
-      "Bash(php -l app/Services/IronAiRealtimeService.php)"
+      "Bash(php -l app/Services/IronAiRealtimeService.php)",
+      "Bash(php -l database/seeders/ProductSeeder.php)"
     ],
     "additionalDirectories": [
       "D:\\Github\\Iron_Body_App\\lib\\core\\config",
@@ -88,7 +89,11 @@
       "d:\\Github\\Iron-Body_Front\\src\\app\\services",
       "d:\\Github\\Iron-Body_Front\\src\\app\\modules",
       "d:\\Github\\Iron-Body_Front\\src\\app\\models",
-      "d:\\Github\\Iron-Body_Front\\src\\app"
+      "d:\\Github\\Iron-Body_Front\\src\\app",
+      "d:\\Github\\Iron_Body_App\\lib\\features\\iron_ai\\screens",
+      "d:\\Github\\Iron_Body_App\\lib\\data\\models",
+      "d:\\Github\\Iron_Body_App\\lib\\features\\store\\services",
+      "d:\\Github\\Iron_Body_App\\lib\\features\\store\\screens"
     ]
   }
 }

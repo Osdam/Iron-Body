@@ -8,6 +8,9 @@ use App\Http\Controllers\Api\ClassController;
 use App\Http\Controllers\Api\RoutineController;
 use App\Http\Controllers\Api\TrainerController;
 use App\Http\Controllers\Api\GymEquipmentController;
+use App\Http\Controllers\Api\AppStoreController;
+use App\Http\Controllers\Api\Admin\ProductController;
+use App\Http\Controllers\Api\Admin\CajaController;
 use App\Http\Controllers\Api\EpaycoPaymentController;
 use App\Http\Controllers\Api\ExerciseController;
 use App\Http\Controllers\Api\AppClassController;
@@ -398,6 +401,15 @@ Route::middleware('auth.member')->group(function (): void {
     Route::post('app/nutrition/day',              [AppNutritionController::class, 'store']);
     Route::delete('app/routines/{routine}',       [AppRoutineController::class, 'destroy']);
     Route::post('app/routines/{routine}/delete',  [AppRoutineController::class, 'destroy']);
+    // ── Tienda (app) — lee el catálogo `products` (visible_in_app) del CRM ────
+    // El checkout crea un pedido en product_sales (channel=app) que gestiona la
+    // Caja del CRM. Ver AppStoreController y docs/STORE_CAJA_MODULE.md.
+    Route::get('app/store/products',                 [AppStoreController::class, 'products']);
+    Route::get('app/store/orders',                   [AppStoreController::class, 'orders']);
+    Route::post('app/store/orders',                  [AppStoreController::class, 'createOrder']);
+    Route::get('app/store/orders/{uuid}',            [AppStoreController::class, 'showOrder']);
+    Route::post('app/store/orders/{uuid}/receipt',   [AppStoreController::class, 'attachReceipt']);
+
     // Historial de pagos del miembro autenticado (lee `payments` — la misma
     // tabla del CRM, una sola fuente de verdad).
     Route::get('app/payments', [AppPaymentController::class, 'index']);
@@ -564,6 +576,25 @@ Route::apiResource('admin/equipment', GymEquipmentController::class)
     ->only(['index', 'show', 'store', 'update', 'destroy']);
 
 Route::get('iron-ai/equipment-catalog', [GymEquipmentController::class, 'aiCatalog']);
+
+// ── Inventario de productos (CRM) ─────────────────────────────────────────────
+// Fuente única que también alimenta la Tienda de la app (visible_in_app).
+Route::get('admin/products/stats', [ProductController::class, 'stats']);
+Route::post('admin/products/{product}/stock', [ProductController::class, 'adjustStock']);
+Route::apiResource('admin/products', ProductController::class)
+    ->parameters(['products' => 'product'])
+    ->only(['index', 'show', 'store', 'update', 'destroy']);
+
+// ── Caja / Punto de venta (CRM) ───────────────────────────────────────────────
+// POS en mostrador + gestión de pedidos que llegan de la app. (Luego se
+// restringirá a ciertos usuarios.) Ver docs/STORE_CAJA_MODULE.md.
+Route::get('admin/caja/stats',                  [CajaController::class, 'stats']);
+Route::get('admin/caja/sales',                  [CajaController::class, 'index']);
+Route::post('admin/caja/sales',                 [CajaController::class, 'store']);
+Route::get('admin/caja/sales/{sale}',           [CajaController::class, 'show']);
+Route::post('admin/caja/sales/{sale}/pay',      [CajaController::class, 'pay']);
+Route::post('admin/caja/sales/{sale}/deliver',  [CajaController::class, 'deliver']);
+Route::post('admin/caja/sales/{sale}/cancel',   [CajaController::class, 'cancel']);
 
 // ── Ejercicios — referencias visuales (GIF) vía WorkoutX ────────────────────
 // Rutas específicas ANTES de {id} para que no las capture el comodín.

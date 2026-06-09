@@ -58,5 +58,8 @@ class DatabaseSeeder extends Seeder
 
         // Equipos/máquinas del gimnasio (alimenta a IRON IA). Idempotente.
         $this->call(GymEquipmentSeeder::class);
+
+        // Catálogo de productos (inventario CRM + tienda app). Idempotente.
+        $this->call(ProductSeeder::class);
     }
 }
