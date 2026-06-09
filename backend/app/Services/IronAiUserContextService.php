@@ -27,6 +27,7 @@ class IronAiUserContextService
         private readonly NutritionService $nutrition,
         private readonly ProgressSummaryService $progress,
         private readonly WeeklyStreakService $streak,
+        private readonly GymEquipmentContextService $equipment,
     ) {
     }
 
@@ -34,7 +35,7 @@ class IronAiUserContextService
      * Contexto modular del usuario. `$modules` permite pedir solo lo necesario
      * (p. ej. nutrición + progreso para el coach nutricional).
      *
-     * @param array<int,string> $modules profile|membership|workouts|streak|nutrition|progress|evaluation|classes|last_ai_summary
+     * @param array<int,string> $modules profile|membership|workouts|streak|nutrition|progress|evaluation|classes|last_ai_summary|gym_equipment
      */
     public function build(Member $member, array $modules = []): array
     {
@@ -71,6 +72,11 @@ class IronAiUserContextService
         }
         if ($want('last_ai_summary')) {
             $ctx['last_ai_summary'] = $this->lastAiSummary($member);
+        }
+        // Equipos reales del gimnasio: la IA NO debe recomendar ejercicios que
+        // requieran máquinas inexistentes. Opt-in (no se incluye salvo que se pida).
+        if ($want('gym_equipment')) {
+            $ctx['gym_equipment'] = $this->equipment->availableNames();
         }
 
         return $ctx;

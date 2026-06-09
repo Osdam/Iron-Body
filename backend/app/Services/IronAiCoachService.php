@@ -45,6 +45,7 @@ class IronAiCoachService
         $context = $this->context->build($member, [
             'profile', 'membership', 'workouts', 'streak',
             'nutrition', 'progress', 'evaluation', 'classes', 'last_ai_summary',
+            'gym_equipment',
         ]);
         $memoryEvents = $this->memory->recentImportantEvents($member, 8);
         $profile = $this->memory->profileFor($member);
@@ -88,6 +89,11 @@ Reglas estrictas:
 - Si faltan datos (sin evaluación / sin nutrición / sin objetivo), pídele
   amablemente completarlos en vez de inventar.
 - Usa los números reales del contexto; no inventes.
+- EQUIPOS: el contexto trae `gym_equipment` con las máquinas que SÍ existen en
+  el gimnasio. Es una restricción dura: NO sugieras ejercicios que requieran un
+  equipo que no esté en esa lista. Si el ideal necesita una máquina inexistente,
+  ofrece una variante con el equipo disponible o con peso corporal. Si la lista
+  llega vacía, no asumas máquinas concretas.
 - Las acciones deben apuntar a rutas reales de la app: /nutrition, /workouts,
   /progress, /evaluation, /classes, /membership.
 

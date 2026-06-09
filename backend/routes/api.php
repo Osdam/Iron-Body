@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\ClassController;
 use App\Http\Controllers\Api\RoutineController;
 use App\Http\Controllers\Api\TrainerController;
+use App\Http\Controllers\Api\GymEquipmentController;
 use App\Http\Controllers\Api\EpaycoPaymentController;
 use App\Http\Controllers\Api\ExerciseController;
 use App\Http\Controllers\Api\AppClassController;
@@ -546,6 +547,23 @@ Route::apiResource('routines', RoutineController::class)->only(['index','show','
 Route::patch('routines/{routine}/assign', [RoutineController::class, 'assign']);
 Route::post('trainers/{trainer}/reviews', [TrainerController::class, 'review']);
 Route::apiResource('trainers', TrainerController::class)->only(['index','show','store','update','destroy']);
+
+// ── Equipos del gimnasio ──────────────────────────────────────────────────────
+// Inventario de máquinas físicas. Dos audiencias bien separadas:
+//
+//  • CRM admin (CRUD):       /api/admin/equipment*  → patrón /admin/* del CRM.
+//  • IRON IA (solo lectura): GET /api/iron-ai/equipment-catalog
+//
+// 👉 PARA LA INTEGRACIÓN DE IA: consume SOLO el endpoint de catálogo. Devuelve
+//    { generated_at, total, names[], by_category{}, items[] } (forma estable).
+//    Úsalo como restricción dura para no recomendar ejercicios con máquinas
+//    inexistentes. Ver App\Services\GymEquipmentContextService->promptConstraint().
+Route::get('admin/equipment/stats', [GymEquipmentController::class, 'stats']);
+Route::apiResource('admin/equipment', GymEquipmentController::class)
+    ->parameters(['equipment' => 'equipment'])
+    ->only(['index', 'show', 'store', 'update', 'destroy']);
+
+Route::get('iron-ai/equipment-catalog', [GymEquipmentController::class, 'aiCatalog']);
 
 // ── Ejercicios — referencias visuales (GIF) vía WorkoutX ────────────────────
 // Rutas específicas ANTES de {id} para que no las capture el comodín.

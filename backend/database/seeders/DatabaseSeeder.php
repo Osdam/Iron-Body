@@ -55,5 +55,8 @@ class DatabaseSeeder extends Seeder
                 'paid_at' => now(),
             ]
         );
+
+        // Equipos/máquinas del gimnasio (alimenta a IRON IA). Idempotente.
+        $this->call(GymEquipmentSeeder::class);
     }
 }

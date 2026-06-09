@@ -70,11 +70,22 @@
       "Read(//d/Github/Iron_Body_App/**)",
       "Read(//d/Github/**)",
       "Bash(xargs grep -l \"install-templates\\\\|contracts:install\")",
-      "Bash([ -f \"$f\" ])"
+      "Bash([ -f \"$f\" ])",
+      "Bash(php -l app/Models/GymEquipment.php)",
+      "Bash(php -l app/Http/Controllers/Api/GymEquipmentController.php)",
+      "Bash(php -l app/Services/GymEquipmentContextService.php)",
+      "Bash(php -l database/seeders/GymEquipmentSeeder.php)",
+      "Bash(php -l database/migrations/2026_06_09_000001_create_gym_equipment_table.php)",
+      "Bash(grep -n \"styles: \\\\[\\\\|\\\\`\\\\]\\\\|:host\\\\|--\\\\|background:\\\\|border-radius\\\\|class=\\\\\"\\\\|\\\\.page\\\\|\\\\.kpi\\\\|\\\\.modal\\\\|\\\\.table\" ./app/modules/inventory.ts)",
+      "Bash(composer dump-autoload *)"
     ],
     "additionalDirectories": [
       "D:\\Github\\Iron_Body_App\\lib\\core\\config",
-      "D:\\Github\\Iron_Body_App\\lib\\shared\\guide"
+      "D:\\Github\\Iron_Body_App\\lib\\shared\\guide",
+      "d:\\Github\\Iron-Body_Front\\src\\app\\services",
+      "d:\\Github\\Iron-Body_Front\\src\\app\\modules",
+      "d:\\Github\\Iron-Body_Front\\src\\app\\models",
+      "d:\\Github\\Iron-Body_Front\\src\\app"
     ]
   }
 }
