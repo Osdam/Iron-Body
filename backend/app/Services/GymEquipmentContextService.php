@@ -39,17 +39,41 @@ class GymEquipmentContextService
      */
     public function promptConstraint(): string
     {
-        $names = $this->availableNames();
-        if (empty($names)) {
+        $catalog = $this->catalog();
+        if (($catalog['total'] ?? 0) === 0) {
             return '';
         }
 
-        $list = implode(', ', $names);
+        // Etiquetas legibles por categoría (las claves internas no se muestran).
+        $labels = [
+            'strength_machine' => 'Máquinas de fuerza',
+            'free_weights'     => 'Peso libre y bancos',
+            'cardio'           => 'Cardio',
+            'functional'       => 'Funcional',
+            'accessory'        => 'Accesorios',
+            'bodyweight'       => 'Peso corporal',
+        ];
 
-        return "EQUIPOS DISPONIBLES EN EL GIMNASIO (úsalos como restricción dura): {$list}. "
-            . 'NO recomiendes ejercicios que requieran equipos que no estén en esta lista. '
-            . 'Si un ejercicio ideal necesita una máquina que no existe, ofrece una alternativa '
-            . 'con el equipo disponible o una variante con peso corporal.';
+        $blocks = [];
+        foreach ($catalog['by_category'] ?? [] as $category => $items) {
+            $label = $labels[$category] ?? $category;
+            $names = [];
+            foreach ($items as $item) {
+                $name = $item['name'];
+                $muscles = $item['muscle_groups'] ?? [];
+                $names[] = ! empty($muscles)
+                    ? $name . ' (' . implode(', ', array_slice($muscles, 0, 3)) . ')'
+                    : $name;
+            }
+            $blocks[] = "  • {$label}: " . implode('; ', $names) . '.';
+        }
+
+        return "EQUIPOS DISPONIBLES EN EL GIMNASIO (inventario real, restricción dura):\n"
+            . implode("\n", $blocks) . "\n"
+            . 'NO recomiendes ejercicios que requieran equipos/máquinas que no estén en esta lista '
+            . '(p. ej. si una máquina está dañada o fue retirada, no aparece aquí). Si el ejercicio '
+            . 'ideal necesita algo que no existe, ofrece una alternativa con el equipo disponible o '
+            . 'una variante con peso corporal.';
     }
 
     /** Invalida la caché (se llama al mutar el catálogo desde el CRM). */

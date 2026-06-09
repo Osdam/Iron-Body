@@ -77,7 +77,10 @@
       "Bash(php -l database/seeders/GymEquipmentSeeder.php)",
       "Bash(php -l database/migrations/2026_06_09_000001_create_gym_equipment_table.php)",
       "Bash(grep -n \"styles: \\\\[\\\\|\\\\`\\\\]\\\\|:host\\\\|--\\\\|background:\\\\|border-radius\\\\|class=\\\\\"\\\\|\\\\.page\\\\|\\\\.kpi\\\\|\\\\.modal\\\\|\\\\.table\" ./app/modules/inventory.ts)",
-      "Bash(composer dump-autoload *)"
+      "Bash(composer dump-autoload *)",
+      "Bash(grep -n \"public function __construct\\\\|private readonly\\\\|use App\\\\\\\\\\\\\\\\Services\" app/Services/IronAiService.php)",
+      "Bash(php -l app/Services/IronAiService.php)",
+      "Bash(php -l app/Services/IronAiRealtimeService.php)"
     ],
     "additionalDirectories": [
       "D:\\Github\\Iron_Body_App\\lib\\core\\config",

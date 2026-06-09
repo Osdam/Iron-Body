@@ -142,6 +142,12 @@ TXT;
         $level = $capabilities['context_level'] ?? 'full';
         $instructions = $this->ironAi->systemPrompt();
 
+        // Contexto general del gimnasio: equipos disponibles (restricción dura).
+        $equipment = $this->ironAi->gymEquipmentConstraint();
+        if ($equipment !== '') {
+            $instructions .= "\n\n" . $equipment;
+        }
+
         $context = $this->ironAi->buildUserContext($member, $user, $level);
         if ($context !== '') {
             $instructions .= "\n\nCONTEXTO DEL USUARIO (datos reales; no inventes lo que no esté aquí):\n" . $context;

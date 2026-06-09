@@ -82,7 +82,37 @@ TXT;
         private readonly IronAiMediaService $media,
         private readonly IronAiTranscriptionService $transcription,
         private readonly IronAiVisionService $vision,
+        private readonly GymEquipmentContextService $gymEquipment,
     ) {
+    }
+
+    /**
+     * Bloque de contexto GENERAL del gimnasio (no por usuario): qué equipos/
+     * máquinas hay disponibles. Es una restricción dura para que IRON no
+     * recomiende ejercicios con máquinas inexistentes. Se actualiza solo cuando
+     * el CRM crea/edita/elimina o marca un equipo como dañado/fuera de servicio
+     * (ver GymEquipmentContextService, cacheado e invalidado por el CRUD).
+     *
+     * Devuelve '' si no hay equipos registrados (la IA opera sin la restricción).
+     */
+    public function gymEquipmentConstraint(): string
+    {
+        return $this->gymEquipment->promptConstraint();
+    }
+
+    /**
+     * El bloque anterior como mensaje(s) de sistema para el payload del chat.
+     *
+     * @return array<int, array{role: string, content: string}>
+     */
+    private function gymEquipmentMessages(): array
+    {
+        $constraint = $this->gymEquipmentConstraint();
+        if ($constraint === '') {
+            return [];
+        }
+
+        return [['role' => 'system', 'content' => $constraint]];
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -297,6 +327,7 @@ TXT;
 
         $context = $this->buildUserContext($member, $user, $contextLevel);
         $payload = [['role' => 'system', 'content' => self::SYSTEM_PROMPT . self::IMAGE_SAFETY_PROMPT]];
+        $payload = array_merge($payload, $this->gymEquipmentMessages());
         if ($context !== '') {
             $payload[] = ['role' => 'system', 'content' => "CONTEXTO DEL USUARIO (datos reales; no inventes lo que no esté aquí):\n" . $context];
         }
@@ -336,6 +367,7 @@ TXT;
         }
 
         $payload = [['role' => 'system', 'content' => $systemPrompt]];
+        $payload = array_merge($payload, $this->gymEquipmentMessages());
         if ($context !== '') {
             $payload[] = ['role' => 'system', 'content' => "CONTEXTO DEL USUARIO (datos reales; no inventes lo que no esté aquí):\n" . $context];
         }

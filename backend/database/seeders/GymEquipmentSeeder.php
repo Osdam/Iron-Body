@@ -7,18 +7,18 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
 /**
- * Carga inicial de equipos/máquinas del gimnasio.
+ * Inventario REAL de equipos de Iron Body (Centro de Acondicionamiento Físico).
  *
- * ⚠️  REEMPLAZA / AMPLÍA el array $equipment con las máquinas REALES de la
- *     instalación (Óscar las pasará). Usa `firstOrCreate` por slug, así que
- *     puedes volver a correr el seeder sin duplicar:
+ * Es la fuente de verdad de "qué máquinas tenemos". Alimenta a IRON IA vía
+ * GymEquipmentContextService (chat, voz/visión y coach) para que NUNCA recomiende
+ * un ejercicio con una máquina que no existe.
  *
- *        php artisan db:seed --class=Database\\Seeders\\GymEquipmentSeeder
+ * Idempotente (firstOrCreate por slug):
+ *   php artisan db:seed --class=Database\\Seeders\\GymEquipmentSeeder
  *
- * Categorías válidas: strength_machine | free_weights | cardio | functional |
- * accessory | bodyweight (ver App\Models\GymEquipment::CATEGORIES).
- *
- * El set de abajo es un PUNTO DE PARTIDA común de gimnasio; ajústalo a la realidad.
+ * Cuando una máquina se dañe o se retire, NO la borres del seeder: edítala desde
+ * el CRM (estado "Mantenimiento"/"Fuera de servicio" o quita "Disponible para IA")
+ * y la IA dejará de tenerla en cuenta automáticamente.
  */
 class GymEquipmentSeeder extends Seeder
 {
@@ -33,6 +33,7 @@ class GymEquipmentSeeder extends Seeder
                     'status'              => $row['status'] ?? 'operational',
                     'is_available_for_ai' => $row['is_available_for_ai'] ?? true,
                     'quantity'            => $row['quantity'] ?? 1,
+                    'zone'                => $row['zone'] ?? null,
                 ]),
             );
         }
@@ -44,39 +45,225 @@ class GymEquipmentSeeder extends Seeder
     private function equipment(): array
     {
         return [
-            // ── Máquinas guiadas de fuerza ───────────────────────────────────
-            ['name' => 'Prensa de piernas 45°', 'category' => 'strength_machine', 'zone' => 'Zona de pesas', 'quantity' => 1, 'muscle_groups' => ['cuádriceps', 'glúteos', 'isquiotibiales'], 'aliases' => ['leg press', 'prensa']],
-            ['name' => 'Extensión de cuádriceps', 'category' => 'strength_machine', 'zone' => 'Zona de pesas', 'quantity' => 1, 'muscle_groups' => ['cuádriceps'], 'aliases' => ['leg extension', 'extensiones']],
-            ['name' => 'Curl femoral acostado', 'category' => 'strength_machine', 'zone' => 'Zona de pesas', 'quantity' => 1, 'muscle_groups' => ['isquiotibiales'], 'aliases' => ['leg curl', 'femoral']],
-            ['name' => 'Polea alta (jalón al pecho)', 'category' => 'strength_machine', 'zone' => 'Zona de pesas', 'quantity' => 1, 'muscle_groups' => ['dorsales', 'bíceps'], 'aliases' => ['lat pulldown', 'jalón', 'polea']],
-            ['name' => 'Remo en polea baja', 'category' => 'strength_machine', 'zone' => 'Zona de pesas', 'quantity' => 1, 'muscle_groups' => ['dorsales', 'trapecio'], 'aliases' => ['seated row', 'remo']],
-            ['name' => 'Pecho en máquina (press)', 'category' => 'strength_machine', 'zone' => 'Zona de pesas', 'quantity' => 1, 'muscle_groups' => ['pectoral', 'tríceps'], 'aliases' => ['chest press']],
-            ['name' => 'Peck deck (aperturas)', 'category' => 'strength_machine', 'zone' => 'Zona de pesas', 'quantity' => 1, 'muscle_groups' => ['pectoral'], 'aliases' => ['pec deck', 'aperturas']],
-            ['name' => 'Máquina de hombros (press militar)', 'category' => 'strength_machine', 'zone' => 'Zona de pesas', 'quantity' => 1, 'muscle_groups' => ['deltoides'], 'aliases' => ['shoulder press']],
-            ['name' => 'Máquina de abductores/aductores', 'category' => 'strength_machine', 'zone' => 'Zona de pesas', 'quantity' => 1, 'muscle_groups' => ['abductores', 'aductores'], 'aliases' => ['hip abductor']],
+            // ── Tren inferior — máquinas guiadas ─────────────────────────────
+            [
+                'name' => 'Hack Squat',
+                'category' => 'strength_machine',
+                'zone' => 'Zona de piernas',
+                'muscle_groups' => ['cuádriceps', 'glúteo mayor', 'isquiotibiales', 'aductores'],
+                'aliases' => ['hack squat', 'sentadilla hack', 'máquina hack'],
+                'notes' => 'Sentadilla guiada en recorrido inclinado. El énfasis muscular cambia según la posición de los pies.',
+            ],
+            [
+                'name' => 'Prensa Pendular',
+                'category' => 'strength_machine',
+                'zone' => 'Zona de piernas',
+                'muscle_groups' => ['cuádriceps', 'glúteos', 'isquiotibiales', 'gemelos'],
+                'aliases' => ['prensa pendular', 'pendular leg press'],
+                'notes' => 'Empuje de piernas con trayectoria pendular (curva de resistencia distinta a la prensa convencional).',
+            ],
+            [
+                'name' => 'Prensa Lineal',
+                'category' => 'strength_machine',
+                'zone' => 'Zona de piernas',
+                'muscle_groups' => ['cuádriceps', 'glúteos', 'isquiotibiales'],
+                'aliases' => ['prensa lineal', 'leg press lineal', 'prensa de piernas'],
+                'notes' => 'Empuje de piernas sobre recorrido lineal (sentadilla asistida).',
+            ],
+            [
+                'name' => 'Sentadilla Pendular',
+                'category' => 'strength_machine',
+                'zone' => 'Zona de piernas',
+                'muscle_groups' => ['cuádriceps', 'glúteos', 'aductores'],
+                'aliases' => ['sentadilla pendular', 'pendulum squat'],
+                'notes' => 'Sentadilla guiada con gran énfasis en la flexión de rodilla.',
+            ],
+            [
+                'name' => 'Extensión de Pierna',
+                'category' => 'strength_machine',
+                'zone' => 'Zona de piernas',
+                'muscle_groups' => ['cuádriceps'],
+                'aliases' => ['leg extension', 'extensión de cuádriceps', 'extensiones de pierna'],
+                'notes' => 'Aislamiento de extensión de rodilla.',
+            ],
+            [
+                'name' => 'Curl Femoral Sentado',
+                'category' => 'strength_machine',
+                'zone' => 'Zona de piernas',
+                'muscle_groups' => ['isquiotibiales', 'gemelos'],
+                'aliases' => ['seated leg curl', 'curl femoral sentado'],
+                'notes' => 'Flexión de rodilla en posición sentada.',
+            ],
+            [
+                'name' => 'Curl Femoral Acostado',
+                'category' => 'strength_machine',
+                'zone' => 'Zona de piernas',
+                'muscle_groups' => ['isquiotibiales', 'gemelos'],
+                'aliases' => ['lying leg curl', 'curl femoral acostado', 'femoral acostado'],
+                'notes' => 'Flexión de rodilla boca abajo.',
+            ],
+            [
+                'name' => 'Máquina de Hip Thrust',
+                'category' => 'strength_machine',
+                'zone' => 'Zona de glúteos',
+                'muscle_groups' => ['glúteo mayor', 'isquiotibiales'],
+                'aliases' => ['hip thrust', 'hip thrust machine', 'empuje de cadera'],
+                'notes' => 'Extensión de cadera guiada para glúteos.',
+            ],
+            [
+                'name' => 'Máquina de Aducción',
+                'category' => 'strength_machine',
+                'zone' => 'Zona de piernas',
+                'muscle_groups' => ['aductores'],
+                'aliases' => ['aducción', 'hip adduction', 'aductores', 'máquina de abducción y aducción'],
+                'notes' => 'Aducción de cadera (acercar las piernas a la línea media).',
+            ],
+            [
+                'name' => 'Máquina de Abducción',
+                'category' => 'strength_machine',
+                'zone' => 'Zona de piernas',
+                'muscle_groups' => ['glúteo medio', 'glúteo menor'],
+                'aliases' => ['abducción', 'hip abduction', 'abductores', 'máquina de abducción y aducción'],
+                'notes' => 'Abducción de cadera (separar las piernas de la línea media).',
+            ],
 
-            // ── Peso libre ───────────────────────────────────────────────────
-            ['name' => 'Rack de mancuernas', 'category' => 'free_weights', 'zone' => 'Zona de pesas', 'quantity' => 1, 'muscle_groups' => ['cuerpo completo'], 'aliases' => ['mancuernas', 'dumbbells']],
-            ['name' => 'Barra olímpica con discos', 'category' => 'free_weights', 'zone' => 'Zona de pesas', 'quantity' => 2, 'muscle_groups' => ['cuerpo completo'], 'aliases' => ['barra', 'barbell', 'discos']],
-            ['name' => 'Banco plano ajustable', 'category' => 'free_weights', 'zone' => 'Zona de pesas', 'quantity' => 2, 'muscle_groups' => ['pectoral', 'cuerpo completo'], 'aliases' => ['banco', 'bench']],
-            ['name' => 'Rack de sentadillas', 'category' => 'free_weights', 'zone' => 'Zona de pesas', 'quantity' => 1, 'muscle_groups' => ['piernas', 'glúteos'], 'aliases' => ['squat rack', 'jaula']],
-            ['name' => 'Banco Scott (predicador)', 'category' => 'free_weights', 'zone' => 'Zona de pesas', 'quantity' => 1, 'muscle_groups' => ['bíceps'], 'aliases' => ['preacher curl', 'scott']],
+            // ── Pecho ────────────────────────────────────────────────────────
+            [
+                'name' => 'Press de Banca Convergente',
+                'category' => 'strength_machine',
+                'zone' => 'Zona de pecho',
+                'muscle_groups' => ['pectoral mayor', 'tríceps', 'deltoides anterior'],
+                'aliases' => ['press de banca convergente', 'chest press', 'press de pecho convergente'],
+                'notes' => 'Palancas que convergen durante el recorrido.',
+            ],
+            [
+                'name' => 'Press Inclinado',
+                'category' => 'strength_machine',
+                'zone' => 'Zona de pecho',
+                'muscle_groups' => ['pecho superior', 'deltoides anterior', 'tríceps'],
+                'aliases' => ['press inclinado', 'incline press'],
+                'notes' => 'Enfocado en la porción clavicular del pecho.',
+            ],
+            [
+                'name' => 'Press Inclinado Convergente',
+                'category' => 'strength_machine',
+                'zone' => 'Zona de pecho',
+                'muscle_groups' => ['pectoral superior'],
+                'aliases' => ['press inclinado convergente', 'incline convergente'],
+                'notes' => 'Variante guiada con trayectoria convergente para pecho superior.',
+            ],
+
+            // ── Espalda ──────────────────────────────────────────────────────
+            [
+                'name' => 'Máquina de Remo Bajo',
+                'category' => 'strength_machine',
+                'zone' => 'Zona de espalda',
+                'muscle_groups' => ['dorsal ancho', 'romboides', 'bíceps', 'trapecio medio'],
+                'aliases' => ['remo bajo', 'seated row', 'remo horizontal'],
+                'notes' => 'Remos horizontales guiados.',
+            ],
+            [
+                'name' => 'Remo Barra T',
+                'category' => 'strength_machine',
+                'zone' => 'Zona de espalda',
+                'muscle_groups' => ['espalda media', 'dorsales', 'trapecio', 'bíceps'],
+                'aliases' => ['remo barra t', 't-bar row', 'barra t'],
+                'notes' => 'Remo con barra T (agarre cerrado o abierto).',
+            ],
+            [
+                'name' => 'Hiperextensión Lumbar',
+                'category' => 'functional',
+                'zone' => 'Zona de core',
+                'muscle_groups' => ['erectores espinales', 'glúteos', 'isquiotibiales'],
+                'aliases' => ['hiperextensión lumbar', 'hiperextensiones', 'banco lumbar', 'hyperextension'],
+                'notes' => 'Banco para fortalecer la cadena posterior.',
+            ],
+
+            // ── Multifuncional ───────────────────────────────────────────────
+            [
+                'name' => 'Sentadilla Smith',
+                'category' => 'strength_machine',
+                'zone' => 'Zona multifuncional',
+                'muscle_groups' => ['cuádriceps', 'glúteos', 'pectoral', 'deltoides'],
+                'aliases' => ['smith', 'máquina smith', 'sentadilla smith', 'multipower smith'],
+                'notes' => 'Barra guiada verticalmente. Permite sentadilla, press militar, press de pecho y zancadas.',
+            ],
+            [
+                'name' => 'Multipower',
+                'category' => 'strength_machine',
+                'zone' => 'Zona multifuncional',
+                'muscle_groups' => ['cuerpo completo'],
+                'aliases' => ['multipower', 'smith machine', 'máquina multipower'],
+                'notes' => 'Barra guiada para sentadilla, press banca, press militar, remo, hip thrust y zancadas.',
+            ],
+            [
+                'name' => 'Cable Dual (Poleas)',
+                'category' => 'functional',
+                'zone' => 'Zona multifuncional',
+                'muscle_groups' => ['cuerpo completo'],
+                'aliases' => ['cable dual', 'poleas', 'crossover', 'polea doble', 'cruce de poleas'],
+                'notes' => 'Estación de poleas ajustables: cruces de pecho, jalones, remo, curl, extensión de tríceps, elevaciones laterales y core.',
+            ],
+
+            // ── Peso libre / estructuras / bancos ────────────────────────────
+            [
+                'name' => 'Jaula para Sentadilla',
+                'category' => 'free_weights',
+                'zone' => 'Zona de peso libre',
+                'muscle_groups' => ['piernas', 'glúteos', 'espalda', 'cuerpo completo'],
+                'aliases' => ['jaula', 'power rack', 'squat rack', 'jaula de sentadilla'],
+                'notes' => 'Estructura para barra libre con seguridad: sentadilla, peso muerto, press militar, hip thrust.',
+            ],
+            [
+                'name' => 'Estructura para Sentadilla Búlgara',
+                'category' => 'free_weights',
+                'zone' => 'Zona de peso libre',
+                'muscle_groups' => ['cuádriceps', 'glúteos', 'isquiotibiales'],
+                'aliases' => ['sentadilla búlgara', 'bulgarian split squat', 'estructura búlgara'],
+                'notes' => 'Soporte para zancada/sentadilla búlgara.',
+            ],
+            [
+                'name' => 'Banco Plano',
+                'category' => 'free_weights',
+                'zone' => 'Zona de peso libre',
+                'muscle_groups' => ['pectoral', 'cuerpo completo'],
+                'aliases' => ['banco plano', 'flat bench', 'banco fijo'],
+                'notes' => 'Banco para ejercicios con peso libre y mancuernas.',
+            ],
+            [
+                'name' => 'Banco Reclinable Ajustable',
+                'category' => 'free_weights',
+                'zone' => 'Zona de peso libre',
+                'muscle_groups' => ['pectoral', 'deltoides', 'cuerpo completo'],
+                'aliases' => ['banco ajustable', 'banco inclinado', 'banco reclinable', 'adjustable bench'],
+                'notes' => 'Banco configurable en ángulos inclinado, declinado y plano.',
+            ],
 
             // ── Cardio ───────────────────────────────────────────────────────
-            ['name' => 'Caminadora (trotadora)', 'category' => 'cardio', 'zone' => 'Sala cardio', 'quantity' => 3, 'muscle_groups' => ['cardio', 'piernas'], 'aliases' => ['treadmill', 'trotadora', 'banda']],
-            ['name' => 'Bicicleta estática', 'category' => 'cardio', 'zone' => 'Sala cardio', 'quantity' => 2, 'muscle_groups' => ['cardio', 'piernas'], 'aliases' => ['spinning', 'bici']],
-            ['name' => 'Elíptica', 'category' => 'cardio', 'zone' => 'Sala cardio', 'quantity' => 2, 'muscle_groups' => ['cardio', 'cuerpo completo'], 'aliases' => ['elliptical']],
-            ['name' => 'Remadora', 'category' => 'cardio', 'zone' => 'Sala cardio', 'quantity' => 1, 'muscle_groups' => ['cardio', 'espalda'], 'aliases' => ['rower', 'remo cardio']],
-
-            // ── Funcional ────────────────────────────────────────────────────
-            ['name' => 'Kettlebells', 'category' => 'functional', 'zone' => 'Zona funcional', 'quantity' => 1, 'muscle_groups' => ['cuerpo completo'], 'aliases' => ['pesa rusa']],
-            ['name' => 'Bandas de resistencia', 'category' => 'functional', 'zone' => 'Zona funcional', 'quantity' => 1, 'muscle_groups' => ['cuerpo completo'], 'aliases' => ['ligas', 'bands']],
-            ['name' => 'Cajón pliométrico', 'category' => 'functional', 'zone' => 'Zona funcional', 'quantity' => 1, 'muscle_groups' => ['piernas'], 'aliases' => ['box jump', 'cajón']],
-            ['name' => 'TRX (suspensión)', 'category' => 'functional', 'zone' => 'Zona funcional', 'quantity' => 1, 'muscle_groups' => ['cuerpo completo'], 'aliases' => ['suspensión']],
-
-            // ── Peso corporal ────────────────────────────────────────────────
-            ['name' => 'Barra de dominadas', 'category' => 'bodyweight', 'zone' => 'Zona funcional', 'quantity' => 1, 'muscle_groups' => ['dorsales', 'bíceps'], 'aliases' => ['pull up bar', 'dominadas']],
-            ['name' => 'Paralelas (fondos)', 'category' => 'bodyweight', 'zone' => 'Zona funcional', 'quantity' => 1, 'muscle_groups' => ['tríceps', 'pectoral'], 'aliases' => ['dips', 'fondos']],
+            [
+                'name' => 'Caminadora Eléctrica',
+                'category' => 'cardio',
+                'zone' => 'Zona de cardio',
+                'muscle_groups' => ['cardio', 'piernas'],
+                'aliases' => ['caminadora', 'treadmill', 'trotadora eléctrica', 'banda eléctrica'],
+                'notes' => 'Motorizada, con control de velocidad e inclinación. Resistencia cardiovascular y acondicionamiento.',
+            ],
+            [
+                'name' => 'Caminadora Mecánica',
+                'category' => 'cardio',
+                'zone' => 'Zona de cardio',
+                'muscle_groups' => ['cardio', 'piernas'],
+                'aliases' => ['caminadora mecánica', 'curve treadmill', 'trotadora mecánica'],
+                'notes' => 'Impulsada por la fuerza del usuario (mayor demanda metabólica).',
+            ],
+            [
+                'name' => 'Bicicleta de Cycling',
+                'category' => 'cardio',
+                'zone' => 'Zona de cardio',
+                'muscle_groups' => ['cuádriceps', 'glúteos', 'isquiotibiales', 'gemelos'],
+                'aliases' => ['bicicleta', 'spinning', 'cycling', 'bici estática', 'bicicleta de cycling'],
+                'notes' => 'Bicicleta estacionaria para ciclismo indoor y HIIT.',
+            ],
         ];
     }
 }

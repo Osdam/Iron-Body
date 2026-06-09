@@ -100,34 +100,51 @@ $ctx->promptConstraint(); // frase lista para inyectar en el system prompt
 $ctx->flush();            // invalida la caché (lo hace el CRUD por ti)
 ```
 
-Ya conectado en dos lugares (referencia para extender a otros flujos de IA):
+**Ya está conectado automáticamente en TODOS los flujos de IRON IA** (no hay que
+hacer nada extra; el contexto del gimnasio viaja en cada interacción):
 
-1. **`IronAiUserContextService::build()`** — añade el módulo opt-in
-   `gym_equipment` (lista de nombres) al contexto del usuario. Pídelo así:
+1. **`IronAiService`** — chat de texto y análisis de imagen. Inyecta el bloque de
+   equipos como mensaje de sistema en cada conversación (`gymEquipmentMessages()`),
+   incluso para usuarios anónimos. Expone `gymEquipmentConstraint(): string` para
+   reusar la frase.
+2. **`IronAiRealtimeService`** — voz en vivo y visión con cámara. Añade el mismo
+   bloque a las `instructions` del realtime.
+3. **`IronAiCoachService`** — el "plan de hoy" recibe `gym_equipment` y el system
+   prompt lo trata como **restricción dura**.
+4. **`IronAiUserContextService::build()`** — módulo opt-in `gym_equipment` (lista
+   de nombres) para cualquier otro consumidor de contexto:
    ```php
    $context = $userContext->build($member, ['profile', 'gym_equipment']);
-   // $context['gym_equipment'] === ["Prensa de piernas 45°", ...]
+   // $context['gym_equipment'] === ["Hack Squat", "Prensa Pendular", ...]
    ```
-2. **`IronAiCoachService`** — el "plan de hoy" ya recibe `gym_equipment` y el
-   system prompt instruye a la IA a tratarlo como **restricción dura**.
 
-### Para el chat / realtime / otros servicios de IA
+La frase inyectada agrupa por categoría e incluye los músculos principales, p. ej.:
 
-Inyecta la restricción en tu system prompt:
-
-```php
-$constraint = app(GymEquipmentContextService::class)->promptConstraint();
-// "EQUIPOS DISPONIBLES EN EL GIMNASIO (úsalos como restricción dura): ... NO recomiendes ejercicios que requieran equipos que no estén en esta lista..."
-
-$messages[] = ['role' => 'system', 'content' => $constraint];
+```
+EQUIPOS DISPONIBLES EN EL GIMNASIO (inventario real, restricción dura):
+  • Máquinas de fuerza: Hack Squat (cuádriceps, glúteo mayor, isquiotibiales); ...
+  • Cardio: Caminadora Eléctrica (cardio, piernas); ...
+NO recomiendes ejercicios que requieran equipos/máquinas que no estén en esta lista
+(p. ej. si una máquina está dañada o fue retirada, no aparece aquí). ...
 ```
 
-O valida un ejercicio antes de mostrarlo:
+### Si necesitas validar/usar el catálogo en otro punto
 
 ```php
-$names = app(GymEquipmentContextService::class)->availableNames();
+$ctx = app(GymEquipmentContextService::class);
+$names = $ctx->availableNames();                  // string[] disponibles
 $ok = in_array($exercise->equipment_required, $names, true); // matching simple
 ```
+
+### Máquina dañada o retirada → la IA lo sabe sola
+
+Edita el equipo desde el CRM:
+- **Estado** `Mantenimiento` o `Fuera de servicio`, **o** desmarca
+  **«Disponible para IRON IA»**.
+
+El scope `forAi()` solo expone equipos `operational` + `is_available_for_ai`, y el
+CRUD invalida la caché. En ≤10 min (o al instante tras el `flush()` del CRUD) la IA
+deja de recomendar esa máquina. No hay que tocar código.
 
 ---
 
