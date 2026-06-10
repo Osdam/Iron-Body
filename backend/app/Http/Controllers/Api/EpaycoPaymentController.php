@@ -41,6 +41,9 @@ class EpaycoPaymentController extends Controller
         'member_id'           => 'nullable|integer|exists:members,id',
         'user_id'             => 'nullable|integer',
         'plan_id'             => 'nullable|integer|exists:plans,id',
+        // Tipo de pago: 'membership' (default, exige plan) | 'store' (compra de
+        // productos de la tienda, sin plan; el monto viene en `amount`).
+        'purpose'             => 'nullable|string|in:membership,store',
         'customer'            => 'nullable|array',
         'customer.name'       => 'nullable|string|max:120',
         'customer.last_name'  => 'nullable|string|max:120',
@@ -197,7 +200,11 @@ class EpaycoPaymentController extends Controller
 
     private function resolvePaymentSubject(array $data): array
     {
-        if (empty($data['plan_id'])) {
+        // Las compras de la tienda (purpose=store) NO requieren plan: el monto
+        // viaja en `amount`. Los pagos de membresía siguen exigiendo plan_id.
+        $isStore = ($data['purpose'] ?? null) === 'store';
+
+        if (! $isStore && empty($data['plan_id'])) {
             throw ValidationException::withMessages([
                 'plan_id' => ['El plan de membresia es obligatorio para procesar el pago.'],
             ]);

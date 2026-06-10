@@ -81,7 +81,9 @@
       "Bash(grep -n \"public function __construct\\\\|private readonly\\\\|use App\\\\\\\\\\\\\\\\Services\" app/Services/IronAiService.php)",
       "Bash(php -l app/Services/IronAiService.php)",
       "Bash(php -l app/Services/IronAiRealtimeService.php)",
-      "Bash(php -l database/seeders/ProductSeeder.php)"
+      "Bash(php -l database/seeders/ProductSeeder.php)",
+      "Bash(grep -rn 'plan_id\\\\|activateMembership\\\\|extendMembership\\\\|memberships->\\\\|MembershipService\\\\|->plan_id ?\\\\|if \\($plan\\\\|if \\(! $plan\\\\|if \\($tx->plan_id' app/Services/EpaycoPaymentService.php)",
+      "Bash(php -l app/Http/Controllers/Api/EpaycoPaymentController.php)"
     ],
     "additionalDirectories": [
       "D:\\Github\\Iron_Body_App\\lib\\core\\config",
@@ -93,7 +95,8 @@
       "d:\\Github\\Iron_Body_App\\lib\\features\\iron_ai\\screens",
       "d:\\Github\\Iron_Body_App\\lib\\data\\models",
       "d:\\Github\\Iron_Body_App\\lib\\features\\store\\services",
-      "d:\\Github\\Iron_Body_App\\lib\\features\\store\\screens"
+      "d:\\Github\\Iron_Body_App\\lib\\features\\store\\screens",
+      "d:\\Github\\Iron_Body_App\\lib\\features\\payments\\services"
     ]
   }
 }
