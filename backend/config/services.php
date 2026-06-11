@@ -141,12 +141,33 @@ return [
     | WorkoutX trae marca de agua → por defecto apagada).
     */
     'exercises' => [
-        'provider'             => env('EXERCISE_PROVIDER', 'fitgif'),
+        // provider: exercisedb | fitgif | workoutx | freeexercisedb | local.
+        // FitGif fue descontinuado → el proveedor recomendado es 'exercisedb'.
+        'provider'             => env('EXERCISE_PROVIDER', 'exercisedb'),
         'show_workoutx_gifs'   => filter_var(env('SHOW_WORKOUTX_GIFS', false), FILTER_VALIDATE_BOOLEAN),
         'show_fitgif_gifs'     => filter_var(env('SHOW_FITGIF_GIFS', true), FILTER_VALIDATE_BOOLEAN),
         // Fallback a Free Exercise DB. En la demo se apaga: si FitGif falla se
         // devuelve placeholder, NO fotos de Free Exercise DB.
         'show_free_exercise_db' => filter_var(env('SHOW_FREE_EXERCISE_DB', false), FILTER_VALIDATE_BOOLEAN),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | ExerciseDB (AscendAPI v1) — proveedor principal de GIF animado (mini-video)
+    |--------------------------------------------------------------------------
+    | Catálogo de ~1.500 ejercicios con GIF animado (CDN público static.exercisedb.dev).
+    | Endpoint OSS abierto: https://oss.exercisedb.dev/api/v1/exercises (sin key).
+    | La key de RapidAPI es OPCIONAL (solo si usas el host de RapidAPI en vez del OSS).
+    | Se guarda directo en la tabla `exercises` durante `exercisedb:sync`.
+    | Reemplazo de FitGif (descontinuado). OJO: uso comercial requiere plan de pago
+    | + atribución a AscendAPI (ver términos en RapidAPI).
+    */
+    'exercisedb' => [
+        'provider'     => 'exercisedb',
+        'base_url'     => rtrim(env('EXERCISEDB_BASE_URL', 'https://oss.exercisedb.dev'), '/'),
+        'host'         => env('EXERCISEDB_RAPIDAPI_HOST', ''),
+        'api_key'      => env('EXERCISEDB_RAPIDAPI_KEY'),
+        'source_label' => 'ExerciseDB',
     ],
 
     /*

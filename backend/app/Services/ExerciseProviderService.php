@@ -27,6 +27,7 @@ class ExerciseProviderService
         private readonly FitGifExerciseService $fitgif,
         private readonly WorkoutXService $workoutx,
         private readonly FreeExerciseDbService $freeexercisedb,
+        private readonly ExerciseDbService $exercisedb,
     ) {}
 
     private function provider(): string
@@ -52,6 +53,7 @@ class ExerciseProviderService
             fn () => $this->fitgif->all($limit, $offset),
             fn () => $this->workoutx->all($limit, $offset),
             fn () => $this->freeexercisedb->all($limit, $offset),
+            fn () => $this->exercisedb->all($limit, $offset),
             fn () => Exercise::orderBy('name')->limit($limit)->offset($offset)
                 ->get()->map->toReference()->all(),
         ));
@@ -60,6 +62,7 @@ class ExerciseProviderService
     public function find(string $id): ?array
     {
         $ref = match ($this->provider()) {
+            'exercisedb'     => $this->exercisedb->find($id),
             'workoutx'       => $this->workoutx->find($id),
             'freeexercisedb' => $this->freeexercisedb->find($id),
             'local'          => optional(Exercise::where('external_id', $id)->first())->toReference(),
@@ -77,6 +80,7 @@ class ExerciseProviderService
             fn () => $this->fitgif->search($q),
             fn () => $this->workoutx->search($q),
             fn () => $this->freeexercisedb->search($q),
+            fn () => $this->exercisedb->search($q),
             fn () => Exercise::where('name', 'like', "%$q%")
                 ->limit(15)->get()->map->toReference()->all(),
         ));
@@ -88,6 +92,7 @@ class ExerciseProviderService
             fn () => $this->fitgif->byMuscle($muscle),
             fn () => $this->workoutx->byMuscle($muscle),
             fn () => $this->freeexercisedb->byMuscle($muscle),
+            fn () => $this->exercisedb->byMuscle($muscle),
             fn () => Exercise::where('body_part', 'like', "%$muscle%")
                 ->orWhere('target', 'like', "%$muscle%")
                 ->limit(30)->get()->map->toReference()->all(),
@@ -97,6 +102,7 @@ class ExerciseProviderService
     public function sync(): array
     {
         return match ($this->provider()) {
+            'exercisedb'     => array_merge(['details' => []], $this->exercisedb->sync()),
             'workoutx'       => ['ok' => $this->workoutx->sync(), 'fail' => 0, 'details' => []],
             'freeexercisedb' => ['ok' => $this->freeexercisedb->sync(), 'fail' => 0, 'details' => []],
             'local'          => ['ok' => 0, 'fail' => 0, 'details' => []],
@@ -145,12 +151,17 @@ class ExerciseProviderService
         callable $fitgif,
         callable $workoutx,
         callable $freeexercisedb,
+        callable $exercisedb,
         callable $local,
     ): array {
         $p = $this->provider();
 
         if ($p === 'local') {
             return $local();
+        }
+        if ($p === 'exercisedb') {
+            $res = $exercisedb();
+            return ! empty($res) ? $res : $local();
         }
         if ($p === 'workoutx') {
             $res = $workoutx();
@@ -229,8 +240,9 @@ class ExerciseProviderService
                 ? "{$base}/api/exercises/gif/{$file}"
                 : null;
             $ref['thumbnail_url'] = null;
-        } elseif ($provider === 'freeexercisedb') {
-            // CDN público: sin key, sin marca de agua → se exponen directas.
+        } elseif (in_array($provider, ['freeexercisedb', 'exercisedb'], true)) {
+            // CDN público (ExerciseDB / Free Exercise DB): sin key, sin marca de
+            // agua → las URLs del GIF/imagen se exponen directas a Flutter.
             if (! $this->isHttpUrl($ref['gif_url'] ?? null)) {
                 $ref['gif_url'] = null;
             }
