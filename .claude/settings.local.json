@@ -96,7 +96,9 @@
       "d:\\Github\\Iron_Body_App\\lib\\data\\models",
       "d:\\Github\\Iron_Body_App\\lib\\features\\store\\services",
       "d:\\Github\\Iron_Body_App\\lib\\features\\store\\screens",
-      "d:\\Github\\Iron_Body_App\\lib\\features\\payments\\services"
+      "d:\\Github\\Iron_Body_App\\lib\\features\\payments\\services",
+      "d:\\Github\\Iron_Body_App\\lib\\features\\auth\\widgets",
+      "d:\\Github\\Iron_Body_App\\lib\\features\\payments\\widgets"
     ]
   }
 }

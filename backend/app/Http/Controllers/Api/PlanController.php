@@ -243,6 +243,7 @@ class PlanController extends Controller
 
         $data = $request->validate([
             'name'               => [...$req, 'string', 'max:255'],
+            'tier'               => ['sometimes', 'nullable', 'string', 'in:'.implode(',', Plan::TIERS)],
             'price'              => [...$req, 'numeric', 'min:0'],
             'original_price'     => ['nullable', 'numeric', 'min:0'],
             'duration_days'      => [$updating ? 'sometimes' : 'required_without_all:duration_months,months', 'integer', 'min:1'],
@@ -270,6 +271,11 @@ class PlanController extends Controller
         }
 
         unset($data['duration_months'], $data['months']);
+
+        // El tier es opcional desde el cliente; por defecto un plan es "lite".
+        if (array_key_exists('tier', $data) && empty($data['tier'])) {
+            $data['tier'] = 'lite';
+        }
 
         if (array_key_exists('benefits', $data) && is_array($data['benefits'])) {
             $data['benefits'] = json_encode(array_values(array_filter(array_map(

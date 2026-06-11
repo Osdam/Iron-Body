@@ -27,6 +27,7 @@ class DatabaseSeeder extends Seeder
         $basic = Plan::firstOrCreate(
             ['name' => 'Mensual'],
             [
+                'tier' => 'lite',
                 'price' => 39.99,
                 'duration_days' => 30,
                 'benefits' => 'Acceso a sala general y una valoración mensual.',
@@ -37,6 +38,7 @@ class DatabaseSeeder extends Seeder
         Plan::firstOrCreate(
             ['name' => 'Elite'],
             [
+                'tier' => 'premium',
                 'price' => 79.99,
                 'duration_days' => 30,
                 'benefits' => 'Clases ilimitadas, rutinas personalizadas y reservas preferentes.',

@@ -41,6 +41,7 @@ class MembershipPlanController extends Controller
         return [
             'id' => $plan->id,
             'name' => $plan->name,
+            'tier' => $plan->tier ?: 'lite',
             'period' => $plan->period,
             'months' => $plan->months,
             'price' => (float) $plan->price,

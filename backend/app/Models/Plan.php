@@ -11,6 +11,7 @@ class Plan extends Model
 
     protected $fillable = [
         'name',
+        'tier',
         'price',
         'original_price',
         'duration_days',
@@ -35,6 +36,9 @@ class Plan extends Model
         'sort_order' => 'integer',
         'features' => 'array',
     ];
+
+    /** Segmentos comerciales disponibles para un plan. */
+    public const TIERS = ['lite', 'pro', 'premium'];
 
     public static function defaultFeatures(): array
     {
