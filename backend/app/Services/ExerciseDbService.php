@@ -40,6 +40,153 @@ class ExerciseDbService
         'waist'       => 'Core',
     ];
 
+    /** Equipo (EN) → sufijo en ES (con preposición). '' = no se añade sufijo. */
+    private const EQUIPMENT_ES = [
+        'barbell'           => 'con barra',
+        'ez barbell'        => 'con barra Z',
+        'olympic barbell'   => 'con barra olímpica',
+        'trap bar'          => 'con barra hexagonal',
+        'dumbbell'          => 'con mancuerna',
+        'kettlebell'        => 'con pesa rusa',
+        'cable'             => 'en polea',
+        'machine'           => 'en máquina',
+        'smith machine'     => 'en máquina Smith',
+        'leverage machine'  => 'en máquina',
+        'lever'             => 'en máquina',
+        'sled machine'      => 'en máquina',
+        'sled'              => 'en máquina',
+        'band'              => 'con banda elástica',
+        'resistance band'   => 'con banda elástica',
+        'elastic band'      => 'con banda elástica',
+        'medicine ball'     => 'con balón medicinal',
+        'stability ball'    => 'con pelota de estabilidad',
+        'bosu ball'         => 'con bosu',
+        'exercise ball'     => 'con pelota',
+        'roller'            => 'con rodillo',
+        'rope'              => 'con cuerda',
+        'wheel roller'      => 'con rueda abdominal',
+        'weighted'          => 'con peso',
+        'assisted'          => '(asistido)',
+        'body weight'       => '',
+        'tire'              => 'con llanta',
+        'hammer'            => '',
+    ];
+
+    /** Frases de movimiento (EN → ES). Orden: de más larga a más corta. */
+    private const PHRASES = [
+        'clean and jerk'        => 'cargada y envión',
+        'romanian deadlift'     => 'peso muerto rumano',
+        'stiff leg deadlift'    => 'peso muerto piernas rígidas',
+        'sumo deadlift'         => 'peso muerto sumo',
+        'bent over row'         => 'remo inclinado',
+        'upright row'           => 'remo al mentón',
+        'seated row'            => 'remo sentado',
+        'lat pulldown'          => 'jalón al pecho',
+        'lateral raise'         => 'elevación lateral',
+        'front raise'           => 'elevación frontal',
+        'leg raise'             => 'elevación de piernas',
+        'calf raise'            => 'elevación de pantorrilla',
+        'knee raise'            => 'elevación de rodillas',
+        'shoulder press'        => 'press de hombro',
+        'military press'        => 'press militar',
+        'overhead press'        => 'press sobre la cabeza',
+        'chest press'           => 'press de pecho',
+        'bench press'           => 'press de banca',
+        'leg press'             => 'prensa de pierna',
+        'push press'            => 'push press',
+        'leg curl'              => 'curl femoral',
+        'leg extension'         => 'extensión de pierna',
+        'biceps curl'           => 'curl de bíceps',
+        'bicep curl'            => 'curl de bíceps',
+        'hammer curl'           => 'curl martillo',
+        'preacher curl'         => 'curl predicador',
+        'concentration curl'    => 'curl concentrado',
+        'wrist curl'            => 'curl de muñeca',
+        'triceps extension'     => 'extensión de tríceps',
+        'tricep extension'      => 'extensión de tríceps',
+        'triceps pushdown'      => 'extensión en polea',
+        'tricep pushdown'       => 'extensión en polea',
+        'skull crusher'         => 'rompecráneos',
+        'hip thrust'            => 'empuje de cadera',
+        'glute bridge'          => 'puente de glúteo',
+        'good morning'          => 'buenos días',
+        'face pull'             => 'jalón a la cara',
+        'pull through'          => 'jalón entre piernas',
+        'russian twist'         => 'giro ruso',
+        'mountain climber'      => 'escalador',
+        'jumping jack'          => 'salto de tijera',
+        'front squat'           => 'sentadilla frontal',
+        'hack squat'            => 'sentadilla hack',
+        'goblet squat'          => 'sentadilla goblet',
+        'split squat'           => 'sentadilla búlgara',
+        'step up'               => 'subida al cajón',
+        'box jump'              => 'salto al cajón',
+        'pull up'               => 'dominada',
+        'chin up'               => 'dominada supina',
+        'push up'               => 'flexión',
+        'sit up'                => 'abdominal completo',
+        'back extension'        => 'hiperextensión',
+        'deadlift'              => 'peso muerto',
+        'pulldown'              => 'jalón',
+        'pushdown'              => 'extensión en polea',
+        'squat'                 => 'sentadilla',
+        'lunge'                 => 'zancada',
+        'shrug'                 => 'encogimiento',
+        'pullover'              => 'pull over',
+        'kickback'              => 'patada',
+        'crunch'                => 'abdominal',
+        'plank'                 => 'plancha',
+        'burpee'                => 'burpee',
+        'thruster'             => 'thruster',
+        'snatch'                => 'arranque',
+        'clean'                 => 'cargada',
+        'swing'                 => 'swing',
+        'twist'                 => 'giro',
+        'dips'                  => 'fondos',
+        'dip'                   => 'fondos',
+        'flyes'                 => 'aperturas',
+        'flye'                  => 'aperturas',
+        'fly'                   => 'aperturas',
+        'row'                   => 'remo',
+        'raise'                 => 'elevación',
+        'extension'             => 'extensión',
+        'curl'                  => 'curl',
+        'press'                 => 'press',
+    ];
+
+    /** Modificadores / anatomía (EN → ES) por palabra. */
+    private const WORDS = [
+        'incline' => 'inclinado', 'decline' => 'declinado', 'flat' => 'plano',
+        'seated' => 'sentado', 'standing' => 'de pie', 'lying' => 'acostado',
+        'kneeling' => 'arrodillado', 'bent' => 'inclinado', 'reverse' => 'inverso',
+        'alternating' => 'alterno', 'alternate' => 'alterno', 'hanging' => 'colgado',
+        'wide' => 'abierto', 'close' => 'cerrado', 'grip' => 'agarre',
+        'overhead' => 'sobre la cabeza', 'front' => 'frontal', 'rear' => 'posterior',
+        'side' => 'lateral', 'cross' => 'cruzado', 'high' => 'alto', 'low' => 'bajo',
+        'single' => 'a una', 'arm' => 'brazo', 'leg' => 'pierna',
+        'chest' => 'pecho', 'shoulder' => 'hombro', 'shoulders' => 'hombros',
+        'bicep' => 'bíceps', 'biceps' => 'bíceps', 'tricep' => 'tríceps', 'triceps' => 'tríceps',
+        'glute' => 'glúteo', 'glutes' => 'glúteos', 'hamstring' => 'femoral', 'hamstrings' => 'femoral',
+        'quad' => 'cuádriceps', 'quads' => 'cuádriceps', 'calf' => 'pantorrilla', 'calves' => 'pantorrillas',
+        'oblique' => 'oblicuo', 'obliques' => 'oblicuos', 'forearm' => 'antebrazo',
+        'trap' => 'trapecio', 'traps' => 'trapecio', 'lat' => 'dorsal', 'lats' => 'dorsales',
+        'neck' => 'cuello', 'wrist' => 'muñeca', 'hip' => 'cadera', 'hips' => 'cadera',
+        'and' => 'y', 'with' => 'con', 'to' => 'a', 'the' => '', 'of' => 'de', 'over' => '',
+    ];
+
+    /** Modificadores que, si van al inicio, se mueven al final para mejor orden. */
+    private const LEAD_MODS = [
+        'incline', 'decline', 'flat', 'seated', 'standing', 'lying',
+        'kneeling', 'reverse', 'bent', 'hanging', 'alternating', 'alternate',
+    ];
+
+    /** Palabras de equipo a quitar del nombre (el equipo va como sufijo en ES). */
+    private const STRIP_EQUIP = [
+        'barbell', 'dumbbell', 'dumbell', 'cable', 'machine', 'smith',
+        'kettlebell', 'lever', 'leverage', 'sled', 'ez', 'olympic',
+        'weighted', 'assisted', 'bosu', 'roller',
+    ];
+
     public function __construct()
     {
         $cfg = config('services.exercisedb');
@@ -244,7 +391,9 @@ class ExerciseDbService
 
         return [
             'external_id'       => $id,
-            'name'              => Str::ucfirst($name),
+            // Nombre mostrado en ES; el original EN se guarda para búsqueda.
+            'name'              => $this->translateName($name, $equipment),
+            'local_name'        => Str::ucfirst($name),
             'body_part'         => $bodyPart !== '' ? Str::ucfirst($bodyPart) : null,
             'muscle_group'      => $muscleEs ?: null,
             'target'            => $target !== '' ? $target : null,
@@ -265,6 +414,58 @@ class ExerciseDbService
     private function httpUrl(?string $v): ?string
     {
         return (is_string($v) && preg_match('#^https?://#i', $v)) ? $v : null;
+    }
+
+    /**
+     * Traduce el nombre EN del ejercicio a ES con diccionarios:
+     *  1) quita el equipo del inicio y lo añade como sufijo ("con barra", "en polea");
+     *  2) mueve modificadores líderes (incline, seated…) al final para mejor orden;
+     *  3) traduce frases de movimiento y luego palabras sueltas.
+     * Lo que no esté en el diccionario queda en inglés (degradación limpia).
+     */
+    private function translateName(string $en, string $equipEn): string
+    {
+        $s = str_replace('-', ' ', mb_strtolower(trim($en)));
+        $equip = mb_strtolower(trim($equipEn));
+
+        $words = preg_split('/\s+/', $s, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        // 1) Quita palabras de equipo en cualquier posición (el equipo se añade
+        //    como sufijo) y el conector 'over'.
+        $words = array_values(array_filter(
+            $words,
+            fn ($w) => $w !== 'over' && ! in_array($w, self::STRIP_EQUIP, true),
+        ));
+
+        // 2) Reordena modificadores líderes al final ("incline bench press"
+        //    → "bench press incline" → "press de banca inclinado").
+        $lead = [];
+        while (! empty($words) && in_array($words[0], self::LEAD_MODS, true)) {
+            $lead[] = array_shift($words);
+        }
+        $s = trim(implode(' ', array_merge($words, $lead)));
+
+        // 3) Traduce frases (largas→cortas) y luego palabras sueltas.
+        $s = $this->replaceTokens($s, self::PHRASES);
+        $s = $this->replaceTokens($s, self::WORDS);
+        $s = trim(preg_replace('/\s{2,}/', ' ', $s));
+
+        $suffix = self::EQUIPMENT_ES[$equip] ?? '';
+        if ($suffix !== '') {
+            $s = trim($s . ' ' . $suffix);
+        }
+
+        return $s !== '' ? Str::ucfirst($s) : Str::ucfirst($en);
+    }
+
+    /** Reemplaza claves del diccionario respetando límites de palabra. */
+    private function replaceTokens(string $s, array $dict): string
+    {
+        foreach ($dict as $en => $es) {
+            $s = preg_replace('/\b' . preg_quote($en, '/') . '\b/u', $es, $s);
+        }
+
+        return $s;
     }
 
     private function persist(array $ref): bool
