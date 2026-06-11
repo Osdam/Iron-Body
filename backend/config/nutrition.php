@@ -84,8 +84,10 @@ return [
         'require_user_confirmation' => filter_var(env('NUTRITION_OCR_REQUIRE_USER_CONFIRMATION', true), FILTER_VALIDATE_BOOLEAN),
     ],
 
-    // Metas nutricionales por defecto (aún no hay metas por plan/usuario). Se usan
-    // para calcular adherencia/cumplimiento en las estadísticas de constancia.
+    // Metas nutricionales por defecto SOLO de fallback de adherencia (constancia).
+    // NO es la meta del usuario: la meta real personalizada vive por miembro en
+    // nutrition_goals (calculada con goal_calculator). Esta tolerancia/valores se
+    // usan únicamente cuando un miembro aún no tiene meta para no romper gráficas.
     'goals' => [
         'calories'  => (float) env('NUTRITION_GOAL_CALORIES', 2200),
         'protein'   => (float) env('NUTRITION_GOAL_PROTEIN', 150),
@@ -93,6 +95,91 @@ return [
         'fat'       => (float) env('NUTRITION_GOAL_FAT', 70),
         // Tolerancia ± para considerar un día "en rango" (0.10 = ±10%).
         'tolerance' => (float) env('NUTRITION_GOAL_TOLERANCE', 0.10),
+    ],
+
+    // ── Calculadora de metas nutricionales personalizadas (estilo Fitia) ──────
+    // El BACKEND es la única autoridad: calcula BMR (Mifflin-St Jeor) → TDEE →
+    // ajuste por objetivo → macros. Flutter NUNCA calcula la meta final ni
+    // hardcodea valores. Todas las constantes de negocio viven aquí (no en
+    // controladores ni en la app). Versionado para auditar cambios de fórmula.
+    'goal_calculator' => [
+        'default_formula' => env('NUTRITION_GOAL_FORMULA', 'mifflin_st_jeor'),
+        'formula_version' => env('NUTRITION_GOAL_FORMULA_VERSION', 'v1'),
+
+        // Factores de actividad sobre el BMR → TDEE.
+        'activity_factors' => [
+            'sedentary'   => 1.20,
+            'light'       => 1.375,
+            'moderate'    => 1.55,
+            'very_active' => 1.725,
+            'athlete'     => 1.90,
+        ],
+
+        // Sugerencia de nivel de actividad según días de entrenamiento/semana.
+        'training_days_to_activity' => [
+            0 => 'sedentary', 1 => 'light', 2 => 'light',
+            3 => 'moderate', 4 => 'moderate', 5 => 'moderate',
+            6 => 'very_active', 7 => 'athlete',
+        ],
+
+        // Ajuste calórico (kcal) sobre el TDEE por objetivo. Donde el superávit/
+        // déficit depende de experiencia o ritmo, se define por clave.
+        'objective_calorie_adjustments' => [
+            'muscle_gain'      => ['beginner' => 300, 'intermediate' => 250, 'advanced' => 200, 'default' => 250],
+            'strength'         => ['beginner' => 250, 'intermediate' => 200, 'advanced' => 150, 'default' => 200],
+            'fat_loss'         => ['conservative' => -250, 'moderate' => -450, 'aggressive' => -600, 'default' => -450],
+            'endurance'        => ['default' => 100],
+            'general_wellness' => ['default' => 0],
+        ],
+
+        // Gramos por kg de peso (valor objetivo). Carbohidratos = calorías resto.
+        'macro_ranges' => [
+            'protein_g_per_kg' => [
+                'fat_loss' => 2.0, 'muscle_gain' => 1.8, 'strength' => 1.8,
+                'endurance' => 1.6, 'general_wellness' => 1.6,
+            ],
+            'fat_g_per_kg' => [
+                'fat_loss' => 0.7, 'muscle_gain' => 0.9, 'strength' => 0.9,
+                'endurance' => 0.85, 'general_wellness' => 0.9,
+            ],
+            // Piso de grasa (g/kg) al ajustar para que los carbos no queden < 0.
+            'fat_g_per_kg_floor'     => 0.5,
+            // Piso de proteína (g/kg) al ajustar (preservar masa muscular).
+            'protein_g_per_kg_floor' => 1.2,
+            // Fibra sugerida: 14 g por cada 1000 kcal (estándar dietético).
+            'fiber_g_per_1000_kcal'  => 14,
+        ],
+
+        // kcal por gramo de macronutriente (factores de Atwater).
+        'atwater' => ['protein' => 4, 'carbs' => 4, 'fat' => 9],
+
+        // Piso de calorías por sexo metabólico: nunca metas peligrosamente bajas.
+        'calorie_safety_floors' => [
+            'male' => 1500, 'female' => 1200, 'unspecified' => 1300,
+        ],
+
+        // Rangos realistas de validación (fuera de rango → se rechaza/avisa).
+        'validation_ranges' => [
+            'age'                 => ['min' => 14, 'max' => 100],
+            'weight_kg'           => ['min' => 30, 'max' => 300],
+            'height_cm'           => ['min' => 120, 'max' => 230],
+            'minor_age_threshold' => 18,
+        ],
+
+        // Sugerir recálculo cuando el peso cambia ≥ este delta (kg).
+        'recalculation_thresholds' => [
+            'weight_delta_kg' => 2.0,
+        ],
+
+        // Redondeos finales.
+        'rounding_rules' => [
+            'calories_to' => 10, // múltiplos de 10 kcal
+            'macros_to'   => 1,  // gramos enteros
+        ],
+
+        // Campos mínimos para poder calcular una meta real (si falta alguno →
+        // status setup_required, la app pide solo lo faltante).
+        'setup_required_fields' => ['metabolic_sex', 'age', 'weight_kg', 'height_cm', 'objective', 'activity_level'],
     ],
 
     // ── Capa IA (OpenAI) de asistencia — NO es fuente certificada de verdad ──

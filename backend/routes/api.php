@@ -201,6 +201,13 @@ Route::middleware('auth.member')->prefix('nutrition')->group(function (): void {
     Route::post('ai/parse-text',  [$ai, 'parseText'])->middleware('throttle:20,1');
     Route::post('ai/estimate',    [$ai, 'estimate'])->middleware('throttle:20,1');
     Route::get('ai/insights',     [$ai, 'insights'])->middleware('throttle:30,1');
+
+    // Meta nutricional personalizada (BMR/TDEE/macros). Backend = autoridad.
+    $goal = \App\Http\Controllers\Api\Nutrition\NutritionGoalController::class;
+    Route::get('goal',              [$goal, 'show']);
+    Route::post('goal/calculate',   [$goal, 'calculate'])->middleware('throttle:30,1');
+    Route::post('goal',             [$goal, 'store'])->middleware('throttle:20,1');
+    Route::post('goal/recalculate', [$goal, 'recalculate'])->middleware('throttle:20,1');
 });
 
 // ── IRON IA — asistente con OpenAI (Flutter → Laravel → OpenAI) ──────────────
