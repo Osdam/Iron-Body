@@ -395,6 +395,9 @@ Route::middleware('auth.member')->group(function (): void {
     Route::get('member/training/today',           [AppRoutineController::class, 'today']);
     Route::get('app/routines/assigned',           [AppRoutineController::class, 'assigned']);
     Route::get('app/routines/custom',             [AppRoutineController::class, 'custom']);
+    // Catálogo de plantillas pre-hechas que el miembro explora y adopta.
+    Route::get('app/routines/templates',          [AppRoutineController::class, 'templates']);
+    Route::post('app/routines/templates/{routine}/adopt', [AppRoutineController::class, 'adopt']);
     Route::post('app/routines',                   [AppRoutineController::class, 'store']);
     Route::post('app/routines/{routine}/complete',[AppRoutineController::class, 'complete']);
     // Resumen nutricional diario (sincroniza desde la app → push al cumplir meta)

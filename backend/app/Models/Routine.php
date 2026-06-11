@@ -11,6 +11,7 @@ class Routine extends Model
         'name',
         'objective',
         'level',
+        'gender',
         'muscle_group',
         'estimated_minutes',
         'duration_minutes',
@@ -22,19 +23,23 @@ class Routine extends Model
         'is_assigned',
         'member_id',
         'created_by_admin',
+        'is_template',
         'status',
         'description',
         'notes',
         'exercises',
+        'days',
     ];
 
     protected $casts = [
         'exercises'         => 'array',
+        'days'              => 'array',
         'duration_minutes'  => 'integer',
         'estimated_minutes' => 'integer',
         'days_per_week'     => 'integer',
         'is_assigned'       => 'boolean',
         'created_by_admin'  => 'boolean',
+        'is_template'       => 'boolean',
     ];
 
     public function routineExercises(): HasMany

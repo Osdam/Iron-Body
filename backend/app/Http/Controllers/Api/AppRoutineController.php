@@ -83,6 +83,68 @@ class AppRoutineController extends Controller
     }
 
     /**
+     * Catálogo público de rutinas pre-hechas (plantillas) que cualquier miembro
+     * puede explorar y adoptar. Filtra opcionalmente por nivel y/o género.
+     * GET /api/app/routines/templates?level=Principiante&gender=Mujer
+     */
+    public function templates(Request $request): JsonResponse
+    {
+        $query = Routine::where('is_template', true)
+            ->with(['routineExercises.exercise']);
+
+        if ($request->filled('level')) {
+            $query->where('level', $request->input('level'));
+        }
+        if ($request->filled('gender')) {
+            $query->where('gender', $request->input('gender'));
+        }
+
+        $routines = $query
+            ->orderBy('level')
+            ->orderBy('gender')
+            ->orderBy('name')
+            ->get();
+
+        return response()->json([
+            'ok'   => true,
+            'data' => RoutineResource::collection($routines),
+        ]);
+    }
+
+    /**
+     * El miembro adopta una plantilla: queda asignada a él (aparece en
+     * "Asignadas" y en "Entrenamiento de hoy"). Idempotente.
+     * POST /api/app/routines/templates/{routine}/adopt
+     */
+    public function adopt(Request $request, Routine $routine): JsonResponse
+    {
+        $member = $request->attributes->get('auth_member');
+
+        if (! $routine->is_template) {
+            return response()->json(['message' => 'Esta rutina no es una plantilla.'], 422);
+        }
+
+        $assignment = MemberRoutineAssignment::firstOrCreate(
+            ['routine_id' => $routine->id, 'member_id' => $member->id],
+            ['assigned_at' => now()]
+        );
+
+        if ($assignment->wasRecentlyCreated) {
+            app(NotificationService::class)->notifyRoutineAssigned($member, $routine);
+        }
+
+        $routine->load('routineExercises.exercise');
+
+        return response()->json([
+            'ok'      => true,
+            'message' => $assignment->wasRecentlyCreated
+                ? 'Rutina agregada a tus entrenamientos.'
+                : 'Esta rutina ya estaba en tus entrenamientos.',
+            'data'    => new RoutineResource($routine),
+        ], $assignment->wasRecentlyCreated ? 201 : 200);
+    }
+
+    /**
      * Rutinas personalizadas creadas por el propio miembro.
      */
     public function custom(Request $request): JsonResponse

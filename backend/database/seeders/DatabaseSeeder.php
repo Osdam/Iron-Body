@@ -61,6 +61,9 @@ class DatabaseSeeder extends Seeder
         // Catálogo real de planes IRONBODY (Básicos / Pro / Total Access).
         $this->call(PlansSeeder::class);
 
+        // Rutinas pre-hechas (plantillas) por nivel y género.
+        $this->call(RoutineTemplatesSeeder::class);
+
         // Equipos/máquinas del gimnasio (alimenta a IRON IA). Idempotente.
         $this->call(GymEquipmentSeeder::class);
 

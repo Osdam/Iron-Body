@@ -256,10 +256,13 @@ class RoutineController extends Controller
             'trainerName' => $r->trainer_name,
             'assignedMemberId' => $r->assigned_member_id ? (string) $r->assigned_member_id : null,
             'assignedMemberName' => $r->assigned_member_name,
+            'gender' => $r->gender ?? '',
+            'isTemplate' => (bool) $r->is_template,
             'status' => $r->status ?? 'Activa',
             'description' => $r->description ?? '',
             'notes' => $r->notes ?? '',
             'exercises' => $r->exercises ?? [],
+            'days' => is_array($r->days) ? $r->days : [],
             'createdAt' => optional($r->created_at)->toIso8601String(),
             'updatedAt' => optional($r->updated_at)->toIso8601String(),
         ];
