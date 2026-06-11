@@ -55,7 +55,7 @@ class NotificationController extends Controller
             return response()->json(['ok' => true, 'data' => [], 'unread_count' => 0]);
         }
 
-        $query = Notification::forMember($member->id, $member->document_number);
+        $query = Notification::forMember($member->id, $member->document_number, $member->created_at);
 
         $this->applyCategory($query, (string) $request->query('category', 'all'));
 
@@ -69,7 +69,7 @@ class NotificationController extends Controller
             ->limit(200)
             ->get();
 
-        $unread = Notification::forMember($member->id, $member->document_number)
+        $unread = Notification::forMember($member->id, $member->document_number, $member->created_at)
             ->unread()
             ->count();
 
@@ -99,10 +99,10 @@ class NotificationController extends Controller
         // Sólo lo nuevo tras conectar; lo histórico llega por el fetch normal.
         $cursor = $request->filled('after_id')
             ? (int) $request->query('after_id')
-            : (int) (Notification::forMember($member->id, $member->document_number)->max('id') ?? 0);
+            : (int) (Notification::forMember($member->id, $member->document_number, $member->created_at)->max('id') ?? 0);
 
         return SseStream::response(function () use ($member, &$cursor): void {
-            $items = Notification::forMember($member->id, $member->document_number)
+            $items = Notification::forMember($member->id, $member->document_number, $member->created_at)
                 ->where('id', '>', $cursor)
                 ->orderBy('id')
                 ->limit(20)
@@ -124,7 +124,7 @@ class NotificationController extends Controller
         $member = $this->resolveMember($request);
 
         $count = $member
-            ? Notification::forMember($member->id, $member->document_number)->unread()->count()
+            ? Notification::forMember($member->id, $member->document_number, $member->created_at)->unread()->count()
             : 0;
 
         return response()->json(['ok' => true, 'unread_count' => $count]);
@@ -147,7 +147,7 @@ class NotificationController extends Controller
             return response()->json(['ok' => true, 'data' => []]);
         }
 
-        $items = Notification::forMember($member->id, $member->document_number)
+        $items = Notification::forMember($member->id, $member->document_number, $member->created_at)
             ->where('should_popup', true)
             ->whereNull('popup_shown_at')
             ->orderByRaw("CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END")
@@ -212,7 +212,7 @@ class NotificationController extends Controller
             return response()->json(['ok' => true, 'updated' => 0]);
         }
 
-        $updated = Notification::forMember($member->id, $member->document_number)
+        $updated = Notification::forMember($member->id, $member->document_number, $member->created_at)
             ->unread()
             ->update(['status' => Notification::STATUS_READ, 'read_at' => now()]);
 

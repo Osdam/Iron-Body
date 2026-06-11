@@ -104,20 +104,39 @@ class Notification extends Model
         return $q->where('audience', $audience);
     }
 
-    /** Notificaciones visibles para un miembro: suyas + difusión global. */
-    public function scopeForMember(Builder $q, ?int $memberId, ?string $document): Builder
+    /**
+     * Notificaciones visibles para un miembro: suyas + difusión global.
+     *
+     * [$since] (normalmente la fecha de alta del miembro) acota las difusiones
+     * globales y las coincidencias SOLO por documento a las creadas desde que el
+     * miembro existe. Sin esto, un miembro recién creado heredaba TODAS las
+     * promos/anuncios históricos (aparecían ~50 al instante) y, si se recreaba
+     * con la misma cédula, también las notificaciones del miembro borrado.
+     * Las notificaciones ligadas a su `member_id` no se acotan (son posteriores
+     * a su alta por definición).
+     */
+    public function scopeForMember(Builder $q, ?int $memberId, ?string $document, $since = null): Builder
     {
         return $q->where('audience', self::AUDIENCE_MEMBER)
-            ->where(function (Builder $sub) use ($memberId, $document): void {
+            ->where(function (Builder $sub) use ($memberId, $document, $since): void {
                 if ($memberId) {
                     $sub->orWhere('member_id', $memberId);
                 }
                 if ($document) {
-                    $sub->orWhere('document', $document);
+                    $sub->orWhere(function (Builder $d) use ($document, $since): void {
+                        $d->where('document', $document);
+                        if ($since) {
+                            $d->where('created_at', '>=', $since);
+                        }
+                    });
                 }
-                // Difusión global a todos los miembros (promos/anuncios).
-                $sub->orWhere(function (Builder $g): void {
+                // Difusión global a todos los miembros (promos/anuncios): solo las
+                // emitidas desde que el miembro existe.
+                $sub->orWhere(function (Builder $g) use ($since): void {
                     $g->whereNull('member_id')->whereNull('document');
+                    if ($since) {
+                        $g->where('created_at', '>=', $since);
+                    }
                 });
             });
     }

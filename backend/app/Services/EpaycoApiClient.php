@@ -791,6 +791,11 @@ class EpaycoApiClient
             ?? $j['textResponse']
             ?? $j['titleResponse']
             ?? $j['message']
+            // Motivo específico de ePayco (p. ej. E015 "monto máximo superado"):
+            // viene en errors[].errorMessage, no en los campos de texto de arriba.
+            ?? $this->firstEpaycoError($j, $data)
+            ?? $j['description']
+            ?? $data['description']
             ?? null;
 
         // 'status'/'success' string 'error'/'false' también es fallo.
@@ -814,6 +819,26 @@ class EpaycoApiClient
             'requires_external' => false,
             'raw'               => $this->redact($data),
         ];
+    }
+
+    /**
+     * Extrae el primer mensaje de error del arreglo `errors` de ePayco
+     * (formato APIFY: errors:[{codError, errorMessage}]). Devuelve el texto
+     * del motivo real (p. ej. "monto máximo superado") o null si no hay.
+     */
+    private function firstEpaycoError(array $j, array $data): ?string
+    {
+        foreach ([$data['errors'] ?? null, $j['errors'] ?? null] as $errs) {
+            if (is_array($errs)) {
+                foreach ($errs as $e) {
+                    if (is_array($e) && ! empty($e['errorMessage'])) {
+                        return (string) $e['errorMessage'];
+                    }
+                }
+            }
+        }
+
+        return null;
     }
 
     /** 'Aceptada'/'1' → 1, 'Rechazada'/'2' → 2, 'Pendiente'/'3' → 3, etc. */
