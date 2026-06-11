@@ -22,13 +22,19 @@ class NutritionService
     public const TZ = 'America/Bogota';
     public const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snacks'];
 
-    /** Meta por defecto si el miembro aún no configuró una (no se persiste). */
-    private const DEFAULT_GOAL = [
-        'daily_calories' => 2200,
-        'protein_g' => 150,
-        'carbs_g' => 250,
-        'fat_g' => 70,
+    /**
+     * Estado cuando el miembro AÚN no tiene meta. Ya NO es una meta fija de 2200
+     * kcal: la app debe mostrar "Configura tu objetivo nutricional" (setup) y
+     * llamar a GET /api/nutrition/goal para el cálculo personalizado real.
+     */
+    private const SETUP_GOAL = [
+        'daily_calories' => 0,
+        'protein_g' => 0,
+        'carbs_g' => 0,
+        'fat_g' => 0,
         'goal_type' => null,
+        'status' => 'setup_required',
+        'source' => null,
     ];
 
     public function today(string $tz): CarbonImmutable
@@ -91,7 +97,7 @@ class NutritionService
             ->latest('id')
             ->first();
 
-        return $goal?->toPublicArray() ?? self::DEFAULT_GOAL;
+        return $goal?->toPublicArray() ?? self::SETUP_GOAL;
     }
 
     /** Crea/actualiza la meta activa (desactiva la anterior). */
@@ -110,6 +116,11 @@ class NutritionService
                 'carbs_g' => (int) $data['carbs_g'],
                 'fat_g' => (int) $data['fat_g'],
                 'goal_type' => $data['goal_type'] ?? null,
+                // Meta manual: el usuario fijó cal/macros a mano. Se marca para
+                // que el recálculo no la pise sin confirmación explícita.
+                'source' => 'manual',
+                'status' => 'manual',
+                'is_manual_override' => true,
                 'is_active' => true,
             ]);
 
