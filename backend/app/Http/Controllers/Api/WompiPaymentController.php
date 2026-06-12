@@ -16,6 +16,7 @@ use App\Services\Wompi\WompiCardPaymentService;
 use App\Services\Wompi\WompiDaviplataPaymentService;
 use App\Services\Wompi\WompiNequiPaymentService;
 use App\Services\Wompi\WompiPsePaymentService;
+use App\Services\Wompi\WompiReconciliationService;
 use App\Services\Wompi\WompiTransactionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -144,6 +145,23 @@ class WompiPaymentController extends Controller
     public function status(Request $request, string $reference): JsonResponse
     {
         $tx = $this->ownedTransaction($request, $reference);
+
+        // Si está EN VUELO y ya tiene id de Wompi, se consulta el estado real
+        // (el webhook puede no haber llegado). En estado FINAL no se consulta
+        // (anti doble pago + ahorro). Un error de Wompi NO produce 500: se loguea
+        // de forma segura (solo referencia/id/clase) y se devuelve el estado local.
+        if (! $tx->isWompiFinal() && $tx->wompi_transaction_id) {
+            try {
+                WompiReconciliationService::make()->reconcileOne($tx);
+                $tx->refresh();
+            } catch (Throwable $e) {
+                Log::warning('Wompi status: reconciliación falló (estado local)', [
+                    'reference'            => $tx->reference,
+                    'wompi_transaction_id' => $tx->wompi_transaction_id,
+                    'error'                => get_class($e),
+                ]);
+            }
+        }
 
         $member = $tx->member_id ? Member::find($tx->member_id) : null;
         $user   = $tx->user_id ? User::find($tx->user_id) : ($member?->user);

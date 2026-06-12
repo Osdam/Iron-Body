@@ -15,8 +15,13 @@ class WompiReconcile extends Command
     protected $signature = 'payments:wompi-reconcile {--limit=100 : Máximo de transacciones a revisar}';
     protected $description = 'Reconcilia pagos Wompi pendientes contra la API de Wompi (respaldo del webhook).';
 
-    public function handle(WompiReconciliationService $service): int
+    public function handle(): int
     {
+        // El servicio se CONSTRUYE con su factory: no se inyecta por el contenedor
+        // (WompiClient recibe `array $cfg`, que el contenedor no sabe resolver →
+        // "Unresolvable dependency resolving array $cfg").
+        $service = WompiReconciliationService::make();
+
         $stats = $service->reconcilePending((int) $this->option('limit'));
 
         $this->info(sprintf(

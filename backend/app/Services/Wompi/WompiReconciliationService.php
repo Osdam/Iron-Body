@@ -68,35 +68,55 @@ class WompiReconciliationService
         return $stats;
     }
 
-    /** @return 'updated'|'expired'|'skipped' */
+    /**
+     * Reconcilia UNA transacción. ORDEN CRÍTICO: se consulta Wompi PRIMERO y solo
+     * se expira si Wompi sigue PENDING tras una consulta VÁLIDA y se superó el
+     * límite. Un fallo temporal de Wompi NO expira ni cambia el estado (así no se
+     * marca expired un pago que Wompi ya aprobó). La activación de membresía es
+     * idempotente (la garantiza applyWompiTransaction → transitionTo).
+     *
+     * @return 'updated'|'expired'|'skipped'
+     */
     public function reconcileOne(PaymentTransaction $tx): string
     {
         $maxRetries = (int) ($this->cfg['reconciliation']['max_retries'] ?? 24);
         $maxPendingMin = (int) ($this->cfg['reconciliation']['max_pending_minutes'] ?? 60);
 
-        // Expiración por antigüedad o por exceso de reintentos.
-        $age = $tx->created_at ? Carbon::parse($tx->created_at)->diffInMinutes(now()) : 0;
-        if ($age >= $maxPendingMin || (int) $tx->retry_count >= $maxRetries) {
-            $this->tx->transitionTo($tx, PaymentStateMachine::EXPIRED, [
-                'status_message' => 'El pago expiró sin confirmarse.',
-            ]);
-            return 'expired';
+        if (! $tx->wompi_transaction_id) {
+            return 'skipped';
         }
 
+        // 1) Consultar Wompi PRIMERO (fuente de verdad). Se marca el intento
+        //    (retry_count + last_reconciled_at) aunque la consulta falle.
         $res = $this->client->getTransaction($tx->wompi_transaction_id);
-
-        // Marca el intento aunque falle la consulta (backoff por orden).
         $tx->forceFill([
             'retry_count'        => (int) $tx->retry_count + 1,
             'last_reconciled_at' => now(),
         ])->save();
 
+        // 2) Fallo temporal de Wompi → NO expirar, NO cambiar estado.
         if (! $res['ok'] || empty($res['data']['id'])) {
             return 'skipped';
         }
 
+        // 3) Aplicar el estado real de inmediato (idempotente). Si Wompi devolvió
+        //    APPROVED/DECLINED/VOIDED/ERROR, la máquina de estados lo sella aquí.
         $before = $tx->status;
         $updated = $this->tx->applyWompiTransaction($tx, $res['data']);
+
+        if ($this->sm->isTerminal($updated->status)) {
+            return $updated->status !== $before ? 'updated' : 'skipped';
+        }
+
+        // 4) Wompi SIGUE PENDING (consulta válida) → expirar solo si se superó el
+        //    límite de antigüedad o de reintentos.
+        $age = $updated->created_at ? Carbon::parse($updated->created_at)->diffInMinutes(now()) : 0;
+        if ($age >= $maxPendingMin || (int) $updated->retry_count >= $maxRetries) {
+            $this->tx->transitionTo($updated, PaymentStateMachine::EXPIRED, [
+                'status_message' => 'El pago expiró sin confirmarse.',
+            ]);
+            return 'expired';
+        }
 
         return $updated->status !== $before ? 'updated' : 'skipped';
     }
