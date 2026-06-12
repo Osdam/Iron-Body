@@ -92,13 +92,19 @@ class WompiClient
     /**
      * POST a una URL ABSOLUTA devuelta por Wompi (p. ej. `url_services` de
      * DaviPlata para el ciclo OTP). Misma sanitización y normalización; sin
-     * reintento (operación con efecto). El OTP del body NO se loguea.
+     * reintento (operación con efecto). El OTP/código del body NO se loguea.
+     *
+     * @param  string|null  $bearer  token Bearer EXPLÍCITO (token de url_services o
+     *                               authorization.access_token). Si se entrega, se
+     *                               usa en vez de la llave pública/privada.
      */
-    public function postAbsolute(string $url, array $body, ?string $auth = 'public'): array
+    public function postAbsolute(string $url, array $body, ?string $auth = 'public', ?string $bearer = null): array
     {
         $correlationId = (string) Str::uuid();
         try {
-            $req = $this->baseRequest($auth, null, $correlationId);
+            $req = $bearer !== null && $bearer !== ''
+                ? $this->baseRequest(null, null, $correlationId)->withToken($bearer)
+                : $this->baseRequest($auth, null, $correlationId);
             $response = $req->post($url, $body);
             $raw = $this->safeJson($response->json());
             $ok = $response->successful();

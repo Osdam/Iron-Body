@@ -87,6 +87,18 @@ return [
         'max_pending_minutes' => (int) env('WOMPI_MAX_PENDING_MINUTES', 60),
     ],
 
+    // ── DaviPlata (ciclo OTP) ───────────────────────────────────────────────
+    // Tras crear la transacción, Wompi entrega `payment_method.extra.url_services`
+    // (token + code_otp_send + code_otp_validate) que pueden NO venir en la primera
+    // respuesta → se consulta con backoff acotado.
+    'daviplata' => [
+        'poll_attempts'   => (int) env('WOMPI_DAVIPLATA_POLL_ATTEMPTS', 6),
+        'poll_sleep_ms'   => (int) env('WOMPI_DAVIPLATA_POLL_SLEEP_MS', 900),
+        'otp_ttl_minutes' => (int) env('WOMPI_DAVIPLATA_OTP_TTL_MINUTES', 10),
+        'max_attempts'    => (int) env('WOMPI_DAVIPLATA_MAX_OTP_ATTEMPTS', 3),
+        'max_resends'     => (int) env('WOMPI_DAVIPLATA_MAX_OTP_RESENDS', 2),
+    ],
+
     // ── Cache de tokens de aceptación (presigned_acceptance) ────────────────
     // Wompi rota las versiones; cache corto e invalidable.
     'acceptance_cache_ttl' => (int) env('WOMPI_ACCEPTANCE_CACHE_TTL', 600),
