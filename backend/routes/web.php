@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Controllers\Api\EpaycoPaymentController;
 use App\Http\Controllers\Crm\ExerciseController as CrmExerciseController;
 use App\Http\Controllers\Crm\MemberRoutineController as CrmMemberRoutineController;
 use App\Http\Controllers\Crm\RoutineController as CrmRoutineController;
@@ -11,11 +10,9 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-// Bridge web del Smart Checkout v2 de ePayco: página que abre checkout-v2.js con
-// el sessionId de la transacción. Protegida por firma+TTL (?exp&t). La app la
-// abre en un WebView interno; la confirmación REAL del pago es por webhook.
-Route::get('payments/epayco/checkout-bridge/{reference}', [EpaycoPaymentController::class, 'checkoutBridge'])
-    ->name('payments.epayco.checkout-bridge');
+// (Retirado) El bridge web del Smart Checkout v2 de ePayco se eliminó en la
+// migración a Wompi: la app ya no abre ese WebView. Wompi usa la URL oficial de
+// autenticación (PSE/3DS) que entrega la propia transacción.
 
 Route::prefix('crm')->name('crm.')->group(function () {
     // Entrenadores

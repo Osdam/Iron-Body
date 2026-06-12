@@ -18,11 +18,27 @@ class PaymentTransaction extends Model
     public const STATUS_CANCELLED  = 'cancelled';
     public const STATUS_EXPIRED    = 'expired';
 
+    // Estados adicionales de la máquina Wompi (provider='wompi'). Los legados
+    // (ePayco) siguen usando el set de arriba; estos son aditivos.
+    public const STATUS_CREATED         = 'created';
+    public const STATUS_TOKENIZING      = 'tokenizing';
+    public const STATUS_REQUIRES_ACTION = 'requires_action';
+    public const STATUS_DECLINED        = 'declined';
+    public const STATUS_VOIDED          = 'voided';
+    public const STATUS_ERROR           = 'error';
+
     protected $fillable = [
         'reference', 'idempotency_key', 'order_id', 'member_id', 'user_id', 'plan_id',
         'amount', 'currency', 'status', 'provider', 'method', 'provider_ref',
         'checkout_url', 'description', 'failure_reason', 'customer',
         'raw_response', 'paid_at',
+        // Wompi (aditivo).
+        'uuid', 'environment', 'wompi_transaction_id', 'status_message',
+        'processor_response_code', 'customer_email', 'customer_phone',
+        'customer_legal_id_type', 'customer_legal_id', 'external_auth_url',
+        'redirect_url', 'approved_at', 'declined_at', 'voided_at', 'failed_at',
+        'expires_at', 'last_reconciled_at', 'retry_count', 'card_brand',
+        'card_last_four', 'installments', 'metadata',
     ];
 
     protected $casts = [
@@ -30,6 +46,16 @@ class PaymentTransaction extends Model
         'customer'     => 'array',
         'raw_response' => 'array',
         'paid_at'      => 'datetime',
+        // Wompi (aditivo).
+        'metadata'           => 'array',
+        'approved_at'        => 'datetime',
+        'declined_at'        => 'datetime',
+        'voided_at'          => 'datetime',
+        'failed_at'          => 'datetime',
+        'expires_at'         => 'datetime',
+        'last_reconciled_at' => 'datetime',
+        'retry_count'        => 'integer',
+        'installments'       => 'integer',
     ];
 
     public function user()
@@ -100,6 +126,53 @@ class PaymentTransaction extends Model
             'paid_at'      => optional($this->paid_at)->toIso8601String(),
             'created_at'   => optional($this->created_at)->toIso8601String(),
             'updated_at'   => optional($this->updated_at)->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Respuesta pública para la app en el flujo WOMPI. Estados canónicos de la
+     * máquina de estados (created|tokenizing|pending|requires_action|approved|
+     * declined|voided|error|expired). SIN secretos: ni token, ni llaves, ni
+     * payload crudo. Incluye la URL de autenticación EXTERNA oficial (PSE/3DS)
+     * y datos NO sensibles de tarjeta (marca, últimos 4, cuotas).
+     */
+    public function toWompiPublicArray(): array
+    {
+        $isFailedLike = in_array($this->status, [
+            self::STATUS_DECLINED, self::STATUS_VOIDED, self::STATUS_ERROR,
+            self::STATUS_FAILED, self::STATUS_CANCELLED, self::STATUS_EXPIRED,
+        ], true);
+
+        return [
+            'ok'                  => ! $isFailedLike,
+            'reference'           => $this->reference,
+            'uuid'                => $this->uuid,
+            'status'              => $this->status,
+            'status_message'      => $this->status_message,
+            'reason'              => $this->status_message ?: $this->failure_reason,
+            'amount'              => (float) $this->amount,
+            'amount_in_cents'     => (int) round((float) $this->amount * 100),
+            'currency'            => $this->currency,
+            'provider'            => $this->provider,
+            'environment'         => $this->environment,
+            'payment_method'      => $this->method,
+            'method'              => $this->method,
+            'transaction_id'      => $this->wompi_transaction_id ?: $this->provider_ref,
+            'wompi_transaction_id'=> $this->wompi_transaction_id,
+            // Paso externo OFICIAL del banco/emisor: la app lo abre en WebView.
+            'external_auth_url'   => $this->external_auth_url,
+            'card_brand'          => $this->card_brand,
+            'card_last_four'      => $this->card_last_four,
+            'installments'        => $this->installments,
+            'member_id'           => $this->member_id,
+            'plan_id'             => $this->plan_id,
+            'description'         => $this->description,
+            'product'             => $this->description,
+            'approved_at'         => optional($this->approved_at)->toIso8601String(),
+            'paid_at'             => optional($this->paid_at)->toIso8601String(),
+            'expires_at'          => optional($this->expires_at)->toIso8601String(),
+            'created_at'          => optional($this->created_at)->toIso8601String(),
+            'updated_at'          => optional($this->updated_at)->toIso8601String(),
         ];
     }
 }

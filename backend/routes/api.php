@@ -11,11 +11,12 @@ use App\Http\Controllers\Api\GymEquipmentController;
 use App\Http\Controllers\Api\AppStoreController;
 use App\Http\Controllers\Api\Admin\ProductController;
 use App\Http\Controllers\Api\Admin\CajaController;
-use App\Http\Controllers\Api\EpaycoPaymentController;
 use App\Http\Controllers\Api\ExerciseController;
 use App\Http\Controllers\Api\AppClassController;
 use App\Http\Controllers\Api\AppExerciseController;
 use App\Http\Controllers\Api\AppPaymentController;
+use App\Http\Controllers\Api\WompiPaymentController;
+use App\Http\Controllers\Api\WompiWebhookController;
 use App\Http\Controllers\Api\AppRoutineController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\MemberRegistrationController;
@@ -132,32 +133,39 @@ Route::get('contracts/consent-template', [MemberContractController::class, 'cons
 Route::get('legal/privacy', [\App\Http\Controllers\Api\LegalController::class, 'privacy']);
 Route::get('legal/terms',   [\App\Http\Controllers\Api\LegalController::class, 'terms']);
 
-// ── ePayco — tarjeta/PSE in-app por API; billeteras por Smart Checkout v2 ─────
-Route::post('payments/epayco/create', [EpaycoPaymentController::class, 'create']);
-Route::post('payments/epayco/pay-card', [EpaycoPaymentController::class, 'payCard']);
-Route::post('payments/epayco/pay-pse', [EpaycoPaymentController::class, 'payPse']);
-// Billeteras (Nequi/DaviPlata): Smart Checkout v2 (sesión + bridge WebView).
-Route::post('payments/epayco/pay-nequi', [EpaycoPaymentController::class, 'payNequi']);
-Route::post('payments/epayco/pay-daviplata', [EpaycoPaymentController::class, 'payDaviplata']);
-Route::post('payments/epayco/checkout-session', [EpaycoPaymentController::class, 'checkoutSession']);
-Route::post('payments/epayco/confirmation', [EpaycoPaymentController::class, 'confirmation']);
-Route::get('payments/epayco/response', [EpaycoPaymentController::class, 'response']);
-Route::get('payments/epayco/history', [EpaycoPaymentController::class, 'history']);
-Route::get('payments/{reference}/status', [EpaycoPaymentController::class, 'status']);
+// ── PASARELA: WOMPI (única pasarela activa) ───────────────────────────────────
+// La integración ePayco y el Nequi-directo (Smart Checkout v2 / APIFY push) se
+// RETIRARON como rutas activas en la migración a Wompi. Los registros históricos
+// (`payments` con method=epayco/nequi) siguen siendo legibles desde el historial
+// del miembro (GET /api/app/payments). Wompi vive en el grupo `payments/wompi/*`
+// (más abajo) y el webhook público `POST /api/webhooks/wompi`.
 
-// ── Nequi DIRECTO (Pagos con notificación Push) — proveedor independiente ──────
-// push/status/reverse exigen sesión de miembro; confirmation/response son S2S.
-// Deshabilitado por defecto (responde `unavailable`). La membresía solo se
-// activa por `approved` (webhook/consulta), nunca desde la app.
-Route::post('payments/nequi/confirmation', [\App\Http\Controllers\Api\NequiPaymentController::class, 'confirmation']);
-Route::get('payments/nequi/response', [\App\Http\Controllers\Api\NequiPaymentController::class, 'response']);
-Route::middleware('auth.member')->group(function (): void {
-    Route::post('payments/nequi/push', [\App\Http\Controllers\Api\NequiPaymentController::class, 'push'])
-        ->middleware('throttle:10,1');
-    Route::get('payments/nequi/{reference}/status', [\App\Http\Controllers\Api\NequiPaymentController::class, 'status'])
-        ->where('reference', '[A-Za-z0-9_\-]+');
-    Route::post('payments/nequi/{reference}/reverse', [\App\Http\Controllers\Api\NequiPaymentController::class, 'reverse'])
+// ── WOMPI (pasarela ACTIVA) — IN-APP, autenticado como miembro ─────────────────
+// El sujeto se toma del miembro autenticado (no del body). El monto es
+// autoritativo del backend. Tarjeta: la app envía SOLO el token (PCI). La
+// membresía se activa por webhook/reconciliación, nunca desde la app.
+Route::middleware('auth.member')->prefix('payments/wompi')->group(function (): void {
+    Route::get('config',            [WompiPaymentController::class, 'config'])->middleware('throttle:30,1');
+    Route::get('acceptance',        [WompiPaymentController::class, 'acceptance'])->middleware('throttle:30,1');
+    Route::get('pse/institutions',  [WompiPaymentController::class, 'pseInstitutions'])->middleware('throttle:30,1');
+
+    Route::post('card',      [WompiPaymentController::class, 'payCard'])->middleware('throttle:10,1');
+    Route::post('pse',       [WompiPaymentController::class, 'payPse'])->middleware('throttle:10,1');
+    Route::post('nequi',     [WompiPaymentController::class, 'payNequi'])->middleware('throttle:10,1');
+
+    Route::post('daviplata/start', [WompiPaymentController::class, 'daviplataStart'])->middleware('throttle:10,1');
+    Route::post('daviplata/{reference}/send-otp',     [WompiPaymentController::class, 'daviplataSendOtp'])
         ->where('reference', '[A-Za-z0-9_\-]+')->middleware('throttle:6,1');
+    Route::post('daviplata/{reference}/validate-otp', [WompiPaymentController::class, 'daviplataValidateOtp'])
+        ->where('reference', '[A-Za-z0-9_\-]+')->middleware('throttle:10,1');
+    Route::post('daviplata/{reference}/resend-otp',   [WompiPaymentController::class, 'daviplataResendOtp'])
+        ->where('reference', '[A-Za-z0-9_\-]+')->middleware('throttle:4,1');
+
+    Route::get('history', [WompiPaymentController::class, 'history'])->middleware('throttle:30,1');
+    // Estado real (refresca contra Wompi si sigue en vuelo). Path propio para no
+    // colisionar con el legado público payments/{reference}/status (ePayco).
+    Route::get('{reference}/status', [WompiPaymentController::class, 'status'])
+        ->where('reference', '[A-Za-z0-9_\-]+')->middleware('throttle:60,1');
 });
 
 // ── Nutrición premium: búsqueda de alimentos / barcode / OCR / tracking ───────
@@ -261,6 +269,13 @@ Route::post('turnstile/webhook/fire', [TurnstileController::class, 'fireWebhook'
 // (no ngrok) en producción. Ver WebhookMetaController.
 Route::get('webhooks/meta',  [\App\Http\Controllers\Api\WebhookMetaController::class, 'verify']);
 Route::post('webhooks/meta', [\App\Http\Controllers\Api\WebhookMetaController::class, 'receive']);
+
+// ── Webhook público de WOMPI (S2S) ────────────────────────────────────────────
+// Sin auth de sesión: la autenticidad se valida por el CHECKSUM del evento. La
+// activación de membresía ocurre AQUÍ (idempotente), nunca desde la app. URL a
+// registrar en el dashboard Wompi (config('wompi.webhook_url')).
+Route::post('webhooks/wompi', [WompiWebhookController::class, 'handle'])
+    ->middleware('throttle:120,1');
 // ZKTeco Eco — apertura directa (SDK standalone, TCP 4370).
 Route::post('turnstile/zkteco/open', [TurnstileController::class, 'openZkteco']);
 // Serial COM (replica NetGymValidator → USB-CH340 → RS485 → placa SATT).

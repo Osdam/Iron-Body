@@ -66,3 +66,15 @@ Schedule::command('ironbody:detect-progress-stalled')
 // Resúmenes semanales IA: domingo 19:00.
 Schedule::command('ironbody:generate-weekly-ai-summaries')
     ->weeklyOn(0, '19:00')->withoutOverlapping()->onOneServer();
+
+// ── Wompi: reconciliación de pagos en vuelo (respaldo del webhook) ─────────────
+// Corre cada WOMPI_RECONCILIATION_MINUTES (default 5). Idempotente y con
+// lockForUpdate: jamás duplica activaciones ni degrada un pago terminal.
+// withoutOverlapping evita solapes; onOneServer en despliegues multi-nodo.
+if ((bool) config('wompi.reconciliation.enabled', true)) {
+    $wompiMinutes = max(1, (int) config('wompi.reconciliation.minutes', 5));
+    Schedule::command('payments:wompi-reconcile')
+        ->cron('*/'.$wompiMinutes.' * * * *')
+        ->withoutOverlapping()
+        ->onOneServer();
+}

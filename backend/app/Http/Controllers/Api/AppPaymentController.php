@@ -5,24 +5,21 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Member;
 use App\Models\Payment;
-use App\Services\EpaycoPaymentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Historial de pagos del miembro autenticado (lectura).
+ * Historial de pagos del miembro autenticado (SOLO lectura).
  *
- * Lee de la tabla `payments` (fuente de verdad del CRM): cualquier pago que
- * vea el admin en su panel — efectivo registrado a mano o aprobaciones de
- * ePayco volcadas por EpaycoPaymentService::onApproved — se devuelve aquí.
- * No toca pasarelas ni cobros; solo expone datos públicos vía toPublicArray().
+ * Lee de la tabla `payments` (fuente de verdad del CRM): cualquier pago que vea
+ * el admin en su panel — efectivo registrado a mano, aprobaciones de Wompi
+ * volcadas por PaymentMembershipActivator, o registros HISTÓRICOS de ePayco —
+ * se devuelve aquí. No toca pasarelas ni cobros; solo expone datos públicos vía
+ * toPublicArray(). (La integración ePayco se retiró como ruta activa; sus
+ * registros antiguos siguen siendo legibles desde aquí.)
  */
 class AppPaymentController extends Controller
 {
-    public function __construct(private EpaycoPaymentService $epayco)
-    {
-    }
-
     public function index(Request $request): JsonResponse
     {
         /** @var Member $member */
@@ -45,10 +42,9 @@ class AppPaymentController extends Controller
      * GET /api/app/payments/{reference} — detalle de un pago del miembro.
      *
      * 404 cuando la referencia no existe O no pertenece al miembro (mismo
-     * código para no filtrar la existencia de referencias ajenas). Si el
-     * registro sigue en vuelo (pending/processing), refresca contra ePayco
-     * antes de responder; statusFor() persiste el cambio en
-     * payment_transactions y, al aprobarse, propaga a payments vía onApproved.
+     * código para no filtrar la existencia de referencias ajenas). Es SOLO
+     * lectura: la `payments` guarda pagos ya liquidados; el estado en vuelo de
+     * Wompi se consulta por GET /api/payments/wompi/{reference}/status.
      */
     public function show(Request $request, string $reference): JsonResponse
     {
@@ -61,11 +57,6 @@ class AppPaymentController extends Controller
 
         if (! $payment) {
             return response()->json(['message' => 'Pago no encontrado.'], 404);
-        }
-
-        if (in_array(Payment::normalizeStatus($payment->status), ['pending', 'processing'], true)) {
-            $this->epayco->statusFor($reference);
-            $payment = $payment->fresh();
         }
 
         $payment->load($this->eagerLoads());
