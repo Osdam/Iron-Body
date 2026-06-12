@@ -134,20 +134,25 @@ class WompiTransactionService
         $wompiStatus = (string) ($wt['status'] ?? '');
         $state = $this->sm->mapWompiStatus($wompiStatus);
 
-        $externalAuthUrl = $this->extractExternalAuthUrl($wt);
+        $pm = $wt['payment_method'] ?? [];
+        $method = $tx->method ?: $this->methodFromType($pm['type'] ?? null);
 
-        // PENDING + URL de autenticación externa → requires_action.
-        if ($state === PaymentStateMachine::PENDING && $externalAuthUrl) {
+        // La autenticación externa SOLO existe en PSE (URL real del banco). Jamás
+        // se deriva de `redirect_url` (que Wompi devuelve en TODA transacción) ni
+        // se usa para CARD/NEQUI/DAVIPLATA → así CARD nunca cae en requires_action.
+        $externalAuthUrl = $method === 'pse' ? $this->extractPseAuthUrl($wt) : null;
+
+        // Solo PSE pendiente con URL del banco pasa a requires_action.
+        if ($state === PaymentStateMachine::PENDING && $method === 'pse' && $externalAuthUrl) {
             $state = PaymentStateMachine::REQUIRES_ACTION;
         }
 
-        $pm = $wt['payment_method'] ?? [];
         $attrs = [
             'wompi_transaction_id'     => $wt['id'] ?? null,
             'provider_ref'             => $wt['id'] ?? null,
             'status_message'           => $this->safeMessage($wt['status_message'] ?? null),
             'processor_response_code'  => $this->extractProcessorCode($wt),
-            'method'                   => $tx->method ?: $this->methodFromType($pm['type'] ?? null),
+            'method'                   => $method,
             'external_auth_url'        => $externalAuthUrl,
             'card_brand'               => data_get($pm, 'extra.brand'),
             'card_last_four'           => data_get($pm, 'extra.last_four'),
@@ -275,13 +280,18 @@ class WompiTransactionService
         return (int) round((float) $tx->amount * 100);
     }
 
-    private function extractExternalAuthUrl(array $wt): ?string
+    /**
+     * URL OFICIAL del banco para PSE (`async_payment_url`). NO se usa
+     * `redirect_url` (es solo nuestra URL de retorno y Wompi la devuelve en TODA
+     * transacción, lo que provocaba que CARD entrara en requires_action y abriera
+     * un WebView). Esta URL se abre en el NAVEGADOR EXTERNO del sistema, nunca en
+     * un WebView.
+     */
+    private function extractPseAuthUrl(array $wt): ?string
     {
-        // PSE: payment_method.extra.async_payment_url; 3DS: extra.three_ds_auth.* o redirect_url.
-        return data_get($wt, 'payment_method.extra.async_payment_url')
-            ?? data_get($wt, 'payment_method.extra.external_identifier_url')
-            ?? data_get($wt, 'redirect_url')
-            ?: null;
+        $url = data_get($wt, 'payment_method.extra.async_payment_url')
+            ?? data_get($wt, 'payment_method.extra.external_identifier_url');
+        return is_string($url) && $url !== '' ? $url : null;
     }
 
     private function extractProcessorCode(array $wt): ?string

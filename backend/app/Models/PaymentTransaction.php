@@ -143,11 +143,18 @@ class PaymentTransaction extends Model
             self::STATUS_FAILED, self::STATUS_CANCELLED, self::STATUS_EXPIRED,
         ], true);
 
+        $isFinal = $this->isWompiFinal();
+        $action = $this->wompiAction($isFinal);
+
         return [
             'ok'                  => ! $isFailedLike,
             'reference'           => $this->reference,
             'uuid'                => $this->uuid,
             'status'              => $this->status,
+            'is_final'            => $isFinal,
+            // Contrato explícito que la app conmuta por método + action.type.
+            // type ∈ wait_for_confirmation|external_browser|open_nequi_app|daviplata_otp|none
+            'action'              => $action,
             'status_message'      => $this->status_message,
             'reason'              => $this->status_message ?: $this->failure_reason,
             'amount'              => (float) $this->amount,
@@ -155,12 +162,13 @@ class PaymentTransaction extends Model
             'currency'            => $this->currency,
             'provider'            => $this->provider,
             'environment'         => $this->environment,
-            'payment_method'      => $this->method,
+            'payment_method'      => $this->method ? strtoupper($this->method) : null,
             'method'              => $this->method,
             'transaction_id'      => $this->wompi_transaction_id ?: $this->provider_ref,
             'wompi_transaction_id'=> $this->wompi_transaction_id,
-            // Paso externo OFICIAL del banco/emisor: la app lo abre en WebView.
-            'external_auth_url'   => $this->external_auth_url,
+            // URL del banco para PSE (solo cuando action.type=external_browser).
+            // Se abre en el NAVEGADOR EXTERNO del sistema, nunca en un WebView.
+            'external_auth_url'   => $action['type'] === 'external_browser' ? $action['url'] : null,
             'card_brand'          => $this->card_brand,
             'card_last_four'      => $this->card_last_four,
             'installments'        => $this->installments,
@@ -174,5 +182,49 @@ class PaymentTransaction extends Model
             'created_at'          => optional($this->created_at)->toIso8601String(),
             'updated_at'          => optional($this->updated_at)->toIso8601String(),
         ];
+    }
+
+    /** ¿El pago Wompi está en un estado FINAL (terminal)? */
+    public function isWompiFinal(): bool
+    {
+        return in_array($this->status, [
+            self::STATUS_APPROVED, self::STATUS_DECLINED, self::STATUS_VOIDED,
+            self::STATUS_ERROR, self::STATUS_EXPIRED,
+            // Equivalentes legados:
+            self::STATUS_FAILED, self::STATUS_CANCELLED,
+        ], true);
+    }
+
+    /**
+     * Acción que la app debe ejecutar, EXPLÍCITA por método. NUNCA devuelve una
+     * acción de WebView. El cliente conmuta por `action.type`:
+     *   - none                 → estado final, ir a la pantalla de resultado.
+     *   - wait_for_confirmation→ espera NATIVA + polling (tarjeta / PSE sin URL).
+     *   - external_browser     → abrir la URL del banco en el NAVEGADOR EXTERNO (PSE).
+     *   - open_nequi_app       → mensaje "abre Nequi y aprueba" + polling.
+     *   - daviplata_otp        → OTP nativo (endpoints OTP del backend).
+     *
+     * @return array{type:string,url:?string}
+     */
+    public function wompiAction(?bool $isFinal = null): array
+    {
+        $isFinal ??= $this->isWompiFinal();
+        if ($isFinal) {
+            return ['type' => 'none', 'url' => null];
+        }
+
+        $method = strtolower((string) $this->method);
+
+        return match ($method) {
+            // PSE: navegador externo SOLO si hay URL real del banco; si aún no la
+            // hay (creándose), espera nativa.
+            'pse' => ($this->status === self::STATUS_REQUIRES_ACTION && $this->external_auth_url)
+                ? ['type' => 'external_browser', 'url' => $this->external_auth_url]
+                : ['type' => 'wait_for_confirmation', 'url' => null],
+            'nequi'     => ['type' => 'open_nequi_app', 'url' => null],
+            'daviplata' => ['type' => 'daviplata_otp', 'url' => null],
+            // CARD (y cualquier otro): SIEMPRE espera nativa, jamás navegador/WebView.
+            default     => ['type' => 'wait_for_confirmation', 'url' => null],
+        };
     }
 }
