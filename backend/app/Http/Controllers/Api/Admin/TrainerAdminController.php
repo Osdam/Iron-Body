@@ -8,6 +8,7 @@ use App\Http\Resources\TrainerProfessionalResource;
 use App\Models\Identity;
 use App\Models\Trainer;
 use App\Models\TrainerAuditLog;
+use App\Models\TrainerDeviceSession;
 use App\Services\Identity\IdentityLinkService;
 use App\Services\Trainer\TrainerAuditService;
 use App\Services\Trainer\TrainerSessionService;
@@ -167,6 +168,66 @@ class TrainerAdminController extends Controller
             'message' => $active ? 'Entrenador activado.' : 'Entrenador desactivado.',
             'data' => new TrainerProfessionalResource($trainer),
         ]);
+    }
+
+    /** Dispositivos con sesión profesional activa (para el CRM). */
+    public function devices(Trainer $trainer): JsonResponse
+    {
+        $devices = $this->sessions->activeSessions($trainer)
+            ->map(fn ($session) => $session->toPublicArray());
+
+        return response()->json([
+            'ok' => true,
+            'data' => $devices,
+        ]);
+    }
+
+    /** Revoca una sesión profesional concreta (cierre remoto desde el CRM). */
+    public function revokeDevice(Request $request, Trainer $trainer, string $uuid): JsonResponse
+    {
+        $data = $request->validate(['admin_id' => ['nullable', 'integer']]);
+
+        $session = TrainerDeviceSession::query()
+            ->where('trainer_id', $trainer->getKey())
+            ->where('uuid', $uuid)
+            ->active()
+            ->first();
+
+        if (! $session) {
+            return response()->json(['ok' => false, 'code' => 'not_found', 'message' => 'Sesión no encontrada.'], 404);
+        }
+
+        $this->sessions->revoke($session, 'revoked_by_admin');
+
+        $this->audit->record(
+            TrainerAuditLog::EVENT_SESSION_REVOKED,
+            $trainer,
+            actorType: TrainerAuditLog::ACTOR_ADMIN,
+            actorId: $data['admin_id'] ?? null,
+            metadata: ['session' => $uuid, 'scope' => 'one'],
+            request: $request,
+        );
+
+        return response()->json(['ok' => true, 'message' => 'Sesión revocada.']);
+    }
+
+    /** Revoca TODAS las sesiones profesionales del entrenador. */
+    public function revokeAllSessions(Request $request, Trainer $trainer): JsonResponse
+    {
+        $data = $request->validate(['admin_id' => ['nullable', 'integer']]);
+
+        $count = $this->sessions->revokeAll($trainer, 'revoked_by_admin');
+
+        $this->audit->record(
+            TrainerAuditLog::EVENT_SESSION_REVOKED,
+            $trainer,
+            actorType: TrainerAuditLog::ACTOR_ADMIN,
+            actorId: $data['admin_id'] ?? null,
+            metadata: ['scope' => 'all', 'revoked' => $count],
+            request: $request,
+        );
+
+        return response()->json(['ok' => true, 'message' => 'Sesiones revocadas.', 'revoked' => $count]);
     }
 
     public function audit(Request $request, Trainer $trainer): JsonResponse

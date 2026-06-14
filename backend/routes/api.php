@@ -100,8 +100,18 @@ Route::middleware('trainer.feature:trainer_auth_enabled')->prefix('trainer/auth'
     Route::post('access', [\App\Http\Controllers\Api\TrainerAuthController::class, 'access'])->middleware('throttle:6,1');
     Route::post('verify', [\App\Http\Controllers\Api\TrainerAuthController::class, 'verify'])->middleware('throttle:10,1');
     Route::post('resend', [\App\Http\Controllers\Api\TrainerAuthController::class, 'resend'])->middleware('throttle:6,1');
-    Route::get('me',      [\App\Http\Controllers\Api\TrainerAuthController::class, 'me'])->middleware('auth.trainer');
+
+    // Requieren sesión profesional vigente.
+    Route::middleware('auth.trainer')->group(function (): void {
+        Route::get('me',                [\App\Http\Controllers\Api\TrainerAuthController::class, 'me']);
+        Route::get('bootstrap',         [\App\Http\Controllers\Api\TrainerAuthController::class, 'bootstrap']);
+        Route::post('biometric-unlock', [\App\Http\Controllers\Api\TrainerAuthController::class, 'biometricUnlock'])->middleware('throttle:20,1');
+    });
 });
+
+// Espacios disponibles para el miembro autenticado (cuentas dobles). No revela
+// nada al miembro normal (ver MemberWorkspaceController).
+Route::middleware('auth.member')->get('member/workspaces', [\App\Http\Controllers\Api\MemberWorkspaceController::class, 'index']);
 
 Route::middleware('member.registration.token')->group(function () {
     Route::get('members/incomplete', [MemberRegistrationController::class, 'incomplete']);
@@ -782,6 +792,9 @@ Route::put('admin/trainers/{trainer}/professional',        [\App\Http\Controller
 Route::post('admin/trainers/{trainer}/identity/link',      [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'linkIdentity']);
 Route::post('admin/trainers/{trainer}/activate',           [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'activate']);
 Route::post('admin/trainers/{trainer}/deactivate',         [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'deactivate']);
+Route::get('admin/trainers/{trainer}/devices',             [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'devices']);
+Route::post('admin/trainers/{trainer}/devices/{uuid}/revoke', [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'revokeDevice']);
+Route::post('admin/trainers/{trainer}/sessions/revoke-all', [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'revokeAllSessions']);
 Route::get('admin/trainers/{trainer}/audit',               [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'audit']);
 
 // ── Mercadeo digital (Meta) — datos reales de las tablas marketing_* (CRM admin) ─

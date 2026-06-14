@@ -161,6 +161,63 @@ class TrainerAuthController extends Controller
         ]);
     }
 
+    /**
+     * Fuente de verdad del portal: perfiles vigentes, permisos y espacios
+     * autorizados para esta identidad. Flutter enruta según esto, nunca según un
+     * estado local. La preferencia de espacio por dispositivo vive en el cliente
+     * (almacenamiento seguro); el backend solo dice qué espacios son válidos.
+     */
+    public function bootstrap(Request $request): JsonResponse
+    {
+        $trainer = $request->attributes->get('auth_trainer');
+        $trainer->load('roleAssignments');
+
+        $workspaces = ['trainer'];
+        if ($trainer->identity_id !== null && $trainer->identity?->hasMemberProfile()) {
+            $workspaces[] = 'member';
+        }
+
+        return response()->json([
+            'ok' => true,
+            'identity_id' => $trainer->identity_id,
+            'workspaces' => $workspaces,
+            'trainer' => new TrainerProfessionalResource($trainer),
+        ]);
+    }
+
+    /**
+     * Desbloqueo biométrico del portal: la biometría se valida EN EL DISPOSITIVO
+     * y desbloquea la credencial guardada; aquí se ROTA el token de sesión
+     * (revoca el anterior, emite uno nuevo) sin volver a pedir OTP, siempre que
+     * la sesión siga viva y el entrenador activo. Requiere sesión vigente.
+     */
+    public function biometricUnlock(Request $request): JsonResponse
+    {
+        $trainer = $request->attributes->get('auth_trainer');
+        $session = $request->attributes->get('auth_trainer_session');
+
+        // Rota el token sobre el MISMO dispositivo de la sesión actual.
+        $issued = $this->sessions->issueSession($trainer, array_merge(
+            $this->context($request),
+            ['device_id' => $session->device_id],
+        ));
+        $trainer->load('roleAssignments');
+
+        $this->audit->record(
+            TrainerAuditLog::EVENT_LOGIN,
+            $trainer,
+            actorType: TrainerAuditLog::ACTOR_TRAINER,
+            metadata: ['session' => $issued['session']->uuid, 'biometric' => true],
+            request: $request,
+        );
+
+        return response()->json([
+            'ok' => true,
+            'token' => $issued['token'],
+            'trainer' => new TrainerProfessionalResource($trainer),
+        ]);
+    }
+
     private function resolveActiveTrainer(string $document): ?Trainer
     {
         $identity = $this->identities->findByDocument($document);
