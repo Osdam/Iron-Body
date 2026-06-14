@@ -113,6 +113,27 @@ Route::middleware('trainer.feature:trainer_auth_enabled')->prefix('trainer/auth'
 // nada al miembro normal (ver MemberWorkspaceController).
 Route::middleware('auth.member')->get('member/workspaces', [\App\Http\Controllers\Api\MemberWorkspaceController::class, 'index']);
 
+// ── Valoraciones profesionales — portal del entrenador ────────────────────────
+// Autorización compuesta: feature flag + auth.trainer + permiso por acción +
+// asignación/propiedad (en el controlador). Una valoración enviada es inmutable.
+Route::middleware(['trainer.feature:professional_assessments_enabled', 'auth.trainer'])->prefix('trainer')->group(function (): void {
+    $pa = \App\Http\Controllers\Api\Trainer\ProfessionalAssessmentController::class;
+    Route::get('members/{member}/assessments',  [$pa, 'index'])->middleware('trainer.can:assessments.view');
+    Route::post('members/{member}/assessments', [$pa, 'store'])->middleware('trainer.can:assessments.create');
+    Route::get('assessments/{assessment}',          [$pa, 'show'])->middleware('trainer.can:assessments.view');
+    Route::put('assessments/{assessment}',          [$pa, 'update'])->middleware('trainer.can:assessments.update_draft');
+    Route::post('assessments/{assessment}/submit',  [$pa, 'submit'])->middleware('trainer.can:assessments.submit');
+    Route::post('assessments/{assessment}/amend',   [$pa, 'amend'])->middleware('trainer.can:assessments.amend');
+});
+
+// ── Valoraciones profesionales — vista de SOLO LECTURA del miembro ────────────
+Route::middleware(['trainer.feature:professional_assessments_enabled', 'auth.member'])->group(function (): void {
+    $ma = \App\Http\Controllers\Api\MemberAssessmentController::class;
+    Route::get('member/assessments',                 [$ma, 'index']);
+    Route::get('member/assessments/{uuid}',          [$ma, 'show']);
+    Route::post('member/assessments/{uuid}/ack',     [$ma, 'acknowledge']);
+});
+
 Route::middleware('member.registration.token')->group(function () {
     Route::get('members/incomplete', [MemberRegistrationController::class, 'incomplete']);
     // ── Login con verificación en dos pasos (OTP por SMS) ─────────────────────
