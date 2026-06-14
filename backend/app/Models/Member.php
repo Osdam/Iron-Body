@@ -32,6 +32,7 @@ class Member extends Model
     protected $fillable = [
         'member_uuid',
         'user_id',
+        'identity_id',
         'access_hash',
         'full_name',
         'email',
@@ -125,6 +126,15 @@ class Member extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Identidad central de la persona. Aditivo: puede ser null en datos previos
+     * al backfill; el resto del flujo del miembro no depende de esta relación.
+     */
+    public function identity(): BelongsTo
+    {
+        return $this->belongsTo(Identity::class);
     }
 
     // ── Seguridad / sesiones (2FA, dispositivos) ─────────────────────────────

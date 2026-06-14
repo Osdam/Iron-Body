@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -10,6 +11,7 @@ use Illuminate\Support\Str;
 class Trainer extends Model
 {
     protected $fillable = [
+        'identity_id',
         'full_name',
         'document',
         'phone',
@@ -41,6 +43,16 @@ class Trainer extends Model
     ];
 
     protected $appends = ['name'];
+
+    /**
+     * Identidad central de la persona. Aditivo y nullable: un entrenador puede
+     * existir sin perfil de miembro y viceversa. La baja como entrenador no
+     * elimina la identidad ni el perfil de miembro asociado.
+     */
+    public function identity(): BelongsTo
+    {
+        return $this->belongsTo(Identity::class);
+    }
 
     public function classes(): HasMany
     {
