@@ -21,6 +21,7 @@ class Trainer extends Model
         'specialties',
         'experience_years',
         'contract_type',
+        'location',
         'status',
         'rating',
         'bio',
@@ -91,13 +92,21 @@ class Trainer extends Model
     }
 
     /**
-     * Permisos efectivos = UNIÓN de los permisos de todos sus roles, según el
+     * Permisos EFECTIVOS = UNIÓN de los permisos de todos sus roles, según el
      * catálogo central de `config/trainer.php`. Autoridad única de permisos.
+     *
+     * Un entrenador inactivo no tiene ninguno: la desactivación en el CRM corta
+     * el acceso profesional de inmediato (esto es lo que consume el portal y el
+     * bootstrap de sesión, no solo `hasPermission`).
      *
      * @return list<string>
      */
     public function permissions(): array
     {
+        if (! $this->isActive()) {
+            return [];
+        }
+
         $catalog = (array) config('trainer.permissions', []);
 
         $permissions = [];
@@ -110,16 +119,8 @@ class Trainer extends Model
         return array_keys($permissions);
     }
 
-    /**
-     * ¿El entrenador tiene un permiso? Un entrenador inactivo no tiene ninguno:
-     * la desactivación en el CRM corta el acceso profesional de inmediato.
-     */
     public function hasPermission(string $permission): bool
     {
-        if (! $this->isActive()) {
-            return false;
-        }
-
         return in_array($permission, $this->permissions(), true);
     }
 

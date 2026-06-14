@@ -762,6 +762,17 @@ Route::post('admin/trainer-tasks/{id}/complete', [\App\Http\Controllers\Api\Admi
 Route::post('admin/trainer-tasks/{id}/dismiss',  [\App\Http\Controllers\Api\Admin\TrainerTaskController::class, 'dismiss'])->where('id', '[0-9]+');
 Route::get('admin/members/{member}/coach-timeline', [\App\Http\Controllers\Api\Admin\TrainerTaskController::class, 'memberTimeline']);
 
+// ── Portal profesional — administración de entrenadores (CRM admin) ───────────
+// Patrón /admin/* del CRM (sin auth de ruta; el acceso se controla en el CRM).
+// Aditivo al CRUD de TrainerController: roles, sede, enlace de identidad,
+// activación/desactivación y auditoría del perfil profesional.
+Route::get('admin/trainers/{trainer}/professional',        [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'show']);
+Route::put('admin/trainers/{trainer}/professional',        [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'updateProfessional']);
+Route::post('admin/trainers/{trainer}/identity/link',      [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'linkIdentity']);
+Route::post('admin/trainers/{trainer}/activate',           [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'activate']);
+Route::post('admin/trainers/{trainer}/deactivate',         [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'deactivate']);
+Route::get('admin/trainers/{trainer}/audit',               [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'audit']);
+
 // ── Mercadeo digital (Meta) — datos reales de las tablas marketing_* (CRM admin) ─
 // Patrón /admin/* del CRM. Sirven datos reales; si no hay registros → vacío/0/null.
 Route::get('admin/marketing/overview',                       [\App\Http\Controllers\Api\Admin\MarketingController::class, 'overview']);
