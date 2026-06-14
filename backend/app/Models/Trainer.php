@@ -69,6 +69,90 @@ class Trainer extends Model
         return $this->hasMany(TrainerReview::class);
     }
 
+    public function roleAssignments(): HasMany
+    {
+        return $this->hasMany(TrainerRole::class);
+    }
+
+    /**
+     * Roles profesionales vigentes del entrenador (`trainer_floor`,
+     * `trainer_functional`). Solo válidos según el catálogo.
+     *
+     * @return list<string>
+     */
+    public function roleNames(): array
+    {
+        return $this->roleAssignments
+            ->pluck('role')
+            ->filter(fn (string $role): bool => TrainerRole::isValid($role))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Permisos efectivos = UNIÓN de los permisos de todos sus roles, según el
+     * catálogo central de `config/trainer.php`. Autoridad única de permisos.
+     *
+     * @return list<string>
+     */
+    public function permissions(): array
+    {
+        $catalog = (array) config('trainer.permissions', []);
+
+        $permissions = [];
+        foreach ($this->roleNames() as $role) {
+            foreach ((array) ($catalog[$role] ?? []) as $permission) {
+                $permissions[$permission] = true;
+            }
+        }
+
+        return array_keys($permissions);
+    }
+
+    /**
+     * ¿El entrenador tiene un permiso? Un entrenador inactivo no tiene ninguno:
+     * la desactivación en el CRM corta el acceso profesional de inmediato.
+     */
+    public function hasPermission(string $permission): bool
+    {
+        if (! $this->isActive()) {
+            return false;
+        }
+
+        return in_array($permission, $this->permissions(), true);
+    }
+
+    public function hasRole(string $role): bool
+    {
+        return in_array($role, $this->roleNames(), true);
+    }
+
+    /**
+     * Sincroniza el conjunto de roles del entrenador con los indicados. Ignora
+     * roles inválidos. Idempotente. Devuelve los roles finales.
+     *
+     * @param  iterable<string>  $roles
+     * @return list<string>
+     */
+    public function syncRoles(iterable $roles): array
+    {
+        $desired = collect($roles)
+            ->filter(fn ($role): bool => is_string($role) && TrainerRole::isValid($role))
+            ->unique()
+            ->values();
+
+        $this->roleAssignments()->whereNotIn('role', $desired)->delete();
+
+        foreach ($desired as $role) {
+            $this->roleAssignments()->firstOrCreate(['role' => $role]);
+        }
+
+        $this->load('roleAssignments');
+
+        return $desired->all();
+    }
+
     // Alias para TrainerResource y el endpoint de calificaciones de la app
     public function ratings(): HasMany
     {
