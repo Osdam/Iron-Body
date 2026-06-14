@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\AuthenticateMember;
+use App\Http\Middleware\AuthenticateTrainer;
 use App\Http\Middleware\EnsureMemberRegistrationToken;
 use App\Http\Middleware\EnsureTrainerFeature;
 use App\Http\Middleware\EnsureTrainerPermission;
@@ -22,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'member.registration.token' => EnsureMemberRegistrationToken::class,
             'auth.member'               => AuthenticateMember::class,
+            'auth.trainer'              => AuthenticateTrainer::class,
             'automation.internal'       => VerifyInternalAutomationSignature::class,
             'trainer.can'               => EnsureTrainerPermission::class,
             'trainer.feature'           => EnsureTrainerFeature::class,

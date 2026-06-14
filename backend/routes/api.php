@@ -92,6 +92,17 @@ Route::patch('users/{user}', [UserController::class, 'update']);
 Route::put('users/{user}', [UserController::class, 'update']);
 Route::delete('users/{user}', [UserController::class, 'destroy']);
 
+// ── Acceso al portal profesional (entrenadores) — OTP por SMS ─────────────────
+// Capa nueva que REUSA el motor OTP/Twilio. Tras el feature flag
+// `trainer_auth_enabled` (404 si está apagado). `access` responde de forma
+// uniforme para no filtrar qué documentos corresponden a entrenadores.
+Route::middleware('trainer.feature:trainer_auth_enabled')->prefix('trainer/auth')->group(function (): void {
+    Route::post('access', [\App\Http\Controllers\Api\TrainerAuthController::class, 'access'])->middleware('throttle:6,1');
+    Route::post('verify', [\App\Http\Controllers\Api\TrainerAuthController::class, 'verify'])->middleware('throttle:10,1');
+    Route::post('resend', [\App\Http\Controllers\Api\TrainerAuthController::class, 'resend'])->middleware('throttle:6,1');
+    Route::get('me',      [\App\Http\Controllers\Api\TrainerAuthController::class, 'me'])->middleware('auth.trainer');
+});
+
 Route::middleware('member.registration.token')->group(function () {
     Route::get('members/incomplete', [MemberRegistrationController::class, 'incomplete']);
     // ── Login con verificación en dos pasos (OTP por SMS) ─────────────────────

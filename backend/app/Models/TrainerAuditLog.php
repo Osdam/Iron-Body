@@ -30,6 +30,17 @@ class TrainerAuditLog extends Model
 
     public const EVENT_DEACTIVATED = 'trainer.deactivated';
 
+    // Eventos de acceso profesional (Fase 4/5).
+    public const EVENT_OTP_REQUESTED = 'trainer.otp_requested';
+
+    public const EVENT_OTP_VERIFIED = 'trainer.otp_verified';
+
+    public const EVENT_LOGIN = 'trainer.login';
+
+    public const EVENT_SESSION_REVOKED = 'trainer.session_revoked';
+
+    public const EVENT_WORKSPACE_SWITCH = 'trainer.workspace_switch';
+
     protected $fillable = [
         'actor_type',
         'actor_id',

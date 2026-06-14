@@ -10,6 +10,7 @@ use App\Models\Trainer;
 use App\Models\TrainerAuditLog;
 use App\Services\Identity\IdentityLinkService;
 use App\Services\Trainer\TrainerAuditService;
+use App\Services\Trainer\TrainerSessionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -30,6 +31,7 @@ class TrainerAdminController extends Controller
     public function __construct(
         private readonly IdentityLinkService $identities,
         private readonly TrainerAuditService $audit,
+        private readonly TrainerSessionService $sessions,
     ) {}
 
     public function show(Trainer $trainer): JsonResponse
@@ -141,6 +143,14 @@ class TrainerAdminController extends Controller
         $data = $request->validate(['admin_id' => ['nullable', 'integer']]);
 
         $trainer->forceFill(['status' => $active ? 'active' : 'inactive'])->save();
+
+        // Desactivar corta el acceso profesional de inmediato: además del status
+        // (que ya lo rechaza), se revocan las sesiones de dispositivo activas.
+        $revoked = 0;
+        if (! $active) {
+            $revoked = $this->sessions->revokeAll($trainer, 'trainer_deactivated');
+        }
+
         $trainer->refresh()->load('roleAssignments');
 
         $this->audit->record(
@@ -148,6 +158,7 @@ class TrainerAdminController extends Controller
             $trainer,
             actorType: TrainerAuditLog::ACTOR_ADMIN,
             actorId: $data['admin_id'] ?? null,
+            metadata: $active ? [] : ['revoked_sessions' => $revoked],
             request: $request,
         );
 
