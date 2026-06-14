@@ -197,6 +197,20 @@ class ProfessionalAssessmentTest extends TestCase
             ->assertStatus(403);
     }
 
+    public function test_trainer_lists_only_assigned_members(): void
+    {
+        // Otro miembro NO asignado a este entrenador.
+        Member::create([
+            'full_name' => 'Unassigned', 'document_number' => '888', 'phone' => '+573000000001',
+            'status' => Member::STATUS_ACTIVE,
+        ]);
+
+        $this->getJson('/api/trainer/members', $this->asTrainer())
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $this->member->id);
+    }
+
     public function test_routes_hidden_when_feature_off(): void
     {
         config(['trainer.flags.professional_assessments_enabled' => false, 'trainer.pilot_identities' => []]);

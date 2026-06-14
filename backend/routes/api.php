@@ -118,6 +118,9 @@ Route::middleware('auth.member')->get('member/workspaces', [\App\Http\Controller
 // asignación/propiedad (en el controlador). Una valoración enviada es inmutable.
 Route::middleware(['trainer.feature:professional_assessments_enabled', 'auth.trainer'])->prefix('trainer')->group(function (): void {
     $pa = \App\Http\Controllers\Api\Trainer\ProfessionalAssessmentController::class;
+    // Miembros asignados al entrenador (home profesional).
+    Route::get('members', [\App\Http\Controllers\Api\Trainer\TrainerMembersController::class, 'index'])
+        ->middleware('trainer.can:members.view_assigned');
     Route::get('members/{member}/assessments',  [$pa, 'index'])->middleware('trainer.can:assessments.view');
     Route::post('members/{member}/assessments', [$pa, 'store'])->middleware('trainer.can:assessments.create');
     Route::get('assessments/{assessment}',          [$pa, 'show'])->middleware('trainer.can:assessments.view');
