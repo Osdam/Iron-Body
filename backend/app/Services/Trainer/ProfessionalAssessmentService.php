@@ -7,7 +7,7 @@ use App\Models\Member;
 use App\Models\ProfessionalAssessment;
 use App\Models\Trainer;
 use App\Models\TrainerAuditLog;
-use App\Services\AppNotificationService;
+use App\Services\NotificationService;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
@@ -26,7 +26,7 @@ class ProfessionalAssessmentService
     ];
 
     public function __construct(
-        private readonly AppNotificationService $notifications,
+        private readonly NotificationService $notifications,
         private readonly TrainerAuditService $audit,
     ) {}
 
@@ -147,19 +147,30 @@ class ProfessionalAssessmentService
         return $assessment->refresh();
     }
 
+    /**
+     * Notifica al miembro por el MISMO canal que consume su app (`Notification`),
+     * con `action_payload` para el deep link y un `event_key` que evita
+     * duplicados por reenvío. El miembro abre la valoración (validada en backend),
+     * nunca confiando en los parámetros del deep link.
+     */
     private function notifyMember(ProfessionalAssessment $assessment, bool $isAmendment): void
     {
-        $this->notifications->createForMember(
-            memberId: $assessment->member_id,
-            type: $isAmendment ? 'professional_assessment_amended' : 'professional_assessment',
-            title: $isAmendment ? 'Valoración corregida' : 'Nueva valoración profesional',
-            body: $isAmendment
+        $member = Member::find($assessment->member_id);
+        if ($member === null) {
+            return;
+        }
+
+        $this->notifications->createMemberNotification($member, [
+            'type' => $isAmendment ? 'professional_assessment_amended' : 'professional_assessment',
+            'title' => $isAmendment ? 'Valoración corregida' : 'Nueva valoración profesional',
+            'message' => $isAmendment
                 ? 'Tu entrenador corrigió tu valoración. Tócala para verla.'
                 : 'Tu entrenador registró una nueva valoración. Tócala para verla.',
-            actionRoute: 'professional_assessment',
-            payload: ['assessment_uuid' => $assessment->uuid],
-            priority: 'high',
-            source: 'trainer',
-        );
+            'action_type' => 'route',
+            'action_url' => '/assessment',
+            'action_payload' => ['assessment_uuid' => $assessment->uuid],
+            'priority' => 'high',
+            'event_key' => 'assessment:'.$assessment->uuid.':v'.$assessment->version,
+        ]);
     }
 }

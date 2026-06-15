@@ -102,9 +102,21 @@ class ProfessionalAssessmentTest extends TestCase
             ->assertJsonPath('data.0.uuid', $uuid)
             ->assertJsonPath('data.0.is_editable', false);
 
-        $this->assertDatabaseHas('app_notifications', [
+        $this->assertDatabaseHas('notifications', [
             'member_id' => $this->member->id, 'type' => 'professional_assessment',
         ]);
+    }
+
+    public function test_member_notification_carries_deeplink_payload(): void
+    {
+        $uuid = $this->createDraft();
+        $this->postJson("/api/trainer/assessments/{$uuid}/submit", [], $this->asTrainer())->assertOk();
+
+        // El miembro lo recibe por su canal real con el payload del deep link.
+        $this->getJson('/api/notifications', $this->asMember())
+            ->assertOk()
+            ->assertJsonFragment(['type' => 'professional_assessment'])
+            ->assertJsonFragment(['assessment_uuid' => $uuid]);
     }
 
     public function test_submitted_assessment_is_immutable(): void
