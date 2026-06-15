@@ -121,6 +121,9 @@ Route::middleware(['trainer.feature:professional_assessments_enabled', 'auth.tra
     // Miembros asignados al entrenador (home profesional).
     Route::get('members', [\App\Http\Controllers\Api\Trainer\TrainerMembersController::class, 'index'])
         ->middleware('trainer.can:members.view_assigned');
+    // Detalle del miembro autorizado (perfil + última valoración).
+    Route::get('members/{member}', [\App\Http\Controllers\Api\Trainer\TrainerMembersController::class, 'show'])
+        ->whereNumber('member')->middleware('trainer.can:members.view_assigned');
     Route::get('members/{member}/assessments',  [$pa, 'index'])->middleware('trainer.can:assessments.view');
     Route::post('members/{member}/assessments', [$pa, 'store'])->middleware('trainer.can:assessments.create');
     Route::get('assessments/{assessment}',          [$pa, 'show'])->middleware('trainer.can:assessments.view');

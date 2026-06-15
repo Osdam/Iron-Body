@@ -223,6 +223,42 @@ class ProfessionalAssessmentTest extends TestCase
             ->assertJsonPath('data.0.id', $this->member->id);
     }
 
+    public function test_member_detail_returns_authorized_profile(): void
+    {
+        $res = $this->getJson("/api/trainer/members/{$this->member->id}", $this->asTrainer())
+            ->assertOk()
+            ->assertJsonPath('data.id', $this->member->id)
+            ->assertJsonPath('data.full_name', 'Member');
+
+        // Nunca expone documento ni correo del miembro.
+        $data = $res->json('data');
+        $this->assertArrayNotHasKey('document_number', $data);
+        $this->assertArrayNotHasKey('email', $data);
+        $this->assertArrayHasKey('assigned_at', $data);
+    }
+
+    public function test_member_detail_forbidden_for_unassigned_member(): void
+    {
+        $other = Member::create([
+            'full_name' => 'Other', 'document_number' => '999', 'phone' => '+573000000000',
+            'status' => Member::STATUS_ACTIVE,
+        ]);
+
+        $this->getJson("/api/trainer/members/{$other->id}", $this->asTrainer())
+            ->assertStatus(403);
+    }
+
+    public function test_member_detail_includes_last_assessment_summary(): void
+    {
+        $uuid = $this->createDraft();
+        $this->postJson("/api/trainer/assessments/{$uuid}/submit", [], $this->asTrainer())->assertOk();
+
+        $this->getJson("/api/trainer/members/{$this->member->id}", $this->asTrainer())
+            ->assertOk()
+            ->assertJsonPath('data.last_assessment.uuid', $uuid)
+            ->assertJsonPath('data.last_assessment.status', 'submitted');
+    }
+
     public function test_routes_hidden_when_feature_off(): void
     {
         config(['trainer.flags.professional_assessments_enabled' => false, 'trainer.pilot_identities' => []]);
