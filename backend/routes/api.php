@@ -92,6 +92,62 @@ Route::patch('users/{user}', [UserController::class, 'update']);
 Route::put('users/{user}', [UserController::class, 'update']);
 Route::delete('users/{user}', [UserController::class, 'destroy']);
 
+// ── Acceso al portal profesional (entrenadores) — OTP por SMS ─────────────────
+// Capa nueva que REUSA el motor OTP/Twilio. Tras el feature flag
+// `trainer_auth_enabled` (404 si está apagado). `access` responde de forma
+// uniforme para no filtrar qué documentos corresponden a entrenadores.
+Route::middleware('trainer.feature:trainer_auth_enabled')->prefix('trainer/auth')->group(function (): void {
+    Route::post('access', [\App\Http\Controllers\Api\TrainerAuthController::class, 'access'])->middleware('throttle:6,1');
+    Route::post('verify', [\App\Http\Controllers\Api\TrainerAuthController::class, 'verify'])->middleware('throttle:10,1');
+    Route::post('resend', [\App\Http\Controllers\Api\TrainerAuthController::class, 'resend'])->middleware('throttle:6,1');
+
+    // Requieren sesión profesional vigente.
+    Route::middleware('auth.trainer')->group(function (): void {
+        Route::get('me',                [\App\Http\Controllers\Api\TrainerAuthController::class, 'me']);
+        Route::get('bootstrap',         [\App\Http\Controllers\Api\TrainerAuthController::class, 'bootstrap']);
+        Route::post('biometric-unlock', [\App\Http\Controllers\Api\TrainerAuthController::class, 'biometricUnlock'])->middleware('throttle:20,1');
+    });
+});
+
+// Espacios disponibles para el miembro autenticado (cuentas dobles). No revela
+// nada al miembro normal (ver MemberWorkspaceController).
+Route::middleware('auth.member')->get('member/workspaces', [\App\Http\Controllers\Api\MemberWorkspaceController::class, 'index']);
+
+// ── Valoraciones profesionales — portal del entrenador ────────────────────────
+// Autorización compuesta: feature flag + auth.trainer + permiso por acción +
+// asignación/propiedad (en el controlador). Una valoración enviada es inmutable.
+Route::middleware(['trainer.feature:professional_assessments_enabled', 'auth.trainer'])->prefix('trainer')->group(function (): void {
+    $pa = \App\Http\Controllers\Api\Trainer\ProfessionalAssessmentController::class;
+    // Miembros asignados al entrenador (home profesional).
+    Route::get('members', [\App\Http\Controllers\Api\Trainer\TrainerMembersController::class, 'index'])
+        ->middleware('trainer.can:members.view_assigned');
+    Route::get('members/{member}/assessments',  [$pa, 'index'])->middleware('trainer.can:assessments.view');
+    Route::post('members/{member}/assessments', [$pa, 'store'])->middleware('trainer.can:assessments.create');
+    Route::get('assessments/{assessment}',          [$pa, 'show'])->middleware('trainer.can:assessments.view');
+    Route::put('assessments/{assessment}',          [$pa, 'update'])->middleware('trainer.can:assessments.update_draft');
+    Route::post('assessments/{assessment}/submit',  [$pa, 'submit'])->middleware('trainer.can:assessments.submit');
+    Route::post('assessments/{assessment}/amend',   [$pa, 'amend'])->middleware('trainer.can:assessments.amend');
+});
+
+// ── Valoraciones profesionales — vista de SOLO LECTURA del miembro ────────────
+Route::middleware(['trainer.feature:professional_assessments_enabled', 'auth.member'])->group(function (): void {
+    $ma = \App\Http\Controllers\Api\MemberAssessmentController::class;
+    Route::get('member/assessments',                 [$ma, 'index']);
+    Route::get('member/assessments/{uuid}',          [$ma, 'show']);
+    Route::post('member/assessments/{uuid}/ack',     [$ma, 'acknowledge']);
+});
+
+// ── Clases y asistencia — entrenador funcional ────────────────────────────────
+// Feature flag + auth.trainer + permiso por acción + propiedad de la clase
+// (en el controlador). Un entrenador solo gestiona SUS clases.
+Route::middleware(['trainer.feature:trainer_classes_enabled', 'auth.trainer'])->prefix('trainer')->group(function (): void {
+    $tc = \App\Http\Controllers\Api\Trainer\TrainerClassController::class;
+    Route::get('classes',                      [$tc, 'index'])->middleware('trainer.can:classes.view');
+    Route::get('classes/{class}',              [$tc, 'show'])->middleware('trainer.can:classes.view');
+    Route::post('classes/{class}/attendance',  [$tc, 'markAttendance'])->middleware('trainer.can:attendance.create');
+    Route::put('classes/{class}/attendance',   [$tc, 'correctAttendance'])->middleware('trainer.can:attendance.update');
+});
+
 Route::middleware('member.registration.token')->group(function () {
     Route::get('members/incomplete', [MemberRegistrationController::class, 'incomplete']);
     // ── Login con verificación en dos pasos (OTP por SMS) ─────────────────────
@@ -761,6 +817,20 @@ Route::post('admin/trainer-tasks/{id}/seen',     [\App\Http\Controllers\Api\Admi
 Route::post('admin/trainer-tasks/{id}/complete', [\App\Http\Controllers\Api\Admin\TrainerTaskController::class, 'complete'])->where('id', '[0-9]+');
 Route::post('admin/trainer-tasks/{id}/dismiss',  [\App\Http\Controllers\Api\Admin\TrainerTaskController::class, 'dismiss'])->where('id', '[0-9]+');
 Route::get('admin/members/{member}/coach-timeline', [\App\Http\Controllers\Api\Admin\TrainerTaskController::class, 'memberTimeline']);
+
+// ── Portal profesional — administración de entrenadores (CRM admin) ───────────
+// Patrón /admin/* del CRM (sin auth de ruta; el acceso se controla en el CRM).
+// Aditivo al CRUD de TrainerController: roles, sede, enlace de identidad,
+// activación/desactivación y auditoría del perfil profesional.
+Route::get('admin/trainers/{trainer}/professional',        [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'show']);
+Route::put('admin/trainers/{trainer}/professional',        [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'updateProfessional']);
+Route::post('admin/trainers/{trainer}/identity/link',      [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'linkIdentity']);
+Route::post('admin/trainers/{trainer}/activate',           [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'activate']);
+Route::post('admin/trainers/{trainer}/deactivate',         [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'deactivate']);
+Route::get('admin/trainers/{trainer}/devices',             [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'devices']);
+Route::post('admin/trainers/{trainer}/devices/{uuid}/revoke', [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'revokeDevice']);
+Route::post('admin/trainers/{trainer}/sessions/revoke-all', [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'revokeAllSessions']);
+Route::get('admin/trainers/{trainer}/audit',               [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'audit']);
 
 // ── Mercadeo digital (Meta) — datos reales de las tablas marketing_* (CRM admin) ─
 // Patrón /admin/* del CRM. Sirven datos reales; si no hay registros → vacío/0/null.

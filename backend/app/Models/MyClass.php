@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Carbon\Carbon;
+use Database\Factories\ClassFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MyClass extends Model
 {
-    /** @use HasFactory<\Database\Factories\ClassFactory> */
+    /** @use HasFactory<ClassFactory> */
     use HasFactory;
 
     protected $table = 'classes';
@@ -39,10 +40,10 @@ class MyClass extends Model
     protected function casts(): array
     {
         return [
-            'date_time'           => 'datetime',
-            'is_recurring'        => 'boolean',
-            'allow_online_booking'=> 'boolean',
-            'requires_active_plan'=> 'boolean',
+            'date_time' => 'datetime',
+            'is_recurring' => 'boolean',
+            'allow_online_booking' => 'boolean',
+            'requires_active_plan' => 'boolean',
         ];
     }
 
@@ -54,6 +55,17 @@ class MyClass extends Model
     public function reservations(): HasMany
     {
         return $this->hasMany(ClassReservation::class, 'class_id');
+    }
+
+    public function attendances(): HasMany
+    {
+        return $this->hasMany(ClassAttendance::class, 'class_id');
+    }
+
+    /** Una clase recibe asistencia solo si está activa (no cancelada/finalizada). */
+    public function acceptsAttendance(): bool
+    {
+        return in_array(strtolower((string) $this->status), ['active', 'activa'], true);
     }
 
     /**
@@ -71,13 +83,13 @@ class MyClass extends Model
         }
 
         $dayMap = [
-            'Lunes'     => Carbon::MONDAY,
-            'Martes'    => Carbon::TUESDAY,
+            'Lunes' => Carbon::MONDAY,
+            'Martes' => Carbon::TUESDAY,
             'Miércoles' => Carbon::WEDNESDAY,
-            'Jueves'    => Carbon::THURSDAY,
-            'Viernes'   => Carbon::FRIDAY,
-            'Sábado'    => Carbon::SATURDAY,
-            'Domingo'   => Carbon::SUNDAY,
+            'Jueves' => Carbon::THURSDAY,
+            'Viernes' => Carbon::FRIDAY,
+            'Sábado' => Carbon::SATURDAY,
+            'Domingo' => Carbon::SUNDAY,
         ];
 
         $targetDay = $dayMap[$this->day_of_week] ?? null;
@@ -92,7 +104,7 @@ class MyClass extends Model
 
         if ($now->dayOfWeek === $targetDay) {
             $today = $now->copy()->setTime((int) $hour, (int) $minute, 0);
-            $next  = $today->isFuture() ? $today : $next;
+            $next = $today->isFuture() ? $today : $next;
         }
 
         return $next;

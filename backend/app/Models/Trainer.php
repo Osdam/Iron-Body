@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -10,6 +11,7 @@ use Illuminate\Support\Str;
 class Trainer extends Model
 {
     protected $fillable = [
+        'identity_id',
         'full_name',
         'document',
         'phone',
@@ -19,6 +21,7 @@ class Trainer extends Model
         'specialties',
         'experience_years',
         'contract_type',
+        'location',
         'status',
         'rating',
         'bio',
@@ -42,6 +45,16 @@ class Trainer extends Model
 
     protected $appends = ['name'];
 
+    /**
+     * Identidad central de la persona. Aditivo y nullable: un entrenador puede
+     * existir sin perfil de miembro y viceversa. La baja como entrenador no
+     * elimina la identidad ni el perfil de miembro asociado.
+     */
+    public function identity(): BelongsTo
+    {
+        return $this->belongsTo(Identity::class);
+    }
+
     public function classes(): HasMany
     {
         return $this->hasMany(MyClass::class, 'trainer_id');
@@ -55,6 +68,96 @@ class Trainer extends Model
     public function reviews(): HasMany
     {
         return $this->hasMany(TrainerReview::class);
+    }
+
+    public function roleAssignments(): HasMany
+    {
+        return $this->hasMany(TrainerRole::class);
+    }
+
+    /** Sesiones de dispositivo del portal profesional (para CRM: dispositivos). */
+    public function professionalSessions(): HasMany
+    {
+        return $this->hasMany(TrainerDeviceSession::class);
+    }
+
+    /**
+     * Roles profesionales vigentes del entrenador (`trainer_floor`,
+     * `trainer_functional`). Solo válidos según el catálogo.
+     *
+     * @return list<string>
+     */
+    public function roleNames(): array
+    {
+        return $this->roleAssignments
+            ->pluck('role')
+            ->filter(fn (string $role): bool => TrainerRole::isValid($role))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Permisos EFECTIVOS = UNIÓN de los permisos de todos sus roles, según el
+     * catálogo central de `config/trainer.php`. Autoridad única de permisos.
+     *
+     * Un entrenador inactivo no tiene ninguno: la desactivación en el CRM corta
+     * el acceso profesional de inmediato (esto es lo que consume el portal y el
+     * bootstrap de sesión, no solo `hasPermission`).
+     *
+     * @return list<string>
+     */
+    public function permissions(): array
+    {
+        if (! $this->isActive()) {
+            return [];
+        }
+
+        $catalog = (array) config('trainer.permissions', []);
+
+        $permissions = [];
+        foreach ($this->roleNames() as $role) {
+            foreach ((array) ($catalog[$role] ?? []) as $permission) {
+                $permissions[$permission] = true;
+            }
+        }
+
+        return array_keys($permissions);
+    }
+
+    public function hasPermission(string $permission): bool
+    {
+        return in_array($permission, $this->permissions(), true);
+    }
+
+    public function hasRole(string $role): bool
+    {
+        return in_array($role, $this->roleNames(), true);
+    }
+
+    /**
+     * Sincroniza el conjunto de roles del entrenador con los indicados. Ignora
+     * roles inválidos. Idempotente. Devuelve los roles finales.
+     *
+     * @param  iterable<string>  $roles
+     * @return list<string>
+     */
+    public function syncRoles(iterable $roles): array
+    {
+        $desired = collect($roles)
+            ->filter(fn ($role): bool => is_string($role) && TrainerRole::isValid($role))
+            ->unique()
+            ->values();
+
+        $this->roleAssignments()->whereNotIn('role', $desired)->delete();
+
+        foreach ($desired as $role) {
+            $this->roleAssignments()->firstOrCreate(['role' => $role]);
+        }
+
+        $this->load('roleAssignments');
+
+        return $desired->all();
     }
 
     // Alias para TrainerResource y el endpoint de calificaciones de la app
