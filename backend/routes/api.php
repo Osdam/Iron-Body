@@ -588,6 +588,13 @@ Route::middleware('throttle:10,1')->group(function (): void {
     Route::post('member/phone-recovery/verify',           [\App\Http\Controllers\Api\MemberPhoneRecoveryController::class, 'verify']);
 });
 
+// ── Auditoría general del CRM (append-only — patrón del resto del CRM) ─────
+// Bitácora persistente que reemplaza el localStorage del navegador. El actor lo
+// reporta el CRM (su sesión es de cliente) y solo sirve como traza, nunca para
+// autorizar. `index` filtra por días/usuario/módulo/acción/búsqueda.
+Route::get('admin/audit-logs',  [\App\Http\Controllers\Api\Admin\AuditLogController::class, 'index']);
+Route::post('admin/audit-logs', [\App\Http\Controllers\Api\Admin\AuditLogController::class, 'store']);
+
 // ── Seguridad: bandeja de reportes (CRM admin — patrón del resto del CRM) ──
 Route::get('admin/security/reports',                       [\App\Http\Controllers\Api\SecuritySupportController::class, 'adminIndex']);
 Route::get('admin/security/reports/{report}',              [\App\Http\Controllers\Api\SecuritySupportController::class, 'adminShow']);
