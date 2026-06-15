@@ -5,14 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TrainerResource;
 use App\Models\Trainer;
-use App\Models\TrainerAuditLog;
 use App\Models\TrainerReview;
 use App\Models\TrainerRole;
-use App\Services\Identity\IdentityLinkService;
 use App\Services\NotificationService;
 use App\Services\RealtimeEvents;
-use App\Services\Trainer\TrainerAuditService;
-use App\Services\Trainer\TrainerSessionService;
+use App\Services\Trainer\TrainerProfileService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -132,16 +129,7 @@ class TrainerController extends Controller
 
         // Si la edición dejó al entrenador inactivo, se corta el acceso
         // profesional al instante (revoca sesiones). Conserva miembro/historial.
-        if ($wasActive && ! $trainer->fresh()->isActive()) {
-            $revoked = app(TrainerSessionService::class)->revokeAll($trainer, 'trainer_deactivated');
-            app(TrainerAuditService::class)->record(
-                TrainerAuditLog::EVENT_DEACTIVATED,
-                $trainer,
-                actorType: TrainerAuditLog::ACTOR_ADMIN,
-                metadata: ['revoked_sessions' => $revoked, 'source' => 'crm_trainers'],
-                request: $request,
-            );
-        }
+        app(TrainerProfileService::class)->revokeOnDeactivation($trainer, $wasActive, 'api_trainers');
 
         // Notificación de entrenador actualizado (ADITIVO; idempotente por hash).
         app(NotificationService::class)->notifyTrainerUpdated($trainer);
@@ -157,20 +145,8 @@ class TrainerController extends Controller
      */
     private function syncProfessional(Trainer $trainer, array $validated): void
     {
-        $identities = app(IdentityLinkService::class);
-        $identity = $identities->ensureIdentity($trainer->document, $trainer->phone);
-        $identities->attachTrainer($trainer, $identity, ownershipVerified: true);
-
-        if (array_key_exists('roles', $validated)) {
-            $trainer->syncRoles($validated['roles'] ?? []);
-        }
-
-        app(TrainerAuditService::class)->record(
-            TrainerAuditLog::EVENT_IDENTITY_LINKED,
-            $trainer,
-            actorType: TrainerAuditLog::ACTOR_ADMIN,
-            metadata: ['identity_id' => $identity->getKey(), 'source' => 'crm_trainers'],
-        );
+        $roles = array_key_exists('roles', $validated) ? ($validated['roles'] ?? []) : null;
+        app(TrainerProfileService::class)->linkIdentityAndRoles($trainer, $roles, 'api_trainers');
     }
 
     private function loadProfessional(Trainer $trainer): Trainer

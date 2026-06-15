@@ -20,6 +20,7 @@
                     <th class="text-center">Estudiantes</th>
                     <th class="text-center">Promedio ★</th>
                     <th class="text-center">N° Calif.</th>
+                    <th class="text-center">Portal</th>
                     <th class="text-center">Estado</th>
                     <th class="text-center">Acciones</th>
                 </tr>
@@ -36,6 +37,25 @@
                         {{ $trainer->reviews_avg_rating ? number_format($trainer->reviews_avg_rating, 1) : '—' }}
                     </td>
                     <td class="text-center">{{ $trainer->reviews_count ?? 0 }}</td>
+                    {{-- Portal profesional: indicadores discretos (no rediseña la tabla). --}}
+                    @php
+                        $roles = $trainer->roleNames();
+                        $portalReady = $trainer->isActive() && $roles !== [] && trim((string) $trainer->phone) !== '';
+                    @endphp
+                    <td class="text-center small">
+                        @forelse($roles as $role)
+                            <span class="badge bg-dark-subtle text-dark">{{ $role === 'trainer_floor' ? 'Planta' : 'Funcional' }}</span>
+                        @empty
+                            <span class="text-muted">—</span>
+                        @endforelse
+                        <div class="mt-1">
+                            @if($portalReady)
+                                <span class="badge bg-success-subtle text-success" title="Acceso OTP listo">● Portal</span>
+                            @elseif($trainer->identity_id)
+                                <span class="badge bg-secondary-subtle text-secondary" title="Identidad vinculada, sin rol/teléfono">○ ID</span>
+                            @endif
+                        </div>
+                    </td>
                     <td class="text-center">
                         @if($trainer->isActive())
                             <span class="badge badge-active">Activo</span>
@@ -59,7 +79,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="9" class="text-center text-muted py-4">No hay entrenadores registrados.</td>
+                    <td colspan="10" class="text-center text-muted py-4">No hay entrenadores registrados.</td>
                 </tr>
                 @endforelse
             </tbody>
