@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
+use App\Models\Member;
 use App\Models\Trainer;
 use App\Models\TrainerRole;
 use App\Services\RealtimeEvents;
+use App\Services\Trainer\MemberAssignmentService;
 use App\Services\Trainer\TrainerProfileService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -15,7 +17,10 @@ use Illuminate\View\View;
 
 class TrainerController extends Controller
 {
-    public function __construct(private readonly TrainerProfileService $profiles) {}
+    public function __construct(
+        private readonly TrainerProfileService $profiles,
+        private readonly MemberAssignmentService $assignments,
+    ) {}
 
     public function index(): View
     {
@@ -52,11 +57,49 @@ class TrainerController extends Controller
             ->with('success', 'Entrenador creado exitosamente.');
     }
 
-    public function edit(Trainer $trainer): View
+    public function edit(Request $request, Trainer $trainer): View
     {
         $trainer->load('roleAssignments');
 
-        return view('crm.trainers.edit', compact('trainer'));
+        $assignedMembers = $this->assignments->assignedMembers($trainer);
+
+        // Buscador de miembros activos (nombre/documento/teléfono) para asignar.
+        $memberQuery = (string) $request->query('member_q', '');
+        $memberResults = $memberQuery !== ''
+            ? $this->assignments->searchAssignable($trainer, $memberQuery)
+            : collect();
+
+        return view('crm.trainers.edit', compact('trainer', 'assignedMembers', 'memberResults', 'memberQuery'));
+    }
+
+    /** Asigna uno o varios miembros activos a este entrenador. */
+    public function assignMembers(Request $request, Trainer $trainer): RedirectResponse
+    {
+        $data = $request->validate([
+            'member_ids' => 'required|array|min:1',
+            'member_ids.*' => 'integer|exists:members,id',
+        ]);
+
+        $assigned = 0;
+        foreach (Member::whereIn('id', $data['member_ids'])->get() as $member) {
+            if ($this->assignments->assign($trainer, $member, 'crm_blade')) {
+                $assigned++;
+            }
+        }
+
+        return redirect()->route('crm.trainers.edit', ['trainer' => $trainer, 'tab' => 'miembros'])
+            ->with('success', $assigned > 0
+                ? "Se asignaron {$assigned} miembro(s)."
+                : 'Sin cambios: ya estaban asignados.');
+    }
+
+    /** Quita un miembro asignado de este entrenador. */
+    public function unassignMember(Trainer $trainer, Member $member): RedirectResponse
+    {
+        $this->assignments->unassign($trainer, $member);
+
+        return redirect()->route('crm.trainers.edit', ['trainer' => $trainer, 'tab' => 'miembros'])
+            ->with('success', 'Miembro retirado del entrenador.');
     }
 
     public function update(Request $request, Trainer $trainer): RedirectResponse

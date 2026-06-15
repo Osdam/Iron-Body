@@ -123,6 +123,9 @@ Route::middleware(['trainer.feature:professional_assessments_enabled', 'auth.tra
     // Miembros asignados al entrenador (home profesional).
     Route::get('members', [\App\Http\Controllers\Api\Trainer\TrainerMembersController::class, 'index'])
         ->middleware('trainer.can:members.view_assigned');
+    // Detalle del miembro autorizado (perfil + última valoración).
+    Route::get('members/{member}', [\App\Http\Controllers\Api\Trainer\TrainerMembersController::class, 'show'])
+        ->whereNumber('member')->middleware('trainer.can:members.view_assigned');
     Route::get('members/{member}/assessments',  [$pa, 'index'])->middleware('trainer.can:assessments.view');
     Route::post('members/{member}/assessments', [$pa, 'store'])->middleware('trainer.can:assessments.create');
     Route::get('assessments/{assessment}',          [$pa, 'show'])->middleware('trainer.can:assessments.view');
@@ -840,6 +843,11 @@ Route::get('admin/trainers/{trainer}/devices',             [\App\Http\Controller
 Route::post('admin/trainers/{trainer}/devices/{uuid}/revoke', [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'revokeDevice']);
 Route::post('admin/trainers/{trainer}/sessions/revoke-all', [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'revokeAllSessions']);
 Route::get('admin/trainers/{trainer}/audit',               [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'audit']);
+// Miembros asignados al entrenador (CRM Angular) — reutiliza member_trainer_assignments.
+Route::get('admin/trainers/{trainer}/members/search',       [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'searchMembers']);
+Route::get('admin/trainers/{trainer}/members',             [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'members']);
+Route::post('admin/trainers/{trainer}/members',            [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'assignMembers']);
+Route::delete('admin/trainers/{trainer}/members/{member}', [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'unassignMember']);
 
 // ── Mercadeo digital (Meta) — datos reales de las tablas marketing_* (CRM admin) ─
 // Patrón /admin/* del CRM. Sirven datos reales; si no hay registros → vacío/0/null.
