@@ -4,13 +4,19 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TrainerResource;
-use App\Models\Member;
 use App\Models\Trainer;
+use App\Models\TrainerAuditLog;
 use App\Models\TrainerReview;
+use App\Models\TrainerRole;
+use App\Services\Identity\IdentityLinkService;
 use App\Services\NotificationService;
 use App\Services\RealtimeEvents;
+use App\Services\Trainer\TrainerAuditService;
+use App\Services\Trainer\TrainerSessionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class TrainerController extends Controller
 {
@@ -39,18 +45,19 @@ class TrainerController extends Controller
             $query->where('status', $request->input('status'));
         }
         if ($request->filled('search')) {
-            $term = '%' . $request->input('search') . '%';
+            $term = '%'.$request->input('search').'%';
             $query->where(function ($q) use ($term) {
                 $q->where('full_name', 'like', $term)
-                  ->orWhere('main_specialty', 'like', $term)
-                  ->orWhere('email', 'like', $term);
+                    ->orWhere('main_specialty', 'like', $term)
+                    ->orWhere('email', 'like', $term);
             });
         }
 
         $items = $query
             ->withAvg('reviews', 'rating')
             ->withCount('reviews')
-            ->with('reviews.member:id,full_name')
+            ->withCount(['professionalSessions as active_sessions_count' => fn ($q) => $q->whereNull('revoked_at')])
+            ->with(['reviews.member:id,full_name', 'roleAssignments'])
             ->orderByDesc('created_at')
             ->get();
 
@@ -60,7 +67,7 @@ class TrainerController extends Controller
     public function show(Request $request, Trainer $trainer)
     {
         if ($request->boolean('admin')) {
-            return response()->json($this->serialize($trainer));
+            return response()->json($this->serialize($this->loadProfessional($trainer)));
         }
 
         if (! $trainer->isActive()) {
@@ -96,26 +103,82 @@ class TrainerController extends Controller
     public function store(Request $request)
     {
         $validated = $this->validateInput($request, true);
-        $trainer = Trainer::create($this->mapInput($validated));
+
+        // Crear el entrenador Y vincular su identidad/rol en una sola transacción:
+        // el mismo módulo /trainers queda integrado con el portal profesional, sin
+        // CRUD ni tabla paralela. Idempotente y anti-duplicado por documento.
+        $trainer = DB::transaction(function () use ($validated) {
+            $trainer = Trainer::create($this->mapInput($validated));
+            $this->syncProfessional($trainer, $validated);
+
+            return $trainer;
+        });
 
         // Notificación de entrenador creado (ADITIVO; no afecta la creación).
         app(NotificationService::class)->notifyTrainerCreated($trainer);
 
-        $trainer->loadAvg('reviews', 'rating')->loadCount('reviews');
-        return response()->json($this->serialize($trainer), 201);
+        return response()->json($this->serialize($this->loadProfessional($trainer)), 201);
     }
 
     public function update(Request $request, Trainer $trainer)
     {
         $validated = $this->validateInput($request, false);
-        $trainer->fill($this->mapInput($validated));
-        $trainer->save();
+        $wasActive = $trainer->isActive();
+
+        DB::transaction(function () use ($trainer, $validated) {
+            $trainer->fill($this->mapInput($validated))->save();
+            $this->syncProfessional($trainer, $validated);
+        });
+
+        // Si la edición dejó al entrenador inactivo, se corta el acceso
+        // profesional al instante (revoca sesiones). Conserva miembro/historial.
+        if ($wasActive && ! $trainer->fresh()->isActive()) {
+            $revoked = app(TrainerSessionService::class)->revokeAll($trainer, 'trainer_deactivated');
+            app(TrainerAuditService::class)->record(
+                TrainerAuditLog::EVENT_DEACTIVATED,
+                $trainer,
+                actorType: TrainerAuditLog::ACTOR_ADMIN,
+                metadata: ['revoked_sessions' => $revoked, 'source' => 'crm_trainers'],
+                request: $request,
+            );
+        }
 
         // Notificación de entrenador actualizado (ADITIVO; idempotente por hash).
         app(NotificationService::class)->notifyTrainerUpdated($trainer);
 
-        $trainer->loadAvg('reviews', 'rating')->loadCount('reviews');
-        return response()->json($this->serialize($trainer));
+        return response()->json($this->serialize($this->loadProfessional($trainer)));
+    }
+
+    /**
+     * Vincula el entrenador a su identidad (creándola si no existe, REUSANDO la
+     * del miembro si comparten documento) y sincroniza roles si vienen en el
+     * formulario. Es el puente del módulo /trainers existente con el portal.
+     * Idempotente; nunca crea dos identidades para el mismo documento.
+     */
+    private function syncProfessional(Trainer $trainer, array $validated): void
+    {
+        $identities = app(IdentityLinkService::class);
+        $identity = $identities->ensureIdentity($trainer->document, $trainer->phone);
+        $identities->attachTrainer($trainer, $identity, ownershipVerified: true);
+
+        if (array_key_exists('roles', $validated)) {
+            $trainer->syncRoles($validated['roles'] ?? []);
+        }
+
+        app(TrainerAuditService::class)->record(
+            TrainerAuditLog::EVENT_IDENTITY_LINKED,
+            $trainer,
+            actorType: TrainerAuditLog::ACTOR_ADMIN,
+            metadata: ['identity_id' => $identity->getKey(), 'source' => 'crm_trainers'],
+        );
+    }
+
+    private function loadProfessional(Trainer $trainer): Trainer
+    {
+        return $trainer->loadAvg('reviews', 'rating')
+            ->loadCount('reviews')
+            ->loadCount(['professionalSessions as active_sessions_count' => fn ($q) => $q->whereNull('revoked_at')])
+            ->load('roleAssignments');
     }
 
     public function destroy(Trainer $trainer)
@@ -124,6 +187,7 @@ class TrainerController extends Controller
         app(NotificationService::class)->notifyTrainerDeleted($trainer);
 
         $trainer->delete();
+
         return response()->json(null, 204);
     }
 
@@ -134,7 +198,7 @@ class TrainerController extends Controller
         }
 
         $data = $request->validate([
-            'rating'  => 'required|numeric|min:1|max:5',
+            'rating' => 'required|numeric|min:1|max:5',
             'comment' => 'nullable|string|max:500',
         ], [
             'rating.min' => 'La calificación debe estar entre 1 y 5',
@@ -146,7 +210,7 @@ class TrainerController extends Controller
         $trainer->ratings()->updateOrCreate(
             ['member_id' => $member->id],
             [
-                'rating'  => round($data['rating'], 1),
+                'rating' => round($data['rating'], 1),
                 'comment' => $data['comment'] ?? null,
             ]
         );
@@ -214,6 +278,10 @@ class TrainerController extends Controller
             'specialties' => 'sometimes|nullable|array',
             'experienceYears' => 'sometimes|nullable|integer|min:0|max:80',
             'contractType' => 'sometimes|nullable|string|max:100',
+            // Sede y roles profesionales (aditivos: el portal usa estos campos).
+            'location' => 'sometimes|nullable|string|max:120',
+            'roles' => 'sometimes|array',
+            'roles.*' => ['string', Rule::in(TrainerRole::ALL)],
             'status' => 'sometimes|nullable|string|max:50',
             'rating' => 'sometimes|nullable|numeric|min:0|max:5',
             'bio' => 'sometimes|nullable|string',
@@ -237,6 +305,7 @@ class TrainerController extends Controller
             'specialties' => 'specialties',
             'experienceYears' => 'experience_years',
             'contractType' => 'contract_type',
+            'location' => 'location',
             'status' => 'status',
             'rating' => 'rating',
             'bio' => 'bio',
@@ -246,7 +315,9 @@ class TrainerController extends Controller
             'availability' => 'availability',
         ];
         foreach ($directMap as $camel => $snake) {
-            if (array_key_exists($camel, $data)) $out[$snake] = $data[$camel];
+            if (array_key_exists($camel, $data)) {
+                $out[$snake] = $data[$camel];
+            }
         }
         if (array_key_exists('certifications', $out) && is_array($out['certifications'])) {
             $out['certifications'] = json_encode(array_values(array_filter(array_map(
@@ -254,6 +325,7 @@ class TrainerController extends Controller
                 $out['certifications']
             ))));
         }
+
         return $out;
     }
 
@@ -266,9 +338,9 @@ class TrainerController extends Controller
                 ->values()
                 ->map(fn ($r) => [
                     'memberName' => $r->member?->full_name ?? 'Miembro',
-                    'rating'     => (float) $r->rating,
-                    'comment'    => $r->comment ?? '',
-                    'createdAt'  => optional($r->created_at)->toIso8601String(),
+                    'rating' => (float) $r->rating,
+                    'comment' => $r->comment ?? '',
+                    'createdAt' => optional($r->created_at)->toIso8601String(),
                 ])
             : [];
 
@@ -283,7 +355,17 @@ class TrainerController extends Controller
             'specialties' => $t->specialties ?? [],
             'experienceYears' => (int) $t->experience_years,
             'contractType' => $t->contract_type ?? '',
+            'location' => $t->location ?? '',
             'status' => $t->status ?? 'active',
+            // ── Portal profesional (aditivo) ─────────────────────────────────
+            'identityId' => $t->identity_id,
+            'roles' => $t->relationLoaded('roleAssignments') ? $t->roleNames() : [],
+            'permissions' => $t->relationLoaded('roleAssignments') ? $t->permissions() : [],
+            'portalAccess' => $t->relationLoaded('roleAssignments')
+                && $t->isActive()
+                && $t->roleNames() !== []
+                && trim((string) $t->phone) !== '',
+            'activeSessions' => (int) ($t->active_sessions_count ?? 0),
             'bio' => $t->bio ?? '',
             'certifications' => $t->certifications ?? '',
             'avatarUrl' => $t->avatar_url,
@@ -308,7 +390,7 @@ class TrainerController extends Controller
 
         if ($request->filled('specialty')) {
             $specialty = $request->input('specialty');
-            $term = '%' . $specialty . '%';
+            $term = '%'.$specialty.'%';
             $query->where(function ($q) use ($specialty, $term) {
                 $q->where('main_specialty', $specialty)
                     ->orWhere('main_specialty', 'like', $term)
@@ -317,7 +399,7 @@ class TrainerController extends Controller
         }
 
         if ($request->filled('search')) {
-            $term = '%' . $request->input('search') . '%';
+            $term = '%'.$request->input('search').'%';
             $query->where(function ($q) use ($term) {
                 $q->where('full_name', 'like', $term)
                     ->orWhere('main_specialty', 'like', $term)
@@ -355,7 +437,7 @@ class TrainerController extends Controller
 
     private function rankPosition(Trainer $trainer): int
     {
-        $ids = $this->rankedActiveQuery(new Request())
+        $ids = $this->rankedActiveQuery(new Request)
             ->pluck('id')
             ->values();
 

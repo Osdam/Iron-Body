@@ -75,6 +75,12 @@ class Trainer extends Model
         return $this->hasMany(TrainerRole::class);
     }
 
+    /** Sesiones de dispositivo del portal profesional (para CRM: dispositivos). */
+    public function professionalSessions(): HasMany
+    {
+        return $this->hasMany(TrainerDeviceSession::class);
+    }
+
     /**
      * Roles profesionales vigentes del entrenador (`trainer_floor`,
      * `trainer_functional`). Solo válidos según el catálogo.
