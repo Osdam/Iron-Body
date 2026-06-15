@@ -841,6 +841,11 @@ Route::get('admin/trainers/{trainer}/devices',             [\App\Http\Controller
 Route::post('admin/trainers/{trainer}/devices/{uuid}/revoke', [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'revokeDevice']);
 Route::post('admin/trainers/{trainer}/sessions/revoke-all', [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'revokeAllSessions']);
 Route::get('admin/trainers/{trainer}/audit',               [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'audit']);
+// Miembros asignados al entrenador (CRM Angular) — reutiliza member_trainer_assignments.
+Route::get('admin/trainers/{trainer}/members/search',       [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'searchMembers']);
+Route::get('admin/trainers/{trainer}/members',             [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'members']);
+Route::post('admin/trainers/{trainer}/members',            [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'assignMembers']);
+Route::delete('admin/trainers/{trainer}/members/{member}', [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'unassignMember']);
 
 // ── Mercadeo digital (Meta) — datos reales de las tablas marketing_* (CRM admin) ─
 // Patrón /admin/* del CRM. Sirven datos reales; si no hay registros → vacío/0/null.

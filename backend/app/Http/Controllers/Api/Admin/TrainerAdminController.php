@@ -6,14 +6,17 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateTrainerProfessionalRequest;
 use App\Http\Resources\TrainerProfessionalResource;
 use App\Models\Identity;
+use App\Models\Member;
 use App\Models\Trainer;
 use App\Models\TrainerAuditLog;
 use App\Models\TrainerDeviceSession;
 use App\Services\Identity\IdentityLinkService;
+use App\Services\Trainer\MemberAssignmentService;
 use App\Services\Trainer\TrainerAuditService;
 use App\Services\Trainer\TrainerSessionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -33,7 +36,95 @@ class TrainerAdminController extends Controller
         private readonly IdentityLinkService $identities,
         private readonly TrainerAuditService $audit,
         private readonly TrainerSessionService $sessions,
+        private readonly MemberAssignmentService $assignments,
     ) {}
+
+    // ── Miembros asignados (para el CRM Angular) ─────────────────────────────
+
+    /** Miembros activos asignados a este entrenador. */
+    public function members(Trainer $trainer): JsonResponse
+    {
+        return response()->json(['ok' => true, 'data' => $this->assignedMembersData($trainer)]);
+    }
+
+    /**
+     * Busca miembros ACTIVOS para asignar (por nombre, documento, teléfono o
+     * correo), excluyendo los ya asignados a este entrenador.
+     */
+    public function searchMembers(Request $request, Trainer $trainer): JsonResponse
+    {
+        $term = trim((string) $request->query('q', ''));
+        if ($term === '') {
+            return response()->json(['ok' => true, 'data' => []]);
+        }
+
+        $assigned = $this->assignments->assignedMembers($trainer)->pluck('id');
+        $like = '%'.$term.'%';
+
+        $data = Member::query()
+            ->where('status', Member::STATUS_ACTIVE)
+            ->whereNotIn('id', $assigned)
+            ->where(function ($q) use ($like) {
+                $q->where('full_name', 'like', $like)
+                    ->orWhere('document_number', 'like', $like)
+                    ->orWhere('phone', 'like', $like)
+                    ->orWhere('email', 'like', $like);
+            })
+            ->orderBy('full_name')
+            ->limit(15)
+            ->get(['id', 'full_name', 'document_number', 'phone', 'email']);
+
+        return response()->json(['ok' => true, 'data' => $data]);
+    }
+
+    /** Asigna uno o varios miembros activos a este entrenador. */
+    public function assignMembers(Request $request, Trainer $trainer): JsonResponse
+    {
+        $data = $request->validate([
+            'member_ids' => ['required', 'array', 'min:1'],
+            'member_ids.*' => ['integer', 'exists:members,id'],
+            'admin_id' => ['nullable', 'integer'],
+        ]);
+
+        $assigned = 0;
+        foreach (Member::whereIn('id', $data['member_ids'])->get() as $member) {
+            if ($this->assignments->assign($trainer, $member, 'crm_admin')) {
+                $assigned++;
+            }
+        }
+
+        return response()->json([
+            'ok' => true,
+            'assigned' => $assigned,
+            'data' => $this->assignedMembersData($trainer),
+        ]);
+    }
+
+    /** Quita un miembro asignado de este entrenador. */
+    public function unassignMember(Trainer $trainer, Member $member): JsonResponse
+    {
+        $this->assignments->unassign($trainer, $member);
+
+        return response()->json(['ok' => true, 'data' => $this->assignedMembersData($trainer)]);
+    }
+
+    /** @return Collection<int, array<string, mixed>> */
+    private function assignedMembersData(Trainer $trainer)
+    {
+        $ids = $this->assignments->assignedMembers($trainer)->pluck('id');
+
+        return Member::query()
+            ->whereIn('id', $ids)
+            ->orderBy('full_name')
+            ->get(['id', 'full_name', 'document_number', 'phone', 'email'])
+            ->map(fn (Member $m): array => [
+                'id' => $m->id,
+                'full_name' => $m->full_name,
+                'document_number' => $m->document_number,
+                'phone' => $m->phone,
+                'email' => $m->email,
+            ]);
+    }
 
     public function show(Trainer $trainer): JsonResponse
     {
