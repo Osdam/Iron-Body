@@ -160,16 +160,27 @@ miembro se auto-oculta.
 
 ## 5. Alta de entrenadores (CRM)
 
-El perfil profesional lo administra el CRM. Por cada entrenador:
+El perfil profesional se administra desde el **módulo `/trainers` existente** (no
+hay módulo nuevo). El CRUD existente quedó integrado:
 
-1. Crear/ubicar el `Trainer` (CRUD existente) con **documento** y **teléfono**
-   correctos (el OTP se envía a ese teléfono).
-2. Vincular identidad: `POST /api/admin/trainers/{id}/identity/link`
-   (`{ "document": "<doc>" }` o `{ "identity_id": <id> }`).
-3. Asignar roles y sede: `PUT /api/admin/trainers/{id}/professional`
-   (`{ "roles": ["trainer_floor","trainer_functional"], "location": "Sede Norte" }`).
-4. Asignar miembros (planta) y/o clases (funcional) con los flujos existentes
+1. Crear/editar el `Trainer` desde `/trainers` con **documento** y **teléfono**
+   correctos (el OTP se envía a ese teléfono). Al guardar, el backend **vincula
+   automáticamente la identidad** (creándola o **reutilizando la del miembro** si
+   comparten documento; idempotente, sin duplicar) y sincroniza los **roles** si
+   el formulario los envía (`roles: ["trainer_floor","trainer_functional"]`) y la
+   **sede** (`location`).
+2. Asignar miembros (planta) y/o clases (funcional) con los flujos existentes
    (`member_trainer_assignments`, `classes.trainer_id`).
+
+Endpoints profesionales complementarios (consumibles por el mismo detalle de
+`/trainers`, no son otro CRUD): `…/admin/trainers/{id}/professional` (roles/sede),
+`…/identity/link` (vínculo manual por `identity_id`), `…/activate` /
+`…/deactivate`, `…/devices` (+ `…/{uuid}/revoke`, `…/sessions/revoke-all`),
+`…/audit`.
+
+> **Backfill de entrenadores existentes:** la migración `backfill_identities`
+> ya vincula identidad a los entrenadores actuales. Tras ella, todo entrenador
+> creado/editado desde `/trainers` queda vinculado automáticamente.
 
 Para **desactivar** un entrenador: `POST /api/admin/trainers/{id}/deactivate`
 → corta el acceso profesional y **revoca sus sesiones**, pero conserva su cuenta
