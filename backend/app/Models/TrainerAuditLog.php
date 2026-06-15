@@ -41,6 +41,11 @@ class TrainerAuditLog extends Model
 
     public const EVENT_WORKSPACE_SWITCH = 'trainer.workspace_switch';
 
+    // Eventos de asistencia a clases (Fase 9).
+    public const EVENT_ATTENDANCE_MARKED = 'class.attendance_marked';
+
+    public const EVENT_ATTENDANCE_CORRECTED = 'class.attendance_corrected';
+
     protected $fillable = [
         'actor_type',
         'actor_id',

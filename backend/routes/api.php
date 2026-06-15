@@ -137,6 +137,17 @@ Route::middleware(['trainer.feature:professional_assessments_enabled', 'auth.mem
     Route::post('member/assessments/{uuid}/ack',     [$ma, 'acknowledge']);
 });
 
+// ── Clases y asistencia — entrenador funcional ────────────────────────────────
+// Feature flag + auth.trainer + permiso por acción + propiedad de la clase
+// (en el controlador). Un entrenador solo gestiona SUS clases.
+Route::middleware(['trainer.feature:trainer_classes_enabled', 'auth.trainer'])->prefix('trainer')->group(function (): void {
+    $tc = \App\Http\Controllers\Api\Trainer\TrainerClassController::class;
+    Route::get('classes',                      [$tc, 'index'])->middleware('trainer.can:classes.view');
+    Route::get('classes/{class}',              [$tc, 'show'])->middleware('trainer.can:classes.view');
+    Route::post('classes/{class}/attendance',  [$tc, 'markAttendance'])->middleware('trainer.can:attendance.create');
+    Route::put('classes/{class}/attendance',   [$tc, 'correctAttendance'])->middleware('trainer.can:attendance.update');
+});
+
 Route::middleware('member.registration.token')->group(function () {
     Route::get('members/incomplete', [MemberRegistrationController::class, 'incomplete']);
     // ── Login con verificación en dos pasos (OTP por SMS) ─────────────────────

@@ -1,0 +1,148 @@
+<?php
+
+namespace App\Http\Controllers\Api\Trainer;
+
+use App\Exceptions\AttendanceException;
+use App\Http\Controllers\Controller;
+use App\Http\Resources\TrainerClassResource;
+use App\Models\MyClass;
+use App\Models\Trainer;
+use App\Services\Trainer\ClassAttendanceService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+
+/**
+ * Agenda y asistencia de clases del entrenador FUNCIONAL. Mínimo privilegio: un
+ * entrenador solo ve y gestiona SUS propias clases (classes.trainer_id). La
+ * autorización se compone: feature flag + auth.trainer + permiso por acción +
+ * propiedad de la clase + participante inscrito.
+ */
+class TrainerClassController extends Controller
+{
+    public function __construct(private readonly ClassAttendanceService $attendance) {}
+
+    /** Agenda: las clases del entrenador autenticado, con aforo real. */
+    public function index(Request $request): JsonResponse
+    {
+        $trainer = $this->trainer($request);
+
+        $classes = MyClass::query()
+            ->where('trainer_id', $trainer->getKey())
+            ->withCount('reservations')
+            ->orderBy('day_of_week')
+            ->orderBy('start_time')
+            ->get();
+
+        return response()->json([
+            'ok' => true,
+            'data' => TrainerClassResource::collection($classes),
+        ]);
+    }
+
+    /** Detalle de una clase propia + participantes con su asistencia del día. */
+    public function show(Request $request, MyClass $class): JsonResponse
+    {
+        $this->assertOwner($this->trainer($request), $class);
+        $sessionDate = $this->sessionDate($request);
+        $class->loadCount('reservations');
+
+        return response()->json([
+            'ok' => true,
+            'data' => new TrainerClassResource($class),
+            'session_date' => $sessionDate->toDateString(),
+            'participants' => $this->attendance->participants($class, $sessionDate),
+        ]);
+    }
+
+    public function markAttendance(Request $request, MyClass $class): JsonResponse
+    {
+        $trainer = $this->trainer($request);
+        $this->assertOwner($trainer, $class);
+
+        $data = $this->validateAttendance($request);
+
+        try {
+            $this->attendance->mark(
+                $class,
+                $data['member_id'],
+                Carbon::parse($data['session_date']),
+                $data['status'],
+                $trainer,
+            );
+        } catch (AttendanceException $e) {
+            return $this->error($e);
+        }
+
+        return $this->participantsResponse($class, Carbon::parse($data['session_date']), 'Asistencia registrada.');
+    }
+
+    public function correctAttendance(Request $request, MyClass $class): JsonResponse
+    {
+        $trainer = $this->trainer($request);
+        $this->assertOwner($trainer, $class);
+
+        $data = $this->validateAttendance($request, withNote: true);
+
+        try {
+            $this->attendance->correct(
+                $class,
+                $data['member_id'],
+                Carbon::parse($data['session_date']),
+                $data['status'],
+                $data['note'] ?? null,
+                $trainer,
+            );
+        } catch (AttendanceException $e) {
+            return $this->error($e);
+        }
+
+        return $this->participantsResponse($class, Carbon::parse($data['session_date']), 'Asistencia corregida.');
+    }
+
+    private function validateAttendance(Request $request, bool $withNote = false): array
+    {
+        return $request->validate([
+            'member_id' => ['required', 'integer'],
+            'session_date' => ['required', 'date'],
+            'status' => ['required', 'string', 'in:present,absent,late'],
+            'note' => [$withNote ? 'nullable' : 'prohibited', 'string', 'max:255'],
+        ]);
+    }
+
+    private function participantsResponse(MyClass $class, Carbon $sessionDate, string $message): JsonResponse
+    {
+        return response()->json([
+            'ok' => true,
+            'message' => $message,
+            'session_date' => $sessionDate->toDateString(),
+            'participants' => $this->attendance->participants($class, $sessionDate),
+        ]);
+    }
+
+    private function trainer(Request $request): Trainer
+    {
+        return $request->attributes->get('auth_trainer');
+    }
+
+    private function assertOwner(Trainer $trainer, MyClass $class): void
+    {
+        abort_unless((int) $class->trainer_id === (int) $trainer->getKey(), 403, 'Esta clase no es tuya.');
+    }
+
+    private function sessionDate(Request $request): Carbon
+    {
+        $raw = $request->query('session_date');
+
+        return $raw !== null ? Carbon::parse((string) $raw) : Carbon::now();
+    }
+
+    private function error(AttendanceException $e): JsonResponse
+    {
+        return response()->json([
+            'ok' => false,
+            'code' => 'attendance_error',
+            'message' => $e->getMessage(),
+        ], $e->status);
+    }
+}
