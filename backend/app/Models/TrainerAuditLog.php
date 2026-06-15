@@ -46,6 +46,11 @@ class TrainerAuditLog extends Model
 
     public const EVENT_ATTENDANCE_CORRECTED = 'class.attendance_corrected';
 
+    // Eventos de asignación de miembros (CRM).
+    public const EVENT_MEMBER_ASSIGNED = 'trainer.member_assigned';
+
+    public const EVENT_MEMBER_UNASSIGNED = 'trainer.member_unassigned';
+
     protected $fillable = [
         'actor_type',
         'actor_id',
