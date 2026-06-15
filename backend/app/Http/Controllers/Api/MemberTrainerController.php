@@ -7,6 +7,7 @@ use App\Models\Member;
 use App\Models\MemberTrainerAssignment;
 use App\Models\Trainer;
 use App\Services\NotificationService;
+use App\Services\Trainer\TrainerRealtimeEvents;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -42,6 +43,8 @@ class MemberTrainerController extends Controller
         ]);
 
         app(NotificationService::class)->notifyTrainerAssigned($member, $trainer);
+        // Real-time: el nuevo entrenador ve aparecer al cliente al instante.
+        TrainerRealtimeEvents::membersChanged($trainer->id);
 
         return response()->json([
             'ok'   => true,
@@ -67,6 +70,8 @@ class MemberTrainerController extends Controller
         if ($trainer) {
             app(NotificationService::class)->notifyTrainerUnassigned($member, $trainer);
         }
+        // Real-time: el entrenador ve desaparecer al cliente al instante.
+        TrainerRealtimeEvents::membersChanged((int) $active->trainer_id);
 
         return response()->json(['ok' => true]);
     }

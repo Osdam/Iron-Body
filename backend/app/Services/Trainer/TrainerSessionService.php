@@ -65,6 +65,32 @@ class TrainerSessionService
             ->first();
     }
 
+    /**
+     * Sesión de confianza para este dispositivo: una sesión activa (no revocada)
+     * cuyo `trusted_at` sigue dentro de la ventana. Si existe, el acceso puede
+     * saltar el OTP (el equipo ya verificó al entrenador antes). `ttlDays <= 0`
+     * = sin caducidad de confianza. Devuelve null si no hay device_id estable.
+     */
+    public function trustedSessionForDevice(Trainer $trainer, ?string $deviceId, int $ttlDays): ?TrainerDeviceSession
+    {
+        $deviceId = $deviceId !== null ? trim((string) $deviceId) : '';
+        if ($deviceId === '') {
+            return null;
+        }
+
+        $query = TrainerDeviceSession::query()
+            ->where('trainer_id', $trainer->id)
+            ->where('device_id', $deviceId)
+            ->active()
+            ->whereNotNull('trusted_at');
+
+        if ($ttlDays > 0) {
+            $query->where('trusted_at', '>=', now()->subDays($ttlDays));
+        }
+
+        return $query->latest('trusted_at')->first();
+    }
+
     /** Sesión activa de un dispositivo concreto (para el desbloqueo biométrico). */
     public function activeForDevice(Trainer $trainer, string $deviceId): ?TrainerDeviceSession
     {

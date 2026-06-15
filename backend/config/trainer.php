@@ -30,6 +30,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Dispositivo de confianza (acceso profesional sin repetir OTP)
+    |--------------------------------------------------------------------------
+    | Tras el PRIMER acceso por OTP en un equipo, ese dispositivo queda marcado
+    | como de confianza (`trainer_device_sessions.trusted_at`). Mientras siga
+    | dentro de la ventana y la sesión no haya sido revocada, los accesos
+    | siguientes (incluso después de cerrar sesión) entran SIN OTP y sin gastar
+    | SMS. El `device_id` es un UUID por instalación (no adivinable); la confianza
+    | se rompe al desactivar al entrenador (revokeAll) o al expirar la ventana.
+    | Con `enabled=false` se exige OTP siempre.
+    */
+    'trusted_device' => [
+        'enabled'  => filter_var(env('TRAINER_TRUSTED_DEVICE_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+        'ttl_days' => (int) env('TRAINER_TRUSTED_DEVICE_TTL_DAYS', 30),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Catálogo de permisos por rol (autoridad central)
     |--------------------------------------------------------------------------
     | Fuente única de la verdad para qué puede hacer cada rol profesional. Un

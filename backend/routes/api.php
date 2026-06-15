@@ -106,6 +106,8 @@ Route::middleware('trainer.feature:trainer_auth_enabled')->prefix('trainer/auth'
         Route::get('me',                [\App\Http\Controllers\Api\TrainerAuthController::class, 'me']);
         Route::get('bootstrap',         [\App\Http\Controllers\Api\TrainerAuthController::class, 'bootstrap']);
         Route::post('biometric-unlock', [\App\Http\Controllers\Api\TrainerAuthController::class, 'biometricUnlock'])->middleware('throttle:20,1');
+        // Canal SSE del portal: empuja cambios de los clientes del entrenador.
+        Route::get('realtime',          [\App\Http\Controllers\Api\Trainer\TrainerRealtimeController::class, 'stream']);
     });
 });
 

@@ -87,6 +87,10 @@ class ProfessionalAssessmentService
                 'version' => $assessment->version,
             ]);
 
+            // Real-time: refresca el panel de quien atiende a este cliente
+            // (incl. un segundo entrenador del mismo miembro). Best-effort.
+            TrainerRealtimeEvents::assessmentForMember((int) $assessment->member_id);
+
             return $assessment->refresh();
         });
     }

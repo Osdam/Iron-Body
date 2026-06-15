@@ -45,6 +45,39 @@ class TrainerAuthController extends Controller
 
         $trainer = $this->resolveActiveTrainer($data['document']);
 
+        // Dispositivo de confianza: si este equipo ya verificó por OTP a este
+        // entrenador dentro de la ventana, entra SIN OTP (no gasta SMS) y sin
+        // volver a pedir 2FA tras cerrar sesión. Solo dispara para un entrenador
+        // real con una sesión de confianza previa en ESTE device_id; un equipo
+        // sin confianza cae al flujo OTP uniforme (no filtra existencia).
+        if ($trainer && (bool) config('trainer.trusted_device.enabled', true)) {
+            $trusted = $this->sessions->trustedSessionForDevice(
+                $trainer,
+                $data['device_id'] ?? null,
+                (int) config('trainer.trusted_device.ttl_days', 30),
+            );
+
+            if ($trusted) {
+                $issued = $this->sessions->issueSession($trainer, $this->context($request));
+                $trainer->load('roleAssignments');
+
+                $this->audit->record(
+                    TrainerAuditLog::EVENT_LOGIN,
+                    $trainer,
+                    actorType: TrainerAuditLog::ACTOR_TRAINER,
+                    metadata: ['session' => $issued['session']->uuid, 'trusted_device' => true],
+                    request: $request,
+                );
+
+                return response()->json([
+                    'ok' => true,
+                    'trusted' => true,
+                    'token' => $issued['token'],
+                    'trainer' => new TrainerProfessionalResource($trainer),
+                ]);
+            }
+        }
+
         // Respuesta uniforme. Sin entrenador activo (o sin teléfono) devolvemos
         // un challenge "señuelo" que jamás validará, para no filtrar existencia.
         if (! $trainer || $this->otp->resolvePhone($trainer) === null) {
