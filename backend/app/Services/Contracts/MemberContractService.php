@@ -182,6 +182,7 @@ class MemberContractService
                 'guardian_document_number' => $payload['guardian_document_number'] ?? null,
                 'guardian_document_city'   => $payload['guardian_document_city'] ?? null,
                 'guardian_phone'           => $payload['guardian_phone'] ?? null,
+                'guardian_email'           => $payload['guardian_email'] ?? null,
                 'guardian_address'         => $payload['guardian_address'] ?? null,
                 'guardian_city'            => $payload['guardian_city'] ?? null,
                 'guardian_relationship'    => $payload['guardian_relationship'] ?? null,

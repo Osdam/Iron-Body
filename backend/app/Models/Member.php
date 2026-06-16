@@ -130,6 +130,14 @@ class Member extends Model
     public const GENDERS = ['Masculino', 'Femenino', 'Otro'];
 
     /**
+     * Edad mínima (años cumplidos) permitida para registrarse. Por seguridad y
+     * riesgo físico en el gimnasio, Iron Body no admite menores de esta edad.
+     * Espejo de `minRegistrationAge` en la app Flutter. La validación real vive
+     * en App\Rules\MinimumRegistrationAge para no confiar solo en el cliente.
+     */
+    public const MIN_REGISTRATION_AGE = 11;
+
+    /**
      * Normaliza un teléfono a solo dígitos. Si viene con prefijo país (+57 /
      * 57), lo descarta para quedarse con el celular nacional de 10 dígitos. No
      * valida (eso lo hace el FormRequest); solo limpia para comparar/guardar.

@@ -124,4 +124,78 @@ class MemberRegistrationTest extends TestCase
             'gender' => 'Seleccionar',
         ])->assertStatus(422)->assertJsonValidationErrors(['gender']);
     }
+
+    /** Payload base de registro válido (datos ficticios). */
+    private function registerPayload(array $override = []): array
+    {
+        return array_merge([
+            'full_name' => 'Menor Prueba',
+            'document_number' => (string) random_int(100000000, 999999999),
+            'phone' => '3000000000',
+            'gender' => 'Masculino',
+            'email' => 'responsable@example.com',
+        ], $override);
+    }
+
+    public function test_register_rejects_member_below_minimum_age(): void
+    {
+        // Edad por debajo del mínimo (cumple 10 hoy) → 422 por edad mínima.
+        $tenYearsOld = now()->subYears(10)->format('Y-m-d');
+
+        $this->postJson('/api/members/register', $this->registerPayload([
+            'birth_date' => $tenYearsOld,
+        ]))->assertStatus(422)->assertJsonValidationErrors(['birth_date']);
+    }
+
+    public function test_register_rejects_member_one_day_before_turning_eleven(): void
+    {
+        // Cumple 11 mañana: hoy aún tiene 10 → bloqueado (validación por fecha exacta).
+        $almostEleven = now()->subYears(11)->addDay()->format('Y-m-d');
+
+        $this->postJson('/api/members/register', $this->registerPayload([
+            'birth_date' => $almostEleven,
+        ]))->assertStatus(422)->assertJsonValidationErrors(['birth_date']);
+    }
+
+    public function test_register_allows_member_exactly_eleven_years_old(): void
+    {
+        // Cumple 11 justo hoy → permitido (menor con flujo de acudiente posterior).
+        $exactlyEleven = now()->subYears(11)->format('Y-m-d');
+
+        $this->postJson('/api/members/register', $this->registerPayload([
+            'document_number' => '111111111',
+            'birth_date' => $exactlyEleven,
+            'is_minor' => true,
+        ]))->assertCreated();
+    }
+
+    public function test_register_allows_minor_between_eleven_and_seventeen(): void
+    {
+        $fifteenYearsOld = now()->subYears(15)->format('Y-m-d');
+
+        $this->postJson('/api/members/register', $this->registerPayload([
+            'document_number' => '151515151',
+            'birth_date' => $fifteenYearsOld,
+            'is_minor' => true,
+        ]))->assertCreated();
+    }
+
+    public function test_register_allows_adult(): void
+    {
+        $adult = now()->subYears(25)->format('Y-m-d');
+
+        $this->postJson('/api/members/register', $this->registerPayload([
+            'document_number' => '252525252',
+            'birth_date' => $adult,
+            'is_minor' => false,
+        ]))->assertCreated();
+    }
+
+    public function test_register_allows_missing_birth_date(): void
+    {
+        // Sin fecha de nacimiento NO se bloquea por edad mínima (se confirma luego).
+        $this->postJson('/api/members/register', $this->registerPayload([
+            'document_number' => '262626262',
+        ]))->assertCreated();
+    }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\MinimumRegistrationAge;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
@@ -26,7 +27,7 @@ class SignMemberContractRequest extends FormRequest
             // Datos del usuario (se confirman/actualizan al firmar).
             'full_name'       => ['nullable', 'string', 'max:255'],
             'document_number' => ['nullable', 'string', 'max:50'],
-            'birth_date'      => ['nullable', 'date'],
+            'birth_date'      => ['nullable', 'date', new MinimumRegistrationAge()],
             'rh'              => ['nullable', 'string', 'max:10'],
             'address'         => ['nullable', 'string', 'max:255'],
             'phone'           => ['nullable', 'string', 'max:30'],
@@ -41,6 +42,7 @@ class SignMemberContractRequest extends FormRequest
             'guardian_document_number' => ['nullable', 'string', 'max:50'],
             'guardian_document_city'   => ['nullable', 'string', 'max:120'],
             'guardian_phone'           => ['nullable', 'string', 'max:30'],
+            'guardian_email'           => ['nullable', 'email', 'max:255'],
             'guardian_address'         => ['nullable', 'string', 'max:255'],
             'guardian_city'            => ['nullable', 'string', 'max:120'],
             'guardian_relationship'    => ['nullable', 'string', 'max:80'],

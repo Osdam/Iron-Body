@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Member;
+use App\Rules\MinimumRegistrationAge;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -25,7 +26,7 @@ class StoreMemberIdentityRequest extends FormRequest
         return [
             'document_type' => ['nullable', 'string', Rule::in(['CC', 'TI', 'CE', 'PASAPORTE'])],
             'document_number' => ['required', 'string', 'max:50'],
-            'birth_date' => ['nullable', 'date'],
+            'birth_date' => ['nullable', 'date', new MinimumRegistrationAge()],
             'ocr_full_name' => ['nullable', 'string', 'max:255'],
             'ocr_confidence' => ['nullable', 'numeric', 'between:0,100'],
             'identity_status' => ['required', Rule::in(['verified', 'needs_manual_review'])],

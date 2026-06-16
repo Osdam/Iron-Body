@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Member;
+use App\Rules\MinimumRegistrationAge;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -37,7 +38,7 @@ class RegisterMemberRequest extends FormRequest
             'goal' => ['nullable', 'string', 'max:120'],
             'training_level' => ['nullable', 'string', 'max:80'],
             'injuries' => ['nullable', 'string', 'max:2000'],
-            'birth_date' => ['nullable', 'date'],
+            'birth_date' => ['nullable', 'date', new MinimumRegistrationAge()],
             'is_minor' => ['sometimes', 'boolean'],
             // Intención de biometría (opcional, Apple). Validación clara (no 500).
             'biometric_status' => ['sometimes', 'nullable', 'in:pending,registered,skipped,manual_required'],

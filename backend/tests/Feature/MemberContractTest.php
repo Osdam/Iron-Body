@@ -448,10 +448,10 @@ class MemberContractTest extends TestCase
      * crea `guardian_snapshot` pero NO una fila en `member_guardians`, por lo
      * que sirve para probar el fallback del CRM hacia el snapshot del contrato.
      */
-    private function signMinorRelease(Member $minor): string
+    private function signMinorRelease(Member $minor, array $guardianExtra = []): string
     {
         $uuid = $this->postJson('/api/member/contracts/draft', [], $this->auth($minor))->json('data.uuid');
-        $this->postJson("/api/member/contracts/{$uuid}/sign", [
+        $this->postJson("/api/member/contracts/{$uuid}/sign", array_merge([
             'signature_image'          => $this->signaturePngBase64(),
             'guardian_full_name'       => 'Responsable Prueba',
             'guardian_document_number' => '1234567890',
@@ -465,7 +465,7 @@ class MemberContractTest extends TestCase
                 'guardian_authorized' => true, 'minor_admission' => true, 'accompaniment' => true,
                 'risk_waiver' => true, 'minor_data_processing' => true,
             ],
-        ], $this->auth($minor))->assertOk();
+        ], $guardianExtra), $this->auth($minor))->assertOk();
 
         return $uuid;
     }
@@ -528,6 +528,54 @@ class MemberContractTest extends TestCase
         $this->getJson("/api/admin/members/{$minor->id}/contracts")
             ->assertOk()
             ->assertJsonPath('member.guardian', null);
+    }
+
+    public function test_sign_persists_guardian_email_and_relationship_in_snapshot(): void
+    {
+        // Registro nuevo: el contrato firmado guarda correo y parentesco del
+        // acudiente en guardian_snapshot, y el CRM los expone vía el fallback.
+        $minor = $this->makeMember(['full_name' => 'Menor Prueba', 'is_minor' => true, 'birth_date' => '2014-01-01']);
+        $this->signMinorRelease($minor, [
+            'guardian_email'        => 'responsable@example.com',
+            'guardian_relationship' => 'Madre',
+        ]);
+
+        $this->assertDatabaseMissing('member_guardians', ['member_id' => $minor->id]);
+
+        $this->getJson("/api/admin/members/{$minor->id}/contracts")
+            ->assertOk()
+            ->assertJsonPath('member.guardian.email', 'responsable@example.com')
+            ->assertJsonPath('member.guardian.relationship', 'Madre');
+    }
+
+    public function test_admin_member_summary_returns_email_and_relationship_from_guardian_record(): void
+    {
+        // Fuente viva member_guardians expone correo y parentesco.
+        $minor = $this->makeMember(['full_name' => 'Menor Prueba', 'is_minor' => true, 'birth_date' => '2014-01-01']);
+        $minor->guardian()->create([
+            'guardian_full_name'       => 'Responsable Prueba',
+            'guardian_document_number' => '1234567890',
+            'guardian_email'           => 'responsable@example.com',
+            'guardian_relationship'    => 'Padre',
+        ]);
+
+        $this->getJson("/api/admin/members/{$minor->id}/contracts")
+            ->assertOk()
+            ->assertJsonPath('member.guardian.email', 'responsable@example.com')
+            ->assertJsonPath('member.guardian.relationship', 'Padre');
+    }
+
+    public function test_old_snapshot_without_email_shows_null_without_breaking(): void
+    {
+        // Contrato antiguo sin correo en el snapshot: email null, sin romper.
+        $minor = $this->makeMember(['full_name' => 'Menor Prueba', 'is_minor' => true, 'birth_date' => '2014-01-01']);
+        $this->signMinorRelease($minor); // sin guardian_email/relationship
+
+        $this->getJson("/api/admin/members/{$minor->id}/contracts")
+            ->assertOk()
+            ->assertJsonPath('member.guardian.full_name', 'Responsable Prueba')
+            ->assertJsonPath('member.guardian.email', null)
+            ->assertJsonPath('member.guardian.relationship', null);
     }
 
     public function test_minor_contract_download_still_works_with_guardian_summary(): void
