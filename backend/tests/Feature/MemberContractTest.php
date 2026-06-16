@@ -378,6 +378,104 @@ class MemberContractTest extends TestCase
             ->assertOk()->assertJsonPath('data', []);
     }
 
+    public function test_admin_member_summary_omits_guardian_for_adult_without_guardian(): void
+    {
+        // Mayor de edad sin acudiente → el resumen no debe exponer responsable.
+        $member = $this->makeMember(['is_minor' => false]);
+
+        $this->getJson("/api/admin/members/{$member->id}/contracts")
+            ->assertOk()
+            ->assertJsonPath('member.is_minor', false)
+            ->assertJsonPath('member.guardian', null);
+    }
+
+    public function test_admin_member_summary_includes_guardian_for_minor(): void
+    {
+        // Menor con responsable y consentimiento legal → el detalle del CRM
+        // expone los datos del acudiente sin necesidad de descargar el PDF.
+        $member = $this->makeMember([
+            'full_name' => 'Menor Prueba',
+            'is_minor'  => true,
+            'birth_date' => '2014-01-01',
+        ]);
+        $member->guardian()->create([
+            'guardian_full_name'             => 'Responsable Prueba',
+            'guardian_document_number'       => '1234567890',
+            'guardian_phone'                 => '3000000000',
+            'guardian_email'                 => 'responsable@example.com',
+            'guardian_relationship'          => 'Madre',
+            'guardian_accepts_responsibility' => true,
+        ]);
+        $member->legalConsent()->create([
+            'accepted_at'            => '2026-01-15 10:00:00',
+            'guardian_authorization' => true,
+        ]);
+
+        $this->getJson("/api/admin/members/{$member->id}/contracts")
+            ->assertOk()
+            ->assertJsonPath('member.is_minor', true)
+            ->assertJsonPath('member.guardian.full_name', 'Responsable Prueba')
+            ->assertJsonPath('member.guardian.document_number', '1234567890')
+            ->assertJsonPath('member.guardian.phone', '3000000000')
+            ->assertJsonPath('member.guardian.email', 'responsable@example.com')
+            ->assertJsonPath('member.guardian.relationship', 'Madre')
+            ->assertJsonPath('member.guardian.accepts_responsibility', true)
+            ->assertJsonPath('member.guardian.authorized', true);
+    }
+
+    public function test_admin_user_contracts_endpoint_exposes_guardian(): void
+    {
+        // La variante por user_id (listado del CRM) también expone el acudiente.
+        $member = $this->makeMember([
+            'full_name' => 'Menor Prueba',
+            'is_minor'  => true,
+            'user_id'   => 4242,
+        ]);
+        $member->guardian()->create([
+            'guardian_full_name'       => 'Responsable Prueba',
+            'guardian_document_number' => '1234567890',
+            'guardian_relationship'    => 'Padre',
+        ]);
+
+        $this->getJson('/api/admin/users/4242/contracts')
+            ->assertOk()
+            ->assertJsonPath('member.guardian.full_name', 'Responsable Prueba')
+            ->assertJsonPath('member.guardian.relationship', 'Padre');
+    }
+
+    public function test_minor_contract_download_still_works_with_guardian_summary(): void
+    {
+        // El resumen del acudiente no rompe firma ni descarga del contrato del menor.
+        $minor = $this->makeMember(['full_name' => 'Menor Prueba', 'is_minor' => true, 'birth_date' => '2014-01-01']);
+        $minor->guardian()->create([
+            'guardian_full_name'       => 'Responsable Prueba',
+            'guardian_document_number' => '1234567890',
+        ]);
+
+        $uuid = $this->postJson('/api/member/contracts/draft', [], $this->auth($minor))->json('data.uuid');
+        $this->postJson("/api/member/contracts/{$uuid}/sign", [
+            'signature_image'          => $this->signaturePngBase64(),
+            'guardian_full_name'       => 'Responsable Prueba',
+            'guardian_document_number' => '1234567890',
+            'guardian_document_city'   => 'Neiva',
+            'guardian_phone'           => '3000000000',
+            'guardian_address'         => 'Calle Prueba 1-23',
+            'guardian_city'            => 'Neiva',
+            'minor_full_name'          => 'Menor Prueba',
+            'minor_document_number'    => '1075000000',
+            'acceptance' => [
+                'guardian_authorized' => true, 'minor_admission' => true, 'accompaniment' => true,
+                'risk_waiver' => true, 'minor_data_processing' => true,
+            ],
+        ], $this->auth($minor))->assertOk();
+
+        $this->getJson("/api/admin/members/{$minor->id}/contracts")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('member.guardian.full_name', 'Responsable Prueba');
+        $this->get("/api/admin/contracts/{$uuid}/download")->assertOk();
+    }
+
     public function test_missing_template_fails_clearly(): void
     {
         Storage::disk('local')->delete('contract_templates/source/workout_registration.pdf');

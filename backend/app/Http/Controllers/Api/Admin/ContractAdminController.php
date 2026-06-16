@@ -42,10 +42,41 @@ class ContractAdminController extends Controller
     /** Resumen del miembro para el panel legal del CRM (estado biometría/menor). */
     private function memberSummary(Member $member): array
     {
+        $member->loadMissing(['guardian', 'legalConsent']);
+
         return [
             'id'               => $member->id,
             'is_minor'         => (bool) $member->is_minor,
             'biometric_status' => $member->biometric_status ?? 'pending',
+            'guardian'         => $this->guardianSummary($member),
+        ];
+    }
+
+    /**
+     * Datos del responsable legal/acudiente para el detalle del CRM. Permite a
+     * atención/emergencia ver el contacto sin descargar el PDF del contrato.
+     * Devuelve null si el miembro no tiene responsable registrado: el frontend
+     * no debe pintar la sección (mayores de edad sin acudiente). La fecha y el
+     * estado de autorización provienen del consentimiento legal, fuente viva.
+     */
+    private function guardianSummary(Member $member): ?array
+    {
+        $guardian = $member->guardian;
+        if ($guardian === null) {
+            return null;
+        }
+
+        $consent = $member->legalConsent;
+
+        return [
+            'full_name'              => $guardian->guardian_full_name,
+            'document_number'        => $guardian->guardian_document_number,
+            'phone'                  => $guardian->guardian_phone,
+            'email'                  => $guardian->guardian_email,
+            'relationship'           => $guardian->guardian_relationship,
+            'accepts_responsibility' => (bool) $guardian->guardian_accepts_responsibility,
+            'authorized'             => $consent !== null ? (bool) $consent->guardian_authorization : null,
+            'authorized_at'          => optional($consent?->accepted_at)->toIso8601String(),
         ];
     }
 
