@@ -184,17 +184,17 @@ class ClassController extends Controller
             }
         }
 
-        // Estado → active|inactive|finished (acepta español/mayúsculas).
-        if ($request->filled('status')) {
+        // Estado → active|inactive|finished (acepta español/mayúsculas). Si llega
+        // presente pero vacío o con un valor desconocido (CRM viejo), cae a
+        // 'active' para no romper la validación `in:`.
+        if ($request->has('status')) {
             $statusMap = [
                 'active' => 'active', 'activa' => 'active', 'activo' => 'active',
                 'inactive' => 'inactive', 'inactiva' => 'inactive', 'inactivo' => 'inactive',
                 'finished' => 'finished', 'finalizada' => 'finished', 'finalizado' => 'finished',
             ];
             $key = $this->stripAccentsLower((string) $request->input('status'));
-            if (isset($statusMap[$key])) {
-                $merge['status'] = $statusMap[$key];
-            }
+            $merge['status'] = $statusMap[$key] ?? 'active';
         }
 
         // Día → Lunes..Domingo (acepta inglés, minúsculas, sin acentos).

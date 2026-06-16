@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\ClassAttendance;
+use App\Models\ClassReservation;
 use App\Models\ClassSession;
 use App\Models\MyClass;
 use App\Models\Trainer;
@@ -57,6 +59,13 @@ class ClassSupervisionController extends Controller
         $scheduledStart = $class?->start_time;
         $scheduledEnd = $class?->end_time;
 
+        // Personas: inscritos a la clase y cuántos asistieron en esa sesión.
+        $enrolled = ClassReservation::where('class_id', $s->class_id)->count();
+        $attended = ClassAttendance::where('class_id', $s->class_id)
+            ->whereDate('session_date', optional($s->session_date)->toDateString())
+            ->whereIn('status', ['present', 'late'])
+            ->count();
+
         // Puntualidad: minutos de diferencia entre el inicio real y el programado.
         $startDelayMin = null;
         if ($scheduledStart && $s->started_at) {
@@ -75,6 +84,8 @@ class ClassSupervisionController extends Controller
             'scheduled_end' => $scheduledEnd,
             'real_start' => optional($s->started_at)->toIso8601String(),
             'real_end' => optional($s->ended_at)->toIso8601String(),
+            'enrolled' => $enrolled,
+            'attended' => $attended,
             'start_delay_minutes' => $startDelayMin, // + tarde, - antes
             'start_face_verified' => (bool) $s->start_face_verified,
             'end_face_verified' => (bool) $s->end_face_verified,
