@@ -73,6 +73,7 @@ class ClassController extends Controller
 
     public function store(Request $request)
     {
+        $this->normalizeClassInput($request);
         $validated = $request->validate([
             'name'                 => 'required|string|max:255',
             'type'                 => 'required|string|max:100',
@@ -116,6 +117,7 @@ class ClassController extends Controller
 
     public function update(Request $request, MyClass $myClass)
     {
+        $this->normalizeClassInput($request);
         $validated = $request->validate([
             'name'                 => 'sometimes|string|max:255',
             'type'                 => 'sometimes|string|max:100',
@@ -163,6 +165,65 @@ class ClassController extends Controller
         RealtimeEvents::classesChanged();
 
         return new ClassResource($myClass->loadCount('reservations')->load('trainer:id,full_name'));
+    }
+
+    /**
+     * Normaliza las entradas de clase para que ediciones con datos en otro
+     * formato (horas con segundos, día/estado en inglés o con mayúsculas/acentos)
+     * no fallen la validación `in:`/`date_format`. Deja valores canónicos.
+     */
+    private function normalizeClassInput(Request $request): void
+    {
+        $merge = [];
+
+        // Horas "H:i:s" → "H:i" (la validación pide H:i).
+        foreach (['start_time', 'end_time'] as $field) {
+            $value = $request->input($field);
+            if (is_string($value) && preg_match('/^(\d{1,2}:\d{2}):\d{2}$/', $value, $m)) {
+                $merge[$field] = $m[1];
+            }
+        }
+
+        // Estado → active|inactive|finished (acepta español/mayúsculas).
+        if ($request->filled('status')) {
+            $statusMap = [
+                'active' => 'active', 'activa' => 'active', 'activo' => 'active',
+                'inactive' => 'inactive', 'inactiva' => 'inactive', 'inactivo' => 'inactive',
+                'finished' => 'finished', 'finalizada' => 'finished', 'finalizado' => 'finished',
+            ];
+            $key = $this->stripAccentsLower((string) $request->input('status'));
+            if (isset($statusMap[$key])) {
+                $merge['status'] = $statusMap[$key];
+            }
+        }
+
+        // Día → Lunes..Domingo (acepta inglés, minúsculas, sin acentos).
+        if ($request->filled('day_of_week')) {
+            $dayMap = [
+                'lunes' => 'Lunes', 'monday' => 'Lunes',
+                'martes' => 'Martes', 'tuesday' => 'Martes',
+                'miercoles' => 'Miércoles', 'wednesday' => 'Miércoles',
+                'jueves' => 'Jueves', 'thursday' => 'Jueves',
+                'viernes' => 'Viernes', 'friday' => 'Viernes',
+                'sabado' => 'Sábado', 'saturday' => 'Sábado',
+                'domingo' => 'Domingo', 'sunday' => 'Domingo',
+            ];
+            $key = $this->stripAccentsLower((string) $request->input('day_of_week'));
+            if (isset($dayMap[$key])) {
+                $merge['day_of_week'] = $dayMap[$key];
+            }
+        }
+
+        if ($merge !== []) {
+            $request->merge($merge);
+        }
+    }
+
+    private function stripAccentsLower(string $value): string
+    {
+        $value = mb_strtolower(trim($value));
+
+        return strtr($value, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u']);
     }
 
     /**
