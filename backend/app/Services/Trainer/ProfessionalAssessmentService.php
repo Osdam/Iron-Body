@@ -4,6 +4,7 @@ namespace App\Services\Trainer;
 
 use App\Exceptions\AssessmentException;
 use App\Models\Member;
+use App\Models\PhysicalEvaluation;
 use App\Models\ProfessionalAssessment;
 use App\Models\Trainer;
 use App\Models\TrainerAuditLog;
@@ -91,6 +92,10 @@ class ProfessionalAssessmentService
             // (incl. un segundo entrenador del mismo miembro). Best-effort.
             TrainerRealtimeEvents::assessmentForMember((int) $assessment->member_id);
 
+            // Vuelca las medidas al historial de Evaluación Física del miembro
+            // (lo que ya consume su app), para que la valoración aparezca ahí.
+            $this->syncToPhysicalEvaluation($assessment);
+
             return $assessment->refresh();
         });
     }
@@ -137,8 +142,49 @@ class ProfessionalAssessmentService
                 'version' => $amendment->version,
             ]);
 
+            // La corrección también se refleja en el historial de Evaluación Física.
+            $this->syncToPhysicalEvaluation($amendment);
+
             return $amendment;
         });
+    }
+
+    /**
+     * Vuelca las medidas de una valoración ENVIADA al historial de Evaluación
+     * Física del miembro (misma tabla `physical_evaluations` que ya consume su
+     * app). Así la valoración del entrenador aparece en "Evaluación física" del
+     * usuario, con su historial. Solo crea fila si trae al menos una medida (no
+     * ensucia el historial con valoraciones puramente cualitativas). Best-effort:
+     * un fallo aquí no rompe el envío de la valoración.
+     */
+    private function syncToPhysicalEvaluation(ProfessionalAssessment $a): void
+    {
+        $measurements = [
+            'weight_kg' => $a->weight_kg,
+            'height_cm' => $a->height_cm,
+            'body_fat_pct' => $a->body_fat_pct,
+            'muscle_mass_pct' => $a->muscle_mass_pct,
+            'waist_cm' => $a->waist_cm,
+            'hip_cm' => $a->hip_cm,
+            'chest_cm' => $a->chest_cm,
+            'arm_cm' => $a->arm_cm,
+            'leg_cm' => $a->leg_cm,
+        ];
+
+        if (collect($measurements)->every(fn ($v) => $v === null)) {
+            return;
+        }
+
+        $notes = collect([
+            $a->observations ? 'Observaciones: '.$a->observations : null,
+            $a->recommendations ? 'Recomendaciones: '.$a->recommendations : null,
+        ])->filter()->implode("\n\n");
+
+        PhysicalEvaluation::create(array_merge($measurements, [
+            'member_id' => $a->member_id,
+            'trainer_id' => $a->trainer_id,
+            'trainer_notes' => $notes !== '' ? $notes : null,
+        ]));
     }
 
     /** El miembro marca la valoración como leída. No la altera. */
