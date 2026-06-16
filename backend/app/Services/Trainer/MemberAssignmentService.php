@@ -6,6 +6,7 @@ use App\Models\Member;
 use App\Models\MemberTrainerAssignment;
 use App\Models\Trainer;
 use App\Models\TrainerAuditLog;
+use App\Models\TrainerRole;
 use App\Services\NotificationService;
 
 /**
@@ -28,6 +29,19 @@ class MemberAssignmentService
      */
     public function assign(Trainer $trainer, Member $member, ?string $assignedBy = null): bool
     {
+        // El portal solo lista clientes a quien tiene el rol que otorga
+        // `members.view_assigned` (entrenador de planta). Como el alta de un
+        // entrenador en el CRM no fija rol, al asignarle un miembro le
+        // garantizamos ese rol (sin quitar los que ya tenga) para que lo vea de
+        // inmediato en el portal. Se hace siempre que se asigna, aunque el
+        // miembro ya estuviera vinculado.
+        if ($trainer->isActive() && ! $trainer->hasPermission('members.view_assigned')) {
+            $trainer->syncRoles(array_values(array_unique([
+                ...$trainer->roleNames(),
+                TrainerRole::FLOOR,
+            ])));
+        }
+
         $alreadyActive = MemberTrainerAssignment::query()
             ->where('member_id', $member->getKey())
             ->where('trainer_id', $trainer->getKey())
