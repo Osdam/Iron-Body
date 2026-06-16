@@ -60,6 +60,8 @@ class MemberAssignmentService
             actorType: TrainerAuditLog::ACTOR_ADMIN,
             metadata: ['member_id' => $member->getKey(), 'source' => 'crm_blade'],
         );
+        // Real-time: el portal del entrenador ve aparecer al cliente al instante.
+        TrainerRealtimeEvents::membersChanged((int) $trainer->getKey());
 
         return true;
     }
@@ -90,6 +92,8 @@ class MemberAssignmentService
             actorType: TrainerAuditLog::ACTOR_ADMIN,
             metadata: ['member_id' => $member->getKey(), 'source' => 'crm_blade'],
         );
+        // Real-time: el portal del entrenador ve desaparecer al cliente al instante.
+        TrainerRealtimeEvents::membersChanged((int) $trainer->getKey());
 
         return true;
     }
