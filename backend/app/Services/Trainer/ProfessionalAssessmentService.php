@@ -11,6 +11,7 @@ use App\Models\TrainerAuditLog;
 use App\Services\NotificationService;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Lógica de dominio de las valoraciones profesionales. Garantiza la
@@ -74,7 +75,7 @@ class ProfessionalAssessmentService
             throw AssessmentException::notSubmittable();
         }
 
-        return DB::transaction(function () use ($assessment, $trainer) {
+        $result = DB::transaction(function () use ($assessment, $trainer) {
             $assessment->forceFill([
                 'status' => ProfessionalAssessment::STATUS_SUBMITTED,
                 'submitted_at' => now(),
@@ -92,12 +93,16 @@ class ProfessionalAssessmentService
             // (incl. un segundo entrenador del mismo miembro). Best-effort.
             TrainerRealtimeEvents::assessmentForMember((int) $assessment->member_id);
 
-            // Vuelca las medidas al historial de Evaluación Física del miembro
-            // (lo que ya consume su app), para que la valoración aparezca ahí.
-            $this->syncToPhysicalEvaluation($assessment);
-
             return $assessment->refresh();
         });
+
+        // FUERA de la transacción (best-effort): vuelca las medidas al historial
+        // de Evaluación Física del miembro. Si fallara, NO debe afectar el envío
+        // ya confirmado (en Postgres un INSERT fallido dentro de la transacción la
+        // abortaría por completo).
+        $this->syncToPhysicalEvaluation($result);
+
+        return $result;
     }
 
     /**
@@ -115,7 +120,7 @@ class ProfessionalAssessmentService
             throw AssessmentException::amendmentReasonRequired();
         }
 
-        return DB::transaction(function () use ($original, $trainer, $data, $reason) {
+        $amendment = DB::transaction(function () use ($original, $trainer, $data, $reason) {
             $amendment = ProfessionalAssessment::create(array_merge(
                 Arr::only($data, self::CONTENT_FIELDS),
                 [
@@ -142,11 +147,14 @@ class ProfessionalAssessmentService
                 'version' => $amendment->version,
             ]);
 
-            // La corrección también se refleja en el historial de Evaluación Física.
-            $this->syncToPhysicalEvaluation($amendment);
-
             return $amendment;
         });
+
+        // FUERA de la transacción (best-effort): la corrección también alimenta el
+        // historial de Evaluación Física del miembro.
+        $this->syncToPhysicalEvaluation($amendment);
+
+        return $amendment;
     }
 
     /**
@@ -159,6 +167,12 @@ class ProfessionalAssessmentService
      */
     private function syncToPhysicalEvaluation(ProfessionalAssessment $a): void
     {
+        // La evaluación física pertenece a un miembro existente (FK obligatorio);
+        // si el miembro fue borrado (datos de prueba), no hay nada que registrar.
+        if (! $a->member_id || ! Member::whereKey($a->member_id)->exists()) {
+            return;
+        }
+
         $measurements = [
             'weight_kg' => $a->weight_kg,
             'height_cm' => $a->height_cm,
@@ -180,11 +194,25 @@ class ProfessionalAssessmentService
             $a->recommendations ? 'Recomendaciones: '.$a->recommendations : null,
         ])->filter()->implode("\n\n");
 
-        PhysicalEvaluation::create(array_merge($measurements, [
-            'member_id' => $a->member_id,
-            'trainer_id' => $a->trainer_id,
-            'trainer_notes' => $notes !== '' ? $notes : null,
-        ]));
+        // El FK de physical_evaluations.trainer_id apunta a `trainers`; si el
+        // entrenador de la valoración no existe ahí (datos legados), se guarda con
+        // trainer_id nulo en vez de romper. La columna es nullable.
+        $trainerId = ($a->trainer_id && Trainer::whereKey($a->trainer_id)->exists())
+            ? $a->trainer_id
+            : null;
+
+        try {
+            PhysicalEvaluation::create(array_merge($measurements, [
+                'member_id' => $a->member_id,
+                'trainer_id' => $trainerId,
+                'trainer_notes' => $notes !== '' ? $notes : null,
+            ]));
+        } catch (\Throwable $e) {
+            Log::warning('assessment.sync_physical_evaluation_failed', [
+                'assessment' => $a->uuid,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /** El miembro marca la valoración como leída. No la altera. */
