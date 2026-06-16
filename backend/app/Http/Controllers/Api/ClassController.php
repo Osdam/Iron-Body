@@ -7,6 +7,8 @@ use App\Http\Resources\ClassResource;
 use App\Models\ClassReservation;
 use App\Models\Member;
 use App\Models\MyClass;
+use App\Models\Trainer;
+use App\Models\TrainerRole;
 use App\Services\NotificationService;
 use App\Services\RealtimeEvents;
 use Illuminate\Http\JsonResponse;
@@ -99,6 +101,10 @@ class ClassController extends Controller
 
         $class = MyClass::create($validated);
 
+        // Asignar una clase implica que ese entrenador la gestione en su portal:
+        // le garantizamos el rol que habilita el portal de clases.
+        $this->ensureClassTrainerRole($validated['trainer_id'] ?? null);
+
         // Notificación de clase creada (ADITIVO; no afecta la creación).
         app(NotificationService::class)->notifyClassCreated($class);
 
@@ -145,6 +151,9 @@ class ClassController extends Controller
 
         $myClass->update($validated);
 
+        // Si se (re)asignó a un entrenador, garantízale el rol del portal de clases.
+        $this->ensureClassTrainerRole($myClass->trainer_id);
+
         // Notifica a los miembros inscritos de los cambios (ADITIVO).
         $members = $myClass->reservations()->with('member')->get()
             ->pluck('member')->filter()->values();
@@ -154,6 +163,26 @@ class ClassController extends Controller
         RealtimeEvents::classesChanged();
 
         return new ClassResource($myClass->loadCount('reservations')->load('trainer:id,full_name'));
+    }
+
+    /**
+     * Al asignar una clase a un entrenador, le garantizamos el rol que habilita
+     * el portal de clases (`trainer_functional` → classes.view/manage/attendance),
+     * sin quitarle los que ya tenga. Si no, la clase no le aparecería en su portal.
+     */
+    private function ensureClassTrainerRole(?int $trainerId): void
+    {
+        if (! $trainerId) {
+            return;
+        }
+        $trainer = Trainer::find($trainerId);
+        if ($trainer === null || $trainer->hasPermission('classes.view')) {
+            return;
+        }
+        $trainer->syncRoles(array_values(array_unique([
+            ...$trainer->roleNames(),
+            TrainerRole::FUNCTIONAL,
+        ])));
     }
 
     public function destroy(MyClass $myClass)
