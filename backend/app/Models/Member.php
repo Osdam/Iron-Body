@@ -14,19 +14,27 @@ use Illuminate\Support\Str;
 class Member extends Model
 {
     public const STATUS_PENDING_REGISTRATION = 'pending_registration';
+
     public const STATUS_INCOMPLETE = 'incomplete';
+
     public const STATUS_ACTIVE = 'active';
+
     public const STATUS_FAILED = 'failed';
+
     // Cuenta eliminada/anonimizada por solicitud del usuario: bloquea el login.
     public const STATUS_DELETED = 'deleted';
+
     // Cuenta suspendida por seguridad (manual desde el CRM o automática si se
     // activa): bloquea login + sesiones hasta que el CRM la desbloquee.
     public const STATUS_SUSPENDED = 'suspended';
 
     // Estado de inscripción biométrica facial (la biometría es OPCIONAL).
     public const BIOMETRIC_PENDING = 'pending';
+
     public const BIOMETRIC_REGISTERED = 'registered';
+
     public const BIOMETRIC_SKIPPED = 'skipped';
+
     public const BIOMETRIC_MANUAL_REQUIRED = 'manual_required';
 
     protected $fillable = [
@@ -116,6 +124,29 @@ class Member extends Model
         $normalized = preg_replace('/[\s\.\-]+/', '', $normalized);
 
         return $normalized === '' ? null : $normalized;
+    }
+
+    /** Valores de género aceptados en el registro/edición. */
+    public const GENDERS = ['Masculino', 'Femenino', 'Otro'];
+
+    /**
+     * Normaliza un teléfono a solo dígitos. Si viene con prefijo país (+57 /
+     * 57), lo descarta para quedarse con el celular nacional de 10 dígitos. No
+     * valida (eso lo hace el FormRequest); solo limpia para comparar/guardar.
+     */
+    public static function normalizePhone(?string $phone): ?string
+    {
+        if ($phone === null) {
+            return null;
+        }
+
+        $digits = preg_replace('/\D+/', '', $phone) ?? '';
+        // Quita prefijo Colombia (+57 / 0057) dejando el celular de 10 dígitos.
+        if (strlen($digits) === 12 && str_starts_with($digits, '57')) {
+            $digits = substr($digits, 2);
+        }
+
+        return $digits === '' ? null : $digits;
     }
 
     public function isRegistrationResumable(): bool
@@ -250,7 +281,7 @@ class Member extends Model
             );
         }
 
-        $plan      = $user->plan ? Plan::where('name', $user->plan)->first() : null;
+        $plan = $user->plan ? Plan::where('name', $user->plan)->first() : null;
         $expiresAt = $user->membershipEndDate
             ? Carbon::parse($user->membershipEndDate)->endOfDay()
             : null;

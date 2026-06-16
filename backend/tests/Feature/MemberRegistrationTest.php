@@ -24,6 +24,7 @@ class MemberRegistrationTest extends TestCase
             'email' => 'new@example.com',
             'document_number' => '1.004 301-550',
             'phone' => '3215542105',
+            'gender' => 'Masculino',
         ]);
 
         // Un registro pendiente con el mismo documento normalizado se REANUDA
@@ -53,6 +54,8 @@ class MemberRegistrationTest extends TestCase
         $response = $this->postJson('/api/members/register', [
             'full_name' => 'Someone Else',
             'document_number' => '1004301550',
+            'phone' => '3215542105',
+            'gender' => 'Masculino',
         ]);
 
         $response
@@ -60,5 +63,65 @@ class MemberRegistrationTest extends TestCase
             ->assertJsonPath('status', 'duplicate_document')
             ->assertJsonPath('member_id', $member->id)
             ->assertJsonPath('message', 'Ya existe una cuenta registrada con este documento o correo.');
+    }
+
+    /** @return array<string, array{0: array<string,mixed>, 1: string}> */
+    public static function invalidPhoneProvider(): array
+    {
+        return [
+            'menos de 10' => [['phone' => '321554210'], 'phone'],
+            'mas de 10 (se normaliza pero no cumple regex)' => [['phone' => '32155421050'], 'phone'],
+            'no empieza por 3' => [['phone' => '6015542105'], 'phone'],
+            'con letras' => [['phone' => '32155abcd1'], 'phone'],
+            'vacio' => [['phone' => ''], 'phone'],
+        ];
+    }
+
+    /** @dataProvider invalidPhoneProvider */
+    public function test_register_rejects_invalid_colombian_phone(array $override, string $field): void
+    {
+        $response = $this->postJson('/api/members/register', array_merge([
+            'full_name' => 'New Member',
+            'document_number' => '900900900',
+            'phone' => '3001234567',
+            'gender' => 'Masculino',
+        ], $override));
+
+        $response->assertStatus(422)->assertJsonValidationErrors([$field]);
+        $this->assertDatabaseMissing('members', ['document_number' => '900900900']);
+    }
+
+    public function test_register_accepts_phone_with_country_prefix_normalized(): void
+    {
+        $this->postJson('/api/members/register', [
+            'full_name' => 'New Member',
+            'document_number' => '900900901',
+            'phone' => '+57 300 123 4567',
+            'gender' => 'Femenino',
+        ])->assertCreated();
+
+        // Se normaliza a 10 dígitos nacionales antes de guardar.
+        $this->assertDatabaseHas('members', [
+            'document_number' => '900900901',
+            'phone' => '3001234567',
+        ]);
+    }
+
+    public function test_register_requires_a_valid_gender(): void
+    {
+        // Falta el género (la app no debe enviar "Seleccionar").
+        $this->postJson('/api/members/register', [
+            'full_name' => 'New Member',
+            'document_number' => '900900902',
+            'phone' => '3001234567',
+        ])->assertStatus(422)->assertJsonValidationErrors(['gender']);
+
+        // Valor fuera del conjunto válido.
+        $this->postJson('/api/members/register', [
+            'full_name' => 'New Member',
+            'document_number' => '900900903',
+            'phone' => '3001234567',
+            'gender' => 'Seleccionar',
+        ])->assertStatus(422)->assertJsonValidationErrors(['gender']);
     }
 }

@@ -258,6 +258,7 @@ class MemberContractTest extends TestCase
             'full_name'        => 'Usuario Skip',
             'document_number'  => $doc,
             'phone'            => '3001112233',
+            'gender'           => 'Masculino',
             'email'            => 'skip'.random_int(1, 99999).'@example.com',
             'is_minor'         => false,
             'biometric_status' => 'skipped',
@@ -273,7 +274,7 @@ class MemberContractTest extends TestCase
     {
         $doc = '7'.random_int(1000000, 9999999);
         $payload = [
-            'full_name' => 'Reintento', 'document_number' => $doc, 'phone' => '3001112233',
+            'full_name' => 'Reintento', 'document_number' => $doc, 'phone' => '3001112233', 'gender' => 'Masculino',
             'email' => 'idem'.random_int(1, 99999).'@example.com', 'is_minor' => false,
             'biometric_status' => 'skipped',
         ];
@@ -295,7 +296,7 @@ class MemberContractTest extends TestCase
         $email = 'sameuser'.random_int(1, 99999).'@example.com';
         $first = $this->postJson('/api/members/register', [
             'full_name' => 'Usuario A', 'document_number' => '7'.random_int(1000000, 9999999),
-            'phone' => '3001112233', 'email' => $email, 'is_minor' => false,
+            'phone' => '3001112233', 'gender' => 'Masculino', 'email' => $email, 'is_minor' => false,
             'biometric_status' => 'skipped',
         ]);
         $first->assertCreated();
@@ -303,7 +304,7 @@ class MemberContractTest extends TestCase
 
         $second = $this->postJson('/api/members/register', [
             'full_name' => 'Usuario A', 'document_number' => '8'.random_int(1000000, 9999999),
-            'phone' => '3001112233', 'email' => $email, 'is_minor' => false,
+            'phone' => '3001112233', 'gender' => 'Masculino', 'email' => $email, 'is_minor' => false,
         ]);
         $second->assertOk()->assertJsonPath('member_id', $memberId);
         $this->assertDatabaseCount('members', 1);
@@ -313,7 +314,7 @@ class MemberContractTest extends TestCase
     {
         $doc = '7'.random_int(1000000, 9999999);
         $payload = [
-            'full_name' => 'Activo', 'document_number' => $doc, 'phone' => '3001112233',
+            'full_name' => 'Activo', 'document_number' => $doc, 'phone' => '3001112233', 'gender' => 'Masculino',
             'email' => 'act'.random_int(1, 99999).'@example.com', 'is_minor' => false,
         ];
         $first = $this->postJson('/api/members/register', $payload);
