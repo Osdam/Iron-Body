@@ -103,11 +103,17 @@ Route::middleware('trainer.feature:trainer_auth_enabled')->prefix('trainer/auth'
     // Acceso de PRUEBAS sin OTP (gated por TRAINER_OTP_DEV_BYPASS; 404 si off).
     Route::post('dev-login', [\App\Http\Controllers\Api\TrainerAuthController::class, 'devLogin'])->middleware('throttle:10,1');
 
+    // Login facial en tablet (pre-sesión; gated por TRAINER_FACE_LOGIN_ENABLED).
+    Route::get('face/roster', [\App\Http\Controllers\Api\TrainerAuthController::class, 'faceRoster'])->middleware('throttle:30,1');
+    Route::post('face/login', [\App\Http\Controllers\Api\TrainerAuthController::class, 'faceLogin'])->middleware('throttle:20,1');
+
     // Requieren sesión profesional vigente.
     Route::middleware('auth.trainer')->group(function (): void {
         Route::get('me',                [\App\Http\Controllers\Api\TrainerAuthController::class, 'me']);
         Route::get('bootstrap',         [\App\Http\Controllers\Api\TrainerAuthController::class, 'bootstrap']);
         Route::post('biometric-unlock', [\App\Http\Controllers\Api\TrainerAuthController::class, 'biometricUnlock'])->middleware('throttle:20,1');
+        // Enrolamiento del rostro del entrenador (calculado on-device).
+        Route::post('face/enroll',      [\App\Http\Controllers\Api\TrainerAuthController::class, 'enrollFace'])->middleware('throttle:10,1');
         // Canal SSE del portal: empuja cambios de los clientes del entrenador.
         Route::get('realtime',          [\App\Http\Controllers\Api\Trainer\TrainerRealtimeController::class, 'stream']);
     });

@@ -59,6 +59,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Login facial en tablet (kiosko de entrenadores)
+    |--------------------------------------------------------------------------
+    | El entrenador enrola su rostro una vez (embedding 192-D calculado en el
+    | dispositivo). En la tablet elige su nombre y la cámara confirma 1:1: el
+    | embedding vivo se compara contra la referencia EN EL BACKEND (la referencia
+    | nunca sale del servidor). `login_enabled` habilita el roster + login facial;
+    | el enrolamiento funciona aunque esté off (para preparar antes). El umbral es
+    | la distancia euclídea máx. para considerar "misma persona" (MobileFaceNet
+    | ≈ 1.0, igual que on-device).
+    */
+    'face' => [
+        'login_enabled'   => filter_var(env('TRAINER_FACE_LOGIN_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'embedding_size'  => 192,
+        'match_threshold' => (float) env('TRAINER_FACE_MATCH_THRESHOLD', 1.0),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Catálogo de permisos por rol (autoridad central)
     |--------------------------------------------------------------------------
     | Fuente única de la verdad para qué puede hacer cada rol profesional. Un

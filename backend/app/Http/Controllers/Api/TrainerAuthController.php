@@ -9,6 +9,7 @@ use App\Models\Trainer;
 use App\Models\TrainerAuditLog;
 use App\Services\Identity\IdentityLinkService;
 use App\Services\Trainer\TrainerAuditService;
+use App\Services\Trainer\TrainerFaceService;
 use App\Services\Trainer\TrainerOtpService;
 use App\Services\Trainer\TrainerSessionService;
 use Illuminate\Http\JsonResponse;
@@ -32,7 +33,115 @@ class TrainerAuthController extends Controller
         private readonly TrainerSessionService $sessions,
         private readonly IdentityLinkService $identities,
         private readonly TrainerAuditService $audit,
+        private readonly TrainerFaceService $face,
     ) {}
+
+    // ── Login facial en tablet (kiosko) ──────────────────────────────────────
+
+    /**
+     * Enrolamiento: guarda el embedding facial del entrenador AUTENTICADO. El
+     * cliente lo calcula on-device durante la captura; aquí solo se persiste.
+     */
+    public function enrollFace(Request $request): JsonResponse
+    {
+        $trainer = $request->attributes->get('auth_trainer');
+
+        $data = $request->validate([
+            'embedding' => ['required', 'array'],
+        ]);
+
+        if (! $this->face->isValidEmbedding($data['embedding'])) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'invalid_embedding',
+                'message' => 'No pudimos procesar el rostro. Intenta de nuevo.',
+            ], 422);
+        }
+
+        $this->face->enroll($trainer, $data['embedding']);
+
+        $this->audit->record(
+            TrainerAuditLog::EVENT_LOGIN,
+            $trainer,
+            actorType: TrainerAuditLog::ACTOR_TRAINER,
+            metadata: ['face_enrolled' => true],
+            request: $request,
+        );
+
+        return response()->json(['ok' => true, 'enrolled' => true]);
+    }
+
+    /** Lista de entrenadores activos con rostro enrolado (selector de tablet). */
+    public function faceRoster(): JsonResponse
+    {
+        abort_unless((bool) config('trainer.face.login_enabled', false), 404, 'Recurso no disponible.');
+
+        return response()->json(['ok' => true, 'data' => $this->face->roster()]);
+    }
+
+    /**
+     * Login facial: el entrenador eligió su nombre y la cámara capturó su rostro;
+     * el embedding vivo se compara contra la referencia EN EL BACKEND. Si coincide,
+     * emite la sesión (sin OTP). Gated por `TRAINER_FACE_LOGIN_ENABLED`.
+     */
+    public function faceLogin(Request $request): JsonResponse
+    {
+        abort_unless((bool) config('trainer.face.login_enabled', false), 404, 'Recurso no disponible.');
+
+        $data = $request->validate([
+            'trainer_id' => ['required', 'integer'],
+            'embedding' => ['required', 'array'],
+            'device_id' => ['nullable', 'string', 'max:120'],
+            'device_name' => ['nullable', 'string', 'max:120'],
+            'platform' => ['nullable', 'string', 'max:40'],
+            'app_version' => ['nullable', 'string', 'max:40'],
+        ]);
+
+        $trainer = Trainer::query()
+            ->where('id', $data['trainer_id'])
+            ->whereIn('status', ['active', 'activo'])
+            ->first();
+
+        // Mensaje uniforme para no distinguir "no existe" de "no coincide".
+        $genericFail = response()->json([
+            'ok' => false,
+            'code' => 'face_no_match',
+            'message' => 'El rostro no coincide. Intenta de nuevo o usa el código.',
+        ], 422);
+
+        if (! $trainer || ! $this->face->isValidEmbedding($data['embedding'])) {
+            return $genericFail;
+        }
+
+        $result = $this->face->match($trainer, $data['embedding']);
+        if (! $result['matched']) {
+            $this->audit->record(
+                TrainerAuditLog::EVENT_LOGIN,
+                $trainer,
+                actorType: TrainerAuditLog::ACTOR_TRAINER,
+                metadata: ['face_login' => true, 'matched' => false, 'distance' => $result['distance']],
+                request: $request,
+            );
+            return $genericFail;
+        }
+
+        $issued = $this->sessions->issueSession($trainer, $this->context($request));
+        $trainer->load('roleAssignments');
+
+        $this->audit->record(
+            TrainerAuditLog::EVENT_LOGIN,
+            $trainer,
+            actorType: TrainerAuditLog::ACTOR_TRAINER,
+            metadata: ['session' => $issued['session']->uuid, 'face_login' => true, 'matched' => true],
+            request: $request,
+        );
+
+        return response()->json([
+            'ok' => true,
+            'token' => $issued['token'],
+            'trainer' => new TrainerProfessionalResource($trainer),
+        ]);
+    }
 
     public function access(Request $request): JsonResponse
     {
