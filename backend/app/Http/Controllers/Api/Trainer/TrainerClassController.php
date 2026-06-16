@@ -8,6 +8,7 @@ use App\Http\Resources\TrainerClassResource;
 use App\Models\MyClass;
 use App\Models\Trainer;
 use App\Services\Trainer\ClassAttendanceService;
+use App\Services\Trainer\ClassSessionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -20,7 +21,10 @@ use Illuminate\Support\Carbon;
  */
 class TrainerClassController extends Controller
 {
-    public function __construct(private readonly ClassAttendanceService $attendance) {}
+    public function __construct(
+        private readonly ClassAttendanceService $attendance,
+        private readonly ClassSessionService $sessions,
+    ) {}
 
     /** Agenda: las clases del entrenador autenticado, con aforo real. */
     public function index(Request $request): JsonResponse
@@ -52,6 +56,7 @@ class TrainerClassController extends Controller
             'data' => new TrainerClassResource($class),
             'session_date' => $sessionDate->toDateString(),
             'participants' => $this->attendance->participants($class, $sessionDate),
+            'session' => $this->sessions->forDate($class, $sessionDate)?->toPublicArray(),
         ]);
     }
 
@@ -98,6 +103,75 @@ class TrainerClassController extends Controller
         }
 
         return $this->participantsResponse($class, Carbon::parse($data['session_date']), 'Asistencia corregida.');
+    }
+
+    /**
+     * Inicia la clase del día: registra la hora real, exige rostro del entrenador
+     * (`face_verified`) y avisa a los inscritos. Idempotente (no reenvía avisos).
+     */
+    public function startSession(Request $request, MyClass $class): JsonResponse
+    {
+        $trainer = $this->trainer($request);
+        $this->assertOwner($trainer, $class);
+
+        $data = $request->validate([
+            'session_date' => ['nullable', 'date'],
+            'face_verified' => ['required', 'boolean'],
+        ]);
+
+        if (! $data['face_verified']) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'face_required',
+                'message' => 'Debes verificar tu rostro para iniciar la clase.',
+            ], 422);
+        }
+
+        $sessionDate = isset($data['session_date']) ? Carbon::parse($data['session_date']) : Carbon::now();
+        $session = $this->sessions->start($class, $trainer, $sessionDate, true);
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Clase iniciada.',
+            'session' => $session->toPublicArray(),
+        ]);
+    }
+
+    /** Finaliza la clase del día: registra la hora real (también con rostro). */
+    public function endSession(Request $request, MyClass $class): JsonResponse
+    {
+        $trainer = $this->trainer($request);
+        $this->assertOwner($trainer, $class);
+
+        $data = $request->validate([
+            'session_date' => ['nullable', 'date'],
+            'face_verified' => ['required', 'boolean'],
+        ]);
+
+        if (! $data['face_verified']) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'face_required',
+                'message' => 'Debes verificar tu rostro para finalizar la clase.',
+            ], 422);
+        }
+
+        $sessionDate = isset($data['session_date']) ? Carbon::parse($data['session_date']) : Carbon::now();
+        $session = $this->sessions->end($class, $trainer, $sessionDate, true);
+
+        if ($session === null) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'not_started',
+                'message' => 'La clase no se ha iniciado todavía.',
+            ], 422);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Clase finalizada.',
+            'session' => $session->toPublicArray(),
+        ]);
     }
 
     private function validateAttendance(Request $request, bool $withNote = false): array

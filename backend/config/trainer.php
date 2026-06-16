@@ -47,6 +47,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Acceso de PRUEBAS sin OTP (¡solo para QA / desarrollo!)
+    |--------------------------------------------------------------------------
+    | Con `TRAINER_OTP_DEV_BYPASS=true`, el endpoint `dev-login` emite la sesión
+    | de un entrenador ACTIVO sin enviar ni validar OTP (no gasta SMS). Es un
+    | atajo TEMPORAL para probar el portal: déjalo en false en cuanto termines,
+    | porque mientras esté en true cualquiera con un documento de entrenador
+    | activo puede entrar sin segundo factor. Cada acceso queda auditado.
+    */
+    'otp_dev_bypass' => filter_var(env('TRAINER_OTP_DEV_BYPASS', false), FILTER_VALIDATE_BOOLEAN),
+
+    /*
+    |--------------------------------------------------------------------------
     | Catálogo de permisos por rol (autoridad central)
     |--------------------------------------------------------------------------
     | Fuente única de la verdad para qué puede hacer cada rol profesional. Un

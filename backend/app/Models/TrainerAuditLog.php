@@ -46,6 +46,11 @@ class TrainerAuditLog extends Model
 
     public const EVENT_ATTENDANCE_CORRECTED = 'class.attendance_corrected';
 
+    // Ciclo de vida real de la clase (inicio/fin con rostro del entrenador).
+    public const EVENT_CLASS_STARTED = 'class.started';
+
+    public const EVENT_CLASS_ENDED = 'class.ended';
+
     // Eventos de asignación de miembros (CRM).
     public const EVENT_MEMBER_ASSIGNED = 'trainer.member_assigned';
 

@@ -158,6 +158,51 @@ class TrainerAuthController extends Controller
         ]);
     }
 
+    /**
+     * Acceso de PRUEBAS sin OTP (gated por `TRAINER_OTP_DEV_BYPASS`). Emite la
+     * sesión de un entrenador ACTIVO directamente, sin enviar ni validar código.
+     * Pensado SOLO para QA/desarrollo: con el flag apagado responde 404 (igual que
+     * una función deshabilitada, sin filtrar nada). Cada acceso queda auditado.
+     */
+    public function devLogin(Request $request): JsonResponse
+    {
+        abort_unless((bool) config('trainer.otp_dev_bypass', false), 404, 'Recurso no disponible.');
+
+        $data = $request->validate([
+            'document' => ['required', 'string', 'max:50'],
+            'device_id' => ['nullable', 'string', 'max:120'],
+            'device_name' => ['nullable', 'string', 'max:120'],
+            'platform' => ['nullable', 'string', 'max:40'],
+            'app_version' => ['nullable', 'string', 'max:40'],
+        ]);
+
+        $trainer = $this->resolveActiveTrainer($data['document']);
+        if (! $trainer) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'trainer_inactive',
+                'message' => 'No hay un entrenador activo con ese documento.',
+            ], 404);
+        }
+
+        $issued = $this->sessions->issueSession($trainer, $this->context($request));
+        $trainer->load('roleAssignments');
+
+        $this->audit->record(
+            TrainerAuditLog::EVENT_LOGIN,
+            $trainer,
+            actorType: TrainerAuditLog::ACTOR_TRAINER,
+            metadata: ['session' => $issued['session']->uuid, 'dev_bypass' => true],
+            request: $request,
+        );
+
+        return response()->json([
+            'ok' => true,
+            'token' => $issued['token'],
+            'trainer' => new TrainerProfessionalResource($trainer),
+        ]);
+    }
+
     public function resend(Request $request): JsonResponse
     {
         $data = $request->validate([

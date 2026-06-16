@@ -466,6 +466,27 @@ class NotificationService
         });
     }
 
+    /** La clase INICIÓ: aviso al miembro inscrito (push + bandeja). */
+    public function notifyClassStarted($member, $class): void
+    {
+        $this->safe(function () use ($member, $class): void {
+            $classId   = $this->attr($class, 'id');
+            $className  = $this->attr($class, 'name') ?? 'tu clase';
+            $today      = Carbon::now()->toDateString();
+
+            $this->createMemberNotification($member, [
+                'type'        => 'class',
+                'title'       => 'Tu clase comenzó',
+                'message'     => "La clase {$className} acaba de iniciar. ¡Te esperamos!",
+                'priority'    => 'high',
+                'action_type' => 'class_detail',
+                'action_payload' => array_filter(['class_id' => $classId]),
+                'metadata'    => ['class_id' => $classId, 'class' => $className, 'member_name' => $member?->full_name],
+                'event_key'   => ($member && $classId) ? "class_started_{$classId}_{$member->id}_{$today}" : null,
+            ]);
+        });
+    }
+
     // ── Eventos de RUTINA / IRON IA ───────────────────────────────────────────────
 
     /** Rutina creada en el CRM (general o asignada). Aviso operativo al admin. */

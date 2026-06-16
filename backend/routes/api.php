@@ -100,6 +100,8 @@ Route::middleware('trainer.feature:trainer_auth_enabled')->prefix('trainer/auth'
     Route::post('access', [\App\Http\Controllers\Api\TrainerAuthController::class, 'access'])->middleware('throttle:6,1');
     Route::post('verify', [\App\Http\Controllers\Api\TrainerAuthController::class, 'verify'])->middleware('throttle:10,1');
     Route::post('resend', [\App\Http\Controllers\Api\TrainerAuthController::class, 'resend'])->middleware('throttle:6,1');
+    // Acceso de PRUEBAS sin OTP (gated por TRAINER_OTP_DEV_BYPASS; 404 si off).
+    Route::post('dev-login', [\App\Http\Controllers\Api\TrainerAuthController::class, 'devLogin'])->middleware('throttle:10,1');
 
     // Requieren sesión profesional vigente.
     Route::middleware('auth.trainer')->group(function (): void {
@@ -151,6 +153,9 @@ Route::middleware(['trainer.feature:trainer_classes_enabled', 'auth.trainer'])->
     Route::get('classes/{class}',              [$tc, 'show'])->middleware('trainer.can:classes.view');
     Route::post('classes/{class}/attendance',  [$tc, 'markAttendance'])->middleware('trainer.can:attendance.create');
     Route::put('classes/{class}/attendance',   [$tc, 'correctAttendance'])->middleware('trainer.can:attendance.update');
+    // Inicio / fin REAL de la clase (con rostro). Mismo permiso de asistencia.
+    Route::post('classes/{class}/start',       [$tc, 'startSession'])->middleware('trainer.can:attendance.create');
+    Route::post('classes/{class}/end',         [$tc, 'endSession'])->middleware('trainer.can:attendance.create');
 });
 
 Route::middleware('member.registration.token')->group(function () {
@@ -599,6 +604,10 @@ Route::middleware('throttle:10,1')->group(function (): void {
 // autorizar. `index` filtra por días/usuario/módulo/acción/búsqueda.
 Route::get('admin/audit-logs',  [\App\Http\Controllers\Api\Admin\AuditLogController::class, 'index']);
 Route::post('admin/audit-logs', [\App\Http\Controllers\Api\Admin\AuditLogController::class, 'store']);
+
+// ── Supervisión de horarios de clases (CRM admin) ─────────────────────────
+// Horario programado vs inicio/fin real (con rostro) por sesión de clase.
+Route::get('admin/class-sessions', [\App\Http\Controllers\Api\Admin\ClassSupervisionController::class, 'index']);
 
 // ── Seguridad: bandeja de reportes (CRM admin — patrón del resto del CRM) ──
 Route::get('admin/security/reports',                       [\App\Http\Controllers\Api\SecuritySupportController::class, 'adminIndex']);
