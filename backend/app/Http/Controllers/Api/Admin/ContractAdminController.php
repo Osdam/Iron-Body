@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ContractAuditLog;
 use App\Models\Member;
 use App\Models\MemberContract;
+use App\Models\MemberLegalConsent;
 use App\Services\Contracts\MemberContractService;
 use App\Services\Contracts\ContractTemplateService;
 use Illuminate\Http\JsonResponse;
@@ -55,28 +56,85 @@ class ContractAdminController extends Controller
     /**
      * Datos del responsable legal/acudiente para el detalle del CRM. Permite a
      * atención/emergencia ver el contacto sin descargar el PDF del contrato.
-     * Devuelve null si el miembro no tiene responsable registrado: el frontend
-     * no debe pintar la sección (mayores de edad sin acudiente). La fecha y el
-     * estado de autorización provienen del consentimiento legal, fuente viva.
+     *
+     * Fuentes, en orden de preferencia:
+     *   1. `member_guardians` (fuente viva: editable, llenada en el registro).
+     *   2. `guardian_snapshot` del contrato firmado más reciente (registros
+     *      antiguos donde el acudiente solo quedó dentro del contrato).
+     *
+     * Devuelve null solo si no existe ninguna de las dos fuentes (p. ej. mayor
+     * de edad sin acudiente): el frontend no debe pintar la sección. La fecha y
+     * el estado de autorización provienen del consentimiento legal cuando
+     * existe; en el fallback se complementan con el propio contrato firmado.
      */
     private function guardianSummary(Member $member): ?array
     {
+        $consent = $member->legalConsent;
+
         $guardian = $member->guardian;
-        if ($guardian === null) {
+        if ($guardian !== null) {
+            return [
+                'full_name'              => $guardian->guardian_full_name,
+                'document_number'        => $guardian->guardian_document_number,
+                'phone'                  => $guardian->guardian_phone,
+                'email'                  => $guardian->guardian_email,
+                'relationship'           => $guardian->guardian_relationship,
+                'accepts_responsibility' => (bool) $guardian->guardian_accepts_responsibility,
+                'authorized'             => $consent !== null ? (bool) $consent->guardian_authorization : null,
+                'authorized_at'          => optional($consent?->accepted_at)->toIso8601String(),
+            ];
+        }
+
+        return $this->guardianFromContract($member, $consent);
+    }
+
+    /**
+     * Fallback: reconstruye el responsable desde el `guardian_snapshot` del
+     * contrato firmado más reciente que lo contenga. El snapshot no guarda
+     * correo; ese campo queda nulo. `authorized`/`accepts_responsibility` se
+     * toman del consentimiento legal y, si no existe, de la aceptación firmada
+     * dentro del propio contrato (el acto de firma es la autorización).
+     */
+    private function guardianFromContract(Member $member, ?MemberLegalConsent $consent): ?array
+    {
+        $contract = $member->contracts()
+            ->where('status', MemberContract::STATUS_SIGNED)
+            ->whereNotNull('guardian_snapshot')
+            ->orderByDesc('signed_at')
+            ->orderByDesc('id')
+            ->get()
+            ->first(fn (MemberContract $c) => filled($c->guardian_snapshot['guardian_full_name'] ?? null));
+
+        if ($contract === null) {
             return null;
         }
 
-        $consent = $member->legalConsent;
+        $snapshot = $contract->guardian_snapshot ?? [];
+
+        // El acceptance_snapshot es una LISTA de items {key,value}: buscamos el
+        // checkbox de autorización del acudiente para derivar `authorized`.
+        $acceptedGuardian = null;
+        foreach ((array) $contract->acceptance_snapshot as $item) {
+            if (($item['key'] ?? null) === 'guardian_authorized') {
+                $acceptedGuardian = (bool) ($item['value'] ?? false);
+                break;
+            }
+        }
+
+        $authorized = $consent !== null
+            ? (bool) $consent->guardian_authorization
+            : $acceptedGuardian;
 
         return [
-            'full_name'              => $guardian->guardian_full_name,
-            'document_number'        => $guardian->guardian_document_number,
-            'phone'                  => $guardian->guardian_phone,
-            'email'                  => $guardian->guardian_email,
-            'relationship'           => $guardian->guardian_relationship,
-            'accepts_responsibility' => (bool) $guardian->guardian_accepts_responsibility,
-            'authorized'             => $consent !== null ? (bool) $consent->guardian_authorization : null,
-            'authorized_at'          => optional($consent?->accepted_at)->toIso8601String(),
+            'full_name'              => $snapshot['guardian_full_name'] ?? null,
+            'document_number'        => $snapshot['guardian_document_number'] ?? null,
+            'phone'                  => $snapshot['guardian_phone'] ?? null,
+            'email'                  => $snapshot['guardian_email'] ?? null,
+            'relationship'           => $snapshot['guardian_relationship'] ?? null,
+            'accepts_responsibility' => $authorized === true,
+            'authorized'             => $authorized,
+            'authorized_at'          => optional($consent?->accepted_at)->toIso8601String()
+                ?? optional($contract->signed_at)->toIso8601String(),
         ];
     }
 

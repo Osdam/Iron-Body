@@ -443,6 +443,93 @@ class MemberContractTest extends TestCase
             ->assertJsonPath('member.guardian.relationship', 'Padre');
     }
 
+    /**
+     * Firma un contrato real de menor y devuelve su uuid. El flujo de firma
+     * crea `guardian_snapshot` pero NO una fila en `member_guardians`, por lo
+     * que sirve para probar el fallback del CRM hacia el snapshot del contrato.
+     */
+    private function signMinorRelease(Member $minor): string
+    {
+        $uuid = $this->postJson('/api/member/contracts/draft', [], $this->auth($minor))->json('data.uuid');
+        $this->postJson("/api/member/contracts/{$uuid}/sign", [
+            'signature_image'          => $this->signaturePngBase64(),
+            'guardian_full_name'       => 'Responsable Prueba',
+            'guardian_document_number' => '1234567890',
+            'guardian_document_city'   => 'Neiva',
+            'guardian_phone'           => '3000000000',
+            'guardian_address'         => 'Calle Prueba 1-23',
+            'guardian_city'            => 'Neiva',
+            'minor_full_name'          => 'Menor Prueba',
+            'minor_document_number'    => '1075000000',
+            'acceptance' => [
+                'guardian_authorized' => true, 'minor_admission' => true, 'accompaniment' => true,
+                'risk_waiver' => true, 'minor_data_processing' => true,
+            ],
+        ], $this->auth($minor))->assertOk();
+
+        return $uuid;
+    }
+
+    public function test_admin_member_summary_uses_guardian_snapshot_when_no_guardian_record(): void
+    {
+        // Menor con contrato firmado pero SIN fila en member_guardians: el CRM
+        // debe reconstruir el responsable desde guardian_snapshot del contrato.
+        $minor = $this->makeMember(['full_name' => 'Menor Prueba', 'is_minor' => true, 'birth_date' => '2014-01-01']);
+        $this->signMinorRelease($minor);
+
+        $this->assertDatabaseMissing('member_guardians', ['member_id' => $minor->id]);
+
+        $this->getJson("/api/admin/members/{$minor->id}/contracts")
+            ->assertOk()
+            ->assertJsonPath('member.guardian.full_name', 'Responsable Prueba')
+            ->assertJsonPath('member.guardian.document_number', '1234567890')
+            ->assertJsonPath('member.guardian.phone', '3000000000')
+            ->assertJsonPath('member.guardian.relationship', null)
+            ->assertJsonPath('member.guardian.authorized', true)
+            ->assertJsonPath('member.guardian.accepts_responsibility', true);
+    }
+
+    public function test_admin_member_summary_prefers_guardian_record_over_snapshot(): void
+    {
+        // Si existe member_guardians, esa fuente viva manda aunque haya snapshot.
+        $minor = $this->makeMember(['full_name' => 'Menor Prueba', 'is_minor' => true, 'birth_date' => '2014-01-01']);
+        $this->signMinorRelease($minor);
+        $minor->guardian()->create([
+            'guardian_full_name'       => 'Responsable Vivo',
+            'guardian_document_number' => '9999999999',
+            'guardian_relationship'    => 'Tutora',
+        ]);
+
+        $this->getJson("/api/admin/members/{$minor->id}/contracts")
+            ->assertOk()
+            ->assertJsonPath('member.guardian.full_name', 'Responsable Vivo')
+            ->assertJsonPath('member.guardian.document_number', '9999999999')
+            ->assertJsonPath('member.guardian.relationship', 'Tutora');
+    }
+
+    public function test_admin_user_contracts_endpoint_uses_guardian_snapshot(): void
+    {
+        // El fallback al snapshot también aplica a la variante por user_id.
+        $minor = $this->makeMember([
+            'full_name' => 'Menor Prueba', 'is_minor' => true, 'birth_date' => '2014-01-01', 'user_id' => 4343,
+        ]);
+        $this->signMinorRelease($minor);
+
+        $this->getJson('/api/admin/users/4343/contracts')
+            ->assertOk()
+            ->assertJsonPath('member.guardian.full_name', 'Responsable Prueba');
+    }
+
+    public function test_admin_member_summary_guardian_null_without_any_source(): void
+    {
+        // Menor sin acudiente vivo y sin contrato firmado → no hay responsable.
+        $minor = $this->makeMember(['full_name' => 'Menor Prueba', 'is_minor' => true, 'birth_date' => '2014-01-01']);
+
+        $this->getJson("/api/admin/members/{$minor->id}/contracts")
+            ->assertOk()
+            ->assertJsonPath('member.guardian', null);
+    }
+
     public function test_minor_contract_download_still_works_with_guardian_summary(): void
     {
         // El resumen del acudiente no rompe firma ni descarga del contrato del menor.
