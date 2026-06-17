@@ -14,6 +14,7 @@ use App\Models\Trainer;
 use App\Models\TrainerRole;
 use App\Services\NotificationService;
 use App\Services\RealtimeEvents;
+use App\Services\Trainer\TrainerRealtimeEvents;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -58,18 +59,9 @@ class ClassController extends Controller
                 ->flip()
             : collect();
 
-        // Sesión vigente de cada clase (EN CURSO preferida, si no la de hoy) +
+        // Sesión vigente de cada clase (en curso / recién finalizada / hoy) +
         // asistencia de HOY del miembro. Sin N+1.
-        $sessions = ClassSession::whereIn('class_id', $classIds)
-            ->where(function ($q) {
-                $q->whereDate('session_date', Carbon::today())
-                    ->orWhere(fn ($q2) => $q2->whereNotNull('started_at')->whereNull('ended_at'));
-            })
-            ->orderByRaw('CASE WHEN started_at IS NOT NULL AND ended_at IS NULL THEN 0 ELSE 1 END')
-            ->orderByDesc('session_date')
-            ->get()
-            ->unique('class_id')
-            ->keyBy('class_id');
+        $sessions = $this->relevantSessionsFor($classIds);
         $attendance = $memberId
             ? ClassAttendance::where('member_id', $memberId)
                 ->whereIn('class_id', $classIds)
@@ -412,6 +404,11 @@ class ClassController extends Controller
         );
 
         $myClass->loadCount('reservations')->load('trainer:id,full_name');
+
+        // Realtime: el entrenador ve la asistencia entrar en vivo en su portal.
+        if ($myClass->trainer_id) {
+            TrainerRealtimeEvents::emit((int) $myClass->trainer_id, TrainerRealtimeEvents::ATTENDANCE, ['classes']);
+        }
 
         return response()->json([
             'message' => 'Asistencia registrada.',

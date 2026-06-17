@@ -15,23 +15,45 @@ use Illuminate\Support\Carbon;
 trait MemberClassContext
 {
     /**
-     * Sesión relevante de la clase para el miembro: prioriza una EN CURSO
-     * (iniciada y sin finalizar, sin importar la fecha exacta — evita desajustes
-     * de zona horaria entre el dispositivo del entrenador y el servidor); si no
-     * hay, usa la de HOY.
+     * Sesión relevante de la clase para el miembro. Prioriza: (1) EN CURSO
+     * (iniciada y sin finalizar), (2) recién FINALIZADA (en las últimas 8 h, para
+     * mostrar "finalizada/espera" hasta la próxima clase), (3) la de HOY. No
+     * depende de que la fecha calce exacto (evita desajustes de zona horaria).
      */
     protected function currentClassSession(MyClass $class): ?ClassSession
     {
-        return ClassSession::where('class_id', $class->getKey())
+        return $this->relevantSessionQuery()
+            ->where('class_id', $class->getKey())
+            ->first();
+    }
+
+    /**
+     * Sesión relevante de varias clases en bloque (sin N+1), una por clase.
+     *
+     * @param  \Illuminate\Support\Collection<int, int>  $classIds
+     * @return \Illuminate\Support\Collection<int, ClassSession>
+     */
+    protected function relevantSessionsFor($classIds)
+    {
+        return $this->relevantSessionQuery()
+            ->whereIn('class_id', $classIds)
+            ->get()
+            ->unique('class_id')
+            ->keyBy('class_id');
+    }
+
+    /** Query base: en curso primero, luego recién finalizada / hoy; más reciente. */
+    private function relevantSessionQuery()
+    {
+        return ClassSession::query()
             ->where(function ($q) {
                 $q->whereDate('session_date', Carbon::today())
-                    ->orWhere(function ($q2) {
-                        $q2->whereNotNull('started_at')->whereNull('ended_at');
-                    });
+                    ->orWhere(fn ($q2) => $q2->whereNotNull('started_at')->whereNull('ended_at'))
+                    ->orWhere('ended_at', '>=', Carbon::now()->subHours(8));
             })
             ->orderByRaw('CASE WHEN started_at IS NOT NULL AND ended_at IS NULL THEN 0 ELSE 1 END')
             ->orderByDesc('session_date')
-            ->first();
+            ->orderByDesc('id');
     }
 
     /**
