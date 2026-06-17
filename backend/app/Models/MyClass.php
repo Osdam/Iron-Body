@@ -127,22 +127,36 @@ class MyClass extends Model
     public function occurrenceDateTimeInWeek(Carbon $weekStart): ?Carbon
     {
         $monday = $weekStart->copy()->startOfWeek(Carbon::MONDAY)->startOfDay();
+        $end = $monday->copy()->addDays(6)->endOfDay();
 
-        if ($this->date_time) {
+        // Clase ÚNICA (no recurrente): solo aparece en la semana de su fecha fija.
+        if (! $this->is_recurring && $this->date_time) {
             $dt = Carbon::parse($this->date_time);
-            $end = $monday->copy()->addDays(6)->endOfDay();
 
-            return ($dt->betweenIncluded($monday, $end)) ? $dt : null;
+            return $dt->betweenIncluded($monday, $end) ? $dt : null;
         }
 
         $index = self::WEEK_DAY_INDEX[$this->day_of_week] ?? null;
         if ($index === null || ! $this->start_time) {
+            // Recurrente sin día válido pero con fecha (compat): trátala como única.
+            if ($this->date_time) {
+                $dt = Carbon::parse($this->date_time);
+
+                return $dt->betweenIncluded($monday, $end) ? $dt : null;
+            }
+
             return null;
         }
 
         [$hour, $minute] = array_pad(explode(':', $this->start_time), 2, '0');
+        $occ = $monday->copy()->addDays($index)->setTime((int) $hour, (int) $minute, 0);
 
-        return $monday->copy()->addDays($index)->setTime((int) $hour, (int) $minute, 0);
+        // Recurrente con fecha de inicio de vigencia: no aparece antes de esa fecha.
+        if ($this->date_time && $occ->copy()->startOfDay()->lessThan(Carbon::parse($this->date_time)->startOfDay())) {
+            return null;
+        }
+
+        return $occ;
     }
 
     /**
@@ -157,20 +171,34 @@ class MyClass extends Model
      */
     public function operationalOccurrence(string $tz = 'America/Bogota'): ?Carbon
     {
-        if ($this->date_time) {
+        // Clase ÚNICA (no recurrente): su única ocurrencia es la fecha fija.
+        if (! $this->is_recurring && $this->date_time) {
             return Carbon::parse($this->date_time);
         }
 
         $index = self::WEEK_DAY_INDEX[$this->day_of_week] ?? null;
         if ($index === null || ! $this->start_time) {
-            return null;
+            // Recurrente sin día válido: si hay fecha, úsala (compat); si no, nada.
+            return $this->date_time ? Carbon::parse($this->date_time) : null;
         }
 
         [$hour, $minute] = array_pad(explode(':', $this->start_time), 2, '0');
         $today = Carbon::today($tz);
         $occ = $today->copy()->startOfWeek(Carbon::MONDAY)->addDays($index)->setTime((int) $hour, (int) $minute, 0);
 
-        // Si el DÍA de la clase ya pasó esta semana → la ocurrencia de la próxima.
-        return $occ->copy()->startOfDay()->lt($today) ? $occ->addWeek() : $occ;
+        // Cota inferior: hoy y, si la recurrente define fecha de inicio de vigencia
+        // (date_time), tampoco antes de esa fecha.
+        $lowerBound = $today->copy();
+        if ($this->date_time) {
+            $from = Carbon::parse($this->date_time)->startOfDay();
+            if ($from->greaterThan($lowerBound)) {
+                $lowerBound = $from;
+            }
+        }
+        while ($occ->copy()->startOfDay()->lessThan($lowerBound)) {
+            $occ->addWeek();
+        }
+
+        return $occ;
     }
 }

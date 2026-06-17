@@ -131,6 +131,8 @@ class ClassController extends Controller
     public function store(Request $request)
     {
         $this->normalizeClassInput($request);
+        // Clase ÚNICA (is_recurring=false): exige fecha y deriva el día desde ella.
+        $this->normalizeRecurrenceInput($request, requireDateWhenSingle: true);
         $validated = $request->validate([
             'name'                 => 'required|string|max:255',
             'type'                 => 'required|string|max:100',
@@ -176,6 +178,9 @@ class ClassController extends Controller
     public function update(Request $request, MyClass $myClass)
     {
         $this->normalizeClassInput($request);
+        // En edición no exigimos fecha (parcial), pero si llega fecha y la clase es
+        // única, el día se deriva de ella para mantener coherencia.
+        $this->normalizeRecurrenceInput($request, requireDateWhenSingle: false);
         $validated = $request->validate([
             'name'                 => 'sometimes|string|max:255',
             'type'                 => 'sometimes|string|max:100',
@@ -285,6 +290,44 @@ class ClassController extends Controller
         if ($merge !== []) {
             $request->merge($merge);
         }
+    }
+
+    /**
+     * Modelo recurrente vs único. Recurrente (por defecto): manda `day_of_week`;
+     * `date_time` —si llega— es la fecha de inicio de VIGENCIA, no una sesión
+     * única. Única (`is_recurring=false`): la fecha es obligatoria y el día se
+     * DERIVA de ella (coherencia garantizada; no se confía en el día del cliente).
+     * Validación controlada (422), nunca 500.
+     */
+    private function normalizeRecurrenceInput(Request $request, bool $requireDateWhenSingle): void
+    {
+        // Si is_recurring no llega, se asume recurrente (default del negocio).
+        if ($request->boolean('is_recurring', true)) {
+            return;
+        }
+
+        if ($requireDateWhenSingle && ! $request->filled('date_time')) {
+            $request->validate(
+                ['date_time' => ['required', 'date']],
+                ['date_time.required' => 'Una clase no recurrente requiere la fecha de la clase.'],
+            );
+        }
+
+        if ($request->filled('date_time')) {
+            $request->merge([
+                'day_of_week' => $this->spanishWeekday(Carbon::parse((string) $request->input('date_time'))),
+            ]);
+        }
+    }
+
+    /** Día de la semana en español (coincide con el enum aceptado por la validación). */
+    private function spanishWeekday(Carbon $date): string
+    {
+        return [
+            Carbon::MONDAY => 'Lunes', Carbon::TUESDAY => 'Martes', Carbon::WEDNESDAY => 'Miércoles',
+            Carbon::THURSDAY => 'Jueves', Carbon::FRIDAY => 'Viernes', Carbon::SATURDAY => 'Sábado',
+            Carbon::SUNDAY => 'Domingo',
+        ][$date->dayOfWeek];
     }
 
     private function stripAccentsLower(string $value): string
