@@ -42,6 +42,15 @@ Schedule::command('stories:purge')
     ->withoutOverlapping()
     ->onOneServer();
 
+// Renovación de clases fijas/recurrentes — corre cada hora. Reabre el ciclo de
+// reservas de cada clase según su `renewal_hours` (8/12/24/48/168=semanal). Las
+// franjas de renovación son por horas, así que la granularidad horaria basta.
+// Idempotente (una sesión ya renovada no se vuelve a tocar).
+Schedule::command('classes:renew')
+    ->hourly()
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // ── Coach proactivo: detección de señales → eventos hacia n8n ────────────────
 // Todos idempotentes por día/semana → no duplican si corren varias veces.
 // (También existe `ironbody:emit-automation-events` para correr todo junto.)

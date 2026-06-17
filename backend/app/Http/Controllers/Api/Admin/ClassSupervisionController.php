@@ -59,10 +59,20 @@ class ClassSupervisionController extends Controller
         $scheduledStart = $class?->start_time;
         $scheduledEnd = $class?->end_time;
 
-        // Personas: inscritos a la clase y cuántos asistieron en esa sesión.
-        $enrolled = ClassReservation::where('class_id', $s->class_id)->count();
+        // Personas: inscritos y cuántos asistieron en esa sesión.
+        // "Inscritos" = máximo entre las reservas actuales (roster de hoy/en vivo) y
+        // la lista de asistencia de esa fecha. Así el historial sigue siendo correcto
+        // aunque la clase ya haya RENOVADO (la renovación limpia reservas pero
+        // conserva la asistencia).
+        $sessionDate = optional($s->session_date)->toDateString();
+        $reservedNow = ClassReservation::where('class_id', $s->class_id)->count();
+        $attendanceRoster = ClassAttendance::where('class_id', $s->class_id)
+            ->whereDate('session_date', $sessionDate)
+            ->distinct('member_id')
+            ->count('member_id');
+        $enrolled = max($reservedNow, $attendanceRoster);
         $attended = ClassAttendance::where('class_id', $s->class_id)
-            ->whereDate('session_date', optional($s->session_date)->toDateString())
+            ->whereDate('session_date', $sessionDate)
             ->whereIn('status', ['present', 'late'])
             ->count();
 

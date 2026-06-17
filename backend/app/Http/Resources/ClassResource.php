@@ -56,6 +56,7 @@ class ClassResource extends JsonResource
             'end_time'             => $this->end_time,
             'location'             => $this->location,
             'is_recurring'         => (bool) $this->is_recurring,
+            'renewal_hours'        => $this->renewal_hours,
             'allow_online_booking' => (bool) $this->allow_online_booking,
             'requires_active_plan' => (bool) $this->requires_active_plan,
             'notes'                => $this->notes,

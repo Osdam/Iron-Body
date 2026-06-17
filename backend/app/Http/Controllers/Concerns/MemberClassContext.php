@@ -42,14 +42,23 @@ trait MemberClassContext
             ->keyBy('class_id');
     }
 
-    /** Query base: en curso primero, luego recién finalizada / hoy; más reciente. */
+    /**
+     * Query base: en curso primero, luego recién finalizada / hoy; más reciente.
+     * Excluye sesiones ya RENOVADAS (archivadas tras cumplir su ciclo): esas
+     * dejan de ser la sesión vigente, de modo que la clase vuelve a aparecer como
+     * reservable para el miembro. El estado "finalizada" persiste hasta que la
+     * clase renueva (ver ClassRenewalService); el tope de 8 días es solo una cota
+     * de seguridad para clases configuradas como "no renovar".
+     */
     private function relevantSessionQuery()
     {
         return ClassSession::query()
+            ->whereNull('renewed_at')
             ->where(function ($q) {
                 $q->whereDate('session_date', Carbon::today())
                     ->orWhere(fn ($q2) => $q2->whereNotNull('started_at')->whereNull('ended_at'))
-                    ->orWhere('ended_at', '>=', Carbon::now()->subHours(8));
+                    ->orWhere(fn ($q2) => $q2->whereNotNull('ended_at')
+                        ->where('session_date', '>=', Carbon::today()->subDays(8)));
             })
             ->orderByRaw('CASE WHEN started_at IS NOT NULL AND ended_at IS NULL THEN 0 ELSE 1 END')
             ->orderByDesc('session_date')

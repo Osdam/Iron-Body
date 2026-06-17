@@ -113,6 +113,7 @@ class ClassController extends Controller
             'description'          => 'nullable|string',
             'notes'                => 'nullable|string',
             'is_recurring'         => 'nullable|boolean',
+            'renewal_hours'        => 'nullable|integer|in:0,8,12,24,48,168',
             'allow_online_booking' => 'nullable|boolean',
             'requires_active_plan' => 'nullable|boolean',
         ]);
@@ -158,6 +159,7 @@ class ClassController extends Controller
             'description'          => 'nullable|string',
             'notes'                => 'nullable|string',
             'is_recurring'         => 'nullable|boolean',
+            'renewal_hours'        => 'nullable|integer|in:0,8,12,24,48,168',
             'allow_online_booking' => 'nullable|boolean',
             'requires_active_plan' => 'nullable|boolean',
         ]);
@@ -218,6 +220,15 @@ class ClassController extends Controller
             ];
             $key = $this->stripAccentsLower((string) $request->input('status'));
             $merge['status'] = $statusMap[$key] ?? 'active';
+        }
+
+        // Frecuencia de renovación: "" o no-numérico → null (no renovar), así un
+        // valor vacío del CRM no falla la validación `integer|in:`.
+        if ($request->has('renewal_hours')) {
+            $raw = $request->input('renewal_hours');
+            $merge['renewal_hours'] = ($raw === '' || $raw === null || ! is_numeric($raw))
+                ? null
+                : (int) $raw;
         }
 
         // Día → Lunes..Domingo (acepta inglés, minúsculas, sin acentos).

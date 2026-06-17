@@ -16,6 +16,7 @@ class ClassSession extends Model
         'session_date',
         'started_at',
         'ended_at',
+        'renewed_at',
         'started_by',
         'ended_by',
         'start_face_verified',
@@ -28,6 +29,7 @@ class ClassSession extends Model
             'session_date' => 'date',
             'started_at' => 'datetime',
             'ended_at' => 'datetime',
+            'renewed_at' => 'datetime',
             'start_face_verified' => 'boolean',
             'end_face_verified' => 'boolean',
         ];

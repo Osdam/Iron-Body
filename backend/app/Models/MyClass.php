@@ -33,6 +33,7 @@ class MyClass extends Model
         'description',
         'notes',
         'is_recurring',
+        'renewal_hours',
         'allow_online_booking',
         'requires_active_plan',
     ];
@@ -42,6 +43,7 @@ class MyClass extends Model
         return [
             'date_time' => 'datetime',
             'is_recurring' => 'boolean',
+            'renewal_hours' => 'integer',
             'allow_online_booking' => 'boolean',
             'requires_active_plan' => 'boolean',
         ];
