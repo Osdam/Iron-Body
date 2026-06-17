@@ -144,4 +144,33 @@ class MyClass extends Model
 
         return $monday->copy()->addDays($index)->setTime((int) $hour, (int) $minute, 0);
     }
+
+    /**
+     * Ocurrencia RESERVABLE en día operativo (zona del gimnasio, por DÍA y NO por
+     * hora). FUENTE ÚNICA del `session_date` de una reserva: si la clase es HOY se
+     * reserva HOY aunque su hora ya pasara (el cierre lo decide el entrenador, no
+     * el reloj); si su día ya pasó esta semana, la próxima semana. Así "Clases",
+     * su detalle, el planificador semanal y el roster del entrenador comparten
+     * EXACTAMENTE la misma fecha (antes `nextOccurrence()` saltaba a la próxima
+     * semana al pasar la hora —y en UTC—, dejando la reserva en otra fecha que el
+     * roster de hoy no veía). Para clases con fecha fija usa `date_time`.
+     */
+    public function operationalOccurrence(string $tz = 'America/Bogota'): ?Carbon
+    {
+        if ($this->date_time) {
+            return Carbon::parse($this->date_time);
+        }
+
+        $index = self::WEEK_DAY_INDEX[$this->day_of_week] ?? null;
+        if ($index === null || ! $this->start_time) {
+            return null;
+        }
+
+        [$hour, $minute] = array_pad(explode(':', $this->start_time), 2, '0');
+        $today = Carbon::today($tz);
+        $occ = $today->copy()->startOfWeek(Carbon::MONDAY)->addDays($index)->setTime((int) $hour, (int) $minute, 0);
+
+        // Si el DÍA de la clase ya pasó esta semana → la ocurrencia de la próxima.
+        return $occ->copy()->startOfDay()->lt($today) ? $occ->addWeek() : $occ;
+    }
 }

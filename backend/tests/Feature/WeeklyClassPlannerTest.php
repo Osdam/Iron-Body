@@ -627,4 +627,81 @@ class WeeklyClassPlannerTest extends TestCase
         $this->assertFalse($card['can_reserve']);
         $this->assertFalse($card['can_cancel']);
     }
+
+    // ── Bug: reserva desde "Clases" debía fijar la fecha operativa (HOY) ──────
+
+    public function test_clases_reserve_binds_operational_today_and_shows_in_roster_and_weekly(): void
+    {
+        // Hoy: miércoles 15:00 (Bogotá = UTC-5 → 20:00 UTC). La clase es miércoles
+        // 09:00 (su hora YA pasó). Reservar desde "Clases" debe fijar
+        // session_date = HOY (no la próxima semana, como hacía nextOccurrence en
+        // UTC al pasar la hora) para que el roster del entrenador de HOY y el plan
+        // de ESTA semana vean al inscrito.
+        Carbon::setTestNow(Carbon::parse('2026-06-17 20:00:00'));
+        $today = '2026-06-17';
+
+        $trainer = Trainer::create([
+            'full_name' => 'Coach T', 'document' => '557', 'phone' => '+573009990057', 'status' => 'active',
+        ]);
+        $class = $this->makeClass(['trainer_id' => $trainer->id, 'start_time' => '09:00', 'end_time' => '10:00']);
+
+        $this->postJson("/api/classes/{$class->id}/reserve", [], $this->auth($this->member))->assertOk();
+
+        // 1) La fila se crea con session_date = HOY operativo (no próxima semana).
+        $reservation = ClassReservation::where('class_id', $class->id)
+            ->where('member_id', $this->member->id)->first();
+        $this->assertNotNull($reservation);
+        $this->assertSame($today, $reservation->session_date->toDateString());
+
+        // 2) El roster del entrenador de HOY muestra al inscrito (misma fuente).
+        $participants = app(ClassAttendanceService::class)->participants($class, Carbon::parse($today));
+        $this->assertCount(1, $participants);
+        $this->assertSame($this->member->id, $participants[0]['member_id']);
+
+        // 3) "Organizar mi semana" (semana actual) la ve reservada para esa fecha.
+        $entry = $this->weeklyEntry($class->id, $today);
+        $this->assertNotNull($entry);
+        $this->assertTrue($entry['is_reserved']);
+        $this->assertFalse($entry['can_reserve']);
+
+        // 4) "Clases" la refleja reservada y oculta "Reservar".
+        $card = collect($this->getJson('/api/classes', $this->auth($this->member))->json('data'))
+            ->firstWhere('id', (string) $class->id);
+        $this->assertTrue($card['is_reserved']);
+        $this->assertFalse($card['can_reserve']);
+    }
+
+    public function test_clases_double_reserve_is_controlled_not_500(): void
+    {
+        $class = $this->makeClass();
+
+        $this->postJson("/api/classes/{$class->id}/reserve", [], $this->auth($this->member))->assertOk();
+        // Segunda reserva de la misma ocurrencia → respuesta controlada (no 500).
+        $this->postJson("/api/classes/{$class->id}/reserve", [], $this->auth($this->member))->assertStatus(422);
+
+        $this->assertSame(1, ClassReservation::where('class_id', $class->id)
+            ->where('member_id', $this->member->id)->count());
+    }
+
+    public function test_clases_and_weekly_reserve_target_same_session_date(): void
+    {
+        // Reserva semanal (miércoles de esta semana) y, en otra clase equivalente,
+        // reserva individual: ambas deben quedar con la MISMA forma (session_date
+        // de la ocurrencia real), no una con fecha y otra sin/− distinta.
+        $weekly = $this->makeClass(['name' => 'W']);
+        $individual = $this->makeClass(['name' => 'I']);
+
+        $this->postJson('/api/app/classes/weekly/reserve', [
+            'items' => [['class_id' => $weekly->id, 'session_date' => $this->dayOfWeek(2)]],
+        ], $this->auth($this->member))->assertOk();
+        $this->postJson("/api/classes/{$individual->id}/reserve", [], $this->auth($this->member))->assertOk();
+
+        $wRow = ClassReservation::where('class_id', $weekly->id)->first();
+        $iRow = ClassReservation::where('class_id', $individual->id)->first();
+        $this->assertSame($this->dayOfWeek(2), $wRow->session_date->toDateString());
+        $this->assertSame($this->dayOfWeek(2), $iRow->session_date->toDateString(),
+            'La reserva individual debe usar la misma ocurrencia real que la semanal.');
+        $this->assertSame($this->member->id, (int) $wRow->member_id);
+        $this->assertSame($this->member->id, (int) $iRow->member_id);
+    }
 }

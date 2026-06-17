@@ -71,7 +71,7 @@ class AppClassController extends Controller
         return response()->json([
             'data' => $classes->map(function (MyClass $c) use ($reservations, $sessions, $attendance, $member, $today) {
                 // Cupo/estado referidos a la PRÓXIMA ocurrencia de la clase.
-                $occDate = optional($c->nextOccurrence())->toDateString() ?? $today->toDateString();
+                $occDate = optional($c->operationalOccurrence())->toDateString() ?? $today->toDateString();
                 $rows = ($reservations->get($c->id) ?? collect())->filter(
                     fn ($r) => $r->session_date === null || optional($r->session_date)->toDateString() === $occDate,
                 );
@@ -99,7 +99,7 @@ class AppClassController extends Controller
         }
 
         // Reserva individual = la PRÓXIMA ocurrencia de la clase (sin cambiar la UX).
-        $date = optional($myClass->nextOccurrence())->toDateString() ?? Carbon::today()->toDateString();
+        $date = optional($myClass->operationalOccurrence())->toDateString() ?? Carbon::today()->toDateString();
 
         $outcome = $this->reserveOccurrence($member, $myClass, $date);
 
@@ -156,7 +156,7 @@ class AppClassController extends Controller
             ], 422);
         }
 
-        $date = $explicit ?? (optional($myClass->nextOccurrence())->toDateString() ?? Carbon::today()->toDateString());
+        $date = $explicit ?? (optional($myClass->operationalOccurrence())->toDateString() ?? Carbon::today()->toDateString());
         $query = ClassReservation::where('class_id', $myClass->id)
             ->where('member_id', $member->id);
         if ($explicit !== null) {

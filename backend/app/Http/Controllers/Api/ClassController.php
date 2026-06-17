@@ -76,7 +76,7 @@ class ClassController extends Controller
             : collect();
 
         $paginated->getCollection()->transform(function (MyClass $c) use ($memberId, $reservations, $sessions, $attendance, $today) {
-            $occDate = optional($c->nextOccurrence())->toDateString() ?? $today->toDateString();
+            $occDate = optional($c->operationalOccurrence())->toDateString() ?? $today->toDateString();
             $rows = ($reservations->get($c->id) ?? collect())->filter(
                 fn ($r) => $r->session_date === null || optional($r->session_date)->toDateString() === $occDate,
             );
@@ -101,7 +101,7 @@ class ClassController extends Controller
         $myClass->load('trainer:id,full_name');
 
         // Cupo/estado referidos a la próxima ocurrencia (coherente con index()).
-        $date = optional($myClass->nextOccurrence())->toDateString() ?? Carbon::today()->toDateString();
+        $date = optional($myClass->operationalOccurrence())->toDateString() ?? Carbon::today()->toDateString();
         $myClass->reservations_count = $this->occurrenceBookedCount($myClass, $date);
 
         $reservation = $member
@@ -368,7 +368,7 @@ class ClassController extends Controller
 
         // Reserva individual = la PRÓXIMA ocurrencia (por fecha), con lock y cupo
         // por fecha para no sobrepasar el aforo ante concurrencia.
-        $date = optional($myClass->nextOccurrence())->toDateString() ?? Carbon::today()->toDateString();
+        $date = optional($myClass->operationalOccurrence())->toDateString() ?? Carbon::today()->toDateString();
         $outcome = $this->reserveOccurrence($member, $myClass, $date);
 
         if ($outcome === 'already') {
@@ -415,7 +415,7 @@ class ClassController extends Controller
             ], 422);
         }
 
-        $date = $explicit ?? (optional($myClass->nextOccurrence())->toDateString() ?? Carbon::today()->toDateString());
+        $date = $explicit ?? (optional($myClass->operationalOccurrence())->toDateString() ?? Carbon::today()->toDateString());
         $query = ClassReservation::where('class_id', $myClass->id)
             ->where('member_id', $member->id);
         if ($explicit !== null) {

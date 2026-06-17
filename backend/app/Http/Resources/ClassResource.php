@@ -48,7 +48,7 @@ class ClassResource extends JsonResource
         $canReserve = ClassStateResolver::canReserve($sessionStatus, (bool) $this->isReserved, $available);
         $canCancel = ClassStateResolver::canCancel($sessionStatus, (bool) $this->isReserved);
 
-        $dt = $this->date_time ?? $this->resource->nextOccurrence();
+        $dt = $this->date_time ?? $this->resource->operationalOccurrence();
 
         return array_merge($this->memberContext, [
             // ── Estado resuelto del ciclo de vida (fuente única) ─────────────
