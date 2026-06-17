@@ -322,6 +322,25 @@ class WeeklyClassPlannerTest extends TestCase
         $this->assertTrue($entry['can_reserve']);
     }
 
+    public function test_class_earlier_today_is_not_locked_by_clock(): void
+    {
+        // Bug real: clase de HOY cuya hora ya pasó (mañana) NO debe bloquearse en
+        // el planificador. El cierre lo controla el entrenador; mientras sea el
+        // día operativo y no haya sesión cerrada, sigue disponible/seleccionable.
+        // (Antes se marcaba "Finalizada/candado" por comparar la hora contra UTC.)
+        $class = $this->makeClass([
+            'day_of_week' => 'Lunes', 'start_time' => '06:00', 'end_time' => '07:00',
+        ]); // ahora es lunes 08:00 → su horario "pasó", pero es el mismo día
+
+        $entry = $this->weeklyEntry($class->id, $this->dayOfWeek(0));
+        $this->assertNotNull($entry);
+        $this->assertContains($entry['state'], ['available', 'few_spots'],
+            'Una clase del día de hoy no debe bloquearse por la hora.');
+        $this->assertTrue($entry['can_reserve']);
+        $this->assertFalse($entry['is_past']);
+        $this->assertNull($entry['blocked_reason']);
+    }
+
     public function test_live_class_is_not_marked_closed_even_if_schedule_passed(): void
     {
         // Clase del lunes 07:00-07:30; ahora es lunes 08:00 → su horario ya pasó,

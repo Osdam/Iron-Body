@@ -24,6 +24,14 @@ class AppClassController extends Controller
     /** Etiquetas de los días (lunes..domingo) del planificador semanal. */
     private const WEEKDAY_LABELS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
+    /**
+     * Zona horaria operativa del gimnasio. El backend corre en UTC
+     * (config/app.timezone), por eso —igual que Nutrición/Racha/Progreso— el día
+     * y "hoy" del planificador se calculan en America/Bogota. Evita que una clase
+     * de la tarde se vea "vencida" ~5 h antes por comparar contra UTC.
+     */
+    private const TZ = 'America/Bogota';
+
     private function member(Request $request): Member
     {
         return $request->attributes->get('auth_member');
@@ -171,7 +179,8 @@ class AppClassController extends Controller
         $member = $this->member($request);
         $weekStart = $this->resolveWeekStart($request);
         $weekEnd = $weekStart->copy()->addDays(6);
-        $now = Carbon::now();
+        // "Hoy" operativo en zona del gimnasio (no UTC) para decidir el día vencido.
+        $todayStr = Carbon::today(self::TZ)->toDateString();
 
         $classes = MyClass::query()
             ->where('status', 'active')
@@ -237,19 +246,28 @@ class AppClassController extends Controller
             $isLive = $sessionStatus === 'live';       // en curso (entrenador la inició)
             $isFull = $booked >= $capacity;
 
-            // "Vencida" SOLO si la ocurrencia ya pasó por completo y NO hay sesión
-            // viva ni cerrada (el entrenador no la abrió). Excluye live/finished y
-            // futuras, evitando el falso "Finalizada" por cálculo de hora.
-            $isPast = ! $isLive && ! $isClosed && $this->occurrenceEnd($class, $occ)->isPast();
+            // "Vencida" por DÍA OPERATIVO (Bogotá), NUNCA por hora: el cierre por
+            // tiempo lo controla el entrenador. Un día anterior a hoy ya pasó; el
+            // día de hoy y los futuros NO se bloquean por reloj. Excluye live/closed.
+            $isPast = ! $isLive && ! $isClosed && $dateStr < $todayStr;
 
             $state = match (true) {
                 $isReserved => 'reserved',
                 $isClosed   => 'unavailable', // cierre/finalización real del entrenador
-                $isLive     => 'live',        // en curso (precede a cualquier cálculo de hora)
+                $isLive     => 'live',        // en curso (precede a cualquier cálculo de fecha)
                 $isFull     => 'full',
-                $isPast     => 'unavailable', // ocurrencia realmente vencida (no abierta)
+                $isPast     => 'unavailable', // día operativo ya vencido (no por hora)
                 ($capacity - $booked) <= 3 => 'few_spots',
                 default     => 'available',
+            };
+
+            // Razón de bloqueo trazable (null si es seleccionable). Fuente única.
+            $blockedReason = match (true) {
+                $isClosed => 'closed',
+                $isLive   => 'live',
+                $isFull   => 'full',
+                $isPast   => 'past',
+                default   => null,
             };
 
             $days[$idx]['classes'][] = [
@@ -272,7 +290,9 @@ class AppClassController extends Controller
                 'is_past'         => $isPast,
                 'is_closed'       => $isClosed,
                 'is_live'         => $isLive,
+                'is_finished'     => $isClosed, // cierre del entrenador = finalizada (mismo origen)
                 'state'           => $state,
+                'blocked_reason'  => $blockedReason,
                 'can_reserve'     => ! $isReserved && ! $isFull && ! $isClosed && ! $isLive && ! $isPast,
             ];
         }
@@ -340,7 +360,8 @@ class AppClassController extends Controller
                 $results['live'][] = $tag;
                 continue;
             }
-            if ($occEnd->isPast()) {
+            // Vencida por DÍA OPERATIVO (Bogotá), no por hora (alineado con weeklyPlan).
+            if ($date < Carbon::today(self::TZ)->toDateString()) {
                 $results['past'][] = $tag;
                 continue;
             }
@@ -476,7 +497,7 @@ class AppClassController extends Controller
     private function resolveWeekStart(Request $request): Carbon
     {
         $raw = $request->query('week_start');
-        $base = $raw !== null ? Carbon::parse((string) $raw) : Carbon::now();
+        $base = $raw !== null ? Carbon::parse((string) $raw, self::TZ) : Carbon::now(self::TZ);
 
         return $base->copy()->startOfWeek(Carbon::MONDAY)->startOfDay();
     }
