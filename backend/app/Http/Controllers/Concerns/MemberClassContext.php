@@ -14,10 +14,23 @@ use Illuminate\Support\Carbon;
  */
 trait MemberClassContext
 {
-    protected function todayClassSession(MyClass $class): ?ClassSession
+    /**
+     * Sesión relevante de la clase para el miembro: prioriza una EN CURSO
+     * (iniciada y sin finalizar, sin importar la fecha exacta — evita desajustes
+     * de zona horaria entre el dispositivo del entrenador y el servidor); si no
+     * hay, usa la de HOY.
+     */
+    protected function currentClassSession(MyClass $class): ?ClassSession
     {
         return ClassSession::where('class_id', $class->getKey())
-            ->whereDate('session_date', Carbon::today())
+            ->where(function ($q) {
+                $q->whereDate('session_date', Carbon::today())
+                    ->orWhere(function ($q2) {
+                        $q2->whereNotNull('started_at')->whereNull('ended_at');
+                    });
+            })
+            ->orderByRaw('CASE WHEN started_at IS NOT NULL AND ended_at IS NULL THEN 0 ELSE 1 END')
+            ->orderByDesc('session_date')
             ->first();
     }
 

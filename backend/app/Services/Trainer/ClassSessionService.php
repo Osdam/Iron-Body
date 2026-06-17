@@ -9,6 +9,7 @@ use App\Models\MyClass;
 use App\Models\Trainer;
 use App\Models\TrainerAuditLog;
 use App\Services\NotificationService;
+use App\Services\RealtimeEvents;
 use Illuminate\Support\Carbon;
 
 /**
@@ -57,6 +58,10 @@ class ClassSessionService
             $this->notifyEnrolled($class);
         }
 
+        // Realtime: los miembros refrescan sus clases en vivo → aparece el botón
+        // "Marcar presente" sin recargar.
+        RealtimeEvents::classesChanged();
+
         return $session;
     }
 
@@ -89,6 +94,9 @@ class ClassSessionService
                 ],
             );
         }
+
+        // Realtime: al finalizar, los miembros ven el estado "finalizada" en vivo.
+        RealtimeEvents::classesChanged();
 
         return $session;
     }

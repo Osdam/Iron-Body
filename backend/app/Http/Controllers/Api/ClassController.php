@@ -58,10 +58,17 @@ class ClassController extends Controller
                 ->flip()
             : collect();
 
-        // Sesión de HOY de cada clase + asistencia de HOY del miembro (sin N+1).
+        // Sesión vigente de cada clase (EN CURSO preferida, si no la de hoy) +
+        // asistencia de HOY del miembro. Sin N+1.
         $sessions = ClassSession::whereIn('class_id', $classIds)
-            ->whereDate('session_date', Carbon::today())
+            ->where(function ($q) {
+                $q->whereDate('session_date', Carbon::today())
+                    ->orWhere(fn ($q2) => $q2->whereNotNull('started_at')->whereNull('ended_at'));
+            })
+            ->orderByRaw('CASE WHEN started_at IS NOT NULL AND ended_at IS NULL THEN 0 ELSE 1 END')
+            ->orderByDesc('session_date')
             ->get()
+            ->unique('class_id')
             ->keyBy('class_id');
         $attendance = $memberId
             ? ClassAttendance::where('member_id', $memberId)
@@ -351,7 +358,7 @@ class ClassController extends Controller
         $member = $request->attributes->get('auth_member');
 
         // No se puede cancelar una clase que ya inició o finalizó (sesión de hoy).
-        $session = $this->todayClassSession($myClass);
+        $session = $this->currentClassSession($myClass);
         if ($session && $session->started_at) {
             return response()->json([
                 'message' => $session->ended_at ? 'La clase ya finalizó.' : 'La clase ya está en curso.',
@@ -388,7 +395,7 @@ class ClassController extends Controller
             return response()->json(['message' => 'No tienes reserva en esta clase.'], 422);
         }
 
-        $session = $this->todayClassSession($myClass);
+        $session = $this->currentClassSession($myClass);
         if (! $session || ! $session->started_at) {
             return response()->json(['message' => 'La clase aún no ha iniciado.'], 422);
         }
@@ -396,8 +403,11 @@ class ClassController extends Controller
             return response()->json(['message' => 'La clase ya finalizó.'], 422);
         }
 
+        // Se guarda con la FECHA DE LA SESIÓN (no "hoy") para que coincida con la
+        // vista del entrenador y la supervisión, aunque haya desfase horario.
+        $sessionDate = optional($session->session_date)->toDateString() ?? Carbon::today()->toDateString();
         ClassAttendance::updateOrCreate(
-            ['class_id' => $myClass->id, 'member_id' => $member->id, 'session_date' => Carbon::today()->toDateString()],
+            ['class_id' => $myClass->id, 'member_id' => $member->id, 'session_date' => $sessionDate],
             ['status' => ClassAttendance::STATUS_PRESENT, 'marked_at' => now()],
         );
 
@@ -409,13 +419,14 @@ class ClassController extends Controller
         ]);
     }
 
-    /** ClassResource con el contexto de la sesión de HOY del miembro. */
+    /** ClassResource con el contexto de la sesión vigente del miembro. */
     private function memberResource(MyClass $class, Member $member, bool $reserved): ClassResource
     {
-        $session = $this->todayClassSession($class);
+        $session = $this->currentClassSession($class);
+        $sessionDate = optional($session?->session_date)->toDateString() ?? Carbon::today()->toDateString();
         $attendance = ClassAttendance::where('class_id', $class->id)
             ->where('member_id', $member->id)
-            ->whereDate('session_date', Carbon::today())
+            ->whereDate('session_date', $sessionDate)
             ->first();
 
         return new ClassResource($class, $reserved, $this->memberClassContext($reserved, $session, $attendance));
