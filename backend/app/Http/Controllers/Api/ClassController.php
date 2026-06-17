@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Concerns\MemberClassContext;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ClassResource;
+use App\Models\ClassAttendance;
 use App\Models\ClassReservation;
+use App\Models\ClassSession;
 use App\Models\Member;
 use App\Models\MyClass;
 use App\Models\Trainer;
@@ -13,9 +16,12 @@ use App\Services\NotificationService;
 use App\Services\RealtimeEvents;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
 class ClassController extends Controller
 {
+    use MemberClassContext;
+
     public function index(Request $request)
     {
         // Optional member context: app sends access_hash as Bearer token.
@@ -44,16 +50,34 @@ class ClassController extends Controller
 
         $paginated = $query->paginate(20);
 
+        $classIds = $paginated->pluck('id');
         $reservedIds = $memberId
             ? ClassReservation::where('member_id', $memberId)
-                ->whereIn('class_id', $paginated->pluck('id'))
+                ->whereIn('class_id', $classIds)
                 ->pluck('class_id')
                 ->flip()
             : collect();
 
-        $paginated->getCollection()->transform(
-            fn (MyClass $c) => new ClassResource($c, $memberId !== null && $reservedIds->has($c->id))
-        );
+        // Sesión de HOY de cada clase + asistencia de HOY del miembro (sin N+1).
+        $sessions = ClassSession::whereIn('class_id', $classIds)
+            ->whereDate('session_date', Carbon::today())
+            ->get()
+            ->keyBy('class_id');
+        $attendance = $memberId
+            ? ClassAttendance::where('member_id', $memberId)
+                ->whereIn('class_id', $classIds)
+                ->whereDate('session_date', Carbon::today())
+                ->get()
+                ->keyBy('class_id')
+            : collect();
+
+        $paginated->getCollection()->transform(function (MyClass $c) use ($memberId, $reservedIds, $sessions, $attendance) {
+            $reserved = $memberId !== null && $reservedIds->has($c->id);
+            $context = $memberId !== null
+                ? $this->memberClassContext($reserved, $sessions->get($c->id), $attendance->get($c->id))
+                : [];
+            return new ClassResource($c, $reserved, $context);
+        });
 
         return $paginated;
     }
@@ -318,13 +342,21 @@ class ClassController extends Controller
         // Cupo cambió → refresca el módulo de Clases para todos en vivo.
         RealtimeEvents::classesChanged();
 
-        return response()->json(['data' => new ClassResource($myClass, true)]);
+        return response()->json(['data' => $this->memberResource($myClass, $member, true)]);
     }
 
     /** POST /api/classes/{myClass}/cancel — cancelar reserva (requiere auth.member) */
     public function cancel(Request $request, MyClass $myClass): JsonResponse
     {
         $member = $request->attributes->get('auth_member');
+
+        // No se puede cancelar una clase que ya inició o finalizó (sesión de hoy).
+        $session = $this->todayClassSession($myClass);
+        if ($session && $session->started_at) {
+            return response()->json([
+                'message' => $session->ended_at ? 'La clase ya finalizó.' : 'La clase ya está en curso.',
+            ], 422);
+        }
 
         $deleted = ClassReservation::where('class_id', $myClass->id)
             ->where('member_id', $member->id)
@@ -339,7 +371,54 @@ class ClassController extends Controller
         // Cupo liberado → refresca el módulo de Clases para todos en vivo.
         RealtimeEvents::classesChanged();
 
-        return response()->json(['data' => new ClassResource($myClass, false)]);
+        return response()->json(['data' => $this->memberResource($myClass, $member, false)]);
+    }
+
+    /**
+     * POST /api/classes/{myClass}/check-in — AUTO check-in del miembro (presente).
+     * Requiere reserva y que la clase esté EN CURSO (el entrenador la inició).
+     */
+    public function checkIn(Request $request, MyClass $myClass): JsonResponse
+    {
+        $member = $request->attributes->get('auth_member');
+
+        $reserved = ClassReservation::where('class_id', $myClass->id)
+            ->where('member_id', $member->id)->exists();
+        if (! $reserved) {
+            return response()->json(['message' => 'No tienes reserva en esta clase.'], 422);
+        }
+
+        $session = $this->todayClassSession($myClass);
+        if (! $session || ! $session->started_at) {
+            return response()->json(['message' => 'La clase aún no ha iniciado.'], 422);
+        }
+        if ($session->ended_at) {
+            return response()->json(['message' => 'La clase ya finalizó.'], 422);
+        }
+
+        ClassAttendance::updateOrCreate(
+            ['class_id' => $myClass->id, 'member_id' => $member->id, 'session_date' => Carbon::today()->toDateString()],
+            ['status' => ClassAttendance::STATUS_PRESENT, 'marked_at' => now()],
+        );
+
+        $myClass->loadCount('reservations')->load('trainer:id,full_name');
+
+        return response()->json([
+            'message' => 'Asistencia registrada.',
+            'data' => $this->memberResource($myClass, $member, true),
+        ]);
+    }
+
+    /** ClassResource con el contexto de la sesión de HOY del miembro. */
+    private function memberResource(MyClass $class, Member $member, bool $reserved): ClassResource
+    {
+        $session = $this->todayClassSession($class);
+        $attendance = ClassAttendance::where('class_id', $class->id)
+            ->where('member_id', $member->id)
+            ->whereDate('session_date', Carbon::today())
+            ->first();
+
+        return new ClassResource($class, $reserved, $this->memberClassContext($reserved, $session, $attendance));
     }
 
     private function resolveMember(Request $request): ?Member

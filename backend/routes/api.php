@@ -477,9 +477,11 @@ Route::middleware('auth.member')->group(function (): void {
     Route::get('app/classes', [AppClassController::class, 'index']);
     Route::post('app/classes/{myClass}/reserve', [AppClassController::class, 'reserve']);
     Route::delete('app/classes/{myClass}/reserve', [AppClassController::class, 'cancel']);
+    Route::post('app/classes/{myClass}/check-in', [AppClassController::class, 'checkIn']);
     // Rutas alias en /classes para compatibilidad con la app móvil
     Route::post('classes/{myClass}/reserve', [ClassController::class, 'reserve']);
     Route::post('classes/{myClass}/cancel',  [ClassController::class, 'cancel']);
+    Route::post('classes/{myClass}/check-in', [ClassController::class, 'checkIn']);
     // Entrenador asignado al miembro autenticado (antes de trainers/{trainer}).
     Route::get('trainers/mine', [MemberTrainerController::class, 'mine']);
     // Calificación de entrenadores

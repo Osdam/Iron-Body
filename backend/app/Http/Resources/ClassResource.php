@@ -9,7 +9,12 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /** @mixin MyClass */
 class ClassResource extends JsonResource
 {
-    public function __construct($resource, private bool $isReserved = false)
+    /**
+     * @param  array<string,mixed>  $memberContext  estado de la sesión de HOY para
+     *   el miembro (session_status, my_attendance, can_check_in, can_cancel). Vacío
+     *   en contexto CRM.
+     */
+    public function __construct($resource, private bool $isReserved = false, private array $memberContext = [])
     {
         parent::__construct($resource);
     }
@@ -29,7 +34,7 @@ class ClassResource extends JsonResource
 
         $dt = $this->date_time ?? $this->resource->nextOccurrence();
 
-        return [
+        return array_merge($this->memberContext, [
             // ── App fields ───────────────────────────────────────────────
             'id'               => (string) $this->id,
             'name'             => $this->name,
@@ -60,6 +65,6 @@ class ClassResource extends JsonResource
                 'full_name' => $this->trainer->full_name,
             ]),
             'created_at' => $this->created_at,
-        ];
+        ]);
     }
 }
