@@ -73,12 +73,7 @@ trait MemberClassContext
      */
     protected function memberClassContext(bool $reserved, ?ClassSession $session, ?ClassAttendance $attendance): array
     {
-        $status = 'scheduled';
-        if ($session && $session->ended_at) {
-            $status = 'finished';
-        } elseif ($session && $session->started_at) {
-            $status = 'live';
-        }
+        $status = $this->sessionStatusLabel($session);
 
         $myAttendance = $attendance?->status;
 
@@ -88,6 +83,25 @@ trait MemberClassContext
             'can_check_in'   => $reserved && $status === 'live' && $myAttendance !== ClassAttendance::STATUS_PRESENT,
             'can_cancel'     => $reserved && $status === 'scheduled',
         ];
+    }
+
+    /**
+     * Estado OFICIAL de una sesión de clase, controlado por el entrenador/backend
+     * (NUNCA por la hora local): 'finished' si el entrenador la cerró
+     * (`ended_at`), 'live' si la inició y no la ha cerrado (`started_at`), o
+     * 'scheduled' en cualquier otro caso. Fuente única de verdad para el estado,
+     * compartida por Clases, el detalle y "Organizar mi semana".
+     */
+    protected function sessionStatusLabel(?ClassSession $session): string
+    {
+        if ($session && $session->ended_at) {
+            return 'finished';
+        }
+        if ($session && $session->started_at) {
+            return 'live';
+        }
+
+        return 'scheduled';
     }
 
     /**

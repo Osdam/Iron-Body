@@ -263,4 +263,87 @@ class WeeklyClassPlannerTest extends TestCase
                 ->where('type', 'class.updated')->exists()
         );
     }
+
+    /** Devuelve la entrada del plan semanal para (clase, fecha) o null. */
+    private function weeklyEntry(int $classId, string $date): ?array
+    {
+        $res = $this->getJson('/api/app/classes/weekly', $this->auth($this->member))->assertOk();
+        foreach ($res->json('days') as $day) {
+            foreach ($day['classes'] as $c) {
+                if ((int) $c['class_id'] === $classId && $c['session_date'] === $date) {
+                    return $c;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    public function test_available_class_is_consistent_between_normal_and_weekly(): void
+    {
+        $class = $this->makeClass(); // sin sesión → disponible
+
+        // Sección normal de Clases (ClassController@index): disponible/scheduled.
+        $normal = $this->getJson('/api/classes', $this->auth($this->member))->assertOk();
+        $card = collect($normal->json('data'))->firstWhere('id', (string) $class->id);
+        $this->assertSame('available', $card['status']);
+        $this->assertSame('scheduled', $card['session_status']);
+
+        // "Organizar mi semana": el MISMO estado oficial → disponible.
+        $entry = $this->weeklyEntry($class->id, $this->dayOfWeek(2));
+        $this->assertNotNull($entry);
+        $this->assertSame('available', $entry['state']);
+        $this->assertFalse($entry['is_closed']);
+        $this->assertFalse($entry['is_past']);
+        $this->assertTrue($entry['can_reserve']);
+    }
+
+    public function test_live_class_is_not_marked_closed_even_if_schedule_passed(): void
+    {
+        // Clase del lunes 07:00-07:30; ahora es lunes 08:00 → su horario ya pasó,
+        // pero el entrenador la tiene EN CURSO (started_at, sin ended_at).
+        $class = $this->makeClass([
+            'day_of_week' => 'Lunes', 'start_time' => '07:00', 'end_time' => '07:30',
+        ]);
+        ClassSession::create([
+            'class_id' => $class->id, 'session_date' => $this->dayOfWeek(0),
+            'started_at' => $this->monday->copy()->setTime(7, 0),
+            'ended_at' => null,
+        ]);
+
+        $entry = $this->weeklyEntry($class->id, $this->dayOfWeek(0));
+        $this->assertNotNull($entry);
+        $this->assertSame('live', $entry['state'], 'Una clase en curso NO debe verse finalizada/cerrada.');
+        $this->assertTrue($entry['is_live']);
+        $this->assertFalse($entry['is_closed']);
+        $this->assertFalse($entry['is_past']);
+    }
+
+    public function test_closed_class_shows_unavailable_in_weekly(): void
+    {
+        $class = $this->makeClass();
+        ClassSession::create([
+            'class_id' => $class->id, 'session_date' => $this->dayOfWeek(2),
+            'started_at' => $this->monday->copy()->addDays(2)->setTime(10, 0),
+            'ended_at' => $this->monday->copy()->addDays(2)->setTime(11, 0), // cerrada por el entrenador
+        ]);
+
+        $entry = $this->weeklyEntry($class->id, $this->dayOfWeek(2));
+        $this->assertNotNull($entry);
+        $this->assertSame('unavailable', $entry['state']);
+        $this->assertTrue($entry['is_closed']);
+        $this->assertFalse($entry['can_reserve']);
+    }
+
+    public function test_future_class_is_not_marked_finished_by_time(): void
+    {
+        // Clase del miércoles (futura respecto al lunes 08:00) sin sesión.
+        $class = $this->makeClass();
+
+        $entry = $this->weeklyEntry($class->id, $this->dayOfWeek(2));
+        $this->assertNotNull($entry);
+        $this->assertContains($entry['state'], ['available', 'few_spots']);
+        $this->assertFalse($entry['is_past'], 'Una clase futura nunca debe marcarse vencida.');
+        $this->assertFalse($entry['is_closed']);
+    }
 }

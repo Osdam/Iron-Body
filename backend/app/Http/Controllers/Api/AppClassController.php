@@ -229,19 +229,27 @@ class AppClassController extends Controller
             $session = $sessions->get($key);
             $isReserved = $myReserved->has($key);
 
-            $endOcc = $this->occurrenceEnd($class, $occ);
-            $isPast = $endOcc->isPast();
-            $isClosed = ($session && $session->ended_at) ? true : false;
-            $isLive = ($session && $session->started_at && ! $session->ended_at) ? true : false;
+            // Estado OFICIAL desde la SESIÓN (entrenador/backend), igual que Clases
+            // normal y el detalle. NUNCA se finaliza/cierra por hora local: una
+            // clase en curso (live) o futura no debe verse cerrada por reloj.
+            $sessionStatus = $this->sessionStatusLabel($session);
+            $isClosed = $sessionStatus === 'finished'; // cerrada/finalizada por el entrenador
+            $isLive = $sessionStatus === 'live';       // en curso (entrenador la inició)
             $isFull = $booked >= $capacity;
 
+            // "Vencida" SOLO si la ocurrencia ya pasó por completo y NO hay sesión
+            // viva ni cerrada (el entrenador no la abrió). Excluye live/finished y
+            // futuras, evitando el falso "Finalizada" por cálculo de hora.
+            $isPast = ! $isLive && ! $isClosed && $this->occurrenceEnd($class, $occ)->isPast();
+
             $state = match (true) {
-                $isReserved        => 'reserved',
-                $isClosed || $isPast => 'unavailable',
-                $isLive            => 'live',
-                $isFull            => 'full',
+                $isReserved => 'reserved',
+                $isClosed   => 'unavailable', // cierre/finalización real del entrenador
+                $isLive     => 'live',        // en curso (precede a cualquier cálculo de hora)
+                $isFull     => 'full',
+                $isPast     => 'unavailable', // ocurrencia realmente vencida (no abierta)
                 ($capacity - $booked) <= 3 => 'few_spots',
-                default            => 'available',
+                default     => 'available',
             };
 
             $days[$idx]['classes'][] = [
@@ -265,7 +273,7 @@ class AppClassController extends Controller
                 'is_closed'       => $isClosed,
                 'is_live'         => $isLive,
                 'state'           => $state,
-                'can_reserve'     => ! $isReserved && ! $isFull && ! $isPast && ! $isClosed,
+                'can_reserve'     => ! $isReserved && ! $isFull && ! $isClosed && ! $isLive && ! $isPast,
             ];
         }
 
