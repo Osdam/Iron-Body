@@ -16,7 +16,6 @@ use App\Services\Trainer\TrainerRealtimeEvents;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 
 class AppClassController extends Controller
 {
@@ -443,57 +442,6 @@ class AppClassController extends Controller
             ->first();
 
         return new ClassResource($class, $reserved, $this->memberClassContext($reserved, $session, $attendance));
-    }
-
-    /**
-     * Reserva una ocurrencia (clase + fecha) de forma transaccional y segura ante
-     * concurrencia: bloquea la clase (Postgres; no-op en SQLite de tests), valida
-     * cupo POR FECHA y anti-doble reserva. Devuelve: reserved | already | full.
-     */
-    private function reserveOccurrence(Member $member, MyClass $class, string $date): string
-    {
-        return DB::transaction(function () use ($member, $class, $date): string {
-            $locked = MyClass::whereKey($class->getKey())->lockForUpdate()->first() ?? $class;
-
-            $already = ClassReservation::where('class_id', $class->getKey())
-                ->where('member_id', $member->id)
-                ->where(function ($q) use ($date): void {
-                    $q->whereNull('session_date')->orWhereDate('session_date', $date);
-                })
-                ->exists();
-            if ($already) {
-                return 'already';
-            }
-
-            $booked = ClassReservation::where('class_id', $class->getKey())
-                ->where(function ($q) use ($date): void {
-                    $q->whereNull('session_date')->orWhereDate('session_date', $date);
-                })
-                ->lockForUpdate()
-                ->count();
-            if ($booked >= (int) $locked->max_capacity) {
-                return 'full';
-            }
-
-            ClassReservation::create([
-                'class_id'     => $class->getKey(),
-                'member_id'    => $member->id,
-                'session_date' => $date,
-                'reserved_at'  => now(),
-            ]);
-
-            return 'reserved';
-        });
-    }
-
-    /** Cupo ocupado de una ocurrencia (reservas de esa fecha + legacy sin fecha). */
-    private function occurrenceBookedCount(MyClass $class, string $date): int
-    {
-        return (int) ClassReservation::where('class_id', $class->getKey())
-            ->where(function ($q) use ($date): void {
-                $q->whereNull('session_date')->orWhereDate('session_date', $date);
-            })
-            ->count();
     }
 
     /** Señal real-time al portal del entrenador dueño de la clase (best-effort). */

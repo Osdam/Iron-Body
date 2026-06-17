@@ -29,7 +29,7 @@ class ClassController extends Controller
         $member   = $this->resolveMember($request);
         $memberId = $member?->id;
 
-        $query = MyClass::query()->with('trainer:id,full_name')->withCount('reservations');
+        $query = MyClass::query()->with('trainer:id,full_name');
 
         if ($request->filled('status')) {
             $query->where('status', $request->input('status'));
@@ -52,12 +52,17 @@ class ClassController extends Controller
         $paginated = $query->paginate(20);
 
         $classIds = $paginated->pluck('id');
-        $reservedIds = $memberId
-            ? ClassReservation::where('member_id', $memberId)
-                ->whereIn('class_id', $classIds)
-                ->pluck('class_id')
-                ->flip()
-            : collect();
+        $today = Carbon::today();
+
+        // Reservas vigentes/futuras (por fecha) + legacy sin fecha, en bloque. El
+        // cupo/estado de la card se refieren a la PRÓXIMA ocurrencia de la clase,
+        // para que las reservas de semanas futuras no inflen el conteo del ciclo.
+        $reservations = ClassReservation::whereIn('class_id', $classIds)
+            ->where(function ($q) use ($today): void {
+                $q->whereNull('session_date')->orWhereDate('session_date', '>=', $today->toDateString());
+            })
+            ->get(['class_id', 'member_id', 'session_date'])
+            ->groupBy('class_id');
 
         // Sesión vigente de cada clase (en curso / recién finalizada / hoy) +
         // asistencia de HOY del miembro. Sin N+1.
@@ -70,8 +75,15 @@ class ClassController extends Controller
                 ->keyBy('class_id')
             : collect();
 
-        $paginated->getCollection()->transform(function (MyClass $c) use ($memberId, $reservedIds, $sessions, $attendance) {
-            $reserved = $memberId !== null && $reservedIds->has($c->id);
+        $paginated->getCollection()->transform(function (MyClass $c) use ($memberId, $reservations, $sessions, $attendance, $today) {
+            $occDate = optional($c->nextOccurrence())->toDateString() ?? $today->toDateString();
+            $rows = ($reservations->get($c->id) ?? collect())->filter(
+                fn ($r) => $r->session_date === null || optional($r->session_date)->toDateString() === $occDate,
+            );
+            $c->reservations_count = $rows->count();
+
+            $reserved = $memberId !== null
+                && $rows->contains(fn ($r) => (int) $r->member_id === (int) $memberId);
             $context = $memberId !== null
                 ? $this->memberClassContext($reserved, $sessions->get($c->id), $attendance->get($c->id))
                 : [];
@@ -84,11 +96,18 @@ class ClassController extends Controller
     public function show(MyClass $myClass, Request $request)
     {
         $member = $this->resolveMember($request);
-        $myClass->loadCount('reservations')->load('trainer:id,full_name');
+        $myClass->load('trainer:id,full_name');
+
+        // Cupo/estado referidos a la próxima ocurrencia (coherente con index()).
+        $date = optional($myClass->nextOccurrence())->toDateString() ?? Carbon::today()->toDateString();
+        $myClass->reservations_count = $this->occurrenceBookedCount($myClass, $date);
 
         $isReserved = $member
             && ClassReservation::where('class_id', $myClass->id)
                 ->where('member_id', $member->id)
+                ->where(function ($q) use ($date): void {
+                    $q->whereNull('session_date')->orWhereDate('session_date', $date);
+                })
                 ->exists();
 
         return new ClassResource($myClass, (bool) $isReserved);
@@ -332,25 +351,26 @@ class ClassController extends Controller
             return response()->json(['message' => 'Clase no disponible para reservas.'], 422);
         }
 
-        $bookedSpots = $myClass->reservations()->count();
-        if ($bookedSpots >= $myClass->max_capacity) {
+        // Reserva individual = la PRÓXIMA ocurrencia (por fecha), con lock y cupo
+        // por fecha para no sobrepasar el aforo ante concurrencia.
+        $date = optional($myClass->nextOccurrence())->toDateString() ?? Carbon::today()->toDateString();
+        $outcome = $this->reserveOccurrence($member, $myClass, $date);
+
+        if ($outcome === 'already') {
+            return response()->json(['message' => 'Ya tienes esta clase reservada.'], 422);
+        }
+        if ($outcome === 'full') {
             return response()->json(['message' => 'No hay cupos disponibles.'], 422);
         }
 
-        if (ClassReservation::where('class_id', $myClass->id)->where('member_id', $member->id)->exists()) {
-            return response()->json(['message' => 'Ya tienes esta clase reservada.'], 422);
-        }
+        $myClass->reservations_count = $this->occurrenceBookedCount($myClass, $date);
+        $myClass->load('trainer:id,full_name');
 
-        ClassReservation::create([
-            'class_id'    => $myClass->id,
-            'member_id'   => $member->id,
-            'reserved_at' => now(),
-        ]);
-
-        $myClass->loadCount('reservations')->load('trainer:id,full_name');
-
-        // Cupo cambió → refresca el módulo de Clases para todos en vivo.
+        // Cupo cambió → refresca Clases para todos en vivo + portal del entrenador.
         RealtimeEvents::classesChanged();
+        if ($myClass->trainer_id) {
+            TrainerRealtimeEvents::emit((int) $myClass->trainer_id, TrainerRealtimeEvents::CLASS_EVENT, ['classes']);
+        }
 
         return response()->json(['data' => $this->memberResource($myClass, $member, true)]);
     }
@@ -368,18 +388,28 @@ class ClassController extends Controller
             ], 422);
         }
 
+        // Cancela la PRÓXIMA ocurrencia (+ legacy sin fecha); conserva otras
+        // reservas futuras de la misma clase (p.ej. de "Organizar mi semana").
+        $date = optional($myClass->nextOccurrence())->toDateString() ?? Carbon::today()->toDateString();
         $deleted = ClassReservation::where('class_id', $myClass->id)
             ->where('member_id', $member->id)
+            ->where(function ($q) use ($date): void {
+                $q->whereNull('session_date')->orWhereDate('session_date', $date);
+            })
             ->delete();
 
         if (! $deleted) {
             return response()->json(['message' => 'No tienes reserva en esta clase.'], 422);
         }
 
-        $myClass->loadCount('reservations')->load('trainer:id,full_name');
+        $myClass->reservations_count = $this->occurrenceBookedCount($myClass, $date);
+        $myClass->load('trainer:id,full_name');
 
-        // Cupo liberado → refresca el módulo de Clases para todos en vivo.
+        // Cupo liberado → refresca Clases para todos en vivo + portal del entrenador.
         RealtimeEvents::classesChanged();
+        if ($myClass->trainer_id) {
+            TrainerRealtimeEvents::emit((int) $myClass->trainer_id, TrainerRealtimeEvents::CLASS_EVENT, ['classes']);
+        }
 
         return response()->json(['data' => $this->memberResource($myClass, $member, false)]);
     }

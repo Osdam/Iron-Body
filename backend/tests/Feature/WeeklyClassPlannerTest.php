@@ -177,6 +177,27 @@ class WeeklyClassPlannerTest extends TestCase
         $this->assertSame($this->dayOfWeek(2), $reservation->session_date->toDateString());
     }
 
+    public function test_alias_reserve_path_is_per_occurrence(): void
+    {
+        // La app reserva por /classes/{id}/reserve (ClassController). Debe sellar
+        // session_date y respetar cupo por fecha igual que el planificador.
+        $class = $this->makeClass(['max_capacity' => 1]);
+
+        $this->postJson("/api/classes/{$class->id}/reserve", [], $this->auth($this->member))
+            ->assertOk();
+
+        $reservation = ClassReservation::where('class_id', $class->id)
+            ->where('member_id', $this->member->id)->first();
+        $this->assertNotNull($reservation);
+        $this->assertSame($this->dayOfWeek(2), $reservation->session_date->toDateString());
+
+        // Otro miembro: clase llena para esa ocurrencia → 422 (sin sobrecupo).
+        $other = $this->makeMember('600600600');
+        $this->postJson("/api/classes/{$class->id}/reserve", [], $this->auth($other))
+            ->assertStatus(422);
+        $this->assertSame(1, ClassReservation::where('class_id', $class->id)->count());
+    }
+
     public function test_renewal_keeps_future_reservations(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-19 12:00:00')); // viernes
