@@ -8,8 +8,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
  * Clase en la agenda del entrenador. Expone aforo real (capacidad vs inscritos)
- * y la próxima ocurrencia. `reservations_count` viene de withCount cuando está
- * disponible; si no, cae a `enrolled_count`.
+ * y la próxima ocurrencia. `reservations_count` lo fija el controlador con el
+ * cupo de la OCURRENCIA operativa (por session_date), no el histórico; si no
+ * está disponible cae a `enrolled_count`.
  *
  * @mixin MyClass
  */
@@ -33,7 +34,9 @@ class TrainerClassResource extends JsonResource
             'max_capacity' => $this->max_capacity,
             'enrolled' => (int) $enrolled,
             'spots_left' => max(0, (int) $this->max_capacity - (int) $enrolled),
-            'next_occurrence' => $this->nextOccurrence(),
+            // Misma ocurrencia operativa (Bogotá, por día) que usa el resto del
+            // sistema para reservar/contar, no el nextOccurrence() viejo (UTC).
+            'next_occurrence' => $this->operationalOccurrence(),
         ];
     }
 }

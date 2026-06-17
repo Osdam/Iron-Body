@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Trainer;
 
 use App\Exceptions\AttendanceException;
+use App\Http\Controllers\Concerns\MemberClassContext;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TrainerClassResource;
 use App\Models\MyClass;
@@ -23,6 +24,10 @@ use Illuminate\Support\Carbon;
  */
 class TrainerClassController extends Controller
 {
+    // Reutiliza occurrenceBookedCount()/operationalOccurrence(): MISMA fuente de
+    // cupo por session_date que "Clases" y "Organizar mi semana" (no histórico).
+    use MemberClassContext;
+
     public function __construct(
         private readonly ClassAttendanceService $attendance,
         private readonly ClassSessionService $sessions,
@@ -35,10 +40,17 @@ class TrainerClassController extends Controller
 
         $classes = MyClass::query()
             ->where('trainer_id', $trainer->getKey())
-            ->withCount('reservations')
             ->orderBy('day_of_week')
             ->orderBy('start_time')
             ->get();
+
+        // Inscritos/cupo = reservas de la OCURRENCIA operativa real de cada clase
+        // (su session_date vigente + legacy sin fecha), NO todas las reservas
+        // históricas. Antes withCount('reservations') sumaba todas las semanas.
+        foreach ($classes as $class) {
+            $date = optional($class->operationalOccurrence())->toDateString() ?? Carbon::today()->toDateString();
+            $class->reservations_count = $this->occurrenceBookedCount($class, $date);
+        }
 
         return response()->json([
             'ok' => true,
@@ -51,7 +63,9 @@ class TrainerClassController extends Controller
     {
         $this->assertOwner($this->trainer($request), $class);
         $sessionDate = $this->sessionDate($request);
-        $class->loadCount('reservations');
+        // Inscritos/cupo de la SESIÓN que se está viendo (coherente con la lista
+        // de participantes de esa misma fecha), no el histórico de la clase.
+        $class->reservations_count = $this->occurrenceBookedCount($class, $sessionDate->toDateString());
 
         return response()->json([
             'ok' => true,
