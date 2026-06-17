@@ -33,9 +33,16 @@ class ClassAttendanceService
             ->get()
             ->keyBy('member_id');
 
+        // Inscritos de ESA sesión: reservas de la fecha pedida, más las legacy
+        // sin fecha (compatibilidad con reservas previas a "Organizar mi semana").
         return $class->reservations()
+            ->where(function ($q) use ($sessionDate): void {
+                $q->whereNull('session_date')
+                    ->orWhereDate('session_date', $sessionDate->toDateString());
+            })
             ->with('member:id,full_name')
             ->get()
+            ->unique('member_id')
             ->map(fn (ClassReservation $r): array => [
                 'member_id' => $r->member_id,
                 'full_name' => $r->member?->full_name ?? '',

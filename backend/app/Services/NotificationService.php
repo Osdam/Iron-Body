@@ -300,6 +300,52 @@ class NotificationService
     }
 
     /**
+     * Confirmación de "Organizar mi semana": resumen tras una reserva en lote.
+     * Reutiliza el centro de notificaciones interno (no crea sistema paralelo).
+     * Idempotencia ligera por minuto para evitar duplicados ante reintentos del
+     * cliente, pero permite re-planificar la semana más tarde.
+     */
+    public function notifyWeeklyPlanConfirmed($member, int $reserved, int $failed): void
+    {
+        $this->safe(function () use ($member, $reserved, $failed): void {
+            if ($reserved <= 0 && $failed <= 0) {
+                return;
+            }
+
+            $title = $reserved > 0 ? 'Tu semana quedó organizada' : 'Revisa tu semana';
+
+            if ($reserved > 0 && $failed > 0) {
+                $message = "Reservaste {$reserved} ".($reserved === 1 ? 'clase' : 'clases')
+                    .". {$failed} ".($failed === 1 ? 'no se pudo' : 'no se pudieron')
+                    .' reservar; revisa tu semana.';
+            } elseif ($reserved > 0) {
+                $message = "Reservaste {$reserved} ".($reserved === 1 ? 'clase' : 'clases').' esta semana.';
+            } else {
+                $message = "{$failed} ".($failed === 1 ? 'clase' : 'clases')
+                    .' necesitan atención: no había cupo o ya las tenías.';
+            }
+
+            $stamp = now()->format('YmdHi');
+
+            $this->createMemberNotification($member, [
+                'type'           => 'class',
+                'title'          => $title,
+                'message'        => $message,
+                'priority'       => $failed > 0 ? 'medium' : 'low',
+                'should_popup'   => true,
+                'action_type'    => 'classes_weekly',
+                'action_payload' => ['reserved' => $reserved, 'failed' => $failed],
+                'metadata'       => [
+                    'source_event' => 'weekly_plan_confirmed',
+                    'reserved'     => $reserved,
+                    'failed'       => $failed,
+                ],
+                'event_key'      => ($member && $member->id) ? "weekly_plan_{$member->id}_{$stamp}" : null,
+            ]);
+        });
+    }
+
+    /**
      * Clase creada desde el CRM. Avisa al CRM y, si admite reservas online,
      * difunde "nueva clase disponible" a todos los miembros (broadcast global).
      */

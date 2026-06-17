@@ -16,10 +16,14 @@ use App\Services\Trainer\TrainerRealtimeEvents;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class AppClassController extends Controller
 {
     use MemberClassContext;
+
+    /** Etiquetas de los días (lunes..domingo) del planificador semanal. */
+    private const WEEKDAY_LABELS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
     private function member(Request $request): Member
     {
@@ -34,16 +38,18 @@ class AppClassController extends Controller
             ->where('status', 'active')
             ->where('allow_online_booking', true)
             ->with('trainer:id,full_name')
-            ->withCount('reservations')
             ->get();
 
         $classIds = $classes->pluck('id');
         $today = Carbon::today();
 
-        $reservedIds = ClassReservation::where('member_id', $member->id)
-            ->whereIn('class_id', $classIds)
-            ->pluck('class_id')
-            ->flip();
+        // Reservas vigentes/futuras (por fecha) + legacy sin fecha, en bloque.
+        $reservations = ClassReservation::whereIn('class_id', $classIds)
+            ->where(function ($q) use ($today): void {
+                $q->whereNull('session_date')->orWhereDate('session_date', '>=', $today->toDateString());
+            })
+            ->get(['class_id', 'member_id', 'session_date'])
+            ->groupBy('class_id');
 
         // Sesión vigente (en curso / recién finalizada / hoy) + asistencia de HOY
         // del miembro, en bloque (sin N+1).
@@ -55,8 +61,16 @@ class AppClassController extends Controller
             ->keyBy('class_id');
 
         return response()->json([
-            'data' => $classes->map(function (MyClass $c) use ($reservedIds, $sessions, $attendance) {
-                $reserved = $reservedIds->has($c->id);
+            'data' => $classes->map(function (MyClass $c) use ($reservations, $sessions, $attendance, $member, $today) {
+                // Cupo/estado referidos a la PRÓXIMA ocurrencia de la clase.
+                $occDate = optional($c->nextOccurrence())->toDateString() ?? $today->toDateString();
+                $rows = ($reservations->get($c->id) ?? collect())->filter(
+                    fn ($r) => $r->session_date === null || optional($r->session_date)->toDateString() === $occDate,
+                );
+
+                $c->reservations_count = $rows->count();
+                $reserved = $rows->contains(fn ($r) => (int) $r->member_id === (int) $member->id);
+
                 return new ClassResource(
                     $c,
                     $reserved,
@@ -74,34 +88,34 @@ class AppClassController extends Controller
             return response()->json(['message' => 'Clase no disponible para reservas.'], 422);
         }
 
-        $bookedSpots = $myClass->reservations()->count();
-        if ($bookedSpots >= $myClass->max_capacity) {
-            return response()->json(['message' => 'Clase completa.'], 422);
-        }
+        // Reserva individual = la PRÓXIMA ocurrencia de la clase (sin cambiar la UX).
+        $date = optional($myClass->nextOccurrence())->toDateString() ?? Carbon::today()->toDateString();
 
-        if (ClassReservation::where('class_id', $myClass->id)->where('member_id', $member->id)->exists()) {
+        $outcome = $this->reserveOccurrence($member, $myClass, $date);
+
+        if ($outcome === 'already') {
             return response()->json(['message' => 'Ya tienes una reserva para esta clase.'], 422);
         }
-
-        ClassReservation::create([
-            'class_id'    => $myClass->id,
-            'member_id'   => $member->id,
-            'reserved_at' => now(),
-        ]);
+        if ($outcome === 'full') {
+            return response()->json(['message' => 'Clase completa.'], 422);
+        }
 
         // Notificación de clase reservada (ADITIVO; no afecta la reserva).
         $notifier = app(NotificationService::class);
         $notifier->notifyClassReserved($member, $myClass);
 
-        // Si esta reserva agotó el cupo, avisa al CRM (idempotente por clase).
-        if (($bookedSpots + 1) >= $myClass->max_capacity) {
+        $booked = $this->occurrenceBookedCount($myClass, $date);
+        if ($booked >= (int) $myClass->max_capacity) {
             $notifier->notifyClassFull($myClass);
         }
 
-        $myClass->loadCount('reservations')->load('trainer:id,full_name');
+        $myClass->reservations_count = $booked;
+        $myClass->load('trainer:id,full_name');
 
-        // Cupo cambió → refresca el módulo de Clases para todos en vivo.
+        // Cupo cambió → refresca el módulo de Clases para todos en vivo (app + CRM)
+        // y el portal del entrenador dueño de la clase.
         RealtimeEvents::classesChanged();
+        $this->emitTrainerClassChange($myClass);
 
         return response()->json(['data' => $this->resourceFor($myClass, $member, true)]);
     }
@@ -120,8 +134,14 @@ class AppClassController extends Controller
             ], 422);
         }
 
+        // Cancela la PRÓXIMA ocurrencia (+ legacy sin fecha). Conserva otras
+        // reservas futuras de la misma clase hechas desde "Organizar mi semana".
+        $date = optional($myClass->nextOccurrence())->toDateString() ?? Carbon::today()->toDateString();
         $deleted = ClassReservation::where('class_id', $myClass->id)
             ->where('member_id', $member->id)
+            ->where(function ($q) use ($date): void {
+                $q->whereNull('session_date')->orWhereDate('session_date', $date);
+            })
             ->delete();
 
         if (! $deleted) {
@@ -131,12 +151,232 @@ class AppClassController extends Controller
         // Notificación de reserva cancelada (ADITIVO; no afecta la cancelación).
         app(NotificationService::class)->notifyClassReservationCancelled($member, $myClass);
 
-        $myClass->loadCount('reservations')->load('trainer:id,full_name');
+        $myClass->reservations_count = $this->occurrenceBookedCount($myClass, $date);
+        $myClass->load('trainer:id,full_name');
 
         // Cupo liberado → refresca el módulo de Clases para todos en vivo.
         RealtimeEvents::classesChanged();
+        $this->emitTrainerClassChange($myClass);
 
         return response()->json(['data' => $this->resourceFor($myClass, $member, false)]);
+    }
+
+    /**
+     * "ORGANIZAR MI SEMANA" — planificación semanal. Devuelve las ocurrencias
+     * REALES de las clases activas (creadas en el CRM) para la semana pedida
+     * (?week_start=YYYY-MM-DD; por defecto la semana en curso, lunes a domingo),
+     * con cupo por fecha, estado de la reserva del miembro y si ya pasó/cerró.
+     */
+    public function weeklyPlan(Request $request): JsonResponse
+    {
+        $member = $this->member($request);
+        $weekStart = $this->resolveWeekStart($request);
+        $weekEnd = $weekStart->copy()->addDays(6);
+        $now = Carbon::now();
+
+        $classes = MyClass::query()
+            ->where('status', 'active')
+            ->where('allow_online_booking', true)
+            ->with('trainer:id,full_name')
+            ->get();
+
+        $classIds = $classes->pluck('id');
+
+        // Reservas del miembro + conteos por (clase, fecha) dentro de la semana, en bloque.
+        $myReserved = ClassReservation::where('member_id', $member->id)
+            ->whereIn('class_id', $classIds)
+            ->whereBetween('session_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
+            ->get(['class_id', 'session_date'])
+            ->map(fn ($r) => $r->class_id.'|'.optional($r->session_date)->toDateString())
+            ->flip();
+
+        $counts = ClassReservation::whereIn('class_id', $classIds)
+            ->whereBetween('session_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
+            ->selectRaw('class_id, session_date, COUNT(*) as c')
+            ->groupBy('class_id', 'session_date')
+            ->get()
+            ->mapWithKeys(fn ($r) => [$r->class_id.'|'.Carbon::parse($r->session_date)->toDateString() => (int) $r->c]);
+
+        $sessions = ClassSession::whereIn('class_id', $classIds)
+            ->whereBetween('session_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
+            ->get()
+            ->keyBy(fn ($s) => $s->class_id.'|'.optional($s->session_date)->toDateString());
+
+        // Construye las ocurrencias agrupadas por día (lunes..domingo).
+        $days = [];
+        for ($i = 0; $i < 7; $i++) {
+            $date = $weekStart->copy()->addDays($i);
+            $days[$i] = [
+                'date' => $date->toDateString(),
+                'weekday' => $date->isoWeekday(), // 1=lunes
+                'label' => self::WEEKDAY_LABELS[$i],
+                'classes' => [],
+            ];
+        }
+
+        foreach ($classes as $class) {
+            $occ = $class->occurrenceDateTimeInWeek($weekStart);
+            if ($occ === null) {
+                continue;
+            }
+            $idx = (int) round(($occ->copy()->startOfDay()->timestamp - $weekStart->copy()->startOfDay()->timestamp) / 86400);
+            if ($idx < 0 || $idx > 6) {
+                continue;
+            }
+            $dateStr = $occ->toDateString();
+            $key = $class->id.'|'.$dateStr;
+            $booked = $counts[$key] ?? 0;
+            $capacity = (int) $class->max_capacity;
+            $session = $sessions->get($key);
+            $isReserved = $myReserved->has($key);
+
+            $endOcc = $this->occurrenceEnd($class, $occ);
+            $isPast = $endOcc->isPast();
+            $isClosed = ($session && $session->ended_at) ? true : false;
+            $isLive = ($session && $session->started_at && ! $session->ended_at) ? true : false;
+            $isFull = $booked >= $capacity;
+
+            $state = match (true) {
+                $isReserved        => 'reserved',
+                $isClosed || $isPast => 'unavailable',
+                $isLive            => 'live',
+                $isFull            => 'full',
+                ($capacity - $booked) <= 3 => 'few_spots',
+                default            => 'available',
+            };
+
+            $days[$idx]['classes'][] = [
+                'reservation_key' => $key,
+                'class_id'        => (int) $class->id,
+                'session_date'    => $dateStr,
+                'name'            => $class->name,
+                'type'            => $class->type,
+                'instructor'      => $class->instructor ?? $class->trainer?->full_name ?? '',
+                'start_time'      => $class->start_time,
+                'end_time'        => $class->end_time,
+                'date_time'       => $occ->toIso8601String(),
+                'duration_minutes' => $class->duration_minutes,
+                'location'        => $class->location,
+                'total_spots'     => $capacity,
+                'booked_spots'    => $booked,
+                'available_spots' => max(0, $capacity - $booked),
+                'is_reserved'     => $isReserved,
+                'is_full'         => $isFull,
+                'is_past'         => $isPast,
+                'is_closed'       => $isClosed,
+                'is_live'         => $isLive,
+                'state'           => $state,
+                'can_reserve'     => ! $isReserved && ! $isFull && ! $isPast && ! $isClosed,
+            ];
+        }
+
+        foreach ($days as $i => $day) {
+            usort($days[$i]['classes'], fn ($a, $b) => strcmp((string) $a['start_time'], (string) $b['start_time']));
+        }
+
+        return response()->json([
+            'week_start' => $weekStart->toDateString(),
+            'week_end'   => $weekEnd->toDateString(),
+            'days'       => array_values($days),
+        ]);
+    }
+
+    /**
+     * "ORGANIZAR MI SEMANA" — reserva en LOTE. Recibe varias ocurrencias y crea
+     * las reservas válidas con resultado PARCIAL (no tumba todo si una falla):
+     * informa reservadas, ya reservadas, llenas, no disponibles, vencidas,
+     * cerradas y conflictos de horario. Cada reserva es transaccional con lock
+     * para no sobrepasar cupos ante concurrencia.
+     */
+    public function reserveWeek(Request $request): JsonResponse
+    {
+        $member = $this->member($request);
+
+        $data = $request->validate([
+            'items'                => ['required', 'array', 'min:1', 'max:40'],
+            'items.*.class_id'     => ['required', 'integer'],
+            'items.*.session_date' => ['required', 'date'],
+        ]);
+
+        $results = [
+            'reserved' => [], 'already' => [], 'full' => [],
+            'unavailable' => [], 'past' => [], 'closed' => [], 'conflict' => [],
+        ];
+        $acceptedSlots = []; // [date => [[start,end], ...]] para detectar conflictos en la selección
+        $affectedTrainers = [];
+
+        foreach ($data['items'] as $item) {
+            $class = MyClass::find($item['class_id']);
+            $date = Carbon::parse($item['session_date'])->toDateString();
+            $tag = ['class_id' => (int) $item['class_id'], 'session_date' => $date, 'name' => $class?->name];
+
+            if (! $class || $class->status !== 'active' || ! $class->allow_online_booking) {
+                $results['unavailable'][] = $tag;
+                continue;
+            }
+
+            $occStart = Carbon::parse($date.' '.($class->start_time ?: '00:00'));
+            $occEnd = $this->occurrenceEnd($class, $occStart);
+            if ($occEnd->isPast()) {
+                $results['past'][] = $tag;
+                continue;
+            }
+
+            $session = ClassSession::where('class_id', $class->id)->whereDate('session_date', $date)->first();
+            if ($session && $session->ended_at) {
+                $results['closed'][] = $tag;
+                continue;
+            }
+
+            // Conflicto de horario dentro de la propia selección (mismo día, solape).
+            if ($this->conflictsWithSelection($acceptedSlots, $date, $occStart, $occEnd)) {
+                $results['conflict'][] = $tag;
+                continue;
+            }
+
+            $outcome = $this->reserveOccurrence($member, $class, $date);
+            $results[$outcome === 'reserved' ? 'reserved' : $outcome][] = $tag;
+
+            if ($outcome === 'reserved') {
+                $acceptedSlots[$date][] = [$occStart, $occEnd];
+                if ($class->trainer_id) {
+                    $affectedTrainers[(int) $class->trainer_id] = true;
+                }
+                $booked = $this->occurrenceBookedCount($class, $date);
+                if ($booked >= (int) $class->max_capacity) {
+                    app(NotificationService::class)->notifyClassFull($class);
+                }
+            }
+        }
+
+        $reservedCount = count($results['reserved']);
+        $failedCount = count($results['already']) + count($results['full']) + count($results['unavailable'])
+            + count($results['past']) + count($results['closed']) + count($results['conflict']);
+
+        // Notificación interna de confirmación (resumen del plan semanal).
+        app(NotificationService::class)->notifyWeeklyPlanConfirmed($member, $reservedCount, $failedCount);
+
+        // Realtime: refresca Clases para todos y el portal de cada entrenador tocado.
+        if ($reservedCount > 0) {
+            RealtimeEvents::classesChanged();
+            foreach (array_keys($affectedTrainers) as $trainerId) {
+                TrainerRealtimeEvents::emit($trainerId, TrainerRealtimeEvents::CLASS_EVENT, ['classes']);
+            }
+        }
+
+        return response()->json([
+            'summary' => [
+                'reserved'    => $reservedCount,
+                'failed'      => $failedCount,
+                'already'     => count($results['already']),
+                'full'        => count($results['full']),
+                'unavailable' => count($results['unavailable']),
+                'past'        => count($results['past']),
+                'closed'      => count($results['closed']),
+                'conflict'    => count($results['conflict']),
+            ],
+            'results' => $results,
+        ]);
     }
 
     /**
@@ -203,5 +443,101 @@ class AppClassController extends Controller
             ->first();
 
         return new ClassResource($class, $reserved, $this->memberClassContext($reserved, $session, $attendance));
+    }
+
+    /**
+     * Reserva una ocurrencia (clase + fecha) de forma transaccional y segura ante
+     * concurrencia: bloquea la clase (Postgres; no-op en SQLite de tests), valida
+     * cupo POR FECHA y anti-doble reserva. Devuelve: reserved | already | full.
+     */
+    private function reserveOccurrence(Member $member, MyClass $class, string $date): string
+    {
+        return DB::transaction(function () use ($member, $class, $date): string {
+            $locked = MyClass::whereKey($class->getKey())->lockForUpdate()->first() ?? $class;
+
+            $already = ClassReservation::where('class_id', $class->getKey())
+                ->where('member_id', $member->id)
+                ->where(function ($q) use ($date): void {
+                    $q->whereNull('session_date')->orWhereDate('session_date', $date);
+                })
+                ->exists();
+            if ($already) {
+                return 'already';
+            }
+
+            $booked = ClassReservation::where('class_id', $class->getKey())
+                ->where(function ($q) use ($date): void {
+                    $q->whereNull('session_date')->orWhereDate('session_date', $date);
+                })
+                ->lockForUpdate()
+                ->count();
+            if ($booked >= (int) $locked->max_capacity) {
+                return 'full';
+            }
+
+            ClassReservation::create([
+                'class_id'     => $class->getKey(),
+                'member_id'    => $member->id,
+                'session_date' => $date,
+                'reserved_at'  => now(),
+            ]);
+
+            return 'reserved';
+        });
+    }
+
+    /** Cupo ocupado de una ocurrencia (reservas de esa fecha + legacy sin fecha). */
+    private function occurrenceBookedCount(MyClass $class, string $date): int
+    {
+        return (int) ClassReservation::where('class_id', $class->getKey())
+            ->where(function ($q) use ($date): void {
+                $q->whereNull('session_date')->orWhereDate('session_date', $date);
+            })
+            ->count();
+    }
+
+    /** Señal real-time al portal del entrenador dueño de la clase (best-effort). */
+    private function emitTrainerClassChange(MyClass $class): void
+    {
+        if ($class->trainer_id) {
+            TrainerRealtimeEvents::emit((int) $class->trainer_id, TrainerRealtimeEvents::CLASS_EVENT, ['classes']);
+        }
+    }
+
+    /** Lunes (00:00) de la semana pedida (?week_start) o la semana en curso. */
+    private function resolveWeekStart(Request $request): Carbon
+    {
+        $raw = $request->query('week_start');
+        $base = $raw !== null ? Carbon::parse((string) $raw) : Carbon::now();
+
+        return $base->copy()->startOfWeek(Carbon::MONDAY)->startOfDay();
+    }
+
+    /** Fin de la ocurrencia: usa end_time si existe, si no start + duración. */
+    private function occurrenceEnd(MyClass $class, Carbon $start): Carbon
+    {
+        if ($class->end_time) {
+            [$h, $m] = array_pad(explode(':', (string) $class->end_time), 2, '0');
+            $end = $start->copy()->setTime((int) $h, (int) $m, 0);
+            if ($end->lessThanOrEqualTo($start)) {
+                $end = $start->copy()->addMinutes((int) ($class->duration_minutes ?: 60));
+            }
+
+            return $end;
+        }
+
+        return $start->copy()->addMinutes((int) ($class->duration_minutes ?: 60));
+    }
+
+    /** ¿La ocurrencia [start,end] solapa con alguna ya aceptada ese mismo día? */
+    private function conflictsWithSelection(array $accepted, string $date, Carbon $start, Carbon $end): bool
+    {
+        foreach ($accepted[$date] ?? [] as [$s, $e]) {
+            if ($start->lessThan($e) && $end->greaterThan($s)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

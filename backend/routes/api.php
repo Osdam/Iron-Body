@@ -475,6 +475,10 @@ Route::middleware('auth.member')->group(function (): void {
     Route::post('members/push-token/remove', [AuthController::class, 'removePushToken']);
 
     Route::get('app/classes', [AppClassController::class, 'index']);
+    // "Organizar mi semana": planificación y reserva semanal en lote. DEBEN ir
+    // antes de las rutas con {myClass} para que "weekly" no se enlace como clase.
+    Route::get('app/classes/weekly', [AppClassController::class, 'weeklyPlan']);
+    Route::post('app/classes/weekly/reserve', [AppClassController::class, 'reserveWeek']);
     Route::post('app/classes/{myClass}/reserve', [AppClassController::class, 'reserve']);
     Route::delete('app/classes/{myClass}/reserve', [AppClassController::class, 'cancel']);
     Route::post('app/classes/{myClass}/check-in', [AppClassController::class, 'checkIn']);

@@ -44,7 +44,10 @@ class ClassRenewalService
             ->with('gymClass:id,renewal_hours')
             ->get();
 
-        $dueClassIds = [];
+        // Por clase, la fecha de la última sesión vencida que cumplió su ventana.
+        // Solo se limpian las reservas de ese ciclo (<= esa fecha) y las legacy
+        // sin fecha; las reservas FUTURAS ("Organizar mi semana") se CONSERVAN.
+        $dueUpTo = [];
         foreach ($sessions as $session) {
             $hours = (int) ($session->gymClass?->renewal_hours ?? 0);
             if ($hours <= 0) {
@@ -54,18 +57,35 @@ class ClassRenewalService
             if ($session->ended_at->copy()->addHours($hours)->isFuture()) {
                 continue;
             }
-            $dueClassIds[$session->class_id] = true;
+            $classId = $session->class_id;
+            $date = optional($session->session_date)->toDateString() ?? $session->ended_at->toDateString();
+            if (! isset($dueUpTo[$classId]) || $date > $dueUpTo[$classId]) {
+                $dueUpTo[$classId] = $date;
+            }
         }
 
-        if ($dueClassIds === []) {
+        if ($dueUpTo === []) {
             return 0;
         }
 
-        $ids = array_keys($dueClassIds);
+        $ids = array_keys($dueUpTo);
 
-        DB::transaction(function () use ($ids): void {
-            ClassReservation::whereIn('class_id', $ids)->delete();
-            MyClass::whereIn('id', $ids)->update(['enrolled_count' => 0]);
+        DB::transaction(function () use ($dueUpTo, $ids): void {
+            // Limpia SOLO el ciclo vencido por clase: reservas con fecha <= la
+            // sesión renovada, más las legacy sin fecha. Nunca borra futuras.
+            foreach ($dueUpTo as $classId => $upTo) {
+                ClassReservation::where('class_id', $classId)
+                    ->where(function ($q) use ($upTo): void {
+                        $q->whereNull('session_date')
+                            ->orWhereDate('session_date', '<=', $upTo);
+                    })
+                    ->delete();
+
+                // enrolled_count (display CRM) = reservas futuras que sobreviven.
+                $remaining = ClassReservation::where('class_id', $classId)->count();
+                MyClass::whereKey($classId)->update(['enrolled_count' => $remaining]);
+            }
+
             // Archiva las sesiones finalizadas (conserva el historial/asistencia).
             ClassSession::whereIn('class_id', $ids)
                 ->whereNotNull('ended_at')

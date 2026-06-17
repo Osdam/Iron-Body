@@ -111,4 +111,37 @@ class MyClass extends Model
 
         return $next;
     }
+
+    /** Índice 0..6 (Lunes..Domingo) del día programado, o null. */
+    public const WEEK_DAY_INDEX = [
+        'Lunes' => 0, 'Martes' => 1, 'Miércoles' => 2, 'Jueves' => 3,
+        'Viernes' => 4, 'Sábado' => 5, 'Domingo' => 6,
+    ];
+
+    /**
+     * Datetime de la ocurrencia de esta clase dentro de la semana cuyo lunes es
+     * $weekStart. Para clases recurrentes mapea day_of_week→fecha; para clases
+     * con fecha fija (date_time) devuelve esa fecha si cae en la semana pedida.
+     * Usado por el planificador semanal ("Organizar mi semana").
+     */
+    public function occurrenceDateTimeInWeek(Carbon $weekStart): ?Carbon
+    {
+        $monday = $weekStart->copy()->startOfWeek(Carbon::MONDAY)->startOfDay();
+
+        if ($this->date_time) {
+            $dt = Carbon::parse($this->date_time);
+            $end = $monday->copy()->addDays(6)->endOfDay();
+
+            return ($dt->betweenIncluded($monday, $end)) ? $dt : null;
+        }
+
+        $index = self::WEEK_DAY_INDEX[$this->day_of_week] ?? null;
+        if ($index === null || ! $this->start_time) {
+            return null;
+        }
+
+        [$hour, $minute] = array_pad(explode(':', $this->start_time), 2, '0');
+
+        return $monday->copy()->addDays($index)->setTime((int) $hour, (int) $minute, 0);
+    }
 }

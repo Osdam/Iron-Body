@@ -7,11 +7,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ClassReservation extends Model
 {
-    protected $fillable = ['class_id', 'member_id', 'reserved_at'];
+    protected $fillable = ['class_id', 'member_id', 'session_date', 'reserved_at'];
 
     protected function casts(): array
     {
-        return ['reserved_at' => 'datetime'];
+        return [
+            'reserved_at'  => 'datetime',
+            'session_date' => 'date',
+        ];
     }
 
     public function gymClass(): BelongsTo
