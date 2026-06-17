@@ -240,6 +240,30 @@ class WeeklyClassPlannerTest extends TestCase
         $this->assertSame(0, ClassReservation::where('class_id', $class->id)->count());
     }
 
+    public function test_reserve_week_blocks_live_class(): void
+    {
+        // Clase del lunes 07:00-07:30 EN CURSO (entrenador la inició, sin cerrar);
+        // ahora es lunes 08:00 → su horario pasó, pero NO debe contar como vencida
+        // ni reservarse: el blindaje server-side la bloquea como "en curso".
+        $class = $this->makeClass([
+            'day_of_week' => 'Lunes', 'start_time' => '07:00', 'end_time' => '07:30',
+        ]);
+        ClassSession::create([
+            'class_id' => $class->id, 'session_date' => $this->dayOfWeek(0),
+            'started_at' => $this->monday->copy()->setTime(7, 0),
+            'ended_at' => null,
+        ]);
+
+        $res = $this->postJson('/api/app/classes/weekly/reserve', [
+            'items' => [['class_id' => $class->id, 'session_date' => $this->dayOfWeek(0)]],
+        ], $this->auth($this->member))->assertOk();
+
+        $this->assertSame(0, $res->json('summary.reserved'));
+        $this->assertSame(1, $res->json('summary.live'));
+        $this->assertSame(0, $res->json('summary.past'));
+        $this->assertSame(0, ClassReservation::where('class_id', $class->id)->count());
+    }
+
     public function test_trainer_roster_and_realtime_for_date(): void
     {
         $trainer = Trainer::create([

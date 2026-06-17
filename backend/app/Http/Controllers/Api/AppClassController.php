@@ -307,7 +307,7 @@ class AppClassController extends Controller
 
         $results = [
             'reserved' => [], 'already' => [], 'full' => [],
-            'unavailable' => [], 'past' => [], 'closed' => [], 'conflict' => [],
+            'unavailable' => [], 'past' => [], 'closed' => [], 'live' => [], 'conflict' => [],
         ];
         $acceptedSlots = []; // [date => [[start,end], ...]] para detectar conflictos en la selección
         $affectedTrainers = [];
@@ -324,14 +324,24 @@ class AppClassController extends Controller
 
             $occStart = Carbon::parse($date.' '.($class->start_time ?: '00:00'));
             $occEnd = $this->occurrenceEnd($class, $occStart);
-            if ($occEnd->isPast()) {
-                $results['past'][] = $tag;
+
+            // Estado OFICIAL de la sesión (entrenador/backend) con la MISMA
+            // precedencia que el plan semanal: cerrada → en curso → vencida. Así
+            // una clase en curso (que pudo pasar su hora) no se etiqueta "vencida".
+            $session = ClassSession::where('class_id', $class->id)->whereDate('session_date', $date)->first();
+            $sessionStatus = $this->sessionStatusLabel($session);
+
+            if ($sessionStatus === 'finished') {
+                $results['closed'][] = $tag; // cerrada/finalizada por el entrenador
                 continue;
             }
-
-            $session = ClassSession::where('class_id', $class->id)->whereDate('session_date', $date)->first();
-            if ($session && $session->ended_at) {
-                $results['closed'][] = $tag;
+            if ($sessionStatus === 'live') {
+                // Blindaje: no se puede reservar una clase que el entrenador ya inició.
+                $results['live'][] = $tag;
+                continue;
+            }
+            if ($occEnd->isPast()) {
+                $results['past'][] = $tag;
                 continue;
             }
 
@@ -358,7 +368,8 @@ class AppClassController extends Controller
 
         $reservedCount = count($results['reserved']);
         $failedCount = count($results['already']) + count($results['full']) + count($results['unavailable'])
-            + count($results['past']) + count($results['closed']) + count($results['conflict']);
+            + count($results['past']) + count($results['closed']) + count($results['live'])
+            + count($results['conflict']);
 
         // Notificación interna de confirmación (resumen del plan semanal).
         app(NotificationService::class)->notifyWeeklyPlanConfirmed($member, $reservedCount, $failedCount);
@@ -380,6 +391,7 @@ class AppClassController extends Controller
                 'unavailable' => count($results['unavailable']),
                 'past'        => count($results['past']),
                 'closed'      => count($results['closed']),
+                'live'        => count($results['live']),
                 'conflict'    => count($results['conflict']),
             ],
             'results' => $results,
