@@ -126,11 +126,15 @@ trait MemberClassContext
                 return 'already';
             }
 
+            // El cupo se cuenta SIN lockForUpdate: ya serializamos las reservas
+            // concurrentes de esta clase con el lock de su fila (arriba), así que
+            // dentro de la transacción el conteo es consistente. Postgres además
+            // PROHÍBE `FOR UPDATE` sobre agregados: bloquear la fila y luego contar
+            // lanzaba "FOR UPDATE is not allowed with aggregate functions" (500).
             $booked = ClassReservation::where('class_id', $class->getKey())
                 ->where(function ($q) use ($date): void {
                     $q->whereNull('session_date')->orWhereDate('session_date', $date);
                 })
-                ->lockForUpdate()
                 ->count();
             if ($booked >= (int) $locked->max_capacity) {
                 return 'full';

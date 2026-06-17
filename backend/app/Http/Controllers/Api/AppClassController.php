@@ -131,8 +131,20 @@ class AppClassController extends Controller
     {
         $member = $this->member($request);
 
-        // No se puede cancelar una clase que ya inició o finalizó (sesión de hoy).
-        $session = $this->currentClassSession($myClass);
+        // "Organizar mi semana" puede cancelar una OCURRENCIA concreta (futura)
+        // enviando `session_date`. Sin él = comportamiento histórico: la próxima
+        // ocurrencia del ciclo (+ legacy sin fecha). Aditivo: conserva las demás
+        // reservas futuras de la misma clase.
+        $data = $request->validate(['session_date' => ['nullable', 'date']]);
+        $explicit = isset($data['session_date'])
+            ? Carbon::parse($data['session_date'])->toDateString()
+            : null;
+
+        // No se puede cancelar una clase que ya inició o finalizó: se valida la
+        // sesión de ESA fecha (semanal) o la vigente de hoy (individual).
+        $session = $explicit !== null
+            ? ClassSession::where('class_id', $myClass->id)->whereDate('session_date', $explicit)->first()
+            : $this->currentClassSession($myClass);
         if ($session && $session->started_at) {
             return response()->json([
                 'message' => $session->ended_at
@@ -141,15 +153,17 @@ class AppClassController extends Controller
             ], 422);
         }
 
-        // Cancela la PRÓXIMA ocurrencia (+ legacy sin fecha). Conserva otras
-        // reservas futuras de la misma clase hechas desde "Organizar mi semana".
-        $date = optional($myClass->nextOccurrence())->toDateString() ?? Carbon::today()->toDateString();
-        $deleted = ClassReservation::where('class_id', $myClass->id)
-            ->where('member_id', $member->id)
-            ->where(function ($q) use ($date): void {
+        $date = $explicit ?? (optional($myClass->nextOccurrence())->toDateString() ?? Carbon::today()->toDateString());
+        $query = ClassReservation::where('class_id', $myClass->id)
+            ->where('member_id', $member->id);
+        if ($explicit !== null) {
+            $query->whereDate('session_date', $explicit); // ocurrencia exacta de la semana
+        } else {
+            $query->where(function ($q) use ($date): void {
                 $q->whereNull('session_date')->orWhereDate('session_date', $date);
-            })
-            ->delete();
+            });
+        }
+        $deleted = $query->delete();
 
         if (! $deleted) {
             return response()->json(['message' => 'No tienes reserva en esta clase.'], 422);

@@ -389,4 +389,131 @@ class WeeklyClassPlannerTest extends TestCase
         $this->assertFalse($entry['is_past'], 'Una clase futura nunca debe marcarse vencida.');
         $this->assertFalse($entry['is_closed']);
     }
+
+    public function test_weekly_reservation_reflects_in_normal_classes_and_weekly(): void
+    {
+        $class = $this->makeClass();
+
+        $this->postJson('/api/app/classes/weekly/reserve', [
+            'items' => [['class_id' => $class->id, 'session_date' => $this->dayOfWeek(2)]],
+        ], $this->auth($this->member))->assertOk();
+
+        // "Organizar mi semana" la pinta reservada.
+        $entry = $this->weeklyEntry($class->id, $this->dayOfWeek(2));
+        $this->assertTrue($entry['is_reserved']);
+        $this->assertSame('reserved', $entry['state']);
+        $this->assertFalse($entry['can_reserve']);
+
+        // La pantalla NORMAL de Clases también la refleja reservada (misma fuente).
+        $normal = $this->getJson('/api/classes', $this->auth($this->member))->assertOk();
+        $card = collect($normal->json('data'))->firstWhere('id', (string) $class->id);
+        $this->assertTrue($card['is_reserved']);
+        $this->assertSame('reserved', $card['status']);
+    }
+
+    public function test_weekly_cancel_frees_slot_and_updates_trainer_roster(): void
+    {
+        $trainer = Trainer::create([
+            'full_name' => 'Coach C', 'document' => '556', 'phone' => '+573009990056', 'status' => 'active',
+        ]);
+        $class = $this->makeClass(['trainer_id' => $trainer->id]);
+        $date = $this->dayOfWeek(2);
+
+        $this->postJson('/api/app/classes/weekly/reserve', [
+            'items' => [['class_id' => $class->id, 'session_date' => $date]],
+        ], $this->auth($this->member))->assertOk();
+        $this->assertCount(1, app(ClassAttendanceService::class)->participants($class, Carbon::parse($date)));
+
+        // Cancelar la ocurrencia concreta (lo que envía "Organizar mi semana").
+        $this->postJson("/api/classes/{$class->id}/cancel", ['session_date' => $date], $this->auth($this->member))
+            ->assertOk();
+
+        // Cupo liberado: la reserva de ESA fecha desaparece.
+        $this->assertSame(0, ClassReservation::where('class_id', $class->id)
+            ->whereDate('session_date', $date)->count());
+
+        // El entrenador deja de ver al inscrito en esa sesión.
+        $this->assertCount(0, app(ClassAttendanceService::class)->participants($class, Carbon::parse($date)));
+
+        // Y vuelve a aparecer disponible/seleccionable en el planificador.
+        $entry = $this->weeklyEntry($class->id, $date);
+        $this->assertFalse($entry['is_reserved']);
+        $this->assertTrue($entry['can_reserve']);
+
+        // SSE: señal al portal del entrenador dueño al liberar el cupo.
+        $this->assertTrue(TrainerRealtimeEvent::where('trainer_id', $trainer->id)
+            ->where('type', 'class.updated')->exists());
+    }
+
+    public function test_weekly_cancel_keeps_other_future_reservations(): void
+    {
+        $class = $this->makeClass(['day_of_week' => 'Lunes', 'start_time' => '07:00', 'end_time' => '08:00']);
+        $thisWeek = $this->dayOfWeek(0);                       // lunes de esta semana
+        $nextWeek = $this->monday->copy()->addDays(7)->toDateString(); // lunes siguiente
+
+        ClassReservation::create(['class_id' => $class->id, 'member_id' => $this->member->id, 'session_date' => $thisWeek]);
+        ClassReservation::create(['class_id' => $class->id, 'member_id' => $this->member->id, 'session_date' => $nextWeek]);
+
+        $this->postJson("/api/classes/{$class->id}/cancel", ['session_date' => $thisWeek], $this->auth($this->member))
+            ->assertOk();
+
+        $this->assertSame(0, ClassReservation::where('class_id', $class->id)->whereDate('session_date', $thisWeek)->count());
+        $this->assertSame(1, ClassReservation::where('class_id', $class->id)->whereDate('session_date', $nextWeek)->count(),
+            'Cancelar una ocurrencia NO debe tocar otras reservas futuras.');
+    }
+
+    public function test_cancel_without_reservation_is_controlled_not_500(): void
+    {
+        $class = $this->makeClass();
+
+        $this->postJson("/api/classes/{$class->id}/cancel", ['session_date' => $this->dayOfWeek(2)], $this->auth($this->member))
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'No tienes reserva en esta clase.');
+    }
+
+    public function test_cannot_cancel_reservation_of_another_member(): void
+    {
+        $class = $this->makeClass();
+        $date = $this->dayOfWeek(2);
+        $other = $this->makeMember('500500500');
+        ClassReservation::create(['class_id' => $class->id, 'member_id' => $other->id, 'session_date' => $date]);
+
+        // El miembro autenticado NO tiene esa reserva → respuesta controlada y la
+        // reserva ajena permanece intacta.
+        $this->postJson("/api/classes/{$class->id}/cancel", ['session_date' => $date], $this->auth($this->member))
+            ->assertStatus(422);
+        $this->assertSame(1, ClassReservation::where('class_id', $class->id)
+            ->where('member_id', $other->id)->count());
+    }
+
+    public function test_cannot_cancel_started_session_is_controlled(): void
+    {
+        $class = $this->makeClass(['day_of_week' => 'Lunes', 'start_time' => '07:00', 'end_time' => '08:00']);
+        $date = $this->dayOfWeek(0);
+        ClassReservation::create(['class_id' => $class->id, 'member_id' => $this->member->id, 'session_date' => $date]);
+        ClassSession::create([
+            'class_id' => $class->id, 'session_date' => $date,
+            'started_at' => $this->monday->copy()->setTime(7, 0), 'ended_at' => null,
+        ]);
+
+        $this->postJson("/api/classes/{$class->id}/cancel", ['session_date' => $date], $this->auth($this->member))
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'La clase ya está en curso.');
+        $this->assertSame(1, ClassReservation::where('class_id', $class->id)->count(),
+            'No debe liberarse una clase ya iniciada.');
+    }
+
+    public function test_reserve_occurrence_does_not_use_for_update_with_count(): void
+    {
+        // Blindaje del bug Postgres: `lockForUpdate()->count()` lanza
+        // "FOR UPDATE is not allowed with aggregate functions" (500). El cupo se
+        // cuenta SIN bloqueo (la fila de la clase ya serializa la concurrencia).
+        $source = file_get_contents(app_path('Http/Controllers/Concerns/MemberClassContext.php'));
+        // Dentro de una misma cadena (sin cruzar `;`) no debe haber count() tras lockForUpdate().
+        $this->assertDoesNotMatchRegularExpression(
+            '/lockForUpdate\(\)[^;]*->count\(\)/',
+            $source,
+            'reserveOccurrence no debe combinar lockForUpdate() con count() (Postgres lo prohíbe).'
+        );
+    }
 }
