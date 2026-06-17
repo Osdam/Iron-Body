@@ -6,6 +6,7 @@ use App\Models\ClassAttendance;
 use App\Models\ClassReservation;
 use App\Models\Member;
 use App\Models\MyClass;
+use App\Models\MemberRealtimeEvent;
 use App\Models\Trainer;
 use App\Models\TrainerAuditLog;
 use App\Models\TrainerRole;
@@ -124,6 +125,21 @@ class TrainerClassAttendanceTest extends TestCase
         $this->assertDatabaseHas('class_attendances', [
             'class_id' => $this->class->id, 'member_id' => $this->member->id, 'status' => 'present',
         ]);
+    }
+
+    public function test_marking_attendance_emits_member_realtime(): void
+    {
+        // Al marcar asistencia, el miembro debe recibir señal SSE para refrescar
+        // "Clases" y "Organizar mi semana" (verá Presente/Tarde/Ausente en vivo).
+        $this->postJson("/api/trainer/classes/{$this->class->id}/attendance", [
+            'member_id' => $this->member->id, 'session_date' => $this->today, 'status' => 'present',
+        ], $this->auth())->assertOk();
+
+        $this->assertTrue(
+            MemberRealtimeEvent::where('member_id', $this->member->id)
+                ->where('type', 'class.updated')->exists(),
+            'Marcar asistencia debe emitir señal real-time al miembro.'
+        );
     }
 
     public function test_cannot_double_mark(): void

@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\MyClass;
+use App\Support\ClassStateResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -13,9 +14,14 @@ class ClassResource extends JsonResource
      * @param  array<string,mixed>  $memberContext  estado de la sesión de HOY para
      *   el miembro (session_status, my_attendance, can_check_in, can_cancel). Vacío
      *   en contexto CRM.
+     * @param  int|null  $reservationId  id de la reserva del miembro (si la tiene).
      */
-    public function __construct($resource, private bool $isReserved = false, private array $memberContext = [])
-    {
+    public function __construct(
+        $resource,
+        private bool $isReserved = false,
+        private array $memberContext = [],
+        private ?int $reservationId = null,
+    ) {
         parent::__construct($resource);
     }
 
@@ -32,9 +38,26 @@ class ClassResource extends JsonResource
             default                    => 'available',
         };
 
+        // Estado RESUELTO (misma fuente que "Organizar mi semana"): la sesión del
+        // entrenador y la asistencia mandan sobre "reservada", para que "Clases"
+        // jamás muestre "Reservar" ni "Reservada" cuando ya está en curso/finalizada.
+        $sessionStatus = $this->memberContext['session_status'] ?? 'scheduled';
+        $attendance = $this->memberContext['my_attendance'] ?? null;
+        $displayState = ClassStateResolver::displayState($sessionStatus, (bool) $this->isReserved, $attendance, $available);
+        $reservationStatus = ClassStateResolver::reservationStatus((bool) $this->isReserved, $attendance);
+        $canReserve = ClassStateResolver::canReserve($sessionStatus, (bool) $this->isReserved, $available);
+        $canCancel = ClassStateResolver::canCancel($sessionStatus, (bool) $this->isReserved);
+
         $dt = $this->date_time ?? $this->resource->nextOccurrence();
 
         return array_merge($this->memberContext, [
+            // ── Estado resuelto del ciclo de vida (fuente única) ─────────────
+            'display_state'      => $displayState,
+            'reservation_status' => $reservationStatus,
+            'attendance_status'  => $attendance,
+            'reservation_id'     => $this->reservationId,
+            'can_reserve'        => $canReserve,
+            'can_cancel'         => $canCancel,
             // ── App fields ───────────────────────────────────────────────
             'id'               => (string) $this->id,
             'name'             => $this->name,

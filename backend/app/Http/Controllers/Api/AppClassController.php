@@ -13,6 +13,7 @@ use App\Models\MyClass;
 use App\Services\NotificationService;
 use App\Services\RealtimeEvents;
 use App\Services\Trainer\TrainerRealtimeEvents;
+use App\Support\ClassStateResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -55,7 +56,7 @@ class AppClassController extends Controller
             ->where(function ($q) use ($today): void {
                 $q->whereNull('session_date')->orWhereDate('session_date', '>=', $today->toDateString());
             })
-            ->get(['class_id', 'member_id', 'session_date'])
+            ->get(['id', 'class_id', 'member_id', 'session_date'])
             ->groupBy('class_id');
 
         // Sesión vigente (en curso / recién finalizada / hoy) + asistencia de HOY
@@ -76,12 +77,14 @@ class AppClassController extends Controller
                 );
 
                 $c->reservations_count = $rows->count();
-                $reserved = $rows->contains(fn ($r) => (int) $r->member_id === (int) $member->id);
+                $myRow = $rows->first(fn ($r) => (int) $r->member_id === (int) $member->id);
+                $reserved = $myRow !== null;
 
                 return new ClassResource(
                     $c,
                     $reserved,
                     $this->memberClassContext($reserved, $sessions->get($c->id), $attendance->get($c->id)),
+                    $myRow?->id,
                 );
             }),
         ]);
@@ -204,13 +207,21 @@ class AppClassController extends Controller
 
         $classIds = $classes->pluck('id');
 
-        // Reservas del miembro + conteos por (clase, fecha) dentro de la semana, en bloque.
+        // Reservas del miembro (con id, para reservation_id) por (clase, fecha)
+        // dentro de la semana, en bloque.
         $myReserved = ClassReservation::where('member_id', $member->id)
             ->whereIn('class_id', $classIds)
             ->whereBetween('session_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
-            ->get(['class_id', 'session_date'])
-            ->map(fn ($r) => $r->class_id.'|'.optional($r->session_date)->toDateString())
-            ->flip();
+            ->get(['id', 'class_id', 'session_date'])
+            ->keyBy(fn ($r) => $r->class_id.'|'.optional($r->session_date)->toDateString());
+
+        // Asistencia del miembro por (clase, fecha) de la semana: present/late/absent.
+        // Es el historial real (sobrevive aunque la reserva se limpie al renovar).
+        $myAttendance = ClassAttendance::where('member_id', $member->id)
+            ->whereIn('class_id', $classIds)
+            ->whereBetween('session_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
+            ->get(['class_id', 'session_date', 'status'])
+            ->keyBy(fn ($a) => $a->class_id.'|'.optional($a->session_date)->toDateString());
 
         $counts = ClassReservation::whereIn('class_id', $classIds)
             ->whereBetween('session_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
@@ -249,36 +260,37 @@ class AppClassController extends Controller
             $key = $class->id.'|'.$dateStr;
             $booked = $counts[$key] ?? 0;
             $capacity = (int) $class->max_capacity;
+            $available = max(0, $capacity - $booked);
             $session = $sessions->get($key);
-            $isReserved = $myReserved->has($key);
+            $reservation = $myReserved->get($key);
+            $isReserved = $reservation !== null;
+            $attendanceStatus = $myAttendance->get($key)?->status; // present|late|absent|null
 
             // Estado OFICIAL desde la SESIÓN (entrenador/backend), igual que Clases
             // normal y el detalle. NUNCA se finaliza/cierra por hora local: una
             // clase en curso (live) o futura no debe verse cerrada por reloj.
-            $sessionStatus = $this->sessionStatusLabel($session);
+            $sessionStatus = $this->sessionStatusLabel($session); // scheduled|live|finished
             $isClosed = $sessionStatus === 'finished'; // cerrada/finalizada por el entrenador
             $isLive = $sessionStatus === 'live';       // en curso (entrenador la inició)
-            $isFull = $booked >= $capacity;
+            $isFull = $available <= 0;
 
             // "Vencida" por DÍA OPERATIVO (Bogotá), NUNCA por hora: el cierre por
             // tiempo lo controla el entrenador. Un día anterior a hoy ya pasó; el
             // día de hoy y los futuros NO se bloquean por reloj. Excluye live/closed.
             $isPast = ! $isLive && ! $isClosed && $dateStr < $todayStr;
 
-            $state = match (true) {
-                $isReserved => 'reserved',
-                $isClosed   => 'unavailable', // cierre/finalización real del entrenador
-                $isLive     => 'live',        // en curso (precede a cualquier cálculo de fecha)
-                $isFull     => 'full',
-                $isPast     => 'unavailable', // día operativo ya vencido (no por hora)
-                ($capacity - $booked) <= 3 => 'few_spots',
-                default     => 'available',
-            };
+            // Estado RESUELTO (fuente única, prioridad fija): finalizada/asistencia
+            // > en curso > reservada > llena > vencida > pocos cupos > disponible.
+            $state = ClassStateResolver::displayState($sessionStatus, $isReserved, $attendanceStatus, $available, $isPast);
+            $reservationStatus = ClassStateResolver::reservationStatus($isReserved, $attendanceStatus);
+            $canReserve = ClassStateResolver::canReserve($sessionStatus, $isReserved, $available, $isPast);
+            $canCancel = ClassStateResolver::canCancel($sessionStatus, $isReserved, $isPast);
 
             // Razón de bloqueo trazable (null si es seleccionable). Fuente única.
             $blockedReason = match (true) {
                 $isClosed => 'closed',
                 $isLive   => 'live',
+                $isReserved => 'reserved',
                 $isFull   => 'full',
                 $isPast   => 'past',
                 default   => null,
@@ -298,16 +310,22 @@ class AppClassController extends Controller
                 'location'        => $class->location,
                 'total_spots'     => $capacity,
                 'booked_spots'    => $booked,
-                'available_spots' => max(0, $capacity - $booked),
+                'available_spots' => $available,
                 'is_reserved'     => $isReserved,
                 'is_full'         => $isFull,
                 'is_past'         => $isPast,
                 'is_closed'       => $isClosed,
                 'is_live'         => $isLive,
                 'is_finished'     => $isClosed, // cierre del entrenador = finalizada (mismo origen)
-                'state'           => $state,
+                'reservation_id'  => $reservation?->id,
+                'session_status'  => $sessionStatus,          // scheduled|live|finished
+                'reservation_status' => $reservationStatus,   // none|reserved|attended|late|absent
+                'attendance_status'  => $attendanceStatus,    // present|late|absent|null
+                'display_state'   => $state,                  // estado resuelto (alias de state)
+                'state'           => $state,                  // back-compat con clientes previos
                 'blocked_reason'  => $blockedReason,
-                'can_reserve'     => ! $isReserved && ! $isFull && ! $isClosed && ! $isLive && ! $isPast,
+                'can_reserve'     => $canReserve,
+                'can_cancel'      => $canCancel,
             ];
         }
 

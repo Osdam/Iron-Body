@@ -61,7 +61,7 @@ class ClassController extends Controller
             ->where(function ($q) use ($today): void {
                 $q->whereNull('session_date')->orWhereDate('session_date', '>=', $today->toDateString());
             })
-            ->get(['class_id', 'member_id', 'session_date'])
+            ->get(['id', 'class_id', 'member_id', 'session_date'])
             ->groupBy('class_id');
 
         // Sesión vigente de cada clase (en curso / recién finalizada / hoy) +
@@ -82,12 +82,14 @@ class ClassController extends Controller
             );
             $c->reservations_count = $rows->count();
 
-            $reserved = $memberId !== null
-                && $rows->contains(fn ($r) => (int) $r->member_id === (int) $memberId);
+            $myRow = $memberId !== null
+                ? $rows->first(fn ($r) => (int) $r->member_id === (int) $memberId)
+                : null;
+            $reserved = $myRow !== null;
             $context = $memberId !== null
                 ? $this->memberClassContext($reserved, $sessions->get($c->id), $attendance->get($c->id))
                 : [];
-            return new ClassResource($c, $reserved, $context);
+            return new ClassResource($c, $reserved, $context, $myRow?->id);
         });
 
         return $paginated;
@@ -102,15 +104,28 @@ class ClassController extends Controller
         $date = optional($myClass->nextOccurrence())->toDateString() ?? Carbon::today()->toDateString();
         $myClass->reservations_count = $this->occurrenceBookedCount($myClass, $date);
 
-        $isReserved = $member
-            && ClassReservation::where('class_id', $myClass->id)
+        $reservation = $member
+            ? ClassReservation::where('class_id', $myClass->id)
                 ->where('member_id', $member->id)
                 ->where(function ($q) use ($date): void {
                     $q->whereNull('session_date')->orWhereDate('session_date', $date);
                 })
-                ->exists();
+                ->first()
+            : null;
+        $reserved = $reservation !== null;
 
-        return new ClassResource($myClass, (bool) $isReserved);
+        // Contexto del miembro (estado resuelto: sesión + asistencia mandan sobre
+        // "reservada"). Vacío en CRM (sin miembro) → solo cupo/estado base.
+        $session = $member ? $this->currentClassSession($myClass) : null;
+        $attendance = ($member && $session)
+            ? ClassAttendance::where('class_id', $myClass->id)
+                ->where('member_id', $member->id)
+                ->whereDate('session_date', optional($session->session_date)->toDateString() ?? $date)
+                ->first()
+            : null;
+        $context = $member ? $this->memberClassContext($reserved, $session, $attendance) : [];
+
+        return new ClassResource($myClass, $reserved, $context, $reservation?->id);
     }
 
     public function store(Request $request)

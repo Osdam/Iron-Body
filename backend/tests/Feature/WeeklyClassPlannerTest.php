@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\ClassAttendance;
 use App\Models\ClassReservation;
 use App\Models\ClassSession;
 use App\Models\Member;
@@ -373,7 +374,11 @@ class WeeklyClassPlannerTest extends TestCase
 
         $entry = $this->weeklyEntry($class->id, $this->dayOfWeek(2));
         $this->assertNotNull($entry);
-        $this->assertSame('unavailable', $entry['state']);
+        // Cierre del entrenador sin asistencia → estado resuelto "finished"
+        // (la prioridad finalizada > reservada/llena/disponible).
+        $this->assertSame('finished', $entry['state']);
+        $this->assertSame('finished', $entry['display_state']);
+        $this->assertSame('finished', $entry['session_status']);
         $this->assertTrue($entry['is_closed']);
         $this->assertFalse($entry['can_reserve']);
     }
@@ -515,5 +520,111 @@ class WeeklyClassPlannerTest extends TestCase
             $source,
             'reserveOccurrence no debe combinar lockForUpdate() con count() (Postgres lo prohíbe).'
         );
+    }
+
+    // ── Ciclo de vida / prioridad de estados ─────────────────────────────────
+
+    /** Reserva la ocurrencia del miércoles para el miembro de prueba. */
+    private function reserveWednesday(MyClass $class): void
+    {
+        ClassReservation::create([
+            'class_id' => $class->id, 'member_id' => $this->member->id,
+            'session_date' => $this->dayOfWeek(2),
+        ]);
+    }
+
+    public function test_live_session_overrides_reserved_in_weekly(): void
+    {
+        $class = $this->makeClass();
+        $this->reserveWednesday($class);
+        ClassSession::create([
+            'class_id' => $class->id, 'session_date' => $this->dayOfWeek(2),
+            'started_at' => $this->monday->copy()->addDays(2)->setTime(10, 0), 'ended_at' => null,
+        ]);
+
+        $entry = $this->weeklyEntry($class->id, $this->dayOfWeek(2));
+        $this->assertSame('live', $entry['display_state'], 'En curso debe ganarle a Reservada.');
+        $this->assertSame('live', $entry['session_status']);
+        $this->assertTrue($entry['is_reserved']);
+        $this->assertFalse($entry['can_reserve']);
+        $this->assertFalse($entry['can_cancel'], 'No se cancela una clase en curso.');
+    }
+
+    public function test_finished_session_overrides_reserved_and_keeps_history(): void
+    {
+        $class = $this->makeClass();
+        $this->reserveWednesday($class);
+        ClassSession::create([
+            'class_id' => $class->id, 'session_date' => $this->dayOfWeek(2),
+            'started_at' => $this->monday->copy()->addDays(2)->setTime(10, 0),
+            'ended_at' => $this->monday->copy()->addDays(2)->setTime(11, 0),
+        ]);
+
+        $entry = $this->weeklyEntry($class->id, $this->dayOfWeek(2));
+        $this->assertSame('finished', $entry['display_state'], 'Finalizada debe ganarle a Reservada.');
+        $this->assertFalse($entry['can_reserve']);
+        $this->assertFalse($entry['can_cancel']);
+        // La reserva NO se borra: queda como historial.
+        $this->assertSame(1, ClassReservation::where('class_id', $class->id)
+            ->where('member_id', $this->member->id)->count());
+    }
+
+    public function test_attendance_present_late_absent_reflected_in_weekly(): void
+    {
+        foreach ([
+            ClassAttendance::STATUS_PRESENT => 'attended',
+            ClassAttendance::STATUS_LATE    => 'late',
+            ClassAttendance::STATUS_ABSENT  => 'absent',
+        ] as $status => $expected) {
+            $class = $this->makeClass();
+            $this->reserveWednesday($class);
+            ClassSession::create([
+                'class_id' => $class->id, 'session_date' => $this->dayOfWeek(2),
+                'started_at' => $this->monday->copy()->addDays(2)->setTime(10, 0),
+                'ended_at' => $this->monday->copy()->addDays(2)->setTime(11, 0),
+            ]);
+            ClassAttendance::create([
+                'class_id' => $class->id, 'member_id' => $this->member->id,
+                'session_date' => $this->dayOfWeek(2), 'status' => $status, 'marked_at' => now(),
+            ]);
+
+            $entry = $this->weeklyEntry($class->id, $this->dayOfWeek(2));
+            $this->assertSame($expected, $entry['display_state'], "Asistencia $status → display_state $expected");
+            $this->assertSame($expected, $entry['reservation_status']);
+            $this->assertSame($status, $entry['attendance_status']);
+        }
+    }
+
+    public function test_normal_classes_reflects_reserved_and_hides_reserve_button(): void
+    {
+        $class = $this->makeClass();
+        $this->reserveWednesday($class); // próxima ocurrencia = miércoles
+
+        $normal = $this->getJson('/api/classes', $this->auth($this->member))->assertOk();
+        $card = collect($normal->json('data'))->firstWhere('id', (string) $class->id);
+        $this->assertTrue($card['is_reserved']);
+        $this->assertSame('reserved', $card['display_state']);
+        $this->assertFalse($card['can_reserve'], 'Clases no debe ofrecer "Reservar" si ya está reservada.');
+        $this->assertTrue($card['can_cancel']);
+        $this->assertNotNull($card['reservation_id']);
+    }
+
+    public function test_normal_classes_live_overrides_reserved(): void
+    {
+        // Clase del lunes (hoy en el reloj de prueba) reservada y EN CURSO.
+        $class = $this->makeClass(['day_of_week' => 'Lunes', 'start_time' => '07:00', 'end_time' => '08:00']);
+        ClassReservation::create([
+            'class_id' => $class->id, 'member_id' => $this->member->id, 'session_date' => $this->dayOfWeek(0),
+        ]);
+        ClassSession::create([
+            'class_id' => $class->id, 'session_date' => $this->dayOfWeek(0),
+            'started_at' => $this->monday->copy()->setTime(7, 0), 'ended_at' => null,
+        ]);
+
+        $normal = $this->getJson('/api/classes', $this->auth($this->member))->assertOk();
+        $card = collect($normal->json('data'))->firstWhere('id', (string) $class->id);
+        $this->assertSame('live', $card['display_state'], 'En curso debe ganarle a Reservada también en Clases.');
+        $this->assertFalse($card['can_reserve']);
+        $this->assertFalse($card['can_cancel']);
     }
 }

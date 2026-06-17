@@ -7,8 +7,10 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\TrainerClassResource;
 use App\Models\MyClass;
 use App\Models\Trainer;
+use App\Services\RealtimeEvents;
 use App\Services\Trainer\ClassAttendanceService;
 use App\Services\Trainer\ClassSessionService;
+use App\Services\Trainer\TrainerRealtimeEvents;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -79,6 +81,10 @@ class TrainerClassController extends Controller
             return $this->error($e);
         }
 
+        // Realtime: el miembro ve "Presente/Tarde/Ausente" en Clases y en
+        // "Organizar mi semana" sin recargar; el portal del entrenador se refresca.
+        $this->emitAttendanceRealtime($class);
+
         return $this->participantsResponse($class, Carbon::parse($data['session_date']), 'Asistencia registrada.');
     }
 
@@ -101,6 +107,8 @@ class TrainerClassController extends Controller
         } catch (AttendanceException $e) {
             return $this->error($e);
         }
+
+        $this->emitAttendanceRealtime($class);
 
         return $this->participantsResponse($class, Carbon::parse($data['session_date']), 'Asistencia corregida.');
     }
@@ -192,6 +200,15 @@ class TrainerClassController extends Controller
             'session_date' => $sessionDate->toDateString(),
             'participants' => $this->attendance->participants($class, $sessionDate),
         ]);
+    }
+
+    /** Señal real-time a los miembros (Clases/semana) y al portal del entrenador. */
+    private function emitAttendanceRealtime(MyClass $class): void
+    {
+        RealtimeEvents::classesChanged();
+        if ($class->trainer_id) {
+            TrainerRealtimeEvents::emit((int) $class->trainer_id, TrainerRealtimeEvents::ATTENDANCE, ['classes']);
+        }
     }
 
     private function trainer(Request $request): Trainer
