@@ -752,6 +752,7 @@ Route::prefix('admin/notifications')->group(function (): void {
 
 // ── Módulo "Esta semana" — configuración y beneficios (CRM admin) ──────────────
 Route::prefix('admin/weekly-streak')->group(function (): void {
+    Route::get('members',                  [WeeklyStreakAdminController::class, 'members']);
     Route::get('configs',                  [WeeklyStreakAdminController::class, 'index']);
     Route::post('configs',                 [WeeklyStreakAdminController::class, 'storeConfig']);
     Route::match(['put', 'patch'], 'configs/{config}', [WeeklyStreakAdminController::class, 'updateConfig']);

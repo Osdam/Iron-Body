@@ -3,8 +3,12 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Member;
+use App\Models\MemberAppActivityDay;
 use App\Models\WeeklyStreakConfig;
 use App\Models\WeeklyStreakReward;
+use App\Services\WeeklyStreakService;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -109,6 +113,145 @@ class WeeklyStreakAdminController extends Controller
                 'url' => Storage::disk('public')->url($path),
             ],
         ]);
+    }
+
+    /**
+     * GET /api/admin/weekly-streak/members — racha de TODOS los miembros.
+     *
+     * Calcula racha actual, racha más larga, días activos de la semana y última
+     * actividad de cada miembro. Eficiente: una sola query de días de actividad
+     * agrupada por miembro (sin N+1). Soporta búsqueda, filtro por racha
+     * mín/máx y orden por racha (desc por defecto).
+     *
+     * Query params: search, min_streak, max_streak, sort (current_desc|current_asc|
+     * week_desc|name_asc).
+     */
+    public function members(Request $request): JsonResponse
+    {
+        $tz = WeeklyStreakService::TZ;
+        $today = CarbonImmutable::now($tz)->startOfDay();
+        $weekStart = $today->startOfWeek(CarbonImmutable::MONDAY);
+        $weekEnd = $weekStart->addDays(6);
+
+        $goal = WeeklyStreakConfig::activePrimary()?->weekly_goal_days ?? 5;
+
+        // Todos los días de actividad, agrupados por miembro (1 sola query).
+        $daysByMember = MemberAppActivityDay::query()
+            ->orderBy('member_id')
+            ->orderBy('activity_date')
+            ->get(['member_id', 'activity_date'])
+            ->groupBy('member_id');
+
+        $members = Member::query()
+            ->with('user:id,name,plan')
+            ->whereHas('user')
+            ->get(['id', 'user_id', 'full_name', 'document_number', 'status']);
+
+        $rows = $members->map(function (Member $m) use ($daysByMember, $today, $weekStart, $weekEnd, $goal): array {
+            $dates = ($daysByMember[$m->id] ?? collect())
+                ->pluck('activity_date')
+                ->map(fn ($d) => CarbonImmutable::parse($d)->toDateString())
+                ->values()
+                ->all();
+
+            $streak = $this->streakFromDates($dates, $today);
+
+            $weekActive = collect($dates)->filter(
+                fn ($d) => $d >= $weekStart->toDateString() && $d <= $weekEnd->toDateString(),
+            )->count();
+
+            return [
+                'member_id' => $m->id,
+                'user_id' => $m->user_id,
+                'name' => $m->user?->name ?: $m->full_name,
+                'document' => $m->document_number,
+                'plan' => $m->user?->plan,
+                'status' => $m->status,
+                'current_streak_days' => $streak['current'],
+                'longest_streak_days' => $streak['longest'],
+                'active_days_this_week' => $weekActive,
+                'weekly_goal_days' => $goal,
+                'reached_goal' => $goal > 0 && $weekActive >= $goal,
+                'last_active_date' => $streak['last'],
+            ];
+        });
+
+        // ── Filtros ──
+        $search = trim((string) $request->query('search', ''));
+        if ($search !== '') {
+            $needle = Str::lower($search);
+            $rows = $rows->filter(function (array $r) use ($needle): bool {
+                return str_contains(Str::lower((string) $r['name']), $needle)
+                    || str_contains(Str::lower((string) $r['document']), $needle)
+                    || str_contains(Str::lower((string) $r['plan']), $needle);
+            });
+        }
+        if ($request->filled('min_streak')) {
+            $min = (int) $request->query('min_streak');
+            $rows = $rows->filter(fn (array $r) => $r['current_streak_days'] >= $min);
+        }
+        if ($request->filled('max_streak')) {
+            $max = (int) $request->query('max_streak');
+            $rows = $rows->filter(fn (array $r) => $r['current_streak_days'] <= $max);
+        }
+
+        // ── Orden ──
+        $sort = (string) $request->query('sort', 'current_desc');
+        $rows = match ($sort) {
+            'current_asc' => $rows->sortBy('current_streak_days'),
+            'week_desc' => $rows->sortByDesc('active_days_this_week'),
+            'name_asc' => $rows->sortBy('name'),
+            default => $rows->sortByDesc('current_streak_days'),
+        };
+
+        $rows = $rows->values();
+
+        return response()->json([
+            'ok' => true,
+            'count' => $rows->count(),
+            'week_start' => $weekStart->toDateString(),
+            'week_end' => $weekEnd->toDateString(),
+            'weekly_goal_days' => $goal,
+            'data' => $rows,
+        ]);
+    }
+
+    /**
+     * Racha actual y más larga a partir de un arreglo ordenado de fechas
+     * (YYYY-MM-DD). Pura (sin BD) para poder calcular en lote todos los miembros.
+     */
+    private function streakFromDates(array $dates, CarbonImmutable $today): array
+    {
+        if (empty($dates)) {
+            return ['current' => 0, 'longest' => 0, 'last' => null];
+        }
+
+        $set = array_flip($dates);
+
+        $longest = 1;
+        $run = 1;
+        for ($i = 1, $n = count($dates); $i < $n; $i++) {
+            $prev = CarbonImmutable::parse($dates[$i - 1]);
+            $curr = CarbonImmutable::parse($dates[$i]);
+            if ($prev->addDay()->toDateString() === $curr->toDateString()) {
+                $run++;
+                $longest = max($longest, $run);
+            } else {
+                $run = 1;
+            }
+        }
+
+        $current = 0;
+        $cursor = $today;
+        if (! isset($set[$today->toDateString()])) {
+            $cursor = $today->subDay(); // hoy sin marcar → la racha vive desde ayer
+        }
+        while (isset($set[$cursor->toDateString()])) {
+            $current++;
+            $cursor = $cursor->subDay();
+        }
+
+        return ['current' => $current, 'longest' => max($longest, $current), 'last' => end($dates)];
     }
 
     // ── Validación ──────────────────────────────────────────────────────────
