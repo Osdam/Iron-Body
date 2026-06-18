@@ -870,6 +870,7 @@ Route::post('admin/trainers/{trainer}/deactivate',         [\App\Http\Controller
 Route::get('admin/trainers/{trainer}/devices',             [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'devices']);
 Route::post('admin/trainers/{trainer}/devices/{uuid}/revoke', [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'revokeDevice']);
 Route::post('admin/trainers/{trainer}/sessions/revoke-all', [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'revokeAllSessions']);
+Route::delete('admin/trainers/{trainer}/face',              [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'deleteFace']);
 Route::get('admin/trainers/{trainer}/audit',               [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'audit']);
 // Miembros asignados al entrenador (CRM Angular) — reutiliza member_trainer_assignments.
 Route::get('admin/trainers/{trainer}/members/search',       [\App\Http\Controllers\Api\Admin\TrainerAdminController::class, 'searchMembers']);

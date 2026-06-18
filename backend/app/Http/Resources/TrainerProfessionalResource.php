@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Trainer;
+use App\Services\Trainer\TrainerFaceService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -30,6 +31,9 @@ class TrainerProfessionalResource extends JsonResource
             'identity_id' => $this->identity_id,
             'roles' => $this->roleNames(),
             'permissions' => $this->permissions(),
+            // ¿Ya tiene rostro enrolado? El portal oculta "Configurar mi rostro"
+            // y el CRM habilita el botón de borrar rostro según esto.
+            'face_enrolled' => app(TrainerFaceService::class)->hasReference($this->resource),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

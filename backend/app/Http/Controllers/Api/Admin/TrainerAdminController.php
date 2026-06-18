@@ -136,6 +136,31 @@ class TrainerAdminController extends Controller
         ]);
     }
 
+    /**
+     * Borra el rostro enrolado del entrenador (caso: falla el reconocimiento).
+     * Tras esto, el portal del entrenador vuelve a ofrecer "Configurar mi rostro".
+     */
+    public function deleteFace(Request $request, Trainer $trainer): JsonResponse
+    {
+        $deleted = \App\Models\TrainerFaceReference::where('trainer_id', $trainer->getKey())->delete();
+
+        $this->audit->record(
+            TrainerAuditLog::EVENT_PROFILE_UPDATED,
+            $trainer,
+            actorType: TrainerAuditLog::ACTOR_ADMIN,
+            metadata: ['face_deleted' => true],
+            request: $request,
+        );
+
+        return response()->json([
+            'ok' => true,
+            'face_enrolled' => false,
+            'message' => $deleted
+                ? 'Rostro del entrenador eliminado. Podrá volver a registrarlo desde su portal.'
+                : 'El entrenador no tenía rostro registrado.',
+        ]);
+    }
+
     public function updateProfessional(UpdateTrainerProfessionalRequest $request, Trainer $trainer): JsonResponse
     {
         $data = $request->validated();
