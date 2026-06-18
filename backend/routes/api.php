@@ -324,6 +324,7 @@ Route::delete('iron-ai/conversations/{uuid}', [IronAiConversationController::cla
 // El backend solo persiste, sirve el catálogo de rostros y la imagen.
 Route::get('attendances', [AttendanceController::class, 'index']);
 Route::post('attendances', [AttendanceController::class, 'store']);
+Route::get('attendances/stream', [AttendanceController::class, 'stream']); // SSE tiempo real
 Route::get('attendances/face-references', [AttendanceController::class, 'faceReferences']);
 Route::get('attendances/face-image/{userId}', [AttendanceController::class, 'faceImage'])
     ->where('userId', '[0-9]+');

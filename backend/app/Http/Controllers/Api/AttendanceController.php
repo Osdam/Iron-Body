@@ -10,6 +10,7 @@ use App\Models\TurnstileSetting;
 use App\Models\User;
 use App\Services\NotificationService;
 use App\Services\TurnstileService;
+use App\Support\SseStream;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -115,6 +116,33 @@ class AttendanceController extends Controller
                 'message' => 'No se pudo registrar la asistencia.',
             ], 500);
         }
+    }
+
+    /**
+     * Tiempo real (SSE): empuja cada asistencia nueva en cuanto se registra,
+     * venga de la lectura facial, del registro manual o de otra estación. El
+     * CRM la inserta al instante en el feed sin recargar. EventSource reconecta
+     * solo; el polling/recarga queda como fallback.
+     */
+    public function stream(Request $request): StreamedResponse
+    {
+        $cursor = $request->filled('after_id')
+            ? (int) $request->query('after_id')
+            : (int) (Attendance::max('id') ?? 0);
+
+        return SseStream::response(function () use (&$cursor): void {
+            $items = Attendance::query()
+                ->with('user:id,name,plan')
+                ->where('id', '>', $cursor)
+                ->orderBy('id')
+                ->limit(50)
+                ->get();
+
+            foreach ($items as $attendance) {
+                SseStream::emit('attendance', $this->serialize($attendance), $attendance->id);
+                $cursor = $attendance->id;
+            }
+        }, 20, 1500);
     }
 
     /**
