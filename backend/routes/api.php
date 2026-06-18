@@ -404,6 +404,10 @@ Route::middleware('auth.member')->group(function (): void {
     // estado vivo de la app: membresía/días/pago/entreno/racha/seguridad).
     Route::get('member/app-state', [\App\Http\Controllers\Api\MemberAppStateController::class, 'show']);
 
+    // ── Soporte: el miembro reporta un error / lo que pasó (→ bandeja del CRM) ──
+    Route::post('member/support', [\App\Http\Controllers\Api\MemberSupportController::class, 'store'])
+        ->middleware('throttle:8,1');
+
     // ── Canal real-time PRIVADO del miembro (SSE): empuja señales de cambio
     // (membresía/pago/perfil/staff/story/seguridad) para refrescar sin polling.
     Route::get('member/realtime', [\App\Http\Controllers\Api\MemberRealtimeController::class, 'stream']);
@@ -668,6 +672,12 @@ Route::post('admin/exercises/upload',          [\App\Http\Controllers\Api\Admin\
 Route::post('admin/exercises',                 [\App\Http\Controllers\Api\Admin\ExerciseController::class, 'store']);
 Route::match(['put', 'patch'], 'admin/exercises/{exercise}', [\App\Http\Controllers\Api\Admin\ExerciseController::class, 'update']);
 Route::delete('admin/exercises/{exercise}',    [\App\Http\Controllers\Api\Admin\ExerciseController::class, 'destroy']);
+
+// ── Soporte (CRM): bandeja de reportes que envían los miembros desde la app ──
+Route::get('admin/support/unread-count',       [\App\Http\Controllers\Api\Admin\SupportController::class, 'unreadCount']);
+Route::get('admin/support',                    [\App\Http\Controllers\Api\Admin\SupportController::class, 'index']);
+Route::get('admin/support/{ticket}',           [\App\Http\Controllers\Api\Admin\SupportController::class, 'show']);
+Route::patch('admin/support/{ticket}',         [\App\Http\Controllers\Api\Admin\SupportController::class, 'update']);
 
 // ── Story Live (CRM admin): historial + finalizar — Bloque 5 ────────────────
 Route::get('admin/lives',             [\App\Http\Controllers\Api\Admin\LiveController::class, 'index']);

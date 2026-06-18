@@ -1046,6 +1046,34 @@ class NotificationService
         });
     }
 
+    /**
+     * Un miembro envió un reporte de soporte desde la app. Aviso al CRM (campana
+     * + refresco en vivo de la bandeja de Soporte vía SSE de notificaciones).
+     */
+    public function notifySupportTicket($ticket): void
+    {
+        $this->safe(function () use ($ticket): void {
+            $id   = $this->attr($ticket, 'id');
+            $type = $this->attr($ticket, 'type') ?? 'other';
+            $msg  = (string) $this->attr($ticket, 'message');
+            $member = $ticket instanceof \App\Models\MemberSupportTicket ? $ticket->member : null;
+            $name = $member?->full_name ?? 'Un miembro';
+            $short = mb_strlen($msg) > 90 ? mb_substr($msg, 0, 90) . '…' : $msg;
+
+            $this->createAdminNotification([
+                'type'        => 'system',
+                'title'       => 'Nuevo reporte de soporte',
+                'message'     => "{$name}: {$short}",
+                'priority'    => 'high',
+                'member'      => $member,
+                'action_type' => 'support_ticket',
+                'should_popup'=> true,
+                'metadata'    => array_filter(['ticket_id' => $id, 'support_type' => $type]),
+                'event_key'   => $id ? "support_ticket_{$id}" : null,
+            ]);
+        });
+    }
+
     // ── MIEMBRO (auditoría CRM) ────────────────────────────────────────────────────
 
     /** Miembro/usuario creado desde el CRM. Aviso operativo al admin. */
