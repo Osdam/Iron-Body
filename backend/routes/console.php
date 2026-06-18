@@ -108,8 +108,13 @@ if ((bool) config('proactive_coach.enabled', false)) {
         ->weeklyOn(4, '10:00')->withoutOverlapping()->onOneServer();
 
     // Reactivación: dos veces por semana (martes/viernes 10:30).
+    // Se usan dos weeklyOn en vez de twiceWeekly (no disponible en esta versión
+    // del Scheduler → "Method ...Event::twiceWeekly does not exist").
     Schedule::command('ironbody:detect-coach-reactivation')
-        ->twiceWeekly(2, 5, '10:30')->withoutOverlapping()->onOneServer();
+        ->weeklyOn(2, '10:30')->withoutOverlapping()->onOneServer();
+
+    Schedule::command('ironbody:detect-coach-reactivation')
+        ->weeklyOn(5, '10:30')->withoutOverlapping()->onOneServer();
 
     // Plan de la semana: lunes 08:30.
     Schedule::command('ironbody:detect-weekly-coach-plan')
