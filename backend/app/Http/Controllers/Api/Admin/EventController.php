@@ -33,6 +33,10 @@ class EventController extends Controller
         $data = $this->validateEvent($request);
         $data = array_merge($data, $this->resolveImage($request));
         $event = AppEvent::create($data);
+        // Recién publicado y activo → avisa a los miembros (notificación + SSE).
+        if ($event->is_active) {
+            app(\App\Services\NotificationService::class)->notifyEventPublished($event);
+        }
         return response()->json(['ok' => true, 'data' => $event], 201);
     }
 
@@ -57,6 +61,8 @@ class EventController extends Controller
     public function activate(AppEvent $event): JsonResponse
     {
         $event->update(['is_active' => true]);
+        // Al publicar manualmente, avisa a los miembros (notificación + SSE).
+        app(\App\Services\NotificationService::class)->notifyEventPublished($event->fresh());
         return response()->json(['ok' => true, 'data' => $event]);
     }
 

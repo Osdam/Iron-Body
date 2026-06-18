@@ -55,6 +55,12 @@ class WeeklyStreakService
         // Idempotente por (member, semana) → solo se emite una vez por semana.
         if (($summary['active_days_this_week'] ?? 0) >= ($summary['weekly_goal_days'] ?? 5)
             && ($summary['weekly_goal_days'] ?? 0) > 0) {
+            // Notificación in-app al miembro + copia al CRM (idempotente por semana).
+            try {
+                app(NotificationService::class)->notifyStreakCompleted($member, $summary);
+            } catch (\Throwable $e) {
+                // El aviso es aditivo: nunca rompe el touch.
+            }
             try {
                 app(\App\Services\AutomationEventService::class)->emit(
                     'streak.completed',

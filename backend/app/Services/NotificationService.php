@@ -958,6 +958,91 @@ class NotificationService
         });
     }
 
+    /**
+     * Evento/publicidad publicado desde el CRM. Difunde a TODOS los miembros
+     * (notificación + popup) y deja copia al CRM. Emite señal real-time para que
+     * la app muestre el aviso al instante (no al abrir la pantalla de Eventos).
+     */
+    public function notifyEventPublished($event): void
+    {
+        $this->safe(function () use ($event): void {
+            $id    = $this->attr($event, 'id');
+            $title = $this->attr($event, 'title') ?: 'Nuevo evento';
+            $desc  = $this->attr($event, 'description');
+            $img   = $this->attr($event, 'image_url');
+
+            // Broadcast a miembros (member_id=null → todos). should_popup para que
+            // salga el aviso emergente en la app.
+            $this->createMemberNotification(null, [
+                'type'        => 'promotion',
+                'title'       => '📣 ' . $title,
+                'message'     => $desc ?: 'Hay un nuevo evento disponible. ¡Échale un vistazo en la app!',
+                'priority'    => 'medium',
+                'should_popup'=> true,
+                'action_type' => 'event_detail',
+                'metadata'    => array_filter(['event_id' => $id, 'image_url' => $img]),
+                'event_key'   => $id ? "event_published_{$id}" : null,
+            ]);
+
+            // Copia operativa al CRM (campana + refresco en vivo de paneles).
+            $this->createAdminNotification([
+                'type'        => 'promotion',
+                'title'       => 'Evento publicado',
+                'message'     => "Se publicó el evento \"{$title}\" en la app.",
+                'priority'    => 'low',
+                'action_type' => 'event_published',
+                'metadata'    => array_filter(['event_id' => $id]),
+                'event_key'   => $id ? "event_published_admin_{$id}" : null,
+            ]);
+
+            // Real-time: empuja el popup-pending a la app al instante.
+            RealtimeEvents::broadcastToActiveMembers('notification.created', ['notifications']);
+        });
+    }
+
+    /**
+     * El miembro completó su meta semanal de racha. Avisa al miembro (popup) y
+     * deja copia al CRM (para la campana y el refresco en vivo de la tabla de
+     * rachas). Idempotente por (miembro, semana) gracias al event_key.
+     */
+    public function notifyStreakCompleted($member, array $summary): void
+    {
+        $this->safe(function () use ($member, $summary): void {
+            if (! $member instanceof Member) {
+                return;
+            }
+            $days = (int) ($summary['active_days_this_week'] ?? 0);
+            $goal = (int) ($summary['weekly_goal_days'] ?? 0);
+            $week = $summary['week_start'] ?? now()->toDateString();
+            $name = $member->full_name ?? 'Un miembro';
+
+            $this->createMemberNotification($member, [
+                'type'        => 'system',
+                'title'       => '¡Racha completada! 🔥',
+                'message'     => "Cumpliste tu meta de {$goal} días esta semana. ¡Sigue así!",
+                'priority'    => 'medium',
+                'should_popup'=> true,
+                'action_type' => 'streak_detail',
+                'metadata'    => array_filter(['active_days' => $days, 'goal' => $goal]),
+                'event_key'   => "streak_completed_member_{$member->id}_{$week}",
+            ]);
+
+            $this->createAdminNotification([
+                'type'        => 'system',
+                'title'       => 'Racha completada',
+                'message'     => "{$name} completó su racha semanal ({$days}/{$goal} días).",
+                'priority'    => 'low',
+                'member'      => $member,
+                'action_type' => 'streak_completed',
+                'metadata'    => array_filter(['active_days' => $days, 'goal' => $goal]),
+                'event_key'   => "streak_completed_admin_{$member->id}_{$week}",
+            ]);
+
+            // Real-time: popup al instante en la app.
+            RealtimeEvents::emit($member->id, 'notification.created', ['notifications']);
+        });
+    }
+
     // ── MIEMBRO (auditoría CRM) ────────────────────────────────────────────────────
 
     /** Miembro/usuario creado desde el CRM. Aviso operativo al admin. */
