@@ -1,0 +1,84 @@
+{
+  "name": "Iron Body - Automation Router",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "description": "Router de notificaciones proactivas (Fase 2). Webhook recibe un evento emitido por Laravel; un Code node usa el mensaje personalizado de Laravel (data.notification) o un catalogo de respaldo premium, y llama a /api/internal/automation/notify-member (Bearer interno). Parametrizado con $env.LARAVEL_BASE_URL y $env.AUTOMATION_INTERNAL_SECRET. No accede a PostgreSQL, no llama OpenAI, no es F3 marketing. Sin secretos."
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "iron-body-automation",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "11111111-1111-4111-8111-111111111111",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        220,
+        300
+      ],
+      "webhookId": "iron-body-automation"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Iron Body - Automation Router (produccion)\n// Recibe un evento proactivo emitido por Laravel y lo convierte en una\n// notificacion segura llamando a /api/internal/automation/notify-member.\n//\n// Estrategia de mensaje (Fase 2):\n//   1) Si Laravel envia data.notification (mensaje PREMIUM/personalizado), se usa.\n//   2) Si no, se usa el catalogo de respaldo MESSAGES (generico premium).\n// Asi los eventos base (p. ej. nutrition.missing) siguen funcionando igual y los\n// nuevos pueden llegar personalizados desde Laravel.\n//\n// NO accede a PostgreSQL. NO construye contexto IA. NO llama a OpenAI.\n// Variables de entorno requeridas en n8n:\n//   - LARAVEL_BASE_URL            (https://api.ironbodyneiva.cloud)\n//   - AUTOMATION_INTERNAL_SECRET  (mismo valor que el .env de Laravel)\n// Si los Code nodes no leen $env, ajustar N8N_BLOCK_ENV_ACCESS_IN_NODE=false.\n\nconst items = $input.all();\nconst item = items[0] || { json: {} };\nconst j = item.json || {};\nconst headers = j.headers || {};\nconst body = j.body || j;\nconst data = body.data || {};\n\nconst eventType =\n  headers['x-ironbody-event'] ||\n  body.event_type ||\n  (body.event && body.event.type) ||\n  'default';\n\nconst memberId =\n  (data.member && data.member.id) ||\n  data.member_id ||\n  body.member_id ||\n  (body.member && body.member.id) ||\n  null;\n\n// Catalogo de respaldo (premium, generico, sin PII). type = event_type.\nconst MESSAGES = {\n  // ── Base (ya en produccion: NO cambiar nutrition.missing) ──────────────────\n  'nutrition.missing':            { type:'nutrition.missing',            title:'Nutricion pendiente',            body:'Aun no registras tus comidas de hoy. IRON IA puede ayudarte a ajustar tu dia.', action_route:'/iron-ai?focus=nutrition', priority:'normal' },\n  'membership.expiring':          { type:'membership.expiring',          title:'Tu membresia esta por vencer',   body:'Revisa tu plan para no perder el acceso al gimnasio.',                            action_route:'/membership',              priority:'high'   },\n  'streak.completed':             { type:'streak.completed',             title:'Racha completada',               body:'Buen trabajo. IRON IA puede ayudarte a subir el siguiente nivel.',                action_route:'/iron-ai?focus=progress',  priority:'normal' },\n  'evaluation.outdated':          { type:'evaluation.outdated',          title:'Actualiza tu evaluacion',        body:'Tu progreso sera mas preciso si actualizas tus datos fisicos.',                   action_route:'/evaluation',              priority:'normal' },\n  'progress.stalled':             { type:'progress.stalled',             title:'Revisemos tu progreso',          body:'IRON IA puede ayudarte a ajustar entrenamiento y nutricion para volver a avanzar.', action_route:'/iron-ai?focus=progress', priority:'normal' },\n  'iron_ai.weekly_summary_ready': { type:'iron_ai.weekly_summary_ready', title:'Tu resumen semanal esta listo',  body:'IRON IA analizo tu semana y preparo recomendaciones para mejorar.',               action_route:'/iron-ai?focus=weekly',    priority:'normal' },\n  // workout.missed: tono coach evolucionado (Fase 2).\n  'workout.missed':               { type:'workout.missed',               title:'No perdamos el ritmo',           body:'Hoy no se completo el entrenamiento. Ven, revisemos como retomarlo sin afectar tu progreso.', action_route:'/iron-ai?focus=workout', priority:'normal' },\n\n  // ── Nuevos (Fase 2) — respaldo generico; Laravel suele enviar personalizado ─\n  'workout.not_started_today':    { type:'workout.not_started_today',    title:'Tu entrenamiento te esta esperando', body:'Aun estas a tiempo. Ven, te ayudo a empezar la rutina de hoy sin complicarte.', action_route:'/iron-ai?focus=workout', priority:'normal' },\n  'streak.at_risk':               { type:'streak.at_risk',               title:'Tu racha esta en riesgo',        body:'Aun puedes protegerla hoy. Ven, hagamos una accion rapida para mantener el impulso.', action_route:'/iron-ai?focus=streak', priority:'high'   },\n  'streak.not_started':           { type:'streak.not_started',           title:'Empieza tu primera racha',       body:'Hoy puede ser tu primer dia de constancia. Ven, te ayudo a comenzar con una accion simple.', action_route:'/iron-ai?focus=streak', priority:'normal' },\n  'daily.compliance_missing':     { type:'daily.compliance_missing',     title:'Aun puedes cumplir hoy',         body:'Te falta una accion clave para cerrar el dia mejor. Ven, te ayudo a elegir la mas importante.', action_route:'/iron-ai?focus=today', priority:'normal' },\n  'coach.nudge':                  { type:'coach.nudge',                  title:'Tengo una recomendacion para ti', body:'Ven, revisemos juntos que accion te conviene hacer ahora.',                       action_route:'/iron-ai?focus=today',     priority:'normal' },\n  'iron_ai.chat_invite':          { type:'iron_ai.chat_invite',          title:'Tu Coach IA puede ayudarte',     body:'Preguntame que entrenar, como comer mejor o como avanzar esta semana. Ven, probemoslo juntos.', action_route:'/iron-ai?focus=chat', priority:'normal' },\n  'iron_ai.nutrition_invite':     { type:'iron_ai.nutrition_invite',     title:'Puedo revisar tu nutricion contigo', body:'Ven, analicemos tus comidas y descubramos que puedes mejorar sin complicarte.', action_route:'/iron-ai?focus=nutrition', priority:'normal' },\n  'iron_ai.progress_invite':      { type:'iron_ai.progress_invite',      title:'Revisemos tu progreso',          body:'Ven, miremos juntos que esta funcionando y que podriamos ajustar para avanzar mejor.', action_route:'/iron-ai?focus=progress', priority:'normal' },\n  'iron_ai.streak_invite':        { type:'iron_ai.streak_invite',        title:'Construyamos constancia',        body:'Tu racha puede ayudarte a mantener disciplina. Ven, te explico como empezar.',   action_route:'/iron-ai?focus=streak',    priority:'normal' },\n  'module.discovery':             { type:'module.discovery',             title:'Hay algo nuevo para ti',         body:'Puedo ayudarte a sacarle mas provecho a Iron Body. Ven, descubramos que modulo te conviene usar hoy.', action_route:'/iron-ai?focus=discover', priority:'normal' },\n  'coach.reactivation':           { type:'coach.reactivation',           title:'Retomemos sin presion',          body:'No importa cuantos dias pasaron. Ven, te ayudo a volver con una accion simple.',  action_route:'/iron-ai?focus=reactivation', priority:'normal' },\n  'weekly.coach_plan':            { type:'weekly.coach_plan',            title:'Planifiquemos tu semana',        body:'Ven, te ayudo a ordenar entrenamiento, nutricion y constancia para avanzar con claridad.', action_route:'/iron-ai?focus=weekly-plan', priority:'normal' }\n};\n\nconst baseUrl = ($env.LARAVEL_BASE_URL || '').replace(/\\/+$/, '');\nconst secret = $env.AUTOMATION_INTERNAL_SECRET || '';\n\n// 1) Mensaje personalizado de Laravel, si viene; 2) catalogo de respaldo.\nconst provided = (data && data.notification && typeof data.notification === 'object') ? data.notification : null;\nconst fallback = MESSAGES[eventType] || null;\nconst msg = provided || fallback;\n\nfunction skipped(reason) {\n  return [{ json: {\n    ok: true, received: true, event_type: eventType, member_id: memberId,\n    status: 'skipped', skipped_reason: reason\n  } }];\n}\n\nif (!baseUrl)  { return skipped('no_base_url'); }\nif (!secret)   { return skipped('no_secret'); }\nif (!memberId) { return skipped('no_member'); }\nif (!msg || !msg.title || !msg.body) { return skipped('unmapped_event'); }\n\nconst outPayload = {\n  member_id: memberId,\n  type: msg.type || eventType,\n  title: msg.title,\n  body: msg.body,\n  action_route: msg.action_route || null,\n  priority: msg.priority || 'normal',\n  payload: { event_type: eventType, source: 'n8n-automation-router', personalized: provided !== null }\n};\n\nconst resp = await this.helpers.httpRequest({\n  method: 'POST',\n  url: baseUrl + '/api/internal/automation/notify-member',\n  headers: { 'Authorization': 'Bearer ' + secret, 'Content-Type': 'application/json' },\n  body: outPayload,\n  json: true,\n  returnFullResponse: true,\n  ignoreHttpStatusErrors: true\n});\n\nconst code = resp.statusCode || 0;\nreturn [{ json: {\n  ok: code >= 200 && code < 300,\n  received: true,\n  event_type: eventType,\n  member_id: memberId,\n  status: 'sent',\n  laravel_status: code,\n  laravel: resp.body\n} }];\n"
+      },
+      "id": "22222222-2222-4222-8222-222222222222",
+      "name": "Map + Notify Laravel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "33333333-3333-4333-8333-333333333333",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        740,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Map + Notify Laravel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map + Notify Laravel": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}
