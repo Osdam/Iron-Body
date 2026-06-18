@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\Member;
+use App\Models\MemberBiometric;
 use App\Models\TurnstileSetting;
 use App\Models\User;
+use App\Services\NotificationService;
 use App\Services\TurnstileService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -182,6 +184,113 @@ class AttendanceController extends Controller
             'Content-Type' => $biometric->face_mime ?: 'image/jpeg',
             'Cache-Control' => 'private, max-age=3600',
         ]);
+    }
+
+    /**
+     * Miembros REGISTRADOS que aún NO tienen rostro biométrico. Es la lista de
+     * trabajo del punto físico: el staff los selecciona y les asigna el rostro
+     * con la cámara del CRM. Excluye registros incompletos (sin usuario CRM).
+     */
+    public function faceEnrollmentPending(Request $request): JsonResponse
+    {
+        $search = trim((string) $request->query('search', ''));
+
+        $members = Member::query()
+            ->with('user:id,name,plan,status')
+            ->whereHas('user')
+            ->whereDoesntHave('biometric')
+            ->whereIn('status', [
+                Member::STATUS_ACTIVE,
+                Member::STATUS_PENDING_REGISTRATION,
+                Member::STATUS_INCOMPLETE,
+            ])
+            ->when($search !== '', function ($q) use ($search): void {
+                $like = '%' . $search . '%';
+                $q->where(function ($sub) use ($like): void {
+                    $sub->where('full_name', 'like', $like)
+                        ->orWhere('document_number', 'like', $like)
+                        ->orWhere('email', 'like', $like);
+                });
+            })
+            ->orderByDesc('created_at')
+            ->limit(500)
+            ->get();
+
+        $data = $members->map(function (Member $member): array {
+            $user = $member->user;
+
+            return [
+                'member_id'     => $member->id,
+                'user_id'       => $user?->id,
+                'member_uuid'   => $member->member_uuid,
+                'name'          => $user?->name ?: $member->full_name,
+                'document'      => $member->document_number,
+                'plan'          => $user?->plan,
+                'status'        => $member->status,
+                'biometric_status' => $member->biometric_status,
+                'created_at'    => optional($member->created_at)->toIso8601String(),
+            ];
+        })->values();
+
+        return response()->json([
+            'ok' => true,
+            'count' => $data->count(),
+            'data' => $data,
+        ]);
+    }
+
+    /**
+     * Asigna (enrola) el rostro de un miembro desde el CRM. Guarda la imagen
+     * biométrica, marca el estado y avisa en tiempo real (SSE) al CRM y al
+     * miembro reutilizando el mismo flujo de notificación que la app.
+     */
+    public function enrollFace(Request $request, Member $member): JsonResponse
+    {
+        $request->validate([
+            'face' => ['required', 'image', 'mimes:jpeg,jpg,png', 'max:8192'],
+        ]);
+
+        try {
+            $old = $member->biometric;
+            $file = $request->file('face');
+            $path = $file->store("members/{$member->member_uuid}/biometrics/faces", 'local');
+
+            $member->biometric()->updateOrCreate(
+                ['member_id' => $member->id],
+                [
+                    'face_path' => $path,
+                    'face_mime' => $file->getMimeType(),
+                    'face_size' => $file->getSize(),
+                    'captured_at' => now(),
+                    'bytes_length' => $file->getSize(),
+                    'normalizer_version' => null,
+                    'enrolled_platform' => 'crm',
+                    'biometric_reference_status' => MemberBiometric::STATUS_ACTIVE,
+                    'last_biometric_enrolled_at' => now(),
+                ]
+            );
+
+            $member->biometric_status = Member::BIOMETRIC_REGISTERED;
+            $member->save();
+
+            if ($old?->face_path && $old->face_path !== $path) {
+                Storage::disk('local')->delete($old->face_path);
+            }
+
+            // Aviso real-time: CRM (re-index del terminal facial) + miembro (app).
+            app(NotificationService::class)->notifyFaceEnrolled($member->fresh());
+
+            return response()->json([
+                'ok' => true,
+                'message' => 'Rostro registrado correctamente.',
+                'member_id' => $member->id,
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'No se pudo registrar el rostro.',
+            ], 500);
+        }
     }
 
     /**

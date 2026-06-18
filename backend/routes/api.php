@@ -327,6 +327,10 @@ Route::post('attendances', [AttendanceController::class, 'store']);
 Route::get('attendances/face-references', [AttendanceController::class, 'faceReferences']);
 Route::get('attendances/face-image/{userId}', [AttendanceController::class, 'faceImage'])
     ->where('userId', '[0-9]+');
+// Enrolamiento facial desde el CRM (punto físico): miembros sin rostro y alta.
+Route::get('attendances/face-enrollment/pending', [AttendanceController::class, 'faceEnrollmentPending']);
+Route::post('attendances/face-enrollment/{member}', [AttendanceController::class, 'enrollFace'])
+    ->where('member', '[0-9]+');
 
 // ── Torniquete — relé HTTP (ESP32, Sonoff, Shelly, ZKTeco, Hikvision, etc.)
 Route::get('turnstile', [TurnstileController::class, 'show']);
