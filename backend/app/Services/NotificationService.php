@@ -1659,8 +1659,13 @@ class NotificationService
         $memberId = $notification->member_id;
         dispatch(function () use ($notification, $memberId): void {
             try {
-                $member = $memberId ? Member::find($memberId) : null;
-                app(\App\Services\Fcm\FcmService::class)->sendToMember($member, $notification);
+                $fcm = app(\App\Services\Fcm\FcmService::class);
+                if ($memberId) {
+                    $fcm->sendToMember(Member::find($memberId), $notification);
+                } else {
+                    // Sin destinatario fijo (broadcast, p.ej. evento) → a todos.
+                    $fcm->sendToAllMembers($notification);
+                }
             } catch (Throwable $e) {
                 Log::warning('FCM: push afterResponse falló', ['error' => $e->getMessage()]);
             }

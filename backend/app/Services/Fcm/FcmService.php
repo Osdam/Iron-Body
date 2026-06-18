@@ -55,6 +55,39 @@ class FcmService
         }
     }
 
+    /**
+     * Empuja a TODOS los dispositivos activos (broadcast). Para notificaciones de
+     * miembro sin destinatario fijo (member_id null), como un evento publicado.
+     * Best-effort: tokens muertos se limpian; un fallo nunca rompe el flujo.
+     */
+    public function sendToAllMembers(Notification $notification): void
+    {
+        if (! $this->enabled()) {
+            Log::info('FCM no configurado: broadcast omitido (solo SSE in-app).', [
+                'notif' => $notification->uuid,
+            ]);
+            return;
+        }
+
+        MemberDeviceToken::query()
+            ->distinct()
+            ->pluck('token')
+            ->chunk(500)
+            ->each(function ($tokens) use ($notification): void {
+                foreach ($tokens as $token) {
+                    try {
+                        $unregistered = false;
+                        $ok = $this->client->send($this->buildMessage($token, $notification), $unregistered);
+                        if (! $ok && $unregistered) {
+                            MemberDeviceToken::where('token', $token)->delete();
+                        }
+                    } catch (Throwable $e) {
+                        Log::warning('FCM: fallo enviando a token (broadcast)', ['error' => $e->getMessage()]);
+                    }
+                }
+            });
+    }
+
     /** Mensaje HTTP v1: notification (visible app cerrada) + data (ruteo/tap). */
     private function buildMessage(string $token, Notification $n): array
     {
