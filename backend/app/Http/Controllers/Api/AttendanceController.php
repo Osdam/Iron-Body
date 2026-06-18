@@ -358,8 +358,15 @@ class AttendanceController extends Controller
         return $last && $last->action === 'entry' ? 'exit' : 'entry';
     }
 
+    /** Zona horaria de negocio: la BD guarda en UTC, se muestra en hora local. */
+    private const DISPLAY_TZ = 'America/Bogota';
+
     private function serialize(Attendance $a): array
     {
+        // captured_at se persiste en UTC; para mostrar hora/fecha al operador se
+        // convierte a la zona del gimnasio (si no, sale corrido ~5h).
+        $local = $a->captured_at?->copy()->setTimezone(self::DISPLAY_TZ);
+
         return [
             'id' => $a->id,
             'user_id' => $a->user_id,
@@ -370,9 +377,9 @@ class AttendanceController extends Controller
             'source' => $a->source,
             'confidence' => $a->confidence,
             'note' => $a->note,
-            'captured_at' => optional($a->captured_at)->toIso8601String(),
-            'date' => optional($a->captured_at)->toDateString(),
-            'time' => optional($a->captured_at)->format('H:i'),
+            'captured_at' => $local?->toIso8601String(),
+            'date' => $local?->toDateString(),
+            'time' => $local?->format('H:i'),
         ];
     }
 }
