@@ -72,6 +72,16 @@ class EventController extends Controller
         return response()->json(['ok' => true, 'data' => $event]);
     }
 
+    /**
+     * Reenvía la notificación del evento a los miembros (botón "Notificar" del
+     * CRM). Útil para probar el flujo de notificaciones/SSE sin recrear nada.
+     */
+    public function notify(AppEvent $event): JsonResponse
+    {
+        app(\App\Services\NotificationService::class)->notifyEventPublished($event, force: true);
+        return response()->json(['ok' => true, 'message' => 'Notificación enviada a los miembros.']);
+    }
+
     private function validateEvent(Request $request, ?AppEvent $event = null): array
     {
         $required = $event ? 'sometimes' : 'required';

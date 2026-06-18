@@ -660,6 +660,7 @@ Route::match(['patch', 'post'], 'admin/events/{event}', [\App\Http\Controllers\A
 Route::delete('admin/events/{event}',       [\App\Http\Controllers\Api\Admin\EventController::class, 'destroy']);
 Route::post('admin/events/{event}/activate',  [\App\Http\Controllers\Api\Admin\EventController::class, 'activate']);
 Route::post('admin/events/{event}/deactivate',[\App\Http\Controllers\Api\Admin\EventController::class, 'deactivate']);
+Route::post('admin/events/{event}/notify',    [\App\Http\Controllers\Api\Admin\EventController::class, 'notify']);
 
 // ── Story Live (CRM admin): historial + finalizar — Bloque 5 ────────────────
 Route::get('admin/lives',             [\App\Http\Controllers\Api\Admin\LiveController::class, 'index']);

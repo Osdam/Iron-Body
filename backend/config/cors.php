@@ -8,9 +8,14 @@ return [
     'allowed_origins' => [
         'http://localhost:4200',
         'http://127.0.0.1:4200',
+        'https://ironbodyneiva.cloud',
+        'https://www.ironbodyneiva.cloud',
     ],
 
-    'allowed_origins_patterns' => [],
+    // Cualquier subdominio de ironbodyneiva.cloud (crm, api, www, etc.).
+    'allowed_origins_patterns' => [
+        '#^https://([a-z0-9-]+\.)?ironbodyneiva\.cloud$#',
+    ],
 
     'allowed_headers' => ['*'],
 

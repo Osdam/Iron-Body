@@ -963,13 +963,16 @@ class NotificationService
      * (notificación + popup) y deja copia al CRM. Emite señal real-time para que
      * la app muestre el aviso al instante (no al abrir la pantalla de Eventos).
      */
-    public function notifyEventPublished($event): void
+    public function notifyEventPublished($event, bool $force = false): void
     {
-        $this->safe(function () use ($event): void {
+        $this->safe(function () use ($event, $force): void {
             $id    = $this->attr($event, 'id');
             $title = $this->attr($event, 'title') ?: 'Nuevo evento';
             $desc  = $this->attr($event, 'description');
             $img   = $this->attr($event, 'image_url');
+            // En reenvíos de prueba ($force) usamos una clave única para saltar la
+            // idempotencia y que el aviso vuelva a dispararse.
+            $suffix = $force ? '_' . now()->format('YmdHis') : '';
 
             // Broadcast a miembros (member_id=null → todos). should_popup para que
             // salga el aviso emergente en la app.
@@ -981,7 +984,7 @@ class NotificationService
                 'should_popup'=> true,
                 'action_type' => 'event_detail',
                 'metadata'    => array_filter(['event_id' => $id, 'image_url' => $img]),
-                'event_key'   => $id ? "event_published_{$id}" : null,
+                'event_key'   => $id ? "event_published_{$id}{$suffix}" : null,
             ]);
 
             // Copia operativa al CRM (campana + refresco en vivo de paneles).
@@ -992,7 +995,7 @@ class NotificationService
                 'priority'    => 'low',
                 'action_type' => 'event_published',
                 'metadata'    => array_filter(['event_id' => $id]),
-                'event_key'   => $id ? "event_published_admin_{$id}" : null,
+                'event_key'   => $id ? "event_published_admin_{$id}{$suffix}" : null,
             ]);
 
             // Real-time: empuja el popup-pending a la app al instante.
