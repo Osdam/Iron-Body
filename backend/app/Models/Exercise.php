@@ -65,6 +65,9 @@ class Exercise extends Model
             'muscles_worked' => $this->muscles_worked ?? [],
             'gif_url'        => $this->gif_url,
             'thumbnail_url'  => $this->thumbnail_url,
+            // Para ejercicios manuales (provider local) la media es una URL pública
+            // ya almacenada; finalizeOne la usa como video_url.
+            'video_path'     => $this->video_path,
             'instructions'   => $this->instructions ?? [],
             'provider'       => $this->provider,
             'source'         => $this->source,

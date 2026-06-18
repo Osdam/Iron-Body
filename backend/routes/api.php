@@ -662,6 +662,13 @@ Route::post('admin/events/{event}/activate',  [\App\Http\Controllers\Api\Admin\E
 Route::post('admin/events/{event}/deactivate',[\App\Http\Controllers\Api\Admin\EventController::class, 'deactivate']);
 Route::post('admin/events/{event}/notify',    [\App\Http\Controllers\Api\Admin\EventController::class, 'notify']);
 
+// ── Catálogo manual de ejercicios (CRM) — reemplaza el sync de proveedores ──
+Route::get('admin/exercises',                  [\App\Http\Controllers\Api\Admin\ExerciseController::class, 'index']);
+Route::post('admin/exercises/upload',          [\App\Http\Controllers\Api\Admin\ExerciseController::class, 'upload']);
+Route::post('admin/exercises',                 [\App\Http\Controllers\Api\Admin\ExerciseController::class, 'store']);
+Route::match(['put', 'patch'], 'admin/exercises/{exercise}', [\App\Http\Controllers\Api\Admin\ExerciseController::class, 'update']);
+Route::delete('admin/exercises/{exercise}',    [\App\Http\Controllers\Api\Admin\ExerciseController::class, 'destroy']);
+
 // ── Story Live (CRM admin): historial + finalizar — Bloque 5 ────────────────
 Route::get('admin/lives',             [\App\Http\Controllers\Api\Admin\LiveController::class, 'index']);
 Route::post('admin/lives/{live}/end', [\App\Http\Controllers\Api\Admin\LiveController::class, 'end']);

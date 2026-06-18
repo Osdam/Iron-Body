@@ -240,6 +240,18 @@ class ExerciseProviderService
                 ? "{$base}/api/exercises/gif/{$file}"
                 : null;
             $ref['thumbnail_url'] = null;
+        } elseif ($provider === 'local') {
+            // Ejercicios manuales del CRM: la media ya son URLs públicas absolutas.
+            if (! empty($ref['video_path']) && $this->isHttpUrl($ref['video_path'])) {
+                $videoUrl  = $ref['video_path'];
+                $mediaType = 'video';
+            }
+            if (! $this->isHttpUrl($ref['gif_url'] ?? null)) {
+                $ref['gif_url'] = null;
+            }
+            if (! $this->isHttpUrl($ref['thumbnail_url'] ?? null)) {
+                $ref['thumbnail_url'] = null;
+            }
         } elseif (in_array($provider, ['freeexercisedb', 'exercisedb'], true)) {
             // CDN público (ExerciseDB / Free Exercise DB): sin key, sin marca de
             // agua → las URLs del GIF/imagen se exponen directas a Flutter.
