@@ -260,5 +260,159 @@ verificación. Se deja como mejora futura; mientras tanto el Bearer es suficient
 - [ ] Evento real (`nutrition.missing`) → `app_notifications` creada, visible en la app.
 - [ ] Logs revisados (sin secretos ni PII).
 - [ ] (Opcional Fase 2) HMAC saliente evaluado.
+
+---
+
+# Fase 2 — Iron Body Proactive Coach (eventos de comportamiento)
+
+Extiende el router con eventos premium que acompañan al usuario fuera de la app.
+**No cambia el flujo base** (Laravel → n8n → notify-member → app_notifications →
+FCM). El router ahora **prefiere el mensaje personalizado** que envía Laravel
+(`data.notification`) y, si no viene, usa su **catálogo de respaldo** (incluye
+los 13 eventos nuevos). `nutrition.missing` queda **idéntico** (texto sin tocar).
+
+## Arquitectura del mensaje (premium + personalizado)
+
+```
+Detector Laravel → ProactiveCoachService.consider()
+   ├─ catálogo premium (App\Support\ProactiveCoach\ProactiveCoachCatalog)
+   │     · elige variante (rota por día), personaliza con {name}
+   ├─ presupuesto anti-spam (máx 1 fuerte / 2 totales por día)  ← capa nueva
+   ├─ idempotencia día/semana (idempotency_key)
+   └─ AutomationEventService.emit(payload.data.notification = {title,body,route,...})
+         → Job → n8n Router
+              · usa data.notification si viene; si no, catálogo de respaldo
+              → notify-member (igual que siempre)
+```
+
+La copy premium vive en DOS sitios por diseño: **Laravel** (personalizada) y el
+**catálogo de respaldo de n8n** (genérica). Si Laravel no envía bloque, n8n
+sigue funcionando solo.
+
+## Eventos nuevos (Fase 2)
+
+| Evento | Intensidad | Cadencia | action_route | Detector | Scheduler sugerido |
+|---|---|---|---|---|---|
+| `workout.not_started_today` | soft | diaria | `/iron-ai?focus=workout` | `detect-workout-not-started` | 17:00 |
+| `streak.at_risk` | **strong** | diaria | `/iron-ai?focus=streak` | `detect-streak-at-risk` | 20:30 |
+| `streak.not_started` | soft | semanal | `/iron-ai?focus=streak` | `detect-streak-not-started` | mié 11:00 |
+| `daily.compliance_missing` | **strong** | diaria | `/iron-ai?focus=today` | `detect-daily-compliance-missing` | 18:30 |
+| `coach.nudge` | soft | diaria | `/iron-ai?focus=today` | `detect-coach-nudges` | 16:00 |
+| `iron_ai.chat_invite` | soft | semanal | `/iron-ai?focus=chat` | `detect-iron-ai-invites` | jue 10:00 |
+| `iron_ai.nutrition_invite` | soft | semanal | `/iron-ai?focus=nutrition` | `detect-iron-ai-invites` | jue 10:00 |
+| `iron_ai.progress_invite` | soft | semanal | `/iron-ai?focus=progress` | `detect-iron-ai-invites` | jue 10:00 |
+| `iron_ai.streak_invite` | soft | semanal | `/iron-ai?focus=streak` | `detect-iron-ai-invites` | jue 10:00 |
+| `coach.reactivation` | **strong** | semanal | `/iron-ai?focus=reactivation` | `detect-coach-reactivation` | mar/vie 10:30 |
+| `weekly.coach_plan` | soft | semanal | `/iron-ai?focus=weekly-plan` | `detect-weekly-coach-plan` | lun 08:30 |
+| `module.discovery` | soft | semanal | `/iron-ai?focus=discover` | `detect-module-discovery` | **INACTIVO** |
+| `workout.missed` *(base)* | — | diaria | `/iron-ai?focus=workout` | `detect-workout-missed` | 19:00 (tono evolucionado) |
+
+`module.discovery` está **preparado pero inactivo**: requiere la tabla
+`app_module_usages` poblada por instrumentación en Flutter (Fase 3). El detector
+se salta siempre hasta que `PROACTIVE_COACH_DISCOVERY_ENABLED=true` **y** haya
+datos. No inventa uso.
+
+## Estrategia anti-spam (capas)
+
+1. **Idempotencia** (`automation_events.idempotency_key`): no duplica el mismo
+   evento/miembro por día (o semana, según cadencia).
+2. **Presupuesto diario** (`ProactiveCoachService`): máx **1 fuerte** y máx **2
+   totales** proactivas por miembro/día (config `proactive_coach.budget`).
+3. **Quiet hours**: no emite 21:00–08:00 (config `proactive_coach.quiet_hours`).
+4. **Gate final** (`AppNotificationService`, sin cambios): 12h mismo tipo, 1/tipo/día,
+   3 totales/día.
+5. **Cumplimiento**: si el usuario ya cumplió (entrenó/registró/marcó racha), el
+   detector lo salta antes de emitir.
+
+## Rutas en Flutter
+
+`CoachNotificationRouter` ya enruta `/iron-ai`, `/membership`, `/progress`,
+`/nutrition`, `/evaluation`, `/workouts`, `/classes`. Los focos nuevos
+(`workout/chat/discover/reactivation/weekly-plan/weekly`) abren el Coach IA; el
+servicio Flutter `IronAiCoachService.normalizeFocus()` los **clampa** a un foco
+válido del backend (`today/progress/nutrition/streak`) para no romper la petición.
+
+## Flag maestro y rollback
+
+- `PROACTIVE_COACH_ENABLED=false` (default) → el scheduler **no** agenda ningún
+  detector nuevo. El flujo base sigue intacto.
+- Para activar: `PROACTIVE_COACH_ENABLED=true` + `config:cache`. **Rollback**:
+  volver a `false` (o quitar la env) y `config:cache`. Sin tocar código.
+- `PROACTIVE_COACH_DISCOVERY_ENABLED=false` (default) mantiene `module.discovery`
+  inerte aunque el flag maestro esté en true.
+
+## Probar en local (sin enviar nada real)
+
+```
+php artisan ironbody:detect-workout-not-started --dry-run
+php artisan ironbody:detect-streak-at-risk --dry-run
+php artisan ironbody:detect-daily-compliance-missing --dry-run
+php artisan ironbody:detect-coach-nudges --dry-run
+php artisan ironbody:detect-iron-ai-invites --dry-run
+php artisan ironbody:detect-coach-reactivation --dry-run
+php artisan ironbody:detect-weekly-coach-plan --dry-run
+php artisan ironbody:detect-module-discovery --dry-run   # avisa INACTIVO
+php artisan test --filter=ProactiveCoachTest
+```
+
+`--dry-run` muestra qué se emitiría sin escribir. Opciones: `--member-id=<id>`
+(un solo miembro, cualquier estado), `--limit=<n>` (tope de acciones),
+`--event=<event_type>` (filtra en detectores multi-evento, p. ej. invites).
+
+## Probar en producción de forma controlada
+
+```
+# 1) Smoke del canal (no mapeado → skipped, confirma ida/vuelta):
+php artisan ironbody:n8n-test-event
+
+# 2) Un solo miembro real, evento real (con N8N_ENABLED=true):
+php artisan ironbody:detect-streak-at-risk --member-id=<ID> --limit=1
+#    (sin --dry-run: emite de verdad a ese único miembro)
+
+# 3) Validar:
+#    - automation_events: status 'sent'
+#    - n8n Executions: laravel_status 200
+#    - app_notifications: fila con type/action_route correctos, source='automation'
+#    - dispositivo real: push (si FCM_ENABLED=true y hay token activo)
+```
+
+> ⚠️ Nunca correr un detector **sin** `--member-id`/`--limit` en producción la
+> primera vez: emitiría masivamente. Validar siempre con `--dry-run` antes.
+
+## Despliegue en la VPS (pasos exactos, NO ejecutar aquí)
+
+```
+git pull
+composer install --no-dev --optimize-autoloader      # si cambió composer
+php artisan migrate                                   # crea app_module_usages (vacía, inerte)
+php artisan optimize:clear
+php artisan config:cache
+php artisan route:cache                               # si aplica
+php artisan queue:restart
+supervisorctl restart ironbody-queue-worker:*
+# n8n: Import from File → n8n/workflows/ironbody_automation_router.json
+#      (reemplaza el router; conserva env vars). Activar SOLO tras probar.
+#      Verificar Production URL = https://n8n.ironbodyneiva.cloud/webhook/iron-body-automation
+# Pruebas: system.test → un miembro con --member-id → revisar Executions + tablas.
+```
+
+Tablas/colas a revisar: `automation_events`, `app_notifications`, `jobs`,
+`failed_jobs`, y n8n **Executions** (input/output de cada nodo + `laravel_status`).
+
+## Revisar n8n Executions
+
+Panel del workflow → **Executions** → abrir una ejecución → nodo
+"Map + Notify Laravel": ver `event_type`, si usó `personalized:true` (mensaje de
+Laravel) o el respaldo, y `laravel_status` (200 = notify-member OK).
+
+## Riesgos pendientes / antes de activar masivo
+
+- `workout.not_started_today` depende del formato de `routines.days`; si está
+  vacío/no fiable, degrada a "rutina asignada sin completion hoy". Revisar con
+  datos reales antes de activarlo a todos.
+- `module.discovery` requiere instrumentación Flutter (Fase 3); no activar.
+- HMAC saliente n8n→Laravel sigue sin implementar (Bearer-only, aceptado).
+- Activar **uno por uno** (no todos de golpe): empezar por 1-2 eventos suaves,
+  observar volumen en `app_notifications` y feedback, luego ampliar.
 </content>
 </invoke>

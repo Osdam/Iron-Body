@@ -76,6 +76,52 @@ Schedule::command('ironbody:detect-progress-stalled')
 Schedule::command('ironbody:generate-weekly-ai-summaries')
     ->weeklyOn(0, '19:00')->withoutOverlapping()->onOneServer();
 
+// ── Iron Body Proactive Coach (Fase 2) ───────────────────────────────────────
+// INERTE por defecto: solo se agenda si PROACTIVE_COACH_ENABLED=true. Permite
+// activación gradual sin romper el flujo base. Rollback = poner el flag en false.
+// Horarios pensados para NO saturar ni caer en madrugada; el presupuesto
+// anti-spam (máx 1 fuerte / 2 totales por día) y la idempotencia día/semana
+// hacen el resto. Activar uno por uno, no todos de golpe.
+if ((bool) config('proactive_coach.enabled', false)) {
+    // Entrenamiento esperado hoy sin iniciar: media tarde.
+    Schedule::command('ironbody:detect-workout-not-started')
+        ->dailyAt('17:00')->withoutOverlapping()->onOneServer();
+
+    // Racha en riesgo: noche temprana (aún a tiempo, sin madrugada).
+    Schedule::command('ironbody:detect-streak-at-risk')
+        ->dailyAt('20:30')->withoutOverlapping()->onOneServer();
+
+    // Cumplimiento diario nulo: tarde.
+    Schedule::command('ironbody:detect-daily-compliance-missing')
+        ->dailyAt('18:30')->withoutOverlapping()->onOneServer();
+
+    // Nudge contextual (cumplimiento parcial): una vez al día, tarde.
+    Schedule::command('ironbody:detect-coach-nudges')
+        ->dailyAt('16:00')->withoutOverlapping()->onOneServer();
+
+    // Racha no iniciada: semanal, miércoles 11:00 (frecuencia baja).
+    Schedule::command('ironbody:detect-streak-not-started')
+        ->weeklyOn(3, '11:00')->withoutOverlapping()->onOneServer();
+
+    // Invitaciones IA: semanal, jueves 10:00 (frecuencia baja, no diaria).
+    Schedule::command('ironbody:detect-iron-ai-invites')
+        ->weeklyOn(4, '10:00')->withoutOverlapping()->onOneServer();
+
+    // Reactivación: dos veces por semana (martes/viernes 10:30).
+    Schedule::command('ironbody:detect-coach-reactivation')
+        ->twiceWeekly(2, 5, '10:30')->withoutOverlapping()->onOneServer();
+
+    // Plan de la semana: lunes 08:30.
+    Schedule::command('ironbody:detect-weekly-coach-plan')
+        ->weeklyOn(1, '08:30')->withoutOverlapping()->onOneServer();
+
+    // module.discovery: solo si además hay tracking real (doble flag). Inerte hoy.
+    if ((bool) config('proactive_coach.discovery_enabled', false)) {
+        Schedule::command('ironbody:detect-module-discovery')
+            ->weeklyOn(6, '11:00')->withoutOverlapping()->onOneServer();
+    }
+}
+
 // ── Wompi: reconciliación de pagos en vuelo (respaldo del webhook) ─────────────
 // Corre cada WOMPI_RECONCILIATION_MINUTES (default 5). Idempotente y con
 // lockForUpdate: jamás duplica activaciones ni degrada un pago terminal.
