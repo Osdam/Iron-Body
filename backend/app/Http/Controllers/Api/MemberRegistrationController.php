@@ -367,6 +367,9 @@ class MemberRegistrationController extends Controller
             $this->updateRegistrationStatus($member, Member::STATUS_ACTIVE);
             $this->deleteOldFiles($old?->face_path);
 
+            // Aviso real-time: CRM (re-index del terminal facial) + miembro (app).
+            app(\App\Services\NotificationService::class)->notifyFaceEnrolled($member->fresh());
+
             return response()->json($this->memberResponse($member->fresh(), 'Biometria facial guardada.'));
         } catch (Throwable) {
             return $this->serverError();

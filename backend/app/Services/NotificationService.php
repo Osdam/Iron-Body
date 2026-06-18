@@ -909,6 +909,55 @@ class NotificationService
         });
     }
 
+    /**
+     * El miembro registró (o actualizó) su rostro para el punto físico.
+     * Avisa al CRM (con action_type 'face_enrolled' para que el terminal facial
+     * re-indexe en vivo vía SSE) y confirma al miembro en la app. Además emite
+     * una señal real-time al miembro para refrescar su estado biométrico.
+     */
+    public function notifyFaceEnrolled($member): void
+    {
+        $this->safe(function () use ($member): void {
+            $memberId = $this->attr($member, 'id');
+            $name = $this->attr($member, 'full_name') ?? $this->attr($member, 'name') ?? 'Un miembro';
+            $doc  = $this->attr($member, 'document_number');
+            // Clave por enrolamiento (minuto): un re-registro posterior vuelve a
+            // avisar y dispara el re-index en el CRM.
+            $stamp = now()->format('YmdHi');
+
+            $this->createAdminNotification([
+                'type'        => 'system',
+                'title'       => 'Rostro registrado',
+                'message'     => "{$name} registró su rostro para el acceso facial del punto físico.",
+                'priority'    => 'medium',
+                'member'      => $member instanceof Member ? $member : null,
+                'action_type' => 'face_enrolled',
+                'should_popup'=> true,
+                'metadata'    => array_filter([
+                    'member_id'   => $memberId,
+                    'member_name' => $name,
+                    'document'    => $doc,
+                ]),
+                'event_key'   => $memberId ? "face_enrolled_admin_{$memberId}_{$stamp}" : null,
+            ]);
+
+            if ($member instanceof Member) {
+                $this->createMemberNotification($member, [
+                    'type'        => 'system',
+                    'title'       => 'Rostro registrado',
+                    'message'     => 'Tu rostro quedó registrado. Ya puedes ingresar al gimnasio con reconocimiento facial.',
+                    'priority'    => 'medium',
+                    'should_popup'=> true,
+                    'metadata'    => array_filter(['member_name' => $name]),
+                    'event_key'   => "face_enrolled_member_{$memberId}_{$stamp}",
+                ]);
+
+                // Señal real-time al miembro (refresca estado biométrico/perfil).
+                RealtimeEvents::biometric($memberId);
+            }
+        });
+    }
+
     // ── MIEMBRO (auditoría CRM) ────────────────────────────────────────────────────
 
     /** Miembro/usuario creado desde el CRM. Aviso operativo al admin. */

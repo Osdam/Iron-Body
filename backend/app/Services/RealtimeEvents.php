@@ -27,6 +27,7 @@ class RealtimeEvents
     public const CLASS_EVENT = 'class.updated';
     public const NUTRITION  = 'nutrition.updated';
     public const RANKING    = 'ranking.updated';
+    public const BIOMETRIC  = 'biometric.enrolled';
 
     /**
      * Emite una señal de cambio para un miembro. [$changed] son los módulos que
@@ -109,6 +110,12 @@ class RealtimeEvents
     public static function nutrition(?int $memberId): void
     {
         self::emit($memberId, self::NUTRITION, ['nutrition']);
+    }
+
+    /** El miembro registró/actualizó su rostro (biometría facial). */
+    public static function biometric(?int $memberId): void
+    {
+        self::emit($memberId, self::BIOMETRIC, ['biometric', 'profile']);
     }
 
     /**
