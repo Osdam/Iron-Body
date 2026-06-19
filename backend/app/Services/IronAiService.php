@@ -120,49 +120,37 @@ TXT;
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
-     * Resuelve el usuario/miembro actual sin romper nada.
+     * Resuelve el usuario/miembro actual SOLO desde la sesión autenticada.
      *
-     * Orden: Bearer token (access_hash de Member, el mecanismo de la app) →
-     * member_id en el body → document/email en el body. Si no se identifica a
-     * nadie, la conversación es anónima (IRON responde igual, sin contexto).
+     * SEGURIDAD (anti-suplantación): la identidad jamás se toma de campos del
+     * body (member_id/document/email). Esos campos permitirían que un usuario
+     * cargara la memoria, conversaciones, cuota y contexto IA de otro. El orden
+     * es estricto:
+     *   1) `auth_member` (atributo puesto por el middleware auth.member) →
+     *      prioridad ABSOLUTA: identidad verificada por token/sesión.
+     *   2) Bearer token directo (defensa en profundidad; mismo origen verificado)
+     *      por si alguna ruta interna resolviera el contexto sin auth.member.
+     * Sin token válido → conversación anónima (IRON responde sin contexto
+     * personal). La IA sigue aprendiendo por usuario porque el member_id sale
+     * del token, no de un valor elegido por el cliente.
      *
-     * @return array{member: ?Member, user: ?User, conversation_id: string}
+     * @return array{member: ?Member, user: ?User, conversation_id: string, document: ?string}
      */
     public function resolveContext(Request $request): array
     {
         $member = null;
         $user = null;
 
-        // 1) Bearer token = session_token de dispositivo (2FA) o access_hash.
-        if ($token = $request->bearerToken()) {
+        // 1) Miembro autenticado por el middleware auth.member (prioridad total).
+        $authMember = $request->attributes->get('auth_member');
+        if ($authMember instanceof Member) {
+            $member = $authMember;
+        }
+
+        // 2) Bearer token = session_token de dispositivo (2FA) o access_hash.
+        // Mismo origen verificado que (1); nunca identidad arbitraria del body.
+        if (! $member && ($token = $request->bearerToken())) {
             $member = Member::resolveByToken($token);
-        }
-
-        // 2) member_id explícito. Ramificamos por formato: PostgreSQL no
-        // acepta enteros donde la columna es UUID (SQLSTATE 22P02).
-        if (! $member && ($memberId = $request->input('member_id'))) {
-            if (\Illuminate\Support\Str::isUuid($memberId)) {
-                $member = Member::where('member_uuid', $memberId)->first();
-            } elseif (ctype_digit((string) $memberId)) {
-                $member = Member::where('id', (int) $memberId)->first();
-            }
-        }
-
-        // 3) Documento (la app inicia sesión por documento).
-        $document = Member::normalizeDocumentNumber((string) $request->input('document', ''));
-        if (! $member && $document) {
-            $member = Member::where('document_number', $document)->first();
-            if (! $member) {
-                $user = User::where('document', $document)->first();
-            }
-        }
-
-        // 4) Email como último recurso.
-        if (! $member && ! $user && ($email = $request->input('email'))) {
-            $member = Member::where('email', $email)->first();
-            if (! $member) {
-                $user = User::where('email', $email)->first();
-            }
         }
 
         if ($member && $member->user_id) {
@@ -171,10 +159,8 @@ TXT;
 
         $conversationId = $this->conversationKey($member, $user, $request->input('conversation_id'));
 
-        // Documento resuelto: del miembro/usuario identificado o del request.
-        $resolvedDocument = $member?->document_number
-            ?? $user?->document
-            ?? $document;
+        // Documento resuelto: SIEMPRE del miembro/usuario autenticado (no del body).
+        $resolvedDocument = $member?->document_number ?? $user?->document;
 
         return [
             'member'          => $member,

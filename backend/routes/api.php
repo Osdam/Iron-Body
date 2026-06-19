@@ -291,33 +291,40 @@ Route::middleware('auth.member')->prefix('nutrition')->group(function (): void {
 });
 
 // ── IRON IA — asistente con OpenAI (Flutter → Laravel → OpenAI) ──────────────
-// El usuario se resuelve de forma flexible dentro del servicio (Bearer
-// access_hash de Member, member_id, documento o email). Sin identificación,
-// IRON responde igual pero sin contexto personal. La API key vive solo aquí.
-Route::get('iron-ai/access', [IronAiController::class, 'access']);
-Route::get('iron-ai/quota', [IronAiController::class, 'quota']);
-Route::post('iron-ai/chat', [IronAiController::class, 'chat']);
-Route::get('iron-ai/recommendations', [IronAiController::class, 'recommendations']);
+// SEGURIDAD: todas estas rutas exigen `auth.member` (Bearer session_token/
+// access_hash del miembro). La identidad SIEMPRE se resuelve desde el token
+// autenticado — nunca desde member_id/document/email del body — para impedir
+// suplantación (un usuario no puede leer la memoria/conversaciones/cuota de
+// otro). La memoria por usuario sigue funcionando porque el member_id sale del
+// token, no de un campo elegido por el cliente. La API key de OpenAI vive solo
+// en el backend. El único endpoint IA público es `iron-ai/equipment-catalog`
+// (catálogo de equipos, sin datos personales), definido más abajo.
+Route::middleware('auth.member')->group(function (): void {
+    Route::get('iron-ai/access', [IronAiController::class, 'access']);
+    Route::get('iron-ai/quota', [IronAiController::class, 'quota']);
+    Route::post('iron-ai/chat', [IronAiController::class, 'chat']);
+    Route::get('iron-ai/recommendations', [IronAiController::class, 'recommendations']);
 
-// ── IRON IA multimodal — voz (transcripción) e imagen (visión) ───────────────
-// Multipart. Consumen cuota IA (kind=audio|image) y dependen del plan: si la
-// función está bloqueada o se agotó la cuota, NO se llama a OpenAI.
-Route::post('iron-ai/audio-chat', [IronAiMediaController::class, 'audioChat']);
-Route::post('iron-ai/image-chat', [IronAiMediaController::class, 'imageChat']);
+    // ── IRON IA multimodal — voz (transcripción) e imagen (visión) ───────────
+    // Multipart. Consumen cuota IA (kind=audio|image) y dependen del plan: si la
+    // función está bloqueada o se agotó la cuota, NO se llama a OpenAI.
+    Route::post('iron-ai/audio-chat', [IronAiMediaController::class, 'audioChat']);
+    Route::post('iron-ai/image-chat', [IronAiMediaController::class, 'imageChat']);
 
-// ── IRON IA — conversación de voz EN VIVO (OpenAI Realtime / WebRTC) ──────────
-// session: acuña token efímero (gated por plan; consume cuota realtime).
-// transcript: persiste turnos (no llama a OpenAI ni consume cuota de chat).
-Route::post('iron-ai/realtime/session', [IronAiRealtimeController::class, 'session']);
-Route::post('iron-ai/realtime/transcript', [IronAiRealtimeController::class, 'transcript']);
+    // ── IRON IA — conversación de voz EN VIVO (OpenAI Realtime / WebRTC) ──────
+    // session: acuña token efímero (gated por plan; consume cuota realtime).
+    // transcript: persiste turnos (no llama a OpenAI ni consume cuota de chat).
+    Route::post('iron-ai/realtime/session', [IronAiRealtimeController::class, 'session']);
+    Route::post('iron-ai/realtime/transcript', [IronAiRealtimeController::class, 'transcript']);
 
-// ── IRON IA — centro de conversaciones (CRUD; no consume OpenAI/cuota) ────────
-Route::get('iron-ai/conversations', [IronAiConversationController::class, 'index']);
-Route::post('iron-ai/conversations', [IronAiConversationController::class, 'store']);
-Route::get('iron-ai/conversations/{uuid}/messages', [IronAiConversationController::class, 'messages']);
-Route::post('iron-ai/conversations/{uuid}/archive', [IronAiConversationController::class, 'archive']);
-Route::post('iron-ai/conversations/{uuid}/clear', [IronAiConversationController::class, 'clear']);
-Route::delete('iron-ai/conversations/{uuid}', [IronAiConversationController::class, 'destroy']);
+    // ── IRON IA — centro de conversaciones (CRUD; no consume OpenAI/cuota) ────
+    Route::get('iron-ai/conversations', [IronAiConversationController::class, 'index']);
+    Route::post('iron-ai/conversations', [IronAiConversationController::class, 'store']);
+    Route::get('iron-ai/conversations/{uuid}/messages', [IronAiConversationController::class, 'messages']);
+    Route::post('iron-ai/conversations/{uuid}/archive', [IronAiConversationController::class, 'archive']);
+    Route::post('iron-ai/conversations/{uuid}/clear', [IronAiConversationController::class, 'clear']);
+    Route::delete('iron-ai/conversations/{uuid}', [IronAiConversationController::class, 'destroy']);
+});
 
 // ── Asistencias — registro facial/manual (CRM web) ───────────────────────────
 // El reconocimiento facial corre 100% en el navegador del CRM con face-api.js.
