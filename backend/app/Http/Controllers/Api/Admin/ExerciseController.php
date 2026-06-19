@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Exercise;
+use App\Support\SseStream;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Gestión MANUAL del catálogo de ejercicios desde el CRM.
@@ -50,6 +52,30 @@ class ExerciseController extends Controller
                 'total'        => $page->total(),
             ],
         ]);
+    }
+
+    /**
+     * GET /api/admin/exercises/stream — tiempo real (SSE). Cuando CUALQUIER
+     * usuario crea, edita o borra un ejercicio, los demás CRM abiertos refrescan
+     * el catálogo al instante (firma = total + última modificación).
+     */
+    public function stream(Request $request): StreamedResponse
+    {
+        $signature = static fn (): string => Exercise::count() . ':' . (string) Exercise::max('updated_at');
+
+        $last = null;
+
+        return SseStream::response(function () use (&$last, $signature): void {
+            $now = $signature();
+            if ($last === null) {
+                $last = $now; // primer tick: línea base, no dispara
+                return;
+            }
+            if ($now !== $last) {
+                $last = $now;
+                SseStream::emit('exercises', ['sig' => $now]);
+            }
+        }, 25, 2000); // sondeo cada 2s durante ~25s; el cliente reconecta solo
     }
 
     /** POST /api/admin/exercises */
@@ -97,7 +123,9 @@ class ExerciseController extends Controller
     public function upload(Request $request): JsonResponse
     {
         $request->validate([
-            'file' => ['required', 'file', 'mimes:mp4,webm,gif,jpg,jpeg,png,webp', 'max:30720'], // 30 MB
+            'file' => ['required', 'file', 'mimes:mp4,webm,gif,jpg,jpeg,png,webp', 'max:2048'], // 2 MB
+        ], [
+            'file.max' => 'El archivo supera el máximo de 2 MB. Comprímelo e inténtalo de nuevo.',
         ]);
 
         $file = $request->file('file');

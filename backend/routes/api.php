@@ -668,6 +668,7 @@ Route::post('admin/events/{event}/notify',    [\App\Http\Controllers\Api\Admin\E
 
 // ── Catálogo manual de ejercicios (CRM) — reemplaza el sync de proveedores ──
 Route::get('admin/exercises',                  [\App\Http\Controllers\Api\Admin\ExerciseController::class, 'index']);
+Route::get('admin/exercises/stream',           [\App\Http\Controllers\Api\Admin\ExerciseController::class, 'stream']); // SSE tiempo real
 Route::post('admin/exercises/upload',          [\App\Http\Controllers\Api\Admin\ExerciseController::class, 'upload']);
 Route::post('admin/exercises',                 [\App\Http\Controllers\Api\Admin\ExerciseController::class, 'store']);
 Route::match(['put', 'patch'], 'admin/exercises/{exercise}', [\App\Http\Controllers\Api\Admin\ExerciseController::class, 'update']);
