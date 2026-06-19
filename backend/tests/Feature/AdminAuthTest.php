@@ -2,9 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\EnsureAdminAuth;
 use App\Models\Admin;
 use App\Models\AdminSession;
+use App\Services\Admin\AdminSessionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Tests\TestCase;
 
 /**
@@ -94,6 +97,30 @@ class AdminAuthTest extends TestCase
         $this->getJson('/api/admin/auth/me', $headers)
             ->assertStatus(403)
             ->assertJsonPath('code', 'admin_token_invalid');
+    }
+
+    public function test_stream_acepta_token_de_sesion_por_query(): void
+    {
+        // EventSource no puede mandar header: las rutas /stream aceptan ?token=.
+        $admin = $this->makeAdmin();
+        $issued = app(AdminSessionService::class)->issueSession($admin);
+
+        $request = Request::create('/api/admin/exercises/stream', 'GET', ['token' => $issued['token']]);
+
+        $this->assertNull(EnsureAdminAuth::challenge($request)); // pasa (autenticado)
+    }
+
+    public function test_token_por_query_no_vale_fuera_de_stream(): void
+    {
+        // Fuera de /stream el token por query se ignora (no normalizar token-en-URL).
+        $admin = $this->makeAdmin();
+        $issued = app(AdminSessionService::class)->issueSession($admin);
+
+        $request = Request::create('/api/admin/exercises', 'GET', ['token' => $issued['token']]);
+        $response = EnsureAdminAuth::challenge($request);
+
+        $this->assertNotNull($response);
+        $this->assertSame(401, $response->getStatusCode());
     }
 
     public function test_sesion_caducada_no_autentica(): void
