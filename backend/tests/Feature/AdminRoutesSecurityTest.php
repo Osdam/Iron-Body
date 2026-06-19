@@ -75,9 +75,25 @@ class AdminRoutesSecurityTest extends TestCase
 
     public function test_admin_route_con_secreto_correcto_pasa_el_middleware(): void
     {
-        // El secreto válido cruza el blindaje (audit-logs index → 200 con BD limpia).
+        // El secreto válido (fallback n8n) cruza el blindaje (audit-logs index → 200).
         $this->getJson('/api/admin/audit-logs', ['Authorization' => 'Bearer ' . self::SECRET])
             ->assertOk();
+    }
+
+    public function test_admin_route_con_sesion_real_pasa_el_middleware(): void
+    {
+        // Una sesión admin real (login email+contraseña) también cruza el blindaje.
+        $this->getJson('/api/admin/audit-logs', $this->actingAsAdmin())
+            ->assertOk();
+    }
+
+    public function test_login_admin_es_publico_y_no_exige_secreto(): void
+    {
+        // /api/admin/auth/login está bajo /admin pero ProtectAdminPaths lo excluye:
+        // sin token NO devuelve 401 de blindaje, sino el 401 de credenciales.
+        $this->postJson('/api/admin/auth/login', ['email' => 'x@y.z', 'password' => 'nope'])
+            ->assertStatus(401)
+            ->assertJsonPath('code', 'invalid_credentials');
     }
 
     /** Rutas CRM antes públicas (fuera del prefijo /admin): ahora exigen secreto. */

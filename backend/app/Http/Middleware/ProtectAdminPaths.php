@@ -37,6 +37,13 @@ class ProtectAdminPaths
      */
     private function requiresAdminAuth(Request $request): bool
     {
+        // El login del CRM (email+contraseña) debe ser PÚBLICO: vive bajo
+        // /api/admin/* pero es la puerta para obtener el token. `me`/`logout`
+        // sí exigen sesión (las protege el alias `auth.admin` por ruta).
+        if ($request->is('api/admin/auth/login')) {
+            return false;
+        }
+
         if ($request->is('api/admin', 'api/admin/*')) {
             return true;
         }

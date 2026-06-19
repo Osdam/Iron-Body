@@ -123,9 +123,9 @@ class ExerciseController extends Controller
     public function upload(Request $request): JsonResponse
     {
         $request->validate([
-            'file' => ['required', 'file', 'mimes:mp4,webm,gif,jpg,jpeg,png,webp', 'max:2048'], // 2 MB
+            'file' => ['required', 'file', 'mimes:mp4,webm,gif,jpg,jpeg,png,webp', 'max:10240'], // 10 MB
         ], [
-            'file.max' => 'El archivo supera el máximo de 2 MB. Comprímelo e inténtalo de nuevo.',
+            'file.max' => 'El archivo supera el máximo de 10 MB. Comprímelo e inténtalo de nuevo.',
         ]);
 
         $file = $request->file('file');

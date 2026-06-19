@@ -17,4 +17,16 @@ return [
     |
     */
     'api_token' => env('ADMIN_API_TOKEN'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Sesiones del panel (login email + contraseña)
+    |--------------------------------------------------------------------------
+    |
+    | Caducidad del token de sesión admin. `session_ttl_minutes` aplica al login
+    | normal; `session_remember_days` cuando el usuario marca "recuérdame".
+    |
+    */
+    'session_ttl_minutes' => (int) env('ADMIN_SESSION_TTL_MINUTES', 720), // 12 h
+    'session_remember_days' => (int) env('ADMIN_SESSION_REMEMBER_DAYS', 30),
 ];

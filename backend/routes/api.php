@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\WompiPaymentController;
 use App\Http\Controllers\Api\WompiWebhookController;
 use App\Http\Controllers\Api\AppRoutineController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AdminAuthController;
 use App\Http\Controllers\Api\MemberRegistrationController;
 use App\Http\Controllers\Api\MemberContractController;
 use App\Http\Controllers\Api\Admin\ContractAdminController;
@@ -72,6 +73,17 @@ Route::get('/health', function () {
         'status' => 'ok',
         'timestamp' => now()->toIso8601String(),
     ]);
+});
+
+// Login del panel/CRM (email + contraseña). `login` es público (ProtectAdminPaths
+// lo excluye del blindaje global); `me` y `logout` exigen sesión admin.
+Route::prefix('admin/auth')->group(function (): void {
+    Route::post('login', [AdminAuthController::class, 'login'])->middleware('throttle:8,1');
+
+    Route::middleware('auth.admin')->group(function (): void {
+        Route::get('me', [AdminAuthController::class, 'me']);
+        Route::post('logout', [AdminAuthController::class, 'logout']);
+    });
 });
 
 // Dashboard del CRM (conteos/ingresos agregados) — solo administración.
