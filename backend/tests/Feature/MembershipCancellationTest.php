@@ -99,7 +99,7 @@ class MembershipCancellationTest extends TestCase
     {
         $m = $this->memberWithPlan(Carbon::today()->addDays(20)->toDateString());
 
-        $r = $this->postJson("/api/admin/memberships/{$m->id}/cancel", ['immediate' => true]);
+        $r = $this->adminPostJson("/api/admin/memberships/{$m->id}/cancel", ['immediate' => true]);
 
         $r->assertOk()->assertJsonPath('data.is_active', false);
         $this->assertSame('cancelled', $r->json('data.status'));
@@ -109,7 +109,7 @@ class MembershipCancellationTest extends TestCase
     {
         $m = $this->memberWithPlan(Carbon::today()->addDays(20)->toDateString());
 
-        $r = $this->postJson("/api/admin/memberships/{$m->id}/cancel");
+        $r = $this->adminPostJson("/api/admin/memberships/{$m->id}/cancel");
 
         $r->assertOk()
             ->assertJsonPath('data.is_active', true)
@@ -119,9 +119,9 @@ class MembershipCancellationTest extends TestCase
     public function test_admin_reactivate(): void
     {
         $m = $this->memberWithPlan(Carbon::today()->addDays(20)->toDateString());
-        $this->postJson("/api/admin/memberships/{$m->id}/cancel");
+        $this->adminPostJson("/api/admin/memberships/{$m->id}/cancel");
 
-        $r = $this->postJson("/api/admin/memberships/{$m->id}/reactivate");
+        $r = $this->adminPostJson("/api/admin/memberships/{$m->id}/reactivate");
 
         $r->assertOk()->assertJsonPath('data.status', 'active');
     }

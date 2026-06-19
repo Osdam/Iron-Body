@@ -169,7 +169,7 @@ class NutritionCommunityTest extends TestCase
         $uuid = $this->postJson('/api/nutrition/foods', $this->createPayload(), $this->auth($author))
             ->assertStatus(201)->json('data.uuid');
 
-        $this->postJson("/api/admin/nutrition/foods/{$uuid}/verify", [])
+        $this->adminPostJson("/api/admin/nutrition/foods/{$uuid}/verify", [])
             ->assertOk()
             ->assertJsonPath('data.verification_status', 'verified')
             ->assertJsonPath('data.is_verified_iron_body', true)
@@ -182,11 +182,11 @@ class NutritionCommunityTest extends TestCase
         $uuid = $this->postJson('/api/nutrition/foods', $this->createPayload(), $this->auth($author))
             ->assertStatus(201)->json('data.uuid');
 
-        $this->postJson("/api/admin/nutrition/foods/{$uuid}/reject", ['reason' => 'datos falsos'])
+        $this->adminPostJson("/api/admin/nutrition/foods/{$uuid}/reject", ['reason' => 'datos falsos'])
             ->assertOk()->assertJsonPath('data.verification_status', 'rejected');
 
         $this->assertFalse(NutritionFood::where('uuid', $uuid)->first()->is_public);
-        $this->getJson('/api/admin/nutrition/foods/pending')->assertOk()
+        $this->adminGetJson('/api/admin/nutrition/foods/pending')->assertOk()
             ->assertJsonMissing(['uuid' => $uuid]);
     }
 
@@ -194,7 +194,7 @@ class NutritionCommunityTest extends TestCase
     {
         $author = $this->member();
         $this->postJson('/api/nutrition/foods', $this->createPayload(), $this->auth($author))->assertStatus(201);
-        $res = $this->getJson('/api/admin/nutrition/foods/pending')->assertOk();
+        $res = $this->adminGetJson('/api/admin/nutrition/foods/pending')->assertOk();
         $this->assertGreaterThanOrEqual(1, count($res->json('data')));
     }
 

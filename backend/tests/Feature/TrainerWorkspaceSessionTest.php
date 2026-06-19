@@ -106,11 +106,11 @@ class TrainerWorkspaceSessionTest extends TestCase
         $trainer = $this->activeTrainer('444');
         $token = $this->loginToken('444');
 
-        $devices = $this->getJson("/api/admin/trainers/{$trainer->id}/devices")->assertOk();
+        $devices = $this->adminGetJson("/api/admin/trainers/{$trainer->id}/devices")->assertOk();
         $uuid = $devices->json('data.0.uuid');
         $this->assertNotNull($uuid);
 
-        $this->postJson("/api/admin/trainers/{$trainer->id}/devices/{$uuid}/revoke")->assertOk();
+        $this->adminPostJson("/api/admin/trainers/{$trainer->id}/devices/{$uuid}/revoke")->assertOk();
 
         // La sesión revocada deja de resolver.
         $this->getJson('/api/trainer/auth/me', ['Authorization' => "Bearer {$token}"])->assertStatus(401);
@@ -121,7 +121,7 @@ class TrainerWorkspaceSessionTest extends TestCase
         $trainer = $this->activeTrainer('555');
         $token = $this->loginToken('555');
 
-        $this->postJson("/api/admin/trainers/{$trainer->id}/sessions/revoke-all")
+        $this->adminPostJson("/api/admin/trainers/{$trainer->id}/sessions/revoke-all")
             ->assertOk()
             ->assertJsonPath('revoked', 1);
 

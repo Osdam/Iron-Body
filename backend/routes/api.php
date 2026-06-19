@@ -74,7 +74,8 @@ Route::get('/health', function () {
     ]);
 });
 
-Route::get('/dashboard', function () {
+// Dashboard del CRM (conteos/ingresos agregados) — solo administración.
+Route::middleware('auth.admin')->get('/dashboard', function () {
     return response()->json([
         'users' => User::count(),
         'active_plans' => Plan::where('active', true)->count(),
@@ -84,13 +85,16 @@ Route::get('/dashboard', function () {
     ]);
 });
 
-Route::get('users', [UserController::class, 'index']);
-Route::post('users', [UserController::class, 'store']);
-Route::get('users/{user}', [UserController::class, 'show']);
-Route::get('users/{user}/plan-features', [UserController::class, 'planFeatures']);
-Route::patch('users/{user}', [UserController::class, 'update']);
-Route::put('users/{user}', [UserController::class, 'update']);
-Route::delete('users/{user}', [UserController::class, 'destroy']);
+// Gestión de usuarios del CRM (PII de miembros): blindado para administración.
+Route::middleware('auth.admin')->group(function (): void {
+    Route::get('users', [UserController::class, 'index']);
+    Route::post('users', [UserController::class, 'store']);
+    Route::get('users/{user}', [UserController::class, 'show']);
+    Route::get('users/{user}/plan-features', [UserController::class, 'planFeatures']);
+    Route::patch('users/{user}', [UserController::class, 'update']);
+    Route::put('users/{user}', [UserController::class, 'update']);
+    Route::delete('users/{user}', [UserController::class, 'destroy']);
+});
 
 // ── Acceso al portal profesional (entrenadores) — OTP por SMS ─────────────────
 // Capa nueva que REUSA el motor OTP/Twilio. Tras el feature flag
@@ -329,23 +333,29 @@ Route::middleware('auth.member')->group(function (): void {
 // ── Asistencias — registro facial/manual (CRM web) ───────────────────────────
 // El reconocimiento facial corre 100% en el navegador del CRM con face-api.js.
 // El backend solo persiste, sirve el catálogo de rostros y la imagen.
-Route::get('attendances', [AttendanceController::class, 'index']);
-Route::post('attendances', [AttendanceController::class, 'store']);
-Route::get('attendances/stream', [AttendanceController::class, 'stream']); // SSE tiempo real
-Route::get('attendances/face-references', [AttendanceController::class, 'faceReferences']);
-Route::get('attendances/face-image/{userId}', [AttendanceController::class, 'faceImage'])
-    ->where('userId', '[0-9]+');
-// Enrolamiento facial desde el CRM (punto físico): miembros sin rostro y alta.
-Route::get('attendances/face-enrollment/pending', [AttendanceController::class, 'faceEnrollmentPending']);
-Route::post('attendances/face-enrollment/{member}', [AttendanceController::class, 'enrollFace'])
-    ->where('member', '[0-9]+');
+// Asistencias + catálogo de rostros (CRM web): datos biométricos → solo admin.
+Route::middleware('auth.admin')->group(function (): void {
+    Route::get('attendances', [AttendanceController::class, 'index']);
+    Route::post('attendances', [AttendanceController::class, 'store']);
+    Route::get('attendances/stream', [AttendanceController::class, 'stream']); // SSE tiempo real
+    Route::get('attendances/face-references', [AttendanceController::class, 'faceReferences']);
+    Route::get('attendances/face-image/{userId}', [AttendanceController::class, 'faceImage'])
+        ->where('userId', '[0-9]+');
+    // Enrolamiento facial desde el CRM (punto físico): miembros sin rostro y alta.
+    Route::get('attendances/face-enrollment/pending', [AttendanceController::class, 'faceEnrollmentPending']);
+    Route::post('attendances/face-enrollment/{member}', [AttendanceController::class, 'enrollFace'])
+        ->where('member', '[0-9]+');
+});
 
 // ── Torniquete — relé HTTP (ESP32, Sonoff, Shelly, ZKTeco, Hikvision, etc.)
-Route::get('turnstile', [TurnstileController::class, 'show']);
-Route::put('turnstile', [TurnstileController::class, 'update']);
-Route::post('turnstile/trigger', [TurnstileController::class, 'trigger']);
-// Disparo directo de un webhook HTTP (Sonoff / ESP32 / Shelly).
-Route::post('turnstile/webhook/fire', [TurnstileController::class, 'fireWebhook']);
+// Control del acceso físico: solo administración (el CRM/operador lo dispara).
+Route::middleware('auth.admin')->group(function (): void {
+    Route::get('turnstile', [TurnstileController::class, 'show']);
+    Route::put('turnstile', [TurnstileController::class, 'update']);
+    Route::post('turnstile/trigger', [TurnstileController::class, 'trigger']);
+    // Disparo directo de un webhook HTTP (Sonoff / ESP32 / Shelly).
+    Route::post('turnstile/webhook/fire', [TurnstileController::class, 'fireWebhook']);
+});
 
 // ── Webhook público de Meta (Instagram / Facebook / WhatsApp) ──────────────────
 // Sin auth de sesión (lo llama Meta): GET verifica con verify_token; POST valida
@@ -360,35 +370,56 @@ Route::post('webhooks/meta', [\App\Http\Controllers\Api\WebhookMetaController::c
 // registrar en el dashboard Wompi (config('wompi.webhook_url')).
 Route::post('webhooks/wompi', [WompiWebhookController::class, 'handle'])
     ->middleware('throttle:120,1');
-// ZKTeco Eco — apertura directa (SDK standalone, TCP 4370).
-Route::post('turnstile/zkteco/open', [TurnstileController::class, 'openZkteco']);
-// Serial COM (replica NetGymValidator → USB-CH340 → RS485 → placa SATT).
-Route::post('turnstile/serial/open', [TurnstileController::class, 'openSerial']);
+// Apertura directa del torniquete (hardware) — solo administración.
+Route::middleware('auth.admin')->group(function (): void {
+    // ZKTeco Eco — apertura directa (SDK standalone, TCP 4370).
+    Route::post('turnstile/zkteco/open', [TurnstileController::class, 'openZkteco']);
+    // Serial COM (replica NetGymValidator → USB-CH340 → RS485 → placa SATT).
+    Route::post('turnstile/serial/open', [TurnstileController::class, 'openSerial']);
+});
 
-Route::get('plans/features', [PlanController::class, 'allFeatures']);
-Route::put('plans/{plan}/features', [PlanController::class, 'updateFeatures']);
-// IRON IA — capacidades detalladas por plan (CRM ↔ membership_ai_capabilities).
-Route::get('plans/{plan}/ai-capabilities', [PlanController::class, 'aiCapabilities']);
-Route::put('plans/{plan}/ai-capabilities', [PlanController::class, 'updateAiCapabilities']);
-Route::apiResource('plans', PlanController::class)->only(['index','show','store','update','destroy']);
+// Configuración de planes y su CRUD de escritura: solo administración. Las
+// rutas estáticas (plans/features, ai-capabilities) se registran ANTES del
+// apiResource para que no las capture el comodín {plan}.
+Route::middleware('auth.admin')->group(function (): void {
+    Route::get('plans/features', [PlanController::class, 'allFeatures']);
+    Route::put('plans/{plan}/features', [PlanController::class, 'updateFeatures']);
+    // IRON IA — capacidades detalladas por plan (CRM ↔ membership_ai_capabilities).
+    Route::get('plans/{plan}/ai-capabilities', [PlanController::class, 'aiCapabilities']);
+    Route::put('plans/{plan}/ai-capabilities', [PlanController::class, 'updateAiCapabilities']);
+    Route::apiResource('plans', PlanController::class)->only(['store','update','destroy']);
+});
+// Lectura de planes/precios: PÚBLICA (la app muestra planes en registro/landing).
+Route::apiResource('plans', PlanController::class)->only(['index','show']);
 Route::get('membership-plans', [MembershipPlanController::class, 'index']);
 Route::get('membership-plans/{plan}', [MembershipPlanController::class, 'show']);
 Route::apiResource('payments', PaymentController::class)->only(['index','show','store','update']);
+// Escritura del catálogo de clases + listado de reservas: solo administración.
+Route::middleware('auth.admin')->group(function (): void {
+    Route::apiResource('classes', ClassController::class)
+        ->only(['store','update','destroy'])
+        ->parameters(['classes' => 'myClass']);
+    Route::get('classes/{myClass}/reservations', [ClassController::class, 'reservations']);
+});
+// Lectura del horario de clases: PÚBLICA (la app consulta el catálogo).
 Route::apiResource('classes', ClassController::class)
-    ->only(['index','show','store','update','destroy'])
+    ->only(['index','show'])
     ->parameters(['classes' => 'myClass']);
-Route::get('classes/{myClass}/reservations', [ClassController::class, 'reservations']);
 
 // ── Catálogo de ejercicios (público para la app; CRUD sin auth para el CRM) ──
 Route::get('app/exercises', [AppExerciseController::class, 'index']);
 Route::get('exercises/catalog', [AppExerciseController::class, 'index']);
 
 // ── Rutinas por miembro (CRM) ────────────────────────────────────────────────
-Route::get('members/{member}/routines',                [MemberRoutineController::class, 'index']);
-Route::post('members/{member}/routines',               [MemberRoutineController::class, 'store']);
-Route::put('members/{member}/routines/{routine}',      [MemberRoutineController::class, 'update']);
-Route::patch('members/{member}/routines/{routine}',    [MemberRoutineController::class, 'update']);
-Route::delete('members/{member}/routines/{routine}',   [MemberRoutineController::class, 'destroy']);
+// Gestión de las rutinas de un miembro desde el CRM (la app usa app/routines/*):
+// solo administración. Datos de un miembro concreto → blindado.
+Route::middleware('auth.admin')->group(function (): void {
+    Route::get('members/{member}/routines',                [MemberRoutineController::class, 'index']);
+    Route::post('members/{member}/routines',               [MemberRoutineController::class, 'store']);
+    Route::put('members/{member}/routines/{routine}',      [MemberRoutineController::class, 'update']);
+    Route::patch('members/{member}/routines/{routine}',    [MemberRoutineController::class, 'update']);
+    Route::delete('members/{member}/routines/{routine}',   [MemberRoutineController::class, 'destroy']);
+});
 
 // ── App: clases y entrenadores para miembros (autenticación por access_hash) ──
 Route::middleware('auth.member')->group(function (): void {
@@ -700,10 +731,16 @@ Route::patch('admin/members/{member}/staff-access',[\App\Http\Controllers\Api\Ad
 Route::get('admin/stories',         [StoriesController::class, 'indexAsAdmin']);
 Route::post('admin/stories',        [StoriesController::class, 'storeAsAdmin']);
 Route::delete('admin/stories/{id}', [StoriesController::class, 'destroyAsAdmin']);
-Route::apiResource('routines', RoutineController::class)->only(['index','show','store','update','destroy']);
-Route::patch('routines/{routine}/assign', [RoutineController::class, 'assign']);
-Route::post('trainers/{trainer}/reviews', [TrainerController::class, 'review']);
-Route::apiResource('trainers', TrainerController::class)->only(['index','show','store','update','destroy']);
+// Rutinas (catálogo del CRM; la app usa app/routines/*) + escritura de
+// entrenadores y sus reseñas: solo administración.
+Route::middleware('auth.admin')->group(function (): void {
+    Route::apiResource('routines', RoutineController::class)->only(['index','show','store','update','destroy']);
+    Route::patch('routines/{routine}/assign', [RoutineController::class, 'assign']);
+    Route::post('trainers/{trainer}/reviews', [TrainerController::class, 'review']);
+    Route::apiResource('trainers', TrainerController::class)->only(['store','update','destroy']);
+});
+// Lectura de entrenadores: PÚBLICA (la app muestra el directorio/perfil).
+Route::apiResource('trainers', TrainerController::class)->only(['index','show']);
 
 // ── Equipos del gimnasio ──────────────────────────────────────────────────────
 // Inventario de máquinas físicas. Dos audiencias bien separadas:
@@ -849,7 +886,7 @@ Route::get('/reports/stats', function () {
                 ->get(),
         ];
     }));
-});
+})->middleware('auth.admin'); // Ingresos/métricas del CRM: solo administración.
 
 // ── Automatización interna (disparada por n8n, firmada HMAC) ───────────────────
 // n8n solo coordina: NO accede a PostgreSQL ni construye contexto. Laravel

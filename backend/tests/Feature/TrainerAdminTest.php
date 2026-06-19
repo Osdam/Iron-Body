@@ -35,7 +35,7 @@ class TrainerAdminTest extends TestCase
         $trainer = $this->trainer();
         $trainer->syncRoles([TrainerRole::FUNCTIONAL]);
 
-        $this->getJson("/api/admin/trainers/{$trainer->id}/professional")
+        $this->adminGetJson("/api/admin/trainers/{$trainer->id}/professional")
             ->assertOk()
             ->assertJsonPath('data.roles', [TrainerRole::FUNCTIONAL])
             ->assertJsonFragment(['classes.manage']);
@@ -45,7 +45,7 @@ class TrainerAdminTest extends TestCase
     {
         $trainer = $this->trainer();
 
-        $this->putJson("/api/admin/trainers/{$trainer->id}/professional", [
+        $this->adminPutJson("/api/admin/trainers/{$trainer->id}/professional", [
             'roles' => [TrainerRole::FLOOR, TrainerRole::FUNCTIONAL],
             'location' => 'Sede Norte',
             'admin_id' => 7,
@@ -65,7 +65,7 @@ class TrainerAdminTest extends TestCase
     {
         $trainer = $this->trainer();
 
-        $this->putJson("/api/admin/trainers/{$trainer->id}/professional", [
+        $this->adminPutJson("/api/admin/trainers/{$trainer->id}/professional", [
             'roles' => ['superadmin'],
         ])->assertStatus(422);
     }
@@ -74,7 +74,7 @@ class TrainerAdminTest extends TestCase
     {
         $trainer = $this->trainer(['document' => null]);
 
-        $this->postJson("/api/admin/trainers/{$trainer->id}/identity/link", [
+        $this->adminPostJson("/api/admin/trainers/{$trainer->id}/identity/link", [
             'document' => '55.667.788',
             'admin_id' => 3,
         ])->assertOk();
@@ -95,7 +95,7 @@ class TrainerAdminTest extends TestCase
         $trainer = $this->trainer();
         $identity = app(IdentityLinkService::class)->ensureIdentity('900900900');
 
-        $this->postJson("/api/admin/trainers/{$trainer->id}/identity/link", [
+        $this->adminPostJson("/api/admin/trainers/{$trainer->id}/identity/link", [
             'identity_id' => $identity->id,
         ])->assertOk();
 
@@ -118,7 +118,7 @@ class TrainerAdminTest extends TestCase
         $trainer->refresh();
         $this->assertSame($member->identity_id, $trainer->identity_id);
 
-        $this->postJson("/api/admin/trainers/{$trainer->id}/deactivate", ['admin_id' => 9])
+        $this->adminPostJson("/api/admin/trainers/{$trainer->id}/deactivate", ['admin_id' => 9])
             ->assertOk()
             ->assertJsonPath('data.is_active', false)
             ->assertJsonPath('data.permissions', []);
@@ -141,7 +141,7 @@ class TrainerAdminTest extends TestCase
         $trainer = $this->trainer(['status' => 'inactive']);
         $trainer->syncRoles([TrainerRole::FUNCTIONAL]);
 
-        $this->postJson("/api/admin/trainers/{$trainer->id}/activate")
+        $this->adminPostJson("/api/admin/trainers/{$trainer->id}/activate")
             ->assertOk()
             ->assertJsonPath('data.is_active', true);
 
@@ -152,10 +152,10 @@ class TrainerAdminTest extends TestCase
     {
         $trainer = $this->trainer();
 
-        $this->postJson("/api/admin/trainers/{$trainer->id}/deactivate");
-        $this->postJson("/api/admin/trainers/{$trainer->id}/activate");
+        $this->adminPostJson("/api/admin/trainers/{$trainer->id}/deactivate");
+        $this->adminPostJson("/api/admin/trainers/{$trainer->id}/activate");
 
-        $response = $this->getJson("/api/admin/trainers/{$trainer->id}/audit")->assertOk();
+        $response = $this->adminGetJson("/api/admin/trainers/{$trainer->id}/audit")->assertOk();
         $events = collect($response->json('data'))->pluck('event')->all();
 
         $this->assertSame(TrainerAuditLog::EVENT_ACTIVATED, $events[0]);

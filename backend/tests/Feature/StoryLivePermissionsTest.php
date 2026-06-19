@@ -86,14 +86,14 @@ class StoryLivePermissionsTest extends TestCase
     {
         $member = $this->member('1004', false);
 
-        $this->patchJson("/api/admin/members/{$member->id}/staff-access", ['is_staff' => true])
+        $this->adminPatchJson("/api/admin/members/{$member->id}/staff-access", ['is_staff' => true])
             ->assertOk()->assertJsonPath('data.is_staff', true);
         $this->assertTrue($member->fresh()->is_staff);
 
-        $this->getJson("/api/admin/members/{$member->id}")
+        $this->adminGetJson("/api/admin/members/{$member->id}")
             ->assertOk()->assertJsonPath('data.is_staff', true);
 
-        $this->patchJson("/api/admin/members/{$member->id}/staff-access", ['is_staff' => false])
+        $this->adminPatchJson("/api/admin/members/{$member->id}/staff-access", ['is_staff' => false])
             ->assertOk()->assertJsonPath('data.is_staff', false);
         $this->assertFalse($member->fresh()->is_staff);
     }

@@ -242,10 +242,10 @@ class MemberContractTest extends TestCase
                 'health_data' => true, 'inform_injuries' => true, 'commercial_policies' => true],
         ], $this->auth($member))->assertOk();
 
-        $this->getJson("/api/admin/members/{$member->id}/contracts")->assertOk()->assertJsonCount(1, 'data');
-        $this->getJson("/api/admin/contracts/{$uuid}")->assertOk()->assertJsonPath('data.status', 'signed');
-        $this->get("/api/admin/contracts/{$uuid}/download")->assertOk();
-        $this->postJson("/api/admin/contracts/{$uuid}/void", ['reason' => 'Solicitud del titular'])
+        $this->adminGetJson("/api/admin/members/{$member->id}/contracts")->assertOk()->assertJsonCount(1, 'data');
+        $this->adminGetJson("/api/admin/contracts/{$uuid}")->assertOk()->assertJsonPath('data.status', 'signed');
+        $this->get("/api/admin/contracts/{$uuid}/download", $this->adminHeaders())->assertOk();
+        $this->adminPostJson("/api/admin/contracts/{$uuid}/void", ['reason' => 'Solicitud del titular'])
             ->assertOk()->assertJsonPath('data.status', 'void');
     }
 
@@ -374,7 +374,7 @@ class MemberContractTest extends TestCase
     public function test_admin_user_contracts_endpoint(): void
     {
         // Sin miembro vinculado a ese user_id → lista vacía, no error.
-        $this->getJson('/api/admin/users/9999/contracts')
+        $this->adminGetJson('/api/admin/users/9999/contracts')
             ->assertOk()->assertJsonPath('data', []);
     }
 
@@ -383,7 +383,7 @@ class MemberContractTest extends TestCase
         // Mayor de edad sin acudiente → el resumen no debe exponer responsable.
         $member = $this->makeMember(['is_minor' => false]);
 
-        $this->getJson("/api/admin/members/{$member->id}/contracts")
+        $this->adminGetJson("/api/admin/members/{$member->id}/contracts")
             ->assertOk()
             ->assertJsonPath('member.is_minor', false)
             ->assertJsonPath('member.guardian', null);
@@ -411,7 +411,7 @@ class MemberContractTest extends TestCase
             'guardian_authorization' => true,
         ]);
 
-        $this->getJson("/api/admin/members/{$member->id}/contracts")
+        $this->adminGetJson("/api/admin/members/{$member->id}/contracts")
             ->assertOk()
             ->assertJsonPath('member.is_minor', true)
             ->assertJsonPath('member.guardian.full_name', 'Responsable Prueba')
@@ -437,7 +437,7 @@ class MemberContractTest extends TestCase
             'guardian_relationship'    => 'Padre',
         ]);
 
-        $this->getJson('/api/admin/users/4242/contracts')
+        $this->adminGetJson('/api/admin/users/4242/contracts')
             ->assertOk()
             ->assertJsonPath('member.guardian.full_name', 'Responsable Prueba')
             ->assertJsonPath('member.guardian.relationship', 'Padre');
@@ -479,7 +479,7 @@ class MemberContractTest extends TestCase
 
         $this->assertDatabaseMissing('member_guardians', ['member_id' => $minor->id]);
 
-        $this->getJson("/api/admin/members/{$minor->id}/contracts")
+        $this->adminGetJson("/api/admin/members/{$minor->id}/contracts")
             ->assertOk()
             ->assertJsonPath('member.guardian.full_name', 'Responsable Prueba')
             ->assertJsonPath('member.guardian.document_number', '1234567890')
@@ -500,7 +500,7 @@ class MemberContractTest extends TestCase
             'guardian_relationship'    => 'Tutora',
         ]);
 
-        $this->getJson("/api/admin/members/{$minor->id}/contracts")
+        $this->adminGetJson("/api/admin/members/{$minor->id}/contracts")
             ->assertOk()
             ->assertJsonPath('member.guardian.full_name', 'Responsable Vivo')
             ->assertJsonPath('member.guardian.document_number', '9999999999')
@@ -515,7 +515,7 @@ class MemberContractTest extends TestCase
         ]);
         $this->signMinorRelease($minor);
 
-        $this->getJson('/api/admin/users/4343/contracts')
+        $this->adminGetJson('/api/admin/users/4343/contracts')
             ->assertOk()
             ->assertJsonPath('member.guardian.full_name', 'Responsable Prueba');
     }
@@ -525,7 +525,7 @@ class MemberContractTest extends TestCase
         // Menor sin acudiente vivo y sin contrato firmado → no hay responsable.
         $minor = $this->makeMember(['full_name' => 'Menor Prueba', 'is_minor' => true, 'birth_date' => '2014-01-01']);
 
-        $this->getJson("/api/admin/members/{$minor->id}/contracts")
+        $this->adminGetJson("/api/admin/members/{$minor->id}/contracts")
             ->assertOk()
             ->assertJsonPath('member.guardian', null);
     }
@@ -542,7 +542,7 @@ class MemberContractTest extends TestCase
 
         $this->assertDatabaseMissing('member_guardians', ['member_id' => $minor->id]);
 
-        $this->getJson("/api/admin/members/{$minor->id}/contracts")
+        $this->adminGetJson("/api/admin/members/{$minor->id}/contracts")
             ->assertOk()
             ->assertJsonPath('member.guardian.email', 'responsable@example.com')
             ->assertJsonPath('member.guardian.relationship', 'Madre');
@@ -559,7 +559,7 @@ class MemberContractTest extends TestCase
             'guardian_relationship'    => 'Padre',
         ]);
 
-        $this->getJson("/api/admin/members/{$minor->id}/contracts")
+        $this->adminGetJson("/api/admin/members/{$minor->id}/contracts")
             ->assertOk()
             ->assertJsonPath('member.guardian.email', 'responsable@example.com')
             ->assertJsonPath('member.guardian.relationship', 'Padre');
@@ -571,7 +571,7 @@ class MemberContractTest extends TestCase
         $minor = $this->makeMember(['full_name' => 'Menor Prueba', 'is_minor' => true, 'birth_date' => '2014-01-01']);
         $this->signMinorRelease($minor); // sin guardian_email/relationship
 
-        $this->getJson("/api/admin/members/{$minor->id}/contracts")
+        $this->adminGetJson("/api/admin/members/{$minor->id}/contracts")
             ->assertOk()
             ->assertJsonPath('member.guardian.full_name', 'Responsable Prueba')
             ->assertJsonPath('member.guardian.email', null)
@@ -604,11 +604,11 @@ class MemberContractTest extends TestCase
             ],
         ], $this->auth($minor))->assertOk();
 
-        $this->getJson("/api/admin/members/{$minor->id}/contracts")
+        $this->adminGetJson("/api/admin/members/{$minor->id}/contracts")
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('member.guardian.full_name', 'Responsable Prueba');
-        $this->get("/api/admin/contracts/{$uuid}/download")->assertOk();
+        $this->get("/api/admin/contracts/{$uuid}/download", $this->adminHeaders())->assertOk();
     }
 
     public function test_missing_template_fails_clearly(): void

@@ -180,7 +180,7 @@ class TrainerAuthOtpTest extends TestCase
         $this->getJson('/api/trainer/auth/me', ['Authorization' => "Bearer {$token}"])->assertOk();
 
         // El CRM desactiva al entrenador.
-        $this->postJson("/api/admin/trainers/{$trainer->id}/deactivate")->assertOk();
+        $this->adminPostJson("/api/admin/trainers/{$trainer->id}/deactivate")->assertOk();
 
         $this->getJson('/api/trainer/auth/me', ['Authorization' => "Bearer {$token}"])
             ->assertStatus(401);

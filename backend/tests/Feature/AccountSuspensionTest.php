@@ -48,7 +48,7 @@ class AccountSuspensionTest extends TestCase
             ->assertOk()->assertJsonPath('data.requires_otp', true);
 
         // Admin suspende 3 días.
-        $this->postJson("/api/admin/members/{$member->id}/suspend", [
+        $this->adminPostJson("/api/admin/members/{$member->id}/suspend", [
             'reason' => 'Actividad sospechosa',
             'days' => 3,
         ])->assertOk();
@@ -68,7 +68,7 @@ class AccountSuspensionTest extends TestCase
             ->assertJsonPath('code', 'account_suspended');
 
         // Admin desbloquea.
-        $this->postJson("/api/admin/members/{$member->id}/unlock", [
+        $this->adminPostJson("/api/admin/members/{$member->id}/unlock", [
             'note' => 'Identidad validada en recepción',
         ])->assertOk();
 

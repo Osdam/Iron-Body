@@ -110,7 +110,7 @@ class LiveStreamTest extends TestCase
             'status' => LiveStream::STATUS_LIVE, 'started_at' => now(),
         ]);
 
-        $this->postJson("/api/admin/lives/{$live->id}/end")
+        $this->adminPostJson("/api/admin/lives/{$live->id}/end")
             ->assertOk()->assertJsonPath('data.status', 'ended');
     }
 }

@@ -28,14 +28,14 @@ class AiCapabilitiesSaveLoadTest extends TestCase
             'active' => true,
         ]);
 
-        $this->putJson("/api/plans/{$plan->id}/ai-capabilities", [
+        $this->adminPutJson("/api/plans/{$plan->id}/ai-capabilities", [
             'ai_image_analysis_enabled' => true,
             'ai_voice_chat_enabled' => true,
             'ai_realtime_voice_enabled' => true,
             'ai_progress_analysis_enabled' => true,
         ])->assertOk();
 
-        $get = $this->getJson("/api/plans/{$plan->id}/ai-capabilities");
+        $get = $this->adminGetJson("/api/plans/{$plan->id}/ai-capabilities");
         $get->assertOk();
 
         $caps = $get->json('capabilities');
@@ -91,7 +91,7 @@ class AiCapabilitiesSaveLoadTest extends TestCase
         ]);
 
         // Acción: admin envía SOLO el toggle que cambió (escenario "PATCH-like").
-        $put = $this->putJson(
+        $put = $this->adminPutJson(
             "/api/plans/{$plan->id}/ai-capabilities",
             ['ai_image_analysis_enabled' => true],
         );
@@ -116,11 +116,11 @@ class AiCapabilitiesSaveLoadTest extends TestCase
 
         $payload = $this->fullPayload(['ai_image_analysis_enabled' => true]);
 
-        $put = $this->putJson("/api/plans/{$plan->id}/ai-capabilities", $payload);
+        $put = $this->adminPutJson("/api/plans/{$plan->id}/ai-capabilities", $payload);
         $put->assertOk();
         $put->assertJsonPath('capabilities.ai_image_analysis_enabled', true);
 
-        $get = $this->getJson("/api/plans/{$plan->id}/ai-capabilities");
+        $get = $this->adminGetJson("/api/plans/{$plan->id}/ai-capabilities");
         $get->assertOk();
         $get->assertJsonPath('capabilities.ai_image_analysis_enabled', true);
 
@@ -159,10 +159,10 @@ class AiCapabilitiesSaveLoadTest extends TestCase
 
         foreach ($toggles as $key) {
             $payload = $this->fullPayload([$key => true]);
-            $put = $this->putJson("/api/plans/{$plan->id}/ai-capabilities", $payload);
+            $put = $this->adminPutJson("/api/plans/{$plan->id}/ai-capabilities", $payload);
             $put->assertOk();
 
-            $get = $this->getJson("/api/plans/{$plan->id}/ai-capabilities");
+            $get = $this->adminGetJson("/api/plans/{$plan->id}/ai-capabilities");
             $get->assertOk();
             $this->assertTrue(
                 $get->json("capabilities.$key") === true,

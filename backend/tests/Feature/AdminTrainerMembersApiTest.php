@@ -36,7 +36,7 @@ class AdminTrainerMembersApiTest extends TestCase
     {
         $trainer = $this->trainer();
 
-        $this->getJson("/api/admin/trainers/{$trainer->id}/members")
+        $this->adminGetJson("/api/admin/trainers/{$trainer->id}/members")
             ->assertOk()
             ->assertJsonCount(0, 'data');
     }
@@ -47,14 +47,14 @@ class AdminTrainerMembersApiTest extends TestCase
         $m1 = $this->member('Ana Gomez', '201', 'ana@x.co');
         $m2 = $this->member('Beto Ruiz', '202', 'beto@x.co');
 
-        $this->postJson("/api/admin/trainers/{$trainer->id}/members", [
+        $this->adminPostJson("/api/admin/trainers/{$trainer->id}/members", [
             'member_ids' => [$m1->id, $m2->id],
         ])->assertOk()
             ->assertJsonPath('assigned', 2)
             ->assertJsonCount(2, 'data')
             ->assertJsonFragment(['full_name' => 'Ana Gomez', 'email' => 'ana@x.co']);
 
-        $this->getJson("/api/admin/trainers/{$trainer->id}/members")
+        $this->adminGetJson("/api/admin/trainers/{$trainer->id}/members")
             ->assertOk()
             ->assertJsonCount(2, 'data');
 
@@ -68,8 +68,8 @@ class AdminTrainerMembersApiTest extends TestCase
         $trainer = $this->trainer();
         $member = $this->member('Ana', '201');
 
-        $this->postJson("/api/admin/trainers/{$trainer->id}/members", ['member_ids' => [$member->id]])->assertOk();
-        $this->postJson("/api/admin/trainers/{$trainer->id}/members", ['member_ids' => [$member->id]])
+        $this->adminPostJson("/api/admin/trainers/{$trainer->id}/members", ['member_ids' => [$member->id]])->assertOk();
+        $this->adminPostJson("/api/admin/trainers/{$trainer->id}/members", ['member_ids' => [$member->id]])
             ->assertOk()
             ->assertJsonPath('assigned', 0)
             ->assertJsonCount(1, 'data');
@@ -79,9 +79,9 @@ class AdminTrainerMembersApiTest extends TestCase
     {
         $trainer = $this->trainer();
         $member = $this->member('Ana', '201');
-        $this->postJson("/api/admin/trainers/{$trainer->id}/members", ['member_ids' => [$member->id]])->assertOk();
+        $this->adminPostJson("/api/admin/trainers/{$trainer->id}/members", ['member_ids' => [$member->id]])->assertOk();
 
-        $this->deleteJson("/api/admin/trainers/{$trainer->id}/members/{$member->id}")
+        $this->adminDeleteJson("/api/admin/trainers/{$trainer->id}/members/{$member->id}")
             ->assertOk()
             ->assertJsonCount(0, 'data');
 
@@ -96,14 +96,14 @@ class AdminTrainerMembersApiTest extends TestCase
 
         // Por nombre, documento, teléfono y correo.
         foreach (['Carlos', '987654', 'carlos@mail'] as $term) {
-            $this->getJson("/api/admin/trainers/{$trainer->id}/members/search?q=".urlencode($term))
+            $this->adminGetJson("/api/admin/trainers/{$trainer->id}/members/search?q=".urlencode($term))
                 ->assertOk()
                 ->assertJsonFragment(['id' => $carlos->id]);
         }
 
         // Una vez asignado, deja de aparecer en la búsqueda.
-        $this->postJson("/api/admin/trainers/{$trainer->id}/members", ['member_ids' => [$carlos->id]])->assertOk();
-        $this->getJson("/api/admin/trainers/{$trainer->id}/members/search?q=Carlos")
+        $this->adminPostJson("/api/admin/trainers/{$trainer->id}/members", ['member_ids' => [$carlos->id]])->assertOk();
+        $this->adminGetJson("/api/admin/trainers/{$trainer->id}/members/search?q=Carlos")
             ->assertOk()
             ->assertJsonMissing(['id' => $carlos->id]);
     }
@@ -113,7 +113,7 @@ class AdminTrainerMembersApiTest extends TestCase
         $trainer = $this->trainer();
         $this->member('Ana', '201');
 
-        $this->getJson("/api/admin/trainers/{$trainer->id}/members/search?q=")
+        $this->adminGetJson("/api/admin/trainers/{$trainer->id}/members/search?q=")
             ->assertOk()
             ->assertJsonCount(0, 'data');
     }

@@ -2,7 +2,9 @@
 
 use App\Http\Middleware\AuthenticateMember;
 use App\Http\Middleware\AuthenticateTrainer;
+use App\Http\Middleware\EnsureAdminAuth;
 use App\Http\Middleware\EnsureMemberRegistrationToken;
+use App\Http\Middleware\ProtectAdminPaths;
 use App\Http\Middleware\EnsureTrainerFeature;
 use App\Http\Middleware\EnsureTrainerPermission;
 use App\Http\Middleware\VerifyInternalAutomationSignature;
@@ -24,10 +26,19 @@ return Application::configure(basePath: dirname(__DIR__))
             'member.registration.token' => EnsureMemberRegistrationToken::class,
             'auth.member'               => AuthenticateMember::class,
             'auth.trainer'              => AuthenticateTrainer::class,
+            'auth.admin'                => EnsureAdminAuth::class,
             'automation.internal'       => VerifyInternalAutomationSignature::class,
             'trainer.can'               => EnsureTrainerPermission::class,
             'trainer.feature'           => EnsureTrainerFeature::class,
         ]);
+
+        // Blindaje global: TODAS las rutas /api/admin/* y los pagos legacy
+        // (/api/payments) exigen el secreto administrativo. Se monta a nivel del
+        // grupo `api` para no depender de envolver a mano ~22 bloques dispersos
+        // y cubrir también rutas administrativas futuras. El guard se autolimita
+        // a esas rutas; el resto del tráfico pasa intacto. Las rutas CRM fuera de
+        // /admin se blindan con el alias `auth.admin` por ruta (ver api.php).
+        $middleware->appendToGroup('api', ProtectAdminPaths::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Cuerpo de request demasiado grande (p.ej. imagen OCR pesada). En rutas

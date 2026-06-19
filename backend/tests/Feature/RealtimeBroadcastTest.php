@@ -83,7 +83,7 @@ class RealtimeBroadcastTest extends TestCase
     {
         $a = $this->member('1010101010');
 
-        $this->patchJson('/api/admin/members/'.$a->id.'/staff-access', [
+        $this->adminPatchJson('/api/admin/members/'.$a->id.'/staff-access', [
             'is_staff' => true,
         ])->assertOk();
 

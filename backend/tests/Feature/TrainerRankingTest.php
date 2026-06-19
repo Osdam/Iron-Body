@@ -63,7 +63,7 @@ class TrainerRankingTest extends TestCase
             'status' => 'active',
         ]);
 
-        $this->postJson("/api/trainers/{$trainer->id}/reviews", [
+        $this->adminPostJson("/api/trainers/{$trainer->id}/reviews", [
             'member_id' => $member->id,
             'rating' => 4,
             'comment' => 'Buen entrenamiento.',
@@ -71,7 +71,7 @@ class TrainerRankingTest extends TestCase
             ->assertJsonPath('data.trainer_rating', 4)
             ->assertJsonPath('data.reviews_count', 1);
 
-        $this->postJson("/api/trainers/{$trainer->id}/reviews", [
+        $this->adminPostJson("/api/trainers/{$trainer->id}/reviews", [
             'member_id' => $member->id,
             'rating' => 5,
             'comment' => 'Excelente entrenador.',
@@ -91,7 +91,7 @@ class TrainerRankingTest extends TestCase
             'status' => 'inactive',
         ]);
 
-        $this->postJson("/api/trainers/{$trainer->id}/reviews", [
+        $this->adminPostJson("/api/trainers/{$trainer->id}/reviews", [
             'member_id' => $member->id,
             'rating' => 5,
         ])->assertUnprocessable();

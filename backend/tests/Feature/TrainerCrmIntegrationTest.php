@@ -23,7 +23,7 @@ class TrainerCrmIntegrationTest extends TestCase
 
     public function test_creating_a_trainer_links_an_identity(): void
     {
-        $res = $this->postJson('/api/trainers', [
+        $res = $this->adminPostJson('/api/trainers', [
             'fullName' => 'Nuevo Coach',
             'document' => '12.345.678',
             'phone' => '+573009998877',
@@ -45,7 +45,7 @@ class TrainerCrmIntegrationTest extends TestCase
         app(IdentityLinkService::class)->backfillExisting();
         $member->refresh();
 
-        $this->postJson('/api/trainers', [
+        $this->adminPostJson('/api/trainers', [
             'fullName' => 'Same Person', 'document' => '777', 'phone' => '+573001112233',
         ])->assertStatus(201);
 
@@ -58,8 +58,8 @@ class TrainerCrmIntegrationTest extends TestCase
 
     public function test_no_duplicate_identity_for_same_document(): void
     {
-        $this->postJson('/api/trainers', ['fullName' => 'A', 'document' => '900'])->assertStatus(201);
-        $this->postJson('/api/trainers', ['fullName' => 'B', 'document' => '900'])->assertStatus(201);
+        $this->adminPostJson('/api/trainers', ['fullName' => 'A', 'document' => '900'])->assertStatus(201);
+        $this->adminPostJson('/api/trainers', ['fullName' => 'B', 'document' => '900'])->assertStatus(201);
 
         // Dos registros de entrenador, UNA sola identidad.
         $this->assertSame(2, Trainer::count());
@@ -70,7 +70,7 @@ class TrainerCrmIntegrationTest extends TestCase
 
     public function test_creating_with_roles_enables_portal_access(): void
     {
-        $res = $this->postJson('/api/trainers', [
+        $res = $this->adminPostJson('/api/trainers', [
             'fullName' => 'Coach', 'document' => '111', 'phone' => '+573009998877',
             'roles' => [TrainerRole::FLOOR, TrainerRole::FUNCTIONAL],
         ])->assertStatus(201);
@@ -85,7 +85,7 @@ class TrainerCrmIntegrationTest extends TestCase
 
     public function test_creating_without_roles_has_no_portal_access(): void
     {
-        $res = $this->postJson('/api/trainers', [
+        $res = $this->adminPostJson('/api/trainers', [
             'fullName' => 'Coach', 'document' => '222', 'phone' => '+573009998877',
         ])->assertStatus(201);
 
@@ -95,14 +95,14 @@ class TrainerCrmIntegrationTest extends TestCase
 
     public function test_editing_preserves_identity_and_updates_roles(): void
     {
-        $create = $this->postJson('/api/trainers', [
+        $create = $this->adminPostJson('/api/trainers', [
             'fullName' => 'Coach', 'document' => '333', 'phone' => '+573009998877',
             'roles' => [TrainerRole::FLOOR],
         ])->assertStatus(201);
         $id = (int) $create->json('id');
         $identityId = $create->json('identityId');
 
-        $res = $this->putJson("/api/trainers/{$id}", [
+        $res = $this->adminPutJson("/api/trainers/{$id}", [
             'roles' => [TrainerRole::FUNCTIONAL],
             'location' => 'Sede Norte',
         ])->assertOk();
@@ -120,7 +120,7 @@ class TrainerCrmIntegrationTest extends TestCase
         ]);
         app(IdentityLinkService::class)->backfillExisting();
 
-        $create = $this->postJson('/api/trainers', [
+        $create = $this->adminPostJson('/api/trainers', [
             'fullName' => 'Dual', 'document' => '444', 'phone' => '+573001112233',
             'roles' => [TrainerRole::FLOOR],
         ])->assertStatus(201);
@@ -131,7 +131,7 @@ class TrainerCrmIntegrationTest extends TestCase
             'trainer_id' => $id, 'device_id' => 'd1', 'token_hash' => hash('sha256', 'tok'),
         ]);
 
-        $this->putJson("/api/trainers/{$id}", ['status' => 'inactive'])->assertOk();
+        $this->adminPutJson("/api/trainers/{$id}", ['status' => 'inactive'])->assertOk();
 
         // Acceso profesional cortado…
         $this->assertNotNull($session->fresh()->revoked_at);
@@ -142,7 +142,7 @@ class TrainerCrmIntegrationTest extends TestCase
 
     public function test_admin_list_exposes_professional_fields(): void
     {
-        $this->postJson('/api/trainers', [
+        $this->adminPostJson('/api/trainers', [
             'fullName' => 'Coach', 'document' => '555', 'phone' => '+573009998877',
             'roles' => [TrainerRole::FLOOR],
         ])->assertStatus(201);
@@ -155,7 +155,7 @@ class TrainerCrmIntegrationTest extends TestCase
 
     public function test_existing_mobile_listing_still_works(): void
     {
-        $this->postJson('/api/trainers', [
+        $this->adminPostJson('/api/trainers', [
             'fullName' => 'Coach', 'document' => '666', 'phone' => '+573009998877',
             'status' => 'active',
         ])->assertStatus(201);

@@ -254,7 +254,7 @@ class NutritionAiTest extends TestCase
         $this->fakeAi(['suggested_status' => 'community', 'is_probable_duplicate' => true,
             'data_quality' => 'medium', 'notes' => 'Parece duplicado', 'confidence_score' => 0.7]);
 
-        $res = $this->postJson("/api/admin/nutrition/foods/{$a->uuid}/ai-review")->assertOk();
+        $res = $this->adminPostJson("/api/admin/nutrition/foods/{$a->uuid}/ai-review")->assertOk();
         $res->assertJsonPath('ok', true)
             ->assertJsonPath('suggestions.is_probable_duplicate', true);
         // No ejecutó merge: el alimento sigue sin canonical_food_id.

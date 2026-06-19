@@ -50,19 +50,19 @@ class AppAdsEventsTest extends TestCase
 
     public function test_admin_creates_and_lists_ad(): void
     {
-        $r = $this->postJson('/api/admin/ads', [
+        $r = $this->adminPostJson('/api/admin/ads', [
             'title' => 'Black Friday',
             'image_url' => 'https://cdn/bf.jpg',
             'frequency_rule' => 'daily',
         ]);
         $r->assertCreated()->assertJsonPath('data.title', 'Black Friday');
 
-        $this->getJson('/api/admin/ads')->assertOk()->assertJsonFragment(['title' => 'Black Friday']);
+        $this->adminGetJson('/api/admin/ads')->assertOk()->assertJsonFragment(['title' => 'Black Friday']);
     }
 
     public function test_admin_create_ad_requires_image(): void
     {
-        $this->postJson('/api/admin/ads', ['title' => 'X'])->assertStatus(422);
+        $this->adminPostJson('/api/admin/ads', ['title' => 'X'])->assertStatus(422);
     }
 
     public function test_member_sees_active_ad_once_then_hidden_after_seen(): void
@@ -108,7 +108,7 @@ class AppAdsEventsTest extends TestCase
 
     public function test_event_lifecycle(): void
     {
-        $r = $this->postJson('/api/admin/events', [
+        $r = $this->adminPostJson('/api/admin/events', [
             'title' => 'Clase abierta', 'image_url' => 'https://cdn/e.jpg',
             'location' => 'Sede norte',
         ]);
@@ -121,7 +121,7 @@ class AppAdsEventsTest extends TestCase
         $this->getJson("/api/member/events/{$id}", $this->auth())
             ->assertOk()->assertJsonPath('data.location', 'Sede norte');
 
-        $this->postJson("/api/admin/events/{$id}/deactivate")->assertOk();
+        $this->adminPostJson("/api/admin/events/{$id}/deactivate")->assertOk();
 
         $this->getJson('/api/member/events', $this->auth())
             ->assertOk()->assertJsonCount(0, 'data');

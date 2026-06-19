@@ -73,7 +73,7 @@ class RecurringClassTest extends TestCase
     public function test_create_recurring_class_appears_this_week_and_future_weeks(): void
     {
         // El CRM crea una recurrente con día+hora, SIN fecha (date_time null).
-        $res = $this->postJson('/api/classes', [
+        $res = $this->adminPostJson('/api/classes', [
             'name' => 'IRON FUNCIONAL', 'type' => 'Funcional',
             'day_of_week' => 'Miércoles', 'start_time' => '19:00', 'end_time' => '20:00',
             'max_capacity' => 20, 'status' => 'active', 'is_recurring' => true,
@@ -94,7 +94,7 @@ class RecurringClassTest extends TestCase
 
     public function test_recurring_reserve_uses_session_date_per_occurrence(): void
     {
-        $res = $this->postJson('/api/classes', [
+        $res = $this->adminPostJson('/api/classes', [
             'name' => 'IRON FUNCIONAL', 'type' => 'Funcional',
             'day_of_week' => 'Miércoles', 'start_time' => '19:00', 'end_time' => '20:00',
             'max_capacity' => 20, 'status' => 'active', 'is_recurring' => true,
@@ -120,7 +120,7 @@ class RecurringClassTest extends TestCase
     {
         // is_recurring=false + fecha fija; el día llega CONTRADICTORIO a propósito
         // ('Lunes') y debe derivarse de la fecha (miércoles 17).
-        $res = $this->postJson('/api/classes', [
+        $res = $this->adminPostJson('/api/classes', [
             'name' => 'Evento especial', 'type' => 'Funcional',
             'day_of_week' => 'Lunes', 'start_time' => '09:00', 'end_time' => '10:00',
             'max_capacity' => 20, 'status' => 'active', 'is_recurring' => false,
@@ -143,7 +143,7 @@ class RecurringClassTest extends TestCase
 
     public function test_single_class_requires_date_returns_controlled_422(): void
     {
-        $this->postJson('/api/classes', [
+        $this->adminPostJson('/api/classes', [
             'name' => 'Sin fecha', 'type' => 'Funcional',
             'day_of_week' => 'Lunes', 'start_time' => '09:00', 'end_time' => '10:00',
             'max_capacity' => 20, 'status' => 'active', 'is_recurring' => false,
