@@ -760,6 +760,8 @@ class NotificationService
                 'title'       => 'Entrenador eliminado',
                 'message'     => "Se eliminó al entrenador {$trainerName}.",
                 'priority'    => 'low',
+                'action_type' => 'trainer_detail',
+                'action_payload' => array_filter(['trainer_id' => $trainerId]),
                 'metadata'    => array_filter(['trainer_id' => $trainerId, 'trainer' => $trainerName]),
                 'event_key'   => $trainerId ? "trainer_deleted_{$trainerId}_{$date}" : null,
             ]);
@@ -893,6 +895,10 @@ class NotificationService
                 'message'     => "{$name} inició su registro" . ($doc ? " (doc. {$doc})." : '.'),
                 'priority'    => 'low',
                 'member'      => $member,
+                // action_type estable para que el CRM filtre y refresque la lista
+                // de miembros en vivo (igual que 'trainer_detail' para entrenadores).
+                'action_type' => 'member_detail',
+                'action_payload' => array_filter(['member_id' => $member?->id]),
                 'metadata'    => array_filter(['member_name' => $name, 'document' => $doc]),
                 'event_key'   => $member ? "system_new_member_{$member->id}" : null,
             ]);

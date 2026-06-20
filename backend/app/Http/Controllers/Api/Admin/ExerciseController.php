@@ -40,7 +40,9 @@ class ExerciseController extends Controller
             });
         }
 
-        $page = $query->paginate((int) min(max($request->integer('per_page', 30), 1), 100));
+        // Tope alto: el catálogo del CRM se consume completo (cientos de ejercicios)
+        // y se filtra en el cliente. Sigue acotado para no permitir abusos.
+        $page = $query->paginate((int) min(max($request->integer('per_page', 30), 1), 1000));
 
         return response()->json([
             'ok'    => true,
