@@ -1096,6 +1096,9 @@ class NotificationService
                 'message'   => "Se creó al miembro {$name}" . ($document ? " (doc. {$document})." : '.'),
                 'priority'  => 'low',
                 'member'    => $member instanceof Member ? $member : null,
+                // action_type estable para que el CRM refresque la lista en vivo.
+                'action_type' => 'member_detail',
+                'action_payload' => array_filter(['member_id' => $memberId]),
                 'metadata'  => array_filter(['member_name' => $name, 'document' => $document]),
                 'event_key' => $memberId ? "member_created_{$memberId}" : null,
             ]);
