@@ -241,17 +241,17 @@ class ExerciseProviderService
                 : null;
             $ref['thumbnail_url'] = null;
         } elseif ($provider === 'local') {
-            // Ejercicios manuales del CRM: la media ya son URLs públicas absolutas.
-            if (! empty($ref['video_path']) && $this->isHttpUrl($ref['video_path'])) {
+            // Ejercicios manuales del CRM. La media puede venir como URL absoluta
+            // O como ruta del disco public ('exercises/...' o '/storage/...');
+            // normalizamos a URL absoluta para que la app SIEMPRE reciba media.
+            // (Antes, si no era http, quedaba sin video → placeholder "no disponible".)
+            $ref['video_path'] = $this->publicMediaUrl($ref['video_path'] ?? null);
+            if (! empty($ref['video_path'])) {
                 $videoUrl  = $ref['video_path'];
                 $mediaType = 'video';
             }
-            if (! $this->isHttpUrl($ref['gif_url'] ?? null)) {
-                $ref['gif_url'] = null;
-            }
-            if (! $this->isHttpUrl($ref['thumbnail_url'] ?? null)) {
-                $ref['thumbnail_url'] = null;
-            }
+            $ref['gif_url'] = $this->publicMediaUrl($ref['gif_url'] ?? null);
+            $ref['thumbnail_url'] = $this->publicMediaUrl($ref['thumbnail_url'] ?? null);
         } elseif (in_array($provider, ['freeexercisedb', 'exercisedb'], true)) {
             // CDN público (ExerciseDB / Free Exercise DB): sin key, sin marca de
             // agua → las URLs del GIF/imagen se exponen directas a Flutter.
@@ -289,5 +289,26 @@ class ExerciseProviderService
     private function isHttpUrl(?string $v): bool
     {
         return is_string($v) && (bool) preg_match('#^https?://#i', $v);
+    }
+
+    /**
+     * URL absoluta de una media de ejercicio manual. Acepta URL http(s) (se deja
+     * igual) o una ruta del disco `public` ('exercises/...' o '/storage/...') y
+     * la resuelve contra el host público. Devuelve null si está vacía.
+     */
+    private function publicMediaUrl(?string $v): ?string
+    {
+        if (! is_string($v) || trim($v) === '') {
+            return null;
+        }
+        if ($this->isHttpUrl($v)) {
+            return $v;
+        }
+        $base = rtrim(config('app.public_url') ?: url('/'), '/');
+        $rel = ltrim($v, '/');
+        if (! str_starts_with($rel, 'storage/')) {
+            $rel = 'storage/'.$rel;
+        }
+        return "{$base}/{$rel}";
     }
 }
