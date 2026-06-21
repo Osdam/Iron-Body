@@ -66,13 +66,19 @@ class Routine extends Model
 
     public function isSemiPersonalized(): bool
     {
+        // Las rutinas del CRM hechas/asignadas para un miembro concreto NUNCA son
+        // semi (aunque sean multi-día o aún no tengan exercise_id): van a "Mis
+        // rutinas". Solo los planes base del gimnasio (plantillas SIN dueño) lo son.
+        if (! empty($this->member_id) || ! empty($this->assigned_member_id)) {
+            return false;
+        }
         if ($this->is_template) {
             return true; // los planes base del gimnasio son plantillas
         }
         if ($this->hasCatalogLink()) {
             return false; // vinculada al catálogo → personalizada
         }
-        // Sin vínculo: un programa multi-día es un plan base.
+        // Sin dueño ni vínculo: un programa multi-día es un plan base.
         return is_array($this->days) && ! empty($this->days);
     }
 

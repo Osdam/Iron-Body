@@ -36,7 +36,13 @@ class AppRoutineController extends Controller
             ->get();
 
         $routines = $viaAssignment->merge($viaMemberId)->unique('id')->values();
-        $routines = $this->excludeHidden($routines, $member->id);
+        // "Mis rutinas" = SOLO personalizadas del CRM. Las plantillas/semi (aunque
+        // estén asignadas o adoptadas) NO se mezclan aquí: tienen su propia
+        // pestaña y su propio ocultamiento. El ocultamiento NO aplica a "Mis
+        // rutinas".
+        $routines = $routines
+            ->reject(fn (Routine $r) => $r->isSemiPersonalized())
+            ->values();
 
         return response()->json([
             'ok'   => true,
@@ -171,12 +177,19 @@ class AppRoutineController extends Controller
     }
 
     /**
-     * Catálogo público de rutinas pre-hechas (plantillas) que cualquier miembro
-     * puede explorar y adoptar. Filtra opcionalmente por nivel y/o género.
-     * GET /api/app/routines/templates?level=Principiante&gender=Mujer
+     * Rutinas base/semi-personalizadas del gimnasio (plantillas del Seeder).
+     * GET /api/app/routines/templates?level=&gender=&include_hidden=true
+     *
+     * - Lista principal de "Semi-personalizadas" (sin `include_hidden`): EXCLUYE
+     *   las que el miembro ocultó.
+     * - "Explorar" (`include_hidden=true`): incluye TODAS (también las ocultas)
+     *   con flags `is_hidden`/`can_restore`, para poder restaurarlas. El
+     *   ocultamiento NUNCA elimina la rutina de Explorar.
      */
     public function templates(Request $request): JsonResponse
     {
+        $member = $request->attributes->get('auth_member');
+
         $query = Routine::where('is_template', true)
             ->with(['routineExercises.exercise']);
 
@@ -193,12 +206,26 @@ class AppRoutineController extends Controller
             ->orderBy('name')
             ->get();
 
-        $member = $request->attributes->get('auth_member');
-        $routines = $this->excludeHidden($routines, $member->id);
+        $hidden = $this->hiddenRoutineIds($member->id);
+        $includeHidden = $request->boolean('include_hidden');
+
+        // Lista principal: filtra ocultas. Explorar: las conserva.
+        $visible = $includeHidden
+            ? $routines
+            : $routines->reject(fn (Routine $r) => in_array((int) $r->id, $hidden, true))->values();
+
+        $data = $visible->map(function (Routine $r) use ($request, $hidden, $includeHidden): array {
+            $arr = (new RoutineResource($r))->toArray($request);
+            // En Explorar marcamos el estado para permitir "Restaurar".
+            $isHidden = in_array((int) $r->id, $hidden, true);
+            $arr['is_hidden'] = $isHidden;
+            $arr['can_restore'] = $includeHidden && $isHidden;
+            return $arr;
+        })->all();
 
         return response()->json([
             'ok'   => true,
-            'data' => RoutineResource::collection($routines),
+            'data' => $data,
         ]);
     }
 

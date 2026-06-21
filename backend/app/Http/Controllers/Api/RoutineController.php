@@ -8,6 +8,7 @@ use App\Models\MemberRoutineAssignment;
 use App\Models\Routine;
 use App\Models\User;
 use App\Services\NotificationService;
+use App\Services\RealtimeEvents;
 use Illuminate\Http\Request;
 
 class RoutineController extends Controller
@@ -77,6 +78,9 @@ class RoutineController extends Controller
             if ($assignment->wasRecentlyCreated) {
                 app(NotificationService::class)->notifyRoutineAssigned($member, $routine);
             }
+
+            // Realtime: la app refresca "Mis rutinas" al instante (SSE existente).
+            RealtimeEvents::routine($member->id);
         }
 
         return response()->json($this->serialize($routine), 201);
@@ -93,6 +97,7 @@ class RoutineController extends Controller
             $member = Member::find($routine->member_id);
             if ($member) {
                 app(NotificationService::class)->notifyRoutineUpdated($member, $routine);
+                RealtimeEvents::routine($member->id); // SSE → refresca "Mis rutinas"
             }
         }
 
@@ -104,6 +109,9 @@ class RoutineController extends Controller
         // Notifica ANTES de borrar (admin + miembro si estaba asignada).
         $member = $routine->member_id ? Member::find($routine->member_id) : null;
         app(NotificationService::class)->notifyRoutineDeleted($routine, $member);
+        if ($member) {
+            RealtimeEvents::routine($member->id); // SSE → "Mis rutinas" se actualiza
+        }
 
         $routine->delete();
         return response()->json(null, 204);
@@ -144,6 +152,8 @@ class RoutineController extends Controller
             if ($assignment->wasRecentlyCreated) {
                 app(NotificationService::class)->notifyRoutineAssigned($member, $routine);
             }
+
+            RealtimeEvents::routine($member->id); // SSE → "Mis rutinas"
         }
 
         return response()->json($this->serialize($routine));

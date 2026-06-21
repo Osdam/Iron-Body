@@ -11,7 +11,9 @@ use Illuminate\Database\Seeder;
  * JSON `days`. Son visibles en el catálogo "Explorar rutinas" de la app
  * (is_template = true) y también asignables desde el CRM.
  *
- * Idempotente: updateOrCreate por nombre. Ejecutar con:
+ * Fuente: PDFs del gimnasio en "rutinas definidas" (planes por nivel y género).
+ * Idempotente: updateOrCreate por clave estable (nombre + género + nivel).
+ * Ejecutar con:
  *   php artisan db:seed --class=Database\\Seeders\\RoutineTemplatesSeeder
  */
 class RoutineTemplatesSeeder extends Seeder
@@ -42,12 +44,15 @@ class RoutineTemplatesSeeder extends Seeder
     public function run(): void
     {
         foreach ($this->templates() as $tpl) {
+            // Clave estable: nombre + género + nivel (no duplica al re-ejecutar).
             Routine::updateOrCreate(
-                ['name' => $tpl['name']],
+                [
+                    'name'   => $tpl['name'],
+                    'gender' => $tpl['gender'],
+                    'level'  => $tpl['level'],
+                ],
                 [
                     'objective'         => $tpl['objective'],
-                    'level'             => $tpl['level'],
-                    'gender'            => $tpl['gender'],
                     'muscle_group'      => 'Full body',
                     'estimated_minutes' => 60,
                     'duration_minutes'  => 60,

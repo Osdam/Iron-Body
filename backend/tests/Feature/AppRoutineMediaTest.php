@@ -72,8 +72,13 @@ class AppRoutineMediaTest extends TestCase
         $url = 'https://api.ironbodyneiva.cloud/storage/exercises/videos/assigned.mp4';
         $this->localExercise('Press militar con barra de pie', $url);
 
+        // Rutina del CRM para el miembro (personalizada): tiene dueño → "Mis
+        // rutinas". (Una rutina con días pero SIN dueño sería semi/plantilla.)
         $routine = Routine::create([
-            'name' => 'Asignada con días',
+            'name'        => 'Asignada con días',
+            'member_id'   => $member->id,
+            'assigned_member_id' => $member->id,
+            'is_assigned' => true,
             'days' => [[
                 'day'       => 'Lunes',
                 'title'     => 'Hombro',

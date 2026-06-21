@@ -64,20 +64,27 @@ class RoutineHideTest extends TestCase
     public function test_member_can_hide_semi_personalized_routine(): void
     {
         $m = $this->member();
-        $r = $this->templateRoutine('Rutina Principiante - Hombre - prueba');
-        $this->assignToMember($r, $m);
+        $this->templateRoutine('Rutina Principiante - Hombre - prueba');
+        $r = \App\Models\Routine::first();
 
-        // Antes: la ve.
-        $this->getJson('/api/app/routines/assigned', $this->auth($m))
+        // Lista principal de Semi-personalizadas (templates): la ve.
+        $this->getJson('/api/app/routines/templates', $this->auth($m))
             ->assertOk()->assertJsonCount(1, 'data');
 
         // Oculta.
         $this->postJson("/api/app/routines/{$r->id}/hide", [], $this->auth($m))
             ->assertOk()->assertJsonPath('hidden', true);
 
-        // Después: ya no aparece.
-        $this->getJson('/api/app/routines/assigned', $this->auth($m))
+        // Lista principal: ya no aparece.
+        $this->getJson('/api/app/routines/templates', $this->auth($m))
             ->assertOk()->assertJsonCount(0, 'data');
+
+        // Explorar (include_hidden): SIGUE apareciendo, marcada como oculta.
+        $this->getJson('/api/app/routines/templates?include_hidden=true', $this->auth($m))
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.is_hidden', true)
+            ->assertJsonPath('data.0.can_restore', true);
     }
 
     public function test_hiding_does_not_delete_global_routine(): void
@@ -98,16 +105,15 @@ class RoutineHideTest extends TestCase
     {
         $m1 = $this->member('a@example.com', '111');
         $m2 = $this->member('b@example.com', '222');
-        $r = $this->templateRoutine();
-        $this->assignToMember($r, $m1);
-        $this->assignToMember($r, $m2);
+        $this->templateRoutine();
+        $r = \App\Models\Routine::first();
 
         $this->postJson("/api/app/routines/{$r->id}/hide", [], $this->auth($m1))->assertOk();
 
-        // m1 no la ve; m2 sí.
-        $this->getJson('/api/app/routines/assigned', $this->auth($m1))
+        // m1 no la ve en su lista principal; m2 sí (ocultamiento por miembro).
+        $this->getJson('/api/app/routines/templates', $this->auth($m1))
             ->assertOk()->assertJsonCount(0, 'data');
-        $this->getJson('/api/app/routines/assigned', $this->auth($m2))
+        $this->getJson('/api/app/routines/templates', $this->auth($m2))
             ->assertOk()->assertJsonCount(1, 'data');
     }
 
@@ -176,14 +182,18 @@ class RoutineHideTest extends TestCase
     public function test_unhide_restores_routine(): void
     {
         $m = $this->member();
-        $r = $this->templateRoutine();
-        $this->assignToMember($r, $m);
+        $this->templateRoutine();
+        $r = \App\Models\Routine::first();
 
         $this->postJson("/api/app/routines/{$r->id}/hide", [], $this->auth($m))->assertOk();
+        $this->getJson('/api/app/routines/templates', $this->auth($m))
+            ->assertOk()->assertJsonCount(0, 'data');
+
         $this->postJson("/api/app/routines/{$r->id}/unhide", [], $this->auth($m))
             ->assertOk()->assertJsonPath('hidden', false);
 
-        $this->getJson('/api/app/routines/assigned', $this->auth($m))
+        // Restaurada en la lista principal de Semi-personalizadas.
+        $this->getJson('/api/app/routines/templates', $this->auth($m))
             ->assertOk()->assertJsonCount(1, 'data');
     }
 }
