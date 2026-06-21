@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Member;
 use App\Models\MemberSecurityEvent;
+use App\Models\MemberSupportTicket;
 use App\Models\SupportSecurityReport;
 use App\Services\DeviceSessionService;
 use App\Services\NotificationService;
@@ -68,6 +69,10 @@ class SecuritySupportController extends Controller
                 'user_agent' => $request->userAgent(),
             ], ['report_id' => $report->id, 'report_type' => $report->report_type]);
         }
+
+        // El reporte también aterriza en la bandeja de Soporte del CRM, para que
+        // el equipo lo gestione desde el mismo lugar que el resto de tickets.
+        $this->createSupportTicket($report, $member);
 
         $this->notifications->notifySecuritySupportReport($report, $member);
 
@@ -158,6 +163,65 @@ class SecuritySupportController extends Controller
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /** Etiquetas legibles (ES) de cada tipo de reporte de acceso. */
+    private const REPORT_TYPE_LABELS = [
+        SupportSecurityReport::TYPE_STOLEN_DEVICE       => 'Me robaron el celular',
+        SupportSecurityReport::TYPE_LOST_ACCESS         => 'Perdí acceso a mi número',
+        SupportSecurityReport::TYPE_PHONE_CHANGED       => 'Cambié de teléfono',
+        SupportSecurityReport::TYPE_SUSPICIOUS_ACTIVITY => 'Actividad sospechosa',
+        SupportSecurityReport::TYPE_OTHER               => 'Otro',
+    ];
+
+    /**
+     * Crea un ticket en la bandeja de Soporte del CRM a partir del reporte de
+     * acceso. Así el equipo ve y gestiona estas solicitudes desde un solo lugar
+     * (el reporte de seguridad sigue existiendo para la acción de revocar
+     * dispositivos). Aditivo: nunca rompe el flujo de envío del reporte.
+     */
+    private function createSupportTicket(SupportSecurityReport $report, ?Member $member): void
+    {
+        try {
+            $label = self::REPORT_TYPE_LABELS[$report->report_type] ?? $report->report_type;
+
+            // Mensaje con el motivo + datos de contacto (la persona NO está
+            // autenticada y puede haber perdido el número de la cuenta).
+            $lines = ["Solicitud de acceso/seguridad: {$label}."];
+            if ($report->description) {
+                $lines[] = "Descripción: {$report->description}";
+            }
+            $contact = array_filter([
+                $report->name ? "Nombre: {$report->name}" : null,
+                $report->phone ? "Teléfono de contacto: {$report->phone}" : null,
+                $report->email ? "Correo: {$report->email}" : null,
+                $report->document_number ? "Documento: {$report->document_number}" : null,
+            ]);
+            if ($contact !== []) {
+                $lines[] = 'Contacto: ' . implode(' · ', $contact);
+            }
+
+            $ticket = MemberSupportTicket::create([
+                'member_id' => $member?->id,
+                'user_id'   => $member?->user_id,
+                'document'  => $report->document_number,
+                'type'      => 'access',
+                'message'   => implode("\n", $lines),
+                'status'    => MemberSupportTicket::STATUS_NEW,
+                'platform'  => 'login',
+                'metadata'  => array_filter([
+                    'source'           => 'login_security_report',
+                    'security_report_id' => $report->id,
+                    'report_type'      => $report->report_type,
+                    'contact_phone'    => $report->phone,
+                    'contact_email'    => $report->email,
+                ]),
+            ]);
+
+            $this->notifications->notifySupportTicket($ticket->fresh('member'));
+        } catch (\Throwable $e) {
+            // El ticket es aditivo: si falla, el reporte de seguridad ya quedó.
+        }
+    }
 
     private function resolveMember(?string $document): ?Member
     {

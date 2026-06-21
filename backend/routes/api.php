@@ -358,6 +358,9 @@ Route::middleware('auth.admin')->group(function (): void {
     Route::get('attendances/face-enrollment/pending', [AttendanceController::class, 'faceEnrollmentPending']);
     Route::post('attendances/face-enrollment/{member}', [AttendanceController::class, 'enrollFace'])
         ->where('member', '[0-9]+');
+    // Eliminar (des-enrolar) el rostro de un miembro desde el punto físico.
+    Route::delete('attendances/face-enrollment/{member}', [AttendanceController::class, 'deleteFace'])
+        ->where('member', '[0-9]+');
 });
 
 // ── Torniquete — relé HTTP (ESP32, Sonoff, Shelly, ZKTeco, Hikvision, etc.)

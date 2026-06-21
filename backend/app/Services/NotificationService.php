@@ -965,6 +965,52 @@ class NotificationService
     }
 
     /**
+     * Rostro biométrico ELIMINADO desde el CRM. Avisa al CRM para que re-indexe
+     * el terminal facial (quitar el rostro) y al miembro para que sepa que debe
+     * volver a registrarlo. Mismo patrón que notifyFaceEnrolled.
+     */
+    public function notifyFaceDeleted($member): void
+    {
+        $this->safe(function () use ($member): void {
+            $memberId = $this->attr($member, 'id');
+            $name = $this->attr($member, 'full_name') ?? $this->attr($member, 'name') ?? 'Un miembro';
+            $doc  = $this->attr($member, 'document_number');
+            $stamp = now()->format('YmdHi');
+
+            $this->createAdminNotification([
+                'type'        => 'system',
+                'title'       => 'Rostro eliminado',
+                'message'     => "Se eliminó el rostro de {$name} del acceso facial del punto físico.",
+                'priority'    => 'medium',
+                'member'      => $member instanceof Member ? $member : null,
+                'action_type' => 'face_deleted',
+                'should_popup'=> false,
+                'metadata'    => array_filter([
+                    'member_id'   => $memberId,
+                    'member_name' => $name,
+                    'document'    => $doc,
+                ]),
+                'event_key'   => $memberId ? "face_deleted_admin_{$memberId}_{$stamp}" : null,
+            ]);
+
+            if ($member instanceof Member) {
+                $this->createMemberNotification($member, [
+                    'type'        => 'system',
+                    'title'       => 'Rostro eliminado',
+                    'message'     => 'Tu rostro fue eliminado del acceso facial. Acércate al gimnasio para volver a registrarlo.',
+                    'priority'    => 'medium',
+                    'should_popup'=> true,
+                    'metadata'    => array_filter(['member_name' => $name]),
+                    'event_key'   => "face_deleted_member_{$memberId}_{$stamp}",
+                ]);
+
+                // Señal real-time al miembro (refresca estado biométrico/perfil).
+                RealtimeEvents::biometric($memberId);
+            }
+        });
+    }
+
+    /**
      * Evento/publicidad publicado desde el CRM. Difunde a TODOS los miembros
      * (notificación + popup) y deja copia al CRM. Emite señal real-time para que
      * la app muestre el aviso al instante (no al abrir la pantalla de Eventos).

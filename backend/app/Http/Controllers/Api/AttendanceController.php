@@ -10,6 +10,7 @@ use App\Models\TurnstileSetting;
 use App\Models\User;
 use App\Services\NotificationService;
 use App\Services\TurnstileService;
+use App\Services\WeeklyStreakService;
 use App\Support\SseStream;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -102,6 +103,17 @@ class AttendanceController extends Controller
                 'note' => $data['note'] ?? null,
                 'captured_at' => now(),
             ]);
+
+            // Racha semanal: la ÚNICA forma de marcar un día activo es ir al
+            // gimnasio (asistencia de ENTRADA). Abrir la app ya no marca racha.
+            // Idempotente y aditivo: nunca rompe el registro de la asistencia.
+            if ($action === 'entry' && $member) {
+                try {
+                    app(WeeklyStreakService::class)->touch($member, 'attendance');
+                } catch (Throwable $e) {
+                    // El marcado de racha es aditivo: no bloquea la asistencia.
+                }
+            }
 
             $turnstileResult = $this->maybeOpenTurnstile($attendance, $user);
 
@@ -317,6 +329,48 @@ class AttendanceController extends Controller
             return response()->json([
                 'ok' => false,
                 'message' => 'No se pudo registrar el rostro.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Elimina (des-enrola) el rostro biométrico de un miembro desde el CRM.
+     * Borra el registro biométrico y su imagen, devuelve el estado a "pendiente"
+     * y avisa en tiempo real (SSE) al CRM (re-index del terminal) y al miembro.
+     */
+    public function deleteFace(Member $member): JsonResponse
+    {
+        try {
+            $biometric = $member->biometric;
+
+            if (! $biometric) {
+                return response()->json([
+                    'ok' => true,
+                    'biometric_status' => $member->biometric_status,
+                    'message' => 'El miembro no tenía rostro registrado.',
+                ]);
+            }
+
+            if ($biometric->face_path) {
+                Storage::disk('local')->delete($biometric->face_path);
+            }
+            $biometric->delete();
+
+            $member->biometric_status = Member::BIOMETRIC_PENDING;
+            $member->save();
+
+            // Aviso real-time: CRM (re-index del terminal facial) + miembro (app).
+            app(NotificationService::class)->notifyFaceDeleted($member->fresh());
+
+            return response()->json([
+                'ok' => true,
+                'biometric_status' => $member->biometric_status,
+                'message' => 'Rostro eliminado correctamente. El miembro puede volver a registrarlo.',
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'No se pudo eliminar el rostro.',
             ], 500);
         }
     }
