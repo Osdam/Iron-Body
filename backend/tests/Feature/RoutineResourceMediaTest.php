@@ -55,6 +55,51 @@ class RoutineResourceMediaTest extends TestCase
         return null;
     }
 
+    public function test_template_routine_is_semi_personalized(): void
+    {
+        $routine = Routine::create([
+            'name'        => 'Plan base mujer principiante',
+            'is_template' => true,
+            'level'       => 'Principiante',
+            'gender'      => 'Mujer',
+            'days'        => [[
+                'day' => 'Lunes', 'title' => 'Pierna',
+                'exercises' => [['name' => 'Sentadilla', 'sets' => 4, 'reps' => '12']],
+            ]],
+        ]);
+
+        $out = (new RoutineResource($routine))->toArray($this->request());
+        $this->assertSame('semi_personalized', $out['routine_type']);
+    }
+
+    public function test_routine_with_exercise_id_is_personalized(): void
+    {
+        $ex = $this->localExercise('Press de pecho en máquina',
+            'https://api.ironbodyneiva.cloud/storage/exercises/videos/p.mp4');
+
+        $routine = Routine::create([
+            'name'      => 'Hecha para el miembro',
+            'exercises' => [['name' => 'X', 'exercise_id' => $ex->id, 'sets' => 4, 'reps' => 10]],
+        ]);
+
+        $out = (new RoutineResource($routine))->toArray($this->request());
+        $this->assertSame('personalized', $out['routine_type']);
+    }
+
+    public function test_multiday_without_catalog_is_semi_personalized(): void
+    {
+        $routine = Routine::create([
+            'name' => 'Programa por días',
+            'days' => [[
+                'day' => 'Lunes', 'title' => 'Pecho',
+                'exercises' => [['name' => 'Ejercicio libre sin catálogo', 'sets' => 3, 'reps' => '10']],
+            ]],
+        ]);
+
+        $out = (new RoutineResource($routine))->toArray($this->request());
+        $this->assertSame('semi_personalized', $out['routine_type']);
+    }
+
     public function test_json_exercise_by_name_gets_catalog_video(): void
     {
         $url = 'https://api.ironbodyneiva.cloud/storage/exercises/videos/abc.mp4';
