@@ -203,6 +203,8 @@ class RoutineController extends Controller
             'notes' => 'sometimes|nullable|string',
             'exercises' => 'sometimes|nullable|array',
             'exercises.*.name' => 'sometimes|string|max:255',
+            'exercises.*.exerciseId' => 'sometimes|nullable|integer',
+            'exercises.*.exercise_id' => 'sometimes|nullable|integer',
             'exercises.*.muscleGroup' => 'sometimes|nullable|string|max:100',
             'exercises.*.sets' => 'sometimes|nullable|integer|min:0',
             'exercises.*.reps' => 'sometimes|nullable|integer|min:0',
@@ -226,9 +228,18 @@ class RoutineController extends Controller
         if (array_key_exists('assignedMemberName', $data)) $out['assigned_member_name'] = $data['assignedMemberName'];
         if (array_key_exists('assignedMemberId', $data)) $out['assigned_member_id'] = $data['assignedMemberId'];
         if (array_key_exists('exercises', $data)) {
-            $out['exercises'] = array_map(function ($ex, $i) {
-                return [
+            // Vínculo real al catálogo: si el ejercicio viene del catálogo (o se
+            // resuelve de forma SEGURA por id/alias/nombre exacto), persistimos
+            // `exercise_id` + media. El nombre visible se conserva tal cual.
+            $resolver = app(\App\Services\Exercises\ExerciseCatalogResolver::class);
+
+            $out['exercises'] = array_map(function ($ex, $i) use ($resolver) {
+                $exId = $ex['exerciseId'] ?? $ex['exercise_id'] ?? null;
+                $exId = $exId !== null && $exId !== '' ? (int) $exId : null;
+
+                $item = [
                     'id' => $ex['id'] ?? ('ex-' . ($i + 1)),
+                    'exercise_id' => $exId,
                     'name' => $ex['name'] ?? '',
                     'muscleGroup' => $ex['muscleGroup'] ?? '',
                     'sets' => (int) ($ex['sets'] ?? 0),
@@ -238,6 +249,18 @@ class RoutineController extends Controller
                     'notes' => $ex['notes'] ?? '',
                     'order' => (int) ($ex['order'] ?? ($i + 1)),
                 ];
+
+                $match = $resolver->resolveSafe($exId, $item['name']);
+                if ($match !== null) {
+                    $media = $resolver->mediaFor($match);
+                    $item['exercise_id']  = $media['exercise_id'];
+                    $item['video_url']    = $media['video_url'];
+                    $item['gif_url']      = $media['gif_url'];
+                    $item['thumbnail_url']= $media['thumbnail_url'];
+                    $item['media_type']   = $media['media_type'];
+                }
+
+                return $item;
             }, $data['exercises'] ?? [], array_keys($data['exercises'] ?? []));
         }
         return $out;

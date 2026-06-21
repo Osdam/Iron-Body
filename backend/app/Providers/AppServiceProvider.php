@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\Exercises\ExerciseCatalogResolver;
 use App\Services\Wompi\WompiConfigValidator;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
@@ -13,7 +14,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Resolver de catálogo de ejercicios: una sola carga de catálogo+aliases
+        // por request (evita N+1 al serializar muchas rutinas).
+        $this->app->singleton(ExerciseCatalogResolver::class);
     }
 
     /**
