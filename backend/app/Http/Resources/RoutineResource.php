@@ -19,7 +19,7 @@ class RoutineResource extends JsonResource
         $exercises = $this->routineExercises
             ->sortBy('sort_order')
             ->values()
-            ->map(fn (RoutineExercise $re): array => $this->serializeRoutineExercise($re))
+            ->map(fn (RoutineExercise $re): array => $this->serializeRoutineExercise($re, $resolver))
             ->all();
 
         // Fallback: si la tabla normalizada está vacía pero la rutina trae
@@ -123,18 +123,29 @@ class RoutineResource extends JsonResource
         })->values()->all();
     }
 
-    private function serializeRoutineExercise(RoutineExercise $re): array
+    private function serializeRoutineExercise(RoutineExercise $re, ExerciseCatalogResolver $resolver): array
     {
         /** @var Exercise|null $ex */
         $ex = $re->exercise;
 
+        // Media absoluta y consistente con el resto del recurso.
+        $media = $ex ? $resolver->mediaFor($ex) : null;
+
         return [
-            'id'         => (string) $re->id,
-            'sets'       => (int) $re->sets,
-            'reps'       => (string) ($re->reps ?: '10'),
-            'weight'     => $re->weight !== null ? (float) $re->weight : null,
-            'notes'      => $re->notes ?? '',
-            'sort_order' => (int) $re->sort_order,
+            'id'             => (string) $re->id,
+            'exercise_id'    => $ex ? (int) $ex->id : null,
+            'sets'           => (int) $re->sets,
+            'reps'           => (string) ($re->reps ?: '10'),
+            'weight'         => $re->weight !== null ? (float) $re->weight : null,
+            'notes'          => $re->notes ?? '',
+            'sort_order'     => (int) $re->sort_order,
+            // Media también a nivel de item (forma estable que la app puede leer
+            // directo, igual que en los ejercicios JSON).
+            'video_url'      => $media['video_url'] ?? null,
+            'media_type'     => $media['media_type'] ?? null,
+            'gif_url'        => $media['gif_url'] ?? null,
+            'thumbnail_url'  => $media['thumbnail_url'] ?? null,
+            'playback_speed' => $media['playback_speed'] ?? null,
             'exercise'   => $ex ? [
                 'id'                => (string) $ex->id,
                 'name'              => $ex->name,
@@ -149,9 +160,11 @@ class RoutineResource extends JsonResource
                 'muscles_worked'    => $ex->muscles_worked ?? [],
                 'suggested_sets'    => (int) ($ex->suggested_sets ?? 3),
                 'suggested_reps'    => $ex->suggested_reps ?? '8-12',
-                'gif_url'           => $ex->gif_url,
-                'thumbnail_url'     => $ex->thumbnail_url,
-                'video_url'         => $ex->video_path,
+                'gif_url'           => $media['gif_url'] ?? $ex->gif_url,
+                'thumbnail_url'     => $media['thumbnail_url'] ?? $ex->thumbnail_url,
+                'video_url'         => $media['video_url'] ?? $ex->video_path,
+                'media_type'        => $media['media_type'] ?? null,
+                'playback_speed'    => $media['playback_speed'] ?? null,
             ] : null,
         ];
     }

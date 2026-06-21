@@ -127,7 +127,13 @@ class ExerciseMediaAuditCommand extends Command
             array_map(fn ($r) => array_values($r), $shown),
         );
 
+        $verifiedAliases = ExerciseAlias::query()->where('is_verified', true)->count();
+
         $this->newLine();
+        $this->info(sprintf(
+            'Aliases verificados: %d',
+            $verifiedAliases,
+        ));
         $this->info(sprintf(
             'Total: %d nombres únicos · matched=%d · needs_review=%d · ambiguous=%d · no_candidate=%d',
             count($usages), $stats['matched'], $stats['needs_review'], $stats['ambiguous'], $stats['no_candidate'],
