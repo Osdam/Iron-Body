@@ -44,11 +44,11 @@ class EnsureAdminAuth
     {
         $token = $request->bearerToken();
 
-        // SSE: el `EventSource` del navegador NO puede enviar el header
-        // Authorization. SOLO para las rutas de stream aceptamos el token de
-        // sesión por query (`?token=`). Se limita a `*/stream` para no normalizar
-        // tokens-en-URL (quedan en logs) en el resto de la superficie admin.
-        if (! $token && $request->is('*/stream')) {
+        // El navegador NO puede enviar el header Authorization en recursos que
+        // carga directo: SSE (`EventSource`) e imágenes (`<img src>`). SOLO para
+        // esas rutas (streams y face-image) aceptamos el token por query
+        // (`?token=`); se limita para no normalizar tokens-en-URL en el resto.
+        if (! $token && ($request->is('*/stream') || $request->is('*/face-image/*'))) {
             $queryToken = $request->query('token');
             $token = is_string($queryToken) ? $queryToken : null;
         }
