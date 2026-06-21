@@ -73,62 +73,16 @@ class RoutineResource extends JsonResource
             'is_assigned'       => (bool) $this->is_assigned,
             'created_by_admin'  => (bool) $this->created_by_admin,
             'is_template'       => (bool) $this->is_template,
-            // Clasificación para la app (sin migración):
-            //  - semi_personalized: plan base del gimnasio (plantilla/Seeder, por
-            //    días, sin vínculo al catálogo) → premium SIN forzar video.
-            //  - personalized: hecha para el miembro con ejercicios del catálogo
-            //    (exercise_id) → puede mostrar referencia visual/video.
-            'routine_type'      => $this->classifyRoutineType($exercises, $days),
+            // Clasificación (fuente única en el modelo Routine):
+            //  - semi_personalized: plan base del gimnasio (plantilla/Seeder) →
+            //    premium SIN forzar video; ocultable por miembro.
+            //  - personalized: hecha para el miembro con catálogo (exercise_id).
+            'routine_type'      => $this->resource->classifyType(),
             'exercises'         => $exercises,
             'exercise_count'    => count($exercises),
             'days'              => $days,
             'created_at'        => optional($this->created_at)->toIso8601String(),
         ];
-    }
-
-    /**
-     * Clasifica la rutina para que la app separe los flujos:
-     *  - 'semi_personalized': plantilla/base del gimnasio (Seeder), normalmente
-     *    multi-día y sin vínculo al catálogo. NO debe forzar video.
-     *  - 'personalized': hecha para el miembro con ejercicios del catálogo
-     *    (algún exercise_id) → puede mostrar referencia visual.
-     *
-     * Usa SOLO campos existentes (sin migración). `is_template` es el separador
-     * principal (los planes base del gimnasio son plantillas).
-     *
-     * @param  list<array<string,mixed>> $exercises
-     * @param  list<array<string,mixed>> $days
-     */
-    private function classifyRoutineType(array $exercises, array $days): string
-    {
-        if ((bool) $this->is_template) {
-            return 'semi_personalized';
-        }
-
-        $hasCatalogLink = $this->anyHasExerciseId($exercises)
-            || collect($days)->contains(fn (array $d) => $this->anyHasExerciseId($d['exercises'] ?? []));
-
-        if ($hasCatalogLink) {
-            return 'personalized';
-        }
-
-        // Sin vínculo al catálogo: si es un programa multi-día es un plan base.
-        return ! empty($days) ? 'semi_personalized' : 'personalized';
-    }
-
-    /** @param array<int,array<string,mixed>> $items */
-    private function anyHasExerciseId(array $items): bool
-    {
-        foreach ($items as $it) {
-            if (is_array($it) && ! empty($it['exercise_id'])) {
-                return true;
-            }
-            // Ruta normalizada: exercise_id puede venir dentro de `exercise`.
-            if (is_array($it) && ! empty($it['exercise']['id'])) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**

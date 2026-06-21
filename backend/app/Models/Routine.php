@@ -51,4 +51,50 @@ class Routine extends Model
     {
         return $this->hasMany(MemberRoutineAssignment::class);
     }
+
+    /**
+     * Clasificación para la app (fuente única, sin migración):
+     *  - 'semi_personalized': plan base del gimnasio (plantilla/Seeder, por días,
+     *    sin vínculo real al catálogo). NO fuerza video; es OCULTABLE por miembro.
+     *  - 'personalized': hecha para el miembro con ejercicios del catálogo
+     *    (exercise_id) → puede mostrar referencia visual.
+     */
+    public function classifyType(): string
+    {
+        return $this->isSemiPersonalized() ? 'semi_personalized' : 'personalized';
+    }
+
+    public function isSemiPersonalized(): bool
+    {
+        if ($this->is_template) {
+            return true; // los planes base del gimnasio son plantillas
+        }
+        if ($this->hasCatalogLink()) {
+            return false; // vinculada al catálogo → personalizada
+        }
+        // Sin vínculo: un programa multi-día es un plan base.
+        return is_array($this->days) && ! empty($this->days);
+    }
+
+    /** ¿Algún ejercicio (JSON, days o tabla normalizada) referencia el catálogo? */
+    private function hasCatalogLink(): bool
+    {
+        $inJson = collect(is_array($this->exercises) ? $this->exercises : [])
+            ->contains(fn ($e) => is_array($e) && ! empty($e['exercise_id']));
+        if ($inJson) {
+            return true;
+        }
+
+        $inDays = collect(is_array($this->days) ? $this->days : [])
+            ->contains(function ($d) {
+                $exs = is_array($d['exercises'] ?? null) ? $d['exercises'] : [];
+                return collect($exs)->contains(fn ($e) => is_array($e) && ! empty($e['exercise_id']));
+            });
+        if ($inDays) {
+            return true;
+        }
+
+        // routine_exercises siempre lleva exercise_id (FK): su existencia = vínculo.
+        return $this->routineExercises()->exists();
+    }
 }

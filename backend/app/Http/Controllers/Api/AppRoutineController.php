@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\RoutineResource;
+use App\Models\MemberHiddenRoutine;
 use App\Models\MemberRoutineAssignment;
 use App\Models\Plan;
 use App\Models\Routine;
@@ -12,6 +13,7 @@ use App\Models\RoutineExercise;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 class AppRoutineController extends Controller
 {
@@ -34,10 +36,95 @@ class AppRoutineController extends Controller
             ->get();
 
         $routines = $viaAssignment->merge($viaMemberId)->unique('id')->values();
+        $routines = $this->excludeHidden($routines, $member->id);
 
         return response()->json([
             'ok'   => true,
             'data' => RoutineResource::collection($routines),
+        ]);
+    }
+
+    /** Ids de rutinas ocultadas por el miembro (solo afecta su vista). */
+    private function hiddenRoutineIds(int $memberId): array
+    {
+        return MemberHiddenRoutine::query()
+            ->where('member_id', $memberId)
+            ->pluck('routine_id')
+            ->all();
+    }
+
+    /**
+     * Excluye de una colección de rutinas las ocultadas por el miembro.
+     *
+     * @param  Collection<int,Routine> $routines
+     * @return Collection<int,Routine>
+     */
+    private function excludeHidden(Collection $routines, int $memberId): Collection
+    {
+        $hidden = $this->hiddenRoutineIds($memberId);
+        if (empty($hidden)) {
+            return $routines;
+        }
+
+        return $routines
+            ->reject(fn (Routine $r) => in_array((int) $r->id, $hidden, true))
+            ->values();
+    }
+
+    /**
+     * POST /api/app/routines/{routine}/hide
+     * Oculta una rutina semi-personalizada (plan base del gimnasio) SOLO para el
+     * miembro autenticado. NO borra la rutina global. Idempotente.
+     */
+    public function hide(Request $request, Routine $routine): JsonResponse
+    {
+        $member = $request->attributes->get('auth_member');
+
+        // Solo se ocultan planes base del gimnasio (semi-personalizadas). Las
+        // personalizadas tienen su propio flujo (destroy) y NO se ocultan aquí
+        // para no esconder rutinas hechas para el miembro.
+        if (! $routine->isSemiPersonalized()) {
+            return response()->json([
+                'ok'      => false,
+                'message' => 'Solo puedes quitar rutinas semi-personalizadas del gimnasio.',
+            ], 422);
+        }
+
+        $record = MemberHiddenRoutine::firstOrCreate(
+            ['member_id' => $member->id, 'routine_id' => $routine->id],
+            [
+                'routine_type' => $routine->classifyType(),
+                'reason'       => $request->input('reason'),
+                'hidden_at'    => now(),
+            ],
+        );
+
+        return response()->json([
+            'ok'      => true,
+            'hidden'  => true,
+            'message' => $record->wasRecentlyCreated
+                ? 'Rutina quitada de tus semi-personalizadas.'
+                : 'Esta rutina ya estaba oculta.',
+        ]);
+    }
+
+    /**
+     * POST /api/app/routines/{routine}/unhide
+     * Restaura una rutina previamente ocultada por el miembro. Idempotente.
+     */
+    public function unhide(Request $request, Routine $routine): JsonResponse
+    {
+        $member = $request->attributes->get('auth_member');
+
+        MemberHiddenRoutine::query()
+            ->where('member_id', $member->id)
+            ->where('routine_id', $routine->id)
+            ->delete();
+
+        return response()->json([
+            'ok'      => true,
+            'hidden'  => false,
+            'message' => 'Rutina restaurada en tus semi-personalizadas.',
         ]);
     }
 
@@ -63,6 +150,7 @@ class AppRoutineController extends Controller
 
         $routines = $viaAssignment->merge($viaMemberId)
             ->unique('id')->sortBy('id')->values();
+        $routines = $this->excludeHidden($routines, $member->id)->sortBy('id')->values();
 
         if ($routines->isEmpty()) {
             return response()->json([
@@ -104,6 +192,9 @@ class AppRoutineController extends Controller
             ->orderBy('gender')
             ->orderBy('name')
             ->get();
+
+        $member = $request->attributes->get('auth_member');
+        $routines = $this->excludeHidden($routines, $member->id);
 
         return response()->json([
             'ok'   => true,

@@ -560,6 +560,10 @@ Route::middleware('auth.member')->group(function (): void {
     Route::post('app/routines/templates/{routine}/adopt', [AppRoutineController::class, 'adopt']);
     Route::post('app/routines',                   [AppRoutineController::class, 'store']);
     Route::post('app/routines/{routine}/complete',[AppRoutineController::class, 'complete']);
+    // Ocultar/restaurar una rutina semi-personalizada SOLO para este miembro
+    // (no borra la rutina global). Ver MemberHiddenRoutine.
+    Route::post('app/routines/{routine}/hide',    [AppRoutineController::class, 'hide']);
+    Route::post('app/routines/{routine}/unhide',  [AppRoutineController::class, 'unhide']);
     // Resumen nutricional diario (sincroniza desde la app → push al cumplir meta)
     Route::post('app/nutrition/day',              [AppNutritionController::class, 'store']);
     Route::delete('app/routines/{routine}',       [AppRoutineController::class, 'destroy']);
