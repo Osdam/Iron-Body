@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Http\Resources\RoutineResource;
 use App\Models\Exercise;
+use App\Models\ExerciseAlias;
 use App\Models\Routine;
 use App\Models\RoutineExercise;
+use App\Services\Exercises\ExerciseCatalogResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Tests\TestCase;
@@ -154,6 +156,73 @@ class RoutineResourceMediaTest extends TestCase
 
         $this->assertSame($url, $ex['video_url']);
         $this->assertSame('video', $ex['media_type']);
+    }
+
+    public function test_verified_alias_resolves_video_in_resource(): void
+    {
+        // Catálogo con el nombre REAL; la rutina usa un nombre distinto.
+        $catalog = $this->localExercise(
+            'Press de pecho en máquina',
+            'https://api.ironbodyneiva.cloud/storage/exercises/videos/pecho.mp4',
+        );
+        $resolver = app(ExerciseCatalogResolver::class);
+        ExerciseAlias::create([
+            'alias_name'       => 'Press plano en máquina Hammer',
+            'normalized_alias' => $resolver->normalize('Press plano en máquina Hammer'),
+            'exercise_id'      => $catalog->id,
+            'source'           => 'seed',
+            'confidence'       => 1.0,
+            'is_verified'      => true,
+        ]);
+        $resolver->refresh();
+
+        $routine = Routine::create([
+            'name'      => 'Pecho',
+            'exercises' => [['name' => 'Press plano en máquina Hammer', 'sets' => 4, 'reps' => 10]],
+        ]);
+
+        $out = (new RoutineResource($routine))->toArray($this->request());
+        $ex = $out['exercises'][0];
+
+        $this->assertSame(
+            'https://api.ironbodyneiva.cloud/storage/exercises/videos/pecho.mp4',
+            $ex['video_url'],
+        );
+        $this->assertSame('video', $ex['media_type']);
+        $this->assertSame($catalog->id, $ex['exercise_id']);
+    }
+
+    public function test_days_exercises_get_catalog_video(): void
+    {
+        $url = 'https://api.ironbodyneiva.cloud/storage/exercises/videos/day.mp4';
+        $this->localExercise('Press plano en máquina Hammer', $url);
+
+        // Rutina multi-día: ejercicios dentro de `days`, por nombre, sin media.
+        $routine = Routine::create([
+            'name' => 'Programa semanal',
+            'days' => [
+                [
+                    'day'       => 'Lunes',
+                    'title'     => 'Pecho',
+                    'exercises' => [
+                        ['name' => 'Press plano en máquina Hammer', 'sets' => 4, 'reps' => 10],
+                    ],
+                ],
+            ],
+        ]);
+
+        $out = (new RoutineResource($routine))->toArray($this->request());
+
+        // Dentro de days[].exercises[].
+        $dayEx = $out['days'][0]['exercises'][0];
+        $this->assertSame($url, $dayEx['video_url']);
+        $this->assertSame('video', $dayEx['media_type']);
+
+        // Y en la lista plana `exercises` (que la app aplana desde days).
+        $flat = $this->findExercise($out, 'Press plano en máquina Hammer');
+        $this->assertNotNull($flat);
+        $this->assertSame($url, $flat['video_url']);
+        $this->assertSame('video', $flat['media_type']);
     }
 
     public function test_normalized_routine_still_serializes_media(): void
