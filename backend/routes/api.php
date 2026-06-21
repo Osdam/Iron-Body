@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\GymEquipmentController;
 use App\Http\Controllers\Api\AppStoreController;
 use App\Http\Controllers\Api\Admin\ProductController;
 use App\Http\Controllers\Api\Admin\CajaController;
+use App\Http\Controllers\Api\Admin\EarningsController;
 use App\Http\Controllers\Api\ExerciseController;
 use App\Http\Controllers\Api\AppClassController;
 use App\Http\Controllers\Api\AppExerciseController;
@@ -782,6 +783,10 @@ Route::apiResource('admin/products', ProductController::class)
 // ── Caja / Punto de venta (CRM) ───────────────────────────────────────────────
 // POS en mostrador + gestión de pedidos que llegan de la app. (Luego se
 // restringirá a ciertos usuarios.) Ver docs/STORE_CAJA_MODULE.md.
+// Reporte de ganancias del CRM (gimnasio + cafetería). Bajo /api/admin/* → blindado.
+Route::get('admin/earnings',                     [EarningsController::class, 'index']);
+Route::get('admin/earnings/stream',              [EarningsController::class, 'stream']); // SSE tiempo real
+
 Route::get('admin/caja/stats',                  [CajaController::class, 'stats']);
 Route::get('admin/caja/sales',                  [CajaController::class, 'index']);
 Route::post('admin/caja/sales',                 [CajaController::class, 'store']);
