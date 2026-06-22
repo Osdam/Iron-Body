@@ -8,6 +8,7 @@ use App\Models\Plan;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class UserController extends Controller
@@ -61,6 +62,10 @@ class UserController extends Controller
      * Crea un usuario/miembro desde el CRM. SOLO identidad y datos personales:
      * el plan y la membresía NO se fijan aquí, se otorgan exclusivamente con
      * pagos (así la app y el historial quedan sincronizados con una sola fuente).
+     *
+     * Crea TAMBIÉN el registro `Member` vinculado: la app inicia sesión por
+     * `members.document_number`, así que sin el Member el login respondía
+     * "Documento no encontrado". El documento se normaliza igual que en el login.
      */
     public function store(Request $request)
     {
@@ -76,20 +81,49 @@ class UserController extends Controller
             'notes' => 'nullable|string|max:2000',
         ]);
 
-        $user = User::create([
-            'name' => $validated['fullName'],
-            'email' => $validated['email'] ?? 'user-' . time() . '-' . mt_rand(1000, 9999) . '@ironbody.local',
-            'password' => bcrypt('default-password'),
-            'document' => $validated['document'],
-            'phone' => $validated['phone'],
-            'birth_date' => $validated['birthDate'] ?? null,
-            'gender' => $validated['gender'] ?? null,
-            'address' => $validated['address'] ?? null,
-            'emergency_contact' => $validated['emergencyContact'] ?? null,
-            'notes' => $validated['notes'] ?? null,
-            'status' => 'active',
-            // plan / membresía NO se fijan al crear: se otorgan con pagos.
-        ]);
+        $document = Member::normalizeDocumentNumber($validated['document']);
+
+        // El documento es la llave de acceso del miembro (único en members).
+        if ($document === null) {
+            return response()->json(['message' => 'El documento no es válido.'], 422);
+        }
+        if (Member::where('document_number', $document)->exists()
+            || User::where('document', $document)->exists()) {
+            return response()->json([
+                'message' => 'Ya existe un miembro registrado con ese documento.',
+            ], 422);
+        }
+
+        $user = DB::transaction(function () use ($validated, $document): User {
+            $user = User::create([
+                'name' => $validated['fullName'],
+                'email' => $validated['email'] ?? 'user-' . time() . '-' . mt_rand(1000, 9999) . '@ironbody.local',
+                'password' => bcrypt('default-password'),
+                'document' => $document,
+                'phone' => $validated['phone'],
+                'birth_date' => $validated['birthDate'] ?? null,
+                'gender' => $validated['gender'] ?? null,
+                'address' => $validated['address'] ?? null,
+                'emergency_contact' => $validated['emergencyContact'] ?? null,
+                'notes' => $validated['notes'] ?? null,
+                'status' => 'active',
+                // plan / membresía NO se fijan al crear: se otorgan con pagos.
+            ]);
+
+            // Member vinculado para que la app reconozca al miembro por documento.
+            Member::create([
+                'user_id' => $user->id,
+                'full_name' => $validated['fullName'],
+                'email' => $validated['email'] ?? null,
+                'document_number' => $document,
+                'phone' => $validated['phone'],
+                'gender' => $validated['gender'] ?? null,
+                'birth_date' => $validated['birthDate'] ?? null,
+                'status' => Member::STATUS_ACTIVE,
+            ]);
+
+            return $user;
+        });
 
         // Auditoría: miembro creado desde el CRM (ADITIVO).
         app(\App\Services\NotificationService::class)
