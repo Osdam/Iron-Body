@@ -57,6 +57,11 @@ class UserController extends Controller
         ]);
     }
 
+    /**
+     * Crea un usuario/miembro desde el CRM. SOLO identidad y datos personales:
+     * el plan y la membresía NO se fijan aquí, se otorgan exclusivamente con
+     * pagos (así la app y el historial quedan sincronizados con una sola fuente).
+     */
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -64,10 +69,11 @@ class UserController extends Controller
             'document' => 'required|string|max:50',
             'phone' => 'required|string|max:20',
             'email' => 'nullable|email|max:255',
-            'status' => 'nullable|string|in:active,inactive,pending,expired',
-            'plan' => 'nullable|string|max:100',
-            'membershipStartDate' => 'nullable|date',
-            'membershipEndDate' => 'nullable|date',
+            'birthDate' => 'nullable|date',
+            'gender' => 'nullable|string|max:30',
+            'address' => 'nullable|string|max:255',
+            'emergencyContact' => 'nullable|string|max:255',
+            'notes' => 'nullable|string|max:2000',
         ]);
 
         $user = User::create([
@@ -76,10 +82,13 @@ class UserController extends Controller
             'password' => bcrypt('default-password'),
             'document' => $validated['document'],
             'phone' => $validated['phone'],
-            'status' => $validated['status'] ?? 'active',
-            'plan' => $validated['plan'] ?? null,
-            'membership_start_date' => $validated['membershipStartDate'] ?? null,
-            'membership_end_date' => $validated['membershipEndDate'] ?? null,
+            'birth_date' => $validated['birthDate'] ?? null,
+            'gender' => $validated['gender'] ?? null,
+            'address' => $validated['address'] ?? null,
+            'emergency_contact' => $validated['emergencyContact'] ?? null,
+            'notes' => $validated['notes'] ?? null,
+            'status' => 'active',
+            // plan / membresía NO se fijan al crear: se otorgan con pagos.
         ]);
 
         // Auditoría: miembro creado desde el CRM (ADITIVO).
@@ -89,6 +98,11 @@ class UserController extends Controller
         return response()->json($this->serialize($user), 201);
     }
 
+    /**
+     * Actualiza identidad / datos personales del miembro. El plan y la membresía
+     * NO se tocan aquí (se gestionan con pagos); el estado CRM (active/inactive)
+     * sí, porque es una bandera de gestión, no la membresía vigente de la app.
+     */
     public function update(Request $request, User $user)
     {
         $validated = $request->validate([
@@ -96,27 +110,35 @@ class UserController extends Controller
             'email' => 'sometimes|nullable|email|max:255',
             'document' => 'sometimes|nullable|string|max:50',
             'phone' => 'sometimes|nullable|string|max:20',
+            'birthDate' => 'sometimes|nullable|date',
+            'gender' => 'sometimes|nullable|string|max:30',
+            'address' => 'sometimes|nullable|string|max:255',
+            'emergencyContact' => 'sometimes|nullable|string|max:255',
+            'notes' => 'sometimes|nullable|string|max:2000',
             'status' => 'sometimes|nullable|string|in:active,inactive,pending,expired',
-            'plan' => 'sometimes|nullable|string|max:100',
-            'membershipStartDate' => 'sometimes|nullable|date',
-            'membershipEndDate' => 'sometimes|nullable|date',
         ]);
 
         // Estado anterior para detectar cambios reales (notificaciones).
-        $originalPlan = $user->plan;
         $originalStatus = $user->status;
 
-        foreach (['name', 'email', 'document', 'phone', 'status', 'plan'] as $field) {
+        foreach (['name', 'email', 'document', 'phone', 'status'] as $field) {
             if (array_key_exists($field, $validated)) {
                 $user->{$field} = $validated[$field];
             }
         }
 
-        if (array_key_exists('membershipStartDate', $validated)) {
-            $user->membership_start_date = $validated['membershipStartDate'];
-        }
-        if (array_key_exists('membershipEndDate', $validated)) {
-            $user->membership_end_date = $validated['membershipEndDate'];
+        // Datos personales (camelCase del CRM → columnas snake_case).
+        $personal = [
+            'birthDate' => 'birth_date',
+            'gender' => 'gender',
+            'address' => 'address',
+            'emergencyContact' => 'emergency_contact',
+            'notes' => 'notes',
+        ];
+        foreach ($personal as $input => $column) {
+            if (array_key_exists($input, $validated)) {
+                $user->{$column} = $validated[$input];
+            }
         }
 
         $user->save();
@@ -136,6 +158,13 @@ class UserController extends Controller
             if (array_key_exists('phone', $validated)) {
                 $memberUpdates['phone'] = $validated['phone'];
             }
+            // Datos personales que la app también usa (Member es su fuente).
+            if (array_key_exists('gender', $validated)) {
+                $memberUpdates['gender'] = $validated['gender'];
+            }
+            if (array_key_exists('birthDate', $validated)) {
+                $memberUpdates['birth_date'] = $validated['birthDate'];
+            }
             if (($validated['status'] ?? null) === 'active') {
                 $memberUpdates['status'] = Member::STATUS_ACTIVE;
             }
@@ -145,11 +174,6 @@ class UserController extends Controller
             }
 
             $notifier = app(\App\Services\NotificationService::class);
-
-            // Si el admin cambió el plan, notifica al miembro (ADITIVO).
-            if (array_key_exists('plan', $validated) && $validated['plan'] !== $originalPlan) {
-                $notifier->notifyMembershipPlanChanged($user->appMember, $validated['plan']);
-            }
 
             // Si el estado pasó a inactivo/vencido, notifica membresía cancelada.
             $newStatus = $validated['status'] ?? null;
@@ -192,6 +216,11 @@ class UserController extends Controller
             'email',
             'document',
             'phone',
+            'birth_date',
+            'gender',
+            'address',
+            'emergency_contact',
+            'notes',
             'status',
             'plan',
             'membership_start_date',
@@ -211,6 +240,11 @@ class UserController extends Controller
             'email'               => $user->email,
             'document'            => $user->document,
             'phone'               => $user->phone,
+            'birthDate'           => $user->birth_date ? substr((string) $user->birth_date, 0, 10) : null,
+            'gender'              => $user->gender,
+            'address'             => $user->address,
+            'emergencyContact'    => $user->emergency_contact,
+            'notes'               => $user->notes,
             'status'              => $user->status,
             'plan'                => $user->plan,
             'membershipStartDate' => $user->membershipStartDate,
