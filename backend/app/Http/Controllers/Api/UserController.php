@@ -13,6 +13,9 @@ use Illuminate\Support\Facades\Schema;
 
 class UserController extends Controller
 {
+    /** Mayoría de edad (años): por debajo se exige acudiente. Espejo de la app. */
+    private const LEGAL_ADULT_AGE = 18;
+
     public function index(Request $request)
     {
         $query = User::query();
@@ -21,10 +24,24 @@ class UserController extends Controller
             $query->where('status', $request->input('status'));
         }
 
-        return $query
+        $page = $query
             ->select($this->memberFields())
+            ->with('appMember.guardian')
             ->orderByDesc('created_at')
             ->paginate(20);
+
+        // Adjunta menor de edad + acudiente por fila (para prefijar el editar)
+        // sin exponer la relación cruda del miembro.
+        $page->getCollection()->transform(function (User $u): User {
+            $member = $u->appMember;
+            $u->setAttribute('isMinor', (bool) ($member?->is_minor));
+            $u->setAttribute('guardian', $this->guardianArray($member?->guardian));
+            $u->unsetRelation('appMember');
+
+            return $u;
+        });
+
+        return $page;
     }
 
     public function show(User $user)
@@ -94,7 +111,30 @@ class UserController extends Controller
             ], 422);
         }
 
-        $user = DB::transaction(function () use ($validated, $document): User {
+        // Edad / menor de edad (igual que la app): se calcula en el servidor.
+        $age = $this->ageFromBirthDate($validated['birthDate'] ?? null);
+        if ($age !== null && $age < Member::MIN_REGISTRATION_AGE) {
+            return response()->json([
+                'message' => 'El registro no está disponible para menores de '
+                    . Member::MIN_REGISTRATION_AGE . ' años.',
+            ], 422);
+        }
+        $isMinor = $age !== null && $age < self::LEGAL_ADULT_AGE;
+
+        // Si es menor, el acudiente (nombre + documento) es OBLIGATORIO.
+        $guardian = $request->validate([
+            'guardianFullName'     => [$isMinor ? 'required' : 'nullable', 'string', 'max:255'],
+            'guardianDocument'     => [$isMinor ? 'required' : 'nullable', 'string', 'max:50'],
+            'guardianPhone'        => ['nullable', 'string', 'max:30'],
+            'guardianEmail'        => ['nullable', 'email', 'max:255'],
+            'guardianRelationship' => ['nullable', 'string', 'max:80'],
+            'guardianAccepts'      => ['sometimes', 'boolean'],
+        ], [
+            'guardianFullName.required' => 'El nombre del acudiente es obligatorio para menores de edad.',
+            'guardianDocument.required' => 'El documento del acudiente es obligatorio para menores de edad.',
+        ]);
+
+        $user = DB::transaction(function () use ($validated, $guardian, $document, $isMinor): User {
             $user = User::create([
                 'name' => $validated['fullName'],
                 'email' => $validated['email'] ?? 'user-' . time() . '-' . mt_rand(1000, 9999) . '@ironbody.local',
@@ -111,7 +151,7 @@ class UserController extends Controller
             ]);
 
             // Member vinculado para que la app reconozca al miembro por documento.
-            Member::create([
+            $member = Member::create([
                 'user_id' => $user->id,
                 'full_name' => $validated['fullName'],
                 'email' => $validated['email'] ?? null,
@@ -119,8 +159,13 @@ class UserController extends Controller
                 'phone' => $validated['phone'],
                 'gender' => $validated['gender'] ?? null,
                 'birth_date' => $validated['birthDate'] ?? null,
+                'is_minor' => $isMinor,
                 'status' => Member::STATUS_ACTIVE,
             ]);
+
+            // Acudiente: igual que en la app, se guarda si es menor o si se
+            // diligenció el nombre del responsable.
+            $this->syncGuardian($member, $guardian);
 
             return $user;
         });
@@ -150,6 +195,12 @@ class UserController extends Controller
             'emergencyContact' => 'sometimes|nullable|string|max:255',
             'notes' => 'sometimes|nullable|string|max:2000',
             'status' => 'sometimes|nullable|string|in:active,inactive,pending,expired',
+            'guardianFullName' => 'sometimes|nullable|string|max:255',
+            'guardianDocument' => 'sometimes|nullable|string|max:50',
+            'guardianPhone' => 'sometimes|nullable|string|max:30',
+            'guardianEmail' => 'sometimes|nullable|email|max:255',
+            'guardianRelationship' => 'sometimes|nullable|string|max:80',
+            'guardianAccepts' => 'sometimes|boolean',
         ]);
 
         // Estado anterior para detectar cambios reales (notificaciones).
@@ -198,6 +249,9 @@ class UserController extends Controller
             }
             if (array_key_exists('birthDate', $validated)) {
                 $memberUpdates['birth_date'] = $validated['birthDate'];
+                // Recalcula menor de edad (igual que la app) desde la fecha.
+                $age = $this->ageFromBirthDate($validated['birthDate']);
+                $memberUpdates['is_minor'] = $age !== null && $age < self::LEGAL_ADULT_AGE;
             }
             if (($validated['status'] ?? null) === 'active') {
                 $memberUpdates['status'] = Member::STATUS_ACTIVE;
@@ -205,6 +259,16 @@ class UserController extends Controller
 
             if ($memberUpdates !== []) {
                 $user->appMember()->update($memberUpdates);
+            }
+
+            // Acudiente (formato de menores): si el CRM mandó datos del
+            // responsable, se crean/actualizan.
+            $guardianKeys = [
+                'guardianFullName', 'guardianDocument', 'guardianPhone',
+                'guardianEmail', 'guardianRelationship', 'guardianAccepts',
+            ];
+            if (collect($guardianKeys)->contains(fn ($k) => array_key_exists($k, $validated))) {
+                $this->syncGuardian($user->appMember, $validated);
             }
 
             $notifier = app(\App\Services\NotificationService::class);
@@ -268,6 +332,9 @@ class UserController extends Controller
      */
     private function serialize(User $user): array
     {
+        $user->loadMissing('appMember.guardian');
+        $member = $user->appMember;
+
         return [
             'id'                  => $user->id,
             'name'                => $user->name,
@@ -279,12 +346,72 @@ class UserController extends Controller
             'address'             => $user->address,
             'emergencyContact'    => $user->emergency_contact,
             'notes'               => $user->notes,
+            'isMinor'             => (bool) ($member?->is_minor),
+            'guardian'            => $this->guardianArray($member?->guardian),
             'status'              => $user->status,
             'plan'                => $user->plan,
             'membershipStartDate' => $user->membershipStartDate,
             'membershipEndDate'   => $user->membershipEndDate,
             'features'            => $this->featuresFor($user),
             'created_at'          => $user->created_at,
+        ];
+    }
+
+    /** Edad en años cumplidos a partir de la fecha de nacimiento (o null). */
+    private function ageFromBirthDate(?string $birthDate): ?int
+    {
+        if (! $birthDate) {
+            return null;
+        }
+        try {
+            return Carbon::parse($birthDate)->age;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Crea/actualiza el acudiente del miembro (formato de menores). Igual que la
+     * app: se guarda si hay nombre de responsable; si no, no se crea nada.
+     *
+     * @param array<string,mixed> $guardian campos camelCase del CRM.
+     */
+    private function syncGuardian(Member $member, array $guardian): void
+    {
+        $name = trim((string) ($guardian['guardianFullName'] ?? ''));
+        $document = trim((string) ($guardian['guardianDocument'] ?? ''));
+
+        if ($name === '' || $document === '') {
+            return;
+        }
+
+        $member->guardian()->updateOrCreate(
+            ['member_id' => $member->id],
+            [
+                'guardian_full_name' => $name,
+                'guardian_document_number' => $document,
+                'guardian_phone' => $guardian['guardianPhone'] ?? null,
+                'guardian_email' => $guardian['guardianEmail'] ?? null,
+                'guardian_relationship' => $guardian['guardianRelationship'] ?? null,
+                'guardian_accepts_responsibility' => (bool) ($guardian['guardianAccepts'] ?? false),
+            ]
+        );
+    }
+
+    /** Serializa el acudiente (o null) para el CRM (camelCase). */
+    private function guardianArray($guardian): ?array
+    {
+        if (! $guardian) {
+            return null;
+        }
+
+        return [
+            'fullName' => $guardian->guardian_full_name,
+            'document' => $guardian->guardian_document_number,
+            'phone' => $guardian->guardian_phone,
+            'email' => $guardian->guardian_email,
+            'relationship' => $guardian->guardian_relationship,
+            'accepts' => (bool) $guardian->guardian_accepts_responsibility,
         ];
     }
 
