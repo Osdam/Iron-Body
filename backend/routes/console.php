@@ -138,3 +138,21 @@ if ((bool) config('wompi.reconciliation.enabled', true)) {
         ->withoutOverlapping()
         ->onOneServer();
 }
+
+// ── Factus: reconciliación de comprobantes + reintento de errores técnicos ────
+// INERTE por defecto: solo se agenda si FACTUS_ENABLED=true (y la reconciliación
+// activa). Los jobs además revalidan el flag en runtime, así que un cambio de
+// .env basta para activar/desactivar. Idempotentes y best-effort.
+if ((bool) config('billing.enabled', false) && (bool) config('billing.reconciliation.enabled', true)) {
+    $factusSync = max(1, (int) config('billing.reconciliation.minutes', 10));
+    Schedule::job(new \App\Jobs\SyncFactusInvoiceStatusJob, config('billing.queue', 'billing'))
+        ->cron('*/'.$factusSync.' * * * *')
+        ->withoutOverlapping()
+        ->onOneServer();
+
+    $factusRetry = max(1, (int) config('billing.reconciliation.retry_minutes', 15));
+    Schedule::job(new \App\Jobs\RetryElectronicInvoiceJob, config('billing.queue', 'billing'))
+        ->cron('*/'.$factusRetry.' * * * *')
+        ->withoutOverlapping()
+        ->onOneServer();
+}

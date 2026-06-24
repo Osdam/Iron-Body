@@ -7,6 +7,7 @@ use App\Models\Payment;
 use App\Models\PaymentTransaction;
 use App\Models\Plan;
 use App\Models\User;
+use App\Services\Billing\InvoicingService;
 use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -80,6 +81,11 @@ class PaymentMembershipActivator
                     'membership_end_date' => $endDate,
                 ]);
             }
+
+            // Facturación electrónica (ADITIVO, best-effort, idempotente por
+            // source+type). Con FACTUS_ENABLED=false solo crea la factura
+            // 'pending'; nunca llama a Factus ni bloquea la activación del pago.
+            app(InvoicingService::class)->enqueueForPayment($payment);
         } catch (Throwable $e) {
             Log::warning('Activación de membresía post-pago falló', [
                 'reference' => $tx->reference,

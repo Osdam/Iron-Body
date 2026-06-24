@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Plan extends Model
 {
@@ -25,6 +26,10 @@ class Plan extends Model
         'restrictions',
         'active',
         'features',
+        // Facturación electrónica (aditivo).
+        'tax_rate_id',
+        'price_includes_tax',
+        'unspsc_code',
     ];
 
     protected $casts = [
@@ -35,10 +40,17 @@ class Plan extends Model
         'active' => 'boolean',
         'sort_order' => 'integer',
         'features' => 'array',
+        'price_includes_tax' => 'boolean',
     ];
 
     /** Segmentos comerciales disponibles para un plan. */
     public const TIERS = ['lite', 'pro', 'premium'];
+
+    /** Tarifa de IVA del plan (facturación electrónica). */
+    public function taxRate(): BelongsTo
+    {
+        return $this->belongsTo(TaxRate::class);
+    }
 
     public static function defaultFeatures(): array
     {

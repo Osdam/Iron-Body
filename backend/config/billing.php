@@ -1,0 +1,149 @@
+<?php
+
+/*
+|--------------------------------------------------------------------------
+| Facturación electrónica DIAN — Factus / Halltec (API V2)
+|--------------------------------------------------------------------------
+| Toda la configuración de facturación vive aquí (centralizada y env-driven).
+| NINGÚN secreto se hardcodea: usuario, password, client_id y client_secret
+| salen SIEMPRE de variables de entorno y jamás se exponen al frontend/app.
+| Toda llamada a Factus pasa por el backend (ver App\Services\Billing\*).
+|
+| Reglas de ambiente (validadas en arranque por FactusConfigValidator):
+|   - sandbox     -> base_url api-sandbox.factus.com.co
+|   - production  -> base_url productiva + credenciales reales
+| Pasar a producción = cambiar SOLO el .env (credenciales, base URL, ambiente,
+| resolución/rango/prefijo y datos fiscales del emisor). Cero cambios de código.
+|
+| Interruptor maestro: FACTUS_ENABLED=false => las facturas quedan en estado
+| 'pending' y NUNCA se llama a Factus (sin emisión real accidental).
+*/
+
+$env = env('FACTUS_ENV', 'sandbox');
+
+return [
+
+    // Interruptor maestro. Con false, InvoicingService nunca despacha el job de
+    // emisión: la factura se crea 'pending' como evidencia, pero no sale a Factus.
+    'enabled' => filter_var(env('FACTUS_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
+    'provider' => 'factus',
+
+    // sandbox | production
+    'env'        => $env,
+    'production' => $env === 'production',
+
+    // URL base de la API V2 según ambiente.
+    'base_url' => rtrim((string) env('FACTUS_BASE_URL', 'https://api-sandbox.factus.com.co'), '/'),
+
+    // -- Credenciales OAuth2 (password grant) --------------------------------
+    // SECRETAS: solo backend. NUNCA se entregan al front/app ni se loguean.
+    'credentials' => [
+        'username'      => env('FACTUS_USERNAME'),
+        'password'      => env('FACTUS_PASSWORD'),
+        'client_id'     => env('FACTUS_CLIENT_ID'),
+        'client_secret' => env('FACTUS_CLIENT_SECRET'),
+    ],
+
+    // -- Cliente HTTP --------------------------------------------------------
+    'http' => [
+        'timeout'         => (int) env('FACTUS_TIMEOUT', 30),
+        'connect_timeout' => (int) env('FACTUS_CONNECT_TIMEOUT', 10),
+        // Reintentos SOLO en operaciones idempotentes (GET). La emisión (POST)
+        // no se reintenta a ciegas dentro del cliente; de eso se encarga el job
+        // con backoff y guardas de idempotencia (ver EmitElectronicInvoiceJob).
+        'retry_times'   => (int) env('FACTUS_RETRY_TIMES', 5),
+        'retry_backoff' => (int) env('FACTUS_RETRY_BACKOFF_SECONDS', 60),
+    ],
+
+    // TTL del access_token en cache. Debe ser MENOR a la expiración real que
+    // devuelva Factus (confirmar en la doc/colección). Ver FactusTokenManager.
+    'token_cache_seconds' => (int) env('FACTUS_TOKEN_CACHE_SECONDS', 3000),
+
+    // Cola dedicada para no competir con notificaciones/automations.
+    'queue' => env('FACTUS_QUEUE', 'billing'),
+
+    // -- Emisor (la empresa que factura) -------------------------------------
+    // Datos fiscales propios. Van en .env, no en la BD de clientes.
+    'company' => [
+        'nit'             => env('FACTUS_COMPANY_NIT'),
+        'dv'              => env('FACTUS_COMPANY_DV'),
+        'name'            => env('FACTUS_COMPANY_NAME'),
+        'email'           => env('FACTUS_COMPANY_EMAIL'),
+        'phone'           => env('FACTUS_COMPANY_PHONE'),
+        'address'         => env('FACTUS_COMPANY_ADDRESS'),
+        'city_code'       => env('FACTUS_COMPANY_CITY_CODE'),
+        'department_code' => env('FACTUS_COMPANY_DEPARTMENT_CODE'),
+    ],
+
+    // -- Numeración / resolución DIAN ----------------------------------------
+    // La numeración legal la administra Factus por su rango/resolución. El CRM
+    // envía el rango y RECIBE el número; no fabrica el consecutivo.
+    'numbering' => [
+        'range_id' => env('FACTUS_NUMBERING_RANGE_ID'),
+        'prefix'   => env('FACTUS_NUMBERING_PREFIX'),
+    ],
+
+    // -- Valores por defecto del documento -----------------------------------
+    'defaults' => [
+        'payment_method_code' => env('FACTUS_DEFAULT_PAYMENT_METHOD_CODE'),
+        'tribute_id'          => env('FACTUS_DEFAULT_TRIBUTE_ID'),
+        'currency'            => 'COP',
+    ],
+
+    // -- Consumidor final ----------------------------------------------------
+    // Cuando el pago no trae datos fiscales completos, se factura a consumidor
+    // final (sin bloquear el cobro). Documento/tipo exactos según Factus/DIAN.
+    'consumer_final' => [
+        'document_type'   => env('FACTUS_CONSUMER_FINAL_DOCUMENT_TYPE'),
+        'document_number' => env('FACTUS_CONSUMER_FINAL_DOCUMENT_NUMBER'),
+        'name'            => env('FACTUS_CONSUMER_FINAL_NAME', 'Consumidor final'),
+    ],
+
+    // -- Webhook / callback (condicional) ------------------------------------
+    // Solo si Factus ofrece callbacks. Si no, se usa reconciliación por job
+    // (SyncFactusInvoiceStatusJob). Secreto para verificar firma del evento.
+    'webhook' => [
+        'enabled' => filter_var(env('FACTUS_WEBHOOK_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'secret'  => env('FACTUS_WEBHOOK_SECRET'),
+    ],
+
+    // -- Reconciliación (polling de facturas en 'processing') ----------------
+    'reconciliation' => [
+        'enabled'         => filter_var(env('FACTUS_RECONCILIATION_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+        'minutes'         => (int) env('FACTUS_RECONCILIATION_MINUTES', 10),
+        'retry_minutes'   => (int) env('FACTUS_RETRY_SWEEP_MINUTES', 15),
+        'max_age_minutes' => (int) env('FACTUS_RECONCILIATION_MAX_AGE_MINUTES', 1440),
+    ],
+
+    // -- Almacenamiento de PDF/XML -------------------------------------------
+    // Disco PRIVADO. Nunca público: se sirve por endpoint autenticado.
+    'storage' => [
+        'disk' => env('FACTUS_STORAGE_DISK', 'local'),
+        'path' => env('FACTUS_STORAGE_PATH', 'invoices'),
+    ],
+
+    // -- Mapa de estados Factus/DIAN -> estado interno -----------------------
+    // Confirmar los literales exactos que devuelve Factus V2 en la respuesta y
+    // ajustar este mapa (ver FactusResponseMapper). Los internos están en
+    // App\Enums\InvoiceStatus.
+    'status_map' => [
+        // 'Validada' / 'Aprobada' => 'validated',
+        // 'Rechazada'             => 'rejected',
+    ],
+
+    // -- Claves prohibidas en logs (defensa en profundidad) ------------------
+    // FactusPayloadSanitizer elimina recursivamente cualquier clave cuyo nombre
+    // contenga una de estas (substring, case-insensitive) antes de persistir.
+    'forbidden_log_keys' => [
+        'password',
+        'client_secret',
+        'client_id',
+        'access_token',
+        'refresh_token',
+        'authorization',
+        'token',
+        'secret',
+        'bearer',
+    ],
+];

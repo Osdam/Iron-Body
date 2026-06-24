@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
@@ -31,6 +32,10 @@ class Product extends Model
         'supplier',
         'visible_in_app',
         'active',
+        // Facturación electrónica (aditivo).
+        'tax_rate_id',
+        'price_includes_tax',
+        'unspsc_code',
     ];
 
     protected $casts = [
@@ -40,6 +45,7 @@ class Product extends Model
         'min_stock'      => 'integer',
         'visible_in_app' => 'boolean',
         'active'         => 'boolean',
+        'price_includes_tax' => 'boolean',
     ];
 
     protected $appends = ['stock_status', 'in_app'];
@@ -49,6 +55,12 @@ class Product extends Model
         static::creating(function (Product $p): void {
             $p->uuid ??= (string) Str::uuid();
         });
+    }
+
+    /** Tarifa de IVA del producto (facturación electrónica). */
+    public function taxRate(): BelongsTo
+    {
+        return $this->belongsTo(TaxRate::class);
     }
 
     /** Disponible (catálogo). */

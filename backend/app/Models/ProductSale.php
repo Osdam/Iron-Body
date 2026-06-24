@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Enums\InvoiceType;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -72,6 +75,19 @@ class ProductSale extends Model
     public function cashier(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cashier_user_id');
+    }
+
+    /** Comprobantes electrónicos (factura + posibles notas crédito) de la venta. */
+    public function electronicInvoices(): MorphMany
+    {
+        return $this->morphMany(ElectronicInvoice::class, 'source');
+    }
+
+    /** La factura electrónica (tipo invoice) de esta venta, si existe. */
+    public function electronicInvoice(): MorphOne
+    {
+        return $this->morphOne(ElectronicInvoice::class, 'source')
+            ->where('type', InvoiceType::INVOICE->value);
     }
 
     public function scopePos(Builder $q): Builder

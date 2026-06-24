@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\User;
+use App\Services\Billing\InvoicingService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -62,6 +63,9 @@ class PaymentController extends Controller
 
         if ($payment->status === 'paid') {
             $this->applyMembershipExtension($payment);
+            // Facturación electrónica (best-effort, idempotente). Inerte si
+            // FACTUS_ENABLED=false. Nunca rompe el registro del pago.
+            app(InvoicingService::class)->enqueueForPayment($payment);
         }
 
         return response()->json($payment->load(['user:id,name,email', 'plan:id,name']), 201);
@@ -87,6 +91,8 @@ class PaymentController extends Controller
 
         if (!$wasPaid && $payment->status === 'paid') {
             $this->applyMembershipExtension($payment);
+            // Facturación electrónica al confirmar (correcciones / histórico).
+            app(InvoicingService::class)->enqueueForPayment($payment);
         }
 
         return response()->json($payment->load(['user:id,name,email', 'plan:id,name']));

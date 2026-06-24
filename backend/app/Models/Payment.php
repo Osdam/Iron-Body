@@ -2,9 +2,12 @@
 
 namespace App\Models;
 
+use App\Enums\InvoiceType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
 
 /**
  * Pago registrado en la tabla `payments` (fuente de verdad del CRM).
@@ -44,6 +47,19 @@ class Payment extends Model
     public function transaction(): BelongsTo
     {
         return $this->belongsTo(PaymentTransaction::class, 'reference', 'reference');
+    }
+
+    /** Comprobantes electrónicos (factura + posibles notas crédito) de este pago. */
+    public function electronicInvoices(): MorphMany
+    {
+        return $this->morphMany(ElectronicInvoice::class, 'source');
+    }
+
+    /** La factura electrónica (tipo invoice) de este pago, si existe. */
+    public function electronicInvoice(): MorphOne
+    {
+        return $this->morphOne(ElectronicInvoice::class, 'source')
+            ->where('type', InvoiceType::INVOICE->value);
     }
 
     /**
