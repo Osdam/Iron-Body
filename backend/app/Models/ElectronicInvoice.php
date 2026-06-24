@@ -92,6 +92,22 @@ class ElectronicInvoice extends Model
         return $q->whereIn('status', [InvoiceStatus::PROCESSING->value, InvoiceStatus::CREDIT_NOTE_PROCESSING->value]);
     }
 
+    /** Filtros del listado admin. Ignora claves vacías. */
+    public function scopeFilter(Builder $q, array $f): Builder
+    {
+        return $q
+            ->when($f['status'] ?? null, fn ($q, $v) => $q->where('status', $v))
+            ->when($f['type'] ?? null, fn ($q, $v) => $q->where('type', $v))
+            ->when($f['source_type'] ?? null, fn ($q, $v) => $q->where('source_type', \App\Services\Billing\InvoicingService::SOURCE_MAP[$v] ?? $v))
+            ->when($f['source_id'] ?? null, fn ($q, $v) => $q->where('source_id', $v))
+            ->when($f['number'] ?? null, fn ($q, $v) => $q->where('full_number', 'like', "%{$v}%"))
+            ->when($f['cufe'] ?? null, fn ($q, $v) => $q->where('cufe', 'like', "%{$v}%"))
+            ->when($f['document'] ?? null, fn ($q, $v) => $q->where('customer_doc_number', 'like', "%{$v}%"))
+            ->when($f['customer'] ?? null, fn ($q, $v) => $q->where('customer_name', 'like', "%{$v}%"))
+            ->when($f['date_from'] ?? null, fn ($q, $v) => $q->whereDate('created_at', '>=', $v))
+            ->when($f['date_to'] ?? null, fn ($q, $v) => $q->whereDate('created_at', '<=', $v));
+    }
+
     // ── Transiciones de estado (idempotentes) ───────────────────────────────
 
     public function markProcessing(): void
@@ -170,6 +186,79 @@ class ElectronicInvoice extends Model
             'retry_count' => (int) $this->retry_count,
             'issued_at'   => optional($this->issued_at)->toIso8601String(),
             'created_at'  => optional($this->created_at)->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Detalle completo para el CRM admin: cabecera + cliente + montos + resumen
+     * del source + items (si hay request saneado) + logs YA SANEADOS. NUNCA
+     * expone payloads crudos con secretos ni rutas internas de archivo.
+     */
+    public function toAdminDetailArray(): array
+    {
+        $this->loadMissing('logs');
+
+        $items = is_array($this->request_payload['items'] ?? null)
+            ? $this->request_payload['items']
+            : [];
+
+        return array_merge($this->toAdminArray(), [
+            'prefix'                => $this->prefix,
+            'number'                => $this->number,
+            'qr_data'               => $this->qr_data,
+            'validated_at'          => optional($this->validated_at)->toIso8601String(),
+            'last_attempt_at'       => optional($this->last_attempt_at)->toIso8601String(),
+            'references_invoice_id' => $this->references_invoice_id,
+            'customer_full' => [
+                'doc_type'        => $this->customer_doc_type,
+                'doc_number'      => $this->customer_doc_number,
+                'dv'              => $this->customer_dv,
+                'name'            => $this->customer_name,
+                'email'           => $this->customer_email,
+                'phone'           => $this->customer_phone,
+                'address'         => $this->customer_address,
+                'city_code'       => $this->customer_city_code,
+                'department_code' => $this->customer_department_code,
+                'final'           => (bool) $this->is_final_consumer,
+            ],
+            'fiscal_summary' => [
+                'currency'  => $this->currency,
+                'subtotal'  => (float) $this->subtotal,
+                'discount'  => (float) $this->discount,
+                'tax_total' => (float) $this->tax_total,
+                'total'     => (float) $this->total,
+            ],
+            'items'  => $items,
+            'source' => $this->sourceSummary(),
+            'logs'   => $this->logs->map(fn (ElectronicInvoiceLog $l) => [
+                'action'      => $l->action?->value,
+                'result'      => $l->result,
+                'endpoint'    => $l->endpoint,
+                'http_status' => $l->http_status,
+                'message'     => $l->message,
+                'excerpt'     => $l->payload_excerpt, // saneado en escritura
+                'created_at'  => optional($l->created_at)->toIso8601String(),
+            ])->all(),
+        ]);
+    }
+
+    /** Resumen liviano de la fuente facturada (sin datos sensibles). */
+    private function sourceSummary(): array
+    {
+        $source = $this->source; // morphTo (Payment | ProductSale)
+        if ($source === null) {
+            return ['type' => $this->source_type, 'id' => $this->source_id, 'label' => null];
+        }
+        if ($source instanceof ProductSale) {
+            return [
+                'type' => 'product_sale', 'id' => $source->id, 'label' => $source->code,
+                'total' => (float) $source->total, 'channel' => $source->channel,
+            ];
+        }
+
+        return [
+            'type' => 'payment', 'id' => $source->id, 'label' => $source->reference,
+            'amount' => (float) $source->amount, 'method' => $source->method, 'status' => $source->status,
         ];
     }
 }

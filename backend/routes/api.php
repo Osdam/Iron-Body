@@ -12,6 +12,8 @@ use App\Http\Controllers\Api\AppStoreController;
 use App\Http\Controllers\Api\Admin\ProductController;
 use App\Http\Controllers\Api\Admin\CajaController;
 use App\Http\Controllers\Api\Admin\EarningsController;
+use App\Http\Controllers\Api\Admin\ElectronicInvoiceController;
+use App\Http\Controllers\Api\Admin\FiscalProfileController;
 use App\Http\Controllers\Api\ExerciseController;
 use App\Http\Controllers\Api\AppClassController;
 use App\Http\Controllers\Api\AppExerciseController;
@@ -802,6 +804,26 @@ Route::post('admin/caja/sales/{sale}/pay',      [CajaController::class, 'pay']);
 Route::post('admin/caja/sales/{sale}/deliver',  [CajaController::class, 'deliver']);
 Route::post('admin/caja/sales/{sale}/cancel',   [CajaController::class, 'cancel']);
 
+// ── Facturación electrónica (Factus) — API administrativa (Fase 2) ────────────
+// Bajo /api/admin/* → blindado por ProtectAdminPaths (sesión admin o token).
+// Las rutas LITERALES (stats/config/manual-emit) van ANTES del wildcard
+// {invoice} para que no las capture; el wildcard exige id numérico.
+Route::get('admin/electronic-invoices',               [ElectronicInvoiceController::class, 'index']);
+Route::get('admin/electronic-invoices/stats',         [ElectronicInvoiceController::class, 'stats']);
+Route::get('admin/electronic-invoices/config',        [ElectronicInvoiceController::class, 'config']);
+Route::post('admin/electronic-invoices/manual-emit',  [ElectronicInvoiceController::class, 'manualEmit']);
+Route::get('admin/electronic-invoices/{invoice}',             [ElectronicInvoiceController::class, 'show'])->whereNumber('invoice');
+Route::post('admin/electronic-invoices/{invoice}/retry',      [ElectronicInvoiceController::class, 'retry'])->whereNumber('invoice');
+Route::post('admin/electronic-invoices/{invoice}/sync',       [ElectronicInvoiceController::class, 'sync'])->whereNumber('invoice');
+Route::get('admin/electronic-invoices/{invoice}/pdf',         [ElectronicInvoiceController::class, 'pdf'])->whereNumber('invoice');
+Route::get('admin/electronic-invoices/{invoice}/xml',         [ElectronicInvoiceController::class, 'xml'])->whereNumber('invoice');
+Route::post('admin/electronic-invoices/{invoice}/credit-note',[ElectronicInvoiceController::class, 'creditNote'])->whereNumber('invoice');
+
+// Perfiles fiscales por usuario/miembro (datos DIAN; no bloquean pagos).
+Route::get('admin/users/{user}/fiscal-profile',    [FiscalProfileController::class, 'showForUser'])->whereNumber('user');
+Route::put('admin/users/{user}/fiscal-profile',    [FiscalProfileController::class, 'updateForUser'])->whereNumber('user');
+Route::get('admin/members/{member}/fiscal-profile', [FiscalProfileController::class, 'showForMember'])->whereNumber('member');
+Route::put('admin/members/{member}/fiscal-profile', [FiscalProfileController::class, 'updateForMember'])->whereNumber('member');
 // ── Ejercicios — referencias visuales (GIF) vía WorkoutX ────────────────────
 // Rutas específicas ANTES de {id} para que no las capture el comodín.
 Route::get('exercises/search', [ExerciseController::class, 'search']);
