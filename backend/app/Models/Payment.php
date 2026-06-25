@@ -63,6 +63,25 @@ class Payment extends Model
     }
 
     /**
+     * Resumen compacto de la factura electrónica para el CRM admin. Null si no
+     * hay (o la relación no se cargó). No expone datos sensibles ni payloads.
+     */
+    public function getInvoiceSummaryAttribute(): ?array
+    {
+        if (! $this->relationLoaded('electronicInvoice') || $this->electronicInvoice === null) {
+            return null;
+        }
+        $inv = $this->electronicInvoice;
+
+        return [
+            'id'          => $inv->id,
+            'status'      => $inv->status->value,
+            'full_number' => $inv->full_number,
+            'cufe'        => $inv->cufe,
+        ];
+    }
+
+    /**
      * Normaliza el status del CRM al vocabulario que consume la app
      * (approved|pending|processing|failed|cancelled|expired|refunded).
      * El CRM usa "paid" como sinónimo de "approved"; el resto pasa tal cual.

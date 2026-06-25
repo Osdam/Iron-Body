@@ -90,6 +90,22 @@ class ProductSale extends Model
             ->where('type', InvoiceType::INVOICE->value);
     }
 
+    /** Resumen compacto de la factura electrónica para el CRM admin (o null). */
+    public function getInvoiceSummaryAttribute(): ?array
+    {
+        if (! $this->relationLoaded('electronicInvoice') || $this->electronicInvoice === null) {
+            return null;
+        }
+        $inv = $this->electronicInvoice;
+
+        return [
+            'id'          => $inv->id,
+            'status'      => $inv->status->value,
+            'full_number' => $inv->full_number,
+            'cufe'        => $inv->cufe,
+        ];
+    }
+
     public function scopePos(Builder $q): Builder
     {
         return $q->where('channel', 'pos');

@@ -14,7 +14,7 @@ class PaymentController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Payment::query()->with(['user:id,name,email', 'plan:id,name'])->latest();
+        $query = Payment::query()->with(['user:id,name,email', 'plan:id,name', 'electronicInvoice'])->latest();
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -32,7 +32,12 @@ class PaymentController extends Controller
             $query->where('user_id', $request->user_id);
         }
 
-        return $query->paginate(20);
+        $payments = $query->paginate(20);
+        $payments->getCollection()->transform(
+            fn (Payment $p) => $p->append('invoice_summary')->makeHidden('electronicInvoice')
+        );
+
+        return $payments;
     }
 
     public function show(Payment $payment)
@@ -40,7 +45,8 @@ class PaymentController extends Controller
         return $payment->load([
             'user:id,name,email',
             'plan:id,name',
-        ]);
+            'electronicInvoice',
+        ])->append('invoice_summary')->makeHidden('electronicInvoice');
     }
 
     public function store(Request $request)
