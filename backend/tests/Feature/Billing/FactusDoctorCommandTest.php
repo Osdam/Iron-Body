@@ -90,4 +90,15 @@ class FactusDoctorCommandTest extends TestCase
             ->expectsOutputToContain('sin tax_rate_id')
             ->assertExitCode(1);
     }
+
+    public function test_blocks_on_production_server_with_sandbox_env(): void
+    {
+        $this->readyConfig();
+        $this->app['env'] = 'production';
+        config(['billing.env' => 'sandbox', 'billing.base_url' => 'https://api-sandbox.factus.com.co']);
+
+        $this->artisan('billing:factus-doctor')
+            ->expectsOutputToContain('FACTUS_ENV=sandbox')
+            ->assertExitCode(1);
+    }
 }

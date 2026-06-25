@@ -31,6 +31,12 @@ class FactusDoctorCommand extends Command
         $validator = FactusConfigValidator::fromConfig();
         $issues = $validator->productionReadiness();
 
+        // 🔒 Mismatch peligroso: servidor productivo apuntando a sandbox.
+        if ($this->laravel->environment('production') && config('billing.env') !== 'production') {
+            $issues[] = 'APP_ENV=production con FACTUS_ENV=' . config('billing.env')
+                . ': NO activar; se emitiría a sandbox en el servidor productivo.';
+        }
+
         // Resumen de configuración (sin secretos: solo presente/ausente).
         $creds = (array) config('billing.credentials');
         $this->line('Ambiente y configuración:');

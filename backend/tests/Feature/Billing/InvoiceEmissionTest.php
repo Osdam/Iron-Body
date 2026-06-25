@@ -190,4 +190,20 @@ class InvoiceEmissionTest extends TestCase
 
         Queue::assertPushed(EmitElectronicInvoiceJob::class, 1); // manual sí emite
     }
+
+    public function test_emit_refused_on_production_server_with_sandbox_env(): void
+    {
+        $this->app['env'] = 'production';              // servidor productivo
+        config(['billing.enabled' => true, 'billing.env' => 'sandbox']); // pero Factus en sandbox
+        Http::fake();
+
+        $payment = $this->paidPayment();
+        $invoice = app(InvoicingService::class)->enqueueForPayment($payment);
+
+        app()->call([new EmitElectronicInvoiceJob($invoice->id), 'handle']);
+
+        $invoice->refresh();
+        $this->assertSame(InvoiceStatus::PENDING, $invoice->status); // no emitió
+        Http::assertNothingSent();                                   // no llamó a Factus
+    }
 }

@@ -60,6 +60,12 @@ class EmitCreditNoteJob implements ShouldQueue
             return;
         }
 
+        // 🔒 Servidor de producción con Factus en sandbox: no emitir (ver Emit job).
+        if (app()->environment('production') && config('billing.env') !== 'production') {
+            Log::warning('billing.refused_sandbox_on_production_server', ['credit_note' => $this->creditNoteInvoiceId]);
+            return;
+        }
+
         // 🔒 En producción, no emitir si la config no está lista (ver Emit job).
         if (config('billing.env') === 'production'
             && ! FactusConfigValidator::fromConfig()->isReadyForProduction()) {

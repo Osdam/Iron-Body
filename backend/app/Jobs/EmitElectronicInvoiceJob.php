@@ -61,6 +61,14 @@ class EmitElectronicInvoiceJob implements ShouldQueue
             return; // Seguridad: jamás emitir con el módulo apagado.
         }
 
+        // 🔒 Servidor de producción con Factus en sandbox: NUNCA emitir
+        // comprobantes de prueba para ventas reales. La factura queda 'pending'.
+        // (En local/sandbox/testing no aplica → no rompe smoke ni tests.)
+        if (app()->environment('production') && config('billing.env') !== 'production') {
+            Log::warning('billing.refused_sandbox_on_production_server', ['invoice' => $this->invoiceId]);
+            return;
+        }
+
         // 🔒 En producción, no emitir si la configuración no está lista
         // (rangos, municipio, datos del emisor, decisión tributaria). La
         // factura queda 'pending' hasta corregir. En sandbox no aplica.
