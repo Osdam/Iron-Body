@@ -8,7 +8,10 @@ use App\Models\TaxRate;
 use App\Models\User;
 use App\Services\Billing\Factus\FactusClient;
 use App\Services\Billing\Factus\FactusTokenManager;
+use App\Enums\InvoiceStatus;
+use App\Jobs\EmitElectronicInvoiceJob;
 use App\Services\Billing\InvoiceDtoBuilder;
+use App\Services\Billing\InvoicingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -115,5 +118,48 @@ class FactusV2IntegrationTest extends TestCase
         $rate = FactusClient::make()->createInvoice(['x' => 1]);
         $this->assertSame('rate_limit', $rate['error_class']);
         $this->assertSame(30, $rate['retry_after']);
+    }
+
+    public function test_real_v2_response_maps_number_not_reference_code(): void
+    {
+        config(['billing.enabled' => false]);
+        $rate = TaxRate::create(['code' => 'IVA_19', 'name' => 'IVA 19%', 'rate' => 19, 'active' => true]);
+        $plan = Plan::create([
+            'name' => 'Premium', 'price' => 119000, 'duration_days' => 30, 'benefits' => '',
+            'tax_rate_id' => $rate->id, 'price_includes_tax' => true,
+        ]);
+        $user = User::factory()->create();
+        $payment = Payment::create([
+            'user_id' => $user->id, 'plan_id' => $plan->id, 'amount' => 119000,
+            'method' => 'cash', 'reference' => 'RR', 'status' => 'paid', 'paid_at' => now(),
+        ]);
+        $invoice = app(InvoicingService::class)->enqueueForPayment($payment); // pending, sin dispatch
+
+        config(['billing.enabled' => true]);
+        Http::fake([
+            '*oauth/token'        => Http::response(['access_token' => 'A', 'expires_in' => 3600]),
+            '*/v2/bills/validate' => Http::response([
+                'status' => 'Created',
+                'data'   => [
+                    'reference_code' => 'b6c82591-1529-4950-961c-ff1aed3affb8',
+                    'number'         => 'SETP990006967',
+                    'cufe'           => 'ddf9beb168d93226c0a81837c89595bafeec171a',
+                    'links'          => ['qr' => 'https://qr.example/x', 'public_url' => 'https://pub.example/x'],
+                ],
+            ], 201),
+            '*download-pdf' => Http::response(['pdf_base_64' => base64_encode('%PDF demo')]),
+            '*download-xml' => Http::response(['xml_base_64' => base64_encode('<Invoice/>')]),
+            '*' => Http::response([], 200),
+        ]);
+
+        app()->call([new EmitElectronicInvoiceJob($invoice->id), 'handle']);
+
+        $invoice->refresh();
+        $this->assertSame('SETP990006967', $invoice->full_number);          // número real
+        $this->assertNotSame('b6c82591-1529-4950-961c-ff1aed3affb8', $invoice->full_number); // NO el uuid
+        $this->assertSame('ddf9beb168d93226c0a81837c89595bafeec171a', $invoice->cufe);
+        $this->assertSame('https://qr.example/x', $invoice->qr_url);          // links.qr
+        $this->assertSame(InvoiceStatus::VALIDATED, $invoice->status);
+        $this->assertNotNull($invoice->pdf_path);                            // descargado por número real
     }
 }

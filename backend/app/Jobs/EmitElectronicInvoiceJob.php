@@ -131,7 +131,9 @@ class EmitElectronicInvoiceJob implements ShouldQueue
 
         // Factus V2 NO devuelve PDF/XML en /validate: se descargan por número.
         $number = $mapped['full_number'] ?: $mapped['number'];
-        if ($number && empty($files['pdf_path']) && empty($files['pdf_url'])) {
+        // Aunque el create traiga un public_url, guardamos también una copia
+        // privada descargando el archivo por su número fiscal real.
+        if ($number && $this->isRealNumber((string) $number) && empty($files['pdf_path'])) {
             $files = array_merge($files, $this->fetchFiles((string) $number, $invoice, $client, $storage));
         }
 
@@ -167,6 +169,12 @@ class EmitElectronicInvoiceJob implements ShouldQueue
         } catch (\Throwable) {
             return []; // best-effort: la factura ya quedó validada
         }
+    }
+
+    /** Número fiscal real de Factus (p. ej. SETP990006967), no el uuid interno. */
+    private function isRealNumber(string $n): bool
+    {
+        return $n !== '' && ! str_contains($n, '-');
     }
 
     /** La cola agotó los reintentos: dejar constancia dura del error. */

@@ -54,7 +54,8 @@ class FactusCheckCommand extends Command
             return self::FAILURE;
         }
 
-        $ranges = Arr::get($res['body'], 'data', $res['body']);
+        // La respuesta real pagina los rangos en data.data[].
+        $ranges = Arr::get($res['body'], 'data.data', Arr::get($res['body'], 'data', $res['body']));
         $ranges = is_array($ranges) ? $ranges : [];
         if ($ranges === []) {
             $this->warn('  No hay rangos configurados en la cuenta sandbox.');

@@ -50,13 +50,17 @@ class FactusResponseMapper
             'factus_id'   => $this->first($bill, ['id', 'bill_id', 'document_id']),
             'number'      => $number,
             'prefix'      => $prefix,
-            'full_number' => $this->first($bill, ['full_number', 'name', 'reference_code'])
-                ?? ($prefix && $number ? $prefix . $number : $number),
+            // full_number = el número fiscal real (SETP990006967). JAMÁS el
+            // reference_code (uuid interno) ni name. Si no hay full_number
+            // explícito, se usa data.number; último recurso prefix+number.
+            'full_number' => $this->first($bill, ['full_number'])
+                ?? $number
+                ?? ($prefix && $number ? $prefix . $number : null),
             'cufe'        => $cufe,
             'dian_status' => $dianStatus,
-            'qr_url'      => $this->first($bill, ['qr_image', 'qr_url', 'qr']),
+            'qr_url'      => $this->first($bill, ['links.qr', 'qr_image', 'qr_url', 'qr']),
             'qr_data'     => $this->first($bill, ['qr_data', 'qr_code', 'qrcode']),
-            'pdf_url'     => $this->first($bill, ['pdf_url', 'public_url', 'pdf']),
+            'pdf_url'     => $this->first($bill, ['links.public_url', 'pdf_url', 'public_url', 'pdf']),
             'xml_url'     => $this->first($bill, ['xml_url', 'xml']),
             'pdf_base64'  => $this->first($bill, ['pdf_base_64', 'pdf_base64', 'pdf_content']),
             'xml_base64'  => $this->first($bill, ['xml_base_64', 'xml_base64', 'xml_content']),

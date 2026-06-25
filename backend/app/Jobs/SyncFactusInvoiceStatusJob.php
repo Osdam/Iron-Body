@@ -74,6 +74,12 @@ class SyncFactusInvoiceStatusJob implements ShouldQueue
         InvoicePdfStorageService $storage,
         InvoicingService $invoicing,
     ): void {
+        // Solo consultamos con un número fiscal REAL (SETP…), nunca con el uuid
+        // interno (que lleva guiones). Filas antiguas mal formadas se ignoran.
+        if ($invoice->full_number === null || str_contains($invoice->full_number, '-')) {
+            return;
+        }
+
         $result = $client->getInvoice((string) $invoice->full_number);
 
         $invoicing->recordLog(
