@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\CreateCreditNoteRequest;
 use App\Http\Requests\Admin\ManualEmitInvoiceRequest;
 use App\Jobs\SyncFactusInvoiceStatusJob;
+use App\Models\Admin;
 use App\Models\AuditLog;
 use App\Models\ElectronicInvoice;
 use App\Services\Billing\InvoicingService;
@@ -215,6 +216,15 @@ class ElectronicInvoiceController extends Controller
     // POST /api/admin/electronic-invoices/{invoice}/credit-note
     public function creditNote(CreateCreditNoteRequest $request, ElectronicInvoice $invoice): JsonResponse
     {
+        // Anulación/nota crédito: acción sensible restringida al dueño/admin.
+        // Token compartido (n8n) o rol menor → 403.
+        if (! $this->isOwnerOrAdmin($request)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Solo el dueño o un administrador puede emitir notas crédito.',
+            ], 403);
+        }
+
         try {
             $note = $this->invoicing->createCreditNote($invoice, $request->validated()['reason']);
         } catch (InvalidArgumentException $e) {
@@ -254,6 +264,17 @@ class ElectronicInvoiceController extends Controller
         }
 
         return response()->json(['ok' => false, 'message' => 'Archivo no disponible.'], 404);
+    }
+
+    /** ¿El actor es dueño o administrador (no token compartido ni rol menor)? */
+    private function isOwnerOrAdmin(Request $request): bool
+    {
+        $admin = $request->attributes->get('auth_admin');
+        if (! $admin instanceof Admin) {
+            return false; // token compartido / sin sesión admin real
+        }
+
+        return in_array($admin->role, [Admin::ROLE_SUPER_ADMIN, Admin::ROLE_ADMINISTRADOR], true);
     }
 
     /** Traza de auditoría de acciones administrativas (append-only). */

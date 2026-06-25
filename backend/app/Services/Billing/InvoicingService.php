@@ -195,9 +195,13 @@ class InvoicingService
                 $this->recordLog($invoice, InvoiceLogAction::ENQUEUE, 'ok', 'Factura encolada (pending).');
             }
 
-            // Ya validada o en curso: no la tocamos (idempotencia).
+            // Despacho a Factus SOLO si:
+            //   - es manual (force: el cliente la solicitó), o
+            //   - la emisión automática de ese origen está activada (auto_emit).
+            // El comprobante 'pending' SIEMPRE queda creado como evidencia.
             $shouldDispatch = config('billing.enabled')
-                && ($invoice->wasRecentlyCreated || ($force && $invoice->status->canRetry()));
+                && ($invoice->wasRecentlyCreated || ($force && $invoice->status->canRetry()))
+                && ($force || $this->autoEmitEnabled($source));
 
             if ($shouldDispatch) {
                 EmitElectronicInvoiceJob::dispatch($invoice->id)->onQueue($this->queue());
@@ -214,6 +218,14 @@ class InvoicingService
 
             return null;
         }
+    }
+
+    /** ¿La emisión automática está activada para el origen (membresía vs POS)? */
+    private function autoEmitEnabled(Model $source): bool
+    {
+        return $source instanceof ProductSale
+            ? (bool) config('billing.auto_emit.product_sales')
+            : (bool) config('billing.auto_emit.memberships');
     }
 
     public function recordLog(

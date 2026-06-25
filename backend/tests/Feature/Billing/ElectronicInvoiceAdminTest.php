@@ -194,9 +194,18 @@ class ElectronicInvoiceAdminTest extends TestCase
     {
         $inv = $this->invoice(['status' => 'pending']);
 
+        $this->postJson("/api/admin/electronic-invoices/{$inv->id}/credit-note",
+            ['reason' => 'Anulación por error'], $this->actingAsAdmin())->assertStatus(422);
+    }
+
+    public function test_credit_note_forbidden_for_shared_token(): void
+    {
+        $inv = $this->invoice(['status' => 'validated', 'cufe' => 'cufe-orig']);
+
+        // adminHeaders() usa el secreto compartido (no sesión de dueño) → 403.
         $this->adminPostJson("/api/admin/electronic-invoices/{$inv->id}/credit-note", [
-            'reason' => 'Anulación por error',
-        ])->assertStatus(422);
+            'reason' => 'Devolución total',
+        ])->assertStatus(403);
     }
 
     public function test_credit_note_created_when_original_validated(): void
@@ -204,9 +213,8 @@ class ElectronicInvoiceAdminTest extends TestCase
         config(['billing.enabled' => false]);
         $inv = $this->invoice(['status' => 'validated', 'cufe' => 'cufe-orig']);
 
-        $res = $this->adminPostJson("/api/admin/electronic-invoices/{$inv->id}/credit-note", [
-            'reason' => 'Devolución total',
-        ])->assertStatus(201);
+        $res = $this->postJson("/api/admin/electronic-invoices/{$inv->id}/credit-note",
+            ['reason' => 'Devolución total'], $this->actingAsAdmin())->assertStatus(201);
 
         $this->assertSame('credit_note', $res->json('data.type'));
         $this->assertDatabaseHas('electronic_invoices', [

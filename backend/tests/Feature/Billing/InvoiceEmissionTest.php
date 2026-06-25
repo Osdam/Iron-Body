@@ -67,7 +67,7 @@ class InvoiceEmissionTest extends TestCase
 
     public function test_flag_on_dispatches_emit_job_once(): void
     {
-        config(['billing.enabled' => true]);
+        config(['billing.enabled' => true, 'billing.auto_emit.memberships' => true]);
         Queue::fake();
 
         $payment = $this->paidPayment();
@@ -166,5 +166,28 @@ class InvoiceEmissionTest extends TestCase
         $invoice->refresh();
         $this->assertSame(InvoiceStatus::PENDING, $invoice->status); // no emitió
         Http::assertNothingSent();
+    }
+
+    public function test_auto_hook_does_not_emit_when_auto_emit_off(): void
+    {
+        config(['billing.enabled' => true, 'billing.auto_emit.memberships' => false]);
+        Queue::fake();
+
+        $payment = $this->paidPayment();
+        $invoice = app(InvoicingService::class)->enqueueForPayment($payment);
+
+        $this->assertSame(InvoiceStatus::PENDING, $invoice->status); // pending creado
+        Queue::assertNothingPushed();                                // pero NO emite
+    }
+
+    public function test_manual_emit_dispatches_even_when_auto_emit_off(): void
+    {
+        config(['billing.enabled' => true, 'billing.auto_emit.memberships' => false]);
+        Queue::fake();
+
+        $payment = $this->paidPayment();
+        app(InvoicingService::class)->manualEmit('payment', $payment->id);
+
+        Queue::assertPushed(EmitElectronicInvoiceJob::class, 1); // manual sí emite
     }
 }

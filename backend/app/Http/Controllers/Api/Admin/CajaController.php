@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\ProductSale;
+use App\Services\Billing\InvoicingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -117,6 +118,7 @@ class CajaController extends Controller
         if ($data['paid'] ?? true) {
             $sale->load('items');
             $sale->markPaid($data['payment_method']);
+            $this->enqueueInvoice($sale);
         }
 
         return response()->json(['data' => $this->serialize($sale->fresh(['items', 'member:id,full_name']))], 201);
@@ -132,6 +134,7 @@ class CajaController extends Controller
 
         $sale->load('items');
         $sale->markPaid($data['payment_method'] ?? null, $data['payment_reference'] ?? null);
+        $this->enqueueInvoice($sale);
 
         return response()->json(['data' => $this->serialize($sale->fresh(['items', 'member:id,full_name']))]);
     }
@@ -148,6 +151,17 @@ class CajaController extends Controller
     {
         $sale->cancel();
         return response()->json(['data' => $this->serialize($sale->fresh('items'))]);
+    }
+
+    /**
+     * Facturación electrónica de la venta (best-effort). Crea el comprobante
+     * 'pending'; NO emite a Factus salvo que FACTUS_PRODUCT_SALES_AUTO_EMIT esté
+     * activo (o se emita manualmente). Nunca rompe la venta. Consumidor final si
+     * faltan datos fiscales.
+     */
+    private function enqueueInvoice(ProductSale $sale): void
+    {
+        app(InvoicingService::class)->enqueueForSale($sale->fresh('items'));
     }
 
     private function serialize(ProductSale $sale): array

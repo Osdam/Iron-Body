@@ -34,6 +34,14 @@ return [
     // ponga esta variable en true. No se asume IVA.
     'tax_decision_confirmed' => filter_var(env('FACTUS_TAX_DECISION_CONFIRMED', false), FILTER_VALIDATE_BOOLEAN),
 
+    // Emisión AUTOMÁTICA por origen. Por decisión del dueño, apagada por
+    // defecto: la factura se crea 'pending' pero NO se envía a Factus salvo que
+    // el cliente la solicite (emisión manual) o se active el flag respectivo.
+    'auto_emit' => [
+        'memberships'   => filter_var(env('FACTUS_MEMBERSHIPS_AUTO_EMIT', false), FILTER_VALIDATE_BOOLEAN),
+        'product_sales' => filter_var(env('FACTUS_PRODUCT_SALES_AUTO_EMIT', false), FILTER_VALIDATE_BOOLEAN),
+    ],
+
     // sandbox | production
     'env'        => $env,
     'production' => $env === 'production',
