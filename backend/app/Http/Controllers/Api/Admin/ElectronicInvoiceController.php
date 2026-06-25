@@ -9,6 +9,7 @@ use App\Jobs\SyncFactusInvoiceStatusJob;
 use App\Models\Admin;
 use App\Models\AuditLog;
 use App\Models\ElectronicInvoice;
+use App\Services\Billing\Factus\FactusConfigValidator;
 use App\Services\Billing\InvoicingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -102,6 +103,7 @@ class ElectronicInvoiceController extends Controller
         // WHITELIST explícita: jamás se difunde config('billing') completa.
         // Nunca credentials, ni webhook.secret, ni tokens.
         $c = config('billing');
+        $validator = FactusConfigValidator::fromConfig();
 
         return response()->json([
             'data' => [
@@ -121,6 +123,9 @@ class ElectronicInvoiceController extends Controller
                 'reconciliation' => $c['reconciliation'] ?? [],
                 'storage'        => ['disk' => $c['storage']['disk'] ?? null],
                 'webhook'        => ['enabled' => (bool) ($c['webhook']['enabled'] ?? false)],
+                // Readiness de producción (lista de bloqueos saneada, sin secretos).
+                'production_ready'  => $validator->isReadyForProduction(),
+                'production_issues' => $validator->productionReadiness(),
             ],
         ]);
     }

@@ -86,6 +86,7 @@ class ElectronicInvoiceAdminTest extends TestCase
         $res->assertDontSee('PWDLEAK');
         $res->assertDontSee('WHSECRET');
         $res->assertJsonMissingPath('data.credentials');
+        $res->assertJsonStructure(['data' => ['production_ready', 'production_issues']]);
     }
 
     public function test_manual_emit_is_idempotent(): void
