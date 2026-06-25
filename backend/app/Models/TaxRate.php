@@ -11,12 +11,13 @@ use Illuminate\Database\Eloquent\Model;
 class TaxRate extends Model
 {
     protected $fillable = [
-        'code', 'name', 'rate', 'factus_tribute_id', 'active',
+        'code', 'name', 'description', 'rate', 'factus_tribute_id', 'price_includes_tax', 'active',
     ];
 
     protected $casts = [
         'rate'   => 'decimal:2',
         'active' => 'boolean',
+        'price_includes_tax' => 'boolean',
     ];
 
     /** Factor decimal de la tarifa (19.00 -> 0.19). */

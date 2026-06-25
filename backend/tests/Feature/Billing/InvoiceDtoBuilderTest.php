@@ -4,6 +4,8 @@ namespace Tests\Feature\Billing;
 
 use App\Models\Payment;
 use App\Models\Plan;
+use App\Models\Product;
+use App\Models\ProductSale;
 use App\Models\TaxRate;
 use App\Models\User;
 use App\Services\Billing\InvoiceDtoBuilder;
@@ -79,5 +81,25 @@ class InvoiceDtoBuilderTest extends TestCase
 
         $this->assertEqualsWithDelta(0, (float) $snap['tax_total'], 0.01);
         $this->assertEqualsWithDelta(50000, (float) $snap['total'], 0.5);
+    }
+
+    public function test_product_iva_19_included_splits_base_and_tax(): void
+    {
+        $rate = TaxRate::create(['code' => 'IVA_19_INCL', 'name' => 'IVA 19% incluido', 'rate' => 19, 'price_includes_tax' => true, 'active' => true]);
+        $product = Product::create([
+            'name' => 'Proteína', 'sale_price' => 119000, 'cost_price' => 80000, 'stock' => 10,
+            'active' => true, 'tax_rate_id' => $rate->id, 'price_includes_tax' => true,
+        ]);
+        $sale = ProductSale::create([
+            'channel' => 'pos', 'status' => 'paid', 'payment_method' => 'cash',
+            'subtotal' => 119000, 'total' => 119000,
+        ]);
+        $sale->items()->create(['product_id' => $product->id, 'name' => 'Proteína', 'unit_price' => 119000, 'quantity' => 1, 'subtotal' => 119000]);
+
+        $snap = app(InvoiceDtoBuilder::class)->forSale($sale->fresh('items'), $this->consumer())['snapshot'];
+
+        $this->assertEqualsWithDelta(100000, (float) $snap['subtotal'], 0.5);
+        $this->assertEqualsWithDelta(19000, (float) $snap['tax_total'], 0.5);
+        $this->assertEqualsWithDelta(119000, (float) $snap['total'], 0.5);
     }
 }

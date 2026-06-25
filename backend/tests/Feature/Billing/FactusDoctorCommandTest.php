@@ -3,6 +3,7 @@
 namespace Tests\Feature\Billing;
 
 use App\Models\Plan;
+use App\Models\Product;
 use App\Models\TaxRate;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -78,5 +79,15 @@ class FactusDoctorCommandTest extends TestCase
         $this->artisan('billing:factus-doctor')
             ->expectsOutputToContain('LISTO PARA PRODUCCIÓN')
             ->assertExitCode(0);
+    }
+
+    public function test_blocks_when_active_product_without_tax_rate(): void
+    {
+        $this->readyConfig();
+        Product::create(['name' => 'Proteína', 'sale_price' => 50000, 'stock' => 5, 'active' => true]); // sin tax_rate_id
+
+        $this->artisan('billing:factus-doctor')
+            ->expectsOutputToContain('sin tax_rate_id')
+            ->assertExitCode(1);
     }
 }

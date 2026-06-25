@@ -8,6 +8,7 @@ use App\Enums\InvoiceType;
 use App\Models\ElectronicInvoice;
 use App\Models\ProductSale;
 use App\Services\Billing\Factus\FactusClient;
+use App\Services\Billing\Factus\FactusConfigValidator;
 use App\Services\Billing\FactusPayloadSanitizer;
 use App\Services\Billing\FactusResponseMapper;
 use App\Services\Billing\FiscalProfileResolver;
@@ -19,6 +20,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Throwable;
 
@@ -55,6 +57,13 @@ class EmitCreditNoteJob implements ShouldQueue
         FiscalProfileResolver $resolver,
     ): void {
         if (! config('billing.enabled')) {
+            return;
+        }
+
+        // 🔒 En producción, no emitir si la config no está lista (ver Emit job).
+        if (config('billing.env') === 'production'
+            && ! FactusConfigValidator::fromConfig()->isReadyForProduction()) {
+            Log::warning('billing.production_not_ready', ['credit_note' => $this->creditNoteInvoiceId]);
             return;
         }
 

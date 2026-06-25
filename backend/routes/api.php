@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\AppStoreController;
 use App\Http\Controllers\Api\Admin\ProductController;
 use App\Http\Controllers\Api\Admin\CajaController;
 use App\Http\Controllers\Api\Admin\EarningsController;
+use App\Http\Controllers\Api\Admin\BillingTaxController;
 use App\Http\Controllers\Api\Admin\ElectronicInvoiceController;
 use App\Http\Controllers\Api\Admin\FiscalProfileController;
 use App\Http\Controllers\Api\ExerciseController;
@@ -824,6 +825,13 @@ Route::get('admin/users/{user}/fiscal-profile',    [FiscalProfileController::cla
 Route::put('admin/users/{user}/fiscal-profile',    [FiscalProfileController::class, 'updateForUser'])->whereNumber('user');
 Route::get('admin/members/{member}/fiscal-profile', [FiscalProfileController::class, 'showForMember'])->whereNumber('member');
 Route::put('admin/members/{member}/fiscal-profile', [FiscalProfileController::class, 'updateForMember'])->whereNumber('member');
+
+// ── Configuración fiscal de planes/productos (Fase 9) ─────────────────────────
+Route::get('admin/billing/tax-rates',                 [BillingTaxController::class, 'index']);
+Route::get('admin/billing/fiscal-assignments',        [BillingTaxController::class, 'assignments']);
+Route::put('admin/billing/plans/{plan}/tax-rate',     [BillingTaxController::class, 'assignPlan'])->whereNumber('plan');
+Route::put('admin/billing/products/{product}/tax-rate', [BillingTaxController::class, 'assignProduct'])->whereNumber('product');
+Route::post('admin/billing/products/bulk-tax',        [BillingTaxController::class, 'bulkProducts']);
 // ── Ejercicios — referencias visuales (GIF) vía WorkoutX ────────────────────
 // Rutas específicas ANTES de {id} para que no las capture el comodín.
 Route::get('exercises/search', [ExerciseController::class, 'search']);
