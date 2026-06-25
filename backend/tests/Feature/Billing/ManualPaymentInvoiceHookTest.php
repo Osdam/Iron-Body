@@ -38,7 +38,7 @@ class ManualPaymentInvoiceHookTest extends TestCase
         config(['billing.enabled' => true, 'queue.default' => 'sync']);
         Http::fake([
             '*/oauth/token'       => Http::response(['access_token' => 'tok', 'expires_in' => 3600]),
-            '*/v1/bills/validate' => Http::response(['message' => 'down'], 500),
+            '*/v2/bills/validate' => Http::response(['message' => 'down'], 500),
         ]);
 
         $user = User::factory()->create();

@@ -25,7 +25,7 @@ class CajaController extends Controller
     // GET /api/admin/caja/sales
     public function index(Request $request): JsonResponse
     {
-        $query = ProductSale::query()->with(['items', 'member:id,full_name'])->latest('id');
+        $query = ProductSale::query()->with(['items', 'member:id,full_name', 'electronicInvoice'])->latest('id');
 
         if ($request->filled('channel')) {
             $query->where('channel', $request->input('channel'));
@@ -58,7 +58,7 @@ class CajaController extends Controller
     // GET /api/admin/caja/sales/{sale}
     public function show(ProductSale $sale): JsonResponse
     {
-        $sale->load(['items', 'member:id,full_name']);
+        $sale->load(['items', 'member:id,full_name', 'electronicInvoice']);
         return response()->json(['data' => $this->serialize($sale)]);
     }
 
@@ -154,6 +154,7 @@ class CajaController extends Controller
     {
         return array_merge($sale->toReceiptArray(), [
             'id'            => $sale->id,
+            'invoice'       => $sale->invoice_summary,
             'member_id'     => $sale->member_id,
             'member_name'   => $sale->member?->full_name,
             'receipt_url'   => $sale->receipt_url,

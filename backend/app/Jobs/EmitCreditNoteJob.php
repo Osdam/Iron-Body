@@ -3,11 +3,15 @@
 namespace App\Jobs;
 
 use App\Enums\InvoiceLogAction;
+use App\Enums\InvoiceStatus;
 use App\Enums\InvoiceType;
 use App\Models\ElectronicInvoice;
+use App\Models\ProductSale;
 use App\Services\Billing\Factus\FactusClient;
 use App\Services\Billing\FactusPayloadSanitizer;
 use App\Services\Billing\FactusResponseMapper;
+use App\Services\Billing\FiscalProfileResolver;
+use App\Services\Billing\InvoiceDtoBuilder;
 use App\Services\Billing\InvoicePdfStorageService;
 use App\Services\Billing\InvoicingService;
 use Illuminate\Bus\Queueable;
@@ -19,12 +23,14 @@ use RuntimeException;
 use Throwable;
 
 /**
- * Emite una NOTA CRÉDITO (anulación/reembolso) en Factus.
+ * Emite una NOTA CRÉDITO (anulación/reembolso) en Factus V2.
  *
- * DISEÑADO para Fase 2: opera sobre un ElectronicInvoice de tipo credit_note ya
- * creado (con references_invoice_id apuntando a la factura original). El
- * cableado a ProductSale::cancel()/refund se hará en Fase 2; la estructura,
- * idempotencia y manejo de errores quedan listos aquí.
+ * Opera sobre un ElectronicInvoice de tipo credit_note (con references_invoice_id
+ * a la factura original VALIDADA). Reconstruye customer/items/payment_details
+ * desde el source (mismo builder que la factura) y añade los campos propios de
+ * NC: correction_concept_code, customization_id, bill_number (de la original) y
+ * SU PROPIO numbering_range_id. Estructura confirmada contra la colección oficial
+ * (POST /v2/credit-notes/validate).
  */
 class EmitCreditNoteJob implements ShouldQueue
 {
@@ -45,6 +51,8 @@ class EmitCreditNoteJob implements ShouldQueue
         FactusPayloadSanitizer $sanitizer,
         InvoicePdfStorageService $storage,
         InvoicingService $invoicing,
+        InvoiceDtoBuilder $builder,
+        FiscalProfileResolver $resolver,
     ): void {
         if (! config('billing.enabled')) {
             return;
@@ -59,25 +67,34 @@ class EmitCreditNoteJob implements ShouldQueue
         }
 
         $original = $note->referencesInvoice;
-        if ($original === null || empty($original->cufe)) {
-            $note->markError('Nota crédito sin factura original válida (CUFE).');
+        if ($original === null || empty($original->full_number)) {
+            $note->markError('Nota crédito sin factura original válida (número).');
             return;
         }
 
-        // El esquema exacto del payload de nota crédito (causal, referencia por
-        // CUFE/número) se confirma contra la doc de Factus V2 (ver preguntas).
+        $source = $note->source; // Payment | ProductSale (mismo que la original)
+        if ($source === null) {
+            $note->markError('Fuente de la nota crédito no encontrada.');
+            return;
+        }
+
+        // Reconstruye customer + items + payment_details con el mismo builder.
+        $built = $source instanceof ProductSale
+            ? $builder->forSale($source, $resolver->resolveForSale($source))
+            : $builder->forPayment($source, $resolver->resolveForPayment($source));
+        $base = $built['payload'];
+
         $payload = [
-            'numbering_range_id' => $note->numbering_range_id ?? config('billing.numbering.range_id'),
-            'reference_code'     => $note->uuid,
-            'bill_cufe'          => $original->cufe,
-            'bill_number'        => $original->full_number,
-            'reason'             => $note->failure_reason ?? 'Anulación',
-            'customer'           => [
-                'identification' => $note->customer_doc_number,
-                'names'          => $note->customer_name,
-                'email'          => $note->customer_email,
-            ],
-            'amount' => (float) $note->total,
+            'reference_code'          => $note->uuid,
+            'correction_concept_code' => (string) config('billing.credit_note.correction_concept_code', '2'),
+            'customization_id'        => (string) config('billing.credit_note.customization_id', '20'),
+            'bill_number'             => $original->full_number,
+            'numbering_range_id'      => (int) (config('billing.numbering.credit_range_id') ?: $note->numbering_range_id),
+            'observation'             => $note->failure_reason ?? 'Anulación',
+            'cash_rounding_amount'    => '0.00',
+            'payment_details'         => $base['payment_details'],
+            'customer'                => $base['customer'],
+            'items'                   => $base['items'],
         ];
 
         $note->markProcessing();
@@ -106,7 +123,7 @@ class EmitCreditNoteJob implements ShouldQueue
                     'dian_status' => $mapped['dian_status'],
                 ]));
                 // La factura original queda anulada por la nota crédito validada.
-                $original->update(['status' => \App\Enums\InvoiceStatus::CANCELLED->value]);
+                $original->update(['status' => InvoiceStatus::CANCELLED->value]);
                 return;
             }
             $note->markRejected($mapped['reason'] ?? 'Nota crédito rechazada.');

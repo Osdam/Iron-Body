@@ -7,17 +7,19 @@ use App\Models\Plan;
 use App\Models\ProductSale;
 
 /**
- * Construye el DTO de facturación a partir de la fuente (pago o venta) y los
- * datos fiscales ya resueltos (FiscalProfileResolver).
+ * Construye el DTO de facturación Factus V2 a partir de la fuente (pago o venta)
+ * y los datos fiscales ya resueltos (FiscalProfileResolver).
  *
- * Devuelve un arreglo con DOS partes:
+ * Devuelve:
  *   - 'snapshot': datos a persistir en electronic_invoices (montos + customer).
- *   - 'payload' : cuerpo para la API de Factus V2.
+ *   - 'payload' : cuerpo EXACTO para POST /v2/bills/validate (estructura oficial
+ *                 confirmada contra docs/factus/factus-v2.postman_collection.json).
  *
- * El cálculo de base/IVA respeta price_includes_tax del plan/producto: si el
- * precio ya incluye IVA, se desglosa hacia atrás; si no, se suma. Las CLAVES
- * exactas del payload Factus deben confirmarse contra la colección oficial; al
- * confirmarlas se ajustan SOLO aquí.
+ * Reglas del payload V2:
+ *   - Montos como string; payment_form entero; price unitario SIN IVA.
+ *   - customer con sufijos *_code; natural → names; jurídica → company+trade_name.
+ *   - items.taxes[] = [{code, rate}] o [{is_excluded:true}] si tarifa 0/excluida.
+ *   - El reference_code raíz lo fija InvoicingService/Job (uuid de la factura).
  */
 class InvoiceDtoBuilder
 {
@@ -34,21 +36,20 @@ class InvoiceDtoBuilder
         $gross = (float) $payment->amount;
         [$base, $tax] = $this->splitTax($gross, $rate?->factor() ?? 0.0, $includesTax);
 
-        $description = $plan ? 'Membresía ' . $plan->name . ' - Iron Body' : 'Pago Iron Body';
+        $name = $plan ? 'Membresía ' . $plan->name . ' - Iron Body' : 'Pago Iron Body';
 
-        $line = [
-            'name'        => $description,
-            'quantity'    => 1,
-            'unit_price'  => round($base, 2),
-            'discount'    => 0,
-            'tax_rate'    => $rate?->rate !== null ? (float) $rate->rate : 0,
-            'tribute_id'  => $rate?->factus_tribute_id ?? config('billing.defaults.tribute_id'),
-            'tax_amount'  => round($tax, 2),
-            'unspsc_code' => $plan?->unspsc_code,
-            'total'       => round($base + $tax, 2),
-        ];
+        $line = $this->line(
+            codeReference: $plan ? 'PLAN-' . $plan->id : 'PAGO',
+            name: $name,
+            quantity: 1,
+            unitBase: round($base, 2),
+            taxAmount: round($tax, 2),
+            taxRate: $rate?->rate !== null ? (float) $rate->rate : null,
+            taxCode: $rate?->factus_tribute_id,
+            unspsc: $plan?->unspsc_code,
+        );
 
-        return $this->assemble($customer, [$line], 0.0);
+        return $this->assemble($customer, [$line], 0.0, $name);
     }
 
     /**
@@ -65,23 +66,23 @@ class InvoiceDtoBuilder
             $rate = $product?->taxRate;
             $includesTax = $product ? (bool) $product->price_includes_tax : true;
 
-            $gross = (float) $item->unit_price * (int) $item->quantity;
+            $qty = max(1, (int) $item->quantity);
+            $gross = (float) $item->unit_price * $qty;
             [$base, $tax] = $this->splitTax($gross, $rate?->factor() ?? 0.0, $includesTax);
 
-            $lines[] = [
-                'name'        => $item->name,
-                'quantity'    => (int) $item->quantity,
-                'unit_price'  => round($base / max(1, (int) $item->quantity), 2),
-                'discount'    => 0,
-                'tax_rate'    => $rate?->rate !== null ? (float) $rate->rate : 0,
-                'tribute_id'  => $rate?->factus_tribute_id ?? config('billing.defaults.tribute_id'),
-                'tax_amount'  => round($tax, 2),
-                'unspsc_code' => $product?->unspsc_code,
-                'total'       => round($base + $tax, 2),
-            ];
+            $lines[] = $this->line(
+                codeReference: $product ? 'PROD-' . $product->id : 'ITEM',
+                name: (string) $item->name,
+                quantity: $qty,
+                unitBase: round($base / $qty, 2),
+                taxAmount: round($tax, 2),
+                taxRate: $rate?->rate !== null ? (float) $rate->rate : null,
+                taxCode: $rate?->factus_tribute_id,
+                unspsc: $product?->unspsc_code,
+            );
         }
 
-        return $this->assemble($customer, $lines, (float) $sale->discount);
+        return $this->assemble($customer, $lines, (float) $sale->discount, 'Venta Iron Body');
     }
 
     /**
@@ -101,14 +102,53 @@ class InvoiceDtoBuilder
         return [$gross, $gross * $factor];
     }
 
+    /** Línea interna (base para snapshot de montos + item del payload). */
+    private function line(
+        string $codeReference,
+        string $name,
+        int $quantity,
+        float $unitBase,
+        float $taxAmount,
+        ?float $taxRate,
+        ?string $taxCode,
+        ?string $unspsc,
+    ): array {
+        $d = (array) config('billing.defaults');
+        $hasTax = $taxRate !== null && $taxRate > 0;
+
+        return [
+            'code_reference'    => $codeReference,
+            'name'              => $name,
+            'quantity'          => $quantity,
+            'unit_base'         => $unitBase,
+            'tax_amount'        => $taxAmount,
+            'tax_rate'          => $taxRate,
+            // Item del payload Factus V2.
+            'payload' => [
+                'code_reference'   => $codeReference,
+                'name'             => $name,
+                'quantity'         => $this->num($quantity),
+                'discount_rate'    => '0.00',
+                'price'            => $this->num($unitBase),
+                'unit_measure_code' => (string) ($d['unit_measure_code'] ?? '94'),
+                'standard_code'    => $unspsc ?: (string) ($d['standard_code'] ?? '999'),
+                'taxes'            => $hasTax
+                    ? [['code' => $taxCode ?: (string) ($d['tax_code'] ?? '01'), 'rate' => $this->num($taxRate)]]
+                    : [['is_excluded' => true]],
+            ],
+        ];
+    }
+
     /**
      * @param  array<string,mixed>  $customer
      * @param  array<int,array<string,mixed>>  $lines
      * @return array{snapshot: array<string,mixed>, payload: array<string,mixed>}
      */
-    private function assemble(array $customer, array $lines, float $discount): array
+    private function assemble(array $customer, array $lines, float $discount, string $observation): array
     {
-        $subtotal = array_sum(array_map(static fn ($l) => $l['unit_price'] * $l['quantity'], $lines));
+        $d = (array) config('billing.defaults');
+
+        $subtotal = array_sum(array_map(static fn ($l) => $l['unit_base'] * $l['quantity'], $lines));
         $taxTotal = array_sum(array_map(static fn ($l) => $l['tax_amount'], $lines));
         $total    = round($subtotal + $taxTotal - $discount, 2);
 
@@ -123,7 +163,7 @@ class InvoiceDtoBuilder
             'customer_city_code'       => $customer['city_code'] ?? null,
             'customer_department_code' => $customer['department_code'] ?? null,
             'is_final_consumer'        => (bool) ($customer['is_final_consumer'] ?? false),
-            'currency'                 => config('billing.defaults.currency', 'COP'),
+            'currency'                 => (string) ($d['currency'] ?? 'COP'),
             'subtotal'                 => round($subtotal, 2),
             'discount'                 => round($discount, 2),
             'tax_total'                => round($taxTotal, 2),
@@ -131,33 +171,74 @@ class InvoiceDtoBuilder
         ];
 
         $payload = [
-            'numbering_range_id' => config('billing.numbering.range_id'),
-            'reference_code'     => null, // lo fija InvoicingService (uuid de la factura)
-            'payment_method_code' => config('billing.defaults.payment_method_code'),
-            'customer' => [
-                'identification'        => $customer['doc_number'] ?? null,
-                'identification_document_id' => $customer['doc_type'] ?? null,
-                'dv'                    => $customer['dv'] ?? null,
-                'names'                 => $customer['name'] ?? null,
-                'legal_organization_id' => ($customer['is_final_consumer'] ?? false) ? null : ($customer['legal_name'] ? 2 : 1),
-                'email'                 => $customer['email'] ?? null,
-                'phone'                 => $customer['phone'] ?? null,
-                'address'               => $customer['address'] ?? null,
-                'municipality_id'       => $customer['city_code'] ?? null,
-            ],
-            'items' => array_map(static function (array $l) {
-                return [
-                    'name'              => $l['name'],
-                    'quantity'          => $l['quantity'],
-                    'price'             => $l['unit_price'],
-                    'discount_rate'     => 0,
-                    'tax_rate'          => $l['tax_rate'],
-                    'tribute_id'        => $l['tribute_id'],
-                    'standard_code_id'  => $l['unspsc_code'],
-                ];
-            }, $lines),
+            'document'             => (string) ($d['document'] ?? '01'),
+            'operation_type'       => (string) ($d['operation_type'] ?? '10'),
+            'numbering_range_id'   => (int) config('billing.numbering.range_id'),
+            'send_email'           => false,
+            'observation'          => $observation,
+            'cash_rounding_amount' => '0.00',
+            'payment_details'      => [[
+                'payment_form'        => (int) ($d['payment_form'] ?? 1),
+                'payment_method_code' => (string) ($d['payment_method_code'] ?? '10'),
+                'amount'              => $this->num($total),
+            ]],
+            'customer' => $this->customer($customer, $d),
+            'items'    => array_map(static fn ($l) => $l['payload'], $lines),
         ];
 
         return ['snapshot' => $snapshot, 'payload' => $payload];
+    }
+
+    /** Construye el bloque customer V2 (natural vs jurídica). */
+    private function customer(array $c, array $d): array
+    {
+        $juridica = ($c['person_type'] ?? null) === 'juridica';
+        $legalOrg = $juridica ? '1' : (string) ($d['legal_organization_code'] ?? '2');
+
+        $out = [
+            'identification_document_code' => $this->docCode($c['doc_type'] ?? null),
+            'identification'               => (string) ($c['doc_number'] ?? ''),
+            'legal_organization_code'      => $legalOrg,
+            'tribute_code'                 => (string) ($d['tribute_code'] ?? 'ZZ'),
+            'municipality_code'            => $c['city_code'] ?: ($d['municipality_code'] ?? null),
+        ];
+
+        if ($juridica) {
+            $out['company']    = (string) ($c['legal_name'] ?? $c['name'] ?? '');
+            $out['trade_name'] = (string) ($c['legal_name'] ?? $c['name'] ?? '');
+        } else {
+            $out['names'] = (string) ($c['name'] ?? '');
+        }
+
+        if (! empty($c['dv'])) {
+            $out['dv'] = (string) $c['dv'];
+        }
+        foreach (['address', 'email', 'phone'] as $k) {
+            if (! empty($c[$k])) {
+                $out[$k] = (string) $c[$k];
+            }
+        }
+
+        return $out;
+    }
+
+    /** Traduce el tipo de documento interno (CC/NIT…) a código DIAN/Factus. */
+    private function docCode(?string $docType): string
+    {
+        if ($docType === null || $docType === '') {
+            return '';
+        }
+        if (ctype_digit($docType)) {
+            return $docType; // ya es código
+        }
+        $map = (array) config('billing.document_type_map', []);
+
+        return (string) ($map[strtoupper($docType)] ?? $docType);
+    }
+
+    /** Formatea número como string con 2 decimales (formato Factus). */
+    private function num(float|int $n): string
+    {
+        return number_format((float) $n, 2, '.', '');
     }
 }

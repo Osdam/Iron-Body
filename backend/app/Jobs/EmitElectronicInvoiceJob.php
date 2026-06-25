@@ -98,7 +98,7 @@ class EmitElectronicInvoiceJob implements ShouldQueue
         );
 
         if ($result['ok']) {
-            $this->applySuccess($invoice, $mapper->map($result['body']), $storage);
+            $this->applySuccess($invoice, $mapper->map($result['body']), $storage, $client);
             return;
         }
 
@@ -115,14 +115,25 @@ class EmitElectronicInvoiceJob implements ShouldQueue
     }
 
     /** Persiste número/CUFE/QR/archivos y marca validado o rechazado. */
-    private function applySuccess(ElectronicInvoice $invoice, array $mapped, InvoicePdfStorageService $storage): void
-    {
+    private function applySuccess(
+        ElectronicInvoice $invoice,
+        array $mapped,
+        InvoicePdfStorageService $storage,
+        FactusClient $client,
+    ): void {
         if ($mapped['is_rejected']) {
             $invoice->markRejected($mapped['reason'] ?? 'Rechazada por DIAN.');
             return;
         }
 
+        // Archivos del create (si vinieron inline).
         $files = $storage->store($invoice, $mapped);
+
+        // Factus V2 NO devuelve PDF/XML en /validate: se descargan por número.
+        $number = $mapped['full_number'] ?: $mapped['number'];
+        if ($number && empty($files['pdf_path']) && empty($files['pdf_url'])) {
+            $files = array_merge($files, $this->fetchFiles((string) $number, $invoice, $client, $storage));
+        }
 
         $invoice->markValidated(array_merge($files, [
             'factus_id'   => $mapped['factus_id'],
@@ -134,6 +145,28 @@ class EmitElectronicInvoiceJob implements ShouldQueue
             'qr_url'      => $mapped['qr_url'],
             'qr_data'     => $mapped['qr_data'],
         ]));
+    }
+
+    /** Descarga PDF/XML por número (best-effort) y los guarda en disco privado. */
+    private function fetchFiles(
+        string $number,
+        ElectronicInvoice $invoice,
+        FactusClient $client,
+        InvoicePdfStorageService $storage,
+    ): array {
+        try {
+            $pdf = $client->downloadPdf($number)['body'] ?? [];
+            $xml = $client->downloadXml($number)['body'] ?? [];
+
+            return $storage->store($invoice, [
+                'pdf_base64' => $pdf['pdf_base_64'] ?? $pdf['pdf_base64'] ?? null,
+                'pdf_url'    => $pdf['public_url'] ?? $pdf['pdf_url'] ?? null,
+                'xml_base64' => $xml['xml_base_64'] ?? $xml['xml_base64'] ?? null,
+                'xml_url'    => $xml['xml_url'] ?? null,
+            ]);
+        } catch (\Throwable) {
+            return []; // best-effort: la factura ya quedó validada
+        }
     }
 
     /** La cola agotó los reintentos: dejar constancia dura del error. */

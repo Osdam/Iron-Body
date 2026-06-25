@@ -80,17 +80,45 @@ return [
     // La numeración legal la administra Factus por su rango/resolución. El CRM
     // envía el rango y RECIBE el número; no fabrica el consecutivo.
     'numbering' => [
-        'range_id' => env('FACTUS_NUMBERING_RANGE_ID'),
-        'prefix'   => env('FACTUS_NUMBERING_PREFIX'),
+        'range_id'        => env('FACTUS_NUMBERING_RANGE_ID'),
+        'prefix'          => env('FACTUS_NUMBERING_PREFIX'),
+        // Las notas crédito usan SU PROPIO rango de numeración (resolución NC).
+        'credit_range_id' => env('FACTUS_CREDIT_NUMBERING_RANGE_ID'),
     ],
 
-    // -- Valores por defecto del documento -----------------------------------
+    // -- Valores por defecto del documento (códigos de catálogo Factus V2) ----
+    // Confirmados contra la colección oficial (docs/factus). Los montos van como
+    // string; payment_form es entero; payment_method_code y los demás, string.
     'defaults' => [
-        'payment_method_code' => env('FACTUS_DEFAULT_PAYMENT_METHOD_CODE'),
-        'tribute_id'          => env('FACTUS_DEFAULT_TRIBUTE_ID'),
-        'currency'            => 'COP',
+        'currency'             => 'COP',
+        'document'             => env('FACTUS_DOCUMENT_CODE', '01'),        // 01 = Factura de venta
+        'operation_type'       => env('FACTUS_OPERATION_TYPE', '10'),      // 10 = Estándar
+        'unit_measure_code'    => env('FACTUS_DEFAULT_UNIT_MEASURE_CODE', '94'),
+        'standard_code'        => env('FACTUS_DEFAULT_STANDARD_CODE', '999'),
+        'tax_code'             => env('FACTUS_DEFAULT_TAX_CODE', '01'),     // 01 = IVA (items.taxes[].code)
+        'tax_rate'             => env('FACTUS_DEFAULT_TAX_RATE', '19.00'),
+        'payment_form'         => (int) env('FACTUS_DEFAULT_PAYMENT_FORM', 1),
+        'payment_method_code'  => env('FACTUS_DEFAULT_PAYMENT_METHOD_CODE', '10'),
+        'tribute_code'         => env('FACTUS_DEFAULT_TRIBUTE_CODE', 'ZZ'), // customer.tribute_code
+        'legal_organization_code' => env('FACTUS_DEFAULT_LEGAL_ORGANIZATION_CODE', '2'), // 2 = Natural
+        'municipality_code'    => env('FACTUS_DEFAULT_MUNICIPALITY_CODE'),
     ],
 
+    // -- Notas crédito -------------------------------------------------------
+    'credit_note' => [
+        'correction_concept_code' => env('FACTUS_CREDIT_CORRECTION_CONCEPT_CODE', '2'), // 2 = Anulación
+        'customization_id'        => env('FACTUS_CREDIT_CUSTOMIZATION_ID', '20'),
+    ],
+
+    // -- Mapa tipo de documento interno -> código DIAN/Factus ----------------
+    // Si el valor almacenado ya es numérico (código), se usa tal cual.
+    'document_type_map' => [
+        'CC'  => '13',
+        'NIT' => '31',
+        'CE'  => '22',
+        'PAS' => '41',
+        'TI'  => '12',
+    ],
     // -- Consumidor final ----------------------------------------------------
     // Cuando el pago no trae datos fiscales completos, se factura a consumidor
     // final (sin bloquear el cobro). Documento/tipo exactos según Factus/DIAN.

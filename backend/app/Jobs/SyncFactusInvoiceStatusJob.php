@@ -54,13 +54,13 @@ class SyncFactusInvoiceStatusJob implements ShouldQueue
         if ($this->invoiceId !== null) {
             return ElectronicInvoice::query()
                 ->whereKey($this->invoiceId)
-                ->whereNotNull('factus_id')
+                ->whereNotNull('full_number')
                 ->get();
         }
 
         return ElectronicInvoice::query()
             ->processing()
-            ->whereNotNull('factus_id')
+            ->whereNotNull('full_number')
             ->orderBy('id')
             ->limit(100)
             ->get();
@@ -74,7 +74,7 @@ class SyncFactusInvoiceStatusJob implements ShouldQueue
         InvoicePdfStorageService $storage,
         InvoicingService $invoicing,
     ): void {
-        $result = $client->getInvoice((string) $invoice->factus_id);
+        $result = $client->getInvoice((string) $invoice->full_number);
 
         $invoicing->recordLog(
             $invoice,

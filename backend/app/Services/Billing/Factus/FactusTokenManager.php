@@ -3,24 +3,26 @@
 namespace App\Services\Billing\Factus;
 
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
 /**
- * Gestiona el access_token OAuth2 (password grant) de Factus.
+ * Gestiona el access_token OAuth2 de Factus V2.
  *
- * - Cachea el token con TTL acotado (config('billing.token_cache_seconds'),
- *   recortado por el expires_in real que devuelva Factus).
- * - NUNCA loguea credenciales ni el token.
- * - Reintenta solo la obtención (operación segura) con backoff corto.
+ * Estrategia:
+ *   - Si hay un refresh_token cacheado → intenta grant_type=refresh_token
+ *     (renueva sin reenviar credenciales).
+ *   - Si no hay, o el refresh falla → grant_type=password.
+ *   - Cachea access_token (TTL = expires_in - 60s) y refresh_token (TTL largo).
+ *   - NUNCA loguea credenciales ni tokens.
  *
- * La RUTA del endpoint de token ('/oauth/token') y el grant deben confirmarse
- * contra la colección/doc oficial de Factus V2 (ver preguntas para Halltec).
+ * Endpoint y grants confirmados contra la colección oficial:
+ *   POST /oauth/token  (password | refresh_token)
  */
 class FactusTokenManager
 {
-    /** Ruta del endpoint de token (confirmar en doc Factus V2). */
     private const TOKEN_PATH = '/oauth/token';
 
     public function __construct(private array $cfg)
@@ -32,15 +34,25 @@ class FactusTokenManager
         return new self((array) config('billing'));
     }
 
-    private function cacheKey(): string
+    private function env(): string
     {
-        return 'billing.factus.token.' . ($this->cfg['env'] ?? 'sandbox');
+        return (string) ($this->cfg['env'] ?? 'sandbox');
+    }
+
+    private function accessKey(): string
+    {
+        return 'billing.factus.token.' . $this->env();
+    }
+
+    private function refreshKey(): string
+    {
+        return 'billing.factus.refresh.' . $this->env();
     }
 
     /** Devuelve un access_token válido (cacheado o recién emitido). */
     public function accessToken(): string
     {
-        $cached = Cache::get($this->cacheKey());
+        $cached = Cache::get($this->accessKey());
         if (is_string($cached) && $cached !== '') {
             return $cached;
         }
@@ -48,22 +60,38 @@ class FactusTokenManager
         return $this->refresh();
     }
 
-    /** Fuerza la obtención de un token nuevo y lo cachea. */
+    /**
+     * Obtiene un token nuevo: primero por refresh_token (si existe), luego por
+     * password. Cachea ambos tokens. Devuelve el access_token.
+     */
     public function refresh(): string
     {
-        $creds = (array) ($this->cfg['credentials'] ?? []);
-        foreach (['username', 'password', 'client_id', 'client_secret'] as $k) {
-            if (empty($creds[$k])) {
-                throw new RuntimeException("Factus: credencial '{$k}' no configurada.");
+        $refreshToken = Cache::get($this->refreshKey());
+        if (is_string($refreshToken) && $refreshToken !== '') {
+            $response = $this->request([
+                'grant_type'    => 'refresh_token',
+                'client_id'     => $this->cred('client_id'),
+                'client_secret' => $this->cred('client_secret'),
+                'refresh_token' => $refreshToken,
+            ]);
+            if ($response->successful()) {
+                return $this->store($response);
             }
+            // Refresh inválido/expirado: lo descartamos y caemos a password.
+            Cache::forget($this->refreshKey());
         }
 
-        $response = $this->http()->asForm()->post(self::TOKEN_PATH, [
+        return $this->passwordGrant();
+    }
+
+    private function passwordGrant(): string
+    {
+        $response = $this->request([
             'grant_type'    => 'password',
-            'client_id'     => $creds['client_id'],
-            'client_secret' => $creds['client_secret'],
-            'username'      => $creds['username'],
-            'password'      => $creds['password'],
+            'client_id'     => $this->cred('client_id'),
+            'client_secret' => $this->cred('client_secret'),
+            'username'      => $this->cred('username'),
+            'password'      => $this->cred('password'),
         ]);
 
         if (! $response->successful()) {
@@ -71,6 +99,12 @@ class FactusTokenManager
             throw new RuntimeException('Factus: fallo al obtener token (HTTP ' . $response->status() . ').');
         }
 
+        return $this->store($response);
+    }
+
+    /** Persiste access_token (y refresh_token si vino) en cache. */
+    private function store(Response $response): string
+    {
         $token = (string) ($response->json('access_token') ?? '');
         if ($token === '') {
             throw new RuntimeException('Factus: respuesta de token sin access_token.');
@@ -79,19 +113,38 @@ class FactusTokenManager
         $ttl = (int) ($this->cfg['token_cache_seconds'] ?? 3000);
         $expiresIn = (int) ($response->json('expires_in') ?? 0);
         if ($expiresIn > 0) {
-            // Margen de 60s para no usar un token a punto de expirar.
             $ttl = min($ttl, max(60, $expiresIn - 60));
         }
+        Cache::put($this->accessKey(), $token, $ttl);
 
-        Cache::put($this->cacheKey(), $token, $ttl);
+        $refresh = (string) ($response->json('refresh_token') ?? '');
+        if ($refresh !== '') {
+            // El refresh dura mucho más que el access; lo guardamos aparte.
+            Cache::put($this->refreshKey(), $refresh, (int) ($this->cfg['refresh_cache_seconds'] ?? 1209600));
+        }
 
         return $token;
     }
 
-    /** Invalida el token cacheado (p. ej. ante un 401). */
+    /** Invalida el access_token cacheado (p. ej. ante un 401). */
     public function forget(): void
     {
-        Cache::forget($this->cacheKey());
+        Cache::forget($this->accessKey());
+    }
+
+    private function cred(string $key): string
+    {
+        $creds = (array) ($this->cfg['credentials'] ?? []);
+        if (empty($creds[$key])) {
+            throw new RuntimeException("Factus: credencial '{$key}' no configurada.");
+        }
+
+        return (string) $creds[$key];
+    }
+
+    private function request(array $form): Response
+    {
+        return $this->http()->asForm()->post(self::TOKEN_PATH, $form);
     }
 
     private function http(): PendingRequest

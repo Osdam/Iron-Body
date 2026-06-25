@@ -81,10 +81,13 @@ class InvoiceEmissionTest extends TestCase
         config(['billing.enabled' => true]);
         Http::fake([
             '*/oauth/token'       => Http::response(['access_token' => 'tok', 'expires_in' => 3600]),
-            '*/v1/bills/validate' => Http::response(['data' => ['bill' => [
+            '*/v2/bills/validate' => Http::response(['data' => ['bill' => [
                 'id' => 'F123', 'number' => '990000001', 'prefix' => 'SETP',
                 'cufe' => 'cufe-abc-123', 'status' => 'Validada',
             ]]], 201),
+            '*download-pdf' => Http::response(['pdf_base_64' => base64_encode('%PDF demo')]),
+            '*download-xml' => Http::response(['xml_base_64' => base64_encode('<Invoice/>')]),
+            '*' => Http::response([], 200),
         ]);
         Queue::fake(); // evita auto-ejecución; corremos el job a mano
 
@@ -98,6 +101,7 @@ class InvoiceEmissionTest extends TestCase
         $this->assertSame('cufe-abc-123', $invoice->cufe);
         $this->assertSame('990000001', $invoice->number);
         $this->assertNotNull($invoice->validated_at);
+        $this->assertNotNull($invoice->pdf_path); // descargado por número tras validar
     }
 
     public function test_emit_job_marks_error_and_throws_on_server_error(): void
@@ -105,7 +109,7 @@ class InvoiceEmissionTest extends TestCase
         config(['billing.enabled' => true]);
         Http::fake([
             '*/oauth/token'       => Http::response(['access_token' => 'tok', 'expires_in' => 3600]),
-            '*/v1/bills/validate' => Http::response(['message' => 'boom'], 500),
+            '*/v2/bills/validate' => Http::response(['message' => 'boom'], 500),
         ]);
         Queue::fake();
 
@@ -130,7 +134,7 @@ class InvoiceEmissionTest extends TestCase
         config(['billing.enabled' => true]);
         Http::fake([
             '*/oauth/token'       => Http::response(['access_token' => 'tok', 'expires_in' => 3600]),
-            '*/v1/bills/validate' => Http::response(['message' => 'datos inválidos'], 422),
+            '*/v2/bills/validate' => Http::response(['message' => 'datos inválidos'], 422),
         ]);
         Queue::fake();
 

@@ -78,6 +78,7 @@ class FiscalProfileResolver
             'dv'               => $p->dv,
             'name'             => $p->legal_name ?: ($p->user?->name ?? $p->member?->full_name),
             'legal_name'       => $p->legal_name,
+            'person_type'      => $p->person_type,
             'email'            => $p->email ?: ($p->user?->email ?? $p->member?->email),
             'phone'            => $p->phone,
             'address'          => $p->address,
@@ -98,6 +99,7 @@ class FiscalProfileResolver
             'dv'               => null,
             'name'             => $cf['name'] ?? 'Consumidor final',
             'legal_name'       => $cf['name'] ?? 'Consumidor final',
+            'person_type'      => null,
             // Contacto real para entrega del comprobante (no es la identidad fiscal).
             'email'            => $contactEmail,
             'phone'            => $contactPhone,

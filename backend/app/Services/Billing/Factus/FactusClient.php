@@ -10,20 +10,24 @@ use Illuminate\Support\Facades\Http;
  * Único punto de salida HTTP hacia Factus V2. Toda llamada a Factus pasa por
  * aquí (jamás desde front/app). Inyecta el Bearer del FactusTokenManager,
  * aplica timeouts de config y, ante un 401, refresca el token y reintenta UNA
- * vez. Reintentos automáticos SOLO en GET (idempotente); la emisión (POST) no
- * se reintenta a ciegas: de eso se encarga el job con guardas de idempotencia.
+ * vez. Reintentos automáticos los gobierna el job (con guardas de idempotencia).
  *
- * Las RUTAS de los endpoints (validate/show/credit-notes/...) deben confirmarse
- * contra la colección/doc de Factus V2 y viven centralizadas aquí.
+ * Rutas confirmadas contra la colección oficial (docs/factus/factus-v2.postman):
+ *   POST   /v2/bills/validate
+ *   GET    /v2/bills/{number}
+ *   GET    /v2/bills/{number}/download-pdf | download-xml
+ *   GET    /v2/bills/{number}/radian/events
+ *   POST   /v2/credit-notes/validate
+ *   GET    /v2/numbering-ranges
+ * La consulta y descargas son por NÚMERO (full_number), no por id interno.
  */
 class FactusClient
 {
-    // Rutas a confirmar contra la colección oficial de Factus V2.
-    private const PATH_CREATE_INVOICE = '/v1/bills/validate';
-    private const PATH_SHOW_INVOICE   = '/v1/bills/show/';         // + {id}
-    private const PATH_DOWNLOAD_PDF   = '/v1/bills/download-pdf/'; // + {number}
-    private const PATH_DOWNLOAD_XML   = '/v1/bills/download-xml/'; // + {number}
-    private const PATH_CREATE_CREDIT  = '/v1/credit-notes/validate';
+    private const PATH_CREATE_INVOICE = '/v2/bills/validate';
+    private const PATH_BILL           = '/v2/bills/';            // + {number}[/download-pdf|/download-xml|/radian/events]
+    private const PATH_CREATE_CREDIT  = '/v2/credit-notes/validate';
+    private const PATH_CREDIT         = '/v2/credit-notes/';     // + {number}[/download-pdf|/download-xml]
+    private const PATH_NUMBERING       = '/v2/numbering-ranges';
 
     public function __construct(
         private FactusTokenManager $tokens,
@@ -48,25 +52,43 @@ class FactusClient
         return $this->send('post', self::PATH_CREATE_CREDIT, $payload);
     }
 
-    /** Consulta el estado/detalle de una factura (para reconciliación). GET. */
-    public function getInvoice(string $id): array
+    /** Consulta una factura por su NÚMERO (para reconciliación). GET. */
+    public function getInvoice(string $number): array
     {
-        return $this->send('get', self::PATH_SHOW_INVOICE . $id);
+        return $this->send('get', self::PATH_BILL . rawurlencode($number));
     }
 
-    /** Descarga el PDF (la respuesta puede traer base64 o una URL). GET. */
+    /** Eventos DIAN/RADIAN de la factura (estado). GET. */
+    public function getInvoiceEvents(string $number): array
+    {
+        return $this->send('get', self::PATH_BILL . rawurlencode($number) . '/radian/events');
+    }
+
+    /** Descarga el PDF de la factura por número (respuesta con base64). GET. */
     public function downloadPdf(string $number): array
     {
-        return $this->send('get', self::PATH_DOWNLOAD_PDF . $number);
+        return $this->send('get', self::PATH_BILL . rawurlencode($number) . '/download-pdf');
     }
 
-    /** Descarga el XML UBL. GET. */
+    /** Descarga el XML UBL de la factura por número. GET. */
     public function downloadXml(string $number): array
     {
-        return $this->send('get', self::PATH_DOWNLOAD_XML . $number);
+        return $this->send('get', self::PATH_BILL . rawurlencode($number) . '/download-xml');
     }
 
-    /** Lectura de catálogos (municipios, tributos, formas de pago, ...). GET. */
+    /** Descarga el PDF de una nota crédito por número. GET. */
+    public function downloadCreditNotePdf(string $number): array
+    {
+        return $this->send('get', self::PATH_CREDIT . rawurlencode($number) . '/download-pdf');
+    }
+
+    /** Lista de rangos de numeración configurados en la cuenta. GET. */
+    public function getNumberingRanges(): array
+    {
+        return $this->send('get', self::PATH_NUMBERING);
+    }
+
+    /** Lectura genérica de catálogos (si se necesitan en vivo). GET. */
     public function catalog(string $path, array $query = []): array
     {
         return $this->send('get', $path, $query);
@@ -75,26 +97,53 @@ class FactusClient
     // ── Internos ────────────────────────────────────────────────────────────
 
     /**
-     * Ejecuta la petición y normaliza la respuesta. Ante 401 refresca el token
-     * y reintenta UNA vez (el token pudo expirar). Nunca lanza: devuelve un
-     * resultado estructurado para que el job decida estado/reintento sin romper
-     * el flujo de pago.
+     * Ejecuta la petición y normaliza la respuesta. Ante 401 refresca el token y
+     * reintenta UNA vez. Nunca lanza: devuelve un resultado estructurado para que
+     * el job decida estado/reintento sin romper el flujo de pago.
+     *
+     * Clasificación de errores (campo error_class):
+     *   auth (401) · conflict (409) · validation (4xx/422) · rate_limit (429) ·
+     *   server (5xx) · network (0) · ok.
+     *
+     * @return array{ok:bool,status:int,body:array,error:?string,error_class:string,retry_after:?int}
      */
     private function send(string $method, string $path, array $data = [], bool $reauthed = false): array
     {
         $response = $this->dispatch($method, $path, $data);
+        $status = $response->status();
 
-        if ($response->status() === 401 && ! $reauthed) {
+        if ($status === 401 && ! $reauthed) {
             $this->tokens->forget();
             return $this->send($method, $path, $data, reauthed: true);
         }
 
         return [
-            'ok'     => $response->successful(),
-            'status' => $response->status(),
-            'body'   => $this->safeJson($response),
-            'error'  => $response->successful() ? null : ('HTTP ' . $response->status()),
+            'ok'          => $response->successful(),
+            'status'      => $status,
+            'body'        => $this->safeJson($response),
+            'error'       => $response->successful() ? null : ('HTTP ' . $status),
+            'error_class' => $this->classify($status),
+            'retry_after' => $this->retryAfter($response),
         ];
+    }
+
+    private function classify(int $status): string
+    {
+        return match (true) {
+            $status >= 200 && $status < 300 => 'ok',
+            $status === 401                 => 'auth',
+            $status === 409                 => 'conflict',
+            $status === 429                 => 'rate_limit',
+            $status >= 400 && $status < 500 => 'validation',
+            $status >= 500                  => 'server',
+            default                         => 'network',
+        };
+    }
+
+    private function retryAfter(Response $response): ?int
+    {
+        $h = $response->header('Retry-After');
+        return is_numeric($h) ? (int) $h : null;
     }
 
     private function dispatch(string $method, string $path, array $data): Response
