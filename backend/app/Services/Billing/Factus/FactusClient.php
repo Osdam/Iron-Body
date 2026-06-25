@@ -88,6 +88,11 @@ class FactusClient
         return $this->send('get', self::PATH_NUMBERING);
     }
 
+    /** Elimina (sandbox) una factura por su reference_code. DELETE. */
+    public function destroyByReference(string $referenceCode): array
+    {
+        return $this->send('delete', self::PATH_BILL . 'destroy/reference/' . rawurlencode($referenceCode));
+    }
     /** Lectura genérica de catálogos (si se necesitan en vivo). GET. */
     public function catalog(string $path, array $query = []): array
     {
@@ -150,9 +155,11 @@ class FactusClient
     {
         $request = $this->base();
 
-        return $method === 'get'
-            ? $request->get($path, $data)
-            : $request->post($path, $data);
+        return match ($method) {
+            'get'    => $request->get($path, $data),
+            'delete' => $request->delete($path, $data),
+            default  => $request->post($path, $data),
+        };
     }
 
     private function base(): PendingRequest
