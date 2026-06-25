@@ -29,6 +29,11 @@ return [
 
     'provider' => 'factus',
 
+    // 🔒 Bloqueo tributario: producción NO se considera lista hasta que el
+    // contador confirme el tratamiento de IVA de membresías/productos y se
+    // ponga esta variable en true. No se asume IVA.
+    'tax_decision_confirmed' => filter_var(env('FACTUS_TAX_DECISION_CONFIRMED', false), FILTER_VALIDATE_BOOLEAN),
+
     // sandbox | production
     'env'        => $env,
     'production' => $env === 'production',

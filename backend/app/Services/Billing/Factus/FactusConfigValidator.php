@@ -106,4 +106,71 @@ class FactusConfigValidator
             throw new RuntimeException(implode(' | ', $hard));
         }
     }
+
+    /**
+     * Requisitos DUROS para emitir en PRODUCCIÓN. Más estrictos que issues():
+     * exigen ambos rangos (factura + nota crédito), municipio por defecto, datos
+     * del emisor y —sobre todo— la CONFIRMACIÓN TRIBUTARIA del contador. No se
+     * asume IVA: sin tax_decision_confirmed la producción queda bloqueada.
+     *
+     * @return string[] Lista de bloqueos (vacía = listo para producción).
+     */
+    public function productionReadiness(): array
+    {
+        $issues = [];
+
+        // Credenciales OAuth2.
+        $creds = (array) ($this->cfg['credentials'] ?? []);
+        foreach (['username', 'password', 'client_id', 'client_secret'] as $k) {
+            if (empty($creds[$k])) {
+                $issues[] = "Falta credencial '{$k}'.";
+            }
+        }
+
+        // base_url productiva (no sandbox) cuando el ambiente es production.
+        $env = $this->cfg['env'] ?? 'sandbox';
+        $baseUrl = (string) ($this->cfg['base_url'] ?? '');
+        if ($baseUrl === '') {
+            $issues[] = 'Falta base_url.';
+        } elseif ($env === 'production' && str_contains($baseUrl, 'sandbox')) {
+            $issues[] = 'En producción la base_url no puede ser de sandbox.';
+        }
+
+        // Rangos de numeración: factura Y nota crédito.
+        $numbering = (array) ($this->cfg['numbering'] ?? []);
+        if (empty($numbering['range_id'])) {
+            $issues[] = 'Falta FACTUS_NUMBERING_RANGE_ID (rango de factura).';
+        }
+        if (empty($numbering['credit_range_id'])) {
+            $issues[] = 'Falta FACTUS_CREDIT_NUMBERING_RANGE_ID (rango de nota crédito).';
+        }
+
+        // Municipio por defecto (default o consumidor final).
+        $defaultMun = $this->cfg['defaults']['municipality_code'] ?? null;
+        if (empty($defaultMun)) {
+            $issues[] = 'Falta FACTUS_DEFAULT_MUNICIPALITY_CODE.';
+        }
+
+        // Datos del emisor.
+        $company = (array) ($this->cfg['company'] ?? []);
+        foreach (['nit', 'dv', 'name'] as $k) {
+            if (empty($company[$k])) {
+                $issues[] = "Falta dato del emisor '{$k}'.";
+            }
+        }
+
+        // 🔒 Decisión tributaria confirmada por el contador (no se asume IVA).
+        if (! ($this->cfg['tax_decision_confirmed'] ?? false)) {
+            $issues[] = 'Decisión tributaria NO confirmada (FACTUS_TAX_DECISION_CONFIRMED=false). '
+                . 'El contador debe definir IVA/exento/excluido de membresías y productos.';
+        }
+
+        return $issues;
+    }
+
+    /** ¿La configuración está lista para emitir en producción? */
+    public function isReadyForProduction(): bool
+    {
+        return $this->productionReadiness() === [];
+    }
 }

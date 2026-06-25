@@ -146,4 +146,25 @@ class InvoiceEmissionTest extends TestCase
         $invoice->refresh();
         $this->assertSame(InvoiceStatus::REJECTED, $invoice->status);
     }
+
+    public function test_emit_skips_in_production_when_not_ready(): void
+    {
+        config([
+            'billing.enabled' => true,
+            'billing.env' => 'production',
+            'billing.base_url' => 'https://api.factus.com.co',
+            'billing.tax_decision_confirmed' => false, // bloqueo tributario
+        ]);
+        Queue::fake();
+        Http::fake();
+
+        $payment = $this->paidPayment();
+        $invoice = app(InvoicingService::class)->enqueueForPayment($payment);
+
+        app()->call([new EmitElectronicInvoiceJob($invoice->id), 'handle']);
+
+        $invoice->refresh();
+        $this->assertSame(InvoiceStatus::PENDING, $invoice->status); // no emitió
+        Http::assertNothingSent();
+    }
 }
