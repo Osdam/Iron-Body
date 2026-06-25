@@ -103,6 +103,10 @@ class SyncFactusInvoiceStatusJob implements ShouldQueue
         }
         if ($mapped['is_validated']) {
             $files = $storage->store($invoice, $mapped);
+            // Descarga la copia privada del PDF/XML por número (si falta).
+            if (empty($files['pdf_path'])) {
+                $files = array_merge($files, $storage->fetchAndStore($invoice, $client, (string) $invoice->full_number));
+            }
             $invoice->markValidated(array_merge($files, [
                 'factus_id'   => $mapped['factus_id'] ?? $invoice->factus_id,
                 'number'      => $mapped['number'],

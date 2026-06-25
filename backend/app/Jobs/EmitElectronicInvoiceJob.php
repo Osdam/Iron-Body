@@ -134,7 +134,7 @@ class EmitElectronicInvoiceJob implements ShouldQueue
         // Aunque el create traiga un public_url, guardamos también una copia
         // privada descargando el archivo por su número fiscal real.
         if ($number && $this->isRealNumber((string) $number) && empty($files['pdf_path'])) {
-            $files = array_merge($files, $this->fetchFiles((string) $number, $invoice, $client, $storage));
+            $files = array_merge($files, $storage->fetchAndStore($invoice, $client, (string) $number));
         }
 
         $invoice->markValidated(array_merge($files, [
@@ -149,27 +149,6 @@ class EmitElectronicInvoiceJob implements ShouldQueue
         ]));
     }
 
-    /** Descarga PDF/XML por número (best-effort) y los guarda en disco privado. */
-    private function fetchFiles(
-        string $number,
-        ElectronicInvoice $invoice,
-        FactusClient $client,
-        InvoicePdfStorageService $storage,
-    ): array {
-        try {
-            $pdf = $client->downloadPdf($number)['body'] ?? [];
-            $xml = $client->downloadXml($number)['body'] ?? [];
-
-            return $storage->store($invoice, [
-                'pdf_base64' => $pdf['pdf_base_64'] ?? $pdf['pdf_base64'] ?? null,
-                'pdf_url'    => $pdf['public_url'] ?? $pdf['pdf_url'] ?? null,
-                'xml_base64' => $xml['xml_base_64'] ?? $xml['xml_base64'] ?? null,
-                'xml_url'    => $xml['xml_url'] ?? null,
-            ]);
-        } catch (\Throwable) {
-            return []; // best-effort: la factura ya quedó validada
-        }
-    }
 
     /** Número fiscal real de Factus (p. ej. SETP990006967), no el uuid interno. */
     private function isRealNumber(string $n): bool

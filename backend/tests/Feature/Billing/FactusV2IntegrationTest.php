@@ -10,10 +10,13 @@ use App\Services\Billing\Factus\FactusClient;
 use App\Services\Billing\Factus\FactusTokenManager;
 use App\Enums\InvoiceStatus;
 use App\Jobs\EmitElectronicInvoiceJob;
+use App\Models\ElectronicInvoice;
 use App\Services\Billing\InvoiceDtoBuilder;
+use App\Services\Billing\InvoicePdfStorageService;
 use App\Services\Billing\InvoicingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class FactusV2IntegrationTest extends TestCase
@@ -136,6 +139,7 @@ class FactusV2IntegrationTest extends TestCase
         $invoice = app(InvoicingService::class)->enqueueForPayment($payment); // pending, sin dispatch
 
         config(['billing.enabled' => true]);
+        Storage::fake('local');
         Http::fake([
             '*oauth/token'        => Http::response(['access_token' => 'A', 'expires_in' => 3600]),
             '*/v2/bills/validate' => Http::response([
@@ -147,8 +151,8 @@ class FactusV2IntegrationTest extends TestCase
                     'links'          => ['qr' => 'https://qr.example/x', 'public_url' => 'https://pub.example/x'],
                 ],
             ], 201),
-            '*download-pdf' => Http::response(['pdf_base_64' => base64_encode('%PDF demo')]),
-            '*download-xml' => Http::response(['xml_base_64' => base64_encode('<Invoice/>')]),
+            '*download-pdf' => Http::response(['status' => 'OK', 'data' => ['file_name' => 'fv', 'pdf_base_64_encoded' => base64_encode('%PDF-1.4 demo')]]),
+            '*download-xml' => Http::response(['status' => 'OK', 'data' => ['file_name' => 'fv', 'xml_base_64_encoded' => base64_encode('<?xml version="1.0"?><Invoice/>')]]),
             '*' => Http::response([], 200),
         ]);
 
@@ -160,6 +164,30 @@ class FactusV2IntegrationTest extends TestCase
         $this->assertSame('ddf9beb168d93226c0a81837c89595bafeec171a', $invoice->cufe);
         $this->assertSame('https://qr.example/x', $invoice->qr_url);          // links.qr
         $this->assertSame(InvoiceStatus::VALIDATED, $invoice->status);
-        $this->assertNotNull($invoice->pdf_path);                            // descargado por número real
+        $this->assertSame('invoices/' . $invoice->uuid . '/factura.pdf', $invoice->pdf_path);
+        $this->assertSame('invoices/' . $invoice->uuid . '/factura.xml', $invoice->xml_path);
+        $this->assertSame('https://pub.example/x', $invoice->pdf_url); // public_url conservado
+        Storage::disk('local')->assertExists($invoice->pdf_path);
+        Storage::disk('local')->assertExists($invoice->xml_path);
+    }
+
+    public function test_invalid_base64_does_not_store_corrupt_file(): void
+    {
+        Storage::fake('local');
+        $invoice = ElectronicInvoice::create([
+            'source_type' => Payment::class, 'source_id' => 1, 'type' => 'invoice',
+            'status' => 'validated', 'full_number' => 'SETP990006968', 'total' => 1000,
+        ]);
+        Http::fake([
+            '*oauth/token'  => Http::response(['access_token' => 'A', 'expires_in' => 3600]),
+            '*download-pdf' => Http::response(['data' => ['pdf_base_64_encoded' => base64_encode('esto no es un pdf')]]),
+            '*download-xml' => Http::response(['data' => ['xml_base_64_encoded' => '!!!no-es-base64!!!']]),
+        ]);
+
+        $out = app(InvoicePdfStorageService::class)->fetchAndStore($invoice, FactusClient::make(), 'SETP990006968');
+
+        $this->assertArrayNotHasKey('pdf_path', $out); // contenido no empieza con %PDF
+        $this->assertArrayNotHasKey('xml_path', $out); // base64 inválido
+        $this->assertCount(0, Storage::disk('local')->allFiles());
     }
 }
