@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Enums\InvoiceLogAction;
+use App\Enums\InvoiceStatus;
 use App\Models\ElectronicInvoice;
 use App\Models\Payment;
 use App\Models\ProductSale;
@@ -127,6 +128,7 @@ class EmitElectronicInvoiceJob implements ShouldQueue
 
         if ($result['ok']) {
             $this->applySuccess($invoice, $mapper->map($result['body']), $storage, $client);
+            $this->maybeQueueCustomerEmail($invoice, $invoicing);
             return;
         }
 
@@ -177,6 +179,38 @@ class EmitElectronicInvoiceJob implements ShouldQueue
         ]));
     }
 
+
+    /**
+     * Encola el envío PROPIO (SMTP) del comprobante al cliente como fallback al
+     * envío nativo de Factus. Solo si: el flag está activo, la factura quedó
+     * efectivamente 'validated' (no nota crédito) y el cliente tiene email
+     * válido. Best-effort: NO afecta la emisión ya completada.
+     */
+    private function maybeQueueCustomerEmail(ElectronicInvoice $invoice, InvoicingService $invoicing): void
+    {
+        if (! config('billing.customer_email_delivery.enabled')) {
+            return;
+        }
+        if ($invoice->status !== InvoiceStatus::VALIDATED) {
+            return; // Solo facturas validadas (rechazos / notas crédito quedan fuera).
+        }
+        if (! InvoiceDtoBuilder::hasValidEmail($invoice->customer_email)) {
+            return; // Sin email válido no se intenta (consumidor final, etc.).
+        }
+        if ($invoice->customerEmailAlreadySent()) {
+            return; // Idempotencia: ya se envió antes.
+        }
+
+        $invoice->forceFill(['customer_email_status' => 'queued'])->save();
+        $invoicing->recordLog(
+            $invoice,
+            InvoiceLogAction::EMAIL_QUEUED,
+            'ok',
+            'Envío del comprobante al cliente encolado.',
+        );
+
+        SendElectronicInvoiceEmailJob::dispatch($invoice->id);
+    }
 
     /** Número fiscal real de Factus (p. ej. SETP990006967), no el uuid interno. */
     private function isRealNumber(string $n): bool

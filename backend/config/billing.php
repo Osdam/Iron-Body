@@ -48,6 +48,18 @@ return [
     // emite igual con send_email=false. No implica SMTP propio (eso es aparte).
     'send_email' => filter_var(env('FACTUS_SEND_EMAIL', false), FILTER_VALIDATE_BOOLEAN),
 
+    // Envío PROPIO (SMTP de Laravel) del comprobante al correo del cliente. Es
+    // un FALLBACK al envío nativo de Factus: en producción Factus respondió
+    // send_email=false y customer.email=null, así que no podemos depender de él.
+    // Es independiente y NO altera la emisión: la factura ya quedó 'validated';
+    // el correo es best-effort y su fallo jamás revierte el comprobante.
+    // Apagado por defecto (opt-in vía BILLING_SEND_CUSTOMER_EMAIL=true).
+    'customer_email_delivery' => [
+        'enabled'    => filter_var(env('BILLING_SEND_CUSTOMER_EMAIL', false), FILTER_VALIDATE_BOOLEAN),
+        'attach_pdf' => filter_var(env('BILLING_CUSTOMER_EMAIL_ATTACH_PDF', true), FILTER_VALIDATE_BOOLEAN),
+        'attach_xml' => filter_var(env('BILLING_CUSTOMER_EMAIL_ATTACH_XML', true), FILTER_VALIDATE_BOOLEAN),
+    ],
+
     // sandbox | production
     'env'        => $env,
     'production' => $env === 'production',

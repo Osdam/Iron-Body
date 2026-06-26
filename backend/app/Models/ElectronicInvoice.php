@@ -31,6 +31,7 @@ class ElectronicInvoice extends Model
         'currency', 'subtotal', 'discount', 'tax_total', 'total',
         'request_payload', 'response_payload', 'failure_reason',
         'retry_count', 'last_attempt_at', 'issued_at', 'created_by_admin_id',
+        'customer_email_sent_at', 'customer_email_status', 'customer_email_failure_reason',
     ];
 
     protected $casts = [
@@ -47,6 +48,7 @@ class ElectronicInvoice extends Model
         'validated_at'      => 'datetime',
         'last_attempt_at'   => 'datetime',
         'issued_at'         => 'datetime',
+        'customer_email_sent_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -152,6 +154,32 @@ class ElectronicInvoice extends Model
         ])->save();
     }
 
+    // ── Envío propio del comprobante al cliente (SMTP, best-effort) ──────────
+
+    /** ¿Ya se envió el comprobante al correo del cliente? (idempotencia). */
+    public function customerEmailAlreadySent(): bool
+    {
+        return $this->customer_email_sent_at !== null;
+    }
+
+    public function markCustomerEmailSent(): void
+    {
+        $this->forceFill([
+            'customer_email_sent_at'        => now(),
+            'customer_email_status'         => 'sent',
+            'customer_email_failure_reason' => null,
+        ])->save();
+    }
+
+    /** Registra el fallo del envío. NUNCA cambia el estado fiscal de la factura. */
+    public function markCustomerEmailFailed(?string $reason = null): void
+    {
+        $this->forceFill([
+            'customer_email_status'         => 'failed',
+            'customer_email_failure_reason' => $reason,
+        ])->save();
+    }
+
     // ── Serialización ───────────────────────────────────────────────────────
 
     /** Detalle para el CRM admin. No expone payloads crudos con secretos. */
@@ -209,6 +237,11 @@ class ElectronicInvoice extends Model
             'validated_at'          => optional($this->validated_at)->toIso8601String(),
             'last_attempt_at'       => optional($this->last_attempt_at)->toIso8601String(),
             'references_invoice_id' => $this->references_invoice_id,
+            'customer_email_delivery' => [
+                'status'         => $this->customer_email_status,
+                'sent_at'        => optional($this->customer_email_sent_at)->toIso8601String(),
+                'failure_reason' => $this->customer_email_failure_reason,
+            ],
             'customer_full' => [
                 'doc_type'        => $this->customer_doc_type,
                 'doc_number'      => $this->customer_doc_number,

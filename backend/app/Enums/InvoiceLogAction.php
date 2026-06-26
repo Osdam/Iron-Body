@@ -17,6 +17,12 @@ enum InvoiceLogAction: string
     case CREDIT_NOTE = 'credit_note';
     case DOWNLOAD    = 'download';
 
+    // Envío PROPIO (SMTP) del comprobante al cliente — fallback al envío nativo
+    // de Factus. Sin datos sensibles: solo el correo destino enmascarado.
+    case EMAIL_QUEUED = 'email_queued';
+    case EMAIL_SENT   = 'email_sent';
+    case EMAIL_FAILED = 'email_failed';
+
     /** @return string[] */
     public static function values(): array
     {
