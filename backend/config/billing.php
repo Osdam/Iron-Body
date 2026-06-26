@@ -58,6 +58,13 @@ return [
         'enabled'    => filter_var(env('BILLING_SEND_CUSTOMER_EMAIL', false), FILTER_VALIDATE_BOOLEAN),
         'attach_pdf' => filter_var(env('BILLING_CUSTOMER_EMAIL_ATTACH_PDF', true), FILTER_VALIDATE_BOOLEAN),
         'attach_xml' => filter_var(env('BILLING_CUSTOMER_EMAIL_ATTACH_XML', true), FILTER_VALIDATE_BOOLEAN),
+
+        // Branding visual del correo del comprobante (solo presentación, no toca
+        // la emisión ni los adjuntos). El logo debe ser una URL ABSOLUTA HTTPS
+        // pública (los clientes de correo no resuelven rutas internas). Si queda
+        // vacío, el header usa un fallback tipográfico de marca "IRON BODY".
+        'logo_url'      => env('BILLING_EMAIL_LOGO_URL'),
+        'support_email' => env('BILLING_EMAIL_SUPPORT', 'facturacion@ironbodyneiva.cloud'),
     ],
 
     // sandbox | production

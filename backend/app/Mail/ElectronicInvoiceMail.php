@@ -44,15 +44,36 @@ class ElectronicInvoiceMail extends Mailable
     public function content(): Content
     {
         return new Content(
-            markdown: 'mail.electronic-invoice',
+            // Vista HTML propia (no Markdown) para un diseño premium de marca.
+            // Solo cambia la PRESENTACIÓN: mismos datos fiscales, mismos adjuntos.
+            view: 'mail.electronic-invoice',
             with: [
-                'fullNumber'  => $this->invoice->full_number ?: $this->invoice->number,
-                'total'       => number_format((float) $this->invoice->total, 2, ',', '.'),
-                'currency'    => $this->invoice->currency,
-                'cufe'        => $this->invoice->cufe,
-                'validatedAt' => optional($this->invoice->validated_at)->format('Y-m-d H:i'),
+                'fullNumber'   => $this->invoice->full_number ?: $this->invoice->number,
+                'total'        => number_format((float) $this->invoice->total, 2, ',', '.'),
+                'currency'     => $this->invoice->currency,
+                'cufe'         => $this->invoice->cufe,
+                'validatedAt'  => optional($this->invoice->validated_at)->format('Y-m-d H:i'),
+                // Branding (presentación). Logo: URL absoluta HTTPS o fallback de texto.
+                'logoUrl'      => config('billing.customer_email_delivery.logo_url'),
+                'supportEmail' => config('billing.customer_email_delivery.support_email')
+                    ?: 'facturacion@ironbodyneiva.cloud',
+                // Reflejan los adjuntos REALES que el job decidió incluir.
+                'hasPdf'       => $this->attachmentHasExtension('.pdf'),
+                'hasXml'       => $this->attachmentHasExtension('.xml'),
             ],
         );
+    }
+
+    /** Indica si entre los adjuntos hay uno con la extensión dada (p. ej. ".pdf"). */
+    private function attachmentHasExtension(string $ext): bool
+    {
+        foreach ($this->attachmentSpecs as $spec) {
+            if (isset($spec['as']) && str_ends_with(strtolower($spec['as']), $ext)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

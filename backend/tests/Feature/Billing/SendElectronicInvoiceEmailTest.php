@@ -107,4 +107,42 @@ class SendElectronicInvoiceEmailTest extends TestCase
 
         Mail::assertNothingSent();
     }
+
+    /**
+     * El Blade premium debe renderizar sin errores y mostrar los datos fiscales
+     * (número, total, CUFE, validación) y los chips de adjuntos según las specs.
+     */
+    public function test_premium_blade_renders_with_fiscal_data_and_attachment_chips(): void
+    {
+        $inv = $this->invoice();
+
+        $specs = [
+            ['disk' => 'local', 'path' => 'x.pdf', 'as' => 'Factura-SETP990000001.pdf', 'mime' => 'application/pdf'],
+            ['disk' => 'local', 'path' => 'x.xml', 'as' => 'Factura-SETP990000001.xml', 'mime' => 'application/xml'],
+        ];
+
+        $html = (new ElectronicInvoiceMail($inv, $specs))->render();
+
+        $this->assertStringContainsString('Tu factura electrónica ha sido generada', $html);
+        $this->assertStringContainsString('Validada ante la DIAN', $html);
+        $this->assertStringContainsString('SETP990000001', $html);
+        $this->assertStringContainsString('COP', $html);
+        $this->assertStringContainsString('cufe-x', $html);
+        $this->assertStringContainsString('Factura PDF', $html);
+        $this->assertStringContainsString('Factura XML', $html);
+        // Fallback de marca cuando no hay logo configurado.
+        $this->assertStringContainsString('IRON', $html);
+    }
+
+    /** Sin adjuntos, no se pintan los chips de PDF/XML pero el correo sí renderiza. */
+    public function test_premium_blade_renders_without_attachment_chips(): void
+    {
+        $inv = $this->invoice();
+
+        $html = (new ElectronicInvoiceMail($inv, []))->render();
+
+        $this->assertStringContainsString('Tu factura electrónica ha sido generada', $html);
+        $this->assertStringNotContainsString('Factura PDF', $html);
+        $this->assertStringNotContainsString('Factura XML', $html);
+    }
 }
