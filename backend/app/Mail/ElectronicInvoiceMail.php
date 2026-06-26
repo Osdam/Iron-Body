@@ -70,7 +70,8 @@ class ElectronicInvoiceMail extends Mailable
     /**
      * URL absoluta del logo para el header del correo. Prioridad:
      *   1) BILLING_EMAIL_LOGO_URL (config) si está definida.
-     *   2) Asset público de marca brand/iron-body-email-logo.png (URL absoluta).
+     *   2) Asset público de marca brand/iron-body-email-logo-dark.png (URL
+     *      absoluta). Logo transparente pensado para el header NEGRO.
      * Si el asset no existe en disco, devuelve null para usar el fallback de texto.
      */
     private function resolveLogoUrl(): ?string
@@ -80,7 +81,7 @@ class ElectronicInvoiceMail extends Mailable
             return $configured;
         }
 
-        $relative = 'brand/iron-body-email-logo.png';
+        $relative = 'brand/iron-body-email-logo-dark.png';
         if (is_file(public_path($relative))) {
             return asset($relative);
         }

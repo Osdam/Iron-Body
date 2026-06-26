@@ -53,14 +53,14 @@
 
                     {{-- ============ HEADER NEGRO + LOGO ============ --}}
                     <tr>
-                        <td align="center" style="background-color:#FFFFFF; padding:36px 30px 30px 30px;">
+                        <td align="center" style="background-color:{{ $black }}; padding:36px 30px 32px 30px;">
                             @if(!empty($logoUrl))
                                 <img src="{{ $logoUrl }}" alt="Iron Body Neiva" width="180" style="display:block; width:180px; max-width:72%; height:auto; margin:0 auto;">
                             @else
-                                <div style="font-family:'Trebuchet MS', Arial, Helvetica, sans-serif; font-size:30px; line-height:1; font-weight:800; letter-spacing:5px; color:{{ $black }}; text-transform:uppercase;">
+                                <div style="font-family:'Trebuchet MS', Arial, Helvetica, sans-serif; font-size:30px; line-height:1; font-weight:800; letter-spacing:5px; color:#FFFFFF; text-transform:uppercase;">
                                     IRON <span style="color:{{ $gold }};">BODY</span>
                                 </div>
-                                <div style="font-family:Arial, Helvetica, sans-serif; font-size:11px; letter-spacing:5px; color:#9AA0A8; text-transform:uppercase; margin-top:8px;">
+                                <div style="font-family:Arial, Helvetica, sans-serif; font-size:11px; letter-spacing:5px; color:#9CA0A8; text-transform:uppercase; margin-top:8px;">
                                     Neiva
                                 </div>
                             @endif
