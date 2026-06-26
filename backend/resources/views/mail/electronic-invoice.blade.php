@@ -28,34 +28,35 @@
         img { border:0; outline:none; text-decoration:none; -ms-interpolation-mode:bicubic; }
         a { text-decoration:none; }
         /* Responsive para Gmail móvil */
-        @media only screen and (max-width:620px) {
+        @media only screen and (max-width:640px) {
             .ib-container { width:100% !important; }
             .ib-pad { padding-left:22px !important; padding-right:22px !important; }
             .ib-title { font-size:24px !important; line-height:30px !important; }
             .ib-total { font-size:26px !important; }
+            .ib-logo { width:210px !important; max-width:78% !important; }
             .ib-stack { display:block !important; width:100% !important; }
             .ib-stack-gap { height:12px !important; }
         }
     </style>
 </head>
-<body style="margin:0; padding:0; background-color:#0F1012;">
+<body style="margin:0; padding:0; background-color:#EEF0F3;">
     {{-- Preheader oculto (resumen en la bandeja de entrada) --}}
     <div style="display:none; max-height:0; overflow:hidden; opacity:0; mso-hide:all;">
         Tu factura electrónica Iron Body Neiva fue validada ante la DIAN. PDF y XML adjuntos.
     </div>
 
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0F1012;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#EEF0F3;">
         <tr>
             <td align="center" style="padding:32px 14px;">
 
-                {{-- ============ CONTENEDOR CENTRAL ============ --}}
-                <table role="presentation" class="ib-container" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:600px; background-color:#FFFFFF; border-radius:18px; overflow:hidden; box-shadow:0 18px 50px rgba(0,0,0,0.35);">
+                {{-- ============ CONTENEDOR CENTRAL (tarjeta premium centrada) ============ --}}
+                <table role="presentation" class="ib-container" width="620" cellpadding="0" cellspacing="0" border="0" style="width:620px; max-width:620px; background-color:#FFFFFF; border-radius:18px; overflow:hidden; box-shadow:0 10px 32px rgba(17,18,20,0.12);">
 
-                    {{-- ============ HEADER NEGRO + LOGO ============ --}}
+                    {{-- ============ HEADER NEGRO + LOGO (solo encabezado de la tarjeta) ============ --}}
                     <tr>
-                        <td align="center" style="background-color:{{ $black }}; padding:36px 30px 32px 30px;">
+                        <td align="center" style="background-color:{{ $black }}; padding:30px 30px 28px 30px;">
                             @if(!empty($logoUrl))
-                                <img src="{{ $logoUrl }}" alt="Iron Body Neiva" width="180" style="display:block; width:180px; max-width:72%; height:auto; margin:0 auto;">
+                                <img src="{{ $logoUrl }}" alt="Iron Body Neiva" width="250" class="ib-logo" style="display:block; width:250px; max-width:74%; height:auto; margin:0 auto;">
                             @else
                                 <div style="font-family:'Trebuchet MS', Arial, Helvetica, sans-serif; font-size:30px; line-height:1; font-weight:800; letter-spacing:5px; color:#FFFFFF; text-transform:uppercase;">
                                     IRON <span style="color:{{ $gold }};">BODY</span>
