@@ -10,9 +10,9 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-// (Retirado) El bridge web del Smart Checkout v2 de ePayco se eliminó en la
-// migración a Wompi: la app ya no abre ese WebView. Wompi usa la URL oficial de
-// autenticación (PSE/3DS) que entrega la propia transacción.
+// Pagos: NO hay bridge web ni WebView. Todo el flujo es Wompi IN-APP; cuando se
+// requiere autenticación (PSE/3DS) se abre la URL OFICIAL que entrega la propia
+// transacción de Wompi en el navegador del sistema.
 
 Route::prefix('crm')->name('crm.')->group(function () {
     // Entrenadores

@@ -207,60 +207,8 @@ return [
         'source_label' => 'Free Exercise DB',
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | ePayco (Davivienda) — pasarela de pagos
-    |--------------------------------------------------------------------------
-    | Todas las llaves viven SOLO aquí (backend). La app Flutter nunca las ve:
-    | solo recibe un `checkout_url` ya construido por el backend.
-    | `p_cust_id_cliente` y `p_key` son necesarias para validar la firma del
-    | webhook; si están vacías, la confirmación se valida consultando la API de
-    | ePayco por `ref_payco` (fuente de verdad alterna).
-    */
-    'epayco' => [
-        'test' => filter_var(env('EPAYCO_TEST', true), FILTER_VALIDATE_BOOLEAN),
-        'public_key' => env('EPAYCO_PUBLIC_KEY'),
-        'private_key' => env('EPAYCO_PRIVATE_KEY'),
-        'p_cust_id_cliente' => env('EPAYCO_P_CUST_ID_CLIENTE'),
-        'p_key' => env('EPAYCO_P_KEY'),
-        // Si quedan vacías se generan a partir de APP_URL (rutas internas).
-        'response_url' => env('EPAYCO_RESPONSE_URL'),
-        'confirmation_url' => env('EPAYCO_CONFIRMATION_URL'),
-        // Consulta de estado: ahora se usa el SDK oficial
-        // (`charge->transaction` → host correcto `secure.payco.co`).
-        // El host anterior `api.secure.epayco.co` NO existe (error DNS).
-        'validation_url' => 'https://api.secure.payco.co',
-        // API REST (apify) para pago in-app por token/transacción.
-        'apify_base' => env('EPAYCO_APIFY_BASE', 'https://apify.epayco.co'),
-        // Ruta APIFY del cobro Nequi (push a la app Nequi). El SDK oficial NO
-        // expone un recurso Nequi; lo llamamos directamente por APIFY (mismo
-        // transporte/auth que Daviplata). Si ePayco asigna otra ruta a esta
-        // cuenta, se ajusta por env SIN tocar código (degradación segura: una
-        // ruta inválida devuelve error de ePayco → estado controlado, jamás
-        // una aprobación falsa).
-        'nequi_path' => env('EPAYCO_NEQUI_PATH', '/payment/process/pmpush'),
-        // Smart Checkout v2: las billeteras (Nequi/DaviPlata) ya no fuerzan un
-        // endpoint directo (la cuenta puede no tenerlos habilitados). Se crea una
-        // sesión (`/payment/session/create`) y el usuario completa el pago en el
-        // checkout OFICIAL de ePayco, que muestra los métodos disponibles.
-        'checkout_js' => env('EPAYCO_CHECKOUT_JS', 'https://checkout.epayco.co/checkout-v2.js'),
-        // Vigencia (segundos) de la URL firmada del bridge de checkout.
-        'checkout_bridge_ttl' => (int) env('EPAYCO_CHECKOUT_BRIDGE_TTL', 900),
-        // Métodos a OCULTAR en el Smart Checkout de wallets (Nequi/DaviPlata/
-        // Davivienda). ePayco solo soporta BLACKLIST (`methodsDisable`), no
-        // allow-list. Tokens documentados: TDC (tarjetas), PSE, SP (SafetyPay),
-        // CASH (efectivo/Baloto/Efecty/etc.). Por defecto se ocultan esos para
-        // dejar visibles las billeteras/bancos objetivo. Ajustable por env (CSV)
-        // sin tocar código, p. ej. si Davivienda solo aparece vía PSE en esta
-        // cuenta, quitar PSE de la lista.
-        'checkout_methods_disable' => array_values(array_filter(array_map(
-            'trim',
-            explode(',', (string) env('EPAYCO_CHECKOUT_METHODS_DISABLE', 'TDC,PSE,SP,CASH'))
-        ), fn ($v) => $v !== '')),
-    ],
-
     // ── Nequi DIRECTO (Pagos con notificación Push de Nequi Negocios/Conecta) ──
-    // Proveedor INDEPENDIENTE de ePayco. El comercio inicia el pago por API, el
+    // Proveedor INDEPENDIENTE de la pasarela Wompi. El comercio inicia el pago por API, el
     // cliente aprueba/cancela en su app Nequi y el backend confirma por webhook
     // o consulta de estado para activar la membresía. Deshabilitado por defecto:
     // sin credenciales reales el endpoint responde `unavailable` (jamás un cobro
@@ -281,10 +229,10 @@ return [
     ],
 
     // Proveedor activo para el método Nequi en la app:
-    //   direct                → Nequi push directo (services.nequi).
-    //   epayco_smart_checkout → fallback técnico por el Smart Checkout de ePayco.
-    //   disabled (default)    → Nequi no disponible (usar PSE/tarjeta/DaviPlata).
-    // El Smart Checkout deja de ser el flujo PRINCIPAL de Nequi.
+    //   direct             → Nequi push directo (services.nequi).
+    //   disabled (default) → Nequi no disponible (usar PSE/tarjeta/DaviPlata).
+    // Nota: el método Nequi en producción se cobra por la pasarela Wompi
+    // (WompiNequiPaymentService); este proveedor directo es opcional/independiente.
     'payments' => [
         'nequi_provider' => env('PAYMENT_NEQUI_PROVIDER', 'disabled'),
     ],

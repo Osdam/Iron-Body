@@ -5,9 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Transacción de pasarela de pago (ePayco). Fuente de verdad del estado del
+ * Transacción de pasarela de pago (Wompi). Fuente de verdad del estado del
  * pago para la app. `raw_response` guarda el último payload recibido del
- * proveedor (sin datos de tarjeta — ePayco nunca los envía).
+ * proveedor (sin datos de tarjeta — la app tokeniza y solo viaja el token).
  */
 class PaymentTransaction extends Model
 {
@@ -18,8 +18,8 @@ class PaymentTransaction extends Model
     public const STATUS_CANCELLED  = 'cancelled';
     public const STATUS_EXPIRED    = 'expired';
 
-    // Estados adicionales de la máquina Wompi (provider='wompi'). Los legados
-    // (ePayco) siguen usando el set de arriba; estos son aditivos.
+    // Estados adicionales de la máquina Wompi (provider='wompi'). Los registros
+    // legados siguen usando el set de arriba; estos son aditivos.
     public const STATUS_CREATED         = 'created';
     public const STATUS_TOKENIZING      = 'tokenizing';
     public const STATUS_REQUIRES_ACTION = 'requires_action';

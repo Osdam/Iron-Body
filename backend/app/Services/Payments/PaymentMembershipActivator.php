@@ -15,7 +15,7 @@ use Throwable;
 
 /**
  * Activación de membresía al aprobarse un pago — fuente ÚNICA y compartida por
- * todos los proveedores (ePayco tarjeta/PSE/DaviPlata y Nequi push directo).
+ * todos los métodos de la pasarela Wompi (tarjeta/PSE/Nequi/DaviPlata).
  *
  * Garantiza que la membresía se active UNA sola vez por referencia (idempotente
  * vía `payments.reference` único) y que la extensión de fechas sea idéntica sin
@@ -30,9 +30,9 @@ class PaymentMembershipActivator
      * Al aprobarse: crea el registro legado en `payments` y extiende membresía.
      * Si llega member_id, usa su user_id enlazado para mantener una sola ficha.
      *
-     * @param  string  $method  método persistido en `payments.method` (epayco|nequi).
+     * @param  string  $method  método persistido en `payments.method` (wompi|nequi).
      */
-    public function activate(PaymentTransaction $tx, string $method = 'epayco'): void
+    public function activate(PaymentTransaction $tx, string $method = 'wompi'): void
     {
         try {
             if (! $tx->user_id && $tx->member_id) {
@@ -85,7 +85,13 @@ class PaymentMembershipActivator
             // Facturación electrónica (ADITIVO, best-effort, idempotente por
             // source+type). Con FACTUS_ENABLED=false solo crea la factura
             // 'pending'; nunca llama a Factus ni bloquea la activación del pago.
-            app(InvoicingService::class)->enqueueForPayment($payment);
+            //
+            // Si el cliente SOLICITÓ la factura desde la app (metadata.wants_invoice),
+            // se fuerza la emisión a Factus aunque auto_emit global esté apagado:
+            // mismo camino que la emisión manual del CRM (force=true). El envío del
+            // comprobante por correo lo resuelve el job según la config de billing.
+            $wantsInvoice = (bool) ($tx->metadata['wants_invoice'] ?? false);
+            app(InvoicingService::class)->enqueueForPayment($payment, force: $wantsInvoice);
         } catch (Throwable $e) {
             Log::warning('Activación de membresía post-pago falló', [
                 'reference' => $tx->reference,

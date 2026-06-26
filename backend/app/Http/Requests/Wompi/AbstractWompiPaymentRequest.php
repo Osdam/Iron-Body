@@ -34,6 +34,13 @@ abstract class AbstractWompiPaymentRequest extends FormRequest
             'description'       => 'nullable|string|max:160',
             // Idempotencia desde la app (doble toque / reintento de red).
             'client_request_id' => 'nullable|string|max:120',
+            // Factura electrónica (opt-in del cliente). Si llega en true, al
+            // aprobarse el pago se FUERZA la emisión a Factus + envío del
+            // comprobante (PDF/XML) al correo, sin depender del flag global
+            // auto_emit. `invoice_email` es el correo de contacto (opcional:
+            // el backend usa el del miembro autenticado si no llega).
+            'request_invoice'   => 'nullable|boolean',
+            'invoice_email'     => 'nullable|email|max:160',
             // Consentimientos Wompi (ambos obligatorios).
             'accepted_terms'          => 'required|accepted',
             'accepted_personal_data'  => 'required|accepted',

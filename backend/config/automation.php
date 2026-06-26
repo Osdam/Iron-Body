@@ -36,7 +36,7 @@ return [
         'document', 'document_number', 'document_image', 'identity_document',
         'biometric', 'face_hash', 'face_reference', 'facial',
         'signature', 'contract', 'legal_consent',
-        'card', 'card_number', 'cvv', 'cvc', 'pan', 'epayco',
+        'card', 'card_number', 'cvv', 'cvc', 'pan', 'wompi',
         'api_key', 'private_key', 'authorization',
     ],
 

@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Log;
  * borra datos ni elimina la cuenta. Reactivar deshace la cancelación.
  *
  * El COBRO recurrente automático real depende de un proveedor de suscripciones
- * (ePayco Suscripciones / Stripe). Esa pieza queda como hook documentado
+ * (p. ej. tokenización recurrente de Wompi). Esa pieza queda como hook documentado
  * (`payment_provider_subscription_id` + applyProviderRenewal); ver
  * docs/MEMBRESIA_RENOVACION_CANCELACION.md. Sin proveedor conectado, la
  * renovación sigue ocurriendo por el flujo de pago existente (app/CRM).

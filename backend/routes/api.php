@@ -226,11 +226,11 @@ Route::get('legal/privacy', [\App\Http\Controllers\Api\LegalController::class, '
 Route::get('legal/terms',   [\App\Http\Controllers\Api\LegalController::class, 'terms']);
 
 // ── PASARELA: WOMPI (única pasarela activa) ───────────────────────────────────
-// La integración ePayco y el Nequi-directo (Smart Checkout v2 / APIFY push) se
-// RETIRARON como rutas activas en la migración a Wompi. Los registros históricos
-// (`payments` con method=epayco/nequi) siguen siendo legibles desde el historial
-// del miembro (GET /api/app/payments). Wompi vive en el grupo `payments/wompi/*`
-// (más abajo) y el webhook público `POST /api/webhooks/wompi`.
+// Pasarelas anteriores y el Nequi-directo (push) se RETIRARON como rutas
+// activas: hoy TODO el flujo de pagos es Wompi. Los registros históricos en
+// `payments` siguen siendo legibles desde el historial del miembro
+// (GET /api/app/payments). Wompi vive en el grupo `payments/wompi/*` (más abajo)
+// y el webhook público `POST /api/webhooks/wompi`.
 
 // ── WOMPI (pasarela ACTIVA) — IN-APP, autenticado como miembro ─────────────────
 // El sujeto se toma del miembro autenticado (no del body). El monto es
@@ -255,7 +255,7 @@ Route::middleware('auth.member')->prefix('payments/wompi')->group(function (): v
 
     Route::get('history', [WompiPaymentController::class, 'history'])->middleware('throttle:30,1');
     // Estado real (refresca contra Wompi si sigue en vuelo). Path propio para no
-    // colisionar con el legado público payments/{reference}/status (ePayco).
+    // colisionar con el legado público payments/{reference}/status.
     Route::get('{reference}/status', [WompiPaymentController::class, 'status'])
         ->where('reference', '[A-Za-z0-9_\-]+')->middleware('throttle:60,1');
 });
@@ -586,9 +586,9 @@ Route::middleware('auth.member')->group(function (): void {
     // Historial de pagos del miembro autenticado (lee `payments` — la misma
     // tabla del CRM, una sola fuente de verdad).
     Route::get('app/payments', [AppPaymentController::class, 'index']);
-    // Detalle de un pago del miembro. Refresca contra ePayco si está en vuelo
-    // (pending/processing) reutilizando EpaycoPaymentService::statusFor. 404
-    // tanto si la referencia no existe como si no pertenece al miembro.
+    // Detalle de un pago del miembro (SOLO lectura sobre `payments`). El estado
+    // en vuelo de Wompi se consulta por GET /api/payments/wompi/{reference}/status.
+    // 404 tanto si la referencia no existe como si no pertenece al miembro.
     Route::get('app/payments/{reference}', [AppPaymentController::class, 'show'])
         ->where('reference', '[A-Za-z0-9_\-]+');
 

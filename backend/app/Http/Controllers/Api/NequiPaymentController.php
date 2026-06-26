@@ -16,8 +16,8 @@ use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
- * Nequi DIRECTO (Pagos con notificación Push) — proveedor independiente de
- * ePayco. push/status/reverse exigen sesión de miembro (auth.member);
+ * Nequi DIRECTO (Pagos con notificación Push) — proveedor independiente de la
+ * pasarela Wompi. push/status/reverse exigen sesión de miembro (auth.member);
  * confirmation/response son webhooks S2S públicos.
  *
  * La membresía SOLO se activa por estado `approved` (webhook/consulta), nunca

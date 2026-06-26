@@ -13,10 +13,9 @@ use Illuminate\Http\Request;
  *
  * Lee de la tabla `payments` (fuente de verdad del CRM): cualquier pago que vea
  * el admin en su panel — efectivo registrado a mano, aprobaciones de Wompi
- * volcadas por PaymentMembershipActivator, o registros HISTÓRICOS de ePayco —
+ * volcadas por PaymentMembershipActivator, o registros de pagos HISTÓRICOS —
  * se devuelve aquí. No toca pasarelas ni cobros; solo expone datos públicos vía
- * toPublicArray(). (La integración ePayco se retiró como ruta activa; sus
- * registros antiguos siguen siendo legibles desde aquí.)
+ * toPublicArray(). Los registros antiguos siguen siendo legibles desde aquí.
  */
 class AppPaymentController extends Controller
 {

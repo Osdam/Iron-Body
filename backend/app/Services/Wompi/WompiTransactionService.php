@@ -16,7 +16,7 @@ use Illuminate\Support\Str;
 /**
  * Núcleo transaccional de Wompi: creación/idempotencia, transición de estados
  * (con lockForUpdate y la máquina de estados PURA) y activación de membresía al
- * aprobarse (reutilizando el ACTIVADOR COMPARTIDO ya probado de ePayco/Nequi).
+ * aprobarse (reutilizando el ACTIVADOR COMPARTIDO de pagos del CRM).
  *
  * Reglas no negociables:
  *   - Monto AUTORITATIVO del backend (Plan::price → centavos). Flutter nunca
@@ -105,6 +105,10 @@ class WompiTransactionService
                 'customer_legal_id_type' => $c['doc_type'] ?? null,
                 'customer_legal_id'      => $c['doc_number'] ?? null,
                 'retry_count'      => 0,
+                // Factura electrónica solicitada desde la app (opt-in). Se guarda
+                // como metadato; al aprobarse, PaymentMembershipActivator decide si
+                // FUERZA la emisión a Factus (sin depender de auto_emit global).
+                'metadata'         => $this->invoiceMetadata($data),
             ];
 
             try {
@@ -326,6 +330,26 @@ class WompiTransactionService
     {
         return 'IRON-'.now()->format('Ymd').'-'
             .strtoupper(Str::random(6)).'-'.substr((string) time(), -5);
+    }
+
+    /**
+     * Metadatos de facturación electrónica solicitados desde la app. Solo se
+     * persisten si el cliente marcó la opción (`request_invoice`). `wants_invoice`
+     * dispara la emisión FORZADA al aprobarse el pago; `invoice_email` es el
+     * correo de contacto opcional (el backend usa el del miembro si no llega).
+     */
+    private function invoiceMetadata(array $data): ?array
+    {
+        $wants = filter_var($data['request_invoice'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        if (! $wants) {
+            return null;
+        }
+        $email = isset($data['invoice_email']) ? trim((string) $data['invoice_email']) : '';
+
+        return array_filter([
+            'wants_invoice' => true,
+            'invoice_email' => $email !== '' ? $email : null,
+        ], fn ($v) => $v !== null);
     }
 
     private function sanitizeCustomer(array $c): array

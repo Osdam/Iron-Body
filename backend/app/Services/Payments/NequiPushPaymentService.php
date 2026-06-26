@@ -16,7 +16,7 @@ use Throwable;
 
 /**
  * Proveedor DIRECTO de Nequi — "Pagos con notificación Push" (Nequi Negocios /
- * Nequi Conecta). INDEPENDIENTE de ePayco.
+ * Nequi Conecta). INDEPENDIENTE de la pasarela Wompi.
  *
  * Flujo: el comercio inicia el pago por API → el cliente recibe una notificación
  * en su app Nequi → aprueba o cancela → el backend confirma por webhook o por

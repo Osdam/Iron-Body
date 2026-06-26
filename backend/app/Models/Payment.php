@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
  * Pago registrado en la tabla `payments` (fuente de verdad del CRM).
  *
  * Tanto los pagos creados manualmente por el admin (efectivo, etc.) como los
- * aprobados por ePayco terminan aquí (ver EpaycoPaymentService::onApproved),
+ * aprobados por Wompi terminan aquí (ver PaymentMembershipActivator::activate),
  * por lo que el historial del miembro en la app sale de esta tabla.
  */
 class Payment extends Model
@@ -100,7 +100,7 @@ class Payment extends Model
      * Representación pública para la app (historial de pagos del miembro).
      *
      * NO incluye datos sensibles: ni número de tarjeta, ni CVV, ni tokens de
-     * pasarela, ni llaves privadas, ni payload crudo de ePayco. La transacción
+     * pasarela, ni llaves privadas, ni payload crudo de la pasarela. La transacción
      * `payment_transactions` se usa solo para enriquecer campos visibles
      * (descripción, proveedor, customer público) ya que la legada `payments`
      * no los almacena.
