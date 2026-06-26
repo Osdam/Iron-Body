@@ -53,10 +53,12 @@
                 <table role="presentation" class="ib-container" width="620" cellpadding="0" cellspacing="0" border="0" style="width:620px; max-width:620px; background-color:#FFFFFF; border-radius:18px; overflow:hidden; box-shadow:0 10px 32px rgba(17,18,20,0.12);">
 
                     {{-- ============ HEADER NEGRO + LOGO (solo encabezado de la tarjeta) ============ --}}
+                    {{-- El fondo usa #000000 EXACTO (mismo negro del logo) para que el --}}
+                    {{-- logo se funda con el header sin recuadro/diferencia tonal. --}}
                     <tr>
-                        <td align="center" style="background-color:{{ $black }}; padding:30px 30px 28px 30px;">
+                        <td align="center" bgcolor="#000000" style="background-color:#000000; padding:30px 30px 28px 30px;">
                             @if(!empty($logoUrl))
-                                <img src="{{ $logoUrl }}" alt="Iron Body Neiva" width="250" class="ib-logo" style="display:block; width:250px; max-width:74%; height:auto; margin:0 auto;">
+                                <img src="{{ $logoUrl }}" alt="Iron Body Neiva" width="250" class="ib-logo" style="display:block; width:250px; max-width:74%; height:auto; margin:0 auto; border:0; background-color:#000000;">
                             @else
                                 <div style="font-family:'Trebuchet MS', Arial, Helvetica, sans-serif; font-size:30px; line-height:1; font-weight:800; letter-spacing:5px; color:#FFFFFF; text-transform:uppercase;">
                                     IRON <span style="color:{{ $gold }};">BODY</span>
