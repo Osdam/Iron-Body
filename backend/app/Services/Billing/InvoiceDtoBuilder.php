@@ -174,7 +174,7 @@ class InvoiceDtoBuilder
             'document'             => (string) ($d['document'] ?? '01'),
             'operation_type'       => (string) ($d['operation_type'] ?? '10'),
             'numbering_range_id'   => (int) config('billing.numbering.range_id'),
-            'send_email'           => false,
+            'send_email'           => $this->shouldSendEmail($customer),
             'observation'          => $observation,
             'cash_rounding_amount' => '0.00',
             'payment_details'      => [[
@@ -187,6 +187,26 @@ class InvoiceDtoBuilder
         ];
 
         return ['snapshot' => $snapshot, 'payload' => $payload];
+    }
+
+    /**
+     * Decide si se solicita a Factus el envío del comprobante al correo del cliente.
+     * Solo true si el flag FACTUS_SEND_EMAIL está activo Y el cliente tiene un
+     * email válido. Sin email válido => false, pero la factura se emite igual.
+     */
+    private function shouldSendEmail(array $customer): bool
+    {
+        if (! filter_var(config('billing.send_email', false), FILTER_VALIDATE_BOOLEAN)) {
+            return false;
+        }
+
+        return self::hasValidEmail($customer['email'] ?? null);
+    }
+
+    /** Validación segura de email (consumidor final puede no traer email). */
+    public static function hasValidEmail(mixed $email): bool
+    {
+        return is_string($email) && filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
     }
 
     /** Construye el bloque customer V2 (natural vs jurídica). */

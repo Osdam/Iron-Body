@@ -42,6 +42,12 @@ return [
         'product_sales' => filter_var(env('FACTUS_PRODUCT_SALES_AUTO_EMIT', false), FILTER_VALIDATE_BOOLEAN),
     ],
 
+    // Envío automático del comprobante (PDF/XML) al correo del cliente usando el
+    // envío NATIVO de Factus (payload send_email). Solo se solicita si el flag
+    // está en true Y el cliente tiene un email válido; si no, la factura se
+    // emite igual con send_email=false. No implica SMTP propio (eso es aparte).
+    'send_email' => filter_var(env('FACTUS_SEND_EMAIL', false), FILTER_VALIDATE_BOOLEAN),
+
     // sandbox | production
     'env'        => $env,
     'production' => $env === 'production',

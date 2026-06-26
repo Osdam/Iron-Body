@@ -16,14 +16,54 @@ class InvoiceDtoBuilderTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function consumer(): array
+    private function consumer(array $overrides = []): array
     {
-        return [
+        return array_merge([
             'doc_type' => '13', 'doc_number' => '222222222222', 'dv' => null,
             'name' => 'Consumidor final', 'legal_name' => 'Consumidor final',
             'email' => null, 'phone' => null, 'address' => null,
             'city_code' => null, 'department_code' => null, 'is_final_consumer' => true,
-        ];
+        ], $overrides);
+    }
+
+    private function payment(): Payment
+    {
+        $user = User::factory()->create();
+
+        return Payment::create([
+            'user_id' => $user->id, 'plan_id' => null, 'amount' => 50000,
+            'method' => 'cash', 'reference' => 'T-EMAIL', 'status' => 'paid', 'paid_at' => now(),
+        ]);
+    }
+
+    public function test_send_email_true_when_flag_on_and_email_valid(): void
+    {
+        config(['billing.send_email' => true]);
+
+        $payload = app(InvoiceDtoBuilder::class)
+            ->forPayment($this->payment(), $this->consumer(['email' => 'cliente@iron.com']))['payload'];
+
+        $this->assertTrue($payload['send_email']);
+    }
+
+    public function test_send_email_false_when_flag_on_but_email_invalid(): void
+    {
+        config(['billing.send_email' => true]);
+
+        $payload = app(InvoiceDtoBuilder::class)
+            ->forPayment($this->payment(), $this->consumer(['email' => 'no-es-correo']))['payload'];
+
+        $this->assertFalse($payload['send_email']);
+    }
+
+    public function test_send_email_false_when_flag_off_even_with_valid_email(): void
+    {
+        config(['billing.send_email' => false]);
+
+        $payload = app(InvoiceDtoBuilder::class)
+            ->forPayment($this->payment(), $this->consumer(['email' => 'cliente@iron.com']))['payload'];
+
+        $this->assertFalse($payload['send_email']);
     }
 
     public function test_price_including_tax_is_split_backwards(): void

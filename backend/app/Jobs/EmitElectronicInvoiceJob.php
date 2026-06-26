@@ -96,6 +96,15 @@ class EmitElectronicInvoiceJob implements ShouldQueue
         $payload = $built['payload'];
         $payload['reference_code'] = $invoice->uuid; // trazabilidad CRM ↔ Factus
 
+        // Auditoría del envío nativo de Factus al correo del cliente. Sin datos
+        // sensibles: solo si se solicitó el envío y si el cliente tenía email válido.
+        Log::info('billing.invoice_email', [
+            'invoice_id'        => $invoice->id,
+            'reference_code'    => $invoice->uuid,
+            'email_requested'   => (bool) ($payload['send_email'] ?? false),
+            'has_customer_email' => InvoiceDtoBuilder::hasValidEmail($built['snapshot']['customer_email'] ?? null),
+        ]);
+
         $invoice->markProcessing();
 
         $startedAt = microtime(true);
