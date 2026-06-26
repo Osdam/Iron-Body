@@ -53,8 +53,11 @@ class ElectronicInvoiceMail extends Mailable
                 'currency'     => $this->invoice->currency,
                 'cufe'         => $this->invoice->cufe,
                 'validatedAt'  => optional($this->invoice->validated_at)->format('Y-m-d H:i'),
-                // Branding (presentación). Logo: URL absoluta HTTPS o fallback de texto.
-                'logoUrl'      => config('billing.customer_email_delivery.logo_url'),
+                // Branding (presentación). Logo: si no hay URL absoluta en .env,
+                // cae al asset público de marca (resuelto contra APP_URL como URL
+                // absoluta, requisito de los clientes de correo). Si tampoco, el
+                // header usa el fallback tipográfico "IRON BODY".
+                'logoUrl'      => $this->resolveLogoUrl(),
                 'supportEmail' => config('billing.customer_email_delivery.support_email')
                     ?: 'facturacion@ironbodyneiva.cloud',
                 // Reflejan los adjuntos REALES que el job decidió incluir.
@@ -62,6 +65,27 @@ class ElectronicInvoiceMail extends Mailable
                 'hasXml'       => $this->attachmentHasExtension('.xml'),
             ],
         );
+    }
+
+    /**
+     * URL absoluta del logo para el header del correo. Prioridad:
+     *   1) BILLING_EMAIL_LOGO_URL (config) si está definida.
+     *   2) Asset público de marca brand/iron-body-email-logo.png (URL absoluta).
+     * Si el asset no existe en disco, devuelve null para usar el fallback de texto.
+     */
+    private function resolveLogoUrl(): ?string
+    {
+        $configured = config('billing.customer_email_delivery.logo_url');
+        if (! empty($configured)) {
+            return $configured;
+        }
+
+        $relative = 'brand/iron-body-email-logo.png';
+        if (is_file(public_path($relative))) {
+            return asset($relative);
+        }
+
+        return null;
     }
 
     /** Indica si entre los adjuntos hay uno con la extensión dada (p. ej. ".pdf"). */
