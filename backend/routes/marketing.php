@@ -37,6 +37,9 @@ Route::middleware(['automation.internal', 'throttle:120,1'])
         // Cerebro comercial IA (Fase 2): clasifica intención y decide acciones.
         // auto_execute solo dispara acciones seguras (link en dry_run si Meta off).
         Route::post('ai/analyze-message', [InternalMarketingController::class, 'analyzeMessage']);
+
+        // Readiness del cerebro IA (driver/OpenAI/responder efectivo) sin secretos.
+        Route::get('ai/doctor', [InternalMarketingController::class, 'aiDoctor']);
     });
 
 // ── Agente comercial — endpoint admin (CRM): generar link desde el panel ──────

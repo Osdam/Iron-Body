@@ -9,6 +9,7 @@ use App\Models\MarketingFollowup;
 use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
 use App\Models\Plan;
+use App\Services\Marketing\MarketingAiDoctorService;
 use App\Services\Marketing\MarketingMessageDispatcher;
 use App\Services\Marketing\SalesAgentOrchestratorService;
 use App\Services\Marketing\SalesGuardrailException;
@@ -40,6 +41,15 @@ class InternalMarketingController extends Controller
      * n8n/operación. JSON SIN secretos (solo SET/MISSING y decisiones derivadas).
      */
     public function metaDoctor(MetaDoctorService $doctor): JsonResponse
+    {
+        return response()->json(['ok' => true, 'data' => $doctor->report()]);
+    }
+
+    /**
+     * GET /api/internal/marketing/ai/doctor — readiness del cerebro comercial IA
+     * (driver, OpenAI, responder efectivo) para n8n/operación. JSON SIN secretos.
+     */
+    public function aiDoctor(MarketingAiDoctorService $doctor): JsonResponse
     {
         return response()->json(['ok' => true, 'data' => $doctor->report()]);
     }
@@ -88,7 +98,9 @@ class InternalMarketingController extends Controller
         $conversation->update(['last_message_at' => now()]);
 
         // Decisión (pura) + persistencia obligatoria para auditoría.
-        $decision = $orchestrator->analyze($lead, $data['body'], ['lead' => $lead, 'channel' => $channel]);
+        $decision = $orchestrator->analyze($lead, $data['body'], [
+            'lead' => $lead, 'channel' => $channel, 'conversation' => $conversation,
+        ]);
         $action   = $orchestrator->persist($lead, $conversation->id, $inbound->id, $decision, $autoExecute);
 
         // Ejecución de acciones SEGURAS solo si se pidió explícitamente.

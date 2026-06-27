@@ -39,11 +39,24 @@ class SalesAgentOrchestratorService
 
         $temperature = $this->scoring->temperature($intent);
         $stage       = $this->scoring->salesStage($intent);
-        $esc         = $this->escalation->evaluate($intent, $body);
-        $reply       = $this->replies->replyFor($intent, $context);
 
-        $isPayment      = in_array($intent, SalesIntents::PAYMENT_INTENTS, true);
-        $shouldSchedule = $this->scoring->shouldScheduleFollowup($temperature) && ! $esc['should_escalate'];
+        // Escalado: por reglas (palabras/intención) o forzado por el validador del
+        // modelo (intento prohibido / claim inseguro). Laravel deriva esto, no el
+        // modelo: la IA solo aporta la señal.
+        $esc            = $this->escalation->evaluate($intent, $body);
+        $forceEscalate  = (bool) ($cls['force_escalate'] ?? false);
+        $shouldEscalate = $esc['should_escalate'] || $forceEscalate;
+        $escReason      = $esc['escalation_reason']
+            ?? ($forceEscalate ? ($cls['escalation_reason'] ?? 'unsafe_content') : null);
+        $riskFlags      = array_values(array_unique(array_merge(
+            $esc['risk_flags'], (array) ($cls['risk_flags'] ?? []),
+        )));
+
+        // Respuesta: la del modelo (ya saneada) si aplica; si no, la curada.
+        $reply = $this->resolveReply($intent, $cls['reply'] ?? null, $shouldEscalate, $context);
+
+        $isPayment      = in_array($intent, SalesIntents::PAYMENT_INTENTS, true) && ! $shouldEscalate;
+        $shouldSchedule = $this->scoring->shouldScheduleFollowup($temperature) && ! $shouldEscalate;
         $delay          = $shouldSchedule ? $this->scoring->followupDelayMinutes($temperature) : null;
 
         $tools = [];
@@ -65,12 +78,12 @@ class SalesAgentOrchestratorService
             'should_send_message'           => $reply !== null,
             'should_schedule_followup'      => $shouldSchedule,
             'followup_delay_minutes'        => $delay,
-            'should_escalate'               => $esc['should_escalate'],
-            'escalation_reason'             => $esc['escalation_reason'],
-            'risk_flags'                    => $esc['risk_flags'],
+            'should_escalate'               => $shouldEscalate,
+            'escalation_reason'             => $escReason,
+            'risk_flags'                    => $riskFlags,
             'extracted_fields'              => $cls['extracted_fields'],
             'missing_fields'                => $cls['missing_fields'],
-            'recommended_action'            => $this->recommendedAction($intent, $esc['should_escalate']),
+            'recommended_action'            => $this->recommendedAction($intent, $shouldEscalate),
             'reply'                         => $reply,
             'tools_requested'               => $tools,
             'safe_to_send'                  => false, // lo fija el guardrail
@@ -222,6 +235,27 @@ class SalesAgentOrchestratorService
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Decide la respuesta final: si se escala, mensaje de espera neutro; si el
+     * lead pide no ser contactado, no se responde; si el modelo aportó un reply
+     * (ya saneado), se usa; si no, la respuesta curada por intención.
+     */
+    private function resolveReply(string $intent, ?string $modelReply, bool $shouldEscalate, array $context): ?string
+    {
+        if ($shouldEscalate) {
+            return in_array($intent, SalesIntents::ESCALATION_INTENTS, true)
+                ? $this->replies->replyFor($intent, $context)
+                : $this->replies->escalationReply();
+        }
+        if ($intent === SalesIntents::DO_NOT_CONTACT_REQUEST) {
+            return null;
+        }
+        if ($modelReply !== null && trim($modelReply) !== '') {
+            return $modelReply;
+        }
+        return $this->replies->replyFor($intent, $context);
+    }
 
     private function recommendedAction(string $intent, bool $escalate): string
     {

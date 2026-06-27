@@ -58,6 +58,13 @@ class SalesConversationReplyService
         };
     }
 
+    /** Mensaje neutro de espera cuando se fuerza un escalado a humano. */
+    public function escalationReply(): string
+    {
+        return 'Para ayudarte bien con esto, te va a atender una persona del equipo en un momento. '
+            .'Gracias por tu paciencia.';
+    }
+
     /**
      * Mensaje humano corto que acompaña un link de pago. El precio es el REAL
      * del plan activo (nunca inventado).

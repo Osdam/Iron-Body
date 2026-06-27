@@ -31,22 +31,32 @@ class SalesIntentClassifierService
         }
 
         return [
-            'intent'           => (string) ($result['intent'] ?? SalesIntents::UNKNOWN),
-            'confidence'       => (float) ($result['confidence'] ?? 0.0),
-            'extracted_fields' => (array) ($result['extracted_fields'] ?? []),
-            'missing_fields'   => (array) ($result['missing_fields'] ?? []),
-            'responder'        => $this->responder->name(),
+            'intent'            => (string) ($result['intent'] ?? SalesIntents::UNKNOWN),
+            'confidence'        => (float) ($result['confidence'] ?? 0.0),
+            'extracted_fields'  => (array) ($result['extracted_fields'] ?? []),
+            'missing_fields'    => (array) ($result['missing_fields'] ?? []),
+            // El responder efectivo puede ser distinto del nombre (openai → fallback).
+            'responder'         => (string) ($result['responder'] ?? $this->responder->name()),
+            // Campos opcionales del cerebro OpenAI (el fake no los aporta).
+            'reply'             => isset($result['reply']) && is_string($result['reply']) ? $result['reply'] : null,
+            'force_escalate'    => (bool) ($result['force_escalate'] ?? false),
+            'escalation_reason' => $result['escalation_reason'] ?? null,
+            'risk_flags'        => (array) ($result['risk_flags'] ?? []),
         ];
     }
 
     private function fallback(string $responder): array
     {
         return [
-            'intent'           => SalesIntents::UNKNOWN,
-            'confidence'       => 0.0,
-            'extracted_fields' => [],
-            'missing_fields'   => [],
-            'responder'        => $responder,
+            'intent'            => SalesIntents::UNKNOWN,
+            'confidence'        => 0.0,
+            'extracted_fields'  => [],
+            'missing_fields'    => [],
+            'responder'         => $responder,
+            'reply'             => null,
+            'force_escalate'    => false,
+            'escalation_reason' => null,
+            'risk_flags'        => [],
         ];
     }
 }

@@ -47,8 +47,10 @@ return [
     // cambiar el driver SIN tocar el orquestador. La IA solo DECIDE y registra;
     // las acciones reales siguen protegidas por flags/guardrails.
     'ai' => [
-        // fake (reglas locales) | openai (futuro, requiere config segura).
-        'driver'  => env('MARKETING_AI_DRIVER', 'fake'),
+        // fake (reglas locales) | openai (requiere config segura + OPENAI_API_KEY).
+        // MARKETING_SALES_AI_DRIVER es el nombre canónico; se conserva el alias
+        // MARKETING_AI_DRIVER por retrocompatibilidad con la Fase 2.
+        'driver'  => env('MARKETING_SALES_AI_DRIVER', env('MARKETING_AI_DRIVER', 'fake')),
         // Interruptor del cerebro; con false el orquestador devuelve unknown.
         'enabled' => filter_var(env('MARKETING_AI_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
 
@@ -58,6 +60,25 @@ return [
             'very_hot' => (int) env('MARKETING_AI_FOLLOWUP_VERY_HOT', 60),
             'hot'      => (int) env('MARKETING_AI_FOLLOWUP_HOT', 120),
             'warm'     => (int) env('MARKETING_AI_FOLLOWUP_WARM', 360),
+        ],
+
+        // Cerebro OpenAI (Fase 3). INERTE por defecto: aunque driver=openai, solo
+        // se usa si openai.enabled=true Y existe OPENAI_API_KEY (services.openai).
+        // La API key NO se duplica aquí: se reutiliza config('services.openai').
+        // Laravel SIEMPRE tiene la última palabra (validator + guardrails).
+        'openai' => [
+            'enabled'           => filter_var(env('MARKETING_OPENAI_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+            // Modelo; por defecto reusa el de IRON IA (services.openai.model).
+            'model'             => env('MARKETING_OPENAI_MODEL', env('OPENAI_MODEL', 'gpt-4.1-mini')),
+            'timeout'           => (int) env('MARKETING_OPENAI_TIMEOUT', 20),
+            'max_retries'       => (int) env('MARKETING_OPENAI_MAX_RETRIES', 1),
+            'temperature'       => (float) env('MARKETING_OPENAI_TEMPERATURE', 0.2),
+            'max_output_tokens' => (int) env('MARKETING_OPENAI_MAX_OUTPUT_TOKENS', 1200),
+            // Por seguridad/privacidad, NO se loguean prompts por defecto.
+            'log_prompts'       => filter_var(env('MARKETING_OPENAI_LOG_PROMPTS', false), FILTER_VALIDATE_BOOLEAN),
+            // true → ante error/JSON inválido se devuelve una decisión SEGURA
+            // (unknown). false → cae al responder determinista (fake).
+            'fail_closed'       => filter_var(env('MARKETING_OPENAI_FAIL_CLOSED', true), FILTER_VALIDATE_BOOLEAN),
         ],
     ],
 ];
