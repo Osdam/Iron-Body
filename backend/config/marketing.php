@@ -42,6 +42,25 @@ return [
         'source' => 'marketing_agent',
     ],
 
+    // Mensajes ENTRANTES de Meta/WhatsApp (Fase 4-A). Defaults SEGUROS:
+    //  - analizar (cerebro) SÍ puede estar habilitado,
+    //  - EJECUTAR herramientas reales queda en false (y además exige
+    //    agent_enabled), y el envío real sigue bloqueado por META_ENABLED.
+    'inbound' => [
+        // Permite el procesamiento de entrantes; si false, el webhook solo
+        // registra (no analiza). Derivado/independiente de META_ENABLED.
+        'meta_enabled'  => filter_var(env('MARKETING_INBOUND_META_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+        // ¿Enrutar el texto entrante al cerebro (analyze)?
+        'auto_analyze'  => filter_var(env('MARKETING_INBOUND_AUTO_ANALYZE', true), FILTER_VALIDATE_BOOLEAN),
+        // ¿Ejecutar herramientas (link/followup/takeover) de forma automática?
+        // Falso por defecto; además requiere marketing.agent_enabled=true.
+        'auto_execute'  => filter_var(env('MARKETING_INBOUND_AUTO_EXECUTE', false), FILTER_VALIDATE_BOOLEAN),
+        // Guardar el evento crudo de Meta en metadata (debug). Off por defecto.
+        'store_raw_payload' => filter_var(env('MARKETING_INBOUND_STORE_RAW_PAYLOAD', false), FILTER_VALIDATE_BOOLEAN),
+        // Tipos de mensaje soportados hoy (solo texto). El resto se escala.
+        'supported_message_types' => ['text'],
+    ],
+
     // Cerebro comercial IA (Fase 2). Por defecto usa un responder DETERMINISTA
     // (reglas, sin OpenAI). Cuando exista infraestructura segura se podrá
     // cambiar el driver SIN tocar el orquestador. La IA solo DECIDE y registra;

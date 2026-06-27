@@ -46,9 +46,44 @@ class MetaDoctorService
             'live_send_allowed' => $liveSendAllowed,
             'send_mode'        => $sendMode,
             'webhook_url'      => $this->expectedWebhookUrl(),
+            'webhook'          => $this->webhookSection($enabled, $present, $liveSendAllowed),
             'missing'          => $this->missing($enabled, $present),
             'suggestions'      => $this->suggestions($enabled, $present, $liveSendAllowed),
         ];
+    }
+
+    /** Estado del webhook entrante (Fase 4-A) sin secretos. */
+    private function webhookSection(bool $enabled, array $present, bool $liveSendAllowed): array
+    {
+        [$get, $post] = $this->webhookRoutesExist();
+
+        return [
+            'get_route_exists'         => $get,
+            'post_route_exists'        => $post,
+            'verify_token'             => $present['verify_token'],
+            'webhook_secret'           => $present['webhook_secret'],
+            'whatsapp_phone_number_id' => $present['whatsapp_phone_number_id'],
+            'inbound_meta_enabled'     => (bool) config('marketing.inbound.meta_enabled', true),
+            'inbound_auto_analyze'     => (bool) config('marketing.inbound.auto_analyze', true),
+            'inbound_auto_execute'     => (bool) config('marketing.inbound.auto_execute', false),
+            'meta_enabled'             => $enabled,
+            // Modo efectivo de envío de respuestas: real solo si Meta está listo.
+            'effective_mode'           => $liveSendAllowed ? 'real' : 'dry_run',
+        ];
+    }
+
+    /** @return array{0:bool,1:bool} [GET existe, POST existe] para /api/webhooks/meta. */
+    private function webhookRoutesExist(): array
+    {
+        $get = $post = false;
+        foreach (app('router')->getRoutes() as $route) {
+            if ($route->uri() === 'api/webhooks/meta') {
+                $methods = $route->methods();
+                $get = $get || in_array('GET', $methods, true);
+                $post = $post || in_array('POST', $methods, true);
+            }
+        }
+        return [$get, $post];
     }
 
     /** URL del webhook que debe registrarse en Meta (derivada de APP_URL). */

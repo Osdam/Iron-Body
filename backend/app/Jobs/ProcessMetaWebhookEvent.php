@@ -2,6 +2,8 @@
 
 namespace App\Jobs;
 
+use App\Services\Marketing\MarketingInboundMessageRouter;
+use App\Services\Marketing\MarketingMessageDispatcher;
 use App\Services\Meta\MetaConversationService;
 use App\Services\Meta\MetaLeadService;
 use App\Services\Meta\MetaWebhookService;
@@ -15,10 +17,11 @@ use Illuminate\Support\Facades\Log;
 /**
  * Procesa (en cola) un payload de webhook de Meta ya verificado por firma.
  *
- * El webhook responde 200 de inmediato; aquí ocurre el trabajo pesado: parsear
- * eventos, crear/actualizar lead + conversación y registrar el mensaje entrante
- * (idempotente por meta_message_id). NO llama a OpenAI ni a Graph: la respuesta
- * comercial IA la orquesta n8n a partir del lead creado (fase posterior).
+ * El webhook responde 200 de inmediato; aquí ocurre el trabajo pesado: filtrar
+ * eventos, crear/actualizar lead + conversación, registrar el mensaje entrante
+ * (idempotente por meta_message_id) y ENRUTAR el texto al cerebro comercial en
+ * modo seguro (Fase 4-A): se analiza, pero NO se ejecutan herramientas ni se
+ * envía nada mientras los flags estén en false. NUNCA activa membresías ni pagos.
  */
 class ProcessMetaWebhookEvent implements ShouldQueue
 {
@@ -36,28 +39,70 @@ class ProcessMetaWebhookEvent implements ShouldQueue
         MetaWebhookService $webhook,
         MetaLeadService $leads,
         MetaConversationService $conversations,
+        MarketingInboundMessageRouter $router,
+        MarketingMessageDispatcher $dispatcher,
     ): void {
-        $events = $webhook->parseEvents($this->payload);
+        if (! (bool) config('marketing.inbound.meta_enabled', true)) {
+            return; // procesamiento de entrantes deshabilitado (modo registro off).
+        }
 
-        foreach ($events as $event) {
-            // Estados de entrega de WhatsApp → solo actualizar estado.
-            if (str_starts_with((string) $event['kind'], 'status:')) {
-                $conversations->recordStatus($event['message_id'], substr($event['kind'], 7));
+        $supportedTypes = (array) config('marketing.inbound.supported_message_types', ['text']);
+        $expectedPhoneId = (string) config('meta.whatsapp_phone_number_id');
+
+        foreach ($webhook->parseEvents($this->payload) as $event) {
+            // Seguridad multi-número: si el número configurado no coincide, ignorar.
+            if ($expectedPhoneId !== '' && ! empty($event['phone_number_id'])
+                && ! hash_equals($expectedPhoneId, (string) $event['phone_number_id'])) {
+                Log::info('meta.webhook.skip', ['reason' => 'phone_number_mismatch']);
                 continue;
             }
 
-            // Solo procesamos mensajes con remitente identificable.
+            // Estados de entrega (sent/delivered/read) → solo actualizar estado.
+            if (str_starts_with((string) $event['kind'], 'status:')) {
+                $conversations->recordStatus($event['message_id'], substr((string) $event['kind'], 7));
+                continue;
+            }
+
+            // Solo mensajes con remitente identificable.
             if ($event['kind'] !== 'message' || empty($event['meta_user_id'])) {
                 continue;
             }
 
+            $type = (string) ($event['message_type'] ?? 'text');
+            $supported = in_array($type, $supportedTypes, true);
+
             $lead = $leads->resolveLead($event['channel'], $event['meta_user_id'], $event['name']);
+            // Asegura el teléfono del lead (WhatsApp) para envíos futuros.
+            if ($event['channel'] === 'whatsapp' && empty($lead->phone) && ! empty($event['wa_id'])) {
+                $phone = $dispatcher->normalizePhone((string) $event['wa_id']);
+                if ($phone !== null) {
+                    $lead->forceFill(['phone' => $phone])->save();
+                }
+            }
+
             $conversation = $leads->ensureConversation($lead, $event['channel']);
-            $conversations->recordInbound(
+
+            $message = $conversations->recordInbound(
                 $conversation,
                 $event['message_id'],
-                $event['text'],
+                $supported ? $event['text'] : null,
+                $this->messageMetadata($event, $supported),
             );
+
+            // Idempotencia: si el mensaje ya existía, no re-analizar.
+            if ($message === null || ! $message->wasRecentlyCreated) {
+                Log::info('meta.webhook.duplicate', ['conversation_id' => $conversation->id]);
+                continue;
+            }
+
+            if (! $supported) {
+                // Media no soportada → registrar para humano, sin OpenAI.
+                $router->recordUnsupported($lead, $conversation, $message, $type);
+                continue;
+            }
+
+            // Texto soportado → cerebro comercial (dry_run / proposed).
+            $router->analyze($lead, $conversation, $message);
 
             Log::info('meta.webhook.lead_message', [
                 'channel'         => $event['channel'],
@@ -66,5 +111,26 @@ class ProcessMetaWebhookEvent implements ShouldQueue
                 // NUNCA logueamos el cuerpo del mensaje ni datos personales.
             ]);
         }
+    }
+
+    /** Metadatos saneados del mensaje (sin datos sensibles). */
+    private function messageMetadata(array $event, bool $supported): array
+    {
+        $meta = array_filter([
+            'wa_id'                => $event['wa_id'] ?? null,
+            'phone_number_id'      => $event['phone_number_id'] ?? null,
+            'display_phone_number' => $event['display_phone_number'] ?? null,
+            'message_type'         => $event['message_type'] ?? null,
+            'timestamp'            => $event['timestamp'] ?? null,
+        ], fn ($v) => $v !== null);
+
+        if (! $supported) {
+            $meta['unsupported_message'] = true;
+        }
+        if ((bool) config('marketing.inbound.store_raw_payload', false)) {
+            $meta['raw_event'] = $event['raw'] ?? null;
+        }
+
+        return $meta;
     }
 }

@@ -97,27 +97,19 @@ class InternalMarketingController extends Controller
         ]);
         $conversation->update(['last_message_at' => now()]);
 
-        // Decisión (pura) + persistencia obligatoria para auditoría. Se pasa el
-        // plan (si llegó plan_id) para la respuesta DETERMINISTA de precio.
-        $decision = $orchestrator->analyze($lead, $data['body'], [
-            'lead' => $lead, 'channel' => $channel, 'conversation' => $conversation, 'plan' => $plan,
-        ]);
-        $action   = $orchestrator->persist($lead, $conversation->id, $inbound->id, $decision, $autoExecute);
-
-        // Ejecución de acciones SEGURAS solo si se pidió explícitamente.
-        $executed = $autoExecute
-            ? $orchestrator->execute($lead->fresh(), $conversation, $decision, $plan)
-            : [];
+        // Decisión + persistencia + ejecución (compartido con el webhook entrante).
+        // Se pasa el plan (si llegó plan_id) para la respuesta DETERMINISTA de precio.
+        $result = $orchestrator->handle($lead, $conversation, $inbound->id, $data['body'], $plan, $autoExecute);
 
         return response()->json([
             'ok'              => true,
             'lead_id'         => $lead->id,
             'conversation_id' => $conversation->id,
             'message_id'      => $inbound->id,
-            'ai_action_id'    => $action->id,
-            'auto_execute'    => $autoExecute,
-            'decision'        => $decision,
-            'executed'        => $executed,
+            'ai_action_id'    => $result['ai_action_id'],
+            'auto_execute'    => $result['auto_execute'],
+            'decision'        => $result['decision'],
+            'executed'        => $result['executed'],
         ]);
     }
 

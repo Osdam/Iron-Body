@@ -34,6 +34,17 @@ class MetaDoctor extends Command
         $this->line('send_mode           : '.$r['send_mode']);
         $this->line('webhook a registrar : '.$r['webhook_url']);
 
+        $w = $r['webhook'];
+        $this->newLine();
+        $this->line('── Webhook entrante (Fase 4-A) ──');
+        $this->line('GET route            : '.($w['get_route_exists'] ? 'yes' : 'no'));
+        $this->line('POST route           : '.($w['post_route_exists'] ? 'yes' : 'no'));
+        $this->line('verify_token         : '.($w['verify_token'] ? 'SET' : 'MISSING'));
+        $this->line('webhook_secret       : '.($w['webhook_secret'] ? 'SET' : 'MISSING'));
+        $this->line('inbound_auto_analyze : '.($w['inbound_auto_analyze'] ? 'true' : 'false'));
+        $this->line('inbound_auto_execute : '.($w['inbound_auto_execute'] ? 'true' : 'false'));
+        $this->line('effective_mode       : '.$w['effective_mode']);
+
         if (! empty($r['missing'])) {
             $this->newLine();
             $this->warn('Faltantes para envío real:');

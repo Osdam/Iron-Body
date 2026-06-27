@@ -30,6 +30,37 @@ class SalesAgentOrchestratorService
     }
 
     /**
+     * Flujo completo compartido (controlador + webhook entrante): analiza,
+     * persiste la decisión (auditoría) y, SOLO si auto_execute, ejecuta acciones
+     * seguras. Nunca activa membresía ni aprueba pagos.
+     *
+     * @return array{decision:array, ai_action_id:int, executed:array, auto_execute:bool}
+     */
+    public function handle(
+        MarketingLead $lead,
+        MarketingConversation $conversation,
+        ?int $messageId,
+        string $body,
+        ?Plan $plan,
+        bool $autoExecute,
+    ): array {
+        $decision = $this->analyze($lead, $body, [
+            'lead' => $lead, 'channel' => $conversation->channel,
+            'conversation' => $conversation, 'plan' => $plan,
+        ]);
+
+        $action   = $this->persist($lead, $conversation->id, $messageId, $decision, $autoExecute);
+        $executed = $autoExecute ? $this->execute($lead->fresh(), $conversation, $decision, $plan) : [];
+
+        return [
+            'decision'     => $decision,
+            'ai_action_id' => $action->id,
+            'executed'     => $executed,
+            'auto_execute' => $autoExecute,
+        ];
+    }
+
+    /**
      * Decisión PURA (sin side effects). Ensambla clasificación + scoring +
      * escalado + respuesta y aplica los guardrails del agente.
      */

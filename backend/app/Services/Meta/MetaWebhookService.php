@@ -55,47 +55,78 @@ class MetaWebhookService
             foreach (($entry['messaging'] ?? []) as $m) {
                 $channel = $object === 'instagram' ? 'instagram' : 'facebook';
                 $msg = $m['message'] ?? null;
-                $events[] = [
+                $events[] = $this->event([
                     'channel'      => $channel,
                     'meta_user_id' => $m['sender']['id'] ?? null,
                     'message_id'   => $msg['mid'] ?? null,
                     'text'         => $msg['text'] ?? null,
                     'name'         => null,
                     'kind'         => $msg ? 'message' : 'event',
+                    'message_type' => $msg ? 'text' : null,
                     'raw'          => $m,
-                ];
+                ]);
             }
 
             // WhatsApp Cloud API.
             foreach (($entry['changes'] ?? []) as $change) {
-                $value = $change['value'] ?? [];
+                $value   = $change['value'] ?? [];
+                $waMeta  = $value['metadata'] ?? [];
                 $contactName = $value['contacts'][0]['profile']['name'] ?? null;
+
                 foreach (($value['messages'] ?? []) as $wa) {
-                    $events[] = [
-                        'channel'      => 'whatsapp',
-                        'meta_user_id' => $wa['from'] ?? null,
-                        'message_id'   => $wa['id'] ?? null,
-                        'text'         => $wa['text']['body'] ?? null,
-                        'name'         => $contactName,
-                        'kind'         => 'message',
-                        'raw'          => $wa,
-                    ];
+                    $events[] = $this->event([
+                        'channel'              => 'whatsapp',
+                        'meta_user_id'         => $wa['from'] ?? null,
+                        'wa_id'                => $wa['from'] ?? null,
+                        'message_id'           => $wa['id'] ?? null,
+                        'text'                 => $wa['text']['body'] ?? null,
+                        'name'                 => $contactName,
+                        'kind'                 => 'message',
+                        'message_type'         => $wa['type'] ?? 'text',
+                        'timestamp'            => $wa['timestamp'] ?? null,
+                        'phone_number_id'      => $waMeta['phone_number_id'] ?? null,
+                        'display_phone_number' => $waMeta['display_phone_number'] ?? null,
+                        'raw'                  => $wa,
+                    ]);
                 }
                 // Estados de entrega (sent/delivered/read) → solo trazas.
                 foreach (($value['statuses'] ?? []) as $st) {
-                    $events[] = [
-                        'channel'      => 'whatsapp',
-                        'meta_user_id' => $st['recipient_id'] ?? null,
-                        'message_id'   => $st['id'] ?? null,
-                        'text'         => null,
-                        'name'         => null,
-                        'kind'         => 'status:' . ($st['status'] ?? 'unknown'),
-                        'raw'          => $st,
-                    ];
+                    $events[] = $this->event([
+                        'channel'              => 'whatsapp',
+                        'meta_user_id'         => $st['recipient_id'] ?? null,
+                        'wa_id'                => $st['recipient_id'] ?? null,
+                        'message_id'           => $st['id'] ?? null,
+                        'text'                 => null,
+                        'name'                 => null,
+                        'kind'                 => 'status:' . ($st['status'] ?? 'unknown'),
+                        'timestamp'            => $st['timestamp'] ?? null,
+                        'phone_number_id'      => $waMeta['phone_number_id'] ?? null,
+                        'display_phone_number' => $waMeta['display_phone_number'] ?? null,
+                        'raw'                  => $st,
+                    ]);
                 }
             }
         }
 
         return $events;
+    }
+
+    /** Normaliza un evento con todas las claves esperadas (defaults null). */
+    private function event(array $e): array
+    {
+        return array_merge([
+            'channel'              => null,
+            'meta_user_id'         => null,
+            'wa_id'                => null,
+            'message_id'           => null,
+            'text'                 => null,
+            'name'                 => null,
+            'kind'                 => 'event',
+            'message_type'         => null,
+            'timestamp'            => null,
+            'phone_number_id'      => null,
+            'display_phone_number' => null,
+            'raw'                  => [],
+        ], $e);
     }
 }
