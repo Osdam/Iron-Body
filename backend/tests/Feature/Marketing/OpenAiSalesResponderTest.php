@@ -100,18 +100,20 @@ class OpenAiSalesResponderTest extends TestCase
 
     public function test_valid_openai_json_becomes_valid_decision(): void
     {
+        // Intención NO-pricing: el reply del modelo (saneado) pasa tal cual.
+        // (Pricing es determinista en Laravel; se prueba aparte en PricingReplyTest.)
         $this->enableOpenAi();
         $this->fakeOpenAi([
-            'intent' => SalesIntents::PRICING_QUESTION, 'confidence' => 0.9,
-            'reply' => 'Con gusto te ayudo. ¿Buscas bajar grasa o ganar músculo?',
+            'intent' => SalesIntents::LOCATION_QUESTION, 'confidence' => 0.9,
+            'reply' => 'Estamos en Neiva, ¿quieres que te oriente con un plan?',
             'tools_requested' => ['reply'],
         ]);
 
-        $this->analyze(['body' => '¿precios?'])
+        $this->analyze(['body' => '¿dónde quedan?'])
             ->assertOk()
             ->assertJsonPath('decision.responder', 'openai')
-            ->assertJsonPath('decision.intent', SalesIntents::PRICING_QUESTION)
-            ->assertJsonPath('decision.reply', 'Con gusto te ayudo. ¿Buscas bajar grasa o ganar músculo?');
+            ->assertJsonPath('decision.intent', SalesIntents::LOCATION_QUESTION)
+            ->assertJsonPath('decision.reply', 'Estamos en Neiva, ¿quieres que te oriente con un plan?');
     }
 
     public function test_invalid_openai_json_does_not_500(): void

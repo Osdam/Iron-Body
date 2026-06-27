@@ -58,6 +58,36 @@ class SalesConversationReplyService
         };
     }
 
+    /**
+     * Respuesta DETERMINISTA de precio. Si el plan está identificado, incluye
+     * nombre + precio REAL (Plan::price, formateado COP) + beneficios + cierre
+     * suave. Si NO hay plan claro, NO inventa precio: pide objetivo/plan. El
+     * precio nunca lo decide el modelo: sale del backend.
+     */
+    public function pricingReply(?Plan $plan): string
+    {
+        if ($plan === null) {
+            return (string) $this->replyFor(SalesIntents::PRICING_QUESTION);
+        }
+
+        $price    = $this->formatCop((float) $plan->price);
+        $benefits = $plan->benefitsArray();
+        $line     = '';
+        if (! empty($benefits)) {
+            $top  = array_slice($benefits, 0, 3);
+            $line = ' Incluye: '.implode(', ', $top).'.';
+        }
+
+        return "El plan {$plan->name} tiene un valor de {$price}.{$line} "
+            .'¿Quieres que te envíe el link seguro de pago?';
+    }
+
+    /** Formato de precio en COP sin decimales: 80000 → "$80.000 COP". */
+    public function formatCop(float $amount): string
+    {
+        return '$'.number_format($amount, 0, ',', '.').' COP';
+    }
+
     /** Mensaje neutro de espera cuando se fuerza un escalado a humano. */
     public function escalationReply(): string
     {

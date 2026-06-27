@@ -97,9 +97,10 @@ class InternalMarketingController extends Controller
         ]);
         $conversation->update(['last_message_at' => now()]);
 
-        // Decisión (pura) + persistencia obligatoria para auditoría.
+        // Decisión (pura) + persistencia obligatoria para auditoría. Se pasa el
+        // plan (si llegó plan_id) para la respuesta DETERMINISTA de precio.
         $decision = $orchestrator->analyze($lead, $data['body'], [
-            'lead' => $lead, 'channel' => $channel, 'conversation' => $conversation,
+            'lead' => $lead, 'channel' => $channel, 'conversation' => $conversation, 'plan' => $plan,
         ]);
         $action   = $orchestrator->persist($lead, $conversation->id, $inbound->id, $decision, $autoExecute);
 

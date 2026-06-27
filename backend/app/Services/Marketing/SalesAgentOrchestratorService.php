@@ -54,7 +54,7 @@ class SalesAgentOrchestratorService
         )));
 
         // Respuesta: la del modelo (ya saneada) si aplica; si no, la curada.
-        $reply = $this->resolveReply($intent, $cls['reply'] ?? null, $shouldEscalate, $context);
+        $reply = $this->resolveReply($intent, $cls['reply'] ?? null, $shouldEscalate, $context, $body);
 
         $isPayment      = in_array($intent, SalesIntents::PAYMENT_INTENTS, true) && ! $shouldEscalate;
         $shouldSchedule = $this->scoring->shouldScheduleFollowup($temperature) && ! $shouldEscalate;
@@ -245,7 +245,7 @@ class SalesAgentOrchestratorService
      * lead pide no ser contactado, no se responde; si el modelo aportó un reply
      * (ya saneado), se usa; si no, la respuesta curada por intención.
      */
-    private function resolveReply(string $intent, ?string $modelReply, bool $shouldEscalate, array $context): ?string
+    private function resolveReply(string $intent, ?string $modelReply, bool $shouldEscalate, array $context, string $body = ''): ?string
     {
         if ($shouldEscalate) {
             return in_array($intent, SalesIntents::ESCALATION_INTENTS, true)
@@ -255,10 +255,47 @@ class SalesAgentOrchestratorService
         if ($intent === SalesIntents::DO_NOT_CONTACT_REQUEST) {
             return null;
         }
+        // Precio: DETERMINISTA desde la DB. Si el plan está identificado
+        // (plan_id o nombre claro), el reply incluye el precio REAL; si no, no se
+        // inventa (se pregunta objetivo/plan). No se confía en el modelo para esto.
+        if ($intent === SalesIntents::PRICING_QUESTION) {
+            return $this->replies->pricingReply($this->resolvePricingPlan($context, $body));
+        }
         if ($modelReply !== null && trim($modelReply) !== '') {
             return $modelReply;
         }
         return $this->replies->replyFor($intent, $context);
+    }
+
+    /**
+     * Resuelve el plan para una pregunta de precio: por plan_id del request o por
+     * nombre claro de un plan activo en el mensaje. Devuelve null si no hay un
+     * plan inequívoco (entonces NO se inventa precio).
+     */
+    private function resolvePricingPlan(array $context, string $body): ?Plan
+    {
+        $plan = $context['plan'] ?? null;
+        if ($plan instanceof Plan && (bool) $plan->active) {
+            return $plan;
+        }
+
+        $needle = $this->normalizeText($body);
+        if ($needle === '') {
+            return null;
+        }
+
+        $matches = Plan::where('active', true)->get()->filter(function (Plan $p) use ($needle) {
+            $name = $this->normalizeText((string) $p->name);
+            return strlen($name) >= 4 && str_contains($needle, $name);
+        });
+
+        return $matches->count() === 1 ? $matches->first() : null;
+    }
+
+    private function normalizeText(string $s): string
+    {
+        $lower = mb_strtolower(trim($s));
+        return strtr($lower, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ñ' => 'n']);
     }
 
     private function recommendedAction(string $intent, bool $escalate): string
