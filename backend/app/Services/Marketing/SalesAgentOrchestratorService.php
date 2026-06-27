@@ -25,6 +25,7 @@ class SalesAgentOrchestratorService
         private readonly SalesAgentGuardrailService $guardrail,
         private readonly SalesPaymentGuardrailService $paymentGuardrail,
         private readonly MarketingMessageDispatcher $dispatcher,
+        private readonly MarketingKnowledgeBaseService $knowledge,
     ) {
     }
 
@@ -113,6 +114,9 @@ class SalesAgentOrchestratorService
                 'tools_requested'    => $decision['tools_requested'],
                 'safe_to_send'       => $decision['safe_to_send'],
                 'responder'          => $decision['responder'] ?? null,
+                // Auditoría del conocimiento usado al decidir (Fase 3.5).
+                'knowledge_items_count' => $this->knowledge->activeItemsCount(),
+                'knowledge_version'     => $this->knowledge->version(),
             ],
         ]);
 

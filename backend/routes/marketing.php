@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\Admin\MarketingController;
 use App\Http\Controllers\Api\Internal\InternalMarketingController;
+use App\Http\Controllers\Api\Internal\InternalMarketingKnowledgeController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -40,6 +41,11 @@ Route::middleware(['automation.internal', 'throttle:120,1'])
 
         // Readiness del cerebro IA (driver/OpenAI/responder efectivo) sin secretos.
         Route::get('ai/doctor', [InternalMarketingController::class, 'aiDoctor']);
+
+        // Base de conocimiento comercial (Fase 3.5). Solo interno (HMAC).
+        Route::get('knowledge/doctor', [InternalMarketingKnowledgeController::class, 'doctor']);
+        Route::get('knowledge',        [InternalMarketingKnowledgeController::class, 'index']);
+        Route::post('knowledge',       [InternalMarketingKnowledgeController::class, 'upsert']);
     });
 
 // ── Agente comercial — endpoint admin (CRM): generar link desde el panel ──────

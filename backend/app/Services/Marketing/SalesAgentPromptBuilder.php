@@ -4,7 +4,6 @@ namespace App\Services\Marketing;
 
 use App\Models\MarketingConversation;
 use App\Models\MarketingLead;
-use App\Models\Plan;
 
 /**
  * Construye el prompt del sistema + el mensaje de usuario (contexto saneado)
@@ -13,6 +12,10 @@ use App\Models\Plan;
  */
 class SalesAgentPromptBuilder
 {
+    public function __construct(private readonly MarketingKnowledgeBaseService $knowledge)
+    {
+    }
+
     /** Prompt del sistema: marca, tono, reglas duras y contrato JSON. */
     public function systemPrompt(): string
     {
@@ -27,10 +30,19 @@ class SalesAgentPromptBuilder
         Tu rol: vender de forma ÉTICA y consultiva por WhatsApp. Tono humano, cálido, claro
         y BREVE (1-3 frases), nunca robótico. Calificas, guías, cierras y escalas cuando toca.
 
+        USA ÚNICAMENTE la información del bloque knowledge_base y active_plans que recibes en
+        el contexto. Es tu fuente oficial. NO inventes datos que no estén ahí.
+
         REGLAS DURAS (obligatorias):
-        - NUNCA inventes precios ni promociones. Los precios SOLO salen del backend; no los
-          escribas en el texto de la respuesta. Para compartir precio, recomienda la
-          herramienta payment_link_send.
+        - NUNCA inventes precios ni promociones. Los precios SOLO salen de active_plans
+          (backend); no los escribas en el texto de la respuesta. Para compartir precio,
+          recomienda la herramienta payment_link_send.
+        - Si preguntan por HORARIOS y no hay categoría schedule en knowledge_base, di que una
+          persona del equipo confirma el horario exacto (no inventes horarios).
+        - Si preguntan por UBICACIÓN y no hay categoría location en knowledge_base, pide
+          confirmar con una persona del equipo (no inventes dirección).
+        - Si un dato no está en knowledge_base ni en active_plans, NO lo inventes: ofrece
+          resolverlo con una persona del equipo.
         - NUNCA prometas resultados físicos garantizados.
         - NUNCA diagnostiques lesiones, dolores ni enfermedades: eso se escala a un humano.
         - NUNCA actives membresías ni marques pagos como aprobados ni toques facturación.
@@ -70,7 +82,8 @@ class SalesAgentPromptBuilder
                 'do_not_contact' => (bool) $lead->do_not_contact,
             ],
             'recent_messages' => $this->recentMessages($conversation),
-            'active_plans'    => $this->activePlans(),
+            'knowledge_base'  => $this->knowledge->groupedForPrompt(),
+            'active_plans'    => $this->knowledge->activePlans(),
             'flags' => [
                 'meta_enabled'          => (bool) config('meta.enabled'),
                 'whatsapp_mode'         => config('meta.enabled') ? 'live' : 'dry_run',
@@ -100,20 +113,6 @@ class SalesAgentPromptBuilder
                 'body' => $m->body,
                 'at'   => optional($m->created_at)->toIso8601String(),
             ])->reverse()->values()->all();
-    }
-
-    /** Planes activos REALES (id/name/price/duration/benefits). Fuente de precio. */
-    private function activePlans(): array
-    {
-        return Plan::where('active', true)
-            ->orderBy('sort_order')->get(['id', 'name', 'price', 'duration_days', 'benefits'])
-            ->map(fn (Plan $p) => [
-                'id'            => $p->id,
-                'name'          => $p->name,
-                'price'         => (float) $p->price,
-                'duration_days' => $p->duration_days,
-                'benefits'      => $p->benefitsArray(),
-            ])->all();
     }
 
     private function maskPhone(?string $phone): ?string
