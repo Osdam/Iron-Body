@@ -156,3 +156,15 @@ if ((bool) config('billing.enabled', false) && (bool) config('billing.reconcilia
         ->withoutOverlapping()
         ->onOneServer();
 }
+
+// ── Agente comercial: despacho de seguimientos vencidos (Fase 0) ──────────────
+// INERTE por defecto: solo se agenda si MARKETING_FOLLOWUPS_SCHEDULER=true. El
+// comando además es seguro en sí mismo (no envía nada si el agente/despacho
+// están off). Idempotente + withoutOverlapping → nunca duplica mensajes/llamadas.
+if ((bool) config('marketing.followups.scheduler_enabled', false)) {
+    $mktMinutes = max(1, (int) config('marketing.followups.scheduler_minutes', 10));
+    Schedule::command('marketing:dispatch-followups')
+        ->cron('*/'.$mktMinutes.' * * * *')
+        ->withoutOverlapping()
+        ->onOneServer();
+}

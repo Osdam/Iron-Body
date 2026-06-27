@@ -9,6 +9,9 @@ use App\Models\MarketingFollowup;
 use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
 use App\Models\Plan;
+use App\Services\Marketing\SalesGuardrailException;
+use App\Services\Marketing\SalesPaymentGuardrailService;
+use App\Services\Marketing\WompiPaymentLinkService;
 use App\Services\Meta\MetaMessagingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -159,6 +162,113 @@ class InternalMarketingController extends Controller
             'followup_id' => $followup->id,
             'created'     => $followup->wasRecentlyCreated,
         ]);
+    }
+
+    /**
+     * POST /api/internal/marketing/payment-links — genera un link de pago Wompi
+     * para enviar por WhatsApp/Meta cuando el lead no quiere pagar desde la app.
+     *
+     * SEGURO: el monto es autoritativo del backend (Plan::price); el cliente/n8n
+     * NUNCA lo envía. Generar el link NO activa membresía: la activación sigue
+     * siendo exclusiva del webhook Wompi aprobado. Respeta do_not_contact.
+     */
+    public function paymentLinks(
+        Request $request,
+        SalesPaymentGuardrailService $guardrail,
+    ): JsonResponse {
+        $data = $request->validate([
+            'marketing_lead_id' => 'required|integer|exists:marketing_leads,id',
+            'plan_id'           => 'required|integer|exists:plans,id',
+            'channel'           => 'nullable|string|max:40',
+            'conversation_id'   => 'nullable|integer|exists:marketing_conversations,id',
+            'wants_invoice'     => 'nullable|boolean',
+            'invoice_email'     => 'nullable|email|max:160',
+        ]);
+
+        $lead = MarketingLead::findOrFail($data['marketing_lead_id']);
+        $plan = Plan::findOrFail($data['plan_id']);
+
+        // Guardrails de pago (do_not_contact, monto prohibido en payload, plan
+        // activo y con precio válido). Violación → JSON controlado (sin crear datos).
+        try {
+            $guardrail->assertCanGeneratePaymentLink($lead, $plan, $request->all());
+        } catch (SalesGuardrailException $e) {
+            return response()->json([
+                'ok'       => false,
+                'code'     => $e->errorCode,
+                'message'  => $e->getMessage(),
+                'escalate' => $e->escalate,
+            ], $e->httpStatus);
+        }
+
+        $result = WompiPaymentLinkService::make()->generateForLead($lead, $plan, [
+            'conversation_id' => $data['conversation_id'] ?? null,
+            'channel'         => $data['channel'] ?? null,
+            'wants_invoice'   => (bool) ($data['wants_invoice'] ?? false),
+            'invoice_email'   => $data['invoice_email'] ?? null,
+        ]);
+
+        // Falta configuración Wompi Web Checkout → 503 controlado, sin link falso.
+        if (($result['configured'] ?? false) === false) {
+            return response()->json([
+                'ok'      => false,
+                'code'    => $result['error'] ?? 'wompi_checkout_not_configured',
+                'message' => $result['message'] ?? 'Link de pago no disponible.',
+                'missing' => $result['missing'] ?? [],
+            ], 503);
+        }
+
+        $safeToSend = ($result['already_paid'] ?? false) === false
+            && ! empty($result['payment_url']);
+
+        // Trazabilidad: registra la generación como acción IA y, si hay
+        // conversación, un mensaje saliente (sender=system) con el link.
+        $this->recordPaymentLinkTrace($lead, $data['conversation_id'] ?? null, $result, $safeToSend);
+
+        return response()->json([
+            'ok'             => true,
+            'lead_id'        => $lead->id,
+            'payment_url'    => $result['payment_url'] ?? null,
+            'reference'      => $result['reference'] ?? null,
+            'amount'         => $result['amount'] ?? null,
+            'currency'       => $result['currency'] ?? null,
+            'expires_at'     => $result['expires_at'] ?? null,
+            'transaction_id' => $result['transaction_id'] ?? null,
+            'already_paid'   => (bool) ($result['already_paid'] ?? false),
+            'safe_to_send'   => $safeToSend,
+        ]);
+    }
+
+    /** Registra trazabilidad del link generado (no envía nada a Meta aquí). */
+    private function recordPaymentLinkTrace(MarketingLead $lead, ?int $conversationId, array $result, bool $safeToSend): void
+    {
+        MarketingAiAction::create([
+            'lead_id'         => $lead->id,
+            'conversation_id' => $conversationId,
+            'action_type'     => 'payment_link_generated',
+            'reason'          => $result['already_paid'] ?? false ? 'already_paid' : null,
+            'status'          => 'executed',
+            'metadata'        => array_filter([
+                'reference'      => $result['reference'] ?? null,
+                'transaction_id' => $result['transaction_id'] ?? null,
+                'amount'         => $result['amount'] ?? null,
+                'safe_to_send'   => $safeToSend,
+            ], fn ($v) => $v !== null),
+        ]);
+
+        if ($conversationId !== null && $safeToSend) {
+            MarketingMessage::create([
+                'conversation_id' => $conversationId,
+                'direction'       => MarketingMessage::DIRECTION_OUTBOUND,
+                'sender_type'     => MarketingMessage::SENDER_SYSTEM,
+                'body'            => 'Link de pago: '.$result['payment_url'],
+                'status'          => 'generated',
+                'metadata'        => array_filter([
+                    'kind'      => 'payment_link',
+                    'reference' => $result['reference'] ?? null,
+                ], fn ($v) => $v !== null),
+            ]);
+        }
     }
 
     /** GET /api/internal/marketing/context/{lead} — contexto mínimo saneado para la IA. */

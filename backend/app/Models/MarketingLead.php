@@ -19,18 +19,37 @@ class MarketingLead extends Model
     public const STATUS_CONVERTED = 'converted';
     public const STATUS_NEEDS_HUMAN = 'needs_human';
 
+    // Estado del consentimiento de contacto comercial.
+    public const CONSENT_GRANTED = 'granted';
+    public const CONSENT_DENIED  = 'denied';
+    public const CONSENT_PENDING = 'pending';
+    public const CONSENT_UNKNOWN = 'unknown';
+
     protected $fillable = [
         'channel', 'source', 'meta_user_id', 'phone', 'instagram_username',
         'name', 'status', 'temperature', 'objective', 'assigned_to',
         'campaign_id', 'member_id', 'first_message_at', 'last_message_at',
         'converted_at',
+        // Consentimiento / do-not-contact / escalado (aditivo).
+        'do_not_contact', 'consent_status', 'consent_source', 'consent_at',
+        'last_human_takeover_at', 'human_takeover_reason', 'metadata',
     ];
 
     protected $casts = [
         'first_message_at' => 'datetime',
         'last_message_at'  => 'datetime',
         'converted_at'     => 'datetime',
+        'do_not_contact'   => 'boolean',
+        'consent_at'       => 'datetime',
+        'last_human_takeover_at' => 'datetime',
+        'metadata'         => 'array',
     ];
+
+    /** ¿Es seguro para el agente contactar a este lead? */
+    public function isContactable(): bool
+    {
+        return ! (bool) $this->do_not_contact;
+    }
 
     public function campaign(): BelongsTo
     {
@@ -55,5 +74,10 @@ class MarketingLead extends Model
     public function followups(): HasMany
     {
         return $this->hasMany(MarketingFollowup::class, 'lead_id');
+    }
+
+    public function calls(): HasMany
+    {
+        return $this->hasMany(MarketingCall::class, 'marketing_lead_id');
     }
 }

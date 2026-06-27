@@ -49,6 +49,25 @@ return [
     'webhook_url'  => env('WOMPI_WEBHOOK_URL') ?: rtrim((string) env('APP_URL'), '/').'/api/webhooks/wompi',
     'redirect_url' => env('WOMPI_REDIRECT_URL') ?: rtrim((string) env('APP_URL'), '/').'/api/payments/wompi/return',
 
+    // ── Web Checkout / Link de pago (link reutilizable, p. ej. WhatsApp) ──────
+    // Aditivo y NO afecta el flujo in-app actual. Genera una URL hosteada por
+    // Wompi (checkout.wompi.co) firmada con la integridad del comercio:
+    //   {base}?public-key=...&currency=COP&amount-in-cents=N&reference=REF
+    //          &signature:integrity=SHA256(...)&redirect-url=...
+    // No requiere llamada a la API: solo public_key + integrity_secret. Wompi
+    // confirma el pago por el MISMO webhook S2S existente (fuente de verdad).
+    'checkout' => [
+        // Base del Web Checkout. Igual en sandbox/prod; la llave pública define
+        // el ambiente. Override por env si Wompi cambia el dominio.
+        'base_url'     => rtrim((string) env('WOMPI_CHECKOUT_URL', 'https://checkout.wompi.co/p/'), '/').'/',
+        // URL a la que Wompi redirige tras el pago (página de gracias pública).
+        // Por defecto reusa la misma redirect_url del flujo in-app.
+        'redirect_url' => env('WOMPI_CHECKOUT_REDIRECT_URL'),
+        // Vigencia del link/transacción (minutos). El link no caduca por sí solo
+        // en Wompi; este valor sella expires_at de la PaymentTransaction local.
+        'expiration_minutes' => (int) env('WOMPI_CHECKOUT_EXPIRATION_MINUTES', 1440),
+    ],
+
     // ── Cliente HTTP ────────────────────────────────────────────────────────
     'timeout'         => (int) env('WOMPI_TIMEOUT_SECONDS', 30),
     'connect_timeout' => (int) env('WOMPI_CONNECT_TIMEOUT_SECONDS', 10),

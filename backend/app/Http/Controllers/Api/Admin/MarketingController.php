@@ -10,6 +10,10 @@ use App\Models\MarketingConversation;
 use App\Models\MarketingFollowup;
 use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
+use App\Models\Plan;
+use App\Services\Marketing\SalesGuardrailException;
+use App\Services\Marketing\SalesPaymentGuardrailService;
+use App\Services\Marketing\WompiPaymentLinkService;
 use App\Services\Meta\MarketingMetricsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -208,6 +212,65 @@ class MarketingController extends Controller
             'sale_amount'   => (float) $a->sale_amount,
             'membership_id' => $a->membership_id,
             'converted_at'  => $a->converted_at?->toIso8601String(),
+        ]);
+    }
+
+    /**
+     * POST /api/admin/marketing/leads/{lead}/payment-link — un humano del CRM
+     * genera un link de pago Wompi para el lead. NO envía el mensaje
+     * automáticamente: solo devuelve el link para copiar/compartir. Generar el
+     * link NO activa membresía (eso es exclusivo del webhook Wompi aprobado).
+     */
+    public function paymentLink(
+        Request $request,
+        int $lead,
+        SalesPaymentGuardrailService $guardrail,
+    ): JsonResponse {
+        $data = $request->validate([
+            'plan_id'       => 'required|integer|exists:plans,id',
+            'wants_invoice' => 'nullable|boolean',
+            'invoice_email' => 'nullable|email|max:160',
+        ]);
+
+        $leadModel = MarketingLead::findOrFail($lead);
+        $plan = Plan::findOrFail($data['plan_id']);
+
+        try {
+            $guardrail->assertCanGeneratePaymentLink($leadModel, $plan, $request->all());
+        } catch (SalesGuardrailException $e) {
+            return response()->json([
+                'ok'       => false,
+                'code'     => $e->errorCode,
+                'message'  => $e->getMessage(),
+                'escalate' => $e->escalate,
+            ], $e->httpStatus);
+        }
+
+        $result = WompiPaymentLinkService::make()->generateForLead($leadModel, $plan, [
+            'channel'       => $leadModel->channel,
+            'wants_invoice' => (bool) ($data['wants_invoice'] ?? false),
+            'invoice_email' => $data['invoice_email'] ?? null,
+        ]);
+
+        if (($result['configured'] ?? false) === false) {
+            return response()->json([
+                'ok'      => false,
+                'code'    => $result['error'] ?? 'wompi_checkout_not_configured',
+                'message' => $result['message'] ?? 'Link de pago no disponible.',
+                'missing' => $result['missing'] ?? [],
+            ], 503);
+        }
+
+        return response()->json([
+            'ok'             => true,
+            'lead_id'        => $leadModel->id,
+            'payment_url'    => $result['payment_url'] ?? null,
+            'reference'      => $result['reference'] ?? null,
+            'amount'         => $result['amount'] ?? null,
+            'currency'       => $result['currency'] ?? null,
+            'expires_at'     => $result['expires_at'] ?? null,
+            'transaction_id' => $result['transaction_id'] ?? null,
+            'already_paid'   => (bool) ($result['already_paid'] ?? false),
         ]);
     }
 
