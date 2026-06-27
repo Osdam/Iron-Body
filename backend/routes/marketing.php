@@ -25,6 +25,11 @@ Route::middleware(['automation.internal', 'throttle:120,1'])
         // Genera un link de pago Wompi para enviar por WhatsApp/Meta. El monto es
         // autoritativo del backend; generar el link NO activa membresía.
         Route::post('payment-links', [InternalMarketingController::class, 'paymentLinks']);
+
+        // Flujo completo: genera el link y lo envía por WhatsApp (dry_run si META
+        // está deshabilitado/sin credenciales). Nunca activa membresía.
+        // (send-message vive en routes/api.php; aquí solo lo nuevo de Fase 1.5.)
+        Route::post('payment-links/send', [InternalMarketingController::class, 'paymentLinksSend']);
     });
 
 // ── Agente comercial — endpoint admin (CRM): generar link desde el panel ──────
