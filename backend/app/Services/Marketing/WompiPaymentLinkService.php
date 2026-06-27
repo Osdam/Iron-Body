@@ -9,14 +9,18 @@ use App\Services\Wompi\PaymentStateMachine;
 use App\Services\Wompi\WompiSignatureService;
 use App\Services\Wompi\WompiTransactionService;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 /**
  * Genera un LINK DE PAGO Wompi (Web Checkout hosteado) reutilizable para enviar
  * por WhatsApp/Meta cuando un lead no quiere pagar desde la app.
  *
  * Diseño SEGURO y ADITIVO:
- *   - Reutiliza WompiTransactionService::createOrReuse (idempotencia por
- *     `order_id` = lead+plan; anti doble pago ya probado).
+ *   - Reutiliza WompiTransactionService::createOrReuse para CREAR (monto
+ *     autoritativo, reference única, anti doble pago ya probado). La
+ *     idempotencia por (lead, plan) se resuelve aquí con un prefijo en la
+ *     columna STRING `idempotency_key` — NUNCA con `order_id` (que es bigint y
+ *     pertenece al flujo in-app de órdenes/compras).
  *   - El monto es AUTORITATIVO del backend (Plan::price). El cliente/n8n nunca
  *     lo define (lo refuerza SalesPaymentGuardrailService).
  *   - El link es una URL FIRMADA con la integridad del comercio. NO se llama a
@@ -91,43 +95,48 @@ class WompiPaymentLinkService
         }
 
         $currency = strtoupper((string) ($this->cfg['currency'] ?? 'COP'));
+        $prefix = $this->dedupKeyPrefix($lead, $plan);
 
-        // Transacción autoritativa (monto desde el plan). order_id estable por
-        // (lead, plan) → idempotencia/anti doble pago reutilizando el núcleo Wompi.
-        $transaction = $this->tx->createOrReuse([
-            'order_id'        => $this->orderIdFor($lead, $plan),
-            'plan_id'         => $plan->id,
-            'member_id'       => $lead->member_id,
-            'method'          => 'web_checkout',
-            'currency'        => $currency,
-            'description'     => 'Membresía Iron Body — '.$plan->name,
-            'customer'        => array_filter([
-                'name'  => $lead->name,
-                'phone' => $lead->phone,
-            ]),
-            // Factura electrónica: SOLO se guarda metadata; el flujo existente
-            // (PaymentMembershipActivator) decide tras el pago aprobado.
-            'request_invoice' => (bool) ($options['wants_invoice'] ?? false),
-            'invoice_email'   => $options['invoice_email'] ?? null,
-        ]);
-
-        // Enriquecer metadata con la trazabilidad comercial (sin pisar invoice).
-        $this->stampMarketingMetadata($transaction, $lead, $options);
-
-        // Si ya está aprobada, NO se genera link nuevo: el pago ya ocurrió.
-        if ($transaction->status === PaymentStateMachine::APPROVED) {
+        // Si ya hay un pago APROBADO para (lead, plan), NO se genera link nuevo.
+        $approved = $this->latestForPrefix($prefix, [PaymentStateMachine::APPROVED]);
+        if ($approved !== null) {
             return [
                 'configured'     => true,
                 'already_paid'   => true,
                 'payment_url'    => null,
-                'reference'      => $transaction->reference,
-                'amount'         => (float) $transaction->amount,
-                'currency'       => $transaction->currency,
-                'transaction_id' => $transaction->provider_ref ?: (string) $transaction->id,
-                'status'         => $transaction->status,
+                'reference'      => $approved->reference,
+                'amount'         => (float) $approved->amount,
+                'currency'       => $approved->currency,
+                'transaction_id' => $approved->provider_ref ?: (string) $approved->id,
+                'status'         => $approved->status,
                 'message'        => 'Este lead ya tiene un pago aprobado para este plan.',
             ];
         }
+
+        // Idempotencia: reutiliza una transacción de marketing EN VUELO (no final)
+        // para el mismo (lead, plan); si no hay, crea una nueva. NUNCA reutiliza
+        // approved/declined/voided/error/expired. order_id queda SIEMPRE en null.
+        $transaction = $this->latestForPrefix($prefix, PaymentStateMachine::IN_FLIGHT)
+            ?? $this->tx->createOrReuse([
+                // order_id se OMITE a propósito (es bigint del flujo de órdenes).
+                'idempotency_key' => $prefix.Str::uuid(),  // string único → nunca colisiona
+                'plan_id'         => $plan->id,
+                'member_id'       => $lead->member_id,
+                'method'          => 'web_checkout',
+                'currency'        => $currency,
+                'description'     => 'Membresía Iron Body — '.$plan->name,
+                'customer'        => array_filter([
+                    'name'  => $lead->name,
+                    'phone' => $lead->phone,
+                ]),
+                // Factura electrónica: SOLO se guarda metadata; el flujo existente
+                // (PaymentMembershipActivator) decide tras el pago aprobado.
+                'request_invoice' => (bool) ($options['wants_invoice'] ?? false),
+                'invoice_email'   => $options['invoice_email'] ?? null,
+            ]);
+
+        // Enriquecer metadata con la trazabilidad comercial (sin pisar invoice).
+        $this->stampMarketingMetadata($transaction, $lead, $options);
 
         $expiresAt = $this->resolveExpiresAt($transaction);
         $url = $this->buildCheckoutUrl($transaction, $currency);
@@ -151,10 +160,33 @@ class WompiPaymentLinkService
         ];
     }
 
-    /** order_id determinístico por (lead, plan): habilita la idempotencia. */
-    private function orderIdFor(MarketingLead $lead, Plan $plan): string
+    /**
+     * Prefijo determinístico por (lead, plan) para la columna STRING
+     * `idempotency_key`. Cada transacción concreta añade un sufijo único (uuid),
+     * así varias transacciones del mismo lead/plan conviven (la unique de
+     * idempotency_key nunca choca) y la idempotencia se resuelve por LIKE.
+     */
+    private function dedupKeyPrefix(MarketingLead $lead, Plan $plan): string
     {
-        return 'mkt-lead-'.$lead->id.'-plan-'.$plan->id;
+        return 'mkt-lead-'.$lead->id.'-plan-'.$plan->id.'-';
+    }
+
+    /**
+     * Última transacción Wompi de marketing (por prefijo de idempotency_key) en
+     * alguno de los estados dados. LIKE sobre columna string → cross-DB seguro
+     * (no usa JSON path ni casts). Nunca toca order_id.
+     *
+     * @param  string[]  $statuses
+     */
+    private function latestForPrefix(string $prefix, array $statuses): ?PaymentTransaction
+    {
+        return PaymentTransaction::query()
+            ->where('provider', 'wompi')
+            ->where('method', 'web_checkout')
+            ->where('idempotency_key', 'like', $prefix.'%')
+            ->whereIn('status', $statuses)
+            ->latest('id')
+            ->first();
     }
 
     /**

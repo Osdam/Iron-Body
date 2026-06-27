@@ -211,4 +211,31 @@ class PaymentLinkTest extends TestCase
         // No se crean datos corruptos.
         $this->assertDatabaseCount('payment_transactions', 0);
     }
+
+    /**
+     * Regresión del bug 22P02: order_id es bigint → JAMÁS debe recibir un string
+     * (p. ej. "mkt-lead-1-plan-1"). La referencia textual va en `reference`; el
+     * dedup va en `idempotency_key` (string). order_id queda null.
+     */
+    public function test_does_not_pass_string_to_bigint_order_id(): void
+    {
+        $this->generate()->assertOk();
+
+        $tx = PaymentTransaction::where('provider', 'wompi')->latest()->first();
+        $this->assertNull($tx->order_id, 'order_id debe quedar null en links de marketing');
+        $this->assertIsString($tx->reference);
+        $this->assertNotSame('', $tx->reference);
+        // El dedup vive en idempotency_key (string), no en order_id.
+        $this->assertStringStartsWith('mkt-lead-'.$this->lead->id.'-plan-'.$this->plan->id.'-', (string) $tx->idempotency_key);
+    }
+
+    /** Idempotencia: dos llamadas (lead+plan) reutilizan la transacción en vuelo. */
+    public function test_reuses_inflight_transaction_for_same_lead_plan(): void
+    {
+        $first  = $this->generate()->assertOk();
+        $second = $this->generate()->assertOk();
+
+        $this->assertSame($first->json('reference'), $second->json('reference'));
+        $this->assertSame(1, PaymentTransaction::where('provider', 'wompi')->count());
+    }
 }
