@@ -13,6 +13,7 @@ use App\Services\Marketing\SalesGuardrailException;
 use App\Services\Marketing\SalesPaymentGuardrailService;
 use App\Services\Marketing\WompiPaymentLinkService;
 use App\Services\Meta\MetaAuthService;
+use App\Services\Meta\MetaDoctorService;
 use App\Services\Meta\MetaMessagingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -33,6 +34,15 @@ class InternalMarketingController extends Controller
         private readonly MetaMessagingService $messaging,
         private readonly MetaAuthService $metaAuth,
     ) {
+    }
+
+    /**
+     * GET /api/internal/marketing/meta/doctor — readiness de Meta/WhatsApp para
+     * n8n/operación. JSON SIN secretos (solo SET/MISSING y decisiones derivadas).
+     */
+    public function metaDoctor(MetaDoctorService $doctor): JsonResponse
+    {
+        return response()->json(['ok' => true, 'data' => $doctor->report()]);
     }
 
     /** POST /api/internal/marketing/ai-action — registra la decisión del asesor IA. */
@@ -103,7 +113,8 @@ class InternalMarketingController extends Controller
             'payment_transaction_id' => $data['payment_transaction_id'] ?? null,
         ], fn ($v) => $v !== null));
 
-        return response()->json($result);
+        // Eco del cuerpo preparado (útil para n8n; sin secretos).
+        return response()->json(array_merge($result, ['body' => $data['body']]));
     }
 
     /**
@@ -236,11 +247,15 @@ class InternalMarketingController extends Controller
             return array_merge($base, ['reason' => 'channel_not_supported']);
         }
 
-        // Guardrail: WhatsApp exige teléfono del lead.
+        // Guardrail: WhatsApp exige un teléfono válido del lead.
         $to = $this->normalizePhone($lead->phone);
         if ($to === null) {
             return array_merge($base, ['reason' => 'lead_without_phone']);
         }
+
+        // El recipiente normalizado usado para Meta queda en metadata (no se
+        // sobrescribe el teléfono guardado del lead).
+        $metadata = array_merge($metadata, ['recipient' => $to]);
 
         // A partir de aquí ES seguro intentar el envío.
         $conversation = MarketingConversation::firstOrCreate(
@@ -302,11 +317,29 @@ class InternalMarketingController extends Controller
         return $message;
     }
 
-    /** Normaliza un teléfono a dígitos (recipiente WhatsApp). null si vacío. */
+    /**
+     * Normaliza un teléfono al formato que espera WhatsApp Cloud API (dígitos,
+     * con indicativo de país, SIN '+'). Reglas:
+     *   - Quita '+', espacios y cualquier separador.
+     *   - Colombia: si quedan 10 dígitos y empieza por 3 (celular), antepone 57.
+     *   - Valida longitud E.164 (11–15 dígitos). Inválido → null (bloquea envío).
+     * No modifica el teléfono guardado del lead; solo calcula el recipiente.
+     */
     private function normalizePhone(?string $phone): ?string
     {
-        $digits = preg_replace('/[^0-9]/', '', (string) $phone);
-        return ($digits === null || $digits === '') ? null : $digits;
+        $digits = preg_replace('/[^0-9]/', '', (string) $phone) ?? '';
+        if ($digits === '') {
+            return null;
+        }
+        // Celular colombiano local (10 dígitos empezando por 3) → +57.
+        if (strlen($digits) === 10 && str_starts_with($digits, '3')) {
+            $digits = '57'.$digits;
+        }
+        // Longitud válida para un número internacional (sin '+').
+        if (strlen($digits) < 11 || strlen($digits) > 15) {
+            return null;
+        }
+        return $digits;
     }
 
     /** Mensaje humano corto con el link (precio REAL; nunca inventado). */

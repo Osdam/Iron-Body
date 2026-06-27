@@ -170,6 +170,40 @@ class SendMessageTest extends TestCase
         ]);
     }
 
+    public function test_normalizes_colombian_phone_for_whatsapp(): void
+    {
+        config()->set('meta.enabled', true);
+        config()->set('meta.access_token', 'tok_x');
+        config()->set('meta.app_secret', 'sec_x');
+        config()->set('meta.whatsapp_phone_number_id', '123456');
+        config()->set('meta.graph_base', 'https://graph.facebook.com');
+        config()->set('meta.graph_version', 'v21.0');
+
+        $lead = MarketingLead::create([
+            'channel' => 'whatsapp', 'source' => 'inbound', 'phone' => '3150536026',
+            'name' => 'Cel CO', 'status' => MarketingLead::STATUS_NEW,
+        ]);
+
+        Http::fake([
+            'graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.NORM']]], 200),
+        ]);
+
+        $this->postJson('/api/internal/marketing/send-message', [
+            'marketing_lead_id' => $lead->id,
+            'body'              => 'Hola',
+        ], $this->headers())->assertOk()->assertJsonPath('sent', true);
+
+        // El recipiente enviado a Meta debe ser 57 + los 10 dígitos.
+        Http::assertSent(function ($request) {
+            return ($request['to'] ?? null) === '573150536026';
+        });
+
+        // El teléfono guardado del lead NO se altera; el recipiente va en metadata.
+        $this->assertSame('3150536026', $lead->fresh()->phone);
+        $msg = MarketingMessage::where('status', 'sent')->latest()->first();
+        $this->assertSame('573150536026', $msg->metadata['recipient'] ?? null);
+    }
+
     public function test_payment_links_send_generates_link_and_prepares_message(): void
     {
         Http::fake();

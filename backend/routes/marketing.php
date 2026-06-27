@@ -30,6 +30,9 @@ Route::middleware(['automation.internal', 'throttle:120,1'])
         // está deshabilitado/sin credenciales). Nunca activa membresía.
         // (send-message vive en routes/api.php; aquí solo lo nuevo de Fase 1.5.)
         Route::post('payment-links/send', [InternalMarketingController::class, 'paymentLinksSend']);
+
+        // Readiness de Meta/WhatsApp (sin secretos) para n8n/operación (Fase 1.6).
+        Route::get('meta/doctor', [InternalMarketingController::class, 'metaDoctor']);
     });
 
 // ── Agente comercial — endpoint admin (CRM): generar link desde el panel ──────
