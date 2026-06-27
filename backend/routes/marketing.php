@@ -33,6 +33,10 @@ Route::middleware(['automation.internal', 'throttle:120,1'])
 
         // Readiness de Meta/WhatsApp (sin secretos) para n8n/operación (Fase 1.6).
         Route::get('meta/doctor', [InternalMarketingController::class, 'metaDoctor']);
+
+        // Cerebro comercial IA (Fase 2): clasifica intención y decide acciones.
+        // auto_execute solo dispara acciones seguras (link en dry_run si Meta off).
+        Route::post('ai/analyze-message', [InternalMarketingController::class, 'analyzeMessage']);
     });
 
 // ── Agente comercial — endpoint admin (CRM): generar link desde el panel ──────

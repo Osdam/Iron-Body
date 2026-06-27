@@ -6,6 +6,8 @@ use App\Services\Billing\Factus\FactusClient;
 use App\Services\Billing\Factus\FactusConfigValidator;
 use App\Services\Billing\Factus\FactusTokenManager;
 use App\Services\Exercises\ExerciseCatalogResolver;
+use App\Services\Marketing\Contracts\AiSalesResponderInterface;
+use App\Services\Marketing\FakeAiSalesResponder;
 use App\Services\Wompi\WompiConfigValidator;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
@@ -29,6 +31,16 @@ class AppServiceProvider extends ServiceProvider
             FactusClient::class,
             fn ($app) => new FactusClient($app->make(FactusTokenManager::class), (array) config('billing')),
         );
+
+        // Cerebro comercial IA (Fase 2). Por defecto el responder DETERMINISTA
+        // (reglas, sin OpenAI). El driver se elige por config sin tocar el
+        // orquestador; un driver desconocido cae al fake (degradación segura).
+        $this->app->bind(AiSalesResponderInterface::class, function () {
+            return match ((string) config('marketing.ai.driver', 'fake')) {
+                // 'openai' => $this->app->make(OpenAiSalesResponder::class), // futuro
+                default => new FakeAiSalesResponder(),
+            };
+        });
     }
 
     /**

@@ -41,4 +41,23 @@ return [
         // Origen que se sella en metadata.source de la PaymentTransaction.
         'source' => 'marketing_agent',
     ],
+
+    // Cerebro comercial IA (Fase 2). Por defecto usa un responder DETERMINISTA
+    // (reglas, sin OpenAI). Cuando exista infraestructura segura se podrá
+    // cambiar el driver SIN tocar el orquestador. La IA solo DECIDE y registra;
+    // las acciones reales siguen protegidas por flags/guardrails.
+    'ai' => [
+        // fake (reglas locales) | openai (futuro, requiere config segura).
+        'driver'  => env('MARKETING_AI_DRIVER', 'fake'),
+        // Interruptor del cerebro; con false el orquestador devuelve unknown.
+        'enabled' => filter_var(env('MARKETING_AI_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+
+        // Retrasos de seguimiento por temperatura (minutos). Usados al programar
+        // marketing_followups; nada se envía solo si los flags de envío están off.
+        'followup_delays' => [
+            'very_hot' => (int) env('MARKETING_AI_FOLLOWUP_VERY_HOT', 60),
+            'hot'      => (int) env('MARKETING_AI_FOLLOWUP_HOT', 120),
+            'warm'     => (int) env('MARKETING_AI_FOLLOWUP_WARM', 360),
+        ],
+    ],
 ];

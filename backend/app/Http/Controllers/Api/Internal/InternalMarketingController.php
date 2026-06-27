@@ -9,12 +9,12 @@ use App\Models\MarketingFollowup;
 use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
 use App\Models\Plan;
+use App\Services\Marketing\MarketingMessageDispatcher;
+use App\Services\Marketing\SalesAgentOrchestratorService;
 use App\Services\Marketing\SalesGuardrailException;
 use App\Services\Marketing\SalesPaymentGuardrailService;
 use App\Services\Marketing\WompiPaymentLinkService;
-use App\Services\Meta\MetaAuthService;
 use App\Services\Meta\MetaDoctorService;
-use App\Services\Meta\MetaMessagingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -31,8 +31,7 @@ use Illuminate\Http\Request;
 class InternalMarketingController extends Controller
 {
     public function __construct(
-        private readonly MetaMessagingService $messaging,
-        private readonly MetaAuthService $metaAuth,
+        private readonly MarketingMessageDispatcher $dispatcher,
     ) {
     }
 
@@ -43,6 +42,70 @@ class InternalMarketingController extends Controller
     public function metaDoctor(MetaDoctorService $doctor): JsonResponse
     {
         return response()->json(['ok' => true, 'data' => $doctor->report()]);
+    }
+
+    /**
+     * POST /api/internal/marketing/ai/analyze-message — CEREBRO comercial (Fase 2).
+     * Clasifica intención, calcula temperatura/etapa, detecta riesgos, propone
+     * respuesta humana y recomienda acciones. SIEMPRE registra la decisión.
+     *
+     * - auto_execute=false (default): solo devuelve la decisión (no ejecuta nada).
+     * - auto_execute=true: ejecuta SOLO acciones seguras (link en dry_run si Meta
+     *   off, marcar do_not_contact, escalar a humano, programar seguimiento).
+     * NUNCA activa membresía ni marca un pago como aprobado.
+     */
+    public function analyzeMessage(Request $request, SalesAgentOrchestratorService $orchestrator): JsonResponse
+    {
+        $data = $request->validate([
+            'marketing_lead_id' => 'required|integer|exists:marketing_leads,id',
+            'body'              => 'required|string|max:4000',
+            'channel'           => 'nullable|string|in:whatsapp',
+            'conversation_id'   => 'nullable|integer|exists:marketing_conversations,id',
+            'auto_execute'      => 'nullable|boolean',
+            'plan_id'           => 'nullable|integer|exists:plans,id',
+        ]);
+
+        $lead        = MarketingLead::findOrFail($data['marketing_lead_id']);
+        $channel     = $data['channel'] ?? 'whatsapp';
+        $autoExecute = (bool) ($data['auto_execute'] ?? false);
+        $plan        = isset($data['plan_id']) ? Plan::find($data['plan_id']) : null;
+
+        // Conversación + registro del mensaje entrante del lead.
+        $conversation = isset($data['conversation_id'])
+            ? MarketingConversation::findOrFail($data['conversation_id'])
+            : MarketingConversation::firstOrCreate(
+                ['lead_id' => $lead->id, 'channel' => $channel],
+                ['status' => 'open', 'ai_enabled' => true, 'human_takeover' => false, 'last_message_at' => now()],
+            );
+
+        $inbound = MarketingMessage::create([
+            'conversation_id' => $conversation->id,
+            'direction'       => MarketingMessage::DIRECTION_INBOUND,
+            'sender_type'     => MarketingMessage::SENDER_LEAD,
+            'body'            => $data['body'],
+            'status'          => 'received',
+        ]);
+        $conversation->update(['last_message_at' => now()]);
+
+        // Decisión (pura) + persistencia obligatoria para auditoría.
+        $decision = $orchestrator->analyze($lead, $data['body'], ['lead' => $lead, 'channel' => $channel]);
+        $action   = $orchestrator->persist($lead, $conversation->id, $inbound->id, $decision, $autoExecute);
+
+        // Ejecución de acciones SEGURAS solo si se pidió explícitamente.
+        $executed = $autoExecute
+            ? $orchestrator->execute($lead->fresh(), $conversation, $decision, $plan)
+            : [];
+
+        return response()->json([
+            'ok'              => true,
+            'lead_id'         => $lead->id,
+            'conversation_id' => $conversation->id,
+            'message_id'      => $inbound->id,
+            'ai_action_id'    => $action->id,
+            'auto_execute'    => $autoExecute,
+            'decision'        => $decision,
+            'executed'        => $executed,
+        ]);
     }
 
     /** POST /api/internal/marketing/ai-action — registra la decisión del asesor IA. */
@@ -108,7 +171,7 @@ class InternalMarketingController extends Controller
         }
 
         $channel = $data['channel'] ?? 'whatsapp';
-        $result = $this->dispatchWhatsapp($lead, $channel, $data['body'], array_filter([
+        $result = $this->dispatcher->dispatchWhatsapp($lead, $channel, $data['body'], array_filter([
             'kind'                   => isset($data['payment_url']) ? 'payment_link' : 'text',
             'payment_transaction_id' => $data['payment_transaction_id'] ?? null,
         ], fn ($v) => $v !== null));
@@ -192,7 +255,7 @@ class InternalMarketingController extends Controller
         // Mensaje humano corto (precio REAL del backend; nunca inventado).
         $body = $this->buildPaymentLinkMessage($plan, (float) $link['amount'], $link['payment_url']);
 
-        $send = $this->dispatchWhatsapp($lead, $channel, $body, [
+        $send = $this->dispatcher->dispatchWhatsapp($lead, $channel, $body, [
             'kind'      => 'payment_link',
             'reference' => $link['reference'] ?? null,
         ]);
@@ -218,128 +281,6 @@ class InternalMarketingController extends Controller
             return $conversation ? MarketingLead::find($conversation->lead_id) : null;
         }
         return null;
-    }
-
-    // ── Envío WhatsApp (compartido) ───────────────────────────────────────────
-
-    /**
-     * Despacho WhatsApp con guardrails. Devuelve un resultado uniforme y NUNCA
-     * lanza por falta de config Meta. Registra siempre el MarketingMessage
-     * saliente (status: sent | failed | dry_run) salvo cuando se bloquea por
-     * guardrail (do_not_contact / sin teléfono / canal no soportado).
-     *
-     * @return array{ok:bool,sent:bool,dry_run:bool,safe_to_send:bool,message_id:?int,provider_message_id:?string,reason:?string,conversation_id:?int}
-     */
-    private function dispatchWhatsapp(MarketingLead $lead, string $channel, string $body, array $metadata = []): array
-    {
-        $base = [
-            'ok' => true, 'sent' => false, 'dry_run' => false, 'safe_to_send' => false,
-            'message_id' => null, 'provider_message_id' => null, 'reason' => null, 'conversation_id' => null,
-        ];
-
-        // Guardrail: do_not_contact.
-        if (! $lead->isContactable()) {
-            return array_merge($base, ['reason' => 'do_not_contact']);
-        }
-
-        // Solo WhatsApp implementado hoy (IG/FB en fase viva).
-        if ($channel !== 'whatsapp') {
-            return array_merge($base, ['reason' => 'channel_not_supported']);
-        }
-
-        // Guardrail: WhatsApp exige un teléfono válido del lead.
-        $to = $this->normalizePhone($lead->phone);
-        if ($to === null) {
-            return array_merge($base, ['reason' => 'lead_without_phone']);
-        }
-
-        // El recipiente normalizado usado para Meta queda en metadata (no se
-        // sobrescribe el teléfono guardado del lead).
-        $metadata = array_merge($metadata, ['recipient' => $to]);
-
-        // A partir de aquí ES seguro intentar el envío.
-        $conversation = MarketingConversation::firstOrCreate(
-            ['lead_id' => $lead->id, 'channel' => $channel],
-            ['status' => 'open', 'ai_enabled' => true, 'human_takeover' => false, 'last_message_at' => now()],
-        );
-
-        // META deshabilitado o sin credenciales → dry_run (prepara, no entrega).
-        if (! $this->metaAuth->isConfigured()) {
-            $message = $this->recordOutbound($conversation, $body, 'dry_run', null, $metadata);
-            return array_merge($base, [
-                'dry_run'         => true,
-                'safe_to_send'    => true,
-                'message_id'      => $message->id,
-                'conversation_id' => $conversation->id,
-                'reason'          => 'meta_disabled_or_unconfigured',
-            ]);
-        }
-
-        // Envío real (best-effort; sendWhatsappText nunca lanza ni loguea secretos).
-        $providerId = $this->messaging->sendWhatsappText($to, $body);
-        $message = $this->recordOutbound(
-            $conversation,
-            $body,
-            $providerId !== null ? 'sent' : 'failed',
-            $providerId,
-            $metadata,
-        );
-
-        return array_merge($base, [
-            'sent'                => $providerId !== null,
-            'safe_to_send'        => true,
-            'message_id'          => $message->id,
-            'provider_message_id' => $providerId,
-            'conversation_id'     => $conversation->id,
-            'reason'              => $providerId !== null ? null : 'provider_send_failed',
-        ]);
-    }
-
-    /** Registra el mensaje saliente y avanza last_message_at. */
-    private function recordOutbound(
-        MarketingConversation $conversation,
-        string $body,
-        string $status,
-        ?string $providerId,
-        array $metadata,
-    ): MarketingMessage {
-        $message = MarketingMessage::create([
-            'conversation_id' => $conversation->id,
-            'direction'       => MarketingMessage::DIRECTION_OUTBOUND,
-            'sender_type'     => MarketingMessage::SENDER_AI,
-            'body'            => $body,
-            'meta_message_id' => $providerId,
-            'status'          => $status,
-            'metadata'        => $metadata ?: null,
-        ]);
-        $conversation->update(['last_message_at' => now()]);
-
-        return $message;
-    }
-
-    /**
-     * Normaliza un teléfono al formato que espera WhatsApp Cloud API (dígitos,
-     * con indicativo de país, SIN '+'). Reglas:
-     *   - Quita '+', espacios y cualquier separador.
-     *   - Colombia: si quedan 10 dígitos y empieza por 3 (celular), antepone 57.
-     *   - Valida longitud E.164 (11–15 dígitos). Inválido → null (bloquea envío).
-     * No modifica el teléfono guardado del lead; solo calcula el recipiente.
-     */
-    private function normalizePhone(?string $phone): ?string
-    {
-        $digits = preg_replace('/[^0-9]/', '', (string) $phone) ?? '';
-        if ($digits === '') {
-            return null;
-        }
-        // Celular colombiano local (10 dígitos empezando por 3) → +57.
-        if (strlen($digits) === 10 && str_starts_with($digits, '3')) {
-            $digits = '57'.$digits;
-        }
-        // Longitud válida para un número internacional (sin '+').
-        if (strlen($digits) < 11 || strlen($digits) > 15) {
-            return null;
-        }
-        return $digits;
     }
 
     /** Mensaje humano corto con el link (precio REAL; nunca inventado). */
