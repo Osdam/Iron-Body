@@ -120,7 +120,19 @@ class SalesAgentOrchestratorService
             $reply = $this->replies->scrubLinkOffer($reply);
         }
 
-        $isPayment      = in_array($intent, SalesIntents::PAYMENT_INTENTS, true) && ! $shouldEscalate;
+        // Post-procesamiento de CTA por intención (determinista):
+        //  - location_question: NUNCA empuja pago; cierre suave de llegada.
+        //  - beginner_fear / price_objection: CTA de asesoría/objetivo, no pago.
+        if ($intent === SalesIntents::LOCATION_QUESTION && $this->replies->mentionsPaymentCta($reply)) {
+            $reply = $this->replies->scrubPaymentCta($reply, '¿Quieres que te comparta una referencia para llegar más fácil?');
+        } elseif (in_array($intent, [SalesIntents::BEGINNER_FEAR, SalesIntents::PRICE_OBJECTION], true)
+            && $this->replies->mentionsPaymentCta($reply)) {
+            $reply = $this->replies->scrubPaymentCta($reply, '¿Quieres que te asesore según tu objetivo?');
+        }
+
+        // Pago AUTOMÁTICO solo si Wompi es productivo. Si no, el link queda
+        // deshabilitado de forma determinista (sin tool de pago, sin CTA de pago).
+        $isPayment      = in_array($intent, SalesIntents::PAYMENT_INTENTS, true) && ! $shouldEscalate && $canLink;
         $shouldSchedule = $this->scoring->shouldScheduleFollowup($temperature) && ! $shouldEscalate;
         $delay          = $shouldSchedule ? $this->scoring->followupDelayMinutes($temperature) : null;
 
@@ -152,7 +164,7 @@ class SalesAgentOrchestratorService
             'risk_flags'                    => $riskFlags,
             'extracted_fields'              => $cls['extracted_fields'],
             'missing_fields'                => $cls['missing_fields'],
-            'recommended_action'            => $this->recommendedAction($intent, $shouldEscalate),
+            'recommended_action'            => $this->recommendedAction($intent, $shouldEscalate, $canLink),
             'reply'                         => $reply,
             'tools_requested'               => $tools,
             'safe_to_send'                  => false, // lo fija el guardrail
@@ -454,13 +466,16 @@ class SalesAgentOrchestratorService
         return strtr($lower, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ñ' => 'n']);
     }
 
-    private function recommendedAction(string $intent, bool $escalate): string
+    private function recommendedAction(string $intent, bool $escalate, bool $canLink = true): string
     {
         if ($escalate) {
             return SalesIntents::ACTION_ESCALATE_HUMAN;
         }
         return match ($intent) {
-            SalesIntents::PAYMENT_LINK_REQUEST, SalesIntents::HIGH_INTENT_CLOSE => SalesIntents::ACTION_GENERATE_PAYMENT_LINK,
+            // Pago: solo se recomienda generar link si Wompi es productivo; si no,
+            // se responde (un asesor comparte el medio de pago).
+            SalesIntents::PAYMENT_LINK_REQUEST, SalesIntents::HIGH_INTENT_CLOSE =>
+                $canLink ? SalesIntents::ACTION_GENERATE_PAYMENT_LINK : SalesIntents::ACTION_REPLY,
             SalesIntents::PRICE_OBJECTION        => SalesIntents::ACTION_REGISTER_OBJECTION,
             SalesIntents::DO_NOT_CONTACT_REQUEST => SalesIntents::ACTION_MARK_DNC,
             default                              => SalesIntents::ACTION_REPLY,

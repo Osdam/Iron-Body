@@ -78,6 +78,9 @@ class SalesAgentTest extends TestCase
 
     public function test_payment_link_request_flags_generate_link(): void
     {
+        // Wompi productivo: la intención de pago sí marca la generación de link.
+        config()->set('wompi.env', 'production');
+
         $this->analyze(['body' => 'No quiero pagar por la app, mándame link de pago'])
             ->assertOk()
             ->assertJsonPath('decision.intent', SalesIntents::PAYMENT_LINK_REQUEST)

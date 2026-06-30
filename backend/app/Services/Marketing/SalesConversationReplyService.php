@@ -53,8 +53,8 @@ class SalesConversationReplyService
                 .'tu acceso queda listo.',
 
             SalesIntents::LOCATION_QUESTION =>
-                'Estamos en Iron Body Neiva. Te comparto la ubicación y horarios para que te '
-                .'quede fácil llegar. ¿Quieres que te oriente con un plan también?',
+                'Estamos en Iron Body Neiva. Te oriento con la ubicación para que te quede fácil '
+                .'llegar. ¿Vas a ir por primera vez?',
 
             SalesIntents::SCHEDULE_QUESTION =>
                 'Con gusto te cuento los horarios de Iron Body Neiva. ¿Buscas entrenar en la '
@@ -191,6 +191,50 @@ class SalesConversationReplyService
         }
         if (! str_contains($out, '?')) {
             $out .= ' ¿Quieres que te explique los planes?';
+        }
+        return $out;
+    }
+
+    /** Términos que delatan un CTA/empuje de pago (para intenciones que no deben pagar aún). */
+    private const PAYMENT_CTA_TERMS = ['pago', 'pagar', 'link', 'medio de pago', 'proceso de compra'];
+
+    /** ¿El texto empuja el pago (CTA de pago)? */
+    public function mentionsPaymentCta(?string $text): bool
+    {
+        if ($text === null || trim($text) === '') {
+            return false;
+        }
+        $needle = $this->normalize($text);
+        foreach (self::PAYMENT_CTA_TERMS as $t) {
+            if (str_contains($needle, $this->normalize($t))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Elimina del texto cualquier oración que empuje el pago y garantiza un cierre
+     * suave (sin pago). Usado para intenciones que NO deben llevar a pago todavía
+     * (ubicación, miedo de principiante, objeción de precio).
+     */
+    public function scrubPaymentCta(?string $text, string $softClosing): ?string
+    {
+        if ($text === null) {
+            return null;
+        }
+        $sentences = preg_split('/(?<=[.!?])\s+/u', trim($text)) ?: [];
+        $kept = array_values(array_filter(
+            $sentences,
+            fn ($s) => trim($s) !== '' && ! $this->mentionsPaymentCta($s),
+        ));
+
+        $out = trim(implode(' ', $kept));
+        if ($out === '') {
+            $out = 'Con gusto te oriento.';
+        }
+        if (! str_contains($out, '?')) {
+            $out .= ' '.$softClosing;
         }
         return $out;
     }

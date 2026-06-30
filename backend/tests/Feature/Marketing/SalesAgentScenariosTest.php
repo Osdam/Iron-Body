@@ -163,21 +163,80 @@ class SalesAgentScenariosTest extends TestCase
             ->assertJsonPath('decision.recommended_action', SalesIntents::ACTION_REGISTER_OBJECTION);
     }
 
-    public function test_quiero_pagar_el_mensual_is_payment_intent(): void
+    public function test_quiero_pagar_el_mensual_in_sandbox_defers_no_link(): void
     {
-        $this->analyze(['body' => 'quiero pagar el mensual'])
+        // Wompi NO productivo (sandbox): aunque el intent sea de pago, de forma
+        // DETERMINISTA no se genera link, no hay tool de pago y se responde humano.
+        $res = $this->analyze(['body' => 'quiero pagar el mensual', 'auto_execute' => false])
             ->assertOk()
             ->assertJsonPath('decision.intent', SalesIntents::PAYMENT_LINK_REQUEST)
             ->assertJsonPath('decision.lead_stage', SalesIntents::LEAD_STAGE_READY_TO_PAY)
-            ->assertJsonPath('decision.should_generate_payment_link', true);
+            ->assertJsonPath('decision.payment_readiness', 'sandbox_pending')
+            ->assertJsonPath('decision.should_generate_payment_link', false)
+            ->assertJsonPath('decision.recommended_action', SalesIntents::ACTION_REPLY)
+            ->assertJsonPath('executed', []);
+
+        $this->assertNotContains(
+            SalesIntents::TOOL_PAYMENT_LINK_SEND,
+            $res->json('decision.tools_requested'),
+        );
+        // Reply = fallback humano (un asesor comparte el medio de pago), sin link.
+        $reply = $res->json('decision.reply');
+        $this->assertStringContainsStringIgnoringCase('asesor', (string) $reply);
+        $this->assertStringNotContainsStringIgnoringCase('link', (string) $reply);
+    }
+
+    public function test_quiero_pagar_el_mensual_productive_flags_link(): void
+    {
+        // Wompi productivo: sí se ofrece/genera link.
+        config()->set('wompi.env', 'production');
+
+        $this->analyze(['body' => 'quiero pagar el mensual'])
+            ->assertOk()
+            ->assertJsonPath('decision.intent', SalesIntents::PAYMENT_LINK_REQUEST)
+            ->assertJsonPath('decision.should_generate_payment_link', true)
+            ->assertJsonPath('decision.recommended_action', SalesIntents::ACTION_GENERATE_PAYMENT_LINK);
     }
 
     public function test_donde_quedan_is_location_question(): void
     {
-        $this->analyze(['body' => 'dónde quedan'])
+        $reply = $this->analyze(['body' => 'dónde quedan'])
             ->assertOk()
             ->assertJsonPath('decision.intent', SalesIntents::LOCATION_QUESTION)
-            ->assertJsonPath('decision.lead_stage', SalesIntents::LEAD_STAGE_INFORMED);
+            ->assertJsonPath('decision.lead_stage', SalesIntents::LEAD_STAGE_INFORMED)
+            ->json('decision.reply');
+
+        // location_question NUNCA cierra empujando pago.
+        $this->assertStringNotContainsStringIgnoringCase('pago', (string) $reply);
+        $this->assertStringNotContainsStringIgnoringCase('pagar', (string) $reply);
+    }
+
+    public function test_location_question_strips_payment_cta_from_model_reply(): void
+    {
+        // El bug reportado: OpenAI cierra ubicación con CTA de pago. Laravel lo
+        // elimina de forma determinista y deja un cierre suave de llegada.
+        config()->set('marketing.ai.driver', 'openai');
+        config()->set('marketing.ai.openai.enabled', true);
+        config()->set('marketing.ai.openai.model', 'gpt-test');
+        config()->set('services.openai.api_key', 'sk-test');
+
+        Http::fake([
+            'api.openai.com/*' => Http::response(['choices' => [['message' => ['content' => json_encode([
+                'intent' => SalesIntents::LOCATION_QUESTION, 'confidence' => 0.9,
+                'reply' => 'Estamos en Iron Body Neiva. ¿Quieres que te ayude con el proceso de pago del plan mensual?',
+                'tools_requested' => ['reply'],
+            ])]]]], 200),
+            '*' => Http::response([], 200),
+        ]);
+
+        $reply = $this->analyze(['body' => 'dónde quedan'])
+            ->assertOk()
+            ->assertJsonPath('decision.intent', SalesIntents::LOCATION_QUESTION)
+            ->json('decision.reply');
+
+        $this->assertStringNotContainsStringIgnoringCase('pago', (string) $reply);
+        $this->assertStringContainsString('Iron Body Neiva', (string) $reply);
+        $this->assertStringContainsString('?', (string) $reply); // mantiene un cierre suave
     }
 
     public function test_quiero_hablar_con_alguien_escalates_to_human(): void
@@ -209,20 +268,23 @@ class SalesAgentScenariosTest extends TestCase
     public function test_sandbox_wompi_never_generates_link_defers_to_human(): void
     {
         Http::fake();
-        // Wompi en sandbox (NO_PRODUCTIVO) → NUNCA se genera/entrega link, ni
-        // siquiera en dry_run. Un asesor comparte el medio de pago.
+        // Wompi en sandbox (NO_PRODUCTIVO) → de forma determinista NO se solicita
+        // el tool de pago ni se genera link; un asesor comparte el medio de pago.
         $res = $this->analyze([
             'body' => 'quiero pagar el mensual', 'plan_id' => $this->plan->id, 'auto_execute' => true,
-        ])->assertOk();
+        ])->assertOk()
+            ->assertJsonPath('decision.should_generate_payment_link', false)
+            ->assertJsonPath('decision.recommended_action', SalesIntents::ACTION_REPLY);
 
-        // El reply sugerido NO ofrece un link: deriva a un asesor.
+        // El tool de pago NO se solicita y no se ejecuta nada de pago.
+        $this->assertNotContains(SalesIntents::TOOL_PAYMENT_LINK_SEND, $res->json('decision.tools_requested'));
+        $this->assertNull(collect($res->json('executed'))->firstWhere('tool', SalesIntents::TOOL_PAYMENT_LINK_SEND));
+
+        // El reply deriva a un asesor, sin mencionar link.
         $reply = $res->json('decision.reply');
         $this->assertStringNotContainsString('http', (string) $reply);
+        $this->assertStringNotContainsStringIgnoringCase('link', (string) $reply);
         $this->assertStringContainsStringIgnoringCase('asesor', (string) $reply);
-
-        $exec = collect($res->json('executed'))->firstWhere('tool', SalesIntents::TOOL_PAYMENT_LINK_SEND);
-        $this->assertSame('deferred_to_human', $exec['status']);
-        $this->assertSame('wompi_not_production', $exec['reason']);
 
         // No se generó ninguna transacción de pago (no se entregó link sandbox).
         $this->assertDatabaseCount('payment_transactions', 0);
