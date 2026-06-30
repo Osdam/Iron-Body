@@ -10,6 +10,7 @@ use App\Models\Plan;
 use App\Services\Marketing\SalesIntents;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -99,6 +100,64 @@ class InboundWebhookTest extends TestCase
         // Aunque pida link, NO se ejecuta ni se crea transacción (agente off).
         $this->assertDatabaseCount('payment_transactions', 0);
         Http::assertNothingSent();
+    }
+
+    /** Helper: ¿se registró un log con ese mensaje exacto? */
+    private function loggedMessage(string $level, string $message): void
+    {
+        Log::shouldHaveReceived($level)
+            ->withArgs(fn (...$args) => ($args[0] ?? null) === $message)
+            ->atLeast()->once();
+    }
+
+    public function test_webhook_logs_received_message_detected_and_inbound_saved(): void
+    {
+        Log::spy();
+
+        $this->postMeta($this->textPayload('wamid.LOG1', '573150536026', 'precio'))->assertOk();
+
+        // Instrumentación síncrona del controlador + del job (sin secretos).
+        $this->loggedMessage('info', 'meta.webhook.received');
+        $this->loggedMessage('info', 'meta.webhook.message_detected');
+        $this->loggedMessage('info', 'meta.webhook.queued');
+        $this->loggedMessage('info', 'meta.webhook.inbound_saved');
+    }
+
+    public function test_webhook_logs_status_detected_for_status_events(): void
+    {
+        Log::spy();
+
+        $payload = ['object' => 'whatsapp_business_account', 'entry' => [['changes' => [['field' => 'messages', 'value' => [
+            'metadata' => ['phone_number_id' => self::PHONE_ID],
+            'statuses' => [['id' => 'wamid.S1', 'status' => 'delivered', 'recipient_id' => '573150536026', 'timestamp' => '1700000001']],
+        ]]]]]];
+        $this->postMeta($payload)->assertOk();
+
+        $this->loggedMessage('info', 'meta.webhook.status_detected');
+    }
+
+    public function test_webhook_invalid_signature_logs_skipped(): void
+    {
+        Log::spy();
+
+        $raw = json_encode($this->textPayload('wamid.BAD', '573150536026', 'precio'));
+        $this->call('POST', '/api/webhooks/meta', [], [], [], [
+            'HTTP_X-Hub-Signature-256' => 'sha256=deadbeef',
+            'CONTENT_TYPE'             => 'application/json',
+        ], $raw)->assertStatus(403);
+
+        $this->loggedMessage('warning', 'meta.webhook.skipped');
+    }
+
+    public function test_webhook_phone_mismatch_logs_skipped(): void
+    {
+        Log::spy();
+
+        // phone_number_id distinto del configurado → el job lo descarta y loguea.
+        $this->postMeta($this->textPayload('wamid.MM', '573150536026', 'precio', '999999'))->assertOk();
+
+        $this->loggedMessage('warning', 'meta.webhook.skipped');
+        $this->assertDatabaseMissing('marketing_messages', ['body' => 'precio']);
     }
 
     public function test_auto_execute_inbound_creates_outbound_reply(): void

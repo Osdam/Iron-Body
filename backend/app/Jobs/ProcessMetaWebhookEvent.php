@@ -43,30 +43,56 @@ class ProcessMetaWebhookEvent implements ShouldQueue
         MarketingMessageDispatcher $dispatcher,
     ): void {
         if (! (bool) config('marketing.inbound.meta_enabled', true)) {
+            Log::info('meta.webhook.skipped', ['reason' => 'inbound_meta_disabled']);
             return; // procesamiento de entrantes deshabilitado (modo registro off).
         }
 
         $supportedTypes = (array) config('marketing.inbound.supported_message_types', ['text']);
         $expectedPhoneId = (string) config('meta.whatsapp_phone_number_id');
 
+        $events = $webhook->parseEvents($this->payload);
+        Log::info('meta.webhook.job_started', [
+            'queue_connection' => (string) config('queue.default'),
+            'events'           => is_countable($events) ? count($events) : null,
+        ]);
+
         foreach ($webhook->parseEvents($this->payload) as $event) {
             // Seguridad multi-número: si el número configurado no coincide, ignorar.
             if ($expectedPhoneId !== '' && ! empty($event['phone_number_id'])
                 && ! hash_equals($expectedPhoneId, (string) $event['phone_number_id'])) {
-                Log::info('meta.webhook.skip', ['reason' => 'phone_number_mismatch']);
+                Log::warning('meta.webhook.skipped', [
+                    'reason'                   => 'phone_number_mismatch',
+                    'received_phone_number_id' => (string) $event['phone_number_id'],
+                    'expected_phone_number_id' => $expectedPhoneId,
+                ]);
                 continue;
             }
 
             // Estados de entrega (sent/delivered/read) → solo actualizar estado.
             if (str_starts_with((string) $event['kind'], 'status:')) {
+                Log::info('meta.webhook.status_detected', [
+                    'message_id' => $event['message_id'] ?? null,
+                    'status'     => substr((string) $event['kind'], 7),
+                ]);
                 $conversations->recordStatus($event['message_id'], substr((string) $event['kind'], 7));
                 continue;
             }
 
             // Solo mensajes con remitente identificable.
             if ($event['kind'] !== 'message' || empty($event['meta_user_id'])) {
+                Log::info('meta.webhook.skipped', [
+                    'reason' => 'not_a_message_or_no_sender',
+                    'kind'   => $event['kind'] ?? null,
+                ]);
                 continue;
             }
+
+            Log::info('meta.webhook.message_detected', [
+                'type'       => $event['message_type'] ?? 'text',
+                'wa_id'      => $event['wa_id'] ?? null,
+                'message_id' => $event['message_id'] ?? null,
+                'has_text'   => ! empty($event['text']),
+            ]);
 
             $type = (string) ($event['message_type'] ?? 'text');
             $supported = in_array($type, $supportedTypes, true);
@@ -91,24 +117,35 @@ class ProcessMetaWebhookEvent implements ShouldQueue
 
             // Idempotencia: si el mensaje ya existía, no re-analizar.
             if ($message === null || ! $message->wasRecentlyCreated) {
-                Log::info('meta.webhook.duplicate', ['conversation_id' => $conversation->id]);
+                Log::info('meta.webhook.skipped', [
+                    'reason'          => 'duplicate_message',
+                    'conversation_id' => $conversation->id,
+                ]);
                 continue;
             }
 
+            Log::info('meta.webhook.inbound_saved', [
+                'message_id'      => $message->id,
+                'conversation_id' => $conversation->id,
+                'lead_id'         => $lead->id,
+            ]);
+
             if (! $supported) {
                 // Media no soportada → registrar para humano, sin OpenAI.
+                Log::info('meta.webhook.skipped', ['reason' => 'unsupported_message_type', 'type' => $type]);
                 $router->recordUnsupported($lead, $conversation, $message, $type);
                 continue;
             }
 
-            // Texto soportado → cerebro comercial (dry_run / proposed).
-            $router->analyze($lead, $conversation, $message);
+            // Texto soportado → cerebro comercial (dry_run / proposed según flags).
+            $result = $router->analyze($lead, $conversation, $message);
 
-            Log::info('meta.webhook.lead_message', [
+            Log::info('meta.webhook.auto_analyze_dispatched', [
                 'channel'         => $event['channel'],
                 'lead_id'         => $lead->id,
                 'conversation_id' => $conversation->id,
-                // NUNCA logueamos el cuerpo del mensaje ni datos personales.
+                'skipped'         => $result['skipped'] ?? false,
+                'reason'          => $result['skipped'] ?? false ? ($result['reason'] ?? null) : null,
             ]);
         }
     }
