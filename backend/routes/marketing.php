@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Admin\MarketingController;
+use App\Http\Controllers\Api\Admin\MarketingInboxController;
 use App\Http\Controllers\Api\Internal\InternalMarketingController;
 use App\Http\Controllers\Api\Internal\InternalMarketingKnowledgeController;
 use Illuminate\Support\Facades\Route;
@@ -53,3 +54,28 @@ Route::middleware(['automation.internal', 'throttle:120,1'])
 // mensaje automáticamente: solo devuelve el link para que un humano lo comparta.
 Route::post('admin/marketing/leads/{lead}/payment-link', [MarketingController::class, 'paymentLink'])
     ->where('lead', '[0-9]+');
+
+// ── Inbox CRM de WhatsApp (Fase 2A) ───────────────────────────────────────────
+// Bandeja para operar WhatsApp Cloud API desde el CRM. Protegido por el blindaje
+// global de /api/admin/* (ProtectAdminPaths reutiliza EnsureAdminAuth::challenge,
+// que deja el admin en `auth_admin`). Throttle adicional al grupo `api`.
+Route::middleware('throttle:120,1')
+    ->prefix('admin/marketing/inbox')
+    ->where(['id' => '[0-9]+'])
+    ->group(function (): void {
+        Route::get('conversations',                      [MarketingInboxController::class, 'index']);
+        Route::get('metrics',                            [MarketingInboxController::class, 'metrics']);
+        Route::get('conversations/{id}',                 [MarketingInboxController::class, 'show']);
+
+        // Envío manual (throttle más estricto para frenar spam de salida).
+        Route::post('conversations/{id}/messages', [MarketingInboxController::class, 'sendMessage'])
+            ->middleware('throttle:30,1');
+
+        Route::post('conversations/{id}/takeover',            [MarketingInboxController::class, 'takeover']);
+        Route::post('conversations/{id}/release',             [MarketingInboxController::class, 'release']);
+        Route::post('conversations/{id}/assign',              [MarketingInboxController::class, 'assign']);
+        Route::post('conversations/{id}/notes',               [MarketingInboxController::class, 'addNote']);
+        Route::post('conversations/{id}/tags',                [MarketingInboxController::class, 'tags']);
+        Route::patch('conversations/{id}/status',             [MarketingInboxController::class, 'status']);
+        Route::post('conversations/{id}/staff-review/resolve', [MarketingInboxController::class, 'resolveStaffReview']);
+    });

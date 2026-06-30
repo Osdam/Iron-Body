@@ -37,7 +37,12 @@ class MetaConversationService
             'metadata'        => $metadata ?: null,
         ]);
 
-        $conversation->update(['last_message_at' => now()]);
+        // Bookkeeping del Inbox (aditivo): avanza timestamps y suma no-leídos.
+        $conversation->forceFill([
+            'last_message_at' => now(),
+            'last_inbound_at' => now(),
+            'unread_count'    => (int) $conversation->getAttribute('unread_count') + 1,
+        ])->save();
 
         return $message;
     }

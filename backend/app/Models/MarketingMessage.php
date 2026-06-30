@@ -16,7 +16,7 @@ class MarketingMessage extends Model
     public const SENDER_SYSTEM = 'system';
 
     protected $fillable = [
-        'conversation_id', 'direction', 'sender_type', 'body',
+        'conversation_id', 'direction', 'sender_type', 'sender_user_id', 'body',
         'meta_message_id', 'status', 'metadata',
     ];
 

@@ -214,6 +214,15 @@ class SalesAgentOrchestratorService
             ],
         ]);
 
+        // Marca denormalizada para la bandeja del Inbox: si la decisión pide
+        // revisión del equipo, deja la conversación señalada (NO apaga la IA).
+        if ($conversationId !== null && ($decision['needs_staff_review'] ?? false)) {
+            MarketingConversation::whereKey($conversationId)->update([
+                'staff_review_pending' => true,
+                'staff_review_reason'  => $decision['staff_review_reason'] ?? null,
+            ]);
+        }
+
         // Refleja temperatura y objetivo detectado en el lead (CRM Mercadeo)
         // salvo do_not_contact. El objetivo solo se fija si aún no había uno.
         if ($lead->isContactable()) {

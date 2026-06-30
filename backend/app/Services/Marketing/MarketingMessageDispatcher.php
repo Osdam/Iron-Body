@@ -24,10 +24,18 @@ class MarketingMessageDispatcher
     }
 
     /**
+     * @param  string   $senderType    Autor del outbound (ai por defecto; human para envío manual del Inbox).
+     * @param  int|null $senderUserId  Admin/asesor que envía (solo para sender_type=human).
      * @return array{ok:bool,sent:bool,dry_run:bool,safe_to_send:bool,message_id:?int,provider_message_id:?string,reason:?string,conversation_id:?int}
      */
-    public function dispatchWhatsapp(MarketingLead $lead, string $channel, string $body, array $metadata = []): array
-    {
+    public function dispatchWhatsapp(
+        MarketingLead $lead,
+        string $channel,
+        string $body,
+        array $metadata = [],
+        string $senderType = MarketingMessage::SENDER_AI,
+        ?int $senderUserId = null,
+    ): array {
         $base = [
             'ok' => true, 'sent' => false, 'dry_run' => false, 'safe_to_send' => false,
             'message_id' => null, 'provider_message_id' => null, 'reason' => null, 'conversation_id' => null,
@@ -60,7 +68,7 @@ class MarketingMessageDispatcher
 
         // META deshabilitado o sin credenciales → dry_run (prepara, no entrega).
         if (! $this->auth->isConfigured()) {
-            $message = $this->recordOutbound($conversation, $body, 'dry_run', null, $metadata);
+            $message = $this->recordOutbound($conversation, $body, 'dry_run', null, $metadata, $senderType, $senderUserId);
             return array_merge($base, [
                 'dry_run'         => true,
                 'safe_to_send'    => true,
@@ -78,6 +86,8 @@ class MarketingMessageDispatcher
             $providerId !== null ? 'sent' : 'failed',
             $providerId,
             $metadata,
+            $senderType,
+            $senderUserId,
         );
 
         return array_merge($base, [
@@ -90,24 +100,34 @@ class MarketingMessageDispatcher
         ]);
     }
 
-    /** Registra el mensaje saliente y avanza last_message_at. */
+    /** Registra el mensaje saliente y avanza los timestamps de la conversación. */
     private function recordOutbound(
         MarketingConversation $conversation,
         string $body,
         string $status,
         ?string $providerId,
         array $metadata,
+        string $senderType = MarketingMessage::SENDER_AI,
+        ?int $senderUserId = null,
     ): MarketingMessage {
         $message = MarketingMessage::create([
             'conversation_id' => $conversation->id,
             'direction'       => MarketingMessage::DIRECTION_OUTBOUND,
-            'sender_type'     => MarketingMessage::SENDER_AI,
+            'sender_type'     => $senderType,
+            'sender_user_id'  => $senderUserId,
             'body'            => $body,
             'meta_message_id' => $providerId,
             'status'          => $status,
             'metadata'        => $metadata ?: null,
         ]);
-        $conversation->update(['last_message_at' => now()]);
+
+        // Bookkeeping del Inbox (aditivo, no cambia el comportamiento de envío):
+        // avanza last_message_at/last_outbound_at y marca la primera respuesta.
+        $changes = ['last_message_at' => now(), 'last_outbound_at' => now()];
+        if ($conversation->getAttribute('first_response_at') === null) {
+            $changes['first_response_at'] = now();
+        }
+        $conversation->forceFill($changes)->save();
 
         return $message;
     }
