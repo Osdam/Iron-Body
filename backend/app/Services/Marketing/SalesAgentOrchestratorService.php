@@ -53,7 +53,7 @@ class SalesAgentOrchestratorService
 
         $action   = $this->persist($lead, $conversation->id, $messageId, $decision, $autoExecute);
         $this->memory->remember($conversation, $decision, $body);
-        $executed = $autoExecute ? $this->execute($lead->fresh(), $conversation, $decision, $plan) : [];
+        $executed = $autoExecute ? $this->execute($lead->fresh(), $conversation, $decision, $plan, $action) : [];
 
         return [
             'decision'     => $decision,
@@ -218,13 +218,14 @@ class SalesAgentOrchestratorService
     }
 
     /**
-     * Ejecuta SOLO acciones seguras (auto_execute=true). Nunca envía mensajes de
-     * venta normales (esos quedan como recomendación); solo el flujo de link va a
-     * dispatch (dry_run si Meta off). Nunca activa membresía.
+     * Ejecuta acciones seguras (auto_execute=true): herramientas (link/followup/
+     * takeover/dnc) y el ENVÍO REAL de la respuesta conversacional `reply` por
+     * WhatsApp (crea el outbound y actualiza el estado de la acción IA según el
+     * resultado del envío). Nunca activa membresía ni aprueba pagos.
      *
      * @return array<int, array<string,mixed>>
      */
-    public function execute(MarketingLead $lead, MarketingConversation $conversation, array $decision, ?Plan $plan): array
+    public function execute(MarketingLead $lead, MarketingConversation $conversation, array $decision, ?Plan $plan, ?MarketingAiAction $action = null): array
     {
         $executed = [];
         foreach ($decision['tools_requested'] as $tool) {
@@ -236,7 +237,85 @@ class SalesAgentOrchestratorService
                 default                              => ['tool' => $tool, 'status' => 'skipped', 'reason' => 'unknown_tool'],
             };
         }
+
+        // Envío REAL de la respuesta conversacional (lo que faltaba): crea el
+        // outbound y ajusta el estado de la acción IA según el envío.
+        $reply = $this->maybeSendReply($lead, $conversation, $decision, $executed, $action);
+        if ($reply !== null) {
+            $executed[] = $reply;
+        }
+
         return $executed;
+    }
+
+    /**
+     * Si la decisión es una respuesta conversacional segura (no escalado, no link,
+     * no opt-out), la ENTREGA por WhatsApp creando el outbound. Devuelve el detalle
+     * del envío o null si no aplica. Actualiza la acción IA:
+     *   - outbound creado/enviado (sent o dry_run) → status executed
+     *   - creado pero el proveedor falló            → status failed
+     *   - no se creó (do_not_contact / sin teléfono)→ status skipped
+     *
+     * @return array<string,mixed>|null
+     */
+    private function maybeSendReply(MarketingLead $lead, MarketingConversation $conversation, array $decision, array $executed, ?MarketingAiAction $action): ?array
+    {
+        $reply = $decision['reply'] ?? null;
+
+        $sendable = (bool) ($decision['safe_to_send'] ?? false)
+            && (bool) ($decision['should_send_message'] ?? false)
+            && in_array($decision['recommended_action'] ?? null, [
+                SalesIntents::ACTION_REPLY, SalesIntents::ACTION_REGISTER_OBJECTION,
+            ], true)
+            && is_string($reply) && trim($reply) !== '';
+
+        // No reenviar si una herramienta de pago ya despachó su propio mensaje.
+        $alreadyDispatched = collect($executed)->contains(
+            fn ($e) => ($e['tool'] ?? null) === SalesIntents::TOOL_PAYMENT_LINK_SEND
+                && ($e['status'] ?? null) === 'executed',
+        );
+
+        if (! $sendable || $alreadyDispatched) {
+            return null;
+        }
+
+        $send = $this->dispatcher->dispatchWhatsapp($lead, $conversation->channel, (string) $reply, ['kind' => 'reply']);
+
+        $created = $send['message_id'] !== null;
+        $status  = ($send['sent'] || $send['dry_run'])
+            ? 'executed'
+            : ($created ? 'failed' : 'skipped');
+
+        $this->updateActionSendStatus($action, $status, $send);
+
+        return [
+            'tool'                => 'reply_send',
+            'status'              => $status,
+            'sent'                => $send['sent'],
+            'dry_run'             => $send['dry_run'],
+            'message_id'          => $send['message_id'],
+            'provider_message_id' => $send['provider_message_id'],
+            'reason'              => $send['reason'],
+        ];
+    }
+
+    /** Refleja en la acción IA el resultado REAL del envío del outbound. */
+    private function updateActionSendStatus(?MarketingAiAction $action, string $status, array $send): void
+    {
+        if ($action === null) {
+            return;
+        }
+
+        $meta = is_array($action->metadata) ? $action->metadata : [];
+        $meta['outbound'] = array_filter([
+            'message_id'          => $send['message_id'],
+            'sent'                => $send['sent'],
+            'dry_run'             => $send['dry_run'],
+            'provider_message_id' => $send['provider_message_id'],
+            'reason'              => $send['reason'],
+        ], fn ($v) => $v !== null);
+
+        $action->forceFill(['status' => $status, 'metadata' => $meta])->save();
     }
 
     // ── Ejecutores de herramientas seguras ────────────────────────────────────

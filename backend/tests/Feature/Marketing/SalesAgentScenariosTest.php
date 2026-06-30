@@ -302,6 +302,83 @@ class SalesAgentScenariosTest extends TestCase
         $this->assertSame(MarketingLead::STATUS_NEEDS_HUMAN, $this->lead->fresh()->status);
     }
 
+    // ── Envío REAL del outbound en auto_execute ───────────────────────────────
+
+    private function configureRealMeta(): void
+    {
+        config()->set('meta.enabled', true);
+        config()->set('meta.access_token', 'tok_x');
+        config()->set('meta.app_secret', 'sec_x');
+        config()->set('meta.whatsapp_phone_number_id', '123456');
+        config()->set('meta.graph_base', 'https://graph.facebook.com');
+        config()->set('meta.graph_version', 'v21.0');
+    }
+
+    public function test_auto_execute_reply_creates_and_sends_outbound(): void
+    {
+        $this->configureRealMeta();
+        Http::fake(['graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.OUT1']]], 200)]);
+
+        $res = $this->analyze(['body' => 'precio', 'auto_execute' => true])
+            ->assertOk()
+            ->assertJsonPath('decision.intent', SalesIntents::PRICING_QUESTION);
+
+        // 1) Se creó el outbound de la IA con el reply y 2) se envió por Meta.
+        $this->assertDatabaseHas('marketing_messages', [
+            'direction'       => 'outbound',
+            'sender_type'     => 'ai',
+            'status'          => 'sent',
+            'meta_message_id' => 'wamid.OUT1',
+        ]);
+
+        // 3) El detalle de ejecución refleja el envío real.
+        $exec = collect($res->json('executed'))->firstWhere('tool', 'reply_send');
+        $this->assertSame('executed', $exec['status']);
+        $this->assertTrue($exec['sent']);
+
+        // 4) La acción IA solo queda executed porque el outbound se creó/envió.
+        $action = \App\Models\MarketingAiAction::find($res->json('ai_action_id'));
+        $this->assertSame('executed', $action->status);
+        $this->assertSame('wamid.OUT1', $action->metadata['outbound']['provider_message_id'] ?? null);
+    }
+
+    public function test_auto_execute_reply_dry_run_when_meta_off_still_creates_outbound(): void
+    {
+        // Meta off → dry_run: se crea el outbound (no se entrega), acción executed.
+        Http::fake();
+        $res = $this->analyze(['body' => 'precio', 'auto_execute' => true])->assertOk();
+
+        $this->assertDatabaseHas('marketing_messages', [
+            'direction' => 'outbound', 'sender_type' => 'ai', 'status' => 'dry_run',
+        ]);
+        $exec = collect($res->json('executed'))->firstWhere('tool', 'reply_send');
+        $this->assertSame('executed', $exec['status']);
+        $this->assertTrue($exec['dry_run']);
+    }
+
+    public function test_auto_execute_reply_marks_action_failed_when_provider_fails(): void
+    {
+        $this->configureRealMeta();
+        // Meta responde error → el outbound queda 'failed' y la acción IA failed.
+        Http::fake(['graph.facebook.com/*' => Http::response(['error' => ['message' => 'bad']], 400)]);
+
+        $res = $this->analyze(['body' => 'precio', 'auto_execute' => true])->assertOk();
+
+        $exec = collect($res->json('executed'))->firstWhere('tool', 'reply_send');
+        $this->assertSame('failed', $exec['status']);
+        $this->assertFalse($exec['sent']);
+
+        $action = \App\Models\MarketingAiAction::find($res->json('ai_action_id'));
+        $this->assertSame('failed', $action->status);
+    }
+
+    public function test_auto_execute_false_never_creates_outbound(): void
+    {
+        Http::fake();
+        $this->analyze(['body' => 'precio', 'auto_execute' => false])->assertOk();
+        $this->assertDatabaseMissing('marketing_messages', ['direction' => 'outbound']);
+    }
+
     // ── Gate de pago productivo ───────────────────────────────────────────────
 
     public function test_sandbox_wompi_never_generates_link_defers_to_human(): void

@@ -101,6 +101,32 @@ class InboundWebhookTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_auto_execute_inbound_creates_outbound_reply(): void
+    {
+        // Agente + auto_execute ON → el inbound "precio" debe generar un OUTBOUND
+        // de la IA (lo que faltaba en VPS: la acción quedaba executed sin outbound).
+        // Meta off aquí → dry_run determinista; el envío real se prueba aparte.
+        config()->set('marketing.agent_enabled', true);
+        config()->set('marketing.inbound.auto_execute', true);
+
+        $this->postMeta($this->textPayload('wamid.PRECIO', '573150536026', 'precio'))->assertOk();
+
+        $lead = MarketingLead::where('meta_user_id', '573150536026')->first();
+        $conv = MarketingConversation::where('lead_id', $lead->id)->first();
+
+        // Outbound de la IA creado con el reply (antes NO existía).
+        $this->assertDatabaseHas('marketing_messages', [
+            'conversation_id' => $conv->id,
+            'direction'       => 'outbound',
+            'sender_type'     => 'ai',
+            'status'          => 'dry_run',
+        ]);
+        // La acción IA reply quedó executed PORQUE se creó el outbound.
+        $this->assertDatabaseHas('marketing_ai_actions', [
+            'lead_id' => $lead->id, 'action_type' => 'reply', 'status' => 'executed',
+        ]);
+    }
+
     public function test_duplicate_message_does_not_duplicate_nor_reanalyze(): void
     {
         $payload = $this->textPayload('wamid.DUP', '573150536026', 'hola');
