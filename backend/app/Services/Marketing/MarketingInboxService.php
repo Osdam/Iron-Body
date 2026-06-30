@@ -21,7 +21,10 @@ class MarketingInboxService
 
         $query = MarketingConversation::query()
             ->with([
-                'lead:id,name,phone,channel,status,temperature,lead_stage,do_not_contact',
+                // OJO: lead_stage vive en marketing_conversations, NO en
+                // marketing_leads. Pedirlo aquí rompía la consulta (SQL 42703)
+                // y dejaba la lista vacía aunque las métricas sí contaran.
+                'lead:id,name,phone,channel,status,temperature,objective,do_not_contact',
                 'assignedAdmin:id,name',
                 'tags:id,conversation_id,tag',
             ])
