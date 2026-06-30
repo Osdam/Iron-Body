@@ -415,31 +415,50 @@ class SalesAgentOrchestratorService
 
     /** Palabras que indican una pregunta de precio EXPLÍCITA en el mensaje actual. */
     private const PRICING_KEYWORDS = [
-        'precio', 'precios', 'valor', 'cuanto vale', 'cuanto cuesta', 'cuanto sale',
-        'cuanto es', 'mensualidad', 'planes', 'tarifa',
+        'precio', 'precios', 'valor', 'valores', 'cuanto vale', 'cuanto cuesta',
+        'cuanto sale', 'cuanto es', 'mensualidad', 'planes', 'tarifa',
+    ];
+
+    /** Señales EXPLÍCITAS de objeción de precio en el mensaje actual. */
+    private const OBJECTION_SIGNALS = [
+        'caro', 'costoso', 'carisim', 'no me alcanza', 'presupuesto', 'mucha plata',
     ];
 
     /**
-     * Si el mensaje actual pregunta precio explícitamente, fuerza pricing_question
-     * por encima de un objetivo histórico (goal_*) o de intenciones genéricas. El
-     * objetivo se conserva en extracted_fields.goal. No pisa pago/escalado/opt-out.
+     * Override determinista de intención (Laravel tiene la última palabra):
+     *
+     *  - Si el MENSAJE ACTUAL es una pregunta de precio explícita (precio, valor,
+     *    cuánto vale/cuesta, mensualidad, planes…) y NO trae señales de objeción
+     *    ("caro", "costoso", "no me alcanza"…), se fuerza pricing_question aunque
+     *    el modelo (por el historial) haya dicho price_objection / goal_* / etc.
+     *  - NUNCA pisa intenciones de mayor prioridad: pedir humano / médico / queja /
+     *    fraude-pago / opt-out / pago. Esas mandan sobre la pregunta de precio.
+     *
+     * El objetivo histórico (si venía de un goal_*) se conserva en
+     * extracted_fields.goal. Orden de prioridad respetado:
+     *   1) humano/médico/queja/factura/problema de pago  2) intención de pago
+     *   3) pregunta de precio  4) ubicación  5) horario  6) objetivos  7) objeciones
      *
      * @return array{0:string,1:array}
      */
     private function applyPricingKeywordOverride(string $intent, array $cls, string $body): array
     {
-        if (! $this->mentionsPricing($body)) {
+        // El mensaje actual debe ser una pregunta de precio SIN señal de objeción.
+        if (! $this->mentionsPricing($body) || $this->mentionsObjection($body)) {
             return [$intent, $cls];
         }
 
-        $overridable = array_merge(SalesIntents::GOAL_INTENTS, [
-            SalesIntents::GENERAL_INFO, SalesIntents::UNKNOWN,
-        ]);
-        if (! in_array($intent, $overridable, true)) {
+        // Intenciones de mayor prioridad que la pregunta de precio: no se tocan.
+        $protected = array_merge(
+            SalesIntents::PAYMENT_INTENTS,
+            SalesIntents::ESCALATION_INTENTS,
+            [SalesIntents::DO_NOT_CONTACT_REQUEST, SalesIntents::SPAM_LOW_QUALITY],
+        );
+        if (in_array($intent, $protected, true)) {
             return [$intent, $cls];
         }
 
-        // Preserva el objetivo histórico que traía la intención de goal.
+        // Preserva el objetivo histórico que traía una intención de goal.
         if ($intent === SalesIntents::GOAL_FAT_LOSS) {
             $cls['extracted_fields']['goal'] = 'fat_loss';
         } elseif ($intent === SalesIntents::GOAL_MUSCLE_GAIN) {
@@ -453,6 +472,17 @@ class SalesAgentOrchestratorService
     {
         $needle = $this->normalizeText($body);
         foreach (self::PRICING_KEYWORDS as $kw) {
+            if (str_contains($needle, $kw)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function mentionsObjection(string $body): bool
+    {
+        $needle = $this->normalizeText($body);
+        foreach (self::OBJECTION_SIGNALS as $kw) {
             if (str_contains($needle, $kw)) {
                 return true;
             }

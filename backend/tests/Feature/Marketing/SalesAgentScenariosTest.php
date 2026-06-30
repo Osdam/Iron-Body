@@ -119,6 +119,45 @@ class SalesAgentScenariosTest extends TestCase
         $this->assertStringNotContainsStringIgnoringCase('link', (string) $reply);
     }
 
+    public function test_precio_overrides_price_objection_from_history(): void
+    {
+        // Bug VPS: con historial de objeciones, OpenAI clasifica "precio" como
+        // price_objection. Laravel DEBE forzar pricing_question.
+        config()->set('marketing.ai.driver', 'openai');
+        config()->set('marketing.ai.openai.enabled', true);
+        config()->set('marketing.ai.openai.model', 'gpt-test');
+        config()->set('services.openai.api_key', 'sk-test');
+
+        Http::fake([
+            'api.openai.com/*' => Http::response(['choices' => [['message' => ['content' => json_encode([
+                'intent' => SalesIntents::PRICE_OBJECTION, 'confidence' => 0.9,
+                'reply' => 'Entiendo que te parezca caro...', 'tools_requested' => ['reply'],
+            ])]]]], 200),
+            '*' => Http::response([], 200),
+        ]);
+
+        $reply = $this->analyze(['body' => 'precio'])
+            ->assertOk()
+            ->assertJsonPath('decision.intent', SalesIntents::PRICING_QUESTION)
+            ->assertJsonPath('decision.recommended_action', SalesIntents::ACTION_REPLY)
+            ->assertJsonPath('decision.should_generate_payment_link', false)
+            ->assertJsonPath('decision.payment_readiness', 'sandbox_pending')
+            ->json('decision.reply');
+
+        // Cotiza precio real, NO suena a objeción ("caro").
+        $this->assertStringContainsString('$80.000 COP', (string) $reply);
+        $this->assertStringNotContainsStringIgnoringCase('caro', (string) $reply);
+    }
+
+    public function test_explicit_objection_stays_price_objection(): void
+    {
+        // Con señal explícita de objeción en el mensaje actual, NO se fuerza pricing.
+        $this->analyze(['body' => 'el precio está caro'])
+            ->assertOk()
+            ->assertJsonPath('decision.intent', SalesIntents::PRICE_OBJECTION)
+            ->assertJsonPath('decision.recommended_action', SalesIntents::ACTION_REGISTER_OBJECTION);
+    }
+
     public function test_quiero_bajar_barriga_is_goal_fat_loss_and_remembers_objective(): void
     {
         $res = $this->analyze(['body' => 'quiero bajar barriga'])
