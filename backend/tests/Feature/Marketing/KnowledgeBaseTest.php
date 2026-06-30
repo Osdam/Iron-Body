@@ -203,7 +203,7 @@ class KnowledgeBaseTest extends TestCase
         Http::fake([
             'api.openai.com/*' => Http::response(['choices' => [['message' => ['content' => json_encode([
                 'intent' => SalesIntents::PRICING_QUESTION, 'confidence' => 0.9,
-                'reply' => 'La mensualidad son $80.000 al mes.', 'tools_requested' => ['reply'],
+                'reply' => 'La mensualidad son $999.999 al mes.', 'tools_requested' => ['reply'],
             ])]]]], 200),
             '*' => Http::response([], 200),
         ]);
@@ -212,8 +212,9 @@ class KnowledgeBaseTest extends TestCase
             'marketing_lead_id' => $this->lead()->id, 'body' => 'precio?',
         ], $this->headers())->assertOk()->json('decision.reply');
 
-        $this->assertStringNotContainsString('$', $reply);
-        $this->assertStringNotContainsString('80.000', $reply);
+        // El precio inventado por el modelo se descarta; Laravel cotiza el REAL.
+        $this->assertStringNotContainsString('999.999', $reply);
+        $this->assertStringContainsString('$80.000 COP', $reply);
     }
 
     public function test_medical_and_do_not_contact_still_safe_with_knowledge(): void

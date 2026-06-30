@@ -29,6 +29,11 @@ class PricingReplyTest extends TestCase
         config()->set('meta.enabled', false);
         config()->set('marketing.ai.enabled', true);
         config()->set('marketing.ai.driver', 'fake');
+        // Wompi PRODUCTIVO: el cierre de precio puede ofrecer el link seguro.
+        config()->set('wompi', array_merge((array) config('wompi'), [
+            'env' => 'production', 'public_key' => 'pub_prod', 'integrity_secret' => 'int_prod',
+            'checkout' => ['base_url' => 'https://checkout.wompi.co/p/'],
+        ]));
 
         $this->plan = Plan::create([
             'name' => 'Plan Mensual', 'price' => 80000, 'duration_days' => 30, 'active' => true,
@@ -77,9 +82,12 @@ class PricingReplyTest extends TestCase
         $this->assertStringContainsString('$80.000 COP', $reply);
     }
 
-    public function test_pricing_without_plan_does_not_invent_price(): void
+    public function test_pricing_without_active_plan_does_not_invent_price(): void
     {
-        // Mensaje genérico de precio, sin plan_id ni nombre de plan.
+        // Sin NINGÚN plan activo, una pregunta de precio NO inventa valores:
+        // pregunta el objetivo. (Con plan mensual activo sí se cotiza el real.)
+        $this->plan->update(['active' => false]);
+
         $reply = $this->analyze(['body' => '¿cuánto vale?'])
             ->assertOk()
             ->assertJsonPath('decision.intent', SalesIntents::PRICING_QUESTION)

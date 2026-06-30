@@ -101,7 +101,33 @@ class MarketingKnowledgeSeeder extends Seeder
             // ── human_escalation ─────────────────────────────────────────────
             ['key' => 'escalation.rules', 'category' => 'human_escalation', 'priority' => 10,
              'title' => 'Cuándo escalar',
-             'content' => 'Escalar casos médicos, reclamos, devoluciones, facturación sensible, disputas de pago o clientes molestos.'],
+             'content' => 'Escalar casos médicos, reclamos, devoluciones, facturación sensible, disputas de pago, clientes molestos o cuando el cliente pida hablar con una persona.'],
+
+            // ── location ─────────────────────────────────────────────────────
+            // CONSERVADOR: no inventa dirección exacta; una persona la confirma.
+            ['key' => 'location.city', 'category' => 'location', 'priority' => 10,
+             'title' => 'Ubicación',
+             'content' => 'Iron Body está en Neiva, Huila. Para la dirección exacta y cómo llegar, una persona del equipo comparte la ubicación; el asesor no inventa direcciones.'],
+
+            // ── gym_info (información general del gimnasio) ───────────────────
+            ['key' => 'gym.benefits', 'category' => 'gym_info', 'priority' => 10,
+             'title' => 'Beneficios',
+             'content' => 'En Iron Body entrenas en un lugar serio, con estructura y acompañamiento para avanzar con seguridad hacia tu objetivo (bajar grasa, ganar masa, condición o retomar).'],
+            ['key' => 'gym.accompaniment', 'category' => 'gym_info', 'priority' => 20,
+             'title' => 'Acompañamiento',
+             'content' => 'El equipo acompaña al cliente desde el primer día: orientación en la técnica, en la rutina y en la constancia. No se promete resultados garantizados.'],
+            ['key' => 'gym.environment', 'category' => 'gym_info', 'priority' => 30,
+             'title' => 'Ambiente',
+             'content' => 'El ambiente es respetuoso y motivador, pensado para que cualquier persona se sienta cómoda entrenando, sin importar su nivel.'],
+            ['key' => 'gym.beginners', 'category' => 'gym_info', 'priority' => 40,
+             'title' => 'Principiantes',
+             'content' => 'Quien nunca ha entrenado es bienvenido. Se empieza desde cero, sin pena y a su ritmo, con acompañamiento para que aprenda los movimientos con seguridad.'],
+            ['key' => 'gym.includes', 'category' => 'gym_info', 'priority' => 50,
+             'title' => 'Qué incluye',
+             'content' => 'Lo que incluye cada plan (clases, acceso, beneficios) sale de los planes activos del sistema (active_plans). El asesor no inventa beneficios que no estén ahí.'],
+            ['key' => 'gym.how_to_start', 'category' => 'gym_info', 'priority' => 60,
+             'title' => 'Cómo empezar',
+             'content' => 'Para empezar: se define el objetivo, se elige un plan activo y se realiza el pago seguro (link Wompi cuando esté disponible); la membresía queda activa al confirmarse el pago en el sistema.'],
         ];
     }
 }

@@ -166,9 +166,10 @@ class OpenAiSalesResponderTest extends TestCase
     public function test_invented_price_in_reply_is_corrected(): void
     {
         $this->enableOpenAi();
+        // El modelo INVENTA un precio equivocado; Laravel cotiza el REAL desde DB.
         $this->fakeOpenAi([
             'intent' => SalesIntents::PRICING_QUESTION, 'confidence' => 0.9,
-            'reply' => 'La mensualidad cuesta $80.000 al mes.', 'tools_requested' => ['reply'],
+            'reply' => 'La mensualidad cuesta $999.999 al mes.', 'tools_requested' => ['reply'],
         ]);
 
         $reply = $this->analyze(['body' => 'precio?'])
@@ -176,8 +177,9 @@ class OpenAiSalesResponderTest extends TestCase
             ->assertJsonPath('decision.responder', 'openai')
             ->json('decision.reply');
 
-        $this->assertStringNotContainsString('$', $reply);
-        $this->assertStringNotContainsString('80.000', $reply);
+        // El precio inventado por el modelo se descarta; aparece el REAL de DB.
+        $this->assertStringNotContainsString('999.999', $reply);
+        $this->assertStringContainsString('$80.000 COP', $reply);
     }
 
     public function test_medical_risk_still_escalates_with_openai(): void
@@ -213,6 +215,9 @@ class OpenAiSalesResponderTest extends TestCase
 
     public function test_payment_link_auto_execute_uses_dry_run_with_openai(): void
     {
+        // Wompi PRODUCTIVO: el agente sí puede preparar el link (en dry_run porque
+        // META está off). Con sandbox, el link queda bloqueado (otro test).
+        config()->set('wompi.env', 'production');
         $this->enableOpenAi();
         $this->fakeOpenAi([
             'intent' => SalesIntents::PAYMENT_LINK_REQUEST, 'confidence' => 0.95,

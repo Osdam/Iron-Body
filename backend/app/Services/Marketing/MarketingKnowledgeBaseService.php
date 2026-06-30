@@ -16,7 +16,7 @@ class MarketingKnowledgeBaseService
 {
     /** Categorías que el prompt del cerebro debe recibir (orden de presentación). */
     public const PROMPT_CATEGORIES = [
-        'business_identity', 'location', 'schedule', 'payment_policy',
+        'business_identity', 'location', 'schedule', 'gym_info', 'payment_policy',
         'membership_policy', 'invoice_policy', 'objections', 'restrictions',
         'tone', 'faq', 'human_escalation',
     ];
@@ -77,6 +77,24 @@ class MarketingKnowledgeBaseService
     public function activePlansCount(): int
     {
         return Plan::where('active', true)->count();
+    }
+
+    /**
+     * Plan mensual / ancla activo (fuente de precio para una pregunta de precio
+     * genérica). Por duración (~30 días) o por nombre; si no hay, el primer plan
+     * activo por orden. null si no hay ningún plan activo (entonces NO se cotiza).
+     */
+    public function defaultMonthlyPlan(): ?Plan
+    {
+        $monthly = Plan::where('active', true)
+            ->where(function ($q) {
+                $q->whereBetween('duration_days', [28, 31])
+                    ->orWhere('name', 'like', '%ensual%'); // mensual / Mensualidad
+            })
+            ->orderBy('sort_order')
+            ->first();
+
+        return $monthly ?? Plan::where('active', true)->orderBy('sort_order')->first();
     }
 
     /**

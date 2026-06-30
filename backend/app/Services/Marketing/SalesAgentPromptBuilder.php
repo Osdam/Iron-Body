@@ -12,8 +12,10 @@ use App\Models\MarketingLead;
  */
 class SalesAgentPromptBuilder
 {
-    public function __construct(private readonly MarketingKnowledgeBaseService $knowledge)
-    {
+    public function __construct(
+        private readonly MarketingKnowledgeBaseService $knowledge,
+        private readonly SalesPaymentReadinessService $paymentReadiness = new SalesPaymentReadinessService(),
+    ) {
     }
 
     /** Prompt del sistema: marca, tono, reglas duras y contrato JSON. */
@@ -29,6 +31,23 @@ class SalesAgentPromptBuilder
         Eres el asesor comercial de IRON BODY NEIVA, un centro de acondicionamiento físico.
         Tu rol: vender de forma ÉTICA y consultiva por WhatsApp. Tono humano, cálido, claro
         y BREVE (1-3 frases), nunca robótico. Calificas, guías, cierras y escalas cuando toca.
+
+        ESTILO DE ASESOR (no vendedor agresivo):
+        - Mensajes cortos tipo WhatsApp. Como MÁXIMO UNA pregunta al final.
+        - Si el lead está frío o tibio, PRIMERO diagnostica su objetivo (bajar grasa, ganar
+          masa, condición, retomar, salud) antes de empujar un plan o un pago.
+        - Cierra (ofrecer pago) SOLO cuando el lead muestra intención alta y clara.
+        - Ante objeciones (precio, tiempo, pena de empezar, "nunca he entrenado", "lo pienso",
+          "después voy"): responde con EMPATÍA + un beneficio concreto + una pregunta suave.
+        - Usa la `memory` del contexto (resumen y objetivo ya detectado) para dar continuidad;
+          no vuelvas a preguntar lo que el lead ya dijo. NO uses frases como "como mencionamos
+          antes" salvo que el mensaje actual sea claramente una continuación.
+        - Si el mensaje actual pregunta PRECIO de forma explícita (precio, valor, cuánto vale,
+          cuánto cuesta, mensualidad, planes), responde el precio/planes aunque antes se haya
+          hablado de un objetivo: la pregunta de precio manda.
+        - PAGO: si flags.can_offer_link es false, NUNCA menciones ni ofrezcas un "link" de pago
+          (ni "link seguro", "te envío el link", "pagar por aquí"). Si el lead quiere pagar, di
+          que un asesor le comparte el medio de pago. Solo ofrece link si can_offer_link es true.
 
         USA ÚNICAMENTE la información del bloque knowledge_base y active_plans que recibes en
         el contexto. Es tu fuente oficial. NO inventes datos que no estén ahí.
@@ -83,6 +102,7 @@ class SalesAgentPromptBuilder
                 'objective'      => $lead->objective,
                 'do_not_contact' => (bool) $lead->do_not_contact,
             ],
+            'memory'          => $this->conversationMemory($conversation),
             'recent_messages' => $this->recentMessages($conversation),
             'knowledge_base'  => $this->knowledge->groupedForPrompt(),
             'active_plans'    => $this->knowledge->activePlans(),
@@ -90,6 +110,8 @@ class SalesAgentPromptBuilder
                 'meta_enabled'          => (bool) config('meta.enabled'),
                 'whatsapp_mode'         => config('meta.enabled') ? 'live' : 'dry_run',
                 'wompi_env'             => (string) config('wompi.env', 'sandbox'),
+                'payment_readiness'     => $this->paymentReadiness->state(),
+                'can_offer_link'        => $this->paymentReadiness->canGenerateAutomaticLink(),
                 'marketing_agent_enabled' => (bool) config('marketing.agent_enabled', false),
             ],
             'guardrails' => [
@@ -99,6 +121,23 @@ class SalesAgentPromptBuilder
         ];
 
         return json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /** Memoria comercial corta de la conversación (continuidad entre análisis). */
+    private function conversationMemory(?MarketingConversation $conversation): array
+    {
+        if ($conversation === null) {
+            return [];
+        }
+
+        return array_filter([
+            'summary'            => $conversation->summary,
+            'detected_objective' => $conversation->detected_objective,
+            'lead_score'         => $conversation->lead_score,
+            'lead_stage'         => $conversation->lead_stage,
+            'primary_intent'     => $conversation->primary_intent,
+            'last_intent'        => $conversation->last_intent,
+        ], fn ($v) => $v !== null && $v !== '');
     }
 
     /** @return array<int, array{role:string, body:?string, at:?string}> */

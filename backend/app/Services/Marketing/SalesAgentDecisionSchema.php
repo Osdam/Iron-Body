@@ -13,12 +13,21 @@ final class SalesAgentDecisionSchema
         SalesIntents::PRICING_QUESTION,
         SalesIntents::PAYMENT_LINK_REQUEST,
         SalesIntents::PRICE_OBJECTION,
+        SalesIntents::TIME_OBJECTION,
+        SalesIntents::DELAY_OBJECTION,
+        SalesIntents::BEGINNER_FEAR,
         SalesIntents::LOCATION_QUESTION,
         SalesIntents::SCHEDULE_QUESTION,
+        SalesIntents::GENERAL_INFO,
+        SalesIntents::GOAL_FAT_LOSS,
+        SalesIntents::GOAL_MUSCLE_GAIN,
         SalesIntents::HIGH_INTENT_CLOSE,
+        SalesIntents::HUMAN_REQUEST,
+        SalesIntents::COMPLAINT,
         SalesIntents::MEDICAL_RISK_ESCALATION,
         SalesIntents::FRAUD_OR_PAYMENT_CLAIM,
         SalesIntents::DO_NOT_CONTACT_REQUEST,
+        SalesIntents::SPAM_LOW_QUALITY,
         SalesIntents::UNKNOWN,
     ];
 
@@ -30,6 +39,13 @@ final class SalesAgentDecisionSchema
     public const STAGES = [
         SalesIntents::STAGE_DISCOVERY, SalesIntents::STAGE_OBJECTION,
         SalesIntents::STAGE_CLOSING, SalesIntents::STAGE_RISK, SalesIntents::STAGE_OPT_OUT,
+    ];
+
+    /** Taxonomía comercial del lead (la deriva Laravel, no el modelo). */
+    public const LEAD_STAGES = [
+        SalesIntents::LEAD_STAGE_NEW, SalesIntents::LEAD_STAGE_INFORMED,
+        SalesIntents::LEAD_STAGE_INTERESTED, SalesIntents::LEAD_STAGE_READY_TO_PAY,
+        SalesIntents::LEAD_STAGE_NEEDS_HUMAN, SalesIntents::LEAD_STAGE_LOST,
     ];
 
     public const RECOMMENDED_ACTIONS = [

@@ -101,6 +101,9 @@ class SalesAgentTest extends TestCase
     public function test_auto_execute_true_payment_link_runs_in_dry_run(): void
     {
         Http::fake();
+        // Wompi PRODUCTIVO: el agente puede preparar el link (dry_run porque META
+        // está off). En sandbox el link se bloquea (ver test del gate de pago).
+        config()->set('wompi.env', 'production');
 
         $res = $this->analyze([
             'body' => 'link de pago por favor', 'plan_id' => $this->plan->id, 'auto_execute' => true,
@@ -170,8 +173,10 @@ class SalesAgentTest extends TestCase
 
     public function test_does_not_invent_prices_in_reply(): void
     {
+        // Sin plan activo NO se inventa precio: se pregunta el objetivo.
+        $this->plan->update(['active' => false]);
+
         $reply = $this->analyze(['body' => 'cuánto cuesta?'])->json('decision.reply');
-        // La respuesta de precio pregunta el objetivo; NO contiene un precio.
         $this->assertStringNotContainsString('$', $reply);
         $this->assertStringNotContainsString('COP', $reply);
     }

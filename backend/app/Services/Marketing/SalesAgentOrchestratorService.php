@@ -26,6 +26,8 @@ class SalesAgentOrchestratorService
         private readonly SalesPaymentGuardrailService $paymentGuardrail,
         private readonly MarketingMessageDispatcher $dispatcher,
         private readonly MarketingKnowledgeBaseService $knowledge,
+        private readonly SalesConversationMemoryService $memory,
+        private readonly SalesPaymentReadinessService $paymentReadiness,
     ) {
     }
 
@@ -50,6 +52,7 @@ class SalesAgentOrchestratorService
         ]);
 
         $action   = $this->persist($lead, $conversation->id, $messageId, $decision, $autoExecute);
+        $this->memory->remember($conversation, $decision, $body);
         $executed = $autoExecute ? $this->execute($lead->fresh(), $conversation, $decision, $plan) : [];
 
         return [
@@ -69,6 +72,11 @@ class SalesAgentOrchestratorService
         $cls    = $this->classifier->classify($body, $context);
         $intent = $cls['intent'];
 
+        // Override determinista: si el MENSAJE ACTUAL pregunta precio de forma
+        // explícita, pricing_question gana sobre el objetivo histórico (que pudo
+        // venir del historial vía OpenAI). El objetivo queda en extracted_fields.
+        [$intent, $cls] = $this->applyPricingKeywordOverride($intent, $cls, $body);
+
         $temperature = $this->scoring->temperature($intent);
         $stage       = $this->scoring->salesStage($intent);
 
@@ -84,8 +92,33 @@ class SalesAgentOrchestratorService
             $esc['risk_flags'], (array) ($cls['risk_flags'] ?? []),
         )));
 
+        // Scoring comercial (0-100), etapa del lead y temperatura simplificada.
+        $score     = $this->scoring->score($intent, [
+            'objective'        => $lead->objective,
+            'extracted_fields' => $cls['extracted_fields'],
+        ]);
+        $leadStage = $this->scoring->leadStage($intent, $shouldEscalate);
+        $crmTemp   = $this->scoring->crmTemperature($intent);
+
+        // Preparación de pago: si Wompi NO es productivo, el bot NO entrega ni
+        // MENCIONA un link (sandbox o sin configurar): un asesor comparte el medio
+        // de pago. Regla incondicional — no depende de Meta ni de dry_run.
+        $paymentState   = $this->paymentReadiness->state();
+        $canLink        = $this->paymentReadiness->canGenerateAutomaticLink();
+        $paymentBlocked = ! $canLink;
+        $context['can_link']        = $canLink;
+        $context['payment_blocked'] = $paymentBlocked;
+
         // Respuesta: la del modelo (ya saneada) si aplica; si no, la curada.
         $reply = $this->resolveReply($intent, $cls['reply'] ?? null, $shouldEscalate, $context, $body);
+
+        // Guardrail Wompi: si no es productivo, NINGUNA respuesta puede ofrecer un
+        // link de pago (defensa en profundidad sobre respuestas del modelo).
+        if (! $canLink && ! $shouldEscalate
+            && ! in_array($intent, SalesIntents::PAYMENT_INTENTS, true)
+            && $this->replies->offersLink($reply)) {
+            $reply = $this->replies->scrubLinkOffer($reply);
+        }
 
         $isPayment      = in_array($intent, SalesIntents::PAYMENT_INTENTS, true) && ! $shouldEscalate;
         $shouldSchedule = $this->scoring->shouldScheduleFollowup($temperature) && ! $shouldEscalate;
@@ -104,7 +137,11 @@ class SalesAgentOrchestratorService
             'intent'                        => $intent,
             'confidence'                    => $cls['confidence'],
             'temperature'                   => $temperature,
+            'crm_temperature'               => $crmTemp,
+            'lead_score'                    => $score,
+            'lead_stage'                    => $leadStage,
             'sales_stage'                   => $stage,
+            'payment_readiness'             => $paymentState,
             'should_reply'                  => $reply !== null,
             'should_generate_payment_link'  => $isPayment,
             'should_send_message'           => $reply !== null,
@@ -139,7 +176,10 @@ class SalesAgentOrchestratorService
                 'message_id'         => $messageId,
                 'intent'             => $decision['intent'],
                 'temperature'        => $decision['temperature'],
+                'lead_score'         => $decision['lead_score'] ?? null,
+                'lead_stage'         => $decision['lead_stage'] ?? null,
                 'sales_stage'        => $decision['sales_stage'],
+                'payment_readiness'  => $decision['payment_readiness'] ?? null,
                 'recommended_action' => $decision['recommended_action'],
                 'risk_flags'         => $decision['risk_flags'],
                 'tools_requested'    => $decision['tools_requested'],
@@ -151,9 +191,15 @@ class SalesAgentOrchestratorService
             ],
         ]);
 
-        // Refleja la temperatura en el lead (CRM Mercadeo) salvo do_not_contact.
+        // Refleja temperatura y objetivo detectado en el lead (CRM Mercadeo)
+        // salvo do_not_contact. El objetivo solo se fija si aún no había uno.
         if ($lead->isContactable()) {
-            $lead->forceFill(['temperature' => $this->crmTemperature($decision['temperature'])])->save();
+            $changes   = ['temperature' => $decision['crm_temperature'] ?? $this->crmTemperature($decision['temperature'])];
+            $objective = $decision['extracted_fields']['objective'] ?? null;
+            if (is_string($objective) && $objective !== '' && empty($lead->objective)) {
+                $changes['objective'] = $objective;
+            }
+            $lead->forceFill($changes)->save();
         }
 
         return $action;
@@ -235,6 +281,26 @@ class SalesAgentOrchestratorService
             return ['tool' => SalesIntents::TOOL_PAYMENT_LINK_SEND, 'status' => 'skipped', 'reason' => 'missing_plan_id'];
         }
 
+        // Gate de producción: nunca generar ni entregar un link no productivo
+        // (sandbox/sin configurar). En su lugar, un asesor comparte el medio de
+        // pago. Regla incondicional: aplica incluso en dry_run.
+        if (! $this->paymentReadiness->isProductionReady()) {
+            $body = $this->replies->paymentPendingReply();
+            $send = $this->dispatcher->dispatchWhatsapp($lead, $conversation->channel, $body, [
+                'kind' => 'payment_pending',
+            ]);
+
+            return [
+                'tool'          => SalesIntents::TOOL_PAYMENT_LINK_SEND,
+                'status'        => 'deferred_to_human',
+                'reason'        => 'wompi_not_production',
+                'payment_state' => $this->paymentReadiness->state(),
+                'sent'          => $send['sent'],
+                'dry_run'       => $send['dry_run'],
+                'prepared_body' => $body,
+            ];
+        }
+
         // Guardrail de pago (do_not_contact / plan activo / precio válido).
         try {
             $this->paymentGuardrail->assertCanGeneratePaymentLink($lead, $plan, []);
@@ -286,11 +352,19 @@ class SalesAgentOrchestratorService
         if ($intent === SalesIntents::DO_NOT_CONTACT_REQUEST) {
             return null;
         }
+        // Pago sin Wompi productivo: un asesor comparte el medio de pago (NUNCA un
+        // link sandbox como si fuera real, ni se menciona "link").
+        if (in_array($intent, SalesIntents::PAYMENT_INTENTS, true) && ($context['payment_blocked'] ?? false)) {
+            return $this->replies->paymentPendingReply();
+        }
         // Precio: DETERMINISTA desde la DB. Si el plan está identificado
         // (plan_id o nombre claro), el reply incluye el precio REAL; si no, no se
         // inventa (se pregunta objetivo/plan). No se confía en el modelo para esto.
         if ($intent === SalesIntents::PRICING_QUESTION) {
-            return $this->replies->pricingReply($this->resolvePricingPlan($context, $body));
+            return $this->replies->pricingReply(
+                $this->resolvePricingPlan($context, $body),
+                (bool) ($context['can_link'] ?? false),
+            );
         }
         if ($modelReply !== null && trim($modelReply) !== '') {
             return $modelReply;
@@ -299,9 +373,10 @@ class SalesAgentOrchestratorService
     }
 
     /**
-     * Resuelve el plan para una pregunta de precio: por plan_id del request o por
-     * nombre claro de un plan activo en el mensaje. Devuelve null si no hay un
-     * plan inequívoco (entonces NO se inventa precio).
+     * Resuelve el plan para una pregunta de precio: por plan_id del request, por
+     * nombre claro de un plan activo en el mensaje o, si la pregunta es genérica,
+     * el plan mensual/ancla activo. Devuelve null SOLO si no hay ningún plan
+     * activo (entonces NO se inventa precio: se pregunta el objetivo).
      */
     private function resolvePricingPlan(array $context, string $body): ?Plan
     {
@@ -311,16 +386,66 @@ class SalesAgentOrchestratorService
         }
 
         $needle = $this->normalizeText($body);
-        if ($needle === '') {
-            return null;
+        if ($needle !== '') {
+            $matches = Plan::where('active', true)->get()->filter(function (Plan $p) use ($needle) {
+                $name = $this->normalizeText((string) $p->name);
+                return strlen($name) >= 4 && str_contains($needle, $name);
+            });
+            if ($matches->count() === 1) {
+                return $matches->first();
+            }
         }
 
-        $matches = Plan::where('active', true)->get()->filter(function (Plan $p) use ($needle) {
-            $name = $this->normalizeText((string) $p->name);
-            return strlen($name) >= 4 && str_contains($needle, $name);
-        });
+        // Pregunta de precio genérica ("precio", "cuánto vale"): se cotiza el plan
+        // mensual/ancla REAL (no se inventa). null si no hay planes activos.
+        return $this->knowledge->defaultMonthlyPlan();
+    }
 
-        return $matches->count() === 1 ? $matches->first() : null;
+    /** Palabras que indican una pregunta de precio EXPLÍCITA en el mensaje actual. */
+    private const PRICING_KEYWORDS = [
+        'precio', 'precios', 'valor', 'cuanto vale', 'cuanto cuesta', 'cuanto sale',
+        'cuanto es', 'mensualidad', 'planes', 'tarifa',
+    ];
+
+    /**
+     * Si el mensaje actual pregunta precio explícitamente, fuerza pricing_question
+     * por encima de un objetivo histórico (goal_*) o de intenciones genéricas. El
+     * objetivo se conserva en extracted_fields.goal. No pisa pago/escalado/opt-out.
+     *
+     * @return array{0:string,1:array}
+     */
+    private function applyPricingKeywordOverride(string $intent, array $cls, string $body): array
+    {
+        if (! $this->mentionsPricing($body)) {
+            return [$intent, $cls];
+        }
+
+        $overridable = array_merge(SalesIntents::GOAL_INTENTS, [
+            SalesIntents::GENERAL_INFO, SalesIntents::UNKNOWN,
+        ]);
+        if (! in_array($intent, $overridable, true)) {
+            return [$intent, $cls];
+        }
+
+        // Preserva el objetivo histórico que traía la intención de goal.
+        if ($intent === SalesIntents::GOAL_FAT_LOSS) {
+            $cls['extracted_fields']['goal'] = 'fat_loss';
+        } elseif ($intent === SalesIntents::GOAL_MUSCLE_GAIN) {
+            $cls['extracted_fields']['goal'] = 'muscle_gain';
+        }
+
+        return [SalesIntents::PRICING_QUESTION, $cls];
+    }
+
+    private function mentionsPricing(string $body): bool
+    {
+        $needle = $this->normalizeText($body);
+        foreach (self::PRICING_KEYWORDS as $kw) {
+            if (str_contains($needle, $kw)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private function normalizeText(string $s): string

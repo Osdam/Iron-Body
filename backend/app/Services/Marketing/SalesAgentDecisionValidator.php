@@ -88,7 +88,13 @@ class SalesAgentDecisionValidator
         } elseif ($unsafeClaim) {
             $reason = 'unsafe_claim';
         } elseif (in_array($intent, SalesIntents::ESCALATION_INTENTS, true)) {
-            $reason = $intent === SalesIntents::MEDICAL_RISK_ESCALATION ? 'medical_case' : 'payment_or_fraud_claim';
+            $reason = match ($intent) {
+                SalesIntents::MEDICAL_RISK_ESCALATION => 'medical_case',
+                SalesIntents::FRAUD_OR_PAYMENT_CLAIM  => 'payment_or_fraud_claim',
+                SalesIntents::HUMAN_REQUEST           => 'human_requested',
+                SalesIntents::COMPLAINT               => 'complaint',
+                default                               => 'escalation',
+            };
         }
 
         return [

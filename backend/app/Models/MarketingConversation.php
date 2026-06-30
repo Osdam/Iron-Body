@@ -10,12 +10,16 @@ class MarketingConversation extends Model
 {
     protected $fillable = [
         'lead_id', 'channel', 'status', 'last_message_at', 'human_takeover', 'ai_enabled',
+        // Memoria comercial (aditivo).
+        'summary', 'detected_objective', 'lead_score', 'lead_stage',
+        'primary_intent', 'last_intent',
     ];
 
     protected $casts = [
         'last_message_at' => 'datetime',
         'human_takeover'  => 'boolean',
         'ai_enabled'      => 'boolean',
+        'lead_score'      => 'integer',
     ];
 
     public function lead(): BelongsTo
