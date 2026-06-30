@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\MarketingAppointmentController;
 use App\Http\Controllers\Api\Admin\MarketingController;
 use App\Http\Controllers\Api\Admin\MarketingInboxController;
 use App\Http\Controllers\Api\Internal\InternalMarketingController;
@@ -79,4 +80,24 @@ Route::middleware('throttle:120,1')
         Route::post('conversations/{id}/tags',                [MarketingInboxController::class, 'tags']);
         Route::patch('conversations/{id}/status',             [MarketingInboxController::class, 'status']);
         Route::post('conversations/{id}/staff-review/resolve', [MarketingInboxController::class, 'resolveStaffReview']);
+
+        // Citas de la conversación (panel "Citas del lead" del Inbox).
+        Route::get('conversations/{id}/appointments', [MarketingAppointmentController::class, 'forConversation']);
+    });
+
+// ── Agenda comercial / citas para leads (Fase 4B) ─────────────────────────────
+// Misma protección global de /api/admin/*. Autorización fina por rol/estado +
+// ownership en MarketingAppointmentAuthorizationService.
+Route::middleware('throttle:120,1')
+    ->prefix('admin/marketing/appointments')
+    ->where(['id' => '[0-9]+'])
+    ->group(function (): void {
+        Route::get('/',               [MarketingAppointmentController::class, 'index']);
+        Route::post('/',              [MarketingAppointmentController::class, 'store']);
+        Route::get('capabilities',    [MarketingAppointmentController::class, 'capabilities']);
+        Route::get('{id}',            [MarketingAppointmentController::class, 'show']);
+        Route::patch('{id}',          [MarketingAppointmentController::class, 'update']);
+        Route::post('{id}/complete',  [MarketingAppointmentController::class, 'complete']);
+        Route::post('{id}/cancel',    [MarketingAppointmentController::class, 'cancel']);
+        Route::post('{id}/reschedule', [MarketingAppointmentController::class, 'reschedule']);
     });
