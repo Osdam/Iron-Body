@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\MarketingAgentActionController;
 use App\Http\Controllers\Api\Admin\MarketingAppointmentController;
 use App\Http\Controllers\Api\Admin\MarketingController;
 use App\Http\Controllers\Api\Admin\MarketingInboxController;
@@ -83,6 +84,27 @@ Route::middleware('throttle:120,1')
 
         // Citas de la conversación (panel "Citas del lead" del Inbox).
         Route::get('conversations/{id}/appointments', [MarketingAppointmentController::class, 'forConversation']);
+
+        // Acciones del agente para la conversación (panel "Acciones sugeridas").
+        Route::get('conversations/{id}/agent-actions', [MarketingAgentActionController::class, 'forConversation']);
+        Route::post('conversations/{id}/agent-actions/recommend', [MarketingAgentActionController::class, 'recommendForConversation']);
+    });
+
+// ── Acciones CRM del agente comercial (Fase 4C) ───────────────────────────────
+// Human-in-the-loop: recomendar / aprobar / rechazar / ejecutar / cancelar.
+// Misma protección global de /api/admin/* + autorización fina por rol/estado.
+Route::middleware('throttle:120,1')
+    ->prefix('admin/marketing/agent-actions')
+    ->where(['id' => '[0-9]+'])
+    ->group(function (): void {
+        Route::get('/',              [MarketingAgentActionController::class, 'index']);
+        Route::get('capabilities',   [MarketingAgentActionController::class, 'capabilities']);
+        Route::post('recommend',     [MarketingAgentActionController::class, 'recommend']);
+        Route::get('{id}',           [MarketingAgentActionController::class, 'show']);
+        Route::post('{id}/approve',  [MarketingAgentActionController::class, 'approve']);
+        Route::post('{id}/reject',   [MarketingAgentActionController::class, 'reject']);
+        Route::post('{id}/execute',  [MarketingAgentActionController::class, 'execute']);
+        Route::post('{id}/cancel',   [MarketingAgentActionController::class, 'cancel']);
     });
 
 // ── Agenda comercial / citas para leads (Fase 4B) ─────────────────────────────
