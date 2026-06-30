@@ -65,6 +65,7 @@ Route::middleware('throttle:120,1')
     ->group(function (): void {
         Route::get('conversations',                      [MarketingInboxController::class, 'index']);
         Route::get('metrics',                            [MarketingInboxController::class, 'metrics']);
+        Route::get('capabilities',                       [MarketingInboxController::class, 'capabilities']);
         Route::get('conversations/{id}',                 [MarketingInboxController::class, 'show']);
 
         // Envío manual (throttle más estricto para frenar spam de salida).

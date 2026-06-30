@@ -8,6 +8,7 @@ use App\Models\MarketingConversation;
 use App\Services\Marketing\MarketingConversationAssignmentService;
 use App\Services\Marketing\MarketingConversationNoteService;
 use App\Services\Marketing\MarketingConversationTagService;
+use App\Services\Marketing\MarketingInboxAuthorizationService;
 use App\Services\Marketing\MarketingInboxService;
 use App\Services\Marketing\MarketingManualReplyService;
 use App\Services\Marketing\MarketingManualTakeoverService;
@@ -28,8 +29,10 @@ use Illuminate\Validation\Rule;
  */
 class MarketingInboxController extends Controller
 {
-    public function __construct(private readonly MarketingInboxService $inbox)
-    {
+    public function __construct(
+        private readonly MarketingInboxService $inbox,
+        private readonly MarketingInboxAuthorizationService $authz,
+    ) {
     }
 
     /** El admin autenticado (sesión real). Null cuando se usa el secreto compartido. */
@@ -40,6 +43,32 @@ class MarketingInboxController extends Controller
         return $admin instanceof Admin ? $admin->id : null;
     }
 
+    private function admin(Request $request): ?Admin
+    {
+        $admin = $request->attributes->get('auth_admin');
+
+        return $admin instanceof Admin ? $admin : null;
+    }
+
+    /**
+     * Verifica una capacidad del Inbox. Devuelve la respuesta de rechazo
+     * (401/403) o null si está permitida. Toda la lógica de permisos vive en
+     * MarketingInboxAuthorizationService (no dispersa en el controlador).
+     */
+    private function guard(Request $request, string $capability): ?JsonResponse
+    {
+        $deny = $this->authz->deny($this->admin($request), $capability);
+        if ($deny !== null) {
+            return response()->json([
+                'ok'      => false,
+                'code'    => $deny['code'],
+                'message' => $deny['message'],
+            ], $deny['status']);
+        }
+
+        return null;
+    }
+
     private function findConversation(int $id): ?MarketingConversation
     {
         return MarketingConversation::find($id);
@@ -48,6 +77,10 @@ class MarketingInboxController extends Controller
     // ── 1. Lista ──────────────────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
     {
+        if ($r = $this->guard($request, MarketingInboxAuthorizationService::CAP_VIEW)) {
+            return $r;
+        }
+
         $request->validate([
             'q'            => ['nullable', 'string', 'max:80'],
             'status'       => ['nullable', Rule::in(['open', 'closed', 'snoozed', 'pending'])],
@@ -75,6 +108,10 @@ class MarketingInboxController extends Controller
     // ── 2. Detalle ──────────────────────────────────────────────────────────────
     public function show(Request $request, int $id): JsonResponse
     {
+        if ($r = $this->guard($request, MarketingInboxAuthorizationService::CAP_VIEW)) {
+            return $r;
+        }
+
         $conversation = $this->findConversation($id);
         if (! $conversation) {
             return $this->notFound();
@@ -86,6 +123,10 @@ class MarketingInboxController extends Controller
     // ── 3. Envío manual ──────────────────────────────────────────────────────────
     public function sendMessage(Request $request, int $id, MarketingManualReplyService $replies): JsonResponse
     {
+        if ($r = $this->guard($request, MarketingInboxAuthorizationService::CAP_REPLY)) {
+            return $r;
+        }
+
         $data = $request->validate([
             'body'     => ['required', 'string', 'min:1', 'max:4096'],
             'pause_ai' => ['nullable', 'boolean'],
@@ -119,6 +160,10 @@ class MarketingInboxController extends Controller
     // ── 4. Pausar IA (manual) ────────────────────────────────────────────────────
     public function takeover(Request $request, int $id, MarketingManualTakeoverService $takeover): JsonResponse
     {
+        if ($r = $this->guard($request, MarketingInboxAuthorizationService::CAP_TAKEOVER)) {
+            return $r;
+        }
+
         $data = $request->validate(['reason' => ['nullable', 'string', 'max:500']]);
 
         $conversation = $this->findConversation($id);
@@ -134,6 +179,10 @@ class MarketingInboxController extends Controller
     // ── 5. Reactivar IA (manual) ─────────────────────────────────────────────────
     public function release(Request $request, int $id, MarketingManualTakeoverService $takeover): JsonResponse
     {
+        if ($r = $this->guard($request, MarketingInboxAuthorizationService::CAP_RELEASE)) {
+            return $r;
+        }
+
         $conversation = $this->findConversation($id);
         if (! $conversation) {
             return $this->notFound();
@@ -147,6 +196,10 @@ class MarketingInboxController extends Controller
     // ── 6. Asignar asesor ────────────────────────────────────────────────────────
     public function assign(Request $request, int $id, MarketingConversationAssignmentService $assignment): JsonResponse
     {
+        if ($r = $this->guard($request, MarketingInboxAuthorizationService::CAP_ASSIGN)) {
+            return $r;
+        }
+
         $data = $request->validate([
             'assigned_to_admin_id' => ['nullable', 'integer', 'exists:admins,id'],
         ]);
@@ -168,6 +221,10 @@ class MarketingInboxController extends Controller
     // ── 7. Nota interna ──────────────────────────────────────────────────────────
     public function addNote(Request $request, int $id, MarketingConversationNoteService $notes): JsonResponse
     {
+        if ($r = $this->guard($request, MarketingInboxAuthorizationService::CAP_NOTE)) {
+            return $r;
+        }
+
         $data = $request->validate(['body' => ['required', 'string', 'min:1', 'max:2000']]);
 
         $conversation = $this->findConversation($id);
@@ -187,6 +244,10 @@ class MarketingInboxController extends Controller
     // ── 8. Tags ──────────────────────────────────────────────────────────────────
     public function tags(Request $request, int $id, MarketingConversationTagService $tags): JsonResponse
     {
+        if ($r = $this->guard($request, MarketingInboxAuthorizationService::CAP_TAG)) {
+            return $r;
+        }
+
         $data = $request->validate([
             'add'      => ['nullable', 'array', 'max:10'],
             'add.*'    => ['string', 'max:40'],
@@ -207,6 +268,10 @@ class MarketingInboxController extends Controller
     // ── 9. Estado operativo ──────────────────────────────────────────────────────
     public function status(Request $request, int $id): JsonResponse
     {
+        if ($r = $this->guard($request, MarketingInboxAuthorizationService::CAP_UPDATE_STATUS)) {
+            return $r;
+        }
+
         $data = $request->validate([
             'status'       => ['required', Rule::in(['open', 'closed', 'snoozed'])],
             'snooze_until' => ['nullable', 'date', 'after:now'],
@@ -233,6 +298,10 @@ class MarketingInboxController extends Controller
     // ── 10. Resolver staff_review ────────────────────────────────────────────────
     public function resolveStaffReview(Request $request, int $id, MarketingStaffReviewService $staffReview): JsonResponse
     {
+        if ($r = $this->guard($request, MarketingInboxAuthorizationService::CAP_RESOLVE_REVIEW)) {
+            return $r;
+        }
+
         $data = $request->validate(['note' => ['nullable', 'string', 'max:500']]);
 
         $conversation = $this->findConversation($id);
@@ -248,7 +317,27 @@ class MarketingInboxController extends Controller
     // ── 11. Métricas ──────────────────────────────────────────────────────────────
     public function metrics(Request $request): JsonResponse
     {
+        if ($r = $this->guard($request, MarketingInboxAuthorizationService::CAP_VIEW_METRICS)) {
+            return $r;
+        }
+
         return response()->json(['ok' => true, 'data' => $this->inbox->metrics($this->adminId($request))]);
+    }
+
+    // ── 12. Capacidades del admin actual (para el frontend) ──────────────────────
+    // Requiere admin activo, pero devuelve el mapa aunque algunas capacidades
+    // sean false (un rol bloqueado recibe todo en false y el front oculta acciones).
+    public function capabilities(Request $request): JsonResponse
+    {
+        $admin = $this->admin($request);
+        if (! $admin instanceof Admin) {
+            return response()->json(['ok' => false, 'code' => 'inbox_requires_admin', 'message' => 'El Inbox requiere una sesión de administrador.'], 401);
+        }
+        if (! $admin->isActive()) {
+            return response()->json(['ok' => false, 'code' => 'inbox_admin_inactive', 'message' => 'Tu cuenta no está activa.'], 403);
+        }
+
+        return response()->json(['ok' => true, 'data' => $this->authz->frontendCapabilities($admin)]);
     }
 
     private function notFound(): JsonResponse
