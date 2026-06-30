@@ -24,14 +24,21 @@ final class SalesIntents
     public const TIME_OBJECTION          = 'time_objection';
     public const DELAY_OBJECTION         = 'delay_objection';
     public const BEGINNER_FEAR           = 'beginner_fear';
+    public const INSECURITY_BODY         = 'insecurity_body';
     public const LOCATION_QUESTION       = 'location_question';
     public const SCHEDULE_QUESTION       = 'schedule_question';
     public const GENERAL_INFO            = 'general_info';
     public const GOAL_FAT_LOSS           = 'goal_fat_loss';
     public const GOAL_MUSCLE_GAIN        = 'goal_muscle_gain';
     public const HIGH_INTENT_CLOSE       = 'high_intent_close';
+    public const GREETING                = 'greeting';
+    public const THANKS                  = 'thanks';
+    public const GOODBYE                 = 'goodbye';
+    public const NOT_INTERESTED          = 'not_interested';
+    public const BOT_QUESTION            = 'bot_question';
     public const HUMAN_REQUEST           = 'human_request';
     public const COMPLAINT               = 'complaint';
+    public const INVOICE_REQUEST         = 'invoice_request';
     public const MEDICAL_RISK_ESCALATION = 'medical_risk_escalation';
     public const FRAUD_OR_PAYMENT_CLAIM  = 'fraud_or_payment_claim';
     public const DO_NOT_CONTACT_REQUEST  = 'do_not_contact_request';
@@ -82,6 +89,14 @@ final class SalesIntents
         self::FRAUD_OR_PAYMENT_CLAIM,
         self::HUMAN_REQUEST,
         self::COMPLAINT,
+        self::INVOICE_REQUEST,
+    ];
+
+    /** Intenciones de cierre suave: el usuario se despide / no quiere / agradece. */
+    public const SOFT_CLOSE_INTENTS = [
+        self::GOODBYE,
+        self::NOT_INTERESTED,
+        self::THANKS,
     ];
 
     /** Intenciones de objeción comercial (empatía + valor + pregunta suave). */
@@ -90,6 +105,7 @@ final class SalesIntents
         self::TIME_OBJECTION,
         self::DELAY_OBJECTION,
         self::BEGINNER_FEAR,
+        self::INSECURITY_BODY,
     ];
 
     /** Intenciones donde el lead declara un objetivo fitness. */

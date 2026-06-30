@@ -61,15 +61,19 @@ class PricingReplyTest extends TestCase
 
         $this->assertStringContainsString('Plan Mensual', $reply);
         $this->assertStringContainsString('$80.000 COP', $reply);
-        $this->assertStringContainsString('link seguro de pago', $reply);
+        // Tono natural: NO ofrece link y NO suena a ficha técnica.
+        $this->assertStringNotContainsStringIgnoringCase('link', $reply);
     }
 
-    public function test_pricing_with_plan_id_includes_benefits(): void
+    public function test_pricing_reply_is_natural_and_asks_about_experience(): void
     {
         $reply = $this->analyze(['body' => 'precio?', 'plan_id' => $this->plan->id])
             ->assertOk()->json('decision.reply');
 
-        $this->assertStringContainsString('Acceso completo', $reply);
+        // Precio real + UNA pregunta para entender a la persona, sin lista de beneficios.
+        $this->assertStringContainsString('$80.000 COP', $reply);
+        $this->assertStringContainsString('?', $reply);
+        $this->assertStringNotContainsString('Acceso completo', $reply);
     }
 
     public function test_pricing_resolves_plan_by_name_without_plan_id(): void

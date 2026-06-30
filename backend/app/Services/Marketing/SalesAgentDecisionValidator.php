@@ -93,6 +93,7 @@ class SalesAgentDecisionValidator
                 SalesIntents::FRAUD_OR_PAYMENT_CLAIM  => 'payment_or_fraud_claim',
                 SalesIntents::HUMAN_REQUEST           => 'human_requested',
                 SalesIntents::COMPLAINT               => 'complaint',
+                SalesIntents::INVOICE_REQUEST         => 'invoice_request',
                 default                               => 'escalation',
             };
         }

@@ -24,22 +24,24 @@ class SalesObjectionResponderService
     {
         return match ($intent) {
             SalesIntents::PRICE_OBJECTION =>
-                'Te entiendo. Si estás comparando solo por precio puede parecer así, pero la idea '
-                .'es que entrenes en un lugar serio y con estructura. ¿Tu idea es empezar este mes '
-                .'o apenas estás mirando opciones?',
+                'Te entiendo. Más que pagar por pagar, la idea es que sientas que lo vas a '
+                .'aprovechar. ¿Quieres que te cuente para quién sí vale la pena el mensual?',
 
             SalesIntents::TIME_OBJECTION =>
-                'Te entiendo, el tiempo es lo más valioso. Por eso acá las rutinas se ajustan a tu '
-                .'agenda y con poquitas sesiones a la semana ya se notan cambios. '
-                .'¿En qué horario se te haría más fácil entrenar?',
+                'Te entiendo. A veces la clave es armar algo realista, no perfecto. '
+                .'¿Cuántos días a la semana crees que podrías ir sin complicarte?',
 
             SalesIntents::DELAY_OBJECTION =>
-                'Tranquilo, sin presión. Solo te digo algo: el mejor momento para empezar suele ser '
-                .'hoy, aunque sea con calma. ¿Quieres que te deje la info lista para cuando decidas?',
+                'Tranquilo, puedes pensarlo con calma. Si decides empezar, te ayudamos a hacerlo '
+                .'bien. ¿Te queda alguna duda que pueda resolverte?',
 
             SalesIntents::BEGINNER_FEAR =>
-                'Tranquilo, a todos nos pasó la primera vez 💪. Acá te acompañamos desde cero, sin '
-                .'pena y a tu ritmo; nadie nace sabiendo. ¿Te gustaría que te cuente cómo es el primer día?',
+                'Es normal sentir pena al inicio. A muchas personas les pasa cuando no conocen el '
+                .'ambiente o las máquinas. ¿Qué te preocupa más: ir solo o no saber qué hacer?',
+
+            SalesIntents::INSECURITY_BODY =>
+                'Te entiendo, y no tienes por qué sentirte juzgado por eso. Mucha gente empieza '
+                .'justo desde ahí, paso a paso. ¿Te preocupa más el ambiente o no saber cómo empezar?',
 
             default => null,
         };

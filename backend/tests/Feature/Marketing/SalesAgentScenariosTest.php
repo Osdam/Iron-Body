@@ -83,12 +83,12 @@ class SalesAgentScenariosTest extends TestCase
             ->assertJsonPath('decision.payment_readiness', 'sandbox_pending')
             ->json('decision.reply');
 
-        // Cotiza el plan mensual real, con beneficios, SIN ofrecer link.
+        // Cotiza el plan mensual real, tono natural, SIN link y SIN ficha técnica.
         $this->assertStringContainsString('Plan Mensual', $reply);
         $this->assertStringContainsString('$80.000 COP', $reply);
-        $this->assertStringContainsString('asesoría semi personalizada con entrenador de planta', $reply);
         $this->assertStringNotContainsStringIgnoringCase('link', $reply);
-        $this->assertStringContainsString('otros planes', $reply);
+        $this->assertStringNotContainsString('asesoría semi personalizada con entrenador de planta', $reply);
+        $this->assertStringContainsString('?', $reply); // una pregunta para entender a la persona
     }
 
     public function test_pricing_keyword_overrides_historical_goal(): void
@@ -188,9 +188,10 @@ class SalesAgentScenariosTest extends TestCase
             ->assertJsonPath('decision.sales_stage', SalesIntents::STAGE_OBJECTION)
             ->json('decision.reply');
 
-        // Respuesta empática (acompañamiento) y SIN precio inventado.
+        // Respuesta empática que valida la pena y pregunta la barrera, sin precio.
         $this->assertStringNotContainsString('$', (string) $reply);
-        $this->assertStringContainsStringIgnoringCase('acompa', (string) $reply);
+        $this->assertStringContainsStringIgnoringCase('pena', (string) $reply);
+        $this->assertStringContainsString('?', (string) $reply);
     }
 
     public function test_esta_caro_is_price_objection_and_schedules_followup(): void
@@ -202,24 +203,25 @@ class SalesAgentScenariosTest extends TestCase
             ->assertJsonPath('decision.recommended_action', SalesIntents::ACTION_REGISTER_OBJECTION);
     }
 
-    public function test_quiero_pagar_el_mensual_in_sandbox_defers_no_link(): void
+    public function test_quiero_pagar_el_mensual_in_sandbox_escalates_to_human(): void
     {
-        // Wompi NO productivo (sandbox): aunque el intent sea de pago, de forma
-        // DETERMINISTA no se genera link, no hay tool de pago y se responde humano.
+        // Wompi NO productivo (sandbox): aunque el intent sea de pago, NO se genera
+        // link; se ESCALA a un humano que comparte el medio de pago.
         $res = $this->analyze(['body' => 'quiero pagar el mensual', 'auto_execute' => false])
             ->assertOk()
             ->assertJsonPath('decision.intent', SalesIntents::PAYMENT_LINK_REQUEST)
             ->assertJsonPath('decision.lead_stage', SalesIntents::LEAD_STAGE_READY_TO_PAY)
             ->assertJsonPath('decision.payment_readiness', 'sandbox_pending')
+            ->assertJsonPath('decision.should_escalate', true)
             ->assertJsonPath('decision.should_generate_payment_link', false)
-            ->assertJsonPath('decision.recommended_action', SalesIntents::ACTION_REPLY)
+            ->assertJsonPath('decision.recommended_action', SalesIntents::ACTION_ESCALATE_HUMAN)
             ->assertJsonPath('executed', []);
 
         $this->assertNotContains(
             SalesIntents::TOOL_PAYMENT_LINK_SEND,
             $res->json('decision.tools_requested'),
         );
-        // Reply = fallback humano (un asesor comparte el medio de pago), sin link.
+        // Reply = un asesor comparte el medio de pago, sin link.
         $reply = $res->json('decision.reply');
         $this->assertStringContainsStringIgnoringCase('asesor', (string) $reply);
         $this->assertStringNotContainsStringIgnoringCase('link', (string) $reply);
@@ -390,17 +392,19 @@ class SalesAgentScenariosTest extends TestCase
             'body' => 'quiero pagar el mensual', 'plan_id' => $this->plan->id, 'auto_execute' => true,
         ])->assertOk()
             ->assertJsonPath('decision.should_generate_payment_link', false)
-            ->assertJsonPath('decision.recommended_action', SalesIntents::ACTION_REPLY);
+            ->assertJsonPath('decision.should_escalate', true)
+            ->assertJsonPath('decision.recommended_action', SalesIntents::ACTION_ESCALATE_HUMAN);
 
         // El tool de pago NO se solicita y no se ejecuta nada de pago.
         $this->assertNotContains(SalesIntents::TOOL_PAYMENT_LINK_SEND, $res->json('decision.tools_requested'));
         $this->assertNull(collect($res->json('executed'))->firstWhere('tool', SalesIntents::TOOL_PAYMENT_LINK_SEND));
 
-        // El reply deriva a un asesor, sin mencionar link.
+        // El reply deriva a un asesor, sin mencionar link, y queda needs_human.
         $reply = $res->json('decision.reply');
         $this->assertStringNotContainsString('http', (string) $reply);
         $this->assertStringNotContainsStringIgnoringCase('link', (string) $reply);
         $this->assertStringContainsStringIgnoringCase('asesor', (string) $reply);
+        $this->assertSame(MarketingLead::STATUS_NEEDS_HUMAN, $this->lead->fresh()->status);
 
         // No se generó ninguna transacción de pago (no se entregó link sandbox).
         $this->assertDatabaseCount('payment_transactions', 0);

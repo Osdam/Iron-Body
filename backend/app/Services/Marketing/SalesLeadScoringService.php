@@ -17,14 +17,21 @@ class SalesLeadScoringService
         SalesIntents::TIME_OBJECTION          => SalesIntents::TEMP_HOT,
         SalesIntents::DELAY_OBJECTION          => SalesIntents::TEMP_WARM,
         SalesIntents::BEGINNER_FEAR           => SalesIntents::TEMP_WARM,
+        SalesIntents::INSECURITY_BODY         => SalesIntents::TEMP_WARM,
         SalesIntents::PRICING_QUESTION        => SalesIntents::TEMP_WARM,
         SalesIntents::GOAL_FAT_LOSS           => SalesIntents::TEMP_WARM,
         SalesIntents::GOAL_MUSCLE_GAIN        => SalesIntents::TEMP_WARM,
         SalesIntents::LOCATION_QUESTION       => SalesIntents::TEMP_WARM,
         SalesIntents::SCHEDULE_QUESTION       => SalesIntents::TEMP_WARM,
         SalesIntents::GENERAL_INFO            => SalesIntents::TEMP_COLD,
+        SalesIntents::GREETING                => SalesIntents::TEMP_COLD,
+        SalesIntents::THANKS                  => SalesIntents::TEMP_COLD,
+        SalesIntents::GOODBYE                 => SalesIntents::TEMP_COLD,
+        SalesIntents::NOT_INTERESTED          => SalesIntents::TEMP_COLD,
+        SalesIntents::BOT_QUESTION            => SalesIntents::TEMP_COLD,
         SalesIntents::HUMAN_REQUEST           => SalesIntents::TEMP_RISK,
         SalesIntents::COMPLAINT               => SalesIntents::TEMP_RISK,
+        SalesIntents::INVOICE_REQUEST         => SalesIntents::TEMP_RISK,
         SalesIntents::MEDICAL_RISK_ESCALATION => SalesIntents::TEMP_RISK,
         SalesIntents::FRAUD_OR_PAYMENT_CLAIM  => SalesIntents::TEMP_RISK,
         SalesIntents::DO_NOT_CONTACT_REQUEST  => SalesIntents::TEMP_COLD,
@@ -40,14 +47,21 @@ class SalesLeadScoringService
         SalesIntents::TIME_OBJECTION          => SalesIntents::STAGE_OBJECTION,
         SalesIntents::DELAY_OBJECTION          => SalesIntents::STAGE_OBJECTION,
         SalesIntents::BEGINNER_FEAR           => SalesIntents::STAGE_OBJECTION,
+        SalesIntents::INSECURITY_BODY         => SalesIntents::STAGE_OBJECTION,
         SalesIntents::PRICING_QUESTION        => SalesIntents::STAGE_DISCOVERY,
         SalesIntents::GOAL_FAT_LOSS           => SalesIntents::STAGE_DISCOVERY,
         SalesIntents::GOAL_MUSCLE_GAIN        => SalesIntents::STAGE_DISCOVERY,
         SalesIntents::LOCATION_QUESTION       => SalesIntents::STAGE_DISCOVERY,
         SalesIntents::SCHEDULE_QUESTION       => SalesIntents::STAGE_DISCOVERY,
         SalesIntents::GENERAL_INFO            => SalesIntents::STAGE_DISCOVERY,
+        SalesIntents::GREETING                => SalesIntents::STAGE_DISCOVERY,
+        SalesIntents::BOT_QUESTION            => SalesIntents::STAGE_DISCOVERY,
+        SalesIntents::THANKS                  => SalesIntents::STAGE_DISCOVERY,
+        SalesIntents::GOODBYE                 => SalesIntents::STAGE_OPT_OUT,
+        SalesIntents::NOT_INTERESTED          => SalesIntents::STAGE_OPT_OUT,
         SalesIntents::HUMAN_REQUEST           => SalesIntents::STAGE_RISK,
         SalesIntents::COMPLAINT               => SalesIntents::STAGE_RISK,
+        SalesIntents::INVOICE_REQUEST         => SalesIntents::STAGE_RISK,
         SalesIntents::MEDICAL_RISK_ESCALATION => SalesIntents::STAGE_RISK,
         SalesIntents::FRAUD_OR_PAYMENT_CLAIM  => SalesIntents::STAGE_RISK,
         SalesIntents::DO_NOT_CONTACT_REQUEST  => SalesIntents::STAGE_OPT_OUT,
@@ -68,11 +82,18 @@ class SalesLeadScoringService
         SalesIntents::GOAL_MUSCLE_GAIN        => 50,
         SalesIntents::SCHEDULE_QUESTION       => 45,
         SalesIntents::LOCATION_QUESTION       => 42,
+        SalesIntents::INSECURITY_BODY         => 55,
         SalesIntents::GENERAL_INFO            => 35,
+        SalesIntents::GREETING                => 30,
+        SalesIntents::BOT_QUESTION            => 30,
+        SalesIntents::THANKS                  => 25,
         SalesIntents::HUMAN_REQUEST           => 50,
         SalesIntents::COMPLAINT               => 40,
+        SalesIntents::INVOICE_REQUEST         => 40,
         SalesIntents::MEDICAL_RISK_ESCALATION => 45,
         SalesIntents::FRAUD_OR_PAYMENT_CLAIM  => 30,
+        SalesIntents::GOODBYE                 => 10,
+        SalesIntents::NOT_INTERESTED          => 5,
         SalesIntents::DO_NOT_CONTACT_REQUEST  => 0,
         SalesIntents::SPAM_LOW_QUALITY        => 0,
         SalesIntents::UNKNOWN                 => 20,
@@ -113,6 +134,12 @@ class SalesLeadScoringService
      */
     public function leadStage(string $intent, bool $escalate): string
     {
+        // Intención de pago: el lead está listo para pagar aunque se escale a un
+        // humano para compartirle el medio de pago (Wompi aún no productivo).
+        if (in_array($intent, SalesIntents::PAYMENT_INTENTS, true)) {
+            return SalesIntents::LEAD_STAGE_READY_TO_PAY;
+        }
+
         if ($escalate) {
             return SalesIntents::LEAD_STAGE_NEEDS_HUMAN;
         }
@@ -120,7 +147,9 @@ class SalesLeadScoringService
         return match (true) {
             in_array($intent, SalesIntents::PAYMENT_INTENTS, true) => SalesIntents::LEAD_STAGE_READY_TO_PAY,
             $intent === SalesIntents::DO_NOT_CONTACT_REQUEST,
-            $intent === SalesIntents::SPAM_LOW_QUALITY            => SalesIntents::LEAD_STAGE_LOST,
+            $intent === SalesIntents::SPAM_LOW_QUALITY,
+            $intent === SalesIntents::GOODBYE,
+            $intent === SalesIntents::NOT_INTERESTED              => SalesIntents::LEAD_STAGE_LOST,
             in_array($intent, SalesIntents::OBJECTION_INTENTS, true),
             $intent === SalesIntents::PRICING_QUESTION           => SalesIntents::LEAD_STAGE_INTERESTED,
             in_array($intent, SalesIntents::GOAL_INTENTS, true),

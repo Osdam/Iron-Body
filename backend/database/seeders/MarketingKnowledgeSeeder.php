@@ -107,7 +107,7 @@ class MarketingKnowledgeSeeder extends Seeder
             // CONSERVADOR: no inventa dirección exacta; una persona la confirma.
             ['key' => 'location.city', 'category' => 'location', 'priority' => 10,
              'title' => 'Ubicación',
-             'content' => 'Iron Body está en Neiva, Huila. Para la dirección exacta y cómo llegar, una persona del equipo comparte la ubicación; el asesor no inventa direcciones.'],
+             'content' => 'Iron Body Neiva está en Cl. 24 Sur #33-53, Neiva, Huila. Para llegar más fácil, una persona del equipo puede orientarte; el asesor no inventa otras direcciones.'],
 
             // ── gym_info (información general del gimnasio) ───────────────────
             ['key' => 'gym.benefits', 'category' => 'gym_info', 'priority' => 10,

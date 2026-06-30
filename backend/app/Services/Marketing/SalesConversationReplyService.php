@@ -12,73 +12,96 @@ use App\Models\Plan;
  */
 class SalesConversationReplyService
 {
+    /** Dirección OFICIAL de Iron Body Neiva (provista por el negocio). */
+    public const ADDRESS = 'Cl. 24 Sur #33-53, Neiva, Huila';
+
     public function __construct(
         private readonly SalesObjectionResponderService $objections = new SalesObjectionResponderService(),
     ) {
     }
 
     /**
-     * Respuesta sugerida para una intención. null = no responder. Tono de ASESOR
-     * (no vendedor agresivo): empatía + valor + UNA pregunta suave al final.
-     * Mensajes cortos tipo WhatsApp. Primero diagnostica el objetivo; cierra solo
-     * cuando la intención es alta.
+     * Respuesta sugerida (curada) para una intención. null = no responder.
+     *
+     * Tono de ASESOR HUMANO de Iron Body: cercano, tranquilo, breve y cálido.
+     * Estructura: (1) reconoce lo que dijo, (2) ayuda/orienta concreto,
+     * (3) MÁXIMO una pregunta pequeña. Nada de presión, urgencia, promesas de
+     * resultados, ni listas robóticas de beneficios. Primero entiende y cuida;
+     * vende solo cuando hay intención clara.
      */
     public function replyFor(string $intent, array $context = []): ?string
     {
-        // Objeciones: delegadas al manejador dedicado (empatía + beneficio + pregunta).
+        // Objeciones / pena / inseguridad: manejador dedicado (validar + cuidar).
         if ($this->objections->isObjection($intent)) {
             return $this->objections->reply($intent);
         }
 
         return match ($intent) {
-            SalesIntents::PRICING_QUESTION =>
-                'No te paso un plan cualquiera. Para recomendarte bien, dime: '
-                .'¿quieres bajar grasa, ganar masa muscular, mejorar condición o volver a entrenar?',
+            SalesIntents::GREETING =>
+                'Hola, bienvenido a Iron Body. ¿Buscas información de planes, ubicación o quieres '
+                .'empezar con algún objetivo?',
 
-            SalesIntents::PAYMENT_LINK_REQUEST =>
-                'Claro, te envío el link seguro por acá. Apenas Wompi confirme el pago, '
-                .'tu membresía queda registrada en el sistema.',
+            SalesIntents::PRICING_QUESTION =>
+                'Sí, claro. Para recomendarte mejor, ¿quieres empezar por bajar grasa, ganar masa '
+                .'o simplemente coger hábito?',
+
+            SalesIntents::PAYMENT_LINK_REQUEST, SalesIntents::HIGH_INTENT_CLOSE =>
+                $this->paymentPendingReply(),
 
             SalesIntents::GOAL_FAT_LOSS =>
-                '¡Buenísimo objetivo! Para bajar grasa lo que mejor funciona es entrenamiento con '
-                .'acompañamiento y constancia, y acá te guiamos en eso. '
-                .'¿Hoy entrenas algo o estarías empezando desde cero?',
+                'Listo. Para bajar grasa lo más importante es empezar con algo que puedas sostener. '
+                .'¿Ya vienes entrenando o arrancas desde cero?',
 
             SalesIntents::GOAL_MUSCLE_GAIN =>
-                '¡Me gusta! Para ganar masa muscular es clave la técnica y un plan progresivo, y acá '
-                .'te acompañamos en cada fase. ¿Ya has entrenado antes o vas empezando?',
-
-            SalesIntents::HIGH_INTENT_CLOSE =>
-                'Perfecto. Te puedo dejar el link seguro de pago y apenas se confirme, '
-                .'tu acceso queda listo.',
+                'Perfecto. Para ganar masa lo clave es entrenar constante y con buena guía. '
+                .'¿Ya has entrenado antes o estás empezando?',
 
             SalesIntents::LOCATION_QUESTION =>
-                'Estamos en Iron Body Neiva. Te oriento con la ubicación para que te quede fácil '
-                .'llegar. ¿Vas a ir por primera vez?',
+                'Estamos en '.self::ADDRESS.'. ¿Vas a ir por primera vez?',
 
             SalesIntents::SCHEDULE_QUESTION =>
-                'Con gusto te cuento los horarios de Iron Body Neiva. ¿Buscas entrenar en la '
-                .'mañana, tarde o noche? Así te oriento mejor.',
+                'No quiero darte un horario incorrecto. Te paso con alguien del equipo para '
+                .'confirmarlo bien.',
 
             SalesIntents::GENERAL_INFO =>
-                '¡Con gusto te cuento! En Iron Body Neiva te damos acompañamiento para que entrenes '
-                .'seguro y con resultados. Para orientarte mejor, ¿cuál es tu objetivo principal?',
+                'Con gusto te cuento. El mensual te sirve para entrenar constante, y según tu '
+                .'objetivo miramos lo que mejor te sirva. ¿Quieres entrenar por salud, bajar grasa '
+                .'o ganar masa?',
+
+            SalesIntents::THANKS =>
+                'Con gusto. Si después quieres empezar o comparar planes, me escribes y te ayudo '
+                .'sin problema.',
+
+            SalesIntents::NOT_INTERESTED =>
+                'Listo, tranquilo. No hay problema. Si después te animas o solo quieres resolver '
+                .'dudas, aquí te ayudamos.',
+
+            SalesIntents::BOT_QUESTION =>
+                'Soy el asistente de Iron Body y te puedo ayudar con información inicial. Si '
+                .'prefieres, también te paso con una persona del equipo.',
 
             SalesIntents::HUMAN_REQUEST =>
-                '¡Claro! Le paso tu mensaje a una persona del equipo para que te atienda directamente. '
-                .'En un momento te escriben por acá.',
+                'Claro. Te paso con alguien del equipo para que te atienda directo.',
 
             SalesIntents::COMPLAINT =>
-                'Lamento que hayas tenido una mala experiencia. Para resolverlo bien, una persona del '
-                .'equipo va a revisar tu caso y te contacta en breve.',
+                'Lamento que hayas tenido una mala experiencia. Te paso con alguien del equipo para '
+                .'que revise tu caso y te ayude bien.',
+
+            SalesIntents::INVOICE_REQUEST =>
+                'Claro. Para facturación te paso con alguien del equipo y así toman los datos '
+                .'correctamente.',
 
             SalesIntents::MEDICAL_RISK_ESCALATION =>
-                'Prefiero que esto lo revise una persona del equipo para orientarte bien y no '
-                .'darte una respuesta irresponsable.',
+                'Gracias por contarlo. En ese caso prefiero que lo revise alguien del equipo contigo, '
+                .'para orientarte con cuidado y no recomendarte algo que te moleste más.',
 
             SalesIntents::FRAUD_OR_PAYMENT_CLAIM =>
-                'Para revisar tu caso con cuidado, lo va a atender una persona del equipo. '
-                .'Tu membresía solo se activa cuando el pago queda confirmado en el sistema.',
+                'Para revisar tu caso con cuidado, lo va a atender una persona del equipo. La '
+                .'membresía solo queda activa cuando el pago está confirmado en el sistema.',
+
+            SalesIntents::GOODBYE =>
+                'De una, tranquilo. Si más adelante quieres empezar o resolver dudas, me escribes y '
+                .'te ayudo.',
 
             SalesIntents::DO_NOT_CONTACT_REQUEST =>
                 null, // respetamos: no insistimos.
@@ -87,64 +110,55 @@ class SalesConversationReplyService
                 null, // no enganchamos con mensajes sin contenido.
 
             default =>
-                '¡Hola! 💪 Soy del equipo de Iron Body Neiva. Cuéntame qué buscas y te ayudo: '
-                .'¿planes, horarios o ubicación?',
+                'No quiero responderte cualquier cosa. ¿Te refieres a los planes, horarios o '
+                .'ubicación?',
         };
     }
 
     /**
-     * Mensaje para cuando hay intención de pago pero NO se puede entregar un link
-     * productivo (Wompi sin producción): un asesor comparte el medio de pago.
-     * NUNCA se entrega un link de sandbox como si fuera real.
+     * Mensaje para cuando hay intención de pago: como Wompi aún no es productivo,
+     * NO se envía link; un asesor comparte el medio de pago. Cierra con una sola
+     * pregunta suave.
      */
     public function paymentPendingReply(): string
     {
-        return 'Por ahora un asesor te comparte el medio de pago para hacerlo correctamente.';
+        return 'Listo. Por ahora un asesor te comparte el medio de pago para hacerlo correctamente. '
+            .'¿Es para el plan mensual?';
     }
 
     /**
-     * Respuesta DETERMINISTA de precio. Si hay un plan (identificado o el mensual/
-     * ancla), incluye nombre + precio REAL (Plan::price, COP) + beneficios + UNA
-     * pregunta de cierre. El cierre solo OFRECE link si Wompi es productivo
-     * ($canLink); si no, invita a conocer otros planes (sin mencionar link). Si NO
-     * hay plan activo, NO inventa precio: pide objetivo/plan.
+     * Respuesta DETERMINISTA de precio: tono natural, precio REAL de la DB y UNA
+     * pregunta para entender a la persona. NO lista beneficios robóticos, NO ofrece
+     * link, NO empuja el pago. Si no hay plan activo, NO inventa precio: pregunta
+     * el objetivo.
      */
-    public function pricingReply(?Plan $plan, bool $canLink = false): string
+    public function pricingReply(?Plan $plan): string
     {
         if ($plan === null) {
             return (string) $this->replyFor(SalesIntents::PRICING_QUESTION);
         }
 
-        $price    = $this->formatCop((float) $plan->price);
-        $benefits = $plan->benefitsArray();
-        $incl     = '';
-        if (! empty($benefits)) {
-            $incl = ' e incluye '.$this->joinSpanish(array_slice($benefits, 0, 3));
-        }
+        $price = $this->formatCop((float) $plan->price);
 
-        $closing = $canLink
-            ? ' ¿Quieres que te envíe el link seguro de pago?'
-            : ' ¿Quieres que te explique los otros planes también?';
-
-        return "El {$plan->name} está en {$price}{$incl}.{$closing}";
+        return "Sí, claro. El {$plan->name} está en {$price}. "
+            .'¿Ya has entrenado antes o vas arrancando desde cero?';
     }
 
-    /** Une elementos con coma y "y" final al estilo español: "a, b, y c". */
-    private function joinSpanish(array $items): string
+    /**
+     * Cierre suave de despedida: deja valor (precio + ubicación) y puerta abierta,
+     * SIN acosar. Se envía como máximo una vez (lo controla el orquestador).
+     */
+    public function goodbyeReply(?Plan $plan): string
     {
-        $items = array_values(array_filter(array_map('trim', $items), fn ($s) => $s !== ''));
-        $n = count($items);
-        if ($n === 0) {
-            return '';
+        if ($plan !== null) {
+            $price = $this->formatCop((float) $plan->price);
+
+            return "De una, tranquilo. Te dejo el dato por si lo quieres mirar después: el "
+                ."{$plan->name} está en {$price} y estamos en ".self::ADDRESS.'. Si más adelante '
+                .'quieres empezar, me escribes y te ayudo.';
         }
-        if ($n === 1) {
-            return $items[0];
-        }
-        if ($n === 2) {
-            return $items[0].' y '.$items[1];
-        }
-        $last = array_pop($items);
-        return implode(', ', $items).', y '.$last;
+
+        return (string) $this->replyFor(SalesIntents::GOODBYE);
     }
 
     /** Frases que OFRECEN un link de pago (prohibidas si Wompi no es productivo). */

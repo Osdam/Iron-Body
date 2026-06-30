@@ -53,8 +53,10 @@ class SalesLeadScoringServiceTest extends TestCase
         $this->assertSame(SalesIntents::LEAD_STAGE_INFORMED, $this->scoring->leadStage(SalesIntents::GOAL_FAT_LOSS, false));
         $this->assertSame(SalesIntents::LEAD_STAGE_NEW, $this->scoring->leadStage(SalesIntents::UNKNOWN, false));
         $this->assertSame(SalesIntents::LEAD_STAGE_LOST, $this->scoring->leadStage(SalesIntents::SPAM_LOW_QUALITY, false));
-        // Escalado gana sobre todo.
-        $this->assertSame(SalesIntents::LEAD_STAGE_NEEDS_HUMAN, $this->scoring->leadStage(SalesIntents::PAYMENT_LINK_REQUEST, true));
+        // Pago: sigue ready_to_pay aunque se escale (un asesor comparte el medio de pago).
+        $this->assertSame(SalesIntents::LEAD_STAGE_READY_TO_PAY, $this->scoring->leadStage(SalesIntents::PAYMENT_LINK_REQUEST, true));
+        // Escalado NO de pago (médico/humano) → needs_human.
+        $this->assertSame(SalesIntents::LEAD_STAGE_NEEDS_HUMAN, $this->scoring->leadStage(SalesIntents::MEDICAL_RISK_ESCALATION, true));
     }
 
     public function test_crm_temperature_is_three_levels(): void

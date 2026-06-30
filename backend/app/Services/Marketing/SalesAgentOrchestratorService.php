@@ -92,14 +92,6 @@ class SalesAgentOrchestratorService
             $esc['risk_flags'], (array) ($cls['risk_flags'] ?? []),
         )));
 
-        // Scoring comercial (0-100), etapa del lead y temperatura simplificada.
-        $score     = $this->scoring->score($intent, [
-            'objective'        => $lead->objective,
-            'extracted_fields' => $cls['extracted_fields'],
-        ]);
-        $leadStage = $this->scoring->leadStage($intent, $shouldEscalate);
-        $crmTemp   = $this->scoring->crmTemperature($intent);
-
         // Preparación de pago: si Wompi NO es productivo, el bot NO entrega ni
         // MENCIONA un link (sandbox o sin configurar): un asesor comparte el medio
         // de pago. Regla incondicional — no depende de Meta ni de dry_run.
@@ -108,6 +100,23 @@ class SalesAgentOrchestratorService
         $paymentBlocked = ! $canLink;
         $context['can_link']        = $canLink;
         $context['payment_blocked'] = $paymentBlocked;
+
+        // Intención de pago SIN Wompi productivo → escalar a un humano (un asesor
+        // comparte el medio de pago). Mientras Wompi siga en sandbox, la venta NO
+        // se cierra sola: queda en manos de una persona.
+        if (in_array($intent, SalesIntents::PAYMENT_INTENTS, true) && ! $canLink) {
+            $shouldEscalate = true;
+            $escReason ??= 'payment_needs_human';
+            $riskFlags[] = 'payment';
+        }
+
+        // Scoring comercial (0-100), etapa del lead y temperatura simplificada.
+        $score     = $this->scoring->score($intent, [
+            'objective'        => $lead->objective,
+            'extracted_fields' => $cls['extracted_fields'],
+        ]);
+        $leadStage = $this->scoring->leadStage($intent, $shouldEscalate);
+        $crmTemp   = $this->scoring->crmTemperature($intent);
 
         // Respuesta: la del modelo (ya saneada) si aplica; si no, la curada.
         $reply = $this->resolveReply($intent, $cls['reply'] ?? null, $shouldEscalate, $context, $body);
@@ -124,8 +133,8 @@ class SalesAgentOrchestratorService
         //  - location_question: NUNCA empuja pago; cierre suave de llegada.
         //  - beginner_fear / price_objection: CTA de asesoría/objetivo, no pago.
         if ($intent === SalesIntents::LOCATION_QUESTION && $this->replies->mentionsPaymentCta($reply)) {
-            $reply = $this->replies->scrubPaymentCta($reply, '¿Quieres que te comparta una referencia para llegar más fácil?');
-        } elseif (in_array($intent, [SalesIntents::BEGINNER_FEAR, SalesIntents::PRICE_OBJECTION], true)
+            $reply = $this->replies->scrubPaymentCta($reply, '¿Vas a ir por primera vez?');
+        } elseif (in_array($intent, SalesIntents::OBJECTION_INTENTS, true)
             && $this->replies->mentionsPaymentCta($reply)) {
             $reply = $this->replies->scrubPaymentCta($reply, '¿Quieres que te asesore según tu objetivo?');
         }
@@ -262,17 +271,18 @@ class SalesAgentOrchestratorService
     {
         $reply = $decision['reply'] ?? null;
 
+        // Se entrega cualquier respuesta segura: respuestas conversacionales Y los
+        // acuses de escalamiento (p. ej. "te paso con alguien del equipo", "un
+        // asesor te comparte el medio de pago"). NO se entregan: opt-out (reply
+        // null) ni el flujo de link (que despacha su propio mensaje).
         $sendable = (bool) ($decision['safe_to_send'] ?? false)
             && (bool) ($decision['should_send_message'] ?? false)
-            && in_array($decision['recommended_action'] ?? null, [
-                SalesIntents::ACTION_REPLY, SalesIntents::ACTION_REGISTER_OBJECTION,
-            ], true)
             && is_string($reply) && trim($reply) !== '';
 
         // No reenviar si una herramienta de pago ya despachó su propio mensaje.
         $alreadyDispatched = collect($executed)->contains(
-            fn ($e) => ($e['tool'] ?? null) === SalesIntents::TOOL_PAYMENT_LINK_SEND
-                && ($e['status'] ?? null) === 'executed',
+            fn ($e) => in_array($e['tool'] ?? null, [SalesIntents::TOOL_PAYMENT_LINK_SEND], true)
+                && in_array($e['status'] ?? null, ['executed', 'deferred_to_human'], true),
         );
 
         if (! $sendable || $alreadyDispatched) {
@@ -435,6 +445,12 @@ class SalesAgentOrchestratorService
      */
     private function resolveReply(string $intent, ?string $modelReply, bool $shouldEscalate, array $context, string $body = ''): ?string
     {
+        // Pago sin Wompi productivo: un asesor comparte el medio de pago (NUNCA un
+        // link sandbox). Tiene prioridad sobre el escalado genérico para dar el
+        // mensaje correcto aunque la intención de pago se escale a un humano.
+        if (in_array($intent, SalesIntents::PAYMENT_INTENTS, true) && ($context['payment_blocked'] ?? false)) {
+            return $this->replies->paymentPendingReply();
+        }
         if ($shouldEscalate) {
             return in_array($intent, SalesIntents::ESCALATION_INTENTS, true)
                 ? $this->replies->replyFor($intent, $context)
@@ -443,19 +459,14 @@ class SalesAgentOrchestratorService
         if ($intent === SalesIntents::DO_NOT_CONTACT_REQUEST) {
             return null;
         }
-        // Pago sin Wompi productivo: un asesor comparte el medio de pago (NUNCA un
-        // link sandbox como si fuera real, ni se menciona "link").
-        if (in_array($intent, SalesIntents::PAYMENT_INTENTS, true) && ($context['payment_blocked'] ?? false)) {
-            return $this->replies->paymentPendingReply();
-        }
-        // Precio: DETERMINISTA desde la DB. Si el plan está identificado
-        // (plan_id o nombre claro), el reply incluye el precio REAL; si no, no se
-        // inventa (se pregunta objetivo/plan). No se confía en el modelo para esto.
+        // Precio: DETERMINISTA desde la DB (precio REAL, tono natural, sin link).
+        // Si no hay plan activo, no se inventa: se pregunta el objetivo.
         if ($intent === SalesIntents::PRICING_QUESTION) {
-            return $this->replies->pricingReply(
-                $this->resolvePricingPlan($context, $body),
-                (bool) ($context['can_link'] ?? false),
-            );
+            return $this->replies->pricingReply($this->resolvePricingPlan($context, $body));
+        }
+        // Despedida: cierre suave con valor (precio + ubicación) y puerta abierta.
+        if ($intent === SalesIntents::GOODBYE) {
+            return $this->replies->goodbyeReply($this->resolvePricingPlan($context, $body));
         }
         if ($modelReply !== null && trim($modelReply) !== '') {
             return $modelReply;

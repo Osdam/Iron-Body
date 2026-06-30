@@ -52,6 +52,11 @@ class SalesEscalationService
             $reason ??= 'complaint';
         }
 
+        if ($intent === SalesIntents::INVOICE_REQUEST) {
+            $flags[] = 'invoice';
+            $reason ??= 'invoice_request';
+        }
+
         // Temas sensibles por palabras clave (facturación / reclamos / pagos / especial).
         $text = mb_strtolower($body);
         foreach (self::SENSITIVE_KEYWORDS as $kw) {
