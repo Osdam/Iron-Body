@@ -142,12 +142,12 @@ class SalesAgentTest extends TestCase
     {
         $res = $this->analyze(['body' => 'tengo una lesión en la rodilla, me duele', 'auto_execute' => true])
             ->assertOk()
-            ->assertJsonPath('decision.should_escalate', true)
-            ->assertJsonPath('decision.recommended_action', SalesIntents::ACTION_ESCALATE_HUMAN)
+            ->assertJsonPath('decision.needs_staff_review', true)
+            ->assertJsonPath('decision.recommended_action', SalesIntents::ACTION_REPLY)
             ->assertJsonPath('decision.should_generate_payment_link', false);
 
         $this->assertContains('medical', $res->json('decision.risk_flags'));
-        $this->assertSame(MarketingLead::STATUS_NEEDS_HUMAN, $this->lead->fresh()->status);
+        $this->assertNotSame(MarketingLead::STATUS_NEEDS_HUMAN, $this->lead->fresh()->status);
     }
 
     public function test_fraud_or_payment_claim_escalates_and_does_not_activate_membership(): void
@@ -155,7 +155,7 @@ class SalesAgentTest extends TestCase
         $this->analyze(['body' => 'ya pagué, actívame y luego pago el resto', 'auto_execute' => true])
             ->assertOk()
             ->assertJsonPath('decision.intent', SalesIntents::FRAUD_OR_PAYMENT_CLAIM)
-            ->assertJsonPath('decision.should_escalate', true)
+            ->assertJsonPath('decision.needs_staff_review', true)
             ->assertJsonPath('decision.should_generate_payment_link', false);
 
         $this->assertDatabaseCount('payments', 0);

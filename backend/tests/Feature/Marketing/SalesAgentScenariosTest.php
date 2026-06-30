@@ -212,18 +212,18 @@ class SalesAgentScenariosTest extends TestCase
             ->assertJsonPath('decision.intent', SalesIntents::PAYMENT_LINK_REQUEST)
             ->assertJsonPath('decision.lead_stage', SalesIntents::LEAD_STAGE_READY_TO_PAY)
             ->assertJsonPath('decision.payment_readiness', 'sandbox_pending')
-            ->assertJsonPath('decision.should_escalate', true)
+            ->assertJsonPath('decision.needs_staff_review', true)
             ->assertJsonPath('decision.should_generate_payment_link', false)
-            ->assertJsonPath('decision.recommended_action', SalesIntents::ACTION_ESCALATE_HUMAN)
+            ->assertJsonPath('decision.recommended_action', SalesIntents::ACTION_REPLY)
             ->assertJsonPath('executed', []);
 
         $this->assertNotContains(
             SalesIntents::TOOL_PAYMENT_LINK_SEND,
             $res->json('decision.tools_requested'),
         );
-        // Reply = un asesor comparte el medio de pago, sin link.
+        // Reply = la IA deja la solicitud marcada para el equipo, sin link.
         $reply = $res->json('decision.reply');
-        $this->assertStringContainsStringIgnoringCase('asesor', (string) $reply);
+        $this->assertStringContainsStringIgnoringCase('equipo', (string) $reply);
         $this->assertStringNotContainsStringIgnoringCase('link', (string) $reply);
     }
 
@@ -285,23 +285,23 @@ class SalesAgentScenariosTest extends TestCase
         $res = $this->analyze(['body' => 'quiero hablar con alguien', 'auto_execute' => true])
             ->assertOk()
             ->assertJsonPath('decision.intent', SalesIntents::HUMAN_REQUEST)
-            ->assertJsonPath('decision.should_escalate', true)
+            ->assertJsonPath('decision.needs_staff_review', true)
             ->assertJsonPath('decision.lead_stage', SalesIntents::LEAD_STAGE_NEEDS_HUMAN)
             ->assertJsonPath('decision.should_generate_payment_link', false)
-            ->assertJsonPath('decision.recommended_action', SalesIntents::ACTION_ESCALATE_HUMAN);
+            ->assertJsonPath('decision.recommended_action', SalesIntents::ACTION_REPLY);
 
         $this->assertSame('human_requested', $res->json('decision.escalation_reason'));
-        $this->assertSame(MarketingLead::STATUS_NEEDS_HUMAN, $this->lead->fresh()->status);
+        $this->assertNotSame(MarketingLead::STATUS_NEEDS_HUMAN, $this->lead->fresh()->status);
     }
 
     public function test_complaint_escalates_and_does_not_close(): void
     {
         $this->analyze(['body' => 'esto es un pésimo servicio, una queja', 'auto_execute' => true])
             ->assertOk()
-            ->assertJsonPath('decision.should_escalate', true)
+            ->assertJsonPath('decision.needs_staff_review', true)
             ->assertJsonPath('decision.should_generate_payment_link', false);
 
-        $this->assertSame(MarketingLead::STATUS_NEEDS_HUMAN, $this->lead->fresh()->status);
+        $this->assertNotSame(MarketingLead::STATUS_NEEDS_HUMAN, $this->lead->fresh()->status);
     }
 
     // ── Envío REAL del outbound en auto_execute ───────────────────────────────
@@ -392,19 +392,20 @@ class SalesAgentScenariosTest extends TestCase
             'body' => 'quiero pagar el mensual', 'plan_id' => $this->plan->id, 'auto_execute' => true,
         ])->assertOk()
             ->assertJsonPath('decision.should_generate_payment_link', false)
-            ->assertJsonPath('decision.should_escalate', true)
-            ->assertJsonPath('decision.recommended_action', SalesIntents::ACTION_ESCALATE_HUMAN);
+            ->assertJsonPath('decision.needs_staff_review', true)
+            ->assertJsonPath('decision.recommended_action', SalesIntents::ACTION_REPLY);
 
         // El tool de pago NO se solicita y no se ejecuta nada de pago.
         $this->assertNotContains(SalesIntents::TOOL_PAYMENT_LINK_SEND, $res->json('decision.tools_requested'));
         $this->assertNull(collect($res->json('executed'))->firstWhere('tool', SalesIntents::TOOL_PAYMENT_LINK_SEND));
 
-        // El reply deriva a un asesor, sin mencionar link, y queda needs_human.
+        // El reply deja la solicitud marcada para el equipo, sin mencionar link,
+        // y la IA NO se apaga (no queda needs_human).
         $reply = $res->json('decision.reply');
         $this->assertStringNotContainsString('http', (string) $reply);
         $this->assertStringNotContainsStringIgnoringCase('link', (string) $reply);
-        $this->assertStringContainsStringIgnoringCase('asesor', (string) $reply);
-        $this->assertSame(MarketingLead::STATUS_NEEDS_HUMAN, $this->lead->fresh()->status);
+        $this->assertStringContainsStringIgnoringCase('equipo', (string) $reply);
+        $this->assertNotSame(MarketingLead::STATUS_NEEDS_HUMAN, $this->lead->fresh()->status);
 
         // No se generó ninguna transacción de pago (no se entregó link sandbox).
         $this->assertDatabaseCount('payment_transactions', 0);

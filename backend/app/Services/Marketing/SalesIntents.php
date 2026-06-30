@@ -30,6 +30,7 @@ final class SalesIntents
     public const GENERAL_INFO            = 'general_info';
     public const GOAL_FAT_LOSS           = 'goal_fat_loss';
     public const GOAL_MUSCLE_GAIN        = 'goal_muscle_gain';
+    public const GOAL_RECOMPOSITION      = 'goal_recomposition';
     public const HIGH_INTENT_CLOSE       = 'high_intent_close';
     public const GREETING                = 'greeting';
     public const THANKS                  = 'thanks';
@@ -71,7 +72,9 @@ final class SalesIntents
     public const ACTION_REPLY                 = 'reply';
     public const ACTION_GENERATE_PAYMENT_LINK = 'generate_payment_link';
     public const ACTION_SCHEDULE_FOLLOWUP     = 'schedule_followup';
-    public const ACTION_ESCALATE_HUMAN        = 'escalate_human';
+    // staff_review = la IA responde Y deja una alerta interna; NO apaga la IA.
+    public const ACTION_STAFF_REVIEW          = 'staff_review';
+    public const ACTION_ESCALATE_HUMAN        = 'escalate_human'; // SOLO uso manual desde CRM.
     public const ACTION_NO_REPLY              = 'no_reply';
     public const ACTION_BLOCKED_DNC           = 'blocked_do_not_contact';
     public const ACTION_MARK_DNC              = 'mark_do_not_contact';
@@ -80,17 +83,25 @@ final class SalesIntents
     // ── Herramientas que la decisión puede solicitar (auto_execute seguro) ────
     public const TOOL_PAYMENT_LINK_SEND = 'payment_link_send';
     public const TOOL_SCHEDULE_FOLLOWUP = 'schedule_followup';
-    public const TOOL_HUMAN_TAKEOVER    = 'human_takeover';
+    // staff_review crea una alerta interna SIN tocar ai_enabled/human_takeover.
+    public const TOOL_STAFF_REVIEW      = 'staff_review';
+    public const TOOL_HUMAN_TAKEOVER    = 'human_takeover'; // SOLO uso manual desde CRM.
     public const TOOL_MARK_DNC          = 'mark_do_not_contact';
 
-    /** Intenciones que SIEMPRE escalan a humano (riesgo / sensibles). */
-    public const ESCALATION_INTENTS = [
+    /**
+     * Intenciones SENSIBLES que dejan una marca de revisión para el equipo
+     * (needs_staff_review). NUNCA apagan la IA: el bot sigue respondiendo seguro.
+     */
+    public const STAFF_REVIEW_INTENTS = [
         self::MEDICAL_RISK_ESCALATION,
         self::FRAUD_OR_PAYMENT_CLAIM,
         self::HUMAN_REQUEST,
         self::COMPLAINT,
         self::INVOICE_REQUEST,
     ];
+
+    /** Alias retrocompatible (mismas intenciones; semántica = staff review). */
+    public const ESCALATION_INTENTS = self::STAFF_REVIEW_INTENTS;
 
     /** Intenciones de cierre suave: el usuario se despide / no quiere / agradece. */
     public const SOFT_CLOSE_INTENTS = [
@@ -112,6 +123,7 @@ final class SalesIntents
     public const GOAL_INTENTS = [
         self::GOAL_FAT_LOSS,
         self::GOAL_MUSCLE_GAIN,
+        self::GOAL_RECOMPOSITION,
     ];
 
     /** Intenciones que solicitan un link de pago. */

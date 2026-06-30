@@ -100,6 +100,12 @@ class FakeAiSalesResponder implements AiSalesResponderInterface
             'nunca he hecho ejercicio', 'me da cosa', 'no se usar maquinas', 'no sé usar máquinas',
             'hace años no entreno', 'hace anos no entreno',
         ],
+        SalesIntents::GOAL_RECOMPOSITION => [
+            'recomposicion', 'recomposición', 'e ir perdiendo grasa', 'ganar masa y perder grasa',
+            'ganar masa y bajar grasa', 'ganar musculo y bajar grasa', 'masa y bajar grasa',
+            'musculo y perder grasa', 'ganar musculo y perder grasa', 'masa muscular e ir perdiendo grasa',
+            'tonificar', 'marcar y bajar grasa',
+        ],
         SalesIntents::GOAL_FAT_LOSS => [
             'bajar barriga', 'quitar barriga', 'bajar grasa', 'bajar de peso', 'adelgazar',
             'quemar grasa', 'rebajar', 'perder peso', 'bajar la panza', 'quemar barriga',

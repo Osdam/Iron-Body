@@ -156,9 +156,9 @@ class OpenAiSalesResponderTest extends TestCase
 
         $this->analyze(['body' => 'quiero empezar hoy', 'plan_id' => $this->plan->id, 'auto_execute' => true])
             ->assertOk()
-            ->assertJsonPath('decision.should_escalate', true)
+            ->assertJsonPath('decision.needs_staff_review', true)
             ->assertJsonPath('decision.should_generate_payment_link', false)
-            ->assertJsonPath('decision.recommended_action', SalesIntents::ACTION_ESCALATE_HUMAN);
+            ->assertJsonPath('decision.recommended_action', SalesIntents::ACTION_REPLY);
 
         $this->assertDatabaseCount('payments', 0);
     }
@@ -192,10 +192,10 @@ class OpenAiSalesResponderTest extends TestCase
 
         $this->analyze(['body' => 'me duele la rodilla', 'auto_execute' => true])
             ->assertOk()
-            ->assertJsonPath('decision.should_escalate', true)
-            ->assertJsonPath('decision.recommended_action', SalesIntents::ACTION_ESCALATE_HUMAN);
+            ->assertJsonPath('decision.needs_staff_review', true)
+            ->assertJsonPath('decision.recommended_action', SalesIntents::ACTION_REPLY);
 
-        $this->assertSame(MarketingLead::STATUS_NEEDS_HUMAN, $this->lead->fresh()->status);
+        $this->assertNotSame(MarketingLead::STATUS_NEEDS_HUMAN, $this->lead->fresh()->status);
     }
 
     public function test_do_not_contact_still_blocks_with_openai(): void

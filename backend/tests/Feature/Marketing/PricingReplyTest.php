@@ -145,7 +145,7 @@ class PricingReplyTest extends TestCase
     {
         $this->analyze(['body' => 'tengo una lesión en la rodilla'])
             ->assertOk()
-            ->assertJsonPath('decision.should_escalate', true);
+            ->assertJsonPath('decision.needs_staff_review', true);
     }
 
     public function test_do_not_contact_still_blocks(): void

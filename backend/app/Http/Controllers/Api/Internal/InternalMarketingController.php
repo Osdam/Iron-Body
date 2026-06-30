@@ -306,7 +306,13 @@ class InternalMarketingController extends Controller
         ]);
 
         $conversation = MarketingConversation::findOrFail($data['conversation_id']);
-        $conversation->update(['human_takeover' => true, 'ai_enabled' => false]);
+        // Takeover MANUAL (desde CRM): es la ÚNICA forma de pausar la IA. Se marca
+        // el origen para que el router lo respete (y no lo recupere como automático).
+        $conversation->update([
+            'human_takeover'        => true,
+            'human_takeover_source' => 'manual',
+            'ai_enabled'            => false,
+        ]);
 
         // Trazabilidad: queda registrado como acción IA.
         MarketingAiAction::create([

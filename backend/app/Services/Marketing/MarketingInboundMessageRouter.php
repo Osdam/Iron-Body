@@ -32,14 +32,23 @@ class MarketingInboundMessageRouter
             return $this->skip($lead, $conversation, 'auto_analyze_disabled');
         }
 
-        // Respeta do_not_contact (no contactar nunca).
+        // Respeta do_not_contact (no contactar nunca) — es opt-out del usuario.
         if (! $lead->isContactable()) {
             return $this->skip($lead, $conversation, 'do_not_contact');
         }
 
-        // Conversación tomada por un humano → la IA no interviene.
+        // SOLO un takeover MANUAL desde el CRM pausa la IA. Cualquier otro estado
+        // (takeover automático viejo, ai_enabled=false heredado) se RECUPERA: la IA
+        // nunca queda muda por una acción que ella misma generó.
+        if ($conversation->human_takeover && $conversation->human_takeover_source === 'manual') {
+            return $this->skip($lead, $conversation, 'skipped_manual_takeover');
+        }
         if ($conversation->human_takeover || ! $conversation->ai_enabled) {
-            return $this->skip($lead, $conversation, 'skipped_human_takeover');
+            $conversation->forceFill([
+                'human_takeover'        => false,
+                'human_takeover_source' => null,
+                'ai_enabled'            => true,
+            ])->save();
         }
 
         // Ejecutar herramientas requiere AMBOS flags (hoy false → proposed).

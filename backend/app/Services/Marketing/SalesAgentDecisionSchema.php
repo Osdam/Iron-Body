@@ -22,6 +22,7 @@ final class SalesAgentDecisionSchema
         SalesIntents::GENERAL_INFO,
         SalesIntents::GOAL_FAT_LOSS,
         SalesIntents::GOAL_MUSCLE_GAIN,
+        SalesIntents::GOAL_RECOMPOSITION,
         SalesIntents::HIGH_INTENT_CLOSE,
         SalesIntents::GREETING,
         SalesIntents::THANKS,
@@ -57,16 +58,21 @@ final class SalesAgentDecisionSchema
 
     public const RECOMMENDED_ACTIONS = [
         SalesIntents::ACTION_REPLY, SalesIntents::ACTION_GENERATE_PAYMENT_LINK,
-        SalesIntents::ACTION_SCHEDULE_FOLLOWUP, SalesIntents::ACTION_ESCALATE_HUMAN,
-        SalesIntents::ACTION_NO_REPLY, SalesIntents::ACTION_BLOCKED_DNC,
-        SalesIntents::ACTION_MARK_DNC, SalesIntents::ACTION_REGISTER_OBJECTION,
+        SalesIntents::ACTION_SCHEDULE_FOLLOWUP, SalesIntents::ACTION_STAFF_REVIEW,
+        SalesIntents::ACTION_ESCALATE_HUMAN, SalesIntents::ACTION_NO_REPLY,
+        SalesIntents::ACTION_BLOCKED_DNC, SalesIntents::ACTION_MARK_DNC,
+        SalesIntents::ACTION_REGISTER_OBJECTION,
     ];
 
-    /** Únicas herramientas que el modelo puede solicitar (lo demás se bloquea). */
+    /**
+     * Únicas herramientas que el modelo puede solicitar (lo demás se bloquea).
+     * NO incluye human_takeover: la IA NUNCA se apaga sola. Los casos sensibles
+     * usan staff_review (alerta interna que no apaga la IA).
+     */
     public const ALLOWED_TOOLS = [
         SalesIntents::TOOL_PAYMENT_LINK_SEND,
         SalesIntents::TOOL_SCHEDULE_FOLLOWUP,
-        SalesIntents::TOOL_HUMAN_TAKEOVER,
+        SalesIntents::TOOL_STAFF_REVIEW,
         SalesIntents::TOOL_MARK_DNC,
         'reply',
     ];

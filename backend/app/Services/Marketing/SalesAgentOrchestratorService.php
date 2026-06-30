@@ -80,58 +80,54 @@ class SalesAgentOrchestratorService
         $temperature = $this->scoring->temperature($intent);
         $stage       = $this->scoring->salesStage($intent);
 
-        // Escalado: por reglas (palabras/intención) o forzado por el validador del
-        // modelo (intento prohibido / claim inseguro). Laravel deriva esto, no el
-        // modelo: la IA solo aporta la señal.
-        $esc            = $this->escalation->evaluate($intent, $body);
-        $forceEscalate  = (bool) ($cls['force_escalate'] ?? false);
-        $shouldEscalate = $esc['should_escalate'] || $forceEscalate;
-        $escReason      = $esc['escalation_reason']
+        // Caso SENSIBLE (needs_staff_review): por reglas/intención o forzado por el
+        // validador. La IA NO se apaga: responde seguro y deja una marca interna.
+        $esc             = $this->escalation->evaluate($intent, $body);
+        $forceEscalate   = (bool) ($cls['force_escalate'] ?? false);
+        $needsStaffReview = $esc['should_escalate'] || $forceEscalate;
+        $escReason       = $esc['escalation_reason']
             ?? ($forceEscalate ? ($cls['escalation_reason'] ?? 'unsafe_content') : null);
-        $riskFlags      = array_values(array_unique(array_merge(
+        $riskFlags       = array_values(array_unique(array_merge(
             $esc['risk_flags'], (array) ($cls['risk_flags'] ?? []),
         )));
 
         // Preparación de pago: si Wompi NO es productivo, el bot NO entrega ni
-        // MENCIONA un link (sandbox o sin configurar): un asesor comparte el medio
-        // de pago. Regla incondicional — no depende de Meta ni de dry_run.
+        // MENCIONA un link (sandbox o sin configurar). Regla incondicional.
         $paymentState   = $this->paymentReadiness->state();
         $canLink        = $this->paymentReadiness->canGenerateAutomaticLink();
         $paymentBlocked = ! $canLink;
         $context['can_link']        = $canLink;
         $context['payment_blocked'] = $paymentBlocked;
 
-        // Intención de pago SIN Wompi productivo → escalar a un humano (un asesor
-        // comparte el medio de pago). Mientras Wompi siga en sandbox, la venta NO
-        // se cierra sola: queda en manos de una persona.
+        // Intención de pago SIN Wompi productivo → NO se apaga la IA: responde que
+        // deja la solicitud lista para que el equipo confirme el medio, y marca
+        // staff_review (payment_requested). Sigue conversando con normalidad.
         if (in_array($intent, SalesIntents::PAYMENT_INTENTS, true) && ! $canLink) {
-            $shouldEscalate = true;
-            $escReason ??= 'payment_needs_human';
+            $needsStaffReview = true;
+            $escReason ??= 'payment_requested';
             $riskFlags[] = 'payment';
         }
+
+        $staffReason = $needsStaffReview ? $this->staffReviewReason($intent, $escReason) : null;
 
         // Scoring comercial (0-100), etapa del lead y temperatura simplificada.
         $score     = $this->scoring->score($intent, [
             'objective'        => $lead->objective,
             'extracted_fields' => $cls['extracted_fields'],
         ]);
-        $leadStage = $this->scoring->leadStage($intent, $shouldEscalate);
+        $leadStage = $this->scoring->leadStage($intent, $needsStaffReview);
         $crmTemp   = $this->scoring->crmTemperature($intent);
 
-        // Respuesta: la del modelo (ya saneada) si aplica; si no, la curada.
-        $reply = $this->resolveReply($intent, $cls['reply'] ?? null, $shouldEscalate, $context, $body);
+        // Respuesta SIEMPRE presente y segura (la IA nunca queda en silencio).
+        $reply = $this->resolveReply($intent, $cls['reply'] ?? null, $needsStaffReview, $context, $body);
 
-        // Guardrail Wompi: si no es productivo, NINGUNA respuesta puede ofrecer un
-        // link de pago (defensa en profundidad sobre respuestas del modelo).
-        if (! $canLink && ! $shouldEscalate
-            && ! in_array($intent, SalesIntents::PAYMENT_INTENTS, true)
+        // Guardrail Wompi: si no es productivo, ninguna respuesta menciona un link.
+        if (! $canLink && ! in_array($intent, SalesIntents::PAYMENT_INTENTS, true)
             && $this->replies->offersLink($reply)) {
             $reply = $this->replies->scrubLinkOffer($reply);
         }
 
-        // Post-procesamiento de CTA por intención (determinista):
-        //  - location_question: NUNCA empuja pago; cierre suave de llegada.
-        //  - beginner_fear / price_objection: CTA de asesoría/objetivo, no pago.
+        // Post-procesamiento de CTA: ubicación/objeciones NUNCA empujan pago.
         if ($intent === SalesIntents::LOCATION_QUESTION && $this->replies->mentionsPaymentCta($reply)) {
             $reply = $this->replies->scrubPaymentCta($reply, '¿Vas a ir por primera vez?');
         } elseif (in_array($intent, SalesIntents::OBJECTION_INTENTS, true)
@@ -139,10 +135,9 @@ class SalesAgentOrchestratorService
             $reply = $this->replies->scrubPaymentCta($reply, '¿Quieres que te asesore según tu objetivo?');
         }
 
-        // Pago AUTOMÁTICO solo si Wompi es productivo. Si no, el link queda
-        // deshabilitado de forma determinista (sin tool de pago, sin CTA de pago).
-        $isPayment      = in_array($intent, SalesIntents::PAYMENT_INTENTS, true) && ! $shouldEscalate && $canLink;
-        $shouldSchedule = $this->scoring->shouldScheduleFollowup($temperature) && ! $shouldEscalate;
+        // Pago AUTOMÁTICO solo si Wompi es productivo. Si no, sin tool de pago.
+        $isPayment      = in_array($intent, SalesIntents::PAYMENT_INTENTS, true) && $canLink;
+        $shouldSchedule = $this->scoring->shouldScheduleFollowup($temperature);
         $delay          = $shouldSchedule ? $this->scoring->followupDelayMinutes($temperature) : null;
 
         $tools = [];
@@ -151,6 +146,9 @@ class SalesAgentOrchestratorService
         }
         if ($shouldSchedule) {
             $tools[] = SalesIntents::TOOL_SCHEDULE_FOLLOWUP;
+        }
+        if ($needsStaffReview) {
+            $tools[] = SalesIntents::TOOL_STAFF_REVIEW; // alerta interna, NO apaga IA.
         }
 
         $decision = [
@@ -168,12 +166,16 @@ class SalesAgentOrchestratorService
             'should_send_message'           => $reply !== null,
             'should_schedule_followup'      => $shouldSchedule,
             'followup_delay_minutes'        => $delay,
-            'should_escalate'               => $shouldEscalate,
-            'escalation_reason'             => $escReason,
+            // La IA NUNCA se apaga sola: should_escalate queda false (lo fija el
+            // guardrail). El caso sensible se marca en needs_staff_review.
+            'should_escalate'               => false,
+            'needs_staff_review'            => $needsStaffReview,
+            'staff_review_reason'           => $staffReason,
+            'escalation_reason'             => $needsStaffReview ? $escReason : null,
             'risk_flags'                    => $riskFlags,
             'extracted_fields'              => $cls['extracted_fields'],
             'missing_fields'                => $cls['missing_fields'],
-            'recommended_action'            => $this->recommendedAction($intent, $shouldEscalate, $canLink),
+            'recommended_action'            => $this->recommendedAction($intent, $needsStaffReview, $canLink),
             'reply'                         => $reply,
             'tools_requested'               => $tools,
             'safe_to_send'                  => false, // lo fija el guardrail
@@ -240,7 +242,7 @@ class SalesAgentOrchestratorService
         foreach ($decision['tools_requested'] as $tool) {
             $executed[] = match ($tool) {
                 SalesIntents::TOOL_MARK_DNC          => $this->execMarkDoNotContact($lead, $conversation),
-                SalesIntents::TOOL_HUMAN_TAKEOVER    => $this->execHumanTakeover($lead, $conversation, $decision),
+                SalesIntents::TOOL_STAFF_REVIEW      => $this->execStaffReview($lead, $conversation, $decision),
                 SalesIntents::TOOL_SCHEDULE_FOLLOWUP => $this->execScheduleFollowup($lead, $decision),
                 SalesIntents::TOOL_PAYMENT_LINK_SEND => $this->execPaymentLink($lead, $conversation, $plan),
                 default                              => ['tool' => $tool, 'status' => 'skipped', 'reason' => 'unknown_tool'],
@@ -342,16 +344,38 @@ class SalesAgentOrchestratorService
         return ['tool' => SalesIntents::TOOL_MARK_DNC, 'status' => 'executed', 'do_not_contact' => true];
     }
 
-    private function execHumanTakeover(MarketingLead $lead, MarketingConversation $conversation, array $decision): array
+    /**
+     * Deja una ALERTA INTERNA de revisión para el equipo (notify_human) SIN apagar
+     * la IA: NO toca human_takeover ni ai_enabled ni cierra la conversación. El bot
+     * sigue respondiendo. Solo el CRM (acción manual) puede apagar la IA.
+     */
+    private function execStaffReview(MarketingLead $lead, MarketingConversation $conversation, array $decision): array
     {
-        $conversation->update(['human_takeover' => true, 'ai_enabled' => false]);
-        $lead->forceFill([
-            'status'                 => MarketingLead::STATUS_NEEDS_HUMAN,
-            'last_human_takeover_at' => now(),
-            'human_takeover_reason'  => $decision['escalation_reason'] ?? 'escalation',
-        ])->save();
+        $reason = $decision['staff_review_reason'] ?? ($decision['escalation_reason'] ?? 'staff_review');
 
-        return ['tool' => SalesIntents::TOOL_HUMAN_TAKEOVER, 'status' => 'executed', 'human_takeover' => true];
+        MarketingAiAction::create([
+            'lead_id'         => $lead->id,
+            'conversation_id' => $conversation->id,
+            'action_type'     => SalesIntents::ACTION_STAFF_REVIEW,
+            'reason'          => $reason,
+            'status'          => 'created',
+            'metadata'        => array_filter([
+                'needs_staff_review' => true,
+                'staff_review_reason' => $reason,
+                'intent'             => $decision['intent'] ?? null,
+                // Señal CRM para que un humano lo revise; NO apaga la IA.
+                'ai_enabled'         => true,
+                'human_takeover'     => false,
+            ], fn ($v) => $v !== null),
+        ]);
+
+        return [
+            'tool'                => SalesIntents::TOOL_STAFF_REVIEW,
+            'status'              => 'created',
+            'reason'              => $reason,
+            'ai_disabled'         => false,
+            'human_takeover'      => false,
+        ];
     }
 
     private function execScheduleFollowup(MarketingLead $lead, array $decision): array
@@ -443,18 +467,19 @@ class SalesAgentOrchestratorService
      * lead pide no ser contactado, no se responde; si el modelo aportó un reply
      * (ya saneado), se usa; si no, la respuesta curada por intención.
      */
-    private function resolveReply(string $intent, ?string $modelReply, bool $shouldEscalate, array $context, string $body = ''): ?string
+    private function resolveReply(string $intent, ?string $modelReply, bool $needsStaffReview, array $context, string $body = ''): ?string
     {
-        // Pago sin Wompi productivo: un asesor comparte el medio de pago (NUNCA un
-        // link sandbox). Tiene prioridad sobre el escalado genérico para dar el
-        // mensaje correcto aunque la intención de pago se escale a un humano.
+        // Pago sin Wompi productivo: la IA responde que deja la solicitud lista
+        // para que el equipo confirme el medio (NUNCA link sandbox). Sigue activa.
         if (in_array($intent, SalesIntents::PAYMENT_INTENTS, true) && ($context['payment_blocked'] ?? false)) {
             return $this->replies->paymentPendingReply();
         }
-        if ($shouldEscalate) {
-            return in_array($intent, SalesIntents::ESCALATION_INTENTS, true)
+        // Caso sensible: respuesta SEGURA y útil que mantiene la conversación viva
+        // (deja la marca para el equipo pero la IA sigue ayudando). Nunca silencio.
+        if ($needsStaffReview) {
+            return in_array($intent, SalesIntents::STAFF_REVIEW_INTENTS, true)
                 ? $this->replies->replyFor($intent, $context)
-                : $this->replies->escalationReply();
+                : $this->replies->staffReviewReply();
         }
         if ($intent === SalesIntents::DO_NOT_CONTACT_REQUEST) {
             return null;
@@ -586,19 +611,35 @@ class SalesAgentOrchestratorService
         return strtr($lower, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ñ' => 'n']);
     }
 
-    private function recommendedAction(string $intent, bool $escalate, bool $canLink = true): string
+    private function recommendedAction(string $intent, bool $needsStaffReview, bool $canLink = true): string
     {
-        if ($escalate) {
-            return SalesIntents::ACTION_ESCALATE_HUMAN;
+        // Caso sensible: la IA RESPONDE (recommended_action=reply) y deja la marca
+        // staff_review aparte. NUNCA escalate_human (eso apagaría la IA).
+        if ($needsStaffReview) {
+            return SalesIntents::ACTION_REPLY;
         }
         return match ($intent) {
-            // Pago: solo se recomienda generar link si Wompi es productivo; si no,
-            // se responde (un asesor comparte el medio de pago).
+            // Pago: solo se genera link si Wompi es productivo; si no, ya quedó como
+            // caso sensible (arriba) y la IA responde.
             SalesIntents::PAYMENT_LINK_REQUEST, SalesIntents::HIGH_INTENT_CLOSE =>
                 $canLink ? SalesIntents::ACTION_GENERATE_PAYMENT_LINK : SalesIntents::ACTION_REPLY,
             SalesIntents::PRICE_OBJECTION        => SalesIntents::ACTION_REGISTER_OBJECTION,
             SalesIntents::DO_NOT_CONTACT_REQUEST => SalesIntents::ACTION_MARK_DNC,
             default                              => SalesIntents::ACTION_REPLY,
+        };
+    }
+
+    /** Razón de la marca de revisión para el equipo (no apaga la IA). */
+    private function staffReviewReason(string $intent, ?string $fallback): string
+    {
+        return match ($intent) {
+            SalesIntents::PAYMENT_LINK_REQUEST, SalesIntents::HIGH_INTENT_CLOSE => 'payment_requested',
+            SalesIntents::FRAUD_OR_PAYMENT_CLAIM  => 'payment_requested',
+            SalesIntents::INVOICE_REQUEST         => 'invoice_requested',
+            SalesIntents::MEDICAL_RISK_ESCALATION => 'medical_caution',
+            SalesIntents::COMPLAINT               => 'complaint',
+            SalesIntents::HUMAN_REQUEST           => 'human_requested',
+            default                               => $fallback ?: 'staff_review',
         };
     }
 

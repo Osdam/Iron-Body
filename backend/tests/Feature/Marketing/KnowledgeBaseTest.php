@@ -225,7 +225,7 @@ class KnowledgeBaseTest extends TestCase
         // Médico → escala.
         $this->postJson('/api/internal/marketing/ai/analyze-message', [
             'marketing_lead_id' => $lead->id, 'body' => 'tengo una lesión', 'auto_execute' => true,
-        ], $this->headers())->assertOk()->assertJsonPath('decision.should_escalate', true);
+        ], $this->headers())->assertOk()->assertJsonPath('decision.needs_staff_review', true);
 
         // do_not_contact → bloquea.
         $this->postJson('/api/internal/marketing/ai/analyze-message', [

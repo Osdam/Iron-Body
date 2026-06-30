@@ -56,18 +56,37 @@ class SalesAgentGuardrailService
             ]);
         }
 
-        // 3) Escalado: casos sensibles los atiende un humano. Nunca link/cierre.
-        if (! empty($decision['should_escalate'])) {
+        // 3) Caso sensible (needs_staff_review): NUNCA se cierra ni se genera link,
+        // pero la IA SIGUE RESPONDIENDO. Se deja una marca interna (staff_review)
+        // sin apagar el bot: jamás human_takeover ni ai_enabled=false automáticos.
+        if (! empty($decision['needs_staff_review'])) {
             $decision['should_generate_payment_link'] = false;
-            $decision['should_schedule_followup']     = false;
-            $decision['followup_delay_minutes']       = null;
-            $decision['recommended_action']           = SalesIntents::ACTION_ESCALATE_HUMAN;
-            $decision['tools_requested']              = [SalesIntents::TOOL_HUMAN_TAKEOVER];
-            // Se conserva un `reply` de espera (no comercial) si lo hay.
+            $tools = (array) ($decision['tools_requested'] ?? []);
+            // Quita cualquier intento de apagar la IA; deja solo staff_review.
+            $tools = array_values(array_filter($tools, fn ($t) => $t !== SalesIntents::TOOL_HUMAN_TAKEOVER));
+            if (! in_array(SalesIntents::TOOL_STAFF_REVIEW, $tools, true)) {
+                $tools[] = SalesIntents::TOOL_STAFF_REVIEW;
+            }
+            $decision['tools_requested'] = $tools;
+            // recommended_action queda en reply (la IA responde); NO escalate_human.
+            if (($decision['recommended_action'] ?? null) === SalesIntents::ACTION_ESCALATE_HUMAN) {
+                $decision['recommended_action'] = SalesIntents::ACTION_REPLY;
+            }
         }
 
-        // 4) safe_to_send: hay una respuesta segura que un humano/n8n podría
-        // enviar. El envío REAL sigue gated por META_ENABLED + flags + auto_execute.
+        // 4) Defensa dura: el flujo automático NUNCA solicita human_takeover.
+        $decision['tools_requested'] = array_values(array_filter(
+            (array) ($decision['tools_requested'] ?? []),
+            fn ($t) => $t !== SalesIntents::TOOL_HUMAN_TAKEOVER,
+        ));
+        if (($decision['recommended_action'] ?? null) === SalesIntents::ACTION_ESCALATE_HUMAN) {
+            $decision['recommended_action'] = SalesIntents::ACTION_REPLY;
+        }
+        // should_escalate ya NO apaga la IA; queda informativo y en false.
+        $decision['should_escalate'] = false;
+
+        // 5) safe_to_send: hay una respuesta segura que se puede enviar. El envío
+        // REAL sigue gated por META_ENABLED + flags + auto_execute.
         $decision['safe_to_send'] = (bool) ($decision['should_reply'] ?? false) && ! empty($decision['reply']);
 
         return $decision;

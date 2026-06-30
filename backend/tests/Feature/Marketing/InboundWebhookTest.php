@@ -248,14 +248,42 @@ class InboundWebhookTest extends TestCase
         $this->assertDatabaseMissing('marketing_ai_actions', ['lead_id' => $lead->id, 'action_type' => 'reply']);
     }
 
-    public function test_human_takeover_blocks_ai(): void
+    public function test_manual_human_takeover_blocks_ai(): void
     {
+        // SOLO un takeover MANUAL del CRM pausa la IA.
         $lead = MarketingLead::create(['channel' => 'whatsapp', 'meta_user_id' => '573150536026', 'status' => 'new']);
-        MarketingConversation::create(['lead_id' => $lead->id, 'channel' => 'whatsapp', 'human_takeover' => true, 'ai_enabled' => false]);
+        MarketingConversation::create([
+            'lead_id' => $lead->id, 'channel' => 'whatsapp',
+            'human_takeover' => true, 'human_takeover_source' => 'manual', 'ai_enabled' => false,
+        ]);
 
         $this->postMeta($this->textPayload('wamid.HT', '573150536026', 'cuánto vale?'))->assertOk();
 
         $this->assertDatabaseHas('marketing_ai_actions', ['lead_id' => $lead->id, 'action_type' => 'inbound_skipped']);
+        $this->assertDatabaseMissing('marketing_ai_actions', ['lead_id' => $lead->id, 'action_type' => 'reply']);
+    }
+
+    public function test_stale_automatic_takeover_is_recovered_and_ai_replies(): void
+    {
+        // Un takeover AUTOMÁTICO previo (sin source manual) NO debe silenciar la IA:
+        // el router lo recupera (human_takeover=false, ai_enabled=true) y responde.
+        Plan::create(['name' => 'Plan Mensual', 'price' => 80000, 'duration_days' => 30, 'active' => true]);
+        $lead = MarketingLead::create(['channel' => 'whatsapp', 'meta_user_id' => '573150536026', 'status' => 'new']);
+        $conv = MarketingConversation::create([
+            'lead_id' => $lead->id, 'channel' => 'whatsapp',
+            'human_takeover' => true, 'human_takeover_source' => null, 'ai_enabled' => false,
+        ]);
+
+        $this->postMeta($this->textPayload('wamid.STALE', '573150536026', 'cuánto vale el plan mensual?'))->assertOk();
+
+        // No se saltó: la IA respondió.
+        $this->assertDatabaseMissing('marketing_ai_actions', ['lead_id' => $lead->id, 'action_type' => 'inbound_skipped']);
+        $this->assertDatabaseHas('marketing_ai_actions', ['lead_id' => $lead->id, 'action_type' => 'reply']);
+
+        // La conversación quedó recuperada (IA activa de nuevo).
+        $conv->refresh();
+        $this->assertFalse((bool) $conv->human_takeover);
+        $this->assertTrue((bool) $conv->ai_enabled);
     }
 
     public function test_pricing_deterministic_works_via_webhook(): void

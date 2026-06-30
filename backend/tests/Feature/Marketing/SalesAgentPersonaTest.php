@@ -180,10 +180,11 @@ class SalesAgentPersonaTest extends TestCase
     public function test_high_intent_pay_escalates_to_human_no_sandbox_link(): void
     {
         $r = $this->reply('quiero pagar');
-        $this->assertTrue($r['decision']['should_escalate']);
+        $this->assertTrue($r['decision']['needs_staff_review']);
         $this->assertFalse($r['decision']['should_generate_payment_link']);
-        $this->assertSame(SalesIntents::ACTION_ESCALATE_HUMAN, $r['decision']['recommended_action']);
-        $this->assertStringContainsStringIgnoringCase('asesor', $r['reply']);
+        $this->assertSame(SalesIntents::ACTION_REPLY, $r['decision']['recommended_action']);
+        // La IA no se apaga: deja la solicitud marcada para el equipo y sigue.
+        $this->assertStringContainsStringIgnoringCase('equipo', $r['reply']);
         $this->assertNoLinkNoLie($r['reply']);
     }
 
@@ -194,14 +195,14 @@ class SalesAgentPersonaTest extends TestCase
         $this->assertStringContainsStringIgnoringCase('asistente de Iron Body', $r['reply']);
         $this->assertStringContainsStringIgnoringCase('persona', $r['reply']);
         // Transparencia NO escala por sí sola.
-        $this->assertFalse($r['decision']['should_escalate']);
+        $this->assertFalse($r['decision']['needs_staff_review']);
     }
 
     public function test_human_request_escalates(): void
     {
         $r = $this->reply('quiero hablar con alguien');
         $this->assertSame(SalesIntents::HUMAN_REQUEST, $r['intent']);
-        $this->assertTrue($r['decision']['should_escalate']);
+        $this->assertTrue($r['decision']['needs_staff_review']);
         $this->assertStringContainsStringIgnoringCase('equipo', $r['reply']);
     }
 
@@ -209,7 +210,7 @@ class SalesAgentPersonaTest extends TestCase
     {
         $r = $this->reply('tengo lesión de rodilla');
         $this->assertSame(SalesIntents::MEDICAL_RISK_ESCALATION, $r['intent']);
-        $this->assertTrue($r['decision']['should_escalate']);
+        $this->assertTrue($r['decision']['needs_staff_review']);
         $this->assertStringContainsStringIgnoringCase('equipo', $r['reply']);
         $this->assertStringNotContainsString('$', $r['reply']);
     }
@@ -218,7 +219,91 @@ class SalesAgentPersonaTest extends TestCase
     {
         $r = $this->reply('necesito factura');
         $this->assertSame(SalesIntents::INVOICE_REQUEST, $r['intent']);
-        $this->assertTrue($r['decision']['should_escalate']);
+        $this->assertTrue($r['decision']['needs_staff_review']);
         $this->assertStringContainsStringIgnoringCase('facturación', $r['reply']);
+    }
+
+    // ── Invariante crítica: LA IA NO SE APAGA SOLA NUNCA ──────────────────────
+    //
+    // En todo caso (normal o sensible) la decisión debe: should_escalate=false,
+    // recommended_action=reply, con un reply seguro listo para enviar. Lo
+    // sensible se marca en needs_staff_review (alerta), sin pausar la IA.
+
+    private function assertAiStaysOn(array $decision): void
+    {
+        $this->assertFalse($decision['should_escalate'], 'La IA no debe escalar/apagarse sola.');
+        $this->assertTrue($decision['should_reply'], 'Siempre debe responder algo seguro.');
+        $this->assertTrue($decision['should_send_message'], 'Siempre debe quedar un mensaje para enviar.');
+        $this->assertSame(SalesIntents::ACTION_REPLY, $decision['recommended_action']);
+        $this->assertNotContains(SalesIntents::TOOL_HUMAN_TAKEOVER, $decision['tools_requested']);
+    }
+
+    /** A — recomposición no escala. */
+    public function test_recomposition_does_not_escalate(): void
+    {
+        $r = $this->reply('quiero ganar masa muscular e ir perdiendo grasa');
+        $this->assertSame(SalesIntents::GOAL_RECOMPOSITION, $r['intent']);
+        $this->assertFalse($r['decision']['needs_staff_review']);
+        $this->assertAiStaysOn($r['decision']);
+        $this->assertStringContainsString('?', $r['reply']);
+        $this->assertStringNotContainsStringIgnoringCase('equipo', $r['reply']);
+    }
+
+    /** B/C/D/E — objetivos e inseguridad NO escalan ni apagan la IA. */
+    public function test_normal_goals_and_insecurity_never_escalate(): void
+    {
+        foreach (['soy principiante', 'estoy gordo y me da pena', 'quiero bajar grasa', 'quiero ganar masa'] as $body) {
+            $r = $this->reply($body);
+            $this->assertFalse($r['decision']['needs_staff_review'], "No debe escalar: {$body}");
+            $this->assertAiStaysOn($r['decision']);
+        }
+    }
+
+    /** F — pago no apaga la IA (sandbox: sin link, marcado para el equipo). */
+    public function test_payment_does_not_disable_ai(): void
+    {
+        $r = $this->reply('quiero pagar el mensual');
+        $this->assertTrue($r['decision']['needs_staff_review']);
+        $this->assertFalse($r['decision']['should_generate_payment_link']);
+        $this->assertAiStaysOn($r['decision']);
+        $this->assertNoLinkNoLie($r['reply']);
+    }
+
+    /** G — factura no apaga la IA. */
+    public function test_invoice_does_not_disable_ai(): void
+    {
+        $r = $this->reply('necesito una factura electrónica');
+        $this->assertTrue($r['decision']['needs_staff_review']);
+        $this->assertAiStaysOn($r['decision']);
+    }
+
+    /** H — lesión no apaga la IA. */
+    public function test_injury_does_not_disable_ai(): void
+    {
+        $r = $this->reply('tengo una lesión en la rodilla');
+        $this->assertTrue($r['decision']['needs_staff_review']);
+        $this->assertAiStaysOn($r['decision']);
+    }
+
+    /** I — pedir humano no apaga la IA. */
+    public function test_human_request_does_not_disable_ai(): void
+    {
+        $r = $this->reply('quiero hablar con una persona del equipo');
+        $this->assertTrue($r['decision']['needs_staff_review']);
+        $this->assertAiStaysOn($r['decision']);
+    }
+
+    /** J — tras despedirse, un "hola" posterior vuelve a ser atendido. */
+    public function test_goodbye_then_hola_still_replies(): void
+    {
+        $bye = $this->reply('chao');
+        $this->assertSame(SalesIntents::GOODBYE, $bye['intent']);
+        $this->assertAiStaysOn($bye['decision']);
+
+        // La IA sigue viva: el siguiente mensaje se atiende con normalidad.
+        $hi = $this->reply('hola');
+        $this->assertSame(SalesIntents::GREETING, $hi['intent']);
+        $this->assertAiStaysOn($hi['decision']);
+        $this->assertStringContainsStringIgnoringCase('bienvenido', $hi['reply']);
     }
 }

@@ -56,6 +56,11 @@ class SalesConversationReplyService
                 'Perfecto. Para ganar masa lo clave es entrenar constante y con buena guía. '
                 .'¿Ya has entrenado antes o estás empezando?',
 
+            SalesIntents::GOAL_RECOMPOSITION =>
+                'Eso se puede trabajar como recomposición corporal: ganar músculo y bajar grasa '
+                .'poco a poco. Lo clave es hacerlo con constancia y buena guía. '
+                .'¿Ya has entrenado antes o estás empezando?',
+
             SalesIntents::LOCATION_QUESTION =>
                 'Estamos en '.self::ADDRESS.'. ¿Vas a ir por primera vez?',
 
@@ -81,23 +86,28 @@ class SalesConversationReplyService
                 .'prefieres, también te paso con una persona del equipo.',
 
             SalesIntents::HUMAN_REQUEST =>
-                'Claro. Te paso con alguien del equipo para que te atienda directo.',
+                'Claro, dejo marcada tu solicitud para que alguien del equipo la revise. Igual sigo '
+                .'por aquí si quieres que te ayude con precios, ubicación o planes.',
 
             SalesIntents::COMPLAINT =>
-                'Lamento que hayas tenido una mala experiencia. Te paso con alguien del equipo para '
-                .'que revise tu caso y te ayude bien.',
+                'Entiendo. Lo dejo marcado como caso para revisión del equipo. Para ayudarte mejor, '
+                .'¿me cuentas qué pasó exactamente?',
 
             SalesIntents::INVOICE_REQUEST =>
-                'Claro. Para facturación te paso con alguien del equipo y así toman los datos '
-                .'correctamente.',
+                'Claro. Para factura necesito que el equipo confirme los datos correctos para no '
+                .'cometer errores. Te dejo marcada la solicitud de facturación. Si quieres, también '
+                .'puedo ayudarte con información de planes o ubicación.',
 
             SalesIntents::MEDICAL_RISK_ESCALATION =>
-                'Gracias por contarlo. En ese caso prefiero que lo revise alguien del equipo contigo, '
-                .'para orientarte con cuidado y no recomendarte algo que te moleste más.',
+                'Gracias por contarlo. Con una lesión es mejor no recomendar ejercicios específicos '
+                .'por aquí para no darte una orientación irresponsable. Te dejo marcado que necesitas '
+                .'revisión del equipo, y mientras tanto puedo ayudarte con información general de '
+                .'planes o ubicación.',
 
             SalesIntents::FRAUD_OR_PAYMENT_CLAIM =>
-                'Para revisar tu caso con cuidado, lo va a atender una persona del equipo. La '
-                .'membresía solo queda activa cuando el pago está confirmado en el sistema.',
+                'Tranquilo, lo dejo marcado para que el equipo revise tu caso de pago con cuidado. La '
+                .'membresía solo queda activa cuando el pago está confirmado. ¿Quieres que te ayude '
+                .'con algo más mientras tanto?',
 
             SalesIntents::GOODBYE =>
                 'De una, tranquilo. Si más adelante quieres empezar o resolver dudas, me escribes y '
@@ -122,8 +132,20 @@ class SalesConversationReplyService
      */
     public function paymentPendingReply(): string
     {
-        return 'Listo. Por ahora un asesor te comparte el medio de pago para hacerlo correctamente. '
-            .'¿Es para el plan mensual?';
+        return 'Perfecto. Todavía no tengo habilitado el pago automático por aquí, así que te dejo '
+            .'la solicitud lista para que el equipo confirme el medio correcto. Mientras tanto, '
+            .'¿quieres que lo dejemos para el plan mensual?';
+    }
+
+    /**
+     * Respuesta SEGURA para un caso sensible que no encaja en una intención
+     * concreta: la IA ayuda hasta donde puede y deja la parte puntual marcada para
+     * revisión del equipo, SIN cortar la conversación. La IA nunca se apaga.
+     */
+    public function staffReviewReply(): string
+    {
+        return 'Te ayudo con lo que puedo por aquí. Para esa parte puntual, lo dejo marcado para '
+            .'revisión del equipo, pero seguimos si tienes otra duda.';
     }
 
     /**

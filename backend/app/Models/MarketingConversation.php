@@ -9,7 +9,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class MarketingConversation extends Model
 {
     protected $fillable = [
-        'lead_id', 'channel', 'status', 'last_message_at', 'human_takeover', 'ai_enabled',
+        'lead_id', 'channel', 'status', 'last_message_at', 'human_takeover',
+        'human_takeover_source', 'ai_enabled',
         // Memoria comercial (aditivo).
         'summary', 'detected_objective', 'lead_score', 'lead_stage',
         'primary_intent', 'last_intent',
