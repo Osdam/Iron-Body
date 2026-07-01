@@ -205,6 +205,20 @@ class MarketingAgentActionTest extends TestCase
         $this->assertDatabaseHas('marketing_appointments', ['marketing_conversation_id' => $this->conversation->id, 'marketing_lead_id' => $this->lead->id, 'type' => 'visit']);
     }
 
+    public function test_execute_create_follow_up_persists_conversation(): void
+    {
+        $a = $this->suggestion('create_follow_up', ['due_at' => now()->addDay()->toIso8601String(), 'type' => 'call', 'reason' => 'seguir interés']);
+
+        $this->postJson($this->url("/{$a->id}/execute"), [], $this->saHeaders)
+            ->assertOk()->assertJsonPath('data.status', 'executed');
+
+        $this->assertDatabaseHas('marketing_followups', [
+            'lead_id'                   => $this->lead->id,
+            'marketing_conversation_id' => $this->conversation->id,
+            'status'                    => 'pending',
+        ]);
+    }
+
     public function test_execute_draft_reply_does_not_send_whatsapp(): void
     {
         $a = $this->suggestion('draft_reply', ['draft' => 'Hola, te comparto info']);
