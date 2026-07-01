@@ -131,13 +131,34 @@ class MarketingAgentActionController extends Controller
             return response()->json(['ok' => false, 'code' => 'agent_actions_forbidden', 'message' => 'No puedes analizar una conversación de otro asesor.'], 403);
         }
 
-        $created = $engine->recommend($conversation);
+        $result = $engine->recommend($conversation);
+        $created = $result['created'];
+        $skipped = $result['skipped'];
+        $reason = $result['reason'];
 
+        // Respuesta SIEMPRE 200 con JSON explícito (nunca 204 silencioso).
         return response()->json([
-            'ok'      => true,
-            'created' => count($created),
-            'data'    => collect($created)->map(fn ($a) => $this->actions->present($a))->all(),
-        ]);
+            'ok'            => true,
+            'created_count' => count($created),
+            'actions'       => collect($created)->map(fn ($a) => $this->actions->present($a))->all(),
+            'skipped'       => $skipped,
+            'reason'        => $reason,
+            'message'       => $this->recommendMessage(count($created), $skipped, $reason),
+        ], 200);
+    }
+
+    /** Mensaje legible para el CRM según el resultado del análisis. */
+    private function recommendMessage(int $createdCount, array $skipped, ?string $reason): string
+    {
+        if ($createdCount > 0) {
+            return "Se generaron {$createdCount} acción(es) sugerida(s).";
+        }
+
+        return match ($reason) {
+            'conversation_has_no_messages' => 'La conversación aún no tiene mensajes del lead para analizar.',
+            'all_suggestions_deduplicated' => 'No se generaron acciones nuevas: ya existen sugerencias abiertas para esta conversación.',
+            default                        => 'No se generaron acciones nuevas para esta conversación.',
+        };
     }
 
     // ── Citas/acciones de una conversación ───────────────────────────────────

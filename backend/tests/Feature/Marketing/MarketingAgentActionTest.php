@@ -76,12 +76,67 @@ class MarketingAgentActionTest extends TestCase
         $this->inbound('hola, cuanto vale la mensualidad?');
 
         $res = $this->postJson($this->url('/recommend'), ['marketing_conversation_id' => $this->conversation->id], $this->saHeaders)
-            ->assertOk()->assertJsonPath('ok', true);
+            ->assertStatus(200) // nunca 204
+            ->assertJsonPath('ok', true);
 
-        $this->assertGreaterThan(0, $res->json('created'));
-        $types = collect($res->json('data'))->pluck('action_type')->all();
+        $this->assertGreaterThan(0, $res->json('created_count'));
+        $types = collect($res->json('actions'))->pluck('action_type')->all();
         $this->assertContains('add_tag', $types);
         $this->assertContains('draft_reply', $types);
+    }
+
+    public function test_recommend_generates_actions_for_plan_info(): void
+    {
+        // Mensaje comercial real que ANTES no generaba nada.
+        $this->inbound('quiero informacion de planes, plan mensual');
+
+        $res = $this->postJson($this->url('/recommend'), ['marketing_conversation_id' => $this->conversation->id], $this->saHeaders)
+            ->assertStatus(200)
+            ->assertJsonPath('ok', true);
+
+        $this->assertGreaterThan(0, $res->json('created_count'));
+        $types = collect($res->json('actions'))->pluck('action_type')->all();
+        $this->assertContains('add_tag', $types);
+        $this->assertContains('draft_reply', $types);
+    }
+
+    public function test_recommend_returns_json_never_204(): void
+    {
+        $this->inbound('cuanto cuesta?');
+        $res = $this->postJson($this->url('/recommend'), ['marketing_conversation_id' => $this->conversation->id], $this->saHeaders);
+
+        $res->assertStatus(200);
+        $this->assertNotSame(204, $res->getStatusCode());
+        $res->assertJsonStructure(['ok', 'created_count', 'actions', 'skipped', 'reason', 'message']);
+    }
+
+    public function test_recommend_without_messages_returns_reason(): void
+    {
+        // Conversación sin mensajes del lead.
+        $this->postJson($this->url('/recommend'), ['marketing_conversation_id' => $this->conversation->id], $this->saHeaders)
+            ->assertStatus(200)
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('created_count', 0)
+            ->assertJsonPath('reason', 'conversation_has_no_messages');
+
+        $this->assertDatabaseCount('marketing_agent_actions', 0);
+    }
+
+    public function test_recommend_duplicates_returns_skipped(): void
+    {
+        $this->inbound('cuanto cuesta el plan?');
+        $first = $this->postJson($this->url('/recommend'), ['marketing_conversation_id' => $this->conversation->id], $this->saHeaders)->assertStatus(200);
+        $this->assertGreaterThan(0, $first->json('created_count'));
+        $firstCount = MarketingAgentAction::count();
+
+        // Segundo análisis: no crea nuevas, pero devuelve skipped con detalle.
+        $res = $this->postJson($this->url('/recommend'), ['marketing_conversation_id' => $this->conversation->id], $this->saHeaders)
+            ->assertStatus(200)
+            ->assertJsonPath('created_count', 0)
+            ->assertJsonPath('reason', 'all_suggestions_deduplicated');
+
+        $this->assertNotEmpty($res->json('skipped'));
+        $this->assertSame($firstCount, MarketingAgentAction::count());
     }
 
     public function test_recommend_for_conversation_route(): void
