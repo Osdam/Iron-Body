@@ -12,6 +12,7 @@ use App\Models\MembershipSubscription;
 use App\Models\Plan;
 use App\Models\User;
 use App\Models\WompiPaymentSource;
+use App\Services\Subscriptions\MembershipSubscriptionRefreshService;
 use App\Services\Subscriptions\MembershipSubscriptionService;
 use App\Services\Subscriptions\RecurringBillingService;
 use App\Models\SubscriptionEvent;
@@ -141,6 +142,14 @@ class MembershipSubscriptionController extends Controller
             ->orderByRaw("CASE WHEN status IN ('active','past_due','pending_first_payment','paused') THEN 0 ELSE 1 END")
             ->latest('id')
             ->first();
+
+        // Refresh OPCIONAL y seguro (?refresh=1): reconcilia el cobro en vuelo sin
+        // saturar Wompi (lock + throttle). Sin el flag, comportamiento idéntico.
+        if ($sub && $request->boolean('refresh')) {
+            $sub = MembershipSubscriptionRefreshService::make()
+                ->refresh($sub)
+                ->load(['plan', 'paymentSource']);
+        }
 
         return response()->json(['data' => $sub ? new SubscriptionResource($sub) : null]);
     }
