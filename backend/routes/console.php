@@ -139,6 +139,18 @@ if ((bool) config('wompi.reconciliation.enabled', true)) {
         ->onOneServer();
 }
 
+// ── Wompi: cobro recurrente de suscripciones vencidas (pago automático) ────────
+// INERTE por defecto: solo se agenda si WOMPI_RECURRING_ENABLED=true (el comando
+// además revalida el flag en runtime). Idempotente (lock por suscripción +
+// billing_period único): correrlo varias veces NO cobra dos veces. Corre a diario
+// (el vencimiento es por FECHA) + reintentos por día según WOMPI_RECURRING_RETRY_DAYS.
+if ((bool) config('wompi.recurring.enabled', false)) {
+    Schedule::command('subscriptions:charge-due')
+        ->dailyAt('06:00')
+        ->withoutOverlapping()
+        ->onOneServer();
+}
+
 // ── Factus: reconciliación de comprobantes + reintento de errores técnicos ────
 // INERTE por defecto: solo se agenda si FACTUS_ENABLED=true (y la reconciliación
 // activa). Los jobs además revalidan el flag en runtime, así que un cambio de

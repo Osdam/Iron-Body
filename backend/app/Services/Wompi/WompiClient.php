@@ -89,6 +89,79 @@ class WompiClient
         return $this->request('GET', '/transactions/'.$id, auth: 'private');
     }
 
+    // ── Fuentes de pago / cobro recurrente (payment_sources) ─────────────────
+    // Los tres métodos son INERTES si WOMPI_RECURRING_ENABLED=false: devuelven un
+    // error controlado y NO tocan la red. Así el módulo queda "preparado, apagado"
+    // sin poder cobrar nada por accidente. Ninguno loguea token/datos sensibles.
+
+    /**
+     * POST /payment_sources — crea una fuente de pago tokenizada (CARD/NEQUI) para
+     * cobros recurrentes. Llave PRIVADA. Sin reintento a ciegas (no aplica a un
+     * POST con efecto). El `token` (tok_.../nequi) NUNCA se loguea.
+     *
+     * @param  array  $data  { type, token, customer_email, acceptance_token, accept_personal_auth }
+     */
+    public function createPaymentSource(array $data, ?string $idempotencyKey = null): array
+    {
+        if (! $this->recurringEnabled()) {
+            return $this->recurringDisabledError();
+        }
+
+        $payload = array_filter([
+            'type'                 => strtoupper((string) ($data['type'] ?? 'CARD')),
+            'token'                => $data['token'] ?? null,
+            'customer_email'       => $data['customer_email'] ?? null,
+            'acceptance_token'     => $data['acceptance_token'] ?? null,
+            'accept_personal_auth' => $data['accept_personal_auth'] ?? null,
+        ], fn ($v) => $v !== null && $v !== '');
+
+        // Validación mínima ANTES de gastar una llamada (y sin filtrar el token).
+        if (empty($payload['token']) || empty($payload['customer_email'])
+            || empty($payload['acceptance_token']) || empty($payload['accept_personal_auth'])) {
+            return $this->transportError('Datos insuficientes para crear la fuente de pago.');
+        }
+
+        return $this->request('POST', '/payment_sources', auth: 'private', body: $payload, idempotencyKey: $idempotencyKey, retry: false);
+    }
+
+    /** GET /payment_sources/{id} — estado de la fuente (AVAILABLE/DECLINED/...). */
+    public function getPaymentSource(string|int $id): array
+    {
+        if (! $this->recurringEnabled()) {
+            return $this->recurringDisabledError();
+        }
+        $id = trim((string) $id);
+        if ($id === '') {
+            return $this->transportError('Falta el id de la fuente de pago.');
+        }
+        return $this->request('GET', '/payment_sources/'.$id, auth: 'private');
+    }
+
+    /**
+     * POST /transactions con `payment_source_id` — COBRO RECURRENTE sin presencia
+     * del usuario. Llave PRIVADA. Sin reintento a ciegas (anti doble cobro): la
+     * idempotencia se garantiza aguas arriba (reference única + billing_period).
+     *
+     * SEPARACIÓN DE RESPONSABILIDADES: la firma de integridad la calcula el caller
+     * (WompiSignatureService) y llega ya en `$payload['signature']`; este cliente
+     * NUNCA conoce el integrity_secret. Igual que el flujo de pago único.
+     *
+     * @param  array  $payload  { payment_source_id, amount_in_cents, currency,
+     *                            reference, signature, customer_email,
+     *                            recurrent, payment_method?:{installments} }
+     */
+    public function chargeWithPaymentSource(array $payload, ?string $idempotencyKey = null): array
+    {
+        if (! $this->recurringEnabled()) {
+            return $this->recurringDisabledError();
+        }
+        if (empty($payload['payment_source_id']) || empty($payload['reference'])
+            || empty($payload['amount_in_cents']) || empty($payload['signature'])) {
+            return $this->transportError('Datos insuficientes para el cobro recurrente. No se realizó ningún cobro.');
+        }
+        return $this->request('POST', '/transactions', auth: 'private', body: $payload, idempotencyKey: $idempotencyKey, retry: false);
+    }
+
     /**
      * POST a una URL ABSOLUTA devuelta por Wompi (p. ej. `url_services` de
      * DaviPlata para el ciclo OTP). Misma sanitización y normalización; sin
@@ -227,6 +300,26 @@ class WompiClient
         }
 
         return $req;
+    }
+
+    /** ¿El módulo de cobro recurrente está habilitado? (apagado por defecto). */
+    private function recurringEnabled(): bool
+    {
+        return (bool) data_get($this->cfg, 'recurring.enabled', false);
+    }
+
+    /** Error controlado cuando el módulo recurrente está apagado (no llama a Wompi). */
+    private function recurringDisabledError(): array
+    {
+        return [
+            'ok'             => false,
+            'status'         => 0,
+            'data'           => [],
+            'error'          => 'El pago automático no está habilitado.',
+            'error_code'     => 'RECURRING_DISABLED',
+            'raw'            => [],
+            'correlation_id' => (string) Str::uuid(),
+        ];
     }
 
     private function transportError(string $message, ?string $correlationId = null): array

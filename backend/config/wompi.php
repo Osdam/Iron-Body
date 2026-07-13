@@ -106,6 +106,43 @@ return [
         'max_pending_minutes' => (int) env('WOMPI_MAX_PENDING_MINUTES', 60),
     ],
 
+    // ── Pago automático / Suscripciones recurrentes (payment_sources) ────────
+    // Módulo APAGADO por defecto. Con `enabled=false`, los métodos de fuentes de
+    // pago del WompiClient (createPaymentSource/getPaymentSource/chargeWithPayment
+    // Source) son INERTES: devuelven un error controlado y NO llaman a Wompi. No
+    // afecta en nada el flujo de pago único. 3DS/3RI requieren activación manual
+    // con el equipo de fraude de Wompi → quedan en false hasta confirmarla.
+    'recurring' => [
+        'enabled'     => filter_var(env('WOMPI_RECURRING_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'sandbox'     => filter_var(env('WOMPI_RECURRING_SANDBOX', true), FILTER_VALIDATE_BOOLEAN),
+        // 3D Secure para crear fuentes de pago (Visa/Mastercard).
+        '3ds_enabled' => filter_var(env('WOMPI_3DS_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        // 3RI: transacciones automáticas autenticadas (SOLO Mastercard).
+        '3ri_enabled' => filter_var(env('WOMPI_3RI_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        // Reintentos de cobro antes de marcar la suscripción past_due.
+        'max_retries' => max(0, (int) env('WOMPI_RECURRING_MAX_RETRIES', 3)),
+        // Días de gracia de acceso tras un fallo de cobro (0 = sin gracia extra).
+        'grace_days'  => max(0, (int) env('WOMPI_RECURRING_GRACE_DAYS', 0)),
+        // Escalera de reintentos en días tras un cobro fallido (CSV → array de int
+        // positivos y ordenados). Ej: "1,3" → [1, 3] (reintenta a +1d y +3d).
+        'retry_days'  => (function (): array {
+            $days = array_filter(array_map(
+                static fn ($d): int => (int) trim((string) $d),
+                explode(',', (string) env('WOMPI_RECURRING_RETRY_DAYS', '1,3'))
+            ), static fn (int $d): bool => $d > 0);
+            $days = array_values(array_unique($days));
+            sort($days);
+            return $days;
+        })(),
+        // Métodos habilitados para cobro automático. Solo tarjeta por ahora; Nequi
+        // queda modelado pero apagado (decisión de negocio confirmada). PSE,
+        // DaviPlata y Bancolombia NO soportan cobro desatendido → nunca aquí.
+        'methods' => [
+            'card'  => filter_var(env('WOMPI_RECURRING_METHOD_CARD', true), FILTER_VALIDATE_BOOLEAN),
+            'nequi' => filter_var(env('WOMPI_RECURRING_METHOD_NEQUI', false), FILTER_VALIDATE_BOOLEAN),
+        ],
+    ],
+
     // ── DaviPlata (ciclo OTP) ───────────────────────────────────────────────
     // Tras crear la transacción, Wompi entrega `payment_method.extra.url_services`
     // (token + code_otp_send + code_otp_validate) que pueden NO venir en la primera

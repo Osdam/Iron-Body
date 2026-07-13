@@ -260,6 +260,30 @@ Route::middleware('auth.member')->prefix('payments/wompi')->group(function (): v
         ->where('reference', '[A-Za-z0-9_\-]+')->middleware('throttle:60,1');
 });
 
+// ── Pago automático de membresías (suscripciones recurrentes Wompi) — MIEMBRO ──
+// Todo detrás de WOMPI_RECURRING_ENABLED (apagado por defecto): con el flag off,
+// `authorize` informa recurring_enabled=false y crear responde 503 controlado. El
+// sujeto se toma del miembro autenticado; el monto/duración son del backend.
+Route::middleware('auth.member')->prefix('memberships/subscriptions')->group(function (): void {
+    $ctrl = \App\Http\Controllers\Api\MembershipSubscriptionController::class;
+    Route::post('authorize',   [$ctrl, 'authorize'])->middleware('throttle:20,1');
+    Route::post('/',           [$ctrl, 'store'])->middleware('throttle:6,1');
+    Route::get('current',      [$ctrl, 'current'])->middleware('throttle:30,1');
+    Route::post('{id}/cancel', [$ctrl, 'cancel'])->where('id', '[0-9]+')->middleware('throttle:10,1');
+    Route::post('{id}/payment-source', [$ctrl, 'replacePaymentSource'])
+        ->where('id', '[0-9]+')->middleware('throttle:6,1');
+});
+
+// ── Pago automático de membresías — ADMIN (auth.admin) ────────────────────────
+// Solo lectura + acciones idempotentes (retry manual, cancelación auditada).
+Route::middleware('auth.admin')->prefix('admin/subscriptions')->group(function (): void {
+    $ctrl = \App\Http\Controllers\Api\Admin\AdminSubscriptionController::class;
+    Route::get('/',            [$ctrl, 'index']);
+    Route::get('{id}',         [$ctrl, 'show'])->where('id', '[0-9]+');
+    Route::post('{id}/retry',  [$ctrl, 'retry'])->where('id', '[0-9]+');
+    Route::post('{id}/cancel', [$ctrl, 'cancel'])->where('id', '[0-9]+');
+});
+
 // ── Nutrición premium: búsqueda de alimentos / barcode / OCR / tracking ───────
 // Módulo NUEVO (tablas nutrition_foods/entries/...) independiente del nutricional
 // previo (app/nutrition/*). Flutter NUNCA llama a proveedores externos; todo pasa

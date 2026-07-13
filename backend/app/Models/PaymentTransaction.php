@@ -39,6 +39,8 @@ class PaymentTransaction extends Model
         'redirect_url', 'approved_at', 'declined_at', 'voided_at', 'failed_at',
         'expires_at', 'last_reconciled_at', 'retry_count', 'card_brand',
         'card_last_four', 'installments', 'metadata',
+        // Cobro recurrente / suscripciones (aditivo; null en el pago único).
+        'subscription_id', 'billing_period', 'is_recurring', 'wompi_payment_source_id',
     ];
 
     protected $casts = [
@@ -56,6 +58,9 @@ class PaymentTransaction extends Model
         'last_reconciled_at' => 'datetime',
         'retry_count'        => 'integer',
         'installments'       => 'integer',
+        // Cobro recurrente (aditivo).
+        'subscription_id'    => 'integer',
+        'is_recurring'       => 'boolean',
     ];
 
     public function user()

@@ -206,6 +206,23 @@ class WompiTransactionService
                 RealtimeEvents::payment($fresh->member_id);
                 RealtimeEvents::membership($fresh->member_id);
                 RealtimeEvents::appState($fresh->member_id);
+
+                // Cierre de suscripción recurrente (ADITIVO, idempotente, best-effort).
+                // Solo aplica si la transacción pertenece a una suscripción; en el pago
+                // único `subscription_id` es null y esto no hace nada. Corre UNA vez
+                // (guardado por $changed), así que webhook/reconciliación/cobro directo
+                // convergen aquí sin doble activación. Nunca rompe la confirmación.
+                if ($fresh->subscription_id) {
+                    try {
+                        \App\Services\Subscriptions\MembershipSubscriptionService::make()
+                            ->markChargeApproved($fresh);
+                    } catch (\Throwable $e) {
+                        Log::warning('subscriptions.close_on_approved.failed', [
+                            'reference' => $fresh->reference,
+                            'error'     => $e->getMessage(),
+                        ]);
+                    }
+                }
             }
 
             // Notificación de rechazo (best-effort, idempotente por event_key).
@@ -217,6 +234,26 @@ class WompiTransactionService
                     app(\App\Services\NotificationService::class)->notifyPaymentRejected($member, $fresh);
                 } catch (\Throwable $e) {
                     Log::warning('Wompi: notificación de rechazo falló', ['error' => $e->getMessage()]);
+                }
+            }
+
+            // Cierre de suscripción recurrente FALLIDA (ADITIVO, idempotente,
+            // best-effort). Cubre DECLINED/ERROR/VOIDED/EXPIRED — incluye EXPIRED
+            // (que fija la reconciliación) además de los estados de rechazo. Solo
+            // aplica si la transacción pertenece a una suscripción; en el pago único
+            // `subscription_id` es null y no hace nada. Corre una vez ($changed).
+            if ($changed && $fresh->subscription_id && in_array($next, [
+                PaymentStateMachine::DECLINED, PaymentStateMachine::ERROR,
+                PaymentStateMachine::VOIDED, PaymentStateMachine::EXPIRED,
+            ], true)) {
+                try {
+                    \App\Services\Subscriptions\MembershipSubscriptionService::make()
+                        ->markChargeFailed($fresh);
+                } catch (\Throwable $e) {
+                    Log::warning('subscriptions.close_on_failed.failed', [
+                        'reference' => $fresh->reference,
+                        'error'     => $e->getMessage(),
+                    ]);
                 }
             }
 

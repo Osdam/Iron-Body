@@ -280,30 +280,9 @@ class WompiPaymentController extends Controller
 
     private function ensureUserForMember(Member $member): User
     {
-        if ($member->user) {
-            return $member->user;
-        }
-        $user = User::query()->where('document', $member->document_number)->first();
-        if (! $user && $member->email) {
-            $user = User::query()->where('email', $member->email)->first();
-        }
-        if (! $user) {
-            $email = $member->email ?: "member-{$member->id}@ironbody.local";
-            if (User::query()->where('email', $email)->exists()) {
-                $email = "member-{$member->id}-{$member->document_number}@ironbody.local";
-            }
-            $user = User::create([
-                'name'     => $member->full_name,
-                'email'    => $email,
-                'password' => Hash::make(\Illuminate\Support\Str::random(40)),
-                'document' => $member->document_number,
-                'phone'    => $member->phone,
-                'status'   => 'pending',
-            ]);
-        }
-        $member->forceFill(['user_id' => $user->id])->save();
-
-        return $user;
+        // Lógica extraída a MemberUserResolver (compartida con el pago automático);
+        // comportamiento idéntico.
+        return app(\App\Services\Members\MemberUserResolver::class)->resolve($member);
     }
 
     private function statusMessage(string $status): string
