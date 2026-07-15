@@ -71,8 +71,10 @@ class AuthenticateMember
             );
         }
 
-        // (2) Compatibilidad: access_hash permanente.
-        $member = Member::where('access_hash', $token)->first();
+        // (2) Compatibilidad: access_hash permanente (rechazado si fue revocado).
+        $member = Member::where('access_hash', $token)
+            ->whereNull('access_hash_revoked_at')
+            ->first();
         if (! $member) {
             return $this->unauthorized($request, 'invalid_token', 'Token inválido.');
         }

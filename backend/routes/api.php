@@ -187,9 +187,14 @@ Route::middleware(['trainer.feature:trainer_classes_enabled', 'auth.trainer'])->
 Route::middleware('member.registration.token')->group(function () {
     Route::get('members/incomplete', [MemberRegistrationController::class, 'incomplete']);
     // ── Login con verificación en dos pasos (OTP por SMS) ─────────────────────
-    Route::post('members/login', [AuthController::class, 'login']);
-    Route::post('members/login/verify', [AuthController::class, 'verifyOtp']);
-    Route::post('members/login/resend', [AuthController::class, 'resendOtp']);
+    // Throttle por IP: acota fuerza bruta de OTP y spam/coste de SMS. El límite
+    // por reto (otp.max_attempts) sigue vigente; esto limita crear retos nuevos.
+    Route::post('members/login', [AuthController::class, 'login'])
+        ->middleware('throttle:6,1');
+    Route::post('members/login/verify', [AuthController::class, 'verifyOtp'])
+        ->middleware('throttle:10,1');
+    Route::post('members/login/resend', [AuthController::class, 'resendOtp'])
+        ->middleware('throttle:4,1');
     // Tercer factor: reconocimiento facial del titular (match on-device).
     Route::post('members/login/face-reference', [AuthController::class, 'faceReference']);
     Route::post('members/login/face-verify', [AuthController::class, 'faceVerify']);
@@ -865,20 +870,27 @@ Route::get('exercises/gif/{filename}', [ExerciseController::class, 'gif']);
 Route::get('exercises/fitgif/gif/{id}', [ExerciseController::class, 'fitgifGif']);
 Route::get('exercises/fitgif/video/{file}', [ExerciseController::class, 'fitgifVideo'])
     ->where('file', '[A-Za-z0-9_\-]+\.mp4');
-Route::post('exercises/sync', [ExerciseController::class, 'sync']);
+// Mantenimiento: repobla GIFs desde proveedores externos (coste/latencia). Solo
+// admin y con throttle; antes estaba público y era abusable (BACK-009).
+Route::post('exercises/sync', [ExerciseController::class, 'sync'])
+    ->middleware(['auth.admin', 'throttle:3,1']);
 Route::get('exercises', [ExerciseController::class, 'index']);
 Route::get('exercises/{id}', [ExerciseController::class, 'show']);
 
-// ── Notificaciones — APP Flutter (audience=member; por documento o access_hash) ─
+// ── Notificaciones — APP Flutter (audience=member) ────────────────────────────
+// Identidad SOLO por Bearer (session_token o access_hash) vía auth.member; nunca
+// por ?document= (evita IDOR: leer/borrar notificaciones de otro miembro).
 // Rutas estáticas ANTES de las que llevan {uuid} para evitar colisiones.
-Route::get('notifications/unread-count', [NotificationController::class, 'unreadCount']);
-Route::get('notifications/stream', [NotificationController::class, 'stream']); // SSE tiempo real
-Route::get('notifications/popup-pending', [NotificationController::class, 'popupPending']);
-Route::post('notifications/read-all',    [NotificationController::class, 'readAll']);
-Route::get('notifications',              [NotificationController::class, 'index']);
-Route::post('notifications/{uuid}/popup-shown', [NotificationController::class, 'popupShown']);
-Route::post('notifications/{uuid}/read', [NotificationController::class, 'markRead']);
-Route::delete('notifications/{uuid}',    [NotificationController::class, 'destroy']);
+Route::middleware('auth.member')->group(function (): void {
+    Route::get('notifications/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::get('notifications/stream', [NotificationController::class, 'stream']); // SSE tiempo real
+    Route::get('notifications/popup-pending', [NotificationController::class, 'popupPending']);
+    Route::post('notifications/read-all',    [NotificationController::class, 'readAll']);
+    Route::get('notifications',              [NotificationController::class, 'index']);
+    Route::post('notifications/{uuid}/popup-shown', [NotificationController::class, 'popupShown']);
+    Route::post('notifications/{uuid}/read', [NotificationController::class, 'markRead']);
+    Route::delete('notifications/{uuid}',    [NotificationController::class, 'destroy']);
+});
 
 // ── Notificaciones — CRM Angular (audience=admin) ─────────────────────────────
 Route::prefix('admin/notifications')->group(function (): void {

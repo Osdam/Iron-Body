@@ -37,6 +37,11 @@ class Member extends Model
 
     public const BIOMETRIC_MANUAL_REQUIRED = 'manual_required';
 
+    // Zona horaria de operación del negocio. La vigencia de la membresía se
+    // calcula al fin del día LOCAL (no UTC): si no, el acceso se cortaría ~5h
+    // antes de la medianoche real de Colombia el último día del plan.
+    public const BUSINESS_TZ = 'America/Bogota';
+
     protected $fillable = [
         'member_uuid',
         'user_id',
@@ -56,6 +61,7 @@ class Member extends Model
         'biometric_status',
         'status',
         'anonymized_at',
+        'access_hash_revoked_at',
         'profile_photo_url',
         'profile_photo_path',
         'profile_photo_updated_at',
@@ -72,6 +78,7 @@ class Member extends Model
             'is_minor' => 'boolean',
             'is_staff' => 'boolean',
             'anonymized_at' => 'datetime',
+            'access_hash_revoked_at' => 'datetime',
             'profile_photo_updated_at' => 'datetime',
         ];
     }
@@ -111,7 +118,23 @@ class Member extends Model
             return $session->member;
         }
 
-        return self::where('access_hash', $token)->first();
+        // Fallback por access_hash permanente: sólo si NO fue revocado (BACK-006).
+        return self::where('access_hash', $token)
+            ->whereNull('access_hash_revoked_at')
+            ->first();
+    }
+
+    /**
+     * Revoca el `access_hash` permanente como bearer (BACK-006): a partir de
+     * ahora sólo sirven los `session_token` de dispositivo. Se usa como
+     * kill-switch ante sospecha de filtración. Idempotente.
+     */
+    public function revokeAccessHash(): void
+    {
+        if ($this->access_hash_revoked_at !== null) {
+            return;
+        }
+        $this->forceFill(['access_hash_revoked_at' => now()])->save();
     }
 
     public static function normalizeDocumentNumber(?string $documentNumber): ?string
@@ -290,8 +313,10 @@ class Member extends Model
         }
 
         $plan = $user->plan ? Plan::where('name', $user->plan)->first() : null;
+        // Fin del día en la zona del negocio (no UTC): la membresía sigue vigente
+        // hasta la medianoche local del último día del plan.
         $expiresAt = $user->membershipEndDate
-            ? Carbon::parse($user->membershipEndDate)->endOfDay()
+            ? Carbon::parse($user->membershipEndDate, self::BUSINESS_TZ)->endOfDay()
             : null;
         $isExpired = $expiresAt && $expiresAt->isPast();
 

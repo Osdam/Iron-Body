@@ -5,6 +5,7 @@ use App\Http\Middleware\AuthenticateTrainer;
 use App\Http\Middleware\EnsureAdminAuth;
 use App\Http\Middleware\EnsureMemberRegistrationToken;
 use App\Http\Middleware\ProtectAdminPaths;
+use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\EnsureTrainerFeature;
 use App\Http\Middleware\EnsureTrainerPermission;
 use App\Http\Middleware\VerifyInternalAutomationSignature;
@@ -47,6 +48,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // a esas rutas; el resto del tráfico pasa intacto. Las rutas CRM fuera de
         // /admin se blindan con el alias `auth.admin` por ruta (ver api.php).
         $middleware->appendToGroup('api', ProtectAdminPaths::class);
+
+        // Cabeceras de seguridad de base en TODAS las respuestas (web + api).
+        $middleware->append(SecurityHeaders::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Cuerpo de request demasiado grande (p.ej. imagen OCR pesada). En rutas
