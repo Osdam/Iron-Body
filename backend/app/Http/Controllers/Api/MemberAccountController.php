@@ -47,8 +47,10 @@ class MemberAccountController extends Controller
         $user = $member->user;
 
         // Membresía activa: hay plan vinculado y la fecha de fin no está vencida.
-        $endsAt = $user && $user->membership_end_date
-            ? Carbon::parse($user->membership_end_date)->endOfDay()
+        // El fin de vigencia es la medianoche LOCAL (America/Bogota), no UTC: de
+        // lo contrario el acceso se corta ~5h antes el último día del plan.
+        $endsAt = $user && $user->membershipEndDate
+            ? Carbon::parse($user->membershipEndDate, Member::BUSINESS_TZ)->endOfDay()
             : null;
         $hasPlan = (bool) ($user && $user->plan);
         $membershipActive = $hasPlan && (! $endsAt || $endsAt->isFuture());
@@ -69,7 +71,7 @@ class MemberAccountController extends Controller
         $canAccessApp = $membershipActive;
 
         $daysRemaining = $endsAt
-            ? max(0, (int) Carbon::now()->startOfDay()->diffInDays($endsAt->copy()->startOfDay(), false))
+            ? max(0, (int) Carbon::now(Member::BUSINESS_TZ)->startOfDay()->diffInDays($endsAt->copy()->startOfDay(), false))
             : null;
 
         return response()->json([

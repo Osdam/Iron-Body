@@ -46,8 +46,9 @@ class MemberPayload
         }
 
         $plan = $user->plan ? Plan::where('name', $user->plan)->first() : null;
+        // Vigencia hasta la medianoche LOCAL (America/Bogota), no UTC.
         $expiresAt = $user->membershipEndDate
-            ? Carbon::parse($user->membershipEndDate)->endOfDay()
+            ? Carbon::parse($user->membershipEndDate, Member::BUSINESS_TZ)->endOfDay()
             : null;
         $isExpired = $expiresAt && $expiresAt->isPast();
 

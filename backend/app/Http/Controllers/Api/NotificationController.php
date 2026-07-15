@@ -14,8 +14,9 @@ use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 /**
  * Notificaciones para la app Flutter (audience = member).
  *
- * El miembro se identifica por `document` (o por Bearer access_hash si la ruta
- * va protegida). Solo se exponen datos públicos vía Notification::toPublicArray.
+ * El miembro se identifica EXCLUSIVAMENTE por el Bearer autenticado en
+ * auth.member (session_token o access_hash); nunca por `document` del cliente.
+ * Solo se exponen datos públicos vía Notification::toPublicArray.
  */
 class NotificationController extends Controller
 {
@@ -239,7 +240,6 @@ class NotificationController extends Controller
 
     // ── Internos ───────────────────────────────────────────────────────────────
 
-    /** Resuelve el miembro por Bearer access_hash o por ?document=. */
     /**
      * Si el bearer corresponde a una sesión REVOCADA (la cuenta se está usando
      * en otro dispositivo), devuelve 401 con `session_revoked` para que la app
@@ -271,26 +271,18 @@ class NotificationController extends Controller
 
     private function resolveMember(Request $request): ?Member
     {
+        // La identidad se resuelve EXCLUSIVAMENTE desde el bearer autenticado por
+        // el middleware auth.member. No se acepta ?document= del cliente: hacerlo
+        // permitiría leer/alterar notificaciones de cualquier miembro por cédula.
         if ($preset = $request->attributes->get('auth_member')) {
             return $preset;
         }
 
         if ($token = $request->bearerToken()) {
-            $byToken = Member::resolveByToken($token);
-            if ($byToken) {
-                return $byToken;
-            }
+            return Member::resolveByToken($token);
         }
 
-        $document = Member::normalizeDocumentNumber(
-            $request->query('document') ?? $request->input('document')
-        );
-
-        if (! $document) {
-            return null;
-        }
-
-        return Member::where('document_number', $document)->first();
+        return null;
     }
 
     private function belongsToMember(Notification $n, ?Member $member): bool

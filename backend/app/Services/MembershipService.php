@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Member;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -28,11 +29,15 @@ class MembershipService
     public const STATUS_CANCELLED = 'cancelled';
     public const STATUS_EXPIRED = 'expired';
 
-    /** Fin de periodo (endOfDay) o null si no hay plan/fecha. */
+    /**
+     * Fin de periodo o null si no hay plan/fecha. Es el fin del día en la zona
+     * del negocio (America/Bogota), no UTC: así el acceso vale hasta la
+     * medianoche LOCAL del último día del plan y no se corta ~5h antes.
+     */
     public function endsAt(User $user): ?Carbon
     {
-        return $user->membership_end_date
-            ? Carbon::parse($user->membership_end_date)->endOfDay()
+        return $user->membershipEndDate
+            ? Carbon::parse($user->membershipEndDate, Member::BUSINESS_TZ)->endOfDay()
             : null;
     }
 

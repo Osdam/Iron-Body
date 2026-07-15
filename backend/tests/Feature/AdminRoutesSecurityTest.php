@@ -145,8 +145,6 @@ class AdminRoutesSecurityTest extends TestCase
         $this->getJson('/api/classes')->assertOk();
         $this->getJson('/api/trainers')->assertOk();
         $this->getJson('/api/membership-plans')->assertOk();
-        // Notificaciones de la app (audience=member): NO las cubre el secreto admin.
-        $this->getJson('/api/notifications/unread-count')->assertStatus(200);
     }
 
     public function test_app_e_iron_ai_siguen_exigiendo_auth_member(): void
@@ -154,6 +152,18 @@ class AdminRoutesSecurityTest extends TestCase
         // No los toca el blindaje admin: conservan su 401 de auth.member.
         $this->getJson('/api/app/payments')->assertStatus(401);
         $this->postJson('/api/iron-ai/chat', [])->assertStatus(401);
+        // Notificaciones de la app (audience=member): tras BACK-001 exigen
+        // auth.member; ya NO son públicas (antes filtraban por ?document=).
+        $this->getJson('/api/notifications/unread-count')->assertStatus(401);
+    }
+
+    public function test_exercises_sync_requires_admin(): void
+    {
+        // BACK-009: repoblar ejercicios desde proveedores externos ya no es
+        // público (era abusable por coste/latencia). Exige secreto/sesión admin.
+        $this->postJson('/api/exercises/sync')->assertStatus(401);
+        // Las lecturas de ejercicios de la app siguen abiertas.
+        $this->getJson('/api/exercises')->assertOk();
     }
 
     public function test_wompi_in_app_conserva_auth_member_no_el_secreto_admin(): void

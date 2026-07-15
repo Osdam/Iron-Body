@@ -788,11 +788,27 @@ class AuthController extends Controller
             $count++;
         }
 
+        // Kill-switch del access_hash permanente (BACK-006): al cerrar las demás
+        // sesiones también invalidamos el access_hash, que de otro modo seguiría
+        // dando acceso indefinido desde cualquier equipo. Sólo se hace cuando el
+        // dispositivo actual está sobre un session_token (no sobre access_hash),
+        // para no desloguear a quien acaba de pedir esto.
+        $accessHashRevoked = false;
+        if ($current instanceof MemberDeviceSession && $member->access_hash_revoked_at === null) {
+            $member->revokeAccessHash();
+            $accessHashRevoked = true;
+        }
+
         $this->security->record($member, MemberSecurityEvent::TYPE_DEVICE_REVOKED, $this->context($request), [
-            'scope'         => 'others',
-            'revoked_count' => $count,
+            'scope'               => 'others',
+            'revoked_count'       => $count,
+            'access_hash_revoked' => $accessHashRevoked,
         ]);
-        Log::info('session:logout-others', ['member_id' => $member->id, 'count' => $count]);
+        Log::info('session:logout-others', [
+            'member_id'           => $member->id,
+            'count'               => $count,
+            'access_hash_revoked' => $accessHashRevoked,
+        ]);
 
         return response()->json([
             'ok'            => true,

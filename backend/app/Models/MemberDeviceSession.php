@@ -59,12 +59,35 @@ class MemberDeviceSession extends Model
 
     public function scopeActive(Builder $query): Builder
     {
-        return $query->whereNull('revoked_at');
+        $query->whereNull('revoked_at');
+
+        // TTL deslizante: además de no estar revocada, debe tener actividad
+        // dentro de la ventana. Las filas sin `last_seen_at` (legacy) no expiran
+        // por inactividad para no desloguear a nadie de forma retroactiva.
+        $ttlDays = (int) config('otp.session.ttl_days', 0);
+        if ($ttlDays > 0) {
+            $cutoff = now()->subDays($ttlDays);
+            $query->where(function (Builder $q) use ($cutoff): void {
+                $q->where('last_seen_at', '>=', $cutoff)
+                    ->orWhereNull('last_seen_at');
+            });
+        }
+
+        return $query;
     }
 
     public function isActive(): bool
     {
-        return $this->revoked_at === null;
+        if ($this->revoked_at !== null) {
+            return false;
+        }
+
+        $ttlDays = (int) config('otp.session.ttl_days', 0);
+        if ($ttlDays > 0 && $this->last_seen_at !== null) {
+            return $this->last_seen_at->gte(now()->subDays($ttlDays));
+        }
+
+        return true;
     }
 
     /** Hash determinista del token usado como bearer. */

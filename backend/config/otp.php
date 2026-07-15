@@ -66,6 +66,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Vigencia de la sesión de dispositivo (TTL deslizante por inactividad)
+    |--------------------------------------------------------------------------
+    | Una sesión sigue viva mientras tenga actividad (`last_seen_at`) dentro de
+    | los últimos `ttl_days` días. La app refresca esa marca en cada request, así
+    | que un usuario activo NO se desloguea; sólo caducan sesiones realmente
+    | inactivas. Acota la ventana en que un `session_token` filtrado sigue siendo
+    | válido. 0 = sin expiración por inactividad.
+    */
+    'session' => [
+        'ttl_days' => (int) env('OTP_SESSION_TTL_DAYS', 90),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Verificación facial del titular (reconocimiento on-device)
     |--------------------------------------------------------------------------
     | Tras el OTP se exige un escaneo facial cuyo emparejamiento contra la foto

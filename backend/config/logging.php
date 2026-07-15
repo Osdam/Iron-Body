@@ -5,6 +5,11 @@ use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
 use Monolog\Processor\PsrLogMessageProcessor;
 
+// Nivel por defecto seguro: en producción NO se registra en 'debug' (evita ruido
+// y fugas de datos en logs); fuera de producción sí para depurar (BACK-011).
+// Un LOG_LEVEL explícito en el .env siempre manda.
+$defaultLogLevel = env('APP_ENV', 'production') === 'production' ? 'info' : 'debug';
+
 return [
 
     /*
@@ -61,14 +66,14 @@ return [
         'single' => [
             'driver' => 'single',
             'path' => storage_path('logs/laravel.log'),
-            'level' => env('LOG_LEVEL', 'debug'),
+            'level' => env('LOG_LEVEL', $defaultLogLevel),
             'replace_placeholders' => true,
         ],
 
         'daily' => [
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),
-            'level' => env('LOG_LEVEL', 'debug'),
+            'level' => env('LOG_LEVEL', $defaultLogLevel),
             'days' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
         ],
