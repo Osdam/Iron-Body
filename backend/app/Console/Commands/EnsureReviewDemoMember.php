@@ -2,7 +2,10 @@
 
 namespace App\Console\Commands;
 
+use App\Models\ContractTemplate;
 use App\Models\Member;
+use App\Models\MemberContract;
+use App\Models\Plan;
 use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
@@ -12,11 +15,14 @@ use Illuminate\Support\Str;
 
 /**
  * Crea o actualiza SÓLO la cuenta demo de App Review (documento configurado o
- * 9999999999): miembro activo + usuario con membresía vigente, para que el
- * revisor de la tienda pueda navegar toda la app sin SMS real ni pago.
+ * 9999999999): miembro activo + usuario con membresía vigente + plan con todos
+ * los módulos desbloqueados + consentimiento legal aceptado + contrato firmado,
+ * para que el revisor de la tienda entre directo al Home y navegue toda la app
+ * sin SMS real, sin pago, sin términos y sin firma.
  *
- * Idempotente: puede correrse las veces que haga falta; sólo toca la cuenta demo.
- * NO habilita el OTP fijo por sí mismo — eso lo controla APP_REVIEW_DEMO_ENABLED.
+ * Idempotente: puede correrse las veces que haga falta; sólo toca la cuenta demo
+ * (y un plan/plantilla dedicados). NO habilita el OTP fijo por sí mismo — eso lo
+ * controla APP_REVIEW_DEMO_ENABLED.
  */
 class EnsureReviewDemoMember extends Command
 {
@@ -37,7 +43,23 @@ class EnsureReviewDemoMember extends Command
         $this->info("Preparando cuenta demo para documento {$document}…");
 
         $member = DB::transaction(function () use ($document, $phone, $planName, $email, $endDate): Member {
-            // Usuario portador de la MEMBRESÍA (plan + fin de vigencia futuro).
+            // 1) Plan con TODOS los módulos desbloqueados. `MemberPayload::featuresFor`
+            //    resuelve las features por el NOMBRE del plan del usuario: si no hay
+            //    un Plan que coincida, la barra inferior sale con candados. Este plan
+            //    dedicado (sólo para la demo) habilita ranking/clases/progreso/
+            //    nutrición/IRON IA/rutinas.
+            $allFeatures = array_map(fn () => true, Plan::defaultFeatures());
+            Plan::updateOrCreate(
+                ['name' => $planName],
+                [
+                    'price'         => 0,
+                    'duration_days' => 3650,
+                    'active'        => true,
+                    'features'      => $allFeatures,
+                ],
+            );
+
+            // 2) Usuario portador de la MEMBRESÍA (plan + fin de vigencia futuro).
             $user = User::query()->where('document', $document)->first();
             $user ??= User::query()->where('email', $email)->first();
             $user ??= new User();
@@ -59,8 +81,8 @@ class EnsureReviewDemoMember extends Command
             }
             $user->save();
 
-            // Miembro activo vinculado al usuario. member_uuid/access_hash se
-            // autogeneran en el modelo. Match por documento (único).
+            // 3) Miembro activo vinculado al usuario. member_uuid/access_hash se
+            //    autogeneran en el modelo. Match por documento (único).
             $member = Member::query()->where('document_number', $document)->first() ?? new Member();
             $member->fill([
                 'user_id'         => $user->id,
@@ -68,9 +90,69 @@ class EnsureReviewDemoMember extends Command
                 'email'           => $email,
                 'document_number' => $document,
                 'phone'           => $phone,
+                'is_minor'        => false,
                 'status'          => Member::STATUS_ACTIVE,
             ]);
             $member->save();
+
+            // 4) Consentimiento legal ACEPTADO (términos, tratamiento de datos,
+            //    veracidad, contrato de servicio, exención de riesgo físico).
+            $member->legalConsent()->updateOrCreate(
+                ['member_id' => $member->id],
+                [
+                    'accepted_at'            => now(),
+                    'contract_version'       => 'apple-review-demo',
+                    'terms_and_conditions'   => true,
+                    'data_processing'        => true,
+                    'truthfulness'           => true,
+                    'service_contract'       => true,
+                    'physical_risk_waiver'   => true,
+                    'guardian_authorization' => false, // adulto: no aplica
+                ],
+            );
+
+            // 5) Firma placeholder del onboarding (no es un archivo real; la barrera
+            //    de acceso mira el contrato firmado, no este blob).
+            $member->signature()->updateOrCreate(
+                ['member_id' => $member->id],
+                [
+                    'kind'           => 'onboarding',
+                    'signature_path' => 'APPLE_REVIEW_DEMO_ACCEPTED',
+                ],
+            );
+
+            // 6) Contrato FIRMADO del tipo recomendado → GET member/contracts/status
+            //    devuelve requires_contract=false (no manda a "Términos"/firma).
+            $type = $member->is_minor
+                ? 'minor_release'
+                : (string) config('contracts.default_registration_template', 'workout_registration');
+
+            $template = ContractTemplate::firstOrCreate(
+                ['template_key' => 'apple_review_demo'],
+                [
+                    'name'             => 'Apple Review Demo',
+                    'version'          => 'demo-1',
+                    'applies_to'       => 'any',
+                    'source_file_path' => 'contracts/templates/apple_review_demo.placeholder',
+                    'active'           => true,
+                ],
+            );
+
+            $hasSigned = $member->contracts()
+                ->where('contract_type', $type)
+                ->where('status', MemberContract::STATUS_SIGNED)
+                ->exists();
+            if (! $hasSigned) {
+                $member->contracts()->create([
+                    'contract_template_id' => $template->id,
+                    'contract_type'        => $type,
+                    'status'               => MemberContract::STATUS_SIGNED,
+                    'signature_path'       => 'APPLE_REVIEW_DEMO_ACCEPTED',
+                    'signed_at'            => now(),
+                    'template_version'     => $template->version,
+                    'acceptance_snapshot'  => ['source' => 'apple_review_demo', 'accepted' => true],
+                ]);
+            }
 
             return $member;
         });
@@ -81,6 +163,8 @@ class EnsureReviewDemoMember extends Command
         $this->line("  document_number : {$member->document_number}");
         $this->line("  status          : {$member->status}");
         $this->line("  plan            : {$planName} (vence {$endDate})");
+        $this->line('  módulos         : desbloqueados (features del plan en true)');
+        $this->line('  legal/contrato  : aceptado + contrato firmado (sin términos/firma)');
         $this->line("  APP_REVIEW_DEMO_ENABLED = {$enabled}");
         if (! config('services.app_review_demo.enabled')) {
             $this->warn('El acceso demo está DESHABILITADO: pon APP_REVIEW_DEMO_ENABLED=true para el OTP fijo.');
