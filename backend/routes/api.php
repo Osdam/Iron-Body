@@ -184,31 +184,38 @@ Route::middleware(['trainer.feature:trainer_classes_enabled', 'auth.trainer'])->
     Route::post('classes/{class}/end',         [$tc, 'endSession'])->middleware('trainer.can:attendance.create');
 });
 
+// ── Login de miembros existentes (OTP por SMS) — PÚBLICO ──────────────────────
+// El login NO debe quedar detrás de `member.registration.token`: bloquearlo con
+// ese secreto dejaba caer todo el ingreso de la app (503 en producción si el
+// token no está configurado). La seguridad la dan el OTP/retos + el throttle por
+// IP (fuerza bruta / coste de SMS) + el límite por reto (otp.max_attempts).
+// Throttle por IP: acota fuerza bruta de OTP y spam/coste de SMS.
+Route::post('members/login', [AuthController::class, 'login'])
+    ->middleware('throttle:6,1');
+Route::post('members/login/verify', [AuthController::class, 'verifyOtp'])
+    ->middleware('throttle:10,1');
+Route::post('members/login/resend', [AuthController::class, 'resendOtp'])
+    ->middleware('throttle:4,1');
+// Tercer factor: reconocimiento facial del titular (match on-device).
+Route::post('members/login/face-reference', [AuthController::class, 'faceReference']);
+Route::post('members/login/face-verify', [AuthController::class, 'faceVerify']);
+// Re-enrolamiento biométrico cross-platform (gated por OTP + token de un solo uso).
+Route::post('members/login/face-reenroll/request', [AuthController::class, 'faceReenrollRequest'])
+    ->middleware('throttle:6,1');
+Route::post('members/login/face-reenroll/confirm', [AuthController::class, 'faceReenrollConfirm'])
+    ->middleware('throttle:10,1');
+Route::post('members/login/face-reenroll/complete', [AuthController::class, 'faceReenrollComplete'])
+    ->middleware('throttle:6,1');
+Route::post('members/biometric-unlock', [AuthController::class, 'biometricUnlock']);
+// Login adaptativo (Bloque 3b): canje del ticket de desbloqueo local.
+Route::post('members/login/trusted-unlock', [AuthController::class, 'trustedUnlock'])
+    ->middleware('throttle:10,1');
+
+// ── Registro / alta administrativa de miembros — gated por token de registro ──
+// Estos SÍ requieren el secreto `member.registration.token` (crear/editar la
+// identidad de un miembro no es una operación pública de la app de login).
 Route::middleware('member.registration.token')->group(function () {
     Route::get('members/incomplete', [MemberRegistrationController::class, 'incomplete']);
-    // ── Login con verificación en dos pasos (OTP por SMS) ─────────────────────
-    // Throttle por IP: acota fuerza bruta de OTP y spam/coste de SMS. El límite
-    // por reto (otp.max_attempts) sigue vigente; esto limita crear retos nuevos.
-    Route::post('members/login', [AuthController::class, 'login'])
-        ->middleware('throttle:6,1');
-    Route::post('members/login/verify', [AuthController::class, 'verifyOtp'])
-        ->middleware('throttle:10,1');
-    Route::post('members/login/resend', [AuthController::class, 'resendOtp'])
-        ->middleware('throttle:4,1');
-    // Tercer factor: reconocimiento facial del titular (match on-device).
-    Route::post('members/login/face-reference', [AuthController::class, 'faceReference']);
-    Route::post('members/login/face-verify', [AuthController::class, 'faceVerify']);
-    // Re-enrolamiento biométrico cross-platform (gated por OTP + token de un solo uso).
-    Route::post('members/login/face-reenroll/request', [AuthController::class, 'faceReenrollRequest'])
-        ->middleware('throttle:6,1');
-    Route::post('members/login/face-reenroll/confirm', [AuthController::class, 'faceReenrollConfirm'])
-        ->middleware('throttle:10,1');
-    Route::post('members/login/face-reenroll/complete', [AuthController::class, 'faceReenrollComplete'])
-        ->middleware('throttle:6,1');
-    Route::post('members/biometric-unlock', [AuthController::class, 'biometricUnlock']);
-    // Login adaptativo (Bloque 3b): canje del ticket de desbloqueo local.
-    Route::post('members/login/trusted-unlock', [AuthController::class, 'trustedUnlock'])
-        ->middleware('throttle:10,1');
     Route::post('members/register', [MemberRegistrationController::class, 'register']);
     Route::post('members/{member}/identity', [MemberRegistrationController::class, 'identity']);
     Route::post('members/{member}/legal-consent', [MemberRegistrationController::class, 'legalConsent']);
@@ -217,7 +224,6 @@ Route::middleware('member.registration.token')->group(function () {
     // Biometría OPCIONAL: el usuario puede omitirla al crear cuenta (Apple).
     Route::post('members/{member}/biometric-skip', [MemberRegistrationController::class, 'skipBiometric']);
     Route::delete('members/{member}', [MemberRegistrationController::class, 'destroy']);
-
 });
 
 // Plantilla de consentimiento (PÚBLICA, solo config estática: textos de

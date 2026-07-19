@@ -95,6 +95,40 @@ class OtpService
     }
 
     /**
+     * Crea un reto de login para el ACCESO DEMO de App Review: NO envía SMS y no
+     * guarda un código usable (el código fijo lo valida el bypass del demo en el
+     * controlador, nunca este servicio ni Twilio). Devuelve el reto para que el
+     * paso 1 responda con la misma forma que un login OTP normal. Sólo debe
+     * llamarse tras confirmar que el miembro es el de la cuenta demo.
+     */
+    public function startDemoChallenge(Member $member, array $context): MemberAuthChallenge
+    {
+        MemberAuthChallenge::query()
+            ->where('member_id', $member->id)
+            ->where('purpose', MemberAuthChallenge::PURPOSE_LOGIN)
+            ->where('status', MemberAuthChallenge::STATUS_PENDING)
+            ->update(['status' => MemberAuthChallenge::STATUS_EXPIRED]);
+
+        return MemberAuthChallenge::create([
+            'member_id'    => $member->id,
+            'purpose'      => MemberAuthChallenge::PURPOSE_LOGIN,
+            'risk_tier'    => null,
+            // Código aleatorio no derivable: el reto demo no se valida por hash.
+            'code_hash'    => Hash::make(\Illuminate\Support\Str::random(40)),
+            'channel'      => 'demo',
+            'destination'  => $this->resolvePhone($member),
+            'device_id'    => $context['device_id'] ?? null,
+            'device_name'  => $context['device_name'] ?? null,
+            'platform'     => $context['platform'] ?? null,
+            'ip_address'   => $context['ip_address'] ?? null,
+            'user_agent'   => isset($context['user_agent']) ? mb_substr((string) $context['user_agent'], 0, 500) : null,
+            'status'       => MemberAuthChallenge::STATUS_PENDING,
+            'last_sent_at' => now(),
+            'expires_at'   => now()->addSeconds($this->ttl()),
+        ]);
+    }
+
+    /**
      * Crea un TICKET de desbloqueo local (login adaptativo, tier `local`): no
      * envía SMS ni guarda un código usable; sólo es una autorización de corta
      * vida que la app canjea tras pasar la biometría local del dispositivo.

@@ -79,6 +79,23 @@ class AuthController extends Controller
 
         $context = $this->context($request);
 
+        // Acceso DEMO de App Review: sólo el documento configurado y sólo con el
+        // flag activo. NO envía SMS ni exige dispositivo confiable/biometría; el
+        // OTP fijo se valida en el paso verify. La cuenta demo pasó ya los guardas
+        // de estado (borrada/suspendida) de arriba.
+        if ($this->isReviewDemoMember($member)) {
+            $challenge = $this->otp->startDemoChallenge($member, $context);
+
+            return response()->json(['ok' => true, 'data' => [
+                'requires_otp'    => true,
+                'challenge_id'    => $challenge->uuid,
+                'destination'     => $challenge->maskedDestination(),
+                'expires_in'      => (int) config('otp.ttl', 300),
+                'resend_cooldown' => (int) config('otp.resend_cooldown', 60),
+                'channel'         => 'sms',
+            ]]);
+        }
+
         // Evaluación de riesgo (Fase 10): puede avisar o —si autosuspend está
         // activo— suspender. Por defecto solo avisa; re-chequeamos por si acaso.
         $this->risk->assess($member, $context);
@@ -194,6 +211,13 @@ class AuthController extends Controller
 
         $context = $this->context($request);
 
+        // Acceso DEMO de App Review: OTP fijo válido SÓLO para el documento demo.
+        // Para cualquier otro miembro devuelve null y sigue el OTP normal, así el
+        // código fijo jamás funciona en usuarios reales.
+        if (($demo = $this->reviewDemoLogin($validated['challenge_id'], $validated['code'], $context)) !== null) {
+            return $demo;
+        }
+
         try {
             $res = $this->otp->verify($validated['challenge_id'], $validated['code'], $context);
         } catch (OtpException $e) {
@@ -233,6 +257,71 @@ class AuthController extends Controller
         }
 
         // OTP por SMS verificado: refresca la ventana de revalidación de 30 días.
+        return $this->grantSession($member, $context, otpVerified: true, otpReauth: true);
+    }
+
+    // ── Acceso demo de App Review ──────────────────────────────────────────────
+
+    /** ¿Está activo el acceso demo y este miembro ES la cuenta demo (doc exacto)? */
+    private function isReviewDemoMember(Member $member): bool
+    {
+        if (! config('services.app_review_demo.enabled')) {
+            return false;
+        }
+        $demoDoc = (string) config('services.app_review_demo.document');
+        if ($demoDoc === '') {
+            return false;
+        }
+
+        return hash_equals($demoDoc, (string) $member->document_number);
+    }
+
+    /**
+     * Bypass demo de verificación: emite la sesión SÓLO si el acceso demo está
+     * activo, el código coincide con el OTP fijo configurado y el reto pertenece
+     * a la cuenta demo (documento exacto) y sigue vigente. Devuelve null (→ OTP
+     * normal) para cualquier otro caso, de modo que el código fijo nunca funciona
+     * en usuarios reales ni con el flag apagado. No loguea ni retorna el código.
+     */
+    private function reviewDemoLogin(string $challengeUuid, string $code, array $context): ?JsonResponse
+    {
+        if (! config('services.app_review_demo.enabled')) {
+            return null;
+        }
+        $demoDoc = (string) config('services.app_review_demo.document');
+        $demoOtp = (string) config('services.app_review_demo.otp');
+        if ($demoDoc === '' || $demoOtp === '' || ! hash_equals($demoOtp, (string) $code)) {
+            return null;
+        }
+
+        $challenge = MemberAuthChallenge::query()
+            ->where('uuid', $challengeUuid)
+            ->where('purpose', MemberAuthChallenge::PURPOSE_LOGIN)
+            ->first();
+        $member = $challenge?->member;
+        if (! $challenge || ! $member) {
+            return null;
+        }
+        // El bypass aplica EXCLUSIVAMENTE a la cuenta demo (documento exacto).
+        if (! hash_equals($demoDoc, (string) $member->document_number)) {
+            return null;
+        }
+        if ($challenge->isExpired()) {
+            return null;
+        }
+        // Mismos guardas de estado que el login normal: nunca sesión si la cuenta
+        // está borrada o suspendida.
+        if ($member->status === Member::STATUS_DELETED || $member->isSuspended()) {
+            return null;
+        }
+
+        $member->loadMissing('user');
+        // Consume el reto (un solo uso) y emite la sesión por la ruta normal.
+        $challenge->update([
+            'status'      => MemberAuthChallenge::STATUS_VERIFIED,
+            'consumed_at' => now(),
+        ]);
+
         return $this->grantSession($member, $context, otpVerified: true, otpReauth: true);
     }
 

@@ -41,6 +41,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | App Review demo (App Store / Google Play)
+    |--------------------------------------------------------------------------
+    | Acceso demo estable para el revisor de la tienda SIN depender de SMS real,
+    | dispositivo confiable previo ni pagos. Sólo el documento configurado puede
+    | entrar con el OTP fijo, y sólo cuando `enabled` es true. NUNCA habilita el
+    | OTP fijo para usuarios reales (el bypass exige que el documento del reto
+    | coincida EXACTAMENTE con `document`). En producción, mantener deshabilitado
+    | salvo durante la revisión.
+    */
+    'app_review_demo' => [
+        'enabled'  => env('APP_REVIEW_DEMO_ENABLED', false),
+        'document' => env('APP_REVIEW_DEMO_DOCUMENT'),
+        'otp'      => env('APP_REVIEW_DEMO_OTP'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Firebase — service account (Auth custom token, Storage server-side, FCM)
     |--------------------------------------------------------------------------
     | El service-account.json vive SOLO en el backend y firma: (1) custom tokens
