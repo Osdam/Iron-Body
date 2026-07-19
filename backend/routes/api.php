@@ -766,9 +766,17 @@ Route::delete('admin/exercises/{exercise}',    [\App\Http\Controllers\Api\Admin\
 
 // ── Soporte (CRM): bandeja de reportes que envían los miembros desde la app ──
 Route::get('admin/support/unread-count',       [\App\Http\Controllers\Api\Admin\SupportController::class, 'unreadCount']);
+// Búsqueda para vincular miembro (antes del {ticket} para no ser capturada por él).
+Route::get('admin/support/member-lookup',      [\App\Http\Controllers\Api\Admin\SupportController::class, 'memberLookup']);
 Route::get('admin/support',                    [\App\Http\Controllers\Api\Admin\SupportController::class, 'index']);
 Route::get('admin/support/{ticket}',           [\App\Http\Controllers\Api\Admin\SupportController::class, 'show']);
 Route::patch('admin/support/{ticket}',         [\App\Http\Controllers\Api\Admin\SupportController::class, 'update']);
+// Acciones rápidas de resolución (tickets de acceso/seguridad).
+Route::get('admin/support/{ticket}/context',        [\App\Http\Controllers\Api\Admin\SupportController::class, 'context']);
+Route::post('admin/support/{ticket}/link-member',   [\App\Http\Controllers\Api\Admin\SupportController::class, 'linkMember']);
+Route::post('admin/support/{ticket}/phone',         [\App\Http\Controllers\Api\Admin\SupportController::class, 'changePhone']);
+Route::post('admin/support/{ticket}/revoke-devices', [\App\Http\Controllers\Api\Admin\SupportController::class, 'revokeDevices']);
+Route::post('admin/support/{ticket}/reset-trust',   [\App\Http\Controllers\Api\Admin\SupportController::class, 'resetTrust']);
 
 // ── Story Live (CRM admin): historial + finalizar — Bloque 5 ────────────────
 Route::get('admin/lives',             [\App\Http\Controllers\Api\Admin\LiveController::class, 'index']);
