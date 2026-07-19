@@ -8,6 +8,7 @@ use App\Models\MemberContract;
 use App\Models\Plan;
 use App\Models\User;
 use App\Services\Contracts\MemberContractService;
+use App\Services\IronAiMembershipAccessService;
 use App\Support\MemberPayload;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
@@ -75,6 +76,73 @@ class EnsureReviewDemoMemberTest extends TestCase
         foreach (['iron_ia', 'ranking', 'classes', 'progress', 'nutrition', 'custom_routines', 'workouts'] as $key) {
             $this->assertTrue((bool) ($features[$key] ?? false), "módulo bloqueado: {$key}");
         }
+    }
+
+    public function test_command_unlocks_all_iron_ai_capabilities(): void
+    {
+        $this->runCommand();
+        $member = Member::where('document_number', self::DEMO_DOC)->first();
+
+        $svc = app(IronAiMembershipAccessService::class);
+        $membership = $svc->getCurrentMembership($member, $member->user);
+        $this->assertTrue($membership['active']);
+
+        $caps = $svc->getAiCapabilities($membership);
+        foreach ([
+            'ai_enabled',
+            'ai_chat_enabled',
+            'ai_voice_chat_enabled',
+            'ai_realtime_voice_enabled',
+            'ai_image_analysis_enabled',
+            'ai_file_upload_enabled',
+        ] as $flag) {
+            $this->assertTrue((bool) ($caps[$flag] ?? false), "IA bloqueada: {$flag}");
+        }
+        // Sin topes que fuercen "actualiza tu plan".
+        $this->assertNull($caps['monthly_messages_limit']);
+        $this->assertNull($caps['daily_messages_limit']);
+    }
+
+    public function test_iron_ai_access_endpoint_reports_full_access_for_demo(): void
+    {
+        $this->runCommand();
+        $member = Member::where('document_number', self::DEMO_DOC)->first();
+
+        $this->withHeader('Authorization', 'Bearer '.$member->access_hash)
+            ->getJson('/api/iron-ai/access')
+            ->assertOk()
+            ->assertJsonPath('has_active_membership', true)
+            ->assertJsonPath('can_use_chat', true)
+            ->assertJsonPath('upgrade_required', false)
+            ->assertJsonPath('voice_chat_enabled', true)
+            ->assertJsonPath('realtime_voice_enabled', true)
+            ->assertJsonPath('image_analysis_enabled', true)
+            ->assertJsonPath('file_upload_enabled', true);
+    }
+
+    public function test_real_user_does_not_get_demo_ai_capabilities(): void
+    {
+        // Plan real SIN capacidades premium (no hay fila membership_ai_capabilities,
+        // el resolver cae al default/free → sin voz/realtime/imagen).
+        $realUser = User::create([
+            'name' => 'Real', 'email' => 'realai@example.com', 'password' => 'secret',
+            'document' => '1002003004', 'phone' => '3011112222', 'status' => 'active',
+            'plan' => 'Plan Real Basico', 'membership_end_date' => now()->addYear()->toDateString(),
+        ]);
+        $realMember = Member::create([
+            'user_id' => $realUser->id, 'full_name' => 'Real',
+            'document_number' => '1002003004', 'phone' => '3011112222',
+            'status' => Member::STATUS_ACTIVE,
+        ]);
+
+        $this->runCommand(); // crea la cuenta/plan/caps demo, NO al usuario real
+
+        $svc = app(IronAiMembershipAccessService::class);
+        $caps = $svc->getAiCapabilities($svc->getCurrentMembership($realMember, $realUser));
+        // El usuario real NO hereda voz/realtime/imagen del plan demo.
+        $this->assertFalse((bool) ($caps['ai_realtime_voice_enabled'] ?? false));
+        $this->assertFalse((bool) ($caps['ai_voice_chat_enabled'] ?? false));
+        $this->assertFalse((bool) ($caps['ai_image_analysis_enabled'] ?? false));
     }
 
     public function test_account_status_endpoint_reports_full_access_for_demo(): void

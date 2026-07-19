@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\ContractTemplate;
 use App\Models\Member;
 use App\Models\MemberContract;
+use App\Models\MembershipAiCapability;
 use App\Models\Plan;
 use App\Models\User;
 use Illuminate\Console\Command;
@@ -49,13 +50,48 @@ class EnsureReviewDemoMember extends Command
             //    dedicado (sólo para la demo) habilita ranking/clases/progreso/
             //    nutrición/IRON IA/rutinas.
             $allFeatures = array_map(fn () => true, Plan::defaultFeatures());
-            Plan::updateOrCreate(
+            $plan = Plan::updateOrCreate(
                 ['name' => $planName],
                 [
                     'price'         => 0,
                     'duration_days' => 3650,
                     'active'        => true,
                     'features'      => $allFeatures,
+                ],
+            );
+
+            // 1b) Capacidades de IRON IA del plan demo (tabla auxiliar
+            //     `membership_ai_capabilities`). Aquí viven los flags que la app
+            //     usa para mostrar/ocultar voz, imagen, uploads y Tiempo Real, y
+            //     que hacían aparecer "actualiza tu plan". Todo habilitado y con
+            //     límites nulos (= ilimitado) SOLO para el plan demo. El resolver
+            //     enlaza por `membership_plan_id` (plan del catálogo) primero.
+            MembershipAiCapability::updateOrCreate(
+                ['membership_plan_id' => $plan->id],
+                [
+                    'plan_code'                       => mb_strtolower($planName),
+                    'ai_enabled'                      => true,
+                    'ai_chat_enabled'                 => true,
+                    'ai_voice_chat_enabled'           => true,
+                    'ai_realtime_voice_enabled'       => true,
+                    'ai_image_analysis_enabled'       => true,
+                    'ai_file_upload_enabled'          => true,
+                    'progress_analysis_enabled'       => true,
+                    'smart_recommendations_enabled'   => true,
+                    'weekly_summary_enabled'          => true,
+                    'proactive_notifications_enabled' => true,
+                    'free_trial_messages'             => 5,
+                    // Límites nulos = sin tope (dentro de la cuota general nula).
+                    'monthly_messages_limit'          => null,
+                    'daily_messages_limit'            => null,
+                    'fair_use_limit'                  => null,
+                    'ai_audio_monthly_limit'          => null,
+                    'ai_image_monthly_limit'          => null,
+                    'max_output_tokens'               => 1200,
+                    'context_level'                   => 'full',
+                    'ai_max_audio_seconds'            => 120,
+                    'ai_max_image_size_mb'            => 10,
+                    'is_active'                       => true,
                 ],
             );
 
@@ -164,6 +200,7 @@ class EnsureReviewDemoMember extends Command
         $this->line("  status          : {$member->status}");
         $this->line("  plan            : {$planName} (vence {$endDate})");
         $this->line('  módulos         : desbloqueados (features del plan en true)');
+        $this->line('  IRON IA         : texto+voz+imagen+uploads+Tiempo Real habilitados (sin upgrade)');
         $this->line('  legal/contrato  : aceptado + contrato firmado (sin términos/firma)');
         $this->line("  APP_REVIEW_DEMO_ENABLED = {$enabled}");
         if (! config('services.app_review_demo.enabled')) {
