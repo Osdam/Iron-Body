@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Concerns\ResolvesPagination;
 use App\Http\Controllers\Controller;
 use App\Models\Member;
 use App\Models\Plan;
@@ -13,9 +14,16 @@ use Illuminate\Support\Facades\Schema;
 
 class UserController extends Controller
 {
+    use ResolvesPagination;
+
     /** Mayoría de edad (años): por debajo se exige acudiente. Espejo de la app. */
     private const LEGAL_ADULT_AGE = 18;
 
+    /**
+     * Listado paginado de miembros. Filtrado y búsqueda se resuelven en el
+     * servidor (`status`, `search`, `per_page`) para que el CRM cargue SOLO la
+     * página visible en vez de recorrer todas las páginas.
+     */
     public function index(Request $request)
     {
         $query = User::query();
@@ -24,11 +32,26 @@ class UserController extends Controller
             $query->where('status', $request->input('status'));
         }
 
+        // Búsqueda server-side sobre los campos que el CRM muestra en la tabla.
+        // `ilike` en PostgreSQL (LIKE distingue mayúsculas ahí); en MySQL/SQLite
+        // el collation por defecto ya es insensible a mayúsculas.
+        $search = trim((string) $request->input('search', ''));
+        if ($search !== '') {
+            $operator = $this->likeOperator($query->getConnection()->getDriverName());
+            $like = $this->likeTerm($search);
+            $query->where(function ($q) use ($operator, $like): void {
+                $q->where('name', $operator, $like)
+                    ->orWhere('email', $operator, $like)
+                    ->orWhere('document', $operator, $like)
+                    ->orWhere('phone', $operator, $like);
+            });
+        }
+
         $page = $query
             ->select($this->memberFields())
             ->with('appMember.guardian')
             ->orderByDesc('created_at')
-            ->paginate(20);
+            ->paginate($this->resolvePerPage($request));
 
         // Adjunta menor de edad + acudiente por fila (para prefijar el editar)
         // sin exponer la relación cruda del miembro.

@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\Admin\EarningsController;
 use App\Http\Controllers\Api\Admin\BillingTaxController;
 use App\Http\Controllers\Api\Admin\ElectronicInvoiceController;
 use App\Http\Controllers\Api\Admin\FiscalProfileController;
+use App\Http\Controllers\Api\Admin\ReportsOverviewController;
 use App\Http\Controllers\Api\ExerciseController;
 use App\Http\Controllers\Api\AppClassController;
 use App\Http\Controllers\Api\AppExerciseController;
@@ -224,6 +225,15 @@ Route::middleware('member.registration.token')->group(function () {
     // Biometría OPCIONAL: el usuario puede omitirla al crear cuenta (Apple).
     Route::post('members/{member}/biometric-skip', [MemberRegistrationController::class, 'skipBiometric']);
     Route::delete('members/{member}', [MemberRegistrationController::class, 'destroy']);
+});
+
+// ── Registros incompletos — CRM (sesión admin) ────────────────────────────────
+// El CRM manda el token de SESIÓN ADMIN, no el secreto de registro: contra
+// `members/incomplete` recibía 401 y el interceptor cerraba la sesión ("tu sesión
+// expiró") justo al abrir Miembros. Estas rutas espejo se validan con auth.admin.
+Route::middleware('auth.admin')->group(function (): void {
+    Route::get('admin/members/incomplete', [MemberRegistrationController::class, 'incomplete']);
+    Route::delete('admin/members/{member}', [MemberRegistrationController::class, 'destroy']);
 });
 
 // Plantilla de consentimiento (PÚBLICA, solo config estática: textos de
@@ -436,6 +446,12 @@ Route::middleware('auth.admin')->group(function (): void {
 // rutas estáticas (plans/features, ai-capabilities) se registran ANTES del
 // apiResource para que no las capture el comodín {plan}.
 Route::middleware('auth.admin')->group(function (): void {
+    // Agregados del CRM. Evitan que los módulos descarguen tablas completas
+    // página por página (Planes, Pagos y Analítica lo hacían al abrirse).
+    Route::get('admin/plans/stats', [PlanController::class, 'crmStats']);
+    Route::get('admin/payments/stats', [PaymentController::class, 'crmStats']);
+    Route::get('admin/payments/latest-per-member', [PaymentController::class, 'latestPerMember']);
+    Route::get('admin/reports/overview', ReportsOverviewController::class);
     Route::get('plans/features', [PlanController::class, 'allFeatures']);
     Route::put('plans/{plan}/features', [PlanController::class, 'updateFeatures']);
     // IRON IA — capacidades detalladas por plan (CRM ↔ membership_ai_capabilities).

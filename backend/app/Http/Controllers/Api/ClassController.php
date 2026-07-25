@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Concerns\MemberClassContext;
+use App\Http\Controllers\Concerns\ResolvesPagination;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ClassResource;
 use App\Models\ClassAttendance;
@@ -22,6 +23,7 @@ use Illuminate\Support\Carbon;
 class ClassController extends Controller
 {
     use MemberClassContext;
+    use ResolvesPagination;
 
     public function index(Request $request)
     {
@@ -49,7 +51,7 @@ class ClassController extends Controller
                 ->orWhere('location', 'like', "%{$search}%"));
         }
 
-        $paginated = $query->paginate(20);
+        $paginated = $query->paginate($this->resolvePerPage($request));
 
         $classIds = $paginated->pluck('id');
         $today = Carbon::today();

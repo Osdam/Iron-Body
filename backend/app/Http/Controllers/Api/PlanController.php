@@ -2,23 +2,116 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Concerns\ResolvesPagination;
 use App\Http\Controllers\Controller;
 use App\Models\MembershipAiCapability;
+use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\User;
 use App\Services\IronAiMembershipAccessService;
 use App\Services\RealtimeEvents;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class PlanController extends Controller
 {
+    use ResolvesPagination;
+
+    /** Estados de pago que cuentan como cobrados (vocabulario mixto ES/EN). */
+    private const PAID_STATUSES = PaymentController::PAID_STATUSES;
+
     public function __construct(private readonly IronAiMembershipAccessService $aiAccess)
     {
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        return Plan::query()->paginate(20);
+        return Plan::query()->paginate($this->resolvePerPage($request));
+    }
+
+    /**
+     * GET /api/admin/plans/stats — métricas agregadas de planes para el CRM.
+     *
+     * Antes el módulo de Planes descargaba TODOS los miembros y TODOS los pagos
+     * (página por página) solo para contar suscriptores e ingresos del mes. Aquí
+     * se resuelve con dos consultas agregadas.
+     */
+    public function crmStats()
+    {
+        $plans = Plan::query()->orderBy('id')->get(['id', 'name']);
+
+        // Suscriptores activos agrupados por el valor de `users.plan` (el CRM
+        // guarda el NOMBRE del plan en esa columna).
+        $subscribersByPlanValue = User::query()
+            ->select('plan', DB::raw('COUNT(*) as total'))
+            ->whereNotNull('plan')
+            ->where('plan', '<>', '')
+            ->where(function ($q): void {
+                $q->whereNull('status')->orWhereIn('status', ['', 'active', 'activo']);
+            })
+            ->groupBy('plan')
+            ->pluck('total', 'plan');
+
+        // Ingresos del mes en curso (pagos cobrados). Los pagos sin `plan_id` se
+        // atribuyen al plan del miembro, igual que hacía el cálculo en el cliente.
+        $rows = Payment::query()
+            ->leftJoin('users', 'users.id', '=', 'payments.user_id')
+            ->whereIn(DB::raw('LOWER(payments.status)'), self::PAID_STATUSES)
+            ->whereRaw('COALESCE(payments.paid_at, payments.created_at) BETWEEN ? AND ?', [
+                now()->startOfMonth(),
+                now()->endOfMonth(),
+            ])
+            ->get(['payments.plan_id', 'payments.amount', 'users.plan as user_plan']);
+
+        // Índice normalizado (nombre e id) → plan, para casar valores sueltos.
+        $planByKey = [];
+        foreach ($plans as $plan) {
+            $planByKey[self::planKey($plan->name)] = $plan->id;
+            $planByKey[self::planKey((string) $plan->id)] = $plan->id;
+        }
+
+        $subscribers = [];
+        foreach ($subscribersByPlanValue as $planValue => $total) {
+            $planId = $planByKey[self::planKey((string) $planValue)] ?? null;
+            if ($planId === null) {
+                continue; // valor huérfano (plan renombrado o eliminado)
+            }
+            $subscribers[$planId] = ($subscribers[$planId] ?? 0) + (int) $total;
+        }
+
+        $income = [];
+        $monthlyIncome = 0.0;
+        foreach ($rows as $row) {
+            $amount = (float) $row->amount;
+            $monthlyIncome += $amount;
+
+            $planId = $row->plan_id !== null
+                ? (int) $row->plan_id
+                : ($planByKey[self::planKey((string) ($row->user_plan ?? ''))] ?? null);
+
+            if ($planId !== null) {
+                $income[$planId] = ($income[$planId] ?? 0.0) + $amount;
+            }
+        }
+
+        return response()->json([
+            'plans' => $plans->map(fn (Plan $p) => [
+                'plan_id'      => $p->id,
+                'subscribers'  => (int) ($subscribers[$p->id] ?? 0),
+                'month_income' => round($income[$p->id] ?? 0.0, 2),
+            ])->values(),
+            'active_plans'      => Plan::where('active', true)->count(),
+            'subscribers_total' => array_sum($subscribers),
+            'monthly_income'    => round($monthlyIncome, 2),
+        ]);
+    }
+
+    /** Normaliza un nombre de plan (minúsculas sin acentos) para comparar. */
+    private static function planKey(string $value): string
+    {
+        return strtr(mb_strtolower(trim($value)), [
+            'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n',
+        ]);
     }
 
     public function show(Plan $plan)
