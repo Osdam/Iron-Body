@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\Admin\BillingTaxController;
 use App\Http\Controllers\Api\Admin\ElectronicInvoiceController;
 use App\Http\Controllers\Api\Admin\FiscalProfileController;
 use App\Http\Controllers\Api\Admin\ReportsOverviewController;
+use App\Http\Controllers\Api\Admin\IronCrmAiController;
 use App\Http\Controllers\Api\ExerciseController;
 use App\Http\Controllers\Api\AppClassController;
 use App\Http\Controllers\Api\AppExerciseController;
@@ -737,6 +738,17 @@ Route::middleware('throttle:10,1')->group(function (): void {
 // autorizar. `index` filtra por días/usuario/módulo/acción/búsqueda.
 Route::get('admin/audit-logs',  [\App\Http\Controllers\Api\Admin\AuditLogController::class, 'index']);
 Route::post('admin/audit-logs', [\App\Http\Controllers\Api\Admin\AuditLogController::class, 'store']);
+
+// ── IRON — copiloto administrativo del CRM (OpenAI, SOLO LECTURA) ──────────────
+// Blindado por auth.admin (sesión admin real / secreto n8n) + ProtectAdminPaths
+// global. `chat` con throttle propio para acotar costo/abuso. La API key de
+// OpenAI vive SOLO en backend; el frontend jamás llama a OpenAI directo.
+Route::middleware('auth.admin')->prefix('admin/iron-ai')->group(function (): void {
+    Route::post('chat', [IronCrmAiController::class, 'chat'])->middleware('throttle:30,1');
+    Route::post('upload', [IronCrmAiController::class, 'upload'])->middleware('throttle:20,1');
+    Route::get('history', [IronCrmAiController::class, 'history']);
+    Route::delete('history', [IronCrmAiController::class, 'clearHistory']);
+});
 
 // ── Supervisión de horarios de clases (CRM admin) ─────────────────────────
 // Horario programado vs inicio/fin real (con rostro) por sesión de clase.
