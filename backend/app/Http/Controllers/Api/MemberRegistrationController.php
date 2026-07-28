@@ -13,6 +13,7 @@ use App\Models\Member;
 use App\Models\MemberBiometric;
 use App\Models\Plan;
 use App\Models\User;
+use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
@@ -45,18 +46,18 @@ class MemberRegistrationController extends Controller
             'data' => [
                 'token' => null,
                 'member' => [
-                    'id'               => $member->id,
-                    'member_uuid'      => $member->member_uuid,
-                    'full_name'        => $member->full_name,
-                    'email'            => $member->email ?: $user?->email,
-                    'document_number'  => $member->document_number,
-                    'phone'            => $member->phone ?: $user?->phone,
-                    'goal'             => $member->goal,
-                    'plan_name'        => $user?->plan,
+                    'id' => $member->id,
+                    'member_uuid' => $member->member_uuid,
+                    'full_name' => $member->full_name,
+                    'email' => $member->email ?: $user?->email,
+                    'document_number' => $member->document_number,
+                    'phone' => $member->phone ?: $user?->phone,
+                    'goal' => $member->goal,
+                    'plan_name' => $user?->plan,
                     'membership_expiry' => $user?->membershipEndDate,
-                    'access_hash'      => $member->access_hash,
-                    'status'           => $member->status,
-                    'features'         => $this->featuresFor($user),
+                    'access_hash' => $member->access_hash,
+                    'status' => $member->status,
+                    'features' => $this->featuresFor($user),
                 ],
             ],
         ]);
@@ -142,6 +143,18 @@ class MemberRegistrationController extends Controller
                 $member = new Member(array_merge($validated, [
                     'status' => Member::STATUS_PENDING_REGISTRATION,
                 ]));
+
+                // `is_minor` lo decide SIEMPRE el servidor a partir de la fecha
+                // de nacimiento; la app ya no puede declararlo (se retiró de
+                // RegisterMemberRequest). Si la fecha no es fiable —el OCR no
+                // la leyó— NO se afirma nada: la columna conserva su valor por
+                // defecto y la verificación de identidad queda en revisión
+                // manual, que es el control que ya existía para ese caso.
+                $registrationAge = Member::ageFromBirthDate($validated['birth_date'] ?? null);
+                if ($registrationAge !== null) {
+                    $member->is_minor = $registrationAge < Member::legalAdultAge();
+                }
+
                 if ($biometricStatus !== null) {
                     $member->biometric_status = $biometricStatus;
                 }
@@ -149,7 +162,7 @@ class MemberRegistrationController extends Controller
                 $member->save();
 
                 // Aviso operativo al CRM de nuevo registro (ADITIVO; idempotente).
-                app(\App\Services\NotificationService::class)->notifyNewMemberRegistered($member);
+                app(NotificationService::class)->notifyNewMemberRegistered($member);
 
                 Log::info('member:register:success', ['member_id' => $member->id]);
 
@@ -368,7 +381,7 @@ class MemberRegistrationController extends Controller
             $this->deleteOldFiles($old?->face_path);
 
             // Aviso real-time: CRM (re-index del terminal facial) + miembro (app).
-            app(\App\Services\NotificationService::class)->notifyFaceEnrolled($member->fresh());
+            app(NotificationService::class)->notifyFaceEnrolled($member->fresh());
 
             return response()->json($this->memberResponse($member->fresh(), 'Biometria facial guardada.'));
         } catch (Throwable) {
@@ -439,7 +452,7 @@ class MemberRegistrationController extends Controller
         $email = $data['email'] ?? $user->email ?? null;
 
         if (! $email || User::query()->where('email', $email)->whereKeyNot($user->id)->exists()) {
-            $email = 'member-' . ($member->id ?: time()) . '-' . substr($data['document_number'], -6) . '@ironbody.local';
+            $email = 'member-'.($member->id ?: time()).'-'.substr($data['document_number'], -6).'@ironbody.local';
         }
 
         $user->fill([
@@ -518,10 +531,10 @@ class MemberRegistrationController extends Controller
     {
         if ($e !== null) {
             Log::error("{$context}:error", [
-                'type'    => $e::class,
+                'type' => $e::class,
                 'message' => $e->getMessage(),
-                'code'    => $e->getCode(),
-                'file'    => basename($e->getFile()).':'.$e->getLine(),
+                'code' => $e->getCode(),
+                'file' => basename($e->getFile()).':'.$e->getLine(),
             ]);
         }
 

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Carbon\Carbon;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -153,12 +154,67 @@ class Member extends Model
     public const GENDERS = ['Masculino', 'Femenino', 'Otro'];
 
     /**
-     * Edad mínima (años cumplidos) permitida para registrarse. Por seguridad y
-     * riesgo físico en el gimnasio, Iron Body no admite menores de esta edad.
-     * Espejo de `minRegistrationAge` en la app Flutter. La validación real vive
-     * en App\Rules\MinimumRegistrationAge para no confiar solo en el cliente.
+     * Edad mínima (años cumplidos) permitida para registrarse.
+     *
+     * Valor de RESPALDO: la fuente real es `config('members.min_registration_age')`
+     * — usa siempre {@see minRegistrationAge()}. Esta constante solo cubre el
+     * caso de que falte la configuración, y por eso su valor es el seguro (13).
+     *
+     * Se elevó de 11 a 13 al retirar el tramo 9-12 del público de Google Play.
+     * Aplica SOLO a registros nuevos: las cuentas históricas no se revisan ni
+     * se bloquean retroactivamente.
+     *
+     * La validación real vive en App\Rules\MinimumRegistrationAge para no
+     * confiar en el cliente.
      */
-    public const MIN_REGISTRATION_AGE = 11;
+    public const MIN_REGISTRATION_AGE = 13;
+
+    /** Edad mínima efectiva para registrarse (configurable por entorno). */
+    public static function minRegistrationAge(): int
+    {
+        $configured = (int) config('members.min_registration_age', self::MIN_REGISTRATION_AGE);
+
+        // Una configuración corrupta (0 o negativa) no puede abrir la puerta:
+        // se cae al valor seguro.
+        return $configured > 0 ? $configured : self::MIN_REGISTRATION_AGE;
+    }
+
+    /** Edad de mayoría legal (marca `is_minor` y exige acudiente). */
+    public static function legalAdultAge(): int
+    {
+        $configured = (int) config('members.legal_adult_age', 18);
+
+        return $configured > 0 ? $configured : 18;
+    }
+
+    /**
+     * Edad cumplida a partir de una fecha de nacimiento.
+     *
+     * Devuelve `null` cuando NO se puede determinar con fiabilidad: fecha
+     * ausente, no parseable o en el futuro. Nunca devuelve 0 para una fecha
+     * inválida — eso haría que un `$age < 18` la tratara como menor y un
+     * `$age >= 13` la dejara pasar según el operador usado. Quien llama debe
+     * distinguir explícitamente "no se sabe" de "es adulto".
+     */
+    public static function ageFromBirthDate(mixed $birthDate): ?int
+    {
+        if (blank($birthDate)) {
+            return null;
+        }
+
+        try {
+            $parsed = CarbonImmutable::parse($birthDate);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        // Una fecha futura no es una edad: es un dato corrupto.
+        if ($parsed->isFuture()) {
+            return null;
+        }
+
+        return (int) $parsed->diffInYears(CarbonImmutable::now());
+    }
 
     /**
      * Normaliza un teléfono a solo dígitos. Si viene con prefijo país (+57 /

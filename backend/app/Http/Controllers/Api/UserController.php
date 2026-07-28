@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Member;
 use App\Models\Plan;
 use App\Models\User;
+use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -90,10 +91,10 @@ class UserController extends Controller
             : $plan->resolvedFeatures();
 
         return response()->json([
-            'userId'    => (string) $user->id,
-            'planId'    => $plan ? (string) $plan->id : null,
-            'planName'  => $plan ? $plan->name : $user->plan,
-            'features'  => $features,
+            'userId' => (string) $user->id,
+            'planId' => $plan ? (string) $plan->id : null,
+            'planName' => $plan ? $plan->name : $user->plan,
+            'features' => $features,
             'expiresAt' => $expiresAt?->toIso8601String(),
         ]);
     }
@@ -114,7 +115,12 @@ class UserController extends Controller
             'document' => 'required|string|max:50',
             'phone' => 'required|string|max:20',
             'email' => 'nullable|email|max:255',
-            'birthDate' => 'nullable|date',
+            // Obligatoria SOLO al crear una cuenta nueva desde el CRM: sin ella
+            // no se puede aplicar el mínimo de edad y el registro quedaría
+            // marcado como adulto por omisión. No afecta a cuentas históricas
+            // (no se revalidan) ni al registro desde la app, donde la fecha
+            // procede del OCR y puede fallar legítimamente.
+            'birthDate' => 'required|date',
             'gender' => 'nullable|string|max:30',
             'address' => 'nullable|string|max:255',
             'emergencyContact' => 'nullable|string|max:255',
@@ -134,24 +140,40 @@ class UserController extends Controller
             ], 422);
         }
 
-        // Edad / menor de edad (igual que la app): se calcula en el servidor.
-        $age = $this->ageFromBirthDate($validated['birthDate'] ?? null);
-        if ($age !== null && $age < Member::MIN_REGISTRATION_AGE) {
+        // Edad / menor de edad: SIEMPRE se calcula en el servidor, nunca se
+        // acepta del cliente. Una fecha futura o no parseable devuelve null
+        // (dato no fiable), no una edad de 0.
+        $birthDateInput = $validated['birthDate'] ?? null;
+        $age = $this->ageFromBirthDate($birthDateInput);
+
+        // Fecha presente pero no interpretable (p. ej. futura): se rechaza en
+        // vez de dejarla entrar con la edad en null.
+        if (filled($birthDateInput) && $age === null) {
             return response()->json([
-                'message' => 'El registro no está disponible para menores de '
-                    . Member::MIN_REGISTRATION_AGE . ' años.',
+                'message' => 'La fecha de nacimiento no es válida.',
             ], 422);
         }
-        $isMinor = $age !== null && $age < self::LEGAL_ADULT_AGE;
+
+        if ($age !== null && $age < Member::minRegistrationAge()) {
+            return response()->json([
+                'message' => 'El registro no está disponible para menores de '
+                    .Member::minRegistrationAge().' años.',
+            ], 422);
+        }
+
+        // En este punto la fecha es obligatoria (ver reglas del request), así
+        // que `$age` es fiable y `is_minor` se deriva de ella. Nunca se acepta
+        // `is_minor` del cliente.
+        $isMinor = $age !== null && $age < Member::legalAdultAge();
 
         // Si es menor, el acudiente (nombre + documento) es OBLIGATORIO.
         $guardian = $request->validate([
-            'guardianFullName'     => [$isMinor ? 'required' : 'nullable', 'string', 'max:255'],
-            'guardianDocument'     => [$isMinor ? 'required' : 'nullable', 'string', 'max:50'],
-            'guardianPhone'        => ['nullable', 'string', 'max:30'],
-            'guardianEmail'        => ['nullable', 'email', 'max:255'],
+            'guardianFullName' => [$isMinor ? 'required' : 'nullable', 'string', 'max:255'],
+            'guardianDocument' => [$isMinor ? 'required' : 'nullable', 'string', 'max:50'],
+            'guardianPhone' => ['nullable', 'string', 'max:30'],
+            'guardianEmail' => ['nullable', 'email', 'max:255'],
             'guardianRelationship' => ['nullable', 'string', 'max:80'],
-            'guardianAccepts'      => ['sometimes', 'boolean'],
+            'guardianAccepts' => ['sometimes', 'boolean'],
         ], [
             'guardianFullName.required' => 'El nombre del acudiente es obligatorio para menores de edad.',
             'guardianDocument.required' => 'El documento del acudiente es obligatorio para menores de edad.',
@@ -160,7 +182,7 @@ class UserController extends Controller
         $user = DB::transaction(function () use ($validated, $guardian, $document, $isMinor): User {
             $user = User::create([
                 'name' => $validated['fullName'],
-                'email' => $validated['email'] ?? 'user-' . time() . '-' . mt_rand(1000, 9999) . '@ironbody.local',
+                'email' => $validated['email'] ?? 'user-'.time().'-'.mt_rand(1000, 9999).'@ironbody.local',
                 'password' => bcrypt('default-password'),
                 'document' => $document,
                 'phone' => $validated['phone'],
@@ -194,7 +216,7 @@ class UserController extends Controller
         });
 
         // Auditoría: miembro creado desde el CRM (ADITIVO).
-        app(\App\Services\NotificationService::class)
+        app(NotificationService::class)
             ->notifyMemberCreated($user, $user->name, $user->document);
 
         return response()->json($this->serialize($user), 201);
@@ -294,7 +316,7 @@ class UserController extends Controller
                 $this->syncGuardian($user->appMember, $validated);
             }
 
-            $notifier = app(\App\Services\NotificationService::class);
+            $notifier = app(NotificationService::class);
 
             // Si el estado pasó a inactivo/vencido, notifica membresía cancelada.
             $newStatus = $validated['status'] ?? null;
@@ -314,7 +336,7 @@ class UserController extends Controller
     public function destroy(User $user)
     {
         // Auditoría: miembro eliminado (ANTES de borrar, conserva nombre/doc).
-        app(\App\Services\NotificationService::class)
+        app(NotificationService::class)
             ->notifyMemberDeleted($user, $user->name, $user->document);
 
         if ($user->appMember) {
@@ -323,6 +345,7 @@ class UserController extends Controller
         }
 
         $user->delete();
+
         return response()->json(null, 204);
     }
 
@@ -359,45 +382,43 @@ class UserController extends Controller
         $member = $user->appMember;
 
         return [
-            'id'                  => $user->id,
-            'name'                => $user->name,
-            'email'               => $user->email,
-            'document'            => $user->document,
-            'phone'               => $user->phone,
-            'birthDate'           => $user->birth_date ? substr((string) $user->birth_date, 0, 10) : null,
-            'gender'              => $user->gender,
-            'address'             => $user->address,
-            'emergencyContact'    => $user->emergency_contact,
-            'notes'               => $user->notes,
-            'isMinor'             => (bool) ($member?->is_minor),
-            'guardian'            => $this->guardianArray($member?->guardian),
-            'status'              => $user->status,
-            'plan'                => $user->plan,
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'document' => $user->document,
+            'phone' => $user->phone,
+            'birthDate' => $user->birth_date ? substr((string) $user->birth_date, 0, 10) : null,
+            'gender' => $user->gender,
+            'address' => $user->address,
+            'emergencyContact' => $user->emergency_contact,
+            'notes' => $user->notes,
+            'isMinor' => (bool) ($member?->is_minor),
+            'guardian' => $this->guardianArray($member?->guardian),
+            'status' => $user->status,
+            'plan' => $user->plan,
             'membershipStartDate' => $user->membershipStartDate,
-            'membershipEndDate'   => $user->membershipEndDate,
-            'features'            => $this->featuresFor($user),
-            'created_at'          => $user->created_at,
+            'membershipEndDate' => $user->membershipEndDate,
+            'features' => $this->featuresFor($user),
+            'created_at' => $user->created_at,
         ];
     }
 
     /** Edad en años cumplidos a partir de la fecha de nacimiento (o null). */
+    /**
+     * Edad cumplida, o `null` cuando no se puede determinar (ausente, no
+     * parseable o futura). Delega en el modelo para que exista UNA sola
+     * definición de "edad" en el backend.
+     */
     private function ageFromBirthDate(?string $birthDate): ?int
     {
-        if (! $birthDate) {
-            return null;
-        }
-        try {
-            return Carbon::parse($birthDate)->age;
-        } catch (\Throwable) {
-            return null;
-        }
+        return Member::ageFromBirthDate($birthDate);
     }
 
     /**
      * Crea/actualiza el acudiente del miembro (formato de menores). Igual que la
      * app: se guarda si hay nombre de responsable; si no, no se crea nada.
      *
-     * @param array<string,mixed> $guardian campos camelCase del CRM.
+     * @param  array<string,mixed>  $guardian  campos camelCase del CRM.
      */
     private function syncGuardian(Member $member, array $guardian): void
     {

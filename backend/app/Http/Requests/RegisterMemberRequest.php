@@ -38,8 +38,14 @@ class RegisterMemberRequest extends FormRequest
             'goal' => ['nullable', 'string', 'max:120'],
             'training_level' => ['nullable', 'string', 'max:80'],
             'injuries' => ['nullable', 'string', 'max:2000'],
-            'birth_date' => ['nullable', 'date', new MinimumRegistrationAge()],
-            'is_minor' => ['sometimes', 'boolean'],
+            // Nullable a propósito: la fecha viene del OCR del documento y
+            // puede no leerse. Cuando falta, el registro sigue su curso hacia
+            // revisión manual en vez de romperse; cuando está, el mínimo de
+            // edad se aplica sin excepción.
+            'birth_date' => ['nullable', 'date', new MinimumRegistrationAge],
+            // `is_minor` NO se acepta del cliente: lo deriva el servidor de la
+            // fecha de nacimiento. Aceptarlo permitía que la app declarara la
+            // mayoría de edad por su cuenta.
             // Intención de biometría (opcional, Apple). Validación clara (no 500).
             'biometric_status' => ['sometimes', 'nullable', 'in:pending,registered,skipped,manual_required'],
         ];
