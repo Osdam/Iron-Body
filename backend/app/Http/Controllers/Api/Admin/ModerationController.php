@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Moderation\ListAppealsRequest;
+use App\Http\Requests\Moderation\ListReportsRequest;
 use App\Http\Resources\Moderation\AdminReportDetailResource;
 use App\Http\Resources\Moderation\AdminReportResource;
 use App\Models\Admin;
@@ -129,37 +131,16 @@ class ModerationController extends Controller
     // ── Cola de casos ─────────────────────────────────────────────────────
 
     /** GET /api/admin/moderation/reports */
-    public function index(Request $request): JsonResponse
+    public function index(ListReportsRequest $request): JsonResponse
     {
         if ($denied = $this->deny($request, ModerationPermission::VIEW)) {
             return $denied;
         }
 
-        $filters = $request->validate([
-            'status' => ['nullable', 'string', Rule::in(ReportStatus::all())],
-            'reason_code' => ['nullable', 'string', Rule::in(ReportReason::codes())],
-            'severity' => ['nullable', 'string', Rule::in([
-                ReportReason::SEVERITY_LOW,
-                ReportReason::SEVERITY_MEDIUM,
-                ReportReason::SEVERITY_HIGH,
-                ReportReason::SEVERITY_CRITICAL,
-            ])],
-            'assigned_admin_id' => 'nullable|integer',
-            'reported_member_id' => 'nullable|integer',
-            'content_type' => 'nullable|string|max:32',
-            'from' => 'nullable|date',
-            'to' => 'nullable|date',
-            'with_evidence' => 'nullable|boolean',
-            'with_appeal' => 'nullable|boolean',
-            'open_only' => 'nullable|boolean',
-            // Lista BLANCA de ordenamientos: no se acepta una columna
-            // arbitraria (evita filtrado por columnas sensibles).
-            'sort' => ['nullable', 'string', Rule::in([
-                'submitted_at', 'priority', 'severity', 'status',
-            ])],
-            'direction' => ['nullable', 'string', Rule::in(['asc', 'desc'])],
-            'per_page' => 'nullable|integer|min:5|max:100',
-        ]);
+        // Los booleanos de la query (`open_only=1`, `open_only=true`, …) ya
+        // llegan normalizados por el FormRequest. Ver ListReportsRequest.
+        $filters = $request->filters();
+        // Reglas y normalización: App\Http\Requests\Moderation\ListReportsRequest.
 
         $query = ContentReport::query()
             ->with(['reportedMember:id,full_name', 'assignedAdmin:id,name'])
@@ -640,23 +621,14 @@ class ModerationController extends Controller
     // ── Apelaciones ───────────────────────────────────────────────────────
 
     /** GET /api/admin/moderation/appeals */
-    public function appeals(Request $request): JsonResponse
+    public function appeals(ListAppealsRequest $request): JsonResponse
     {
         if ($denied = $this->deny($request, ModerationPermission::VIEW)) {
             return $denied;
         }
 
-        $filters = $request->validate([
-            'status' => ['nullable', 'string', Rule::in([
-                ModerationAppeal::STATUS_SUBMITTED,
-                ModerationAppeal::STATUS_UNDER_REVIEW,
-                ModerationAppeal::STATUS_UPHELD,
-                ModerationAppeal::STATUS_GRANTED,
-                ModerationAppeal::STATUS_REJECTED,
-            ])],
-            'open_only' => 'nullable|boolean',
-            'per_page' => 'nullable|integer|min:5|max:100',
-        ]);
+        $filters = $request->filters();
+        // Reglas y normalización: App\Http\Requests\Moderation\ListAppealsRequest.
 
         $query = ModerationAppeal::query()->with(['member:id,full_name', 'action']);
 
