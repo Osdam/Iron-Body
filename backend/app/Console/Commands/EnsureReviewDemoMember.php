@@ -27,6 +27,14 @@ use Illuminate\Support\Str;
  */
 class EnsureReviewDemoMember extends Command
 {
+    /**
+     * Nombre visible de la cuenta demo (users.name y members.full_name → el
+     * `full_name` que la app recibe en `MemberPayload`). Neutral a propósito: no
+     * nombra ninguna tienda. Como el comando reescribe estos campos en cada
+     * corrida, cambiarlo aquí es lo que evita que se restaure el nombre viejo.
+     */
+    private const DEMO_DISPLAY_NAME = 'Iron Body Review';
+
     protected $signature = 'app:ensure-review-demo-member
         {--phone= : Teléfono placeholder del miembro demo (por defecto 3000000000)}
         {--plan= : Nombre de plan a mostrar (por defecto "Demo App Review")}';
@@ -101,7 +109,7 @@ class EnsureReviewDemoMember extends Command
             $user ??= new User();
 
             $user->fill([
-                'name'                => 'Apple Review',
+                'name'                => self::DEMO_DISPLAY_NAME,
                 'email'               => $user->email ?: $email,
                 'document'            => $document,
                 'phone'               => $phone,
@@ -122,7 +130,7 @@ class EnsureReviewDemoMember extends Command
             $member = Member::query()->where('document_number', $document)->first() ?? new Member();
             $member->fill([
                 'user_id'         => $user->id,
-                'full_name'       => 'Apple Review',
+                'full_name'       => self::DEMO_DISPLAY_NAME,
                 'email'           => $email,
                 'document_number' => $document,
                 'phone'           => $phone,

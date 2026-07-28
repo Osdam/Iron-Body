@@ -168,6 +168,16 @@ class EnsureReviewDemoMemberTest extends TestCase
         $this->assertSame(1, $member->contracts()->where('status', MemberContract::STATUS_SIGNED)->count());
     }
 
+    public function test_demo_account_uses_neutral_display_name(): void
+    {
+        $this->runCommand();
+        $this->runCommand(); // re-correr NO debe restaurar el nombre anterior
+
+        $member = Member::where('document_number', self::DEMO_DOC)->first();
+        $this->assertSame('Iron Body Review', $member->full_name);
+        $this->assertSame('Iron Body Review', $member->user->name);
+    }
+
     public function test_command_only_touches_the_demo_document(): void
     {
         // Usuario real con contrato PENDIENTE antes de correr el comando.
