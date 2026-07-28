@@ -66,6 +66,47 @@ class FirebaseStorageService
     }
 
     /**
+     * URL FIRMADA y TEMPORAL de un objeto — para que un moderador autorizado
+     * pueda revisar evidencia sin que exista una URL pública permanente.
+     *
+     * Por qué firmada y no la `download_url` tokenizada de Firebase: esa es
+     * permanente mientras exista el token del objeto, así que compartirla
+     * equivaldría a publicar el archivo. Esta caduca sola en minutos.
+     *
+     * Devuelve null si el objeto ya no existe o si Storage no está disponible;
+     * el CRM muestra "evidencia no disponible" en vez de romper la vista.
+     */
+    public function signedUrl(string $pathOrGsUrl, int $minutes = 10): ?string
+    {
+        $objectPath = $this->normalizeObjectPath($pathOrGsUrl);
+        if ($objectPath === '') {
+            return null;
+        }
+
+        try {
+            $bucket = $this->storage()->getBucket($this->bucketName());
+            $object = $bucket->object($objectPath);
+
+            if (! $object->exists()) {
+                return null;
+            }
+
+            return (string) $object->signedUrl(
+                new \DateTimeImmutable("+{$minutes} minutes"),
+                ['version' => 'v4']
+            );
+        } catch (Throwable $e) {
+            // Nunca logueamos la URL ni credenciales — solo el objeto y el error.
+            logger()->warning('FirebaseStorageService: no se pudo firmar la URL', [
+                'object' => $objectPath,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    /**
      * Convierte `gs://bucket/ruta/archivo.ext` (o una ruta ya relativa) en la
      * ruta de objeto que espera la API (`ruta/archivo.ext`).
      */

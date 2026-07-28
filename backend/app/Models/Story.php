@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -22,21 +23,36 @@ use Illuminate\Support\Facades\Storage;
  * @property string|null $caption
  * @property int|null $size_bytes
  * @property \Carbon\Carbon $expires_at
+ * @property string $moderation_state 'visible' | 'quarantined' | 'removed'
+ * @property int $reports_count
  */
 class Story extends Model
 {
     use HasFactory;
+    // Borrar una story deja de destruir la fila: un caso de moderación abierto
+    // necesita poder investigarla aunque su autor la haya eliminado.
+    use SoftDeletes;
+
+    /** Estado normal — visible en el feed. */
+    public const MODERATION_VISIBLE = 'visible';
+    /** Oculta temporalmente mientras se revisa. Reversible. */
+    public const MODERATION_QUARANTINED = 'quarantined';
+    /** Retirada por decisión de moderación. Reversible por un admin. */
+    public const MODERATION_REMOVED = 'removed';
 
     protected $fillable = [
         'author_type', 'author_id', 'author_name', 'author_avatar',
         'type', 'file_path', 'download_url', 'disk', 'duration_ms', 'caption',
         'size_bytes', 'expires_at',
+        'moderation_state', 'moderated_at', 'moderation_reason_code', 'reports_count',
     ];
 
     protected $casts = [
         'expires_at' => 'datetime',
         'duration_ms' => 'integer',
         'size_bytes' => 'integer',
+        'moderated_at' => 'datetime',
+        'reports_count' => 'integer',
     ];
 
     /** Vistas registradas para este story. */
@@ -74,6 +90,39 @@ class Story extends Model
     public function scopeActive(Builder $q): Builder
     {
         return $q->where('expires_at', '>', now());
+    }
+
+    /**
+     * Scope: solo contenido que la moderación permite mostrar.
+     *
+     * Se aplica SIEMPRE en el servidor. El cliente no decide qué ve: aunque
+     * tuviera el id de una story en cuarentena, la API no se la devuelve.
+     */
+    public function scopeVisibleToMembers(Builder $q): Builder
+    {
+        return $q->where('moderation_state', self::MODERATION_VISIBLE);
+    }
+
+    public function isVisible(): bool
+    {
+        return $this->moderation_state === self::MODERATION_VISIBLE
+            && $this->deleted_at === null;
+    }
+
+    public function isQuarantined(): bool
+    {
+        return $this->moderation_state === self::MODERATION_QUARANTINED;
+    }
+
+    public function isRemoved(): bool
+    {
+        return $this->moderation_state === self::MODERATION_REMOVED;
+    }
+
+    /** ¿El autor de esta story es el miembro indicado? */
+    public function isAuthoredByMember(int $memberId): bool
+    {
+        return $this->author_type === 'member' && (int) $this->author_id === $memberId;
     }
 
     /** Scope: orden cronológico estable para el carousel. */

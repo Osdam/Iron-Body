@@ -3,12 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\MemberUgcConsent;
 use App\Models\Story;
 use App\Models\StoryReaction;
 use App\Models\StoryView;
 use App\Models\User;
 use App\Services\FirebaseStorageService;
+use App\Services\Moderation\BlockService;
+use App\Services\Moderation\EvidenceService;
+use App\Services\Moderation\SuspensionService;
 use App\Services\NotificationService;
+use App\Support\Moderation\ModerationScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -38,12 +43,25 @@ class StoriesController extends Controller
     /** Límite de tamaño de upload (en bytes). 30 MB. */
     private const MAX_SIZE = 30 * 1024 * 1024;
 
+    public function __construct(
+        private BlockService $blocks,
+        private SuspensionService $suspensions,
+        private EvidenceService $evidence,
+    ) {
+    }
+
     // ── Endpoints autenticados (member) ─────────────────────────────────
 
     /** POST /api/app/stories */
     public function storeAsMember(Request $request): JsonResponse
     {
         $member = $request->attributes->get('auth_member');
+
+        // Barrera de moderación en el SERVIDOR. La app también oculta el
+        // botón, pero esa es una cortesía; la decisión se toma aquí.
+        if ($blocked = $this->denyIfCannotPost($member)) {
+            return $blocked;
+        }
 
         $data = $request->validate([
             'file' => 'required|file|max:30720|mimes:jpg,jpeg,png,webp,mp4,mov',
@@ -100,6 +118,12 @@ class StoriesController extends Controller
     public function storeAsMemberFirebase(Request $request): JsonResponse
     {
         $member = $request->attributes->get('auth_member');
+
+        // Misma barrera que en el upload multipart: publicar es publicar,
+        // venga el binario por el backend o directo a Firebase Storage.
+        if ($blocked = $this->denyIfCannotPost($member)) {
+            return $blocked;
+        }
 
         $data = $request->validate([
             'type' => 'nullable|string|in:image,video',
@@ -175,7 +199,16 @@ class StoriesController extends Controller
     {
         $member = $request->attributes->get('auth_member');
 
-        $stories = Story::active()->forFeed()->get();
+        // Una cuenta con las funciones sociales suspendidas no recibe feed.
+        if ($this->suspensions->isRestricted((int) $member->id, ModerationScope::SOCIAL_FEATURES)) {
+            return response()->json(['ok' => true, 'data' => []]);
+        }
+
+        // El filtro de bloqueos y de cuarentena se aplica EN LA CONSULTA, antes
+        // de agrupar y de cualquier límite: filtrar después dejaría huecos en el
+        // resultado y podría devolver páginas vacías o contenido bloqueado.
+        $stories = $this->feedQuery((int) $member->id)->get();
+
         $viewed = StoryView::where('viewer_type', 'member')
             ->where('viewer_id', $member->id)
             ->whereIn('story_id', $stories->pluck('id'))
@@ -212,7 +245,9 @@ class StoriesController extends Controller
     {
         $member = $request->attributes->get('auth_member');
 
-        $story = Story::active()->findOrFail($id);
+        // Resuelto con el mismo filtro del feed: si está bloqueado o en
+        // cuarentena, para este miembro esa story no existe (404).
+        $story = $this->feedQuery((int) $member->id)->findOrFail($id);
 
         // updateOrCreate gracias al unique index — idempotente.
         StoryView::firstOrCreate(
@@ -300,11 +335,21 @@ class StoriesController extends Controller
     {
         $member = $request->attributes->get('auth_member');
 
+        // Reaccionar es una interacción social: una sanción de
+        // `story_interaction` (o mayor) la bloquea desde el servidor.
+        if ($this->suspensions->isRestricted((int) $member->id, ModerationScope::STORY_INTERACTION)) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'interaction_restricted',
+                'message' => 'Tu cuenta tiene las funciones sociales restringidas.',
+            ], 403);
+        }
+
         $data = $request->validate([
             'type' => 'required|string|in:' . implode(',', StoryReaction::VALID_TYPES),
         ]);
 
-        $story = Story::active()->findOrFail($id);
+        $story = $this->feedQuery((int) $member->id)->findOrFail($id);
 
         StoryReaction::updateOrCreate(
             [
@@ -349,7 +394,13 @@ class StoriesController extends Controller
     public function listReactions(Request $request, int $id): JsonResponse
     {
         $member = $request->attributes->get('auth_member');
+        // El owner puede ver las reacciones de su propia story aunque esté en
+        // cuarentena; para el resto rige el filtro del feed.
         $story = Story::findOrFail($id);
+        if (! $story->isAuthoredByMember((int) $member->id)
+            && ! $this->feedQuery((int) $member->id)->whereKey($id)->exists()) {
+            abort(404);
+        }
 
         $isOwner = ($story->author_type === 'member'
             && $story->author_id === $member->id);
@@ -513,20 +564,128 @@ class StoriesController extends Controller
         ]);
     }
 
+    /**
+     * Borra una story respetando la retención de evidencia.
+     *
+     * ANTES: se borraba el objeto y la fila inmediatamente. Eso destruía la
+     * evidencia de cualquier reporte abierto — justo el escenario en que un
+     * infractor borra su contenido al ver que lo reportaron.
+     *
+     * AHORA: la fila se marca con soft delete SIEMPRE (la story desaparece del
+     * feed al instante, igual que antes desde el punto de vista del usuario) y
+     * el binario solo se borra si {@see EvidenceService::canPurgeMedia()} lo
+     * autoriza. Si hay un caso abierto o retención pendiente, el archivo se
+     * conserva y el job `moderation:purge-evidence` lo limpiará al vencer.
+     */
     private function deleteStoryWithFile(Story $story): void
     {
-        try {
-            if ($story->isFirebaseStored()) {
-                // Borrado físico en Firebase Storage vía service account —
-                // libera el recurso aunque la app se cierre tras el delete.
-                app(FirebaseStorageService::class)->deleteObject($story->file_path);
-            } else {
-                Storage::disk($story->disk)->delete($story->file_path);
+        if ($this->evidence->canPurgeMedia((int) $story->id)) {
+            try {
+                if ($story->isFirebaseStored()) {
+                    // Borrado físico en Firebase Storage vía service account —
+                    // libera el recurso aunque la app se cierre tras el delete.
+                    app(FirebaseStorageService::class)->deleteObject($story->file_path);
+                } else {
+                    Storage::disk($story->disk)->delete($story->file_path);
+                }
+            } catch (\Throwable $e) {
+                // Si el archivo ya no existe, igual seguimos con el row.
             }
-        } catch (\Throwable $e) {
-            // Si el archivo ya no existe, igual borramos el row.
+        } else {
+            Log::info('moderation.story_media_retained', [
+                'story_id' => $story->id,
+                'reason' => 'open_report_or_retention',
+            ]);
         }
-        $story->delete();
+
+        $story->delete(); // soft delete: la fila sobrevive para la evidencia.
+    }
+
+    // ── Barreras de moderación ──────────────────────────────────────────
+
+    /**
+     * Consulta base del feed para un miembro: activa, visible para moderación
+     * y sin contenido de personas bloqueadas EN CUALQUIER SENTIDO.
+     *
+     * Se usa en TODOS los endpoints de lectura/interacción para que ninguno
+     * pueda "olvidarse" del filtro. El bloqueo se aplica en el servidor: aunque
+     * el cliente conociera el id, la API no le entrega la story.
+     */
+    private function feedQuery(int $memberId): \Illuminate\Database\Eloquent\Builder
+    {
+        $hidden = $this->blocks->hiddenMemberIdsFor($memberId);
+
+        return Story::query()
+            ->active()
+            ->visibleToMembers()
+            ->when($hidden !== [], function ($q) use ($hidden) {
+                // Solo excluye autores de tipo 'member': los estados oficiales
+                // del gimnasio (author_type='user') no se bloquean entre sí.
+                $q->where(function ($inner) use ($hidden) {
+                    $inner->where('author_type', '!=', 'member')
+                        ->orWhereNotIn('author_id', $hidden);
+                });
+            })
+            ->forFeed();
+    }
+
+    /**
+     * Requisitos para publicar. Devuelve la respuesta de rechazo o null.
+     *
+     * Orden deliberado: primero la sanción (lo más restrictivo), luego la
+     * aceptación de lineamientos y por último la edad — que hoy viene apagada
+     * por configuración porque `members.birth_date` es nullable.
+     */
+    private function denyIfCannotPost($member): ?JsonResponse
+    {
+        $memberId = (int) $member->id;
+
+        if ($this->suspensions->isRestricted($memberId, ModerationScope::STORY_POSTING)) {
+            $restriction = $this->suspensions->restrictionFor(
+                $memberId,
+                ModerationScope::STORY_POSTING
+            );
+
+            return response()->json([
+                'ok' => false,
+                'code' => 'posting_restricted',
+                'message' => ModerationScope::memberExplanation(
+                    $restriction?->scope ?? ModerationScope::STORY_POSTING
+                ),
+                'data' => [
+                    'scope' => $restriction?->scope,
+                    'public_reason' => $restriction?->public_reason,
+                    'ends_at' => $restriction?->ends_at?->toIso8601String(),
+                    'is_permanent' => $restriction?->isPermanent() ?? false,
+                ],
+            ], 403);
+        }
+
+        if (config('ugc.guidelines_required_to_post', true)
+            && ! MemberUgcConsent::hasAcceptedCurrent($memberId)) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'guidelines_acceptance_required',
+                'message' => 'Acepta los Lineamientos de Comunidad para publicar estados.',
+                'data' => [
+                    'version' => (string) config('ugc.guidelines_version'),
+                    'url' => config('ugc.guidelines_url'),
+                ],
+            ], 403);
+        }
+
+        $age = $this->suspensions->checkPostingAge($member);
+        if (! $age['allowed']) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'posting_age_restricted',
+                'message' => 'Debes tener al menos '
+                    . (int) config('ugc.posting_min_age', 13)
+                    . ' años para publicar estados.',
+            ], 403);
+        }
+
+        return null;
     }
 
     private function serializeStory(Story $s, int $viewerId, string $viewerType, ?bool $viewed = null): array
@@ -556,6 +715,14 @@ class StoriesController extends Controller
             // endpoint, así que aquí can_delete == is_owner del member.
             'is_owner' => $isOwner,
             'can_delete' => $isOwner,
+            // Acciones de moderación que la app debe ofrecer en el menú de tres
+            // puntos. Se resuelven aquí para que la UI no tenga que deducir
+            // "¿es mía?" comparando ids — y para poder apagarlas por config.
+            'can_report' => ! $isOwner && (bool) config('ugc.reports_enabled', true),
+            'can_block' => ! $isOwner
+                && $s->author_type === 'member'
+                && (bool) config('ugc.blocking_enabled', true),
+            'moderation_state' => $s->moderation_state,
         ];
     }
 }

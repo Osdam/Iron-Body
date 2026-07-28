@@ -661,6 +661,25 @@ Route::middleware('auth.member')->group(function (): void {
     Route::get('app/stories/{id}/reactions',  [StoriesController::class, 'listReactions']);
     Route::delete('app/stories/{id}',      [StoriesController::class, 'destroyAsMember']);
 
+    // ── Moderación de comunidad (UGC): reportes, bloqueos, sanciones ─────────
+    // El actor SIEMPRE sale del bearer (`auth_member`); ningún endpoint acepta
+    // un id de usuario en el body. Los throttles son la segunda barrera: el
+    // límite real se cuenta contra la base de datos en el servicio.
+    $ugc = \App\Http\Controllers\Api\Moderation\MemberModerationController::class;
+    Route::get('app/moderation/report-reasons', [$ugc, 'reportReasons']);
+    Route::post('app/stories/{id}/report',      [$ugc, 'reportStory'])
+        ->middleware('throttle:20,60');
+    Route::post('app/members/{memberId}/block',   [$ugc, 'block'])
+        ->middleware('throttle:40,60');
+    Route::delete('app/members/{memberId}/block', [$ugc, 'unblock'])
+        ->middleware('throttle:40,60');
+    Route::get('app/moderation/blocked-members', [$ugc, 'blockedMembers']);
+    Route::get('app/moderation/status',          [$ugc, 'status']);
+    Route::get('app/moderation/actions',         [$ugc, 'actions']);
+    Route::post('app/moderation/actions/{action}/appeal', [$ugc, 'appeal'])
+        ->middleware('throttle:10,60');
+    Route::post('app/moderation/guidelines/accept', [$ugc, 'acceptGuidelines']);
+
     // ── Racha semanal "Esta semana" ────────────────────────────────────────
     Route::post('app/weekly-streak/touch', [WeeklyStreakController::class, 'touch']);
     Route::get('app/weekly-streak',        [WeeklyStreakController::class, 'show']);
@@ -820,6 +839,37 @@ Route::post('admin/lives/{live}/end', [\App\Http\Controllers\Api\Admin\LiveContr
 // Solo el CRM puede marcar a un miembro como staff (puede crear/transmitir lives).
 Route::get('admin/members/{member}',               [\App\Http\Controllers\Api\Admin\MemberStaffController::class, 'show']);
 Route::patch('admin/members/{member}/staff-access',[\App\Http\Controllers\Api\Admin\MemberStaffController::class, 'updateStaffAccess']);
+
+// ── Moderación de comunidad (CRM admin) ────────────────────────────────────
+// Bajo /api/admin/* → ya blindado por ProtectAdminPaths. Encima, CADA acción
+// exige su permiso concreto (App\Support\Moderation\ModerationPermission):
+// tener token de admin no basta para suspender a nadie.
+Route::prefix('admin/moderation')->group(function (): void {
+    $mod = \App\Http\Controllers\Api\Admin\ModerationController::class;
+
+    // Canal SSE del módulo (tiempo real sin F5). `EventSource` no puede enviar
+    // el header Authorization, por eso EnsureAdminAuth acepta `?token=` en las
+    // rutas `*/stream` — este endpoint entra en ese patrón.
+    Route::get('stream', [\App\Http\Controllers\Api\Admin\ModerationRealtimeController::class, 'stream']);
+
+    Route::get('dashboard', [$mod, 'dashboard']);
+
+    Route::get('reports',                       [$mod, 'index']);
+    Route::get('reports/{report}',              [$mod, 'show']);
+    Route::get('reports/{report}/evidence',     [$mod, 'evidence']);
+    Route::post('reports/{report}/assign',      [$mod, 'assign']);
+    Route::post('reports/{report}/transition',  [$mod, 'transition']);
+    Route::post('reports/{report}/decision',    [$mod, 'decision']);
+
+    Route::get('members/{memberId}/suspensions',  [$mod, 'memberSuspensions']);
+    Route::post('members/{memberId}/suspensions', [$mod, 'createSuspension']);
+    Route::post('suspensions/{suspension}/revoke', [$mod, 'revokeSuspension']);
+    Route::post('actions/{action}/revoke',      [$mod, 'revokeAction']);
+
+    Route::get('appeals',                       [$mod, 'appeals']);
+    Route::get('appeals/{appeal}',              [$mod, 'showAppeal']);
+    Route::post('appeals/{appeal}/resolve',     [$mod, 'resolveAppeal']);
+});
 
 // ── Stories CRM admin (sin auth — patrón del resto del CRM) ────────────────
 Route::get('admin/stories',         [StoriesController::class, 'indexAsAdmin']);
