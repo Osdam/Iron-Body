@@ -84,8 +84,18 @@ class FactusClient
         }
 
         foreach (array_keys($payload['items']) as $i) {
-            // Sin tarifa (no se cobra IVA) y sin declarar exclusión del bien.
-            $payload['items'][$i]['taxes'] = [['is_excluded' => false]];
+            // Se OMITE el bloque de tributos por completo.
+            //
+            // Factus rechaza `is_excluded: false` sin acompañarlo de `code` y
+            // `rate` (HTTP 422: «El campo código tributo es obligatorio»), y
+            // las dos únicas alternativas que acepta afirmarían algo falso:
+            //   - `[{code:'01', rate:'0.00'}]` declara IVA con tarifa 0 %, que
+            //     es como se representa un bien EXENTO;
+            //   - `[{is_excluded:true}]` declara el bien EXCLUIDO.
+            // Ninguna describe la realidad: el bien es gravable y la causa del
+            // IVA cero es la responsabilidad 49 del EMISOR. Omitir el bloque no
+            // afirma naturaleza tributaria alguna sobre el producto.
+            unset($payload['items'][$i]['taxes']);
         }
 
         $this->assertPayloadIsTaxFree($payload, $policy);

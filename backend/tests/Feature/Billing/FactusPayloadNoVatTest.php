@@ -94,7 +94,7 @@ class FactusPayloadNoVatTest extends TestCase
     {
         $sent = $this->captureSentBody($this->payloadWithVatRate());
 
-        $this->assertSame([['is_excluded' => false]], $sent['items'][0]['taxes']);
+        $this->assertArrayNotHasKey('taxes', $sent['items'][0]);
     }
 
     public function test_el_producto_no_se_clasifica_como_excluido_ni_exento(): void
@@ -103,7 +103,7 @@ class FactusPayloadNoVatTest extends TestCase
         $sent = $this->captureSentBody($this->payloadWithVatRate());
         $json = json_encode($sent);
 
-        $this->assertNotSame(true, $sent['items'][0]['taxes'][0]['is_excluded']);
+        $this->assertArrayNotHasKey('taxes', $sent['items'][0]);
         $this->assertStringNotContainsString('"is_excluded":true', $json);
         $this->assertStringNotContainsString('exento', strtolower($json));
         $this->assertStringNotContainsString('excluido', strtolower($json));
@@ -187,7 +187,7 @@ class FactusPayloadNoVatTest extends TestCase
         $sent = $this->captureSentBody($payload);
 
         foreach ($sent['items'] as $i => $item) {
-            $this->assertSame([['is_excluded' => false]], $item['taxes'], "línea {$i}");
+            $this->assertArrayNotHasKey('taxes', $item, "línea {$i}");
         }
     }
 
@@ -200,7 +200,7 @@ class FactusPayloadNoVatTest extends TestCase
 
         $sent = $this->captureSentBody($payload);
 
-        $this->assertSame([['is_excluded' => false]], $sent['items'][0]['taxes']);
+        $this->assertArrayNotHasKey('taxes', $sent['items'][0]);
     }
 
     // ── Barrera sobre los importes ────────────────────────────────────────
@@ -258,6 +258,6 @@ class FactusPayloadNoVatTest extends TestCase
         $this->assertSame('49', $policy->issuerVatResponsibility());
 
         $sent = $this->captureSentBody($this->payloadWithVatRate());
-        $this->assertFalse($sent['items'][0]['taxes'][0]['is_excluded']);
+        $this->assertArrayNotHasKey('taxes', $sent['items'][0]);
     }
 }
