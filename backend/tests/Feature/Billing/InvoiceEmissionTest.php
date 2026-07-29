@@ -186,9 +186,30 @@ class InvoiceEmissionTest extends TestCase
         Queue::fake();
 
         $payment = $this->paidPayment();
+        // La emisión manual exige la solicitud expresa del cliente: es lo que
+        // manda sobre auto_emit, no el hecho de pulsar un botón.
+        $payment->marcarFacturaSolicitada('cliente.real@correo.com');
         app(InvoicingService::class)->manualEmit('payment', $payment->id);
 
         Queue::assertPushed(EmitElectronicInvoiceJob::class, 1); // manual sí emite
+    }
+
+    /** Sin solicitud expresa, la emisión manual no encola nada. */
+    public function test_manual_emit_without_request_dispatches_nothing(): void
+    {
+        config(['billing.enabled' => true, 'billing.auto_emit.memberships' => false]);
+        Queue::fake();
+
+        $payment = $this->paidPayment(); // sin solicitud
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/no fue creada con solicitud de factura/');
+
+        try {
+            app(InvoicingService::class)->manualEmit('payment', $payment->id);
+        } finally {
+            Queue::assertNothingPushed();
+        }
     }
 
     public function test_emit_refused_on_production_server_with_sandbox_env(): void

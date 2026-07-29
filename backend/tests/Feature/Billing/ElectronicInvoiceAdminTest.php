@@ -94,6 +94,9 @@ class ElectronicInvoiceAdminTest extends TestCase
         config(['billing.enabled' => false]);
         Http::fake();
         $payment = $this->payment();
+        // La emisión manual exige solicitud expresa del cliente (ver
+        // InvoicingService::manualEmit). Sin ella no se encola nada.
+        $payment->marcarFacturaSolicitada('cliente.real@correo.com');
 
         $a = $this->adminPostJson('/api/admin/electronic-invoices/manual-emit', [
             'source_type' => 'payment', 'source_id' => $payment->id,
@@ -105,6 +108,32 @@ class ElectronicInvoiceAdminTest extends TestCase
 
         $this->assertSame($a->json('data.id'), $b->json('data.id'));
         $this->assertSame(1, ElectronicInvoice::where('source_id', $payment->id)->count());
+        Http::assertNothingSent();
+    }
+
+    /**
+     * Regresión de la solicitud #18 (venta V-000003): el botón «Emitir factura»
+     * encolaba un job condenado para una venta sin solicitud, y la venta quedaba
+     * en «Procesando» sin salida. Ahora se rechaza en el endpoint, con el motivo
+     * en pantalla y sin crear ninguna solicitud.
+     */
+    public function test_manual_emit_refuses_a_source_without_an_explicit_request(): void
+    {
+        config(['billing.enabled' => true]);
+        Http::fake();
+        Queue::fake();
+        $payment = $this->payment(); // sin marcarFacturaSolicitada()
+
+        $this->adminPostJson('/api/admin/electronic-invoices/manual-emit', [
+            'source_type' => 'payment', 'source_id' => $payment->id,
+        ])->assertStatus(422)
+            ->assertJsonPath('ok', false)
+            ->assertJsonFragment(['message' => 'Esta venta no fue creada con solicitud de factura electrónica. '
+                .'La factura debe solicitarse al registrar la venta, marcando la casilla '
+                .'«El cliente solicita factura electrónica» antes de cobrar.']);
+
+        $this->assertSame(0, ElectronicInvoice::where('source_id', $payment->id)->count());
+        Queue::assertNothingPushed();
         Http::assertNothingSent();
     }
 
