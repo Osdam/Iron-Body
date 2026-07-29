@@ -255,6 +255,8 @@ class FactusClient
      */
     private function send(string $method, string $path, array $data = [], bool $reauthed = false): array
     {
+        $this->assertEmissionAllowed($method, $path);
+
         $response = $this->dispatch($method, $path, $data);
         $status = $response->status();
 
@@ -271,6 +273,52 @@ class FactusClient
             'error_class' => $this->classify($status),
             'retry_after' => $this->retryAfter($response),
         ];
+    }
+
+    /**
+     * BLOQUEO DE EMISIÓN. Aborta cualquier petición que cree un documento fiscal
+     * mientras la decisión tributaria no esté confirmada por escrito.
+     *
+     * Vive aquí —en el despachador genérico, no en {@see createInvoice()}— por
+     * dos razones:
+     *
+     *  1. Es lo último que se ejecuta antes del HTTP saliente. Ocultar botones en
+     *     el CRM no bloquea nada: `WompiTransactionService` y
+     *     `PaymentMembershipActivator` fuerzan la emisión SIN consultar
+     *     `auto_emit`, y un job en cola puede reintentar por su cuenta.
+     *  2. Cubre cualquier POST, incluidos los que se añadan en el futuro, sin
+     *     depender de que alguien se acuerde de repetir la guarda.
+     *
+     * Los GET quedan permitidos a propósito: la reconciliación fiscal necesita
+     * leer del proveedor, y leer no crea documentos ni consume consecutivos.
+     *
+     * Contexto: Iron Body es responsabilidad 49 (no responsable de IVA) y las
+     * dos únicas representaciones que la API acepta —tarifa 0 % o
+     * `is_excluded`— clasificarían el servicio como exento o excluido, lo que
+     * sería falso. Hasta que Halltec confirme el contrato correcto, no se emite.
+     *
+     * @throws \RuntimeException
+     */
+    private function assertEmissionAllowed(string $method, string $path): void
+    {
+        if (strtolower($method) !== 'post') {
+            return;
+        }
+
+        if ((bool) ($this->cfg['tax_decision_confirmed'] ?? false)) {
+            return;
+        }
+
+        throw new \RuntimeException(sprintf(
+            'Emisión bloqueada: se intentó POST %s con la decisión tributaria sin '
+            .'confirmar (FACTUS_TAX_DECISION_CONFIRMED=false). El emisor es '
+            .'responsabilidad %s (no responsable de IVA) y no existe todavía una '
+            .'representación del tributo aceptada por el proveedor que no '
+            .'clasifique el servicio como exento o excluido. No se emitió ningún '
+            .'documento y no se consumió consecutivo.',
+            $path,
+            app(TaxPolicy::class)->issuerVatResponsibility(),
+        ));
     }
 
     private function classify(int $status): string

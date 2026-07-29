@@ -43,5 +43,13 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <!--
+            Línea base de la suite: la decisión tributaria se da por confirmada
+            para que las pruebas que ejercitan la EMISIÓN sigan ejercitándola.
+            En producción el valor real es false y la emisión está bloqueada en
+            FactusClient::assertEmissionAllowed(). Las pruebas del bloqueo lo
+            apagan explícitamente con config(), nunca al revés.
+        -->
+        <env name="FACTUS_TAX_DECISION_CONFIRMED" value="true"/>
     </php>
 </phpunit>
