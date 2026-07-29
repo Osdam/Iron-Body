@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\ProductSale;
+use App\Rules\DeliverableInvoiceEmail;
+use App\Services\Billing\InvoiceEmail;
 use App\Services\Billing\InvoicingService;
 use App\Services\Billing\Money;
 use App\Services\Billing\PricingException;
@@ -13,6 +15,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Caja / Punto de venta (CRM).
@@ -83,13 +86,25 @@ class CajaController extends Controller
             'discount' => ['nullable', 'numeric', 'min:0'],
             'paid' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string'],
+            // Factura electrónica: OPT-IN explícito del cajero a petición del
+            // cliente. Sin esto la venta no se factura, por mucho que esté
+            // cobrada. Nunca se activa por defecto.
+            'request_invoice' => ['nullable', 'boolean'],
+            'invoice_email' => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail()],
         ]);
+
+        $this->assertInvoiceRequestIsComplete($data);
 
         try {
             $sale = DB::transaction(fn () => $this->buildSale($data, $request));
         } catch (PricingException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
+        // La solicitud se guarda ANTES de cobrar: si el cajero la marcó, debe
+        // quedar registrada aunque el cobro se confirme después (venta a
+        // crédito, entrega diferida) o aunque el encolado falle.
+        $this->persistInvoiceRequest($sale, $data);
 
         // En POS normalmente se cobra al instante → descuenta stock.
         if ($data['paid'] ?? true) {
@@ -107,11 +122,18 @@ class CajaController extends Controller
         $data = $request->validate([
             'payment_method' => ['nullable', Rule::in(ProductSale::PAYMENT_METHODS)],
             'payment_reference' => ['nullable', 'string', 'max:255'],
+            // El cliente puede pedir la factura al pagar, aunque no la pidiera
+            // al crear la venta.
+            'request_invoice' => ['nullable', 'boolean'],
+            'invoice_email' => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail()],
         ]);
+
+        $this->assertInvoiceRequestIsComplete($data);
+        $this->persistInvoiceRequest($sale, $data);
 
         $sale->load('items');
         $sale->markPaid($data['payment_method'] ?? null, $data['payment_reference'] ?? null);
-        $this->enqueueInvoice($sale);
+        $this->enqueueInvoice($sale->fresh('items'));
 
         return response()->json(['data' => $this->serialize($sale->fresh(['items', 'member:id,full_name']))]);
     }
@@ -265,7 +287,48 @@ class CajaController extends Controller
      */
     private function enqueueInvoice(ProductSale $sale): void
     {
-        app(InvoicingService::class)->enqueueForSale($sale->fresh('items'));
+        // `force` sólo cuando el cliente pidió la factura: replica el
+        // comportamiento de la app (la solicitud expresa manda sobre auto_emit).
+        $sale = $sale->fresh('items');
+        app(InvoicingService::class)->enqueueForSale($sale, force: (bool) $sale->invoice_requested);
+    }
+
+    // ── Factura electrónica solicitada en mostrador ─────────────────────────
+
+    /**
+     * Si se pide factura, hace falta un correo al que mandarla.
+     *
+     * Se comprueba ANTES de cobrar para que el cajero corrija en el momento, con
+     * el cliente delante, en vez de descubrirlo cuando la emisión ya falló.
+     *
+     * @param  array<string,mixed>  $data
+     */
+    private function assertInvoiceRequestIsComplete(array $data): void
+    {
+        if (! (bool) ($data['request_invoice'] ?? false)) {
+            return;
+        }
+
+        if (InvoiceEmail::normalizar($data['invoice_email'] ?? null) === null) {
+            throw ValidationException::withMessages([
+                'invoice_email' => ['Para solicitar la factura electrónica hace falta un correo real del cliente.'],
+            ]);
+        }
+    }
+
+    /**
+     * Guarda la solicitud en la VENTA (no en una transacción de pasarela): una
+     * venta de mostrador no tiene pasarela, y aun así puede requerir factura.
+     *
+     * @param  array<string,mixed>  $data
+     */
+    private function persistInvoiceRequest(ProductSale $sale, array $data): void
+    {
+        if (! (bool) ($data['request_invoice'] ?? false)) {
+            return;
+        }
+
+        $sale->marcarFacturaSolicitada($data['invoice_email'] ?? null);
     }
 
     private function serialize(ProductSale $sale): array

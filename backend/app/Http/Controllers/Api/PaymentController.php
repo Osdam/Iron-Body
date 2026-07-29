@@ -8,6 +8,8 @@ use App\Models\AuditLog;
 use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\User;
+use App\Rules\DeliverableInvoiceEmail;
+use App\Services\Billing\InvoiceEmail;
 use App\Services\Billing\InvoicingService;
 use App\Services\Billing\Money;
 use App\Services\Billing\PriceQuote;
@@ -183,7 +185,15 @@ class PaymentController extends Controller
             // queda auditada; sin ella, el importe del plan es el que manda.
             'amount_override' => 'nullable|boolean',
             'override_reason' => 'nullable|string|min:10|max:500',
+            // Factura electrónica: opt-in explícito del administrador a
+            // petición del cliente. Un pago manual (efectivo, transferencia) no
+            // crea transacción de pasarela, así que la solicitud se guarda en el
+            // propio pago. Nunca se activa por defecto.
+            'request_invoice' => 'nullable|boolean',
+            'invoice_email' => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail()],
         ]);
+
+        $invoiceRequest = $this->extractInvoiceRequest($data);
 
         if (($data['status'] ?? 'pending') === 'paid' && empty($data['paid_at'])) {
             $data['paid_at'] = now();
@@ -207,11 +217,22 @@ class PaymentController extends Controller
             $this->auditAmountOverride($payment, $reason, $request);
         }
 
+        // La solicitud se registra aunque el pago aún no esté cobrado: si se
+        // confirma después (update), la intención ya consta y no se pierde.
+        if ($invoiceRequest['requested']) {
+            $payment->marcarFacturaSolicitada($invoiceRequest['email']);
+        }
+
         if ($payment->status === 'paid') {
             $this->applyMembershipExtension($payment);
             // Facturación electrónica (best-effort, idempotente). Inerte si
             // FACTUS_ENABLED=false. Nunca rompe el registro del pago.
-            app(InvoicingService::class)->enqueueForPayment($payment);
+            // `force` sólo si el cliente la pidió: la solicitud expresa manda
+            // sobre el flag global auto_emit.
+            app(InvoicingService::class)->enqueueForPayment(
+                $payment,
+                force: (bool) $payment->invoice_requested,
+            );
         }
 
         return response()->json($payment->load(['user:id,name,email', 'plan:id,name']), 201);
@@ -225,8 +246,12 @@ class PaymentController extends Controller
             'method' => 'nullable|string|max:80',
             'reference' => 'nullable|string|max:120',
             'amount' => 'nullable|numeric|min:0',
+            // El cliente puede pedir la factura al confirmar el pago.
+            'request_invoice' => 'nullable|boolean',
+            'invoice_email' => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail()],
         ]);
 
+        $invoiceRequest = $this->extractInvoiceRequest($data);
         $wasPaid = $payment->status === 'paid';
 
         if (isset($data['status']) && $data['status'] === 'paid' && empty($data['paid_at'])) {
@@ -235,13 +260,50 @@ class PaymentController extends Controller
 
         $payment->update($data);
 
+        if ($invoiceRequest['requested']) {
+            $payment->marcarFacturaSolicitada($invoiceRequest['email']);
+        }
+
         if (! $wasPaid && $payment->status === 'paid') {
             $this->applyMembershipExtension($payment);
             // Facturación electrónica al confirmar (correcciones / histórico).
-            app(InvoicingService::class)->enqueueForPayment($payment);
+            app(InvoicingService::class)->enqueueForPayment(
+                $payment,
+                force: (bool) $payment->fresh()->invoice_requested,
+            );
         }
 
         return response()->json($payment->load(['user:id,name,email', 'plan:id,name']));
+    }
+
+    /**
+     * Extrae la solicitud de factura del request y la SACA de `$data`.
+     *
+     * Se retira del array porque `request_invoice`/`invoice_email` no son
+     * columnas que deban ir en `Payment::create()`/`update()` sin más: la
+     * solicitud se registra con `marcarFacturaSolicitada()`, que es idempotente
+     * y conserva la fecha original.
+     *
+     * Exige correo entregable: pedir factura sin decir a dónde mandarla es una
+     * solicitud incompleta, y descubrirlo después de cobrar es tarde.
+     *
+     * @param  array<string,mixed>  $data
+     * @return array{requested: bool, email: ?string}
+     */
+    private function extractInvoiceRequest(array &$data): array
+    {
+        $requested = (bool) ($data['request_invoice'] ?? false);
+        $email = $data['invoice_email'] ?? null;
+
+        unset($data['request_invoice'], $data['invoice_email']);
+
+        if ($requested && InvoiceEmail::normalizar($email) === null) {
+            throw ValidationException::withMessages([
+                'invoice_email' => ['Para solicitar la factura electrónica hace falta un correo real del cliente.'],
+            ]);
+        }
+
+        return ['requested' => $requested, 'email' => $email];
     }
 
     /**

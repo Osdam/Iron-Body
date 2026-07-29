@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Wompi;
 
+use App\Rules\DeliverableInvoiceEmail;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -40,7 +41,10 @@ abstract class AbstractWompiPaymentRequest extends FormRequest
             // auto_emit. `invoice_email` es el correo de contacto (opcional:
             // el backend usa el del miembro autenticado si no llega).
             'request_invoice'   => 'nullable|boolean',
-            'invoice_email'     => 'nullable|email|max:160',
+            // `entregable` rechaza dominios reservados (.local/.invalid/.test/
+            // .example). Un correo sintético pasa `email` pero la factura nunca
+            // llegaría a nadie. Ver App\Rules\DeliverableInvoiceEmail.
+            'invoice_email'     => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail()],
             // Consentimientos Wompi (ambos obligatorios).
             'accepted_terms'          => 'required|accepted',
             'accepted_personal_data'  => 'required|accepted',
