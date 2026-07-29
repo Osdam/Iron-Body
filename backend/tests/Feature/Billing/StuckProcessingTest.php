@@ -332,6 +332,99 @@ class StuckProcessingTest extends TestCase
         $this->assertStringContainsString('recover-stuck-processing', (string) $log->message);
     }
 
+    // ── Cancelación de una venta real que nadie pidió facturar ────────────
+
+    public function test_una_pendiente_de_venta_real_sin_solicitud_exige_el_flag(): void
+    {
+        // Sin --not-requested el comando se niega: no debe poder cancelar
+        // documentos reales por descuido.
+        $invoice = $this->pendingInvoiceFor($this->sale()); // invoice_requested=false
+
+        $this->artisan("billing:cancel-test-requests --ids={$invoice->id}")
+            ->expectsOutputToContain('venta real sin solicitud del cliente')
+            ->assertExitCode(0);
+
+        $this->assertSame(InvoiceStatus::PENDING, $invoice->fresh()->status);
+    }
+
+    public function test_con_el_flag_la_pendiente_sin_solicitud_queda_cancelada(): void
+    {
+        Http::fake();
+        Queue::fake();
+        $sale = $this->sale();
+        $invoice = $this->pendingInvoiceFor($sale);
+
+        $this->artisan("billing:cancel-test-requests --ids={$invoice->id} --not-requested"
+            .' --reason="La venta no fue creada con solicitud de factura electronica"')
+            ->assertExitCode(0);
+
+        $invoice->refresh();
+        $this->assertSame(InvoiceStatus::CANCELLED, $invoice->status);
+        $this->assertFalse((bool) $invoice->retry_allowed, 'el reintento debe quedar deshabilitado');
+        $this->assertNotNull($invoice->cancelled_at);
+        $this->assertStringContainsString('no fue creada con solicitud', (string) $invoice->cancellation_reason);
+        // Nada se emitió y la venta no se tocó.
+        Http::assertNothingSent();
+        Queue::assertNothingPushed();
+        $this->assertFalse((bool) $sale->fresh()->invoice_requested);
+        $this->assertSame('paid', $sale->fresh()->payment_status);
+    }
+
+    public function test_la_bitacora_de_la_cancelacion_no_dice_que_fue_de_prueba(): void
+    {
+        // Una venta real sin solicitud NO es un pago de sandbox: confundirlo en
+        // la bitácora engañaría a quien audite el documento después.
+        $invoice = $this->pendingInvoiceFor($this->sale());
+
+        $this->artisan("billing:cancel-test-requests --ids={$invoice->id} --not-requested")
+            ->assertExitCode(0);
+
+        $log = \Illuminate\Support\Facades\DB::table('electronic_invoice_logs')
+            ->where('electronic_invoice_id', $invoice->id)->where('action', 'cancel')->latest('id')->first();
+
+        $this->assertStringContainsString('NO solicitó factura', (string) $log->message);
+        $this->assertStringNotContainsString('sandbox', (string) $log->message);
+    }
+
+    public function test_el_flag_no_alcanza_a_una_venta_que_si_pidio_factura(): void
+    {
+        // La condición es verificable en los datos, no un override: si el
+        // cliente sí la pidió, el flag no la vuelve cancelable por esta vía.
+        $sale = $this->sale();
+        $sale->marcarFacturaSolicitada('cliente.real@correo.com');
+        $invoice = $this->pendingInvoiceFor($sale->fresh());
+
+        $this->artisan("billing:cancel-test-requests --ids={$invoice->id} --not-requested")
+            ->expectsOutputToContain('no es de sandbox: requiere decisión manual')
+            ->assertExitCode(0);
+
+        $this->assertSame(InvoiceStatus::PENDING, $invoice->fresh()->status);
+    }
+
+    public function test_nunca_cancela_una_solicitud_con_numero_o_cufe(): void
+    {
+        // Con número asignado: el documento fiscal puede existir de verdad.
+        $conNumero = $this->pendingInvoiceFor($this->sale());
+        $conNumero->forceFill(['full_number' => 'IBFE9'])->save();
+
+        $this->artisan("billing:cancel-test-requests --ids={$conNumero->id} --not-requested")
+            ->expectsOutputToContain('ya tiene número')
+            ->assertExitCode(0);
+
+        $this->assertSame(InvoiceStatus::PENDING, $conNumero->fresh()->status);
+        $this->assertSame('IBFE9', $conNumero->fresh()->full_number);
+
+        // Con CUFE: idem, y se avisa por el CUFE, que es la prueba más fuerte.
+        $conCufe = $this->pendingInvoiceFor($this->payment());
+        $conCufe->forceFill(['cufe' => 'cufe-real'])->save();
+
+        $this->artisan("billing:cancel-test-requests --ids={$conCufe->id} --not-requested")
+            ->expectsOutputToContain('ya tiene CUFE')
+            ->assertExitCode(0);
+
+        $this->assertSame(InvoiceStatus::PENDING, $conCufe->fresh()->status);
+    }
+
     public function test_el_comando_no_reintenta_ni_emite(): void
     {
         Queue::fake();

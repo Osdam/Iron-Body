@@ -34,14 +34,28 @@ class BillingCancelTestRequestsCommand extends Command
         {--ids= : Lista o rango explícito de IDs, p. ej. 10-16 o 10,11,12}
         {--reason=sandbox_test : Motivo estable que se guarda en la factura}
         {--actor= : Quién ordena la cancelación (por defecto, el usuario del sistema)}
+        {--not-requested : Permite cancelar la solicitud de una venta REAL cuyo origen tiene invoice_requested=false}
         {--dry-run : Muestra qué se cancelaría sin escribir nada}';
 
     protected $description = 'Cancela solicitudes de factura originadas en pagos de prueba (sandbox), sin eliminarlas.';
+
+    /** Motivo por defecto: describe pagos de prueba, no ventas reales. */
+    private const MOTIVO_SANDBOX = 'sandbox_test';
+
+    /** Motivo para una venta real cuyo cliente nunca pidió factura. */
+    private const MOTIVO_SIN_SOLICITUD = 'La venta no fue creada con solicitud de factura electrónica';
 
     public function handle(PaymentOriginInspector $inspector): int
     {
         $dry = (bool) $this->option('dry-run');
         $reason = (string) $this->option('reason');
+
+        // El motivo por defecto («sandbox_test») describe pagos de prueba. Con
+        // --not-requested y sin motivo explícito sería una etiqueta FALSA sobre
+        // una venta real: se sustituye por la verdadera.
+        if ($this->option('not-requested') && $reason === self::MOTIVO_SANDBOX) {
+            $reason = self::MOTIVO_SIN_SOLICITUD;
+        }
         $actor = (string) ($this->option('actor') ?: ('cli:'.(get_current_user() ?: 'desconocido')));
 
         $invoices = $this->targets();
@@ -67,6 +81,15 @@ class BillingCancelTestRequestsCommand extends Command
                 $status !== 'pending' => "no es pending (es {$status})",
                 filled($invoice->cufe) => 'ya tiene CUFE',
                 filled($invoice->full_number) => 'ya tiene número',
+                // Una venta REAL que el cliente nunca pidió facturar no se puede
+                // emitir jamás: la barrera la rechazaría siempre. Su solicitud
+                // `pending` no es una emisión en espera, es un registro que no
+                // tiene destino. Requiere --not-requested explícito, y la
+                // condición es verificable en los datos —no un override del
+                // operador—: el origen tiene invoice_requested=false.
+                $this->isNotRequested($invoice) => $this->option('not-requested')
+                    ? null
+                    : 'venta real sin solicitud del cliente: usa --not-requested',
                 ! $origin['is_sandbox'] && ! $origin['is_test_card'] => 'no es de sandbox: requiere decisión manual',
                 default => null,
             };
@@ -155,6 +178,22 @@ class BillingCancelTestRequestsCommand extends Command
         return array_values(array_unique($ids));
     }
 
+    /**
+     * ¿El origen económico NO pidió factura?
+     *
+     * Es la única razón por la que una solicitud de una venta real puede
+     * cancelarse sin más trámite: sin solicitud expresa la emisión está
+     * prohibida por diseño, así que la fila nunca podrá convertirse en
+     * documento. Se lee del hecho económico (pago o venta), no de la
+     * transacción de pasarela.
+     */
+    private function isNotRequested(ElectronicInvoice $invoice): bool
+    {
+        $source = $invoice->source;
+
+        return $source !== null && ! (bool) ($source->invoice_requested ?? false);
+    }
+
     private function cancel(ElectronicInvoice $invoice, string $reason, string $actor): void
     {
         DB::transaction(function () use ($invoice, $reason, $actor) {
@@ -174,11 +213,20 @@ class BillingCancelTestRequestsCommand extends Command
                 'endpoint' => null,
                 'http_status' => null,
                 'result' => 'cancelled',
+                // El porqué tiene que ser EXACTO: una venta real sin solicitud
+                // no es un pago de prueba, y una bitácora que lo confunda
+                // engaña a quien audite el documento años después.
                 'message' => sprintf(
-                    'Solicitud cancelada por %s el %s. Motivo: %s. Origen: pago de prueba '
-                    .'(sandbox); no movió dinero y no debe facturarse. retry_allowed=false. '
+                    'Solicitud cancelada por %s el %s. Motivo: %s. %s retry_allowed=false. '
                     .'No se llamó a Factus y no se eliminó ningún registro.',
-                    $actor, now()->toDateTimeString(), $reason,
+                    $actor,
+                    now()->toDateTimeString(),
+                    $reason,
+                    $this->isNotRequested($invoice)
+                        ? 'Origen: venta real cuyo cliente NO solicitó factura electrónica; '
+                          .'sin solicitud expresa la emisión está prohibida y la solicitud no '
+                          .'tiene destino posible.'
+                        : 'Origen: pago de prueba (sandbox); no movió dinero y no debe facturarse.',
                 ),
                 'payload_excerpt' => null,
                 'duration_ms' => null,
