@@ -80,7 +80,7 @@ class InvoiceEmissionTest extends TestCase
     {
         config(['billing.enabled' => true]);
         Http::fake([
-            '*/oauth/token'       => Http::response(['access_token' => 'tok', 'expires_in' => 3600]),
+            '*/oauth/token' => Http::response(['access_token' => 'tok', 'expires_in' => 3600]),
             '*/v2/bills/validate' => Http::response(['data' => ['bill' => [
                 'id' => 'F123', 'number' => '990000001', 'prefix' => 'SETP',
                 'cufe' => 'cufe-abc-123', 'status' => 'Validada',
@@ -108,7 +108,7 @@ class InvoiceEmissionTest extends TestCase
     {
         config(['billing.enabled' => true]);
         Http::fake([
-            '*/oauth/token'       => Http::response(['access_token' => 'tok', 'expires_in' => 3600]),
+            '*/oauth/token' => Http::response(['access_token' => 'tok', 'expires_in' => 3600]),
             '*/v2/bills/validate' => Http::response(['message' => 'boom'], 500),
         ]);
         Queue::fake();
@@ -133,7 +133,7 @@ class InvoiceEmissionTest extends TestCase
     {
         config(['billing.enabled' => true]);
         Http::fake([
-            '*/oauth/token'       => Http::response(['access_token' => 'tok', 'expires_in' => 3600]),
+            '*/oauth/token' => Http::response(['access_token' => 'tok', 'expires_in' => 3600]),
             '*/v2/bills/validate' => Http::response(['message' => 'datos inválidos'], 422),
         ]);
         Queue::fake();

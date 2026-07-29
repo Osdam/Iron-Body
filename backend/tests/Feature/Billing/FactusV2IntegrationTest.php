@@ -2,15 +2,15 @@
 
 namespace Tests\Feature\Billing;
 
+use App\Enums\InvoiceStatus;
+use App\Jobs\EmitElectronicInvoiceJob;
+use App\Models\ElectronicInvoice;
 use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\TaxRate;
 use App\Models\User;
 use App\Services\Billing\Factus\FactusClient;
 use App\Services\Billing\Factus\FactusTokenManager;
-use App\Enums\InvoiceStatus;
-use App\Jobs\EmitElectronicInvoiceJob;
-use App\Models\ElectronicInvoice;
 use App\Services\Billing\InvoiceDtoBuilder;
 use App\Services\Billing\InvoicePdfStorageService;
 use App\Services\Billing\InvoicingService;
@@ -21,11 +21,15 @@ use Tests\TestCase;
 
 class FactusV2IntegrationTest extends TestCase
 {
+    use AssumesVatResponsibleIssuer;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
+        // Estas pruebas verifican el MOTOR de calculo, no la politica
+        // vigente de Iron Body (no responsable de IVA). Ver el trait.
+        $this->assumeVatResponsibleIssuer();
         config([
             'billing.credentials' => ['username' => 'u', 'password' => 'p', 'client_id' => 'c', 'client_secret' => 's'],
             'billing.numbering.range_id' => 4,
@@ -104,7 +108,7 @@ class FactusV2IntegrationTest extends TestCase
     public function test_client_classifies_conflict(): void
     {
         Http::fake([
-            '*oauth/token'        => Http::response(['access_token' => 'A', 'expires_in' => 3600]),
+            '*oauth/token' => Http::response(['access_token' => 'A', 'expires_in' => 3600]),
             '*/v2/bills/validate' => Http::response(['message' => 'dup'], 409),
         ]);
         $conflict = FactusClient::make()->createInvoice(['x' => 1]);
@@ -115,7 +119,7 @@ class FactusV2IntegrationTest extends TestCase
     public function test_client_classifies_rate_limit(): void
     {
         Http::fake([
-            '*oauth/token'        => Http::response(['access_token' => 'A', 'expires_in' => 3600]),
+            '*oauth/token' => Http::response(['access_token' => 'A', 'expires_in' => 3600]),
             '*/v2/bills/validate' => Http::response(['message' => 'slow down'], 429, ['Retry-After' => '30']),
         ]);
         $rate = FactusClient::make()->createInvoice(['x' => 1]);
@@ -141,14 +145,14 @@ class FactusV2IntegrationTest extends TestCase
         config(['billing.enabled' => true]);
         Storage::fake('local');
         Http::fake([
-            '*oauth/token'        => Http::response(['access_token' => 'A', 'expires_in' => 3600]),
+            '*oauth/token' => Http::response(['access_token' => 'A', 'expires_in' => 3600]),
             '*/v2/bills/validate' => Http::response([
                 'status' => 'Created',
-                'data'   => [
+                'data' => [
                     'reference_code' => 'b6c82591-1529-4950-961c-ff1aed3affb8',
-                    'number'         => 'SETP990006967',
-                    'cufe'           => 'ddf9beb168d93226c0a81837c89595bafeec171a',
-                    'links'          => ['qr' => 'https://qr.example/x', 'public_url' => 'https://pub.example/x'],
+                    'number' => 'SETP990006967',
+                    'cufe' => 'ddf9beb168d93226c0a81837c89595bafeec171a',
+                    'links' => ['qr' => 'https://qr.example/x', 'public_url' => 'https://pub.example/x'],
                 ],
             ], 201),
             '*download-pdf' => Http::response(['status' => 'OK', 'data' => ['file_name' => 'fv', 'pdf_base_64_encoded' => base64_encode('%PDF-1.4 demo')]]),
@@ -164,8 +168,8 @@ class FactusV2IntegrationTest extends TestCase
         $this->assertSame('ddf9beb168d93226c0a81837c89595bafeec171a', $invoice->cufe);
         $this->assertSame('https://qr.example/x', $invoice->qr_url);          // links.qr
         $this->assertSame(InvoiceStatus::VALIDATED, $invoice->status);
-        $this->assertSame('invoices/' . $invoice->uuid . '/factura.pdf', $invoice->pdf_path);
-        $this->assertSame('invoices/' . $invoice->uuid . '/factura.xml', $invoice->xml_path);
+        $this->assertSame('invoices/'.$invoice->uuid.'/factura.pdf', $invoice->pdf_path);
+        $this->assertSame('invoices/'.$invoice->uuid.'/factura.xml', $invoice->xml_path);
         $this->assertSame('https://pub.example/x', $invoice->pdf_url); // public_url conservado
         Storage::disk('local')->assertExists($invoice->pdf_path);
         Storage::disk('local')->assertExists($invoice->xml_path);
@@ -179,7 +183,7 @@ class FactusV2IntegrationTest extends TestCase
             'status' => 'validated', 'full_number' => 'SETP990006968', 'total' => 1000,
         ]);
         Http::fake([
-            '*oauth/token'  => Http::response(['access_token' => 'A', 'expires_in' => 3600]),
+            '*oauth/token' => Http::response(['access_token' => 'A', 'expires_in' => 3600]),
             '*download-pdf' => Http::response(['data' => ['pdf_base_64_encoded' => base64_encode('esto no es un pdf')]]),
             '*download-xml' => Http::response(['data' => ['xml_base_64_encoded' => '!!!no-es-base64!!!']]),
         ]);

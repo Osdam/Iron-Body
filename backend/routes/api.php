@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\AppStoreController;
 use App\Http\Controllers\Api\Admin\ProductController;
 use App\Http\Controllers\Api\Admin\CajaController;
 use App\Http\Controllers\Api\Admin\EarningsController;
+use App\Http\Controllers\Api\Admin\BillingQuoteController;
 use App\Http\Controllers\Api\Admin\BillingTaxController;
 use App\Http\Controllers\Api\Admin\ElectronicInvoiceController;
 use App\Http\Controllers\Api\Admin\FiscalProfileController;
@@ -953,6 +954,11 @@ Route::get('admin/billing/fiscal-assignments',        [BillingTaxController::cla
 Route::put('admin/billing/plans/{plan}/tax-rate',     [BillingTaxController::class, 'assignPlan'])->whereNumber('plan');
 Route::put('admin/billing/products/{product}/tax-rate', [BillingTaxController::class, 'assignProduct'])->whereNumber('product');
 Route::post('admin/billing/products/bulk-tax',        [BillingTaxController::class, 'bulkProducts']);
+Route::put('admin/billing/plans/{plan}/pricing-mode', [BillingTaxController::class, 'updatePlanPricing'])->whereNumber('plan');
+Route::put('admin/billing/products/{product}/pricing-mode', [BillingTaxController::class, 'updateProductPricing'])->whereNumber('product');
+
+// Cotización oficial (base / IVA / total). El frontend la MUESTRA, no la calcula.
+Route::post('admin/billing/quote', BillingQuoteController::class);
 // ── Ejercicios — referencias visuales (GIF) vía WorkoutX ────────────────────
 // Rutas específicas ANTES de {id} para que no las capture el comodín.
 Route::get('exercises/search', [ExerciseController::class, 'search']);

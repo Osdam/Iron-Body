@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\InvoiceStatus;
 use App\Enums\InvoiceType;
+use App\Services\Billing\InvoicingService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -32,23 +33,39 @@ class ElectronicInvoice extends Model
         'request_payload', 'response_payload', 'failure_reason',
         'retry_count', 'last_attempt_at', 'issued_at', 'created_by_admin_id',
         'customer_email_sent_at', 'customer_email_status', 'customer_email_failure_reason',
+        // Pricing V2: payload congelado + conciliación.
+        'payload_snapshot', 'line_items_snapshot', 'source_amount_snapshot',
+        'reconciliation_status', 'reconciliation_difference', 'reconciled_at',
+        'pricing_rules_version',
     ];
 
+    /** Estados del guardarraíl de conciliación pago ↔ factura. */
+    public const RECONCILIATION_OK = 'ok';
+
+    public const RECONCILIATION_FAILED = 'failed';
+
+    public const RECONCILIATION_SKIPPED = 'skipped';
+
     protected $casts = [
-        'type'              => InvoiceType::class,
-        'status'            => InvoiceStatus::class,
+        'type' => InvoiceType::class,
+        'status' => InvoiceStatus::class,
         'is_final_consumer' => 'boolean',
-        'subtotal'          => 'decimal:2',
-        'discount'          => 'decimal:2',
-        'tax_total'         => 'decimal:2',
-        'total'             => 'decimal:2',
-        'request_payload'   => 'array',
-        'response_payload'  => 'array',
-        'retry_count'       => 'integer',
-        'validated_at'      => 'datetime',
-        'last_attempt_at'   => 'datetime',
-        'issued_at'         => 'datetime',
+        'subtotal' => 'decimal:2',
+        'discount' => 'decimal:2',
+        'tax_total' => 'decimal:2',
+        'total' => 'decimal:2',
+        'request_payload' => 'array',
+        'response_payload' => 'array',
+        'retry_count' => 'integer',
+        'validated_at' => 'datetime',
+        'last_attempt_at' => 'datetime',
+        'issued_at' => 'datetime',
         'customer_email_sent_at' => 'datetime',
+        'payload_snapshot' => 'array',
+        'line_items_snapshot' => 'array',
+        'reconciliation_difference' => 'decimal:2',
+        'source_amount_snapshot' => 'decimal:2',
+        'reconciled_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -100,7 +117,7 @@ class ElectronicInvoice extends Model
         return $q
             ->when($f['status'] ?? null, fn ($q, $v) => $q->where('status', $v))
             ->when($f['type'] ?? null, fn ($q, $v) => $q->where('type', $v))
-            ->when($f['source_type'] ?? null, fn ($q, $v) => $q->where('source_type', \App\Services\Billing\InvoicingService::SOURCE_MAP[$v] ?? $v))
+            ->when($f['source_type'] ?? null, fn ($q, $v) => $q->where('source_type', InvoicingService::SOURCE_MAP[$v] ?? $v))
             ->when($f['source_id'] ?? null, fn ($q, $v) => $q->where('source_id', $v))
             ->when($f['number'] ?? null, fn ($q, $v) => $q->where('full_number', 'like', "%{$v}%"))
             ->when($f['cufe'] ?? null, fn ($q, $v) => $q->where('cufe', 'like', "%{$v}%"))
@@ -115,7 +132,7 @@ class ElectronicInvoice extends Model
     public function markProcessing(): void
     {
         $this->forceFill([
-            'status'          => $this->type === InvoiceType::CREDIT_NOTE
+            'status' => $this->type === InvoiceType::CREDIT_NOTE
                 ? InvoiceStatus::CREDIT_NOTE_PROCESSING
                 : InvoiceStatus::PROCESSING,
             'last_attempt_at' => now(),
@@ -125,18 +142,18 @@ class ElectronicInvoice extends Model
     public function markValidated(array $attrs = []): void
     {
         $this->forceFill(array_merge($attrs, [
-            'status'       => $this->type === InvoiceType::CREDIT_NOTE
+            'status' => $this->type === InvoiceType::CREDIT_NOTE
                 ? InvoiceStatus::CREDIT_NOTE_VALIDATED
                 : InvoiceStatus::VALIDATED,
             'validated_at' => $attrs['validated_at'] ?? now(),
-            'issued_at'    => $this->issued_at ?? now(),
+            'issued_at' => $this->issued_at ?? now(),
         ]))->save();
     }
 
     public function markRejected(?string $reason = null, array $attrs = []): void
     {
         $this->forceFill(array_merge($attrs, [
-            'status'         => $this->type === InvoiceType::CREDIT_NOTE
+            'status' => $this->type === InvoiceType::CREDIT_NOTE
                 ? InvoiceStatus::CREDIT_NOTE_REJECTED
                 : InvoiceStatus::REJECTED,
             'failure_reason' => $reason,
@@ -146,12 +163,57 @@ class ElectronicInvoice extends Model
     public function markError(?string $reason = null): void
     {
         $this->forceFill([
-            'status'         => $this->type === InvoiceType::CREDIT_NOTE
+            'status' => $this->type === InvoiceType::CREDIT_NOTE
                 ? InvoiceStatus::CREDIT_NOTE_ERROR
                 : InvoiceStatus::ERROR,
             'failure_reason' => $reason,
-            'retry_count'    => $this->retry_count + 1,
+            'retry_count' => $this->retry_count + 1,
         ])->save();
+    }
+
+    // ── Conciliación (guardarraíl pre-emisión) ──────────────────────────────
+
+    /** ¿Ya tiene el payload congelado? Si sí, los reintentos lo reutilizan. */
+    public function hasPayloadSnapshot(): bool
+    {
+        return is_array($this->payload_snapshot) && $this->payload_snapshot !== [];
+    }
+
+    public function markReconciliationOk(float $sourceAmount, float $difference): void
+    {
+        $this->forceFill([
+            'reconciliation_status' => self::RECONCILIATION_OK,
+            'source_amount_snapshot' => $sourceAmount,
+            'reconciliation_difference' => $difference,
+            'reconciled_at' => now(),
+        ])->save();
+    }
+
+    /**
+     * Descuadre entre lo cobrado y lo que se iba a facturar.
+     *
+     * NO se marca como `rejected`: ese estado significa "la DIAN la rechazó", y
+     * aquí el documento jamás salió. Queda en `error`, que es un estado técnico
+     * reintentable una vez corregida la causa.
+     */
+    public function markReconciliationFailed(float $sourceAmount, float $difference, string $reason): void
+    {
+        $this->forceFill([
+            'reconciliation_status' => self::RECONCILIATION_FAILED,
+            'source_amount_snapshot' => $sourceAmount,
+            'reconciliation_difference' => $difference,
+            'reconciled_at' => now(),
+            'status' => $this->type === InvoiceType::CREDIT_NOTE
+                ? InvoiceStatus::CREDIT_NOTE_ERROR
+                : InvoiceStatus::ERROR,
+            'failure_reason' => $reason,
+            'retry_count' => $this->retry_count + 1,
+        ])->save();
+    }
+
+    public function reconciliationFailed(): bool
+    {
+        return $this->reconciliation_status === self::RECONCILIATION_FAILED;
     }
 
     // ── Envío propio del comprobante al cliente (SMTP, best-effort) ──────────
@@ -165,8 +227,8 @@ class ElectronicInvoice extends Model
     public function markCustomerEmailSent(): void
     {
         $this->forceFill([
-            'customer_email_sent_at'        => now(),
-            'customer_email_status'         => 'sent',
+            'customer_email_sent_at' => now(),
+            'customer_email_status' => 'sent',
             'customer_email_failure_reason' => null,
         ])->save();
     }
@@ -175,7 +237,7 @@ class ElectronicInvoice extends Model
     public function markCustomerEmailFailed(?string $reason = null): void
     {
         $this->forceFill([
-            'customer_email_status'         => 'failed',
+            'customer_email_status' => 'failed',
             'customer_email_failure_reason' => $reason,
         ])->save();
     }
@@ -186,34 +248,49 @@ class ElectronicInvoice extends Model
     public function toAdminArray(): array
     {
         return [
-            'id'          => $this->id,
-            'uuid'        => $this->uuid,
-            'type'        => $this->type->value,
-            'status'      => $this->status->value,
+            'id' => $this->id,
+            'uuid' => $this->uuid,
+            'type' => $this->type->value,
+            'status' => $this->status->value,
             'source_type' => $this->source_type,
-            'source_id'   => $this->source_id,
+            'source_id' => $this->source_id,
             'full_number' => $this->full_number,
-            'cufe'        => $this->cufe,
+            'cufe' => $this->cufe,
             'dian_status' => $this->dian_status,
-            'customer'    => [
-                'doc_type'   => $this->customer_doc_type,
+            'customer' => [
+                'doc_type' => $this->customer_doc_type,
                 'doc_number' => $this->customer_doc_number,
-                'name'       => $this->customer_name,
-                'email'      => $this->customer_email,
-                'final'      => (bool) $this->is_final_consumer,
+                'name' => $this->customer_name,
+                'email' => $this->customer_email,
+                'final' => (bool) $this->is_final_consumer,
             ],
-            'currency'    => $this->currency,
-            'subtotal'    => (float) $this->subtotal,
-            'discount'    => (float) $this->discount,
-            'tax_total'   => (float) $this->tax_total,
-            'total'       => (float) $this->total,
-            'has_pdf'     => (bool) ($this->pdf_path || $this->pdf_url),
-            'has_xml'     => (bool) ($this->xml_path || $this->xml_url),
-            'qr_url'      => $this->qr_url,
+            'currency' => $this->currency,
+            'subtotal' => (float) $this->subtotal,
+            'discount' => (float) $this->discount,
+            'tax_total' => (float) $this->tax_total,
+            'total' => (float) $this->total,
+            'has_pdf' => (bool) ($this->pdf_path || $this->pdf_url),
+            'has_xml' => (bool) ($this->xml_path || $this->xml_url),
+            'qr_url' => $this->qr_url,
             'failure_reason' => $this->failure_reason,
             'retry_count' => (int) $this->retry_count,
-            'issued_at'   => optional($this->issued_at)->toIso8601String(),
-            'created_at'  => optional($this->created_at)->toIso8601String(),
+            'issued_at' => optional($this->issued_at)->toIso8601String(),
+            'created_at' => optional($this->created_at)->toIso8601String(),
+            // Pricing V2: estado del guardarraíl + inmutabilidad para el CRM.
+            'reconciliation' => [
+                'status' => $this->reconciliation_status,
+                'difference' => $this->reconciliation_difference !== null
+                    ? (float) $this->reconciliation_difference
+                    : null,
+                'source_amount' => $this->source_amount_snapshot !== null
+                    ? (float) $this->source_amount_snapshot
+                    : null,
+                'reconciled_at' => optional($this->reconciled_at)->toIso8601String(),
+            ],
+            'has_payload_snapshot' => $this->hasPayloadSnapshot(),
+            'pricing_rules_version' => $this->pricing_rules_version,
+            'immutable' => $this->status->isFinal(),
+            'can_retry' => $this->status->canRetry() && ! $this->reconciliationFailed(),
         ];
     }
 
@@ -226,51 +303,53 @@ class ElectronicInvoice extends Model
     {
         $this->loadMissing('logs');
 
-        $items = is_array($this->request_payload['items'] ?? null)
-            ? $this->request_payload['items']
-            : [];
+        // Prioriza el payload CONGELADO: es exactamente lo que se envía/envió a
+        // Factus. El request_payload solo existe tras el primer intento real.
+        $items = is_array($this->payload_snapshot['items'] ?? null)
+            ? $this->payload_snapshot['items']
+            : (is_array($this->request_payload['items'] ?? null) ? $this->request_payload['items'] : []);
 
         return array_merge($this->toAdminArray(), [
-            'prefix'                => $this->prefix,
-            'number'                => $this->number,
-            'qr_data'               => $this->qr_data,
-            'validated_at'          => optional($this->validated_at)->toIso8601String(),
-            'last_attempt_at'       => optional($this->last_attempt_at)->toIso8601String(),
+            'prefix' => $this->prefix,
+            'number' => $this->number,
+            'qr_data' => $this->qr_data,
+            'validated_at' => optional($this->validated_at)->toIso8601String(),
+            'last_attempt_at' => optional($this->last_attempt_at)->toIso8601String(),
             'references_invoice_id' => $this->references_invoice_id,
             'customer_email_delivery' => [
-                'status'         => $this->customer_email_status,
-                'sent_at'        => optional($this->customer_email_sent_at)->toIso8601String(),
+                'status' => $this->customer_email_status,
+                'sent_at' => optional($this->customer_email_sent_at)->toIso8601String(),
                 'failure_reason' => $this->customer_email_failure_reason,
             ],
             'customer_full' => [
-                'doc_type'        => $this->customer_doc_type,
-                'doc_number'      => $this->customer_doc_number,
-                'dv'              => $this->customer_dv,
-                'name'            => $this->customer_name,
-                'email'           => $this->customer_email,
-                'phone'           => $this->customer_phone,
-                'address'         => $this->customer_address,
-                'city_code'       => $this->customer_city_code,
+                'doc_type' => $this->customer_doc_type,
+                'doc_number' => $this->customer_doc_number,
+                'dv' => $this->customer_dv,
+                'name' => $this->customer_name,
+                'email' => $this->customer_email,
+                'phone' => $this->customer_phone,
+                'address' => $this->customer_address,
+                'city_code' => $this->customer_city_code,
                 'department_code' => $this->customer_department_code,
-                'final'           => (bool) $this->is_final_consumer,
+                'final' => (bool) $this->is_final_consumer,
             ],
             'fiscal_summary' => [
-                'currency'  => $this->currency,
-                'subtotal'  => (float) $this->subtotal,
-                'discount'  => (float) $this->discount,
+                'currency' => $this->currency,
+                'subtotal' => (float) $this->subtotal,
+                'discount' => (float) $this->discount,
                 'tax_total' => (float) $this->tax_total,
-                'total'     => (float) $this->total,
+                'total' => (float) $this->total,
             ],
-            'items'  => $items,
+            'items' => $items,
             'source' => $this->sourceSummary(),
-            'logs'   => $this->logs->map(fn (ElectronicInvoiceLog $l) => [
-                'action'      => $l->action?->value,
-                'result'      => $l->result,
-                'endpoint'    => $l->endpoint,
+            'logs' => $this->logs->map(fn (ElectronicInvoiceLog $l) => [
+                'action' => $l->action?->value,
+                'result' => $l->result,
+                'endpoint' => $l->endpoint,
                 'http_status' => $l->http_status,
-                'message'     => $l->message,
-                'excerpt'     => $l->payload_excerpt, // saneado en escritura
-                'created_at'  => optional($l->created_at)->toIso8601String(),
+                'message' => $l->message,
+                'excerpt' => $l->payload_excerpt, // saneado en escritura
+                'created_at' => optional($l->created_at)->toIso8601String(),
             ])->all(),
         ]);
     }

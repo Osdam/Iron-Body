@@ -18,12 +18,18 @@ class MembershipSubscription extends Model
 {
     // Estados de la suscripción.
     public const STATUS_PENDING_FIRST_PAYMENT = 'pending_first_payment';
-    public const STATUS_ACTIVE                = 'active';
-    public const STATUS_PAST_DUE              = 'past_due';
-    public const STATUS_PAUSED               = 'paused';
-    public const STATUS_CANCELLED            = 'cancelled';
-    public const STATUS_EXPIRED              = 'expired';
-    public const STATUS_FAILED               = 'failed';
+
+    public const STATUS_ACTIVE = 'active';
+
+    public const STATUS_PAST_DUE = 'past_due';
+
+    public const STATUS_PAUSED = 'paused';
+
+    public const STATUS_CANCELLED = 'cancelled';
+
+    public const STATUS_EXPIRED = 'expired';
+
+    public const STATUS_FAILED = 'failed';
 
     /** Estados en los que la suscripción sigue "viva" (una sola por miembro). */
     public const LIVE_STATUSES = [
@@ -46,21 +52,26 @@ class MembershipSubscription extends Model
         'last_charged_at', 'failed_attempts', 'retry_stage', 'last_charge_reference',
         'cancel_at_period_end', 'cancelled_at', 'cancelled_by', 'cancel_reason',
         'paused_at', 'metadata',
+        // Snapshot fiscal congelado al autorizar (Pricing V2).
+        'base_snapshot', 'tax_amount_snapshot', 'gross_snapshot',
+        'tax_rate_id_snapshot', 'tax_rate_snapshot', 'pricing_mode_snapshot',
+        'pricing_rules_version', 'priced_at',
     ];
 
     protected $casts = [
-        'price_snapshot'       => 'float',
-        'interval_days'        => 'integer',
-        'next_charge_at'       => 'datetime',
+        'price_snapshot' => 'float',
+        'priced_at' => 'datetime',
+        'interval_days' => 'integer',
+        'next_charge_at' => 'datetime',
         'current_period_start' => 'date',
-        'current_period_end'   => 'date',
-        'last_charged_at'      => 'datetime',
-        'failed_attempts'      => 'integer',
-        'retry_stage'          => 'integer',
+        'current_period_end' => 'date',
+        'last_charged_at' => 'datetime',
+        'failed_attempts' => 'integer',
+        'retry_stage' => 'integer',
         'cancel_at_period_end' => 'boolean',
-        'cancelled_at'         => 'datetime',
-        'paused_at'            => 'datetime',
-        'metadata'             => 'array',
+        'cancelled_at' => 'datetime',
+        'paused_at' => 'datetime',
+        'metadata' => 'array',
     ];
 
     public function member(): BelongsTo
@@ -106,22 +117,42 @@ class MembershipSubscription extends Model
         return in_array($this->status, self::CHARGEABLE_STATUSES, true);
     }
 
+    /** ¿Trae la cotización fiscal congelada de Pricing V2? */
+    public function hasFinancialSnapshot(): bool
+    {
+        return $this->gross_snapshot !== null;
+    }
+
+    /**
+     * Importe BRUTO a cobrar en cada periodo. Es el único valor que deben usar
+     * el primer cobro y las renovaciones.
+     *
+     * Con snapshot V2 devuelve `gross_snapshot` (base + IVA congelados). Sin
+     * snapshot cae a `price_snapshot`, que es lo que cobraron históricamente las
+     * suscripciones legacy. En ningún caso consulta el precio actual del plan:
+     * el catálogo puede cambiar, la suscripción autorizada no.
+     */
+    public function chargeableGrossAmount(): float
+    {
+        return (float) ($this->gross_snapshot ?? $this->price_snapshot);
+    }
+
     /** Representación pública para la app (sin secretos). */
     public function toPublicArray(): array
     {
         return [
-            'id'                 => $this->id,
-            'uuid'               => $this->uuid,
-            'status'             => $this->status,
-            'plan_id'            => $this->plan_id,
-            'amount'             => (float) $this->price_snapshot,
-            'currency'           => $this->currency,
-            'interval_days'      => $this->interval_days,
-            'method'             => $this->method,
-            'next_charge_at'     => optional($this->next_charge_at)->toIso8601String(),
+            'id' => $this->id,
+            'uuid' => $this->uuid,
+            'status' => $this->status,
+            'plan_id' => $this->plan_id,
+            'amount' => (float) $this->price_snapshot,
+            'currency' => $this->currency,
+            'interval_days' => $this->interval_days,
+            'method' => $this->method,
+            'next_charge_at' => optional($this->next_charge_at)->toIso8601String(),
             'current_period_end' => optional($this->current_period_end)->toDateString(),
             'cancel_at_period_end' => (bool) $this->cancel_at_period_end,
-            'payment_source'     => $this->relationLoaded('paymentSource') && $this->paymentSource
+            'payment_source' => $this->relationLoaded('paymentSource') && $this->paymentSource
                 ? $this->paymentSource->toPublicArray()
                 : null,
         ];

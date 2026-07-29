@@ -4,12 +4,20 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Concerns\ResolvesPagination;
 use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
 use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\User;
 use App\Services\Billing\InvoicingService;
+use App\Services\Billing\Money;
+use App\Services\Billing\PriceQuote;
+use App\Services\Billing\PricingException;
+use App\Services\Billing\PricingService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class PaymentController extends Controller
 {
@@ -17,7 +25,9 @@ class PaymentController extends Controller
 
     /** Vocabulario histórico de estados (ES/EN) agrupado por significado. */
     public const PAID_STATUSES = ['paid', 'pagado', 'pagada', 'approved', 'aprobado', 'completed', 'completado'];
+
     public const PENDING_STATUSES = ['pending', 'pendiente', 'overdue', 'vencido', 'vencida'];
+
     public const FAILED_STATUSES = ['failed', 'cancelled', 'canceled', 'anulado', 'anulada'];
 
     public function index(Request $request)
@@ -47,18 +57,18 @@ class PaymentController extends Controller
         $this->applyCrmFilters($query, $request);
 
         $sumWhen = fn (array $statuses) => 'COALESCE(SUM(CASE WHEN LOWER(status) IN ('
-            . $this->statusPlaceholders($statuses) . ') THEN amount ELSE 0 END), 0)';
+            .$this->statusPlaceholders($statuses).') THEN amount ELSE 0 END), 0)';
         $countWhen = fn (array $statuses) => 'COUNT(CASE WHEN LOWER(status) IN ('
-            . $this->statusPlaceholders($statuses) . ') THEN 1 END)';
+            .$this->statusPlaceholders($statuses).') THEN 1 END)';
 
         $row = $query->selectRaw(
             'COUNT(*) as total_count,'
-            . ' COALESCE(SUM(amount), 0) as total_amount,'
-            . ' ' . $sumWhen(self::PAID_STATUSES) . ' as paid_amount,'
-            . ' ' . $countWhen(self::PAID_STATUSES) . ' as paid_count,'
-            . ' ' . $sumWhen(self::PENDING_STATUSES) . ' as pending_amount,'
-            . ' ' . $countWhen(self::PENDING_STATUSES) . ' as pending_count,'
-            . ' ' . $countWhen(self::FAILED_STATUSES) . ' as failed_count',
+            .' COALESCE(SUM(amount), 0) as total_amount,'
+            .' '.$sumWhen(self::PAID_STATUSES).' as paid_amount,'
+            .' '.$countWhen(self::PAID_STATUSES).' as paid_count,'
+            .' '.$sumWhen(self::PENDING_STATUSES).' as pending_amount,'
+            .' '.$countWhen(self::PENDING_STATUSES).' as pending_count,'
+            .' '.$countWhen(self::FAILED_STATUSES).' as failed_count',
             array_merge(
                 self::PAID_STATUSES,
                 self::PAID_STATUSES,
@@ -69,13 +79,13 @@ class PaymentController extends Controller
         )->first();
 
         return response()->json([
-            'total_count'    => (int) ($row->total_count ?? 0),
-            'total_amount'   => round((float) ($row->total_amount ?? 0), 2),
-            'paid_amount'    => round((float) ($row->paid_amount ?? 0), 2),
-            'paid_count'     => (int) ($row->paid_count ?? 0),
+            'total_count' => (int) ($row->total_count ?? 0),
+            'total_amount' => round((float) ($row->total_amount ?? 0), 2),
+            'paid_amount' => round((float) ($row->paid_amount ?? 0), 2),
+            'paid_count' => (int) ($row->paid_count ?? 0),
             'pending_amount' => round((float) ($row->pending_amount ?? 0), 2),
-            'pending_count'  => (int) ($row->pending_count ?? 0),
-            'failed_count'   => (int) ($row->failed_count ?? 0),
+            'pending_count' => (int) ($row->pending_count ?? 0),
+            'failed_count' => (int) ($row->failed_count ?? 0),
         ]);
     }
 
@@ -135,7 +145,7 @@ class PaymentController extends Controller
             $like = $this->likeTerm((string) $request->search);
             $query->where(function ($q) use ($operator, $like) {
                 $q->where('reference', $operator, $like)
-                  ->orWhereHas('user', fn ($uq) => $uq->where('name', $operator, $like));
+                    ->orWhereHas('user', fn ($uq) => $uq->where('name', $operator, $like));
             });
         }
 
@@ -162,20 +172,40 @@ class PaymentController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'user_id'   => 'required|exists:users,id',
-            'plan_id'   => 'nullable|exists:plans,id',
-            'amount'    => 'required|numeric|min:0',
-            'method'    => 'nullable|string|max:80',
+            'user_id' => 'required|exists:users,id',
+            'plan_id' => 'nullable|exists:plans,id',
+            'amount' => 'required|numeric|min:0',
+            'method' => 'nullable|string|max:80',
             'reference' => 'nullable|string|max:120',
-            'status'    => 'nullable|string|in:pending,paid,failed,refunded,cancelled',
-            'paid_at'   => 'nullable|date',
+            'status' => 'nullable|string|in:pending,paid,failed,refunded,cancelled',
+            'paid_at' => 'nullable|date',
+            // Sobrescritura deliberada del total cotizado. Exige justificación y
+            // queda auditada; sin ella, el importe del plan es el que manda.
+            'amount_override' => 'nullable|boolean',
+            'override_reason' => 'nullable|string|min:10|max:500',
         ]);
 
         if (($data['status'] ?? 'pending') === 'paid' && empty($data['paid_at'])) {
             $data['paid_at'] = now();
         }
 
+        try {
+            $data = $this->applyAuthoritativePricing($data, $request);
+        } catch (PricingException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        } catch (ValidationException $e) {
+            throw $e;
+        }
+
+        $override = (bool) ($data['amount_override'] ?? false);
+        $reason = $data['override_reason'] ?? null;
+        unset($data['amount_override'], $data['override_reason']);
+
         $payment = Payment::create($data);
+
+        if ($override) {
+            $this->auditAmountOverride($payment, $reason, $request);
+        }
 
         if ($payment->status === 'paid') {
             $this->applyMembershipExtension($payment);
@@ -190,11 +220,11 @@ class PaymentController extends Controller
     public function update(Request $request, Payment $payment)
     {
         $data = $request->validate([
-            'status'    => 'nullable|string|in:pending,paid,failed,refunded,cancelled',
-            'paid_at'   => 'nullable|date',
-            'method'    => 'nullable|string|max:80',
+            'status' => 'nullable|string|in:pending,paid,failed,refunded,cancelled',
+            'paid_at' => 'nullable|date',
+            'method' => 'nullable|string|max:80',
             'reference' => 'nullable|string|max:120',
-            'amount'    => 'nullable|numeric|min:0',
+            'amount' => 'nullable|numeric|min:0',
         ]);
 
         $wasPaid = $payment->status === 'paid';
@@ -205,7 +235,7 @@ class PaymentController extends Controller
 
         $payment->update($data);
 
-        if (!$wasPaid && $payment->status === 'paid') {
+        if (! $wasPaid && $payment->status === 'paid') {
             $this->applyMembershipExtension($payment);
             // Facturación electrónica al confirmar (correcciones / histórico).
             app(InvoicingService::class)->enqueueForPayment($payment);
@@ -214,9 +244,104 @@ class PaymentController extends Controller
         return response()->json($payment->load(['user:id,name,email', 'plan:id,name']));
     }
 
+    /**
+     * El backend es la autoridad financiera del pago manual.
+     *
+     * Con un plan seleccionado, el total lo fija PricingService (base + IVA
+     * según el pricing_mode del plan) y se congela el snapshot: el administrador
+     * ya no puede escribir en silencio un total incompatible con el plan, que
+     * era el camino directo a facturar por un importe distinto al cobrado.
+     *
+     * Sobrescribir el total sigue siendo posible cuando hay una razón legítima
+     * (acuerdo comercial, ajuste), pero es EXPLÍCITO: exige amount_override,
+     * una justificación y queda auditado. El importe registrado y el facturado
+     * siguen siendo el mismo valor, así que la conciliación nunca se rompe.
+     *
+     * @param  array<string,mixed>  $data
+     * @return array<string,mixed>
+     *
+     * @throws PricingException|ValidationException
+     */
+    private function applyAuthoritativePricing(array $data, Request $request): array
+    {
+        if (empty($data['plan_id']) || ! config('billing.pricing.v2_enabled', false)) {
+            return $data;
+        }
+
+        $plan = Plan::with('taxRate')->find($data['plan_id']);
+        if (! $plan || (float) $plan->price <= 0) {
+            return $data;
+        }
+
+        $quote = app(PricingService::class)->quoteForPlan($plan);
+        $quoted = $quote->grossAmount->toFloat();
+        $requested = round((float) ($data['amount'] ?? 0), 2);
+
+        if (abs($quoted - $requested) > 0.5) {
+            if (! ($data['amount_override'] ?? false)) {
+                throw ValidationException::withMessages([
+                    'amount' => [sprintf(
+                        'El total del plan «%s» es %s (base %s + IVA %s). Recibido: %s. '
+                        .'Para registrar un importe distinto marca amount_override e indica override_reason.',
+                        $plan->name,
+                        PriceQuote::formatCop($quote->grossAmount),
+                        PriceQuote::formatCop($quote->baseAmount),
+                        PriceQuote::formatCop($quote->taxAmount),
+                        number_format($requested, 2, ',', '.'),
+                    )],
+                ]);
+            }
+
+            if (empty($data['override_reason'])) {
+                throw ValidationException::withMessages([
+                    'override_reason' => ['Indica la justificación del importe distinto al cotizado (mínimo 10 caracteres).'],
+                ]);
+            }
+
+            // Con override, el snapshot se recalcula SOBRE EL IMPORTE REAL para
+            // que base + IVA sigan sumando exactamente lo cobrado.
+            $overrideQuote = app(PricingService::class)->quoteLegacyInclusive(
+                Money::fromAmount($requested),
+                $plan->taxRate,
+            );
+
+            return array_merge($data, $overrideQuote->toSnapshot(), ['amount' => $requested]);
+        }
+
+        return array_merge($data, $quote->toSnapshot(), ['amount' => $quoted]);
+    }
+
+    /** Deja rastro auditable de una sobrescritura manual del total. */
+    private function auditAmountOverride(Payment $payment, ?string $reason, Request $request): void
+    {
+        try {
+            // `actor_name` es NOT NULL con default: se omite si no hay usuario
+            // en sesión (por ejemplo, acceso por token de servicio).
+            AuditLog::create(array_filter([
+                'action' => 'update',
+                'module' => 'payments',
+                'entity' => 'payment',
+                'entity_id' => (string) $payment->id,
+                'target_name' => $payment->reference,
+                'actor_id' => optional($request->user())->id,
+                'actor_name' => optional($request->user())->name,
+                'summary' => 'Importe manual distinto al cotizado por el plan',
+                'metadata' => [
+                    'amount' => (float) $payment->amount,
+                    'plan_id' => $payment->plan_id,
+                    'reason' => $reason,
+                ],
+                'ip_address' => $request->ip(),
+            ], static fn ($v) => $v !== null));
+        } catch (Throwable $e) {
+            // La auditoría es best-effort: no debe tumbar el registro del pago.
+            Log::warning('No se pudo auditar la sobrescritura de importe', ['error' => $e->getMessage()]);
+        }
+    }
+
     private function applyMembershipExtension(Payment $payment): void
     {
-        if (!$payment->plan_id) {
+        if (! $payment->plan_id) {
             return;
         }
 
@@ -225,7 +350,7 @@ class PaymentController extends Controller
         /** @var Plan|null $plan */
         $plan = Plan::find($payment->plan_id);
 
-        if (!$user || !$plan || (int) $plan->duration_days <= 0) {
+        if (! $user || ! $plan || (int) $plan->duration_days <= 0) {
             return;
         }
 
@@ -240,7 +365,7 @@ class PaymentController extends Controller
             ? $currentEnd
             : $paidDate;
 
-        if (!$currentEnd || $currentEnd->lessThan($paidDate) || !$user->membership_start_date) {
+        if (! $currentEnd || $currentEnd->lessThan($paidDate) || ! $user->membership_start_date) {
             $user->membership_start_date = $paidDate->toDateString();
         }
 

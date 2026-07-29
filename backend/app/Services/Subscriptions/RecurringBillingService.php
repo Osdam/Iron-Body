@@ -7,6 +7,7 @@ use App\Models\MembershipSubscription;
 use App\Models\PaymentTransaction;
 use App\Models\SubscriptionEvent;
 use App\Models\WompiPaymentSource;
+use App\Services\Billing\Money;
 use App\Services\Wompi\PaymentStateMachine;
 use App\Services\Wompi\WompiClient;
 use App\Services\Wompi\WompiSignatureService;
@@ -40,8 +41,7 @@ class RecurringBillingService
         private WompiSignatureService $signature,
         private WompiClient $client,
         private array $cfg,
-    ) {
-    }
+    ) {}
 
     public static function make(): self
     {
@@ -124,6 +124,7 @@ class RecurringBillingService
                     || ! $fresh->next_charge_at || $fresh->next_charge_at->gt(now())) {
                     return null;
                 }
+
                 return $this->prepareDueCharge($fresh);
             });
 
@@ -138,21 +139,24 @@ class RecurringBillingService
             }
 
             // 2) Firmar + enviar a Wompi FUERA de la transacción DB.
-            $cents     = (int) round((float) $fresh->price_snapshot * 100);
-            $currency  = strtoupper((string) $fresh->currency);
+            // Bruto CONGELADO de la suscripción (base + IVA con Pricing V2). La
+            // renovación nunca consulta el precio actual del plan: si el catálogo
+            // cambió, el cliente sigue pagando lo que autorizó.
+            $cents = Money::fromAmount($fresh->chargeableGrossAmount())->toWompiCents();
+            $currency = strtoupper((string) $fresh->currency);
             $signature = $this->signature->integritySignature($charge->reference, $cents, $currency);
 
             $this->tx->transitionTo($charge, PaymentStateMachine::PENDING);
 
             $res = $this->client->chargeWithPaymentSource([
                 'payment_source_id' => $charge->wompi_payment_source_id,
-                'amount_in_cents'   => $cents,
-                'currency'          => $currency,
-                'reference'         => $charge->reference,
-                'customer_email'    => $charge->customer_email,
-                'signature'         => $signature,
-                'recurrent'         => true,
-                'payment_method'    => ['installments' => 1],
+                'amount_in_cents' => $cents,
+                'currency' => $currency,
+                'reference' => $charge->reference,
+                'customer_email' => $charge->customer_email,
+                'signature' => $signature,
+                'recurrent' => true,
+                'payment_method' => ['installments' => 1],
             ], $charge->idempotency_key);
 
             // markError transiciona a ERROR → el HOOK central (markChargeFailed)
@@ -160,12 +164,14 @@ class RecurringBillingService
             if (! $res['ok']) {
                 $this->tx->markError($charge, (string) ($res['error'] ?? 'Cobro recurrente rechazado.'),
                     ['processor_response_code' => $res['error_code'] ?? null]);
+
                 return $this->outcome($fresh, $charge);
             }
 
             $wt = is_array($res['data']) ? $res['data'] : [];
             if (empty($wt['id'])) {
                 $this->tx->markError($charge, 'Respuesta inválida de la pasarela en el cobro recurrente.');
+
                 return $this->outcome($fresh, $charge);
             }
 
@@ -190,6 +196,7 @@ class RecurringBillingService
         if (! $this->recurringEnabled()) {
             return 'skipped';
         }
+
         return $this->chargeOne($sub, force: true);
     }
 
@@ -208,6 +215,7 @@ class RecurringBillingService
         if (! $source || ! $source->isChargeable()) {
             $this->subs->logEvent($sub, SubscriptionEvent::TYPE_CHARGE_ERROR, SubscriptionEvent::ACTOR_SYSTEM,
                 message: 'no chargeable payment source');
+
             return null;
         }
 
@@ -243,6 +251,7 @@ class RecurringBillingService
         ], true)) {
             return $sub->fresh()->status === MembershipSubscription::STATUS_PAST_DUE ? 'past_due' : 'declined';
         }
+
         // PENDING: lo resolverá el webhook/reconciliación (y el HOOK cerrará ahí).
         return 'pending';
     }

@@ -30,15 +30,14 @@ class InvoicingService
 {
     /** Mapa cerrado source_type amigable → clase del modelo (seguridad). */
     public const SOURCE_MAP = [
-        'payment'      => Payment::class,
+        'payment' => Payment::class,
         'product_sale' => ProductSale::class,
     ];
 
     public function __construct(
         private FiscalProfileResolver $resolver,
         private InvoiceDtoBuilder $builder,
-    ) {
-    }
+    ) {}
 
     /**
      * Encola (o crea) la factura de un pago/membresía aprobado. Idempotente.
@@ -96,6 +95,20 @@ class InvoicingService
         if (! $invoice->status->canRetry() || ! config('billing.enabled')) {
             return false;
         }
+
+        // 🔒 Un descuadre NO se reintenta a ciegas: el payload congelado sigue
+        // siendo el mismo y volvería a fallar el guardarraíl. Primero hay que
+        // corregir el origen (pago/venta) y regenerar el snapshot.
+        if ($invoice->reconciliationFailed()) {
+            $this->recordLog(
+                $invoice,
+                InvoiceLogAction::RETRY,
+                'error',
+                'Reintento bloqueado: la factura tiene un descuadre de conciliación sin resolver.'
+            );
+
+            return false;
+        }
         $this->recordLog($invoice, InvoiceLogAction::RETRY, 'ok', 'Reintento despachado.');
 
         $job = $invoice->type === InvoiceType::CREDIT_NOTE
@@ -125,32 +138,32 @@ class InvoicingService
         $note = ElectronicInvoice::firstOrCreate(
             [
                 'source_type' => $original->source_type,
-                'source_id'   => $original->source_id,
-                'type'        => InvoiceType::CREDIT_NOTE->value,
+                'source_id' => $original->source_id,
+                'type' => InvoiceType::CREDIT_NOTE->value,
             ],
             [
-                'status'                => InvoiceStatus::CREDIT_NOTE_PENDING->value,
+                'status' => InvoiceStatus::CREDIT_NOTE_PENDING->value,
                 'references_invoice_id' => $original->id,
-                'numbering_range_id'    => config('billing.numbering.range_id'),
-                'prefix'                => config('billing.numbering.prefix'),
+                'numbering_range_id' => config('billing.numbering.range_id'),
+                'prefix' => config('billing.numbering.prefix'),
                 // La causal/razón la consume EmitCreditNoteJob (campo failure_reason).
-                'failure_reason'        => $reason,
+                'failure_reason' => $reason,
                 // Snapshot del adquiriente + montos copiados de la original.
-                'customer_doc_type'        => $original->customer_doc_type,
-                'customer_doc_number'      => $original->customer_doc_number,
-                'customer_dv'              => $original->customer_dv,
-                'customer_name'            => $original->customer_name,
-                'customer_email'           => $original->customer_email,
-                'customer_phone'           => $original->customer_phone,
-                'customer_address'         => $original->customer_address,
-                'customer_city_code'       => $original->customer_city_code,
+                'customer_doc_type' => $original->customer_doc_type,
+                'customer_doc_number' => $original->customer_doc_number,
+                'customer_dv' => $original->customer_dv,
+                'customer_name' => $original->customer_name,
+                'customer_email' => $original->customer_email,
+                'customer_phone' => $original->customer_phone,
+                'customer_address' => $original->customer_address,
+                'customer_city_code' => $original->customer_city_code,
                 'customer_department_code' => $original->customer_department_code,
-                'is_final_consumer'        => $original->is_final_consumer,
-                'currency'                 => $original->currency,
-                'subtotal'                 => $original->subtotal,
-                'discount'                 => $original->discount,
-                'tax_total'                => $original->tax_total,
-                'total'                    => $original->total,
+                'is_final_consumer' => $original->is_final_consumer,
+                'currency' => $original->currency,
+                'subtotal' => $original->subtotal,
+                'discount' => $original->discount,
+                'tax_total' => $original->tax_total,
+                'total' => $original->total,
             ]
         );
 
@@ -181,13 +194,20 @@ class InvoicingService
             $invoice = ElectronicInvoice::firstOrCreate(
                 [
                     'source_type' => $source->getMorphClass(),
-                    'source_id'   => $source->getKey(),
-                    'type'        => $type->value,
+                    'source_id' => $source->getKey(),
+                    'type' => $type->value,
                 ],
                 array_merge($built['snapshot'], [
-                    'status'             => InvoiceStatus::PENDING->value,
+                    'status' => InvoiceStatus::PENDING->value,
                     'numbering_range_id' => config('billing.numbering.range_id'),
-                    'prefix'             => config('billing.numbering.prefix'),
+                    'prefix' => config('billing.numbering.prefix'),
+                    // Payload CONGELADO desde el primer momento: los reintentos y
+                    // la emisión lo reutilizan literalmente, de modo que un cambio
+                    // posterior de precio o de tarifa no puede alterar el
+                    // comprobante. El reference_code lo fija el job (uuid).
+                    'payload_snapshot' => $built['payload'],
+                    'line_items_snapshot' => $built['line_items'] ?? null,
+                    'source_amount_snapshot' => self::sourceGrossAmount($source),
                 ])
             );
 
@@ -211,9 +231,9 @@ class InvoicingService
         } catch (Throwable $e) {
             // Best-effort: el pago no debe fallar por la facturación.
             Log::warning('billing.enqueue_failed', [
-                'source' => $source->getMorphClass() . ':' . $source->getKey(),
-                'type'   => $type->value,
-                'error'  => $e->getMessage(),
+                'source' => $source->getMorphClass().':'.$source->getKey(),
+                'type' => $type->value,
+                'error' => $e->getMessage(),
             ]);
 
             return null;
@@ -228,6 +248,26 @@ class InvoicingService
             : (bool) config('billing.auto_emit.memberships');
     }
 
+    /**
+     * Total BRUTO congelado del origen — la referencia contra la que se concilia
+     * el comprobante antes de emitir.
+     *
+     * Con snapshot Pricing V2 usa `gross_amount`; sin él cae al importe legacy
+     * (`payments.amount` / `product_sales.total`), que siempre fue el bruto
+     * efectivamente cobrado.
+     */
+    public static function sourceGrossAmount(Model $source): ?float
+    {
+        if ($source instanceof ProductSale) {
+            return $source->grossAmountValue();
+        }
+        if ($source instanceof Payment) {
+            return $source->grossAmountValue();
+        }
+
+        return null;
+    }
+
     public function recordLog(
         ElectronicInvoice $invoice,
         InvoiceLogAction $action,
@@ -240,13 +280,13 @@ class InvoicingService
     ): void {
         ElectronicInvoiceLog::create([
             'electronic_invoice_id' => $invoice->id,
-            'action'                => $action->value,
-            'endpoint'              => $endpoint,
-            'http_status'           => $httpStatus,
-            'result'                => $result,
-            'message'               => $message,
-            'payload_excerpt'       => $payloadExcerpt ?: null,
-            'duration_ms'           => $durationMs,
+            'action' => $action->value,
+            'endpoint' => $endpoint,
+            'http_status' => $httpStatus,
+            'result' => $result,
+            'message' => $message,
+            'payload_excerpt' => $payloadExcerpt ?: null,
+            'duration_ms' => $durationMs,
         ]);
     }
 

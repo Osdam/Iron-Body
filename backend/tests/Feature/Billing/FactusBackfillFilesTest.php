@@ -34,7 +34,7 @@ class FactusBackfillFilesTest extends TestCase
         Storage::fake('local');
         $inv = $this->validatedInvoice(); // sin pdf_path/xml_path
         Http::fake([
-            '*oauth/token'  => Http::response(['access_token' => 'A', 'expires_in' => 3600]),
+            '*oauth/token' => Http::response(['access_token' => 'A', 'expires_in' => 3600]),
             '*download-pdf' => Http::response(['data' => ['pdf_base_64_encoded' => base64_encode('%PDF-1.4 ok')]]),
             '*download-xml' => Http::response(['data' => ['xml_base_64_encoded' => base64_encode('<?xml version="1.0"?><Invoice/>')]]),
         ]);
@@ -42,8 +42,8 @@ class FactusBackfillFilesTest extends TestCase
         $this->artisan('billing:factus-backfill-files')->assertExitCode(0);
 
         $inv->refresh();
-        $this->assertSame('invoices/' . $inv->uuid . '/factura.pdf', $inv->pdf_path);
-        $this->assertSame('invoices/' . $inv->uuid . '/factura.xml', $inv->xml_path);
+        $this->assertSame('invoices/'.$inv->uuid.'/factura.pdf', $inv->pdf_path);
+        $this->assertSame('invoices/'.$inv->uuid.'/factura.xml', $inv->xml_path);
         Storage::disk('local')->assertExists($inv->pdf_path);
     }
 
@@ -84,7 +84,7 @@ class FactusBackfillFilesTest extends TestCase
         Storage::fake('local');
         $inv = $this->validatedInvoice(['total' => 1234]);
         Http::fake([
-            '*oauth/token'  => Http::response(['access_token' => 'A', 'expires_in' => 3600]),
+            '*oauth/token' => Http::response(['access_token' => 'A', 'expires_in' => 3600]),
             '*download-pdf' => Http::response(['data' => ['pdf_base_64_encoded' => base64_encode('%PDF ok')]]),
             '*download-xml' => Http::response(['data' => ['xml_base_64_encoded' => base64_encode('<?xml?>')]]),
         ]);

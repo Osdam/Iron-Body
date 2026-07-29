@@ -3,6 +3,7 @@
 namespace Tests\Feature\Billing;
 
 use App\Models\ElectronicInvoice;
+use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -22,13 +23,13 @@ class ManualPaymentInvoiceHookTest extends TestCase
         $res = $this->adminPostJson('/api/payments', [
             'user_id' => $user->id,
             'plan_id' => $plan->id,
-            'amount'  => 100000,
-            'method'  => 'cash',
-            'status'  => 'paid',
+            'amount' => 100000,
+            'method' => 'cash',
+            'status' => 'paid',
         ]);
 
         $res->assertCreated();
-        $this->assertSame(1, ElectronicInvoice::where('source_type', \App\Models\Payment::class)
+        $this->assertSame(1, ElectronicInvoice::where('source_type', Payment::class)
             ->where('source_id', $res->json('id'))->count());
     }
 
@@ -37,7 +38,7 @@ class ManualPaymentInvoiceHookTest extends TestCase
         // Factus encendido pero caído: el cobro/registro NO debe fallar.
         config(['billing.enabled' => true, 'queue.default' => 'sync']);
         Http::fake([
-            '*/oauth/token'       => Http::response(['access_token' => 'tok', 'expires_in' => 3600]),
+            '*/oauth/token' => Http::response(['access_token' => 'tok', 'expires_in' => 3600]),
             '*/v2/bills/validate' => Http::response(['message' => 'down'], 500),
         ]);
 
@@ -47,9 +48,9 @@ class ManualPaymentInvoiceHookTest extends TestCase
         $res = $this->adminPostJson('/api/payments', [
             'user_id' => $user->id,
             'plan_id' => $plan->id,
-            'amount'  => 100000,
-            'method'  => 'cash',
-            'status'  => 'paid',
+            'amount' => 100000,
+            'method' => 'cash',
+            'status' => 'paid',
         ]);
 
         // El pago se registró pese al fallo de facturación (best-effort).

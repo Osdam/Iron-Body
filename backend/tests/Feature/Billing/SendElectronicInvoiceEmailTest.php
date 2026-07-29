@@ -33,11 +33,11 @@ class SendElectronicInvoiceEmailTest extends TestCase
 
         return ElectronicInvoice::create(array_merge([
             'source_type' => Payment::class,
-            'source_id'   => $p->id,
-            'type'        => 'invoice',
-            'status'      => 'validated',
-            'currency'    => 'COP',
-            'subtotal'    => 100000, 'tax_total' => 19000, 'total' => 119000,
+            'source_id' => $p->id,
+            'type' => 'invoice',
+            'status' => 'validated',
+            'currency' => 'COP',
+            'subtotal' => 100000, 'tax_total' => 19000, 'total' => 119000,
             'full_number' => 'SETP990000001', 'cufe' => 'cufe-x', 'validated_at' => now(),
             'customer_name' => 'Cliente Demo', 'customer_doc_number' => '222222222222',
             'customer_email' => 'cliente@example.com',

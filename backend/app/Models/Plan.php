@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Billing\PricingMode;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -30,6 +31,9 @@ class Plan extends Model
         'tax_rate_id',
         'price_includes_tax',
         'unspsc_code',
+        // Pricing V2.
+        'pricing_mode',
+        'billing_enabled',
     ];
 
     protected $casts = [
@@ -41,6 +45,7 @@ class Plan extends Model
         'sort_order' => 'integer',
         'features' => 'array',
         'price_includes_tax' => 'boolean',
+        'billing_enabled' => 'boolean',
     ];
 
     /** Segmentos comerciales disponibles para un plan. */
@@ -52,22 +57,47 @@ class Plan extends Model
         return $this->belongsTo(TaxRate::class);
     }
 
+    /**
+     * ¿Este plan genera un comprobante fiscal?
+     *
+     * Un plan gratuito (precio 0) o marcado explícitamente como no facturable
+     * (billing_enabled=false) NO exige tratamiento tributario: es un plan de
+     * acceso, no una venta. Es el caso del plan Demo App Review, que debe seguir
+     * funcionando sin recibir una clasificación tributaria inventada y sin
+     * bloquear el diagnóstico de Factus.
+     *
+     * `null` cuenta como facturable: es el default de la columna, y un registro
+     * recién creado (o anterior a la migración) no debe escaparse del control
+     * tributario por no tener el valor materializado todavía.
+     */
+    public function isBillable(): bool
+    {
+        return ($this->billing_enabled ?? true) && (float) $this->price > 0;
+    }
+
+    /** Semántica del precio configurado (ver App\Services\Billing\PricingMode). */
+    public function pricingMode(): PricingMode
+    {
+        return PricingMode::fromValue($this->pricing_mode);
+    }
+
     public static function defaultFeatures(): array
     {
         return [
-            'iron_ia'         => false,
-            'workouts'        => true,
+            'iron_ia' => false,
+            'workouts' => true,
             'custom_routines' => false,
-            'ranking'         => false,
-            'classes'         => false,
-            'progress'        => true,
-            'nutrition'       => false,
+            'ranking' => false,
+            'classes' => false,
+            'progress' => true,
+            'nutrition' => false,
         ];
     }
 
     public function resolvedFeatures(): array
     {
         $stored = is_array($this->features) ? $this->features : [];
+
         return array_merge(self::defaultFeatures(), $stored);
     }
 

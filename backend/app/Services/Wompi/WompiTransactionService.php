@@ -6,8 +6,14 @@ use App\Models\Member;
 use App\Models\PaymentConsent;
 use App\Models\PaymentTransaction;
 use App\Models\Plan;
+use App\Services\Billing\Money;
+use App\Services\Billing\PriceQuote;
+use App\Services\Billing\PricingException;
+use App\Services\Billing\PricingService;
+use App\Services\NotificationService;
 use App\Services\Payments\PaymentMembershipActivator;
 use App\Services\RealtimeEvents;
+use App\Services\Subscriptions\MembershipSubscriptionService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -19,8 +25,9 @@ use Illuminate\Support\Str;
  * aprobarse (reutilizando el ACTIVADOR COMPARTIDO de pagos del CRM).
  *
  * Reglas no negociables:
- *   - Monto AUTORITATIVO del backend (Plan::price → centavos). Flutter nunca
- *     define el precio final.
+ *   - Monto AUTORITATIVO del backend. Con Pricing V2 sale de PricingService
+ *     (base + IVA según el pricing_mode del plan) y se congela en la propia
+ *     transacción; sin V2 sale de Plan::price. Flutter nunca define el precio.
  *   - `approved` activa la membresía UNA sola vez (idempotencia por reference).
  *   - Un webhook/reconciliación duplicado no reactiva ni degrada un terminal.
  *   - Nada de PAN/CVC/OTP/secretos aquí.
@@ -30,12 +37,11 @@ class WompiTransactionService
     public function __construct(
         private PaymentStateMachine $sm,
         private array $cfg,
-    ) {
-    }
+    ) {}
 
     public static function make(): self
     {
-        return new self(new PaymentStateMachine(), (array) config('wompi'));
+        return new self(new PaymentStateMachine, (array) config('wompi'));
     }
 
     /**
@@ -81,35 +87,54 @@ class WompiTransactionService
                 $reference = $this->generateReference();
             }
 
-            $amount = $this->authoritativeAmount($data);
+            // COTIZACIÓN AUTORITATIVA. `amount` es el total BRUTO (base + IVA
+            // cuando el plan es base_plus_tax): es lo que se firma, lo que se
+            // cobra y lo que después se factura. El desglose se congela junto a
+            // la transacción para que el webhook y la factura lo reutilicen.
+            $quote = $this->authoritativeQuote($data);
+            $amount = $quote?->grossAmount->toFloat() ?? $this->authoritativeAmount($data);
             $c = $this->sanitizeCustomer($data['customer'] ?? []);
 
             $attrs = [
-                'uuid'             => (string) Str::uuid(),
-                'reference'        => $reference,
-                'idempotency_key'  => $idem ?: (string) Str::uuid(),
-                'order_id'         => $orderId,
-                'member_id'        => $data['member_id'] ?? null,
-                'user_id'          => $data['user_id'] ?? null,
-                'plan_id'          => $data['plan_id'] ?? null,
-                'amount'           => $amount,
-                'currency'         => strtoupper($data['currency'] ?? ($this->cfg['currency'] ?? 'COP')),
-                'status'           => PaymentStateMachine::CREATED,
-                'provider'         => 'wompi',
-                'environment'      => $this->cfg['env'] ?? 'sandbox',
-                'method'           => $data['method'] ?? null,
-                'description'      => $data['description'] ?? 'Pago Iron Body',
-                'customer'         => $c,
-                'customer_email'   => $c['email'] ?? null,
-                'customer_phone'   => $c['phone'] ?? null,
+                'uuid' => (string) Str::uuid(),
+                'reference' => $reference,
+                'idempotency_key' => $idem ?: (string) Str::uuid(),
+                'order_id' => $orderId,
+                'member_id' => $data['member_id'] ?? null,
+                'user_id' => $data['user_id'] ?? null,
+                'plan_id' => $data['plan_id'] ?? null,
+                'amount' => $amount,
+                'currency' => strtoupper($data['currency'] ?? ($this->cfg['currency'] ?? 'COP')),
+                'status' => PaymentStateMachine::CREATED,
+                'provider' => 'wompi',
+                'environment' => $this->cfg['env'] ?? 'sandbox',
+                'method' => $data['method'] ?? null,
+                'description' => $data['description'] ?? 'Pago Iron Body',
+                'customer' => $c,
+                'customer_email' => $c['email'] ?? null,
+                'customer_phone' => $c['phone'] ?? null,
                 'customer_legal_id_type' => $c['doc_type'] ?? null,
-                'customer_legal_id'      => $c['doc_number'] ?? null,
-                'retry_count'      => 0,
+                'customer_legal_id' => $c['doc_number'] ?? null,
+                'retry_count' => 0,
                 // Factura electrónica solicitada desde la app (opt-in). Se guarda
                 // como metadato; al aprobarse, PaymentMembershipActivator decide si
                 // FUERZA la emisión a Factus (sin depender de auto_emit global).
-                'metadata'         => $this->invoiceMetadata($data),
+                'metadata' => $this->invoiceMetadata($data),
             ];
+
+            if ($quote !== null) {
+                $attrs = array_merge($attrs, [
+                    'base_amount' => $quote->baseAmount->toDatabase(),
+                    'tax_amount' => $quote->taxAmount->toDatabase(),
+                    'gross_amount' => $quote->grossAmount->toDatabase(),
+                    'discount_amount' => $quote->discountAmount->toDatabase(),
+                    'tax_rate_id' => $quote->taxRateId,
+                    'tax_rate' => $quote->taxRateString(),
+                    'pricing_mode' => $quote->pricingMode->value,
+                    'pricing_rules_version' => $quote->pricingRulesVersion,
+                    'priced_at' => $quote->pricedAt,
+                ]);
+            }
 
             try {
                 return PaymentTransaction::create($attrs);
@@ -152,16 +177,16 @@ class WompiTransactionService
         }
 
         $attrs = [
-            'wompi_transaction_id'     => $wt['id'] ?? null,
-            'provider_ref'             => $wt['id'] ?? null,
-            'status_message'           => $this->safeMessage($wt['status_message'] ?? null),
-            'processor_response_code'  => $this->extractProcessorCode($wt),
-            'method'                   => $method,
-            'external_auth_url'        => $externalAuthUrl,
-            'card_brand'               => data_get($pm, 'extra.brand'),
-            'card_last_four'           => data_get($pm, 'extra.last_four'),
-            'installments'             => is_numeric($pm['installments'] ?? null) ? (int) $pm['installments'] : null,
-            'raw_response'             => $this->safeRaw($wt),
+            'wompi_transaction_id' => $wt['id'] ?? null,
+            'provider_ref' => $wt['id'] ?? null,
+            'status_message' => $this->safeMessage($wt['status_message'] ?? null),
+            'processor_response_code' => $this->extractProcessorCode($wt),
+            'method' => $method,
+            'external_auth_url' => $externalAuthUrl,
+            'card_brand' => data_get($pm, 'extra.brand'),
+            'card_last_four' => data_get($pm, 'extra.last_four'),
+            'installments' => is_numeric($pm['installments'] ?? null) ? (int) $pm['installments'] : null,
+            'raw_response' => $this->safeRaw($wt),
         ];
 
         return $this->transitionTo($tx, $state, $attrs);
@@ -214,12 +239,12 @@ class WompiTransactionService
                 // convergen aquí sin doble activación. Nunca rompe la confirmación.
                 if ($fresh->subscription_id) {
                     try {
-                        \App\Services\Subscriptions\MembershipSubscriptionService::make()
+                        MembershipSubscriptionService::make()
                             ->markChargeApproved($fresh);
                     } catch (\Throwable $e) {
                         Log::warning('subscriptions.close_on_approved.failed', [
                             'reference' => $fresh->reference,
-                            'error'     => $e->getMessage(),
+                            'error' => $e->getMessage(),
                         ]);
                     }
                 }
@@ -231,7 +256,7 @@ class WompiTransactionService
             ], true)) {
                 try {
                     $member = $fresh->member_id ? Member::find($fresh->member_id) : null;
-                    app(\App\Services\NotificationService::class)->notifyPaymentRejected($member, $fresh);
+                    app(NotificationService::class)->notifyPaymentRejected($member, $fresh);
                 } catch (\Throwable $e) {
                     Log::warning('Wompi: notificación de rechazo falló', ['error' => $e->getMessage()]);
                 }
@@ -247,12 +272,12 @@ class WompiTransactionService
                 PaymentStateMachine::VOIDED, PaymentStateMachine::EXPIRED,
             ], true)) {
                 try {
-                    \App\Services\Subscriptions\MembershipSubscriptionService::make()
+                    MembershipSubscriptionService::make()
                         ->markChargeFailed($fresh);
                 } catch (\Throwable $e) {
                     Log::warning('subscriptions.close_on_failed.failed', [
                         'reference' => $fresh->reference,
-                        'error'     => $e->getMessage(),
+                        'error' => $e->getMessage(),
                     ]);
                 }
             }
@@ -274,19 +299,19 @@ class WompiTransactionService
     {
         try {
             PaymentConsent::create([
-                'uuid'                       => (string) Str::uuid(),
-                'reference'                  => $tx->reference,
-                'payment_transaction_id'     => $tx->id,
-                'member_id'                  => $tx->member_id,
-                'user_id'                    => $tx->user_id,
-                'acceptance_token'           => $tokens['acceptance_token'] ?? null,
+                'uuid' => (string) Str::uuid(),
+                'reference' => $tx->reference,
+                'payment_transaction_id' => $tx->id,
+                'member_id' => $tx->member_id,
+                'user_id' => $tx->user_id,
+                'acceptance_token' => $tokens['acceptance_token'] ?? null,
                 'accept_personal_auth_token' => $tokens['accept_personal_auth_token'] ?? null,
-                'terms_link'                 => $tokens['terms_link'] ?? null,
-                'privacy_link'               => $tokens['privacy_link'] ?? null,
-                'accepted_at'                => now(),
-                'ip'                         => $ip,
-                'user_agent'                 => $userAgent ? mb_substr($userAgent, 0, 255) : null,
-                'environment'                => $tx->environment,
+                'terms_link' => $tokens['terms_link'] ?? null,
+                'privacy_link' => $tokens['privacy_link'] ?? null,
+                'accepted_at' => now(),
+                'ip' => $ip,
+                'user_agent' => $userAgent ? mb_substr($userAgent, 0, 255) : null,
+                'environment' => $tx->environment,
             ]);
         } catch (\Throwable $e) {
             Log::warning('Wompi: registro de consentimiento falló', ['error' => $e->getMessage()]);
@@ -294,6 +319,52 @@ class WompiTransactionService
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Cotización autoritativa del cobro, calculada SIEMPRE en el backend.
+     *
+     * Devuelve null cuando no hay plan asociado (pago libre) o cuando Pricing V2
+     * está apagado: en esos casos se cae a authoritativeAmount() y el
+     * comportamiento es idéntico al anterior.
+     *
+     * El cliente jamás fija el importe: si envía uno distinto al cotizado, se
+     * ignora y se registra la discrepancia.
+     */
+    public function authoritativeQuote(array $data): ?PriceQuote
+    {
+        if (empty($data['plan_id']) || ! config('billing.pricing.v2_enabled', false)) {
+            return null;
+        }
+
+        $plan = Plan::with('taxRate')->find($data['plan_id']);
+        if (! $plan || (float) $plan->price <= 0) {
+            return null;
+        }
+
+        try {
+            $quote = app(PricingService::class)->quoteForPlan($plan);
+        } catch (PricingException $e) {
+            // Un plan gravable sin tarifa no se cobra a ciegas con Pricing V2:
+            // se cae al comportamiento legacy y se deja constancia.
+            Log::warning('Wompi: cotización V2 no disponible, se usa el precio legacy', [
+                'plan_id' => $plan->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        $received = round((float) ($data['amount'] ?? 0), 2);
+        if ($received > 0 && abs($quote->grossAmount->toFloat() - $received) > 0.5) {
+            Log::warning('Wompi: monto recibido != total cotizado; se usa el cotizado', [
+                'plan_id' => $plan->id,
+                'received' => $received,
+                'quoted' => $quote->grossAmount->toFloat(),
+            ]);
+        }
+
+        return $quote;
+    }
 
     /** Monto en pesos (no centavos). Autoritativo desde el plan si aplica. */
     public function authoritativeAmount(array $data): float
@@ -305,20 +376,29 @@ class WompiTransactionService
                 $planPrice = round((float) $plan->price, 2);
                 if (abs($planPrice - $amount) > 0.5) {
                     Log::warning('Wompi: monto recibido != precio del plan; se usa el del plan', [
-                        'plan_id'  => $data['plan_id'],
+                        'plan_id' => $data['plan_id'],
                         'received' => $amount,
-                        'plan'     => $planPrice,
+                        'plan' => $planPrice,
                     ]);
                 }
                 $amount = $planPrice;
             }
         }
+
         return $amount;
     }
 
+    /**
+     * Centavos que se envían y se FIRMAN hacia Wompi.
+     *
+     * Se derivan del bruto congelado (`gross_amount`) cuando existe, y de
+     * `amount` en las transacciones legacy. Ambos son el mismo valor por
+     * construcción; usar el congelado deja explícito que el importe firmado es
+     * el cotizado y no una reconstrucción posterior.
+     */
     public function amountInCents(PaymentTransaction $tx): int
     {
-        return (int) round((float) $tx->amount * 100);
+        return Money::fromAmount($tx->gross_amount ?? $tx->amount)->toWompiCents();
     }
 
     /**
@@ -332,6 +412,7 @@ class WompiTransactionService
     {
         $url = data_get($wt, 'payment_method.extra.async_payment_url')
             ?? data_get($wt, 'payment_method.extra.external_identifier_url');
+
         return is_string($url) && $url !== '' ? $url : null;
     }
 
@@ -341,6 +422,7 @@ class WompiTransactionService
             ? data_get($wt, 'payment_method.extra.respuesta')
             : null;
         $code = data_get($wt, 'payment_method.extra.processor_response_code', $code);
+
         return is_scalar($code) ? (string) $code : null;
     }
 
@@ -349,12 +431,13 @@ class WompiTransactionService
         if (! $type) {
             return null;
         }
+
         return match (strtoupper($type)) {
-            'CARD'      => 'card',
-            'PSE'       => 'pse',
-            'NEQUI'     => 'nequi',
+            'CARD' => 'card',
+            'PSE' => 'pse',
+            'NEQUI' => 'nequi',
             'DAVIPLATA' => 'daviplata',
-            default     => strtolower($type),
+            default => strtolower($type),
         };
     }
 
@@ -392,15 +475,15 @@ class WompiTransactionService
     private function sanitizeCustomer(array $c): array
     {
         return array_filter([
-            'name'       => $c['name'] ?? null,
-            'last_name'  => $c['last_name'] ?? null,
-            'email'      => $c['email'] ?? null,
-            'phone'      => $c['phone'] ?? null,
-            'doc_type'   => $c['doc_type'] ?? null,
+            'name' => $c['name'] ?? null,
+            'last_name' => $c['last_name'] ?? null,
+            'email' => $c['email'] ?? null,
+            'phone' => $c['phone'] ?? null,
+            'doc_type' => $c['doc_type'] ?? null,
             'doc_number' => $c['doc_number'] ?? null,
-            'city'       => $c['city'] ?? null,
-            'address'    => $c['address'] ?? null,
-            'country'    => $c['country'] ?? null,
+            'city' => $c['city'] ?? null,
+            'address' => $c['address'] ?? null,
+            'country' => $c['country'] ?? null,
         ], fn ($v) => $v !== null && $v !== '');
     }
 
@@ -411,6 +494,7 @@ class WompiTransactionService
             unset($raw[$k]);
         }
         unset($raw['payment_method']['token']);
+
         return $raw;
     }
 }

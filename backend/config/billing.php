@@ -1,5 +1,7 @@
 <?php
 
+use App\Services\Billing\PricingService;
+
 /*
 |--------------------------------------------------------------------------
 | Facturación electrónica DIAN — Factus / Halltec (API V2)
@@ -29,6 +31,41 @@ return [
 
     'provider' => 'factus',
 
+    /*
+    |--------------------------------------------------------------------------
+    | Pricing V2 — IVA adicional sobre el precio base
+    |--------------------------------------------------------------------------
+    | Despliegue en tres escalones independientes, del más seguro al más
+    | invasivo. Cada uno se puede activar y revertir por separado:
+    |
+    | 1) reconciliation_guard (ON por defecto): antes de llamar a Factus compara
+    |    el total del comprobante con el total congelado del origen. Es puramente
+    |    defensivo — no cambia ningún importe — y por sí solo impide emitir una
+    |    factura por un valor distinto al cobrado.
+    |
+    | 2) pricing_v2: los flujos empiezan a cotizar vía PricingService y a
+    |    persistir el snapshot financiero. Con tax_on_top apagado, TODO el
+    |    catálogo sigue siendo legacy_inclusive, así que los importes cobrados
+    |    NO cambian: solo se congela el desglose.
+    |
+    | 3) tax_on_top: habilita que un plan/producto con pricing_mode=base_plus_tax
+    |    cobre base + IVA. NO convierte el catálogo: solo los registros marcados
+    |    explícitamente cambian de comportamiento. Con este flag apagado, un
+    |    registro base_plus_tax se cotiza como legacy (red de seguridad).
+    */
+    'pricing' => [
+        'v2_enabled' => filter_var(env('BILLING_PRICING_V2_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'tax_on_top' => filter_var(env('BILLING_TAX_ON_TOP_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'rules_version' => PricingService::RULES_VERSION,
+    ],
+
+    'reconciliation_guard' => [
+        'enabled' => filter_var(env('BILLING_RECONCILIATION_GUARD_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+        // Tolerancia máxima en PESOS entre el total cobrado y el facturado.
+        // 1 peso absorbe el redondeo comercial sin dejar pasar un descuadre real.
+        'tolerance' => (float) env('BILLING_RECONCILIATION_TOLERANCE', 1),
+    ],
+
     // 🔒 Bloqueo tributario: producción NO se considera lista hasta que el
     // contador confirme el tratamiento de IVA de membresías/productos y se
     // ponga esta variable en true. No se asume IVA.
@@ -38,7 +75,7 @@ return [
     // defecto: la factura se crea 'pending' pero NO se envía a Factus salvo que
     // el cliente la solicite (emisión manual) o se active el flag respectivo.
     'auto_emit' => [
-        'memberships'   => filter_var(env('FACTUS_MEMBERSHIPS_AUTO_EMIT', false), FILTER_VALIDATE_BOOLEAN),
+        'memberships' => filter_var(env('FACTUS_MEMBERSHIPS_AUTO_EMIT', false), FILTER_VALIDATE_BOOLEAN),
         'product_sales' => filter_var(env('FACTUS_PRODUCT_SALES_AUTO_EMIT', false), FILTER_VALIDATE_BOOLEAN),
     ],
 
@@ -55,7 +92,7 @@ return [
     // el correo es best-effort y su fallo jamás revierte el comprobante.
     // Apagado por defecto (opt-in vía BILLING_SEND_CUSTOMER_EMAIL=true).
     'customer_email_delivery' => [
-        'enabled'    => filter_var(env('BILLING_SEND_CUSTOMER_EMAIL', false), FILTER_VALIDATE_BOOLEAN),
+        'enabled' => filter_var(env('BILLING_SEND_CUSTOMER_EMAIL', false), FILTER_VALIDATE_BOOLEAN),
         'attach_pdf' => filter_var(env('BILLING_CUSTOMER_EMAIL_ATTACH_PDF', true), FILTER_VALIDATE_BOOLEAN),
         'attach_xml' => filter_var(env('BILLING_CUSTOMER_EMAIL_ATTACH_XML', true), FILTER_VALIDATE_BOOLEAN),
 
@@ -63,12 +100,12 @@ return [
         // la emisión ni los adjuntos). El logo debe ser una URL ABSOLUTA HTTPS
         // pública (los clientes de correo no resuelven rutas internas). Si queda
         // vacío, el header usa un fallback tipográfico de marca "IRON BODY".
-        'logo_url'      => env('BILLING_EMAIL_LOGO_URL'),
+        'logo_url' => env('BILLING_EMAIL_LOGO_URL'),
         'support_email' => env('BILLING_EMAIL_SUPPORT', 'facturacion@ironbodyneiva.cloud'),
     ],
 
     // sandbox | production
-    'env'        => $env,
+    'env' => $env,
     'production' => $env === 'production',
 
     // URL base de la API V2 según ambiente.
@@ -77,20 +114,20 @@ return [
     // -- Credenciales OAuth2 (password grant) --------------------------------
     // SECRETAS: solo backend. NUNCA se entregan al front/app ni se loguean.
     'credentials' => [
-        'username'      => env('FACTUS_USERNAME'),
-        'password'      => env('FACTUS_PASSWORD'),
-        'client_id'     => env('FACTUS_CLIENT_ID'),
+        'username' => env('FACTUS_USERNAME'),
+        'password' => env('FACTUS_PASSWORD'),
+        'client_id' => env('FACTUS_CLIENT_ID'),
         'client_secret' => env('FACTUS_CLIENT_SECRET'),
     ],
 
     // -- Cliente HTTP --------------------------------------------------------
     'http' => [
-        'timeout'         => (int) env('FACTUS_TIMEOUT', 30),
+        'timeout' => (int) env('FACTUS_TIMEOUT', 30),
         'connect_timeout' => (int) env('FACTUS_CONNECT_TIMEOUT', 10),
         // Reintentos SOLO en operaciones idempotentes (GET). La emisión (POST)
         // no se reintenta a ciegas dentro del cliente; de eso se encarga el job
         // con backoff y guardas de idempotencia (ver EmitElectronicInvoiceJob).
-        'retry_times'   => (int) env('FACTUS_RETRY_TIMES', 5),
+        'retry_times' => (int) env('FACTUS_RETRY_TIMES', 5),
         'retry_backoff' => (int) env('FACTUS_RETRY_BACKOFF_SECONDS', 60),
     ],
 
@@ -104,13 +141,13 @@ return [
     // -- Emisor (la empresa que factura) -------------------------------------
     // Datos fiscales propios. Van en .env, no en la BD de clientes.
     'company' => [
-        'nit'             => env('FACTUS_COMPANY_NIT'),
-        'dv'              => env('FACTUS_COMPANY_DV'),
-        'name'            => env('FACTUS_COMPANY_NAME'),
-        'email'           => env('FACTUS_COMPANY_EMAIL'),
-        'phone'           => env('FACTUS_COMPANY_PHONE'),
-        'address'         => env('FACTUS_COMPANY_ADDRESS'),
-        'city_code'       => env('FACTUS_COMPANY_CITY_CODE'),
+        'nit' => env('FACTUS_COMPANY_NIT'),
+        'dv' => env('FACTUS_COMPANY_DV'),
+        'name' => env('FACTUS_COMPANY_NAME'),
+        'email' => env('FACTUS_COMPANY_EMAIL'),
+        'phone' => env('FACTUS_COMPANY_PHONE'),
+        'address' => env('FACTUS_COMPANY_ADDRESS'),
+        'city_code' => env('FACTUS_COMPANY_CITY_CODE'),
         'department_code' => env('FACTUS_COMPANY_DEPARTMENT_CODE'),
     ],
 
@@ -118,8 +155,8 @@ return [
     // La numeración legal la administra Factus por su rango/resolución. El CRM
     // envía el rango y RECIBE el número; no fabrica el consecutivo.
     'numbering' => [
-        'range_id'        => env('FACTUS_NUMBERING_RANGE_ID'),
-        'prefix'          => env('FACTUS_NUMBERING_PREFIX'),
+        'range_id' => env('FACTUS_NUMBERING_RANGE_ID'),
+        'prefix' => env('FACTUS_NUMBERING_PREFIX'),
         // Las notas crédito usan SU PROPIO rango de numeración (resolución NC).
         'credit_range_id' => env('FACTUS_CREDIT_NUMBERING_RANGE_ID'),
     ],
@@ -128,42 +165,42 @@ return [
     // Confirmados contra la colección oficial (docs/factus). Los montos van como
     // string; payment_form es entero; payment_method_code y los demás, string.
     'defaults' => [
-        'currency'             => 'COP',
-        'document'             => env('FACTUS_DOCUMENT_CODE', '01'),        // 01 = Factura de venta
-        'operation_type'       => env('FACTUS_OPERATION_TYPE', '10'),      // 10 = Estándar
-        'unit_measure_code'    => env('FACTUS_DEFAULT_UNIT_MEASURE_CODE', '94'),
-        'standard_code'        => env('FACTUS_DEFAULT_STANDARD_CODE', '999'),
-        'tax_code'             => env('FACTUS_DEFAULT_TAX_CODE', '01'),     // 01 = IVA (items.taxes[].code)
-        'tax_rate'             => env('FACTUS_DEFAULT_TAX_RATE', '19.00'),
-        'payment_form'         => (int) env('FACTUS_DEFAULT_PAYMENT_FORM', 1),
-        'payment_method_code'  => env('FACTUS_DEFAULT_PAYMENT_METHOD_CODE', '10'),
-        'tribute_code'         => env('FACTUS_DEFAULT_TRIBUTE_CODE', 'ZZ'), // customer.tribute_code
+        'currency' => 'COP',
+        'document' => env('FACTUS_DOCUMENT_CODE', '01'),        // 01 = Factura de venta
+        'operation_type' => env('FACTUS_OPERATION_TYPE', '10'),      // 10 = Estándar
+        'unit_measure_code' => env('FACTUS_DEFAULT_UNIT_MEASURE_CODE', '94'),
+        'standard_code' => env('FACTUS_DEFAULT_STANDARD_CODE', '999'),
+        'tax_code' => env('FACTUS_DEFAULT_TAX_CODE', '01'),     // 01 = IVA (items.taxes[].code)
+        'tax_rate' => env('FACTUS_DEFAULT_TAX_RATE', '19.00'),
+        'payment_form' => (int) env('FACTUS_DEFAULT_PAYMENT_FORM', 1),
+        'payment_method_code' => env('FACTUS_DEFAULT_PAYMENT_METHOD_CODE', '10'),
+        'tribute_code' => env('FACTUS_DEFAULT_TRIBUTE_CODE', 'ZZ'), // customer.tribute_code
         'legal_organization_code' => env('FACTUS_DEFAULT_LEGAL_ORGANIZATION_CODE', '2'), // 2 = Natural
-        'municipality_code'    => env('FACTUS_DEFAULT_MUNICIPALITY_CODE'),
+        'municipality_code' => env('FACTUS_DEFAULT_MUNICIPALITY_CODE'),
     ],
 
     // -- Notas crédito -------------------------------------------------------
     'credit_note' => [
         'correction_concept_code' => env('FACTUS_CREDIT_CORRECTION_CONCEPT_CODE', '2'), // 2 = Anulación
-        'customization_id'        => env('FACTUS_CREDIT_CUSTOMIZATION_ID', '20'),
+        'customization_id' => env('FACTUS_CREDIT_CUSTOMIZATION_ID', '20'),
     ],
 
     // -- Mapa tipo de documento interno -> código DIAN/Factus ----------------
     // Si el valor almacenado ya es numérico (código), se usa tal cual.
     'document_type_map' => [
-        'CC'  => '13',
+        'CC' => '13',
         'NIT' => '31',
-        'CE'  => '22',
+        'CE' => '22',
         'PAS' => '41',
-        'TI'  => '12',
+        'TI' => '12',
     ],
     // -- Consumidor final ----------------------------------------------------
     // Cuando el pago no trae datos fiscales completos, se factura a consumidor
     // final (sin bloquear el cobro). Documento/tipo exactos según Factus/DIAN.
     'consumer_final' => [
-        'document_type'   => env('FACTUS_CONSUMER_FINAL_DOCUMENT_TYPE'),
+        'document_type' => env('FACTUS_CONSUMER_FINAL_DOCUMENT_TYPE'),
         'document_number' => env('FACTUS_CONSUMER_FINAL_DOCUMENT_NUMBER'),
-        'name'            => env('FACTUS_CONSUMER_FINAL_NAME', 'Consumidor final'),
+        'name' => env('FACTUS_CONSUMER_FINAL_NAME', 'Consumidor final'),
     ],
 
     // -- Webhook / callback (condicional) ------------------------------------
@@ -171,14 +208,14 @@ return [
     // (SyncFactusInvoiceStatusJob). Secreto para verificar firma del evento.
     'webhook' => [
         'enabled' => filter_var(env('FACTUS_WEBHOOK_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
-        'secret'  => env('FACTUS_WEBHOOK_SECRET'),
+        'secret' => env('FACTUS_WEBHOOK_SECRET'),
     ],
 
     // -- Reconciliación (polling de facturas en 'processing') ----------------
     'reconciliation' => [
-        'enabled'         => filter_var(env('FACTUS_RECONCILIATION_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
-        'minutes'         => (int) env('FACTUS_RECONCILIATION_MINUTES', 10),
-        'retry_minutes'   => (int) env('FACTUS_RETRY_SWEEP_MINUTES', 15),
+        'enabled' => filter_var(env('FACTUS_RECONCILIATION_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+        'minutes' => (int) env('FACTUS_RECONCILIATION_MINUTES', 10),
+        'retry_minutes' => (int) env('FACTUS_RETRY_SWEEP_MINUTES', 15),
         'max_age_minutes' => (int) env('FACTUS_RECONCILIATION_MAX_AGE_MINUTES', 1440),
     ],
 

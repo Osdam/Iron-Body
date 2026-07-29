@@ -35,11 +35,11 @@ class ElectronicInvoiceAdminTest extends TestCase
 
         return ElectronicInvoice::create(array_merge([
             'source_type' => Payment::class,
-            'source_id'   => $p->id,
-            'type'        => 'invoice',
-            'status'      => 'pending',
-            'currency'    => 'COP',
-            'subtotal'    => 100000, 'tax_total' => 19000, 'total' => 119000,
+            'source_id' => $p->id,
+            'type' => 'invoice',
+            'status' => 'pending',
+            'currency' => 'COP',
+            'subtotal' => 100000, 'tax_total' => 19000, 'total' => 119000,
             'customer_name' => 'Cliente Demo', 'customer_doc_number' => '222222222222',
         ], $attrs));
     }
@@ -76,8 +76,8 @@ class ElectronicInvoiceAdminTest extends TestCase
     {
         config([
             'billing.credentials.client_secret' => 'SUPERSECRET',
-            'billing.credentials.password'      => 'PWDLEAK',
-            'billing.webhook.secret'            => 'WHSECRET',
+            'billing.credentials.password' => 'PWDLEAK',
+            'billing.webhook.secret' => 'WHSECRET',
         ]);
 
         $res = $this->adminGetJson('/api/admin/electronic-invoices/config')->assertOk();

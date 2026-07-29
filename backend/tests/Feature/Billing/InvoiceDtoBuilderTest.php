@@ -14,6 +14,16 @@ use Tests\TestCase;
 
 class InvoiceDtoBuilderTest extends TestCase
 {
+    use AssumesVatResponsibleIssuer;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // Estas pruebas verifican el MOTOR de calculo, no la politica
+        // vigente de Iron Body (no responsable de IVA). Ver el trait.
+        $this->assumeVatResponsibleIssuer();
+    }
+
     use RefreshDatabase;
 
     private function consumer(array $overrides = []): array
@@ -88,7 +98,21 @@ class InvoiceDtoBuilderTest extends TestCase
         $this->assertTrue((bool) $snap['is_final_consumer']);
     }
 
-    public function test_price_excluding_tax_adds_tax_on_top(): void
+    /**
+     * CAMBIO DE CONTRATO (Pricing V2).
+     *
+     * Antes, un plan con price_includes_tax=false hacía que un pago de 100.000
+     * se facturara por 119.000: se declaraban 19.000 de IVA que nunca se
+     * cobraron. Ese era el defecto de origen.
+     *
+     * Ahora un pago SIN snapshot financiero es siempre legacy_inclusive: el
+     * importe cobrado es el bruto y la base se extrae hacia atrás. Da igual cómo
+     * esté marcado el plan hoy — lo que manda es lo que efectivamente se cobró.
+     *
+     * El IVA por encima existe, pero se decide ANTES de cobrar y viaja en el
+     * snapshot del pago (ver test_payment_snapshot_base_plus_tax_is_used_as_is).
+     */
+    public function test_legacy_payment_without_snapshot_never_adds_tax_on_top(): void
     {
         $rate = TaxRate::create(['code' => 'IVA_19', 'name' => 'IVA 19%', 'rate' => 19, 'active' => true]);
         $plan = Plan::create([
@@ -103,9 +127,75 @@ class InvoiceDtoBuilderTest extends TestCase
 
         $snap = app(InvoiceDtoBuilder::class)->forPayment($payment, $this->consumer())['snapshot'];
 
-        $this->assertEqualsWithDelta(100000, (float) $snap['subtotal'], 0.5);
-        $this->assertEqualsWithDelta(19000, (float) $snap['tax_total'], 0.5);
-        $this->assertEqualsWithDelta(119000, (float) $snap['total'], 0.5);
+        // El total facturado NO puede superar lo cobrado.
+        $this->assertEqualsWithDelta(100000, (float) $snap['total'], 0.01);
+        $this->assertEqualsWithDelta(84033.61, (float) $snap['subtotal'], 0.01);
+        $this->assertEqualsWithDelta(15966.39, (float) $snap['tax_total'], 0.01);
+    }
+
+    /**
+     * Operación NUEVA: el snapshot manda. Base 80.000 + IVA 19% = 95.200, que es
+     * exactamente lo que se le cobró al cliente.
+     */
+    public function test_payment_snapshot_base_plus_tax_is_used_as_is(): void
+    {
+        $rate = TaxRate::create(['code' => 'IVA_19', 'name' => 'IVA 19%', 'rate' => 19, 'active' => true, 'factus_tribute_id' => '01']);
+        $plan = Plan::create([
+            'name' => 'Premium', 'price' => 80000, 'duration_days' => 30, 'benefits' => '',
+            'tax_rate_id' => $rate->id, 'pricing_mode' => 'base_plus_tax',
+        ]);
+        $user = User::factory()->create();
+        $payment = Payment::create([
+            'user_id' => $user->id, 'plan_id' => $plan->id, 'amount' => 95200,
+            'method' => 'wompi', 'reference' => 'T-V2', 'status' => 'paid', 'paid_at' => now(),
+            'base_amount' => 80000, 'tax_amount' => 15200, 'gross_amount' => 95200,
+            'discount_amount' => 0, 'tax_rate_id' => $rate->id, 'tax_rate' => 19,
+            'pricing_mode' => 'base_plus_tax', 'pricing_rules_version' => 'v2.2026.07',
+            'currency' => 'COP', 'priced_at' => now(),
+        ]);
+
+        $built = app(InvoiceDtoBuilder::class)->forPayment($payment, $this->consumer());
+
+        $this->assertEqualsWithDelta(80000, (float) $built['snapshot']['subtotal'], 0.01);
+        $this->assertEqualsWithDelta(15200, (float) $built['snapshot']['tax_total'], 0.01);
+        $this->assertEqualsWithDelta(95200, (float) $built['snapshot']['total'], 0.01);
+
+        // Factus recibe la BASE unitaria y la tasa; el IVA lo calcula él.
+        $item = $built['payload']['items'][0];
+        $this->assertSame('80000.00', $item['price']);
+        $this->assertSame('19.00', $item['taxes'][0]['rate']);
+        $this->assertSame('95200.00', $built['payload']['payment_details'][0]['amount']);
+    }
+
+    /**
+     * Un cambio posterior del catálogo NO puede alterar una operación ya cobrada.
+     */
+    public function test_catalog_change_after_payment_does_not_alter_invoice(): void
+    {
+        $rate = TaxRate::create(['code' => 'IVA_19', 'name' => 'IVA 19%', 'rate' => 19, 'active' => true]);
+        $plan = Plan::create([
+            'name' => 'Premium', 'price' => 80000, 'duration_days' => 30, 'benefits' => '',
+            'tax_rate_id' => $rate->id, 'pricing_mode' => 'base_plus_tax',
+        ]);
+        $user = User::factory()->create();
+        $payment = Payment::create([
+            'user_id' => $user->id, 'plan_id' => $plan->id, 'amount' => 95200,
+            'method' => 'wompi', 'reference' => 'T-V3', 'status' => 'paid', 'paid_at' => now(),
+            'base_amount' => 80000, 'tax_amount' => 15200, 'gross_amount' => 95200,
+            'discount_amount' => 0, 'tax_rate_id' => $rate->id, 'tax_rate' => 19,
+            'pricing_mode' => 'base_plus_tax', 'pricing_rules_version' => 'v2.2026.07',
+            'currency' => 'COP', 'priced_at' => now(),
+        ]);
+
+        // El gimnasio sube el precio y cambia la tarifa DESPUÉS del cobro.
+        $newRate = TaxRate::create(['code' => 'IVA_5', 'name' => 'IVA 5%', 'rate' => 5, 'active' => true]);
+        $plan->forceFill(['price' => 200000, 'tax_rate_id' => $newRate->id])->save();
+
+        $snap = app(InvoiceDtoBuilder::class)->forPayment($payment->fresh(), $this->consumer())['snapshot'];
+
+        $this->assertEqualsWithDelta(80000, (float) $snap['subtotal'], 0.01);
+        $this->assertEqualsWithDelta(15200, (float) $snap['tax_total'], 0.01);
+        $this->assertEqualsWithDelta(95200, (float) $snap['total'], 0.01);
     }
 
     public function test_plan_without_tax_rate_has_zero_tax(): void

@@ -16,7 +16,7 @@ class FactusDoctorCommandTest extends TestCase
     private function readyConfig(): void
     {
         config([
-            'billing.env'      => 'production',
+            'billing.env' => 'production',
             'billing.base_url' => 'https://api.factus.com.co',
             'billing.credentials' => ['username' => 'u', 'password' => 'p', 'client_id' => 'c', 'client_secret' => 's'],
             'billing.numbering.range_id' => 4,

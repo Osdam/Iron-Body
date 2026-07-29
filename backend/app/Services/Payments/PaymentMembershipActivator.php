@@ -50,15 +50,15 @@ class PaymentMembershipActivator
             // membresía se extiende UNA vez aunque el webhook reintente.
             $payment = Payment::firstOrCreate(
                 ['reference' => $tx->reference],
-                [
-                    'user_id'   => $tx->user_id,
+                array_merge([
+                    'user_id' => $tx->user_id,
                     'member_id' => $tx->member_id,
-                    'plan_id'   => $tx->plan_id,
-                    'amount'    => $tx->amount,
-                    'method'    => $method,
-                    'status'    => 'paid',
-                    'paid_at'   => $tx->paid_at ?? now(),
-                ]
+                    'plan_id' => $tx->plan_id,
+                    'amount' => $tx->amount,
+                    'method' => $method,
+                    'status' => 'paid',
+                    'paid_at' => $tx->paid_at ?? now(),
+                ], self::snapshotFromTransaction($tx))
             );
             if ($payment->wasRecentlyCreated && $tx->plan_id) {
                 $this->extendMembership($payment);
@@ -69,15 +69,15 @@ class PaymentMembershipActivator
             }
 
             // Notificaciones (ADITIVO; idempotentes por event_key).
-            $member   = $tx->member_id ? Member::find($tx->member_id) : null;
+            $member = $tx->member_id ? Member::find($tx->member_id) : null;
             $notifier = app(NotificationService::class);
             $notifier->notifyPaymentApproved($member, $tx);
             if ($tx->plan_id) {
                 $plan = Plan::find($tx->plan_id);
                 $endDate = $tx->user_id ? optional(User::find($tx->user_id))->membership_end_date : null;
                 $notifier->notifyMembershipActivated($member, [
-                    'name'                => $plan?->name,
-                    'id'                  => $tx->plan_id,
+                    'name' => $plan?->name,
+                    'id' => $tx->plan_id,
                     'membership_end_date' => $endDate,
                 ]);
             }
@@ -95,10 +95,40 @@ class PaymentMembershipActivator
         } catch (Throwable $e) {
             Log::warning('Activación de membresía post-pago falló', [
                 'reference' => $tx->reference,
-                'provider'  => $tx->provider,
-                'error'     => $e->getMessage(),
+                'provider' => $tx->provider,
+                'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Traslada al pago la cotización CONGELADA con la que se autorizó el cobro.
+     *
+     * Es el eslabón que conecta "lo que Wompi cobró" con "lo que se factura":
+     * el pago hereda el mismo desglose de la transacción, así que la factura no
+     * necesita volver a mirar el plan. Sin snapshot (transacciones legacy)
+     * devuelve un array vacío y el pago conserva el comportamiento anterior.
+     *
+     * @return array<string,mixed>
+     */
+    private static function snapshotFromTransaction(PaymentTransaction $tx): array
+    {
+        if ($tx->gross_amount === null) {
+            return [];
+        }
+
+        return [
+            'base_amount' => $tx->base_amount,
+            'tax_amount' => $tx->tax_amount,
+            'gross_amount' => $tx->gross_amount,
+            'discount_amount' => $tx->discount_amount,
+            'tax_rate_id' => $tx->tax_rate_id,
+            'tax_rate' => $tx->tax_rate,
+            'pricing_mode' => $tx->pricing_mode,
+            'pricing_rules_version' => $tx->pricing_rules_version,
+            'currency' => $tx->currency,
+            'priced_at' => $tx->priced_at,
+        ];
     }
 
     /** Extiende (o inicia) la membresía del usuario según el plan pagado. */

@@ -3,12 +3,16 @@
 namespace App\Services\Subscriptions;
 
 use App\Exceptions\SubscriptionException;
+use App\Models\Member;
 use App\Models\MembershipSubscription;
 use App\Models\PaymentTransaction;
 use App\Models\Plan;
 use App\Models\SubscriptionEvent;
 use App\Models\User;
 use App\Models\WompiPaymentSource;
+use App\Services\Billing\Money;
+use App\Services\Billing\PricingException;
+use App\Services\Billing\PricingService;
 use App\Services\Wompi\PaymentStateMachine;
 use App\Services\Wompi\WompiClient;
 use App\Services\Wompi\WompiSignatureService;
@@ -44,8 +48,7 @@ class MembershipSubscriptionService
         private WompiSignatureService $signature,
         private WompiClient $client,
         private array $cfg,
-    ) {
-    }
+    ) {}
 
     public static function make(): self
     {
@@ -62,11 +65,11 @@ class MembershipSubscriptionService
      * Crea (o reutiliza) la suscripción del miembro y ejecuta el PRIMER COBRO.
      *
      * @param  array  $data  {
-     *     member_id, user_id, plan_id,
-     *     payment_source_id?  // fuente existente, o…
-     *     type?, token?, card_brand?, card_last_four?, exp_month?, exp_year?,
-     *     customer_email? | customer:{ email, ... }
-     *   }
+     *                       member_id, user_id, plan_id,
+     *                       payment_source_id?  // fuente existente, o…
+     *                       type?, token?, card_brand?, card_last_four?, exp_month?, exp_year?,
+     *                       customer_email? | customer:{ email, ... }
+     *                       }
      * @return array{subscription: MembershipSubscription, charge: ?PaymentTransaction, status: string}
      */
     public function subscribeWithFirstCharge(array $data, ?string $ip = null, ?string $ua = null): array
@@ -74,7 +77,7 @@ class MembershipSubscriptionService
         $this->assertRecurringEnabled();
 
         $memberId = $data['member_id'] ?? null;
-        $userId   = $data['user_id'] ?? null;
+        $userId = $data['user_id'] ?? null;
 
         $plan = ! empty($data['plan_id']) ? Plan::find($data['plan_id']) : null;
         if (! $plan || ! $plan->active || (float) $plan->price <= 0 || (int) $plan->duration_days <= 0) {
@@ -102,22 +105,25 @@ class MembershipSubscriptionService
             }
 
             $sub = $existing ?: new MembershipSubscription([
-                'uuid'      => (string) Str::uuid(),
+                'uuid' => (string) Str::uuid(),
                 'member_id' => $memberId,
-                'user_id'   => $userId,
-                'status'    => MembershipSubscription::STATUS_PENDING_FIRST_PAYMENT,
+                'user_id' => $userId,
+                'status' => MembershipSubscription::STATUS_PENDING_FIRST_PAYMENT,
             ]);
             $wasNew = ! $sub->exists;
 
-            // Snapshot AUTORITATIVO congelado desde backend.
-            $sub->fill([
-                'plan_id'           => $plan->id,
+            // Snapshot AUTORITATIVO congelado desde backend. Con Pricing V2 se
+            // congela también el tratamiento tributario (tarifa + modo), no solo
+            // el precio: así una renovación futura cobra exactamente lo que se
+            // autorizó aunque el catálogo cambie de tarifa entretanto.
+            $sub->fill(array_merge([
+                'plan_id' => $plan->id,
                 'payment_source_id' => $source->id,
-                'price_snapshot'    => (float) $plan->price,
-                'currency'          => strtoupper((string) ($this->cfg['currency'] ?? 'COP')),
-                'interval_days'     => (int) $plan->duration_days,
-                'method'            => $source->type === WompiPaymentSource::TYPE_NEQUI ? 'nequi' : 'card',
-            ]);
+                'price_snapshot' => (float) $plan->price,
+                'currency' => strtoupper((string) ($this->cfg['currency'] ?? 'COP')),
+                'interval_days' => (int) $plan->duration_days,
+                'method' => $source->type === WompiPaymentSource::TYPE_NEQUI ? 'nequi' : 'card',
+            ], $this->fiscalSnapshot($plan)));
             $sub->save();
 
             if ($wasNew) {
@@ -136,6 +142,7 @@ class MembershipSubscriptionService
         if (! $source->isChargeable()) {
             $this->logEvent($sub, SubscriptionEvent::TYPE_CHARGE_ERROR, SubscriptionEvent::ACTOR_SYSTEM,
                 message: 'payment source not available: '.$source->status);
+
             return ['subscription' => $sub->fresh(), 'charge' => null, 'status' => 'payment_source_unavailable'];
         }
 
@@ -145,13 +152,77 @@ class MembershipSubscriptionService
         return ['subscription' => $sub->fresh(), 'charge' => $charge, 'status' => $charge->status];
     }
 
+    // ── Snapshot fiscal de la suscripción ───────────────────────────────────
+
+    /**
+     * Congela el tratamiento tributario del plan en la suscripción.
+     *
+     * Devuelve [] si Pricing V2 está apagado o el plan no es cotizable: la
+     * suscripción queda como legacy (cobra `price_snapshot`) y nada cambia.
+     *
+     * @return array<string,mixed>
+     */
+    private function fiscalSnapshot(Plan $plan): array
+    {
+        if (! config('billing.pricing.v2_enabled', false)) {
+            return [];
+        }
+
+        try {
+            $quote = app(PricingService::class)->quoteForPlan($plan);
+        } catch (PricingException $e) {
+            Log::warning('Suscripción: sin cotización V2, se congela solo el precio legacy', [
+                'plan_id' => $plan->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [];
+        }
+
+        return [
+            'base_snapshot' => $quote->baseAmount->toDatabase(),
+            'tax_amount_snapshot' => $quote->taxAmount->toDatabase(),
+            'gross_snapshot' => $quote->grossAmount->toDatabase(),
+            'tax_rate_id_snapshot' => $quote->taxRateId,
+            'tax_rate_snapshot' => $quote->taxRateString(),
+            'pricing_mode_snapshot' => $quote->pricingMode->value,
+            'pricing_rules_version' => $quote->pricingRulesVersion,
+            'priced_at' => $quote->pricedAt,
+        ];
+    }
+
+    /**
+     * Copia el snapshot de la suscripción a cada cobro (primer cobro y
+     * renovaciones), para que el pago y la factura resultantes lo hereden.
+     *
+     * @return array<string,mixed>
+     */
+    public static function chargeSnapshotFrom(MembershipSubscription $sub): array
+    {
+        if (! $sub->hasFinancialSnapshot()) {
+            return [];
+        }
+
+        return [
+            'base_amount' => $sub->base_snapshot,
+            'tax_amount' => $sub->tax_amount_snapshot,
+            'gross_amount' => $sub->gross_snapshot,
+            'discount_amount' => '0.00',
+            'tax_rate_id' => $sub->tax_rate_id_snapshot,
+            'tax_rate' => $sub->tax_rate_snapshot,
+            'pricing_mode' => $sub->pricing_mode_snapshot,
+            'pricing_rules_version' => $sub->pricing_rules_version,
+            'priced_at' => $sub->priced_at,
+        ];
+    }
+
     // ── Primer cobro ────────────────────────────────────────────────────────
 
     private function chargeFirst(MembershipSubscription $sub, WompiPaymentSource $source, array $data): PaymentTransaction
     {
         // El primer cobro pertenece al periodo inicial (attempt 0).
         $billingPeriod = $sub->uuid.':'.Carbon::today()->toDateString().':a0';
-        $email         = $this->resolveEmail($data, $sub);
+        $email = $this->resolveEmail($data, $sub);
 
         // Idempotencia dura anti doble cobro: (subscription_id, billing_period) único.
         [$charge, $created] = $this->createChargeForPeriod($sub, $source, $billingPeriod, $email, 'Primer cobro membresía Iron Body');
@@ -160,8 +231,9 @@ class MembershipSubscriptionService
             return $charge;
         }
 
-        $cents     = (int) round((float) $sub->price_snapshot * 100);
-        $currency  = strtoupper((string) $sub->currency);
+        // Bruto congelado (base + IVA con Pricing V2; price_snapshot en legacy).
+        $cents = Money::fromAmount($sub->chargeableGrossAmount())->toWompiCents();
+        $currency = strtoupper((string) $sub->currency);
         $signature = $this->signature->integritySignature($charge->reference, $cents, $currency);
 
         // Refleja "enviado a la pasarela" antes de enviar.
@@ -169,13 +241,13 @@ class MembershipSubscriptionService
 
         $res = $this->client->chargeWithPaymentSource([
             'payment_source_id' => $source->wompi_payment_source_id,
-            'amount_in_cents'   => $cents,
-            'currency'          => $currency,
-            'reference'         => $charge->reference,
-            'customer_email'    => $email,
-            'signature'         => $signature,
-            'recurrent'         => true,
-            'payment_method'    => ['installments' => 1],
+            'amount_in_cents' => $cents,
+            'currency' => $currency,
+            'reference' => $charge->reference,
+            'customer_email' => $email,
+            'signature' => $signature,
+            'recurrent' => true,
+            'payment_method' => ['installments' => 1],
         ], $charge->idempotency_key);
 
         // Fallo de transporte / respuesta inválida → markError transiciona a ERROR,
@@ -187,14 +259,16 @@ class MembershipSubscriptionService
                 ['processor_response_code' => $res['error_code'] ?? null]);
             Log::info('subscriptions.first_charge.failed', [
                 'subscription_id' => $sub->id,
-                'error_code'      => $res['error_code'] ?? null,
+                'error_code' => $res['error_code'] ?? null,
             ]);
+
             return $charge->fresh();
         }
 
         $wt = is_array($res['data']) ? $res['data'] : [];
         if (empty($wt['id'])) {
             $this->tx->markError($charge, 'Respuesta inválida de la pasarela. No se realizó ningún cobro.');
+
             return $charge->fresh();
         }
 
@@ -212,7 +286,7 @@ class MembershipSubscriptionService
      * (subscription_id, billing_period)). Reutilizable por el primer cobro y por
      * el cobro recurrente del scheduler (RecurringBillingService).
      *
-     * @return array{0: PaymentTransaction, 1: bool}  [charge, created]
+     * @return array{0: PaymentTransaction, 1: bool} [charge, created]
      */
     public function createChargeForPeriod(
         MembershipSubscription $sub,
@@ -237,28 +311,30 @@ class MembershipSubscriptionService
             }
 
             try {
-                $charge = PaymentTransaction::create([
-                    'uuid'                    => (string) Str::uuid(),
-                    'reference'               => $reference,
-                    'idempotency_key'         => (string) Str::uuid(),
-                    'member_id'               => $sub->member_id,
-                    'user_id'                 => $sub->user_id,
-                    'plan_id'                 => $sub->plan_id,
-                    'amount'                  => (float) $sub->price_snapshot,
-                    'currency'                => strtoupper((string) $sub->currency),
-                    'status'                  => PaymentStateMachine::CREATED,
-                    'provider'                => 'wompi',
-                    'environment'             => $this->cfg['env'] ?? 'sandbox',
-                    'method'                  => 'card',
-                    'description'             => $description,
-                    'customer_email'          => $email,
-                    'retry_count'             => 0,
+                $charge = PaymentTransaction::create(array_merge([
+                    'uuid' => (string) Str::uuid(),
+                    'reference' => $reference,
+                    'idempotency_key' => (string) Str::uuid(),
+                    'member_id' => $sub->member_id,
+                    'user_id' => $sub->user_id,
+                    'plan_id' => $sub->plan_id,
+                    // Bruto congelado de la suscripción, NUNCA el precio actual.
+                    'amount' => $sub->chargeableGrossAmount(),
+                    'currency' => strtoupper((string) $sub->currency),
+                    'status' => PaymentStateMachine::CREATED,
+                    'provider' => 'wompi',
+                    'environment' => $this->cfg['env'] ?? 'sandbox',
+                    'method' => 'card',
+                    'description' => $description,
+                    'customer_email' => $email,
+                    'retry_count' => 0,
                     // Campos recurrentes (migración Bloque 1; modelo ampliado mínimamente).
-                    'subscription_id'         => $sub->id,
-                    'billing_period'          => $billingPeriod,
-                    'is_recurring'            => true,
+                    'subscription_id' => $sub->id,
+                    'billing_period' => $billingPeriod,
+                    'is_recurring' => true,
                     'wompi_payment_source_id' => $source->wompi_payment_source_id,
-                ]);
+                ], self::chargeSnapshotFrom($sub)));
+
                 return [$charge, true];
             } catch (QueryException $e) {
                 $found = PaymentTransaction::where('subscription_id', $sub->id)
@@ -303,24 +379,24 @@ class MembershipSubscriptionService
             $wasFirst = $sub->status === MembershipSubscription::STATUS_PENDING_FIRST_PAYMENT;
 
             $user = $sub->user_id ? User::find($sub->user_id) : null;
-            $end  = $user && $user->membership_end_date
+            $end = $user && $user->membership_end_date
                 ? Carbon::parse($user->membership_end_date)->startOfDay()
                 : Carbon::today()->addDays((int) $sub->interval_days);
 
             $sub->forceFill([
-                'status'                => MembershipSubscription::STATUS_ACTIVE,
-                'current_period_start'  => Carbon::today()->toDateString(),
-                'current_period_end'    => $end->toDateString(),
-                'next_charge_at'        => $end,
-                'last_charged_at'       => now(),
+                'status' => MembershipSubscription::STATUS_ACTIVE,
+                'current_period_start' => Carbon::today()->toDateString(),
+                'current_period_end' => $end->toDateString(),
+                'next_charge_at' => $end,
+                'last_charged_at' => now(),
                 'last_charge_reference' => $charge->reference,
-                'failed_attempts'       => 0,
-                'retry_stage'           => 0,
+                'failed_attempts' => 0,
+                'retry_stage' => 0,
             ])->save();
 
             if ($sub->payment_source_id) {
                 WompiPaymentSource::whereKey($sub->payment_source_id)->update([
-                    'status'       => WompiPaymentSource::STATUS_AVAILABLE,
+                    'status' => WompiPaymentSource::STATUS_AVAILABLE,
                     'last_used_at' => now(),
                 ]);
             }
@@ -373,11 +449,12 @@ class MembershipSubscriptionService
                 $sub->forceFill(['last_charge_reference' => $charge->reference])->save();
                 $this->logEvent($sub, SubscriptionEvent::TYPE_CHARGE_DECLINED, SubscriptionEvent::ACTOR_SYSTEM,
                     $charge->reference, (float) $charge->amount);
+
                 return;
             }
 
             // Renovación fallida → escalera de reintentos / past_due.
-            $retryDays  = array_values((array) ($this->cfg['recurring']['retry_days'] ?? [1, 3]));
+            $retryDays = array_values((array) ($this->cfg['recurring']['retry_days'] ?? [1, 3]));
             $maxRetries = (int) ($this->cfg['recurring']['max_retries'] ?? 3);
 
             $attempt = (int) $sub->failed_attempts + 1;
@@ -392,6 +469,7 @@ class MembershipSubscriptionService
                 $sub->save();
                 $this->logEvent($sub, SubscriptionEvent::TYPE_RETRY_SCHEDULED, SubscriptionEvent::ACTOR_SYSTEM,
                     $charge->reference, (float) $charge->amount, context: ['in_days' => $inDays, 'attempt' => $attempt]);
+
                 return;
             }
 
@@ -422,12 +500,12 @@ class MembershipSubscriptionService
             }
 
             $fresh->forceFill([
-                'status'               => MembershipSubscription::STATUS_CANCELLED,
+                'status' => MembershipSubscription::STATUS_CANCELLED,
                 'cancel_at_period_end' => true,
-                'cancelled_at'         => now(),
-                'cancelled_by'         => $actor,
-                'cancel_reason'        => $reason ? mb_substr($reason, 0, 200) : null,
-                'next_charge_at'       => null, // impide próximos cobros.
+                'cancelled_at' => now(),
+                'cancelled_by' => $actor,
+                'cancel_reason' => $reason ? mb_substr($reason, 0, 200) : null,
+                'next_charge_at' => null, // impide próximos cobros.
             ])->save();
 
             $this->logEvent($fresh, SubscriptionEvent::TYPE_CANCELLED, $actor, context: ['reason' => $reason]);
@@ -444,7 +522,7 @@ class MembershipSubscriptionService
      * (controlador) usando RecurringBillingService::retryNow.
      *
      * @param  array  $data  { type, token, card_brand?, card_last_four?, exp_month?, exp_year? }
-     * @return WompiPaymentSource  la nueva fuente (status available|declined|...).
+     * @return WompiPaymentSource la nueva fuente (status available|declined|...).
      */
     public function replacePaymentSource(MembershipSubscription $sub, array $data): WompiPaymentSource
     {
@@ -454,21 +532,22 @@ class MembershipSubscriptionService
 
         // Crea la nueva fuente (valida método: solo tarjeta; rechaza PSE/etc).
         $source = $this->sources->createForMember([
-            'member_id'      => $sub->member_id,
-            'user_id'        => $sub->user_id,
-            'type'           => $data['type'] ?? 'CARD',
-            'token'          => $data['token'] ?? '',
+            'member_id' => $sub->member_id,
+            'user_id' => $sub->user_id,
+            'type' => $data['type'] ?? 'CARD',
+            'token' => $data['token'] ?? '',
             'customer_email' => $email,
-            'card_brand'     => $data['card_brand'] ?? null,
+            'card_brand' => $data['card_brand'] ?? null,
             'card_last_four' => $data['card_last_four'] ?? null,
-            'exp_month'      => $data['exp_month'] ?? null,
-            'exp_year'       => $data['exp_year'] ?? null,
+            'exp_month' => $data['exp_month'] ?? null,
+            'exp_year' => $data['exp_year'] ?? null,
         ]);
 
         // Solo se vincula si la fuente quedó disponible (no declinada/pendiente 3DS).
         if (! $source->isChargeable()) {
             $this->logEvent($sub, SubscriptionEvent::TYPE_CHARGE_ERROR, SubscriptionEvent::ACTOR_MEMBER,
                 message: 'nueva fuente no disponible: '.$source->status);
+
             return $source;
         }
 
@@ -480,7 +559,7 @@ class MembershipSubscriptionService
             // Revoca la anterior (histórico conservado: solo cambia estado).
             if ($oldId && $oldId !== $source->id) {
                 WompiPaymentSource::whereKey($oldId)->update([
-                    'status'     => WompiPaymentSource::STATUS_REVOKED,
+                    'status' => WompiPaymentSource::STATUS_REVOKED,
                     'revoked_at' => now(),
                 ]);
             }
@@ -502,19 +581,20 @@ class MembershipSubscriptionService
             if (! $src) {
                 throw SubscriptionException::paymentSourceUnavailable('Fuente de pago no encontrada.');
             }
+
             return $src;
         }
 
         return $this->sources->createForMember([
-            'member_id'      => $data['member_id'] ?? null,
-            'user_id'        => $data['user_id'] ?? null,
-            'type'           => $data['type'] ?? 'CARD',
-            'token'          => $data['token'] ?? '',
+            'member_id' => $data['member_id'] ?? null,
+            'user_id' => $data['user_id'] ?? null,
+            'type' => $data['type'] ?? 'CARD',
+            'token' => $data['token'] ?? '',
             'customer_email' => $this->resolveEmail($data, null),
-            'card_brand'     => $data['card_brand'] ?? null,
+            'card_brand' => $data['card_brand'] ?? null,
             'card_last_four' => $data['card_last_four'] ?? null,
-            'exp_month'      => $data['exp_month'] ?? null,
-            'exp_year'       => $data['exp_year'] ?? null,
+            'exp_month' => $data['exp_month'] ?? null,
+            'exp_year' => $data['exp_year'] ?? null,
         ]);
     }
 
@@ -522,8 +602,9 @@ class MembershipSubscriptionService
     {
         $email = $data['customer_email'] ?? ($data['customer']['email'] ?? null);
         if (! $email && $sub && $sub->member_id) {
-            $email = optional(\App\Models\Member::find($sub->member_id))->email;
+            $email = optional(Member::find($sub->member_id))->email;
         }
+
         return trim((string) $email);
     }
 
@@ -539,15 +620,15 @@ class MembershipSubscriptionService
     ): void {
         try {
             SubscriptionEvent::create([
-                'uuid'            => (string) Str::uuid(),
+                'uuid' => (string) Str::uuid(),
                 'subscription_id' => $sub->id,
-                'member_id'       => $sub->member_id,
-                'type'            => $type,
-                'actor'           => $actor,
-                'reference'       => $reference,
-                'amount'          => $amount,
-                'message'         => $message ? mb_substr($message, 0, 200) : null,
-                'context'         => $context !== [] ? $context : null,
+                'member_id' => $sub->member_id,
+                'type' => $type,
+                'actor' => $actor,
+                'reference' => $reference,
+                'amount' => $amount,
+                'message' => $message ? mb_substr($message, 0, 200) : null,
+                'context' => $context !== [] ? $context : null,
             ]);
         } catch (\Throwable $e) {
             Log::warning('subscriptions.event.record_failed', ['type' => $type, 'error' => $e->getMessage()]);

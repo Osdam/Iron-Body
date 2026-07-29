@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Billing\PricingMode;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -36,16 +37,20 @@ class Product extends Model
         'tax_rate_id',
         'price_includes_tax',
         'unspsc_code',
+        // Pricing V2.
+        'pricing_mode',
+        'billing_enabled',
     ];
 
     protected $casts = [
-        'sale_price'     => 'decimal:2',
-        'cost_price'     => 'decimal:2',
-        'stock'          => 'integer',
-        'min_stock'      => 'integer',
+        'sale_price' => 'decimal:2',
+        'cost_price' => 'decimal:2',
+        'stock' => 'integer',
+        'min_stock' => 'integer',
         'visible_in_app' => 'boolean',
-        'active'         => 'boolean',
+        'active' => 'boolean',
         'price_includes_tax' => 'boolean',
+        'billing_enabled' => 'boolean',
     ];
 
     protected $appends = ['stock_status', 'in_app'];
@@ -61,6 +66,24 @@ class Product extends Model
     public function taxRate(): BelongsTo
     {
         return $this->belongsTo(TaxRate::class);
+    }
+
+    /**
+     * ¿Este producto genera comprobante fiscal? Un producto de precio 0 o
+     * marcado como no facturable no exige tratamiento tributario.
+     *
+     * `null` cuenta como facturable (default de la columna): un producto recién
+     * creado no debe saltarse el control tributario.
+     */
+    public function isBillable(): bool
+    {
+        return ($this->billing_enabled ?? true) && (float) $this->sale_price > 0;
+    }
+
+    /** Semántica del precio configurado (ver App\Services\Billing\PricingMode). */
+    public function pricingMode(): PricingMode
+    {
+        return PricingMode::fromValue($this->pricing_mode);
     }
 
     /** Disponible (catálogo). */
@@ -85,6 +108,7 @@ class Product extends Model
         if ($this->min_stock > 0 && $this->stock <= $this->min_stock) {
             return 'low';
         }
+
         return 'ok';
     }
 
@@ -104,6 +128,7 @@ class Product extends Model
             return false;
         }
         $this->decrement('stock', $qty);
+
         return true;
     }
 
@@ -111,15 +136,15 @@ class Product extends Model
     public function toStoreArray(): array
     {
         return [
-            'id'          => $this->id,
-            'uuid'        => $this->uuid,
-            'name'        => $this->name,
-            'category'    => $this->category,
+            'id' => $this->id,
+            'uuid' => $this->uuid,
+            'name' => $this->name,
+            'category' => $this->category,
             'description' => $this->description,
-            'image_url'   => $this->image_url,
-            'price'       => (float) $this->sale_price,
-            'stock'       => $this->stock,
-            'available'   => $this->stock > 0,
+            'image_url' => $this->image_url,
+            'price' => (float) $this->sale_price,
+            'stock' => $this->stock,
+            'available' => $this->stock > 0,
         ];
     }
 }

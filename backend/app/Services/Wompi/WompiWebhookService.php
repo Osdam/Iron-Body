@@ -4,6 +4,7 @@ namespace App\Services\Wompi;
 
 use App\Models\PaymentTransaction;
 use App\Models\PaymentWebhookEvent;
+use App\Services\Billing\Money;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -29,8 +30,7 @@ class WompiWebhookService
         private WompiSignatureService $signature,
         private WompiTransactionService $tx,
         private array $cfg,
-    ) {
-    }
+    ) {}
 
     public static function make(): self
     {
@@ -42,8 +42,8 @@ class WompiWebhookService
     }
 
     /**
-     * @param  array   $payload   cuerpo decodificado del evento.
-     * @param  string  $rawBody   cuerpo crudo (para el hash de dedupe).
+     * @param  array  $payload  cuerpo decodificado del evento.
+     * @param  string  $rawBody  cuerpo crudo (para el hash de dedupe).
      */
     public function handle(array $payload, string $rawBody): array
     {
@@ -52,6 +52,7 @@ class WompiWebhookService
             Log::warning('wompi.webhook.invalid_signature', [
                 'event' => $payload['event'] ?? null,
             ]);
+
             return ['status' => 'invalid_signature', 'http' => 401];
         }
 
@@ -60,6 +61,7 @@ class WompiWebhookService
         $expectedEnv = ($this->cfg['env'] ?? 'sandbox') === 'production' ? 'prod' : 'test';
         if ($eventEnv !== '' && ! str_contains(strtolower($eventEnv), $expectedEnv)) {
             Log::warning('wompi.webhook.env_mismatch', ['event_env' => $eventEnv]);
+
             // 200 para que Wompi no reintente un evento que no nos corresponde.
             return ['status' => 'env_mismatch', 'http' => 200];
         }
@@ -78,17 +80,19 @@ class WompiWebhookService
         // Solo procesamos transaction.updated (extensible a más eventos).
         if ($eventType !== 'transaction.updated') {
             $this->finishEvent($event, PaymentWebhookEvent::STATUS_SKIPPED);
+
             return ['status' => 'ignored_event', 'http' => 200];
         }
 
         // 4) Ubicar transacción.
         $reference = (string) ($wt['reference'] ?? '');
-        $wompiId   = (string) ($wt['id'] ?? '');
+        $wompiId = (string) ($wt['id'] ?? '');
         $transaction = $this->findTransaction($reference, $wompiId);
 
         if (! $transaction) {
             Log::warning('wompi.webhook.tx_not_found', ['reference' => $reference]);
             $this->finishEvent($event, PaymentWebhookEvent::STATUS_FAILED, 'Transacción no encontrada');
+
             // 200: no reintentar; no es un error nuestro recuperable.
             return ['status' => 'tx_not_found', 'http' => 200];
         }
@@ -98,9 +102,10 @@ class WompiWebhookService
         if ($mismatch) {
             Log::warning('wompi.webhook.amount_mismatch', [
                 'reference' => $transaction->reference,
-                'detail'    => $mismatch,
+                'detail' => $mismatch,
             ]);
             $this->finishEvent($event, PaymentWebhookEvent::STATUS_FAILED, $mismatch);
+
             // No degradamos a approved un pago con monto alterado.
             return ['status' => 'amount_mismatch', 'http' => 200];
         }
@@ -109,13 +114,15 @@ class WompiWebhookService
         try {
             $this->tx->applyWompiTransaction($transaction, $wt);
             $this->finishEvent($event, PaymentWebhookEvent::STATUS_PROCESSED);
+
             return ['status' => 'processed', 'http' => 200];
         } catch (\Throwable $e) {
             Log::error('wompi.webhook.process_error', [
                 'reference' => $transaction->reference,
-                'error'     => mb_substr($e->getMessage(), 0, 200),
+                'error' => mb_substr($e->getMessage(), 0, 200),
             ]);
             $this->finishEvent($event, PaymentWebhookEvent::STATUS_FAILED, 'error de procesamiento');
+
             // 500 para que Wompi reintente la entrega.
             return ['status' => 'process_error', 'http' => 500];
         }
@@ -128,14 +135,14 @@ class WompiWebhookService
     {
         try {
             return PaymentWebhookEvent::create([
-                'uuid'              => (string) Str::uuid(),
-                'provider'          => 'wompi',
-                'event_type'        => $eventType,
-                'checksum'          => (string) data_get($payload, 'signature.checksum'),
-                'transaction_id'    => $wt['id'] ?? null,
-                'environment'       => $payload['environment'] ?? null,
-                'payload_hash'      => $payloadHash,
-                'payload'           => $this->safePayload($payload),
+                'uuid' => (string) Str::uuid(),
+                'provider' => 'wompi',
+                'event_type' => $eventType,
+                'checksum' => (string) data_get($payload, 'signature.checksum'),
+                'transaction_id' => $wt['id'] ?? null,
+                'environment' => $payload['environment'] ?? null,
+                'payload_hash' => $payloadHash,
+                'payload' => $this->safePayload($payload),
                 'processing_status' => PaymentWebhookEvent::STATUS_RECEIVED,
             ]);
         } catch (QueryException $e) {
@@ -156,12 +163,16 @@ class WompiWebhookService
         if ($wompiId !== '') {
             return (clone $q)->where('wompi_transaction_id', $wompiId)->first();
         }
+
         return null;
     }
 
     private function amountOrCurrencyMismatch(PaymentTransaction $tx, array $wt): ?string
     {
-        $expectedCents = (int) round((float) $tx->amount * 100);
+        // Se valida contra el importe CONGELADO al autorizar (gross_amount), no
+        // contra el precio actual del plan: si el catálogo cambió entre la
+        // autorización y el webhook, el cobro sigue siendo el que se firmó.
+        $expectedCents = Money::fromAmount($tx->gross_amount ?? $tx->amount)->toWompiCents();
         $gotCents = (int) ($wt['amount_in_cents'] ?? 0);
         if ($gotCents > 0 && $gotCents !== $expectedCents) {
             return "monto: esperado {$expectedCents}c, recibido {$gotCents}c";
@@ -170,6 +181,7 @@ class WompiWebhookService
         if ($currency !== '' && $currency !== strtoupper((string) $tx->currency)) {
             return "moneda: esperado {$tx->currency}, recibido {$currency}";
         }
+
         return null;
     }
 
@@ -177,8 +189,8 @@ class WompiWebhookService
     {
         $event->forceFill([
             'processing_status' => $status,
-            'processed_at'      => now(),
-            'error_message'     => $error ? mb_substr($error, 0, 200) : null,
+            'processed_at' => now(),
+            'error_message' => $error ? mb_substr($error, 0, 200) : null,
         ])->save();
     }
 
@@ -186,6 +198,7 @@ class WompiWebhookService
     private function safePayload(array $payload): array
     {
         unset($payload['data']['transaction']['payment_method']['token']);
+
         return $payload;
     }
 }

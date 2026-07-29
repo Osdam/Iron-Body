@@ -16,7 +16,7 @@ class FactusSmokeCommandTest extends TestCase
     {
         parent::setUp();
         config([
-            'billing.env'      => 'sandbox',
+            'billing.env' => 'sandbox',
             'billing.base_url' => 'https://api-sandbox.factus.com.co',
             'billing.credentials' => ['username' => 'u', 'password' => 'p', 'client_id' => 'c', 'client_secret' => 's'],
         ]);
@@ -75,7 +75,7 @@ class FactusSmokeCommandTest extends TestCase
     public function test_check_lists_ranges_from_nested_data(): void
     {
         Http::fake([
-            '*oauth/token'          => Http::response(['access_token' => 'A', 'expires_in' => 3600]),
+            '*oauth/token' => Http::response(['access_token' => 'A', 'expires_in' => 3600]),
             '*/v2/numbering-ranges' => Http::response(['data' => ['data' => [
                 ['id' => 389, 'document' => '01', 'prefix' => 'SETP', 'from' => 1, 'to' => 1000, 'current' => 5, 'is_active' => true],
             ]]]),

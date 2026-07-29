@@ -21,7 +21,9 @@ use Illuminate\Support\Str;
 class ProductSale extends Model
 {
     public const CHANNELS = ['pos', 'app'];
+
     public const STATUSES = ['pending', 'paid', 'delivered', 'cancelled'];
+
     public const PAYMENT_METHODS = ['cash', 'card', 'online', 'nequi', 'transfer'];
 
     protected $fillable = [
@@ -43,16 +45,36 @@ class ProductSale extends Model
         'paid_at',
         'delivered_at',
         'cancelled_at',
+        // Snapshot fiscal de la venta (Pricing V2). `subtotal`/`total` conservan
+        // su semántica histórica de mostrador.
+        'base_amount', 'tax_amount', 'gross_amount',
+        'pricing_mode', 'pricing_rules_version', 'priced_at',
     ];
 
     protected $casts = [
-        'subtotal'     => 'decimal:2',
-        'discount'     => 'decimal:2',
-        'total'        => 'decimal:2',
-        'paid_at'      => 'datetime',
+        'subtotal' => 'decimal:2',
+        'discount' => 'decimal:2',
+        'total' => 'decimal:2',
+        'paid_at' => 'datetime',
         'delivered_at' => 'datetime',
         'cancelled_at' => 'datetime',
+        'priced_at' => 'datetime',
     ];
+
+    /** ¿La venta trae el snapshot fiscal congelado (Pricing V2)? */
+    public function hasFinancialSnapshot(): bool
+    {
+        return $this->gross_amount !== null;
+    }
+
+    /**
+     * Total bruto congelado de la venta. Con snapshot usa `gross_amount`;
+     * sin snapshot cae a `total`, que siempre fue el bruto cobrado en caja.
+     */
+    public function grossAmountValue(): float
+    {
+        return (float) ($this->gross_amount ?? $this->total);
+    }
 
     protected static function booted(): void
     {
@@ -99,10 +121,10 @@ class ProductSale extends Model
         $inv = $this->electronicInvoice;
 
         return [
-            'id'          => $inv->id,
-            'status'      => $inv->status->value,
+            'id' => $inv->id,
+            'status' => $inv->status->value,
             'full_number' => $inv->full_number,
-            'cufe'        => $inv->cufe,
+            'cufe' => $inv->cufe,
         ];
     }
 
@@ -120,7 +142,8 @@ class ProductSale extends Model
     public static function nextCode(): string
     {
         $n = (int) (self::max('id') ?? 0) + 1;
-        return 'V-' . str_pad((string) $n, 6, '0', STR_PAD_LEFT);
+
+        return 'V-'.str_pad((string) $n, 6, '0', STR_PAD_LEFT);
     }
 
     /**
@@ -139,11 +162,11 @@ class ProductSale extends Model
             }
 
             $this->update([
-                'status'            => 'paid',
-                'payment_status'    => 'paid',
-                'payment_method'    => $method ?? $this->payment_method,
+                'status' => 'paid',
+                'payment_status' => 'paid',
+                'payment_method' => $method ?? $this->payment_method,
                 'payment_reference' => $reference ?? $this->payment_reference,
-                'paid_at'           => now(),
+                'paid_at' => now(),
             ]);
         });
     }
@@ -164,23 +187,32 @@ class ProductSale extends Model
     public function toReceiptArray(): array
     {
         return [
-            'code'           => $this->code,
-            'uuid'           => $this->uuid,
-            'channel'        => $this->channel,
-            'status'         => $this->status,
-            'customer_name'  => $this->customer_name ?? $this->member?->full_name,
+            'code' => $this->code,
+            'uuid' => $this->uuid,
+            'channel' => $this->channel,
+            'status' => $this->status,
+            'customer_name' => $this->customer_name ?? $this->member?->full_name,
             'payment_method' => $this->payment_method,
             'payment_status' => $this->payment_status,
-            'subtotal'       => (float) $this->subtotal,
-            'discount'       => (float) $this->discount,
-            'total'          => (float) $this->total,
-            'paid_at'        => optional($this->paid_at)->toIso8601String(),
-            'created_at'     => optional($this->created_at)->toIso8601String(),
-            'items'          => $this->items->map(fn (ProductSaleItem $i) => [
-                'name'       => $i->name,
+            'subtotal' => (float) $this->subtotal,
+            'discount' => (float) $this->discount,
+            'total' => (float) $this->total,
+            // Desglose fiscal congelado (null en ventas legacy sin snapshot).
+            'base_amount' => $this->base_amount !== null ? (float) $this->base_amount : null,
+            'tax_amount' => $this->tax_amount !== null ? (float) $this->tax_amount : null,
+            'gross_amount' => $this->gross_amount !== null ? (float) $this->gross_amount : null,
+            'pricing_mode' => $this->pricing_mode,
+            'paid_at' => optional($this->paid_at)->toIso8601String(),
+            'created_at' => optional($this->created_at)->toIso8601String(),
+            'items' => $this->items->map(fn (ProductSaleItem $i) => [
+                'name' => $i->name,
                 'unit_price' => (float) $i->unit_price,
-                'quantity'   => $i->quantity,
-                'subtotal'   => (float) $i->subtotal,
+                'quantity' => $i->quantity,
+                'subtotal' => (float) $i->subtotal,
+                'base_amount' => $i->base_amount !== null ? (float) $i->base_amount : null,
+                'tax_amount' => $i->tax_amount !== null ? (float) $i->tax_amount : null,
+                'tax_rate' => $i->tax_rate !== null ? (float) $i->tax_rate : null,
+                'gross_amount' => $i->gross_amount !== null ? (float) $i->gross_amount : null,
             ])->all(),
         ];
     }

@@ -3,8 +3,8 @@
 namespace Tests\Feature\Billing;
 
 use App\Jobs\EmitElectronicInvoiceJob;
-use App\Models\Plan;
 use App\Models\PaymentTransaction;
+use App\Models\Plan;
 use App\Models\User;
 use App\Services\Payments\PaymentMembershipActivator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -26,16 +26,16 @@ class AppInvoiceRequestHookTest extends TestCase
         $user = User::factory()->create();
 
         return PaymentTransaction::create([
-            'reference'       => 'IRON-'.uniqid(),
+            'reference' => 'IRON-'.uniqid(),
             'idempotency_key' => 'IDEM-'.uniqid(),
-            'provider'        => 'wompi',
-            'status'    => PaymentTransaction::STATUS_APPROVED,
-            'amount'    => 100000,
-            'currency'  => 'COP',
-            'user_id'   => $user->id,
-            'plan_id'   => $plan->id,
-            'paid_at'   => now(),
-            'metadata'  => $metadata,
+            'provider' => 'wompi',
+            'status' => PaymentTransaction::STATUS_APPROVED,
+            'amount' => 100000,
+            'currency' => 'COP',
+            'user_id' => $user->id,
+            'plan_id' => $plan->id,
+            'paid_at' => now(),
+            'metadata' => $metadata,
         ]);
     }
 

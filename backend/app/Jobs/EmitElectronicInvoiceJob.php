@@ -14,7 +14,9 @@ use App\Services\Billing\FactusResponseMapper;
 use App\Services\Billing\FiscalProfileResolver;
 use App\Services\Billing\InvoiceDtoBuilder;
 use App\Services\Billing\InvoicePdfStorageService;
+use App\Services\Billing\InvoiceReconciler;
 use App\Services\Billing\InvoicingService;
+use App\Services\Billing\TaxPolicy;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -41,12 +43,39 @@ class EmitElectronicInvoiceJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries;
+
     public int $backoff;
 
     public function __construct(public int $invoiceId)
     {
-        $this->tries   = (int) config('billing.http.retry_times', 5);
+        $this->tries = (int) config('billing.http.retry_times', 5);
         $this->backoff = (int) config('billing.http.retry_backoff', 60);
+    }
+
+    /**
+     * Recorre el payload y verifica que ninguna línea lleve impuesto.
+     *
+     * Con el emisor no responsable, cada item debe declararse sin tributo. Una
+     * tarifa positiva o un `rate` distinto de cero aborta la emisión.
+     */
+    private function assertPayloadHasNoVat(array $payload, TaxPolicy $policy, string $ref): void
+    {
+        if ($policy->collectsVat()) {
+            return;
+        }
+
+        foreach (($payload['items'] ?? []) as $i => $item) {
+            foreach (($item['taxes'] ?? []) as $tax) {
+                $rate = (float) ($tax['rate'] ?? 0);
+                if ($rate > 0) {
+                    throw new RuntimeException(sprintf(
+                        'Bloqueo tributario: la factura %s lleva tarifa %.2f%% en el ítem %d. '
+                        .'Iron Body es responsabilidad %s (no responsable de IVA).',
+                        $ref, $rate, $i + 1, $policy->issuerVatResponsibility(),
+                    ));
+                }
+            }
+        }
     }
 
     public function handle(
@@ -57,6 +86,7 @@ class EmitElectronicInvoiceJob implements ShouldQueue
         FactusPayloadSanitizer $sanitizer,
         InvoicePdfStorageService $storage,
         InvoicingService $invoicing,
+        InvoiceReconciler $reconciler,
     ): void {
         if (! config('billing.enabled')) {
             return; // Seguridad: jamás emitir con el módulo apagado.
@@ -67,6 +97,7 @@ class EmitElectronicInvoiceJob implements ShouldQueue
         // (En local/sandbox/testing no aplica → no rompe smoke ni tests.)
         if (app()->environment('production') && config('billing.env') !== 'production') {
             Log::warning('billing.refused_sandbox_on_production_server', ['invoice' => $this->invoiceId]);
+
             return;
         }
 
@@ -76,6 +107,7 @@ class EmitElectronicInvoiceJob implements ShouldQueue
         if (config('billing.env') === 'production'
             && ! FactusConfigValidator::fromConfig()->isReadyForProduction()) {
             Log::warning('billing.production_not_ready', ['invoice' => $this->invoiceId]);
+
             return;
         }
 
@@ -85,26 +117,97 @@ class EmitElectronicInvoiceJob implements ShouldQueue
         }
 
         $source = $invoice->source; // morphTo: Payment | ProductSale
-        if ($source === null) {
-            $invoice->markError('Fuente del comprobante no encontrada.');
+
+        // PAYLOAD CONGELADO: si el comprobante ya lo tiene, se reutiliza tal cual.
+        // Es lo que garantiza que un reintento envíe exactamente lo mismo y que
+        // un cambio posterior de precio o de tarifa no altere una factura
+        // pendiente. Solo se reconstruye si nunca se congeló (facturas creadas
+        // antes de Pricing V2 y aún sin pasar por billing:freeze-pending-invoices).
+        if ($invoice->hasPayloadSnapshot()) {
+            $payload = $invoice->payload_snapshot;
+        } else {
+            if ($source === null) {
+                $invoice->markError('Fuente del comprobante no encontrada.');
+
+                return;
+            }
+
+            $built = $source instanceof ProductSale
+                ? $builder->forSale($source, $resolver->resolveForSale($source))
+                : $builder->forPayment($source, $resolver->resolveForPayment($source));
+
+            $payload = $built['payload'];
+
+            // Se congela ahora para que los reintentos siguientes lo reutilicen.
+            $invoice->forceFill([
+                'payload_snapshot' => $payload,
+                'line_items_snapshot' => $built['line_items'] ?? null,
+                'source_amount_snapshot' => InvoicingService::sourceGrossAmount($source),
+            ])->save();
+        }
+
+        $payload['reference_code'] = $invoice->uuid; // trazabilidad CRM ↔ Factus
+
+        // 🔒 GUARDARRAÍL: nunca emitir por un importe distinto al cobrado.
+        $reconciliation = $reconciler->check($invoice, $source);
+        if (! $reconciliation['ok']) {
+            $invoice->markReconciliationFailed(
+                (float) $reconciliation['source_amount'],
+                (float) $reconciliation['difference'],
+                (string) $reconciliation['reason'],
+            );
+            $invoicing->recordLog(
+                $invoice,
+                InvoiceLogAction::EMIT,
+                'error',
+                (string) $reconciliation['reason'],
+                payloadExcerpt: $sanitizer->excerpt([
+                    'reconciliation' => [
+                        'invoice_total' => (float) $invoice->total,
+                        'source_amount' => $reconciliation['source_amount'],
+                        'difference' => $reconciliation['difference'],
+                    ],
+                ]),
+            );
+            Log::warning('billing.reconciliation_failed', [
+                'invoice_id' => $invoice->id,
+                'difference' => $reconciliation['difference'],
+            ]);
+
+            // No se relanza: reintentar a ciegas volvería a fallar igual.
             return;
         }
 
-        $built = $source instanceof ProductSale
-            ? $builder->forSale($source, $resolver->resolveForSale($source))
-            : $builder->forPayment($source, $resolver->resolveForPayment($source));
-
-        $payload = $built['payload'];
-        $payload['reference_code'] = $invoice->uuid; // trazabilidad CRM ↔ Factus
+        if (! ($reconciliation['skipped'] ?? false)) {
+            $invoice->markReconciliationOk(
+                (float) $reconciliation['source_amount'],
+                (float) $reconciliation['difference'],
+            );
+        }
 
         // Auditoría del envío nativo de Factus al correo del cliente. Sin datos
         // sensibles: solo si se solicitó el envío y si el cliente tenía email válido.
         Log::info('billing.invoice_email', [
-            'invoice_id'        => $invoice->id,
-            'reference_code'    => $invoice->uuid,
-            'email_requested'   => (bool) ($payload['send_email'] ?? false),
+            'invoice_id' => $invoice->id,
+            'reference_code' => $invoice->uuid,
+            'email_requested' => (bool) ($payload['send_email'] ?? false),
             'has_customer_email' => InvoiceDtoBuilder::hasValidEmail($built['snapshot']['customer_email'] ?? null),
         ]);
+
+        // ÚLTIMA BARRERA antes del POST real. Doble comprobación deliberada:
+        // sobre el total del comprobante y sobre cada línea del payload. Si algo
+        // llegara hasta aquí con IVA, no sale a la DIAN.
+        $taxPolicy = app(TaxPolicy::class);
+        $taxPolicy->assertNoVatAmount($built['snapshot']['tax_total'] ?? 0, 'factura '.$invoice->uuid);
+        $this->assertPayloadHasNoVat($payload, $taxPolicy, $invoice->uuid);
+
+        // request_payload SANEADO y persistido ANTES de enviarlo: si la llamada
+        // falla o el proceso muere, queda la evidencia exacta de lo que se iba a
+        // transmitir. Las 17 facturas previas no lo guardaron y eso impidió
+        // reconstruir por qué se emitió con IVA.
+        $invoice->forceFill([
+            'request_payload' => app(FactusPayloadSanitizer::class)->sanitize($payload),
+        ])->save();
 
         $invoice->markProcessing();
 
@@ -120,7 +223,7 @@ class EmitElectronicInvoiceJob implements ShouldQueue
             endpoint: 'bills/validate',
             httpStatus: $result['status'],
             payloadExcerpt: $sanitizer->excerpt([
-                'request'  => $payload,
+                'request' => $payload,
                 'response' => $result['body'],
             ]),
             durationMs: $durationMs,
@@ -129,19 +232,21 @@ class EmitElectronicInvoiceJob implements ShouldQueue
         if ($result['ok']) {
             $this->applySuccess($invoice, $mapper->map($result['body']), $storage, $client);
             $this->maybeQueueCustomerEmail($invoice, $invoicing);
+
             return;
         }
 
         // No-2xx: distinguir rechazo de datos (no reintentar) de fallo técnico.
         $status = (int) $result['status'];
         if ($status >= 400 && $status < 500) {
-            $invoice->markRejected('Rechazo de Factus/DIAN (HTTP ' . $status . ').');
+            $invoice->markRejected('Rechazo de Factus/DIAN (HTTP '.$status.').');
+
             return;
         }
 
         // Técnico (5xx / red / 0): marcar error y relanzar para backoff.
-        $invoice->markError('Error técnico al emitir (HTTP ' . $status . ').');
-        throw new RuntimeException('Factus emit failed (HTTP ' . $status . ') invoice=' . $invoice->id);
+        $invoice->markError('Error técnico al emitir (HTTP '.$status.').');
+        throw new RuntimeException('Factus emit failed (HTTP '.$status.') invoice='.$invoice->id);
     }
 
     /** Persiste número/CUFE/QR/archivos y marca validado o rechazado. */
@@ -153,6 +258,7 @@ class EmitElectronicInvoiceJob implements ShouldQueue
     ): void {
         if ($mapped['is_rejected']) {
             $invoice->markRejected($mapped['reason'] ?? 'Rechazada por DIAN.');
+
             return;
         }
 
@@ -168,17 +274,16 @@ class EmitElectronicInvoiceJob implements ShouldQueue
         }
 
         $invoice->markValidated(array_merge($files, [
-            'factus_id'   => $mapped['factus_id'],
-            'number'      => $mapped['number'],
-            'prefix'      => $mapped['prefix'] ?? $invoice->prefix,
+            'factus_id' => $mapped['factus_id'],
+            'number' => $mapped['number'],
+            'prefix' => $mapped['prefix'] ?? $invoice->prefix,
             'full_number' => $mapped['full_number'],
-            'cufe'        => $mapped['cufe'],
+            'cufe' => $mapped['cufe'],
             'dian_status' => $mapped['dian_status'],
-            'qr_url'      => $mapped['qr_url'],
-            'qr_data'     => $mapped['qr_data'],
+            'qr_url' => $mapped['qr_url'],
+            'qr_data' => $mapped['qr_data'],
         ]));
     }
-
 
     /**
      * Encola el envío PROPIO (SMTP) del comprobante al cliente como fallback al
@@ -222,6 +327,6 @@ class EmitElectronicInvoiceJob implements ShouldQueue
     public function failed(Throwable $e): void
     {
         $invoice = ElectronicInvoice::find($this->invoiceId);
-        $invoice?->markError('Reintentos agotados: ' . $e->getMessage());
+        $invoice?->markError('Reintentos agotados: '.$e->getMessage());
     }
 }

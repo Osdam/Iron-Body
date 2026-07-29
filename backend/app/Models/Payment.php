@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Enums\InvoiceType;
+use App\Exceptions\PaymentHasInvoiceException;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -21,13 +23,58 @@ class Payment extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id', 'member_id', 'plan_id', 'amount', 'method', 'reference', 'status', 'paid_at'
+        'user_id', 'member_id', 'plan_id', 'amount', 'method', 'reference', 'status', 'paid_at',
+        // Snapshot fiscal congelado (Pricing V2). `amount` sigue siendo el bruto cobrado.
+        'base_amount', 'tax_amount', 'gross_amount', 'discount_amount',
+        'tax_rate_id', 'tax_rate', 'pricing_mode', 'pricing_rules_version',
+        'currency', 'priced_at',
     ];
 
     protected $casts = [
         'amount' => 'float',
         'paid_at' => 'datetime',
+        'priced_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        // 🔒 Integridad histórica: un pago con comprobante electrónico NO se
+        // borra físicamente. En producción existen 6 facturas (1 cancelled,
+        // 5 validated) cuyo Payment fue eliminado, y quedaron huérfanas. Esas
+        // NO se reparan aquí, pero el caso no vuelve a ocurrir.
+        //
+        // No se añade foreign key: fallaría por esos huérfanos históricos.
+        static::deleting(function (Payment $payment): void {
+            if ($payment->isForceDeleting ?? false) {
+                return;
+            }
+            if ($payment->electronicInvoices()->exists()) {
+                throw new PaymentHasInvoiceException(
+                    "El pago #{$payment->id} tiene comprobantes electrónicos asociados y no puede eliminarse. "
+                    .'Anúlalo mediante nota crédito o cambia su estado a cancelled.'
+                );
+            }
+        });
+    }
+
+    /**
+     * ¿El pago trae la cotización congelada de Pricing V2?
+     * Si es false, la operación es legacy y se factura con el comportamiento
+     * anterior (extracción hacia atrás sobre `amount`).
+     */
+    public function hasFinancialSnapshot(): bool
+    {
+        return $this->gross_amount !== null;
+    }
+
+    /**
+     * Total bruto congelado del pago. Con snapshot usa `gross_amount`;
+     * sin snapshot (legacy) cae a `amount`, que siempre fue el bruto cobrado.
+     */
+    public function grossAmountValue(): float
+    {
+        return (float) ($this->gross_amount ?? $this->amount);
+    }
 
     public function user(): BelongsTo
     {
@@ -74,10 +121,10 @@ class Payment extends Model
         $inv = $this->electronicInvoice;
 
         return [
-            'id'          => $inv->id,
-            'status'      => $inv->status->value,
+            'id' => $inv->id,
+            'status' => $inv->status->value,
             'full_number' => $inv->full_number,
-            'cufe'        => $inv->cufe,
+            'cufe' => $inv->cufe,
         ];
     }
 
@@ -92,7 +139,7 @@ class Payment extends Model
 
         return match ($status) {
             '', 'paid' => $status === '' ? 'pending' : 'approved',
-            default    => $status,
+            default => $status,
         };
     }
 
@@ -107,10 +154,10 @@ class Payment extends Model
      */
     public function toPublicArray(): array
     {
-        $tx     = $this->relationLoaded('transaction') ? $this->transaction : null;
-        $plan   = $this->relationLoaded('plan') ? $this->plan : null;
+        $tx = $this->relationLoaded('transaction') ? $this->transaction : null;
+        $plan = $this->relationLoaded('plan') ? $this->plan : null;
         $member = $this->relationLoaded('member') ? $this->member : null;
-        $user   = $this->relationLoaded('user') ? $this->user : null;
+        $user = $this->relationLoaded('user') ? $this->user : null;
 
         $customer = is_array($tx?->customer) ? $tx->customer : [];
 
@@ -132,28 +179,28 @@ class Payment extends Model
 
         $membershipExpiry = optional($user?->membership_end_date)
             ? (is_string($user->membership_end_date)
-                ? \Carbon\Carbon::parse($user->membership_end_date)->toIso8601String()
+                ? Carbon::parse($user->membership_end_date)->toIso8601String()
                 : $user->membership_end_date->toIso8601String())
             : null;
 
         return [
-            'reference'         => $this->reference,
-            'status'            => self::normalizeStatus($this->status),
-            'amount'            => (float) $this->amount,
-            'currency'          => $tx?->currency ?: 'COP',
-            'provider'          => $tx?->provider ?: ($this->method === 'epayco' ? 'epayco' : 'manual'),
-            'method'            => $tx?->method ?: $this->method,
-            'provider_ref'      => $tx?->provider_ref,
-            'description'       => $description,
-            'product'           => $plan?->name ?? $description,
-            'user_name'         => $userName,
-            'document'          => $document,
-            'email'             => $email,
-            'phone'             => $phone,
-            'reason'            => $tx?->failure_reason,
-            'paid_at'           => optional($this->paid_at)->toIso8601String(),
-            'created_at'        => optional($this->created_at)->toIso8601String(),
-            'updated_at'        => optional($this->updated_at)->toIso8601String(),
+            'reference' => $this->reference,
+            'status' => self::normalizeStatus($this->status),
+            'amount' => (float) $this->amount,
+            'currency' => $tx?->currency ?: 'COP',
+            'provider' => $tx?->provider ?: ($this->method === 'epayco' ? 'epayco' : 'manual'),
+            'method' => $tx?->method ?: $this->method,
+            'provider_ref' => $tx?->provider_ref,
+            'description' => $description,
+            'product' => $plan?->name ?? $description,
+            'user_name' => $userName,
+            'document' => $document,
+            'email' => $email,
+            'phone' => $phone,
+            'reason' => $tx?->failure_reason,
+            'paid_at' => optional($this->paid_at)->toIso8601String(),
+            'created_at' => optional($this->created_at)->toIso8601String(),
+            'updated_at' => optional($this->updated_at)->toIso8601String(),
             'membership_expiry' => $membershipExpiry,
         ];
     }

@@ -18,9 +18,9 @@ class FiscalProfileResolverTest extends TestCase
         parent::setUp();
         config([
             'billing.consumer_final' => [
-                'document_type'   => '13',
+                'document_type' => '13',
                 'document_number' => '222222222222',
-                'name'            => 'Consumidor final',
+                'name' => 'Consumidor final',
             ],
         ]);
     }

@@ -11,21 +11,31 @@ use Illuminate\Database\Eloquent\Model;
  */
 class PaymentTransaction extends Model
 {
-    public const STATUS_PENDING    = 'pending';
+    public const STATUS_PENDING = 'pending';
+
     public const STATUS_PROCESSING = 'processing';
-    public const STATUS_APPROVED   = 'approved';
-    public const STATUS_FAILED     = 'failed';
-    public const STATUS_CANCELLED  = 'cancelled';
-    public const STATUS_EXPIRED    = 'expired';
+
+    public const STATUS_APPROVED = 'approved';
+
+    public const STATUS_FAILED = 'failed';
+
+    public const STATUS_CANCELLED = 'cancelled';
+
+    public const STATUS_EXPIRED = 'expired';
 
     // Estados adicionales de la máquina Wompi (provider='wompi'). Los registros
     // legados siguen usando el set de arriba; estos son aditivos.
-    public const STATUS_CREATED         = 'created';
-    public const STATUS_TOKENIZING      = 'tokenizing';
+    public const STATUS_CREATED = 'created';
+
+    public const STATUS_TOKENIZING = 'tokenizing';
+
     public const STATUS_REQUIRES_ACTION = 'requires_action';
-    public const STATUS_DECLINED        = 'declined';
-    public const STATUS_VOIDED          = 'voided';
-    public const STATUS_ERROR           = 'error';
+
+    public const STATUS_DECLINED = 'declined';
+
+    public const STATUS_VOIDED = 'voided';
+
+    public const STATUS_ERROR = 'error';
 
     protected $fillable = [
         'reference', 'idempotency_key', 'order_id', 'member_id', 'user_id', 'plan_id',
@@ -41,26 +51,30 @@ class PaymentTransaction extends Model
         'card_last_four', 'installments', 'metadata',
         // Cobro recurrente / suscripciones (aditivo; null en el pago único).
         'subscription_id', 'billing_period', 'is_recurring', 'wompi_payment_source_id',
+        // Cotización congelada al autorizar (Pricing V2). `amount` = bruto firmado.
+        'base_amount', 'tax_amount', 'gross_amount', 'discount_amount',
+        'tax_rate_id', 'tax_rate', 'pricing_mode', 'pricing_rules_version', 'priced_at',
     ];
 
     protected $casts = [
-        'amount'       => 'float',
-        'customer'     => 'array',
+        'amount' => 'float',
+        'customer' => 'array',
         'raw_response' => 'array',
-        'paid_at'      => 'datetime',
+        'paid_at' => 'datetime',
         // Wompi (aditivo).
-        'metadata'           => 'array',
-        'approved_at'        => 'datetime',
-        'declined_at'        => 'datetime',
-        'voided_at'          => 'datetime',
-        'failed_at'          => 'datetime',
-        'expires_at'         => 'datetime',
+        'metadata' => 'array',
+        'approved_at' => 'datetime',
+        'declined_at' => 'datetime',
+        'voided_at' => 'datetime',
+        'failed_at' => 'datetime',
+        'expires_at' => 'datetime',
         'last_reconciled_at' => 'datetime',
-        'retry_count'        => 'integer',
-        'installments'       => 'integer',
+        'retry_count' => 'integer',
+        'installments' => 'integer',
+        'priced_at' => 'datetime',
         // Cobro recurrente (aditivo).
-        'subscription_id'    => 'integer',
-        'is_recurring'       => 'boolean',
+        'subscription_id' => 'integer',
+        'is_recurring' => 'boolean',
     ];
 
     public function user()
@@ -97,17 +111,17 @@ class PaymentTransaction extends Model
     public function toPublicArray(): array
     {
         return [
-            'ok'           => !in_array($this->status, [self::STATUS_FAILED, self::STATUS_CANCELLED, self::STATUS_EXPIRED], true),
+            'ok' => ! in_array($this->status, [self::STATUS_FAILED, self::STATUS_CANCELLED, self::STATUS_EXPIRED], true),
             'transaction_id' => $this->provider_ref ?: (string) $this->id,
-            'reference'    => $this->reference,
-            'status'       => $this->status,
-            'member_id'    => $this->member_id,
-            'user_id'      => $this->user_id,
-            'plan_id'      => $this->plan_id,
-            'amount'       => $this->amount,
-            'currency'     => $this->currency,
-            'provider'     => $this->provider,
-            'method'       => $this->method,
+            'reference' => $this->reference,
+            'status' => $this->status,
+            'member_id' => $this->member_id,
+            'user_id' => $this->user_id,
+            'plan_id' => $this->plan_id,
+            'amount' => $this->amount,
+            'currency' => $this->currency,
+            'provider' => $this->provider,
+            'method' => $this->method,
             'provider_ref' => $this->provider_ref,
             'checkout_url' => $this->checkout_url,
             // Smart Checkout v2 (Nequi/DaviPlata): flujo + sesión + URL del bridge
@@ -122,15 +136,15 @@ class PaymentTransaction extends Model
             'authorization_url' => is_array($this->raw_response)
                 ? ($this->raw_response['urlbanco'] ?? null)
                 : null,
-            'description'  => $this->description,
-            'product'      => $this->description,
-            'user_name'    => is_array($this->customer)
+            'description' => $this->description,
+            'product' => $this->description,
+            'user_name' => is_array($this->customer)
                 ? ($this->customer['name'] ?? null)
                 : null,
-            'reason'       => $this->failure_reason,
-            'paid_at'      => optional($this->paid_at)->toIso8601String(),
-            'created_at'   => optional($this->created_at)->toIso8601String(),
-            'updated_at'   => optional($this->updated_at)->toIso8601String(),
+            'reason' => $this->failure_reason,
+            'paid_at' => optional($this->paid_at)->toIso8601String(),
+            'created_at' => optional($this->created_at)->toIso8601String(),
+            'updated_at' => optional($this->updated_at)->toIso8601String(),
         ];
     }
 
@@ -152,40 +166,40 @@ class PaymentTransaction extends Model
         $action = $this->wompiAction($isFinal);
 
         return [
-            'ok'                  => ! $isFailedLike,
-            'reference'           => $this->reference,
-            'uuid'                => $this->uuid,
-            'status'              => $this->status,
-            'is_final'            => $isFinal,
+            'ok' => ! $isFailedLike,
+            'reference' => $this->reference,
+            'uuid' => $this->uuid,
+            'status' => $this->status,
+            'is_final' => $isFinal,
             // Contrato explícito que la app conmuta por método + action.type.
             // type ∈ wait_for_confirmation|external_browser|open_nequi_app|daviplata_otp|none
-            'action'              => $action,
-            'status_message'      => $this->status_message,
-            'reason'              => $this->status_message ?: $this->failure_reason,
-            'amount'              => (float) $this->amount,
-            'amount_in_cents'     => (int) round((float) $this->amount * 100),
-            'currency'            => $this->currency,
-            'provider'            => $this->provider,
-            'environment'         => $this->environment,
-            'payment_method'      => $this->method ? strtoupper($this->method) : null,
-            'method'              => $this->method,
-            'transaction_id'      => $this->wompi_transaction_id ?: $this->provider_ref,
-            'wompi_transaction_id'=> $this->wompi_transaction_id,
+            'action' => $action,
+            'status_message' => $this->status_message,
+            'reason' => $this->status_message ?: $this->failure_reason,
+            'amount' => (float) $this->amount,
+            'amount_in_cents' => (int) round((float) $this->amount * 100),
+            'currency' => $this->currency,
+            'provider' => $this->provider,
+            'environment' => $this->environment,
+            'payment_method' => $this->method ? strtoupper($this->method) : null,
+            'method' => $this->method,
+            'transaction_id' => $this->wompi_transaction_id ?: $this->provider_ref,
+            'wompi_transaction_id' => $this->wompi_transaction_id,
             // URL del banco para PSE (solo cuando action.type=external_browser).
             // Se abre en el NAVEGADOR EXTERNO del sistema, nunca en un WebView.
-            'external_auth_url'   => $action['type'] === 'external_browser' ? $action['url'] : null,
-            'card_brand'          => $this->card_brand,
-            'card_last_four'      => $this->card_last_four,
-            'installments'        => $this->installments,
-            'member_id'           => $this->member_id,
-            'plan_id'             => $this->plan_id,
-            'description'         => $this->description,
-            'product'             => $this->description,
-            'approved_at'         => optional($this->approved_at)->toIso8601String(),
-            'paid_at'             => optional($this->paid_at)->toIso8601String(),
-            'expires_at'          => optional($this->expires_at)->toIso8601String(),
-            'created_at'          => optional($this->created_at)->toIso8601String(),
-            'updated_at'          => optional($this->updated_at)->toIso8601String(),
+            'external_auth_url' => $action['type'] === 'external_browser' ? $action['url'] : null,
+            'card_brand' => $this->card_brand,
+            'card_last_four' => $this->card_last_four,
+            'installments' => $this->installments,
+            'member_id' => $this->member_id,
+            'plan_id' => $this->plan_id,
+            'description' => $this->description,
+            'product' => $this->description,
+            'approved_at' => optional($this->approved_at)->toIso8601String(),
+            'paid_at' => optional($this->paid_at)->toIso8601String(),
+            'expires_at' => optional($this->expires_at)->toIso8601String(),
+            'created_at' => optional($this->created_at)->toIso8601String(),
+            'updated_at' => optional($this->updated_at)->toIso8601String(),
         ];
     }
 
@@ -226,10 +240,10 @@ class PaymentTransaction extends Model
             'pse' => ($this->status === self::STATUS_REQUIRES_ACTION && $this->external_auth_url)
                 ? ['type' => 'external_browser', 'url' => $this->external_auth_url]
                 : ['type' => 'wait_for_confirmation', 'url' => null],
-            'nequi'     => ['type' => 'open_nequi_app', 'url' => null],
+            'nequi' => ['type' => 'open_nequi_app', 'url' => null],
             'daviplata' => ['type' => 'daviplata_otp', 'url' => null],
             // CARD (y cualquier otro): SIEMPRE espera nativa, jamás navegador/WebView.
-            default     => ['type' => 'wait_for_confirmation', 'url' => null],
+            default => ['type' => 'wait_for_confirmation', 'url' => null],
         };
     }
 }

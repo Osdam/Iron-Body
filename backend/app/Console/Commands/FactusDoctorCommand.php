@@ -24,6 +24,7 @@ use Illuminate\Console\Command;
 class FactusDoctorCommand extends Command
 {
     protected $signature = 'billing:factus-doctor';
+
     protected $description = 'Valida la configuración productiva de Factus sin emitir ni llamar a Factus (read-only).';
 
     public function handle(): int
@@ -33,8 +34,8 @@ class FactusDoctorCommand extends Command
 
         // 🔒 Mismatch peligroso: servidor productivo apuntando a sandbox.
         if ($this->laravel->environment('production') && config('billing.env') !== 'production') {
-            $issues[] = 'APP_ENV=production con FACTUS_ENV=' . config('billing.env')
-                . ': NO activar; se emitiría a sandbox en el servidor productivo.';
+            $issues[] = 'APP_ENV=production con FACTUS_ENV='.config('billing.env')
+                .': NO activar; se emitiría a sandbox en el servidor productivo.';
         }
 
         // Resumen de configuración (sin secretos: solo presente/ausente).
@@ -55,32 +56,87 @@ class FactusDoctorCommand extends Command
             ['decisión tributaria', config('billing.tax_decision_confirmed') ? 'CONFIRMADA' : '🔒 PENDIENTE'],
         ]);
 
-        // Catálogo tributario en BD: planes/productos activos sin tax_rate_id.
-        $plansMissing = Plan::query()->where('active', true)->whereNull('tax_rate_id')->get();
-        $productsMissing = Product::query()->where('active', true)->whereNull('tax_rate_id')->get();
+        // Catálogo tributario en BD.
+        //
+        // Solo BLOQUEAN los planes/productos que realmente se facturan: activos,
+        // con precio mayor que cero y billing_enabled=true. Un plan gratuito o
+        // marcado como no facturable (caso Demo App Review) no necesita
+        // tratamiento tributario y no puede impedir la activación de Factus:
+        // asignarle una tarifa inventada sería peor que dejarlo fuera.
+        $plansMissing = Plan::query()
+            ->where('active', true)
+            ->where('billing_enabled', true)
+            ->where('price', '>', 0)
+            ->whereNull('tax_rate_id')
+            ->get();
+
+        $productsMissing = Product::query()
+            ->where('active', true)
+            ->where('billing_enabled', true)
+            ->where('sale_price', '>', 0)
+            ->whereNull('tax_rate_id')
+            ->get();
 
         if ($plansMissing->isNotEmpty()) {
-            $issues[] = "Hay {$plansMissing->count()} plan(es) activo(s) sin tax_rate_id: "
-                . $plansMissing->take(10)->pluck('name')->implode(', ');
+            $issues[] = "Hay {$plansMissing->count()} plan(es) facturable(s) sin tax_rate_id: "
+                .$plansMissing->take(10)->pluck('name')->implode(', ');
         }
         if ($productsMissing->isNotEmpty()) {
-            $issues[] = "Hay {$productsMissing->count()} producto(s) activo(s) sin tax_rate_id: "
-                . $productsMissing->take(10)->pluck('name')->implode(', ');
+            $issues[] = "Hay {$productsMissing->count()} producto(s) facturable(s) sin tax_rate_id: "
+                .$productsMissing->take(10)->pluck('name')->implode(', ');
         }
+
+        $this->reportNonBillable();
 
         $this->line('');
         if ($issues === []) {
             $this->info('✔ LISTO PARA PRODUCCIÓN. Configuración y decisión tributaria completas.');
             $this->line('  Siguiente paso: smoke productivo (1 factura real) y luego FACTUS_ENABLED=true.');
+
             return self::SUCCESS;
         }
 
         $this->error('✖ BLOQUEADO. No actives FACTUS_ENABLED=true. Falta:');
         foreach ($issues as $i) {
-            $this->line('   - ' . $i);
+            $this->line('   - '.$i);
         }
 
         return self::FAILURE;
+    }
+
+    /**
+     * Sección INFORMATIVA (no bloqueante) de planes y productos activos que no
+     * se facturan: gratuitos o con billing_enabled=false. Se listan para que
+     * quede explícito que se excluyeron a propósito y no por descuido.
+     */
+    private function reportNonBillable(): void
+    {
+        $plans = Plan::query()->where('active', true)
+            ->where(fn ($q) => $q->where('billing_enabled', false)->orWhere('price', '<=', 0))
+            ->get();
+
+        $products = Product::query()->where('active', true)
+            ->where(fn ($q) => $q->where('billing_enabled', false)->orWhere('sale_price', '<=', 0))
+            ->get();
+
+        if ($plans->isEmpty() && $products->isEmpty()) {
+            return;
+        }
+
+        $this->line('');
+        $this->line('Activos NO facturables (informativo, no bloquean):');
+
+        $rows = [];
+        foreach ($plans as $p) {
+            $rows[] = ['plan', $p->id, $p->name, number_format((float) $p->price, 2, ',', '.'),
+                $p->billing_enabled ? 'gratuito' : 'billing_enabled=false'];
+        }
+        foreach ($products as $p) {
+            $rows[] = ['producto', $p->id, $p->name, number_format((float) $p->sale_price, 2, ',', '.'),
+                $p->billing_enabled ? 'gratuito' : 'billing_enabled=false'];
+        }
+
+        $this->table(['Tipo', 'ID', 'Nombre', 'Precio', 'Motivo'], $rows);
     }
 
     private function credsState(array $creds): string
