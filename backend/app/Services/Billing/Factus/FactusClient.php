@@ -2,6 +2,8 @@
 
 namespace App\Services\Billing\Factus;
 
+use App\Services\Billing\InvoiceEmissionGuard;
+use App\Services\Billing\SandboxProbe;
 use App\Services\Billing\TaxPolicy;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
@@ -56,6 +58,12 @@ class FactusClient
      */
     public function createInvoice(array $payload): array
     {
+        // Barrera de producción: comprueba QUÉ se está facturando (origen del
+        // pago, estado, duplicados, ambiente) antes de mirar CÓMO se declara el
+        // tributo. Va aquí y no en el servicio que origina la emisión porque
+        // hay al menos cuatro caminos que pueden dispararla.
+        app(InvoiceEmissionGuard::class)->assertMayEmit($payload);
+
         return $this->send('post', self::PATH_CREATE_INVOICE, $this->normalizeTaxes($payload));
     }
 
@@ -306,6 +314,15 @@ class FactusClient
         }
 
         if ((bool) ($this->cfg['tax_decision_confirmed'] ?? false)) {
+            return;
+        }
+
+        // Única concesión: una prueba explícita contra sandbox. Sirve
+        // precisamente para ensayar la representación del tributo sin tocar la
+        // DIAN. Exige AMBAS condiciones, y el ambiente se lee de la
+        // configuración, no de la sonda.
+        if (SandboxProbe::isActive()
+            && strtolower((string) ($this->cfg['env'] ?? 'sandbox')) !== 'production') {
             return;
         }
 

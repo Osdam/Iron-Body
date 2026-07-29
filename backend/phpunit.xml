@@ -51,5 +51,13 @@
             apagan explícitamente con config(), nunca al revés.
         -->
         <env name="FACTUS_TAX_DECISION_CONFIRMED" value="true"/>
+        <!--
+            Igual con la barrera de producción: la mayoría de las pruebas de
+            facturación emiten con payloads sintéticos que no corresponden a
+            ningún pago real, así que la barrera las rechazaría todas. En
+            producción está encendida; ProductionEmissionGuardTest la enciende
+            explícitamente para verificarla.
+        -->
+        <env name="BILLING_EMISSION_GUARD" value="false"/>
     </php>
 </phpunit>

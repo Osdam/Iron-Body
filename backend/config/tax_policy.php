@@ -47,6 +47,22 @@ return [
     // Leyenda legal para comprobantes, CRM y app.
     'issuer_legend' => env('BILLING_ISSUER_LEGEND', 'Emisor no responsable de IVA'),
 
+    // Barrera de producción (App\Services\Billing\InvoiceEmissionGuard): rechaza
+    // facturar pagos de sandbox, tarjetas de prueba, cobros no realizados,
+    // solicitudes canceladas o ya facturadas, y endpoints incoherentes con el
+    // ambiente.
+    //
+    // Vive aquí y no en config/billing.php porque ese archivo tiene trabajo sin
+    // commitear cuyos cambios no se pueden separar de los míos.
+    //
+    // Encendida SIEMPRE en producción. La suite de pruebas la apaga en su línea
+    // base (phpunit.xml) porque la mayoría de las pruebas de facturación emiten
+    // con payloads sintéticos que no corresponden a ningún pago real; las
+    // pruebas de la barrera la encienden explícitamente.
+    'emission_guard_enabled' => filter_var(
+        env('BILLING_EMISSION_GUARD', true), FILTER_VALIDATE_BOOLEAN
+    ),
+
     'version' => 'no-vat.2026.07',
 
 ];
