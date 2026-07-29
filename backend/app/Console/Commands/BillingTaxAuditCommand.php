@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Models\ElectronicInvoice;
-use App\Services\Billing\Money;
 use App\Services\Billing\TaxPolicy;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -68,22 +67,32 @@ class BillingTaxAuditCommand extends Command
         return self::SUCCESS;
     }
 
-    /** Desglose candidato: la prueba de que $80.000 factura $80.000 con IVA 0. */
+    /**
+     * Desglose candidato: la prueba de que $80.000 factura $80.000 con IVA 0.
+     *
+     * Se trabaja en CENTAVOS (enteros), nunca en coma flotante: un comprobante
+     * legal no puede depender de la representación binaria de un decimal.
+     */
     private function candidate(TaxPolicy $policy, string $amount): void
     {
-        $price = Money::fromAmount($amount);
-        $tax = Money::zero();               // La política no admite otro valor.
-        $total = $price->minus($tax)->plus($tax);
+        $priceCents = (int) round(((float) $amount) * 100);
+        $taxCents = 0;                       // La política no admite otro valor.
+        $totalCents = $priceCents + $taxCents;
+
+        $fmt = static fn (int $cents): string => number_format($cents / 100, 2, '.', '');
+        $price = $fmt($priceCents);
+        $tax = $fmt($taxCents);
+        $total = $fmt($totalCents);
 
         $this->info('DESGLOSE CANDIDATO (no se emite nada)');
         $this->table(
             ['Concepto', 'Valor'],
             [
-                ['Precio comercial', $price->toDecimalString()],
-                ['Subtotal', $price->toDecimalString()],
+                ['Precio comercial', $price],
+                ['Subtotal', $price],
                 ['Descuentos', '0.00'],
-                ['IVA', $tax->toDecimalString()],
-                ['Total a pagar', $total->toDecimalString()],
+                ['IVA', $tax],
+                ['Total a pagar', $total],
                 ['Tarifa aplicada', '0.00 %'],
                 ['Responsabilidad emisor', $policy->issuerVatResponsibility()],
                 ['Leyenda', $policy->issuerLegend()],
@@ -91,13 +100,17 @@ class BillingTaxAuditCommand extends Command
         );
 
         // Comprobaciones explícitas del contrato exigido.
+        // Valor que produciría la extracción del 19 % sobre este importe: es el
+        // que NO debe aparecer por ningún lado (para 80000 → 67226.89).
+        $extracted = number_format(round($priceCents / 1.19) / 100, 2, '.', '');
+
         $checks = [
-            'subtotal == precio comercial' => $price->equals($price),
-            'IVA == 0' => $tax->isZero(),
-            'total == precio comercial' => $total->equals($price),
-            'no existe tasa 19' => $policy->effectiveBasisPoints(null) !== 1900,
-            'no hay extracción de IVA' => ! $price->toDecimalString() === false
-                && $price->toDecimalString() !== '67226.89',
+            'subtotal == precio comercial' => $price === $fmt($priceCents),
+            'IVA == 0' => $taxCents === 0,
+            'total == precio comercial' => $totalCents === $priceCents,
+            'no existe tasa 19' => $policy->defaultVatRate() === 0.0
+                && $policy->effectiveBasisPoints(null) === 0,
+            'no hay extracción de IVA (≠ '.$extracted.')' => $price !== $extracted,
         ];
         foreach ($checks as $label => $ok) {
             $this->line(sprintf('  [%s] %s', $ok ? 'OK' : 'FALLA', $label));
@@ -114,7 +127,7 @@ class BillingTaxAuditCommand extends Command
 
         $rows = [];
         foreach (ElectronicInvoice::orderBy('id')->get() as $i) {
-            $tax = Money::fromAmount($i->tax_total);
+            $taxCents = (int) round(((float) $i->tax_total) * 100);
             $rows[] = [
                 $i->id,
                 $i->full_number ?: '—',
@@ -122,7 +135,7 @@ class BillingTaxAuditCommand extends Command
                 $i->subtotal,
                 $i->tax_total,
                 $i->total,
-                $tax->isZero() ? 'correcta' : 'DISCRIMINA IVA',
+                $taxCents === 0 ? 'correcta' : 'DISCRIMINA IVA',
             ];
         }
 
@@ -155,11 +168,15 @@ class BillingTaxAuditCommand extends Command
 
         $changed = 0;
         foreach ($pending as $invoice) {
-            $oldSubtotal = Money::fromAmount($invoice->subtotal);
-            $oldTax = Money::fromAmount($invoice->tax_total);
-            $total = Money::fromAmount($invoice->total);
+            $fmt = static fn ($v): string => number_format((float) $v, 2, '.', '');
+            $oldSubtotalC = (int) round(((float) $invoice->subtotal) * 100);
+            $oldTaxC = (int) round(((float) $invoice->tax_total) * 100);
+            $totalC = (int) round(((float) $invoice->total) * 100);
+            $oldSubtotal = $fmt($invoice->subtotal);
+            $oldTax = $fmt($invoice->tax_total);
+            $total = $fmt($invoice->total);
 
-            if ($oldTax->isZero() && $oldSubtotal->equals($total)) {
+            if ($oldTaxC === 0 && $oldSubtotalC === $totalC) {
                 $this->line("  #{$invoice->id} ya cumple la política. Sin cambios.");
 
                 continue;
@@ -168,13 +185,11 @@ class BillingTaxAuditCommand extends Command
             // El TOTAL cobrado al cliente es intocable: es lo que ya se pagó.
             // Lo que se corrige es el desglose: todo el total pasa a subtotal.
             $newSubtotal = $total;
-            $newTax = Money::zero();
+            $newTax = '0.00';
 
             $this->line(sprintf(
                 '  #%-3d  antes: subtotal=%s IVA=%s total=%s  →  después: subtotal=%s IVA=%s total=%s',
-                $invoice->id,
-                $oldSubtotal->toDecimalString(), $oldTax->toDecimalString(), $total->toDecimalString(),
-                $newSubtotal->toDecimalString(), $newTax->toDecimalString(), $total->toDecimalString(),
+                $invoice->id, $oldSubtotal, $oldTax, $total, $newSubtotal, $newTax, $total,
             ));
 
             if ($dry) {
@@ -185,15 +200,14 @@ class BillingTaxAuditCommand extends Command
 
             DB::transaction(function () use ($invoice, $newSubtotal, $newTax, $oldSubtotal, $oldTax, $policy) {
                 $invoice->forceFill([
-                    'subtotal' => $newSubtotal->toDatabase(),
-                    'tax_total' => $newTax->toDatabase(),
+                    'subtotal' => $newSubtotal,
+                    'tax_total' => $newTax,
                     // Deja constancia auditable de la reconstrucción.
                     'failure_reason' => sprintf(
                         'Snapshot fiscal reconstruido el %s: subtotal %s→%s, IVA %s→0.00 '
                         .'(política %s, responsabilidad %s). Total cobrado sin cambios.',
                         now()->toDateTimeString(),
-                        $oldSubtotal->toDecimalString(), $newSubtotal->toDecimalString(),
-                        $oldTax->toDecimalString(),
+                        $oldSubtotal, $newSubtotal, $oldTax,
                         $policy->toSnapshot()['policy_version'],
                         $policy->issuerVatResponsibility(),
                     ),
