@@ -10,11 +10,13 @@ use Illuminate\Console\Command;
 /**
  * Ensaya la representación tributaria contra el ambiente SANDBOX de Factus.
  *
- * Por qué existe: Iron Body es responsabilidad 49 (no responsable de IVA) y la
- * API rechaza el payload cuando el ítem no declara un tributo, pero las dos
- * únicas formas que acepta —tarifa 0 % o `is_excluded`— clasificarían el
- * servicio como exento o excluido, lo que sería falso ante la DIAN. Ese ensayo
- * hay que poder repetirlo sin arriesgar un documento real.
+ * Por qué existe: el contador confirmó que las membresías son EXENTAS de IVA y
+ * Factus confirmó que un exento se declara como IVA al 0 %
+ * (`[{code:'01', rate:'0.00'}]`). Antes de emitir un solo documento real hay
+ * que comprobar contra el proveedor que ese contrato valida y que el
+ * comprobante devuelto conserva el precio comercial: $80.000 → base 80.000,
+ * IVA 0, total 80.000. Ese ensayo hay que poder repetirlo sin arriesgar un
+ * documento real.
  *
  * El comando se niega a ejecutarse contra producción por tres vías
  * independientes: el ambiente declarado, el endpoint configurado y el rango de
@@ -141,9 +143,10 @@ class BillingTestFactusSandboxCommand extends Command
                 'discount_rate' => 0,
                 'unit_measure_code' => (string) ($defaults['unit_measure_code'] ?? '94'),
                 'standard_code' => (string) ($defaults['standard_code'] ?? '999'),
-                // Deliberadamente SIN bloque `taxes`: la política del emisor lo
-                // resuelve en FactusClient::normalizeTaxes(). Aquí no se decide
-                // ninguna clasificación tributaria.
+                // Deliberadamente SIN bloque `taxes`: lo fija la política en
+                // FactusClient::normalizeTaxes() (exento, IVA al 0 %). Así la
+                // sonda prueba el MISMO camino que una factura real, en vez de
+                // un payload escrito a mano que podría no coincidir.
             ]],
         ];
     }
@@ -158,14 +161,23 @@ class BillingTestFactusSandboxCommand extends Command
         // El valor que produciría extraer el 19 %: no debe aparecer.
         $extracted = number_format(round($amountCents / 1.19) / 100, 2, '.', '');
 
+        // Bloque de tributos que la política inyectará en cada ítem al salir por
+        // FactusClient::normalizeTaxes(). Se verifica aquí, antes de enviar.
+        $taxes = $policy->itemTaxes();
+        $tax = $taxes[0] ?? [];
+
         $checks = [
             'precio = '.$price => $payload['items'][0]['price'] === $price,
             'subtotal = '.$price => ($payload['subtotal'] ?? $price) === $price,
             'IVA = 0' => $policy->effectiveBasisPoints(null) === 0,
             'total = '.$price => ($payload['total'] ?? $price) === $price,
-            'sin tarifa 19' => ! str_contains($json, '19.00') && ! str_contains($json, '"rate"'),
+            'tratamiento EXENTO' => $policy->itemTaxTreatment() === TaxPolicy::TREATMENT_EXEMPT,
+            'tributo declarado code=01' => ($tax['code'] ?? null) === '01',
+            'tarifa declarada 0.00' => ($tax['rate'] ?? null) === '0.00',
+            'sin tarifa 19' => ! str_contains($json, '19.00'),
             'sin extracción de IVA (≠ '.$extracted.')' => ! str_contains($json, $extracted),
-            'is_excluded no inferido' => ! str_contains($json, 'is_excluded'),
+            'sin is_excluded' => ! str_contains($json, 'is_excluded')
+                && ! array_key_exists('is_excluded', $tax),
             'referencia marcada como prueba' => str_starts_with(
                 (string) $payload['reference_code'], SandboxProbe::REFERENCE_PREFIX,
             ),
@@ -237,8 +249,9 @@ class BillingTestFactusSandboxCommand extends Command
             }
 
             $this->line('');
-            $this->line('  Este rechazo es el hallazgo, no un fallo del comando: reproduce en');
-            $this->line('  sandbox el bloqueo pendiente de respuesta de Halltec, sin tocar la DIAN.');
+            $this->line('  Este rechazo es el hallazgo, no un fallo del comando: significa que');
+            $this->line('  el contrato tributario ensayado NO es el que el proveedor acepta.');
+            $this->line('  No se emitió en producción y no se tocó la DIAN.');
 
             return self::FAILURE;
         }
@@ -254,22 +267,46 @@ class BillingTestFactusSandboxCommand extends Command
         $this->line('  IVA         : '.($totals['tax_amount'] ?? '—'));
         $this->line('  total       : '.($totals['total'] ?? '—'));
 
+        // Representación del tributo TAL COMO LA REGISTRÓ el proveedor. Es la
+        // comprobación que importa: no basta con que el total cuadre, el
+        // documento debe declarar IVA 0 % y NO estar marcado como excluido.
+        $tax = $data['taxes'][0] ?? ($data['items'][0]['taxes'][0] ?? []);
+        $rate = $tax['rates'][0]['rate'] ?? ($tax['rate'] ?? null);
+        $tributeCode = $tax['tribute']['code'] ?? ($tax['code'] ?? null);
+        $isExcluded = array_key_exists('is_excluded', $tax) ? (bool) $tax['is_excluded'] : null;
+
+        $this->line('  tributo     : '.($tributeCode ?? '—'));
+        $this->line('  tarifa      : '.($rate ?? '—').' %');
+        $this->line('  is_excluded : '.($isExcluded === null ? '— (ausente)' : var_export($isExcluded, true)));
+        $this->line('  CUFE        : '.($data['cufe'] ?? '—'));
+
         $expected = number_format($amountCents / 100, 2, '.', '');
         $taxCents = (int) round(((float) ($totals['tax_amount'] ?? 0)) * 100);
 
-        $ok = $taxCents === 0
+        $amountsOk = $taxCents === 0
             && (string) ($totals['taxable_amount'] ?? '') === $expected
             && (string) ($totals['total'] ?? '') === $expected;
 
+        // El proveedor puede omitir `is_excluded`; lo inaceptable es true.
+        $treatmentOk = $isExcluded !== true
+            && ($rate === null || (float) $rate === 0.0);
+
+        $ok = $amountsOk && $treatmentOk;
+
         $this->line('');
         $this->line(sprintf('  [%s] el documento devuelto conserva el precio comercial con IVA 0',
-            $ok ? 'OK' : 'FALLA'));
+            $amountsOk ? 'OK' : 'FALLA'));
+        $this->line(sprintf('  [%s] tratamiento EXENTO (tarifa 0 %%) y NO excluido',
+            $treatmentOk ? 'OK' : 'FALLA'));
 
-        // Consulta del documento y su XML, para dejar constancia de lo que
-        // realmente quedó registrado (no de lo que creemos haber enviado).
+        // Consulta del documento, su PDF y su XML, para dejar constancia de lo
+        // que realmente quedó registrado (no de lo que creemos haber enviado).
         if ($number !== null) {
             $check = $client->getInvoice((string) $number);
             $this->line('  GET documento  -> HTTP '.$check['status']);
+
+            $pdf = $client->downloadPdf((string) $number);
+            $this->line('  GET PDF        -> HTTP '.$pdf['status']);
 
             $xml = $client->downloadXml((string) $number);
             $this->line('  GET XML        -> HTTP '.$xml['status']);

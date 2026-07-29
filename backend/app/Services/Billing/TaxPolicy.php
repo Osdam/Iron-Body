@@ -28,9 +28,19 @@ use RuntimeException;
  * No se modifican datos: los planes conservan su `tax_rate_id`. La política
  * gana en tiempo de cotización, así que revertirla es cambiar una variable de
  * entorno, no una migración de datos.
+ *
+ * REPRESENTACIÓN ANTE EL PROVEEDOR. Aparte de cuánto se cobra (0), está cómo se
+ * DECLARA. El contador confirmó que las membresías son EXENTAS de IVA y el
+ * soporte de Factus confirmó que un exento se envía como IVA con tarifa 0 %:
+ * `[{code:'01', rate:'0.00'}]`. Nunca `is_excluded`, que es otro tratamiento.
+ * {@see itemTaxes()} es el ÚNICO sitio que construye ese bloque, por la misma
+ * razón que {@see effectiveBasisPoints()} es el único que resuelve la tarifa.
  */
 class TaxPolicy
 {
+    /** Tratamiento aprobado: el ítem es exento (IVA declarado al 0 %). */
+    public const TREATMENT_EXEMPT = 'exempt';
+
     /** Código de responsabilidad tributaria del emisor (RUT). */
     public function issuerVatResponsibility(): string
     {
@@ -83,6 +93,47 @@ class TaxPolicy
         return $this->collectsVat()
             ? (float) config('tax_policy.default_vat_rate', 0)
             : 0.0;
+    }
+
+    // ── Representación del tributo en el ítem ───────────────────────────────
+
+    /** Tratamiento declarado del ítem. Hoy, por decisión del contador: exento. */
+    public function itemTaxTreatment(): string
+    {
+        return (string) config('tax_policy.item_tax_treatment', self::TREATMENT_EXEMPT);
+    }
+
+    /** Código de tributo IVA en el catálogo Factus/DIAN. */
+    public function exemptTaxCode(): string
+    {
+        return (string) config('tax_policy.exempt_tax_code', '01');
+    }
+
+    /** Tarifa del exento, como string con dos decimales («0.00»). */
+    public function exemptTaxRateString(): string
+    {
+        return (string) config('tax_policy.exempt_tax_rate', '0.00');
+    }
+
+    /**
+     * Bloque `items[].taxes` cuando NO se cobra IVA.
+     *
+     * Devuelve el tributo IVA con tarifa 0 %, que es como se representa un bien
+     * EXENTO. Deliberadamente NO devuelve `is_excluded` ni un array vacío:
+     *
+     *   - `is_excluded: true` declararía el servicio EXCLUIDO, un tratamiento
+     *     distinto del confirmado por el contador;
+     *   - omitir el bloque hace que Factus responda 422 («El campo código
+     *     tributo es obligatorio») y no declara tratamiento alguno.
+     *
+     * @return array<int,array<string,string>>
+     */
+    public function itemTaxes(?string $taxCode = null): array
+    {
+        return [[
+            'code' => $taxCode ?: $this->exemptTaxCode(),
+            'rate' => $this->exemptTaxRateString(),
+        ]];
     }
 
     /**
@@ -170,8 +221,11 @@ class TaxPolicy
             'issuer_is_vat_responsible' => $this->issuerIsVatResponsible(),
             'vat_collection_enabled' => $this->collectsVat(),
             'default_vat_rate' => $this->defaultVatRate(),
+            'item_tax_treatment' => $this->itemTaxTreatment(),
+            'item_tax_code' => $this->exemptTaxCode(),
+            'item_tax_rate' => $this->exemptTaxRateString(),
             'issuer_legend' => $this->issuerLegend(),
-            'policy_version' => (string) config('tax_policy.version', 'no-vat.2026.07'),
+            'policy_version' => (string) config('tax_policy.version', 'exempt-vat-0.2026.07'),
         ];
     }
 }

@@ -12,6 +12,22 @@
 |   - No se suma 19 %.            - No se extrae 19 % del precio.
 |   - El precio comercial se conserva: $80.000 factura $80.000.
 |
+| DECISIÓN TRIBUTARIA DEFINITIVA (contador de Iron Body + soporte Halltec/Factus)
+| ------------------------------------------------------------------------------
+| Las membresías se facturan como EXENTAS de IVA. Ante la API eso se declara
+| enviando el tributo IVA con tarifa 0 %:
+|
+|     "taxes": [{"code": "01", "rate": "0.00"}]
+|
+| `is_excluded` NO se usa: exento y excluido son tratamientos distintos ante la
+| DIAN, y el confirmado por el contador es EXENTO. La antigua omisión completa
+| del bloque `taxes` queda descartada — Factus respondía 422 («El campo código
+| tributo es obligatorio») y además no declaraba tratamiento alguno.
+|
+| Esto NO cambia ningún importe: la tarifa efectiva sigue siendo 0, así que el
+| precio comercial se conserva íntegro. Sólo cambia la REPRESENTACIÓN del
+| tributo en el ítem, que es lo que el proveedor exige para validar.
+|
 | Esta política GANA sobre `plans.tax_rate_id`, `products.tax_rate_id` y la
 | tabla `tax_rates`. No se migran datos: App\Services\Billing\TaxPolicy fuerza
 | la tarifa efectiva a 0, de modo que revertir es cambiar una variable de
@@ -44,6 +60,20 @@ return [
 
     'default_vat_rate' => (float) env('BILLING_DEFAULT_VAT_RATE', 0),
 
+    // -- Representación del tributo en el ítem (decisión definitiva) ----------
+    // `exempt` => taxes: [{code: '01', rate: '0.00'}]. Es el único tratamiento
+    // aprobado. Se deja env-driven para poder corregirlo sin desplegar si el
+    // contador cambiara el criterio, pero NO admite `excluded`: si algún día
+    // hiciera falta, sería una decisión nueva y debe escribirse como tal.
+    'item_tax_treatment' => env('BILLING_ITEM_TAX_TREATMENT', 'exempt'),
+
+    // Código de tributo IVA en el catálogo Factus/DIAN.
+    'exempt_tax_code' => (string) env('BILLING_EXEMPT_TAX_CODE', '01'),
+
+    // Tarifa como STRING con dos decimales: la API la espera así, y un float
+    // 0.0 se serializaría como `0` y no como `"0.00"`.
+    'exempt_tax_rate' => (string) env('BILLING_EXEMPT_TAX_RATE', '0.00'),
+
     // Leyenda legal para comprobantes, CRM y app.
     'issuer_legend' => env('BILLING_ISSUER_LEGEND', 'Emisor no responsable de IVA'),
 
@@ -63,6 +93,9 @@ return [
         env('BILLING_EMISSION_GUARD', true), FILTER_VALIDATE_BOOLEAN
     ),
 
-    'version' => 'no-vat.2026.07',
+    // Cambia con la política, no con el despliegue: queda congelado en el
+    // snapshot fiscal de cada comprobante para poder auditar años después bajo
+    // qué criterio se emitió.
+    'version' => 'exempt-vat-0.2026.07',
 
 ];

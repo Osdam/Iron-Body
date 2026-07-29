@@ -10,7 +10,8 @@ use RuntimeException;
 use Tests\TestCase;
 
 /**
- * El payload que sale hacia Factus no puede declarar IVA.
+ * El payload que sale hacia Factus no puede COBRAR IVA, y debe declarar el
+ * tratamiento correcto.
  *
  * Regresión de un defecto RESIDUAL encontrado en producción tras la primera
  * corrección: los importes ya salían bien (base = precio comercial, IVA = 0)
@@ -22,15 +23,23 @@ use Tests\TestCase;
  *
  * Es decir, se habría emitido un documento que declara 19 % con importe cero.
  *
- * CORRECCIÓN POSTERIOR (contador): el IVA cero proviene de la condición del
- * EMISOR —responsabilidad 49, no responsable— y NO de la naturaleza de los
- * productos. Marcar `is_excluded = true` afirmaría que el plan es un bien
- * jurídicamente excluido, lo que sería falso ante la DIAN. El ítem se declara
- * explícitamente NO excluido y sin tarifa.
+ * DECISIÓN DEFINITIVA (contador de Iron Body + soporte Halltec/Factus): las
+ * membresías se facturan como EXENTAS de IVA, y un exento se declara enviando
+ * el tributo IVA con tarifa 0 %:
+ *
+ *     "taxes": [{"code": "01", "rate": "0.00"}]
+ *
+ * Queda descartado `is_excluded` (excluido es otro tratamiento ante la DIAN) y
+ * queda descartada la omisión del bloque (Factus responde 422 «El campo código
+ * tributo es obligatorio»). Los importes NO cambian: $80.000 sigue facturando
+ * base 80.000, IVA 0, total 80.000.
  */
 class FactusPayloadNoVatTest extends TestCase
 {
     use RefreshDatabase;
+
+    /** Bloque de tributos exigido en cada ítem. */
+    private const EXEMPT = [['code' => '01', 'rate' => '0.00']];
 
     protected function setUp(): void
     {
@@ -43,6 +52,9 @@ class FactusPayloadNoVatTest extends TestCase
             'tax_policy.issuer_vat_responsibility' => '49',
             'tax_policy.issuer_is_vat_responsible' => false,
             'tax_policy.vat_collection_enabled' => false,
+            'tax_policy.item_tax_treatment' => TaxPolicy::TREATMENT_EXEMPT,
+            'tax_policy.exempt_tax_code' => '01',
+            'tax_policy.exempt_tax_rate' => '0.00',
         ]);
     }
 
@@ -88,31 +100,38 @@ class FactusPayloadNoVatTest extends TestCase
         ];
     }
 
-    // ── El defecto residual ───────────────────────────────────────────────
+    // ── El contrato tributario exigido ────────────────────────────────────
 
-    public function test_una_tarifa_del_19_se_retira_sin_declarar_exclusion(): void
+    public function test_una_tarifa_del_19_se_reemplaza_por_el_exento_al_cero(): void
     {
         $sent = $this->captureSentBody($this->payloadWithVatRate());
 
-        $this->assertArrayNotHasKey('taxes', $sent['items'][0]);
+        $this->assertSame(self::EXEMPT, $sent['items'][0]['taxes']);
     }
 
-    public function test_el_producto_no_se_clasifica_como_excluido_ni_exento(): void
+    public function test_el_item_declara_tributo_01_con_tarifa_cero(): void
     {
-        // La causa del IVA cero es el emisor, no la naturaleza del bien.
         $sent = $this->captureSentBody($this->payloadWithVatRate());
-        $json = json_encode($sent);
+        $tax = $sent['items'][0]['taxes'][0];
 
-        $this->assertArrayNotHasKey('taxes', $sent['items'][0]);
-        $this->assertStringNotContainsString('"is_excluded":true', $json);
-        $this->assertStringNotContainsString('exento', strtolower($json));
-        $this->assertStringNotContainsString('excluido', strtolower($json));
+        $this->assertSame('01', $tax['code'], 'el tributo debe ser IVA (01)');
+        $this->assertSame('0.00', $tax['rate'], 'la tarifa del exento es 0.00');
+        // La tarifa viaja como STRING con dos decimales, no como número.
+        $this->assertStringContainsString('"rate":"0.00"', json_encode($sent['items']));
     }
 
-    public function test_si_apareciera_is_excluded_true_la_emision_se_bloquea(): void
+    public function test_no_se_usa_is_excluded_en_ninguna_forma(): void
+    {
+        $sent = $this->captureSentBody($this->payloadWithVatRate());
+
+        $this->assertArrayNotHasKey('is_excluded', $sent['items'][0]['taxes'][0]);
+        $this->assertStringNotContainsString('is_excluded', json_encode($sent));
+    }
+
+    public function test_si_apareciera_is_excluded_la_emision_se_bloquea(): void
     {
         // Defensa en profundidad: si un camino futuro inyectara la exclusión
-        // despues de normalizar, la barrera lo rechaza en vez de emitirlo.
+        // después de normalizar, la barrera lo rechaza en vez de emitirlo.
         $policy = app(TaxPolicy::class);
         $client = app(FactusClient::class);
 
@@ -121,7 +140,23 @@ class FactusPayloadNoVatTest extends TestCase
         $payload['items'][0]['taxes'] = [['is_excluded' => true]];
 
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessageMatches('/EXCLUIDO/');
+        $this->expectExceptionMessageMatches('/is_excluded/');
+        $ref->invoke($client, $payload, $policy);
+    }
+
+    public function test_una_linea_sin_tributo_se_bloquea(): void
+    {
+        // Omitir el bloque es lo que Factus rechazaba con 422; si algo lo
+        // vaciara después de normalizar, no debe salir a la red.
+        $policy = app(TaxPolicy::class);
+        $client = app(FactusClient::class);
+
+        $ref = new \ReflectionMethod($client, 'assertPayloadIsTaxFree');
+        $payload = $this->payloadWithVatRate();
+        $payload['items'][0]['taxes'] = [];
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageMatches('/no declara tributo/');
         $ref->invoke($client, $payload, $policy);
     }
 
@@ -156,12 +191,11 @@ class FactusPayloadNoVatTest extends TestCase
         $this->assertSame('80000.00', $sent['items'][0]['price']);
     }
 
-    public function test_el_cuerpo_enviado_no_contiene_la_cadena_19(): void
+    public function test_el_cuerpo_enviado_no_contiene_la_tarifa_19(): void
     {
         $sent = $this->captureSentBody($this->payloadWithVatRate());
 
         $this->assertStringNotContainsString('19.00', json_encode($sent['items']));
-        $this->assertStringNotContainsString('"rate"', json_encode($sent['items']));
     }
 
     public function test_el_precio_comercial_no_se_altera(): void
@@ -171,6 +205,8 @@ class FactusPayloadNoVatTest extends TestCase
 
         $this->assertSame('80000.00', $sent['items'][0]['price']);
         $this->assertSame('1', $sent['items'][0]['quantity']);
+        // 80000/1.19: el valor que produciría extraer el IVA. No debe aparecer.
+        $this->assertStringNotContainsString('67226.89', json_encode($sent));
     }
 
     public function test_varias_lineas_se_normalizan_todas(): void
@@ -187,20 +223,20 @@ class FactusPayloadNoVatTest extends TestCase
         $sent = $this->captureSentBody($payload);
 
         foreach ($sent['items'] as $i => $item) {
-            $this->assertArrayNotHasKey('taxes', $item, "línea {$i}");
+            $this->assertSame(self::EXEMPT, $item['taxes'], "línea {$i}");
         }
     }
 
-    public function test_una_linea_marcada_excluida_por_el_builder_se_corrige(): void
+    public function test_una_linea_marcada_excluida_se_convierte_en_exenta(): void
     {
-        // El builder desplegado marca is_excluded=true cuando la tarifa es 0.
-        // Esa clasificación es falsa para un emisor no responsable: se corrige.
+        // El builder anterior marcaba is_excluded=true cuando la tarifa era 0.
+        // El tratamiento confirmado es EXENTO, así que se reemplaza.
         $payload = $this->payloadWithVatRate();
         $payload['items'][0]['taxes'] = [['is_excluded' => true]];
 
         $sent = $this->captureSentBody($payload);
 
-        $this->assertArrayNotHasKey('taxes', $sent['items'][0]);
+        $this->assertSame(self::EXEMPT, $sent['items'][0]['taxes']);
     }
 
     // ── Barrera sobre los importes ────────────────────────────────────────
@@ -256,8 +292,20 @@ class FactusPayloadNoVatTest extends TestCase
 
         $this->assertFalse($policy->collectsVat());
         $this->assertSame('49', $policy->issuerVatResponsibility());
+        $this->assertSame(self::EXEMPT, $policy->itemTaxes());
 
         $sent = $this->captureSentBody($this->payloadWithVatRate());
-        $this->assertArrayNotHasKey('taxes', $sent['items'][0]);
+        $this->assertSame($policy->itemTaxes(), $sent['items'][0]['taxes']);
+    }
+
+    public function test_el_snapshot_fiscal_registra_el_tratamiento_exento(): void
+    {
+        // Queda congelado en cada comprobante: es lo que permite auditar años
+        // después bajo qué criterio se emitió.
+        $snapshot = app(TaxPolicy::class)->toSnapshot();
+
+        $this->assertSame(TaxPolicy::TREATMENT_EXEMPT, $snapshot['item_tax_treatment']);
+        $this->assertSame('01', $snapshot['item_tax_code']);
+        $this->assertSame('0.00', $snapshot['item_tax_rate']);
     }
 }

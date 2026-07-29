@@ -68,17 +68,26 @@ class FactusClient
     }
 
     /**
-     * Ajusta `items[].taxes` a la política fiscal DEL EMISOR.
+     * Ajusta `items[].taxes` a la política fiscal vigente.
      *
-     * Distinción jurídica que este método hace explícita: Iron Body no cobra
-     * IVA porque el EMISOR figura con responsabilidad 49 (no responsable), NO
-     * porque sus planes o servicios sean bienes exentos, excluidos o no
-     * gravados. Son cosas distintas ante la DIAN.
+     * Decisión definitiva (contador de Iron Body + soporte Halltec/Factus): las
+     * membresías se facturan como EXENTAS de IVA, y un exento se declara ante la
+     * API como el tributo IVA con tarifa 0 %:
      *
-     * Por eso NO se marca `is_excluded = true`: eso afirmaría que el producto
-     * está excluido por su naturaleza, lo que sería una clasificación falsa.
-     * El ítem se declara explícitamente NO excluido y sin tarifa; la condición
-     * del emisor vive en sus datos fiscales, no en la naturaleza del producto.
+     *     "taxes": [{"code": "01", "rate": "0.00"}]
+     *
+     * Qué se descartó y por qué:
+     *
+     *   - `is_excluded: true` declara el bien EXCLUIDO. Exento y excluido son
+     *     tratamientos distintos ante la DIAN, y el confirmado es EXENTO.
+     *   - Omitir el bloque entero (lo que hacía este método antes) provocaba
+     *     HTTP 422 «El campo código tributo es obligatorio» y, aun aceptándose,
+     *     no habría declarado tratamiento alguno.
+     *
+     * Esto NO altera importes: la tarifa es 0, así que el precio comercial se
+     * conserva íntegro ($80.000 → base 80.000, IVA 0, total 80.000). Se
+     * SOBRESCRIBE cualquier bloque que traiga el payload: la representación del
+     * tributo la fija la política, no quien construyó el documento.
      *
      * @param  array<string,mixed>  $payload
      * @return array<string,mixed>
@@ -91,19 +100,10 @@ class FactusClient
             return $payload;
         }
 
+        $exempt = $policy->itemTaxes();
+
         foreach (array_keys($payload['items']) as $i) {
-            // Se OMITE el bloque de tributos por completo.
-            //
-            // Factus rechaza `is_excluded: false` sin acompañarlo de `code` y
-            // `rate` (HTTP 422: «El campo código tributo es obligatorio»), y
-            // las dos únicas alternativas que acepta afirmarían algo falso:
-            //   - `[{code:'01', rate:'0.00'}]` declara IVA con tarifa 0 %, que
-            //     es como se representa un bien EXENTO;
-            //   - `[{is_excluded:true}]` declara el bien EXCLUIDO.
-            // Ninguna describe la realidad: el bien es gravable y la causa del
-            // IVA cero es la responsabilidad 49 del EMISOR. Omitir el bloque no
-            // afirma naturaleza tributaria alguna sobre el producto.
-            unset($payload['items'][$i]['taxes']);
+            $payload['items'][$i]['taxes'] = $exempt;
         }
 
         $this->assertPayloadIsTaxFree($payload, $policy);
@@ -116,7 +116,8 @@ class FactusClient
      *
      *   - un importe de IVA mayor que cero;
      *   - una tarifa mayor que cero en cualquier línea;
-     *   - un `is_excluded = true` (clasificación falsa del producto);
+     *   - un `is_excluded` en cualquier forma (tratamiento no aprobado);
+     *   - una línea sin el bloque de tributos exento;
      *   - un subtotal que no coincida con el precio comercial de las líneas.
      *
      * Se aborta en vez de corregir: maquillar cifras produciría un documento
@@ -129,7 +130,18 @@ class FactusClient
         $responsibility = $policy->issuerVatResponsibility();
 
         foreach (($payload['items'] ?? []) as $n => $item) {
-            foreach (($item['taxes'] ?? []) as $tax) {
+            // Tras la normalización toda línea DEBE declarar el exento. Una
+            // línea sin tributo es la que Factus rechazaba con 422, y dejarla
+            // pasar significaría emitir sin declarar tratamiento.
+            if (($item['taxes'] ?? []) === []) {
+                throw new \RuntimeException(sprintf(
+                    'Bloqueo tributario: el ítem %d no declara tributo. El '
+                    .'tratamiento aprobado es EXENTO (IVA %s al %s %%).',
+                    $n + 1, $policy->exemptTaxCode(), $policy->exemptTaxRateString(),
+                ));
+            }
+
+            foreach ($item['taxes'] as $tax) {
                 if ((float) ($tax['rate'] ?? 0) > 0) {
                     throw new \RuntimeException(sprintf(
                         'Bloqueo tributario: tarifa %s%% en el ítem %d. El emisor es '
@@ -138,13 +150,18 @@ class FactusClient
                     ));
                 }
 
-                if (($tax['is_excluded'] ?? false) === true) {
+                // `is_excluded` no se usa en NINGUNA forma: el tratamiento
+                // confirmado por el contador es EXENTO (IVA al 0 %), y excluido
+                // es otra cosa ante la DIAN. Se bloquea incluso en false, para
+                // que nadie lo reintroduzca «inofensivamente».
+                if (array_key_exists('is_excluded', $tax)) {
                     throw new \RuntimeException(sprintf(
-                        'Bloqueo tributario: el ítem %d se declara EXCLUIDO. El IVA cero '
-                        .'proviene de la responsabilidad %s del emisor, no de la '
-                        .'naturaleza del producto; marcarlo excluido sería una '
-                        .'clasificación falsa ante la DIAN.',
-                        $n + 1, $responsibility,
+                        'Bloqueo tributario: el ítem %d usa `is_excluded`. El tratamiento '
+                        .'confirmado por el contador es EXENTO (IVA %s al %s %%), no '
+                        .'excluido; son tratamientos distintos ante la DIAN. Emisor '
+                        .'responsabilidad %s.',
+                        $n + 1, $policy->exemptTaxCode(), $policy->exemptTaxRateString(),
+                        $responsibility,
                     ));
                 }
             }
@@ -300,10 +317,12 @@ class FactusClient
      * Los GET quedan permitidos a propósito: la reconciliación fiscal necesita
      * leer del proveedor, y leer no crea documentos ni consume consecutivos.
      *
-     * Contexto: Iron Body es responsabilidad 49 (no responsable de IVA) y las
-     * dos únicas representaciones que la API acepta —tarifa 0 % o
-     * `is_excluded`— clasificarían el servicio como exento o excluido, lo que
-     * sería falso. Hasta que Halltec confirme el contrato correcto, no se emite.
+     * Contexto: el tratamiento ya está decidido (EXENTO, IVA al 0 % — ver
+     * {@see normalizeTaxes()}), pero decidido no es lo mismo que verificado
+     * contra el proveedor. Este interruptor sigue cerrado hasta que la prueba
+     * de sandbox demuestre que Factus valida el documento y que el PDF/XML
+     * muestran base íntegra, IVA 0 y tarifa 0 %. Se abre poniendo
+     * FACTUS_TAX_DECISION_CONFIRMED=true, y eso es una decisión humana.
      *
      * @throws \RuntimeException
      */
@@ -328,11 +347,11 @@ class FactusClient
 
         throw new \RuntimeException(sprintf(
             'Emisión bloqueada: se intentó POST %s con la decisión tributaria sin '
-            .'confirmar (FACTUS_TAX_DECISION_CONFIRMED=false). El emisor es '
-            .'responsabilidad %s (no responsable de IVA) y no existe todavía una '
-            .'representación del tributo aceptada por el proveedor que no '
-            .'clasifique el servicio como exento o excluido. No se emitió ningún '
-            .'documento y no se consumió consecutivo.',
+            .'confirmar (FACTUS_TAX_DECISION_CONFIRMED=false). El tratamiento está '
+            .'decidido (EXENTO: IVA al 0 %%, emisor responsabilidad %s), pero aún no '
+            .'se ha verificado contra el proveedor en sandbox que el documento valide '
+            .'con base íntegra e IVA 0. No se emitió ningún documento y no se '
+            .'consumió consecutivo.',
             $path,
             app(TaxPolicy::class)->issuerVatResponsibility(),
         ));
