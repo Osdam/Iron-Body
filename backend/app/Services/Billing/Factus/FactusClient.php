@@ -60,13 +60,17 @@ class FactusClient
     }
 
     /**
-     * Ajusta `items[].taxes` a la política fiscal del emisor.
+     * Ajusta `items[].taxes` a la política fiscal DEL EMISOR.
      *
-     * Con emisor NO responsable, cada línea se declara sin tributo
-     * (`is_excluded`) en lugar de con una tarifa positiva. NO se tocan importes:
-     * si un total llevara IVA, {@see assertNoVatAmounts()} aborta en vez de
-     * maquillarlo — corregir cifras en silencio produciría un documento legal
-     * cuyo origen nadie podría explicar.
+     * Distinción jurídica que este método hace explícita: Iron Body no cobra
+     * IVA porque el EMISOR figura con responsabilidad 49 (no responsable), NO
+     * porque sus planes o servicios sean bienes exentos, excluidos o no
+     * gravados. Son cosas distintas ante la DIAN.
+     *
+     * Por eso NO se marca `is_excluded = true`: eso afirmaría que el producto
+     * está excluido por su naturaleza, lo que sería una clasificación falsa.
+     * El ítem se declara explícitamente NO excluido y sin tarifa; la condición
+     * del emisor vive en sus datos fiscales, no en la naturaleza del producto.
      *
      * @param  array<string,mixed>  $payload
      * @return array<string,mixed>
@@ -80,27 +84,98 @@ class FactusClient
         }
 
         foreach (array_keys($payload['items']) as $i) {
-            $payload['items'][$i]['taxes'] = [['is_excluded' => true]];
+            // Sin tarifa (no se cobra IVA) y sin declarar exclusión del bien.
+            $payload['items'][$i]['taxes'] = [['is_excluded' => false]];
         }
 
-        $this->assertNoVatAmounts($payload, $policy);
+        $this->assertPayloadIsTaxFree($payload, $policy);
 
         return $payload;
     }
 
     /**
-     * Última barrera antes del HTTP: ningún total del payload puede llevar IVA.
+     * Barrera PRE-HTTP. Rechaza, antes de cualquier POST:
+     *
+     *   - un importe de IVA mayor que cero;
+     *   - una tarifa mayor que cero en cualquier línea;
+     *   - un `is_excluded = true` (clasificación falsa del producto);
+     *   - un subtotal que no coincida con el precio comercial de las líneas.
+     *
+     * Se aborta en vez de corregir: maquillar cifras produciría un documento
+     * legal cuyo origen nadie podría explicar.
      *
      * @param  array<string,mixed>  $payload
      */
-    private function assertNoVatAmounts(array $payload, TaxPolicy $policy): void
+    private function assertPayloadIsTaxFree(array $payload, TaxPolicy $policy): void
     {
+        $responsibility = $policy->issuerVatResponsibility();
+
+        foreach (($payload['items'] ?? []) as $n => $item) {
+            foreach (($item['taxes'] ?? []) as $tax) {
+                if ((float) ($tax['rate'] ?? 0) > 0) {
+                    throw new \RuntimeException(sprintf(
+                        'Bloqueo tributario: tarifa %s%% en el ítem %d. El emisor es '
+                        .'responsabilidad %s (no responsable de IVA).',
+                        (string) $tax['rate'], $n + 1, $responsibility,
+                    ));
+                }
+
+                if (($tax['is_excluded'] ?? false) === true) {
+                    throw new \RuntimeException(sprintf(
+                        'Bloqueo tributario: el ítem %d se declara EXCLUIDO. El IVA cero '
+                        .'proviene de la responsabilidad %s del emisor, no de la '
+                        .'naturaleza del producto; marcarlo excluido sería una '
+                        .'clasificación falsa ante la DIAN.',
+                        $n + 1, $responsibility,
+                    ));
+                }
+            }
+        }
+
         foreach (['tax_amount', 'total_tax', 'taxes_amount'] as $key) {
             if (isset($payload[$key])) {
                 $policy->assertNoVat($payload[$key], 'payload de factura');
             }
         }
+
+        $this->assertSubtotalMatchesLines($payload, $responsibility);
     }
+
+    /**
+     * El subtotal declarado debe ser el precio comercial de las líneas menos
+     * descuentos. Si difiere, algo volvió a repartir base/IVA por detrás.
+     *
+     * @param  array<string,mixed>  $payload
+     */
+    private function assertSubtotalMatchesLines(array $payload, string $responsibility): void
+    {
+        if (! isset($payload['subtotal'])) {
+            return; // Factus lo calcula; nada que contrastar.
+        }
+
+        $linesCents = 0;
+        foreach (($payload['items'] ?? []) as $item) {
+            $price = (float) ($item['price'] ?? 0);
+            $qty = (float) ($item['quantity'] ?? 1);
+            $discountRate = (float) ($item['discount_rate'] ?? 0);
+            $gross = $price * $qty;
+            $linesCents += (int) round($gross * (1 - $discountRate / 100) * 100);
+        }
+
+        $declaredCents = (int) round(((float) $payload['subtotal']) * 100);
+
+        // 1 peso de tolerancia absorbe el redondeo comercial.
+        if (abs($declaredCents - $linesCents) > 100) {
+            throw new \RuntimeException(sprintf(
+                'Bloqueo tributario: el subtotal declarado (%s) no coincide con el '
+                .'precio comercial de las líneas (%s). Emisor responsabilidad %s.',
+                number_format($declaredCents / 100, 2, '.', ''),
+                number_format($linesCents / 100, 2, '.', ''),
+                $responsibility,
+            ));
+        }
+    }
+
 
     /** Emite una nota crédito. POST. */
     public function createCreditNote(array $payload): array

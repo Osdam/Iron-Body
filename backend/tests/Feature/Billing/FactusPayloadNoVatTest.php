@@ -21,8 +21,12 @@ use Tests\TestCase;
  *     'taxes' => [['code' => '01', 'rate' => '19.00']]
  *
  * Es decir, se habría emitido un documento que declara 19 % con importe cero.
- * `FactusClient::createInvoice()` —embudo único de todo POST— normaliza ahora
- * cada línea a `is_excluded` y verifica que ningún total lleve impuesto.
+ *
+ * CORRECCIÓN POSTERIOR (contador): el IVA cero proviene de la condición del
+ * EMISOR —responsabilidad 49, no responsable— y NO de la naturaleza de los
+ * productos. Marcar `is_excluded = true` afirmaría que el plan es un bien
+ * jurídicamente excluido, lo que sería falso ante la DIAN. El ítem se declara
+ * explícitamente NO excluido y sin tarifa.
  */
 class FactusPayloadNoVatTest extends TestCase
 {
@@ -86,11 +90,70 @@ class FactusPayloadNoVatTest extends TestCase
 
     // ── El defecto residual ───────────────────────────────────────────────
 
-    public function test_una_tarifa_del_19_se_normaliza_a_excluida(): void
+    public function test_una_tarifa_del_19_se_retira_sin_declarar_exclusion(): void
     {
         $sent = $this->captureSentBody($this->payloadWithVatRate());
 
-        $this->assertSame([['is_excluded' => true]], $sent['items'][0]['taxes']);
+        $this->assertSame([['is_excluded' => false]], $sent['items'][0]['taxes']);
+    }
+
+    public function test_el_producto_no_se_clasifica_como_excluido_ni_exento(): void
+    {
+        // La causa del IVA cero es el emisor, no la naturaleza del bien.
+        $sent = $this->captureSentBody($this->payloadWithVatRate());
+        $json = json_encode($sent);
+
+        $this->assertNotSame(true, $sent['items'][0]['taxes'][0]['is_excluded']);
+        $this->assertStringNotContainsString('"is_excluded":true', $json);
+        $this->assertStringNotContainsString('exento', strtolower($json));
+        $this->assertStringNotContainsString('excluido', strtolower($json));
+    }
+
+    public function test_si_apareciera_is_excluded_true_la_emision_se_bloquea(): void
+    {
+        // Defensa en profundidad: si un camino futuro inyectara la exclusión
+        // despues de normalizar, la barrera lo rechaza en vez de emitirlo.
+        $policy = app(TaxPolicy::class);
+        $client = app(FactusClient::class);
+
+        $ref = new \ReflectionMethod($client, 'assertPayloadIsTaxFree');
+        $payload = $this->payloadWithVatRate();
+        $payload['items'][0]['taxes'] = [['is_excluded' => true]];
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageMatches('/EXCLUIDO/');
+        $ref->invoke($client, $payload, $policy);
+    }
+
+    public function test_el_emisor_declara_responsabilidad_49(): void
+    {
+        $this->assertSame('49', app(TaxPolicy::class)->issuerVatResponsibility());
+        $this->assertFalse(app(TaxPolicy::class)->issuerIsVatResponsible());
+    }
+
+    public function test_un_subtotal_que_no_es_el_precio_comercial_se_bloquea(): void
+    {
+        // 80000/1.19 = 67226.89 → sería una extracción de IVA encubierta.
+        Http::fake(['*oauth/token*' => Http::response(['access_token' => 't', 'expires_in' => 3600], 200)]);
+
+        $payload = $this->payloadWithVatRate();
+        $payload['subtotal'] = '67226.89';
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageMatches('/no coincide con el precio comercial/');
+
+        app(FactusClient::class)->createInvoice($payload);
+    }
+
+    public function test_un_subtotal_igual_al_precio_comercial_pasa(): void
+    {
+        $payload = $this->payloadWithVatRate();
+        $payload['subtotal'] = '80000.00';
+
+        $sent = $this->captureSentBody($payload);
+
+        $this->assertSame('80000.00', $sent['subtotal']);
+        $this->assertSame('80000.00', $sent['items'][0]['price']);
     }
 
     public function test_el_cuerpo_enviado_no_contiene_la_cadena_19(): void
@@ -124,18 +187,20 @@ class FactusPayloadNoVatTest extends TestCase
         $sent = $this->captureSentBody($payload);
 
         foreach ($sent['items'] as $i => $item) {
-            $this->assertSame([['is_excluded' => true]], $item['taxes'], "línea {$i}");
+            $this->assertSame([['is_excluded' => false]], $item['taxes'], "línea {$i}");
         }
     }
 
-    public function test_una_linea_ya_excluida_se_mantiene(): void
+    public function test_una_linea_marcada_excluida_por_el_builder_se_corrige(): void
     {
+        // El builder desplegado marca is_excluded=true cuando la tarifa es 0.
+        // Esa clasificación es falsa para un emisor no responsable: se corrige.
         $payload = $this->payloadWithVatRate();
         $payload['items'][0]['taxes'] = [['is_excluded' => true]];
 
         $sent = $this->captureSentBody($payload);
 
-        $this->assertSame([['is_excluded' => true]], $sent['items'][0]['taxes']);
+        $this->assertSame([['is_excluded' => false]], $sent['items'][0]['taxes']);
     }
 
     // ── Barrera sobre los importes ────────────────────────────────────────
@@ -193,6 +258,6 @@ class FactusPayloadNoVatTest extends TestCase
         $this->assertSame('49', $policy->issuerVatResponsibility());
 
         $sent = $this->captureSentBody($this->payloadWithVatRate());
-        $this->assertArrayHasKey('is_excluded', $sent['items'][0]['taxes'][0]);
+        $this->assertFalse($sent['items'][0]['taxes'][0]['is_excluded']);
     }
 }
