@@ -3,6 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Models\ElectronicInvoice;
+use App\Models\InvoiceFiscalReconciliation;
+use App\Services\Billing\FiscalReconciliationService;
 use App\Services\Billing\TaxPolicy;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -16,8 +18,13 @@ use Illuminate\Support\Facades\DB;
  *                       importe bajo la política vigente y lo imprime. Sirve
  *                       como prueba documental antes de reactivar la emisión.
  *
- *   --audit             Revisa las facturas existentes y señala cuáles
- *                       discriminan IVA. No modifica ninguna.
+ *   --audit             Contrasta cada factura contra el documento fiscal real
+ *                       del proveedor (GET, de solo lectura) y señala las
+ *                       discrepancias. Para un documento validado la AUTORIDAD
+ *                       es el proveedor, no las columnas locales. Deja
+ *                       constancia en la bitácora de reconciliación y termina
+ *                       con código distinto de cero si hay hallazgos. No
+ *                       modifica ningún importe contable.
  *
  *   --rebuild-pending   Recalcula el snapshot fiscal de las facturas en estado
  *                       `pending` para que reflejen la política vigente
@@ -32,6 +39,7 @@ class BillingTaxAuditCommand extends Command
         {--candidate= : Importe comercial para generar un desglose candidato (sin emitir)}
         {--audit : Audita las facturas existentes e informa cuáles discriminan IVA}
         {--rebuild-pending : Recalcula el snapshot fiscal de las facturas pendientes}
+        {--apply-provider-values : RESERVADO. Sobrescribiría los importes locales con los del proveedor; exige aprobación del contador}
         {--dry-run : Muestra qué cambiaría sin escribir nada}';
 
     protected $description = 'Audita el IVA de las facturas y reconstruye las pendientes bajo la política vigente.';
@@ -46,22 +54,45 @@ class BillingTaxAuditCommand extends Command
         $this->line('');
 
         $did = false;
+        $findings = 0;
 
         if ($amount = $this->option('candidate')) {
             $this->candidate($policy, (string) $amount);
             $did = true;
         }
         if ($this->option('audit')) {
-            $this->audit($policy);
+            $findings = $this->audit($policy);
             $did = true;
         }
         if ($this->option('rebuild-pending')) {
             $this->rebuildPending($policy);
             $did = true;
         }
+        if ($this->option('apply-provider-values')) {
+            // Camino explícitamente distinto de --audit, y hoy cerrado.
+            // Sobrescribir los importes locales con los del proveedor cambiaría
+            // los libros: es una decisión contable, no técnica.
+            $this->error('Sincronizar los importes locales con los del proveedor requiere');
+            $this->error('aprobación escrita del contador. La auditoría solo deja constancia.');
+
+            return self::FAILURE;
+        }
 
         if (! $did) {
             $this->warn('Sin acción. Usa --candidate=80000, --audit o --rebuild-pending.');
+
+            return self::SUCCESS;
+        }
+
+        if ($findings > 0) {
+            // Código distinto de cero: si esto corre en CI o en un cron, una
+            // discrepancia fiscal no puede pasar como ejecución correcta.
+            $this->error(sprintf(
+                'Auditoría con %d hallazgo%s sin resolver.',
+                $findings, $findings === 1 ? '' : 's',
+            ));
+
+            return self::FAILURE;
         }
 
         return self::SUCCESS;
@@ -120,32 +151,99 @@ class BillingTaxAuditCommand extends Command
         $this->line('');
     }
 
-    /** Informe de las facturas existentes. No modifica nada. */
-    private function audit(TaxPolicy $policy): void
+    /**
+     * Informe de las facturas existentes contrastadas contra el PROVEEDOR.
+     *
+     * Antes este método leía `electronic_invoices.tax_total` y daba por buena
+     * cualquier factura con IVA local 0,00. Eso produjo un FALSO NEGATIVO: la
+     * IBFE1 figura localmente con IVA 0,00 mientras el documento validado ante
+     * la DIAN discrimina 12.773,11 (19 %). Auditar contra la propia base es
+     * auditar la copia, no el original.
+     *
+     * Ahora, para un documento validado, la autoridad es el proveedor. La base
+     * local solo sirve para exhibir la discrepancia.
+     *
+     * No modifica ningún importe contable: únicamente consulta por GET y añade
+     * filas a la bitácora de reconciliación.
+     *
+     * @return int Número de facturas con discrepancia o sin evidencia.
+     */
+    private function audit(TaxPolicy $policy): int
     {
-        $this->info('AUDITORÍA DE FACTURAS EXISTENTES');
+        $this->info('AUDITORÍA FISCAL — el proveedor es la autoridad para documentos validados');
+        $this->line('');
+
+        $service = app(FiscalReconciliationService::class);
 
         $rows = [];
-        foreach (ElectronicInvoice::orderBy('id')->get() as $i) {
-            $taxCents = (int) round(((float) $i->tax_total) * 100);
+        $providerTaxCents = 0;
+        $mismatches = 0;
+        $unavailable = 0;
+        $withVat = 0;
+
+        foreach (ElectronicInvoice::orderBy('id')->get() as $invoice) {
+            $r = $service->reconcile($invoice, actor: 'billing:tax-audit');
+
+            $providerTaxCents += $r->providerTaxCents();
+
+            if ($r->providerTaxCents() > 0) {
+                $withVat++;
+            }
+
+            $status = match ($r->reconciliation_status) {
+                InvoiceFiscalReconciliation::STATUS_MISMATCH => '✗ DISCREPANCIA',
+                InvoiceFiscalReconciliation::STATUS_RECONCILED => '✓ conciliada',
+                default => '· sin evidencia',
+            };
+
+            if ($r->isMismatch()) {
+                $mismatches++;
+            } elseif ($r->reconciliation_status === InvoiceFiscalReconciliation::STATUS_UNAVAILABLE
+                && $r->local_status === 'validated') {
+                // Una `pending` o `rejected` sin documento fiscal es lo normal y
+                // no cuenta como fallo. Una VALIDADA que no se pudo consultar sí:
+                // significa que hay un documento ante la DIAN sobre el que no
+                // tenemos evidencia.
+                $unavailable++;
+            }
+
             $rows[] = [
-                $i->id,
-                $i->full_number ?: '—',
-                $i->status instanceof \BackedEnum ? $i->status->value : (string) $i->status,
-                $i->subtotal,
-                $i->tax_total,
-                $i->total,
-                $taxCents === 0 ? 'correcta' : 'DISCRIMINA IVA',
+                $invoice->id,
+                $r->invoice_number ?: '—',
+                $r->local_status,
+                $r->local_subtotal,
+                $r->local_tax_total,
+                $r->provider_taxable_amount ?? '—',
+                $r->provider_tax_amount ?? '—',
+                $r->provider_rate ?? '—',
+                $status,
             ];
         }
 
-        $this->table(['id', 'número', 'estado', 'subtotal', 'IVA', 'total', 'diagnóstico'], $rows);
+        $this->table([
+            'id', 'número', 'estado',
+            'local_subtotal', 'local_tax_total',
+            'prov_base_gravable', 'prov_tax_total', 'prov_tarifa',
+            'reconciliación',
+        ], $rows);
 
-        $bad = ElectronicInvoice::where('tax_total', '>', 0)->count();
-        $this->warn("Facturas que discriminan IVA: {$bad}");
-        $this->line('  Las ya validadas ante la DIAN NO se modifican: su corrección');
-        $this->line('  exige nota crédito y es decisión del contador.');
         $this->line('');
+        $this->warn(sprintf(
+            'IVA discriminado según el PROVEEDOR: %s  (%d factura%s)',
+            number_format($providerTaxCents / 100, 2, '.', ''),
+            $withVat,
+            $withVat === 1 ? '' : 's',
+        ));
+        $this->line(sprintf('  Discrepancias local↔proveedor:        %d', $mismatches));
+        $this->line(sprintf('  Validadas sin evidencia del proveedor: %d', $unavailable));
+        $this->line('');
+        $this->line('  Los documentos ya validados ante la DIAN NO se modifican: su');
+        $this->line('  corrección exige nota crédito y es decisión del contador.');
+        $this->line('  Los importes contables locales tampoco se tocan; esta auditoría');
+        $this->line('  solo deja constancia auditable de la divergencia.');
+        $this->line('');
+
+        return $mismatches + $unavailable;
     }
 
     /**
