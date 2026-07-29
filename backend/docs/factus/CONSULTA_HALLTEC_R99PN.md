@@ -110,10 +110,39 @@ Consultando `GET /v2/bills/{number}`, el bloque `company` de la respuesta devuel
 tenemos por tanto forma de verificar desde la API con qué responsabilidad está registrado el emisor,
 lo que motiva la primera pregunta.
 
+## 3-bis. El perfil del emisor YA está correcto
+
+Consultando `GET /v2/companies`, el perfil registrado en nuestra cuenta es:
+
+```json
+{
+  "responsibilities":     [{ "code": "R-99-PN", "name": "No responsable" }],
+  "tribute":              { "code": "ZZ", "name": "No aplica" },
+  "legal_organization":   { "code": "2",  "name": "Persona Natural" },
+  "economic_activity":    "9311"
+}
+```
+
+Es decir, **el emisor ya figura como R-99-PN con tributo de empresa ZZ**, que entendemos es
+exactamente la configuración correspondiente a la responsabilidad 49 del RUT.
+
+Aun así, la API sigue exigiendo un tributo a nivel de ítem. Lo hemos verificado en el ambiente
+de **sandbox**, con el mismo perfil de empresa y sin tocar producción:
+
+```
+POST /v2/bills/validate  (sandbox)
+→ HTTP 422
+   items.0.taxes.0: "El campo items.0.taxes es obligatorio."
+```
+
+Esto descarta que se trate de una configuración incorrecta de la cuenta y sitúa la pregunta en el
+contrato de la API.
+
 ## 4. Preguntas concretas
 
-1. ¿Está el perfil del emisor de esta cuenta configurado correctamente como **R-99-PN**
-   (no responsable de IVA)? Si no lo está, ¿pueden ajustarlo?
+1. Dado que el emisor **ya está registrado como R-99-PN con tributo ZZ**, ¿por qué la API sigue
+   exigiendo `items[].taxes` con código y tarifa? ¿Hay alguna configuración adicional en la cuenta
+   que deba habilitarse?
 
 2. ¿Cuál es el **payload exacto** que debemos enviar para un servicio gravable vendido por un
    emisor no responsable de IVA, de modo que el documento quede con subtotal 80.000, IVA 0 y
