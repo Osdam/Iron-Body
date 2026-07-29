@@ -369,7 +369,10 @@ class InvoiceDtoBuilder
     /** Validación segura de email (consumidor final puede no traer email). */
     public static function hasValidEmail(mixed $email): bool
     {
-        return is_string($email) && filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
+        // No basta con que el formato sea correcto: `socio-XXX@ironbody.local`
+        // lo es y no existe. `send_email=true` hacia ahí deja al cliente sin su
+        // comprobante y sin señal de que algo falló.
+        return is_string($email) && InvoiceEmail::esEntregable($email);
     }
 
     /** Construye el bloque customer V2 (natural vs jurídica). */

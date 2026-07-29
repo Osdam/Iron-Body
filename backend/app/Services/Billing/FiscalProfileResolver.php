@@ -33,12 +33,20 @@ class FiscalProfileResolver
         $profile = $this->findProfile($user?->id, $member?->id, $member?->identity_id);
 
         if ($profile && $profile->isComplete()) {
-            return $this->fromProfile($profile);
+            return $this->fromProfile($profile, $payment->invoice_email);
         }
 
         return $this->consumerFinal(
             contactName: $member?->full_name ?? $user?->name,
-            contactEmail: $member?->email ?? $user?->email,
+            // El correo de entrega tiene que existir de verdad. `socio-XXX@
+            // ironbody.local` es un relleno del sistema: si se colara aquí, el
+            // comprobante se «enviaría» a un buzón inexistente y el pago
+            // quedaría marcado como notificado.
+            contactEmail: InvoiceEmail::primeroEntregable(
+                $payment->invoice_email,
+                $member?->email,
+                $user?->email,
+            ),
             contactPhone: $member?->phone ?? $user?->phone,
         );
     }
@@ -50,12 +58,12 @@ class FiscalProfileResolver
         $profile = $this->findProfile(null, $member?->id, $member?->identity_id);
 
         if ($profile && $profile->isComplete()) {
-            return $this->fromProfile($profile);
+            return $this->fromProfile($profile, $sale->invoice_email);
         }
 
         return $this->consumerFinal(
             contactName: $sale->customer_name ?? $member?->full_name,
-            contactEmail: $member?->email,
+            contactEmail: InvoiceEmail::primeroEntregable($sale->invoice_email, $member?->email),
             contactPhone: $member?->phone,
         );
     }
@@ -69,8 +77,15 @@ class FiscalProfileResolver
             ->first();
     }
 
-    /** @return array<string,mixed> */
-    private function fromProfile(FiscalProfile $p): array
+    /**
+     * Factura NOMINATIVA: identidad fiscal real del cliente.
+     *
+     * `$solicitado` es el correo que el cliente indicó al pedir la factura y
+     * tiene prioridad sobre el del perfil: es el que dio para ESTA compra.
+     *
+     * @return array<string,mixed>
+     */
+    private function fromProfile(FiscalProfile $p, ?string $solicitado = null): array
     {
         return [
             'doc_type'         => $p->doc_type,
@@ -79,7 +94,12 @@ class FiscalProfileResolver
             'name'             => $p->legal_name ?: ($p->user?->name ?? $p->member?->full_name),
             'legal_name'       => $p->legal_name,
             'person_type'      => $p->person_type,
-            'email'            => $p->email ?: ($p->user?->email ?? $p->member?->email),
+            'email'            => InvoiceEmail::primeroEntregable(
+                $solicitado,
+                $p->email,
+                $p->user?->email,
+                $p->member?->email,
+            ),
             'phone'            => $p->phone,
             'address'          => $p->address,
             'city_code'        => $p->city_code,

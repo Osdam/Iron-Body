@@ -218,8 +218,10 @@ class InvoiceEmissionGuard
 
         if (! $origin['wants_invoice']) {
             throw $this->reject(sprintf(
-                'la factura de la solicitud #%d no fue solicitada por el cliente '
-                .'(invoice_requested = false).',
+                'la factura de la solicitud #%d no fue solicitada por el cliente. '
+                .'La solicitud debe constar en el origen económico '
+                .'(payments/product_sales.invoice_requested) o, para pagos de Wompi '
+                .'anteriores, en metadata.wants_invoice. No se factura lo que nadie pidió.',
                 $invoice->id,
             ));
         }

@@ -7,6 +7,7 @@ use App\Models\Payment;
 use App\Models\PaymentTransaction;
 use App\Models\Plan;
 use App\Models\User;
+use App\Services\Billing\InvoiceEmail;
 use App\Services\Billing\InvoicingService;
 use App\Services\NotificationService;
 use Carbon\Carbon;
@@ -90,7 +91,7 @@ class PaymentMembershipActivator
             // se fuerza la emisión a Factus aunque auto_emit global esté apagado:
             // mismo camino que la emisión manual del CRM (force=true). El envío del
             // comprobante por correo lo resuelve el job según la config de billing.
-            $wantsInvoice = (bool) ($tx->metadata['wants_invoice'] ?? false);
+            $wantsInvoice = self::persistInvoiceRequest($payment, $tx);
             app(InvoicingService::class)->enqueueForPayment($payment, force: $wantsInvoice);
         } catch (Throwable $e) {
             Log::warning('Activación de membresía post-pago falló', [
@@ -99,6 +100,40 @@ class PaymentMembershipActivator
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Traslada al PAGO la solicitud de factura que viajó en la transacción.
+     *
+     * El cliente marcó la casilla en el checkout y eso quedó en
+     * `metadata.wants_invoice`. A partir de aquí la intención vive en el pago,
+     * que es el hecho económico: así la factura puede emitirse (o reintentarse
+     * meses después) sin depender de que la transacción de pasarela siga
+     * existiendo o conserve su metadata.
+     *
+     * Idempotente: `marcarFacturaSolicitada()` conserva la primera fecha, de
+     * modo que un webhook repetido o una reconciliación no crean una segunda
+     * solicitud ni mueven la fecha original. Se mantiene `metadata` intacta.
+     *
+     * El correo se toma primero del que indicó el cliente y, si no sirve, del
+     * de la transacción — nunca se inventa uno: si ninguno es entregable, la
+     * factura se emite igual pero sin envío, y el fallo queda visible.
+     */
+    private static function persistInvoiceRequest(Payment $payment, PaymentTransaction $tx): bool
+    {
+        if ((bool) ($tx->metadata['wants_invoice'] ?? false) !== true) {
+            return (bool) $payment->invoice_requested;
+        }
+
+        $email = InvoiceEmail::primeroEntregable(
+            $tx->metadata['invoice_email'] ?? null,
+            $tx->customer_email,
+            $tx->customer['email'] ?? null,
+        );
+
+        $payment->marcarFacturaSolicitada($email);
+
+        return true;
     }
 
     /**
