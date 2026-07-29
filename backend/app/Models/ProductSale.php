@@ -49,6 +49,10 @@ class ProductSale extends Model
         // su semántica histórica de mostrador.
         'base_amount', 'tax_amount', 'gross_amount',
         'pricing_mode', 'pricing_rules_version', 'priced_at',
+        // Solicitud EXPRESA de factura electrónica (ver migración
+        // 2026_07_29_000003). Una venta de mostrador no crea transacción de
+        // pasarela, así que la intención de facturar se guarda aquí.
+        'invoice_requested', 'invoice_email', 'invoice_requested_at',
     ];
 
     protected $casts = [
@@ -59,7 +63,34 @@ class ProductSale extends Model
         'delivered_at' => 'datetime',
         'cancelled_at' => 'datetime',
         'priced_at' => 'datetime',
+        'invoice_requested' => 'boolean',
+        'invoice_requested_at' => 'datetime',
     ];
+
+    /**
+     * Marca la solicitud de factura conservando la PRIMERA fecha. Idempotente:
+     * reintentos y doble clic no generan una segunda solicitud.
+     */
+    public function marcarFacturaSolicitada(?string $email = null): bool
+    {
+        $email = \App\Services\Billing\InvoiceEmail::normalizar($email);
+
+        if ($this->invoice_requested && $this->invoice_requested_at !== null) {
+            if ($email !== null && blank($this->invoice_email)) {
+                $this->forceFill(['invoice_email' => $email])->save();
+            }
+
+            return false;
+        }
+
+        $this->forceFill([
+            'invoice_requested' => true,
+            'invoice_email' => $email ?: $this->invoice_email,
+            'invoice_requested_at' => $this->invoice_requested_at ?? now(),
+        ])->save();
+
+        return true;
+    }
 
     /** ¿La venta trae el snapshot fiscal congelado (Pricing V2)? */
     public function hasFinancialSnapshot(): bool

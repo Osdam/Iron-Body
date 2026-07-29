@@ -28,13 +28,48 @@ class Payment extends Model
         'base_amount', 'tax_amount', 'gross_amount', 'discount_amount',
         'tax_rate_id', 'tax_rate', 'pricing_mode', 'pricing_rules_version',
         'currency', 'priced_at',
+        // Solicitud EXPRESA de factura electrónica. Vive aquí —en el hecho
+        // económico— y no sólo en la transacción de pasarela, porque un pago en
+        // efectivo no crea transacción y aun así puede requerir factura.
+        'invoice_requested', 'invoice_email', 'invoice_requested_at',
     ];
 
     protected $casts = [
         'amount' => 'float',
         'paid_at' => 'datetime',
         'priced_at' => 'datetime',
+        'invoice_requested' => 'boolean',
+        'invoice_requested_at' => 'datetime',
     ];
+
+    /**
+     * Marca la solicitud de factura conservando la PRIMERA vez que se pidió.
+     *
+     * Idempotente a propósito: un callback repetido de la pasarela o un doble
+     * toque en la app no debe mover `invoice_requested_at`, que es la fecha con
+     * la que se justifica la emisión ante una revisión.
+     */
+    public function marcarFacturaSolicitada(?string $email = null): bool
+    {
+        $email = \App\Services\Billing\InvoiceEmail::normalizar($email);
+
+        if ($this->invoice_requested && $this->invoice_requested_at !== null) {
+            // Ya solicitada: sólo se completa el correo si faltaba.
+            if ($email !== null && blank($this->invoice_email)) {
+                $this->forceFill(['invoice_email' => $email])->save();
+            }
+
+            return false;
+        }
+
+        $this->forceFill([
+            'invoice_requested' => true,
+            'invoice_email' => $email ?: $this->invoice_email,
+            'invoice_requested_at' => $this->invoice_requested_at ?? now(),
+        ])->save();
+
+        return true;
+    }
 
     protected static function booted(): void
     {
