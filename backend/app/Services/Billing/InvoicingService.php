@@ -82,6 +82,24 @@ class InvoicingService
             throw new InvalidArgumentException("Fuente no encontrada: {$sourceType}#{$sourceId}");
         }
 
+        // Sin solicitud expresa del cliente no se encola NADA.
+        //
+        // Antes el botón «Emitir factura» del CRM despachaba el job de todos
+        // modos y era la barrera —ya dentro del job— la que rechazaba. Eso es lo
+        // que produjo la solicitud #18: un job condenado que dejó la venta
+        // V-000003 en «Procesando» sin salida. Fallar aquí devuelve un 422 con
+        // el motivo en pantalla, en vez de un estado que hay que rescatar luego.
+        //
+        // El botón no puede ser la vía para convertir a posteriori una venta sin
+        // solicitud en una factura: la solicitud se marca al crear la venta.
+        if (! (bool) ($model->invoice_requested ?? false)) {
+            throw new InvalidArgumentException(
+                'Esta venta no fue creada con solicitud de factura electrónica. '
+                .'La factura debe solicitarse al registrar la venta, marcando la casilla '
+                .'«El cliente solicita factura electrónica» antes de cobrar.'
+            );
+        }
+
         return $model instanceof ProductSale
             ? $this->enqueueForSale($model, $force)
             : $this->enqueueForPayment($model, $force);

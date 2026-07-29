@@ -341,6 +341,12 @@ class CajaController extends Controller
             'receipt_url' => $sale->receipt_url,
             'notes' => $sale->notes,
             'cashier_user_id' => $sale->cashier_user_id,
+            // Sin esto el CRM no puede saber si la venta pidió factura, y el
+            // botón «Factura» aparecería para ventas que la barrera va a
+            // rechazar (el caso de la solicitud #18).
+            'invoice_requested' => (bool) $sale->invoice_requested,
+            'invoice_email' => $sale->invoice_email,
+            'invoice_requested_at' => optional($sale->invoice_requested_at)->toIso8601String(),
         ]);
     }
 }

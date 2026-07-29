@@ -13,6 +13,7 @@ use App\Services\Billing\FactusPayloadSanitizer;
 use App\Services\Billing\FactusResponseMapper;
 use App\Services\Billing\FiscalProfileResolver;
 use App\Services\Billing\InvoiceDtoBuilder;
+use App\Services\Billing\InvoiceEmissionGuard;
 use App\Services\Billing\InvoicePdfStorageService;
 use App\Services\Billing\InvoiceReconciler;
 use App\Services\Billing\InvoicingService;
@@ -194,13 +195,6 @@ class EmitElectronicInvoiceJob implements ShouldQueue
             'has_customer_email' => InvoiceDtoBuilder::hasValidEmail($built['snapshot']['customer_email'] ?? null),
         ]);
 
-        // ÚLTIMA BARRERA antes del POST real. Doble comprobación deliberada:
-        // sobre el total del comprobante y sobre cada línea del payload. Si algo
-        // llegara hasta aquí con IVA, no sale a la DIAN.
-        $taxPolicy = app(TaxPolicy::class);
-        $taxPolicy->assertNoVatAmount($built['snapshot']['tax_total'] ?? 0, 'factura '.$invoice->uuid);
-        $this->assertPayloadHasNoVat($payload, $taxPolicy, $invoice->uuid);
-
         // request_payload SANEADO y persistido ANTES de enviarlo: si la llamada
         // falla o el proceso muere, queda la evidencia exacta de lo que se iba a
         // transmitir. Las 17 facturas previas no lo guardaron y eso impidió
@@ -209,10 +203,65 @@ class EmitElectronicInvoiceJob implements ShouldQueue
             'request_payload' => app(FactusPayloadSanitizer::class)->sanitize($payload),
         ])->save();
 
+        // ── BARRERAS NO REINTENTABLES, ANTES DE TOCAR EL ESTADO ──────────────
+        //
+        // Se ejecutan aquí, y no dentro del POST, por un caso real: la solicitud
+        // #18 (venta V-000003) quedó ATASCADA EN `processing` para siempre. El
+        // job marcaba processing y sólo entonces la barrera de emisión rechazaba
+        // el documento; al reintentar, la guarda de idempotencia veía
+        // `processing` —que no está en canRetry()— y hacía `return`. La cola daba
+        // el job por bueno, `failed()` no se llamaba nunca y el estado terminal
+        // no se escribía jamás: ni número, ni error, ni motivo.
+        //
+        // Un rechazo tributario, una venta sin solicitud del cliente o unos datos
+        // fiscales incompletos NO se reintentan: volverían a fallar igual. Se
+        // marca `error` con el motivo real y se termina sin relanzar.
+        $taxPolicy = app(TaxPolicy::class);
+        try {
+            // Origen económico, solicitud expresa, ambiente, duplicados.
+            app(InvoiceEmissionGuard::class)->assertMayEmit($payload);
+
+            // Doble comprobación tributaria: total del comprobante y cada línea.
+            $taxPolicy->assertNoVatAmount($built['snapshot']['tax_total'] ?? 0, 'factura '.$invoice->uuid);
+            $this->assertPayloadHasNoVat($payload, $taxPolicy, $invoice->uuid);
+        } catch (Throwable $e) {
+            $invoice->markError($e->getMessage());
+            $invoicing->recordLog(
+                $invoice,
+                InvoiceLogAction::EMIT,
+                'error',
+                $e->getMessage(),
+            );
+            Log::warning('billing.emission_blocked', [
+                'invoice_id' => $invoice->id,
+                'reason' => $e->getMessage(),
+            ]);
+
+            return; // Deliberado: reintentar a ciegas repetiría el mismo rechazo.
+        }
+
+        // A partir de aquí sólo quedan fallos TÉCNICOS (red, 5xx, proceso muerto),
+        // que sí merecen backoff. `processing` se marca inmediatamente antes del
+        // POST y nunca sin salida: el catch escribe el estado terminal.
         $invoice->markProcessing();
 
         $startedAt = microtime(true);
-        $result = $client->createInvoice($payload);
+        try {
+            $result = $client->createInvoice($payload);
+        } catch (Throwable $e) {
+            // Sin esto, una excepción aquí dejaba la solicitud en `processing`
+            // y el reintento se rendía en silencio contra ese mismo estado.
+            $invoice->markError('Fallo al emitir: '.$e->getMessage());
+            $invoicing->recordLog(
+                $invoice,
+                InvoiceLogAction::EMIT,
+                'error',
+                $e->getMessage(),
+                endpoint: 'bills/validate',
+            );
+
+            throw $e; // Técnico: la cola reintenta con backoff desde `error`.
+        }
         $durationMs = (int) ((microtime(true) - $startedAt) * 1000);
 
         $invoicing->recordLog(
@@ -323,10 +372,25 @@ class EmitElectronicInvoiceJob implements ShouldQueue
         return $n !== '' && ! str_contains($n, '-');
     }
 
-    /** La cola agotó los reintentos: dejar constancia dura del error. */
+    /**
+     * La cola agotó los reintentos: dejar constancia dura del error.
+     *
+     * Saca la solicitud de `processing` sin condiciones. `markError()` no
+     * consulta el estado previo, así que es la última red que garantiza que
+     * ninguna solicitud se quede colgada en un estado no reintentable — el
+     * defecto que dejó la #18 atascada indefinidamente.
+     *
+     * Nunca toca una factura ya VALIDADA: si el fallo ocurrió después de que
+     * Factus la aceptara, el documento fiscal existe y su estado manda.
+     */
     public function failed(Throwable $e): void
     {
         $invoice = ElectronicInvoice::find($this->invoiceId);
-        $invoice?->markError('Reintentos agotados: '.$e->getMessage());
+
+        if ($invoice === null || $invoice->status->isFinal()) {
+            return;
+        }
+
+        $invoice->markError('Reintentos agotados: '.$e->getMessage());
     }
 }
