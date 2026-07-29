@@ -2,6 +2,7 @@
 
 namespace App\Services\Billing\Factus;
 
+use App\Services\Billing\TaxPolicy;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -41,9 +42,64 @@ class FactusClient
     }
 
     /** Emite (valida) una factura electrónica. POST — no se reintenta a ciegas. */
+    /**
+     * Emite una factura de venta.
+     *
+     * Antes de salir a la red el payload pasa por {@see normalizeTaxes()}: este
+     * es el embudo ÚNICO por el que viaja cualquier comprobante, así que aquí se
+     * garantiza que ningún documento declare una tarifa de IVA que Iron Body
+     * —responsabilidad 49, no responsable— no cobra.
+     *
+     * Motivo: el constructor del DTO ya calculaba importe de IVA = 0, pero
+     * seguía leyendo la tasa CRUDA del catálogo para decidir `taxes[]`, con lo
+     * que habría emitido un documento declarando 19 % con importe cero.
+     */
     public function createInvoice(array $payload): array
     {
-        return $this->send('post', self::PATH_CREATE_INVOICE, $payload);
+        return $this->send('post', self::PATH_CREATE_INVOICE, $this->normalizeTaxes($payload));
+    }
+
+    /**
+     * Ajusta `items[].taxes` a la política fiscal del emisor.
+     *
+     * Con emisor NO responsable, cada línea se declara sin tributo
+     * (`is_excluded`) en lugar de con una tarifa positiva. NO se tocan importes:
+     * si un total llevara IVA, {@see assertNoVatAmounts()} aborta en vez de
+     * maquillarlo — corregir cifras en silencio produciría un documento legal
+     * cuyo origen nadie podría explicar.
+     *
+     * @param  array<string,mixed>  $payload
+     * @return array<string,mixed>
+     */
+    private function normalizeTaxes(array $payload): array
+    {
+        $policy = app(TaxPolicy::class);
+
+        if ($policy->collectsVat() || empty($payload['items'])) {
+            return $payload;
+        }
+
+        foreach (array_keys($payload['items']) as $i) {
+            $payload['items'][$i]['taxes'] = [['is_excluded' => true]];
+        }
+
+        $this->assertNoVatAmounts($payload, $policy);
+
+        return $payload;
+    }
+
+    /**
+     * Última barrera antes del HTTP: ningún total del payload puede llevar IVA.
+     *
+     * @param  array<string,mixed>  $payload
+     */
+    private function assertNoVatAmounts(array $payload, TaxPolicy $policy): void
+    {
+        foreach (['tax_amount', 'total_tax', 'taxes_amount'] as $key) {
+            if (isset($payload[$key])) {
+                $policy->assertNoVat($payload[$key], 'payload de factura');
+            }
+        }
     }
 
     /** Emite una nota crédito. POST. */
