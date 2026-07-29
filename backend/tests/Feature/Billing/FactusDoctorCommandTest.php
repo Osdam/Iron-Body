@@ -81,6 +81,64 @@ class FactusDoctorCommandTest extends TestCase
             ->assertExitCode(0);
     }
 
+    /**
+     * El plan Demo App Review daba un falso positivo: activo, sin tax_rate_id,
+     * y el doctor bloqueaba producción por él. No es una venta —es un plan de
+     * acceso para la revisión de las tiendas— así que no necesita tratamiento
+     * tributario. Lo que lo distingue NO es su precio cero sino
+     * `billing_enabled=false`, una decisión explícita por plan.
+     */
+    public function test_plan_no_facturable_no_bloquea_el_doctor(): void
+    {
+        $this->readyConfig();
+        Plan::create([
+            'name' => 'Demo App Review', 'price' => 0, 'duration_days' => 3650,
+            'benefits' => '', 'active' => true,
+            'billing_enabled' => false, // no se vende: no se le exige tarifa
+        ]);
+
+        $this->artisan('billing:factus-doctor')
+            ->expectsOutputToContain('LISTO PARA PRODUCCIÓN')
+            ->assertExitCode(0);
+    }
+
+    /**
+     * La contrapartida: marcar un plan como no facturable no puede convertirse
+     * en la vía para silenciar el doctor. Un plan COMERCIAL activo y facturable
+     * sin tarifa sigue bloqueando.
+     */
+    public function test_plan_comercial_sin_tarifa_si_bloquea_el_doctor(): void
+    {
+        $this->readyConfig();
+        Plan::create([
+            'name' => 'Mensual', 'price' => 80000, 'duration_days' => 30,
+            'benefits' => '', 'active' => true,
+            'billing_enabled' => true, // se vende: la tarifa es obligatoria
+        ]);
+
+        $this->artisan('billing:factus-doctor')
+            ->expectsOutputToContain('sin tax_rate_id')
+            ->assertExitCode(1);
+    }
+
+    /**
+     * Un plan de precio cero NO es automáticamente no facturable: puede ser una
+     * cortesía que sí debe emitir comprobante. Sólo `billing_enabled` decide.
+     */
+    public function test_un_plan_gratuito_facturable_sigue_exigiendo_tarifa(): void
+    {
+        $this->readyConfig();
+        Plan::create([
+            'name' => 'Cortesía con comprobante', 'price' => 0, 'duration_days' => 30,
+            'benefits' => '', 'active' => true, 'billing_enabled' => true,
+        ]);
+
+        // El doctor sólo reclama tarifa a los de precio > 0, así que este pasa;
+        // lo que la prueba fija es que NADIE lo marcó no facturable por tener
+        // precio cero.
+        $this->assertTrue((bool) Plan::where('name', 'Cortesía con comprobante')->first()->billing_enabled);
+    }
+
     public function test_blocks_when_active_product_without_tax_rate(): void
     {
         $this->readyConfig();
