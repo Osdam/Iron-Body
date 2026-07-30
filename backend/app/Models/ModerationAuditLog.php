@@ -54,6 +54,13 @@ class ModerationAuditLog extends Model
     /** Sesiones cortadas al aplicar una sanción de acceso completo. */
     public const ACTION_SESSIONS_REVOKED = 'sessions_revoked';
 
+    /**
+     * Contenido RETIRADO. Distinto de `content_quarantined`: la cuarentena es
+     * temporal y reversible por sí sola, la retirada es una decisión firme.
+     * Registrarlas con la misma etiqueta impedía distinguirlas en la auditoría.
+     */
+    public const ACTION_CONTENT_REMOVED = 'content_removed';
+
     protected $fillable = [
         'actor_type',
         'actor_id',

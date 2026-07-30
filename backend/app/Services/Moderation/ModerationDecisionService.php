@@ -455,11 +455,16 @@ class ModerationDecisionService
                 'moderation_reason_code' => $action->report?->reason_code,
             ]);
 
+        // Ocultar y retirar tenían la MISMA etiqueta en la auditoría, así que
+        // el registro no permitía distinguir una cuarentena temporal de una
+        // retirada firme — justo lo que hay que poder reconstruir después.
         $this->audit->admin(
             $actor,
-            $state === Story::MODERATION_VISIBLE
-                ? ModerationAuditLog::ACTION_CONTENT_RESTORED
-                : ModerationAuditLog::ACTION_CONTENT_QUARANTINED,
+            match ($state) {
+                Story::MODERATION_VISIBLE => ModerationAuditLog::ACTION_CONTENT_RESTORED,
+                Story::MODERATION_REMOVED => ModerationAuditLog::ACTION_CONTENT_REMOVED,
+                default => ModerationAuditLog::ACTION_CONTENT_QUARANTINED,
+            },
             'story',
             (int) $action->target_story_id,
             null,

@@ -52,6 +52,25 @@ sus normas reglamentarias (Habeas Data, Colombia).</p>
   <li>Imagen (fotos/videos), <em>solo si autorizas</em> ese uso.</li>
   <li>Verificación facial, <em>opcional</em>: si decides usarla para el control
       de acceso. Puedes omitirla y verificarla presencialmente en el gimnasio.</li>
+  <li>Contenido que publicas tú (estados con foto o vídeo, texto y reacciones),
+      junto con la fecha de publicación y quién lo ha visto.</li>
+  <li>Reportes y bloqueos que envías o recibes, para poder moderar la comunidad.</li>
+  <li>Identificador de dispositivo para notificaciones y para reconocer el
+      equipo desde el que entras.</li>
+</ul>
+
+<h2>Permisos del teléfono</h2>
+<p>La app solo pide un permiso cuando vas a usar la función que lo necesita, y
+puedes negarlo o retirarlo después desde los ajustes de Android:</p>
+<ul>
+  <li><strong>Cámara</strong>: tomar fotos o vídeos para tus estados, escanear
+      códigos de alimentos y, si la activas, la verificación facial.</li>
+  <li><strong>Fotos y vídeos</strong>: elegir contenido ya guardado en tu
+      galería para publicarlo. No leemos el resto de tu galería.</li>
+  <li><strong>Micrófono</strong>: solo durante la conversación por voz con el
+      asistente y los vídeos que grabes con sonido.</li>
+  <li><strong>Notificaciones</strong>: avisos de clases, membresía, novedades y
+      decisiones de moderación que te afecten.</li>
 </ul>
 
 <h2>Finalidad</h2>
@@ -60,8 +79,41 @@ sus normas reglamentarias (Habeas Data, Colombia).</p>
   <li>Seguimiento físico y deportivo.</li>
   <li>Comunicación operativa y seguridad del usuario.</li>
   <li>Facturación y pagos.</li>
+  <li>Publicación y moderación del contenido de la comunidad.</li>
   <li>Marketing y uso de imagen, solo si lo autorizas.</li>
 </ul>
+
+<h2>Contenido que publicas y moderación</h2>
+<p>Los estados que publicas son visibles para el resto de miembros durante 24
+horas y luego caducan. Puedes borrarlos antes en cualquier momento.</p>
+<p>Cualquier persona puede reportar una publicación o una cuenta, y bloquear a
+otro miembro desde la propia app. Cuando alguien reporta un contenido
+conservamos una copia y sus datos como <strong>prueba del caso</strong> aunque
+el autor lo borre, durante un máximo de 90 días desde el cierre, y después se
+elimina. La identidad de quien reporta es confidencial y nunca se revela a la
+persona reportada.</p>
+<p>Si incumples las normas de la comunidad podemos retirar el contenido,
+advertirte o restringir tu acceso, siempre de forma temporal salvo casos graves.
+Puedes apelar la decisión desde la app. Una medida de moderación
+<strong>no cancela tu membresía</strong> ni los servicios del gimnasio.</p>
+
+<h2>Con quién compartimos datos</h2>
+<ul>
+  <li><strong>Google Firebase</strong>: almacenamiento del contenido multimedia
+      y envío de notificaciones.</li>
+  <li><strong>Wompi</strong>: procesamiento de pagos. Los datos de tu tarjeta
+      los trata la pasarela; nosotros no los guardamos.</li>
+  <li>Autoridades, únicamente cuando exista obligación legal.</li>
+</ul>
+<p>No vendemos tus datos personales ni los cedemos con fines publicitarios de
+terceros.</p>
+
+<h2>Eliminar tu cuenta</h2>
+<p>Puedes eliminar tu cuenta desde la propia app, en tu perfil. Al hacerlo se
+suprimen o anonimizan tus datos personales y tu contenido publicado. Conservamos
+únicamente lo que exige la ley (por ejemplo, la facturación) y las pruebas de
+casos de moderación abiertos, durante los plazos indicados arriba. Eliminar la
+cuenta es distinto de una suspensión: la suspensión es temporal y reversible.</p>
 
 <h2>Datos sensibles</h2>
 <p>Los datos de salud y los biométricos reciben protección reforzada, no se usan
