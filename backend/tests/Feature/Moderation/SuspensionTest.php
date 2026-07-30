@@ -4,6 +4,8 @@ namespace Tests\Feature\Moderation;
 
 use App\Models\Member;
 use App\Models\MemberSuspension;
+use App\Services\Moderation\SessionEnforcer;
+use App\Services\Moderation\SuspensionService;
 use App\Support\Moderation\ModerationScope;
 
 /**
@@ -33,7 +35,7 @@ class SuspensionTest extends ModerationTestCase
         $this->postJson('/api/app/stories/firebase', [
             'type' => 'image',
             'firebase_path' => 'stories/1/x.jpg',
-            'download_url' => 'https://firebasestorage.example/o/x?token=1',
+            'download_url' => $this->storageUrl('stories/1/x.jpg'),
         ], $this->asMember($member))
             ->assertStatus(403)
             ->assertJsonPath('code', 'posting_restricted');
@@ -100,13 +102,79 @@ class SuspensionTest extends ModerationTestCase
         $this->acceptGuidelines($member);
         $this->suspend($member, ModerationScope::FULL_APP_ACCESS);
 
-        $status = $this->getJson('/api/app/moderation/status', $this->asMember($member))
+        // La jerarquía se comprueba en el servicio: tras la sanción el miembro
+        // ya no puede autenticarse, así que el estado no se puede leer por HTTP
+        // (ver test_full_app_access_cierra_el_acceso_a_la_api).
+        $status = app(SuspensionService::class)->statusFor($member->fresh());
+
+        $this->assertTrue($status['app_access_blocked']);
+        $this->assertFalse($status['can_post_stories']);
+        $this->assertFalse($status['can_interact']);
+        $this->assertFalse($status['can_use_social']);
+    }
+
+    /**
+     * La sanción de acceso completo tiene que EJECUTARSE, no sólo describirse.
+     *
+     * Antes esto no se cumplía: la sanción quedaba registrada pero el token
+     * seguía siendo válido, así que el sancionado continuaba usando la app con
+     * normalidad. Este test fija el comportamiento que impide volver a perderlo.
+     */
+    public function test_full_app_access_cierra_el_acceso_a_la_api(): void
+    {
+        $member = $this->makeMember('Sancionado');
+        $this->acceptGuidelines($member);
+
+        // Antes de la sanción, el miembro usa la app con normalidad.
+        $this->getJson('/api/app/moderation/status', $this->asMember($member))
             ->assertOk();
 
-        $this->assertTrue($status->json('data.app_access_blocked'));
-        $this->assertFalse($status->json('data.can_post_stories'));
-        $this->assertFalse($status->json('data.can_interact'));
-        $this->assertFalse($status->json('data.can_use_social'));
+        $this->suspend($member, ModerationScope::FULL_APP_ACCESS, null);
+
+        // El MISMO token deja de servir de inmediato, con un código estable que
+        // la app puede traducir a su pantalla de cuenta restringida.
+        $this->getJson('/api/app/moderation/status', $this->asMember($member))
+            ->assertStatus(401)
+            ->assertJsonPath('code', 'account_moderation_suspended')
+            ->assertJsonPath('data.is_permanent', true);
+
+        // Y ninguna otra superficie de la app queda abierta.
+        $this->getJson('/api/app/stories', $this->asMember($member))
+            ->assertStatus(401);
+    }
+
+    /** Una sanción SOCIAL no expulsa a nadie de la app. */
+    public function test_sancion_social_no_cierra_la_sesion(): void
+    {
+        $member = $this->makeMember('Sancionado');
+        $this->acceptGuidelines($member);
+        $this->suspend($member, ModerationScope::SOCIAL_FEATURES);
+
+        $this->getJson('/api/app/moderation/status', $this->asMember($member))
+            ->assertOk()
+            ->assertJsonPath('data.can_use_social', false)
+            ->assertJsonPath('data.app_access_blocked', false);
+    }
+
+    /** Revocada la sanción, la cuenta vuelve a autenticarse. */
+    public function test_revocar_la_sancion_devuelve_el_acceso(): void
+    {
+        $member = $this->makeMember('Sancionado');
+        $this->acceptGuidelines($member);
+
+        $suspension = $this->suspend($member, ModerationScope::FULL_APP_ACCESS, null);
+
+        $this->getJson('/api/app/moderation/status', $this->asMember($member))
+            ->assertStatus(401);
+
+        $suspension->forceFill([
+            'status' => MemberSuspension::STATUS_REVOKED,
+            'revoked_at' => now(),
+        ])->save();
+
+        // El `access_hash` se revocó al sancionar y NO se resucita: la cuenta
+        // vuelve por la puerta normal (login + OTP), que ya no la rechaza.
+        $this->assertNull(app(SessionEnforcer::class)->blockFor((int) $member->id));
     }
 
     public function test_suspension_temporal_expira_sola(): void
@@ -172,7 +240,7 @@ class SuspensionTest extends ModerationTestCase
         $this->postJson('/api/app/stories/firebase', [
             'type' => 'image',
             'firebase_path' => 'stories/1/x.jpg',
-            'download_url' => 'https://firebasestorage.example/o/x?token=1',
+            'download_url' => $this->storageUrl('stories/1/x.jpg'),
         ], $this->asMember($member))
             ->assertStatus(403)
             ->assertJsonPath('code', 'guidelines_acceptance_required');
@@ -183,7 +251,7 @@ class SuspensionTest extends ModerationTestCase
         $this->postJson('/api/app/stories/firebase', [
             'type' => 'image',
             'firebase_path' => 'stories/1/x.jpg',
-            'download_url' => 'https://firebasestorage.example/o/x?token=1',
+            'download_url' => $this->storageUrl('stories/1/x.jpg'),
         ], $this->asMember($member))->assertCreated();
     }
 
@@ -233,7 +301,7 @@ class SuspensionTest extends ModerationTestCase
         $this->postJson('/api/app/stories/firebase', [
             'type' => 'image',
             'firebase_path' => 'stories/1/x.jpg',
-            'download_url' => 'https://firebasestorage.example/o/x?token=1',
+            'download_url' => $this->storageUrl('stories/1/x.jpg'),
         ], $this->asMember($member))->assertCreated();
     }
 
@@ -249,7 +317,7 @@ class SuspensionTest extends ModerationTestCase
         $this->postJson('/api/app/stories/firebase', [
             'type' => 'image',
             'firebase_path' => 'stories/1/x.jpg',
-            'download_url' => 'https://firebasestorage.example/o/x?token=1',
+            'download_url' => $this->storageUrl('stories/1/x.jpg'),
         ], $this->asMember($member))
             ->assertStatus(403)
             ->assertJsonPath('code', 'posting_age_restricted');
@@ -270,7 +338,7 @@ class SuspensionTest extends ModerationTestCase
         $this->postJson('/api/app/stories/firebase', [
             'type' => 'image',
             'firebase_path' => 'stories/1/x.jpg',
-            'download_url' => 'https://firebasestorage.example/o/x?token=1',
+            'download_url' => $this->storageUrl('stories/1/x.jpg'),
         ], $this->asMember($member))->assertCreated();
 
         // Con política 'block' sí se bloquea — el sistema está listo para
@@ -280,7 +348,7 @@ class SuspensionTest extends ModerationTestCase
         $this->postJson('/api/app/stories/firebase', [
             'type' => 'image',
             'firebase_path' => 'stories/1/y.jpg',
-            'download_url' => 'https://firebasestorage.example/o/y?token=1',
+            'download_url' => $this->storageUrl('stories/1/y.jpg'),
         ], $this->asMember($member))->assertStatus(403);
     }
 }

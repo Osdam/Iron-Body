@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\Member;
 use App\Models\MemberDeviceSession;
 use App\Services\DeviceSessionService;
+use App\Services\Moderation\SessionEnforcer;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -50,6 +51,9 @@ class AuthenticateMember
             if ($member->isSuspended()) {
                 return $this->unauthorized($request, 'account_suspended', 'Tu cuenta fue suspendida por seguridad.');
             }
+            if ($blocked = $this->moderationBlock($request, $member)) {
+                return $blocked;
+            }
             $this->sessions->touch($session);
             $request->attributes->set('auth_member', $member);
             $request->attributes->set('auth_device_session', $session);
@@ -76,6 +80,18 @@ class AuthenticateMember
             ->whereNull('access_hash_revoked_at')
             ->first();
         if (! $member) {
+            // Antes de responder un genérico «token inválido»: si el hash fue
+            // revocado precisamente por una sanción de acceso, la app debe poder
+            // mostrar la pantalla de cuenta restringida en vez de un error
+            // técnico que el usuario no puede interpretar.
+            $revokedOwner = Member::where('access_hash', $token)
+                ->whereNotNull('access_hash_revoked_at')
+                ->first();
+
+            if ($revokedOwner && ($blocked = $this->moderationBlock($request, $revokedOwner))) {
+                return $blocked;
+            }
+
             return $this->unauthorized($request, 'invalid_token', 'Token inválido.');
         }
         if ($member->status === Member::STATUS_DELETED) {
@@ -84,10 +100,42 @@ class AuthenticateMember
         if ($member->isSuspended()) {
             return $this->unauthorized($request, 'account_suspended', 'Tu cuenta fue suspendida por seguridad.');
         }
+        if ($blocked = $this->moderationBlock($request, $member)) {
+            return $blocked;
+        }
 
         $request->attributes->set('auth_member', $member);
 
         return $next($request);
+    }
+
+    /**
+     * Barrera de moderación: una sanción viva de `full_app_access` invalida
+     * cualquier token, se haya emitido antes o después de la sanción.
+     *
+     * Se comprueba en AMBAS vías de autenticación (sesión de dispositivo y
+     * `access_hash` legacy) porque cubrir sólo una dejaría la otra como puerta
+     * de escape. La revocación al aplicar la sanción es la primera defensa;
+     * esta es la que garantiza que ningún token superviviente sirva.
+     *
+     * Devuelve 401 —no 403— para que la app lo trate como fin de sesión y
+     * navegue al login, donde recibirá la explicación completa.
+     */
+    private function moderationBlock(Request $request, Member $member): ?Response
+    {
+        $suspension = app(SessionEnforcer::class)->blockFor((int) $member->id);
+
+        if ($suspension === null) {
+            return null;
+        }
+
+        Log::info('auth:member:failed', [
+            'reason' => 'account_moderation_suspended',
+            'path' => $request->path(),
+            'ip' => $request->ip(),
+        ]);
+
+        return response()->json(SessionEnforcer::payload($suspension), 401);
     }
 
     /**

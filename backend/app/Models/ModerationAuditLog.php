@@ -51,6 +51,9 @@ class ModerationAuditLog extends Model
 
     public const ACTION_GUIDELINES_ACCEPTED = 'guidelines_accepted';
 
+    /** Sesiones cortadas al aplicar una sanción de acceso completo. */
+    public const ACTION_SESSIONS_REVOKED = 'sessions_revoked';
+
     protected $fillable = [
         'actor_type',
         'actor_id',

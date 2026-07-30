@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Moderation\SessionEnforcer;
 use App\Support\Moderation\ModerationScope;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -64,6 +65,18 @@ class MemberSuspension extends Model
         static::creating(function (MemberSuspension $suspension): void {
             $suspension->public_id ??= (string) Str::uuid();
             $suspension->starts_at ??= now();
+        });
+
+        // Una sanción de acceso completo tiene que EJECUTARSE, no sólo
+        // registrarse: si las sesiones vivas sobreviven, el sancionado sigue
+        // usando la app con el token que ya tenía.
+        //
+        // Va en el evento del modelo —y no en los servicios— a propósito: hay
+        // dos caminos que crean sanciones (decisión sobre un caso y sanción
+        // directa desde el CRM) y cualquiera nuevo heredaría el mismo agujero.
+        // Aquí la revocación es una consecuencia de que exista la fila.
+        static::created(function (MemberSuspension $suspension): void {
+            app(SessionEnforcer::class)->enforce($suspension);
         });
     }
 

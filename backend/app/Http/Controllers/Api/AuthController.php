@@ -15,6 +15,7 @@ use App\Models\MemberReenrollmentToken;
 use App\Models\MemberSecurityEvent;
 use App\Services\AccountRiskService;
 use App\Services\DeviceSessionService;
+use App\Services\Moderation\SessionEnforcer;
 use App\Services\NotificationService;
 use App\Services\OtpService;
 use App\Services\SecurityEventService;
@@ -75,6 +76,13 @@ class AuthController extends Controller
         // no se permite el ingreso; el usuario puede abrir soporte.
         if ($member->isSuspended()) {
             return $this->suspendedResponse($member);
+        }
+
+        // Acceso retirado por moderación: se corta ANTES de enviar el OTP. Que
+        // `grantSession()` lo rechace al final ya sería correcto, pero mandar un
+        // SMS a alguien que no va a poder entrar es gastar dinero y confundirlo.
+        if ($blocked = $this->moderationBlockedResponse($member)) {
+            return $blocked;
         }
 
         $context = $this->context($request);
@@ -1090,6 +1098,28 @@ class AuthController extends Controller
     }
 
     /** Respuesta estándar para una cuenta suspendida por seguridad. */
+    /**
+     * Respuesta de rechazo si el miembro tiene retirado el acceso a la app por
+     * moderación, o null si puede entrar.
+     *
+     * Distinta de {@see suspendedResponse()}: aquella es la suspensión de
+     * SEGURIDAD (`members.status`, bloqueos de riesgo); ésta es la sanción de
+     * comunidad. Se mantienen separadas porque el mensaje, el canal de
+     * reclamación y las consecuencias son distintos — y porque una sanción
+     * social nunca debe leerse como un bloqueo de seguridad de la cuenta.
+     *
+     * 403 en el login (la petición se entiende pero se rechaza) frente al 401
+     * del middleware (el token deja de valer).
+     */
+    private function moderationBlockedResponse(Member $member): ?JsonResponse
+    {
+        $suspension = app(SessionEnforcer::class)->blockFor((int) $member->id);
+
+        return $suspension === null
+            ? null
+            : response()->json(SessionEnforcer::payload($suspension), 403);
+    }
+
     private function suspendedResponse(Member $member): JsonResponse
     {
         $lock = $member->activeRiskLock();
@@ -1218,6 +1248,14 @@ class AuthController extends Controller
     /** Emite la sesión del dispositivo y dispara avisos de seguridad. */
     private function grantSession(Member $member, array $context, bool $otpVerified, bool $faceVerified = false, bool $otpReauth = false): JsonResponse
     {
+        // Última barrera antes de emitir un token: una sanción de acceso
+        // completo no puede sortearse volviendo a iniciar sesión. Va AQUÍ, en el
+        // único punto que emite sesiones, para cubrir por construcción todas las
+        // vías de entrada (OTP, demo de review, desbloqueo confiable, facial).
+        if ($blocked = $this->moderationBlockedResponse($member)) {
+            return $blocked;
+        }
+
         // Asocia el equipo a este titular (anti-uso-compartido por dispositivo) y,
         // si esta entrada fue por OTP real, refresca la marca de revalidación.
         $this->bindDevice($member, $context, $otpReauth);
