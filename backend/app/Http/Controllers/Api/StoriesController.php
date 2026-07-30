@@ -146,6 +146,28 @@ class StoriesController extends Controller
         $type = $data['type'] ?? $data['media_type'] ?? 'image';
         $gsPath = $data['storage_gs_url'] ?? $data['firebase_path'];
 
+        // `download_url` se guarda tal cual y `Story::file_url` la devuelve sin
+        // tocarla, así que sin esta comprobación un cliente podía publicar un
+        // estado cuyo medio apunta a CUALQUIER servidor de internet: contenido
+        // fuera del bucket, imposible de retirar por moderación (no existe el
+        // objeto que borrar) y con la evidencia apuntando a una ruta falsa.
+        // El medio de un estado tiene que vivir en NUESTRO Storage.
+        if (! $this->isOwnStorageUrl($data['download_url'])) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'invalid_media_url',
+                'message' => 'El archivo debe subirse al almacenamiento de Iron Body.',
+            ], 422);
+        }
+
+        if (! $this->isOwnStoragePath($gsPath)) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'invalid_media_path',
+                'message' => 'La ruta del archivo no corresponde al almacenamiento de Iron Body.',
+            ], 422);
+        }
+
         // Metadata-only: el binario ya lo subió la app a Firebase Storage.
         // El backend NO sube archivo, NO usa Storage::disk('firebase'), NO valida
         // archivo local — solo persiste la metadata en PostgreSQL.
@@ -599,6 +621,55 @@ class StoriesController extends Controller
         }
 
         $story->delete(); // soft delete: la fila sobrevive para la evidencia.
+    }
+
+    /**
+     * ¿La URL de descarga apunta al Storage de Firebase de ESTE proyecto?
+     *
+     * Se valida el host y que el bucket del proyecto aparezca en la URL. Los
+     * dos formatos que emite el SDK son:
+     *   https://firebasestorage.googleapis.com/v0/b/<bucket>/o/<objeto>?...
+     *   https://storage.googleapis.com/<bucket>/<objeto>
+     */
+    private function isOwnStorageUrl(string $url): bool
+    {
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+
+        if ($scheme !== 'https') {
+            return false;
+        }
+
+        $allowedHosts = ['firebasestorage.googleapis.com', 'storage.googleapis.com'];
+        if (! in_array($host, $allowedHosts, true)) {
+            return false;
+        }
+
+        $bucket = (string) config('services.firebase.storage_bucket');
+
+        // Un host correcto pero de OTRO proyecto seguiría siendo contenido
+        // ajeno e inmoderable: el bucket propio tiene que estar en la ruta.
+        return $bucket !== '' && str_contains($url, $bucket);
+    }
+
+    /**
+     * La ruta del objeto debe ser relativa (`stories/…`) o un `gs://` del
+     * bucket propio. Se rechaza `..` para que no pueda apuntar fuera.
+     */
+    private function isOwnStoragePath(string $path): bool
+    {
+        if (str_contains($path, '..')) {
+            return false;
+        }
+
+        if (str_starts_with($path, 'gs://')) {
+            $bucket = (string) config('services.firebase.storage_bucket');
+
+            return $bucket !== '' && str_starts_with($path, 'gs://'.$bucket.'/');
+        }
+
+        // Ruta relativa dentro del bucket: nunca una URL absoluta.
+        return ! str_contains($path, '://');
     }
 
     // ── Barreras de moderación ──────────────────────────────────────────

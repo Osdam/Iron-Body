@@ -123,6 +123,24 @@ abstract class ModerationTestCase extends TestCase
         ], $overrides));
     }
 
+    /**
+     * URL de descarga VÁLIDA del bucket propio.
+     *
+     * El endpoint `stories/firebase` rechaza medios alojados fuera de nuestro
+     * Storage, así que los tests deben usar una URL con la misma forma que
+     * emite el SDK de Firebase. Se construye desde la config para que cambiar
+     * el bucket no obligue a tocar cada test.
+     */
+    protected function storageUrl(string $objectPath): string
+    {
+        return sprintf(
+            'https://firebasestorage.googleapis.com/v0/b/%s/o/%s?alt=media&token=%s',
+            (string) config('services.firebase.storage_bucket'),
+            rawurlencode($objectPath),
+            uniqid(),
+        );
+    }
+
     /** Acepta los lineamientos para poder publicar en los tests que lo requieran. */
     protected function acceptGuidelines(Member $member): void
     {
