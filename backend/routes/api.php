@@ -670,6 +670,11 @@ Route::middleware('auth.member')->group(function (): void {
     Route::get('app/moderation/report-reasons', [$ugc, 'reportReasons']);
     Route::post('app/stories/{id}/report',      [$ugc, 'reportStory'])
         ->middleware('throttle:20,60');
+    // Denunciar a una PERSONA. Separado de reportar una publicación: a alguien
+    // sin estados activos no había forma de reportarlo, y Google Play exige
+    // ambos mecanismos para apps con contenido generado por usuarios.
+    Route::post('app/members/{memberId}/report',  [$ugc, 'reportMember'])
+        ->middleware('throttle:20,60');
     Route::post('app/members/{memberId}/block',   [$ugc, 'block'])
         ->middleware('throttle:40,60');
     Route::delete('app/members/{memberId}/block', [$ugc, 'unblock'])

@@ -174,6 +174,20 @@ class ModerationDecisionService
         // El permiso lo declara la propia acción — no hay tabla duplicada.
         $this->assertPermission($actor, ActionType::requiredPermission($actionType));
 
+        // Un reporte de PERFIL no tiene publicación asociada: retirar, ocultar o
+        // restaurar contenido no tendría sobre qué actuar. Antes esto pasaba en
+        // silencio (`applyContentEffect` salía sin hacer nada) y el caso quedaba
+        // cerrado como «contenido retirado» sin haberse retirado nada. Se
+        // rechaza explícitamente para que el moderador elija una medida real.
+        if ($report->content_type !== ContentReport::CONTENT_TYPE_STORY
+            && in_array($actionType, [
+                ActionType::HIDE_CONTENT,
+                ActionType::REMOVE_CONTENT,
+                ActionType::RESTORE_CONTENT,
+            ], true)) {
+            throw new RuntimeException('action_requires_content');
+        }
+
         $durationMinutes = $input['duration_minutes'] ?? null;
         $durationMinutes = $durationMinutes === null ? null : (int) $durationMinutes;
 

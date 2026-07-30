@@ -120,6 +120,51 @@ class MemberModerationController extends Controller
         ], $result['created'] ? 201 : 200);
     }
 
+    /**
+     * POST /api/app/members/{member}/report
+     *
+     * Denuncia a una PERSONA. Función separada de «reportar publicación» y de
+     * «bloquear»: bloquear es una decisión privada del usuario, reportar pide
+     * la intervención del equipo. Ambas deben existir por separado y así lo
+     * exige la política de contenido generado por usuarios de Google Play.
+     */
+    public function reportMember(SubmitReportRequest $request, int $memberId): JsonResponse
+    {
+        /** @var Member $member */
+        $member = $request->attributes->get('auth_member');
+
+        if ($this->suspensions->isRestricted((int) $member->id, ModerationScope::STORY_INTERACTION)) {
+            return $this->error('interaction_restricted',
+                'Tu cuenta tiene las funciones sociales restringidas.', 403);
+        }
+
+        try {
+            $result = $this->reports->reportMember(
+                reporter: $member,
+                reportedMemberId: $memberId,
+                reasonCode: $request->reasonCode(),
+                detail: $request->reasonDetail(),
+                request: $request,
+            );
+        } catch (RuntimeException $e) {
+            return $this->mapReportError($e->getMessage());
+        }
+
+        $report = $result['report'];
+
+        return response()->json([
+            'ok' => true,
+            'data' => [
+                'report_id' => $report->public_id,
+                'status' => $report->status,
+                'created' => $result['created'],
+                'message' => $result['created']
+                    ? 'Recibimos tu reporte. Nuestro equipo revisará esta cuenta.'
+                    : 'Ya tenías un reporte en revisión sobre esta cuenta.',
+            ],
+        ], $result['created'] ? 201 : 200);
+    }
+
     // ── Bloquear / desbloquear ────────────────────────────────────────────
 
     /** POST /api/app/members/{member}/block */
@@ -426,6 +471,9 @@ class MemberModerationController extends Controller
             ),
             'content_not_found' => $this->error(
                 'content_not_found', 'Ese contenido ya no existe.', 404
+            ),
+            'member_not_found' => $this->error(
+                'member_not_found', 'No encontramos a esa persona.', 404
             ),
             'cannot_report_own_content' => $this->error(
                 'cannot_report_own_content', 'No puedes reportar tu propio contenido.', 422

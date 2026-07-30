@@ -32,6 +32,16 @@ class ContentReport extends Model
 {
     public const CONTENT_TYPE_STORY = 'story';
 
+    /**
+     * Reporte sobre una PERSONA, no sobre una publicación concreta.
+     *
+     * `content_id` guarda el id del miembro reportado. Es un tipo distinto —y no
+     * un reporte de story con la story vacía— porque la decisión del moderador
+     * es distinta: aquí no hay contenido que retirar, sólo una cuenta que
+     * evaluar por su conducta.
+     */
+    public const CONTENT_TYPE_MEMBER = 'member';
+
     protected $fillable = [
         'public_id',
         'reporter_member_id',

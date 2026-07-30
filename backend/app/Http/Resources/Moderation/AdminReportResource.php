@@ -34,6 +34,12 @@ class AdminReportResource extends JsonResource
             'id' => $report->public_id,
             'submitted_at' => $report->submitted_at?->toIso8601String(),
             'content_type' => $report->content_type,
+            // El CRM debe poder distinguir «denuncia de una publicación» de
+            // «denuncia de una cuenta»: la evidencia y las medidas aplicables
+            // son distintas y confundirlas lleva a cerrar mal el caso.
+            'content_type_label' => $report->content_type === ContentReport::CONTENT_TYPE_MEMBER
+                ? 'Cuenta'
+                : 'Publicación',
             'reason_code' => $report->reason_code,
             'reason_label' => ReportReason::labelFor($report->reason_code),
             'severity' => $report->severity,

@@ -155,6 +155,120 @@ class ReportService
     }
 
     /**
+     * Registra un reporte sobre una PERSONA (no sobre una publicación).
+     *
+     * Necesario por dos razones. La de cumplimiento: Google Play exige poder
+     * denunciar usuarios además de contenido. Y la funcional: a alguien sin una
+     * Story activa no había forma de reportarlo, porque el único acceso era el
+     * visor de estados.
+     *
+     * No captura snapshot de medios —no hay publicación concreta— pero sí deja
+     * constancia de a quién se reporta y por qué. Si la conducta se refiere a
+     * una publicación, el reporte de Story sigue siendo el camino correcto y
+     * conserva la evidencia.
+     *
+     * @return array{report: ContentReport, created: bool}
+     *
+     * @throws RuntimeException `reports_disabled`, `member_not_found`,
+     *                          `cannot_report_own_content`, `invalid_reason`,
+     *                          `rate_limited`.
+     */
+    public function reportMember(
+        Member $reporter,
+        int $reportedMemberId,
+        string $reasonCode,
+        ?string $detail = null,
+        ?Request $request = null,
+    ): array {
+        if (! config('ugc.reports_enabled', true)) {
+            throw new RuntimeException('reports_disabled');
+        }
+
+        if (! ReportReason::isValid($reasonCode)) {
+            throw new RuntimeException('invalid_reason');
+        }
+
+        if ((int) $reporter->id === $reportedMemberId) {
+            throw new RuntimeException('cannot_report_own_content');
+        }
+
+        // El objetivo se resuelve contra la base de datos: reportar a un id
+        // inventado no puede crear un caso fantasma en la bandeja.
+        $reported = Member::query()->whereKey($reportedMemberId)->first();
+        if (! $reported) {
+            throw new RuntimeException('member_not_found');
+        }
+
+        $this->assertWithinRateLimit((int) $reporter->id);
+
+        $created = false;
+
+        /** @var ContentReport $report */
+        $report = DB::transaction(function () use (
+            $reporter,
+            $reported,
+            $reasonCode,
+            $detail,
+            &$created
+        ): ContentReport {
+            // Mismo criterio de dedup que en las stories: un caso abierto por
+            // reportante y objetivo. Insistir no multiplica los casos.
+            $existing = ContentReport::query()
+                ->where('reporter_member_id', $reporter->id)
+                ->forContent(ContentReport::CONTENT_TYPE_MEMBER, (int) $reported->id)
+                ->whereIn('status', ReportStatus::open())
+                ->lockForUpdate()
+                ->first();
+
+            if ($existing) {
+                return $existing;
+            }
+
+            $created = true;
+
+            return ContentReport::create([
+                'reporter_member_id' => $reporter->id,
+                'reported_member_id' => $reported->id,
+                'reported_author_type' => 'member',
+                'reported_author_id' => $reported->id,
+                'content_type' => ContentReport::CONTENT_TYPE_MEMBER,
+                // Para un reporte de perfil el "contenido" es la propia cuenta.
+                'content_id' => $reported->id,
+                'reason_code' => $reasonCode,
+                'reason_detail' => $this->sanitizeDetail($detail),
+                'status' => ReportStatus::SUBMITTED,
+                'severity' => ReportReason::severityFor($reasonCode),
+                'priority' => ReportReason::priorityFor($reasonCode),
+                'submitted_at' => now(),
+            ]);
+        });
+
+        if (! $created) {
+            return ['report' => $report, 'created' => false];
+        }
+
+        $this->audit->member(
+            (int) $reporter->id,
+            ModerationAuditLog::ACTION_REPORT_SUBMITTED,
+            'content_report',
+            (int) $report->id,
+            [
+                'public_id' => $report->public_id,
+                'reason_code' => $report->reason_code,
+                'severity' => $report->severity,
+                'content_type' => $report->content_type,
+                'content_id' => $report->content_id,
+            ],
+            $request,
+        );
+
+        $this->notifier->reportReceived($reporter, $report);
+        $this->notifier->notifyModerators($report);
+
+        return ['report' => $report, 'created' => true];
+    }
+
+    /**
      * Límite por hora del reportante. Se cuenta sobre la tabla, no sobre caché:
      * un reinicio de Redis no debe abrir la puerta a una campaña de reportes.
      */
