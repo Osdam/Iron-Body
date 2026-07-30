@@ -4,6 +4,7 @@ namespace Tests\Feature\Moderation;
 
 use App\Models\Member;
 use App\Models\MemberSuspension;
+use App\Services\DeviceSessionService;
 use App\Services\Moderation\SessionEnforcer;
 use App\Services\Moderation\SuspensionService;
 use App\Support\Moderation\ModerationScope;
@@ -141,6 +142,44 @@ class SuspensionTest extends ModerationTestCase
         // Y ninguna otra superficie de la app queda abierta.
         $this->getJson('/api/app/stories', $this->asMember($member))
             ->assertStatus(401);
+    }
+
+    /**
+     * A quien se sanciona hay que decirle la verdad.
+     *
+     * La sesión cortada por una sanción resolvía antes por la rama de «sesión
+     * revocada» y el sancionado leía «tu cuenta se está usando en otro
+     * dispositivo»: un motivo falso, y sin el aviso de que su membresía del
+     * gimnasio sigue intacta, que es lo que de verdad le preocupa.
+     */
+    public function test_la_sesion_cortada_por_sancion_no_se_explica_como_relevo_de_dispositivo(): void
+    {
+        $member = $this->makeMember('Sancionado');
+
+        // Sesión de dispositivo real (no el access_hash legacy).
+        $issued = app(DeviceSessionService::class)->issueSession($member, [
+            'device_id' => 'dev_prueba_'.uniqid(),
+            'device_name' => 'Android',
+            'platform' => 'android',
+        ]);
+        $headers = ['Authorization' => 'Bearer '.$issued['token']];
+
+        $this->getJson('/api/app/moderation/status', $headers)->assertOk();
+
+        $this->suspend($member, ModerationScope::FULL_APP_ACCESS, 60);
+
+        $this->getJson('/api/app/moderation/status', $headers)
+            ->assertStatus(401)
+            ->assertJsonPath('code', 'account_moderation_suspended')
+            // El texto debe hablar de restricción, nunca de otro dispositivo.
+            ->assertJsonPath('data.is_permanent', false)
+            ->assertJsonMissingPath('data.owner_device');
+
+        // Sobre el valor decodificado: en el JSON crudo los acentos van
+        // escapados (`membresía`) y la comparación sería un falso negativo.
+        $mensaje = (string) $this->getJson('/api/app/moderation/status', $headers)->json('message');
+        $this->assertStringNotContainsString('otro dispositivo', $mensaje);
+        $this->assertStringContainsString('membresía del gimnasio', $mensaje);
     }
 
     /** Una sanción SOCIAL no expulsa a nadie de la app. */

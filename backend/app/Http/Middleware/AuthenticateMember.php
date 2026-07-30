@@ -68,6 +68,15 @@ class AuthenticateMember
             ->where('token_hash', MemberDeviceSession::hashToken($token))
             ->first();
         if ($revoked) {
+            // Una sesión cortada por una SANCIÓN no puede explicarse como un
+            // relevo de dispositivo: al sancionado se le estaría dando un
+            // motivo falso, y el aviso de que su membresía sigue intacta —lo
+            // que de verdad le preocupa— no llegaría nunca.
+            if ($revoked->revoked_reason === SessionEnforcer::REVOKE_REASON
+                && ($blocked = $this->moderationBlock($request, $revoked->member))) {
+                return $blocked;
+            }
+
             return $this->unauthorized(
                 $request,
                 'session_revoked',
@@ -121,8 +130,12 @@ class AuthenticateMember
      * Devuelve 401 —no 403— para que la app lo trate como fin de sesión y
      * navegue al login, donde recibirá la explicación completa.
      */
-    private function moderationBlock(Request $request, Member $member): ?Response
+    private function moderationBlock(Request $request, ?Member $member): ?Response
     {
+        if ($member === null) {
+            return null;
+        }
+
         $suspension = app(SessionEnforcer::class)->blockFor((int) $member->id);
 
         if ($suspension === null) {
