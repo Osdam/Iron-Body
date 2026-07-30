@@ -53,6 +53,7 @@ use App\Http\Controllers\Api\Admin\NutritionAdminController;
 use App\Http\Controllers\Api\IronAiContextController;
 use App\Http\Controllers\Api\AppNotificationController;
 use App\Http\Controllers\Api\DeviceTokenController;
+use App\Http\Controllers\Api\NotificationPreferenceController;
 use App\Http\Controllers\Crm\NotificationController as AdminNotificationController;
 use App\Models\Member;
 use App\Models\Payment;
@@ -716,6 +717,12 @@ Route::middleware('auth.member')->group(function (): void {
     Route::post('app/notifications/read-all',        [AppNotificationController::class, 'readAll']);
     Route::post('app/notifications/{id}/read',       [AppNotificationController::class, 'markRead'])
         ->where('id', '[0-9]+');
+
+    // ── Preferencias de notificación ──────────────────────────────────────────
+    // El socio sale del bearer; no se acepta member_id por parámetro.
+    Route::get('app/notification-preferences',  [NotificationPreferenceController::class, 'show']);
+    Route::put('app/notification-preferences',  [NotificationPreferenceController::class, 'update'])
+        ->middleware('throttle:30,1');
 
     // ── Tokens FCM del dispositivo ────────────────────────────────────────────
     Route::post('app/device-tokens',                    [DeviceTokenController::class, 'store']);

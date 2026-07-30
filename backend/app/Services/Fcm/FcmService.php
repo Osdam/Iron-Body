@@ -5,6 +5,8 @@ namespace App\Services\Fcm;
 use App\Models\Member;
 use App\Models\MemberDeviceToken;
 use App\Models\Notification;
+use App\Support\Notifications\NotificationCategory;
+use App\Support\Notifications\PushChannel;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -40,6 +42,7 @@ class FcmService
 
         $tokens = MemberDeviceToken::query()
             ->where('member_id', $member->id)
+            ->where('is_active', true)
             ->pluck('token');
 
         foreach ($tokens as $token) {
@@ -47,12 +50,26 @@ class FcmService
                 $unregistered = false;
                 $ok = $this->client->send($this->buildMessage($token, $notification), $unregistered);
                 if (! $ok && $unregistered) {
-                    MemberDeviceToken::where('token', $token)->delete(); // limpia tokens muertos
+                    $this->deactivate($token);
                 }
             } catch (Throwable $e) {
                 Log::warning('FCM: fallo enviando a token', ['error' => $e->getMessage()]);
             }
         }
+    }
+
+    /**
+     * Un token muerto se DESACTIVA, no se borra.
+     *
+     * Borrarlo perdía el rastro de qué dispositivo tuvo el socio y desde
+     * cuándo, y hacía que el mismo teléfono reapareciera como si fuera nuevo.
+     */
+    private function deactivate(string $token): void
+    {
+        MemberDeviceToken::where('token', $token)->update([
+            'is_active' => false,
+            'updated_at' => now(),
+        ]);
     }
 
     /**
@@ -70,6 +87,7 @@ class FcmService
         }
 
         MemberDeviceToken::query()
+            ->where('is_active', true)
             ->distinct()
             ->pluck('token')
             ->chunk(500)
@@ -79,7 +97,7 @@ class FcmService
                         $unregistered = false;
                         $ok = $this->client->send($this->buildMessage($token, $notification), $unregistered);
                         if (! $ok && $unregistered) {
-                            MemberDeviceToken::where('token', $token)->delete();
+                            $this->deactivate($token);
                         }
                     } catch (Throwable $e) {
                         Log::warning('FCM: fallo enviando a token (broadcast)', ['error' => $e->getMessage()]);
@@ -91,6 +109,9 @@ class FcmService
     /** Mensaje HTTP v1: notification (visible app cerrada) + data (ruteo/tap). */
     private function buildMessage(string $token, Notification $n): array
     {
+        $category = NotificationCategory::fromLegacyType($n->type);
+        $urgent = PushChannel::priorityForCategory($category) === 'high';
+
         return [
             'token'        => $token,
             'notification' => [
@@ -100,19 +121,14 @@ class FcmService
             'data' => array_map('strval', array_filter([
                 'uuid'        => $n->uuid,
                 'type'        => $n->type,
+                'category'    => $category,
                 'action_type' => $n->action_type,
                 'priority'    => $n->priority,
             ], fn ($v) => $v !== null)),
-            'android' => [
-                'priority'     => 'high',
-                'notification' => [
-                    'channel_id' => 'iron_body_high',
-                    'sound'      => 'default',
-                ],
-            ],
+            'android' => PushChannel::androidBlock($category),
             'apns' => [
-                'headers' => ['apns-priority' => '10'],
-                'payload' => ['aps' => ['sound' => 'default']],
+                'headers' => ['apns-priority' => $urgent ? '10' : '5'],
+                'payload' => ['aps' => $urgent ? ['sound' => 'default'] : ['sound' => '']],
             ],
         ];
     }

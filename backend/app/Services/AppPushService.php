@@ -6,6 +6,8 @@ use App\Models\AppNotification;
 use App\Models\Member;
 use App\Models\MemberDeviceToken;
 use App\Services\Fcm\FcmHttpV1Client;
+use App\Support\Notifications\NotificationCategory;
+use App\Support\Notifications\PushChannel;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -68,6 +70,8 @@ class AppPushService
     /** Mensaje FCM: solo título/body + data de ruteo (action_route). */
     private function buildMessage(string $token, AppNotification $n): array
     {
+        $category = NotificationCategory::fromLegacyType($n->type);
+
         return [
             'token' => $token,
             'notification' => [
@@ -77,11 +81,15 @@ class AppPushService
             'data' => array_map('strval', array_filter([
                 'notification_id' => (string) $n->id,
                 'type' => $n->type,
+                'category' => $category,
                 'action_type' => $n->action_type,
                 'action_route' => $n->action_route,
                 'priority' => $n->priority,
                 'source' => 'iron_body',
             ], fn ($v) => $v !== null)),
+            // Sin este bloque el mensaje salía con prioridad `normal` y sin
+            // canal: Doze podía retenerlo horas y Android lo mostraba mudo.
+            'android' => PushChannel::androidBlock($category),
         ];
     }
 }

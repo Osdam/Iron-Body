@@ -141,6 +141,23 @@ if ((bool) config('proactive_coach.enabled', false)) {
     }
 }
 
+// ── Bienestar: motivación, hábitos y suplementos ──────────────────────────────
+// INERTE por defecto: solo se agenda si NOTIFICATIONS_WELLNESS_ENABLED=true.
+//
+// Corre dos veces al día a propósito. Cada socio define sus propias horas de
+// silencio en su zona horaria, así que una única pasada dejaría fuera a quien
+// duerme justo cuando corre el cron. La llave de idempotencia
+// (`wellness:socio:fecha`) hace que, aun con dos pasadas, nadie reciba más de
+// una al día. El dispatcher además respeta preferencias y límites.
+if ((bool) config('notifications.wellness.enabled', false)) {
+    foreach ((array) config('notifications.wellness.runs_at', ['15:00']) as $wellnessRun) {
+        Schedule::command('notifications:wellness')
+            ->dailyAt($wellnessRun)
+            ->withoutOverlapping()
+            ->onOneServer();
+    }
+}
+
 // ── Wompi: reconciliación de pagos en vuelo (respaldo del webhook) ─────────────
 // Corre cada WOMPI_RECONCILIATION_MINUTES (default 5). Idempotente y con
 // lockForUpdate: jamás duplica activaciones ni degrada un pago terminal.
