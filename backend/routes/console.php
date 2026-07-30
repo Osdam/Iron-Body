@@ -42,6 +42,20 @@ Schedule::command('stories:purge')
     ->withoutOverlapping()
     ->onOneServer();
 
+// Purga de la evidencia de moderación cuya retención ya venció.
+//
+// Sin esta entrada el comando existía pero no lo ejecutaba nadie: los binarios
+// de contenido denunciado se conservaban indefinidamente. Eso contradice la
+// retención declarada (`ugc.evidence_retention_days`) y convierte una medida de
+// protección de datos en almacenamiento perpetuo de material sensible.
+//
+// El comando es idempotente y comprueba por sí mismo que no haya casos abiertos
+// antes de borrar nada, así que una corrida diaria es suficiente y segura.
+Schedule::command('moderation:purge-evidence')
+    ->dailyAt('03:30')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // Renovación de clases fijas/recurrentes — corre cada hora. Reabre el ciclo de
 // reservas de cada clase según su `renewal_hours` (8/12/24/48/168=semanal). Las
 // franjas de renovación son por horas, así que la granularidad horaria basta.
