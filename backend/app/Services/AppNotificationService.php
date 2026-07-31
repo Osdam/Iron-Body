@@ -6,6 +6,7 @@ use App\Models\AppNotification;
 use App\Models\Member;
 use App\Models\MemberNotificationPreference;
 use App\Support\Notifications\NotificationCategory;
+use App\Support\Notifications\SendingWindow;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -94,8 +95,11 @@ class AppNotificationService
         // aviso queda esperando en el centro de la app y el socio lo ve cuando
         // despierta. Silenciar la interrupción no es lo mismo que ocultar el
         // mensaje, y borrarlo sería peor que molestar.
+        // Se respetan las dos barreras: la ventana del gimnasio (hora de
+        // Bogotá) y las horas de silencio del socio. El coach de IRON IA no
+        // es una urgencia y no tiene por qué sonar de madrugada.
         $member = Member::find($memberId);
-        if ($member !== null && ! $prefs->inQuietHours()) {
+        if ($member !== null && SendingWindow::isOpen() && ! $prefs->inQuietHours()) {
             $this->push->sendToMember($member, $notification);
         }
 

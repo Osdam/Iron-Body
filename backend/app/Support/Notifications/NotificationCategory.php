@@ -88,6 +88,36 @@ final class NotificationCategory
         self::SUPPLEMENT_BCAA,
     ];
 
+    /**
+     * Familias de eventos del coach IRON IA, que llegan con punto
+     * (`nutrition.missing`, `streak.at_risk`) desde el router de n8n.
+     *
+     * Van a categorías OPERATIVAS (entrenamiento, nutrición), nunca a las de
+     * bienestar. Son cosas distintas y el socio debe poder apagar una sin
+     * perder la otra: quien no quiere consejos de creatina puede seguir
+     * queriendo que su coach le avise de que no registró la comida.
+     */
+    private const EVENT_FAMILY_MAP = [
+        'nutrition' => self::NUTRITION,
+        'workout' => self::WORKOUTS,
+        'streak' => self::WORKOUTS,
+        'progress' => self::WORKOUTS,
+        'evaluation' => self::WORKOUTS,
+        'daily' => self::WORKOUTS,
+        'weekly' => self::WORKOUTS,
+        'coach' => self::WORKOUTS,
+        'iron_ai' => self::WORKOUTS,
+        'module' => self::WORKOUTS,
+        'membership' => self::MEMBERSHIP,
+        'payment' => self::PAYMENTS,
+        'billing' => self::PAYMENTS,
+        'security' => self::ACCOUNT_SECURITY,
+        'moderation' => self::ACCOUNT_SECURITY,
+        'story' => self::SOCIAL,
+        'social' => self::SOCIAL,
+        'promotion' => self::PROMOTIONS,
+    ];
+
     /** Traduce el `type` histórico de `notifications`/`app_notifications`. */
     private const LEGACY_TYPE_MAP = [
         'security' => self::ACCOUNT_SECURITY,
@@ -133,10 +163,17 @@ final class NotificationCategory
     }
 
     /**
-     * Categoría a la que pertenece un `type` heredado. Lo desconocido cae en
-     * MEMBERSHIP (avisos generales del gimnasio) y NO en una categoría
-     * obligatoria: un tipo nuevo no debería colarse saltándose las preferencias
-     * solo por no estar en la tabla.
+     * Categoría a la que pertenece un `type`.
+     *
+     * Resuelve en tres pasos, y el segundo existe por un fallo real: los
+     * eventos del coach llegan como `nutrition.missing` o `streak.at_risk`, y
+     * al buscarlos solo por la cadena completa NINGUNO coincidía. Todos caían
+     * en el respaldo, así que un recordatorio de nutrición salía por el canal
+     * de máxima prioridad y el interruptor de «Nutrición» no lo tocaba.
+     *
+     * Lo desconocido cae en MEMBERSHIP (avisos generales del gimnasio) y NUNCA
+     * en una categoría obligatoria: un tipo nuevo no debe colarse saltándose
+     * las preferencias solo por no estar en la tabla.
      */
     public static function fromLegacyType(?string $type): string
     {
@@ -144,7 +181,26 @@ final class NotificationCategory
             return self::MEMBERSHIP;
         }
 
-        return self::LEGACY_TYPE_MAP[strtolower($type)] ?? self::MEMBERSHIP;
+        $type = strtolower(trim($type));
+
+        // 1) Coincidencia exacta con los tipos históricos.
+        if (isset(self::LEGACY_TYPE_MAP[$type])) {
+            return self::LEGACY_TYPE_MAP[$type];
+        }
+
+        // 2) Familia antes del punto: `nutrition.missing` → `nutrition`.
+        if (str_contains($type, '.')) {
+            $family = strstr($type, '.', true);
+            if (isset(self::EVENT_FAMILY_MAP[$family])) {
+                return self::EVENT_FAMILY_MAP[$family];
+            }
+            if (isset(self::LEGACY_TYPE_MAP[$family])) {
+                return self::LEGACY_TYPE_MAP[$family];
+            }
+        }
+
+        // 3) Familia sin punto (por si el tipo llega ya como familia).
+        return self::EVENT_FAMILY_MAP[$type] ?? self::MEMBERSHIP;
     }
 
     /**

@@ -10,6 +10,7 @@ use App\Services\Fcm\FcmHttpV1Client;
 use App\Services\Moderation\SuspensionService;
 use App\Support\Notifications\NotificationCategory;
 use App\Support\Notifications\PushChannel;
+use App\Support\Notifications\SendingWindow;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Log;
@@ -103,6 +104,13 @@ class NotificationDispatcher
 
         if (! $this->wanted($prefs, $category, $supplementKind)) {
             return $record(NotificationDispatch::STATUS_SUPPRESSED, NotificationDispatch::REASON_OPTED_OUT);
+        }
+
+        // Techo horario del gimnasio, en hora de Bogotá. Va ANTES de las horas
+        // de silencio del socio porque no es una preferencia suya: es un límite
+        // del negocio que nadie puede levantar apagando un interruptor.
+        if (! NotificationCategory::bypassesQuietHours($category) && ! SendingWindow::isOpen($now)) {
+            return $record(NotificationDispatch::STATUS_SUPPRESSED, NotificationDispatch::REASON_OUTSIDE_WINDOW);
         }
 
         if (! NotificationCategory::bypassesQuietHours($category) && $prefs->inQuietHours($now)) {

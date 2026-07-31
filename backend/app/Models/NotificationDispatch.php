@@ -22,6 +22,9 @@ class NotificationDispatch extends Model
 
     public const REASON_QUIET_HOURS = 'quiet_hours';
 
+    /** Fuera de la franja horaria que permite el gimnasio (hora de Bogotá). */
+    public const REASON_OUTSIDE_WINDOW = 'outside_window';
+
     public const REASON_DAILY_LIMIT = 'daily_limit';
 
     public const REASON_WEEKLY_LIMIT = 'weekly_limit';

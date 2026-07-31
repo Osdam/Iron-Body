@@ -5,6 +5,8 @@ namespace Tests\Feature\Notifications;
 use App\Models\Member;
 use App\Models\MemberDeviceToken;
 use App\Models\User;
+use Carbon\Carbon;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -25,6 +27,16 @@ abstract class NotificationTestCase extends TestCase
 
         Http::preventStrayRequests();
 
+        // Reloj congelado a mediodía en Bogotá.
+        //
+        // Sin esto la suite pasaría o fallaría según la hora a la que alguien
+        // la ejecute: la ventana 07:00–22:00 es real y cierra de noche. Es el
+        // mismo defecto que arrastran las pruebas de membresía de este
+        // repositorio, y no tiene sentido repetirlo aquí. Quien quiera probar
+        // una hora concreta pasa su propio `$now`.
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-07-30 12:00:00', 'America/Bogota'));
+        Carbon::setTestNow(CarbonImmutable::getTestNow());
+
         config([
             'fcm.enabled' => true,
             'fcm.project_id' => 'iron-body-test',
@@ -35,6 +47,9 @@ abstract class NotificationTestCase extends TestCase
 
     protected function tearDown(): void
     {
+        CarbonImmutable::setTestNow();
+        Carbon::setTestNow();
+
         if (self::$serviceAccountPath !== null && is_file(self::$serviceAccountPath)) {
             @unlink(self::$serviceAccountPath);
             self::$serviceAccountPath = null;

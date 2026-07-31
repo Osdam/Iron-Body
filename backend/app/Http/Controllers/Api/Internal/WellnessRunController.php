@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Internal;
 
 use App\Http\Controllers\Controller;
 use App\Services\Notifications\WellnessPlanner;
+use App\Support\Notifications\SendingWindow;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -43,18 +44,48 @@ class WellnessRunController extends Controller
             ], 409);
         }
 
+        $window = SendingWindow::describe();
+
         if ($data['dry_run'] ?? false) {
             return response()->json([
                 'ok' => true,
                 'dry_run' => true,
+                'window' => $window,
                 'message' => 'Conexión correcta. No se envió nada.',
+            ]);
+        }
+
+        // Segunda barrera. Si n8n se dispara fuera de hora —por un cambio de
+        // horario, un reintento o una ejecución manual— aquí no sale nada.
+        // Devuelve 200 a propósito: no es un fallo del workflow, es el sistema
+        // haciendo su trabajo, y marcarlo como error llenaría n8n de rojo.
+        if (! SendingWindow::isOpen()) {
+            Log::info('notifications.wellness.run', [
+                'source' => 'n8n',
+                'skipped' => 'outside_window',
+            ] + $window);
+
+            return response()->json([
+                'ok' => true,
+                'considered' => 0,
+                'sent' => 0,
+                'suppressed' => 0,
+                'skipped' => 'outside_window',
+                'window' => $window,
+                'next_opening' => SendingWindow::nextOpening()->toIso8601String(),
+                'message' => sprintf(
+                    'Fuera de la franja permitida (%02d:00–%02d:00 %s). No se envió nada.',
+                    SendingWindow::startHour(),
+                    SendingWindow::endHour(),
+                    SendingWindow::timezone(),
+                ),
             ]);
         }
 
         $stats = $this->planner->planDaily(CarbonImmutable::now());
 
-        Log::info('notifications.wellness.run', $stats + ['source' => 'n8n']);
+        Log::info('notifications.wellness.run', $stats + ['source' => 'n8n'] + $window);
 
-        return response()->json(['ok' => true] + $stats);
+        return response()->json(['ok' => true, 'window' => $window] + $stats);
     }
 }

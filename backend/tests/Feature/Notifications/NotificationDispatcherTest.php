@@ -111,18 +111,30 @@ class NotificationDispatcherTest extends NotificationTestCase
         $this->assertSame(NotificationDispatch::STATUS_SENT, $dispatch->status);
     }
 
+    /**
+     * Instante elegido a propósito: las 21:30 en Bogotá.
+     *
+     * Está DENTRO de la franja del gimnasio (07:00–22:00) y DENTRO de las horas
+     * de silencio por defecto del socio (21:00–07:00). Así se prueba el
+     * silencio del socio y no la ventana del negocio, que se comprueba aparte
+     * en {@see SendingWindowTest}.
+     */
+    private function nocheTemprana(): CarbonImmutable
+    {
+        return CarbonImmutable::parse('2026-07-30 21:30:00', 'America/Bogota')->setTimezone('UTC');
+    }
+
     public function test_no_envia_en_horas_de_silencio(): void
     {
         $member = $this->makeMember();
         $this->giveDevice($member);
 
-        // 05:00 UTC = medianoche en Bogotá.
         $dispatch = $this->dispatcher()->dispatch(
             memberId: $member->id,
             category: NotificationCategory::MOTIVATION,
             title: 'Título',
             body: 'Cuerpo',
-            now: CarbonImmutable::parse('2026-07-30 05:00:00', 'UTC'),
+            now: $this->nocheTemprana(),
         );
 
         $this->assertSame(NotificationDispatch::REASON_QUIET_HOURS, $dispatch->reason);
@@ -135,17 +147,19 @@ class NotificationDispatcherTest extends NotificationTestCase
         $this->giveDevice($member);
         MemberNotificationPreference::create([
             'member_id' => $member->id,
-            'timezone' => 'Europe/Madrid',
+            'timezone' => 'America/Los_Angeles',
         ]);
 
-        // 05:00 UTC son las 07:00 en Madrid: ya fuera del silencio, aunque en
-        // Bogotá sea medianoche. La misma hora absoluta, decisión distinta.
+        // El MISMO instante que el test anterior. Para un socio en Bogotá son
+        // las 21:30 y está callado; para uno en Los Ángeles son las 19:30 y
+        // todavía no. Misma hora absoluta, decisión distinta: eso es lo que
+        // demuestra que manda la zona horaria de cada persona.
         $dispatch = $this->dispatcher()->dispatch(
             memberId: $member->id,
             category: NotificationCategory::MOTIVATION,
             title: 'Título',
             body: 'Cuerpo',
-            now: CarbonImmutable::parse('2026-07-30 05:00:00', 'UTC'),
+            now: $this->nocheTemprana(),
         );
 
         $this->assertSame(NotificationDispatch::STATUS_SENT, $dispatch->status);

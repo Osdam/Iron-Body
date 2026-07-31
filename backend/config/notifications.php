@@ -4,6 +4,31 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Ventana horaria dura
+    |--------------------------------------------------------------------------
+    | Fuera de esta franja NO sale ninguna notificación discrecional, pase lo
+    | que pase: da igual que el servidor corra en UTC, que n8n se dispare por
+    | error o que el socio tenga las horas de silencio apagadas.
+    |
+    | Es la última barrera, no la primera. Las preferencias del socio y sus
+    | horas de silencio siguen mandando DENTRO de la ventana; esto solo pone un
+    | techo que nadie puede levantar por configuración.
+    |
+    | Semántica del límite: se permite desde `start` inclusive hasta `end`
+    | EXCLUSIVE. Con 7 y 22, las 21:59 pasan y las 22:00 en punto ya no.
+    |
+    | Lo único exento es la seguridad de la cuenta: si alguien entra en tu
+    | cuenta a las tres de la mañana, enterarte a las siete no sirve de nada.
+    */
+
+    'window' => [
+        'timezone' => env('NOTIFICATIONS_TIMEZONE', 'America/Bogota'),
+        'start_hour' => (int) env('NOTIFICATIONS_WINDOW_START', 7),
+        'end_hour' => (int) env('NOTIFICATIONS_WINDOW_END', 22),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Notificaciones de bienestar (motivación, hábitos, suplementos)
     |--------------------------------------------------------------------------
     | INERTE por defecto. Mientras `wellness.enabled` sea false no sale ni una
