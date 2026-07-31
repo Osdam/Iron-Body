@@ -1,0 +1,99 @@
+{
+  "name": "Iron Body - Notificaciones de Bienestar",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "description": "Dispara la tanda diaria de motivacion, habitos y suplementos. n8n decide CUANDO; Laravel decide QUE y A QUIEN: preferencias del socio, horas de silencio, limites de frecuencia, exclusion de menores e idempotencia viven en el servidor. Disparar dos veces el mismo dia no envia nada dos veces. Sin secretos en el fichero: usa las credenciales/variables de entorno de n8n."
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 15,22 * * *"
+            }
+          ]
+        }
+      },
+      "id": "node-cron",
+      "name": "Cron 15:00 y 22:00 UTC",
+      "notes": "10:00 y 17:00 en Neiva (UTC-5). Dos pasadas porque cada socio tiene sus propias horas de silencio; la idempotencia diaria garantiza como maximo un aviso por persona.",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-720, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LARAVEL_BASE_URL || '{{LARAVEL_BASE_URL}}' }}/api/internal/automation/wellness-run",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.AUTOMATION_INTERNAL_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ dry_run: false }) }}",
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "node-run",
+      "name": "Disparar tanda en Laravel",
+      "notes": "No manda textos ni listas de socios. Solo dice 'ahora'. El cuerpo va firmado por el Bearer; Laravel valida antes de hacer nada.",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-480, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Traduce la respuesta a algo legible en el historial de n8n.\n//\n// 409 wellness_disabled NO es un error: es el modulo apagado a proposito con\n// NOTIFICATIONS_WELLNESS_ENABLED=false. Marcarlo como fallo llenaria el\n// historial de rojo cuando todo esta correcto.\nconst status = $json.statusCode ?? 0;\nconst body = $json.body ?? {};\n\nif (status === 409 && body.reason === 'wellness_disabled') {\n  return [{ json: { resultado: 'inerte', mensaje: 'Modulo de bienestar apagado en el servidor.', alerta: false } }];\n}\n\nif (status !== 200 || body.ok !== true) {\n  return [{ json: { resultado: 'fallo', status, mensaje: body.message || 'Laravel no acepto la tanda.', alerta: true } }];\n}\n\nreturn [{ json: {\n  resultado: 'ok',\n  considerados: body.considered ?? 0,\n  enviados: body.sent ?? 0,\n  no_enviados: body.suppressed ?? 0,\n  alerta: false,\n  nota: 'Los no enviados no son errores: son preferencias, horas de silencio o limites de frecuencia.'\n} }];"
+      },
+      "id": "node-result",
+      "name": "Interpretar resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-240, 0]
+    },
+    {
+      "parameters": {},
+      "id": "node-out",
+      "name": "Salida (conectar destino: log/Slack/email)",
+      "notes": "Conectar aqui el aviso al equipo solo cuando alerta = true.",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [0, 0]
+    }
+  ],
+  "connections": {
+    "Cron 15:00 y 22:00 UTC": {
+      "main": [[{ "node": "Disparar tanda en Laravel", "type": "main", "index": 0 }]]
+    },
+    "Disparar tanda en Laravel": {
+      "main": [[{ "node": "Interpretar resultado", "type": "main", "index": 0 }]]
+    },
+    "Interpretar resultado": {
+      "main": [[{ "node": "Salida (conectar destino: log/Slack/email)", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "tags": []
+}
