@@ -121,7 +121,8 @@ class PushDoctor extends Command
         }
 
         foreach ($tokens as $t) {
-            $dias = $t->updated_at?->diffInDays(now()) ?? 0;
+            // Entero: Carbon 3 devuelve decimales y «8.41 días» no dice nada.
+            $dias = (int) ($t->updated_at?->diffInDays(now()) ?? 0);
             $this->line(sprintf(
                 '  %-8s %s · permiso %s · registrado hace %d día(s) · %s…%s',
                 $t->platform,
