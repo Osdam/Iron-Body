@@ -39,14 +39,17 @@ class NutritionMacroCalculator
             $perServing = $this->perServing($food);
             if ($perServing !== null) {
                 $servingMultiplier = $quantity;
+
                 return $this->scale($perServing, $quantity, $servingMultiplier);
             }
             // Sin per_serving pero con serving_size → gramos equivalentes.
             if ($food->serving_size && $food->serving_size > 0 && $per100 !== null) {
                 $grams = $quantity * (float) $food->serving_size;
                 $servingMultiplier = $quantity;
+
                 return $this->scale($per100, $grams / 100.0, $servingMultiplier);
             }
+
             // Último recurso: tratar 1 unidad = 100 g.
             return $this->scale($per100 ?? [], $quantity, $quantity);
         }
@@ -59,6 +62,7 @@ class NutritionMacroCalculator
         // 3) Medidas caseras → gramos por equivalencia → per_100g.
         if (isset(self::HOUSEHOLD_GRAMS[$unit])) {
             $grams = $quantity * self::HOUSEHOLD_GRAMS[$unit];
+
             return $this->scale($per100 ?? [], $grams / 100.0, $this->multFromGrams($food, $grams));
         }
 
@@ -67,6 +71,7 @@ class NutritionMacroCalculator
         if ($perServing !== null) {
             return $this->scale($perServing, $quantity, $quantity);
         }
+
         return $this->scale($per100 ?? [], $quantity / 100.0, $this->multFromGrams($food, $quantity));
     }
 
@@ -78,6 +83,7 @@ class NutritionMacroCalculator
             'sugar' => $f->sugar_per_100g, 'fiber' => $f->fiber_per_100g,
             'sodium' => $f->sodium_per_100g, 'saturated_fat' => $f->saturated_fat_per_100g,
         ];
+
         return $this->hasAny($m) ? $m : null;
     }
 
@@ -89,6 +95,7 @@ class NutritionMacroCalculator
             'sugar' => $f->sugar_per_serving, 'fiber' => $f->fiber_per_serving,
             'sodium' => $f->sodium_per_serving, 'saturated_fat' => null,
         ];
+
         return $this->hasAny($m) ? $m : null;
     }
 
@@ -99,6 +106,7 @@ class NutritionMacroCalculator
                 return true;
             }
         }
+
         return false;
     }
 
@@ -118,6 +126,7 @@ class NutritionMacroCalculator
             $out[$k] = $v === null ? ($k === 'calories' || in_array($k, ['protein', 'carbs', 'fat'], true) ? 0.0 : null)
                 : round(max(0.0, (float) $v * $factor), 1);
         }
+
         return $out;
     }
 }

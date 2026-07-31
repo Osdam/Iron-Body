@@ -28,7 +28,7 @@ class FiscalProfileResolver
     public function resolveForPayment(Payment $payment): array
     {
         $member = $payment->member_id ? Member::find($payment->member_id) : null;
-        $user   = $payment->user_id ? User::find($payment->user_id) : null;
+        $user = $payment->user_id ? User::find($payment->user_id) : null;
 
         $profile = $this->findProfile($user?->id, $member?->id, $member?->identity_id);
 
@@ -88,22 +88,22 @@ class FiscalProfileResolver
     private function fromProfile(FiscalProfile $p, ?string $solicitado = null): array
     {
         return [
-            'doc_type'         => $p->doc_type,
-            'doc_number'       => $p->doc_number,
-            'dv'               => $p->dv,
-            'name'             => $p->legal_name ?: ($p->user?->name ?? $p->member?->full_name),
-            'legal_name'       => $p->legal_name,
-            'person_type'      => $p->person_type,
-            'email'            => InvoiceEmail::primeroEntregable(
+            'doc_type' => $p->doc_type,
+            'doc_number' => $p->doc_number,
+            'dv' => $p->dv,
+            'name' => $p->legal_name ?: ($p->user?->name ?? $p->member?->full_name),
+            'legal_name' => $p->legal_name,
+            'person_type' => $p->person_type,
+            'email' => InvoiceEmail::primeroEntregable(
                 $solicitado,
                 $p->email,
                 $p->user?->email,
                 $p->member?->email,
             ),
-            'phone'            => $p->phone,
-            'address'          => $p->address,
-            'city_code'        => $p->city_code,
-            'department_code'  => $p->department_code,
+            'phone' => $p->phone,
+            'address' => $p->address,
+            'city_code' => $p->city_code,
+            'department_code' => $p->department_code,
             'is_final_consumer' => false,
         ];
     }
@@ -114,18 +114,18 @@ class FiscalProfileResolver
         $cf = (array) config('billing.consumer_final');
 
         return [
-            'doc_type'         => $cf['document_type'] ?? null,
-            'doc_number'       => $cf['document_number'] ?? null,
-            'dv'               => null,
-            'name'             => $cf['name'] ?? 'Consumidor final',
-            'legal_name'       => $cf['name'] ?? 'Consumidor final',
-            'person_type'      => null,
+            'doc_type' => $cf['document_type'] ?? null,
+            'doc_number' => $cf['document_number'] ?? null,
+            'dv' => null,
+            'name' => $cf['name'] ?? 'Consumidor final',
+            'legal_name' => $cf['name'] ?? 'Consumidor final',
+            'person_type' => null,
             // Contacto real para entrega del comprobante (no es la identidad fiscal).
-            'email'            => $contactEmail,
-            'phone'            => $contactPhone,
-            'address'          => null,
-            'city_code'        => null,
-            'department_code'  => null,
+            'email' => $contactEmail,
+            'phone' => $contactPhone,
+            'address' => null,
+            'city_code' => null,
+            'department_code' => null,
             'is_final_consumer' => true,
         ];
     }

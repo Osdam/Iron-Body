@@ -61,7 +61,7 @@ class AutomationEventService
         } catch (\Throwable $e) {
             Log::warning('automation.event.trainer_task_failed', [
                 'event_id' => $event->id,
-                'reason'   => class_basename($e),
+                'reason' => class_basename($e),
             ]);
         }
 
@@ -99,6 +99,7 @@ class AutomationEventService
                 }
                 $out[$key] = is_array($value) ? $clean($value) : $value;
             }
+
             return $out;
         };
 
@@ -113,6 +114,6 @@ class AutomationEventService
 
     private function generateKey(string $eventType, ?int $memberId): string
     {
-        return $eventType . ':' . ($memberId ?? 'global') . ':' . (string) Str::uuid();
+        return $eventType.':'.($memberId ?? 'global').':'.(string) Str::uuid();
     }
 }

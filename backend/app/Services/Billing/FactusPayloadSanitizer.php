@@ -49,7 +49,7 @@ class FactusPayloadSanitizer
             if (is_array($value)) {
                 $out[$key] = $this->clean($value, $maxString);
             } elseif ($maxString !== null && is_string($value) && mb_strlen($value) > $maxString) {
-                $out[$key] = mb_substr($value, 0, $maxString) . '…[truncated]';
+                $out[$key] = mb_substr($value, 0, $maxString).'…[truncated]';
             } else {
                 $out[$key] = $value;
             }

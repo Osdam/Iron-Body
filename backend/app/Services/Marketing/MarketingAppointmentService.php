@@ -17,9 +17,7 @@ use Illuminate\Http\Request;
  */
 class MarketingAppointmentService
 {
-    public function __construct(private readonly MarketingAppointmentAuthorizationService $authz)
-    {
-    }
+    public function __construct(private readonly MarketingAppointmentAuthorizationService $authz) {}
 
     /** Consulta paginada con filtros + scoping por rol (comercial: propias/sin asignar). */
     public function list(Request $request, ?Admin $viewer): LengthAwarePaginator
@@ -98,20 +96,20 @@ class MarketingAppointmentService
         }
 
         return MarketingAppointment::create([
-            'marketing_lead_id'         => $data['marketing_lead_id'] ?? null,
+            'marketing_lead_id' => $data['marketing_lead_id'] ?? null,
             'marketing_conversation_id' => $data['marketing_conversation_id'] ?? null,
-            'assigned_to_admin_id'      => $data['assigned_to_admin_id'] ?? $createdBy,
-            'created_by_admin_id'       => $createdBy,
-            'type'                      => $data['type'],
-            'status'                    => MarketingAppointment::STATUS_SCHEDULED,
-            'title'                     => $data['title'],
-            'notes'                     => $data['notes'] ?? null,
-            'scheduled_at'              => $data['scheduled_at'],
-            'duration_minutes'          => $data['duration_minutes'] ?? 30,
-            'location'                  => $data['location'] ?? null,
-            'contact_phone'             => $data['contact_phone'] ?? $lead?->phone,
-            'contact_name'              => $data['contact_name'] ?? $lead?->name,
-            'reminder_at'               => $data['reminder_at'] ?? null,
+            'assigned_to_admin_id' => $data['assigned_to_admin_id'] ?? $createdBy,
+            'created_by_admin_id' => $createdBy,
+            'type' => $data['type'],
+            'status' => MarketingAppointment::STATUS_SCHEDULED,
+            'title' => $data['title'],
+            'notes' => $data['notes'] ?? null,
+            'scheduled_at' => $data['scheduled_at'],
+            'duration_minutes' => $data['duration_minutes'] ?? 30,
+            'location' => $data['location'] ?? null,
+            'contact_phone' => $data['contact_phone'] ?? $lead?->phone,
+            'contact_name' => $data['contact_name'] ?? $lead?->name,
+            'reminder_at' => $data['reminder_at'] ?? null,
         ]);
     }
 
@@ -119,16 +117,16 @@ class MarketingAppointmentService
     public function update(MarketingAppointment $appointment, array $data): MarketingAppointment
     {
         $appointment->fill(array_filter([
-            'type'                 => $data['type'] ?? null,
-            'title'                => $data['title'] ?? null,
-            'notes'                => $data['notes'] ?? null,
-            'scheduled_at'         => $data['scheduled_at'] ?? null,
-            'duration_minutes'     => $data['duration_minutes'] ?? null,
-            'location'             => $data['location'] ?? null,
-            'contact_phone'        => $data['contact_phone'] ?? null,
-            'contact_name'         => $data['contact_name'] ?? null,
+            'type' => $data['type'] ?? null,
+            'title' => $data['title'] ?? null,
+            'notes' => $data['notes'] ?? null,
+            'scheduled_at' => $data['scheduled_at'] ?? null,
+            'duration_minutes' => $data['duration_minutes'] ?? null,
+            'location' => $data['location'] ?? null,
+            'contact_phone' => $data['contact_phone'] ?? null,
+            'contact_name' => $data['contact_name'] ?? null,
             'assigned_to_admin_id' => $data['assigned_to_admin_id'] ?? null,
-            'reminder_at'          => $data['reminder_at'] ?? null,
+            'reminder_at' => $data['reminder_at'] ?? null,
         ], fn ($v) => $v !== null));
 
         // status explícito (p. ej. no_show) si viene y es válido.
@@ -144,7 +142,7 @@ class MarketingAppointmentService
     public function complete(MarketingAppointment $appointment, ?string $note = null): MarketingAppointment
     {
         $appointment->forceFill([
-            'status'       => MarketingAppointment::STATUS_COMPLETED,
+            'status' => MarketingAppointment::STATUS_COMPLETED,
             'completed_at' => now(),
         ]);
         if ($note !== null && trim($note) !== '') {
@@ -158,8 +156,8 @@ class MarketingAppointmentService
     public function cancel(MarketingAppointment $appointment, ?string $reason = null): MarketingAppointment
     {
         $appointment->forceFill([
-            'status'              => MarketingAppointment::STATUS_CANCELLED,
-            'cancelled_at'        => now(),
+            'status' => MarketingAppointment::STATUS_CANCELLED,
+            'cancelled_at' => now(),
             'cancellation_reason' => $reason !== null && trim($reason) !== '' ? trim($reason) : null,
         ])->save();
 
@@ -176,12 +174,12 @@ class MarketingAppointmentService
         $history[] = ['from' => $appointment->scheduled_at?->toIso8601String(), 'at' => now()->toIso8601String()];
 
         $appointment->forceFill([
-            'scheduled_at'     => $scheduledAt,
+            'scheduled_at' => $scheduledAt,
             'duration_minutes' => $durationMinutes ?? $appointment->duration_minutes,
-            'status'           => MarketingAppointment::STATUS_SCHEDULED,
-            'cancelled_at'     => null,
-            'completed_at'     => null,
-            'metadata'         => array_merge($appointment->metadata ?? [], ['reschedules' => $history]),
+            'status' => MarketingAppointment::STATUS_SCHEDULED,
+            'cancelled_at' => null,
+            'completed_at' => null,
+            'metadata' => array_merge($appointment->metadata ?? [], ['reschedules' => $history]),
         ])->save();
 
         return $appointment;
@@ -191,25 +189,25 @@ class MarketingAppointmentService
     public function present(MarketingAppointment $a): array
     {
         return [
-            'id'                        => $a->id,
-            'uuid'                      => $a->uuid,
-            'marketing_lead_id'         => $a->marketing_lead_id,
+            'id' => $a->id,
+            'uuid' => $a->uuid,
+            'marketing_lead_id' => $a->marketing_lead_id,
             'marketing_conversation_id' => $a->marketing_conversation_id,
-            'type'                      => $a->type,
-            'status'                    => $a->status,
-            'title'                     => $a->title,
-            'notes'                     => $a->notes,
-            'scheduled_at'              => $a->scheduled_at?->toIso8601String(),
-            'duration_minutes'          => (int) $a->duration_minutes,
-            'location'                  => $a->location,
-            'contact_name'              => $a->contact_name,
-            'contact_phone'             => $a->contact_phone,
-            'completed_at'              => $a->completed_at?->toIso8601String(),
-            'cancelled_at'              => $a->cancelled_at?->toIso8601String(),
-            'cancellation_reason'       => $a->cancellation_reason,
-            'assigned_to'               => $a->assignedAdmin ? ['id' => $a->assignedAdmin->id, 'name' => $a->assignedAdmin->name] : null,
-            'lead'                      => $a->lead ? ['id' => $a->lead->id, 'name' => $a->lead->name, 'phone' => $a->lead->phone] : null,
-            'created_at'                => $a->created_at?->toIso8601String(),
+            'type' => $a->type,
+            'status' => $a->status,
+            'title' => $a->title,
+            'notes' => $a->notes,
+            'scheduled_at' => $a->scheduled_at?->toIso8601String(),
+            'duration_minutes' => (int) $a->duration_minutes,
+            'location' => $a->location,
+            'contact_name' => $a->contact_name,
+            'contact_phone' => $a->contact_phone,
+            'completed_at' => $a->completed_at?->toIso8601String(),
+            'cancelled_at' => $a->cancelled_at?->toIso8601String(),
+            'cancellation_reason' => $a->cancellation_reason,
+            'assigned_to' => $a->assignedAdmin ? ['id' => $a->assignedAdmin->id, 'name' => $a->assignedAdmin->name] : null,
+            'lead' => $a->lead ? ['id' => $a->lead->id, 'name' => $a->lead->name, 'phone' => $a->lead->phone] : null,
+            'created_at' => $a->created_at?->toIso8601String(),
         ];
     }
 }

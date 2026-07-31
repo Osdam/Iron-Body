@@ -23,8 +23,7 @@ class MarketingAgentActionExecutionService
         private readonly MarketingConversationAssignmentService $assignment,
         private readonly MarketingManualTakeoverService $takeover,
         private readonly MarketingAppointmentService $appointments,
-    ) {
-    }
+    ) {}
 
     /**
      * Ejecuta la acción. Devuelve el modelo actualizado (executed o failed).
@@ -41,18 +40,18 @@ class MarketingAgentActionExecutionService
 
         try {
             $result = match ($action->action_type) {
-                MarketingAgentAction::TYPE_CREATE_NOTE         => $this->execCreateNote($conversation, $payload, $executedByAdminId),
-                MarketingAgentAction::TYPE_ADD_TAG             => $this->execAddTag($conversation, $payload, $executedByAdminId),
-                MarketingAgentAction::TYPE_DRAFT_REPLY         => $this->execDraftReply($payload),
+                MarketingAgentAction::TYPE_CREATE_NOTE => $this->execCreateNote($conversation, $payload, $executedByAdminId),
+                MarketingAgentAction::TYPE_ADD_TAG => $this->execAddTag($conversation, $payload, $executedByAdminId),
+                MarketingAgentAction::TYPE_DRAFT_REPLY => $this->execDraftReply($payload),
                 MarketingAgentAction::TYPE_SUGGEST_APPOINTMENT => $this->execSuggestAppointment($payload),
-                MarketingAgentAction::TYPE_CREATE_APPOINTMENT  => $this->execCreateAppointment($action, $payload, $executedByAdminId),
-                MarketingAgentAction::TYPE_CREATE_FOLLOW_UP    => $this->execCreateFollowUp($action, $payload, $executedByAdminId),
+                MarketingAgentAction::TYPE_CREATE_APPOINTMENT => $this->execCreateAppointment($action, $payload, $executedByAdminId),
+                MarketingAgentAction::TYPE_CREATE_FOLLOW_UP => $this->execCreateFollowUp($action, $payload, $executedByAdminId),
                 MarketingAgentAction::TYPE_ASSIGN_CONVERSATION => $this->execAssign($conversation, $payload, $executedByAdminId),
                 MarketingAgentAction::TYPE_REQUEST_STAFF_REVIEW => $this->execRequestStaffReview($conversation, $payload),
-                MarketingAgentAction::TYPE_PAUSE_AI            => $this->execPauseAi($conversation, $payload, $executedByAdminId),
-                MarketingAgentAction::TYPE_RELEASE_AI          => $this->execReleaseAi($conversation, $executedByAdminId),
+                MarketingAgentAction::TYPE_PAUSE_AI => $this->execPauseAi($conversation, $payload, $executedByAdminId),
+                MarketingAgentAction::TYPE_RELEASE_AI => $this->execReleaseAi($conversation, $executedByAdminId),
                 MarketingAgentAction::TYPE_UPDATE_LEAD_PROFILE => $this->execUpdateLeadProfile($action, $payload),
-                default                                        => null,
+                default => null,
             };
 
             if ($result === null) {
@@ -60,11 +59,11 @@ class MarketingAgentActionExecutionService
             }
 
             $action->forceFill([
-                'status'               => MarketingAgentAction::STATUS_EXECUTED,
-                'result'               => $result,
+                'status' => MarketingAgentAction::STATUS_EXECUTED,
+                'result' => $result,
                 'executed_by_admin_id' => $executedByAdminId,
-                'executed_at'          => now(),
-                'failed_reason'        => null,
+                'executed_at' => now(),
+                'failed_reason' => null,
             ])->save();
 
             Log::info('marketing.agent_action.executed', [
@@ -96,10 +95,10 @@ class MarketingAgentActionExecutionService
 
         return match ($type) {
             MarketingAgentAction::TYPE_CREATE_NOTE => $this->str($payload, 'body') ? null : 'note_body_required',
-            MarketingAgentAction::TYPE_ADD_TAG     => $this->str($payload, 'tag') ? null : 'tag_required',
+            MarketingAgentAction::TYPE_ADD_TAG => $this->str($payload, 'tag') ? null : 'tag_required',
             MarketingAgentAction::TYPE_DRAFT_REPLY => $this->str($payload, 'draft') ? null : 'draft_required',
             MarketingAgentAction::TYPE_CREATE_APPOINTMENT => $this->validateAppointment($payload),
-            MarketingAgentAction::TYPE_CREATE_FOLLOW_UP   => $this->str($payload, 'due_at') ? null : 'due_at_required',
+            MarketingAgentAction::TYPE_CREATE_FOLLOW_UP => $this->str($payload, 'due_at') ? null : 'due_at_required',
             MarketingAgentAction::TYPE_ASSIGN_CONVERSATION => isset($payload['assigned_to_admin_id']) ? null : 'assignee_required',
             MarketingAgentAction::TYPE_UPDATE_LEAD_PROFILE => (isset($payload['temperature']) || isset($payload['stage'])) ? null : 'profile_field_required',
             // suggest_appointment / request_staff_review / pause_ai / release_ai: sin payload obligatorio
@@ -153,13 +152,13 @@ class MarketingAgentActionExecutionService
     private function execCreateAppointment(MarketingAgentAction $action, array $p, ?int $admin): array
     {
         $appointment = $this->appointments->create([
-            'type'                      => $p['type'] ?? 'visit',
-            'title'                     => $p['title'],
-            'scheduled_at'              => $p['scheduled_at'],
-            'duration_minutes'          => $p['duration_minutes'] ?? 45,
-            'location'                  => $p['location'] ?? null,
-            'notes'                     => $p['notes'] ?? null,
-            'marketing_lead_id'         => $action->marketing_lead_id,
+            'type' => $p['type'] ?? 'visit',
+            'title' => $p['title'],
+            'scheduled_at' => $p['scheduled_at'],
+            'duration_minutes' => $p['duration_minutes'] ?? 45,
+            'location' => $p['location'] ?? null,
+            'notes' => $p['notes'] ?? null,
+            'marketing_lead_id' => $action->marketing_lead_id,
             'marketing_conversation_id' => $action->marketing_conversation_id,
         ], $admin);
 
@@ -169,14 +168,14 @@ class MarketingAgentActionExecutionService
     private function execCreateFollowUp(MarketingAgentAction $action, array $p, ?int $admin): array
     {
         $followup = MarketingFollowup::create([
-            'lead_id'                   => $action->marketing_lead_id,
+            'lead_id' => $action->marketing_lead_id,
             'marketing_conversation_id' => $action->marketing_conversation_id,
-            'assigned_to_admin_id'      => $p['assigned_to_admin_id'] ?? $admin,
-            'due_at'                    => $p['due_at'],
-            'type'                      => $p['type'] ?? 'task',
-            'status'                    => MarketingFollowup::STATUS_PENDING,
-            'reason'                    => $p['reason'] ?? null,
-            'message_template'          => $p['message_template'] ?? null,
+            'assigned_to_admin_id' => $p['assigned_to_admin_id'] ?? $admin,
+            'due_at' => $p['due_at'],
+            'type' => $p['type'] ?? 'task',
+            'status' => MarketingFollowup::STATUS_PENDING,
+            'reason' => $p['reason'] ?? null,
+            'message_template' => $p['message_template'] ?? null,
         ]);
 
         return ['followup_id' => $followup->id];
@@ -194,7 +193,7 @@ class MarketingAgentActionExecutionService
         // Marca revisión SIN apagar la IA (alerta para el equipo).
         $c->forceFill([
             'staff_review_pending' => true,
-            'staff_review_reason'  => $p['reason'] ?? 'agent_requested',
+            'staff_review_reason' => $p['reason'] ?? 'agent_requested',
         ])->save();
 
         return ['staff_review_pending' => true, 'ai_enabled' => (bool) $c->ai_enabled];
@@ -250,10 +249,10 @@ class MarketingAgentActionExecutionService
     private function fail(MarketingAgentAction $action, string $reason, ?int $admin): MarketingAgentAction
     {
         $action->forceFill([
-            'status'               => MarketingAgentAction::STATUS_FAILED,
-            'failed_reason'        => $reason,
+            'status' => MarketingAgentAction::STATUS_FAILED,
+            'failed_reason' => $reason,
             'executed_by_admin_id' => $admin,
-            'executed_at'          => now(),
+            'executed_at' => now(),
         ])->save();
 
         return $action;

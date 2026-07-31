@@ -24,8 +24,7 @@ class NutritionGoalService
     public function __construct(
         private NutritionGoalCalculatorService $calculator,
         private NutritionGoalMapper $mapper,
-    ) {
-    }
+    ) {}
 
     /**
      * Estado de la meta para la app: meta calculada/manual O setup_required con
@@ -39,19 +38,21 @@ class NutritionGoalService
         if ($goal !== null) {
             $payload = $goal->toPublicArray();
             $recalc = $this->recalculationSuggestion($member, $goal);
+
             return [
-                'status'             => $payload['status'],
-                'goal'               => $payload,
+                'status' => $payload['status'],
+                'goal' => $payload,
                 'needs_recalculation' => $recalc !== null,
-                'recalculation'      => $recalc,
+                'recalculation' => $recalc,
             ];
         }
 
         // Sin meta activa → setup_required con prellenado.
         $resolved = $this->buildInputs($member);
+
         return [
-            'status'  => 'setup_required',
-            'goal'    => null,
+            'status' => 'setup_required',
+            'goal' => null,
             'missing' => $resolved['missing'],
             'prefill' => $resolved['prefill'],
             'needs_recalculation' => false,
@@ -73,13 +74,14 @@ class NutritionGoalService
         }
         if (! empty($resolved['missing'])) {
             return [
-                'status'  => 'setup_required',
+                'status' => 'setup_required',
                 'missing' => $resolved['missing'],
                 'prefill' => $resolved['prefill'],
             ];
         }
 
         $result = $this->calculator->calculate($resolved['inputs']);
+
         return ['status' => 'preview', 'goal' => $result, 'inputs' => $resolved['prefill']];
     }
 
@@ -97,7 +99,7 @@ class NutritionGoalService
         }
         if (! empty($resolved['missing'])) {
             return [
-                'status'  => 'setup_required',
+                'status' => 'setup_required',
                 'missing' => $resolved['missing'],
                 'prefill' => $resolved['prefill'],
             ];
@@ -113,38 +115,38 @@ class NutritionGoalService
                 ->update(['is_active' => false]);
 
             return NutritionGoal::create([
-                'member_id'      => $member->id,
+                'member_id' => $member->id,
                 'daily_calories' => $result['daily_calories'],
-                'protein_g'      => $result['protein_g'],
-                'carbs_g'        => $result['carbs_g'],
-                'fat_g'          => $result['fat_g'],
-                'fiber_g'        => $result['fiber_g'],
-                'goal_type'      => $this->legacyGoalType($result['objective']),
-                'objective'      => $result['objective'],
+                'protein_g' => $result['protein_g'],
+                'carbs_g' => $result['carbs_g'],
+                'fat_g' => $result['fat_g'],
+                'fiber_g' => $result['fiber_g'],
+                'goal_type' => $this->legacyGoalType($result['objective']),
+                'objective' => $result['objective'],
                 'experience_level' => $inputs['experience_level'] ?? null,
-                'gender_identity'  => $inputs['gender_identity'] ?? null,
-                'metabolic_sex'    => $result['metabolic_sex'],
+                'gender_identity' => $inputs['gender_identity'] ?? null,
+                'metabolic_sex' => $result['metabolic_sex'],
                 'age_at_calculation' => $inputs['age'],
-                'birthdate'        => $inputs['birthdate'] ?? null,
-                'weight_kg'        => $inputs['weight_kg'],
-                'height_cm'        => $inputs['height_cm'],
+                'birthdate' => $inputs['birthdate'] ?? null,
+                'weight_kg' => $inputs['weight_kg'],
+                'height_cm' => $inputs['height_cm'],
                 'target_weight_kg' => $inputs['target_weight_kg'] ?? null,
-                'activity_level'   => $result['activity_level'],
-                'activity_factor'  => $result['activity_factor'],
+                'activity_level' => $result['activity_level'],
+                'activity_factor' => $result['activity_factor'],
                 'training_days_per_week' => $inputs['training_days_per_week'] ?? null,
-                'training_type'    => $inputs['training_type'] ?? null,
-                'pace'             => $inputs['pace'] ?? null,
-                'formula'          => $result['formula'],
-                'formula_version'  => $result['formula_version'],
-                'bmr'              => $result['bmr'],
-                'tdee'             => $result['tdee'],
-                'source'           => 'calculated',
-                'status'           => 'complete',
+                'training_type' => $inputs['training_type'] ?? null,
+                'pace' => $inputs['pace'] ?? null,
+                'formula' => $result['formula'],
+                'formula_version' => $result['formula_version'],
+                'bmr' => $result['bmr'],
+                'tdee' => $result['tdee'],
+                'source' => 'calculated',
+                'status' => 'complete',
                 'is_manual_override' => false,
-                'warnings'         => $result['warnings'],
-                'explanation'      => $result['explanation'],
-                'calculated_at'    => now(),
-                'is_active'        => true,
+                'warnings' => $result['warnings'],
+                'explanation' => $result['explanation'],
+                'calculated_at' => now(),
+                'is_active' => true,
             ]);
         });
 
@@ -162,9 +164,9 @@ class NutritionGoalService
         $current = $this->activeGoal($member);
         if ($current && $current->is_manual_override && ! $force) {
             return [
-                'status'  => 'manual_locked',
+                'status' => 'manual_locked',
                 'message' => 'La meta es manual. Confirma para recalcular y reemplazarla.',
-                'goal'    => $current->toPublicArray(),
+                'goal' => $current->toPublicArray(),
             ];
         }
 
@@ -238,21 +240,21 @@ class NutritionGoalService
             || ($age !== null && $age < ($ranges['minor_age_threshold'] ?? 18));
 
         $inputs = [
-            'metabolic_sex'   => $metabolicSex,
+            'metabolic_sex' => $metabolicSex,
             'gender_identity' => $genderIdentity,
-            'age'             => $age,
-            'birthdate'       => $birthdate,
-            'weight_kg'       => $weight,
-            'height_cm'       => $height,
-            'objective'       => $objective,
+            'age' => $age,
+            'birthdate' => $birthdate,
+            'weight_kg' => $weight,
+            'height_cm' => $height,
+            'objective' => $objective,
             'experience_level' => $experience,
-            'activity_level'  => $activityLevel,
+            'activity_level' => $activityLevel,
             'activity_factor' => isset($overrides['activity_factor']) ? (float) $overrides['activity_factor'] : null,
             'training_days_per_week' => $trainingDays,
-            'training_type'   => $overrides['training_type'] ?? null,
+            'training_type' => $overrides['training_type'] ?? null,
             'target_weight_kg' => $this->floatOrNull($overrides['target_weight_kg'] ?? null),
-            'pace'            => $overrides['pace'] ?? null,
-            'is_minor'        => $isMinor,
+            'pace' => $overrides['pace'] ?? null,
+            'is_minor' => $isMinor,
         ];
 
         // ── Faltantes (campos obligatorios para calcular) ────────────────────
@@ -277,9 +279,9 @@ class NutritionGoalService
         }
 
         return [
-            'inputs'  => $inputs,
+            'inputs' => $inputs,
             'missing' => $missing,
-            'errors'  => $errors,
+            'errors' => $errors,
             'prefill' => $this->prefill($inputs),
         ];
     }
@@ -301,12 +303,13 @@ class NutritionGoalService
         if (abs($delta) < $threshold) {
             return null;
         }
+
         return [
-            'reason'        => 'weight_changed',
+            'reason' => 'weight_changed',
             'previous_weight_kg' => (float) $goal->weight_kg,
-            'current_weight_kg'  => $currentWeight,
-            'delta_kg'      => $delta,
-            'message'       => 'Tu peso cambió. ¿Quieres recalcular tu objetivo nutricional?',
+            'current_weight_kg' => $currentWeight,
+            'delta_kg' => $delta,
+            'message' => 'Tu peso cambió. ¿Quieres recalcular tu objetivo nutricional?',
         ];
     }
 
@@ -314,14 +317,14 @@ class NutritionGoalService
     private function snapshotOverrides(NutritionGoal $goal): array
     {
         return array_filter([
-            'objective'        => $goal->objective,
+            'objective' => $goal->objective,
             'experience_level' => $goal->experience_level,
-            'metabolic_sex'    => $goal->metabolic_sex,
-            'activity_level'   => $goal->activity_level,
+            'metabolic_sex' => $goal->metabolic_sex,
+            'activity_level' => $goal->activity_level,
             'training_days_per_week' => $goal->training_days_per_week,
-            'training_type'    => $goal->training_type,
+            'training_type' => $goal->training_type,
             'target_weight_kg' => $goal->target_weight_kg,
-            'pace'             => $goal->pace,
+            'pace' => $goal->pace,
         ], fn ($v) => $v !== null);
     }
 
@@ -370,19 +373,19 @@ class NutritionGoalService
     private function prefill(array $inputs): array
     {
         return [
-            'gender_identity'  => $inputs['gender_identity'],
-            'metabolic_sex'    => $inputs['metabolic_sex'],
-            'age'              => $inputs['age'],
-            'birthdate'        => $inputs['birthdate'],
-            'weight_kg'        => $inputs['weight_kg'],
-            'height_cm'        => $inputs['height_cm'],
-            'objective'        => $inputs['objective'],
+            'gender_identity' => $inputs['gender_identity'],
+            'metabolic_sex' => $inputs['metabolic_sex'],
+            'age' => $inputs['age'],
+            'birthdate' => $inputs['birthdate'],
+            'weight_kg' => $inputs['weight_kg'],
+            'height_cm' => $inputs['height_cm'],
+            'objective' => $inputs['objective'],
             'experience_level' => $inputs['experience_level'],
-            'activity_level'   => $inputs['activity_level'],
+            'activity_level' => $inputs['activity_level'],
             'training_days_per_week' => $inputs['training_days_per_week'],
             'target_weight_kg' => $inputs['target_weight_kg'],
-            'pace'             => $inputs['pace'],
-            'is_minor'         => $inputs['is_minor'],
+            'pace' => $inputs['pace'],
+            'is_minor' => $inputs['is_minor'],
         ];
     }
 }

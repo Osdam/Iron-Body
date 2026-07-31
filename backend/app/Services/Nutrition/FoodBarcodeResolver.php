@@ -30,8 +30,7 @@ class FoodBarcodeResolver
         private NutritionFoodNormalizer $foodNormalizer,
         private OpenFoodFactsNutritionProvider $openFoodFacts,
         private NutritionixProvider $nutritionix,
-    ) {
-    }
+    ) {}
 
     /** @return array{status:string,food?:array,reason?:string,barcode?:string,message?:string} */
     public function resolve(string $raw, Member $member): array
@@ -41,8 +40,8 @@ class FoodBarcodeResolver
 
         if (! $this->normalizer->isPlausible($code)) {
             return [
-                'status'  => 'invalid',
-                'reason'  => 'bad_read',
+                'status' => 'invalid',
+                'reason' => 'bad_read',
                 'barcode' => $code,
                 'message' => 'No pudimos leer bien el código. Acerca la cámara e intenta de nuevo.',
             ];
@@ -60,6 +59,7 @@ class FoodBarcodeResolver
             Log::info('nutrition:barcode:resolved', [
                 'member_id' => $member->id, 'source' => 'local', 'type' => $this->normalizer->type($code),
             ]);
+
             return $this->result($local);
         }
 
@@ -84,18 +84,21 @@ class FoodBarcodeResolver
                                 'member_id' => $member->id, 'source' => $provider->source(),
                                 'type' => $this->normalizer->type($code),
                             ]);
+
                             return $this->result($food);
                         }
                     }
                 }
             } catch (Throwable $e) {
                 Log::warning('nutrition:barcode:error', ['member_id' => $member->id]);
+
                 return ['status' => 'error', 'message' => 'No pudimos consultar el producto. Intenta de nuevo.'];
             }
         }
 
         // 3) ¿Existe el producto por nombre/marca aunque no por barcode? (pista útil)
         $reason = $this->normalizer->hasValidCheckDigit($code) ? 'not_found_provider' : 'bad_read';
+
         return $this->notFound($canonical, $reason, $member, $code);
     }
 
@@ -110,12 +113,13 @@ class FoodBarcodeResolver
         if ($food->isMacroComplete()) {
             return ['status' => 'found', 'food' => $food->toApiArray()];
         }
+
         return [
-            'status'          => 'incomplete',
-            'reason'          => 'incomplete',
+            'status' => 'incomplete',
+            'reason' => 'incomplete',
             'action_required' => 'complete_macros',
-            'message'         => 'Encontramos el producto, pero faltan datos nutricionales.',
-            'food'            => $food->toApiArray(),
+            'message' => 'Encontramos el producto, pero faltan datos nutricionales.',
+            'food' => $food->toApiArray(),
         ];
     }
 
@@ -126,16 +130,17 @@ class FoodBarcodeResolver
             'type' => $this->normalizer->type($original),
             'valid_check' => $this->normalizer->hasValidCheckDigit($original),
         ]);
+
         return [
-            'status'          => 'not_found',
-            'code'            => 'food_barcode_not_found',
-            'reason'          => $reason,
-            'barcode'         => $canonical,
+            'status' => 'not_found',
+            'code' => 'food_barcode_not_found',
+            'reason' => $reason,
+            'barcode' => $canonical,
             'action_required' => 'create_or_scan',
-            'message'         => 'Este producto aún no está en nuestra base Colombia. '
-                . 'Puedes crearlo en 30 segundos y quedará disponible para próximas búsquedas.',
-            'actions'         => ['create_manual', 'scan_label', 'search_by_name', 'scan_another'],
-            'options'         => ['scan_label', 'create_manual', 'search_by_name', 'scan_other'],
+            'message' => 'Este producto aún no está en nuestra base Colombia. '
+                .'Puedes crearlo en 30 segundos y quedará disponible para próximas búsquedas.',
+            'actions' => ['create_manual', 'scan_label', 'search_by_name', 'scan_another'],
+            'options' => ['scan_label', 'create_manual', 'search_by_name', 'scan_other'],
         ];
     }
 }

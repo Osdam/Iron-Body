@@ -26,9 +26,7 @@ use Illuminate\Http\Request;
  */
 class IronAiMembershipAccessService
 {
-    public function __construct(private readonly IronAiService $ironAi)
-    {
-    }
+    public function __construct(private readonly IronAiService $ironAi) {}
 
     // ─────────────────────────────────────────────────────────────────────────
     // Orquestador principal
@@ -46,9 +44,9 @@ class IronAiMembershipAccessService
         $decision = $this->decide($membership, $capabilities, $usage);
 
         return array_merge($ctx, [
-            'membership'   => $membership,
+            'membership' => $membership,
             'capabilities' => $capabilities,
-            'usage'        => $usage,
+            'usage' => $usage,
         ], $decision);
     }
 
@@ -65,11 +63,11 @@ class IronAiMembershipAccessService
         $identityKey = $ctx['document'] ?: $ctx['conversation_id'];
 
         return [
-            'member'          => $ctx['member'],
-            'user'            => $ctx['user'],
-            'document'        => $ctx['document'],
+            'member' => $ctx['member'],
+            'user' => $ctx['user'],
+            'document' => $ctx['document'],
             'conversation_id' => $ctx['conversation_id'],
-            'identity_key'    => $identityKey,
+            'identity_key' => $identityKey,
         ];
     }
 
@@ -118,11 +116,11 @@ class IronAiMembershipAccessService
         }
 
         return [
-            'active'    => $active,
+            'active' => $active,
             'plan_name' => $active ? $planName : null,
-            'plan_id'   => $active ? $plan?->id : null,
-            'plan'      => $active ? $plan : null,
-            'end_date'  => $endDate,
+            'plan_id' => $active ? $plan?->id : null,
+            'plan' => $active ? $plan : null,
+            'end_date' => $endDate,
         ];
     }
 
@@ -230,8 +228,8 @@ class IronAiMembershipAccessService
     private function normalize(string $s): string
     {
         $s = mb_strtolower(trim($s));
-        $from = ['á','é','í','ó','ú','ü','ñ'];
-        $to   = ['a','e','i','o','u','u','n'];
+        $from = ['á', 'é', 'í', 'ó', 'ú', 'ü', 'ñ'];
+        $to = ['a', 'e', 'i', 'o', 'u', 'u', 'n'];
 
         return str_replace($from, $to, $s);
     }
@@ -275,9 +273,9 @@ class IronAiMembershipAccessService
         $monthStart = Carbon::now()->startOfMonth();
 
         return [
-            'lifetime'    => (clone $base())->count(),
-            'today'       => (clone $base())->whereDate('created_at', Carbon::today())->count(),
-            'month'       => (clone $base())->where('created_at', '>=', $monthStart)->count(),
+            'lifetime' => (clone $base())->count(),
+            'today' => (clone $base())->whereDate('created_at', Carbon::today())->count(),
+            'month' => (clone $base())->where('created_at', '>=', $monthStart)->count(),
             'audio_month' => (clone $base())->where('kind', IronAiUsageLog::KIND_AUDIO)->where('created_at', '>=', $monthStart)->count(),
             'image_month' => (clone $base())->where('kind', IronAiUsageLog::KIND_IMAGE)->where('created_at', '>=', $monthStart)->count(),
         ];
@@ -286,8 +284,8 @@ class IronAiMembershipAccessService
     public function getRemainingMessages(?Member $member, ?User $user, ?string $document = null): int
     {
         $ctx = [
-            'member'       => $member,
-            'user'         => $user,
+            'member' => $member,
+            'user' => $user,
             'identity_key' => $document ?: ($member?->document_number ?? $user?->document),
         ];
         $membership = $this->getCurrentMembership($member, $user);
@@ -311,11 +309,11 @@ class IronAiMembershipAccessService
         // IA apagada (master) o chat de texto deshabilitado para este plan.
         if (! ($caps['ai_enabled'] ?? true) || ! ($caps['ai_chat_enabled'] ?? true)) {
             return [
-                'access_type'      => $accessType,
-                'can_use_chat'     => false,
-                'remaining'        => 0,
+                'access_type' => $accessType,
+                'can_use_chat' => false,
+                'remaining' => 0,
                 'upgrade_required' => true,
-                'block'            => $this->block('AI_DISABLED'),
+                'block' => $this->block('AI_DISABLED'),
             ];
         }
 
@@ -327,11 +325,11 @@ class IronAiMembershipAccessService
             $canUse = $remaining > 0;
 
             return [
-                'access_type'      => 'free_trial',
-                'can_use_chat'     => $canUse,
-                'remaining'        => $remaining,
+                'access_type' => 'free_trial',
+                'can_use_chat' => $canUse,
+                'remaining' => $remaining,
                 'upgrade_required' => ! $canUse,
-                'block'            => $canUse ? null : $this->block('FREE_TRIAL_LIMIT_REACHED', $limit),
+                'block' => $canUse ? null : $this->block('FREE_TRIAL_LIMIT_REACHED', $limit),
             ];
         }
 
@@ -342,40 +340,40 @@ class IronAiMembershipAccessService
 
         if ($daily !== null && $usage['today'] >= (int) $daily) {
             return [
-                'access_type'      => 'membership',
-                'can_use_chat'     => false,
-                'remaining'        => 0,
+                'access_type' => 'membership',
+                'can_use_chat' => false,
+                'remaining' => 0,
                 'upgrade_required' => true,
-                'block'            => $this->block('DAILY_LIMIT_REACHED'),
+                'block' => $this->block('DAILY_LIMIT_REACHED'),
             ];
         }
         if ($monthly !== null && $usage['month'] >= (int) $monthly) {
             return [
-                'access_type'      => 'membership',
-                'can_use_chat'     => false,
-                'remaining'        => 0,
+                'access_type' => 'membership',
+                'can_use_chat' => false,
+                'remaining' => 0,
                 'upgrade_required' => true,
-                'block'            => $this->block('MONTHLY_LIMIT_REACHED'),
+                'block' => $this->block('MONTHLY_LIMIT_REACHED'),
             ];
         }
         if ($fairUse !== null && $usage['month'] >= (int) $fairUse) {
             return [
-                'access_type'      => 'membership',
-                'can_use_chat'     => false,
-                'remaining'        => 0,
+                'access_type' => 'membership',
+                'can_use_chat' => false,
+                'remaining' => 0,
                 'upgrade_required' => true,
-                'block'            => $this->block('FAIR_USE_LIMIT_REACHED'),
+                'block' => $this->block('FAIR_USE_LIMIT_REACHED'),
             ];
         }
 
         $remaining = $monthly !== null ? max(0, (int) $monthly - $usage['month']) : null;
 
         return [
-            'access_type'      => 'membership',
-            'can_use_chat'     => true,
-            'remaining'        => $remaining,
+            'access_type' => 'membership',
+            'can_use_chat' => true,
+            'remaining' => $remaining,
             'upgrade_required' => false,
-            'block'            => null,
+            'block' => null,
         ];
     }
 
@@ -410,9 +408,9 @@ class IronAiMembershipAccessService
         }
 
         return [
-            'can'       => true,
+            'can' => true,
             'remaining' => $limit !== null ? max(0, (int) $limit - $used) : null,
-            'block'     => null,
+            'block' => null,
         ];
     }
 
@@ -441,9 +439,9 @@ class IronAiMembershipAccessService
         }
 
         return [
-            'can'       => true,
+            'can' => true,
             'remaining' => $limit !== null ? max(0, (int) $limit - $used) : null,
-            'block'     => null,
+            'block' => null,
         ];
     }
 
@@ -492,81 +490,81 @@ class IronAiMembershipAccessService
     {
         return match ($code) {
             'FREE_TRIAL_LIMIT_REACHED' => [
-                'code'             => $code,
-                'reply'            => 'Ya usaste tus ' . ($limit ?? 5) . ' consultas gratuitas de IRON IA. Compra una membresía para seguir recibiendo asistencia personalizada.',
+                'code' => $code,
+                'reply' => 'Ya usaste tus '.($limit ?? 5).' consultas gratuitas de IRON IA. Compra una membresía para seguir recibiendo asistencia personalizada.',
                 'upgrade_required' => true,
-                'cta'              => ['title' => 'Desbloquear IRON IA', 'action' => 'Ver membresías'],
-                'suggestions'      => ['Ver membresías', 'Comprar plan', 'Volver al inicio'],
+                'cta' => ['title' => 'Desbloquear IRON IA', 'action' => 'Ver membresías'],
+                'suggestions' => ['Ver membresías', 'Comprar plan', 'Volver al inicio'],
             ],
             'DAILY_LIMIT_REACHED' => [
-                'code'             => $code,
-                'reply'            => 'Alcanzaste el límite diario de IRON IA de tu membresía. Vuelve mañana o mejora tu plan para más consultas.',
+                'code' => $code,
+                'reply' => 'Alcanzaste el límite diario de IRON IA de tu membresía. Vuelve mañana o mejora tu plan para más consultas.',
                 'upgrade_required' => true,
-                'cta'              => ['title' => 'Mejorar plan', 'action' => 'Ver membresías'],
-                'suggestions'      => ['Mejorar plan', 'Ver membresías', 'Volver al inicio'],
+                'cta' => ['title' => 'Mejorar plan', 'action' => 'Ver membresías'],
+                'suggestions' => ['Mejorar plan', 'Ver membresías', 'Volver al inicio'],
             ],
             'MONTHLY_LIMIT_REACHED', 'FAIR_USE_LIMIT_REACHED' => [
-                'code'             => $code,
-                'reply'            => 'Has alcanzado el límite de IRON IA de tu membresía. Mejora tu plan para seguir usando el asistente.',
+                'code' => $code,
+                'reply' => 'Has alcanzado el límite de IRON IA de tu membresía. Mejora tu plan para seguir usando el asistente.',
                 'upgrade_required' => true,
-                'cta'              => ['title' => 'Mejorar plan', 'action' => 'Ver membresías'],
-                'suggestions'      => ['Mejorar plan', 'Ver membresías', 'Volver al inicio'],
+                'cta' => ['title' => 'Mejorar plan', 'action' => 'Ver membresías'],
+                'suggestions' => ['Mejorar plan', 'Ver membresías', 'Volver al inicio'],
             ],
             'PROGRESS_ANALYSIS_LOCKED' => [
-                'code'             => $code,
-                'reply'            => 'El análisis de progreso con IA está disponible en una membresía superior. Mejora tu plan para desbloquearlo.',
+                'code' => $code,
+                'reply' => 'El análisis de progreso con IA está disponible en una membresía superior. Mejora tu plan para desbloquearlo.',
                 'upgrade_required' => true,
-                'cta'              => ['title' => 'Mejorar plan', 'action' => 'Ver membresías'],
-                'suggestions'      => ['Mejorar plan', 'Ver membresías'],
+                'cta' => ['title' => 'Mejorar plan', 'action' => 'Ver membresías'],
+                'suggestions' => ['Mejorar plan', 'Ver membresías'],
             ],
             'SMART_RECOMMENDATIONS_LOCKED' => [
-                'code'             => $code,
-                'reply'            => 'Las recomendaciones inteligentes están disponibles en una membresía superior. Mejora tu plan para desbloquearlas.',
+                'code' => $code,
+                'reply' => 'Las recomendaciones inteligentes están disponibles en una membresía superior. Mejora tu plan para desbloquearlas.',
                 'upgrade_required' => true,
-                'cta'              => ['title' => 'Mejorar plan', 'action' => 'Ver membresías'],
-                'suggestions'      => ['Mejorar plan', 'Ver membresías'],
+                'cta' => ['title' => 'Mejorar plan', 'action' => 'Ver membresías'],
+                'suggestions' => ['Mejorar plan', 'Ver membresías'],
             ],
             'VOICE_LOCKED' => [
-                'code'             => $code,
-                'reply'            => 'El chat por voz está disponible en planes superiores. Habla con IRON y recibe respuestas inteligentes sin escribir.',
+                'code' => $code,
+                'reply' => 'El chat por voz está disponible en planes superiores. Habla con IRON y recibe respuestas inteligentes sin escribir.',
                 'upgrade_required' => true,
-                'cta'              => ['title' => 'Desbloquea chat por voz', 'action' => 'Ver membresías'],
-                'suggestions'      => ['Ver membresías', 'Ahora no'],
+                'cta' => ['title' => 'Desbloquea chat por voz', 'action' => 'Ver membresías'],
+                'suggestions' => ['Ver membresías', 'Ahora no'],
             ],
             'IMAGE_LOCKED' => [
-                'code'             => $code,
-                'reply'            => 'El análisis con imagen está disponible en planes superiores. Sube fotos de ejercicios, comidas o progreso para recibir orientación personalizada de IRON.',
+                'code' => $code,
+                'reply' => 'El análisis con imagen está disponible en planes superiores. Sube fotos de ejercicios, comidas o progreso para recibir orientación personalizada de IRON.',
                 'upgrade_required' => true,
-                'cta'              => ['title' => 'Desbloquea análisis con imagen', 'action' => 'Ver membresías'],
-                'suggestions'      => ['Ver membresías', 'Ahora no'],
+                'cta' => ['title' => 'Desbloquea análisis con imagen', 'action' => 'Ver membresías'],
+                'suggestions' => ['Ver membresías', 'Ahora no'],
             ],
             'REALTIME_LOCKED' => [
-                'code'             => $code,
-                'reply'            => 'La conversación en vivo con IRON está disponible en planes superiores. Habla con IRON como en una llamada, sin escribir.',
+                'code' => $code,
+                'reply' => 'La conversación en vivo con IRON está disponible en planes superiores. Habla con IRON como en una llamada, sin escribir.',
                 'upgrade_required' => true,
-                'cta'              => ['title' => 'Desbloquea conversación en vivo', 'action' => 'Ver membresías'],
-                'suggestions'      => ['Ver membresías', 'Ahora no'],
+                'cta' => ['title' => 'Desbloquea conversación en vivo', 'action' => 'Ver membresías'],
+                'suggestions' => ['Ver membresías', 'Ahora no'],
             ],
             'AUDIO_LIMIT_REACHED' => [
-                'code'             => $code,
-                'reply'            => 'Alcanzaste el límite de audios de IRON IA de tu membresía este mes. Mejora tu plan para más chat por voz.',
+                'code' => $code,
+                'reply' => 'Alcanzaste el límite de audios de IRON IA de tu membresía este mes. Mejora tu plan para más chat por voz.',
                 'upgrade_required' => true,
-                'cta'              => ['title' => 'Mejorar plan', 'action' => 'Ver membresías'],
-                'suggestions'      => ['Mejorar plan', 'Ver membresías'],
+                'cta' => ['title' => 'Mejorar plan', 'action' => 'Ver membresías'],
+                'suggestions' => ['Mejorar plan', 'Ver membresías'],
             ],
             'IMAGE_LIMIT_REACHED' => [
-                'code'             => $code,
-                'reply'            => 'Alcanzaste el límite de análisis de imagen de IRON IA de tu membresía este mes. Mejora tu plan para analizar más imágenes.',
+                'code' => $code,
+                'reply' => 'Alcanzaste el límite de análisis de imagen de IRON IA de tu membresía este mes. Mejora tu plan para analizar más imágenes.',
                 'upgrade_required' => true,
-                'cta'              => ['title' => 'Mejorar plan', 'action' => 'Ver membresías'],
-                'suggestions'      => ['Mejorar plan', 'Ver membresías'],
+                'cta' => ['title' => 'Mejorar plan', 'action' => 'Ver membresías'],
+                'suggestions' => ['Mejorar plan', 'Ver membresías'],
             ],
             default => [ // AI_DISABLED u otros.
-                'code'             => $code,
-                'reply'            => 'IRON IA no está disponible para tu plan actual. Adquiere o mejora tu membresía para usar el asistente.',
+                'code' => $code,
+                'reply' => 'IRON IA no está disponible para tu plan actual. Adquiere o mejora tu membresía para usar el asistente.',
                 'upgrade_required' => true,
-                'cta'              => ['title' => 'Ver membresías', 'action' => 'Ver membresías'],
-                'suggestions'      => ['Ver membresías', 'Volver al inicio'],
+                'cta' => ['title' => 'Ver membresías', 'action' => 'Ver membresías'],
+                'suggestions' => ['Ver membresías', 'Volver al inicio'],
             ],
         };
     }
@@ -586,18 +584,18 @@ class IronAiMembershipAccessService
         $output = $metadata['output_tokens'] ?? null;
 
         return IronAiUsageLog::create([
-            'user_id'            => $ctx['user']?->id,
-            'member_id'          => $ctx['member']?->id,
-            'document'           => $ctx['identity_key'] ?? $ctx['document'] ?? null,
+            'user_id' => $ctx['user']?->id,
+            'member_id' => $ctx['member']?->id,
+            'document' => $ctx['identity_key'] ?? $ctx['document'] ?? null,
             'membership_plan_id' => $ctx['membership']['plan_id'] ?? null,
-            'message_id'         => $metadata['message_id'] ?? null,
-            'model'              => $metadata['model'] ?? null,
-            'input_tokens'       => $input,
-            'output_tokens'      => $output,
-            'estimated_cost'     => $this->estimateCost($input, $output),
-            'status'             => $status,
-            'kind'               => $metadata['kind'] ?? IronAiUsageLog::KIND_TEXT,
-            'block_reason'       => $metadata['block_reason'] ?? null,
+            'message_id' => $metadata['message_id'] ?? null,
+            'model' => $metadata['model'] ?? null,
+            'input_tokens' => $input,
+            'output_tokens' => $output,
+            'estimated_cost' => $this->estimateCost($input, $output),
+            'status' => $status,
+            'kind' => $metadata['kind'] ?? IronAiUsageLog::KIND_TEXT,
+            'block_reason' => $metadata['block_reason'] ?? null,
         ]);
     }
 
@@ -637,9 +635,9 @@ class IronAiMembershipAccessService
 
             return array_merge([
                 'access_type' => 'free_trial',
-                'used'        => $used,
-                'limit'       => $limit,
-                'remaining'   => max(0, $limit - $used),
+                'used' => $used,
+                'limit' => $limit,
+                'remaining' => max(0, $limit - $used),
             ], $media);
         }
 
@@ -647,9 +645,9 @@ class IronAiMembershipAccessService
 
         return array_merge([
             'access_type' => 'membership',
-            'used'        => $usage['month'],
-            'limit'       => $monthly,
-            'remaining'   => $monthly !== null ? max(0, (int) $monthly - $usage['month']) : null,
+            'used' => $usage['month'],
+            'limit' => $monthly,
+            'remaining' => $monthly !== null ? max(0, (int) $monthly - $usage['month']) : null,
         ], $media);
     }
 
@@ -665,57 +663,57 @@ class IronAiMembershipAccessService
         $monthly = $caps['monthly_messages_limit'] ?? null;
 
         // Multimodal — flags + cuota por tipo (todo del backend; Flutter no decide).
-        $chatEnabled     = (bool) ($caps['ai_chat_enabled'] ?? true);
-        $voiceEnabled    = (bool) ($caps['ai_voice_chat_enabled'] ?? false);
+        $chatEnabled = (bool) ($caps['ai_chat_enabled'] ?? true);
+        $voiceEnabled = (bool) ($caps['ai_voice_chat_enabled'] ?? false);
         $realtimeEnabled = (bool) ($caps['ai_realtime_voice_enabled'] ?? false);
-        $imageEnabled    = (bool) ($caps['ai_image_analysis_enabled'] ?? false);
-        $fileEnabled     = (bool) ($caps['ai_file_upload_enabled'] ?? false);
-        $audioLimit      = $caps['ai_audio_monthly_limit'] ?? null;
-        $imageLimit      = $caps['ai_image_monthly_limit'] ?? null;
+        $imageEnabled = (bool) ($caps['ai_image_analysis_enabled'] ?? false);
+        $fileEnabled = (bool) ($caps['ai_file_upload_enabled'] ?? false);
+        $audioLimit = $caps['ai_audio_monthly_limit'] ?? null;
+        $imageLimit = $caps['ai_image_monthly_limit'] ?? null;
 
         return [
-            'ok'                            => true,
-            'has_active_membership'         => (bool) ($membership['active'] ?? false),
-            'plan_name'                     => $membership['plan_name'] ?? null,
-            'access_type'                   => $access['access_type'],
-            'ai_enabled'                    => (bool) ($caps['ai_enabled'] ?? true),
-            'can_use_chat'                  => (bool) $access['can_use_chat'],
-            'upgrade_required'              => (bool) $access['upgrade_required'],
-            'context_level'                 => $caps['context_level'] ?? 'basic',
-            'max_output_tokens'             => $caps['max_output_tokens'] ?? null,
-            'progress_analysis_enabled'     => (bool) ($caps['progress_analysis_enabled'] ?? false),
+            'ok' => true,
+            'has_active_membership' => (bool) ($membership['active'] ?? false),
+            'plan_name' => $membership['plan_name'] ?? null,
+            'access_type' => $access['access_type'],
+            'ai_enabled' => (bool) ($caps['ai_enabled'] ?? true),
+            'can_use_chat' => (bool) $access['can_use_chat'],
+            'upgrade_required' => (bool) $access['upgrade_required'],
+            'context_level' => $caps['context_level'] ?? 'basic',
+            'max_output_tokens' => $caps['max_output_tokens'] ?? null,
+            'progress_analysis_enabled' => (bool) ($caps['progress_analysis_enabled'] ?? false),
             'smart_recommendations_enabled' => (bool) ($caps['smart_recommendations_enabled'] ?? false),
-            'weekly_summary_enabled'        => (bool) ($caps['weekly_summary_enabled'] ?? false),
+            'weekly_summary_enabled' => (bool) ($caps['weekly_summary_enabled'] ?? false),
             'proactive_notifications_enabled' => (bool) ($caps['proactive_notifications_enabled'] ?? false),
 
             // Multimodal — capacidades y cuota por tipo (para el composer premium).
-            'chat_enabled'          => $chatEnabled,
-            'voice_chat_enabled'    => $voiceEnabled,
-            'realtime_voice_enabled'=> $realtimeEnabled,
-            'image_analysis_enabled'=> $imageEnabled,
-            'file_upload_enabled'   => $fileEnabled,
-            'audio_monthly_limit'   => $audioLimit,
-            'image_monthly_limit'   => $imageLimit,
-            'audio_used'            => $usage['audio_month'] ?? 0,
-            'image_used'            => $usage['image_month'] ?? 0,
-            'audio_remaining'       => $this->mediaRemaining($voiceEnabled, $audioLimit, (int) ($usage['audio_month'] ?? 0)),
-            'image_remaining'       => $this->mediaRemaining($imageEnabled, $imageLimit, (int) ($usage['image_month'] ?? 0)),
-            'max_audio_seconds'     => (int) ($caps['ai_max_audio_seconds'] ?? config('iron_ai.media.max_audio_seconds', 60)),
-            'max_image_size_mb'     => (int) ($caps['ai_max_image_size_mb'] ?? config('iron_ai.media.max_image_size_mb', 5)),
+            'chat_enabled' => $chatEnabled,
+            'voice_chat_enabled' => $voiceEnabled,
+            'realtime_voice_enabled' => $realtimeEnabled,
+            'image_analysis_enabled' => $imageEnabled,
+            'file_upload_enabled' => $fileEnabled,
+            'audio_monthly_limit' => $audioLimit,
+            'image_monthly_limit' => $imageLimit,
+            'audio_used' => $usage['audio_month'] ?? 0,
+            'image_used' => $usage['image_month'] ?? 0,
+            'audio_remaining' => $this->mediaRemaining($voiceEnabled, $audioLimit, (int) ($usage['audio_month'] ?? 0)),
+            'image_remaining' => $this->mediaRemaining($imageEnabled, $imageLimit, (int) ($usage['image_month'] ?? 0)),
+            'max_audio_seconds' => (int) ($caps['ai_max_audio_seconds'] ?? config('iron_ai.media.max_audio_seconds', 60)),
+            'max_image_size_mb' => (int) ($caps['ai_max_image_size_mb'] ?? config('iron_ai.media.max_image_size_mb', 5)),
 
             // Prueba gratuita. Para miembros con membresía estos quedan null/null:
             // los números reales viven en `monthly_limit`/`remaining_month`. Antes
             // se ponía `message_limit: null` pero `remaining_messages: <número>`,
             // que el cliente leía como "N restantes de ilimitado" — incongruente.
-            'used_messages'      => $isFree ? $usage['lifetime'] : 0,
-            'message_limit'      => $isFree ? $freeLimit : null,
+            'used_messages' => $isFree ? $usage['lifetime'] : 0,
+            'message_limit' => $isFree ? $freeLimit : null,
             'remaining_messages' => $isFree ? max(0, $freeLimit - $usage['lifetime']) : null,
 
             // Membresía.
-            'used_today'      => $usage['today'],
-            'daily_limit'     => $caps['daily_messages_limit'] ?? null,
-            'used_month'      => $usage['month'],
-            'monthly_limit'   => $monthly,
+            'used_today' => $usage['today'],
+            'daily_limit' => $caps['daily_messages_limit'] ?? null,
+            'used_month' => $usage['month'],
+            'monthly_limit' => $monthly,
             'remaining_month' => $monthly !== null ? max(0, (int) $monthly - $usage['month']) : null,
 
             'cta' => $access['block']['cta'] ?? null,

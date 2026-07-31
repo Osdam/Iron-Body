@@ -78,19 +78,19 @@ class NutritionAiResponseValidator
         return [
             'ok' => true, 'errors' => [], 'warnings' => $warnings,
             'data' => [
-                'source'                 => $source,
-                'product_name'           => $this->str($raw['product_name_detected'] ?? $raw['product_name'] ?? null),
-                'brand'                  => $this->str($raw['brand_detected'] ?? $raw['brand'] ?? null),
-                'serving_size_g'         => $servingSize,
-                'serving_unit'           => in_array(($raw['serving_unit'] ?? 'g'), ['g', 'ml'], true) ? ($raw['serving_unit'] ?? 'g') : 'g',
+                'source' => $source,
+                'product_name' => $this->str($raw['product_name_detected'] ?? $raw['product_name'] ?? null),
+                'brand' => $this->str($raw['brand_detected'] ?? $raw['brand'] ?? null),
+                'serving_size_g' => $servingSize,
+                'serving_unit' => in_array(($raw['serving_unit'] ?? 'g'), ['g', 'ml'], true) ? ($raw['serving_unit'] ?? 'g') : 'g',
                 'servings_per_container' => $this->intOrNull($raw['servings_per_container'] ?? null),
-                'basis_detected'         => in_array(($raw['basis_detected'] ?? 'unknown'), ['per_100g', 'per_serving', 'both', 'unknown'], true) ? ($raw['basis_detected'] ?? 'unknown') : 'unknown',
-                'per_100g'               => $per100,
-                'per_serving'            => $perServing,
-                'confidence_score'       => $confidence,
-                'missing_fields'         => $missing,
-                'warnings'               => $warnings,
-                'is_complete'            => $missing === [],
+                'basis_detected' => in_array(($raw['basis_detected'] ?? 'unknown'), ['per_100g', 'per_serving', 'both', 'unknown'], true) ? ($raw['basis_detected'] ?? 'unknown') : 'unknown',
+                'per_100g' => $per100,
+                'per_serving' => $perServing,
+                'confidence_score' => $confidence,
+                'missing_fields' => $missing,
+                'warnings' => $warnings,
+                'is_complete' => $missing === [],
             ],
         ];
     }
@@ -99,8 +99,9 @@ class NutritionAiResponseValidator
     {
         $out = [];
         foreach (self::MACROS as $k) {
-            $out[$k] = $this->num($raw[$k . $suffix] ?? null, $errors, $k . $suffix, $this->maxFor($k));
+            $out[$k] = $this->num($raw[$k.$suffix] ?? null, $errors, $k.$suffix, $this->maxFor($k));
         }
+
         return $out;
     }
 
@@ -111,6 +112,7 @@ class NutritionAiResponseValidator
                 $base[$k] = $this->num($nested[$k], $errors, $k, $this->maxFor($k));
             }
         }
+
         return $base;
     }
 
@@ -147,12 +149,15 @@ class NutritionAiResponseValidator
         $f = (float) $v;
         if ($f < 0) {
             $errors[] = "negative_{$field}";
+
             return null;
         }
         if ($f > $hardMax) {
             $errors[] = "out_of_range_{$field}";
+
             return null;
         }
+
         return round($f, 2);
     }
 
@@ -163,18 +168,21 @@ class NutritionAiResponseValidator
                 return false;
             }
         }
+
         return true;
     }
 
     private function clampConfidence($raw, float $fallback): float
     {
         $c = is_numeric($raw) ? (float) $raw : $fallback;
+
         return round(max(0.0, min(1.0, $c)), 3);
     }
 
     private function str($v): ?string
     {
         $s = is_string($v) ? trim($v) : null;
+
         return ($s === null || $s === '') ? null : mb_substr($s, 0, 160);
     }
 

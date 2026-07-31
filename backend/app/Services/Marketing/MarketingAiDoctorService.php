@@ -13,26 +13,26 @@ class MarketingAiDoctorService
     /** @return array<string,mixed> reporte saneado. */
     public function report(): array
     {
-        $driver       = (string) config('marketing.ai.driver', 'fake');
-        $openaiCfg    = (array) config('marketing.ai.openai');
+        $driver = (string) config('marketing.ai.driver', 'fake');
+        $openaiCfg = (array) config('marketing.ai.openai');
         $openaiEnable = (bool) ($openaiCfg['enabled'] ?? false);
-        $hasKey       = SalesAiConfig::hasApiKey();
-        $hasModel     = SalesAiConfig::model() !== '';
-        $ready        = SalesAiConfig::openAiReady();
+        $hasKey = SalesAiConfig::hasApiKey();
+        $hasModel = SalesAiConfig::model() !== '';
+        $ready = SalesAiConfig::openAiReady();
 
         return [
-            'brain_enabled'     => (bool) config('marketing.ai.enabled', true),
-            'driver'            => $driver,
-            'openai_enabled'    => $openaiEnable,
-            'present'           => [
+            'brain_enabled' => (bool) config('marketing.ai.enabled', true),
+            'driver' => $driver,
+            'openai_enabled' => $openaiEnable,
+            'present' => [
                 'openai_api_key' => $hasKey,    // SET/MISSING (sin valor)
-                'openai_model'   => $hasModel,
+                'openai_model' => $hasModel,
             ],
-            'openai_ready'      => $ready,
+            'openai_ready' => $ready,
             // Responder que se usará realmente: openai (si listo) o fake.
             'effective_responder' => SalesAiConfig::effectiveDriver(),
-            'fail_closed'       => SalesAiConfig::failClosed(),
-            'suggestions'       => $this->suggestions($driver, $openaiEnable, $hasKey, $hasModel, $ready),
+            'fail_closed' => SalesAiConfig::failClosed(),
+            'suggestions' => $this->suggestions($driver, $openaiEnable, $hasKey, $hasModel, $ready),
         ];
     }
 
@@ -57,6 +57,7 @@ class MarketingAiDoctorService
         }
         $tips[] = 'Mientras tanto, el cerebro usa el responder determinista (fake) de forma segura.';
         $tips[] = 'Tras completar .env: php artisan config:clear && php artisan marketing:ai-doctor.';
+
         return $tips;
     }
 }

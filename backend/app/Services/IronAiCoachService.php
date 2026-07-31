@@ -22,14 +22,13 @@ class IronAiCoachService
     public function __construct(
         private readonly IronAiUserContextService $context,
         private readonly IronAiMemoryService $memory,
-    ) {
-    }
+    ) {}
 
     public function isEnabled(): bool
     {
         return (bool) config('services.openai.coach_enabled', true)
             && (bool) config('services.openai.enabled', true)
-            && !empty(config('services.openai.api_key'));
+            && ! empty(config('services.openai.api_key'));
     }
 
     /**
@@ -38,7 +37,7 @@ class IronAiCoachService
      */
     public function coach(Member $member, string $focus = 'today'): ?array
     {
-        if (!$this->isEnabled()) {
+        if (! $this->isEnabled()) {
             return null;
         }
 
@@ -127,14 +126,14 @@ PROMPT;
                 ->timeout((int) ($cfg['timeout'] ?? 30))
                 ->acceptJson()
                 ->asJson()
-                ->post(rtrim($cfg['base_url'], '/') . '/v1/chat/completions', [
+                ->post(rtrim($cfg['base_url'], '/').'/v1/chat/completions', [
                     'model' => $cfg['model'] ?? 'gpt-4.1-mini',
                     'temperature' => (float) ($cfg['temperature'] ?? 0.4),
                     'max_tokens' => 700,
                     'response_format' => ['type' => 'json_object'],
                     'messages' => [
                         ['role' => 'system', 'content' => $this->systemPrompt()],
-                        ['role' => 'user', 'content' => 'Contexto del usuario (JSON): ' . $userContent],
+                        ['role' => 'user', 'content' => 'Contexto del usuario (JSON): '.$userContent],
                     ],
                 ]);
 
@@ -146,25 +145,28 @@ PROMPT;
                     'status' => $response->status(),
                     'latency_ms' => $latencyMs,
                 ]);
+
                 return null;
             }
 
             $content = data_get($response->json(), 'choices.0.message.content');
-            if (!is_string($content) || trim($content) === '') {
+            if (! is_string($content) || trim($content) === '') {
                 return null;
             }
             $parsed = json_decode($content, true);
-            if (!is_array($parsed)) {
+            if (! is_array($parsed)) {
                 return null;
             }
 
             Log::info('iron-ai-coach ok', ['member_id' => $member->id, 'latency_ms' => $latencyMs, 'focus' => $focus]);
+
             return $this->normalize($parsed);
         } catch (Throwable $e) {
             Log::error('iron-ai-coach openai exception', [
                 'member_id' => $member->id,
                 'error_class' => class_basename($e),
             ]);
+
             return null;
         }
     }
@@ -179,7 +181,7 @@ PROMPT;
         $validRoutes = ['/nutrition', '/workouts', '/progress', '/evaluation', '/classes', '/membership'];
         $actions = [];
         foreach ($p['actions'] ?? [] as $a) {
-            if (!is_array($a)) {
+            if (! is_array($a)) {
                 continue;
             }
             $route = $a['route'] ?? null;

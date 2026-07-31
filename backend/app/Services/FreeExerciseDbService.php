@@ -21,26 +21,28 @@ use Throwable;
 class FreeExerciseDbService
 {
     private string $baseUrl;
+
     private int $cacheTtl;
+
     private string $source;
 
     /** Mapeo ES→EN de ejercicios. */
     private const ES_EN = [
-        'press de banca'  => 'bench press',
-        'press banca'     => 'bench press',
-        'sentadilla'      => 'squat',
-        'peso muerto'     => 'deadlift',
-        'curl biceps'     => 'biceps curl',
-        'curl bíceps'     => 'biceps curl',
+        'press de banca' => 'bench press',
+        'press banca' => 'bench press',
+        'sentadilla' => 'squat',
+        'peso muerto' => 'deadlift',
+        'curl biceps' => 'biceps curl',
+        'curl bíceps' => 'biceps curl',
         'curl con mancuernas' => 'biceps curl',
-        'jalon al pecho'  => 'lat pulldown',
-        'jalón al pecho'  => 'lat pulldown',
-        'dominadas'       => 'pull up',
-        'press militar'   => 'shoulder press',
-        'plancha'         => 'plank',
-        'burpees'         => 'burpee',
-        'zancadas'        => 'lunge',
-        'fondos'          => 'dips',
+        'jalon al pecho' => 'lat pulldown',
+        'jalón al pecho' => 'lat pulldown',
+        'dominadas' => 'pull up',
+        'press militar' => 'shoulder press',
+        'plancha' => 'plank',
+        'burpees' => 'burpee',
+        'zancadas' => 'lunge',
+        'fondos' => 'dips',
     ];
 
     /** Mapeo ES→EN de músculos/zonas. */
@@ -62,16 +64,16 @@ class FreeExerciseDbService
     public function __construct()
     {
         $cfg = config('services.freeexercisedb');
-        $this->baseUrl  = $cfg['base_url'] ?? 'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main';
+        $this->baseUrl = $cfg['base_url'] ?? 'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main';
         $this->cacheTtl = (int) ($cfg['cache_ttl'] ?? 86400);
-        $this->source   = $cfg['source_label'] ?? 'Free Exercise DB';
+        $this->source = $cfg['source_label'] ?? 'Free Exercise DB';
     }
 
     // ── API pública ─────────────────────────────────────────────────────────
 
     public function all(int $limit = 30, int $offset = 0): array
     {
-        $limit  = max(1, min($limit, 100));
+        $limit = max(1, min($limit, 100));
         $offset = max(0, $offset);
         $rows = array_slice($this->catalog(), $offset, $limit);
 
@@ -89,9 +91,11 @@ class FreeExerciseDbService
             if (($row['id'] ?? null) === $externalId) {
                 $ref = $this->normalize($row);
                 $this->persist($ref);
+
                 return $ref;
             }
         }
+
         return null;
     }
 
@@ -144,6 +148,7 @@ class FreeExerciseDbService
         foreach (array_values(self::ES_EN) as $name) {
             $count += count($this->search($name));
         }
+
         return $count;
     }
 
@@ -167,8 +172,10 @@ class FreeExerciseDbService
                     return true;
                 }
             }
+
             return false;
         });
+
         return array_slice(array_values($hits), 0, $limit);
     }
 
@@ -179,7 +186,7 @@ class FreeExerciseDbService
             try {
                 $resp = Http::withHeaders(['Accept' => 'application/json'])
                     ->timeout(20)->retry(1, 300)
-                    ->get($this->baseUrl . '/dist/exercises.json');
+                    ->get($this->baseUrl.'/dist/exercises.json');
 
                 $this->log('catalog', 'dist/exercises.json', 0, $resp->status());
 
@@ -187,12 +194,14 @@ class FreeExerciseDbService
                     return [];
                 }
                 $json = $resp->json();
+
                 return is_array($json) ? $json : [];
             } catch (Throwable $e) {
                 Log::warning('FreeExerciseDB catálogo no disponible', [
                     'provider' => 'freeexercisedb',
-                    'reason'   => Str::limit($e->getMessage(), 300),
+                    'reason' => Str::limit($e->getMessage(), 300),
                 ]);
+
                 return [];
             }
         });
@@ -200,29 +209,29 @@ class FreeExerciseDbService
 
     private function normalize(array $r): array
     {
-        $name   = trim($r['name'] ?? '');
+        $name = trim($r['name'] ?? '');
         $images = array_values($r['images'] ?? []);
-        $gif    = isset($images[0]) ? $this->imageUrl($images[0]) : null;
-        $thumb  = isset($images[1]) ? $this->imageUrl($images[1]) : null;
+        $gif = isset($images[0]) ? $this->imageUrl($images[0]) : null;
+        $thumb = isset($images[1]) ? $this->imageUrl($images[1]) : null;
         $primary = $r['primaryMuscles'][0] ?? null;
 
         return [
-            'external_id'   => (string) ($r['id'] ?? Str::slug($name)),
-            'name'          => $name,
-            'body_part'     => $r['category'] ?? $primary,
-            'target'        => $primary,
-            'equipment'     => $r['equipment'] ?? null,
-            'gif_url'       => $gif,
+            'external_id' => (string) ($r['id'] ?? Str::slug($name)),
+            'name' => $name,
+            'body_part' => $r['category'] ?? $primary,
+            'target' => $primary,
+            'equipment' => $r['equipment'] ?? null,
+            'gif_url' => $gif,
             'thumbnail_url' => $thumb,
-            'instructions'  => array_values($r['instructions'] ?? []),
-            'provider'      => 'freeexercisedb',
-            'source'        => $this->source . ' · Open data',
+            'instructions' => array_values($r['instructions'] ?? []),
+            'provider' => 'freeexercisedb',
+            'source' => $this->source.' · Open data',
         ];
     }
 
     private function imageUrl(string $path): string
     {
-        return $this->baseUrl . '/exercises/' . ltrim($path, '/');
+        return $this->baseUrl.'/exercises/'.ltrim($path, '/');
     }
 
     private function persistAll(array $refs): array
@@ -230,6 +239,7 @@ class FreeExerciseDbService
         foreach ($refs as $ref) {
             $this->persist($ref);
         }
+
         return array_values($refs);
     }
 
@@ -243,7 +253,7 @@ class FreeExerciseDbService
         } catch (Throwable $e) {
             Log::warning('FreeExerciseDB persist falló', [
                 'provider' => 'freeexercisedb',
-                'reason'   => Str::limit($e->getMessage(), 300),
+                'reason' => Str::limit($e->getMessage(), 300),
             ]);
         }
     }
@@ -251,10 +261,10 @@ class FreeExerciseDbService
     private function log(string $endpoint, string $query, int $count, ?int $status = 200): void
     {
         Log::info('FreeExerciseDB request', [
-            'provider'     => 'freeexercisedb',
-            'endpoint'     => $endpoint,
-            'query'        => Str::limit($query, 80),
-            'http_status'  => $status,
+            'provider' => 'freeexercisedb',
+            'endpoint' => $endpoint,
+            'query' => Str::limit($query, 80),
+            'http_status' => $status,
             'result_count' => $count,
         ]);
     }

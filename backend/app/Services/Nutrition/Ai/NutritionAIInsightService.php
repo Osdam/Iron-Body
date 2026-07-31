@@ -16,8 +16,7 @@ class NutritionAIInsightService
     public function __construct(
         private NutritionAIEnrichmentService $engine,
         private NutritionStatsService $stats,
-    ) {
-    }
+    ) {}
 
     public function insights(Member $member, string $range = 'week'): array
     {
@@ -29,8 +28,8 @@ class NutritionAIInsightService
                 'ok' => true, 'ai_used' => false, 'range' => $range,
                 'insights' => [[
                     'title' => 'Empieza tu constancia',
-                    'body'  => 'Registra tus comidas durante el día para ver análisis de tu progreso aquí.',
-                    'tone'  => 'neutral',
+                    'body' => 'Registra tus comidas durante el día para ver análisis de tu progreso aquí.',
+                    'tone' => 'neutral',
                 ]],
             ];
         }
@@ -39,12 +38,12 @@ class NutritionAIInsightService
         $model = config('nutrition.ai.model_insights') ?: config('services.openai.model');
         $messages = [
             ['role' => 'system', 'content' => NutritionAiPrompts::insightsSystem()],
-            ['role' => 'user', 'content' => 'Métricas reales del usuario (' . $range . "):\n"
-                . json_encode($metrics, JSON_UNESCAPED_UNICODE)],
+            ['role' => 'user', 'content' => 'Métricas reales del usuario ('.$range."):\n"
+                .json_encode($metrics, JSON_UNESCAPED_UNICODE)],
         ];
 
         $prep = $this->engine->prepare(NutritionAiRun::MODE_INSIGHT, $member, $model, $messages,
-            'ins:' . $range . ':' . md5(json_encode($metrics)), []);
+            'ins:'.$range.':'.md5(json_encode($metrics)), []);
 
         if ($prep['outcome'] === 'cache' && is_array($prep['raw'])) {
             return ['ok' => true, 'ai_used' => true, 'cached' => true, 'range' => $range,
@@ -55,6 +54,7 @@ class NutritionAIInsightService
             if ($insights !== []) {
                 $this->engine->record(NutritionAiRun::MODE_INSIGHT, $member, [], $prep['hash'], $prep['model'],
                     NutritionAiRun::STATUS_SUCCESS, null, ['insights' => $insights]);
+
                 return ['ok' => true, 'ai_used' => true, 'range' => $range, 'insights' => $insights];
             }
         }
@@ -69,6 +69,7 @@ class NutritionAIInsightService
     {
         $s = $stats['summary'];
         $c = $stats['compliance'];
+
         return [
             'days_registered' => $s['days_registered'], 'days_total' => $s['days_total'],
             'current_streak' => $s['current_streak'], 'best_streak' => $s['best_streak'],
@@ -93,10 +94,11 @@ class NutritionAIInsightService
             }
             $out[] = [
                 'title' => mb_substr((string) ($i['title'] ?? 'Análisis'), 0, 60),
-                'body'  => mb_substr((string) $i['body'], 0, 220),
-                'tone'  => in_array(($i['tone'] ?? 'neutral'), ['positive', 'neutral', 'warning'], true) ? $i['tone'] : 'neutral',
+                'body' => mb_substr((string) $i['body'], 0, 220),
+                'tone' => in_array(($i['tone'] ?? 'neutral'), ['positive', 'neutral', 'warning'], true) ? $i['tone'] : 'neutral',
             ];
         }
+
         return $out;
     }
 
@@ -108,18 +110,19 @@ class NutritionAIInsightService
         $out = [];
         $out[] = [
             'title' => 'Adherencia',
-            'body'  => "Registraste {$s['days_registered']} de {$s['days_total']} días. "
-                . "Tu adherencia va en {$s['adherence_percent']}%.",
-            'tone'  => $s['adherence_percent'] >= 70 ? 'positive' : 'neutral',
+            'body' => "Registraste {$s['days_registered']} de {$s['days_total']} días. "
+                ."Tu adherencia va en {$s['adherence_percent']}%.",
+            'tone' => $s['adherence_percent'] >= 70 ? 'positive' : 'neutral',
         ];
         if (($c['protein']['percent'] ?? 100) < 80) {
             $out[] = ['title' => 'Proteína', 'body' => 'Tu proteína quedó por debajo de la meta. '
-                . 'Prioriza una fuente proteica en cada comida.', 'tone' => 'warning'];
+                .'Prioriza una fuente proteica en cada comida.', 'tone' => 'warning'];
         }
         if ($s['current_streak'] >= 2) {
             $out[] = ['title' => 'Racha', 'body' => "Llevas {$s['current_streak']} días seguidos registrando. ¡Sostenlo!",
                 'tone' => 'positive'];
         }
+
         return array_slice($out, 0, 4);
     }
 }

@@ -22,9 +22,7 @@ use RuntimeException;
  */
 class WompiConfigValidator
 {
-    public function __construct(private array $cfg)
-    {
-    }
+    public function __construct(private array $cfg) {}
 
     public static function fromConfig(): self
     {
@@ -99,6 +97,7 @@ class WompiConfigValidator
         if (! str_starts_with($val, $prefix)) {
             return ["{$envName} no corresponde al ambiente ({$this->cfg['env']}): se esperaba prefijo '{$prefix}'."];
         }
+
         return [];
     }
 
@@ -114,6 +113,7 @@ class WompiConfigValidator
         if (str_contains($val, $other) && ! str_contains($val, $expected)) {
             return ["{$envName} parece de '{$other}' pero el ambiente es '{$this->cfg['env']}'."];
         }
+
         return [];
     }
 }

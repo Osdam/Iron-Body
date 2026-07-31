@@ -24,9 +24,13 @@ use Illuminate\Support\Facades\Log;
 class MembershipService
 {
     public const STATUS_NONE = 'none';
+
     public const STATUS_ACTIVE = 'active';
+
     public const STATUS_CANCEL_REQUESTED = 'cancel_requested';
+
     public const STATUS_CANCELLED = 'cancelled';
+
     public const STATUS_EXPIRED = 'expired';
 
     /**
@@ -48,6 +52,7 @@ class MembershipService
             return false;
         }
         $ends = $this->endsAt($user);
+
         return $ends === null || $ends->isFuture();
     }
 
@@ -63,6 +68,7 @@ class MembershipService
         if ($active) {
             return $cancelRequested ? self::STATUS_CANCEL_REQUESTED : self::STATUS_ACTIVE;
         }
+
         // Fuera de periodo: distingue expirado natural de cancelado.
         return $cancelRequested ? self::STATUS_CANCELLED : self::STATUS_EXPIRED;
     }
@@ -74,6 +80,7 @@ class MembershipService
         if ($ends === null) {
             return null;
         }
+
         return max(0, (int) Carbon::now()->startOfDay()->diffInDays($ends->copy()->startOfDay(), false));
     }
 
@@ -81,6 +88,7 @@ class MembershipService
     public function snapshot(User $user): array
     {
         $ends = $this->endsAt($user);
+
         return [
             'status' => $this->status($user),
             'plan_name' => $user->plan,
@@ -106,6 +114,7 @@ class MembershipService
     public function previewCancellation(User $user): array
     {
         $ends = $this->endsAt($user);
+
         return [
             'plan_name' => $user->plan,
             'access_until' => $ends?->toDateString(),

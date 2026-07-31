@@ -21,8 +21,7 @@ class AccountRiskService
         private SecurityEventService $security,
         private NotificationService $notifications,
         private DeviceSessionService $sessions,
-    ) {
-    }
+    ) {}
 
     /** Bloqueo de seguridad vivo del miembro, si existe. */
     public function liveLock(Member $member): ?MemberRiskLock
@@ -52,7 +51,7 @@ class AccountRiskService
         // durante toda la ventana de riesgo). Solo cuentan señales adversariales
         // (OTP fallidos, mismatch, concurrencia, fallos faciales, sospecha).
         $score = $this->score($member, [MemberSecurityEvent::TYPE_NEW_DEVICE]);
-        $warn  = (int) config('security.warn_threshold', 40);
+        $warn = (int) config('security.warn_threshold', 40);
         $local = (int) config('security.local_threshold', 1);
 
         if ($score >= $warn) {
@@ -71,15 +70,15 @@ class AccountRiskService
      * [$excludeTypes] permite ignorar ciertos tipos de evento (p. ej. la señal
      * benigna `new_device` al decidir el tier de un dispositivo ya confiable).
      *
-     * @param string[] $excludeTypes
+     * @param  string[]  $excludeTypes
      */
     public function score(Member $member, array $excludeTypes = []): int
     {
-        $window  = (int) config('security.window', 3600);
+        $window = (int) config('security.window', 3600);
         $weights = (array) config('security.weights', []);
 
-        $since  = now()->subSeconds($window);
-        $query  = MemberSecurityEvent::query()
+        $since = now()->subSeconds($window);
+        $query = MemberSecurityEvent::query()
             ->where('member_id', $member->id)
             ->where('created_at', '>=', $since);
         if ($excludeTypes !== []) {
@@ -91,14 +90,14 @@ class AccountRiskService
             ->pluck('c', 'type');
 
         $map = [
-            MemberSecurityEvent::TYPE_LOGIN_FAILED       => 'login_failed',
-            MemberSecurityEvent::TYPE_OTP_BLOCKED        => 'otp_blocked',
-            MemberSecurityEvent::TYPE_NEW_DEVICE         => 'new_device',
-            MemberSecurityEvent::TYPE_FACE_FAILED        => 'face_failed',
-            MemberSecurityEvent::TYPE_CONCURRENT         => 'concurrent',
+            MemberSecurityEvent::TYPE_LOGIN_FAILED => 'login_failed',
+            MemberSecurityEvent::TYPE_OTP_BLOCKED => 'otp_blocked',
+            MemberSecurityEvent::TYPE_NEW_DEVICE => 'new_device',
+            MemberSecurityEvent::TYPE_FACE_FAILED => 'face_failed',
+            MemberSecurityEvent::TYPE_CONCURRENT => 'concurrent',
             MemberSecurityEvent::TYPE_CONCURRENT_BLOCKED => 'concurrent',
-            MemberSecurityEvent::TYPE_DEVICE_MISMATCH    => 'device_mismatch',
-            MemberSecurityEvent::TYPE_SUSPICIOUS         => 'suspicious',
+            MemberSecurityEvent::TYPE_DEVICE_MISMATCH => 'device_mismatch',
+            MemberSecurityEvent::TYPE_SUSPICIOUS => 'suspicious',
         ];
 
         $score = 0;
@@ -122,9 +121,9 @@ class AccountRiskService
                 return; // ya está suspendido
             }
 
-            $score      = $this->score($member);
-            $warnAt     = (int) config('security.warn_threshold', 40);
-            $suspendAt  = (int) config('security.suspend_threshold', 80);
+            $score = $this->score($member);
+            $warnAt = (int) config('security.warn_threshold', 40);
+            $suspendAt = (int) config('security.suspend_threshold', 80);
 
             if ($score < $warnAt) {
                 return;
@@ -153,7 +152,7 @@ class AccountRiskService
 
             if (! $recent) {
                 $this->security->record($member, MemberSecurityEvent::TYPE_SUSPICIOUS, $context, [
-                    'risk_score'     => $score,
+                    'risk_score' => $score,
                     'autosuspend_on' => (bool) config('security.autosuspend', false),
                 ], 'Puntaje de riesgo elevado.');
                 $this->notifications->notifySuspiciousLogin($member, 'Detectamos varios intentos inusuales.');
@@ -178,12 +177,12 @@ class AccountRiskService
         array $metadata = [],
     ): MemberRiskLock {
         $lock = MemberRiskLock::create([
-            'member_id'    => $member->id,
-            'reason'       => $reason,
-            'status'       => MemberRiskLock::STATUS_ACTIVE,
+            'member_id' => $member->id,
+            'reason' => $reason,
+            'status' => MemberRiskLock::STATUS_ACTIVE,
             'locked_until' => $days !== null ? now()->addDays($days) : null,
-            'created_by'   => $by,
-            'metadata'     => $metadata ?: null,
+            'created_by' => $by,
+            'metadata' => $metadata ?: null,
         ]);
 
         // El estado del miembro refleja la suspensión (bloquea login + sesiones).
@@ -196,10 +195,10 @@ class AccountRiskService
         }
 
         $this->security->record($member, MemberSecurityEvent::TYPE_ACCOUNT_SUSPENDED, $context, [
-            'reason'    => $reason,
-            'until'     => $lock->locked_until?->toIso8601String(),
-            'by'        => $by,
-            'lock_id'   => $lock->id,
+            'reason' => $reason,
+            'until' => $lock->locked_until?->toIso8601String(),
+            'by' => $by,
+            'lock_id' => $lock->id,
         ]);
         $this->notifications->notifyAccountSuspended($member, $reason, $lock->locked_until?->toIso8601String());
 
@@ -214,8 +213,8 @@ class AccountRiskService
     {
         $member->riskLocks()->live()->get()->each(function (MemberRiskLock $lock) use ($note, $resolvedBy): void {
             $lock->forceFill([
-                'status'          => MemberRiskLock::STATUS_RESOLVED,
-                'resolved_by'     => $resolvedBy,
+                'status' => MemberRiskLock::STATUS_RESOLVED,
+                'resolved_by' => $resolvedBy,
                 'resolution_note' => $note,
             ])->save();
         });
@@ -226,7 +225,7 @@ class AccountRiskService
 
         $this->security->record($member, MemberSecurityEvent::TYPE_ACCOUNT_UNLOCKED, $context, [
             'note' => $note,
-            'by'   => $resolvedBy ? 'admin' : 'system',
+            'by' => $resolvedBy ? 'admin' : 'system',
         ]);
     }
 }

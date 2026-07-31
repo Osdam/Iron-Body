@@ -36,9 +36,7 @@ use Throwable;
  */
 class WompiClient
 {
-    public function __construct(private array $cfg)
-    {
-    }
+    public function __construct(private array $cfg) {}
 
     public static function fromConfig(): self
     {
@@ -54,6 +52,7 @@ class WompiClient
         if ($public === '') {
             return $this->transportError('Wompi no está configurado (falta llave pública).');
         }
+
         return $this->request('GET', '/merchants/'.$public, auth: null);
     }
 
@@ -108,10 +107,10 @@ class WompiClient
         }
 
         $payload = array_filter([
-            'type'                 => strtoupper((string) ($data['type'] ?? 'CARD')),
-            'token'                => $data['token'] ?? null,
-            'customer_email'       => $data['customer_email'] ?? null,
-            'acceptance_token'     => $data['acceptance_token'] ?? null,
+            'type' => strtoupper((string) ($data['type'] ?? 'CARD')),
+            'token' => $data['token'] ?? null,
+            'customer_email' => $data['customer_email'] ?? null,
+            'acceptance_token' => $data['acceptance_token'] ?? null,
             'accept_personal_auth' => $data['accept_personal_auth'] ?? null,
         ], fn ($v) => $v !== null && $v !== '');
 
@@ -134,6 +133,7 @@ class WompiClient
         if ($id === '') {
             return $this->transportError('Falta el id de la fuente de pago.');
         }
+
         return $this->request('GET', '/payment_sources/'.$id, auth: 'private');
     }
 
@@ -147,8 +147,8 @@ class WompiClient
      * NUNCA conoce el integrity_secret. Igual que el flujo de pago único.
      *
      * @param  array  $payload  { payment_source_id, amount_in_cents, currency,
-     *                            reference, signature, customer_email,
-     *                            recurrent, payment_method?:{installments} }
+     *                          reference, signature, customer_email,
+     *                          recurrent, payment_method?:{installments} }
      */
     public function chargeWithPaymentSource(array $payload, ?string $idempotencyKey = null): array
     {
@@ -159,6 +159,7 @@ class WompiClient
             || empty($payload['amount_in_cents']) || empty($payload['signature'])) {
             return $this->transportError('Datos insuficientes para el cobro recurrente. No se realizó ningún cobro.');
         }
+
         return $this->request('POST', '/transactions', auth: 'private', body: $payload, idempotencyKey: $idempotencyKey, retry: false);
     }
 
@@ -183,28 +184,29 @@ class WompiClient
             $ok = $response->successful();
 
             Log::info('wompi.http.absolute', [
-                'host'           => parse_url($url, PHP_URL_HOST),
-                'path'           => parse_url($url, PHP_URL_PATH),
-                'status'         => $response->status(),
-                'ok'             => $ok,
+                'host' => parse_url($url, PHP_URL_HOST),
+                'path' => parse_url($url, PHP_URL_PATH),
+                'status' => $response->status(),
+                'ok' => $ok,
                 'correlation_id' => $correlationId,
             ]);
 
             return [
-                'ok'             => $ok,
-                'status'         => $response->status(),
-                'data'           => is_array($raw['data'] ?? null) ? $raw['data'] : $raw,
-                'error'          => $ok ? null : $this->extractError($raw, $response->status()),
-                'error_code'     => $ok ? null : $this->extractErrorCode($raw),
-                'raw'            => $raw,
+                'ok' => $ok,
+                'status' => $response->status(),
+                'data' => is_array($raw['data'] ?? null) ? $raw['data'] : $raw,
+                'error' => $ok ? null : $this->extractError($raw, $response->status()),
+                'error_code' => $ok ? null : $this->extractErrorCode($raw),
+                'raw' => $raw,
                 'correlation_id' => $correlationId,
             ];
         } catch (Throwable $e) {
             Log::error('wompi.http.absolute.transport_error', [
-                'host'           => parse_url($url, PHP_URL_HOST),
-                'type'           => get_class($e),
+                'host' => parse_url($url, PHP_URL_HOST),
+                'type' => get_class($e),
                 'correlation_id' => $correlationId,
             ]);
+
             return $this->transportError('No pudimos comunicarnos con la pasarela. Intenta nuevamente.', $correlationId);
         }
     }
@@ -212,11 +214,11 @@ class WompiClient
     // ── Núcleo ───────────────────────────────────────────────────────────────
 
     /**
-     * @param  string       $method  GET|POST
-     * @param  string       $path    relativo a api_url (con / inicial)
-     * @param  string|null  $auth    'public' | 'private' | null (sin Authorization)
-     * @param  array|null   $body    cuerpo JSON (POST)
-     * @param  bool|null    $retry   forzar/inhabilitar reintento (default: solo GET)
+     * @param  string  $method  GET|POST
+     * @param  string  $path  relativo a api_url (con / inicial)
+     * @param  string|null  $auth  'public' | 'private' | null (sin Authorization)
+     * @param  array|null  $body  cuerpo JSON (POST)
+     * @param  bool|null  $retry  forzar/inhabilitar reintento (default: solo GET)
      */
     public function request(
         string $method,
@@ -248,21 +250,21 @@ class WompiClient
             $ok = $response->successful();
 
             $result = [
-                'ok'             => $ok,
-                'status'         => $response->status(),
-                'data'           => is_array($raw['data'] ?? null) ? $raw['data'] : $raw,
-                'error'          => $ok ? null : $this->extractError($raw, $response->status()),
-                'error_code'     => $ok ? null : $this->extractErrorCode($raw),
-                'raw'            => $raw,
+                'ok' => $ok,
+                'status' => $response->status(),
+                'data' => is_array($raw['data'] ?? null) ? $raw['data'] : $raw,
+                'error' => $ok ? null : $this->extractError($raw, $response->status()),
+                'error_code' => $ok ? null : $this->extractErrorCode($raw),
+                'raw' => $raw,
                 'correlation_id' => $correlationId,
             ];
 
             Log::info('wompi.http', [
-                'method'         => $method,
-                'path'           => $path,
-                'status'         => $response->status(),
-                'ok'             => $ok,
-                'error_code'     => $result['error_code'],
+                'method' => $method,
+                'path' => $path,
+                'status' => $response->status(),
+                'ok' => $ok,
+                'error_code' => $result['error_code'],
                 'correlation_id' => $correlationId,
             ]);
 
@@ -270,12 +272,13 @@ class WompiClient
         } catch (Throwable $e) {
             // Fallo de transporte (timeout/DNS/SSL): controlado, sin filtrar datos.
             Log::error('wompi.http.transport_error', [
-                'method'         => $method,
-                'path'           => $path,
-                'type'           => get_class($e),
-                'detail'         => mb_substr($e->getMessage(), 0, 200),
+                'method' => $method,
+                'path' => $path,
+                'type' => get_class($e),
+                'detail' => mb_substr($e->getMessage(), 0, 200),
                 'correlation_id' => $correlationId,
             ]);
+
             return $this->transportError('No pudimos comunicarnos con la pasarela. Intenta nuevamente.', $correlationId);
         }
     }
@@ -312,12 +315,12 @@ class WompiClient
     private function recurringDisabledError(): array
     {
         return [
-            'ok'             => false,
-            'status'         => 0,
-            'data'           => [],
-            'error'          => 'El pago automático no está habilitado.',
-            'error_code'     => 'RECURRING_DISABLED',
-            'raw'            => [],
+            'ok' => false,
+            'status' => 0,
+            'data' => [],
+            'error' => 'El pago automático no está habilitado.',
+            'error_code' => 'RECURRING_DISABLED',
+            'raw' => [],
             'correlation_id' => (string) Str::uuid(),
         ];
     }
@@ -325,12 +328,12 @@ class WompiClient
     private function transportError(string $message, ?string $correlationId = null): array
     {
         return [
-            'ok'             => false,
-            'status'         => 0,
-            'data'           => [],
-            'error'          => $message,
-            'error_code'     => 'TRANSPORT_ERROR',
-            'raw'            => [],
+            'ok' => false,
+            'status' => 0,
+            'data' => [],
+            'error' => $message,
+            'error_code' => 'TRANSPORT_ERROR',
+            'raw' => [],
             'correlation_id' => $correlationId ?? (string) Str::uuid(),
         ];
     }
@@ -352,12 +355,14 @@ class WompiClient
         if (is_string($type) && $type !== '') {
             return $type;
         }
+
         return "Error de la pasarela (HTTP {$status}).";
     }
 
     private function extractErrorCode(array $raw): ?string
     {
         $type = data_get($raw, 'error.type');
+
         return is_string($type) && $type !== '' ? $type : null;
     }
 }

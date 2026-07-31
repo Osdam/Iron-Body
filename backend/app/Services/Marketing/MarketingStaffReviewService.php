@@ -13,7 +13,7 @@ class MarketingStaffReviewService
     public function resolve(MarketingConversation $conversation, ?int $adminId, ?string $note = null): MarketingConversation
     {
         $conversation->forceFill([
-            'staff_review_pending'     => false,
+            'staff_review_pending' => false,
             'staff_review_resolved_at' => now(),
             'staff_review_resolved_by' => $adminId,
         ])->save();

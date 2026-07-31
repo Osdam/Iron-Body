@@ -23,14 +23,23 @@ use App\Models\Admin;
 class MarketingInboxAuthorizationService
 {
     public const CAP_VIEW = 'view';
+
     public const CAP_VIEW_METRICS = 'view_metrics';
+
     public const CAP_REPLY = 'reply';
+
     public const CAP_TAKEOVER = 'takeover';
+
     public const CAP_RELEASE = 'release';
+
     public const CAP_ASSIGN = 'assign';
+
     public const CAP_NOTE = 'note';
+
     public const CAP_TAG = 'tag';
+
     public const CAP_RESOLVE_REVIEW = 'resolve_review';
+
     public const CAP_UPDATE_STATUS = 'update_status';
 
     public const ALL_CAPS = [
@@ -101,24 +110,24 @@ class MarketingInboxAuthorizationService
     {
         if (! $admin instanceof Admin) {
             return [
-                'status'  => 401,
-                'code'    => 'inbox_requires_admin',
+                'status' => 401,
+                'code' => 'inbox_requires_admin',
                 'message' => 'El Inbox requiere una sesión de administrador.',
             ];
         }
 
         if (! $admin->isActive()) {
             return [
-                'status'  => 403,
-                'code'    => 'inbox_admin_inactive',
+                'status' => 403,
+                'code' => 'inbox_admin_inactive',
                 'message' => 'Tu cuenta no está activa.',
             ];
         }
 
         if (! $this->can($admin, $capability)) {
             return [
-                'status'  => 403,
-                'code'    => 'inbox_forbidden',
+                'status' => 403,
+                'code' => 'inbox_forbidden',
                 'message' => 'No tienes permiso para esta acción del Inbox.',
             ];
         }

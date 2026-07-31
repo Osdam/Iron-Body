@@ -20,9 +20,7 @@ class WompiAcceptanceService
 {
     private const CACHE_KEY = 'wompi:acceptance:tokens';
 
-    public function __construct(private WompiClient $client, private array $cfg)
-    {
-    }
+    public function __construct(private WompiClient $client, private array $cfg) {}
 
     public static function make(): self
     {
@@ -51,26 +49,27 @@ class WompiAcceptanceService
             $res = $this->client->getMerchant();
             if (! $res['ok']) {
                 Log::warning('wompi.acceptance.fetch_failed', [
-                    'status'     => $res['status'],
+                    'status' => $res['status'],
                     'error_code' => $res['error_code'],
                 ]);
+
                 return [
-                    'acceptance_token'           => null,
+                    'acceptance_token' => null,
                     'accept_personal_auth_token' => null,
-                    'terms_link'                 => null,
-                    'privacy_link'               => null,
-                    'available'                  => false,
+                    'terms_link' => null,
+                    'privacy_link' => null,
+                    'available' => false,
                 ];
             }
 
             $data = $res['data'];
 
             return [
-                'acceptance_token'           => data_get($data, 'presigned_acceptance.acceptance_token'),
+                'acceptance_token' => data_get($data, 'presigned_acceptance.acceptance_token'),
                 'accept_personal_auth_token' => data_get($data, 'presigned_personal_data_auth.acceptance_token'),
-                'terms_link'                 => data_get($data, 'presigned_acceptance.permalink'),
-                'privacy_link'               => data_get($data, 'presigned_personal_data_auth.permalink'),
-                'available'                  => (bool) data_get($data, 'presigned_acceptance.acceptance_token'),
+                'terms_link' => data_get($data, 'presigned_acceptance.permalink'),
+                'privacy_link' => data_get($data, 'presigned_personal_data_auth.permalink'),
+                'available' => (bool) data_get($data, 'presigned_acceptance.acceptance_token'),
             ];
         });
     }
@@ -90,11 +89,11 @@ class WompiAcceptanceService
         $t = $this->tokens();
 
         return [
-            'terms_link'   => $t['terms_link'],
+            'terms_link' => $t['terms_link'],
             'privacy_link' => $t['privacy_link'],
-            'available'    => $t['available'],
+            'available' => $t['available'],
             // Etiquetas sugeridas (la app usa su propio copy/UI).
-            'requires_terms_acceptance'        => true,
+            'requires_terms_acceptance' => true,
             'requires_personal_data_authorization' => true,
         ];
     }

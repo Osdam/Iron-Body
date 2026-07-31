@@ -2,6 +2,7 @@
 
 namespace App\Services\Nutrition;
 
+use App\Http\Controllers\Api\Nutrition\NutritionEntryController;
 use App\Models\Member;
 use App\Models\NutritionDailySummary;
 use App\Models\NutritionEntry;
@@ -20,9 +21,7 @@ class NutritionEntryService
 {
     public const TZ = 'America/Bogota';
 
-    public function __construct(private NutritionMacroCalculator $calculator)
-    {
-    }
+    public function __construct(private NutritionMacroCalculator $calculator) {}
 
     public function today(): string
     {
@@ -44,21 +43,21 @@ class NutritionEntryService
 
         $entry = DB::transaction(function () use ($member, $food, $mealType, $date, $quantity, $unit, $macros) {
             $entry = NutritionEntry::create([
-                'member_id'          => $member->id,
-                'food_id'            => $food->id,
-                'meal_type'          => $mealType,
-                'entry_date'         => $date,
-                'quantity'           => max(0, $quantity),
-                'unit'               => $unit,
+                'member_id' => $member->id,
+                'food_id' => $food->id,
+                'meal_type' => $mealType,
+                'entry_date' => $date,
+                'quantity' => max(0, $quantity),
+                'unit' => $unit,
                 'serving_multiplier' => $macros['serving_multiplier'],
-                'calories'           => $macros['calories'],
-                'protein'            => $macros['protein'],
-                'carbs'              => $macros['carbs'],
-                'fat'                => $macros['fat'],
-                'sugar'              => $macros['sugar'],
-                'fiber'              => $macros['fiber'],
-                'sodium'             => $macros['sodium'],
-                'saturated_fat'      => $macros['saturated_fat'],
+                'calories' => $macros['calories'],
+                'protein' => $macros['protein'],
+                'carbs' => $macros['carbs'],
+                'fat' => $macros['fat'],
+                'sugar' => $macros['sugar'],
+                'fiber' => $macros['fiber'],
+                'sodium' => $macros['sodium'],
+                'saturated_fat' => $macros['saturated_fat'],
             ]);
             // Confirmación comunitaria: si OTRO usuario usa por primera vez un
             // alimento aportado por la comunidad, cuenta como confirmación de que
@@ -73,12 +72,14 @@ class NutritionEntryService
 
             $this->updateRecentFood($member, $food);
             $this->recalculateDailySummary($member, $date);
+
             return $entry;
         });
 
         Log::info('nutrition.entry.created', [
             'member_id' => $member->id, 'meal' => $mealType, 'date' => $date,
         ]);
+
         return $entry;
     }
 
@@ -103,22 +104,22 @@ class NutritionEntryService
         $agg = NutritionEntry::where('member_id', $member->id)
             ->whereDate('entry_date', $date)
             ->selectRaw('count(*) as c, '
-                . 'coalesce(sum(calories),0) cal, coalesce(sum(protein),0) pro, '
-                . 'coalesce(sum(carbs),0) car, coalesce(sum(fat),0) fat, '
-                . 'coalesce(sum(sugar),0) sug, coalesce(sum(fiber),0) fib, '
-                . 'coalesce(sum(sodium),0) sod')
+                .'coalesce(sum(calories),0) cal, coalesce(sum(protein),0) pro, '
+                .'coalesce(sum(carbs),0) car, coalesce(sum(fat),0) fat, '
+                .'coalesce(sum(sugar),0) sug, coalesce(sum(fiber),0) fib, '
+                .'coalesce(sum(sodium),0) sod')
             ->first();
 
         return NutritionDailySummary::updateOrCreate(
             ['member_id' => $member->id, 'summary_date' => $date],
             [
-                'calories'    => round((float) $agg->cal, 1),
-                'protein'     => round((float) $agg->pro, 1),
-                'carbs'       => round((float) $agg->car, 1),
-                'fat'         => round((float) $agg->fat, 1),
-                'sugar'       => round((float) $agg->sug, 1),
-                'fiber'       => round((float) $agg->fib, 1),
-                'sodium'      => round((float) $agg->sod, 1),
+                'calories' => round((float) $agg->cal, 1),
+                'protein' => round((float) $agg->pro, 1),
+                'carbs' => round((float) $agg->car, 1),
+                'fat' => round((float) $agg->fat, 1),
+                'sugar' => round((float) $agg->sug, 1),
+                'fiber' => round((float) $agg->fib, 1),
+                'sodium' => round((float) $agg->sod, 1),
                 'entry_count' => (int) $agg->c,
             ]
         );
@@ -137,7 +138,7 @@ class NutritionEntryService
         $meals = ['breakfast' => [], 'lunch' => [], 'dinner' => [], 'snack' => []];
         $totals = ['calories' => 0.0, 'protein' => 0.0, 'carbs' => 0.0, 'fat' => 0.0];
         foreach ($entries as $e) {
-            $meals[$e->meal_type][] = \App\Http\Controllers\Api\Nutrition\NutritionEntryController::present($e);
+            $meals[$e->meal_type][] = NutritionEntryController::present($e);
             $totals['calories'] += (float) $e->calories;
             $totals['protein'] += (float) $e->protein;
             $totals['carbs'] += (float) $e->carbs;
@@ -148,9 +149,9 @@ class NutritionEntryService
         }
 
         return [
-            'date'        => $date,
-            'totals'      => $totals,
-            'meals'       => $meals,
+            'date' => $date,
+            'totals' => $totals,
+            'meals' => $meals,
             'streak_days' => $this->streakDays($member),
         ];
     }
@@ -169,8 +170,8 @@ class NutritionEntryService
         $rows = NutritionEntry::where('member_id', $member->id)
             ->whereDate('entry_date', '>=', $from)
             ->selectRaw('entry_date, count(*) c, '
-                . 'coalesce(sum(calories),0) cal, coalesce(sum(protein),0) pro, '
-                . 'coalesce(sum(carbs),0) car, coalesce(sum(fat),0) fat')
+                .'coalesce(sum(calories),0) cal, coalesce(sum(protein),0) pro, '
+                .'coalesce(sum(carbs),0) car, coalesce(sum(fat),0) fat')
             ->groupBy('entry_date')->get()
             ->keyBy(fn ($r) => (string) Carbon::parse($r->entry_date)->toDateString());
 
@@ -179,14 +180,15 @@ class NutritionEntryService
             $d = $today->copy()->subDays($i)->toDateString();
             $r = $rows->get($d);
             $out[] = [
-                'date'        => $d,
-                'calories'    => $r ? round((float) $r->cal, 1) : 0.0,
-                'protein'     => $r ? round((float) $r->pro, 1) : 0.0,
-                'carbs'       => $r ? round((float) $r->car, 1) : 0.0,
-                'fat'         => $r ? round((float) $r->fat, 1) : 0.0,
+                'date' => $d,
+                'calories' => $r ? round((float) $r->cal, 1) : 0.0,
+                'protein' => $r ? round((float) $r->pro, 1) : 0.0,
+                'carbs' => $r ? round((float) $r->car, 1) : 0.0,
+                'fat' => $r ? round((float) $r->fat, 1) : 0.0,
                 'entry_count' => $r ? (int) $r->c : 0,
             ];
         }
+
         return $out;
     }
 
@@ -205,6 +207,7 @@ class NutritionEntryService
             $streak++;
             $cursor->subDay();
         }
+
         return $streak;
     }
 
@@ -213,7 +216,7 @@ class NutritionEntryService
     {
         $recent = NutritionRecentFood::firstOrNew([
             'member_id' => $member->id,
-            'food_id'   => $food->id,
+            'food_id' => $food->id,
         ]);
         $recent->last_used_at = Carbon::now(self::TZ);
         $recent->use_count = ($recent->exists ? (int) $recent->use_count : 0) + 1;

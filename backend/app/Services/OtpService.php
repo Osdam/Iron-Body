@@ -10,6 +10,7 @@ use App\Services\Sms\SmsSenderFactory;
 use App\Services\Sms\TwilioVerifyService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 /**
  * Verificación en dos pasos (OTP por SMS) para el login de miembros.
@@ -21,9 +22,7 @@ use Illuminate\Support\Facades\Hash;
  */
 class OtpService
 {
-    public function __construct(private SecurityEventService $security)
-    {
-    }
+    public function __construct(private SecurityEventService $security) {}
 
     /** ¿El OTP se delega a Twilio Verify? (genera/envía/valida el código). */
     private function usesTwilioVerify(): bool
@@ -57,23 +56,23 @@ class OtpService
         $phone = $destinationOverride !== null
             ? trim($destinationOverride)
             : $this->resolvePhone($member);
-        $code  = $this->generateCode();
+        $code = $this->generateCode();
 
         $challenge = MemberAuthChallenge::create([
-            'member_id'    => $member->id,
-            'purpose'      => $purpose,
-            'risk_tier'    => $riskTier,
-            'code_hash'    => Hash::make($code),
-            'channel'      => 'sms',
-            'destination'  => $phone,
-            'device_id'    => $context['device_id'] ?? null,
-            'device_name'  => $context['device_name'] ?? null,
-            'platform'     => $context['platform'] ?? null,
-            'ip_address'   => $context['ip_address'] ?? null,
-            'user_agent'   => isset($context['user_agent']) ? mb_substr((string) $context['user_agent'], 0, 500) : null,
-            'status'       => MemberAuthChallenge::STATUS_PENDING,
+            'member_id' => $member->id,
+            'purpose' => $purpose,
+            'risk_tier' => $riskTier,
+            'code_hash' => Hash::make($code),
+            'channel' => 'sms',
+            'destination' => $phone,
+            'device_id' => $context['device_id'] ?? null,
+            'device_name' => $context['device_name'] ?? null,
+            'platform' => $context['platform'] ?? null,
+            'ip_address' => $context['ip_address'] ?? null,
+            'user_agent' => isset($context['user_agent']) ? mb_substr((string) $context['user_agent'], 0, 500) : null,
+            'status' => MemberAuthChallenge::STATUS_PENDING,
             'last_sent_at' => now(),
-            'expires_at'   => now()->addSeconds($this->ttl()),
+            'expires_at' => now()->addSeconds($this->ttl()),
         ]);
 
         // Twilio Verify: Twilio genera/envía/valida el código (no usamos el
@@ -84,9 +83,9 @@ class OtpService
 
         $this->security->record($member, MemberSecurityEvent::TYPE_OTP_SENT, $context, [
             'challenge' => $challenge->uuid,
-            'channel'   => 'sms',
-            'sent'      => $sent,
-            'masked'    => MemberAuthChallenge::maskPhone($phone),
+            'channel' => 'sms',
+            'sent' => $sent,
+            'masked' => MemberAuthChallenge::maskPhone($phone),
         ]);
 
         $this->flagSuspicious($member, $context);
@@ -110,21 +109,21 @@ class OtpService
             ->update(['status' => MemberAuthChallenge::STATUS_EXPIRED]);
 
         return MemberAuthChallenge::create([
-            'member_id'    => $member->id,
-            'purpose'      => MemberAuthChallenge::PURPOSE_LOGIN,
-            'risk_tier'    => null,
+            'member_id' => $member->id,
+            'purpose' => MemberAuthChallenge::PURPOSE_LOGIN,
+            'risk_tier' => null,
             // Código aleatorio no derivable: el reto demo no se valida por hash.
-            'code_hash'    => Hash::make(\Illuminate\Support\Str::random(40)),
-            'channel'      => 'demo',
-            'destination'  => $this->resolvePhone($member),
-            'device_id'    => $context['device_id'] ?? null,
-            'device_name'  => $context['device_name'] ?? null,
-            'platform'     => $context['platform'] ?? null,
-            'ip_address'   => $context['ip_address'] ?? null,
-            'user_agent'   => isset($context['user_agent']) ? mb_substr((string) $context['user_agent'], 0, 500) : null,
-            'status'       => MemberAuthChallenge::STATUS_PENDING,
+            'code_hash' => Hash::make(Str::random(40)),
+            'channel' => 'demo',
+            'destination' => $this->resolvePhone($member),
+            'device_id' => $context['device_id'] ?? null,
+            'device_name' => $context['device_name'] ?? null,
+            'platform' => $context['platform'] ?? null,
+            'ip_address' => $context['ip_address'] ?? null,
+            'user_agent' => isset($context['user_agent']) ? mb_substr((string) $context['user_agent'], 0, 500) : null,
+            'status' => MemberAuthChallenge::STATUS_PENDING,
             'last_sent_at' => now(),
-            'expires_at'   => now()->addSeconds($this->ttl()),
+            'expires_at' => now()->addSeconds($this->ttl()),
         ]);
     }
 
@@ -145,19 +144,19 @@ class OtpService
         $ttl = (int) config('security.local_ticket_ttl', 180);
 
         return MemberAuthChallenge::create([
-            'member_id'   => $member->id,
-            'purpose'     => MemberAuthChallenge::PURPOSE_LOGIN,
-            'risk_tier'   => MemberAuthChallenge::TIER_LOCAL,
+            'member_id' => $member->id,
+            'purpose' => MemberAuthChallenge::PURPOSE_LOGIN,
+            'risk_tier' => MemberAuthChallenge::TIER_LOCAL,
             // Código aleatorio no derivable: este ticket no se valida con OTP.
-            'code_hash'   => Hash::make(\Illuminate\Support\Str::random(40)),
-            'channel'     => 'local',
-            'device_id'   => $context['device_id'] ?? null,
+            'code_hash' => Hash::make(Str::random(40)),
+            'channel' => 'local',
+            'device_id' => $context['device_id'] ?? null,
             'device_name' => $context['device_name'] ?? null,
-            'platform'    => $context['platform'] ?? null,
-            'ip_address'  => $context['ip_address'] ?? null,
-            'user_agent'  => isset($context['user_agent']) ? mb_substr((string) $context['user_agent'], 0, 500) : null,
-            'status'      => MemberAuthChallenge::STATUS_PENDING,
-            'expires_at'  => now()->addSeconds($ttl),
+            'platform' => $context['platform'] ?? null,
+            'ip_address' => $context['ip_address'] ?? null,
+            'user_agent' => isset($context['user_agent']) ? mb_substr((string) $context['user_agent'], 0, 500) : null,
+            'status' => MemberAuthChallenge::STATUS_PENDING,
+            'expires_at' => now()->addSeconds($ttl),
         ]);
     }
 
@@ -181,7 +180,7 @@ class OtpService
         }
 
         $challenge->update([
-            'status'      => MemberAuthChallenge::STATUS_COMPLETED,
+            'status' => MemberAuthChallenge::STATUS_COMPLETED,
             'consumed_at' => now(),
         ]);
 
@@ -276,7 +275,7 @@ class OtpService
                 if ($member) {
                     $this->security->record($member, MemberSecurityEvent::TYPE_OTP_BLOCKED, $context, [
                         'challenge' => $challenge->uuid,
-                        'purpose'   => $challenge->purpose,
+                        'purpose' => $challenge->purpose,
                     ]);
                 }
                 throw new OtpException('Demasiados intentos fallidos. Solicita un código nuevo.', 423);
@@ -285,20 +284,20 @@ class OtpService
             if ($member) {
                 $this->security->record($member, MemberSecurityEvent::TYPE_LOGIN_FAILED, $context, [
                     'challenge' => $challenge->uuid,
-                    'purpose'   => $challenge->purpose,
+                    'purpose' => $challenge->purpose,
                     'remaining' => $remaining,
                 ]);
             }
 
             throw new OtpException(
-                "Código incorrecto. Te quedan {$remaining} intento" . ($remaining === 1 ? '' : 's') . '.',
+                "Código incorrecto. Te quedan {$remaining} intento".($remaining === 1 ? '' : 's').'.',
                 422,
                 ['remaining' => $remaining],
             );
         }
 
         $challenge->update([
-            'status'      => MemberAuthChallenge::STATUS_VERIFIED,
+            'status' => MemberAuthChallenge::STATUS_VERIFIED,
             'consumed_at' => now(),
         ]);
     }
@@ -331,16 +330,16 @@ class OtpService
             throw new OtpException('Alcanzaste el límite de reenvíos. Inicia sesión nuevamente.', 429);
         }
 
-        $code  = $this->generateCode();
+        $code = $this->generateCode();
         $phone = $challenge->destination ?: ($challenge->member ? $this->resolvePhone($challenge->member) : null);
 
         $challenge->update([
-            'code_hash'    => Hash::make($code),
-            'destination'  => $phone,
+            'code_hash' => Hash::make($code),
+            'destination' => $phone,
             'last_sent_at' => now(),
             'resend_count' => $challenge->resend_count + 1,
-            'expires_at'   => now()->addSeconds($this->ttl()),
-            'attempts'     => 0,
+            'expires_at' => now()->addSeconds($this->ttl()),
+            'attempts' => 0,
         ]);
 
         $sent = $this->usesTwilioVerify()
@@ -350,7 +349,7 @@ class OtpService
         if ($challenge->member) {
             $this->security->record($challenge->member, MemberSecurityEvent::TYPE_OTP_RESENT, $context, [
                 'challenge' => $challenge->uuid,
-                'sent'      => $sent,
+                'sent' => $sent,
             ]);
         }
 
@@ -391,7 +390,7 @@ class OtpService
         }
 
         $brand = config('otp.brand', 'Iron Body');
-        $mins  = (int) ceil($this->ttl() / 60);
+        $mins = (int) ceil($this->ttl() / 60);
         $message = "{$brand}: tu código de verificación es {$code}. Vence en {$mins} min. No lo compartas con nadie.";
 
         return SmsSenderFactory::make()->send($phone, $message);
@@ -400,7 +399,7 @@ class OtpService
     private function flagSuspicious(Member $member, array $context): void
     {
         $window = (int) config('otp.suspicious.window', 600);
-        $max    = (int) config('otp.suspicious.max_devices', 3);
+        $max = (int) config('otp.suspicious.max_devices', 3);
 
         $distinctDevices = MemberAuthChallenge::query()
             ->where('member_id', $member->id)
@@ -412,7 +411,7 @@ class OtpService
         if ($distinctDevices > $max) {
             $this->security->record($member, MemberSecurityEvent::TYPE_SUSPICIOUS, $context, [
                 'distinct_devices' => $distinctDevices,
-                'window_seconds'   => $window,
+                'window_seconds' => $window,
             ], 'Múltiples dispositivos intentando acceder en poco tiempo.');
         }
     }

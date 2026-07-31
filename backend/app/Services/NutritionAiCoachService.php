@@ -22,14 +22,13 @@ class NutritionAiCoachService
 {
     public function __construct(
         private readonly IronAiUserContextService $contextService,
-    ) {
-    }
+    ) {}
 
     public function isEnabled(): bool
     {
         return (bool) config('services.openai.nutrition_enabled', true)
             && (bool) config('services.openai.enabled', true)
-            && !empty(config('services.openai.api_key'));
+            && ! empty(config('services.openai.api_key'));
     }
 
     /**
@@ -38,7 +37,7 @@ class NutritionAiCoachService
      */
     public function recommendForToday(Member $member): ?array
     {
-        if (!$this->isEnabled()) {
+        if (! $this->isEnabled()) {
             return null;
         }
 
@@ -104,14 +103,14 @@ PROMPT;
                 ->timeout((int) ($cfg['timeout'] ?? 30))
                 ->acceptJson()
                 ->asJson()
-                ->post(rtrim($cfg['base_url'], '/') . '/v1/chat/completions', [
+                ->post(rtrim($cfg['base_url'], '/').'/v1/chat/completions', [
                     'model' => $cfg['model'] ?? 'gpt-4.1-mini',
                     'temperature' => (float) ($cfg['temperature'] ?? 0.4),
                     'max_tokens' => 600,
                     'response_format' => ['type' => 'json_object'],
                     'messages' => [
                         ['role' => 'system', 'content' => $this->systemPrompt()],
-                        ['role' => 'user', 'content' => 'Contexto del usuario (JSON): ' . json_encode($context, JSON_UNESCAPED_UNICODE)],
+                        ['role' => 'user', 'content' => 'Contexto del usuario (JSON): '.json_encode($context, JSON_UNESCAPED_UNICODE)],
                     ],
                 ]);
 
@@ -123,18 +122,21 @@ PROMPT;
                     'status' => $response->status(),
                     'latency_ms' => $latencyMs,
                 ]);
+
                 return null;
             }
 
             $content = data_get($response->json(), 'choices.0.message.content');
-            if (!is_string($content) || trim($content) === '') {
+            if (! is_string($content) || trim($content) === '') {
                 Log::error('nutrition-ai openai respuesta vacía', ['member_id' => $member->id]);
+
                 return null;
             }
 
             $parsed = json_decode($content, true);
-            if (!is_array($parsed)) {
+            if (! is_array($parsed)) {
                 Log::error('nutrition-ai openai json inválido', ['member_id' => $member->id]);
+
                 return null;
             }
 
@@ -150,6 +152,7 @@ PROMPT;
                 'member_id' => $member->id,
                 'error_class' => class_basename($e),
             ]);
+
             return null;
         }
     }
@@ -164,7 +167,7 @@ PROMPT;
 
         $suggestions = [];
         foreach ($p['meal_suggestions'] ?? [] as $s) {
-            if (!is_array($s)) {
+            if (! is_array($s)) {
                 continue;
             }
             $suggestions[] = [

@@ -30,10 +30,10 @@ class NutritionAiClient
 
         $timeout = (int) config('nutrition.ai.timeout_seconds', 30);
         $payload = [
-            'model'       => $model,
-            'messages'    => $messages,
+            'model' => $model,
+            'messages' => $messages,
             'temperature' => 0.2, // baja → menos alucinación, más estructura
-            'max_tokens'  => $maxTokens && $maxTokens > 0 ? $maxTokens : 900,
+            'max_tokens' => $maxTokens && $maxTokens > 0 ? $maxTokens : 900,
         ];
         if ($json) {
             $payload['response_format'] = ['type' => 'json_object'];
@@ -44,20 +44,23 @@ class NutritionAiClient
             $resp = Http::withToken($openai['api_key'])
                 ->timeout($timeout)
                 ->acceptJson()->asJson()
-                ->post(rtrim($openai['base_url'], '/') . '/v1/chat/completions', $payload);
+                ->post(rtrim($openai['base_url'], '/').'/v1/chat/completions', $payload);
 
             $latency = (int) round((microtime(true) - $started) * 1000);
 
             if ($resp->status() === 429) {
                 Log::warning('nutrition:ai:rate_limited', ['model' => $model, 'latency_ms' => $latency]);
+
                 return $this->fail('rate_limited', 'rate_limited');
             }
             if (in_array($resp->status(), [401, 403], true)) {
                 Log::error('nutrition:ai:unauthorized', ['status' => $resp->status()]);
+
                 return $this->fail('failed', 'ai_unauthorized');
             }
             if ($resp->failed()) {
                 Log::error('nutrition:ai:http_error', ['status' => $resp->status(), 'latency_ms' => $latency]);
+
                 return $this->fail('failed', 'http_error');
             }
 
@@ -68,19 +71,22 @@ class NutritionAiClient
             }
 
             Log::info('nutrition:ai:ok', ['model' => $model, 'latency_ms' => $latency]);
+
             return [
-                'status'     => 'success',
+                'status' => 'success',
                 'error_code' => null,
-                'content'    => $content,
-                'json'       => $this->decodeJson($content),
-                'model'      => data_get($resp->json(), 'model', $model),
-                'usage'      => data_get($resp->json(), 'usage'),
+                'content' => $content,
+                'json' => $this->decodeJson($content),
+                'model' => data_get($resp->json(), 'model', $model),
+                'usage' => data_get($resp->json(), 'usage'),
             ];
         } catch (ConnectionException $e) {
             Log::warning('nutrition:ai:timeout', ['model' => $model]);
+
             return $this->fail('timeout', 'timeout');
         } catch (Throwable $e) {
             Log::error('nutrition:ai:exception', ['error_class' => get_class($e)]);
+
             return $this->fail('failed', 'exception');
         }
     }
@@ -96,6 +102,7 @@ class NutritionAiClient
         // Algunos modelos envuelven en ```json … ```; lo limpiamos.
         $clean = preg_replace('/^```(?:json)?|```$/m', '', trim($content));
         $data = json_decode(trim((string) $clean), true);
+
         return is_array($data) ? $data : null;
     }
 

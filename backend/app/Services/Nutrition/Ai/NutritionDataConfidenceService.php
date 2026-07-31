@@ -11,10 +11,11 @@ class NutritionDataConfidenceService
     public function label(?float $score): string
     {
         $s = $score ?? 0;
+
         return match (true) {
             $s >= 0.80 => 'alta',
             $s >= 0.60 => 'media',
-            default    => 'baja',
+            default => 'baja',
         };
     }
 

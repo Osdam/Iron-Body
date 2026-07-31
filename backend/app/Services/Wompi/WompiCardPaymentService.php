@@ -39,8 +39,8 @@ class WompiCardPaymentService extends AbstractWompiPaymentService
         $installments = max(1, min(36, $installments));
 
         return [
-            'type'         => 'CARD',
-            'token'        => $token,
+            'type' => 'CARD',
+            'token' => $token,
             'installments' => $installments,
         ];
     }

@@ -15,8 +15,8 @@ class MarketingConversationTagService
     private const MAX_LEN = 40;
 
     /**
-     * @param  string[] $add
-     * @param  string[] $remove
+     * @param  string[]  $add
+     * @param  string[]  $remove
      * @return string[] tags vigentes tras aplicar los cambios
      */
     public function apply(MarketingConversation $conversation, array $add, array $remove, ?int $actorAdminId): array

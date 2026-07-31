@@ -15,9 +15,7 @@ use Throwable;
  */
 class NutritionixProvider implements NutritionProviderContract
 {
-    public function __construct(private NutritionFoodNormalizer $normalizer)
-    {
-    }
+    public function __construct(private NutritionFoodNormalizer $normalizer) {}
 
     public function source(): string
     {
@@ -44,9 +42,11 @@ class NutritionixProvider implements NutritionProviderContract
                 return null;
             }
             $food = $resp->json('foods.0');
+
             return is_array($food) ? $this->fromNutritionix($food) : null;
         } catch (Throwable $e) {
             Log::warning('nutrition.barcode.lookup_failed', ['provider' => $this->source()]);
+
             return null;
         }
     }
@@ -56,6 +56,7 @@ class NutritionixProvider implements NutritionProviderContract
         if (! $this->isEnabled()) {
             return [];
         }
+
         // Adapter preparado: se completa al contratar el proveedor. Sin credenciales
         // reales no se llama (isEnabled=false), por eso aquí queda el esqueleto.
         return [];
@@ -64,7 +65,7 @@ class NutritionixProvider implements NutritionProviderContract
     private function authHeaders(): array
     {
         return [
-            'x-app-id'  => (string) config('nutrition.nutritionix.app_id'),
+            'x-app-id' => (string) config('nutrition.nutritionix.app_id'),
             'x-app-key' => (string) config('nutrition.nutritionix.app_key'),
         ];
     }
@@ -81,23 +82,23 @@ class NutritionixProvider implements NutritionProviderContract
         $scale = fn ($v) => ($factor && is_numeric($v)) ? round((float) $v * $factor, 2) : null;
 
         return $this->normalizer->assemble([
-            'source'       => 'nutritionix',
-            'external_id'  => (string) ($f['nix_item_id'] ?? $f['tag_id'] ?? ''),
-            'barcode'      => $f['upc'] ?? null,
-            'name'         => $name,
-            'brand'        => $f['brand_name'] ?? null,
+            'source' => 'nutritionix',
+            'external_id' => (string) ($f['nix_item_id'] ?? $f['tag_id'] ?? ''),
+            'barcode' => $f['upc'] ?? null,
+            'name' => $name,
+            'brand' => $f['brand_name'] ?? null,
             'serving_size' => $grams ?: null,
             'serving_unit' => $grams ? 'g' : null,
-            'per_100g'     => [
+            'per_100g' => [
                 'calories' => $scale($f['nf_calories'] ?? null),
-                'protein'  => $scale($f['nf_protein'] ?? null),
-                'carbs'    => $scale($f['nf_total_carbohydrate'] ?? null),
-                'fat'      => $scale($f['nf_total_fat'] ?? null),
-                'sugar'    => $scale($f['nf_sugars'] ?? null),
-                'fiber'    => $scale($f['nf_dietary_fiber'] ?? null),
-                'sodium'   => $scale($f['nf_sodium'] ?? null),
+                'protein' => $scale($f['nf_protein'] ?? null),
+                'carbs' => $scale($f['nf_total_carbohydrate'] ?? null),
+                'fat' => $scale($f['nf_total_fat'] ?? null),
+                'sugar' => $scale($f['nf_sugars'] ?? null),
+                'fiber' => $scale($f['nf_dietary_fiber'] ?? null),
+                'sodium' => $scale($f['nf_sodium'] ?? null),
             ],
-            'raw'          => ['nix_item_id' => $f['nix_item_id'] ?? null],
+            'raw' => ['nix_item_id' => $f['nix_item_id'] ?? null],
         ]);
     }
 }

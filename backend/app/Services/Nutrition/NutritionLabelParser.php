@@ -26,27 +26,27 @@ class NutritionLabelParser
 
         $macros = [
             'calories' => $this->parseCalories($t),
-            'protein'  => $this->grab($t, ['prote[ií]nas?', 'proteins?', 'protein']),
-            'carbs'    => $this->grab($t, [
+            'protein' => $this->grab($t, ['prote[ií]nas?', 'proteins?', 'protein']),
+            'carbs' => $this->grab($t, [
                 'carbohidratos? totales?', 'hidratos de carbono', 'carbohidratos?',
                 'carbohydrates?', 'carbohyd\w*', 'carbos?', 'carbs?',
             ]),
-            'fat'      => $this->grab($t, [
+            'fat' => $this->grab($t, [
                 'grasas? totales?', 'grasa total', 'grasas?', 'total fat', 'fat',
             ]),
             // Azúcares: total (evita "azúcares añadidos" si el total existe).
-            'sugar'    => $this->grab($t, ['az[uú]cares? totales?', 'az[uú]cares?', 'sugars?', 'sugar']),
-            'fiber'    => $this->grab($t, [
+            'sugar' => $this->grab($t, ['az[uú]cares? totales?', 'az[uú]cares?', 'sugars?', 'sugar']),
+            'fiber' => $this->grab($t, [
                 'fibra(?: diet[eé]tica| alimentaria)?', 'dietary fiber', 'fiber', 'fibre',
             ]),
-            'sodium'   => $this->parseSodium($t),
+            'sodium' => $this->parseSodium($t),
         ];
 
         // Datos adicionales (no rompen el draft; enriquecen calidad/auditoría).
         $extras = [
             'saturated_fat' => $this->grab($t, ['grasas? saturadas?', 'saturated fat', 'sat\.? fat']),
-            'trans_fat'     => $this->grab($t, ['grasas? trans', 'trans fat']),
-            'added_sugar'   => $this->grab($t, ['az[uú]cares? a[nñ]adidos?', 'added sugars?']),
+            'trans_fat' => $this->grab($t, ['grasas? trans', 'trans fat']),
+            'added_sugar' => $this->grab($t, ['az[uú]cares? a[nñ]adidos?', 'added sugars?']),
         ];
         $portionsPerPackage = $this->grab($t, [
             'porciones por (?:envase|paquete|empaque)', 'servings per (?:container|package)',
@@ -71,15 +71,15 @@ class NutritionLabelParser
         }
 
         return [
-            'serving_size'         => $serving['serving_size'],
-            'serving_unit'         => $serving['serving_unit'],
-            'basis'                => $serving['basis'],
+            'serving_size' => $serving['serving_size'],
+            'serving_unit' => $serving['serving_unit'],
+            'basis' => $serving['basis'],
             'portions_per_package' => $portionsPerPackage !== null ? (int) round($portionsPerPackage) : null,
-            'macros'               => $macros,
-            'extras'               => $extras,
-            'confidence'           => $confidence,
-            'field_confidence'     => $fieldConfidence,
-            'warnings'             => $warnings,
+            'macros' => $macros,
+            'extras' => $extras,
+            'confidence' => $confidence,
+            'field_confidence' => $fieldConfidence,
+            'warnings' => $warnings,
         ];
     }
 
@@ -87,6 +87,7 @@ class NutritionLabelParser
     public function isReadable(array $parsed): bool
     {
         $m = $parsed['macros'];
+
         return $m['calories'] !== null || $m['protein'] !== null
             || $m['carbs'] !== null || $m['fat'] !== null;
     }
@@ -105,10 +106,11 @@ class NutritionLabelParser
     {
         foreach ($labels as $label) {
             // Unidad opcional (µg/mcg/mg/g) — el valor se toma tal cual aparece.
-            if (preg_match('/' . $label . '\D{0,15}(\d+(?:[.,]\d+)?)\s*(mcg|µg|mg|g)?/u', $t, $m)) {
+            if (preg_match('/'.$label.'\D{0,15}(\d+(?:[.,]\d+)?)\s*(mcg|µg|mg|g)?/u', $t, $m)) {
                 return $this->toFloat($m[1]);
             }
         }
+
         return null;
     }
 
@@ -126,12 +128,14 @@ class NutritionLabelParser
             $m
         )) {
             $val = $this->toFloat($m[1]);
+
             return ! empty($m[2]) ? round($val / 4.184, 1) : $val;
         }
         // 3) Solo kJ en el texto → convertir a kcal.
         if (preg_match('/(\d+(?:[.,]\d+)?)\s*kj/u', $t, $m)) {
             return round($this->toFloat($m[1]) / 4.184, 1);
         }
+
         return null;
     }
 
@@ -140,14 +144,17 @@ class NutritionLabelParser
     {
         if (preg_match('/(?:sodio|sodium)\D{0,15}(\d+(?:[.,]\d+)?)\s*(mg|g)?/u', $t, $m)) {
             $val = $this->toFloat($m[1]);
+
             return (isset($m[2]) && $m[2] === 'g') ? round($val * 1000, 1) : round($val, 1);
         }
         // Sal/Salt → sodio = sal / 2.5 (0.4×). Por defecto la sal viene en g.
         if (preg_match('/(?:\bsal\b|\bsalt\b)\D{0,15}(\d+(?:[.,]\d+)?)\s*(mg|g)?/u', $t, $m)) {
             $val = $this->toFloat($m[1]);
             $saltMg = (isset($m[2]) && $m[2] === 'mg') ? $val : $val * 1000;
+
             return round($saltMg * 0.4, 1);
         }
+
         return null;
     }
 
@@ -164,6 +171,7 @@ class NutritionLabelParser
             // "(100 g)" sin mención de porción → base por 100 g (formato en línea
             // "Información Nutricional (100 g): …").
             $basis = ((int) $size === 100 && ! $hasPortion) ? '100' : 'serving';
+
             return ['serving_size' => $size, 'serving_unit' => $unit, 'basis' => $basis];
         }
 
@@ -176,7 +184,7 @@ class NutritionLabelParser
             return [
                 'serving_size' => $this->toFloat($m[1]),
                 'serving_unit' => $this->normUnit($m[2] ?? 'g'),
-                'basis'        => 'serving',
+                'basis' => 'serving',
             ];
         }
         // 3) "por 100 g" / "por 100 ml" / "100 g" en encabezado → base 100.
@@ -185,15 +193,17 @@ class NutritionLabelParser
             return [
                 'serving_size' => 100.0,
                 'serving_unit' => $this->normUnit($m[1]),
-                'basis'        => '100',
+                'basis' => '100',
             ];
         }
+
         return ['serving_size' => null, 'serving_unit' => 'g', 'basis' => null];
     }
 
     private function normUnit(string $unit): string
     {
         $u = trim(mb_strtolower($unit));
+
         return $u === 'ml' ? 'ml' : 'g';
     }
 

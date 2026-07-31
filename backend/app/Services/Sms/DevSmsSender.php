@@ -14,7 +14,7 @@ class DevSmsSender implements SmsSender
     public function send(string $to, string $message): bool
     {
         Log::info('OTP SMS (driver dev) — no se envía SMS real', [
-            'to'      => $to,
+            'to' => $to,
             'message' => $message,
         ]);
 

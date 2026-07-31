@@ -21,9 +21,7 @@ use App\Models\MarketingMessage;
  */
 class MarketingInboundMessageRouter
 {
-    public function __construct(private readonly SalesAgentOrchestratorService $orchestrator)
-    {
-    }
+    public function __construct(private readonly SalesAgentOrchestratorService $orchestrator) {}
 
     /** Analiza (dry_run) un mensaje de texto entrante. Devuelve resultado/omisión. */
     public function analyze(MarketingLead $lead, MarketingConversation $conversation, MarketingMessage $message): array
@@ -45,9 +43,9 @@ class MarketingInboundMessageRouter
         }
         if ($conversation->human_takeover || ! $conversation->ai_enabled) {
             $conversation->forceFill([
-                'human_takeover'        => false,
+                'human_takeover' => false,
                 'human_takeover_source' => null,
-                'ai_enabled'            => true,
+                'ai_enabled' => true,
             ])->save();
         }
 
@@ -67,12 +65,12 @@ class MarketingInboundMessageRouter
     public function recordUnsupported(MarketingLead $lead, MarketingConversation $conversation, MarketingMessage $message, string $type): array
     {
         MarketingAiAction::create([
-            'lead_id'         => $lead->id,
+            'lead_id' => $lead->id,
             'conversation_id' => $conversation->id,
-            'action_type'     => 'unsupported_message',
-            'reason'          => 'unsupported_message_type',
-            'status'          => 'proposed',
-            'metadata'        => ['message_type' => $type, 'message_id' => $message->id, 'recommended_action' => 'escalate_human'],
+            'action_type' => 'unsupported_message',
+            'reason' => 'unsupported_message_type',
+            'status' => 'proposed',
+            'metadata' => ['message_type' => $type, 'message_id' => $message->id, 'recommended_action' => 'escalate_human'],
         ]);
 
         return ['skipped' => true, 'reason' => 'unsupported_message_type', 'message_type' => $type];
@@ -82,12 +80,12 @@ class MarketingInboundMessageRouter
     private function skip(MarketingLead $lead, MarketingConversation $conversation, string $reason): array
     {
         MarketingAiAction::create([
-            'lead_id'         => $lead->id,
+            'lead_id' => $lead->id,
             'conversation_id' => $conversation->id,
-            'action_type'     => 'inbound_skipped',
-            'reason'          => $reason,
-            'status'          => 'skipped',
-            'metadata'        => ['reason' => $reason],
+            'action_type' => 'inbound_skipped',
+            'reason' => $reason,
+            'status' => 'skipped',
+            'metadata' => ['reason' => $reason],
         ]);
 
         return ['skipped' => true, 'reason' => $reason];

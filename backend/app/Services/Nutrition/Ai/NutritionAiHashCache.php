@@ -16,7 +16,7 @@ class NutritionAiHashCache
 
     public function hash(string $mode, string $promptVersion, string $input): string
     {
-        return hash('sha256', $mode . '|' . $promptVersion . '|' . $input);
+        return hash('sha256', $mode.'|'.$promptVersion.'|'.$input);
     }
 
     /** Devuelve el JSON estructurado cacheado o null. */

@@ -18,8 +18,7 @@ class NutritionAIEnrichmentService
         private NutritionAiClient $client,
         private NutritionAiCostGuard $guard,
         private NutritionAiHashCache $cache,
-    ) {
-    }
+    ) {}
 
     public function isEnabled(): bool
     {
@@ -45,23 +44,26 @@ class NutritionAIEnrichmentService
                 ? NutritionAiRun::STATUS_RATE_LIMITED
                 : NutritionAiRun::STATUS_REJECTED;
             $this->record($mode, $member, $meta, null, null, $status, null, null, [], $check['reason']);
+
             return $this->out('guard', $check['reason']);
         }
 
         $hash = $this->cache->hash($mode, NutritionAiPrompts::version(), $inputForHash);
         if ($cached = $this->cache->get($hash)) {
             Log::info('nutrition:ai:cache_hit', ['mode' => $mode]);
+
             return ['outcome' => 'cache', 'error_code' => null, 'raw' => $cached, 'hash' => $hash, 'model' => null];
         }
 
         $res = $this->client->complete($model, $messages, true);
         if ($res['status'] !== 'success') {
             $status = match ($res['status']) {
-                'timeout'      => NutritionAiRun::STATUS_TIMEOUT,
+                'timeout' => NutritionAiRun::STATUS_TIMEOUT,
                 'rate_limited' => NutritionAiRun::STATUS_RATE_LIMITED,
-                default        => NutritionAiRun::STATUS_FAILED,
+                default => NutritionAiRun::STATUS_FAILED,
             };
             $this->record($mode, $member, $meta, $hash, $model, $status, null, null, [], $res['error_code']);
+
             return $this->out('provider', $res['error_code'], $hash, $model);
         }
 
@@ -72,19 +74,19 @@ class NutritionAIEnrichmentService
     public function record(string $mode, ?Member $member, array $meta, ?string $hash, ?string $model, string $status, ?float $confidence, ?array $responseJson, array $warnings = [], ?string $errorCode = null): NutritionAiRun
     {
         return NutritionAiRun::create([
-            'member_id'        => $member?->id,
-            'food_id'          => $meta['food_id'] ?? null,
-            'barcode'          => $meta['barcode'] ?? null,
-            'mode'             => $mode,
-            'provider'         => (string) config('nutrition.ai.provider', 'openai'),
-            'model'            => $model,
-            'input_hash'       => $hash,
+            'member_id' => $member?->id,
+            'food_id' => $meta['food_id'] ?? null,
+            'barcode' => $meta['barcode'] ?? null,
+            'mode' => $mode,
+            'provider' => (string) config('nutrition.ai.provider', 'openai'),
+            'model' => $model,
+            'input_hash' => $hash,
             'confidence_score' => $confidence,
-            'status'           => $status,
-            'error_code'       => $errorCode,
-            'prompt_version'   => NutritionAiPrompts::version(),
-            'response_json'    => $responseJson,
-            'warnings'         => $warnings ?: null,
+            'status' => $status,
+            'error_code' => $errorCode,
+            'prompt_version' => NutritionAiPrompts::version(),
+            'response_json' => $responseJson,
+            'warnings' => $warnings ?: null,
         ]);
     }
 

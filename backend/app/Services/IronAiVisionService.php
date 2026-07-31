@@ -34,10 +34,12 @@ class IronAiVisionService
 
         if (empty($cfg['enabled'])) {
             Log::warning('iron-ai visión deshabilitada por configuración');
+
             return null;
         }
         if (empty($cfg['api_key'])) {
             Log::error('iron-ai sin OPENAI_API_KEY para visión');
+
             return null;
         }
 
@@ -51,21 +53,22 @@ class IronAiVisionService
                 ->timeout((int) ($cfg['media_timeout'] ?? 60))
                 ->acceptJson()
                 ->asJson()
-                ->post(rtrim($cfg['base_url'], '/') . '/v1/chat/completions', [
-                    'model'       => $model,
-                    'messages'    => $messages,
+                ->post(rtrim($cfg['base_url'], '/').'/v1/chat/completions', [
+                    'model' => $model,
+                    'messages' => $messages,
                     'temperature' => (float) ($cfg['temperature'] ?? 0.4),
-                    'max_tokens'  => $max,
+                    'max_tokens' => $max,
                 ]);
 
             $latencyMs = (int) round((microtime(true) - $started) * 1000);
 
             if ($response->failed()) {
                 Log::error('iron-ai visión http error', [
-                    'status'      => $response->status(),
-                    'latency_ms'  => $latencyMs,
+                    'status' => $response->status(),
+                    'latency_ms' => $latencyMs,
                     'error_class' => 'OpenAIVisionHttpError',
                 ]);
+
                 return null;
             }
 
@@ -75,27 +78,29 @@ class IronAiVisionService
 
             if ($content === '') {
                 Log::error('iron-ai visión respuesta vacía', ['latency_ms' => $latencyMs]);
+
                 return null;
             }
 
             Log::info('iron-ai visión ok', [
-                'endpoint'   => 'chat/completions(vision)',
+                'endpoint' => 'chat/completions(vision)',
                 'latency_ms' => $latencyMs,
-                'model'      => $model,
+                'model' => $model,
             ]);
 
             return [
-                'content'       => $content,
-                'model'         => data_get($json, 'model', $model),
-                'input_tokens'  => data_get($json, 'usage.prompt_tokens'),
+                'content' => $content,
+                'model' => data_get($json, 'model', $model),
+                'input_tokens' => data_get($json, 'usage.prompt_tokens'),
                 'output_tokens' => data_get($json, 'usage.completion_tokens'),
             ];
         } catch (Throwable $e) {
             Log::error('iron-ai visión exception', [
-                'endpoint'    => 'chat/completions(vision)',
-                'latency_ms'  => (int) round((microtime(true) - $started) * 1000),
+                'endpoint' => 'chat/completions(vision)',
+                'latency_ms' => (int) round((microtime(true) - $started) * 1000),
                 'error_class' => get_class($e),
             ]);
+
             return null;
         }
     }

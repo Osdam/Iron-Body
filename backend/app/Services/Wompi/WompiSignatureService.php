@@ -20,9 +20,7 @@ namespace App\Services\Wompi;
  */
 class WompiSignatureService
 {
-    public function __construct(private array $cfg)
-    {
-    }
+    public function __construct(private array $cfg) {}
 
     public static function fromConfig(): self
     {
@@ -32,11 +30,11 @@ class WompiSignatureService
     /**
      * Firma de integridad para POST /transactions.
      *
-     * @param  string       $reference      referencia única del comercio.
-     * @param  int          $amountInCents  monto en centavos (entero).
-     * @param  string       $currency       ISO (COP).
-     * @param  string|null  $expirationTime ISO8601 si la transacción expira.
-     * @param  string|null  $integritySecret override (tests); por defecto config.
+     * @param  string  $reference  referencia única del comercio.
+     * @param  int  $amountInCents  monto en centavos (entero).
+     * @param  string  $currency  ISO (COP).
+     * @param  string|null  $expirationTime  ISO8601 si la transacción expira.
+     * @param  string|null  $integritySecret  override (tests); por defecto config.
      */
     public function integritySignature(
         string $reference,
@@ -56,7 +54,7 @@ class WompiSignatureService
     /**
      * Verifica el checksum de un evento de webhook de Wompi.
      *
-     * @param  array        $payload       cuerpo del evento (decodificado).
+     * @param  array  $payload  cuerpo del evento (decodificado).
      * @param  string|null  $eventsSecret  override (tests); por defecto config.
      */
     public function verifyWebhookChecksum(array $payload, ?string $eventsSecret = null): bool
@@ -119,6 +117,7 @@ class WompiSignatureService
         if (is_bool($value)) {
             return $value ? 'true' : 'false';
         }
+
         return (string) $value;
     }
 }

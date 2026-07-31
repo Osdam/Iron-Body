@@ -27,16 +27,19 @@ use Illuminate\Support\Facades\Http;
 class FactusClient
 {
     private const PATH_CREATE_INVOICE = '/v2/bills/validate';
-    private const PATH_BILL           = '/v2/bills/';            // + {number}[/download-pdf|/download-xml|/radian/events]
-    private const PATH_CREATE_CREDIT  = '/v2/credit-notes/validate';
-    private const PATH_CREDIT         = '/v2/credit-notes/';     // + {number}[/download-pdf|/download-xml]
-    private const PATH_NUMBERING       = '/v2/numbering-ranges';
+
+    private const PATH_BILL = '/v2/bills/';            // + {number}[/download-pdf|/download-xml|/radian/events]
+
+    private const PATH_CREATE_CREDIT = '/v2/credit-notes/validate';
+
+    private const PATH_CREDIT = '/v2/credit-notes/';     // + {number}[/download-pdf|/download-xml]
+
+    private const PATH_NUMBERING = '/v2/numbering-ranges';
 
     public function __construct(
         private FactusTokenManager $tokens,
         private array $cfg,
-    ) {
-    }
+    ) {}
 
     public static function make(): self
     {
@@ -211,7 +214,6 @@ class FactusClient
         }
     }
 
-
     /** Emite una nota crédito. POST. */
     public function createCreditNote(array $payload): array
     {
@@ -221,31 +223,31 @@ class FactusClient
     /** Consulta una factura por su NÚMERO (para reconciliación). GET. */
     public function getInvoice(string $number): array
     {
-        return $this->send('get', self::PATH_BILL . rawurlencode($number));
+        return $this->send('get', self::PATH_BILL.rawurlencode($number));
     }
 
     /** Eventos DIAN/RADIAN de la factura (estado). GET. */
     public function getInvoiceEvents(string $number): array
     {
-        return $this->send('get', self::PATH_BILL . rawurlencode($number) . '/radian/events');
+        return $this->send('get', self::PATH_BILL.rawurlencode($number).'/radian/events');
     }
 
     /** Descarga el PDF de la factura por número (respuesta con base64). GET. */
     public function downloadPdf(string $number): array
     {
-        return $this->send('get', self::PATH_BILL . rawurlencode($number) . '/download-pdf');
+        return $this->send('get', self::PATH_BILL.rawurlencode($number).'/download-pdf');
     }
 
     /** Descarga el XML UBL de la factura por número. GET. */
     public function downloadXml(string $number): array
     {
-        return $this->send('get', self::PATH_BILL . rawurlencode($number) . '/download-xml');
+        return $this->send('get', self::PATH_BILL.rawurlencode($number).'/download-xml');
     }
 
     /** Descarga el PDF de una nota crédito por número. GET. */
     public function downloadCreditNotePdf(string $number): array
     {
-        return $this->send('get', self::PATH_CREDIT . rawurlencode($number) . '/download-pdf');
+        return $this->send('get', self::PATH_CREDIT.rawurlencode($number).'/download-pdf');
     }
 
     /** Lista de rangos de numeración configurados en la cuenta. GET. */
@@ -257,8 +259,9 @@ class FactusClient
     /** Elimina (sandbox) una factura por su reference_code. DELETE. */
     public function destroyByReference(string $referenceCode): array
     {
-        return $this->send('delete', self::PATH_BILL . 'destroy/reference/' . rawurlencode($referenceCode));
+        return $this->send('delete', self::PATH_BILL.'destroy/reference/'.rawurlencode($referenceCode));
     }
+
     /** Lectura genérica de catálogos (si se necesitan en vivo). GET. */
     public function catalog(string $path, array $query = []): array
     {
@@ -287,14 +290,15 @@ class FactusClient
 
         if ($status === 401 && ! $reauthed) {
             $this->tokens->forget();
+
             return $this->send($method, $path, $data, reauthed: true);
         }
 
         return [
-            'ok'          => $response->successful(),
-            'status'      => $status,
-            'body'        => $this->safeJson($response),
-            'error'       => $response->successful() ? null : ('HTTP ' . $status),
+            'ok' => $response->successful(),
+            'status' => $status,
+            'body' => $this->safeJson($response),
+            'error' => $response->successful() ? null : ('HTTP '.$status),
             'error_class' => $this->classify($status),
             'retry_after' => $this->retryAfter($response),
         ];
@@ -361,18 +365,19 @@ class FactusClient
     {
         return match (true) {
             $status >= 200 && $status < 300 => 'ok',
-            $status === 401                 => 'auth',
-            $status === 409                 => 'conflict',
-            $status === 429                 => 'rate_limit',
+            $status === 401 => 'auth',
+            $status === 409 => 'conflict',
+            $status === 429 => 'rate_limit',
             $status >= 400 && $status < 500 => 'validation',
-            $status >= 500                  => 'server',
-            default                         => 'network',
+            $status >= 500 => 'server',
+            default => 'network',
         };
     }
 
     private function retryAfter(Response $response): ?int
     {
         $h = $response->header('Retry-After');
+
         return is_numeric($h) ? (int) $h : null;
     }
 
@@ -381,9 +386,9 @@ class FactusClient
         $request = $this->base();
 
         return match ($method) {
-            'get'    => $request->get($path, $data),
+            'get' => $request->get($path, $data),
             'delete' => $request->delete($path, $data),
-            default  => $request->post($path, $data),
+            default => $request->post($path, $data),
         };
     }
 
@@ -402,6 +407,7 @@ class FactusClient
     {
         try {
             $json = $response->json();
+
             return is_array($json) ? $json : ['raw' => $response->body()];
         } catch (\Throwable) {
             return ['raw' => $response->body()];

@@ -68,9 +68,9 @@ class SalesEscalationService
         }
 
         return [
-            'should_escalate'   => $flags !== [],
+            'should_escalate' => $flags !== [],
             'escalation_reason' => $reason,
-            'risk_flags'        => array_values(array_unique($flags)),
+            'risk_flags' => array_values(array_unique($flags)),
         ];
     }
 }

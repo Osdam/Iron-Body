@@ -62,15 +62,16 @@ class ExerciseProviderService
     public function find(string $id): ?array
     {
         $ref = match ($this->provider()) {
-            'exercisedb'     => $this->exercisedb->find($id),
-            'workoutx'       => $this->workoutx->find($id),
+            'exercisedb' => $this->exercisedb->find($id),
+            'workoutx' => $this->workoutx->find($id),
             'freeexercisedb' => $this->freeexercisedb->find($id),
-            'local'          => optional(Exercise::where('external_id', $id)->first())->toReference(),
-            default          => $this->fitgif->find($id)
+            'local' => optional(Exercise::where('external_id', $id)->first())->toReference(),
+            default => $this->fitgif->find($id)
                                     ?? ($this->showFreeExerciseDb()
                                         ? $this->freeexercisedb->find($id)
                                         : null),
         };
+
         return $ref ? $this->finalizeOne($ref) : null;
     }
 
@@ -102,11 +103,11 @@ class ExerciseProviderService
     public function sync(): array
     {
         return match ($this->provider()) {
-            'exercisedb'     => array_merge(['details' => []], $this->exercisedb->sync()),
-            'workoutx'       => ['ok' => $this->workoutx->sync(), 'fail' => 0, 'details' => []],
+            'exercisedb' => array_merge(['details' => []], $this->exercisedb->sync()),
+            'workoutx' => ['ok' => $this->workoutx->sync(), 'fail' => 0, 'details' => []],
             'freeexercisedb' => ['ok' => $this->freeexercisedb->sync(), 'fail' => 0, 'details' => []],
-            'local'          => ['ok' => 0, 'fail' => 0, 'details' => []],
-            default          => $this->fitgif->sync(),
+            'local' => ['ok' => 0, 'fail' => 0, 'details' => []],
+            default => $this->fitgif->sync(),
         };
     }
 
@@ -161,14 +162,17 @@ class ExerciseProviderService
         }
         if ($p === 'exercisedb') {
             $res = $exercisedb();
+
             return ! empty($res) ? $res : $local();
         }
         if ($p === 'workoutx') {
             $res = $workoutx();
+
             return ! empty($res) ? $res : $local();
         }
         if ($p === 'freeexercisedb') {
             $res = $freeexercisedb();
+
             return ! empty($res) ? $res : $local();
         }
 
@@ -194,6 +198,7 @@ class ExerciseProviderService
                 return $res;
             }
         }
+
         return [];
     }
 
@@ -225,7 +230,7 @@ class ExerciseProviderService
                 : null;
             // MP4 optimizado si existe; el GIF queda como fallback.
             if ($show && $id && ! empty($ref['_has_video'])) {
-                $videoUrl  = "{$base}/api/exercises/fitgif/video/{$id}.mp4";
+                $videoUrl = "{$base}/api/exercises/fitgif/video/{$id}.mp4";
                 $mediaType = 'video';
             } else {
                 $mediaType = $hasGif ? 'gif' : ($mediaType ?? 'gif');
@@ -247,7 +252,7 @@ class ExerciseProviderService
             // (Antes, si no era http, quedaba sin video → placeholder "no disponible".)
             $ref['video_path'] = $this->publicMediaUrl($ref['video_path'] ?? null);
             if (! empty($ref['video_path'])) {
-                $videoUrl  = $ref['video_path'];
+                $videoUrl = $ref['video_path'];
                 $mediaType = 'video';
             }
             $ref['gif_url'] = $this->publicMediaUrl($ref['gif_url'] ?? null);
@@ -265,23 +270,23 @@ class ExerciseProviderService
 
         // Forma estable garantizada hacia Flutter.
         return [
-            'external_id'   => $ref['external_id'] ?? '',
-            'name'          => $ref['name'] ?? '',
-            'body_part'     => $ref['body_part'] ?? null,
-            'target'        => $ref['target'] ?? null,
-            'equipment'     => $ref['equipment'] ?? null,
-            'gif_url'       => $ref['gif_url'] ?? null,
-            'video_url'     => $videoUrl,
-            'media_type'    => $videoUrl ? 'video' : ($mediaType ?? 'gif'),
+            'external_id' => $ref['external_id'] ?? '',
+            'name' => $ref['name'] ?? '',
+            'body_part' => $ref['body_part'] ?? null,
+            'target' => $ref['target'] ?? null,
+            'equipment' => $ref['equipment'] ?? null,
+            'gif_url' => $ref['gif_url'] ?? null,
+            'video_url' => $videoUrl,
+            'media_type' => $videoUrl ? 'video' : ($mediaType ?? 'gif'),
             'thumbnail_url' => $ref['thumbnail_url'] ?? null,
-            'instructions'  => array_values($ref['instructions'] ?? []),
-            'provider'      => $provider,
-            'source'        => $ref['source'] ?? null,
+            'instructions' => array_values($ref['instructions'] ?? []),
+            'provider' => $provider,
+            'source' => $ref['source'] ?? null,
             'playback_speed' => $ref['playback_speed'] ?? null,
             // Originales en inglés (por si se necesitan); la UI usa los ES.
-            'original_name'         => $ref['original_name'] ?? null,
-            'original_body_part'    => $ref['original_body_part'] ?? null,
-            'original_equipment'    => $ref['original_equipment'] ?? null,
+            'original_name' => $ref['original_name'] ?? null,
+            'original_body_part' => $ref['original_body_part'] ?? null,
+            'original_equipment' => $ref['original_equipment'] ?? null,
             'original_instructions' => $ref['original_instructions'] ?? null,
         ];
     }
@@ -309,6 +314,7 @@ class ExerciseProviderService
         if (! str_starts_with($rel, 'storage/')) {
             $rel = 'storage/'.$rel;
         }
+
         return "{$base}/{$rel}";
     }
 }

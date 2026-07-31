@@ -20,19 +20,18 @@ class MarketingAgentDoctorService
         private readonly MetaDoctorService $metaDoctor,
         private readonly MarketingKnowledgeBaseService $knowledge,
         private readonly SalesPaymentReadinessService $payment,
-    ) {
-    }
+    ) {}
 
     /** @return array<string,mixed> reporte saneado. */
     public function report(): array
     {
         $checks = [
-            'openai'        => $this->openAiCheck(),
-            'meta'          => $this->metaCheck(),
-            'knowledge'     => $this->knowledgeCheck(),
-            'monthly_plan'  => $this->monthlyPlanCheck(),
+            'openai' => $this->openAiCheck(),
+            'meta' => $this->metaCheck(),
+            'knowledge' => $this->knowledgeCheck(),
+            'monthly_plan' => $this->monthlyPlanCheck(),
             'wompi_payment' => $this->wompiCheck(),
-            'auto_execute'  => $this->autoExecuteCheck(),
+            'auto_execute' => $this->autoExecuteCheck(),
         ];
 
         // El agente está "listo para operar en vivo" cuando lo esencial está ok.
@@ -41,9 +40,9 @@ class MarketingAgentDoctorService
         $ready = collect($blocking)->every(fn ($k) => $checks[$k]['ok'] === true);
 
         return [
-            'ready'   => $ready,
-            'checks'  => $checks,
-            'safety'  => $this->safetyGuarantees($checks),
+            'ready' => $ready,
+            'checks' => $checks,
+            'safety' => $this->safetyGuarantees($checks),
             'summary' => $this->summaryLine($checks, $ready),
         ];
     }
@@ -74,10 +73,10 @@ class MarketingAgentDoctorService
         $ready = (bool) ($r['openai_ready'] ?? false);
 
         return [
-            'ok'        => $ready,
-            'status'    => $ready ? 'openai' : 'fake',
-            'detail'    => 'Responder efectivo: '.($r['effective_responder'] ?? 'fake'),
-            'hint'      => $ready
+            'ok' => $ready,
+            'status' => $ready ? 'openai' : 'fake',
+            'detail' => 'Responder efectivo: '.($r['effective_responder'] ?? 'fake'),
+            'hint' => $ready
                 ? 'OpenAI listo (Laravel valida y ejecuta).'
                 : 'Cerebro determinista (fake) activo. Configura OPENAI_API_KEY + MARKETING_SALES_AI_DRIVER=openai para usar OpenAI.',
         ];
@@ -89,10 +88,10 @@ class MarketingAgentDoctorService
         $live = (bool) ($r['live_send_allowed'] ?? false);
 
         return [
-            'ok'     => $live,
+            'ok' => $live,
             'status' => $r['send_mode'] ?? 'dry_run',
             'detail' => 'Envío WhatsApp: '.($live ? 'real' : 'dry_run (no entrega)'),
-            'hint'   => $live
+            'hint' => $live
                 ? 'Meta/WhatsApp configurado para envío real.'
                 : 'Meta en dry_run: completa META_ENABLED + credenciales para enviar en vivo.',
         ];
@@ -105,10 +104,10 @@ class MarketingAgentDoctorService
         $missing = (array) ($s['missing_recommended'] ?? []);
 
         return [
-            'ok'     => $active > 0,
+            'ok' => $active > 0,
             'status' => $active.' items activos',
             'detail' => 'Categorías recomendadas faltantes: '.($missing === [] ? 'ninguna' : implode(', ', $missing)),
-            'hint'   => $active > 0
+            'hint' => $active > 0
                 ? 'Base de conocimiento activa.'
                 : 'Sin conocimiento activo. Corre: php artisan marketing:knowledge-seed.',
         ];
@@ -119,10 +118,10 @@ class MarketingAgentDoctorService
         $plan = $this->findMonthlyPlan();
 
         return [
-            'ok'     => $plan !== null,
+            'ok' => $plan !== null,
             'status' => $plan !== null ? 'encontrado' : 'no encontrado',
             'detail' => $plan !== null ? 'Plan mensual: '.$plan->name : 'No hay un plan mensual activo.',
-            'hint'   => $plan !== null
+            'hint' => $plan !== null
                 ? 'Plan mensual disponible (fuente de precio para el agente).'
                 : 'Crea/activa un plan mensual (≈30 días) para que el agente pueda cotizar y cobrar.',
         ];
@@ -130,30 +129,30 @@ class MarketingAgentDoctorService
 
     private function wompiCheck(): array
     {
-        $r          = $this->payment->report();
-        $state      = (string) $r['state'];
+        $r = $this->payment->report();
+        $state = (string) $r['state'];
         $productive = $state === SalesPaymentReadinessService::STATE_PRODUCTION_READY;
 
         // Etiqueta explícita: sandbox / sin configurar = NO_PRODUCTIVO.
         $label = match ($state) {
             SalesPaymentReadinessService::STATE_PRODUCTION_READY => 'PRODUCTIVO',
-            SalesPaymentReadinessService::STATE_SANDBOX_PENDING  => 'NO_PRODUCTIVO (sandbox)',
-            default                                              => 'NO_PRODUCTIVO (sin config)',
+            SalesPaymentReadinessService::STATE_SANDBOX_PENDING => 'NO_PRODUCTIVO (sandbox)',
+            default => 'NO_PRODUCTIVO (sin config)',
         };
 
         return [
-            'ok'            => $productive,
-            'status'        => $label,
-            'productive'    => $productive,
-            'sandbox'       => $r['env'] === 'sandbox',
+            'ok' => $productive,
+            'status' => $label,
+            'productive' => $productive,
+            'sandbox' => $r['env'] === 'sandbox',
             // Garantía de seguridad: salvo productivo, NUNCA se entrega link real.
             'sandbox_links_blocked' => ! $productive,
-            'detail'        => 'Wompi env: '.$r['env'].' · checkout '.($r['checkout_configured'] ? 'configurado' : 'incompleto')
+            'detail' => 'Wompi env: '.$r['env'].' · checkout '.($r['checkout_configured'] ? 'configurado' : 'incompleto')
                 .' · links sandbox como reales: '.($productive ? 'N/A (productivo)' : 'BLOQUEADOS'),
-            'hint'          => match ($state) {
+            'hint' => match ($state) {
                 SalesPaymentReadinessService::STATE_PRODUCTION_READY => 'Wompi productivo: el agente puede entregar links reales.',
-                SalesPaymentReadinessService::STATE_SANDBOX_PENDING  => 'Wompi en SANDBOX (NO_PRODUCTIVO): el agente NO entrega links sandbox como reales; un asesor comparte el medio de pago.',
-                default                                              => 'Wompi NO_PRODUCTIVO sin configurar: completa WOMPI_PUBLIC_KEY + WOMPI_INTEGRITY_SECRET + checkout. Mientras tanto, no se entregan links.',
+                SalesPaymentReadinessService::STATE_SANDBOX_PENDING => 'Wompi en SANDBOX (NO_PRODUCTIVO): el agente NO entrega links sandbox como reales; un asesor comparte el medio de pago.',
+                default => 'Wompi NO_PRODUCTIVO sin configurar: completa WOMPI_PUBLIC_KEY + WOMPI_INTEGRITY_SECRET + checkout. Mientras tanto, no se entregan links.',
             },
         ];
     }
@@ -161,17 +160,17 @@ class MarketingAgentDoctorService
     private function autoExecuteCheck(): array
     {
         $agentEnabled = (bool) config('marketing.agent_enabled', false);
-        $autoAnalyze  = (bool) config('marketing.inbound.auto_analyze', true);
-        $autoExecute  = (bool) config('marketing.inbound.auto_execute', false);
-        $effective    = $agentEnabled && $autoExecute;
+        $autoAnalyze = (bool) config('marketing.inbound.auto_analyze', true);
+        $autoExecute = (bool) config('marketing.inbound.auto_execute', false);
+        $effective = $agentEnabled && $autoExecute;
 
         return [
-            'ok'     => true, // informativo: ambos modos son válidos y seguros.
+            'ok' => true, // informativo: ambos modos son válidos y seguros.
             'status' => $effective ? 'on' : 'off',
             'detail' => 'MARKETING_AGENT_ENABLED='.($agentEnabled ? 'true' : 'false')
                 .' · INBOUND_AUTO_ANALYZE='.($autoAnalyze ? 'true' : 'false')
                 .' · INBOUND_AUTO_EXECUTE='.($autoExecute ? 'true' : 'false'),
-            'hint'   => $effective
+            'hint' => $effective
                 ? 'Auto-ejecución de herramientas seguras ACTIVA (requiere agent_enabled + auto_execute).'
                 : 'Auto-ejecución OFF (modo seguro): el agente analiza/propone pero no ejecuta solo.',
         ];

@@ -28,10 +28,15 @@ use Throwable;
 class WorkoutXService
 {
     private string $baseUrl;
+
     private string $prefix;
+
     private ?string $apiKey;
+
     private string $provider;
+
     private string $authHeader;
+
     private int $cacheTtl;
 
     /**
@@ -39,19 +44,19 @@ class WorkoutXService
      * envíe el nombre en español y WorkoutX (en inglés) igual resuelva un GIF.
      */
     private const ES_EN = [
-        'press de banca'        => 'bench press',
-        'press banca'           => 'bench press',
-        'sentadilla'            => 'squat',
-        'peso muerto'           => 'deadlift',
-        'dominadas'             => 'pull up',
-        'dominada'              => 'pull up',
-        'press militar'         => 'overhead press',
-        'curl con mancuernas'   => 'dumbbell curl',
-        'curl de biceps'        => 'biceps curl',
-        'plancha'               => 'plank',
-        'burpees'               => 'burpee',
-        'zancadas'              => 'lunge',
-        'fondos'                => 'dips',
+        'press de banca' => 'bench press',
+        'press banca' => 'bench press',
+        'sentadilla' => 'squat',
+        'peso muerto' => 'deadlift',
+        'dominadas' => 'pull up',
+        'dominada' => 'pull up',
+        'press militar' => 'overhead press',
+        'curl con mancuernas' => 'dumbbell curl',
+        'curl de biceps' => 'biceps curl',
+        'plancha' => 'plank',
+        'burpees' => 'burpee',
+        'zancadas' => 'lunge',
+        'fondos' => 'dips',
     ];
 
     /** Términos de músculo/parte del cuerpo ES→EN para WorkoutX. */
@@ -71,12 +76,12 @@ class WorkoutXService
     public function __construct()
     {
         $cfg = config('services.workoutx');
-        $this->baseUrl    = $cfg['base_url'] ?? 'https://api.workoutxapp.com';
-        $this->prefix     = $cfg['api_prefix'] ?? '/v1';
-        $this->apiKey     = $cfg['api_key'] ?? null;
-        $this->provider   = $cfg['provider'] ?? 'workoutx';
+        $this->baseUrl = $cfg['base_url'] ?? 'https://api.workoutxapp.com';
+        $this->prefix = $cfg['api_prefix'] ?? '/v1';
+        $this->apiKey = $cfg['api_key'] ?? null;
+        $this->provider = $cfg['provider'] ?? 'workoutx';
         $this->authHeader = $cfg['auth_header'] ?? 'X-WorkoutX-Key';
-        $this->cacheTtl   = (int) ($cfg['cache_ttl'] ?? 43200);
+        $this->cacheTtl = (int) ($cfg['cache_ttl'] ?? 43200);
     }
 
     public function hasApiKey(): bool
@@ -89,7 +94,7 @@ class WorkoutXService
     /** Listado general de ejercicios (normalizados). */
     public function all(int $limit = 30, int $offset = 0): array
     {
-        $limit  = max(1, min($limit, 100));
+        $limit = max(1, min($limit, 100));
         $offset = max(0, $offset);
 
         return $this->guard(
@@ -112,7 +117,7 @@ class WorkoutXService
 
         $list = $this->guard(
             cacheKey: "wx:id:$externalId",
-            external: fn () => $this->fetch('/exercises/exercise/' . rawurlencode($externalId)),
+            external: fn () => $this->fetch('/exercises/exercise/'.rawurlencode($externalId)),
             fallback: fn () => [],
         );
 
@@ -143,19 +148,20 @@ class WorkoutXService
         }
 
         return $this->guard(
-            cacheKey: 'wx:search:' . Str::slug($term),
+            cacheKey: 'wx:search:'.Str::slug($term),
             external: function () use ($term, $query) {
                 // Match por nombre. /exercises/name/{name} es compatible con el
                 // plan Free (a diferencia de /exercises/search, que es de pago).
-                $res = $this->fetch('/exercises/name/' . rawurlencode($term), ['limit' => 12]);
+                $res = $this->fetch('/exercises/name/'.rawurlencode($term), ['limit' => 12]);
                 if (! empty($res)) {
                     return $res;
                 }
                 // Fallback: primeros resultados compatibles por parte del cuerpo.
                 $muscle = $this->translateMuscle($query);
                 if ($muscle !== '') {
-                    return $this->fetch('/exercises/bodyPart/' . rawurlencode($muscle), ['limit' => 8]);
+                    return $this->fetch('/exercises/bodyPart/'.rawurlencode($muscle), ['limit' => 8]);
                 }
+
                 return [];
             },
             fallback: fn () => [],
@@ -180,8 +186,8 @@ class WorkoutXService
         }
 
         return $this->guard(
-            cacheKey: 'wx:muscle:' . Str::slug($en),
-            external: fn () => $this->fetch('/exercises/bodyPart/' . rawurlencode($en), ['limit' => 30]),
+            cacheKey: 'wx:muscle:'.Str::slug($en),
+            external: fn () => $this->fetch('/exercises/bodyPart/'.rawurlencode($en), ['limit' => 30]),
             fallback: fn () => [],
         );
     }
@@ -193,14 +199,15 @@ class WorkoutXService
         foreach (array_values(self::ES_EN) as $name) {
             try {
                 $count += count($this->guard(
-                    cacheKey: 'wx:sync:' . Str::slug($name),
-                    external: fn () => $this->fetch('/exercises/name/' . rawurlencode($name), ['limit' => 3]),
+                    cacheKey: 'wx:sync:'.Str::slug($name),
+                    external: fn () => $this->fetch('/exercises/name/'.rawurlencode($name), ['limit' => 3]),
                     fallback: fn () => [],
                 ));
             } catch (Throwable) {
                 // continuar; el guard ya logueó sanitizado
             }
         }
+
         return $count;
     }
 
@@ -222,9 +229,11 @@ class WorkoutXService
             $resp = Http::withHeaders([$this->authHeader => $this->apiKey])
                 ->timeout(20)
                 ->get("{$this->baseUrl}{$this->prefix}/gifs/{$filename}");
+
             return $resp->successful() ? $resp : null;
         } catch (Throwable $e) {
             Log::warning('WorkoutX gif no disponible', ['reason' => $this->sanitize($e->getMessage())]);
+
             return null;
         }
     }
@@ -234,12 +243,14 @@ class WorkoutXService
     private function translateExercise(string $value): string
     {
         $k = Str::lower(trim($value));
+
         return self::ES_EN[$k] ?? $value;
     }
 
     private function translateMuscle(string $value): string
     {
         $k = Str::lower(trim($value));
+
         return self::MUSCLE_EN[$k] ?? $value;
     }
 
@@ -256,12 +267,14 @@ class WorkoutXService
             return Cache::remember($cacheKey, $this->cacheTtl, function () use ($external) {
                 $items = $external();
                 $this->persist($items);
+
                 return $items;
             });
         } catch (Throwable $e) {
             Log::warning('WorkoutX no disponible, usando fallback local', [
                 'reason' => $this->sanitize($e->getMessage()),
             ]);
+
             return $fallback();
         }
     }
@@ -270,9 +283,9 @@ class WorkoutXService
     private function fetch(string $path, array $query = []): array
     {
         $resp = Http::withHeaders([
-                $this->authHeader => $this->apiKey,
-                'Accept'          => 'application/json',
-            ])
+            $this->authHeader => $this->apiKey,
+            'Accept' => 'application/json',
+        ])
             ->timeout(15)
             ->retry(1, 250)
             ->get("{$this->baseUrl}{$this->prefix}{$path}", $query);
@@ -315,16 +328,16 @@ class WorkoutXService
         $externalId = (string) ($r['id'] ?? $r['exerciseId'] ?? $r['_id'] ?? Str::slug($name));
 
         return [
-            'external_id'  => $externalId,
-            'name'         => trim($name),
-            'body_part'    => $r['bodyPart'] ?? $r['body_part'] ?? $r['category'] ?? null,
-            'target'       => $r['target'] ?? $r['primaryMuscle'] ?? null,
-            'equipment'    => $r['equipment'] ?? null,
+            'external_id' => $externalId,
+            'name' => trim($name),
+            'body_part' => $r['bodyPart'] ?? $r['body_part'] ?? $r['category'] ?? null,
+            'target' => $r['target'] ?? $r['primaryMuscle'] ?? null,
+            'equipment' => $r['equipment'] ?? null,
             // Guardamos SOLO el nombre de archivo del GIF (p. ej. `0025.gif`).
             // El backend lo sirve vía proxy; nunca exponemos la URL+key.
-            'gif_url'      => $this->gifFilename($r['gifUrl'] ?? $r['gif_url'] ?? $r['gif'] ?? null, $externalId),
+            'gif_url' => $this->gifFilename($r['gifUrl'] ?? $r['gif_url'] ?? $r['gif'] ?? null, $externalId),
             'instructions' => is_array($instructions) ? array_values($instructions) : [],
-            'provider'     => $this->provider,
+            'provider' => $this->provider,
         ];
     }
 
@@ -341,6 +354,7 @@ class WorkoutXService
         if (preg_match('/^[A-Za-z0-9_-]+$/', $externalId)) {
             return "{$externalId}.gif";
         }
+
         return null;
     }
 
@@ -365,6 +379,7 @@ class WorkoutXService
             $msg = str_ireplace((string) $this->apiKey, '[REDACTED]', $msg);
         }
         $msg = str_ireplace($this->baseUrl, '[WORKOUTX]', $msg);
+
         return Str::limit($msg, 300);
     }
 }

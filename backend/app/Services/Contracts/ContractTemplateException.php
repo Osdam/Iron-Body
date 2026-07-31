@@ -9,6 +9,4 @@ use RuntimeException;
  * archivo fuente no coincide con el checksum esperado. El sistema NUNCA genera
  * un contrato "parecido" ni un PDF falso: falla con un error claro.
  */
-class ContractTemplateException extends RuntimeException
-{
-}
+class ContractTemplateException extends RuntimeException {}

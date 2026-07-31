@@ -26,7 +26,7 @@ class NutritionOcrImagePreprocessor
             return null; // sin ImageMagick → se usa la imagen original
         }
 
-        $outPath = sys_get_temp_dir() . '/ironbody_ocr_pre_' . bin2hex(random_bytes(8)) . '.png';
+        $outPath = sys_get_temp_dir().'/ironbody_ocr_pre_'.bin2hex(random_bytes(8)).'.png';
 
         // -auto-orient: EXIF · -colorspace Gray · -resize: limita lado mayor a
         // 2000px · -contrast-stretch/-normalize: realza el texto.
@@ -59,13 +59,15 @@ class NutritionOcrImagePreprocessor
             @unlink($outPath);
             Log::info('nutrition.ocr.preprocess.error', ['msg' => $e->getMessage()]);
         }
+
         return null;
     }
 
     /** Localiza `magick` o `convert` (ImageMagick) en el PATH del sistema. */
     private function magickBinary(): ?string
     {
-        $finder = new ExecutableFinder();
+        $finder = new ExecutableFinder;
+
         return $finder->find('magick') ?? $finder->find('convert');
     }
 }

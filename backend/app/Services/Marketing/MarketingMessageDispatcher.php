@@ -20,12 +20,11 @@ class MarketingMessageDispatcher
     public function __construct(
         private readonly MetaMessagingService $messaging,
         private readonly MetaAuthService $auth,
-    ) {
-    }
+    ) {}
 
     /**
-     * @param  string   $senderType    Autor del outbound (ai por defecto; human para envío manual del Inbox).
-     * @param  int|null $senderUserId  Admin/asesor que envía (solo para sender_type=human).
+     * @param  string  $senderType  Autor del outbound (ai por defecto; human para envío manual del Inbox).
+     * @param  int|null  $senderUserId  Admin/asesor que envía (solo para sender_type=human).
      * @return array{ok:bool,sent:bool,dry_run:bool,safe_to_send:bool,message_id:?int,provider_message_id:?string,reason:?string,conversation_id:?int}
      */
     public function dispatchWhatsapp(
@@ -69,12 +68,13 @@ class MarketingMessageDispatcher
         // META deshabilitado o sin credenciales → dry_run (prepara, no entrega).
         if (! $this->auth->isConfigured()) {
             $message = $this->recordOutbound($conversation, $body, 'dry_run', null, $metadata, $senderType, $senderUserId);
+
             return array_merge($base, [
-                'dry_run'         => true,
-                'safe_to_send'    => true,
-                'message_id'      => $message->id,
+                'dry_run' => true,
+                'safe_to_send' => true,
+                'message_id' => $message->id,
                 'conversation_id' => $conversation->id,
-                'reason'          => 'meta_disabled_or_unconfigured',
+                'reason' => 'meta_disabled_or_unconfigured',
             ]);
         }
 
@@ -91,12 +91,12 @@ class MarketingMessageDispatcher
         );
 
         return array_merge($base, [
-            'sent'                => $providerId !== null,
-            'safe_to_send'        => true,
-            'message_id'          => $message->id,
+            'sent' => $providerId !== null,
+            'safe_to_send' => true,
+            'message_id' => $message->id,
             'provider_message_id' => $providerId,
-            'conversation_id'     => $conversation->id,
-            'reason'              => $providerId !== null ? null : 'provider_send_failed',
+            'conversation_id' => $conversation->id,
+            'reason' => $providerId !== null ? null : 'provider_send_failed',
         ]);
     }
 
@@ -112,13 +112,13 @@ class MarketingMessageDispatcher
     ): MarketingMessage {
         $message = MarketingMessage::create([
             'conversation_id' => $conversation->id,
-            'direction'       => MarketingMessage::DIRECTION_OUTBOUND,
-            'sender_type'     => $senderType,
-            'sender_user_id'  => $senderUserId,
-            'body'            => $body,
+            'direction' => MarketingMessage::DIRECTION_OUTBOUND,
+            'sender_type' => $senderType,
+            'sender_user_id' => $senderUserId,
+            'body' => $body,
             'meta_message_id' => $providerId,
-            'status'          => $status,
-            'metadata'        => $metadata ?: null,
+            'status' => $status,
+            'metadata' => $metadata ?: null,
         ]);
 
         // Bookkeeping del Inbox (aditivo, no cambia el comportamiento de envío):
@@ -150,6 +150,7 @@ class MarketingMessageDispatcher
         if (strlen($digits) < 11 || strlen($digits) > 15) {
             return null;
         }
+
         return $digits;
     }
 }

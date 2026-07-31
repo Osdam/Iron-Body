@@ -19,11 +19,17 @@ use App\Models\MarketingAppointment;
 class MarketingAppointmentAuthorizationService
 {
     public const CAP_VIEW = 'view';
+
     public const CAP_CREATE = 'create';
+
     public const CAP_UPDATE = 'update';
+
     public const CAP_ASSIGN = 'assign';
+
     public const CAP_COMPLETE = 'complete';
+
     public const CAP_CANCEL = 'cancel';
+
     public const CAP_RESCHEDULE = 'reschedule';
 
     public const ALL_CAPS = [

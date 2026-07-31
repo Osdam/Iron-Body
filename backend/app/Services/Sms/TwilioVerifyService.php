@@ -43,15 +43,17 @@ class TwilioVerifyService
 
             if (! $resp->successful()) {
                 Log::warning('TwilioVerify: start no exitoso', [
-                    'status'      => $resp->status(),
+                    'status' => $resp->status(),
                     'twilio_code' => $resp->json('code'),
                 ]);
+
                 return false;
             }
 
             return true;
         } catch (\Throwable $e) {
             Log::warning('TwilioVerify: excepción en start', ['error' => $e->getMessage()]);
+
             return false;
         }
     }
@@ -78,6 +80,7 @@ class TwilioVerifyService
             return $resp->json('status') === 'approved';
         } catch (\Throwable $e) {
             Log::warning('TwilioVerify: excepción en check', ['error' => $e->getMessage()]);
+
             return false;
         }
     }
@@ -100,13 +103,15 @@ class TwilioVerifyService
         if ($cc !== '' && strlen($p) > 10 && str_starts_with($p, $cc)) {
             return '+'.$p;
         }
+
         return '+'.$cc.$p;
     }
 
     private function endpoint(string $action): string
     {
         $base = rtrim((string) config('otp.twilio.verify_base', 'https://verify.twilio.com'), '/');
-        $svc  = (string) config('otp.twilio.verify_service_sid');
+        $svc = (string) config('otp.twilio.verify_service_sid');
+
         return "{$base}/v2/Services/{$svc}/{$action}";
     }
 

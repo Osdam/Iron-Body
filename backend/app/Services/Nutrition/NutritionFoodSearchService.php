@@ -25,8 +25,7 @@ class NutritionFoodSearchService
         private OpenFoodFactsNutritionProvider $openFoodFacts,
         private UsdaFoodDataProvider $usda,
         private NutritionixProvider $nutritionix,
-    ) {
-    }
+    ) {}
 
     /** @return array<int, array<string,mixed>> formato unificado + is_favorite */
     public function search(string $query, Member $member, int $limit = 20): array
@@ -51,9 +50,11 @@ class NutritionFoodSearchService
         $local = array_slice($this->rank($local, $member, NutritionFood::normalize($query)), 0, $limit);
 
         $favoriteIds = $this->favoriteIds($member);
+
         return array_map(function (NutritionFood $f) use ($favoriteIds) {
             $row = $f->toApiArray();
             $row['is_favorite'] = in_array($f->id, $favoriteIds, true);
+
             return $row;
         }, $local);
     }
@@ -74,7 +75,7 @@ class NutritionFoodSearchService
             ->visibleInSearch($member)
             ->where(function ($outer) use ($tokens) {
                 foreach ($tokens as $tok) {
-                    $like = '%' . $tok . '%';
+                    $like = '%'.$tok.'%';
                     $outer->where(function ($q) use ($like) {
                         $q->where('normalized_name', 'like', $like)
                             ->orWhere('name', 'like', $like)
@@ -103,7 +104,7 @@ class NutritionFoodSearchService
      * 3 Open Food Facts cacheado completo, 4 USDA completo, 5 otros completos,
      * 9 incompletos (siempre al final). Empate: mayor score Colombia, verificado.
      *
-     * @param NutritionFood[] $foods
+     * @param  NutritionFood[]  $foods
      * @return NutritionFood[]
      */
     private function rank(array $foods, Member $member, string $qnorm = ''): array
@@ -111,6 +112,7 @@ class NutritionFoodSearchService
         usort($foods, function (NutritionFood $a, NutritionFood $b) use ($member, $qnorm) {
             return $this->rankKey($a, $member, $qnorm) <=> $this->rankKey($b, $member, $qnorm);
         });
+
         return $foods;
     }
 
@@ -131,6 +133,7 @@ class NutritionFoodSearchService
         if ($brand !== '' && str_contains(mb_strtolower($brand), $qnorm)) {
             return 2;
         }
+
         return 3;
     }
 
@@ -195,6 +198,7 @@ class NutritionFoodSearchService
                 Log::warning('nutrition.search.cache_failed');
             }
         }
+
         return $foods;
     }
 
@@ -204,7 +208,7 @@ class NutritionFoodSearchService
         $seen = [];
         $out = [];
         foreach ([...$local, ...$external] as $food) {
-            $key = $food->id ?? ($food->barcode ?: $food->source . ':' . $food->external_id);
+            $key = $food->id ?? ($food->barcode ?: $food->source.':'.$food->external_id);
             if (isset($seen[$key])) {
                 continue;
             }
@@ -214,6 +218,7 @@ class NutritionFoodSearchService
                 break;
             }
         }
+
         return $out;
     }
 

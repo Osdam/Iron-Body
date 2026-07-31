@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Member;
 use App\Models\MemberRealtimeEvent;
 use Illuminate\Support\Facades\Log;
 
@@ -15,19 +16,32 @@ class RealtimeEvents
 {
     /** Tipos de evento (espejo de los handlers del cliente). */
     public const MEMBERSHIP = 'membership.updated';
-    public const PAYMENT    = 'payment.updated';
-    public const PROFILE    = 'profile.updated';
-    public const PHONE      = 'phone.updated';
+
+    public const PAYMENT = 'payment.updated';
+
+    public const PROFILE = 'profile.updated';
+
+    public const PHONE = 'phone.updated';
+
     public const LIVE_PERMS = 'live.permissions.updated';
-    public const STORY_NEW  = 'story.created';
-    public const STORY_DEL  = 'story.deleted';
-    public const SECURITY   = 'device.security.updated';
-    public const APP_STATE  = 'app_state.updated';
-    public const ROUTINE    = 'routine.updated';
+
+    public const STORY_NEW = 'story.created';
+
+    public const STORY_DEL = 'story.deleted';
+
+    public const SECURITY = 'device.security.updated';
+
+    public const APP_STATE = 'app_state.updated';
+
+    public const ROUTINE = 'routine.updated';
+
     public const CLASS_EVENT = 'class.updated';
-    public const NUTRITION  = 'nutrition.updated';
-    public const RANKING    = 'ranking.updated';
-    public const BIOMETRIC  = 'biometric.enrolled';
+
+    public const NUTRITION = 'nutrition.updated';
+
+    public const RANKING = 'ranking.updated';
+
+    public const BIOMETRIC = 'biometric.enrolled';
 
     /**
      * Emite una señal de cambio para un miembro. [$changed] son los módulos que
@@ -40,11 +54,11 @@ class RealtimeEvents
         }
         try {
             MemberRealtimeEvent::create([
-                'member_id'  => $memberId,
-                'type'       => $type,
-                'changed'    => $changed,
+                'member_id' => $memberId,
+                'type' => $type,
+                'changed' => $changed,
                 // Versión monotónica (ms) para que el cliente ignore duplicados.
-                'version'    => (int) (microtime(true) * 1000),
+                'version' => (int) (microtime(true) * 1000),
                 'created_at' => now(),
             ]);
 
@@ -130,12 +144,12 @@ class RealtimeEvents
     public static function broadcastToActiveMembers(string $type, array $changed = []): void
     {
         try {
-            $now        = now();
-            $version    = (int) (microtime(true) * 1000);
+            $now = now();
+            $version = (int) (microtime(true) * 1000);
             $changedJson = json_encode($changed);
 
-            $ids = \App\Models\Member::query()
-                ->where('status', \App\Models\Member::STATUS_ACTIVE)
+            $ids = Member::query()
+                ->where('status', Member::STATUS_ACTIVE)
                 ->pluck('id');
 
             if ($ids->isEmpty()) {
@@ -145,10 +159,10 @@ class RealtimeEvents
             foreach ($ids->chunk(500) as $chunk) {
                 MemberRealtimeEvent::insert(
                     $chunk->map(fn ($id) => [
-                        'member_id'  => (int) $id,
-                        'type'       => $type,
-                        'changed'    => $changedJson,
-                        'version'    => $version,
+                        'member_id' => (int) $id,
+                        'type' => $type,
+                        'changed' => $changedJson,
+                        'version' => $version,
                         'created_at' => $now,
                     ])->all()
                 );

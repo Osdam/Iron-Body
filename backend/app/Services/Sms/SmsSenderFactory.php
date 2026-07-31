@@ -24,9 +24,9 @@ class SmsSenderFactory
         }
 
         return match ($driver) {
-            'twilio'     => new TwilioSmsSender(),
-            'labsmobile' => new LabsMobileSmsSender(),
-            default      => new DevSmsSender(),
+            'twilio' => new TwilioSmsSender,
+            'labsmobile' => new LabsMobileSmsSender,
+            default => new DevSmsSender,
         };
     }
 }

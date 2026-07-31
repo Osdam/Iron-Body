@@ -16,17 +16,14 @@ use setasign\Fpdi\Tcpdf\Fpdi;
  */
 class ContractPdfService
 {
-    public function __construct(private ContractTemplateService $templates)
-    {
-    }
+    public function __construct(private ContractTemplateService $templates) {}
 
     /**
-     * @param  string       $templateKey
-     * @param  array        $fields     [field_key => string]
-     * @param  array        $multiline  [field_key => string]
+     * @param  array  $fields  [field_key => string]
+     * @param  array  $multiline  [field_key => string]
      * @param  string|null  $signaturePngPath  ruta ABSOLUTA del PNG de la firma
-     * @param  array        $audit      metadatos para la página de constancia
-     * @return string  contenido binario del PDF final
+     * @param  array  $audit  metadatos para la página de constancia
+     * @return string contenido binario del PDF final
      */
     public function generate(
         string $templateKey,
@@ -152,6 +149,7 @@ class ContractPdfService
             $candidate = $current === '' ? $word : $current.' '.$word;
             if ($pdf->GetStringWidth($candidate) <= ((float) $slot['w'] - 2)) {
                 $current = $candidate;
+
                 continue;
             }
             // La línea actual se llenó: escribirla y pasar a la siguiente.
@@ -165,6 +163,7 @@ class ContractPdfService
                     $current = preg_replace('/\s*\S+$/', '', $current) ?? '';
                 }
                 $flush(trim($current).' …', count($lines) - 1);
+
                 return;
             }
         }

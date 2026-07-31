@@ -30,18 +30,18 @@ class MetaConversationService
 
         $message = MarketingMessage::create([
             'conversation_id' => $conversation->id,
-            'direction'       => MarketingMessage::DIRECTION_INBOUND,
-            'sender_type'     => MarketingMessage::SENDER_LEAD,
-            'body'            => $body,
+            'direction' => MarketingMessage::DIRECTION_INBOUND,
+            'sender_type' => MarketingMessage::SENDER_LEAD,
+            'body' => $body,
             'meta_message_id' => $metaMessageId,
-            'metadata'        => $metadata ?: null,
+            'metadata' => $metadata ?: null,
         ]);
 
         // Bookkeeping del Inbox (aditivo): avanza timestamps y suma no-leídos.
         $conversation->forceFill([
             'last_message_at' => now(),
             'last_inbound_at' => now(),
-            'unread_count'    => (int) $conversation->getAttribute('unread_count') + 1,
+            'unread_count' => (int) $conversation->getAttribute('unread_count') + 1,
         ])->save();
 
         return $message;

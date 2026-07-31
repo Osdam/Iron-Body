@@ -28,15 +28,23 @@ use InvalidArgumentException;
  */
 class PaymentStateMachine
 {
-    public const CREATED         = 'created';
-    public const TOKENIZING      = 'tokenizing';
-    public const PENDING         = 'pending';
+    public const CREATED = 'created';
+
+    public const TOKENIZING = 'tokenizing';
+
+    public const PENDING = 'pending';
+
     public const REQUIRES_ACTION = 'requires_action';
-    public const APPROVED        = 'approved';
-    public const DECLINED        = 'declined';
-    public const VOIDED          = 'voided';
-    public const ERROR           = 'error';
-    public const EXPIRED         = 'expired';
+
+    public const APPROVED = 'approved';
+
+    public const DECLINED = 'declined';
+
+    public const VOIDED = 'voided';
+
+    public const ERROR = 'error';
+
+    public const EXPIRED = 'expired';
 
     public const TERMINAL = [
         self::APPROVED, self::DECLINED, self::VOIDED, self::ERROR, self::EXPIRED,
@@ -68,9 +76,9 @@ class PaymentStateMachine
         // Terminales: no salen (idempotencia / anti doble pago).
         self::APPROVED => [],
         self::DECLINED => [],
-        self::VOIDED   => [],
-        self::ERROR    => [],
-        self::EXPIRED  => [],
+        self::VOIDED => [],
+        self::ERROR => [],
+        self::EXPIRED => [],
     ];
 
     /** Mapa estado Wompi → estado interno. */
@@ -79,10 +87,10 @@ class PaymentStateMachine
         return match (strtoupper(trim($wompiStatus))) {
             'APPROVED' => self::APPROVED,
             'DECLINED' => self::DECLINED,
-            'VOIDED'   => self::VOIDED,
-            'ERROR'    => self::ERROR,
-            'PENDING'  => self::PENDING,
-            default    => self::PENDING, // desconocido → pending (nunca aprueba)
+            'VOIDED' => self::VOIDED,
+            'ERROR' => self::ERROR,
+            'PENDING' => self::PENDING,
+            default => self::PENDING, // desconocido → pending (nunca aprueba)
         };
     }
 
@@ -118,6 +126,7 @@ class PaymentStateMachine
         if (! in_array($to, $this->allStates(), true)) {
             throw new InvalidArgumentException("Estado destino desconocido: {$to}");
         }
+
         return in_array($to, self::GRAPH[$from], true);
     }
 
@@ -139,6 +148,7 @@ class PaymentStateMachine
         if ($this->isTerminal($current) && $this->isInFlight($target)) {
             return $current;
         }
+
         return $this->canTransition($current, $target) ? $target : $current;
     }
 
@@ -148,10 +158,10 @@ class PaymentStateMachine
         return match ($state) {
             self::APPROVED => 'approved_at',
             self::DECLINED => 'declined_at',
-            self::VOIDED   => 'voided_at',
-            self::ERROR    => 'failed_at',
-            self::EXPIRED  => 'expires_at',
-            default        => null,
+            self::VOIDED => 'voided_at',
+            self::ERROR => 'failed_at',
+            self::EXPIRED => 'expires_at',
+            default => null,
         };
     }
 

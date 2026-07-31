@@ -22,8 +22,7 @@ class MemberContractService
     public function __construct(
         private ContractTemplateService $templates,
         private ContractPdfService $pdf,
-    ) {
-    }
+    ) {}
 
     private const MONTHS_ES = [
         1 => 'enero', 2 => 'febrero', 3 => 'marzo', 4 => 'abril', 5 => 'mayo', 6 => 'junio',
@@ -54,16 +53,16 @@ class MemberContractService
         );
 
         return [
-            'requires_contract'         => ! $hasSignedRequired,
+            'requires_contract' => ! $hasSignedRequired,
             'recommended_contract_type' => $recommended,
-            'is_minor'                  => (bool) $member->is_minor,
-            'pending_contract'          => $pending ? $this->present($pending) : null,
-            'signed_contracts'          => $signed->map(fn ($c) => $this->present($c))->values(),
-            'missing_required_fields'   => $this->missingMemberFields($member),
-            'checkboxes'                => $this->templates->checkboxes($recommended),
-            'privacy_policy_url'        => Config::get('contracts.privacy_policy_url') ?: url('/api/legal/privacy'),
-            'terms_url'                 => Config::get('contracts.terms_url') ?: url('/api/legal/terms'),
-            'support_contact'           => Config::get('contracts.support_contact'),
+            'is_minor' => (bool) $member->is_minor,
+            'pending_contract' => $pending ? $this->present($pending) : null,
+            'signed_contracts' => $signed->map(fn ($c) => $this->present($c))->values(),
+            'missing_required_fields' => $this->missingMemberFields($member),
+            'checkboxes' => $this->templates->checkboxes($recommended),
+            'privacy_policy_url' => Config::get('contracts.privacy_policy_url') ?: url('/api/legal/privacy'),
+            'terms_url' => Config::get('contracts.terms_url') ?: url('/api/legal/terms'),
+            'support_contact' => Config::get('contracts.support_contact'),
         ];
     }
 
@@ -105,17 +104,17 @@ class MemberContractService
         }
 
         $contract = new MemberContract([
-            'member_id'            => $member->id,
+            'member_id' => $member->id,
             'contract_template_id' => $template->id,
-            'contract_type'        => $type,
-            'status'               => MemberContract::STATUS_PENDING,
-            'member_snapshot'      => $this->memberSnapshot($member),
-            'template_version'     => $template->version,
-            'ip_address'           => $request->ip(),
-            'user_agent'           => substr((string) $request->userAgent(), 0, 500),
-            'app_platform'         => $request->input('app_platform'),
-            'app_version'          => $request->input('app_version'),
-            'device_id'            => $request->input('device_id'),
+            'contract_type' => $type,
+            'status' => MemberContract::STATUS_PENDING,
+            'member_snapshot' => $this->memberSnapshot($member),
+            'template_version' => $template->version,
+            'ip_address' => $request->ip(),
+            'user_agent' => substr((string) $request->userAgent(), 0, 500),
+            'app_platform' => $request->input('app_platform'),
+            'app_version' => $request->input('app_version'),
+            'device_id' => $request->input('device_id'),
         ]);
         $contract->save();
         $contract->folio = $this->makeFolio($contract);
@@ -132,7 +131,7 @@ class MemberContractService
      * doble envío: si ya está firmado, lanza error (no se re-firma).
      *
      * @param  array  $payload  datos del formulario + flags + metadatos
-     * @param  string $signaturePng  bytes PNG de la firma
+     * @param  string  $signaturePng  bytes PNG de la firma
      */
     public function sign(MemberContract $contract, array $payload, string $signaturePng, Request $request): MemberContract
     {
@@ -161,33 +160,33 @@ class MemberContractService
 
         // Snapshots inmutables.
         $memberSnapshot = array_merge($this->memberSnapshot($member), array_filter([
-            'full_name'       => $payload['full_name'] ?? null,
+            'full_name' => $payload['full_name'] ?? null,
             'document_number' => $payload['document_number'] ?? null,
-            'birth_date'      => $payload['birth_date'] ?? null,
-            'rh'              => $payload['rh'] ?? null,
-            'address'         => $payload['address'] ?? null,
-            'phone'           => $payload['phone'] ?? null,
-            'email'           => $payload['email'] ?? null,
+            'birth_date' => $payload['birth_date'] ?? null,
+            'rh' => $payload['rh'] ?? null,
+            'address' => $payload['address'] ?? null,
+            'phone' => $payload['phone'] ?? null,
+            'email' => $payload['email'] ?? null,
         ], fn ($v) => $v !== null));
 
         $medicalSnapshot = [
             'medical_notes' => $payload['medical_notes'] ?? null,
-            'injuries'      => $payload['injuries'] ?? null,
+            'injuries' => $payload['injuries'] ?? null,
         ];
 
         $guardianSnapshot = null;
         if ($type === 'minor_release') {
             $guardianSnapshot = array_filter([
-                'guardian_full_name'       => $payload['guardian_full_name'] ?? null,
+                'guardian_full_name' => $payload['guardian_full_name'] ?? null,
                 'guardian_document_number' => $payload['guardian_document_number'] ?? null,
-                'guardian_document_city'   => $payload['guardian_document_city'] ?? null,
-                'guardian_phone'           => $payload['guardian_phone'] ?? null,
-                'guardian_email'           => $payload['guardian_email'] ?? null,
-                'guardian_address'         => $payload['guardian_address'] ?? null,
-                'guardian_city'            => $payload['guardian_city'] ?? null,
-                'guardian_relationship'    => $payload['guardian_relationship'] ?? null,
-                'minor_full_name'          => $payload['minor_full_name'] ?? $member->full_name,
-                'minor_document_number'    => $payload['minor_document_number'] ?? $member->document_number,
+                'guardian_document_city' => $payload['guardian_document_city'] ?? null,
+                'guardian_phone' => $payload['guardian_phone'] ?? null,
+                'guardian_email' => $payload['guardian_email'] ?? null,
+                'guardian_address' => $payload['guardian_address'] ?? null,
+                'guardian_city' => $payload['guardian_city'] ?? null,
+                'guardian_relationship' => $payload['guardian_relationship'] ?? null,
+                'minor_full_name' => $payload['minor_full_name'] ?? $member->full_name,
+                'minor_document_number' => $payload['minor_document_number'] ?? $member->document_number,
             ], fn ($v) => $v !== null);
         }
 
@@ -204,21 +203,21 @@ class MemberContractService
         [$fields, $multiline] = $this->buildStampData($type, $member, $payload, $signedAt);
 
         $audit = [
-            'template_name'    => $this->templates->definition($type)['name'] ?? $type,
-            'contract_type'    => $type,
+            'template_name' => $this->templates->definition($type)['name'] ?? $type,
+            'contract_type' => $type,
             'template_version' => $contract->template_version,
-            'folio'            => $contract->folio,
-            'contract_uuid'    => $contract->contract_uuid,
-            'member_name'      => $memberSnapshot['full_name'] ?? $member->full_name,
-            'member_document'  => $memberSnapshot['document_number'] ?? $member->document_number,
-            'signed_at'        => $signedAt->format('Y-m-d H:i:s T'),
-            'ip_address'       => $request->ip(),
-            'device_id'        => $payload['device_id'] ?? $contract->device_id,
-            'app_platform'     => $payload['app_platform'] ?? $contract->app_platform,
-            'app_version'      => $payload['app_version'] ?? $contract->app_version,
-            'support_contact'  => Config::get('contracts.support_contact'),
-            'checkboxes'       => array_map(fn ($cb) => [
-                'text'  => $cb['text'],
+            'folio' => $contract->folio,
+            'contract_uuid' => $contract->contract_uuid,
+            'member_name' => $memberSnapshot['full_name'] ?? $member->full_name,
+            'member_document' => $memberSnapshot['document_number'] ?? $member->document_number,
+            'signed_at' => $signedAt->format('Y-m-d H:i:s T'),
+            'ip_address' => $request->ip(),
+            'device_id' => $payload['device_id'] ?? $contract->device_id,
+            'app_platform' => $payload['app_platform'] ?? $contract->app_platform,
+            'app_version' => $payload['app_version'] ?? $contract->app_version,
+            'support_contact' => Config::get('contracts.support_contact'),
+            'checkboxes' => array_map(fn ($cb) => [
+                'text' => $cb['text'],
                 'value' => (bool) ($accept[$cb['key']] ?? false),
             ], $checkboxes),
         ];
@@ -232,20 +231,20 @@ class MemberContractService
         // Persistir en una transacción.
         DB::transaction(function () use ($contract, $memberSnapshot, $guardianSnapshot, $medicalSnapshot, $acceptanceSnapshot, $sigPath, $pdfPath, $checksum, $signedAt, $request, $payload) {
             $contract->fill([
-                'status'              => MemberContract::STATUS_SIGNED,
-                'member_snapshot'     => $memberSnapshot,
-                'guardian_snapshot'   => $guardianSnapshot,
-                'medical_snapshot'    => $medicalSnapshot,
+                'status' => MemberContract::STATUS_SIGNED,
+                'member_snapshot' => $memberSnapshot,
+                'guardian_snapshot' => $guardianSnapshot,
+                'medical_snapshot' => $medicalSnapshot,
                 'acceptance_snapshot' => $acceptanceSnapshot,
-                'signature_path'      => $sigPath,
-                'signed_pdf_path'     => $pdfPath,
+                'signature_path' => $sigPath,
+                'signed_pdf_path' => $pdfPath,
                 'signed_pdf_checksum' => $checksum,
-                'signed_at'           => $signedAt,
-                'ip_address'          => $request->ip(),
-                'user_agent'          => substr((string) $request->userAgent(), 0, 500),
-                'device_id'           => $payload['device_id'] ?? $contract->device_id,
-                'app_platform'        => $payload['app_platform'] ?? $contract->app_platform,
-                'app_version'         => $payload['app_version'] ?? $contract->app_version,
+                'signed_at' => $signedAt,
+                'ip_address' => $request->ip(),
+                'user_agent' => substr((string) $request->userAgent(), 0, 500),
+                'device_id' => $payload['device_id'] ?? $contract->device_id,
+                'app_platform' => $payload['app_platform'] ?? $contract->app_platform,
+                'app_version' => $payload['app_version'] ?? $contract->app_version,
             ])->save();
 
             $this->audit($contract, ContractAuditLog::ACTOR_MEMBER, (string) $contract->member_id, ContractAuditLog::ACTION_ACCEPTED, $request, ['checkboxes' => $acceptanceSnapshot]);
@@ -267,8 +266,8 @@ class MemberContractService
         }
 
         $contract->fill([
-            'status'      => MemberContract::STATUS_VOID,
-            'voided_at'   => Carbon::now(),
+            'status' => MemberContract::STATUS_VOID,
+            'voided_at' => Carbon::now(),
             'void_reason' => $reason,
         ])->save();
 
@@ -287,17 +286,17 @@ class MemberContractService
     public function present(MemberContract $contract): array
     {
         return [
-            'id'               => $contract->id,
-            'uuid'             => $contract->contract_uuid,
-            'folio'            => $contract->folio,
-            'contract_type'    => $contract->contract_type,
-            'status'           => $contract->status,
+            'id' => $contract->id,
+            'uuid' => $contract->contract_uuid,
+            'folio' => $contract->folio,
+            'contract_type' => $contract->contract_type,
+            'status' => $contract->status,
             'template_version' => $contract->template_version,
-            'signed_at'        => optional($contract->signed_at)->toIso8601String(),
-            'checksum'         => $contract->signed_pdf_checksum,
-            'has_pdf'          => ! empty($contract->signed_pdf_path),
+            'signed_at' => optional($contract->signed_at)->toIso8601String(),
+            'checksum' => $contract->signed_pdf_checksum,
+            'has_pdf' => ! empty($contract->signed_pdf_path),
             'image_authorized' => $this->imageAuthorized($contract),
-            'created_at'       => optional($contract->created_at)->toIso8601String(),
+            'created_at' => optional($contract->created_at)->toIso8601String(),
         ];
     }
 
@@ -321,13 +320,13 @@ class MemberContractService
     private function memberSnapshot(Member $member): array
     {
         return [
-            'member_uuid'     => $member->member_uuid,
-            'full_name'       => $member->full_name,
+            'member_uuid' => $member->member_uuid,
+            'full_name' => $member->full_name,
             'document_number' => $member->document_number,
-            'birth_date'      => optional($member->birth_date)->format('Y-m-d'),
-            'email'           => $member->email,
-            'phone'           => $member->phone,
-            'is_minor'        => (bool) $member->is_minor,
+            'birth_date' => optional($member->birth_date)->format('Y-m-d'),
+            'email' => $member->email,
+            'phone' => $member->phone,
+            'is_minor' => (bool) $member->is_minor,
         ];
     }
 
@@ -336,16 +335,16 @@ class MemberContractService
         $items = [];
         foreach ($checkboxes as $cb) {
             $items[] = [
-                'key'              => $cb['key'],
-                'text'             => $cb['text'],
-                'required'         => (bool) ($cb['required'] ?? false),
-                'value'            => (bool) ($accept[$cb['key']] ?? false),
-                'accepted_at'      => $signedAt->toIso8601String(),
+                'key' => $cb['key'],
+                'text' => $cb['text'],
+                'required' => (bool) ($cb['required'] ?? false),
+                'value' => (bool) ($accept[$cb['key']] ?? false),
+                'accepted_at' => $signedAt->toIso8601String(),
                 'template_version' => $contract->template_version,
-                'app_version'      => $payload['app_version'] ?? $contract->app_version,
-                'locale'           => $payload['locale'] ?? $request->getPreferredLanguage(),
-                'ip_address'       => $request->ip(),
-                'user_agent'       => substr((string) $request->userAgent(), 0, 500),
+                'app_version' => $payload['app_version'] ?? $contract->app_version,
+                'locale' => $payload['locale'] ?? $request->getPreferredLanguage(),
+                'ip_address' => $request->ip(),
+                'user_agent' => substr((string) $request->userAgent(), 0, 500),
             ];
         }
 
@@ -364,21 +363,21 @@ class MemberContractService
             $city = $payload['sign_city'] ?? $payload['guardian_city'] ?? 'Neiva';
 
             $fields = [
-                'guardian_full_name'        => (string) ($payload['guardian_full_name'] ?? ''),
-                'guardian_document_number'  => (string) ($payload['guardian_document_number'] ?? ''),
-                'guardian_document_city'    => (string) ($payload['guardian_document_city'] ?? ''),
-                'minor_full_name_intro'     => (string) $minorName,
-                'minor_full_name'           => (string) $minorName,
-                'minor_document_number'     => (string) $minorDoc,
-                'sign_city'                 => (string) $city,
-                'sign_day'                  => $signedAt->format('d'),
-                'sign_month'                => self::MONTHS_ES[(int) $signedAt->format('n')],
-                'sign_year'                 => $signedAt->format('y'),
-                'minor_full_name_footer'    => (string) $minorName,
+                'guardian_full_name' => (string) ($payload['guardian_full_name'] ?? ''),
+                'guardian_document_number' => (string) ($payload['guardian_document_number'] ?? ''),
+                'guardian_document_city' => (string) ($payload['guardian_document_city'] ?? ''),
+                'minor_full_name_intro' => (string) $minorName,
+                'minor_full_name' => (string) $minorName,
+                'minor_document_number' => (string) $minorDoc,
+                'sign_city' => (string) $city,
+                'sign_day' => $signedAt->format('d'),
+                'sign_month' => self::MONTHS_ES[(int) $signedAt->format('n')],
+                'sign_year' => $signedAt->format('y'),
+                'minor_full_name_footer' => (string) $minorName,
                 'guardian_full_name_footer' => (string) ($payload['guardian_full_name'] ?? ''),
-                'guardian_phone'            => (string) ($payload['guardian_phone'] ?? ''),
-                'guardian_address'          => (string) ($payload['guardian_address'] ?? ''),
-                'guardian_city'             => (string) ($payload['guardian_city'] ?? $city),
+                'guardian_phone' => (string) ($payload['guardian_phone'] ?? ''),
+                'guardian_address' => (string) ($payload['guardian_address'] ?? ''),
+                'guardian_city' => (string) ($payload['guardian_city'] ?? $city),
             ];
 
             return [$fields, []];
@@ -386,19 +385,19 @@ class MemberContractService
 
         // Plantillas de inscripción (adult): basic_registration / workout_registration.
         $fields = [
-            'fecha'           => $signedAt->format('d/m/Y'),
-            'full_name'       => (string) ($payload['full_name'] ?? $member->full_name),
+            'fecha' => $signedAt->format('d/m/Y'),
+            'full_name' => (string) ($payload['full_name'] ?? $member->full_name),
             'document_number' => (string) ($payload['document_number'] ?? $member->document_number),
-            'birth_date'      => $birthFmt,
-            'rh'              => (string) ($payload['rh'] ?? ''),
-            'address'         => (string) ($payload['address'] ?? ''),
-            'phone'           => (string) ($payload['phone'] ?? $member->phone),
-            'email'           => (string) ($payload['email'] ?? $member->email),
+            'birth_date' => $birthFmt,
+            'rh' => (string) ($payload['rh'] ?? ''),
+            'address' => (string) ($payload['address'] ?? ''),
+            'phone' => (string) ($payload['phone'] ?? $member->phone),
+            'email' => (string) ($payload['email'] ?? $member->email),
         ];
 
         $multiline = [
             'medical_notes' => (string) ($payload['medical_notes'] ?? ''),
-            'injuries'      => (string) ($payload['injuries'] ?? $member->injuries ?? ''),
+            'injuries' => (string) ($payload['injuries'] ?? $member->injuries ?? ''),
         ];
 
         return [$fields, $multiline];
@@ -413,13 +412,13 @@ class MemberContractService
     {
         ContractAuditLog::create([
             'member_contract_id' => $contract->id,
-            'actor_type'         => $actorType,
-            'actor_id'           => $actorId,
-            'action'             => $action,
-            'metadata'           => $metadata ?: null,
-            'ip_address'         => $request->ip(),
-            'user_agent'         => substr((string) $request->userAgent(), 0, 500),
-            'created_at'         => Carbon::now(),
+            'actor_type' => $actorType,
+            'actor_id' => $actorId,
+            'action' => $action,
+            'metadata' => $metadata ?: null,
+            'ip_address' => $request->ip(),
+            'user_agent' => substr((string) $request->userAgent(), 0, 500),
+            'created_at' => Carbon::now(),
         ]);
     }
 

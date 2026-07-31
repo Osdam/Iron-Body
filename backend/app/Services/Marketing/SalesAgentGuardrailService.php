@@ -27,32 +27,32 @@ class SalesAgentGuardrailService
         // 1) do_not_contact: bloqueo total (gana sobre todo).
         if (! $lead->isContactable()) {
             return array_merge($decision, [
-                'should_reply'                  => false,
-                'should_generate_payment_link'  => false,
-                'should_send_message'           => false,
-                'should_schedule_followup'      => false,
-                'followup_delay_minutes'        => null,
-                'should_escalate'               => false,
-                'escalation_reason'             => null,
-                'recommended_action'            => SalesIntents::ACTION_BLOCKED_DNC,
-                'reply'                         => null,
-                'tools_requested'               => [],
-                'safe_to_send'                  => false,
-                'risk_flags'                    => $this->withFlag($decision, 'do_not_contact'),
+                'should_reply' => false,
+                'should_generate_payment_link' => false,
+                'should_send_message' => false,
+                'should_schedule_followup' => false,
+                'followup_delay_minutes' => null,
+                'should_escalate' => false,
+                'escalation_reason' => null,
+                'recommended_action' => SalesIntents::ACTION_BLOCKED_DNC,
+                'reply' => null,
+                'tools_requested' => [],
+                'safe_to_send' => false,
+                'risk_flags' => $this->withFlag($decision, 'do_not_contact'),
             ]);
         }
 
         // 2) El lead pide no ser contactado → marcar, no insistir.
         if (($decision['intent'] ?? null) === SalesIntents::DO_NOT_CONTACT_REQUEST) {
             $decision = array_merge($decision, [
-                'should_reply'                 => false,
+                'should_reply' => false,
                 'should_generate_payment_link' => false,
-                'should_send_message'          => false,
-                'should_schedule_followup'     => false,
-                'followup_delay_minutes'       => null,
-                'recommended_action'           => SalesIntents::ACTION_MARK_DNC,
-                'reply'                        => null,
-                'tools_requested'              => [SalesIntents::TOOL_MARK_DNC],
+                'should_send_message' => false,
+                'should_schedule_followup' => false,
+                'followup_delay_minutes' => null,
+                'recommended_action' => SalesIntents::ACTION_MARK_DNC,
+                'reply' => null,
+                'tools_requested' => [SalesIntents::TOOL_MARK_DNC],
             ]);
         }
 

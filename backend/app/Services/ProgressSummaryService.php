@@ -22,9 +22,7 @@ class ProgressSummaryService
 {
     public const TZ = 'America/Bogota';
 
-    public function __construct(private readonly WeeklyStreakService $streak)
-    {
-    }
+    public function __construct(private readonly WeeklyStreakService $streak) {}
 
     public function build(Member $member): array
     {
@@ -78,6 +76,7 @@ class ProgressSummaryService
         if ($latest === null) {
             return null;
         }
+
         return PhysicalEvaluation::query()
             ->where('member_id', $member->id)
             ->where('id', '!=', $latest->id)
@@ -150,6 +149,7 @@ class ProgressSummaryService
                 'highlight' => $i === $todayIdx,
             ];
         }
+
         return $out;
     }
 

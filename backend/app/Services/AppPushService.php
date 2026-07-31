@@ -20,9 +20,7 @@ use Throwable;
  */
 class AppPushService
 {
-    public function __construct(private readonly FcmHttpV1Client $client)
-    {
-    }
+    public function __construct(private readonly FcmHttpV1Client $client) {}
 
     public function enabled(): bool
     {
@@ -31,7 +29,7 @@ class AppPushService
 
     public function sendToMember(Member $member, AppNotification $notification): void
     {
-        if (!$this->enabled()) {
+        if (! $this->enabled()) {
             // FCM no listo → push omitido (la notificación in-app ya existe).
             return;
         }
@@ -87,9 +85,11 @@ class AppPushService
                 'priority' => $n->priority,
                 'source' => 'iron_body',
             ], fn ($v) => $v !== null)),
-            // Sin este bloque el mensaje salía con prioridad `normal` y sin
-            // canal: Doze podía retenerlo horas y Android lo mostraba mudo.
+            // Sin estos bloques el mensaje salía con prioridad `normal` y sin
+            // canal: Doze podía retenerlo horas y Android lo mostraba mudo. En
+            // iPhone, sin `apns`, todo llegaba con el mismo peso.
             'android' => PushChannel::androidBlock($category),
+            'apns' => PushChannel::apnsBlock($category),
         ];
     }
 }

@@ -31,12 +31,12 @@ class MemberUserResolver
                 $email = "member-{$member->id}-{$member->document_number}@ironbody.local";
             }
             $user = User::create([
-                'name'     => $member->full_name,
-                'email'    => $email,
+                'name' => $member->full_name,
+                'email' => $email,
                 'password' => Hash::make(Str::random(40)),
                 'document' => $member->document_number,
-                'phone'    => $member->phone,
-                'status'   => 'pending',
+                'phone' => $member->phone,
+                'status' => 'pending',
             ]);
         }
         $member->forceFill(['user_id' => $user->id])->save();

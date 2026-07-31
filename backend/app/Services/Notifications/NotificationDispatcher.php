@@ -273,6 +273,7 @@ class NotificationDispatcher
                         'source' => 'iron_body',
                     ], fn ($v) => $v !== null)),
                     'android' => PushChannel::androidBlock($category),
+                    'apns' => PushChannel::apnsBlock($category),
                 ], $unregistered);
 
                 if ($ok) {

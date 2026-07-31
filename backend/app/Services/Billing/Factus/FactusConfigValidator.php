@@ -23,9 +23,7 @@ use RuntimeException;
  */
 class FactusConfigValidator
 {
-    public function __construct(private array $cfg)
-    {
-    }
+    public function __construct(private array $cfg) {}
 
     public static function fromConfig(): self
     {
@@ -162,7 +160,7 @@ class FactusConfigValidator
         // 🔒 Decisión tributaria confirmada por el contador (no se asume IVA).
         if (! ($this->cfg['tax_decision_confirmed'] ?? false)) {
             $issues[] = 'Decisión tributaria NO confirmada (FACTUS_TAX_DECISION_CONFIRMED=false). '
-                . 'El contador debe definir IVA/exento/excluido de membresías y productos.';
+                .'El contador debe definir IVA/exento/excluido de membresías y productos.';
         }
 
         return $issues;

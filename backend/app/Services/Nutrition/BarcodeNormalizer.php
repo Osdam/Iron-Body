@@ -29,6 +29,7 @@ class BarcodeNormalizer
     public function isPlausible(string $code): bool
     {
         $len = strlen($code);
+
         return $len >= 8 && $len <= 14;
     }
 
@@ -36,7 +37,7 @@ class BarcodeNormalizer
     public function type(string $code): string
     {
         return match (strlen($code)) {
-            8  => 'EAN-8/UPC-E',
+            8 => 'EAN-8/UPC-E',
             12 => 'UPC-A',
             13 => 'EAN-13',
             14 => 'GTIN-14',
@@ -53,15 +54,17 @@ class BarcodeNormalizer
     {
         $len = strlen($code);
         if ($len === 12) {
-            return '0' . $code; // UPC-A → EAN-13
+            return '0'.$code; // UPC-A → EAN-13
         }
         if ($len === 14) {
             $trimmed = ltrim($code, '0');
+
             // GTIN-14 con un solo cero de relleno → EAN-13.
             return strlen($code) - strlen($trimmed) >= 1 && strlen($trimmed) <= 13
                 ? str_pad($trimmed, 13, '0', STR_PAD_LEFT)
                 : $code;
         }
+
         return $code;
     }
 
@@ -77,13 +80,13 @@ class BarcodeNormalizer
         $len = strlen($code);
 
         if ($len === 12) {
-            $out[] = '0' . $code;                 // EAN-13
+            $out[] = '0'.$code;                 // EAN-13
             $out[] = str_pad($code, 14, '0', STR_PAD_LEFT); // GTIN-14
         } elseif ($len === 13) {
             if (str_starts_with($code, '0')) {
                 $out[] = substr($code, 1);        // UPC-A
             }
-            $out[] = '0' . $code;                 // GTIN-14
+            $out[] = '0'.$code;                 // GTIN-14
         } elseif ($len === 14) {
             $trim = ltrim($code, '0');
             if ($trim !== '' && strlen($trim) <= 13) {
@@ -97,7 +100,7 @@ class BarcodeNormalizer
             $upcA = $this->expandUpcE($code);
             if ($upcA !== null) {
                 $out[] = $upcA;
-                $out[] = '0' . $upcA;             // EAN-13
+                $out[] = '0'.$upcA;             // EAN-13
             }
         }
 
@@ -110,6 +113,7 @@ class BarcodeNormalizer
                 $result[] = $v;
             }
         }
+
         return $result;
     }
 
@@ -129,6 +133,7 @@ class BarcodeNormalizer
             $sum += (int) $d * ($i % 2 === 0 ? 3 : 1);
         }
         $expected = (10 - ($sum % 10)) % 10;
+
         return $expected === $check;
     }
 
@@ -154,22 +159,23 @@ class BarcodeNormalizer
         $item = '';
         switch ($last) {
             case '0': case '1': case '2':
-                $mfr = substr($first5, 0, 2) . $last . '00';
-                $item = '00' . substr($first5, 2, 3);
+                $mfr = substr($first5, 0, 2).$last.'00';
+                $item = '00'.substr($first5, 2, 3);
                 break;
             case '3':
-                $mfr = substr($first5, 0, 3) . '00';
-                $item = '000' . substr($first5, 3, 2);
+                $mfr = substr($first5, 0, 3).'00';
+                $item = '000'.substr($first5, 3, 2);
                 break;
             case '4':
-                $mfr = substr($first5, 0, 4) . '0';
-                $item = '0000' . substr($first5, 4, 1);
+                $mfr = substr($first5, 0, 4).'0';
+                $item = '0000'.substr($first5, 4, 1);
                 break;
             default: // 5-9
                 $mfr = $first5;
-                $item = '0000' . $last;
+                $item = '0000'.$last;
                 break;
         }
-        return $ns . $mfr . $item . $check;
+
+        return $ns.$mfr.$item.$check;
     }
 }

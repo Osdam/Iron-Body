@@ -56,11 +56,11 @@ class WompiDaviplataPaymentService extends AbstractWompiPaymentService
         }
 
         return array_filter([
-            'type'                => 'DAVIPLATA',
-            'user_legal_id'       => $legalId,
-            'user_legal_id_type'  => $legalIdType,
+            'type' => 'DAVIPLATA',
+            'user_legal_id' => $legalId,
+            'user_legal_id_type' => $legalIdType,
             'payment_description' => mb_substr($this->description($transaction), 0, 60),
-            'sandbox_status'      => $data['sandbox_status'] ?? null, // solo sandbox
+            'sandbox_status' => $data['sandbox_status'] ?? null, // solo sandbox
         ], fn ($v) => $v !== null);
     }
 
@@ -72,6 +72,7 @@ class WompiDaviplataPaymentService extends AbstractWompiPaymentService
         if ($tx->wompi_transaction_id) {
             $this->ensureUrlServices($tx); // si aún no están, sendOtp reintentará
         }
+
         return $tx->fresh();
     }
 
@@ -91,10 +92,11 @@ class WompiDaviplataPaymentService extends AbstractWompiPaymentService
                 return ['ok' => false, 'message' => 'Alcanzaste el máximo de reenvíos. Inicia el pago de nuevo.'];
             }
             $this->saveOtpMeta($tx, [
-                'resends'    => $resends + 1,
-                'attempts'   => 0,
+                'resends' => $resends + 1,
+                'attempts' => 0,
                 'expires_at' => now()->addMinutes($this->ttlMinutes())->timestamp,
             ]);
+
             return $this->doSend($tx, 'resend');
         });
     }
@@ -133,6 +135,7 @@ class WompiDaviplataPaymentService extends AbstractWompiPaymentService
 
             if (! $res['ok']) {
                 $remaining = max(0, $this->maxAttempts() - ($attempts + 1));
+
                 return ['ok' => false, 'attempts_left' => $remaining, 'message' => 'Código incorrecto. Intentos restantes: '.$remaining];
             }
 
@@ -170,9 +173,9 @@ class WompiDaviplataPaymentService extends AbstractWompiPaymentService
             // url_services aún no disponible tras el backoff → NO es terminal: el
             // pago sigue en vuelo y el usuario puede reintentar en unos segundos.
             return [
-                'ok'        => false,
+                'ok' => false,
                 'preparing' => true,
-                'message'   => 'Estamos preparando tu pago con DaviPlata. Intenta de nuevo en unos segundos.',
+                'message' => 'Estamos preparando tu pago con DaviPlata. Intenta de nuevo en unos segundos.',
             ];
         }
 
@@ -202,7 +205,7 @@ class WompiDaviplataPaymentService extends AbstractWompiPaymentService
         $this->saveOtpMeta($tx, $patch);
 
         return [
-            'ok'      => true,
+            'ok' => true,
             'message' => $stage === 'resend'
                 ? 'Te reenviamos el código a tu DaviPlata.'
                 : 'Te enviamos un código a tu DaviPlata.',
@@ -236,13 +239,14 @@ class WompiDaviplataPaymentService extends AbstractWompiPaymentService
 
                 $svc = data_get($res, 'data.payment_method.extra.url_services');
                 $urls = [
-                    'token'    => is_array($svc) ? ($svc['token'] ?? null) : null,
-                    'send'     => is_array($svc) ? ($svc['code_otp_send'] ?? null) : null,
+                    'token' => is_array($svc) ? ($svc['token'] ?? null) : null,
+                    'send' => is_array($svc) ? ($svc['code_otp_send'] ?? null) : null,
                     'validate' => is_array($svc) ? ($svc['code_otp_validate'] ?? null) : null,
                 ];
                 if ($urls['token'] && $urls['send'] && $urls['validate']) {
                     $this->storeUrls($tx, $urls);
                     $this->log('start', $tx, $httpStatus, $urls);
+
                     return $urls;
                 }
             }
@@ -252,6 +256,7 @@ class WompiDaviplataPaymentService extends AbstractWompiPaymentService
                 usleep($sleepMs * 1000);
             }
         }
+
         return null;
     }
 
@@ -260,8 +265,8 @@ class WompiDaviplataPaymentService extends AbstractWompiPaymentService
     private function initOtpState(PaymentTransaction $tx): void
     {
         $this->saveOtpMeta($tx, [
-            'attempts'   => 0,
-            'resends'    => 0,
+            'attempts' => 0,
+            'resends' => 0,
             'expires_at' => now()->addMinutes($this->ttlMinutes())->timestamp,
         ]);
     }
@@ -270,6 +275,7 @@ class WompiDaviplataPaymentService extends AbstractWompiPaymentService
     {
         $tx->refresh();
         $meta = is_array($tx->metadata) ? $tx->metadata : [];
+
         return is_array($meta['otp'] ?? null) ? $meta['otp'] : [];
     }
 
@@ -285,8 +291,8 @@ class WompiDaviplataPaymentService extends AbstractWompiPaymentService
     private function storeUrls(PaymentTransaction $tx, array $urls): void
     {
         $this->saveOtpMeta($tx, [
-            'send_url'      => $urls['send'],
-            'validate_url'  => $urls['validate'],
+            'send_url' => $urls['send'],
+            'validate_url' => $urls['validate'],
             'initial_token' => $urls['token'],
         ]);
     }
@@ -296,17 +302,19 @@ class WompiDaviplataPaymentService extends AbstractWompiPaymentService
         $meta = $this->otpMeta($tx);
         if (! empty($meta['send_url']) && ! empty($meta['validate_url']) && ! empty($meta['initial_token'])) {
             return [
-                'token'    => $meta['initial_token'],
-                'send'     => $meta['send_url'],
+                'token' => $meta['initial_token'],
+                'send' => $meta['send_url'],
                 'validate' => $meta['validate_url'],
             ];
         }
+
         return null;
     }
 
     private function otpExpired(array $meta): bool
     {
         $exp = (int) ($meta['expires_at'] ?? 0);
+
         return $exp > 0 && now()->timestamp > $exp;
     }
 
@@ -319,8 +327,8 @@ class WompiDaviplataPaymentService extends AbstractWompiPaymentService
             // Ya hay una operación OTP en curso para esta referencia (doble toque /
             // request concurrente): no se duplica la llamada a Wompi.
             return [
-                'ok'      => false,
-                'busy'    => true,
+                'ok' => false,
+                'busy' => true,
                 'message' => 'Estamos procesando tu solicitud anterior. Espera un momento.',
             ];
         }
@@ -354,15 +362,15 @@ class WompiDaviplataPaymentService extends AbstractWompiPaymentService
         $meta = $this->otpMeta($tx);
         $u = $urls ?? $this->storedUrls($tx);
         Log::info('wompi.daviplata', [
-            'reference'         => $tx->reference,
-            'transaction_id'    => $tx->wompi_transaction_id,
-            'stage'             => $stage,
-            'http_status'       => $httpStatus,
-            'has_url_services'  => $u !== null,
-            'has_send_url'      => (bool) ($u['send'] ?? null),
-            'has_validate_url'  => (bool) ($u['validate'] ?? null),
+            'reference' => $tx->reference,
+            'transaction_id' => $tx->wompi_transaction_id,
+            'stage' => $stage,
+            'http_status' => $httpStatus,
+            'has_url_services' => $u !== null,
+            'has_send_url' => (bool) ($u['send'] ?? null),
+            'has_validate_url' => (bool) ($u['validate'] ?? null),
             'has_initial_token' => (bool) ($u['token'] ?? ($meta['initial_token'] ?? null)),
-            'has_access_token'  => (bool) ($meta['access_token'] ?? null),
+            'has_access_token' => (bool) ($meta['access_token'] ?? null),
         ]);
     }
 }

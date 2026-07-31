@@ -28,8 +28,7 @@ class SalesAgentOrchestratorService
         private readonly MarketingKnowledgeBaseService $knowledge,
         private readonly SalesConversationMemoryService $memory,
         private readonly SalesPaymentReadinessService $paymentReadiness,
-    ) {
-    }
+    ) {}
 
     /**
      * Flujo completo compartido (controlador + webhook entrante): analiza,
@@ -51,14 +50,14 @@ class SalesAgentOrchestratorService
             'conversation' => $conversation, 'plan' => $plan,
         ]);
 
-        $action   = $this->persist($lead, $conversation->id, $messageId, $decision, $autoExecute);
+        $action = $this->persist($lead, $conversation->id, $messageId, $decision, $autoExecute);
         $this->memory->remember($conversation, $decision, $body);
         $executed = $autoExecute ? $this->execute($lead->fresh(), $conversation, $decision, $plan, $action) : [];
 
         return [
-            'decision'     => $decision,
+            'decision' => $decision,
             'ai_action_id' => $action->id,
-            'executed'     => $executed,
+            'executed' => $executed,
             'auto_execute' => $autoExecute,
         ];
     }
@@ -69,7 +68,7 @@ class SalesAgentOrchestratorService
      */
     public function analyze(MarketingLead $lead, string $body, array $context = []): array
     {
-        $cls    = $this->classifier->classify($body, $context);
+        $cls = $this->classifier->classify($body, $context);
         $intent = $cls['intent'];
 
         // Override determinista: si el MENSAJE ACTUAL pregunta precio de forma
@@ -78,25 +77,25 @@ class SalesAgentOrchestratorService
         [$intent, $cls] = $this->applyPricingKeywordOverride($intent, $cls, $body);
 
         $temperature = $this->scoring->temperature($intent);
-        $stage       = $this->scoring->salesStage($intent);
+        $stage = $this->scoring->salesStage($intent);
 
         // Caso SENSIBLE (needs_staff_review): por reglas/intención o forzado por el
         // validador. La IA NO se apaga: responde seguro y deja una marca interna.
-        $esc             = $this->escalation->evaluate($intent, $body);
-        $forceEscalate   = (bool) ($cls['force_escalate'] ?? false);
+        $esc = $this->escalation->evaluate($intent, $body);
+        $forceEscalate = (bool) ($cls['force_escalate'] ?? false);
         $needsStaffReview = $esc['should_escalate'] || $forceEscalate;
-        $escReason       = $esc['escalation_reason']
+        $escReason = $esc['escalation_reason']
             ?? ($forceEscalate ? ($cls['escalation_reason'] ?? 'unsafe_content') : null);
-        $riskFlags       = array_values(array_unique(array_merge(
+        $riskFlags = array_values(array_unique(array_merge(
             $esc['risk_flags'], (array) ($cls['risk_flags'] ?? []),
         )));
 
         // Preparación de pago: si Wompi NO es productivo, el bot NO entrega ni
         // MENCIONA un link (sandbox o sin configurar). Regla incondicional.
-        $paymentState   = $this->paymentReadiness->state();
-        $canLink        = $this->paymentReadiness->canGenerateAutomaticLink();
+        $paymentState = $this->paymentReadiness->state();
+        $canLink = $this->paymentReadiness->canGenerateAutomaticLink();
         $paymentBlocked = ! $canLink;
-        $context['can_link']        = $canLink;
+        $context['can_link'] = $canLink;
         $context['payment_blocked'] = $paymentBlocked;
 
         // Intención de pago SIN Wompi productivo → NO se apaga la IA: responde que
@@ -111,12 +110,12 @@ class SalesAgentOrchestratorService
         $staffReason = $needsStaffReview ? $this->staffReviewReason($intent, $escReason) : null;
 
         // Scoring comercial (0-100), etapa del lead y temperatura simplificada.
-        $score     = $this->scoring->score($intent, [
-            'objective'        => $lead->objective,
+        $score = $this->scoring->score($intent, [
+            'objective' => $lead->objective,
             'extracted_fields' => $cls['extracted_fields'],
         ]);
         $leadStage = $this->scoring->leadStage($intent, $needsStaffReview);
-        $crmTemp   = $this->scoring->crmTemperature($intent);
+        $crmTemp = $this->scoring->crmTemperature($intent);
 
         // Respuesta SIEMPRE presente y segura (la IA nunca queda en silencio).
         $reply = $this->resolveReply($intent, $cls['reply'] ?? null, $needsStaffReview, $context, $body);
@@ -136,9 +135,9 @@ class SalesAgentOrchestratorService
         }
 
         // Pago AUTOMÁTICO solo si Wompi es productivo. Si no, sin tool de pago.
-        $isPayment      = in_array($intent, SalesIntents::PAYMENT_INTENTS, true) && $canLink;
+        $isPayment = in_array($intent, SalesIntents::PAYMENT_INTENTS, true) && $canLink;
         $shouldSchedule = $this->scoring->shouldScheduleFollowup($temperature);
-        $delay          = $shouldSchedule ? $this->scoring->followupDelayMinutes($temperature) : null;
+        $delay = $shouldSchedule ? $this->scoring->followupDelayMinutes($temperature) : null;
 
         $tools = [];
         if ($isPayment) {
@@ -152,34 +151,34 @@ class SalesAgentOrchestratorService
         }
 
         $decision = [
-            'ok'                            => true,
-            'intent'                        => $intent,
-            'confidence'                    => $cls['confidence'],
-            'temperature'                   => $temperature,
-            'crm_temperature'               => $crmTemp,
-            'lead_score'                    => $score,
-            'lead_stage'                    => $leadStage,
-            'sales_stage'                   => $stage,
-            'payment_readiness'             => $paymentState,
-            'should_reply'                  => $reply !== null,
-            'should_generate_payment_link'  => $isPayment,
-            'should_send_message'           => $reply !== null,
-            'should_schedule_followup'      => $shouldSchedule,
-            'followup_delay_minutes'        => $delay,
+            'ok' => true,
+            'intent' => $intent,
+            'confidence' => $cls['confidence'],
+            'temperature' => $temperature,
+            'crm_temperature' => $crmTemp,
+            'lead_score' => $score,
+            'lead_stage' => $leadStage,
+            'sales_stage' => $stage,
+            'payment_readiness' => $paymentState,
+            'should_reply' => $reply !== null,
+            'should_generate_payment_link' => $isPayment,
+            'should_send_message' => $reply !== null,
+            'should_schedule_followup' => $shouldSchedule,
+            'followup_delay_minutes' => $delay,
             // La IA NUNCA se apaga sola: should_escalate queda false (lo fija el
             // guardrail). El caso sensible se marca en needs_staff_review.
-            'should_escalate'               => false,
-            'needs_staff_review'            => $needsStaffReview,
-            'staff_review_reason'           => $staffReason,
-            'escalation_reason'             => $needsStaffReview ? $escReason : null,
-            'risk_flags'                    => $riskFlags,
-            'extracted_fields'              => $cls['extracted_fields'],
-            'missing_fields'                => $cls['missing_fields'],
-            'recommended_action'            => $this->recommendedAction($intent, $needsStaffReview, $canLink),
-            'reply'                         => $reply,
-            'tools_requested'               => $tools,
-            'safe_to_send'                  => false, // lo fija el guardrail
-            'responder'                     => $cls['responder'],
+            'should_escalate' => false,
+            'needs_staff_review' => $needsStaffReview,
+            'staff_review_reason' => $staffReason,
+            'escalation_reason' => $needsStaffReview ? $escReason : null,
+            'risk_flags' => $riskFlags,
+            'extracted_fields' => $cls['extracted_fields'],
+            'missing_fields' => $cls['missing_fields'],
+            'recommended_action' => $this->recommendedAction($intent, $needsStaffReview, $canLink),
+            'reply' => $reply,
+            'tools_requested' => $tools,
+            'safe_to_send' => false, // lo fija el guardrail
+            'responder' => $cls['responder'],
         ];
 
         return $this->guardrail->apply($decision, $lead);
@@ -189,28 +188,28 @@ class SalesAgentOrchestratorService
     public function persist(MarketingLead $lead, ?int $conversationId, ?int $messageId, array $decision, bool $autoExecute): MarketingAiAction
     {
         $action = MarketingAiAction::create([
-            'lead_id'         => $lead->id,
+            'lead_id' => $lead->id,
             'conversation_id' => $conversationId,
-            'action_type'     => $decision['recommended_action'],
-            'reason'          => $decision['escalation_reason'] ?? $decision['intent'],
-            'confidence'      => $decision['confidence'],
-            'status'          => $autoExecute ? 'executed' : 'proposed',
-            'metadata'        => [
-                'message_id'         => $messageId,
-                'intent'             => $decision['intent'],
-                'temperature'        => $decision['temperature'],
-                'lead_score'         => $decision['lead_score'] ?? null,
-                'lead_stage'         => $decision['lead_stage'] ?? null,
-                'sales_stage'        => $decision['sales_stage'],
-                'payment_readiness'  => $decision['payment_readiness'] ?? null,
+            'action_type' => $decision['recommended_action'],
+            'reason' => $decision['escalation_reason'] ?? $decision['intent'],
+            'confidence' => $decision['confidence'],
+            'status' => $autoExecute ? 'executed' : 'proposed',
+            'metadata' => [
+                'message_id' => $messageId,
+                'intent' => $decision['intent'],
+                'temperature' => $decision['temperature'],
+                'lead_score' => $decision['lead_score'] ?? null,
+                'lead_stage' => $decision['lead_stage'] ?? null,
+                'sales_stage' => $decision['sales_stage'],
+                'payment_readiness' => $decision['payment_readiness'] ?? null,
                 'recommended_action' => $decision['recommended_action'],
-                'risk_flags'         => $decision['risk_flags'],
-                'tools_requested'    => $decision['tools_requested'],
-                'safe_to_send'       => $decision['safe_to_send'],
-                'responder'          => $decision['responder'] ?? null,
+                'risk_flags' => $decision['risk_flags'],
+                'tools_requested' => $decision['tools_requested'],
+                'safe_to_send' => $decision['safe_to_send'],
+                'responder' => $decision['responder'] ?? null,
                 // Auditoría del conocimiento usado al decidir (Fase 3.5).
                 'knowledge_items_count' => $this->knowledge->activeItemsCount(),
-                'knowledge_version'     => $this->knowledge->version(),
+                'knowledge_version' => $this->knowledge->version(),
             ],
         ]);
 
@@ -219,14 +218,14 @@ class SalesAgentOrchestratorService
         if ($conversationId !== null && ($decision['needs_staff_review'] ?? false)) {
             MarketingConversation::whereKey($conversationId)->update([
                 'staff_review_pending' => true,
-                'staff_review_reason'  => $decision['staff_review_reason'] ?? null,
+                'staff_review_reason' => $decision['staff_review_reason'] ?? null,
             ]);
         }
 
         // Refleja temperatura y objetivo detectado en el lead (CRM Mercadeo)
         // salvo do_not_contact. El objetivo solo se fija si aún no había uno.
         if ($lead->isContactable()) {
-            $changes   = ['temperature' => $decision['crm_temperature'] ?? $this->crmTemperature($decision['temperature'])];
+            $changes = ['temperature' => $decision['crm_temperature'] ?? $this->crmTemperature($decision['temperature'])];
             $objective = $decision['extracted_fields']['objective'] ?? null;
             if (is_string($objective) && $objective !== '' && empty($lead->objective)) {
                 $changes['objective'] = $objective;
@@ -250,11 +249,11 @@ class SalesAgentOrchestratorService
         $executed = [];
         foreach ($decision['tools_requested'] as $tool) {
             $executed[] = match ($tool) {
-                SalesIntents::TOOL_MARK_DNC          => $this->execMarkDoNotContact($lead, $conversation),
-                SalesIntents::TOOL_STAFF_REVIEW      => $this->execStaffReview($lead, $conversation, $decision),
+                SalesIntents::TOOL_MARK_DNC => $this->execMarkDoNotContact($lead, $conversation),
+                SalesIntents::TOOL_STAFF_REVIEW => $this->execStaffReview($lead, $conversation, $decision),
                 SalesIntents::TOOL_SCHEDULE_FOLLOWUP => $this->execScheduleFollowup($lead, $decision),
                 SalesIntents::TOOL_PAYMENT_LINK_SEND => $this->execPaymentLink($lead, $conversation, $plan),
-                default                              => ['tool' => $tool, 'status' => 'skipped', 'reason' => 'unknown_tool'],
+                default => ['tool' => $tool, 'status' => 'skipped', 'reason' => 'unknown_tool'],
             };
         }
 
@@ -303,20 +302,20 @@ class SalesAgentOrchestratorService
         $send = $this->dispatcher->dispatchWhatsapp($lead, $conversation->channel, (string) $reply, ['kind' => 'reply']);
 
         $created = $send['message_id'] !== null;
-        $status  = ($send['sent'] || $send['dry_run'])
+        $status = ($send['sent'] || $send['dry_run'])
             ? 'executed'
             : ($created ? 'failed' : 'skipped');
 
         $this->updateActionSendStatus($action, $status, $send);
 
         return [
-            'tool'                => 'reply_send',
-            'status'              => $status,
-            'sent'                => $send['sent'],
-            'dry_run'             => $send['dry_run'],
-            'message_id'          => $send['message_id'],
+            'tool' => 'reply_send',
+            'status' => $status,
+            'sent' => $send['sent'],
+            'dry_run' => $send['dry_run'],
+            'message_id' => $send['message_id'],
             'provider_message_id' => $send['provider_message_id'],
-            'reason'              => $send['reason'],
+            'reason' => $send['reason'],
         ];
     }
 
@@ -329,11 +328,11 @@ class SalesAgentOrchestratorService
 
         $meta = is_array($action->metadata) ? $action->metadata : [];
         $meta['outbound'] = array_filter([
-            'message_id'          => $send['message_id'],
-            'sent'                => $send['sent'],
-            'dry_run'             => $send['dry_run'],
+            'message_id' => $send['message_id'],
+            'sent' => $send['sent'],
+            'dry_run' => $send['dry_run'],
             'provider_message_id' => $send['provider_message_id'],
-            'reason'              => $send['reason'],
+            'reason' => $send['reason'],
         ], fn ($v) => $v !== null);
 
         $action->forceFill(['status' => $status, 'metadata' => $meta])->save();
@@ -347,7 +346,7 @@ class SalesAgentOrchestratorService
             'do_not_contact' => true,
             'consent_status' => MarketingLead::CONSENT_DENIED,
             'consent_source' => $conversation->channel,
-            'consent_at'     => now(),
+            'consent_at' => now(),
         ])->save();
 
         return ['tool' => SalesIntents::TOOL_MARK_DNC, 'status' => 'executed', 'do_not_contact' => true];
@@ -363,27 +362,27 @@ class SalesAgentOrchestratorService
         $reason = $decision['staff_review_reason'] ?? ($decision['escalation_reason'] ?? 'staff_review');
 
         MarketingAiAction::create([
-            'lead_id'         => $lead->id,
+            'lead_id' => $lead->id,
             'conversation_id' => $conversation->id,
-            'action_type'     => SalesIntents::ACTION_STAFF_REVIEW,
-            'reason'          => $reason,
-            'status'          => 'created',
-            'metadata'        => array_filter([
+            'action_type' => SalesIntents::ACTION_STAFF_REVIEW,
+            'reason' => $reason,
+            'status' => 'created',
+            'metadata' => array_filter([
                 'needs_staff_review' => true,
                 'staff_review_reason' => $reason,
-                'intent'             => $decision['intent'] ?? null,
+                'intent' => $decision['intent'] ?? null,
                 // Señal CRM para que un humano lo revise; NO apaga la IA.
-                'ai_enabled'         => true,
-                'human_takeover'     => false,
+                'ai_enabled' => true,
+                'human_takeover' => false,
             ], fn ($v) => $v !== null),
         ]);
 
         return [
-            'tool'                => SalesIntents::TOOL_STAFF_REVIEW,
-            'status'              => 'created',
-            'reason'              => $reason,
-            'ai_disabled'         => false,
-            'human_takeover'      => false,
+            'tool' => SalesIntents::TOOL_STAFF_REVIEW,
+            'status' => 'created',
+            'reason' => $reason,
+            'ai_disabled' => false,
+            'human_takeover' => false,
         ];
     }
 
@@ -395,17 +394,17 @@ class SalesAgentOrchestratorService
         $followup = MarketingFollowup::firstOrCreate(
             [
                 'lead_id' => $lead->id,
-                'type'    => 'message',
-                'status'  => MarketingFollowup::STATUS_PENDING,
+                'type' => 'message',
+                'status' => MarketingFollowup::STATUS_PENDING,
             ],
             ['due_at' => $dueAt],
         );
 
         return [
-            'tool'        => SalesIntents::TOOL_SCHEDULE_FOLLOWUP,
-            'status'      => $followup->wasRecentlyCreated ? 'executed' : 'exists',
+            'tool' => SalesIntents::TOOL_SCHEDULE_FOLLOWUP,
+            'status' => $followup->wasRecentlyCreated ? 'executed' : 'exists',
             'followup_id' => $followup->id,
-            'due_at'      => optional($followup->due_at)->toIso8601String(),
+            'due_at' => optional($followup->due_at)->toIso8601String(),
         ];
     }
 
@@ -425,12 +424,12 @@ class SalesAgentOrchestratorService
             ]);
 
             return [
-                'tool'          => SalesIntents::TOOL_PAYMENT_LINK_SEND,
-                'status'        => 'deferred_to_human',
-                'reason'        => 'wompi_not_production',
+                'tool' => SalesIntents::TOOL_PAYMENT_LINK_SEND,
+                'status' => 'deferred_to_human',
+                'reason' => 'wompi_not_production',
                 'payment_state' => $this->paymentReadiness->state(),
-                'sent'          => $send['sent'],
-                'dry_run'       => $send['dry_run'],
+                'sent' => $send['sent'],
+                'dry_run' => $send['dry_run'],
                 'prepared_body' => $body,
             ];
         }
@@ -455,17 +454,17 @@ class SalesAgentOrchestratorService
 
         $body = $this->replies->paymentLinkMessage($plan, (float) $link['amount'], $link['payment_url']);
         $send = $this->dispatcher->dispatchWhatsapp($lead, $conversation->channel, $body, [
-            'kind'      => 'payment_link',
+            'kind' => 'payment_link',
             'reference' => $link['reference'] ?? null,
         ]);
 
         return array_merge(['tool' => SalesIntents::TOOL_PAYMENT_LINK_SEND, 'status' => 'executed'], [
-            'payment_url'         => $link['payment_url'],
-            'reference'           => $link['reference'] ?? null,
-            'sent'                => $send['sent'],
-            'dry_run'             => $send['dry_run'],
+            'payment_url' => $link['payment_url'],
+            'reference' => $link['reference'] ?? null,
+            'sent' => $send['sent'],
+            'dry_run' => $send['dry_run'],
             'provider_message_id' => $send['provider_message_id'],
-            'prepared_body'       => $body,
+            'prepared_body' => $body,
         ]);
     }
 
@@ -505,6 +504,7 @@ class SalesAgentOrchestratorService
         if ($modelReply !== null && trim($modelReply) !== '') {
             return $modelReply;
         }
+
         return $this->replies->replyFor($intent, $context);
     }
 
@@ -525,6 +525,7 @@ class SalesAgentOrchestratorService
         if ($needle !== '') {
             $matches = Plan::where('active', true)->get()->filter(function (Plan $p) use ($needle) {
                 $name = $this->normalizeText((string) $p->name);
+
                 return strlen($name) >= 4 && str_contains($needle, $name);
             });
             if ($matches->count() === 1) {
@@ -600,6 +601,7 @@ class SalesAgentOrchestratorService
                 return true;
             }
         }
+
         return false;
     }
 
@@ -611,12 +613,14 @@ class SalesAgentOrchestratorService
                 return true;
             }
         }
+
         return false;
     }
 
     private function normalizeText(string $s): string
     {
         $lower = mb_strtolower(trim($s));
+
         return strtr($lower, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ñ' => 'n']);
     }
 
@@ -627,14 +631,14 @@ class SalesAgentOrchestratorService
         if ($needsStaffReview) {
             return SalesIntents::ACTION_REPLY;
         }
+
         return match ($intent) {
             // Pago: solo se genera link si Wompi es productivo; si no, ya quedó como
             // caso sensible (arriba) y la IA responde.
-            SalesIntents::PAYMENT_LINK_REQUEST, SalesIntents::HIGH_INTENT_CLOSE =>
-                $canLink ? SalesIntents::ACTION_GENERATE_PAYMENT_LINK : SalesIntents::ACTION_REPLY,
-            SalesIntents::PRICE_OBJECTION        => SalesIntents::ACTION_REGISTER_OBJECTION,
+            SalesIntents::PAYMENT_LINK_REQUEST, SalesIntents::HIGH_INTENT_CLOSE => $canLink ? SalesIntents::ACTION_GENERATE_PAYMENT_LINK : SalesIntents::ACTION_REPLY,
+            SalesIntents::PRICE_OBJECTION => SalesIntents::ACTION_REGISTER_OBJECTION,
             SalesIntents::DO_NOT_CONTACT_REQUEST => SalesIntents::ACTION_MARK_DNC,
-            default                              => SalesIntents::ACTION_REPLY,
+            default => SalesIntents::ACTION_REPLY,
         };
     }
 
@@ -643,12 +647,12 @@ class SalesAgentOrchestratorService
     {
         return match ($intent) {
             SalesIntents::PAYMENT_LINK_REQUEST, SalesIntents::HIGH_INTENT_CLOSE => 'payment_requested',
-            SalesIntents::FRAUD_OR_PAYMENT_CLAIM  => 'payment_requested',
-            SalesIntents::INVOICE_REQUEST         => 'invoice_requested',
+            SalesIntents::FRAUD_OR_PAYMENT_CLAIM => 'payment_requested',
+            SalesIntents::INVOICE_REQUEST => 'invoice_requested',
             SalesIntents::MEDICAL_RISK_ESCALATION => 'medical_caution',
-            SalesIntents::COMPLAINT               => 'complaint',
-            SalesIntents::HUMAN_REQUEST           => 'human_requested',
-            default                               => $fallback ?: 'staff_review',
+            SalesIntents::COMPLAINT => 'complaint',
+            SalesIntents::HUMAN_REQUEST => 'human_requested',
+            default => $fallback ?: 'staff_review',
         };
     }
 

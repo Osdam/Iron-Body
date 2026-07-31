@@ -25,6 +25,7 @@ class TrainerTaskService
 {
     /** Anti-spam (alineado con AppNotificationService). */
     private const WINDOW_MINUTES = 720; // 12h
+
     private const MAX_PER_TYPE_PER_DAY = 1;
 
     /**
@@ -35,34 +36,34 @@ class TrainerTaskService
      */
     private const EVENT_MAP = [
         'workout.missed' => [
-            'title'    => 'Alumno sin entrenar',
+            'title' => 'Alumno sin entrenar',
             'priority' => TrainerTask::PRIORITY_HIGH,
-            'route'    => '/trainer/members/',
+            'route' => '/trainer/members/',
         ],
         'nutrition.missing' => [
-            'title'    => 'Alumno sin registrar comidas',
+            'title' => 'Alumno sin registrar comidas',
             'priority' => TrainerTask::PRIORITY_NORMAL,
-            'route'    => '/trainer/members/',
+            'route' => '/trainer/members/',
         ],
         'progress.stalled' => [
-            'title'    => 'Progreso estancado',
+            'title' => 'Progreso estancado',
             'priority' => TrainerTask::PRIORITY_NORMAL,
-            'route'    => '/trainer/members/',
+            'route' => '/trainer/members/',
         ],
         'evaluation.outdated' => [
-            'title'    => 'Evaluación física pendiente',
+            'title' => 'Evaluación física pendiente',
             'priority' => TrainerTask::PRIORITY_NORMAL,
-            'route'    => '/trainer/members/',
+            'route' => '/trainer/members/',
         ],
         'membership.expiring' => [
-            'title'    => 'Membresía por vencer (retención)',
+            'title' => 'Membresía por vencer (retención)',
             'priority' => TrainerTask::PRIORITY_HIGH,
-            'route'    => '/trainer/members/',
+            'route' => '/trainer/members/',
         ],
         'iron_ai.weekly_summary_ready' => [
-            'title'    => 'Resumen semanal disponible',
+            'title' => 'Resumen semanal disponible',
             'priority' => TrainerTask::PRIORITY_LOW,
-            'route'    => '/trainer/members/',
+            'route' => '/trainer/members/',
         ],
     ];
 
@@ -107,18 +108,19 @@ class TrainerTaskService
                 title: $map['title'],
                 body: $body,
                 priority: $map['priority'],
-                actionRoute: $map['route'] . $event->member_id,
+                actionRoute: $map['route'].$event->member_id,
                 metadata: ['origin' => 'automation_event'],
                 automationEventId: $event->id,
-                idempotencyKey: 'trainer_task:event:' . $event->id,
+                idempotencyKey: 'trainer_task:event:'.$event->id,
             );
 
             return $result['task'];
         } catch (\Throwable $e) {
             Log::warning('trainer_task.create_from_event.failed', [
                 'event_id' => $event->id ?? null,
-                'reason'   => class_basename($e),
+                'reason' => class_basename($e),
             ]);
+
             return null;
         }
     }
@@ -128,7 +130,7 @@ class TrainerTaskService
      * notify-trainer disparado por n8n). Valida la asignación entrenador↔miembro.
      *
      * @return array{task: ?TrainerTask, status: string}
-     *   status: created | skipped_no_assignment | skipped_duplicate | skipped_limit
+     *                                                   status: created | skipped_no_assignment | skipped_duplicate | skipped_limit
      */
     public function createForTrainer(
         int $trainerId,
@@ -198,24 +200,24 @@ class TrainerTaskService
         }
 
         $task = TrainerTask::create([
-            'trainer_id'          => $trainerId,
-            'member_id'           => $memberId,
+            'trainer_id' => $trainerId,
+            'member_id' => $memberId,
             'automation_event_id' => $automationEventId,
-            'type'                => $type,
-            'title'               => $title,
-            'body'                => $body,
-            'priority'            => $priority,
-            'status'              => TrainerTask::STATUS_PENDING,
-            'action_route'        => $actionRoute,
-            'metadata'            => $this->sanitize($metadata),
-            'idempotency_key'     => $idempotencyKey,
+            'type' => $type,
+            'title' => $title,
+            'body' => $body,
+            'priority' => $priority,
+            'status' => TrainerTask::STATUS_PENDING,
+            'action_route' => $actionRoute,
+            'metadata' => $this->sanitize($metadata),
+            'idempotency_key' => $idempotencyKey,
         ]);
 
         Log::info('trainer_task.created', [
             'trainer_task_id' => $task->id,
-            'trainer_id'      => $trainerId,
-            'member_id'       => $memberId,
-            'type'            => $type,
+            'trainer_id' => $trainerId,
+            'member_id' => $memberId,
+            'type' => $type,
         ]);
 
         return ['task' => $task, 'status' => 'created'];
@@ -236,9 +238,9 @@ class TrainerTaskService
     {
         return $this->transition($taskId, $trainerId, function (TrainerTask $t) {
             $t->update([
-                'status'       => TrainerTask::STATUS_DONE,
+                'status' => TrainerTask::STATUS_DONE,
                 'completed_at' => now(),
-                'seen_at'      => $t->seen_at ?? now(),
+                'seen_at' => $t->seen_at ?? now(),
             ]);
         });
     }
@@ -261,6 +263,7 @@ class TrainerTaskService
             return null;
         }
         $apply($task);
+
         return $task->refresh();
     }
 
@@ -278,6 +281,7 @@ class TrainerTaskService
     private function safeMemberName(array $payload): string
     {
         $name = $payload['member']['name'] ?? null;
+
         return is_string($name) && $name !== '' ? $name : 'Tu alumno';
     }
 
@@ -333,8 +337,10 @@ class TrainerTaskService
                 }
                 $out[$key] = is_array($value) ? $clean($value) : $value;
             }
+
             return $out;
         };
+
         return $clean($payload);
     }
 }

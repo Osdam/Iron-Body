@@ -30,6 +30,7 @@ class SalesPaymentGuardrailService
      * Valida que se PUEDA generar un link de pago para (lead, plan).
      *
      * @param  array  $input  payload tal cual llegó (para detectar montos prohibidos).
+     *
      * @throws SalesGuardrailException
      */
     public function assertCanGeneratePaymentLink(MarketingLead $lead, Plan $plan, array $input = []): void
@@ -85,6 +86,7 @@ class SalesPaymentGuardrailService
                 return true;
             }
         }
+
         return false;
     }
 }

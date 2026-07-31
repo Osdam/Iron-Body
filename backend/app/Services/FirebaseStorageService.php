@@ -48,11 +48,12 @@ class FirebaseStorageService
             $object = $bucket->object($objectPath);
 
             // Si no existe, el resultado deseado (no hay archivo) ya se cumple.
-            if (!$object->exists()) {
+            if (! $object->exists()) {
                 return true;
             }
 
             $object->delete();
+
             return true;
         } catch (Throwable $e) {
             // No bloqueamos el borrado del row por un fallo remoto. El comando
@@ -61,6 +62,7 @@ class FirebaseStorageService
                 'object' => $objectPath,
                 'error' => $e->getMessage(),
             ]);
+
             return false;
         }
     }
@@ -121,6 +123,7 @@ class FirebaseStorageService
             // gs://bucket/objeto → quita el esquema y el nombre del bucket.
             $withoutScheme = substr($value, strlen('gs://'));
             $slash = strpos($withoutScheme, '/');
+
             return $slash === false ? '' : ltrim(substr($withoutScheme, $slash + 1), '/');
         }
 
@@ -133,6 +136,7 @@ class FirebaseStorageService
         if ($bucket === '') {
             throw new RuntimeException('FIREBASE_STORAGE_BUCKET no configurado.');
         }
+
         return $bucket;
     }
 
@@ -150,13 +154,13 @@ class FirebaseStorageService
         // Acepta ruta absoluta o relativa a base_path (como en FCM).
         $path = str_starts_with($relative, '/') ? $relative : base_path($relative);
 
-        if (!is_file($path) || !is_readable($path)) {
+        if (! is_file($path) || ! is_readable($path)) {
             throw new RuntimeException(
-                'Firebase service account no encontrado/legible para Storage: ' . $path
+                'Firebase service account no encontrado/legible para Storage: '.$path
             );
         }
 
-        $this->storage = (new Factory())
+        $this->storage = (new Factory)
             ->withServiceAccount($path)
             ->createStorage();
 

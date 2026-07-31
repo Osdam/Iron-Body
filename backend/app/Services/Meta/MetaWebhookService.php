@@ -19,6 +19,7 @@ class MetaWebhookService
         if ($expected === '' || $mode !== 'subscribe' || $token === null) {
             return null;
         }
+
         return hash_equals($expected, $token) ? $challenge : null;
     }
 
@@ -34,7 +35,8 @@ class MetaWebhookService
             return false;
         }
         // Header: "sha256=<hex>"
-        $expected = 'sha256=' . hash_hmac('sha256', $rawBody, $secret);
+        $expected = 'sha256='.hash_hmac('sha256', $rawBody, $secret);
+
         return hash_equals($expected, $signatureHeader);
     }
 
@@ -56,53 +58,53 @@ class MetaWebhookService
                 $channel = $object === 'instagram' ? 'instagram' : 'facebook';
                 $msg = $m['message'] ?? null;
                 $events[] = $this->event([
-                    'channel'      => $channel,
+                    'channel' => $channel,
                     'meta_user_id' => $m['sender']['id'] ?? null,
-                    'message_id'   => $msg['mid'] ?? null,
-                    'text'         => $msg['text'] ?? null,
-                    'name'         => null,
-                    'kind'         => $msg ? 'message' : 'event',
+                    'message_id' => $msg['mid'] ?? null,
+                    'text' => $msg['text'] ?? null,
+                    'name' => null,
+                    'kind' => $msg ? 'message' : 'event',
                     'message_type' => $msg ? 'text' : null,
-                    'raw'          => $m,
+                    'raw' => $m,
                 ]);
             }
 
             // WhatsApp Cloud API.
             foreach (($entry['changes'] ?? []) as $change) {
-                $value   = $change['value'] ?? [];
-                $waMeta  = $value['metadata'] ?? [];
+                $value = $change['value'] ?? [];
+                $waMeta = $value['metadata'] ?? [];
                 $contactName = $value['contacts'][0]['profile']['name'] ?? null;
 
                 foreach (($value['messages'] ?? []) as $wa) {
                     $events[] = $this->event([
-                        'channel'              => 'whatsapp',
-                        'meta_user_id'         => $wa['from'] ?? null,
-                        'wa_id'                => $wa['from'] ?? null,
-                        'message_id'           => $wa['id'] ?? null,
-                        'text'                 => $wa['text']['body'] ?? null,
-                        'name'                 => $contactName,
-                        'kind'                 => 'message',
-                        'message_type'         => $wa['type'] ?? 'text',
-                        'timestamp'            => $wa['timestamp'] ?? null,
-                        'phone_number_id'      => $waMeta['phone_number_id'] ?? null,
+                        'channel' => 'whatsapp',
+                        'meta_user_id' => $wa['from'] ?? null,
+                        'wa_id' => $wa['from'] ?? null,
+                        'message_id' => $wa['id'] ?? null,
+                        'text' => $wa['text']['body'] ?? null,
+                        'name' => $contactName,
+                        'kind' => 'message',
+                        'message_type' => $wa['type'] ?? 'text',
+                        'timestamp' => $wa['timestamp'] ?? null,
+                        'phone_number_id' => $waMeta['phone_number_id'] ?? null,
                         'display_phone_number' => $waMeta['display_phone_number'] ?? null,
-                        'raw'                  => $wa,
+                        'raw' => $wa,
                     ]);
                 }
                 // Estados de entrega (sent/delivered/read) → solo trazas.
                 foreach (($value['statuses'] ?? []) as $st) {
                     $events[] = $this->event([
-                        'channel'              => 'whatsapp',
-                        'meta_user_id'         => $st['recipient_id'] ?? null,
-                        'wa_id'                => $st['recipient_id'] ?? null,
-                        'message_id'           => $st['id'] ?? null,
-                        'text'                 => null,
-                        'name'                 => null,
-                        'kind'                 => 'status:' . ($st['status'] ?? 'unknown'),
-                        'timestamp'            => $st['timestamp'] ?? null,
-                        'phone_number_id'      => $waMeta['phone_number_id'] ?? null,
+                        'channel' => 'whatsapp',
+                        'meta_user_id' => $st['recipient_id'] ?? null,
+                        'wa_id' => $st['recipient_id'] ?? null,
+                        'message_id' => $st['id'] ?? null,
+                        'text' => null,
+                        'name' => null,
+                        'kind' => 'status:'.($st['status'] ?? 'unknown'),
+                        'timestamp' => $st['timestamp'] ?? null,
+                        'phone_number_id' => $waMeta['phone_number_id'] ?? null,
                         'display_phone_number' => $waMeta['display_phone_number'] ?? null,
-                        'raw'                  => $st,
+                        'raw' => $st,
                     ]);
                 }
             }
@@ -115,18 +117,18 @@ class MetaWebhookService
     private function event(array $e): array
     {
         return array_merge([
-            'channel'              => null,
-            'meta_user_id'         => null,
-            'wa_id'                => null,
-            'message_id'           => null,
-            'text'                 => null,
-            'name'                 => null,
-            'kind'                 => 'event',
-            'message_type'         => null,
-            'timestamp'            => null,
-            'phone_number_id'      => null,
+            'channel' => null,
+            'meta_user_id' => null,
+            'wa_id' => null,
+            'message_id' => null,
+            'text' => null,
+            'name' => null,
+            'kind' => 'event',
+            'message_type' => null,
+            'timestamp' => null,
+            'phone_number_id' => null,
             'display_phone_number' => null,
-            'raw'                  => [],
+            'raw' => [],
         ], $e);
     }
 }

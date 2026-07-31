@@ -16,8 +16,7 @@ class NutritionAITextParser
         private NutritionAIEnrichmentService $engine,
         private NutritionAiResponseValidator $validator,
         private NutritionDataConfidenceService $confidence,
-    ) {
-    }
+    ) {}
 
     public function parse(Member $member, string $rawText, array $meta = []): array
     {
@@ -36,13 +35,13 @@ class NutritionAITextParser
 
         $messages = [
             ['role' => 'system', 'content' => NutritionAiPrompts::textParserSystem()],
-            ['role' => 'user', 'content' => $ctx . "Texto OCR a estructurar:\n\"\"\"\n"
-                . mb_substr($rawText, 0, 4000) . "\n\"\"\""],
+            ['role' => 'user', 'content' => $ctx."Texto OCR a estructurar:\n\"\"\"\n"
+                .mb_substr($rawText, 0, 4000)."\n\"\"\""],
         ];
 
         return (new NutritionAiExtractionFinisher($this->engine, $this->validator, $this->confidence))
             ->run(NutritionAiRun::MODE_OCR_TEXT, $member, $model, $messages,
-                'txt:' . hash('sha256', $rawText), 'ai_text_extraction',
+                'txt:'.hash('sha256', $rawText), 'ai_text_extraction',
                 ['barcode' => $meta['barcode'] ?? null]);
     }
 }

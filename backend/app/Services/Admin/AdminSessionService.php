@@ -4,12 +4,13 @@ namespace App\Services\Admin;
 
 use App\Models\Admin;
 use App\Models\AdminSession;
+use App\Services\Trainer\TrainerSessionService;
 use Illuminate\Support\Str;
 
 /**
  * Sesiones del panel/CRM: emite el `token` opaco (bearer real), lo resuelve para
  * `auth.admin` y lo revoca en el logout. Espejo reducido de
- * {@see \App\Services\Trainer\TrainerSessionService}: el token en claro nunca se
+ * {@see TrainerSessionService}: el token en claro nunca se
  * persiste (solo su hash SHA-256).
  */
 class AdminSessionService

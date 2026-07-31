@@ -15,9 +15,7 @@ use Throwable;
  */
 class UsdaFoodDataProvider implements NutritionProviderContract
 {
-    public function __construct(private NutritionFoodNormalizer $normalizer)
-    {
-    }
+    public function __construct(private NutritionFoodNormalizer $normalizer) {}
 
     public function source(): string
     {
@@ -45,8 +43,8 @@ class UsdaFoodDataProvider implements NutritionProviderContract
         $timeout = (int) config('nutrition.search_timeout_seconds', 8);
         try {
             $resp = Http::timeout($timeout)->get("{$base}/foods/search", [
-                'api_key'  => config('nutrition.usda.api_key'), // SOLO backend
-                'query'    => $query,
+                'api_key' => config('nutrition.usda.api_key'), // SOLO backend
+                'query' => $query,
                 'pageSize' => $limit,
                 'dataType' => 'Foundation,SR Legacy,Branded',
             ]);
@@ -67,9 +65,11 @@ class UsdaFoodDataProvider implements NutritionProviderContract
                     $out[] = $n;
                 }
             }
+
             return $out;
         } catch (Throwable $e) {
             Log::warning('nutrition.search.provider_failed', ['provider' => $this->source()]);
+
             return [];
         }
     }

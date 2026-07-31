@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Cache;
 class GymEquipmentContextService
 {
     public const CACHE_KEY = 'gym_equipment.ai_catalog';
+
     public const CACHE_TTL = 600; // 10 min
 
     /** Catálogo completo agrupado (ver GymEquipment::aiCatalog()). */
@@ -47,11 +48,11 @@ class GymEquipmentContextService
         // Etiquetas legibles por categoría (las claves internas no se muestran).
         $labels = [
             'strength_machine' => 'Máquinas de fuerza',
-            'free_weights'     => 'Peso libre y bancos',
-            'cardio'           => 'Cardio',
-            'functional'       => 'Funcional',
-            'accessory'        => 'Accesorios',
-            'bodyweight'       => 'Peso corporal',
+            'free_weights' => 'Peso libre y bancos',
+            'cardio' => 'Cardio',
+            'functional' => 'Funcional',
+            'accessory' => 'Accesorios',
+            'bodyweight' => 'Peso corporal',
         ];
 
         $blocks = [];
@@ -62,18 +63,18 @@ class GymEquipmentContextService
                 $name = $item['name'];
                 $muscles = $item['muscle_groups'] ?? [];
                 $names[] = ! empty($muscles)
-                    ? $name . ' (' . implode(', ', array_slice($muscles, 0, 3)) . ')'
+                    ? $name.' ('.implode(', ', array_slice($muscles, 0, 3)).')'
                     : $name;
             }
-            $blocks[] = "  • {$label}: " . implode('; ', $names) . '.';
+            $blocks[] = "  • {$label}: ".implode('; ', $names).'.';
         }
 
         return "EQUIPOS DISPONIBLES EN EL GIMNASIO (inventario real, restricción dura):\n"
-            . implode("\n", $blocks) . "\n"
-            . 'NO recomiendes ejercicios que requieran equipos/máquinas que no estén en esta lista '
-            . '(p. ej. si una máquina está dañada o fue retirada, no aparece aquí). Si el ejercicio '
-            . 'ideal necesita algo que no existe, ofrece una alternativa con el equipo disponible o '
-            . 'una variante con peso corporal.';
+            .implode("\n", $blocks)."\n"
+            .'NO recomiendes ejercicios que requieran equipos/máquinas que no estén en esta lista '
+            .'(p. ej. si una máquina está dañada o fue retirada, no aparece aquí). Si el ejercicio '
+            .'ideal necesita algo que no existe, ofrece una alternativa con el equipo disponible o '
+            .'una variante con peso corporal.';
     }
 
     /** Invalida la caché (se llama al mutar el catálogo desde el CRM). */

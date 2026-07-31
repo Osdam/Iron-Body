@@ -15,9 +15,7 @@ use App\Models\MarketingMessage;
  */
 class MarketingAgentRecommendationService
 {
-    public function __construct(private readonly MarketingAgentActionService $actions)
-    {
-    }
+    public function __construct(private readonly MarketingAgentActionService $actions) {}
 
     /**
      * Analiza la conversación y crea sugerencias nuevas (no duplicadas).
@@ -42,27 +40,27 @@ class MarketingAgentRecommendationService
         $staffReviewPending = (bool) $conversation->staff_review_pending;
 
         $base = [
-            'marketing_lead_id'         => $conversation->lead_id,
+            'marketing_lead_id' => $conversation->lead_id,
             'marketing_conversation_id' => $conversation->id,
-            'suggested_by'              => 'ai',
+            'suggested_by' => 'ai',
         ];
 
         // ── Interés / información / planes ───────────────────────────────────
         if ($this->matches($text, ['informacion', 'info', 'planes', 'plan mensual', 'membresia', 'quiero saber', 'como funciona', 'me interesa', 'horarios', 'inscrib'])) {
             $this->suggestTag($created, $skipped, $base, $existingTags, 'interesado', 'Etiquetar lead interesado', 0.7);
             $this->suggestOnce($created, $skipped, $conversation, MarketingAgentAction::TYPE_DRAFT_REPLY, array_merge($base, [
-                'title'      => 'Respuesta sugerida (información)',
-                'reason'     => 'El lead pide información de planes; respuesta con CTA suave (no se envía).',
-                'priority'   => 'normal',
+                'title' => 'Respuesta sugerida (información)',
+                'reason' => 'El lead pide información de planes; respuesta con CTA suave (no se envía).',
+                'priority' => 'normal',
                 'confidence' => 0.65,
-                'payload'    => ['draft' => '¡Con gusto! Tenemos plan mensual con acceso completo y acompañamiento. ¿Quieres que te cuente cómo arrancar o prefieres pasar a conocernos primero?'],
+                'payload' => ['draft' => '¡Con gusto! Tenemos plan mensual con acceso completo y acompañamiento. ¿Quieres que te cuente cómo arrancar o prefieres pasar a conocernos primero?'],
             ]));
             $this->suggestOnce($created, $skipped, $conversation, MarketingAgentAction::TYPE_CREATE_FOLLOW_UP, array_merge($base, [
-                'title'      => 'Seguimiento por interés',
-                'reason'     => 'Programar seguimiento por interés en planes.',
-                'priority'   => 'normal',
+                'title' => 'Seguimiento por interés',
+                'reason' => 'Programar seguimiento por interés en planes.',
+                'priority' => 'normal',
                 'confidence' => 0.5,
-                'payload'    => ['due_at' => now()->addDay()->toIso8601String(), 'type' => 'task', 'reason' => 'Seguir interés en planes'],
+                'payload' => ['due_at' => now()->addDay()->toIso8601String(), 'type' => 'task', 'reason' => 'Seguir interés en planes'],
             ]));
         }
 
@@ -70,11 +68,11 @@ class MarketingAgentRecommendationService
         if ($this->matches($text, ['precio', 'cuanto', 'cuesta', 'costo', 'vale', 'mensualidad', 'tarifa', 'cuanto sale'])) {
             $this->suggestTag($created, $skipped, $base, $existingTags, 'precio', 'Etiquetar interés de precio', 0.7);
             $this->suggestOnce($created, $skipped, $conversation, MarketingAgentAction::TYPE_DRAFT_REPLY, array_merge($base, [
-                'title'      => 'Respuesta sugerida de precio',
-                'reason'     => 'El lead preguntó por el precio; respuesta con plan + CTA suave (no se envía).',
-                'priority'   => 'normal',
+                'title' => 'Respuesta sugerida de precio',
+                'reason' => 'El lead preguntó por el precio; respuesta con plan + CTA suave (no se envía).',
+                'priority' => 'normal',
                 'confidence' => 0.65,
-                'payload'    => ['draft' => 'Con gusto. El plan mensual incluye acceso completo y acompañamiento. ¿Te gustaría que te cuente cómo arrancar o prefieres visitarnos primero?'],
+                'payload' => ['draft' => 'Con gusto. El plan mensual incluye acceso completo y acompañamiento. ¿Te gustaría que te cuente cómo arrancar o prefieres visitarnos primero?'],
             ]));
         }
 
@@ -85,19 +83,19 @@ class MarketingAgentRecommendationService
             $when = $this->parseDateTime($text);
             if ($when !== null && ! $hasFutureAppointment) {
                 $this->suggestOnce($created, $skipped, $conversation, MarketingAgentAction::TYPE_CREATE_APPOINTMENT, array_merge($base, [
-                    'title'      => 'Crear cita de visita',
-                    'reason'     => 'El lead propuso un horario concreto para visitar.',
-                    'priority'   => 'high',
+                    'title' => 'Crear cita de visita',
+                    'reason' => 'El lead propuso un horario concreto para visitar.',
+                    'priority' => 'high',
                     'confidence' => 0.6,
-                    'payload'    => ['type' => 'visit', 'title' => 'Visita al gimnasio', 'scheduled_at' => $when, 'duration_minutes' => 45],
+                    'payload' => ['type' => 'visit', 'title' => 'Visita al gimnasio', 'scheduled_at' => $when, 'duration_minutes' => 45],
                 ]));
             } elseif (! $hasFutureAppointment) {
                 $this->suggestOnce($created, $skipped, $conversation, MarketingAgentAction::TYPE_SUGGEST_APPOINTMENT, array_merge($base, [
-                    'title'      => 'Sugerir visita (sin fecha clara)',
-                    'reason'     => 'El lead quiere visitar pero no dio fecha/hora; confirmar con el lead.',
-                    'priority'   => 'normal',
+                    'title' => 'Sugerir visita (sin fecha clara)',
+                    'reason' => 'El lead quiere visitar pero no dio fecha/hora; confirmar con el lead.',
+                    'priority' => 'normal',
                     'confidence' => 0.55,
-                    'payload'    => ['hint' => 'Proponer 2-3 horarios de visita.'],
+                    'payload' => ['hint' => 'Proponer 2-3 horarios de visita.'],
                 ]));
             }
         }
@@ -106,28 +104,28 @@ class MarketingAgentRecommendationService
         if ($this->matches($text, ['hablar con', 'con una persona', 'con alguien', 'un asesor', 'humano', 'me atienda'])) {
             if (! $staffReviewPending) {
                 $this->suggestOnce($created, $skipped, $conversation, MarketingAgentAction::TYPE_REQUEST_STAFF_REVIEW, array_merge($base, [
-                    'title'      => 'Marcar revisión humana',
-                    'reason'     => 'El lead pidió hablar con una persona.',
-                    'priority'   => 'high',
+                    'title' => 'Marcar revisión humana',
+                    'reason' => 'El lead pidió hablar con una persona.',
+                    'priority' => 'high',
                     'confidence' => 0.8,
-                    'payload'    => ['reason' => 'human_requested'],
+                    'payload' => ['reason' => 'human_requested'],
                 ]));
             } else {
                 $skipped[] = ['action_type' => MarketingAgentAction::TYPE_REQUEST_STAFF_REVIEW, 'reason' => 'staff_review_already_pending'];
             }
             $this->suggestOnce($created, $skipped, $conversation, MarketingAgentAction::TYPE_DRAFT_REPLY, array_merge($base, [
-                'title'      => 'Respuesta sugerida (derivar a humano)',
-                'reason'     => 'Acusar recibo y avisar que un asesor continúa (no se envía).',
-                'priority'   => 'high',
+                'title' => 'Respuesta sugerida (derivar a humano)',
+                'reason' => 'Acusar recibo y avisar que un asesor continúa (no se envía).',
+                'priority' => 'high',
                 'confidence' => 0.6,
-                'payload'    => ['draft' => 'Claro, con gusto te ayudamos. Dejo tu solicitud marcada para que un asesor del equipo continúe contigo. ¿Hay algo puntual que quieras adelantar?'],
+                'payload' => ['draft' => 'Claro, con gusto te ayudamos. Dejo tu solicitud marcada para que un asesor del equipo continúe contigo. ¿Hay algo puntual que quieras adelantar?'],
             ]));
             $this->suggestOnce($created, $skipped, $conversation, MarketingAgentAction::TYPE_PAUSE_AI, array_merge($base, [
-                'title'      => 'Pausar IA (sugerido)',
-                'reason'     => 'Intención clara de atención humana; requiere confirmación.',
-                'priority'   => 'high',
+                'title' => 'Pausar IA (sugerido)',
+                'reason' => 'Intención clara de atención humana; requiere confirmación.',
+                'priority' => 'high',
                 'confidence' => 0.6,
-                'payload'    => ['reason' => 'human_requested'],
+                'payload' => ['reason' => 'human_requested'],
             ]));
         }
 
@@ -135,20 +133,20 @@ class MarketingAgentRecommendationService
         if ($this->matches($text, ['lesion', 'duele', 'dolor', 'rodilla', 'espalda', 'medico', 'fractura', 'molestia', 'operaron'])) {
             if (! $staffReviewPending) {
                 $this->suggestOnce($created, $skipped, $conversation, MarketingAgentAction::TYPE_REQUEST_STAFF_REVIEW, array_merge($base, [
-                    'title'      => 'Marcar revisión (salud)',
-                    'reason'     => 'El lead mencionó una posible lesión/condición de salud.',
-                    'priority'   => 'urgent',
+                    'title' => 'Marcar revisión (salud)',
+                    'reason' => 'El lead mencionó una posible lesión/condición de salud.',
+                    'priority' => 'urgent',
                     'confidence' => 0.8,
-                    'payload'    => ['reason' => 'medical'],
+                    'payload' => ['reason' => 'medical'],
                 ]));
             }
             $this->suggestTag($created, $skipped, $base, $existingTags, 'requiere-cuidado', 'Etiquetar caso de salud', 0.7);
             $this->suggestOnce($created, $skipped, $conversation, MarketingAgentAction::TYPE_DRAFT_REPLY, array_merge($base, [
-                'title'      => 'Respuesta responsable (salud)',
-                'reason'     => 'Responder con cuidado y derivar a valoración profesional.',
-                'priority'   => 'high',
+                'title' => 'Respuesta responsable (salud)',
+                'reason' => 'Responder con cuidado y derivar a valoración profesional.',
+                'priority' => 'high',
                 'confidence' => 0.6,
-                'payload'    => ['draft' => 'Gracias por contarme. Para cuidar tu salud, lo ideal es una valoración con nuestro equipo antes de entrenar esa zona. ¿Quieres que te agende una valoración inicial?'],
+                'payload' => ['draft' => 'Gracias por contarme. Para cuidar tu salud, lo ideal es una valoración con nuestro equipo antes de entrenar esa zona. ¿Quieres que te agende una valoración inicial?'],
             ]));
         }
 
@@ -157,11 +155,11 @@ class MarketingAgentRecommendationService
             $this->suggestTag($created, $skipped, $base, $existingTags, 'lead-caliente', 'Etiquetar lead caliente', 0.75);
             if (! $hasFutureAppointment) {
                 $this->suggestOnce($created, $skipped, $conversation, MarketingAgentAction::TYPE_CREATE_FOLLOW_UP, array_merge($base, [
-                    'title'      => 'Seguimiento de cierre',
-                    'reason'     => 'Lead con alta intención; agendar seguimiento de cierre.',
-                    'priority'   => 'high',
+                    'title' => 'Seguimiento de cierre',
+                    'reason' => 'Lead con alta intención; agendar seguimiento de cierre.',
+                    'priority' => 'high',
                     'confidence' => 0.6,
-                    'payload'    => ['due_at' => now()->addHours(4)->toIso8601String(), 'type' => 'call', 'reason' => 'Cerrar lead caliente'],
+                    'payload' => ['due_at' => now()->addHours(4)->toIso8601String(), 'type' => 'call', 'reason' => 'Cerrar lead caliente'],
                 ]));
             }
             $this->suggestProfile($created, $skipped, $conversation, $base, 'hot', 'interested');
@@ -217,11 +215,11 @@ class MarketingAgentRecommendationService
 
         $created[] = $this->actions->createSuggestion(array_merge($base, [
             'action_type' => MarketingAgentAction::TYPE_ADD_TAG,
-            'title'       => $title,
-            'reason'      => 'Etiqueta sugerida por el análisis de la conversación.',
-            'priority'    => 'low',
-            'confidence'  => $confidence,
-            'payload'     => ['tag' => $tag],
+            'title' => $title,
+            'reason' => 'Etiqueta sugerida por el análisis de la conversación.',
+            'priority' => 'low',
+            'confidence' => $confidence,
+            'payload' => ['tag' => $tag],
         ]));
     }
 
@@ -234,11 +232,11 @@ class MarketingAgentRecommendationService
         }
         $created[] = $this->actions->createSuggestion(array_merge($base, [
             'action_type' => MarketingAgentAction::TYPE_UPDATE_LEAD_PROFILE,
-            'title'       => 'Actualizar perfil comercial',
-            'reason'      => 'Ajustar temperatura/etapa según la conversación.',
-            'priority'    => 'normal',
-            'confidence'  => 0.55,
-            'payload'     => ['temperature' => $temperature, 'stage' => $stage],
+            'title' => 'Actualizar perfil comercial',
+            'reason' => 'Ajustar temperatura/etapa según la conversación.',
+            'priority' => 'normal',
+            'confidence' => 0.55,
+            'payload' => ['temperature' => $temperature, 'stage' => $stage],
         ]));
     }
 

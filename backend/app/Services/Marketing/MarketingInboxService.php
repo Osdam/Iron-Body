@@ -2,6 +2,7 @@
 
 namespace App\Services\Marketing;
 
+use App\Models\MarketingAiAction;
 use App\Models\MarketingConversation;
 use App\Models\MarketingMessage;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -101,24 +102,24 @@ class MarketingInboxService
             ->value('body');
 
         return [
-            'id'                    => $c->id,
-            'lead_id'               => $c->lead_id,
-            'lead_name'             => $c->lead?->name,
-            'phone'                 => $c->lead?->phone,
-            'channel'               => $c->channel,
-            'status'                => $c->status,
-            'ai_enabled'            => (bool) $c->ai_enabled,
-            'human_takeover'        => (bool) $c->human_takeover,
+            'id' => $c->id,
+            'lead_id' => $c->lead_id,
+            'lead_name' => $c->lead?->name,
+            'phone' => $c->lead?->phone,
+            'channel' => $c->channel,
+            'status' => $c->status,
+            'ai_enabled' => (bool) $c->ai_enabled,
+            'human_takeover' => (bool) $c->human_takeover,
             'human_takeover_source' => $c->human_takeover_source,
-            'assigned_to'           => $c->assignedAdmin ? ['id' => $c->assignedAdmin->id, 'name' => $c->assignedAdmin->name] : null,
-            'unread_count'          => (int) $c->unread_count,
-            'last_message_at'       => $c->last_message_at?->toIso8601String(),
-            'last_inbound_at'       => $c->last_inbound_at?->toIso8601String(),
-            'last_outbound_at'      => $c->last_outbound_at?->toIso8601String(),
-            'staff_review_pending'  => (bool) $c->staff_review_pending,
-            'staff_review_reason'   => $c->staff_review_reason,
-            'tags'                  => $c->tags->pluck('tag')->all(),
-            'last_message_preview'  => $preview !== null ? mb_strimwidth((string) $preview, 0, 120, '…') : null,
+            'assigned_to' => $c->assignedAdmin ? ['id' => $c->assignedAdmin->id, 'name' => $c->assignedAdmin->name] : null,
+            'unread_count' => (int) $c->unread_count,
+            'last_message_at' => $c->last_message_at?->toIso8601String(),
+            'last_inbound_at' => $c->last_inbound_at?->toIso8601String(),
+            'last_outbound_at' => $c->last_outbound_at?->toIso8601String(),
+            'staff_review_pending' => (bool) $c->staff_review_pending,
+            'staff_review_reason' => $c->staff_review_reason,
+            'tags' => $c->tags->pluck('tag')->all(),
+            'last_message_preview' => $preview !== null ? mb_strimwidth((string) $preview, 0, 120, '…') : null,
         ];
     }
 
@@ -141,64 +142,64 @@ class MarketingInboxService
             ->orderBy('created_at')
             ->get()
             ->map(fn (MarketingMessage $m) => [
-                'id'             => $m->id,
-                'direction'      => $m->direction,
-                'sender_type'    => $m->sender_type,
+                'id' => $m->id,
+                'direction' => $m->direction,
+                'sender_type' => $m->sender_type,
                 'sender_user_id' => $m->sender_user_id,
-                'body'           => $m->body,
-                'status'         => $m->status,
-                'created_at'     => $m->created_at?->toIso8601String(),
+                'body' => $m->body,
+                'status' => $m->status,
+                'created_at' => $m->created_at?->toIso8601String(),
                 // No se expone metadata cruda del proveedor.
             ])->all();
 
-        $aiActions = \App\Models\MarketingAiAction::where('conversation_id', $conversation->id)
+        $aiActions = MarketingAiAction::where('conversation_id', $conversation->id)
             ->latest('created_at')
             ->limit(20)
             ->get()
             ->map(fn ($a) => [
                 'action_type' => $a->action_type,
-                'status'      => $a->status,
-                'reason'      => $a->reason,
-                'created_at'  => $a->created_at?->toIso8601String(),
+                'status' => $a->status,
+                'reason' => $a->reason,
+                'created_at' => $a->created_at?->toIso8601String(),
             ])->all();
 
         $lead = $conversation->lead;
 
         return [
             'conversation' => [
-                'id'                    => $conversation->id,
-                'channel'               => $conversation->channel,
-                'status'                => $conversation->status,
-                'ai_enabled'            => (bool) $conversation->ai_enabled,
-                'human_takeover'        => (bool) $conversation->human_takeover,
+                'id' => $conversation->id,
+                'channel' => $conversation->channel,
+                'status' => $conversation->status,
+                'ai_enabled' => (bool) $conversation->ai_enabled,
+                'human_takeover' => (bool) $conversation->human_takeover,
                 'human_takeover_source' => $conversation->human_takeover_source,
-                'unread_count'          => 0,
-                'last_message_at'       => $conversation->last_message_at?->toIso8601String(),
-                'staff_review'          => [
-                    'pending'     => (bool) $conversation->staff_review_pending,
-                    'reason'      => $conversation->staff_review_reason,
+                'unread_count' => 0,
+                'last_message_at' => $conversation->last_message_at?->toIso8601String(),
+                'staff_review' => [
+                    'pending' => (bool) $conversation->staff_review_pending,
+                    'reason' => $conversation->staff_review_reason,
                     'resolved_at' => $conversation->staff_review_resolved_at?->toIso8601String(),
                 ],
-                'assignment'            => $conversation->assignedAdmin
+                'assignment' => $conversation->assignedAdmin
                     ? ['id' => $conversation->assignedAdmin->id, 'name' => $conversation->assignedAdmin->name]
                     : null,
             ],
             'lead' => $lead ? [
-                'id'             => $lead->id,
-                'name'           => $lead->name,
-                'phone'          => $lead->phone,
-                'channel'        => $lead->channel,
-                'status'         => $lead->status,
-                'temperature'    => $lead->temperature,
-                'lead_stage'     => $conversation->lead_stage,
+                'id' => $lead->id,
+                'name' => $lead->name,
+                'phone' => $lead->phone,
+                'channel' => $lead->channel,
+                'status' => $lead->status,
+                'temperature' => $lead->temperature,
+                'lead_stage' => $conversation->lead_stage,
                 'do_not_contact' => (bool) $lead->do_not_contact,
             ] : null,
-            'messages'   => $messages,
+            'messages' => $messages,
             'ai_actions' => $aiActions,
-            'notes'      => $conversation->notes->map(fn ($n) => [
-                'id'         => $n->id,
-                'author'     => $n->author?->name,
-                'body'       => $n->body,
+            'notes' => $conversation->notes->map(fn ($n) => [
+                'id' => $n->id,
+                'author' => $n->author?->name,
+                'body' => $n->body,
                 'created_at' => $n->created_at?->toIso8601String(),
             ])->all(),
             'tags' => $conversation->tags->pluck('tag')->all(),
@@ -238,14 +239,14 @@ class MarketingInboxService
             ->all();
 
         return [
-            'open_conversations'            => $open,
-            'unassigned'                    => $unassigned,
-            'unread_total'                  => $unreadTotal,
-            'staff_review_pending'          => $staffReviewPending,
-            'handled_by_ai'                 => $handledByAi,
-            'handled_by_human'              => $handledByHuman,
+            'open_conversations' => $open,
+            'unassigned' => $unassigned,
+            'unread_total' => $unreadTotal,
+            'staff_review_pending' => $staffReviewPending,
+            'handled_by_ai' => $handledByAi,
+            'handled_by_human' => $handledByHuman,
             'first_response_time_avg_seconds' => $ttfr,
-            'conversations_by_status'       => $byStatus,
+            'conversations_by_status' => $byStatus,
         ];
     }
 }

@@ -57,6 +57,7 @@ class MarketingKnowledgeBaseService
             $line = $item->title ? trim($item->title).': '.trim($item->content) : trim($item->content);
             $grouped[$item->category][] = $line;
         }
+
         return $grouped;
     }
 
@@ -66,11 +67,11 @@ class MarketingKnowledgeBaseService
         return Plan::where('active', true)
             ->orderBy('sort_order')->get(['id', 'name', 'price', 'duration_days', 'benefits'])
             ->map(fn (Plan $p) => [
-                'id'            => $p->id,
-                'name'          => $p->name,
-                'price'         => (float) $p->price,
+                'id' => $p->id,
+                'name' => $p->name,
+                'price' => (float) $p->price,
                 'duration_days' => $p->duration_days,
-                'benefits'      => $p->benefitsArray(),
+                'benefits' => $p->benefitsArray(),
             ])->all();
     }
 
@@ -105,6 +106,7 @@ class MarketingKnowledgeBaseService
     {
         $items = $this->activeItems();
         $stamp = $items->max('updated_at');
+
         return $items->count().':'.($stamp ? $stamp->timestamp : '0');
     }
 
@@ -119,13 +121,13 @@ class MarketingKnowledgeBaseService
         $missing = array_values(array_diff(self::RECOMMENDED_CATEGORIES, $present));
 
         return [
-            'total_items'           => MarketingKnowledgeItem::count(),
-            'active_items'          => $this->activeItemsCount(),
-            'by_category'           => $byCategory,
-            'missing_recommended'   => $missing,
-            'active_plans_count'    => $this->activePlansCount(),
+            'total_items' => MarketingKnowledgeItem::count(),
+            'active_items' => $this->activeItemsCount(),
+            'by_category' => $byCategory,
+            'missing_recommended' => $missing,
+            'active_plans_count' => $this->activePlansCount(),
             'prompt_receives_knowledge' => $this->activeItemsCount() > 0,
-            'version'               => $this->version(),
+            'version' => $this->version(),
         ];
     }
 }

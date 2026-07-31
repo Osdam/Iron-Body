@@ -22,9 +22,7 @@ use Throwable;
  */
 class IronAiRealtimeService
 {
-    public function __construct(private readonly IronAiService $ironAi)
-    {
-    }
+    public function __construct(private readonly IronAiService $ironAi) {}
 
     /**
      * Guía de VISIÓN para la conversación realtime multimodal (voz + cámara).
@@ -53,7 +51,6 @@ TXT;
      *
      * @param  bool  $vision  Sesión multimodal con cámara (voz + visión). Cuando
      *                        es true se anexa la guía de visión a las instrucciones.
-     *
      * @return array{client_secret: string, expires_at: ?int, model: string, voice: string, webrtc_url: string}|null
      */
     public function createSession(?Member $member, ?User $user, array $capabilities, bool $vision = false): ?array
@@ -63,10 +60,12 @@ TXT;
 
         if (empty($cfg['enabled']) || empty($cfg['realtime_enabled'])) {
             Log::warning('iron-ai realtime deshabilitado por configuración');
+
             return null;
         }
         if (empty($cfg['api_key'])) {
             Log::error('iron-ai sin OPENAI_API_KEY para realtime');
+
             return null;
         }
 
@@ -81,12 +80,12 @@ TXT;
                 ->asJson()
                 ->post($cfg['realtime_secret_url'], [
                     'session' => [
-                        'type'         => 'realtime',
-                        'model'        => $model,
+                        'type' => 'realtime',
+                        'model' => $model,
                         'instructions' => $instructions,
-                        'audio'        => [
-                            'input'  => [
-                                'transcription'  => ['model' => $cfg['transcription_model'] ?? 'whisper-1'],
+                        'audio' => [
+                            'input' => [
+                                'transcription' => ['model' => $cfg['transcription_model'] ?? 'whisper-1'],
                                 'turn_detection' => ['type' => 'server_vad'],
                             ],
                             'output' => ['voice' => $voice],
@@ -98,10 +97,11 @@ TXT;
 
             if ($response->failed()) {
                 Log::error('iron-ai realtime http error', [
-                    'status'      => $response->status(),
-                    'latency_ms'  => $latencyMs,
+                    'status' => $response->status(),
+                    'latency_ms' => $latencyMs,
                     'error_class' => 'OpenAIRealtimeHttpError',
                 ]);
+
                 return null;
             }
 
@@ -110,28 +110,30 @@ TXT;
             $secret = $json['value'] ?? data_get($json, 'client_secret.value');
             if (! is_string($secret) || $secret === '') {
                 Log::error('iron-ai realtime sin client_secret', ['latency_ms' => $latencyMs]);
+
                 return null;
             }
 
             Log::info('iron-ai realtime session ok', [
-                'user_id'    => $user?->id,
-                'member_id'  => $member?->id,
+                'user_id' => $user?->id,
+                'member_id' => $member?->id,
                 'latency_ms' => $latencyMs,
-                'model'      => $model,
+                'model' => $model,
             ]);
 
             return [
                 'client_secret' => $secret,
-                'expires_at'    => $json['expires_at'] ?? data_get($json, 'client_secret.expires_at'),
-                'model'         => data_get($json, 'session.model', $model),
-                'voice'         => data_get($json, 'session.audio.output.voice', $voice),
-                'webrtc_url'    => $cfg['realtime_webrtc_url'],
+                'expires_at' => $json['expires_at'] ?? data_get($json, 'client_secret.expires_at'),
+                'model' => data_get($json, 'session.model', $model),
+                'voice' => data_get($json, 'session.audio.output.voice', $voice),
+                'webrtc_url' => $cfg['realtime_webrtc_url'],
             ];
         } catch (Throwable $e) {
             Log::error('iron-ai realtime exception', [
-                'latency_ms'  => (int) round((microtime(true) - $started) * 1000),
+                'latency_ms' => (int) round((microtime(true) - $started) * 1000),
                 'error_class' => get_class($e),
             ]);
+
             return null;
         }
     }
@@ -145,19 +147,19 @@ TXT;
         // Contexto general del gimnasio: equipos disponibles (restricción dura).
         $equipment = $this->ironAi->gymEquipmentConstraint();
         if ($equipment !== '') {
-            $instructions .= "\n\n" . $equipment;
+            $instructions .= "\n\n".$equipment;
         }
 
         $context = $this->ironAi->buildUserContext($member, $user, $level);
         if ($context !== '') {
-            $instructions .= "\n\nCONTEXTO DEL USUARIO (datos reales; no inventes lo que no esté aquí):\n" . $context;
+            $instructions .= "\n\nCONTEXTO DEL USUARIO (datos reales; no inventes lo que no esté aquí):\n".$context;
         }
 
         // Estilo conversación en vivo (voz): natural, breve, sin formato markdown.
         $instructions .= "\n\nEstás en una CONVERSACIÓN DE VOZ EN VIVO. Habla en español, "
-            . "con frases naturales y breves, tono cercano y motivador. No uses listas "
-            . "ni markdown ni emojis; responde como en una llamada. Si el usuario hace "
-            . "una pausa, espera. Mantén el foco en fitness, entrenamiento y Iron Body.";
+            .'con frases naturales y breves, tono cercano y motivador. No uses listas '
+            .'ni markdown ni emojis; responde como en una llamada. Si el usuario hace '
+            .'una pausa, espera. Mantén el foco en fitness, entrenamiento y Iron Body.';
 
         // Modo multimodal con cámara: añade la guía de visión segura.
         if ($vision) {

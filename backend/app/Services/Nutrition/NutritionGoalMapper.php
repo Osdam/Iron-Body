@@ -54,6 +54,7 @@ class NutritionGoalMapper
         }
         $days = max(0, min(7, $days));
         $map = (array) config('nutrition.goal_calculator.training_days_to_activity', []);
+
         return $map[$days] ?? null;
     }
 
@@ -67,6 +68,7 @@ class NutritionGoalMapper
         $value = strtr($value, [
             'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n',
         ]);
+
         return preg_replace('/\s+/', ' ', $value) ?? $value;
     }
 }

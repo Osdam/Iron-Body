@@ -18,8 +18,7 @@ class MarketingManualReplyService
     public function __construct(
         private readonly MarketingMessageDispatcher $dispatcher,
         private readonly MarketingManualTakeoverService $takeover,
-    ) {
-    }
+    ) {}
 
     /**
      * @return array{ok:bool,dispatch:array,ai_paused:bool}
@@ -46,8 +45,8 @@ class MarketingManualReplyService
         }
 
         return [
-            'ok'        => (bool) ($dispatch['ok'] ?? false),
-            'dispatch'  => $dispatch,
+            'ok' => (bool) ($dispatch['ok'] ?? false),
+            'dispatch' => $dispatch,
             'ai_paused' => $aiPaused,
         ];
     }

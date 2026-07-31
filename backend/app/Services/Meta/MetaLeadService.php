@@ -25,18 +25,18 @@ class MetaLeadService
 
         if ($lead === null) {
             $lead = MarketingLead::create([
-                'channel'          => $channel,
-                'source'           => 'inbound',
-                'meta_user_id'     => $metaUserId,
-                'name'             => $name,
-                'status'           => MarketingLead::STATUS_NEW,
-                'temperature'      => MarketingLead::STATUS_COLD,
+                'channel' => $channel,
+                'source' => 'inbound',
+                'meta_user_id' => $metaUserId,
+                'name' => $name,
+                'status' => MarketingLead::STATUS_NEW,
+                'temperature' => MarketingLead::STATUS_COLD,
                 'first_message_at' => now(),
-                'last_message_at'  => now(),
+                'last_message_at' => now(),
             ]);
         } else {
             $lead->forceFill([
-                'name'            => $lead->name ?: $name,
+                'name' => $lead->name ?: $name,
                 'last_message_at' => now(),
             ])->save();
         }

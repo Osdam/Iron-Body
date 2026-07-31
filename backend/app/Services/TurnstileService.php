@@ -25,8 +25,7 @@ class TurnstileService
     public function __construct(
         private readonly ZktecoTurnstileService $zkteco,
         private readonly SerialTurnstileService $serial,
-    ) {
-    }
+    ) {}
 
     public function trigger(TurnstileSetting $settings, array $context = []): array
     {
@@ -48,10 +47,10 @@ class TurnstileService
 
         $defaults = [
             'member_name' => '—',
-            'user_id'     => 0,
-            'action'      => 'entry',
+            'user_id' => 0,
+            'action' => 'entry',
             'duration_ms' => $settings->open_duration_ms,
-            'timestamp'   => now()->toIso8601String(),
+            'timestamp' => now()->toIso8601String(),
         ];
         $vars = array_merge($defaults, $context);
 
@@ -77,8 +76,8 @@ class TurnstileService
 
         try {
             $response = match ($method) {
-                'GET'  => $request->get($url),
-                'PUT'  => $request->withBody($payloadString ?? '', 'application/json')->put($url),
+                'GET' => $request->get($url),
+                'PUT' => $request->withBody($payloadString ?? '', 'application/json')->put($url),
                 'PATCH' => $request->withBody($payloadString ?? '', 'application/json')->patch($url),
                 default => $payloadString
                     ? $request->withBody($payloadString, 'application/json')->post($url)
@@ -88,9 +87,9 @@ class TurnstileService
             $ok = $response->successful();
             $settings->forceFill([
                 'last_triggered_at' => now(),
-                'last_status'       => $ok ? 'success' : 'error',
-                'last_http_code'    => $response->status(),
-                'last_error'        => $ok ? null : substr((string) $response->body(), 0, 480),
+                'last_status' => $ok ? 'success' : 'error',
+                'last_http_code' => $response->status(),
+                'last_error' => $ok ? null : substr((string) $response->body(), 0, 480),
             ])->save();
 
             return [
@@ -107,9 +106,9 @@ class TurnstileService
 
             $settings->forceFill([
                 'last_triggered_at' => now(),
-                'last_status'       => 'error',
-                'last_http_code'    => null,
-                'last_error'        => substr($e->getMessage(), 0, 480),
+                'last_status' => 'error',
+                'last_http_code' => null,
+                'last_error' => substr($e->getMessage(), 0, 480),
             ])->save();
 
             return ['ok' => false, 'reason' => 'exception', 'error' => $e->getMessage()];
@@ -134,9 +133,9 @@ class TurnstileService
 
         $settings->forceFill([
             'last_triggered_at' => now(),
-            'last_status'       => $result['ok'] ? 'success' : 'error',
-            'last_http_code'    => null,
-            'last_error'        => $result['ok'] ? null : substr((string) ($result['error'] ?? 'unknown'), 0, 480),
+            'last_status' => $result['ok'] ? 'success' : 'error',
+            'last_http_code' => null,
+            'last_error' => $result['ok'] ? null : substr((string) ($result['error'] ?? 'unknown'), 0, 480),
         ])->save();
 
         return $result;
@@ -164,9 +163,9 @@ class TurnstileService
 
         $settings->forceFill([
             'last_triggered_at' => now(),
-            'last_status'       => $result['ok'] ? 'success' : 'error',
-            'last_http_code'    => null,
-            'last_error'        => $result['ok'] ? null : substr((string) ($result['error'] ?? 'unknown'), 0, 480),
+            'last_status' => $result['ok'] ? 'success' : 'error',
+            'last_http_code' => null,
+            'last_error' => $result['ok'] ? null : substr((string) ($result['error'] ?? 'unknown'), 0, 480),
         ])->save();
 
         return $result;
@@ -176,6 +175,7 @@ class TurnstileService
     {
         return preg_replace_callback('/\{([a-z_][a-z0-9_]*)\}/i', function ($match) use ($vars) {
             $key = $match[1];
+
             return array_key_exists($key, $vars) ? (string) $vars[$key] : $match[0];
         }, $template) ?? $template;
     }
@@ -191,6 +191,7 @@ class TurnstileService
             return ['Authorization', $raw];
         }
         [$name, $value] = explode(':', $raw, 2);
+
         return [trim($name), trim($value)];
     }
 }

@@ -16,26 +16,25 @@ class NutritionAIEstimator
         private NutritionAIEnrichmentService $engine,
         private NutritionAiResponseValidator $validator,
         private NutritionDataConfidenceService $confidence,
-    ) {
-    }
+    ) {}
 
     public function estimate(Member $member, string $description, ?float $quantity = null, ?string $unit = null, ?string $context = null): array
     {
         $model = config('nutrition.ai.model_estimator') ?: config('services.openai.model');
 
         $qty = $quantity && $quantity > 0
-            ? "Cantidad aproximada: {$quantity} " . ($unit ?: 'g') . '. '
+            ? "Cantidad aproximada: {$quantity} ".($unit ?: 'g').'. '
             : '';
         $messages = [
             ['role' => 'system', 'content' => NutritionAiPrompts::estimatorSystem()],
             ['role' => 'user', 'content' => "Estima los macros de: \"{$description}\". {$qty}"
-                . ($context ? "Contexto: {$context}. " : '')
-                . 'Recuerda: es una ESTIMACIÓN, no un dato de etiqueta.'],
+                .($context ? "Contexto: {$context}. " : '')
+                .'Recuerda: es una ESTIMACIÓN, no un dato de etiqueta.'],
         ];
 
         $result = (new NutritionAiExtractionFinisher($this->engine, $this->validator, $this->confidence))
             ->run(NutritionAiRun::MODE_ESTIMATE, $member, $model, $messages,
-                'est:' . hash('sha256', mb_strtolower(trim($description)) . "|{$quantity}|{$unit}"),
+                'est:'.hash('sha256', mb_strtolower(trim($description))."|{$quantity}|{$unit}"),
                 'ai_estimated', []);
 
         // Refuerza marca de estimación + bloquea por confianza mínima.
@@ -49,6 +48,7 @@ class NutritionAIEstimator
             $result['data']['meets_min_confidence'] = $this->confidence->reachesEstimate($conf);
             $result['data']['explanation'] ??= 'Valores estimados por IA; confírmalos o ajústalos.';
         }
+
         return $result;
     }
 }

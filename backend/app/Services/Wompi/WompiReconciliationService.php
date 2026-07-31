@@ -25,15 +25,14 @@ class WompiReconciliationService
         private WompiTransactionService $tx,
         private PaymentStateMachine $sm,
         private array $cfg,
-    ) {
-    }
+    ) {}
 
     public static function make(): self
     {
         return new self(
             WompiClient::fromConfig(),
             WompiTransactionService::make(),
-            new PaymentStateMachine(),
+            new PaymentStateMachine,
             (array) config('wompi'),
         );
     }
@@ -90,7 +89,7 @@ class WompiReconciliationService
         //    (retry_count + last_reconciled_at) aunque la consulta falle.
         $res = $this->client->getTransaction($tx->wompi_transaction_id);
         $tx->forceFill([
-            'retry_count'        => (int) $tx->retry_count + 1,
+            'retry_count' => (int) $tx->retry_count + 1,
             'last_reconciled_at' => now(),
         ])->save();
 
@@ -115,6 +114,7 @@ class WompiReconciliationService
             $this->tx->transitionTo($updated, PaymentStateMachine::EXPIRED, [
                 'status_message' => 'El pago expiró sin confirmarse.',
             ]);
+
             return 'expired';
         }
 

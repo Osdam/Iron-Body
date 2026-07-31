@@ -14,12 +14,13 @@ class LabsMobileSmsSender implements SmsSender
     public function send(string $to, string $message): bool
     {
         $username = (string) config('otp.labsmobile.username');
-        $token    = (string) config('otp.labsmobile.token');
-        $sender   = (string) config('otp.labsmobile.sender');
-        $base     = rtrim((string) config('otp.labsmobile.base'), '/');
+        $token = (string) config('otp.labsmobile.token');
+        $sender = (string) config('otp.labsmobile.sender');
+        $base = rtrim((string) config('otp.labsmobile.base'), '/');
 
         if ($username === '' || $token === '') {
             Log::warning('LabsMobileSmsSender: credenciales incompletas, no se envía SMS.');
+
             return false;
         }
 
@@ -28,8 +29,8 @@ class LabsMobileSmsSender implements SmsSender
                 ->acceptJson()
                 ->timeout(15)
                 ->post("{$base}/json/v2/sms", [
-                    'message'   => $message,
-                    'tpoa'      => $sender,
+                    'message' => $message,
+                    'tpoa' => $sender,
                     'recipient' => [['msisdn' => preg_replace('/\D+/', '', $to)]],
                 ]);
 
@@ -39,11 +40,13 @@ class LabsMobileSmsSender implements SmsSender
 
             Log::warning('LabsMobileSmsSender: respuesta no exitosa', [
                 'status' => $response->status(),
-                'body'   => $response->body(),
+                'body' => $response->body(),
             ]);
+
             return false;
         } catch (\Throwable $e) {
             Log::warning('LabsMobileSmsSender: excepción al enviar', ['error' => $e->getMessage()]);
+
             return false;
         }
     }

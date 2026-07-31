@@ -28,14 +28,13 @@ class IronAiUserContextService
         private readonly ProgressSummaryService $progress,
         private readonly WeeklyStreakService $streak,
         private readonly GymEquipmentContextService $equipment,
-    ) {
-    }
+    ) {}
 
     /**
      * Contexto modular del usuario. `$modules` permite pedir solo lo necesario
      * (p. ej. nutrición + progreso para el coach nutricional).
      *
-     * @param array<int,string> $modules profile|membership|workouts|streak|nutrition|progress|evaluation|classes|last_ai_summary|gym_equipment
+     * @param  array<int,string>  $modules  profile|membership|workouts|streak|nutrition|progress|evaluation|classes|last_ai_summary|gym_equipment
      */
     public function build(Member $member, array $modules = []): array
     {
@@ -119,6 +118,7 @@ class IronAiUserContextService
     private function classesContext(Member $member): array
     {
         $today = CarbonImmutable::now(NutritionService::TZ);
+
         return [
             'reservations_last_30d' => ClassReservation::query()
                 ->where('member_id', $member->id)
@@ -153,6 +153,7 @@ class IronAiUserContextService
     private function membership(Member $member): array
     {
         $user = $member->user ?? null;
+
         return [
             'is_premium' => $user?->status === 'active',
             'status' => $user?->status,
@@ -163,6 +164,7 @@ class IronAiUserContextService
     {
         $today = CarbonImmutable::now(NutritionService::TZ);
         $weekStart = $today->startOfWeek(CarbonImmutable::MONDAY);
+
         return [
             'completed_this_week' => RoutineCompletion::query()
                 ->where('member_id', $member->id)
@@ -178,6 +180,7 @@ class IronAiUserContextService
     private function nutritionContext(Member $member): array
     {
         $day = $this->nutrition->dayPayload($member);
+
         return [
             'goal' => $day['goal'],
             'consumed_today' => $day['consumed'],

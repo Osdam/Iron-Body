@@ -25,8 +25,7 @@ class OpenAiSalesResponder implements AiSalesResponderInterface
         private readonly FakeAiSalesResponder $fake,
         private readonly SalesAgentPromptBuilder $prompt,
         private readonly SalesAgentDecisionValidator $validator,
-    ) {
-    }
+    ) {}
 
     public function classify(string $body, array $context = []): array
     {
@@ -35,12 +34,12 @@ class OpenAiSalesResponder implements AiSalesResponderInterface
         }
 
         try {
-            $lead         = $context['lead'] ?? null;
+            $lead = $context['lead'] ?? null;
             $conversation = $context['conversation'] ?? null;
 
             $raw = $this->callOpenAi(
                 $this->prompt->systemPrompt(),
-                $this->prompt->userPrompt($lead instanceof MarketingLead ? $lead : new MarketingLead(), $body,
+                $this->prompt->userPrompt($lead instanceof MarketingLead ? $lead : new MarketingLead, $body,
                     $conversation instanceof MarketingConversation ? $conversation : null),
             );
 
@@ -51,6 +50,7 @@ class OpenAiSalesResponder implements AiSalesResponderInterface
         } catch (Throwable $e) {
             // Sin secretos ni payloads sensibles.
             Log::warning('marketing.openai.error', ['error' => class_basename($e)]);
+
             return $this->fallback($body, $context, 'error');
         }
     }
@@ -62,12 +62,13 @@ class OpenAiSalesResponder implements AiSalesResponderInterface
 
     /**
      * Llama a Chat Completions y devuelve el objeto JSON decodificado del modelo.
+     *
      * @throws \RuntimeException si la respuesta no es JSON válido.
      */
     private function callOpenAi(string $system, string $user): array
     {
-        $cfg     = (array) config('marketing.ai.openai');
-        $apiKey  = (string) config('services.openai.api_key');
+        $cfg = (array) config('marketing.ai.openai');
+        $apiKey = (string) config('services.openai.api_key');
         $baseUrl = rtrim((string) config('services.openai.base_url', 'https://api.openai.com'), '/');
         $retries = max(1, (int) ($cfg['max_retries'] ?? 1) + 1);
 
@@ -79,11 +80,11 @@ class OpenAiSalesResponder implements AiSalesResponderInterface
             ->timeout((int) ($cfg['timeout'] ?? 20))
             ->retry($retries, 200, throw: false)
             ->post($baseUrl.'/v1/chat/completions', [
-                'model'           => SalesAiConfig::model(),
-                'temperature'     => (float) ($cfg['temperature'] ?? 0.2),
-                'max_tokens'      => (int) ($cfg['max_output_tokens'] ?? 1200),
+                'model' => SalesAiConfig::model(),
+                'temperature' => (float) ($cfg['temperature'] ?? 0.2),
+                'max_tokens' => (int) ($cfg['max_output_tokens'] ?? 1200),
                 'response_format' => ['type' => 'json_object'],
-                'messages'        => [
+                'messages' => [
                     ['role' => 'system', 'content' => $system],
                     ['role' => 'user',   'content' => $user],
                 ],
@@ -107,21 +108,21 @@ class OpenAiSalesResponder implements AiSalesResponderInterface
     {
         if (SalesAiConfig::failClosed()) {
             return [
-                'intent'            => SalesIntents::UNKNOWN,
-                'confidence'        => 0.0,
-                'extracted_fields'  => [],
-                'missing_fields'    => [],
-                'reply'             => null,
-                'force_escalate'    => false,
+                'intent' => SalesIntents::UNKNOWN,
+                'confidence' => 0.0,
+                'extracted_fields' => [],
+                'missing_fields' => [],
+                'reply' => null,
+                'force_escalate' => false,
                 'escalation_reason' => null,
-                'risk_flags'        => ['openai_fallback_'.$why],
-                'responder'         => 'fallback',
+                'risk_flags' => ['openai_fallback_'.$why],
+                'responder' => 'fallback',
             ];
         }
 
         // fail_closed=false → reglas deterministas (fake).
         $f = $this->fake->classify($body, $context);
-        $f['responder']  = 'fallback';
+        $f['responder'] = 'fallback';
         $f['risk_flags'] = array_values(array_unique(array_merge($f['risk_flags'] ?? [], ['openai_fallback_'.$why])));
 
         return $f;

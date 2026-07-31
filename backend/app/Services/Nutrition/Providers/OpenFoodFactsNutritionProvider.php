@@ -15,9 +15,7 @@ use Throwable;
  */
 class OpenFoodFactsNutritionProvider implements NutritionProviderContract
 {
-    public function __construct(private NutritionFoodNormalizer $normalizer)
-    {
-    }
+    public function __construct(private NutritionFoodNormalizer $normalizer) {}
 
     public function source(): string
     {
@@ -50,11 +48,12 @@ class OpenFoodFactsNutritionProvider implements NutritionProviderContract
                 ->withHeaders(['User-Agent' => $this->userAgent()])
                 ->get("{$base}/api/v2/product/{$barcode}.json", [
                     'fields' => 'code,product_name,product_name_es,generic_name,generic_name_es,'
-                        . 'brands,categories,image_front_url,image_url,selected_images,'
-                        . 'serving_size,serving_quantity,product_quantity,nutriments',
+                        .'brands,categories,image_front_url,image_url,selected_images,'
+                        .'serving_size,serving_quantity,product_quantity,nutriments',
                 ]);
             if ($resp->status() === 429) {
                 Log::warning('nutrition.barcode.rate_limited', ['provider' => $this->source()]);
+
                 return null;
             }
             if (! $resp->successful()) {
@@ -65,6 +64,7 @@ class OpenFoodFactsNutritionProvider implements NutritionProviderContract
                 Log::info('nutrition.barcode.raw_summary', [
                     'barcode' => $barcode, 'provider' => $this->source(), 'found' => false,
                 ]);
+
                 return null; // producto no encontrado
             }
             $product = $json['product'];
@@ -74,20 +74,20 @@ class OpenFoodFactsNutritionProvider implements NutritionProviderContract
             // Diagnóstico seguro (sin payload gigante ni datos sensibles).
             $nutr = is_array($product['nutriments'] ?? null) ? $product['nutriments'] : [];
             Log::info('nutrition.barcode.raw_summary', [
-                'barcode'            => $barcode,
-                'provider'           => $this->source(),
-                'found'              => true,
-                'has_nutriments'     => $nutr !== [],
-                'nutriment_keys'     => array_slice(array_keys($nutr), 0, 12),
-                'energy_kcal_100g'   => $nutr['energy-kcal_100g'] ?? null,
-                'energy_100g'        => $nutr['energy_100g'] ?? null,
-                'proteins_100g'      => $nutr['proteins_100g'] ?? null,
+                'barcode' => $barcode,
+                'provider' => $this->source(),
+                'found' => true,
+                'has_nutriments' => $nutr !== [],
+                'nutriment_keys' => array_slice(array_keys($nutr), 0, 12),
+                'energy_kcal_100g' => $nutr['energy-kcal_100g'] ?? null,
+                'energy_100g' => $nutr['energy_100g'] ?? null,
+                'proteins_100g' => $nutr['proteins_100g'] ?? null,
                 'carbohydrates_100g' => $nutr['carbohydrates_100g'] ?? null,
-                'fat_100g'           => $nutr['fat_100g'] ?? null,
-                'serving_size'       => $product['serving_size'] ?? null,
-                'product_name'       => mb_substr((string) ($product['product_name'] ?? ''), 0, 60),
-                'brand'              => mb_substr((string) ($product['brands'] ?? ''), 0, 40),
-                'is_complete'        => $normalized !== null
+                'fat_100g' => $nutr['fat_100g'] ?? null,
+                'serving_size' => $product['serving_size'] ?? null,
+                'product_name' => mb_substr((string) ($product['product_name'] ?? ''), 0, 60),
+                'brand' => mb_substr((string) ($product['brands'] ?? ''), 0, 40),
+                'is_complete' => $normalized !== null
                     && ($normalized['per_100g']['calories'] ?? null) !== null
                     && ($normalized['per_100g']['protein'] ?? null) !== null
                     && ($normalized['per_100g']['carbs'] ?? null) !== null
@@ -97,6 +97,7 @@ class OpenFoodFactsNutritionProvider implements NutritionProviderContract
             return $normalized;
         } catch (Throwable $e) {
             Log::warning('nutrition.barcode.lookup_failed', ['provider' => $this->source()]);
+
             return null;
         }
     }
@@ -112,16 +113,16 @@ class OpenFoodFactsNutritionProvider implements NutritionProviderContract
             $resp = Http::timeout($timeout)
                 ->withHeaders(['User-Agent' => $this->userAgent()])
                 ->get("{$base}/cgi/search.pl", [
-                    'search_terms'   => $query,
-                    'search_simple'  => 1,
-                    'action'         => 'process',
-                    'json'           => 1,
-                    'page_size'      => $limit,
-                    'lc'             => (string) config('nutrition.openfoodfacts.language', 'es'),
+                    'search_terms' => $query,
+                    'search_simple' => 1,
+                    'action' => 'process',
+                    'json' => 1,
+                    'page_size' => $limit,
+                    'lc' => (string) config('nutrition.openfoodfacts.language', 'es'),
                     'countries_tags' => (string) config('nutrition.openfoodfacts.country', 'colombia'),
-                    'fields'         => 'code,product_name,product_name_es,generic_name,generic_name_es,'
-                        . 'brands,categories,image_front_url,image_url,selected_images,'
-                        . 'serving_size,serving_quantity,nutriments',
+                    'fields' => 'code,product_name,product_name_es,generic_name,generic_name_es,'
+                        .'brands,categories,image_front_url,image_url,selected_images,'
+                        .'serving_size,serving_quantity,nutriments',
                 ]);
             if (! $resp->successful()) {
                 return [];
@@ -141,9 +142,11 @@ class OpenFoodFactsNutritionProvider implements NutritionProviderContract
                     $out[] = $n;
                 }
             }
+
             return $out;
         } catch (Throwable $e) {
             Log::warning('nutrition.search.provider_failed', ['provider' => $this->source()]);
+
             return [];
         }
     }

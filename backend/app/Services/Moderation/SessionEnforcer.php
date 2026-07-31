@@ -33,9 +33,7 @@ class SessionEnforcer
     /** Motivo que queda escrito en `member_device_sessions.revoked_reason`. */
     public const REVOKE_REASON = 'moderation_full_app_suspension';
 
-    public function __construct(private ModerationAudit $audit)
-    {
-    }
+    public function __construct(private ModerationAudit $audit) {}
 
     /**
      * ¿Esta sanción retira el acceso completo a la app?

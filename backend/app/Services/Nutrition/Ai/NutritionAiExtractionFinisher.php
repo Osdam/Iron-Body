@@ -16,8 +16,7 @@ class NutritionAiExtractionFinisher
         private NutritionAIEnrichmentService $engine,
         private NutritionAiResponseValidator $validator,
         private NutritionDataConfidenceService $confidence,
-    ) {
-    }
+    ) {}
 
     public function run(string $mode, ?Member $member, string $model, array $messages, string $inputHash, string $source, array $meta = []): array
     {
@@ -44,6 +43,7 @@ class NutritionAiExtractionFinisher
                 $this->engine->record($mode, $member, $meta, $prep['hash'], $prep['model'],
                     NutritionAiRun::STATUS_VALIDATION_FAILED, null, null, $valid['errors'], 'validation_failed');
             }
+
             return ['ok' => false, 'status' => 'validation_failed', 'error_code' => 'validation_failed',
                 'errors' => $valid['errors'],
                 'message' => 'La IA no devolvió datos válidos. Revisa o completa manualmente.'];
@@ -61,19 +61,19 @@ class NutritionAiExtractionFinisher
         }
 
         return [
-            'ok'      => true,
-            'status'  => $data['is_complete'] ? 'success' : 'partial',
-            'cached'  => $prep['outcome'] === 'cache',
-            'data'    => $data,
+            'ok' => true,
+            'status' => $data['is_complete'] ? 'success' : 'partial',
+            'cached' => $prep['outcome'] === 'cache',
+            'data' => $data,
         ];
     }
 
     private function statusFor(?string $errorCode): string
     {
         return match ($errorCode) {
-            'timeout'      => 'timeout',
+            'timeout' => 'timeout',
             'rate_limited' => 'rate_limited',
-            default        => 'ai_unavailable',
+            default => 'ai_unavailable',
         };
     }
 
@@ -81,7 +81,7 @@ class NutritionAiExtractionFinisher
     {
         return match ($source) {
             'ai_estimated' => 'Estimado por IA · No verificado',
-            default        => 'Extraído por IA',
+            default => 'Extraído por IA',
         };
     }
 }

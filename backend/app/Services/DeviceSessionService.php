@@ -24,7 +24,7 @@ class DeviceSessionService
         $deviceId = $context['device_id'] ?? null;
         $deviceId = ($deviceId !== null && trim((string) $deviceId) !== '')
             ? (string) $deviceId
-            : 'auto-' . Str::random(24);
+            : 'auto-'.Str::random(24);
 
         $token = Str::random(64);
 
@@ -38,15 +38,15 @@ class DeviceSessionService
         $session = MemberDeviceSession::updateOrCreate(
             ['member_id' => $member->id, 'device_id' => $deviceId],
             [
-                'token_hash'     => MemberDeviceSession::hashToken($token),
-                'device_name'    => $context['device_name'] ?? null,
-                'platform'       => $context['platform'] ?? null,
-                'app_version'    => $context['app_version'] ?? null,
-                'ip_address'     => $context['ip_address'] ?? null,
-                'user_agent'     => isset($context['user_agent']) ? mb_substr((string) $context['user_agent'], 0, 500) : null,
-                'last_seen_at'   => now(),
-                'trusted_at'     => now(),
-                'revoked_at'     => null,
+                'token_hash' => MemberDeviceSession::hashToken($token),
+                'device_name' => $context['device_name'] ?? null,
+                'platform' => $context['platform'] ?? null,
+                'app_version' => $context['app_version'] ?? null,
+                'ip_address' => $context['ip_address'] ?? null,
+                'user_agent' => isset($context['user_agent']) ? mb_substr((string) $context['user_agent'], 0, 500) : null,
+                'last_seen_at' => now(),
+                'trusted_at' => now(),
+                'revoked_at' => null,
                 'revoked_reason' => null,
             ],
         );
@@ -57,16 +57,16 @@ class DeviceSessionService
         $revoked = [];
         foreach ($others as $other) {
             $other->update([
-                'revoked_at'     => now(),
+                'revoked_at' => now(),
                 'revoked_reason' => 'superseded_by_new_login',
             ]);
             $revoked[] = $other;
         }
 
         return [
-            'token'          => $token,
-            'session'        => $session,
-            'revoked'        => $revoked,
+            'token' => $token,
+            'session' => $session,
+            'revoked' => $revoked,
             'was_new_device' => $wasNewDevice,
         ];
     }
@@ -143,7 +143,7 @@ class DeviceSessionService
     public function revoke(MemberDeviceSession $session, string $reason): void
     {
         $session->update([
-            'revoked_at'     => now(),
+            'revoked_at' => now(),
             'revoked_reason' => $reason,
         ]);
     }

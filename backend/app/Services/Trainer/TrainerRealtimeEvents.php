@@ -4,19 +4,23 @@ namespace App\Services\Trainer;
 
 use App\Models\MemberTrainerAssignment;
 use App\Models\TrainerRealtimeEvent;
+use App\Services\RealtimeEvents;
 use Illuminate\Support\Facades\Log;
 
 /**
  * Bus de eventos real-time por entrenador. `emit()` inserta una señal de cambio
  * que el stream SSE del portal (GET /trainer/realtime) entrega al instante.
  * BEST-EFFORT: nunca lanza ni bloquea la mutación de negocio. No incluye datos
- * sensibles, solo el tipo y los módulos a refrescar. Espejo de {@see \App\Services\RealtimeEvents}.
+ * sensibles, solo el tipo y los módulos a refrescar. Espejo de {@see RealtimeEvents}.
  */
 class TrainerRealtimeEvents
 {
-    public const MEMBERS    = 'members.updated';
+    public const MEMBERS = 'members.updated';
+
     public const ASSESSMENT = 'assessment.updated';
+
     public const ATTENDANCE = 'attendance.updated';
+
     public const CLASS_EVENT = 'class.updated';
 
     /** Emite una señal de cambio para un entrenador concreto. */
@@ -28,9 +32,9 @@ class TrainerRealtimeEvents
         try {
             TrainerRealtimeEvent::create([
                 'trainer_id' => $trainerId,
-                'type'       => $type,
-                'changed'    => $changed,
-                'version'    => (int) (microtime(true) * 1000),
+                'type' => $type,
+                'changed' => $changed,
+                'version' => (int) (microtime(true) * 1000),
                 'created_at' => now(),
             ]);
 

@@ -16,9 +16,9 @@ class FakeAiSalesResponder implements AiSalesResponderInterface
 {
     /**
      * @var array<string, string[]> intent => palabras clave (sin acentos).
-     * El ORDEN importa: primero lo sensible (opt-out, médico, fraude, reclamo,
-     * pedir humano), luego cierre/pago, luego objeciones, luego objetivos, luego
-     * preguntas informativas. Lo genérico (general_info) queda al final.
+     *                              El ORDEN importa: primero lo sensible (opt-out, médico, fraude, reclamo,
+     *                              pedir humano), luego cierre/pago, luego objeciones, luego objetivos, luego
+     *                              preguntas informativas. Lo genérico (general_info) queda al final.
      */
     private const RULES = [
         SalesIntents::DO_NOT_CONTACT_REQUEST => [
@@ -141,10 +141,10 @@ class FakeAiSalesResponder implements AiSalesResponderInterface
 
     /** @var array<string, string[]> objetivo declarado → keywords. */
     private const OBJECTIVE_KEYWORDS = [
-        'fat_loss'      => ['bajar barriga', 'quitar barriga', 'bajar grasa', 'bajar de peso', 'adelgazar', 'quemar grasa', 'rebajar', 'perder peso'],
-        'muscle_gain'   => ['ganar masa', 'masa muscular', 'ganar musculo', 'ganar músculo', 'volumen', 'aumentar masa', 'ponerme fuerte'],
-        'conditioning'  => ['condicion', 'condición', 'resistencia', 'cardio'],
-        'return'        => ['volver a entrenar', 'retomar', 'volver al gym'],
+        'fat_loss' => ['bajar barriga', 'quitar barriga', 'bajar grasa', 'bajar de peso', 'adelgazar', 'quemar grasa', 'rebajar', 'perder peso'],
+        'muscle_gain' => ['ganar masa', 'masa muscular', 'ganar musculo', 'ganar músculo', 'volumen', 'aumentar masa', 'ponerme fuerte'],
+        'conditioning' => ['condicion', 'condición', 'resistencia', 'cardio'],
+        'return' => ['volver a entrenar', 'retomar', 'volver al gym'],
     ];
 
     public function classify(string $body, array $context = []): array
@@ -180,10 +180,10 @@ class FakeAiSalesResponder implements AiSalesResponderInterface
         }
 
         return [
-            'intent'           => $intent,
-            'confidence'       => $confidence,
+            'intent' => $intent,
+            'confidence' => $confidence,
             'extracted_fields' => $extracted,
-            'missing_fields'   => $missing,
+            'missing_fields' => $missing,
         ];
     }
 
@@ -194,6 +194,7 @@ class FakeAiSalesResponder implements AiSalesResponderInterface
         if ($clean === '' || mb_strlen($clean) <= 1) {
             return true;
         }
+
         // Sin ninguna secuencia de letras (solo emojis / signos / números sueltos).
         return preg_match('/[a-z]{2,}/', $clean) !== 1;
     }
@@ -213,6 +214,7 @@ class FakeAiSalesResponder implements AiSalesResponderInterface
                 }
             }
         }
+
         return [];
     }
 
@@ -220,6 +222,7 @@ class FakeAiSalesResponder implements AiSalesResponderInterface
     private function normalize(string $body): string
     {
         $lower = mb_strtolower(trim($body));
+
         return strtr($lower, [
             'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n',
         ]);

@@ -16,12 +16,12 @@ class SalesConversationMemoryService
 {
     /** Objetivos legibles (interno → texto comercial corto). */
     private const OBJECTIVE_LABELS = [
-        'fat_loss'     => 'bajar grasa',
-        'muscle_gain'  => 'ganar masa',
+        'fat_loss' => 'bajar grasa',
+        'muscle_gain' => 'ganar masa',
         'conditioning' => 'mejorar condición',
-        'return'       => 'retomar',
-        'health'       => 'salud',
-        'discipline'   => 'disciplina',
+        'return' => 'retomar',
+        'health' => 'salud',
+        'discipline' => 'disciplina',
     ];
 
     /**
@@ -31,7 +31,7 @@ class SalesConversationMemoryService
      */
     public function remember(MarketingConversation $conversation, array $decision, string $body): MarketingConversation
     {
-        $intent    = (string) ($decision['intent'] ?? SalesIntents::UNKNOWN);
+        $intent = (string) ($decision['intent'] ?? SalesIntents::UNKNOWN);
         $objective = $this->resolveObjective($conversation, $decision);
 
         $primary = $conversation->primary_intent;
@@ -41,11 +41,11 @@ class SalesConversationMemoryService
 
         $conversation->forceFill([
             'detected_objective' => $objective,
-            'lead_score'         => $decision['lead_score'] ?? $conversation->lead_score,
-            'lead_stage'         => $decision['lead_stage'] ?? $conversation->lead_stage,
-            'primary_intent'     => $primary,
-            'last_intent'        => $intent,
-            'summary'            => $this->buildSummary($conversation, $decision, $objective, $body),
+            'lead_score' => $decision['lead_score'] ?? $conversation->lead_score,
+            'lead_stage' => $decision['lead_stage'] ?? $conversation->lead_stage,
+            'primary_intent' => $primary,
+            'last_intent' => $intent,
+            'summary' => $this->buildSummary($conversation, $decision, $objective, $body),
         ])->save();
 
         return $conversation;

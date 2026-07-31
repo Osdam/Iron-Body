@@ -15,9 +15,7 @@ use Illuminate\Http\Request;
  */
 class MarketingAgentActionService
 {
-    public function __construct(private readonly MarketingAgentActionAuthorizationService $authz)
-    {
-    }
+    public function __construct(private readonly MarketingAgentActionAuthorizationService $authz) {}
 
     public function list(Request $request, ?Admin $viewer): LengthAwarePaginator
     {
@@ -60,9 +58,9 @@ class MarketingAgentActionService
     public function createSuggestion(array $data): MarketingAgentAction
     {
         return MarketingAgentAction::create(array_merge([
-            'suggested_by'      => 'ai',
-            'status'            => MarketingAgentAction::STATUS_SUGGESTED,
-            'priority'          => 'normal',
+            'suggested_by' => 'ai',
+            'status' => MarketingAgentAction::STATUS_SUGGESTED,
+            'priority' => 'normal',
             'requires_approval' => true,
         ], $data));
     }
@@ -70,9 +68,9 @@ class MarketingAgentActionService
     public function approve(MarketingAgentAction $action, ?int $adminId): MarketingAgentAction
     {
         $action->forceFill([
-            'status'               => MarketingAgentAction::STATUS_APPROVED,
+            'status' => MarketingAgentAction::STATUS_APPROVED,
             'approved_by_admin_id' => $adminId,
-            'approved_at'          => now(),
+            'approved_at' => now(),
         ])->save();
 
         return $action;
@@ -81,10 +79,10 @@ class MarketingAgentActionService
     public function reject(MarketingAgentAction $action, ?int $adminId, ?string $reason): MarketingAgentAction
     {
         $action->forceFill([
-            'status'               => MarketingAgentAction::STATUS_REJECTED,
+            'status' => MarketingAgentAction::STATUS_REJECTED,
             'rejected_by_admin_id' => $adminId,
-            'rejected_at'          => now(),
-            'rejection_reason'     => $reason !== null && trim($reason) !== '' ? trim($reason) : null,
+            'rejected_at' => now(),
+            'rejection_reason' => $reason !== null && trim($reason) !== '' ? trim($reason) : null,
         ])->save();
 
         return $action;
@@ -93,9 +91,9 @@ class MarketingAgentActionService
     public function cancel(MarketingAgentAction $action, ?int $adminId): MarketingAgentAction
     {
         $action->forceFill([
-            'status'               => MarketingAgentAction::STATUS_CANCELLED,
+            'status' => MarketingAgentAction::STATUS_CANCELLED,
             'rejected_by_admin_id' => $adminId,
-            'rejected_at'          => now(),
+            'rejected_at' => now(),
         ])->save();
 
         return $action;
@@ -105,25 +103,25 @@ class MarketingAgentActionService
     public function present(MarketingAgentAction $a): array
     {
         return [
-            'id'                        => $a->id,
-            'uuid'                      => $a->uuid,
-            'marketing_lead_id'         => $a->marketing_lead_id,
+            'id' => $a->id,
+            'uuid' => $a->uuid,
+            'marketing_lead_id' => $a->marketing_lead_id,
             'marketing_conversation_id' => $a->marketing_conversation_id,
-            'suggested_by'              => $a->suggested_by,
-            'action_type'               => $a->action_type,
-            'status'                    => $a->status,
-            'priority'                  => $a->priority,
-            'title'                     => $a->title,
-            'reason'                    => $a->reason,
-            'payload'                   => $a->payload,
-            'result'                    => $a->result,
-            'confidence'                => $a->confidence,
-            'requires_approval'         => (bool) $a->requires_approval,
-            'rejection_reason'          => $a->rejection_reason,
-            'failed_reason'             => $a->failed_reason,
-            'executed_at'               => $a->executed_at?->toIso8601String(),
-            'created_at'                => $a->created_at?->toIso8601String(),
-            'lead'                      => $a->lead ? ['id' => $a->lead->id, 'name' => $a->lead->name, 'phone' => $a->lead->phone] : null,
+            'suggested_by' => $a->suggested_by,
+            'action_type' => $a->action_type,
+            'status' => $a->status,
+            'priority' => $a->priority,
+            'title' => $a->title,
+            'reason' => $a->reason,
+            'payload' => $a->payload,
+            'result' => $a->result,
+            'confidence' => $a->confidence,
+            'requires_approval' => (bool) $a->requires_approval,
+            'rejection_reason' => $a->rejection_reason,
+            'failed_reason' => $a->failed_reason,
+            'executed_at' => $a->executed_at?->toIso8601String(),
+            'created_at' => $a->created_at?->toIso8601String(),
+            'lead' => $a->lead ? ['id' => $a->lead->id, 'name' => $a->lead->name, 'phone' => $a->lead->phone] : null,
         ];
     }
 }

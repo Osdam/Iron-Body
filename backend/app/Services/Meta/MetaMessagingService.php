@@ -15,9 +15,7 @@ use Throwable;
  */
 class MetaMessagingService
 {
-    public function __construct(private readonly MetaAuthService $auth)
-    {
-    }
+    public function __construct(private readonly MetaAuthService $auth) {}
 
     /**
      * Envía texto a un usuario de WhatsApp por su phone number id.
@@ -28,6 +26,7 @@ class MetaMessagingService
     {
         if (! $this->auth->isConfigured()) {
             Log::info('meta.messaging.skipped', ['reason' => 'disabled_or_unconfigured', 'channel' => 'whatsapp']);
+
             return null;
         }
 
@@ -41,19 +40,21 @@ class MetaMessagingService
                 ->timeout($this->auth->timeout())
                 ->post($this->auth->graphUrl("{$phoneNumberId}/messages"), [
                     'messaging_product' => 'whatsapp',
-                    'to'                => $toWaId,
-                    'type'              => 'text',
-                    'text'              => ['body' => $body],
+                    'to' => $toWaId,
+                    'type' => 'text',
+                    'text' => ['body' => $body],
                 ]);
 
             if ($resp->failed()) {
                 Log::warning('meta.messaging.failed', ['status' => $resp->status(), 'channel' => 'whatsapp']);
+
                 return null;
             }
 
             return $resp->json('messages.0.id');
         } catch (Throwable $e) {
             Log::warning('meta.messaging.exception', ['error' => class_basename($e), 'channel' => 'whatsapp']);
+
             return null;
         }
     }

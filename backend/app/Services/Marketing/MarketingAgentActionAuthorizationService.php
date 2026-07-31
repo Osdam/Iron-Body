@@ -14,10 +14,15 @@ use App\Models\MarketingConversation;
 class MarketingAgentActionAuthorizationService
 {
     public const CAP_VIEW = 'view';
+
     public const CAP_RECOMMEND = 'recommend';
+
     public const CAP_APPROVE = 'approve';
+
     public const CAP_REJECT = 'reject';
+
     public const CAP_EXECUTE = 'execute';
+
     public const CAP_CANCEL = 'cancel';
 
     public const ALL_CAPS = [
@@ -26,6 +31,7 @@ class MarketingAgentActionAuthorizationService
     ];
 
     private const FULL_ROLES = ['super admin', 'administrador', 'admin'];
+
     private const COMMERCIAL_ROLES = ['asesor comercial', 'asesor', 'ventas', 'recepción', 'recepcion'];
 
     /** Tipos que un asesor (comercial) puede EJECUTAR directamente. */
@@ -48,9 +54,7 @@ class MarketingAgentActionAuthorizationService
         MarketingAgentAction::TYPE_REQUEST_STAFF_REVIEW,
     ];
 
-    public function __construct(private readonly MarketingAppointmentAuthorizationService $agendaAuthz)
-    {
-    }
+    public function __construct(private readonly MarketingAppointmentAuthorizationService $agendaAuthz) {}
 
     public function isFull(?Admin $admin): bool
     {

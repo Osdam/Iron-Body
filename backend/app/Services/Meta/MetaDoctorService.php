@@ -11,9 +11,7 @@ namespace App\Services\Meta;
  */
 class MetaDoctorService
 {
-    public function __construct(private readonly MetaAuthService $auth)
-    {
-    }
+    public function __construct(private readonly MetaAuthService $auth) {}
 
     /**
      * @return array<string,mixed> reporte saneado (sin valores sensibles).
@@ -23,13 +21,13 @@ class MetaDoctorService
         $enabled = (bool) config('meta.enabled');
 
         $present = [
-            'access_token'                 => $this->isSet(config('meta.access_token')),
-            'app_secret'                   => $this->isSet(config('meta.app_secret')),
-            'verify_token'                 => $this->isSet(config('meta.verify_token')),
-            'webhook_secret'               => $this->isSet(config('meta.webhook_secret')),
+            'access_token' => $this->isSet(config('meta.access_token')),
+            'app_secret' => $this->isSet(config('meta.app_secret')),
+            'verify_token' => $this->isSet(config('meta.verify_token')),
+            'webhook_secret' => $this->isSet(config('meta.webhook_secret')),
             'whatsapp_business_account_id' => $this->isSet(config('meta.whatsapp_business_account_id')),
-            'whatsapp_phone_number_id'     => $this->isSet(config('meta.whatsapp_phone_number_id')),
-            'whatsapp_display_phone'       => $this->isSet(config('meta.whatsapp_display_phone')),
+            'whatsapp_phone_number_id' => $this->isSet(config('meta.whatsapp_phone_number_id')),
+            'whatsapp_display_phone' => $this->isSet(config('meta.whatsapp_display_phone')),
         ];
 
         // MetaMessagingService considera "configurado" = enabled + access_token + app_secret.
@@ -39,16 +37,16 @@ class MetaDoctorService
         $sendMode = $liveSendAllowed ? 'real' : 'dry_run';
 
         return [
-            'enabled'          => $enabled,
-            'graph_version'    => (string) config('meta.graph_version'),
-            'present'          => $present,
-            'auth_configured'  => $authConfigured,
+            'enabled' => $enabled,
+            'graph_version' => (string) config('meta.graph_version'),
+            'present' => $present,
+            'auth_configured' => $authConfigured,
             'live_send_allowed' => $liveSendAllowed,
-            'send_mode'        => $sendMode,
-            'webhook_url'      => $this->expectedWebhookUrl(),
-            'webhook'          => $this->webhookSection($enabled, $present, $liveSendAllowed),
-            'missing'          => $this->missing($enabled, $present),
-            'suggestions'      => $this->suggestions($enabled, $present, $liveSendAllowed),
+            'send_mode' => $sendMode,
+            'webhook_url' => $this->expectedWebhookUrl(),
+            'webhook' => $this->webhookSection($enabled, $present, $liveSendAllowed),
+            'missing' => $this->missing($enabled, $present),
+            'suggestions' => $this->suggestions($enabled, $present, $liveSendAllowed),
         ];
     }
 
@@ -58,17 +56,17 @@ class MetaDoctorService
         [$get, $post] = $this->webhookRoutesExist();
 
         return [
-            'get_route_exists'         => $get,
-            'post_route_exists'        => $post,
-            'verify_token'             => $present['verify_token'],
-            'webhook_secret'           => $present['webhook_secret'],
+            'get_route_exists' => $get,
+            'post_route_exists' => $post,
+            'verify_token' => $present['verify_token'],
+            'webhook_secret' => $present['webhook_secret'],
             'whatsapp_phone_number_id' => $present['whatsapp_phone_number_id'],
-            'inbound_meta_enabled'     => (bool) config('marketing.inbound.meta_enabled', true),
-            'inbound_auto_analyze'     => (bool) config('marketing.inbound.auto_analyze', true),
-            'inbound_auto_execute'     => (bool) config('marketing.inbound.auto_execute', false),
-            'meta_enabled'             => $enabled,
+            'inbound_meta_enabled' => (bool) config('marketing.inbound.meta_enabled', true),
+            'inbound_auto_analyze' => (bool) config('marketing.inbound.auto_analyze', true),
+            'inbound_auto_execute' => (bool) config('marketing.inbound.auto_execute', false),
+            'meta_enabled' => $enabled,
             // Modo efectivo de envío de respuestas: real solo si Meta está listo.
-            'effective_mode'           => $liveSendAllowed ? 'real' : 'dry_run',
+            'effective_mode' => $liveSendAllowed ? 'real' : 'dry_run',
         ];
     }
 
@@ -83,6 +81,7 @@ class MetaDoctorService
                 $post = $post || in_array('POST', $methods, true);
             }
         }
+
         return [$get, $post];
     }
 
@@ -108,6 +107,7 @@ class MetaDoctorService
         if (! $present['whatsapp_phone_number_id']) {
             $missing[] = 'META_WHATSAPP_PHONE_NUMBER_ID';
         }
+
         return $missing;
     }
 
@@ -135,6 +135,7 @@ class MetaDoctorService
             $tips[] = 'Define META_VERIFY_TOKEN para verificar el webhook (GET hub.verify_token).';
         }
         $tips[] = 'Tras completar .env: php artisan config:clear && php artisan meta:doctor.';
+
         return $tips;
     }
 

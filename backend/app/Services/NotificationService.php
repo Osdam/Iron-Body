@@ -3,9 +3,12 @@
 namespace App\Services;
 
 use App\Models\Member;
+use App\Models\MemberSupportTicket;
 use App\Models\Notification;
+use App\Services\Fcm\FcmService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Throwable;
 
 /**
@@ -31,37 +34,37 @@ class NotificationService
     {
         $this->safe(function () use ($member, $payment): void {
             $reference = $this->attr($payment, 'reference');
-            $amount    = (float) $this->attr($payment, 'amount', 0);
-            $money     = $this->formatCop($amount);
-            $name      = $member?->full_name ?? 'Miembro';
+            $amount = (float) $this->attr($payment, 'amount', 0);
+            $money = $this->formatCop($amount);
+            $name = $member?->full_name ?? 'Miembro';
 
             $payload = array_filter([
                 'reference' => $reference,
-                'amount'    => $amount,
+                'amount' => $amount,
             ], fn ($v) => $v !== null);
 
             $this->createMemberNotification($member, [
-                'type'        => 'payment',
-                'title'       => 'Pago aprobado',
-                'message'     => "Tu pago de {$money} fue aprobado correctamente.",
-                'priority'    => 'medium',
+                'type' => 'payment',
+                'title' => 'Pago aprobado',
+                'message' => "Tu pago de {$money} fue aprobado correctamente.",
+                'priority' => 'medium',
                 'should_popup' => true,
                 'action_type' => 'payment_detail',
                 'action_payload' => $payload,
-                'metadata'    => ['reference' => $reference, 'amount' => $amount, 'member_name' => $name, 'source_event' => 'payment_approved'],
-                'event_key'   => $reference ? "payment_approved_{$reference}" : null,
+                'metadata' => ['reference' => $reference, 'amount' => $amount, 'member_name' => $name, 'source_event' => 'payment_approved'],
+                'event_key' => $reference ? "payment_approved_{$reference}" : null,
             ]);
 
             $this->createAdminNotification([
-                'type'        => 'payment',
-                'title'       => 'Pago aprobado',
-                'message'     => "{$name} pagó {$money}" . ($reference ? " (ref. {$reference})." : '.'),
-                'priority'    => 'low',
-                'member'      => $member,
+                'type' => 'payment',
+                'title' => 'Pago aprobado',
+                'message' => "{$name} pagó {$money}".($reference ? " (ref. {$reference})." : '.'),
+                'priority' => 'low',
+                'member' => $member,
                 'action_type' => 'payment_detail',
                 'action_payload' => $payload,
-                'metadata'    => ['reference' => $reference, 'amount' => $amount, 'member_name' => $name],
-                'event_key'   => $reference ? "admin_payment_approved_{$reference}" : null,
+                'metadata' => ['reference' => $reference, 'amount' => $amount, 'member_name' => $name],
+                'event_key' => $reference ? "admin_payment_approved_{$reference}" : null,
             ]);
         });
     }
@@ -71,37 +74,37 @@ class NotificationService
     {
         $this->safe(function () use ($member, $payment): void {
             $reference = $this->attr($payment, 'reference');
-            $amount    = (float) $this->attr($payment, 'amount', 0);
-            $money     = $this->formatCop($amount);
-            $reason    = $this->attr($payment, 'failure_reason');
-            $name      = $member?->full_name ?? 'Miembro';
+            $amount = (float) $this->attr($payment, 'amount', 0);
+            $money = $this->formatCop($amount);
+            $reason = $this->attr($payment, 'failure_reason');
+            $name = $member?->full_name ?? 'Miembro';
 
             $payload = array_filter([
                 'reference' => $reference,
-                'amount'    => $amount,
+                'amount' => $amount,
             ], fn ($v) => $v !== null);
 
             $this->createMemberNotification($member, [
-                'type'        => 'payment',
-                'title'       => 'Pago rechazado',
-                'message'     => "Tu pago de {$money} no pudo procesarse. No se realizó ningún cobro.",
-                'priority'    => 'high',
+                'type' => 'payment',
+                'title' => 'Pago rechazado',
+                'message' => "Tu pago de {$money} no pudo procesarse. No se realizó ningún cobro.",
+                'priority' => 'high',
                 'action_type' => 'payment_detail',
                 'action_payload' => $payload,
-                'metadata'    => ['reference' => $reference, 'amount' => $amount, 'reason' => $reason, 'member_name' => $name],
-                'event_key'   => $reference ? "payment_rejected_{$reference}" : null,
+                'metadata' => ['reference' => $reference, 'amount' => $amount, 'reason' => $reason, 'member_name' => $name],
+                'event_key' => $reference ? "payment_rejected_{$reference}" : null,
             ]);
 
             $this->createAdminNotification([
-                'type'        => 'payment',
-                'title'       => 'Pago rechazado',
-                'message'     => "El pago de {$name} por {$money} fue rechazado" . ($reference ? " (ref. {$reference})." : '.'),
-                'priority'    => 'medium',
-                'member'      => $member,
+                'type' => 'payment',
+                'title' => 'Pago rechazado',
+                'message' => "El pago de {$name} por {$money} fue rechazado".($reference ? " (ref. {$reference})." : '.'),
+                'priority' => 'medium',
+                'member' => $member,
                 'action_type' => 'payment_detail',
                 'action_payload' => $payload,
-                'metadata'    => ['reference' => $reference, 'amount' => $amount, 'reason' => $reason, 'member_name' => $name],
-                'event_key'   => $reference ? "admin_payment_rejected_{$reference}" : null,
+                'metadata' => ['reference' => $reference, 'amount' => $amount, 'reason' => $reason, 'member_name' => $name],
+                'event_key' => $reference ? "admin_payment_rejected_{$reference}" : null,
             ]);
         });
     }
@@ -117,30 +120,30 @@ class NotificationService
     {
         $this->safe(function () use ($member, $membership): void {
             $planName = $this->attr($membership, 'name') ?? $this->attr($membership, 'plan') ?? 'tu plan';
-            $planId   = $this->attr($membership, 'id') ?? $this->attr($membership, 'plan_id');
-            $endDate  = $this->attr($membership, 'membership_end_date') ?? $this->attr($membership, 'end_date');
-            $name     = $member?->full_name ?? 'Miembro';
+            $planId = $this->attr($membership, 'id') ?? $this->attr($membership, 'plan_id');
+            $endDate = $this->attr($membership, 'membership_end_date') ?? $this->attr($membership, 'end_date');
+            $name = $member?->full_name ?? 'Miembro';
 
             $this->createMemberNotification($member, [
-                'type'        => 'membership',
-                'title'       => 'Membresía activada',
-                'message'     => "Tu plan {$planName} quedó activo. ¡A entrenar!",
-                'priority'    => 'medium',
+                'type' => 'membership',
+                'title' => 'Membresía activada',
+                'message' => "Tu plan {$planName} quedó activo. ¡A entrenar!",
+                'priority' => 'medium',
                 'should_popup' => true,
                 'action_type' => 'membership_detail',
                 'action_payload' => array_filter(['plan_id' => $planId, 'plan' => $planName]),
-                'metadata'    => ['plan' => $planName, 'plan_id' => $planId, 'end_date' => $endDate, 'member_name' => $name, 'source_event' => 'membership_activated'],
-                'event_key'   => ($member && $planId) ? "membership_activated_{$member->id}_{$planId}" : null,
+                'metadata' => ['plan' => $planName, 'plan_id' => $planId, 'end_date' => $endDate, 'member_name' => $name, 'source_event' => 'membership_activated'],
+                'event_key' => ($member && $planId) ? "membership_activated_{$member->id}_{$planId}" : null,
             ]);
 
             $this->createAdminNotification([
-                'type'        => 'membership',
-                'title'       => 'Membresía activada',
-                'message'     => "{$name} activó el plan {$planName}.",
-                'priority'    => 'low',
-                'member'      => $member,
-                'metadata'    => ['plan' => $planName, 'plan_id' => $planId, 'member_name' => $name],
-                'event_key'   => ($member && $planId) ? "admin_membership_activated_{$member->id}_{$planId}" : null,
+                'type' => 'membership',
+                'title' => 'Membresía activada',
+                'message' => "{$name} activó el plan {$planName}.",
+                'priority' => 'low',
+                'member' => $member,
+                'metadata' => ['plan' => $planName, 'plan_id' => $planId, 'member_name' => $name],
+                'event_key' => ($member && $planId) ? "admin_membership_activated_{$member->id}_{$planId}" : null,
             ]);
         });
     }
@@ -150,19 +153,19 @@ class NotificationService
     {
         $this->safe(function () use ($member, $membership): void {
             $planName = $this->attr($membership, 'name') ?? $this->attr($membership, 'plan') ?? 'tu plan';
-            $endDate  = $this->attr($membership, 'membership_end_date') ?? $this->attr($membership, 'end_date');
-            $endStr   = $endDate ? (string) $endDate : 'pronto';
-            $name     = $member?->full_name ?? 'Miembro';
+            $endDate = $this->attr($membership, 'membership_end_date') ?? $this->attr($membership, 'end_date');
+            $endStr = $endDate ? (string) $endDate : 'pronto';
+            $name = $member?->full_name ?? 'Miembro';
 
             $this->createMemberNotification($member, [
-                'type'        => 'membership',
-                'title'       => 'Tu membresía está por vencer',
-                'message'     => "Tu plan {$planName} vence el {$endStr}. Renueva para no perder tu acceso.",
-                'priority'    => 'high',
+                'type' => 'membership',
+                'title' => 'Tu membresía está por vencer',
+                'message' => "Tu plan {$planName} vence el {$endStr}. Renueva para no perder tu acceso.",
+                'priority' => 'high',
                 'action_type' => 'membership_renew',
                 'action_payload' => array_filter(['plan' => $planName, 'end_date' => $endDate]),
-                'metadata'    => ['plan' => $planName, 'end_date' => $endDate, 'member_name' => $name],
-                'event_key'   => ($member && $endDate) ? "membership_expiring_{$member->id}_{$endStr}" : null,
+                'metadata' => ['plan' => $planName, 'end_date' => $endDate, 'member_name' => $name],
+                'event_key' => ($member && $endDate) ? "membership_expiring_{$member->id}_{$endStr}" : null,
             ]);
         });
     }
@@ -172,29 +175,29 @@ class NotificationService
     {
         $this->safe(function () use ($member, $membership): void {
             $planName = $this->attr($membership, 'name') ?? $this->attr($membership, 'plan') ?? 'tu plan';
-            $endDate  = $this->attr($membership, 'membership_end_date') ?? $this->attr($membership, 'end_date');
-            $endStr   = $endDate ? (string) $endDate : '';
-            $name     = $member?->full_name ?? 'Miembro';
+            $endDate = $this->attr($membership, 'membership_end_date') ?? $this->attr($membership, 'end_date');
+            $endStr = $endDate ? (string) $endDate : '';
+            $name = $member?->full_name ?? 'Miembro';
 
             $this->createMemberNotification($member, [
-                'type'        => 'membership',
-                'title'       => 'Tu membresía venció',
-                'message'     => "Tu plan {$planName} venció. Renueva para recuperar tu acceso completo.",
-                'priority'    => 'high',
+                'type' => 'membership',
+                'title' => 'Tu membresía venció',
+                'message' => "Tu plan {$planName} venció. Renueva para recuperar tu acceso completo.",
+                'priority' => 'high',
                 'action_type' => 'membership_renew',
                 'action_payload' => array_filter(['plan' => $planName, 'end_date' => $endDate]),
-                'metadata'    => ['plan' => $planName, 'end_date' => $endDate, 'member_name' => $name],
-                'event_key'   => ($member && $endStr) ? "membership_expired_{$member->id}_{$endStr}" : null,
+                'metadata' => ['plan' => $planName, 'end_date' => $endDate, 'member_name' => $name],
+                'event_key' => ($member && $endStr) ? "membership_expired_{$member->id}_{$endStr}" : null,
             ]);
 
             $this->createAdminNotification([
-                'type'        => 'membership',
-                'title'       => 'Membresía vencida',
-                'message'     => "La membresía de {$name} ({$planName}) venció.",
-                'priority'    => 'low',
-                'member'      => $member,
-                'metadata'    => ['plan' => $planName, 'end_date' => $endDate, 'member_name' => $name],
-                'event_key'   => ($member && $endStr) ? "admin_membership_expired_{$member->id}_{$endStr}" : null,
+                'type' => 'membership',
+                'title' => 'Membresía vencida',
+                'message' => "La membresía de {$name} ({$planName}) venció.",
+                'priority' => 'low',
+                'member' => $member,
+                'metadata' => ['plan' => $planName, 'end_date' => $endDate, 'member_name' => $name],
+                'event_key' => ($member && $endStr) ? "admin_membership_expired_{$member->id}_{$endStr}" : null,
             ]);
         });
     }
@@ -207,18 +210,18 @@ class NotificationService
     {
         $this->safe(function () use ($member, $plan): void {
             $planName = $plan && trim($plan) !== '' ? trim($plan) : 'tu plan';
-            $name     = $member?->full_name ?? 'Miembro';
-            $slug     = \Illuminate\Support\Str::slug($planName) ?: 'plan';
+            $name = $member?->full_name ?? 'Miembro';
+            $slug = Str::slug($planName) ?: 'plan';
 
             $this->createMemberNotification($member, [
-                'type'        => 'membership',
-                'title'       => 'Tu plan fue actualizado',
-                'message'     => "Tu plan ahora es {$planName}.",
-                'priority'    => 'medium',
+                'type' => 'membership',
+                'title' => 'Tu plan fue actualizado',
+                'message' => "Tu plan ahora es {$planName}.",
+                'priority' => 'medium',
                 'action_type' => 'membership_detail',
                 'action_payload' => array_filter(['plan' => $plan]),
-                'metadata'    => ['plan' => $planName, 'member_name' => $name],
-                'event_key'   => $member ? "membership_plan_changed_{$member->id}_{$slug}_" . now()->toDateString() : null,
+                'metadata' => ['plan' => $planName, 'member_name' => $name],
+                'event_key' => $member ? "membership_plan_changed_{$member->id}_{$slug}_".now()->toDateString() : null,
             ]);
         });
     }
@@ -229,36 +232,36 @@ class NotificationService
     public function notifyClassReserved($member, $class): void
     {
         $this->safe(function () use ($member, $class): void {
-            $classId   = $this->attr($class, 'id');
-            $className  = $this->attr($class, 'name') ?? 'una clase';
-            $when       = $this->classWhenLabel($class);
-            $name       = $member?->full_name ?? 'Miembro';
-            $payload    = array_filter(['class_id' => $classId]);
-            $meta       = ['class_id' => $classId, 'class' => $className, 'member_name' => $name];
+            $classId = $this->attr($class, 'id');
+            $className = $this->attr($class, 'name') ?? 'una clase';
+            $when = $this->classWhenLabel($class);
+            $name = $member?->full_name ?? 'Miembro';
+            $payload = array_filter(['class_id' => $classId]);
+            $meta = ['class_id' => $classId, 'class' => $className, 'member_name' => $name];
 
             $this->createMemberNotification($member, [
-                'type'        => 'class',
-                'title'       => 'Clase reservada',
-                'message'     => "Reservaste {$className}" . ($when ? " · {$when}." : '.'),
-                'priority'    => 'medium',
+                'type' => 'class',
+                'title' => 'Clase reservada',
+                'message' => "Reservaste {$className}".($when ? " · {$when}." : '.'),
+                'priority' => 'medium',
                 'should_popup' => true,
                 'action_type' => 'class_detail',
                 'action_payload' => $payload,
-                'metadata'    => $meta + ['source_event' => 'class_reserved'],
-                'event_key'   => ($member && $classId) ? "class_reserved_{$classId}_{$member->id}" : null,
+                'metadata' => $meta + ['source_event' => 'class_reserved'],
+                'event_key' => ($member && $classId) ? "class_reserved_{$classId}_{$member->id}" : null,
             ]);
 
             // Aviso operativo al CRM (sin event_key: puede reservar/cancelar varias veces).
             $this->createAdminNotification([
-                'type'        => 'class',
-                'title'       => 'Nueva reserva de clase',
-                'message'     => "{$name} reservó {$className}" . ($when ? " · {$when}." : '.'),
-                'priority'    => 'low',
-                'member'      => $member,
+                'type' => 'class',
+                'title' => 'Nueva reserva de clase',
+                'message' => "{$name} reservó {$className}".($when ? " · {$when}." : '.'),
+                'priority' => 'low',
+                'member' => $member,
                 'action_type' => 'class_detail',
                 'action_payload' => $payload,
-                'metadata'    => $meta,
-                'event_key'   => null,
+                'metadata' => $meta,
+                'event_key' => null,
             ]);
         });
     }
@@ -267,34 +270,34 @@ class NotificationService
     public function notifyClassReservationCancelled($member, $class): void
     {
         $this->safe(function () use ($member, $class): void {
-            $classId   = $this->attr($class, 'id');
-            $className  = $this->attr($class, 'name') ?? 'una clase';
-            $name       = $member?->full_name ?? 'Miembro';
-            $payload    = array_filter(['class_id' => $classId]);
-            $meta       = ['class_id' => $classId, 'class' => $className, 'member_name' => $name];
+            $classId = $this->attr($class, 'id');
+            $className = $this->attr($class, 'name') ?? 'una clase';
+            $name = $member?->full_name ?? 'Miembro';
+            $payload = array_filter(['class_id' => $classId]);
+            $meta = ['class_id' => $classId, 'class' => $className, 'member_name' => $name];
 
             $this->createMemberNotification($member, [
-                'type'        => 'class',
-                'title'       => 'Reserva cancelada',
-                'message'     => "Cancelaste tu reserva de {$className}.",
-                'priority'    => 'low',
+                'type' => 'class',
+                'title' => 'Reserva cancelada',
+                'message' => "Cancelaste tu reserva de {$className}.",
+                'priority' => 'low',
                 'action_type' => 'class_detail',
                 'action_payload' => $payload,
-                'metadata'    => $meta,
+                'metadata' => $meta,
                 // Sin event_key: una clase puede reservarse/cancelarse varias veces.
-                'event_key'   => null,
+                'event_key' => null,
             ]);
 
             $this->createAdminNotification([
-                'type'        => 'class',
-                'title'       => 'Reserva cancelada',
-                'message'     => "{$name} canceló su reserva de {$className}.",
-                'priority'    => 'low',
-                'member'      => $member,
+                'type' => 'class',
+                'title' => 'Reserva cancelada',
+                'message' => "{$name} canceló su reserva de {$className}.",
+                'priority' => 'low',
+                'member' => $member,
                 'action_type' => 'class_detail',
                 'action_payload' => $payload,
-                'metadata'    => $meta,
-                'event_key'   => null,
+                'metadata' => $meta,
+                'event_key' => null,
             ]);
         });
     }
@@ -328,19 +331,19 @@ class NotificationService
             $stamp = now()->format('YmdHi');
 
             $this->createMemberNotification($member, [
-                'type'           => 'class',
-                'title'          => $title,
-                'message'        => $message,
-                'priority'       => $failed > 0 ? 'medium' : 'low',
-                'should_popup'   => true,
-                'action_type'    => 'classes_weekly',
+                'type' => 'class',
+                'title' => $title,
+                'message' => $message,
+                'priority' => $failed > 0 ? 'medium' : 'low',
+                'should_popup' => true,
+                'action_type' => 'classes_weekly',
                 'action_payload' => ['reserved' => $reserved, 'failed' => $failed],
-                'metadata'       => [
+                'metadata' => [
                     'source_event' => 'weekly_plan_confirmed',
-                    'reserved'     => $reserved,
-                    'failed'       => $failed,
+                    'reserved' => $reserved,
+                    'failed' => $failed,
                 ],
-                'event_key'      => ($member && $member->id) ? "weekly_plan_{$member->id}_{$stamp}" : null,
+                'event_key' => ($member && $member->id) ? "weekly_plan_{$member->id}_{$stamp}" : null,
             ]);
         });
     }
@@ -352,35 +355,35 @@ class NotificationService
     public function notifyClassCreated($class): void
     {
         $this->safe(function () use ($class): void {
-            $classId   = $this->attr($class, 'id');
-            $className  = $this->attr($class, 'name') ?? 'una clase';
-            $type       = $this->attr($class, 'type');
-            $when       = $this->classWhenLabel($class);
-            $payload    = array_filter(['class_id' => $classId]);
-            $meta       = array_filter(['class_id' => $classId, 'class' => $className, 'type' => $type]);
+            $classId = $this->attr($class, 'id');
+            $className = $this->attr($class, 'name') ?? 'una clase';
+            $type = $this->attr($class, 'type');
+            $when = $this->classWhenLabel($class);
+            $payload = array_filter(['class_id' => $classId]);
+            $meta = array_filter(['class_id' => $classId, 'class' => $className, 'type' => $type]);
 
             $this->createAdminNotification([
-                'type'        => 'class',
-                'title'       => 'Clase creada',
-                'message'     => "Se creó la clase {$className}" . ($when ? " · {$when}." : '.'),
-                'priority'    => 'low',
+                'type' => 'class',
+                'title' => 'Clase creada',
+                'message' => "Se creó la clase {$className}".($when ? " · {$when}." : '.'),
+                'priority' => 'low',
                 'action_type' => 'class_detail',
                 'action_payload' => $payload,
-                'metadata'    => $meta,
-                'event_key'   => $classId ? "admin_class_created_{$classId}" : null,
+                'metadata' => $meta,
+                'event_key' => $classId ? "admin_class_created_{$classId}" : null,
             ]);
 
             // Broadcast a miembros solo si la clase es reservable online.
             if ($this->attr($class, 'allow_online_booking')) {
                 $this->createMemberNotification(null, [
-                    'type'        => 'class',
-                    'title'       => 'Nueva clase disponible',
-                    'message'     => "Nueva clase: {$className}" . ($when ? " · {$when}." : '.') . ' Reserva tu cupo.',
-                    'priority'    => 'low',
+                    'type' => 'class',
+                    'title' => 'Nueva clase disponible',
+                    'message' => "Nueva clase: {$className}".($when ? " · {$when}." : '.').' Reserva tu cupo.',
+                    'priority' => 'low',
                     'action_type' => 'class_detail',
                     'action_payload' => $payload,
-                    'metadata'    => $meta,
-                    'event_key'   => $classId ? "class_created_broadcast_{$classId}" : null,
+                    'metadata' => $meta,
+                    'event_key' => $classId ? "class_created_broadcast_{$classId}" : null,
                 ]);
             }
         });
@@ -395,34 +398,34 @@ class NotificationService
     public function notifyClassUpdated($class, iterable $members): void
     {
         $this->safe(function () use ($class, $members): void {
-            $classId   = $this->attr($class, 'id');
-            $className  = $this->attr($class, 'name') ?? 'tu clase';
-            $when       = $this->classWhenLabel($class);
-            $hash       = substr(md5((string) ($this->attr($class, 'updated_at') ?? now())), 0, 8);
-            $payload    = array_filter(['class_id' => $classId]);
+            $classId = $this->attr($class, 'id');
+            $className = $this->attr($class, 'name') ?? 'tu clase';
+            $when = $this->classWhenLabel($class);
+            $hash = substr(md5((string) ($this->attr($class, 'updated_at') ?? now())), 0, 8);
+            $payload = array_filter(['class_id' => $classId]);
 
             foreach ($members as $member) {
                 $this->createMemberNotification($member, [
-                    'type'        => 'class',
-                    'title'       => 'Clase actualizada',
-                    'message'     => "Tu clase {$className} fue actualizada" . ($when ? " · {$when}." : '. Revisa los nuevos detalles.'),
-                    'priority'    => 'medium',
+                    'type' => 'class',
+                    'title' => 'Clase actualizada',
+                    'message' => "Tu clase {$className} fue actualizada".($when ? " · {$when}." : '. Revisa los nuevos detalles.'),
+                    'priority' => 'medium',
                     'action_type' => 'class_detail',
                     'action_payload' => $payload,
-                    'metadata'    => ['class_id' => $classId, 'class' => $className, 'member_name' => $member?->full_name],
-                    'event_key'   => ($member && $classId) ? "class_updated_{$classId}_{$member->id}_{$hash}" : null,
+                    'metadata' => ['class_id' => $classId, 'class' => $className, 'member_name' => $member?->full_name],
+                    'event_key' => ($member && $classId) ? "class_updated_{$classId}_{$member->id}_{$hash}" : null,
                 ]);
             }
 
             $this->createAdminNotification([
-                'type'        => 'class',
-                'title'       => 'Clase actualizada',
-                'message'     => "Se actualizó la clase {$className}.",
-                'priority'    => 'low',
+                'type' => 'class',
+                'title' => 'Clase actualizada',
+                'message' => "Se actualizó la clase {$className}.",
+                'priority' => 'low',
                 'action_type' => 'class_detail',
                 'action_payload' => $payload,
-                'metadata'    => array_filter(['class_id' => $classId, 'class' => $className]),
-                'event_key'   => $classId ? "admin_class_updated_{$classId}_{$hash}" : null,
+                'metadata' => array_filter(['class_id' => $classId, 'class' => $className]),
+                'event_key' => $classId ? "admin_class_updated_{$classId}_{$hash}" : null,
             ]);
         });
     }
@@ -436,32 +439,32 @@ class NotificationService
     public function notifyClassCancelled($class, iterable $members = []): void
     {
         $this->safe(function () use ($class, $members): void {
-            $classId   = $this->attr($class, 'id');
-            $className  = $this->attr($class, 'name') ?? 'una clase';
-            $payload    = array_filter(['class_id' => $classId]);
+            $classId = $this->attr($class, 'id');
+            $className = $this->attr($class, 'name') ?? 'una clase';
+            $payload = array_filter(['class_id' => $classId]);
 
             foreach ($members as $member) {
                 $this->createMemberNotification($member, [
-                    'type'        => 'class',
-                    'title'       => 'Clase cancelada',
-                    'message'     => "La clase {$className} fue cancelada. Tu reserva ya no está activa.",
-                    'priority'    => 'high',
+                    'type' => 'class',
+                    'title' => 'Clase cancelada',
+                    'message' => "La clase {$className} fue cancelada. Tu reserva ya no está activa.",
+                    'priority' => 'high',
                     'action_type' => 'class_detail',
                     'action_payload' => $payload,
-                    'metadata'    => ['class_id' => $classId, 'class' => $className, 'member_name' => $member?->full_name],
-                    'event_key'   => ($member && $classId) ? "class_cancelled_{$classId}_{$member->id}" : null,
+                    'metadata' => ['class_id' => $classId, 'class' => $className, 'member_name' => $member?->full_name],
+                    'event_key' => ($member && $classId) ? "class_cancelled_{$classId}_{$member->id}" : null,
                 ]);
             }
 
             $this->createAdminNotification([
-                'type'        => 'class',
-                'title'       => 'Clase cancelada',
-                'message'     => "Se canceló la clase {$className}.",
-                'priority'    => 'low',
+                'type' => 'class',
+                'title' => 'Clase cancelada',
+                'message' => "Se canceló la clase {$className}.",
+                'priority' => 'low',
                 'action_type' => 'class_detail',
                 'action_payload' => $payload,
-                'metadata'    => array_filter(['class_id' => $classId, 'class' => $className]),
-                'event_key'   => $classId ? "admin_class_cancelled_{$classId}" : null,
+                'metadata' => array_filter(['class_id' => $classId, 'class' => $className]),
+                'event_key' => $classId ? "admin_class_cancelled_{$classId}" : null,
             ]);
         });
     }
@@ -470,18 +473,18 @@ class NotificationService
     public function notifyClassFull($class): void
     {
         $this->safe(function () use ($class): void {
-            $classId   = $this->attr($class, 'id');
-            $className  = $this->attr($class, 'name') ?? 'una clase';
+            $classId = $this->attr($class, 'id');
+            $className = $this->attr($class, 'name') ?? 'una clase';
 
             $this->createAdminNotification([
-                'type'        => 'class',
-                'title'       => 'Clase sin cupos',
-                'message'     => "La clase {$className} alcanzó su cupo máximo.",
-                'priority'    => 'low',
+                'type' => 'class',
+                'title' => 'Clase sin cupos',
+                'message' => "La clase {$className} alcanzó su cupo máximo.",
+                'priority' => 'low',
                 'action_type' => 'class_detail',
                 'action_payload' => array_filter(['class_id' => $classId]),
-                'metadata'    => array_filter(['class_id' => $classId, 'class' => $className]),
-                'event_key'   => $classId ? "class_full_{$classId}" : null,
+                'metadata' => array_filter(['class_id' => $classId, 'class' => $className]),
+                'event_key' => $classId ? "class_full_{$classId}" : null,
             ]);
         });
     }
@@ -493,21 +496,21 @@ class NotificationService
     public function notifyClassReminder($member, $class, $when = null): void
     {
         $this->safe(function () use ($member, $class, $when): void {
-            $classId   = $this->attr($class, 'id');
-            $className  = $this->attr($class, 'name') ?? 'tu clase';
+            $classId = $this->attr($class, 'id');
+            $className = $this->attr($class, 'name') ?? 'tu clase';
             $whenCarbon = $when instanceof Carbon ? $when : ($when ? Carbon::parse($when) : null);
-            $whenLabel  = $whenCarbon ? $whenCarbon->format('H:i') : $this->classWhenLabel($class);
-            $dateHour   = $whenCarbon ? $whenCarbon->format('Y-m-d_H') : 'soon';
+            $whenLabel = $whenCarbon ? $whenCarbon->format('H:i') : $this->classWhenLabel($class);
+            $dateHour = $whenCarbon ? $whenCarbon->format('Y-m-d_H') : 'soon';
 
             $this->createMemberNotification($member, [
-                'type'        => 'class',
-                'title'       => 'Tu clase está por comenzar',
-                'message'     => "Recuerda tu clase {$className}" . ($whenLabel ? " a las {$whenLabel}." : '.'),
-                'priority'    => 'medium',
+                'type' => 'class',
+                'title' => 'Tu clase está por comenzar',
+                'message' => "Recuerda tu clase {$className}".($whenLabel ? " a las {$whenLabel}." : '.'),
+                'priority' => 'medium',
                 'action_type' => 'class_detail',
                 'action_payload' => array_filter(['class_id' => $classId]),
-                'metadata'    => ['class_id' => $classId, 'class' => $className, 'member_name' => $member?->full_name],
-                'event_key'   => ($member && $classId) ? "class_reminder_{$classId}_{$member->id}_{$dateHour}" : null,
+                'metadata' => ['class_id' => $classId, 'class' => $className, 'member_name' => $member?->full_name],
+                'event_key' => ($member && $classId) ? "class_reminder_{$classId}_{$member->id}_{$dateHour}" : null,
             ]);
         });
     }
@@ -516,19 +519,19 @@ class NotificationService
     public function notifyClassStarted($member, $class): void
     {
         $this->safe(function () use ($member, $class): void {
-            $classId   = $this->attr($class, 'id');
-            $className  = $this->attr($class, 'name') ?? 'tu clase';
-            $today      = Carbon::now()->toDateString();
+            $classId = $this->attr($class, 'id');
+            $className = $this->attr($class, 'name') ?? 'tu clase';
+            $today = Carbon::now()->toDateString();
 
             $this->createMemberNotification($member, [
-                'type'        => 'class',
-                'title'       => 'Tu clase comenzó',
-                'message'     => "La clase {$className} acaba de iniciar. ¡Te esperamos!",
-                'priority'    => 'high',
+                'type' => 'class',
+                'title' => 'Tu clase comenzó',
+                'message' => "La clase {$className} acaba de iniciar. ¡Te esperamos!",
+                'priority' => 'high',
                 'action_type' => 'class_detail',
                 'action_payload' => array_filter(['class_id' => $classId]),
-                'metadata'    => ['class_id' => $classId, 'class' => $className, 'member_name' => $member?->full_name],
-                'event_key'   => ($member && $classId) ? "class_started_{$classId}_{$member->id}_{$today}" : null,
+                'metadata' => ['class_id' => $classId, 'class' => $className, 'member_name' => $member?->full_name],
+                'event_key' => ($member && $classId) ? "class_started_{$classId}_{$member->id}_{$today}" : null,
             ]);
         });
     }
@@ -539,22 +542,22 @@ class NotificationService
     public function notifyRoutineCreated($routine): void
     {
         $this->safe(function () use ($routine): void {
-            $routineId   = $this->attr($routine, 'id');
+            $routineId = $this->attr($routine, 'id');
             $routineName = $this->attr($routine, 'name') ?? 'una rutina';
-            $assignedTo  = $this->attr($routine, 'assigned_member_name');
-            $suffix      = ($assignedTo && trim((string) $assignedTo) !== '' && strcasecmp((string) $assignedTo, 'Plantilla general') !== 0)
+            $assignedTo = $this->attr($routine, 'assigned_member_name');
+            $suffix = ($assignedTo && trim((string) $assignedTo) !== '' && strcasecmp((string) $assignedTo, 'Plantilla general') !== 0)
                 ? " · asignada a {$assignedTo}."
                 : '.';
 
             $this->createAdminNotification([
-                'type'        => 'routine',
-                'title'       => 'Nueva rutina creada',
-                'message'     => "Se creó la rutina «{$routineName}»{$suffix}",
-                'priority'    => 'low',
+                'type' => 'routine',
+                'title' => 'Nueva rutina creada',
+                'message' => "Se creó la rutina «{$routineName}»{$suffix}",
+                'priority' => 'low',
                 'action_type' => 'routine_detail',
                 'action_payload' => array_filter(['routine_id' => $routineId]),
-                'metadata'    => array_filter(['routine_id' => $routineId, 'routine' => $routineName, 'member_name' => $assignedTo]),
-                'event_key'   => $routineId ? "routine_created_{$routineId}" : null,
+                'metadata' => array_filter(['routine_id' => $routineId, 'routine' => $routineName, 'member_name' => $assignedTo]),
+                'event_key' => $routineId ? "routine_created_{$routineId}" : null,
             ]);
         });
     }
@@ -562,20 +565,20 @@ class NotificationService
     public function notifyRoutineAssigned($member, $routine): void
     {
         $this->safe(function () use ($member, $routine): void {
-            $routineId   = $this->attr($routine, 'id');
+            $routineId = $this->attr($routine, 'id');
             $routineName = $this->attr($routine, 'name') ?? 'una rutina';
-            $name        = $member?->full_name ?? 'Miembro';
+            $name = $member?->full_name ?? 'Miembro';
 
             $this->createMemberNotification($member, [
-                'type'        => 'routine',
-                'title'       => 'Nueva rutina asignada',
-                'message'     => "Tu entrenador te asignó la rutina «{$routineName}».",
-                'priority'    => 'medium',
+                'type' => 'routine',
+                'title' => 'Nueva rutina asignada',
+                'message' => "Tu entrenador te asignó la rutina «{$routineName}».",
+                'priority' => 'medium',
                 'should_popup' => true,
                 'action_type' => 'routine_detail',
                 'action_payload' => array_filter(['routine_id' => $routineId]),
-                'metadata'    => ['routine_id' => $routineId, 'routine' => $routineName, 'member_name' => $name, 'source_event' => 'routine_assigned'],
-                'event_key'   => ($member && $routineId) ? "routine_assigned_{$routineId}_{$member->id}" : null,
+                'metadata' => ['routine_id' => $routineId, 'routine' => $routineName, 'member_name' => $name, 'source_event' => 'routine_assigned'],
+                'event_key' => ($member && $routineId) ? "routine_assigned_{$routineId}_{$member->id}" : null,
             ]);
         });
     }
@@ -584,19 +587,19 @@ class NotificationService
     public function notifyRoutineUpdated($member, $routine): void
     {
         $this->safe(function () use ($member, $routine): void {
-            $routineId   = $this->attr($routine, 'id');
+            $routineId = $this->attr($routine, 'id');
             $routineName = $this->attr($routine, 'name') ?? 'tu rutina';
-            $hash        = substr(md5((string) ($this->attr($routine, 'updated_at') ?? now())), 0, 8);
+            $hash = substr(md5((string) ($this->attr($routine, 'updated_at') ?? now())), 0, 8);
 
             $this->createMemberNotification($member, [
-                'type'        => 'routine',
-                'title'       => 'Rutina actualizada',
-                'message'     => "Tu rutina «{$routineName}» fue actualizada. Revisa los cambios.",
-                'priority'    => 'medium',
+                'type' => 'routine',
+                'title' => 'Rutina actualizada',
+                'message' => "Tu rutina «{$routineName}» fue actualizada. Revisa los cambios.",
+                'priority' => 'medium',
                 'action_type' => 'routine_detail',
                 'action_payload' => array_filter(['routine_id' => $routineId]),
-                'metadata'    => ['routine_id' => $routineId, 'routine' => $routineName, 'member_name' => $member?->full_name],
-                'event_key'   => ($member && $routineId) ? "routine_updated_{$routineId}_{$member->id}_{$hash}" : null,
+                'metadata' => ['routine_id' => $routineId, 'routine' => $routineName, 'member_name' => $member?->full_name],
+                'event_key' => ($member && $routineId) ? "routine_updated_{$routineId}_{$member->id}_{$hash}" : null,
             ]);
         });
     }
@@ -614,33 +617,33 @@ class NotificationService
     public function notifyRoutineCompleted($member, $routine, $completionId = null): void
     {
         $this->safe(function () use ($member, $routine, $completionId): void {
-            $routineId   = $this->attr($routine, 'id');
+            $routineId = $this->attr($routine, 'id');
             $routineName = $this->attr($routine, 'name') ?? 'tu rutina';
-            $name        = $member?->full_name ?? 'Miembro';
-            $first       = trim(explode(' ', $name)[0]) ?: $name;
+            $name = $member?->full_name ?? 'Miembro';
+            $first = trim(explode(' ', $name)[0]) ?: $name;
             // Discriminador único por guardado (id de RoutineCompletion o ts).
-            $uid         = $completionId ?? now()->timestamp;
+            $uid = $completionId ?? now()->timestamp;
 
             $this->createMemberNotification($member, [
-                'type'        => 'routine',
-                'title'       => 'Entrenamiento guardado',
-                'message'     => "Excelente trabajo, {$first}. Tu progreso quedó registrado.",
-                'priority'    => 'medium',
+                'type' => 'routine',
+                'title' => 'Entrenamiento guardado',
+                'message' => "Excelente trabajo, {$first}. Tu progreso quedó registrado.",
+                'priority' => 'medium',
                 'should_popup' => true,
                 'action_type' => 'routine_detail',
                 'action_payload' => array_filter(['routine_id' => $routineId, 'completion_id' => $completionId]),
-                'metadata'    => ['routine_id' => $routineId, 'routine' => $routineName, 'member_name' => $name, 'source_event' => 'routine_completed'],
-                'event_key'   => ($member && $routineId) ? "routine_completed_{$routineId}_{$member->id}_{$uid}" : null,
+                'metadata' => ['routine_id' => $routineId, 'routine' => $routineName, 'member_name' => $name, 'source_event' => 'routine_completed'],
+                'event_key' => ($member && $routineId) ? "routine_completed_{$routineId}_{$member->id}_{$uid}" : null,
             ]);
 
             $this->createAdminNotification([
-                'type'        => 'routine',
-                'title'       => 'Entrenamiento guardado',
-                'message'     => "{$name} guardó un entrenamiento de «{$routineName}».",
-                'priority'    => 'low',
-                'member'      => $member,
-                'metadata'    => ['routine_id' => $routineId, 'routine' => $routineName, 'member_name' => $name],
-                'event_key'   => ($member && $routineId) ? "admin_routine_completed_{$routineId}_{$member->id}_{$uid}" : null,
+                'type' => 'routine',
+                'title' => 'Entrenamiento guardado',
+                'message' => "{$name} guardó un entrenamiento de «{$routineName}».",
+                'priority' => 'low',
+                'member' => $member,
+                'metadata' => ['routine_id' => $routineId, 'routine' => $routineName, 'member_name' => $name],
+                'event_key' => ($member && $routineId) ? "admin_routine_completed_{$routineId}_{$member->id}_{$uid}" : null,
             ]);
         });
     }
@@ -653,18 +656,18 @@ class NotificationService
     public function notifyRoutinePublished($routine): void
     {
         $this->safe(function () use ($routine): void {
-            $routineId   = $this->attr($routine, 'id');
+            $routineId = $this->attr($routine, 'id');
             $routineName = $this->attr($routine, 'name') ?? 'una rutina';
 
             $this->createMemberNotification(null, [
-                'type'        => 'routine',
-                'title'       => 'Nueva rutina disponible',
-                'message'     => "Hay una nueva rutina disponible: «{$routineName}».",
-                'priority'    => 'low',
+                'type' => 'routine',
+                'title' => 'Nueva rutina disponible',
+                'message' => "Hay una nueva rutina disponible: «{$routineName}».",
+                'priority' => 'low',
                 'action_type' => 'routine_detail',
                 'action_payload' => array_filter(['routine_id' => $routineId]),
-                'metadata'    => ['routine_id' => $routineId, 'routine' => $routineName],
-                'event_key'   => $routineId ? "routine_published_{$routineId}" : null,
+                'metadata' => ['routine_id' => $routineId, 'routine' => $routineName],
+                'event_key' => $routineId ? "routine_published_{$routineId}" : null,
             ]);
         });
     }
@@ -676,28 +679,28 @@ class NotificationService
     public function notifyRoutineDeleted($routine, $member = null): void
     {
         $this->safe(function () use ($routine, $member): void {
-            $routineId   = $this->attr($routine, 'id');
+            $routineId = $this->attr($routine, 'id');
             $routineName = $this->attr($routine, 'name') ?? 'una rutina';
-            $date        = now()->toDateString();
+            $date = now()->toDateString();
 
             $this->createAdminNotification([
-                'type'        => 'routine',
-                'title'       => 'Rutina eliminada',
-                'message'     => "Se eliminó la rutina «{$routineName}».",
-                'priority'    => 'low',
-                'member'      => $member,
-                'metadata'    => array_filter(['routine_id' => $routineId, 'routine' => $routineName]),
-                'event_key'   => $routineId ? "routine_deleted_{$routineId}_{$date}" : null,
+                'type' => 'routine',
+                'title' => 'Rutina eliminada',
+                'message' => "Se eliminó la rutina «{$routineName}».",
+                'priority' => 'low',
+                'member' => $member,
+                'metadata' => array_filter(['routine_id' => $routineId, 'routine' => $routineName]),
+                'event_key' => $routineId ? "routine_deleted_{$routineId}_{$date}" : null,
             ]);
 
             if ($member) {
                 $this->createMemberNotification($member, [
-                    'type'        => 'routine',
-                    'title'       => 'Rutina ya no disponible',
-                    'message'     => "Tu rutina asignada «{$routineName}» ya no está disponible.",
-                    'priority'    => 'low',
-                    'metadata'    => ['routine_id' => $routineId, 'routine' => $routineName, 'member_name' => $member->full_name],
-                    'event_key'   => $routineId ? "routine_deleted_member_{$routineId}_{$member->id}_{$date}" : null,
+                    'type' => 'routine',
+                    'title' => 'Rutina ya no disponible',
+                    'message' => "Tu rutina asignada «{$routineName}» ya no está disponible.",
+                    'priority' => 'low',
+                    'metadata' => ['routine_id' => $routineId, 'routine' => $routineName, 'member_name' => $member->full_name],
+                    'event_key' => $routineId ? "routine_deleted_member_{$routineId}_{$member->id}_{$date}" : null,
                 ]);
             }
         });
@@ -709,19 +712,19 @@ class NotificationService
     public function notifyTrainerCreated($trainer): void
     {
         $this->safe(function () use ($trainer): void {
-            $trainerId   = $this->attr($trainer, 'id');
+            $trainerId = $this->attr($trainer, 'id');
             $trainerName = $this->attr($trainer, 'full_name') ?? $this->attr($trainer, 'name') ?? 'un entrenador';
-            $specialty   = $this->attr($trainer, 'main_specialty');
+            $specialty = $this->attr($trainer, 'main_specialty');
 
             $this->createAdminNotification([
-                'type'        => 'trainer',
-                'title'       => 'Nuevo entrenador registrado',
-                'message'     => "Se registró al entrenador {$trainerName}" . ($specialty ? " ({$specialty})." : '.'),
-                'priority'    => 'low',
+                'type' => 'trainer',
+                'title' => 'Nuevo entrenador registrado',
+                'message' => "Se registró al entrenador {$trainerName}".($specialty ? " ({$specialty})." : '.'),
+                'priority' => 'low',
                 'action_type' => 'trainer_detail',
                 'action_payload' => array_filter(['trainer_id' => $trainerId]),
-                'metadata'    => array_filter(['trainer_id' => $trainerId, 'trainer' => $trainerName, 'specialty' => $specialty]),
-                'event_key'   => $trainerId ? "trainer_created_{$trainerId}" : null,
+                'metadata' => array_filter(['trainer_id' => $trainerId, 'trainer' => $trainerName, 'specialty' => $specialty]),
+                'event_key' => $trainerId ? "trainer_created_{$trainerId}" : null,
             ]);
         });
     }
@@ -730,19 +733,19 @@ class NotificationService
     public function notifyTrainerUpdated($trainer): void
     {
         $this->safe(function () use ($trainer): void {
-            $trainerId   = $this->attr($trainer, 'id');
+            $trainerId = $this->attr($trainer, 'id');
             $trainerName = $this->attr($trainer, 'full_name') ?? $this->attr($trainer, 'name') ?? 'un entrenador';
-            $hash        = substr(md5((string) ($this->attr($trainer, 'updated_at') ?? now())), 0, 8);
+            $hash = substr(md5((string) ($this->attr($trainer, 'updated_at') ?? now())), 0, 8);
 
             $this->createAdminNotification([
-                'type'        => 'trainer',
-                'title'       => 'Entrenador actualizado',
-                'message'     => "Se actualizó la ficha de {$trainerName}.",
-                'priority'    => 'low',
+                'type' => 'trainer',
+                'title' => 'Entrenador actualizado',
+                'message' => "Se actualizó la ficha de {$trainerName}.",
+                'priority' => 'low',
                 'action_type' => 'trainer_detail',
                 'action_payload' => array_filter(['trainer_id' => $trainerId]),
-                'metadata'    => array_filter(['trainer_id' => $trainerId, 'trainer' => $trainerName]),
-                'event_key'   => $trainerId ? "trainer_updated_{$trainerId}_{$hash}" : null,
+                'metadata' => array_filter(['trainer_id' => $trainerId, 'trainer' => $trainerName]),
+                'event_key' => $trainerId ? "trainer_updated_{$trainerId}_{$hash}" : null,
             ]);
         });
     }
@@ -751,19 +754,19 @@ class NotificationService
     public function notifyTrainerDeleted($trainer): void
     {
         $this->safe(function () use ($trainer): void {
-            $trainerId   = $this->attr($trainer, 'id');
+            $trainerId = $this->attr($trainer, 'id');
             $trainerName = $this->attr($trainer, 'full_name') ?? $this->attr($trainer, 'name') ?? 'un entrenador';
-            $date        = now()->toDateString();
+            $date = now()->toDateString();
 
             $this->createAdminNotification([
-                'type'        => 'trainer',
-                'title'       => 'Entrenador eliminado',
-                'message'     => "Se eliminó al entrenador {$trainerName}.",
-                'priority'    => 'low',
+                'type' => 'trainer',
+                'title' => 'Entrenador eliminado',
+                'message' => "Se eliminó al entrenador {$trainerName}.",
+                'priority' => 'low',
                 'action_type' => 'trainer_detail',
                 'action_payload' => array_filter(['trainer_id' => $trainerId]),
-                'metadata'    => array_filter(['trainer_id' => $trainerId, 'trainer' => $trainerName]),
-                'event_key'   => $trainerId ? "trainer_deleted_{$trainerId}_{$date}" : null,
+                'metadata' => array_filter(['trainer_id' => $trainerId, 'trainer' => $trainerName]),
+                'event_key' => $trainerId ? "trainer_deleted_{$trainerId}_{$date}" : null,
             ]);
         });
     }
@@ -772,34 +775,34 @@ class NotificationService
     public function notifyTrainerAssigned($member, $trainer): void
     {
         $this->safe(function () use ($member, $trainer): void {
-            $trainerId   = $this->attr($trainer, 'id');
+            $trainerId = $this->attr($trainer, 'id');
             $trainerName = $this->attr($trainer, 'full_name') ?? $this->attr($trainer, 'name') ?? 'tu entrenador';
-            $name        = $member?->full_name ?? 'Miembro';
-            $date        = now()->toDateString();
-            $payload     = array_filter(['trainer_id' => $trainerId]);
+            $name = $member?->full_name ?? 'Miembro';
+            $date = now()->toDateString();
+            $payload = array_filter(['trainer_id' => $trainerId]);
 
             $this->createMemberNotification($member, [
-                'type'        => 'trainer',
-                'title'       => 'Entrenador asignado',
-                'message'     => "Se te asignó el entrenador {$trainerName}.",
-                'priority'    => 'medium',
+                'type' => 'trainer',
+                'title' => 'Entrenador asignado',
+                'message' => "Se te asignó el entrenador {$trainerName}.",
+                'priority' => 'medium',
                 'should_popup' => true,
                 'action_type' => 'trainer_detail',
                 'action_payload' => $payload,
-                'metadata'    => ['trainer_id' => $trainerId, 'trainer' => $trainerName, 'member_name' => $name, 'source_event' => 'trainer_assigned'],
-                'event_key'   => ($member && $trainerId) ? "trainer_assigned_{$trainerId}_{$member->id}_{$date}" : null,
+                'metadata' => ['trainer_id' => $trainerId, 'trainer' => $trainerName, 'member_name' => $name, 'source_event' => 'trainer_assigned'],
+                'event_key' => ($member && $trainerId) ? "trainer_assigned_{$trainerId}_{$member->id}_{$date}" : null,
             ]);
 
             $this->createAdminNotification([
-                'type'        => 'trainer',
-                'title'       => 'Entrenador asignado',
-                'message'     => "Entrenador {$trainerName} asignado a {$name}.",
-                'priority'    => 'low',
-                'member'      => $member,
+                'type' => 'trainer',
+                'title' => 'Entrenador asignado',
+                'message' => "Entrenador {$trainerName} asignado a {$name}.",
+                'priority' => 'low',
+                'member' => $member,
                 'action_type' => 'trainer_detail',
                 'action_payload' => $payload,
-                'metadata'    => ['trainer_id' => $trainerId, 'trainer' => $trainerName, 'member_name' => $name],
-                'event_key'   => ($member && $trainerId) ? "admin_trainer_assigned_{$trainerId}_{$member->id}_{$date}" : null,
+                'metadata' => ['trainer_id' => $trainerId, 'trainer' => $trainerName, 'member_name' => $name],
+                'event_key' => ($member && $trainerId) ? "admin_trainer_assigned_{$trainerId}_{$member->id}_{$date}" : null,
             ]);
         });
     }
@@ -808,28 +811,28 @@ class NotificationService
     public function notifyTrainerUnassigned($member, $trainer): void
     {
         $this->safe(function () use ($member, $trainer): void {
-            $trainerId   = $this->attr($trainer, 'id');
+            $trainerId = $this->attr($trainer, 'id');
             $trainerName = $this->attr($trainer, 'full_name') ?? $this->attr($trainer, 'name') ?? 'tu entrenador';
-            $name        = $member?->full_name ?? 'Miembro';
-            $date        = now()->toDateString();
+            $name = $member?->full_name ?? 'Miembro';
+            $date = now()->toDateString();
 
             $this->createMemberNotification($member, [
-                'type'        => 'trainer',
-                'title'       => 'Entrenador actualizado',
-                'message'     => 'Tu entrenador asignado fue actualizado.',
-                'priority'    => 'low',
-                'metadata'    => ['trainer_id' => $trainerId, 'trainer' => $trainerName, 'member_name' => $name],
-                'event_key'   => ($member && $trainerId) ? "trainer_unassigned_{$trainerId}_{$member->id}_{$date}" : null,
+                'type' => 'trainer',
+                'title' => 'Entrenador actualizado',
+                'message' => 'Tu entrenador asignado fue actualizado.',
+                'priority' => 'low',
+                'metadata' => ['trainer_id' => $trainerId, 'trainer' => $trainerName, 'member_name' => $name],
+                'event_key' => ($member && $trainerId) ? "trainer_unassigned_{$trainerId}_{$member->id}_{$date}" : null,
             ]);
 
             $this->createAdminNotification([
-                'type'        => 'trainer',
-                'title'       => 'Entrenador retirado',
-                'message'     => "Se retiró al entrenador {$trainerName} de {$name}.",
-                'priority'    => 'low',
-                'member'      => $member,
-                'metadata'    => ['trainer_id' => $trainerId, 'trainer' => $trainerName, 'member_name' => $name],
-                'event_key'   => ($member && $trainerId) ? "admin_trainer_unassigned_{$trainerId}_{$member->id}_{$date}" : null,
+                'type' => 'trainer',
+                'title' => 'Entrenador retirado',
+                'message' => "Se retiró al entrenador {$trainerName} de {$name}.",
+                'priority' => 'low',
+                'member' => $member,
+                'metadata' => ['trainer_id' => $trainerId, 'trainer' => $trainerName, 'member_name' => $name],
+                'event_key' => ($member && $trainerId) ? "admin_trainer_unassigned_{$trainerId}_{$member->id}_{$date}" : null,
             ]);
         });
     }
@@ -841,20 +844,20 @@ class NotificationService
     public function notifyTrainerNote($member, $trainer, $note): void
     {
         $this->safe(function () use ($member, $trainer, $note): void {
-            $trainerId   = $this->attr($trainer, 'id');
+            $trainerId = $this->attr($trainer, 'id');
             $trainerName = $this->attr($trainer, 'full_name') ?? $this->attr($trainer, 'name') ?? 'Tu entrenador';
-            $noteId      = $this->attr($note, 'id');
-            $noteText    = $this->attr($note, 'message') ?? $this->attr($note, 'text') ?? 'tiene una recomendación para ti.';
+            $noteId = $this->attr($note, 'id');
+            $noteText = $this->attr($note, 'message') ?? $this->attr($note, 'text') ?? 'tiene una recomendación para ti.';
 
             $this->createMemberNotification($member, [
-                'type'        => 'trainer',
-                'title'       => "Mensaje de {$trainerName}",
-                'message'     => $noteText,
-                'priority'    => 'medium',
+                'type' => 'trainer',
+                'title' => "Mensaje de {$trainerName}",
+                'message' => $noteText,
+                'priority' => 'medium',
                 'action_type' => 'trainer_detail',
                 'action_payload' => array_filter(['trainer_id' => $trainerId, 'note_id' => $noteId]),
-                'metadata'    => ['trainer_id' => $trainerId, 'trainer' => $trainerName, 'note_id' => $noteId],
-                'event_key'   => ($member && $trainerId && $noteId) ? "trainer_note_{$trainerId}_{$member->id}_{$noteId}" : null,
+                'metadata' => ['trainer_id' => $trainerId, 'trainer' => $trainerName, 'note_id' => $noteId],
+                'event_key' => ($member && $trainerId && $noteId) ? "trainer_note_{$trainerId}_{$member->id}_{$noteId}" : null,
             ]);
         });
     }
@@ -865,16 +868,16 @@ class NotificationService
     public function notifyPromotionPublished(string $title, string $message, array $extra = []): void
     {
         $this->safe(function () use ($title, $message, $extra): void {
-            $slug = $extra['slug'] ?? \Illuminate\Support\Str::slug($title) ?: 'promo';
-            $key  = "promotion_{$slug}_" . now()->toDateString();
+            $slug = $extra['slug'] ?? Str::slug($title) ?: 'promo';
+            $key = "promotion_{$slug}_".now()->toDateString();
 
             $this->createMemberNotification(null, [
-                'type'        => 'promotion',
-                'title'       => $title,
-                'message'     => $message,
-                'priority'    => 'low',
-                'metadata'    => $extra,
-                'event_key'   => $key,
+                'type' => 'promotion',
+                'title' => $title,
+                'message' => $message,
+                'priority' => 'low',
+                'metadata' => $extra,
+                'event_key' => $key,
             ]);
         });
     }
@@ -887,30 +890,30 @@ class NotificationService
     {
         $this->safe(function () use ($member): void {
             $name = $member?->full_name ?? 'Nuevo miembro';
-            $doc  = $member?->document_number;
+            $doc = $member?->document_number;
 
             $this->createAdminNotification([
-                'type'        => 'system',
-                'title'       => 'Nuevo miembro registrado',
-                'message'     => "{$name} inició su registro" . ($doc ? " (doc. {$doc})." : '.'),
-                'priority'    => 'low',
-                'member'      => $member,
+                'type' => 'system',
+                'title' => 'Nuevo miembro registrado',
+                'message' => "{$name} inició su registro".($doc ? " (doc. {$doc})." : '.'),
+                'priority' => 'low',
+                'member' => $member,
                 // action_type estable para que el CRM filtre y refresque la lista
                 // de miembros en vivo (igual que 'trainer_detail' para entrenadores).
                 'action_type' => 'member_detail',
                 'action_payload' => array_filter(['member_id' => $member?->id]),
-                'metadata'    => array_filter(['member_name' => $name, 'document' => $doc]),
-                'event_key'   => $member ? "system_new_member_{$member->id}" : null,
+                'metadata' => array_filter(['member_name' => $name, 'document' => $doc]),
+                'event_key' => $member ? "system_new_member_{$member->id}" : null,
             ]);
 
             // Bienvenida de sistema al miembro (categoría Sistema en la app).
             $this->createMemberNotification($member, [
-                'type'        => 'system',
-                'title'       => '¡Bienvenido a Iron Body!',
-                'message'     => 'Tu cuenta fue creada. Aquí verás avisos del gimnasio, pagos, clases y más.',
-                'priority'    => 'low',
-                'metadata'    => array_filter(['member_name' => $name]),
-                'event_key'   => $member ? "system_welcome_{$member->id}" : null,
+                'type' => 'system',
+                'title' => '¡Bienvenido a Iron Body!',
+                'message' => 'Tu cuenta fue creada. Aquí verás avisos del gimnasio, pagos, clases y más.',
+                'priority' => 'low',
+                'metadata' => array_filter(['member_name' => $name]),
+                'event_key' => $member ? "system_welcome_{$member->id}" : null,
             ]);
         });
     }
@@ -926,36 +929,36 @@ class NotificationService
         $this->safe(function () use ($member): void {
             $memberId = $this->attr($member, 'id');
             $name = $this->attr($member, 'full_name') ?? $this->attr($member, 'name') ?? 'Un miembro';
-            $doc  = $this->attr($member, 'document_number');
+            $doc = $this->attr($member, 'document_number');
             // Clave por enrolamiento (minuto): un re-registro posterior vuelve a
             // avisar y dispara el re-index en el CRM.
             $stamp = now()->format('YmdHi');
 
             $this->createAdminNotification([
-                'type'        => 'system',
-                'title'       => 'Rostro registrado',
-                'message'     => "{$name} registró su rostro para el acceso facial del punto físico.",
-                'priority'    => 'medium',
-                'member'      => $member instanceof Member ? $member : null,
+                'type' => 'system',
+                'title' => 'Rostro registrado',
+                'message' => "{$name} registró su rostro para el acceso facial del punto físico.",
+                'priority' => 'medium',
+                'member' => $member instanceof Member ? $member : null,
                 'action_type' => 'face_enrolled',
-                'should_popup'=> true,
-                'metadata'    => array_filter([
-                    'member_id'   => $memberId,
+                'should_popup' => true,
+                'metadata' => array_filter([
+                    'member_id' => $memberId,
                     'member_name' => $name,
-                    'document'    => $doc,
+                    'document' => $doc,
                 ]),
-                'event_key'   => $memberId ? "face_enrolled_admin_{$memberId}_{$stamp}" : null,
+                'event_key' => $memberId ? "face_enrolled_admin_{$memberId}_{$stamp}" : null,
             ]);
 
             if ($member instanceof Member) {
                 $this->createMemberNotification($member, [
-                    'type'        => 'system',
-                    'title'       => 'Rostro registrado',
-                    'message'     => 'Tu rostro quedó registrado. Ya puedes ingresar al gimnasio con reconocimiento facial.',
-                    'priority'    => 'medium',
-                    'should_popup'=> true,
-                    'metadata'    => array_filter(['member_name' => $name]),
-                    'event_key'   => "face_enrolled_member_{$memberId}_{$stamp}",
+                    'type' => 'system',
+                    'title' => 'Rostro registrado',
+                    'message' => 'Tu rostro quedó registrado. Ya puedes ingresar al gimnasio con reconocimiento facial.',
+                    'priority' => 'medium',
+                    'should_popup' => true,
+                    'metadata' => array_filter(['member_name' => $name]),
+                    'event_key' => "face_enrolled_member_{$memberId}_{$stamp}",
                 ]);
 
                 // Señal real-time al miembro (refresca estado biométrico/perfil).
@@ -974,34 +977,34 @@ class NotificationService
         $this->safe(function () use ($member): void {
             $memberId = $this->attr($member, 'id');
             $name = $this->attr($member, 'full_name') ?? $this->attr($member, 'name') ?? 'Un miembro';
-            $doc  = $this->attr($member, 'document_number');
+            $doc = $this->attr($member, 'document_number');
             $stamp = now()->format('YmdHi');
 
             $this->createAdminNotification([
-                'type'        => 'system',
-                'title'       => 'Rostro eliminado',
-                'message'     => "Se eliminó el rostro de {$name} del acceso facial del punto físico.",
-                'priority'    => 'medium',
-                'member'      => $member instanceof Member ? $member : null,
+                'type' => 'system',
+                'title' => 'Rostro eliminado',
+                'message' => "Se eliminó el rostro de {$name} del acceso facial del punto físico.",
+                'priority' => 'medium',
+                'member' => $member instanceof Member ? $member : null,
                 'action_type' => 'face_deleted',
-                'should_popup'=> false,
-                'metadata'    => array_filter([
-                    'member_id'   => $memberId,
+                'should_popup' => false,
+                'metadata' => array_filter([
+                    'member_id' => $memberId,
                     'member_name' => $name,
-                    'document'    => $doc,
+                    'document' => $doc,
                 ]),
-                'event_key'   => $memberId ? "face_deleted_admin_{$memberId}_{$stamp}" : null,
+                'event_key' => $memberId ? "face_deleted_admin_{$memberId}_{$stamp}" : null,
             ]);
 
             if ($member instanceof Member) {
                 $this->createMemberNotification($member, [
-                    'type'        => 'system',
-                    'title'       => 'Rostro eliminado',
-                    'message'     => 'Tu rostro fue eliminado del acceso facial. Acércate al gimnasio para volver a registrarlo.',
-                    'priority'    => 'medium',
-                    'should_popup'=> true,
-                    'metadata'    => array_filter(['member_name' => $name]),
-                    'event_key'   => "face_deleted_member_{$memberId}_{$stamp}",
+                    'type' => 'system',
+                    'title' => 'Rostro eliminado',
+                    'message' => 'Tu rostro fue eliminado del acceso facial. Acércate al gimnasio para volver a registrarlo.',
+                    'priority' => 'medium',
+                    'should_popup' => true,
+                    'metadata' => array_filter(['member_name' => $name]),
+                    'event_key' => "face_deleted_member_{$memberId}_{$stamp}",
                 ]);
 
                 // Señal real-time al miembro (refresca estado biométrico/perfil).
@@ -1018,36 +1021,36 @@ class NotificationService
     public function notifyEventPublished($event, bool $force = false): void
     {
         $this->safe(function () use ($event, $force): void {
-            $id    = $this->attr($event, 'id');
+            $id = $this->attr($event, 'id');
             $title = $this->attr($event, 'title') ?: 'Nuevo evento';
-            $desc  = $this->attr($event, 'description');
-            $img   = $this->attr($event, 'image_url');
+            $desc = $this->attr($event, 'description');
+            $img = $this->attr($event, 'image_url');
             // En reenvíos de prueba ($force) usamos una clave única para saltar la
             // idempotencia y que el aviso vuelva a dispararse.
-            $suffix = $force ? '_' . now()->format('YmdHis') : '';
+            $suffix = $force ? '_'.now()->format('YmdHis') : '';
 
             // Broadcast a miembros (member_id=null → todos). should_popup para que
             // salga el aviso emergente en la app.
             $this->createMemberNotification(null, [
-                'type'        => 'promotion',
-                'title'       => '📣 ' . $title,
-                'message'     => $desc ?: 'Hay un nuevo evento disponible. ¡Échale un vistazo en la app!',
-                'priority'    => 'medium',
-                'should_popup'=> true,
+                'type' => 'promotion',
+                'title' => '📣 '.$title,
+                'message' => $desc ?: 'Hay un nuevo evento disponible. ¡Échale un vistazo en la app!',
+                'priority' => 'medium',
+                'should_popup' => true,
                 'action_type' => 'event_detail',
-                'metadata'    => array_filter(['event_id' => $id, 'image_url' => $img]),
-                'event_key'   => $id ? "event_published_{$id}{$suffix}" : null,
+                'metadata' => array_filter(['event_id' => $id, 'image_url' => $img]),
+                'event_key' => $id ? "event_published_{$id}{$suffix}" : null,
             ]);
 
             // Copia operativa al CRM (campana + refresco en vivo de paneles).
             $this->createAdminNotification([
-                'type'        => 'promotion',
-                'title'       => 'Evento publicado',
-                'message'     => "Se publicó el evento \"{$title}\" en la app.",
-                'priority'    => 'low',
+                'type' => 'promotion',
+                'title' => 'Evento publicado',
+                'message' => "Se publicó el evento \"{$title}\" en la app.",
+                'priority' => 'low',
                 'action_type' => 'event_published',
-                'metadata'    => array_filter(['event_id' => $id]),
-                'event_key'   => $id ? "event_published_admin_{$id}{$suffix}" : null,
+                'metadata' => array_filter(['event_id' => $id]),
+                'event_key' => $id ? "event_published_admin_{$id}{$suffix}" : null,
             ]);
 
             // Real-time: empuja el popup-pending a la app al instante.
@@ -1072,25 +1075,25 @@ class NotificationService
             $name = $member->full_name ?? 'Un miembro';
 
             $this->createMemberNotification($member, [
-                'type'        => 'system',
-                'title'       => '¡Racha completada! 🔥',
-                'message'     => "Cumpliste tu meta de {$goal} días esta semana. ¡Sigue así!",
-                'priority'    => 'medium',
-                'should_popup'=> true,
+                'type' => 'system',
+                'title' => '¡Racha completada! 🔥',
+                'message' => "Cumpliste tu meta de {$goal} días esta semana. ¡Sigue así!",
+                'priority' => 'medium',
+                'should_popup' => true,
                 'action_type' => 'streak_detail',
-                'metadata'    => array_filter(['active_days' => $days, 'goal' => $goal]),
-                'event_key'   => "streak_completed_member_{$member->id}_{$week}",
+                'metadata' => array_filter(['active_days' => $days, 'goal' => $goal]),
+                'event_key' => "streak_completed_member_{$member->id}_{$week}",
             ]);
 
             $this->createAdminNotification([
-                'type'        => 'system',
-                'title'       => 'Racha completada',
-                'message'     => "{$name} completó su racha semanal ({$days}/{$goal} días).",
-                'priority'    => 'low',
-                'member'      => $member,
+                'type' => 'system',
+                'title' => 'Racha completada',
+                'message' => "{$name} completó su racha semanal ({$days}/{$goal} días).",
+                'priority' => 'low',
+                'member' => $member,
                 'action_type' => 'streak_completed',
-                'metadata'    => array_filter(['active_days' => $days, 'goal' => $goal]),
-                'event_key'   => "streak_completed_admin_{$member->id}_{$week}",
+                'metadata' => array_filter(['active_days' => $days, 'goal' => $goal]),
+                'event_key' => "streak_completed_admin_{$member->id}_{$week}",
             ]);
 
             // Real-time: popup al instante en la app.
@@ -1105,23 +1108,23 @@ class NotificationService
     public function notifySupportTicket($ticket): void
     {
         $this->safe(function () use ($ticket): void {
-            $id   = $this->attr($ticket, 'id');
+            $id = $this->attr($ticket, 'id');
             $type = $this->attr($ticket, 'type') ?? 'other';
-            $msg  = (string) $this->attr($ticket, 'message');
-            $member = $ticket instanceof \App\Models\MemberSupportTicket ? $ticket->member : null;
+            $msg = (string) $this->attr($ticket, 'message');
+            $member = $ticket instanceof MemberSupportTicket ? $ticket->member : null;
             $name = $member?->full_name ?? 'Un miembro';
-            $short = mb_strlen($msg) > 90 ? mb_substr($msg, 0, 90) . '…' : $msg;
+            $short = mb_strlen($msg) > 90 ? mb_substr($msg, 0, 90).'…' : $msg;
 
             $this->createAdminNotification([
-                'type'        => 'system',
-                'title'       => 'Nuevo reporte de soporte',
-                'message'     => "{$name}: {$short}",
-                'priority'    => 'high',
-                'member'      => $member,
+                'type' => 'system',
+                'title' => 'Nuevo reporte de soporte',
+                'message' => "{$name}: {$short}",
+                'priority' => 'high',
+                'member' => $member,
                 'action_type' => 'support_ticket',
-                'should_popup'=> true,
-                'metadata'    => array_filter(['ticket_id' => $id, 'support_type' => $type]),
-                'event_key'   => $id ? "support_ticket_{$id}" : null,
+                'should_popup' => true,
+                'metadata' => array_filter(['ticket_id' => $id, 'support_type' => $type]),
+                'event_key' => $id ? "support_ticket_{$id}" : null,
             ]);
         });
     }
@@ -1137,15 +1140,15 @@ class NotificationService
             $document = $document ?? $this->attr($member, 'document_number') ?? $this->attr($member, 'document');
 
             $this->createAdminNotification([
-                'type'      => 'system',
-                'title'     => 'Miembro creado',
-                'message'   => "Se creó al miembro {$name}" . ($document ? " (doc. {$document})." : '.'),
-                'priority'  => 'low',
-                'member'    => $member instanceof Member ? $member : null,
+                'type' => 'system',
+                'title' => 'Miembro creado',
+                'message' => "Se creó al miembro {$name}".($document ? " (doc. {$document})." : '.'),
+                'priority' => 'low',
+                'member' => $member instanceof Member ? $member : null,
                 // action_type estable para que el CRM refresque la lista en vivo.
                 'action_type' => 'member_detail',
                 'action_payload' => array_filter(['member_id' => $memberId]),
-                'metadata'  => array_filter(['member_name' => $name, 'document' => $document]),
+                'metadata' => array_filter(['member_name' => $name, 'document' => $document]),
                 'event_key' => $memberId ? "member_created_{$memberId}" : null,
             ]);
         });
@@ -1160,12 +1163,12 @@ class NotificationService
             $hash = substr(md5((string) ($this->attr($member, 'updated_at') ?? now())), 0, 8);
 
             $this->createAdminNotification([
-                'type'      => 'system',
-                'title'     => 'Miembro actualizado',
-                'message'   => "Se actualizaron los datos de {$name}.",
-                'priority'  => 'low',
-                'member'    => $member instanceof Member ? $member : null,
-                'metadata'  => array_filter(['member_name' => $name]),
+                'type' => 'system',
+                'title' => 'Miembro actualizado',
+                'message' => "Se actualizaron los datos de {$name}.",
+                'priority' => 'low',
+                'member' => $member instanceof Member ? $member : null,
+                'metadata' => array_filter(['member_name' => $name]),
                 'event_key' => $memberId ? "member_updated_{$memberId}_{$hash}" : null,
             ]);
         });
@@ -1181,11 +1184,11 @@ class NotificationService
             $date = now()->toDateString();
 
             $this->createAdminNotification([
-                'type'      => 'system',
-                'title'     => 'Miembro eliminado',
-                'message'   => "Se eliminó al miembro {$name}" . ($document ? " (doc. {$document})." : '.'),
-                'priority'  => 'low',
-                'metadata'  => array_filter(['member_name' => $name, 'document' => $document]),
+                'type' => 'system',
+                'title' => 'Miembro eliminado',
+                'message' => "Se eliminó al miembro {$name}".($document ? " (doc. {$document})." : '.'),
+                'priority' => 'low',
+                'metadata' => array_filter(['member_name' => $name, 'document' => $document]),
                 'event_key' => $memberId ? "member_deleted_{$memberId}_{$date}" : null,
             ]);
         });
@@ -1196,26 +1199,26 @@ class NotificationService
     {
         $this->safe(function () use ($member, $plan): void {
             $planName = $plan && trim($plan) !== '' ? trim($plan) : 'tu plan';
-            $name     = $member?->full_name ?? 'Miembro';
-            $date     = now()->toDateString();
+            $name = $member?->full_name ?? 'Miembro';
+            $date = now()->toDateString();
 
             $this->createMemberNotification($member, [
-                'type'        => 'membership',
-                'title'       => 'Membresía cancelada',
-                'message'     => "Tu plan {$planName} fue cancelado. Contáctanos para reactivarlo.",
-                'priority'    => 'high',
+                'type' => 'membership',
+                'title' => 'Membresía cancelada',
+                'message' => "Tu plan {$planName} fue cancelado. Contáctanos para reactivarlo.",
+                'priority' => 'high',
                 'action_type' => 'membership_renew',
-                'metadata'    => ['plan' => $planName, 'member_name' => $name],
-                'event_key'   => $member ? "membership_cancelled_{$member->id}_{$date}" : null,
+                'metadata' => ['plan' => $planName, 'member_name' => $name],
+                'event_key' => $member ? "membership_cancelled_{$member->id}_{$date}" : null,
             ]);
 
             $this->createAdminNotification([
-                'type'      => 'membership',
-                'title'     => 'Membresía cancelada',
-                'message'   => "Se canceló la membresía de {$name} ({$planName}).",
-                'priority'  => 'low',
-                'member'    => $member,
-                'metadata'  => ['plan' => $planName, 'member_name' => $name],
+                'type' => 'membership',
+                'title' => 'Membresía cancelada',
+                'message' => "Se canceló la membresía de {$name} ({$planName}).",
+                'priority' => 'low',
+                'member' => $member,
+                'metadata' => ['plan' => $planName, 'member_name' => $name],
                 'event_key' => $member ? "admin_membership_cancelled_{$member->id}_{$date}" : null,
             ]);
         });
@@ -1228,11 +1231,11 @@ class NotificationService
     {
         $this->safe(function () use ($title, $promotionId, $extra): void {
             $this->createAdminNotification([
-                'type'      => 'promotion',
-                'title'     => 'Promoción creada',
-                'message'   => "Se creó la promoción «{$title}».",
-                'priority'  => 'low',
-                'metadata'  => array_merge(['promotion' => $title], $extra),
+                'type' => 'promotion',
+                'title' => 'Promoción creada',
+                'message' => "Se creó la promoción «{$title}».",
+                'priority' => 'low',
+                'metadata' => array_merge(['promotion' => $title], $extra),
                 'event_key' => $promotionId ? "promotion_created_{$promotionId}" : null,
             ]);
         });
@@ -1242,13 +1245,13 @@ class NotificationService
     public function notifyPromotionUpdated(string $title, ?int $promotionId = null): void
     {
         $this->safe(function () use ($title, $promotionId): void {
-            $hash = substr(md5($title . now()), 0, 8);
+            $hash = substr(md5($title.now()), 0, 8);
             $this->createAdminNotification([
-                'type'      => 'promotion',
-                'title'     => 'Promoción actualizada',
-                'message'   => "Se actualizó la promoción «{$title}».",
-                'priority'  => 'low',
-                'metadata'  => ['promotion' => $title],
+                'type' => 'promotion',
+                'title' => 'Promoción actualizada',
+                'message' => "Se actualizó la promoción «{$title}».",
+                'priority' => 'low',
+                'metadata' => ['promotion' => $title],
                 'event_key' => $promotionId ? "promotion_updated_{$promotionId}_{$hash}" : null,
             ]);
         });
@@ -1260,11 +1263,11 @@ class NotificationService
         $this->safe(function () use ($title, $promotionId): void {
             $date = now()->toDateString();
             $this->createAdminNotification([
-                'type'      => 'promotion',
-                'title'     => 'Promoción eliminada',
-                'message'   => "Se eliminó la promoción «{$title}».",
-                'priority'  => 'low',
-                'metadata'  => ['promotion' => $title],
+                'type' => 'promotion',
+                'title' => 'Promoción eliminada',
+                'message' => "Se eliminó la promoción «{$title}».",
+                'priority' => 'low',
+                'metadata' => ['promotion' => $title],
                 'event_key' => $promotionId ? "promotion_deleted_{$promotionId}_{$date}" : null,
             ]);
         });
@@ -1281,9 +1284,9 @@ class NotificationService
     {
         return $this->safe(function () use ($title, $message, $extra): ?Notification {
             return $this->createAdminNotification(array_merge([
-                'type'     => 'system',
-                'title'    => $title,
-                'message'  => $message,
+                'type' => 'system',
+                'title' => $title,
+                'message' => $message,
                 'priority' => 'low',
             ], $extra));
         });
@@ -1300,13 +1303,13 @@ class NotificationService
             $date = $dateKey ?? now()->toDateString();
 
             $this->createMemberNotification($member, [
-                'type'         => 'system',
-                'title'        => 'Día nutricional registrado',
-                'message'      => 'Tu avance de hoy quedó guardado correctamente.',
-                'priority'     => 'low',
+                'type' => 'system',
+                'title' => 'Día nutricional registrado',
+                'message' => 'Tu avance de hoy quedó guardado correctamente.',
+                'priority' => 'low',
                 'should_popup' => true,
-                'metadata'     => ['source_event' => 'nutrition_day_logged', 'member_name' => $member?->full_name],
-                'event_key'    => $member ? "nutrition_day_{$member->id}_{$date}" : null,
+                'metadata' => ['source_event' => 'nutrition_day_logged', 'member_name' => $member?->full_name],
+                'event_key' => $member ? "nutrition_day_{$member->id}_{$date}" : null,
             ]);
         });
     }
@@ -1319,23 +1322,23 @@ class NotificationService
     public function notifyNutritionGoalCompleted($member, int $percentage = 100, ?string $date = null): void
     {
         $this->safe(function () use ($member, $percentage, $date): void {
-            $d     = $date ?? now()->toDateString();
-            $name  = $member?->full_name ?? 'Miembro';
+            $d = $date ?? now()->toDateString();
+            $name = $member?->full_name ?? 'Miembro';
             $first = trim(explode(' ', $name)[0]) ?: $name;
-            $msg   = $percentage >= 100
+            $msg = $percentage >= 100
                 ? 'Llegaste al 100% de tu meta nutricional diaria.'
                 : "Excelente, {$first}. Cumpliste tu objetivo nutricional de hoy.";
 
             $this->createMemberNotification($member, [
-                'type'         => 'nutrition',
-                'title'        => 'Meta nutricional completada',
-                'message'      => $msg,
-                'priority'     => 'medium',
+                'type' => 'nutrition',
+                'title' => 'Meta nutricional completada',
+                'message' => $msg,
+                'priority' => 'medium',
                 'should_popup' => true,
-                'action_type'  => 'nutrition_detail',
+                'action_type' => 'nutrition_detail',
                 'action_payload' => array_filter(['date' => $d, 'percentage' => $percentage]),
-                'metadata'     => ['percentage' => $percentage, 'date' => $d, 'source_event' => 'nutrition_goal_completed', 'member_name' => $name],
-                'event_key'    => $member ? "nutrition_goal_completed_{$member->id}_{$d}" : null,
+                'metadata' => ['percentage' => $percentage, 'date' => $d, 'source_event' => 'nutrition_goal_completed', 'member_name' => $name],
+                'event_key' => $member ? "nutrition_goal_completed_{$member->id}_{$d}" : null,
             ]);
         });
     }
@@ -1343,20 +1346,20 @@ class NotificationService
     public function notifyIronAiRecommendation($member, $recommendation): void
     {
         $this->safe(function () use ($member, $recommendation): void {
-            $recId   = $this->attr($recommendation, 'id');
-            $title   = $this->attr($recommendation, 'title') ?? 'Recomendación de IRON IA';
+            $recId = $this->attr($recommendation, 'id');
+            $title = $this->attr($recommendation, 'title') ?? 'Recomendación de IRON IA';
             $message = $this->attr($recommendation, 'message') ?? 'IRON IA tiene una sugerencia para ti.';
 
             $this->createMemberNotification($member, [
-                'type'        => 'iron_ai',
-                'title'       => $title,
-                'message'     => $message,
-                'priority'    => 'medium',
+                'type' => 'iron_ai',
+                'title' => $title,
+                'message' => $message,
+                'priority' => 'medium',
                 'should_popup' => true,
                 'action_type' => 'iron_ai',
                 'action_payload' => array_filter(['recommendation_id' => $recId]),
-                'metadata'    => ['recommendation_id' => $recId, 'source_event' => 'iron_ai_recommendation'],
-                'event_key'   => ($member && $recId) ? "iron_ai_{$member->id}_{$recId}" : null,
+                'metadata' => ['recommendation_id' => $recId, 'source_event' => 'iron_ai_recommendation'],
+                'event_key' => ($member && $recId) ? "iron_ai_{$member->id}_{$recId}" : null,
             ]);
         });
     }
@@ -1368,32 +1371,32 @@ class NotificationService
     {
         $this->safe(function () use ($member, $deviceName, $ip): void {
             $device = $deviceName ?: 'un dispositivo nuevo';
-            $name   = $member?->full_name ?? 'Miembro';
+            $name = $member?->full_name ?? 'Miembro';
 
             $this->createMemberNotification($member, [
-                'type'         => 'security',
-                'title'        => 'Nuevo inicio de sesión',
-                'message'      => "Detectamos acceso a tu cuenta desde {$device}. Si no fuiste tú, revisa tus dispositivos.",
-                'priority'     => 'high',
+                'type' => 'security',
+                'title' => 'Nuevo inicio de sesión',
+                'message' => "Detectamos acceso a tu cuenta desde {$device}. Si no fuiste tú, revisa tus dispositivos.",
+                'priority' => 'high',
                 'should_popup' => true,
-                'action_type'  => 'security_devices',
-                'metadata'     => array_filter([
-                    'device'       => $deviceName,
-                    'ip'           => $ip,
+                'action_type' => 'security_devices',
+                'metadata' => array_filter([
+                    'device' => $deviceName,
+                    'ip' => $ip,
                     'source_event' => 'new_device_login',
                 ]),
             ]);
 
             // Espejo para auditoría en el CRM.
             $this->createAdminNotification([
-                'type'        => 'security',
-                'title'       => 'Nuevo inicio de sesión de miembro',
-                'message'     => "{$name} inició sesión desde {$device}.",
-                'priority'    => 'low',
-                'member'      => $member,
-                'metadata'    => array_filter([
-                    'device'      => $deviceName,
-                    'ip'          => $ip,
+                'type' => 'security',
+                'title' => 'Nuevo inicio de sesión de miembro',
+                'message' => "{$name} inició sesión desde {$device}.",
+                'priority' => 'low',
+                'member' => $member,
+                'metadata' => array_filter([
+                    'device' => $deviceName,
+                    'ip' => $ip,
                     'member_name' => $name,
                 ]),
             ]);
@@ -1405,27 +1408,27 @@ class NotificationService
     {
         $this->safe(function () use ($member, $newDeviceName): void {
             $device = $newDeviceName ?: 'un nuevo dispositivo';
-            $name   = $member?->full_name ?? 'Miembro';
+            $name = $member?->full_name ?? 'Miembro';
 
             $this->createMemberNotification($member, [
-                'type'         => 'security',
-                'title'        => 'Sesión cerrada en otro dispositivo',
-                'message'      => "Tu cuenta se abrió en {$device}. Por seguridad cerramos la sesión en tus otros dispositivos.",
-                'priority'     => 'high',
+                'type' => 'security',
+                'title' => 'Sesión cerrada en otro dispositivo',
+                'message' => "Tu cuenta se abrió en {$device}. Por seguridad cerramos la sesión en tus otros dispositivos.",
+                'priority' => 'high',
                 'should_popup' => true,
-                'action_type'  => 'security_devices',
-                'metadata'     => array_filter([
-                    'device'       => $newDeviceName,
+                'action_type' => 'security_devices',
+                'metadata' => array_filter([
+                    'device' => $newDeviceName,
                     'source_event' => 'concurrent_session_revoked',
                 ]),
             ]);
 
             $this->createAdminNotification([
-                'type'     => 'security',
-                'title'    => 'Relevo de sesión de miembro',
-                'message'  => "{$name} abrió sesión en {$device}; se cerró su sesión anterior.",
+                'type' => 'security',
+                'title' => 'Relevo de sesión de miembro',
+                'message' => "{$name} abrió sesión en {$device}; se cerró su sesión anterior.",
                 'priority' => 'low',
-                'member'   => $member,
+                'member' => $member,
                 'metadata' => array_filter(['device' => $newDeviceName, 'member_name' => $name]),
             ]);
         });
@@ -1440,33 +1443,33 @@ class NotificationService
     {
         $this->safe(function () use ($member, $attemptedDeviceName, $activeDeviceName): void {
             $attempted = $attemptedDeviceName ?: 'otro dispositivo';
-            $active     = $activeDeviceName ?: 'tu dispositivo principal';
-            $name       = $member?->full_name ?? 'Miembro';
+            $active = $activeDeviceName ?: 'tu dispositivo principal';
+            $name = $member?->full_name ?? 'Miembro';
 
             $this->createMemberNotification($member, [
-                'type'         => 'security',
-                'title'        => 'Acceso bloqueado por seguridad',
-                'message'      => "Bloqueamos un intento de ingreso desde {$attempted}: tu cuenta ya está activa en {$active}.",
-                'priority'     => 'high',
+                'type' => 'security',
+                'title' => 'Acceso bloqueado por seguridad',
+                'message' => "Bloqueamos un intento de ingreso desde {$attempted}: tu cuenta ya está activa en {$active}.",
+                'priority' => 'high',
                 'should_popup' => true,
-                'action_type'  => 'security_devices',
-                'metadata'     => array_filter([
+                'action_type' => 'security_devices',
+                'metadata' => array_filter([
                     'attempted_device' => $attemptedDeviceName,
-                    'active_device'    => $activeDeviceName,
-                    'source_event'     => 'concurrent_login_blocked',
+                    'active_device' => $activeDeviceName,
+                    'source_event' => 'concurrent_login_blocked',
                 ]),
             ]);
 
             $this->createAdminNotification([
-                'type'     => 'security',
-                'title'    => 'Intento de acceso concurrente bloqueado',
-                'message'  => "{$name}: se bloqueó un ingreso desde {$attempted} (cuenta ya activa en {$active}).",
+                'type' => 'security',
+                'title' => 'Intento de acceso concurrente bloqueado',
+                'message' => "{$name}: se bloqueó un ingreso desde {$attempted} (cuenta ya activa en {$active}).",
                 'priority' => 'medium',
-                'member'   => $member,
+                'member' => $member,
                 'metadata' => array_filter([
                     'attempted_device' => $attemptedDeviceName,
-                    'active_device'    => $activeDeviceName,
-                    'member_name'      => $name,
+                    'active_device' => $activeDeviceName,
+                    'member_name' => $name,
                 ]),
             ]);
         });
@@ -1481,28 +1484,28 @@ class NotificationService
     {
         $this->safe(function () use ($member, $deviceName, $deviceId): void {
             $device = $deviceName ?: 'un dispositivo';
-            $name   = $member?->full_name ?? 'Miembro';
-            $day    = now()->toDateString();
-            $dev    = $deviceId ?: 'unknown';
+            $name = $member?->full_name ?? 'Miembro';
+            $day = now()->toDateString();
+            $dev = $deviceId ?: 'unknown';
 
             $this->createMemberNotification($member, [
-                'type'         => 'security',
-                'title'        => 'Verificación facial fallida',
-                'message'      => "Se intentó acceder a tu cuenta desde {$device} y el rostro no coincidió con el titular.",
-                'priority'     => 'high',
+                'type' => 'security',
+                'title' => 'Verificación facial fallida',
+                'message' => "Se intentó acceder a tu cuenta desde {$device} y el rostro no coincidió con el titular.",
+                'priority' => 'high',
                 'should_popup' => true,
-                'action_type'  => 'security_devices',
-                'metadata'     => array_filter(['device' => $deviceName, 'source_event' => 'face_mismatch']),
-                'event_key'    => $member ? "face_mismatch_{$member->id}_{$dev}_{$day}" : null,
+                'action_type' => 'security_devices',
+                'metadata' => array_filter(['device' => $deviceName, 'source_event' => 'face_mismatch']),
+                'event_key' => $member ? "face_mismatch_{$member->id}_{$dev}_{$day}" : null,
             ]);
 
             $this->createAdminNotification([
-                'type'      => 'security',
-                'title'     => 'Verificación facial fallida',
-                'message'   => "{$name}: rostro no coincidente al intentar acceder desde {$device}.",
-                'priority'  => 'medium',
-                'member'    => $member,
-                'metadata'  => array_filter(['device' => $deviceName, 'member_name' => $name]),
+                'type' => 'security',
+                'title' => 'Verificación facial fallida',
+                'message' => "{$name}: rostro no coincidente al intentar acceder desde {$device}.",
+                'priority' => 'medium',
+                'member' => $member,
+                'metadata' => array_filter(['device' => $deviceName, 'member_name' => $name]),
                 'event_key' => $member ? "admin_face_mismatch_{$member->id}_{$dev}_{$day}" : null,
             ]);
         });
@@ -1517,29 +1520,29 @@ class NotificationService
     {
         $this->safe(function () use ($owner, $attemptedDocument, $deviceName, $deviceId): void {
             $device = $deviceName ?: 'tu dispositivo';
-            $name   = $owner?->full_name ?? 'Miembro';
-            $day    = now()->toDateString();
-            $dev    = $deviceId ?: 'unknown';
-            $doc    = $attemptedDocument ?: 'otra cuenta';
+            $name = $owner?->full_name ?? 'Miembro';
+            $day = now()->toDateString();
+            $dev = $deviceId ?: 'unknown';
+            $doc = $attemptedDocument ?: 'otra cuenta';
 
             $this->createMemberNotification($owner, [
-                'type'         => 'security',
-                'title'        => 'Intento de acceso con otra cuenta',
-                'message'      => "Se intentó iniciar sesión con otra cuenta en {$device}. Se bloqueó el acceso.",
-                'priority'     => 'high',
+                'type' => 'security',
+                'title' => 'Intento de acceso con otra cuenta',
+                'message' => "Se intentó iniciar sesión con otra cuenta en {$device}. Se bloqueó el acceso.",
+                'priority' => 'high',
                 'should_popup' => true,
-                'action_type'  => 'security_devices',
-                'metadata'     => array_filter(['device' => $deviceName, 'attempted_document' => $attemptedDocument, 'source_event' => 'device_account_mismatch']),
-                'event_key'    => $owner ? "device_mismatch_{$owner->id}_{$dev}_{$doc}_{$day}" : null,
+                'action_type' => 'security_devices',
+                'metadata' => array_filter(['device' => $deviceName, 'attempted_document' => $attemptedDocument, 'source_event' => 'device_account_mismatch']),
+                'event_key' => $owner ? "device_mismatch_{$owner->id}_{$dev}_{$doc}_{$day}" : null,
             ]);
 
             $this->createAdminNotification([
-                'type'      => 'security',
-                'title'     => 'Bloqueo por dispositivo asociado a otro titular',
-                'message'   => "Se bloqueó un intento de acceso con doc {$doc} en el equipo de {$name}.",
-                'priority'  => 'medium',
-                'member'    => $owner,
-                'metadata'  => array_filter(['device' => $deviceName, 'attempted_document' => $attemptedDocument, 'member_name' => $name]),
+                'type' => 'security',
+                'title' => 'Bloqueo por dispositivo asociado a otro titular',
+                'message' => "Se bloqueó un intento de acceso con doc {$doc} en el equipo de {$name}.",
+                'priority' => 'medium',
+                'member' => $owner,
+                'metadata' => array_filter(['device' => $deviceName, 'attempted_document' => $attemptedDocument, 'member_name' => $name]),
                 'event_key' => $owner ? "admin_device_mismatch_{$owner->id}_{$dev}_{$doc}_{$day}" : null,
             ]);
         });
@@ -1550,14 +1553,14 @@ class NotificationService
     {
         $this->safe(function () use ($member, $detail): void {
             $this->createMemberNotification($member, [
-                'type'         => 'security',
-                'title'        => 'Actividad de acceso inusual',
-                'message'      => 'Detectamos intentos de acceso inusuales a tu cuenta. Si no fuiste tú, protege tu acceso.',
-                'priority'     => 'high',
+                'type' => 'security',
+                'title' => 'Actividad de acceso inusual',
+                'message' => 'Detectamos intentos de acceso inusuales a tu cuenta. Si no fuiste tú, protege tu acceso.',
+                'priority' => 'high',
                 'should_popup' => true,
-                'action_type'  => 'security_devices',
-                'metadata'     => array_filter([
-                    'detail'       => $detail,
+                'action_type' => 'security_devices',
+                'metadata' => array_filter([
+                    'detail' => $detail,
                     'source_event' => 'suspicious_login',
                 ]),
             ]);
@@ -1572,19 +1575,19 @@ class NotificationService
     {
         $this->safe(function () use ($report, $member): void {
             $type = $report->report_type ?? 'other';
-            $who  = $member?->full_name ?? ($report->name ?: ($report->document_number ?: 'Solicitante'));
+            $who = $member?->full_name ?? ($report->name ?: ($report->document_number ?: 'Solicitante'));
 
             $this->createAdminNotification([
-                'type'     => 'security',
-                'title'    => 'Nuevo reporte de seguridad de acceso',
-                'message'  => "{$who} reportó: {$type}. Revisa la bandeja de seguridad.",
+                'type' => 'security',
+                'title' => 'Nuevo reporte de seguridad de acceso',
+                'message' => "{$who} reportó: {$type}. Revisa la bandeja de seguridad.",
                 'priority' => 'high',
-                'member'   => $member,
+                'member' => $member,
                 'metadata' => array_filter([
-                    'report_id'    => $report->id,
-                    'report_type'  => $type,
-                    'document'     => $report->document_number,
-                    'phone'        => $report->phone,
+                    'report_id' => $report->id,
+                    'report_type' => $type,
+                    'document' => $report->document_number,
+                    'phone' => $report->phone,
                     'source_event' => 'security_support_report',
                 ]),
             ]);
@@ -1598,25 +1601,25 @@ class NotificationService
             $name = $member?->full_name ?? 'Miembro';
 
             $this->createMemberNotification($member, [
-                'type'         => 'security',
-                'title'        => 'Cuenta suspendida por seguridad',
-                'message'      => 'Por seguridad, tu cuenta fue suspendida temporalmente. Acércate al gimnasio o contacta a soporte para validar tu identidad.',
-                'priority'     => 'high',
+                'type' => 'security',
+                'title' => 'Cuenta suspendida por seguridad',
+                'message' => 'Por seguridad, tu cuenta fue suspendida temporalmente. Acércate al gimnasio o contacta a soporte para validar tu identidad.',
+                'priority' => 'high',
                 'should_popup' => true,
-                'action_type'  => 'security_devices',
-                'metadata'     => array_filter([
-                    'reason'       => $reason,
-                    'until'        => $until,
+                'action_type' => 'security_devices',
+                'metadata' => array_filter([
+                    'reason' => $reason,
+                    'until' => $until,
                     'source_event' => 'account_suspended',
                 ]),
             ]);
 
             $this->createAdminNotification([
-                'type'     => 'security',
-                'title'    => 'Cuenta de miembro suspendida',
-                'message'  => "Se suspendió la cuenta de {$name}" . ($reason ? " ({$reason})." : '.'),
+                'type' => 'security',
+                'title' => 'Cuenta de miembro suspendida',
+                'message' => "Se suspendió la cuenta de {$name}".($reason ? " ({$reason})." : '.'),
                 'priority' => 'high',
-                'member'   => $member,
+                'member' => $member,
                 'metadata' => array_filter(['reason' => $reason, 'until' => $until, 'member_name' => $name]),
             ]);
         });
@@ -1630,24 +1633,24 @@ class NotificationService
             $name = $member?->full_name ?? 'Miembro';
 
             $this->createMemberNotification($member, [
-                'type'         => 'security',
-                'title'        => 'Número de teléfono actualizado',
-                'message'      => "El número de tu cuenta se actualizó a {$dest}. Si no fuiste tú, contacta al gimnasio de inmediato.",
-                'priority'     => 'high',
+                'type' => 'security',
+                'title' => 'Número de teléfono actualizado',
+                'message' => "El número de tu cuenta se actualizó a {$dest}. Si no fuiste tú, contacta al gimnasio de inmediato.",
+                'priority' => 'high',
                 'should_popup' => true,
-                'action_type'  => 'security_devices',
-                'metadata'     => array_filter([
+                'action_type' => 'security_devices',
+                'metadata' => array_filter([
                     'masked_phone' => $maskedNew,
                     'source_event' => 'phone_changed',
                 ]),
             ]);
 
             $this->createAdminNotification([
-                'type'     => 'security',
-                'title'    => 'Cambio de número de miembro',
-                'message'  => "{$name} actualizó su número de teléfono ({$dest}).",
+                'type' => 'security',
+                'title' => 'Cambio de número de miembro',
+                'message' => "{$name} actualizó su número de teléfono ({$dest}).",
                 'priority' => 'medium',
-                'member'   => $member,
+                'member' => $member,
                 'metadata' => array_filter(['masked_phone' => $maskedNew, 'member_name' => $name]),
             ]);
         });
@@ -1661,9 +1664,9 @@ class NotificationService
         return $this->safe(function () use ($title, $message, $audience, $extra): ?Notification {
             return Notification::create(array_merge([
                 'audience' => $audience,
-                'type'     => 'system',
-                'title'    => $title,
-                'message'  => $message,
+                'type' => 'system',
+                'title' => $title,
+                'message' => $message,
                 'priority' => 'medium',
             ], $extra));
         });
@@ -1675,11 +1678,11 @@ class NotificationService
     public function createMemberNotification(?Member $member, array $attrs): ?Notification
     {
         $base = [
-            'audience'  => Notification::AUDIENCE_MEMBER,
+            'audience' => Notification::AUDIENCE_MEMBER,
             'member_id' => $member?->id,
-            'user_id'   => $member?->user_id,
-            'document'  => $member?->document_number,
-            'priority'  => 'medium',
+            'user_id' => $member?->user_id,
+            'document' => $member?->document_number,
+            'priority' => 'medium',
         ];
 
         return $this->persist(array_merge($base, $attrs));
@@ -1695,11 +1698,11 @@ class NotificationService
         unset($attrs['member']);
 
         $base = [
-            'audience'  => Notification::AUDIENCE_ADMIN,
+            'audience' => Notification::AUDIENCE_ADMIN,
             'member_id' => $member?->id,
-            'user_id'   => $member?->user_id,
-            'document'  => $member?->document_number,
-            'priority'  => 'medium',
+            'user_id' => $member?->user_id,
+            'document' => $member?->document_number,
+            'priority' => 'medium',
         ];
 
         return $this->persist(array_merge($base, $attrs));
@@ -1742,7 +1745,7 @@ class NotificationService
         $memberId = $notification->member_id;
         dispatch(function () use ($notification, $memberId): void {
             try {
-                $fcm = app(\App\Services\Fcm\FcmService::class);
+                $fcm = app(FcmService::class);
                 if ($memberId) {
                     $fcm->sendToMember(Member::find($memberId), $notification);
                 } else {
@@ -1764,21 +1767,23 @@ class NotificationService
         if (is_object($source)) {
             return $source->{$key} ?? $default;
         }
+
         return $default;
     }
 
     /** Formato de pesos colombianos: 120000 → $120.000. */
     private function formatCop(float $amount): string
     {
-        return '$' . number_format($amount, 0, ',', '.');
+        return '$'.number_format($amount, 0, ',', '.');
     }
 
     /** Etiqueta legible de cuándo es una clase: "Lunes a las 09:30". */
     private function classWhenLabel($class): string
     {
-        $day  = $this->attr($class, 'day_of_week');
+        $day = $this->attr($class, 'day_of_week');
         $time = $this->attr($class, 'start_time');
-        return trim(($day ? "$day " : '') . ($time ? "a las $time" : ''));
+
+        return trim(($day ? "$day " : '').($time ? "a las $time" : ''));
     }
 
     /** Ejecuta una closure y nunca deja que un fallo de notificación rompa el flujo. */
@@ -1790,6 +1795,7 @@ class NotificationService
             Log::warning('NotificationService: fallo al notificar (ignorado)', [
                 'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }

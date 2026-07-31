@@ -37,7 +37,7 @@ class WompiNequiPaymentService extends AbstractWompiPaymentService
         }
 
         return [
-            'type'         => 'NEQUI',
+            'type' => 'NEQUI',
             'phone_number' => $phone,
         ];
     }
@@ -52,6 +52,7 @@ class WompiNequiPaymentService extends AbstractWompiPaymentService
         if (strlen($digits) === 11 && str_starts_with($digits, '0')) {
             $digits = substr($digits, 1);
         }
+
         return $digits;
     }
 }

@@ -25,9 +25,7 @@ class FactusTokenManager
 {
     private const TOKEN_PATH = '/oauth/token';
 
-    public function __construct(private array $cfg)
-    {
-    }
+    public function __construct(private array $cfg) {}
 
     public static function fromConfig(): self
     {
@@ -41,12 +39,12 @@ class FactusTokenManager
 
     private function accessKey(): string
     {
-        return 'billing.factus.token.' . $this->env();
+        return 'billing.factus.token.'.$this->env();
     }
 
     private function refreshKey(): string
     {
-        return 'billing.factus.refresh.' . $this->env();
+        return 'billing.factus.refresh.'.$this->env();
     }
 
     /** Devuelve un access_token válido (cacheado o recién emitido). */
@@ -69,8 +67,8 @@ class FactusTokenManager
         $refreshToken = Cache::get($this->refreshKey());
         if (is_string($refreshToken) && $refreshToken !== '') {
             $response = $this->request([
-                'grant_type'    => 'refresh_token',
-                'client_id'     => $this->cred('client_id'),
+                'grant_type' => 'refresh_token',
+                'client_id' => $this->cred('client_id'),
                 'client_secret' => $this->cred('client_secret'),
                 'refresh_token' => $refreshToken,
             ]);
@@ -87,16 +85,16 @@ class FactusTokenManager
     private function passwordGrant(): string
     {
         $response = $this->request([
-            'grant_type'    => 'password',
-            'client_id'     => $this->cred('client_id'),
+            'grant_type' => 'password',
+            'client_id' => $this->cred('client_id'),
             'client_secret' => $this->cred('client_secret'),
-            'username'      => $this->cred('username'),
-            'password'      => $this->cred('password'),
+            'username' => $this->cred('username'),
+            'password' => $this->cred('password'),
         ]);
 
         if (! $response->successful()) {
             // No exponemos el cuerpo (puede traer pistas de credenciales).
-            throw new RuntimeException('Factus: fallo al obtener token (HTTP ' . $response->status() . ').');
+            throw new RuntimeException('Factus: fallo al obtener token (HTTP '.$response->status().').');
         }
 
         return $this->store($response);

@@ -19,11 +19,17 @@ use Throwable;
 class ZktecoTurnstileService
 {
     private const MAGIC = "\x50\x50\x82\x7d";
-    private const CMD_CONNECT    = 1000;
-    private const CMD_EXIT       = 1001;
-    private const CMD_AUTH       = 1102;
-    private const CMD_UNLOCK     = 31;
-    private const CMD_ACK_OK     = 2000;
+
+    private const CMD_CONNECT = 1000;
+
+    private const CMD_EXIT = 1001;
+
+    private const CMD_AUTH = 1102;
+
+    private const CMD_UNLOCK = 31;
+
+    private const CMD_ACK_OK = 2000;
+
     private const CMD_ACK_UNAUTH = 2005;
 
     /**
@@ -56,7 +62,7 @@ class ZktecoTurnstileService
             // 1. Handshake — CMD_CONNECT (session_id se asigna en la respuesta).
             $response = $this->send($socket, self::CMD_CONNECT, 0, 0, '');
             $sessionId = $response['session_id'];
-            $replyId   = $response['reply_id'];
+            $replyId = $response['reply_id'];
 
             // 2. Autenticación si el dispositivo la exige (comm_key ≠ 0).
             if ($response['command'] === self::CMD_ACK_UNAUTH) {
@@ -75,7 +81,7 @@ class ZktecoTurnstileService
 
             // 3. CMD_UNLOCK con duración (4 bytes little-endian, en segundos).
             $replyId++;
-            $payload  = pack('V', $duration);
+            $payload = pack('V', $duration);
             $response = $this->send($socket, self::CMD_UNLOCK, $sessionId, $replyId, $payload);
             $ok = $response['command'] === self::CMD_ACK_OK;
 
@@ -92,8 +98,8 @@ class ZktecoTurnstileService
             ];
         } catch (Throwable $e) {
             Log::warning('ZKTeco unlock failed', [
-                'host'  => $host,
-                'port'  => $port,
+                'host' => $host,
+                'port' => $port,
                 'error' => $e->getMessage(),
             ]);
 
@@ -117,6 +123,7 @@ class ZktecoTurnstileService
         if (@fwrite($socket, $packet) === false) {
             throw new RuntimeException('Fallo al escribir en el socket TCP.');
         }
+
         return $this->readResponse($socket);
     }
 
@@ -125,11 +132,11 @@ class ZktecoTurnstileService
      */
     private function buildPacket(int $command, int $sessionId, int $replyId, string $payload): string
     {
-        $body     = pack('vvvv', $command, 0, $sessionId, $replyId) . $payload;
+        $body = pack('vvvv', $command, 0, $sessionId, $replyId).$payload;
         $checksum = $this->checksum($body);
-        $body     = pack('vvvv', $command, $checksum, $sessionId, $replyId) . $payload;
+        $body = pack('vvvv', $command, $checksum, $sessionId, $replyId).$payload;
 
-        return self::MAGIC . pack('V', strlen($body)) . $body;
+        return self::MAGIC.pack('V', strlen($body)).$body;
     }
 
     private function readResponse($socket): array
@@ -139,7 +146,7 @@ class ZktecoTurnstileService
             throw new RuntimeException('Respuesta inválida — magic incorrecto.');
         }
         $length = unpack('V', substr($head, 4, 4))[1];
-        $body   = $length > 0 ? $this->readFull($socket, $length) : '';
+        $body = $length > 0 ? $this->readFull($socket, $length) : '';
 
         if (strlen($body) < 8) {
             throw new RuntimeException('Header de respuesta truncado.');
@@ -147,16 +154,16 @@ class ZktecoTurnstileService
         $header = unpack('vcommand/vchecksum/vsession_id/vreply_id', substr($body, 0, 8));
 
         return [
-            'command'    => $header['command'],
+            'command' => $header['command'],
             'session_id' => $header['session_id'],
-            'reply_id'   => $header['reply_id'],
-            'payload'    => substr($body, 8),
+            'reply_id' => $header['reply_id'],
+            'payload' => substr($body, 8),
         ];
     }
 
     private function readFull($socket, int $size): string
     {
-        $buffer    = '';
+        $buffer = '';
         $remaining = $size;
         while ($remaining > 0) {
             $chunk = @fread($socket, $remaining);
@@ -167,9 +174,10 @@ class ZktecoTurnstileService
                 }
                 break;
             }
-            $buffer    .= $chunk;
+            $buffer .= $chunk;
             $remaining -= strlen($chunk);
         }
+
         return $buffer;
     }
 
@@ -177,11 +185,11 @@ class ZktecoTurnstileService
     private function checksum(string $data): int
     {
         $length = strlen($data);
-        $sum    = 0;
-        $i      = 0;
+        $sum = 0;
+        $i = 0;
         while ($length > 1) {
             $sum += unpack('v', substr($data, $i, 2))[1];
-            $i      += 2;
+            $i += 2;
             $length -= 2;
         }
         if ($length === 1) {
@@ -190,6 +198,7 @@ class ZktecoTurnstileService
         while ($sum >> 16) {
             $sum = ($sum & 0xFFFF) + ($sum >> 16);
         }
+
         return (~$sum) & 0xFFFF;
     }
 
@@ -206,8 +215,8 @@ class ZktecoTurnstileService
         }
         $k = ($k + $sessionId) & 0xFFFFFFFF;
 
-        $b0 = ($k & 0xFF)         ^ ord('Z');
-        $b1 = (($k >> 8)  & 0xFF) ^ ord('K');
+        $b0 = ($k & 0xFF) ^ ord('Z');
+        $b1 = (($k >> 8) & 0xFF) ^ ord('K');
         $b2 = (($k >> 16) & 0xFF) ^ ord('S');
         $b3 = (($k >> 24) & 0xFF) ^ ord('O');
 

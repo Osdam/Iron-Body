@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\DB;
 class NutritionService
 {
     public const TZ = 'America/Bogota';
+
     public const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snacks'];
 
     /**
@@ -150,6 +151,7 @@ class NutritionService
                 'totals' => $this->sumItems($items),
             ];
         }
+
         return $out;
     }
 
@@ -162,6 +164,7 @@ class NutritionService
             $ca += $i['carbs_g'];
             $f += $i['fat_g'];
         }
+
         return [
             'calories' => round($c, 1),
             'protein_g' => round($p, 1),
@@ -237,6 +240,7 @@ class NutritionService
             return false;
         }
         $item->delete();
+
         return true;
     }
 
@@ -266,7 +270,7 @@ class NutritionService
         $set = array_flip($dates);
         $current = 0;
         $cursor = $today;
-        if (!isset($set[$today->toDateString()])) {
+        if (! isset($set[$today->toDateString()])) {
             $cursor = $today->subDay(); // hoy sin registro → racha vive desde ayer
         }
         while (isset($set[$cursor->toDateString()])) {
@@ -310,6 +314,7 @@ class NutritionService
                 'is_today' => $date->toDateString() === $today->toDateString(),
             ];
         }
+
         return $out;
     }
 }

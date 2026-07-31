@@ -19,8 +19,10 @@ namespace App\Services\Marketing;
 class SalesPaymentReadinessService
 {
     public const STATE_PRODUCTION_READY = 'production_ready';
-    public const STATE_SANDBOX_PENDING  = 'sandbox_pending';
-    public const STATE_NOT_CONFIGURED   = 'not_configured';
+
+    public const STATE_SANDBOX_PENDING = 'sandbox_pending';
+
+    public const STATE_NOT_CONFIGURED = 'not_configured';
 
     /** ¿Wompi está en producción y con Web Checkout configurado? */
     public function isProductionReady(): bool
@@ -66,12 +68,12 @@ class SalesPaymentReadinessService
         $state = $this->state();
 
         return [
-            'env'              => (string) config('wompi.env', 'sandbox'),
-            'production'       => $this->isProduction(),
+            'env' => (string) config('wompi.env', 'sandbox'),
+            'production' => $this->isProduction(),
             'checkout_configured' => $this->isConfigured(),
-            'missing'          => $this->missingConfig(),
-            'state'            => $state,
-            'can_send_live'    => $state === self::STATE_PRODUCTION_READY,
+            'missing' => $this->missingConfig(),
+            'state' => $state,
+            'can_send_live' => $state === self::STATE_PRODUCTION_READY,
         ];
     }
 
@@ -94,6 +96,7 @@ class SalesPaymentReadinessService
         if (empty(config('wompi.checkout.base_url'))) {
             $missing[] = 'WOMPI_CHECKOUT_URL';
         }
+
         return $missing;
     }
 }

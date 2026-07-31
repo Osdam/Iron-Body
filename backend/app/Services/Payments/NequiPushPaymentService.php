@@ -39,12 +39,14 @@ use Throwable;
 class NequiPushPaymentService
 {
     public const PROVIDER = 'nequi';
-    public const METHOD   = 'nequi_push';
+
+    public const METHOD = 'nequi_push';
 
     /** ¿Nequi directo habilitado y con configuración mínima? */
     public function isEnabled(): bool
     {
         $cfg = config('services.nequi');
+
         return (bool) ($cfg['enabled'] ?? false)
             && config('services.payments.nequi_provider') === 'direct';
     }
@@ -84,42 +86,42 @@ class NequiPushPaymentService
 
         try {
             $token = $this->authenticate();
-            $resp  = $this->requestPush($token, $tx, $phone);
+            $resp = $this->requestPush($token, $tx, $phone);
         } catch (NequiException $e) {
             $this->transition($tx, PaymentTransaction::STATUS_FAILED, [
                 'failure_reason' => $e->getMessage(),
-                'raw_response'   => $this->mergeRaw($tx, ['push_error' => true]),
+                'raw_response' => $this->mergeRaw($tx, ['push_error' => true]),
             ]);
             throw $e;
         } catch (Throwable $e) {
             Log::warning('Nequi push: error no controlado', [
                 'reference' => $tx->reference,
-                'provider'  => self::PROVIDER,
-                'method'    => self::METHOD,
+                'provider' => self::PROVIDER,
+                'method' => self::METHOD,
             ]);
             $this->transition($tx, PaymentTransaction::STATUS_FAILED, [
                 'failure_reason' => 'No pudimos iniciar el pago con Nequi. Intenta nuevamente.',
-                'raw_response'   => $this->mergeRaw($tx, ['push_error' => true]),
+                'raw_response' => $this->mergeRaw($tx, ['push_error' => true]),
             ]);
             throw new NequiException('No pudimos iniciar el pago con Nequi. Intenta nuevamente.');
         }
 
         // Push aceptado → PENDING: el cliente aprueba en su app Nequi.
         $providerRef = $resp['transaction_id'] ?? $resp['transactionId'] ?? null;
-        $expiresAt   = $resp['expires_at']
+        $expiresAt = $resp['expires_at']
             ?? now()->addMinutes((int) (config('services.nequi.ttl_minutes') ?: 15))->toIso8601String();
 
         Log::info('nequi.push.created', [
             'reference' => $tx->reference,
-            'provider'  => self::PROVIDER,
-            'method'    => self::METHOD,
-            'status'    => PaymentTransaction::STATUS_PENDING,
+            'provider' => self::PROVIDER,
+            'method' => self::METHOD,
+            'status' => PaymentTransaction::STATUS_PENDING,
         ]);
 
         return $this->transition($tx, PaymentTransaction::STATUS_PENDING, [
             'provider_ref' => $providerRef,
             'raw_response' => $this->mergeRaw($tx, [
-                'flow'       => 'nequi_push',
+                'flow' => 'nequi_push',
                 'expires_at' => $expiresAt,
             ]),
         ]);
@@ -132,19 +134,21 @@ class NequiPushPaymentService
             return $tx;
         }
         try {
-            $token  = $this->authenticate();
+            $token = $this->authenticate();
             $remote = $this->requestStatus($token, $tx);
         } catch (Throwable $e) {
             Log::info('nequi.status.query_failed', [
                 'reference' => $tx->reference,
-                'provider'  => self::PROVIDER,
+                'provider' => self::PROVIDER,
             ]);
+
             return $tx; // sin datos confiables → no se cambia el estado
         }
         $status = $this->mapNequiStatus((string) ($remote['status'] ?? ''));
         if ($status === null) {
             return $tx;
         }
+
         return $this->transition($tx, $status, [
             'failure_reason' => $status === PaymentTransaction::STATUS_APPROVED
                 ? null
@@ -164,10 +168,11 @@ class NequiPushPaymentService
 
         if (! $this->verifyWebhookSignature($payload, $headers)) {
             Log::warning('nequi.webhook.signature_invalid', ['provider' => self::PROVIDER]);
+
             return null;
         }
 
-        $reference   = $payload['reference'] ?? $payload['invoice'] ?? $payload['extra1'] ?? null;
+        $reference = $payload['reference'] ?? $payload['invoice'] ?? $payload['extra1'] ?? null;
         $providerRef = $payload['transaction_id'] ?? $payload['transactionId'] ?? null;
 
         $tx = null;
@@ -181,9 +186,10 @@ class NequiPushPaymentService
         }
         if (! $tx) {
             Log::warning('nequi.webhook.tx_not_found', [
-                'provider'  => self::PROVIDER,
+                'provider' => self::PROVIDER,
                 'reference' => $reference,
             ]);
+
             return null;
         }
 
@@ -191,8 +197,9 @@ class NequiPushPaymentService
         if ($status === null) {
             Log::info('nequi.webhook.unmapped_status', [
                 'reference' => $tx->reference,
-                'provider'  => self::PROVIDER,
+                'provider' => self::PROVIDER,
             ]);
+
             return $tx;
         }
 
@@ -201,26 +208,27 @@ class NequiPushPaymentService
         if ($paid > 0 && abs($paid - (float) $tx->amount) > 0.5) {
             Log::warning('nequi.webhook.amount_mismatch', [
                 'reference' => $tx->reference,
-                'provider'  => self::PROVIDER,
+                'provider' => self::PROVIDER,
             ]);
+
             return $this->transition($tx, PaymentTransaction::STATUS_FAILED, [
                 'failure_reason' => 'Monto no coincide con el esperado',
-                'provider_ref'   => $providerRef,
-                'raw_response'   => $this->mergeRaw($tx, ['webhook' => $this->sanitizePayload($payload)]),
+                'provider_ref' => $providerRef,
+                'raw_response' => $this->mergeRaw($tx, ['webhook' => $this->sanitizePayload($payload)]),
             ]);
         }
 
         Log::info('nequi.webhook.processed', [
             'reference' => $tx->reference,
-            'provider'  => self::PROVIDER,
-            'method'    => self::METHOD,
-            'status'    => $status,
+            'provider' => self::PROVIDER,
+            'method' => self::METHOD,
+            'status' => $status,
         ]);
 
         return $this->transition($tx, $status, [
             'failure_reason' => $status === PaymentTransaction::STATUS_APPROVED ? null : ($payload['message'] ?? null),
-            'provider_ref'   => $providerRef,
-            'raw_response'   => $this->mergeRaw($tx, ['webhook' => $this->sanitizePayload($payload)]),
+            'provider_ref' => $providerRef,
+            'raw_response' => $this->mergeRaw($tx, ['webhook' => $this->sanitizePayload($payload)]),
         ]);
     }
 
@@ -246,16 +254,16 @@ class NequiPushPaymentService
 
         Log::info('nequi.reverse.requested', [
             'reference' => $tx->reference,
-            'provider'  => self::PROVIDER,
-            'method'    => self::METHOD,
-            'status'    => PaymentTransaction::STATUS_CANCELLED,
-            'reason'    => mb_substr($reason, 0, 120),
+            'provider' => self::PROVIDER,
+            'method' => self::METHOD,
+            'status' => PaymentTransaction::STATUS_CANCELLED,
+            'reason' => mb_substr($reason, 0, 120),
         ]);
 
         // Marca la transacción como cancelada (NO toca la membresía vigente).
         return $this->transition($tx, PaymentTransaction::STATUS_CANCELLED, [
-            'failure_reason' => 'Pago reversado: ' . mb_substr($reason, 0, 120),
-            'raw_response'   => $this->mergeRaw($tx, ['reversed' => true]),
+            'failure_reason' => 'Pago reversado: '.mb_substr($reason, 0, 120),
+            'raw_response' => $this->mergeRaw($tx, ['reversed' => true]),
         ]);
     }
 
@@ -271,6 +279,7 @@ class NequiPushPaymentService
         if (strlen($digits) !== 10 || $digits[0] !== '3') {
             throw new NequiException('Ingresa un número de celular Nequi válido (10 dígitos).');
         }
+
         return $digits;
     }
 
@@ -280,8 +289,8 @@ class NequiPushPaymentService
         return match (strtolower(trim($raw))) {
             'approved', 'success', 'successful', 'paid', 'completed', '00', '0', 'c' => PaymentTransaction::STATUS_APPROVED,
             'pending', 'in_progress', 'processing', 'created', '35' => PaymentTransaction::STATUS_PENDING,
-            'rejected', 'declined', 'failed', 'error', 'r'          => PaymentTransaction::STATUS_FAILED,
-            'expired', 'timeout'                                    => PaymentTransaction::STATUS_EXPIRED,
+            'rejected', 'declined', 'failed', 'error', 'r' => PaymentTransaction::STATUS_FAILED,
+            'expired', 'timeout' => PaymentTransaction::STATUS_EXPIRED,
             'cancelled', 'canceled', 'abandoned', 'reversed', 'voided' => PaymentTransaction::STATUS_CANCELLED,
             default => null,
         };
@@ -294,6 +303,7 @@ class NequiPushPaymentService
             $p['access_token'], $p['token'], $p['client_secret'],
             $p['api_key'], $p['signature'], $p['authorization']
         );
+
         return $p;
     }
 
@@ -319,57 +329,60 @@ class NequiPushPaymentService
         if (! is_string($token) || $token === '') {
             throw new NequiException('Respuesta de autenticación de Nequi inválida.');
         }
+
         return $token;
     }
 
     /** Inicia el push (cobro con notificación) en la app Nequi del cliente. */
     protected function requestPush(string $token, PaymentTransaction $tx, string $phone): array
     {
-        $cfg  = config('services.nequi');
+        $cfg = config('services.nequi');
         $base = rtrim((string) $cfg['base_url'], '/');
         // Ruta documentada de "pago no registrado con notificación push". El path
         // exacto se confirma con la doc final de Nequi (adapter listo).
         $resp = Http::withToken($token)
             ->withHeaders(array_filter(['x-api-key' => $cfg['api_key'] ?? null]))
-            ->post($base . '/payments/unregistered/payment', [
+            ->post($base.'/payments/unregistered/payment', [
                 'phoneNumber' => $phone,
-                'code'        => 'NIT_1',
-                'value'       => (string) ((int) round((float) $tx->amount)),
-                'reference'   => $tx->reference,
-                'merchantId'  => $cfg['merchant_id'] ?? null,
+                'code' => 'NIT_1',
+                'value' => (string) ((int) round((float) $tx->amount)),
+                'reference' => $tx->reference,
+                'merchantId' => $cfg['merchant_id'] ?? null,
             ]);
 
         if (! $resp->successful()) {
             throw new NequiException('Nequi no aceptó la solicitud de pago. Intenta nuevamente.');
         }
+
         return (array) $resp->json();
     }
 
     /** Consulta el estado del pago push en Nequi. */
     protected function requestStatus(string $token, PaymentTransaction $tx): array
     {
-        $cfg  = config('services.nequi');
+        $cfg = config('services.nequi');
         $base = rtrim((string) $cfg['base_url'], '/');
         $resp = Http::withToken($token)
             ->withHeaders(array_filter(['x-api-key' => $cfg['api_key'] ?? null]))
-            ->get($base . '/payments/unregistered/' . rawurlencode((string) $tx->provider_ref) . '/status');
+            ->get($base.'/payments/unregistered/'.rawurlencode((string) $tx->provider_ref).'/status');
         if (! $resp->successful()) {
             throw new NequiException('No pudimos consultar el estado en Nequi.');
         }
+
         return (array) $resp->json();
     }
 
     /** Solicita el reverso del pago en Nequi. */
     protected function requestReverse(string $token, PaymentTransaction $tx, string $reason): void
     {
-        $cfg  = config('services.nequi');
+        $cfg = config('services.nequi');
         $base = rtrim((string) $cfg['base_url'], '/');
         $resp = Http::withToken($token)
             ->withHeaders(array_filter(['x-api-key' => $cfg['api_key'] ?? null]))
-            ->post($base . '/payments/unregistered/reverse', [
+            ->post($base.'/payments/unregistered/reverse', [
                 'transactionId' => $tx->provider_ref,
-                'reference'     => $tx->reference,
-                'reason'        => mb_substr($reason, 0, 120),
+                'reference' => $tx->reference,
+                'reason' => mb_substr($reason, 0, 120),
             ]);
         if (! $resp->successful()) {
             throw new NequiException('Nequi no aceptó el reverso.');
@@ -394,6 +407,7 @@ class NequiPushPaymentService
             return false;
         }
         $calc = hash_hmac('sha256', json_encode($payload, JSON_UNESCAPED_SLASHES), (string) $secret);
+
         return hash_equals($calc, (string) $sig);
     }
 
@@ -417,20 +431,21 @@ class NequiPushPaymentService
             while (PaymentTransaction::where('reference', $reference)->exists()) {
                 $reference = $this->generateReference();
             }
+
             return PaymentTransaction::create([
-                'reference'       => $reference,
+                'reference' => $reference,
                 'idempotency_key' => $idempotencyKey ?: (string) Str::uuid(),
-                'member_id'       => $member->id,
-                'user_id'         => $member->user_id,
-                'plan_id'         => $plan->id,
-                'amount'          => $amount,
-                'currency'        => 'COP',
-                'status'          => PaymentTransaction::STATUS_PENDING,
-                'provider'        => self::PROVIDER,
-                'method'          => self::METHOD,
-                'description'     => 'Membresía ' . $plan->name . ' · Iron Body',
-                'customer'        => ['phone' => $phone, 'name' => $member->full_name],
-                'raw_response'    => ['flow' => 'nequi_push', 'requested_method' => self::METHOD],
+                'member_id' => $member->id,
+                'user_id' => $member->user_id,
+                'plan_id' => $plan->id,
+                'amount' => $amount,
+                'currency' => 'COP',
+                'status' => PaymentTransaction::STATUS_PENDING,
+                'provider' => self::PROVIDER,
+                'method' => self::METHOD,
+                'description' => 'Membresía '.$plan->name.' · Iron Body',
+                'customer' => ['phone' => $phone, 'name' => $member->full_name],
+                'raw_response' => ['flow' => 'nequi_push', 'requested_method' => self::METHOD],
             ]);
         });
     }
@@ -487,6 +502,7 @@ class NequiPushPaymentService
     protected function mergeRaw(PaymentTransaction $tx, array $extra): array
     {
         $prev = is_array($tx->raw_response) ? $tx->raw_response : [];
+
         return array_merge($prev, $extra);
     }
 
@@ -498,24 +514,25 @@ class NequiPushPaymentService
                 $p = array_merge($p, $p[$k]);
             }
         }
+
         return $p;
     }
 
     protected function generateReference(): string
     {
-        return 'NEQUI-' . now()->format('Ymd') . '-'
-            . strtoupper(Str::random(6)) . '-' . substr((string) time(), -5);
+        return 'NEQUI-'.now()->format('Ymd').'-'
+            .strtoupper(Str::random(6)).'-'.substr((string) time(), -5);
     }
 
     /** Mensaje funcional mínimo por estado (la app puede usar el suyo). */
     public function statusMessage(string $status): string
     {
         return match ($status) {
-            PaymentTransaction::STATUS_APPROVED  => 'Pago confirmado. Tu membresía fue activada.',
-            PaymentTransaction::STATUS_FAILED    => 'El pago con Nequi no se realizó.',
+            PaymentTransaction::STATUS_APPROVED => 'Pago confirmado. Tu membresía fue activada.',
+            PaymentTransaction::STATUS_FAILED => 'El pago con Nequi no se realizó.',
             PaymentTransaction::STATUS_CANCELLED => 'El pago con Nequi fue cancelado.',
-            PaymentTransaction::STATUS_EXPIRED   => 'El pago con Nequi expiró. Genera uno nuevo.',
-            default                              => 'Revisa tu app Nequi y aprueba el pago.',
+            PaymentTransaction::STATUS_EXPIRED => 'El pago con Nequi expiró. Genera uno nuevo.',
+            default => 'Revisa tu app Nequi y aprueba el pago.',
         };
     }
 
@@ -526,6 +543,7 @@ class NequiPushPaymentService
         if (! empty($raw['expires_at'])) {
             return (string) $raw['expires_at'];
         }
+
         return $tx->created_at
             ? Carbon::parse($tx->created_at)
                 ->addMinutes((int) (config('services.nequi.ttl_minutes') ?: 15))

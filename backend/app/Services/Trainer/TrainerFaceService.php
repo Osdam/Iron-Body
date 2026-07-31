@@ -58,7 +58,7 @@ class TrainerFaceService
         $distance = $this->euclidean($reference, $liveEmbedding);
 
         return [
-            'matched'  => $distance !== null && $distance <= $this->threshold(),
+            'matched' => $distance !== null && $distance <= $this->threshold(),
             'distance' => $distance,
         ];
     }

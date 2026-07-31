@@ -16,14 +16,13 @@ use Symfony\Component\Process\Process;
  */
 class TesseractNutritionOcrProvider
 {
-    public function __construct(private NutritionOcrImagePreprocessor $preprocessor)
-    {
-    }
+    public function __construct(private NutritionOcrImagePreprocessor $preprocessor) {}
 
     /** ¿El binario de Tesseract existe y es ejecutable? */
     public function isAvailable(): bool
     {
         $bin = (string) config('nutrition.ocr.tesseract_bin');
+
         return $bin !== '' && is_file($bin) && is_executable($bin);
     }
 
@@ -37,6 +36,7 @@ class TesseractNutritionOcrProvider
             Log::warning('nutrition.ocr.tesseract.unavailable', [
                 'bin' => config('nutrition.ocr.tesseract_bin'),
             ]);
+
             return null;
         }
         if (! is_file($imagePath)) {
@@ -67,13 +67,16 @@ class TesseractNutritionOcrProvider
                 Log::warning('nutrition.ocr.tesseract.failed', [
                     'err' => trim($proc->getErrorOutput()),
                 ]);
+
                 return null;
             }
 
             $text = trim($proc->getOutput());
+
             return $text === '' ? null : $text;
         } catch (\Throwable $e) {
             Log::warning('nutrition.ocr.tesseract.exception', ['msg' => $e->getMessage()]);
+
             return null;
         } finally {
             // Limpia el temporal de preprocesamiento (nunca el original del caller).

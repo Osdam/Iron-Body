@@ -7,7 +7,6 @@ use App\Models\MemberAppActivityDay;
 use App\Models\WeeklyStreakConfig;
 use App\Models\WeeklyStreakReward;
 use Carbon\CarbonImmutable;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Lógica de la racha semanal ("Esta semana").
@@ -26,6 +25,7 @@ class WeeklyStreakService
 
     /** Días de la semana en orden lunes→domingo, con label corto ES. */
     private const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
     private const DAY_LABELS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 
     /**
@@ -62,7 +62,7 @@ class WeeklyStreakService
                 // El aviso es aditivo: nunca rompe el touch.
             }
             try {
-                app(\App\Services\AutomationEventService::class)->emit(
+                app(AutomationEventService::class)->emit(
                     'streak.completed',
                     $member->id,
                     [
@@ -73,7 +73,7 @@ class WeeklyStreakService
                             'current_streak_days' => $summary['current_streak_days'] ?? 0,
                         ],
                     ],
-                    'streak.completed:' . $member->id . ':' . ($summary['week_start'] ?? $today->toDateString()),
+                    'streak.completed:'.$member->id.':'.($summary['week_start'] ?? $today->toDateString()),
                 );
             } catch (\Throwable $e) {
                 // No rompemos el touch si la automatización falla.
@@ -181,7 +181,7 @@ class WeeklyStreakService
         // Racha actual: desde hoy (o ayer si hoy no marcado) hacia atrás.
         $current = 0;
         $cursor = $today;
-        if (!isset($set[$today->toDateString()])) {
+        if (! isset($set[$today->toDateString()])) {
             $cursor = $today->subDay(); // hoy no marcado → la racha vive desde ayer
         }
         while (isset($set[$cursor->toDateString()])) {

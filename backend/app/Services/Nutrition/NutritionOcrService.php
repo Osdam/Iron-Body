@@ -31,8 +31,7 @@ class NutritionOcrService
     public function __construct(
         private TesseractNutritionOcrProvider $tesseract,
         private NutritionLabelParser $parser,
-    ) {
-    }
+    ) {}
 
     public function isEnabled(): bool
     {
@@ -58,9 +57,9 @@ class NutritionOcrService
 
         $scan = NutritionOcrScan::create([
             'member_id' => $member->id,
-            'barcode'   => $barcode,
-            'provider'  => $provider,
-            'status'    => NutritionOcrScan::STATUS_PENDING,
+            'barcode' => $barcode,
+            'provider' => $provider,
+            'status' => NutritionOcrScan::STATUS_PENDING,
         ]);
 
         Log::info('nutrition.ocr.scan', [
@@ -83,7 +82,7 @@ class NutritionOcrService
             return $this->fail(
                 $scan,
                 'No pudimos leer la tabla nutricional. Intenta con una foto más clara o '
-                . 'completa los datos manualmente.'
+                .'completa los datos manualmente.'
             );
         }
 
@@ -99,17 +98,17 @@ class NutritionOcrService
             return $this->fail(
                 $scan,
                 'No pudimos leer la tabla nutricional. Intenta con una foto más clara o '
-                . 'completa los datos manualmente.',
+                .'completa los datos manualmente.',
                 $imagePath,
                 $text,
             );
         }
 
         $scan->update([
-            'status'           => NutritionOcrScan::STATUS_PROCESSED,
-            'image_path'       => $imagePath,
-            'extracted_text'   => mb_substr($text, 0, 4000),
-            'parsed_payload'   => $this->buildDraftFoodFromParsedLabel($parsed),
+            'status' => NutritionOcrScan::STATUS_PROCESSED,
+            'image_path' => $imagePath,
+            'extracted_text' => mb_substr($text, 0, 4000),
+            'parsed_payload' => $this->buildDraftFoodFromParsedLabel($parsed),
             'confidence_score' => $parsed['confidence'],
         ]);
 
@@ -124,6 +123,7 @@ class NutritionOcrService
             // 'local'/'disabled': sin motor server-side. No se finge resultado.
             return null;
         }
+
         // Se procesa sobre la ruta temporal del upload (no requiere persistirla).
         return $this->tesseract->extractText($image->getPathname());
     }
@@ -139,6 +139,7 @@ class NutritionOcrService
         if (! in_array($mime, self::ALLOWED_MIME, true)) {
             return 'Formato de imagen no soportado. Usa una foto JPG, PNG o WEBP.';
         }
+
         return null;
     }
 
@@ -150,11 +151,12 @@ class NutritionOcrService
         ?string $text = null,
     ): NutritionOcrScan {
         $scan->update([
-            'status'         => NutritionOcrScan::STATUS_FAILED,
-            'image_path'     => $imagePath,
+            'status' => NutritionOcrScan::STATUS_FAILED,
+            'image_path' => $imagePath,
             'extracted_text' => $text !== null ? mb_substr($text, 0, 4000) : null,
-            'error_message'  => $message,
+            'error_message' => $message,
         ]);
+
         return $scan;
     }
 
@@ -162,23 +164,24 @@ class NutritionOcrService
     public function buildDraftFoodFromParsedLabel(array $parsed): array
     {
         $m = $parsed['macros'] ?? [];
+
         return [
-            'name'         => null, // el usuario lo completa/confirma
-            'brand'        => null,
+            'name' => null, // el usuario lo completa/confirma
+            'brand' => null,
             'serving_size' => $parsed['serving_size'] ?? null,
             'serving_unit' => $parsed['serving_unit'] ?? 'g',
-            'per_serving'  => [
+            'per_serving' => [
                 'calories' => $m['calories'] ?? null,
-                'protein'  => $m['protein'] ?? null,
-                'carbs'    => $m['carbs'] ?? null,
-                'fat'      => $m['fat'] ?? null,
-                'sugar'    => $m['sugar'] ?? null,
-                'fiber'    => $m['fiber'] ?? null,
-                'sodium'   => $m['sodium'] ?? null,
+                'protein' => $m['protein'] ?? null,
+                'carbs' => $m['carbs'] ?? null,
+                'fat' => $m['fat'] ?? null,
+                'sugar' => $m['sugar'] ?? null,
+                'fiber' => $m['fiber'] ?? null,
+                'sodium' => $m['sodium'] ?? null,
             ],
             'confidence_score' => $parsed['confidence'] ?? 0,
-            'warnings'         => $parsed['warnings'] ?? [],
-            'needs_review'     => true,
+            'warnings' => $parsed['warnings'] ?? [],
+            'needs_review' => true,
         ];
     }
 
@@ -196,12 +199,12 @@ class NutritionOcrService
         $servingSize = isset($data['serving_size']) ? max(0.01, (float) $data['serving_size']) : 100.0;
         $perServing = [
             'calories' => $this->pos($data['calories'] ?? null),
-            'protein'  => $this->pos($data['protein'] ?? null),
-            'carbs'    => $this->pos($data['carbs'] ?? null),
-            'fat'      => $this->pos($data['fat'] ?? null),
-            'sugar'    => $this->pos($data['sugar'] ?? null),
-            'fiber'    => $this->pos($data['fiber'] ?? null),
-            'sodium'   => $this->pos($data['sodium'] ?? null),
+            'protein' => $this->pos($data['protein'] ?? null),
+            'carbs' => $this->pos($data['carbs'] ?? null),
+            'fat' => $this->pos($data['fat'] ?? null),
+            'sugar' => $this->pos($data['sugar'] ?? null),
+            'fiber' => $this->pos($data['fiber'] ?? null),
+            'sodium' => $this->pos($data['sodium'] ?? null),
         ];
         $factor = $servingSize > 0 ? 100 / $servingSize : 1;
         $per100 = [];
@@ -214,16 +217,16 @@ class NutritionOcrService
         } else {
             $food = NutritionFood::create(array_merge(
                 [
-                    'source'               => 'ocr',
-                    'name'                 => trim((string) ($data['name'] ?? 'Alimento (OCR)')),
-                    'brand'                => $data['brand'] ?? null,
-                    'barcode'              => $data['barcode'] ?? $scan->barcode,
-                    'serving_size'         => $servingSize,
-                    'serving_unit'         => $data['serving_unit'] ?? 'g',
+                    'source' => 'ocr',
+                    'name' => trim((string) ($data['name'] ?? 'Alimento (OCR)')),
+                    'brand' => $data['brand'] ?? null,
+                    'barcode' => $data['barcode'] ?? $scan->barcode,
+                    'serving_size' => $servingSize,
+                    'serving_unit' => $data['serving_unit'] ?? 'g',
                     'created_by_member_id' => $member->id,
-                    'is_public'            => false,
-                    'verified'             => false,
-                    'confidence_score'     => $scan->confidence_score,
+                    'is_public' => false,
+                    'verified' => false,
+                    'confidence_score' => $scan->confidence_score,
                 ],
                 $this->columns($per100, '_per_100g'),
                 $this->columns($perServing, '_per_serving'),
@@ -232,8 +235,9 @@ class NutritionOcrService
 
         $scan->update([
             'created_food_id' => $food->id,
-            'status'          => NutritionOcrScan::STATUS_CONFIRMED,
+            'status' => NutritionOcrScan::STATUS_CONFIRMED,
         ]);
+
         return $food;
     }
 
@@ -255,14 +259,15 @@ class NutritionOcrService
         $food->serving_size = $servingSize;
         $food->serving_unit = $data['serving_unit'] ?? ($food->serving_unit ?: 'g');
         foreach ($perServing as $k => $v) {
-            $food->{$k . '_per_serving'} = $v;
-            $food->{$k . '_per_100g'} = $per100[$k];
+            $food->{$k.'_per_serving'} = $v;
+            $food->{$k.'_per_100g'} = $per100[$k];
         }
         // Completar con datos del usuario sube la confianza del externo.
         if ($food->created_by_member_id !== $member->id && $food->isMacroComplete()) {
             $food->confidence_score = max((float) ($food->confidence_score ?? 0), 0.9);
         }
         $food->save();
+
         return $food->fresh();
     }
 
@@ -270,8 +275,9 @@ class NutritionOcrService
     {
         $out = [];
         foreach ($macros as $k => $v) {
-            $out[$k . $suffix] = $v;
+            $out[$k.$suffix] = $v;
         }
+
         return $out;
     }
 
@@ -288,16 +294,17 @@ class NutritionOcrService
     {
         $parsed = $this->parser->parse($text);
         $m = $parsed['macros'];
+
         return [
             'serving_size' => $parsed['serving_size'],
-            'calories'     => $m['calories'],
-            'protein'      => $m['protein'],
-            'carbs'        => $m['carbs'],
-            'fat'          => $m['fat'],
-            'sugar'        => $m['sugar'],
-            'fiber'        => $m['fiber'],
-            'sodium'       => $m['sodium'],
-            'confidence'   => $parsed['confidence'],
+            'calories' => $m['calories'],
+            'protein' => $m['protein'],
+            'carbs' => $m['carbs'],
+            'fat' => $m['fat'],
+            'sugar' => $m['sugar'],
+            'fiber' => $m['fiber'],
+            'sodium' => $m['sodium'],
+            'confidence' => $parsed['confidence'],
         ];
     }
 }

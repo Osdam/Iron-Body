@@ -14,18 +14,17 @@ class SalesAgentPromptBuilder
 {
     public function __construct(
         private readonly MarketingKnowledgeBaseService $knowledge,
-        private readonly SalesPaymentReadinessService $paymentReadiness = new SalesPaymentReadinessService(),
-    ) {
-    }
+        private readonly SalesPaymentReadinessService $paymentReadiness = new SalesPaymentReadinessService,
+    ) {}
 
     /** Prompt del sistema: marca, tono, reglas duras y contrato JSON. */
     public function systemPrompt(): string
     {
         $intents = implode(', ', SalesAgentDecisionSchema::INTENTS);
-        $temps   = implode(', ', SalesAgentDecisionSchema::TEMPERATURES);
-        $stages  = implode(', ', SalesAgentDecisionSchema::STAGES);
+        $temps = implode(', ', SalesAgentDecisionSchema::TEMPERATURES);
+        $stages = implode(', ', SalesAgentDecisionSchema::STAGES);
         $actions = implode(', ', SalesAgentDecisionSchema::RECOMMENDED_ACTIONS);
-        $tools   = implode(', ', SalesAgentDecisionSchema::ALLOWED_TOOLS);
+        $tools = implode(', ', SalesAgentDecisionSchema::ALLOWED_TOOLS);
 
         return <<<PROMPT
         Eres parte del equipo de IRON BODY NEIVA (un gimnasio) y atiendes por WhatsApp. Hablas
@@ -130,24 +129,24 @@ class SalesAgentPromptBuilder
         $context = [
             'incoming_message' => $body,
             'lead' => [
-                'name'           => $lead->name,
-                'phone_masked'   => $this->maskPhone($lead->phone),
-                'channel'        => $lead->channel,
-                'status'         => $lead->status,
-                'temperature'    => $lead->temperature,
-                'objective'      => $lead->objective,
+                'name' => $lead->name,
+                'phone_masked' => $this->maskPhone($lead->phone),
+                'channel' => $lead->channel,
+                'status' => $lead->status,
+                'temperature' => $lead->temperature,
+                'objective' => $lead->objective,
                 'do_not_contact' => (bool) $lead->do_not_contact,
             ],
-            'memory'          => $this->conversationMemory($conversation),
+            'memory' => $this->conversationMemory($conversation),
             'recent_messages' => $this->recentMessages($conversation),
-            'knowledge_base'  => $this->knowledge->groupedForPrompt(),
-            'active_plans'    => $this->knowledge->activePlans(),
+            'knowledge_base' => $this->knowledge->groupedForPrompt(),
+            'active_plans' => $this->knowledge->activePlans(),
             'flags' => [
-                'meta_enabled'          => (bool) config('meta.enabled'),
-                'whatsapp_mode'         => config('meta.enabled') ? 'live' : 'dry_run',
-                'wompi_env'             => (string) config('wompi.env', 'sandbox'),
-                'payment_readiness'     => $this->paymentReadiness->state(),
-                'can_offer_link'        => $this->paymentReadiness->canGenerateAutomaticLink(),
+                'meta_enabled' => (bool) config('meta.enabled'),
+                'whatsapp_mode' => config('meta.enabled') ? 'live' : 'dry_run',
+                'wompi_env' => (string) config('wompi.env', 'sandbox'),
+                'payment_readiness' => $this->paymentReadiness->state(),
+                'can_offer_link' => $this->paymentReadiness->canGenerateAutomaticLink(),
                 'marketing_agent_enabled' => (bool) config('marketing.agent_enabled', false),
             ],
             'guardrails' => [
@@ -167,12 +166,12 @@ class SalesAgentPromptBuilder
         }
 
         return array_filter([
-            'summary'            => $conversation->summary,
+            'summary' => $conversation->summary,
             'detected_objective' => $conversation->detected_objective,
-            'lead_score'         => $conversation->lead_score,
-            'lead_stage'         => $conversation->lead_stage,
-            'primary_intent'     => $conversation->primary_intent,
-            'last_intent'        => $conversation->last_intent,
+            'lead_score' => $conversation->lead_score,
+            'lead_stage' => $conversation->lead_stage,
+            'primary_intent' => $conversation->primary_intent,
+            'last_intent' => $conversation->last_intent,
         ], fn ($v) => $v !== null && $v !== '');
     }
 
@@ -188,7 +187,7 @@ class SalesAgentPromptBuilder
             ->map(fn ($m) => [
                 'role' => $m->sender_type,
                 'body' => $m->body,
-                'at'   => optional($m->created_at)->toIso8601String(),
+                'at' => optional($m->created_at)->toIso8601String(),
             ])->reverse()->values()->all();
     }
 
@@ -199,6 +198,7 @@ class SalesAgentPromptBuilder
             return null;
         }
         $tail = substr($digits, -3);
+
         return str_repeat('*', max(0, strlen($digits) - 3)).$tail;
     }
 }

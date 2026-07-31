@@ -106,20 +106,20 @@ class ContractTemplateService
             $template = ContractTemplate::updateOrCreate(
                 ['template_key' => $key],
                 [
-                    'name'             => $def['name'] ?? $key,
-                    'version'          => $def['version'] ?? '1.0.0',
-                    'applies_to'       => $def['applies_to'] ?? 'any',
+                    'name' => $def['name'] ?? $key,
+                    'version' => $def['version'] ?? '1.0.0',
+                    'applies_to' => $def['applies_to'] ?? 'any',
                     'source_file_path' => $path,
-                    'source_checksum'  => $checksum,
-                    'active'           => $exists,
+                    'source_checksum' => $checksum,
+                    'active' => $exists,
                 ]
             );
 
             $summary[$key] = [
-                'id'       => $template->id,
-                'exists'   => $exists,
+                'id' => $template->id,
+                'exists' => $exists,
                 'checksum' => $checksum,
-                'path'     => Storage::disk($this->disk())->path($path),
+                'path' => Storage::disk($this->disk())->path($path),
             ];
         }
 
@@ -135,12 +135,12 @@ class ContractTemplateService
         return ContractTemplate::updateOrCreate(
             ['template_key' => $templateKey],
             [
-                'name'             => $def['name'] ?? $templateKey,
-                'version'          => $def['version'] ?? '1.0.0',
-                'applies_to'       => $def['applies_to'] ?? 'any',
+                'name' => $def['name'] ?? $templateKey,
+                'version' => $def['version'] ?? '1.0.0',
+                'applies_to' => $def['applies_to'] ?? 'any',
                 'source_file_path' => $path,
-                'source_checksum'  => $this->sourceChecksum($templateKey),
-                'active'           => true,
+                'source_checksum' => $this->sourceChecksum($templateKey),
+                'active' => true,
             ]
         );
     }

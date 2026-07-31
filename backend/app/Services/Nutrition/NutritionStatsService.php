@@ -6,6 +6,7 @@ use App\Models\Member;
 use App\Models\NutritionDailySummary;
 use App\Models\NutritionEntry;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * Estadísticas de CONSTANCIA nutricional (server-side, datos reales). Calcula
@@ -63,49 +64,49 @@ class NutritionStatsService
             }
 
             $table[] = [
-                'date'        => $key,
-                'weekday'     => $d->isoWeekday(),
-                'calories'    => round($cal, 1),
-                'protein'     => $s ? round((float) $s->protein, 1) : 0.0,
-                'carbs'       => $s ? round((float) $s->carbs, 1) : 0.0,
-                'fat'         => $s ? round((float) $s->fat, 1) : 0.0,
+                'date' => $key,
+                'weekday' => $d->isoWeekday(),
+                'calories' => round($cal, 1),
+                'protein' => $s ? round((float) $s->protein, 1) : 0.0,
+                'carbs' => $s ? round((float) $s->carbs, 1) : 0.0,
+                'fat' => $s ? round((float) $s->fat, 1) : 0.0,
                 'entry_count' => $entryCount,
-                'state'       => $state,
-                'compliance'  => $this->compliance($cal, $goals['calories'], $entryCount),
-                'comment'     => $this->comment($state),
+                'state' => $state,
+                'compliance' => $this->compliance($cal, $goals['calories'], $entryCount),
+                'comment' => $this->comment($state),
             ];
         }
 
         $avgDivisor = max(1, $registered);
         $averages = [
             'calories' => round($sum['calories'] / $avgDivisor, 1),
-            'protein'  => round($sum['protein'] / $avgDivisor, 1),
-            'carbs'    => round($sum['carbs'] / $avgDivisor, 1),
-            'fat'      => round($sum['fat'] / $avgDivisor, 1),
+            'protein' => round($sum['protein'] / $avgDivisor, 1),
+            'carbs' => round($sum['carbs'] / $avgDivisor, 1),
+            'fat' => round($sum['fat'] / $avgDivisor, 1),
         ];
 
         return [
-            'range'   => $range,
-            'days'    => $days,
-            'goals'   => $goals,
+            'range' => $range,
+            'days' => $days,
+            'goals' => $goals,
             'summary' => [
-                'days_registered'      => $registered,
-                'days_total'           => $days,
-                'current_streak'       => $this->currentStreak($member, $today),
-                'best_streak'          => $this->bestStreak($member, $today),
-                'adherence_percent'    => $days > 0 ? (int) round(100 * $daysInRange / $days) : 0,
-                'days_in_range'        => $daysInRange,
-                'days_below'           => $daysBelow,
-                'days_above'           => $daysAbove,
+                'days_registered' => $registered,
+                'days_total' => $days,
+                'current_streak' => $this->currentStreak($member, $today),
+                'best_streak' => $this->bestStreak($member, $today),
+                'adherence_percent' => $days > 0 ? (int) round(100 * $daysInRange / $days) : 0,
+                'days_in_range' => $daysInRange,
+                'days_below' => $daysBelow,
+                'days_above' => $daysAbove,
             ],
-            'averages'   => $averages,
+            'averages' => $averages,
             'compliance' => [
                 'calories' => $this->macroCompliance($averages['calories'], $goals['calories']),
-                'protein'  => $this->macroCompliance($averages['protein'], $goals['protein']),
-                'carbs'    => $this->macroCompliance($averages['carbs'], $goals['carbs']),
-                'fat'      => $this->macroCompliance($averages['fat'], $goals['fat']),
+                'protein' => $this->macroCompliance($averages['protein'], $goals['protein']),
+                'carbs' => $this->macroCompliance($averages['carbs'], $goals['carbs']),
+                'fat' => $this->macroCompliance($averages['fat'], $goals['fat']),
             ],
-            'table'   => $table,
+            'table' => $table,
             'has_data' => $registered > 0,
         ];
     }
@@ -129,18 +130,19 @@ class NutritionStatsService
         if (abs($ratio - 1) <= $tol) {
             return 'in_range';
         }
+
         return $ratio < 1 ? 'low' : 'high';
     }
 
     private function comment(string $state): string
     {
         return match ($state) {
-            'perfect'    => '¡Perfecto! Justo en tu meta.',
-            'in_range'   => 'En rango, buen día.',
-            'low'        => 'Por debajo de tu meta.',
-            'high'       => 'Por encima de tu meta.',
+            'perfect' => '¡Perfecto! Justo en tu meta.',
+            'in_range' => 'En rango, buen día.',
+            'low' => 'Por debajo de tu meta.',
+            'high' => 'Por encima de tu meta.',
             'incomplete' => 'Registro incompleto.',
-            default      => 'Sin registro.',
+            default => 'Sin registro.',
         };
     }
 
@@ -149,6 +151,7 @@ class NutritionStatsService
         if ($entryCount === 0 || $goal <= 0) {
             return null; // sin registro → no se inventa 0
         }
+
         return (int) round(100 * min($cal / $goal, 1.5));
     }
 
@@ -156,7 +159,7 @@ class NutritionStatsService
     {
         return [
             'average' => $avg,
-            'goal'    => $goal,
+            'goal' => $goal,
             'percent' => $goal > 0 ? (int) round(100 * min($avg / $goal, 1.5)) : null,
         ];
     }
@@ -171,6 +174,7 @@ class NutritionStatsService
             $streak++;
             $cursor->subDay();
         }
+
         return $streak;
     }
 
@@ -189,10 +193,11 @@ class NutritionStatsService
             }
             $cursor->addDay();
         }
+
         return $best;
     }
 
-    /** @return \Illuminate\Support\Collection fechas (Y-m-d) con registros. */
+    /** @return Collection fechas (Y-m-d) con registros. */
     private function registeredDates(Member $member, Carbon $from)
     {
         return NutritionEntry::where('member_id', $member->id)
@@ -205,12 +210,12 @@ class NutritionStatsService
     private function goals(): array
     {
         return [
-            'calories'  => (float) config('nutrition.goals.calories', 2200),
-            'protein'   => (float) config('nutrition.goals.protein', 150),
-            'carbs'     => (float) config('nutrition.goals.carbs', 250),
-            'fat'       => (float) config('nutrition.goals.fat', 70),
+            'calories' => (float) config('nutrition.goals.calories', 2200),
+            'protein' => (float) config('nutrition.goals.protein', 150),
+            'carbs' => (float) config('nutrition.goals.carbs', 250),
+            'fat' => (float) config('nutrition.goals.fat', 70),
             'tolerance' => (float) config('nutrition.goals.tolerance', 0.10),
-            'source'    => 'default', // aún no hay meta por usuario
+            'source' => 'default', // aún no hay meta por usuario
         ];
     }
 }

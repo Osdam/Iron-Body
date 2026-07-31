@@ -27,14 +27,19 @@ class ExerciseCatalogResolver
 {
     /** @var array<int,Exercise>|null */
     private ?array $byId = null;
+
     /** @var array<string,Exercise> nombre normalizado único → ejercicio */
     private array $byName = [];
+
     /** @var array<string,Exercise> local_name normalizado único → ejercicio */
     private array $byLocalName = [];
+
     /** @var array<string,Exercise> external_id (lower) → ejercicio */
     private array $byExternalId = [];
+
     /** @var array<string,int> alias normalizado verificado → exercise_id */
     private array $aliases = [];
+
     /** @var list<array{exercise:Exercise,tokens:array<string,true>}> */
     private array $tokenIndex = [];
 
@@ -173,6 +178,7 @@ class ExerciseCatalogResolver
         if ($n !== '' && isset($this->byLocalName[$n]) && (int) $this->byLocalName[$n]->id === (int) $match->id) {
             return 'exact_local_name';
         }
+
         return 'external_id';
     }
 
@@ -188,12 +194,12 @@ class ExerciseCatalogResolver
         $safe = $this->resolveSafe($exerciseId, $name);
         if ($safe) {
             return [
-                'status'     => 'matched',
-                'exercise'   => $safe,
-                'method'     => $this->methodFor($exerciseId, $name, $safe),
+                'status' => 'matched',
+                'exercise' => $safe,
+                'method' => $this->methodFor($exerciseId, $name, $safe),
                 'confidence' => 1.0,
                 'candidates' => [],
-                'suggested'  => null,
+                'suggested' => null,
             ];
         }
 
@@ -241,8 +247,8 @@ class ExerciseCatalogResolver
             $union = count($q + $t);
             $score = $union > 0 ? $inter / $union : 0.0;
             $scored[] = [
-                'id'    => (int) $row['exercise']->id,
-                'name'  => (string) $row['exercise']->name,
+                'id' => (int) $row['exercise']->id,
+                'name' => (string) $row['exercise']->name,
                 'score' => round($score, 3),
             ];
         }
@@ -262,14 +268,14 @@ class ExerciseCatalogResolver
         $video = $this->publicMediaUrl($ex->video_path);
 
         return [
-            'exercise_id'    => (int) $ex->id,
-            'video_url'      => $video,
-            'gif_url'        => $this->publicMediaUrl($ex->gif_url),
-            'thumbnail_url'  => $this->publicMediaUrl($ex->thumbnail_url),
-            'media_type'     => $video ? 'video' : ($ex->media_type ?? 'gif'),
+            'exercise_id' => (int) $ex->id,
+            'video_url' => $video,
+            'gif_url' => $this->publicMediaUrl($ex->gif_url),
+            'thumbnail_url' => $this->publicMediaUrl($ex->thumbnail_url),
+            'media_type' => $video ? 'video' : ($ex->media_type ?? 'gif'),
             'playback_speed' => $ex->playback_speed,
-            'equipment'      => $ex->equipment,
-            'muscle_group'   => $ex->muscle_group ?? $ex->body_part,
+            'equipment' => $ex->equipment,
+            'muscle_group' => $ex->muscle_group ?? $ex->body_part,
         ];
     }
 
@@ -318,7 +324,7 @@ class ExerciseCatalogResolver
         $base = rtrim(config('app.public_url') ?: url('/'), '/');
         $rel = ltrim($v, '/');
         if (! str_starts_with($rel, 'storage/')) {
-            $rel = 'storage/' . $rel;
+            $rel = 'storage/'.$rel;
         }
 
         return "{$base}/{$rel}";

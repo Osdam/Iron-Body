@@ -40,8 +40,8 @@ class NutritionGoalCalculatorService
             ? $in['metabolic_sex'] : 'unspecified';
         $weight = (float) $in['weight_kg'];
         $height = (float) $in['height_cm'];
-        $age    = (int) $in['age'];
-        $objective  = $this->normalizeObjective($in['objective'] ?? 'general_wellness');
+        $age = (int) $in['age'];
+        $objective = $this->normalizeObjective($in['objective'] ?? 'general_wellness');
         $experience = $in['experience_level'] ?? null;
 
         // ── 1) BMR — Mifflin-St Jeor ─────────────────────────────────────────
@@ -86,10 +86,10 @@ class NutritionGoalCalculatorService
         // ── 4) Macros (g/kg, carbohidratos por resto) ────────────────────────
         $atw = $cfg['atwater'];
         $proteinPerKg = (float) ($cfg['macro_ranges']['protein_g_per_kg'][$objective] ?? 1.6);
-        $fatPerKg     = (float) ($cfg['macro_ranges']['fat_g_per_kg'][$objective] ?? 0.9);
+        $fatPerKg = (float) ($cfg['macro_ranges']['fat_g_per_kg'][$objective] ?? 0.9);
 
         $protein = $proteinPerKg * $weight;
-        $fat     = $fatPerKg * $weight;
+        $fat = $fatPerKg * $weight;
 
         $carbsKcal = $target - ($protein * $atw['protein']) - ($fat * $atw['fat']);
 
@@ -114,33 +114,33 @@ class NutritionGoalCalculatorService
         $fiber = ((float) ($cfg['macro_ranges']['fiber_g_per_1000_kcal'] ?? 14)) * ($target / 1000.0);
 
         // ── 5) Redondeos finales ─────────────────────────────────────────────
-        $calStep   = max(1, (int) ($cfg['rounding_rules']['calories_to'] ?? 10));
+        $calStep = max(1, (int) ($cfg['rounding_rules']['calories_to'] ?? 10));
         $macroStep = max(1, (int) ($cfg['rounding_rules']['macros_to'] ?? 1));
 
         $targetCalories = (int) (round($target / $calStep) * $calStep);
         $proteinG = (int) (round($protein / $macroStep) * $macroStep);
-        $carbsG   = (int) (round($carbs / $macroStep) * $macroStep);
-        $fatG     = (int) (round($fat / $macroStep) * $macroStep);
-        $fiberG   = (int) round($fiber);
+        $carbsG = (int) (round($carbs / $macroStep) * $macroStep);
+        $fatG = (int) (round($fat / $macroStep) * $macroStep);
+        $fiberG = (int) round($fiber);
 
         return [
-            'formula'         => $cfg['default_formula'] ?? 'mifflin_st_jeor',
+            'formula' => $cfg['default_formula'] ?? 'mifflin_st_jeor',
             'formula_version' => $cfg['formula_version'] ?? 'v1',
-            'metabolic_sex'   => $sex,
-            'objective'       => $objective,
-            'activity_level'  => $activityLevel,
+            'metabolic_sex' => $sex,
+            'objective' => $objective,
+            'activity_level' => $activityLevel,
             'activity_factor' => round($factor, 3),
-            'bmr'             => (int) round($bmr),
-            'tdee'            => (int) round($tdee),
+            'bmr' => (int) round($bmr),
+            'tdee' => (int) round($tdee),
             'maintenance_calories' => (int) round($tdee),
-            'calorie_adjustment'   => (int) round($adjustment),
-            'daily_calories'  => $targetCalories,
-            'protein_g'       => $proteinG,
-            'carbs_g'         => $carbsG,
-            'fat_g'           => $fatG,
-            'fiber_g'         => $fiberG,
-            'warnings'        => array_values(array_unique($warnings)),
-            'explanation'     => $this->explanation($objective, (int) round($tdee), $targetCalories, $proteinG, $carbsG, $fatG),
+            'calorie_adjustment' => (int) round($adjustment),
+            'daily_calories' => $targetCalories,
+            'protein_g' => $proteinG,
+            'carbs_g' => $carbsG,
+            'fat_g' => $fatG,
+            'fiber_g' => $fiberG,
+            'warnings' => array_values(array_unique($warnings)),
+            'explanation' => $this->explanation($objective, (int) round($tdee), $targetCalories, $proteinG, $carbsG, $fatG),
         ];
     }
 
@@ -152,12 +152,14 @@ class NutritionGoalCalculatorService
         // fat_loss usa ritmo (conservative|moderate|aggressive).
         if ($objective === 'fat_loss') {
             $key = $pace ?: 'default';
+
             return (float) ($map[$key] ?? $map['default'] ?? -450);
         }
 
         // muscle_gain / strength usan experiencia.
         if (in_array($objective, ['muscle_gain', 'strength'], true)) {
             $key = $experience ?: 'default';
+
             return (float) ($map[$key] ?? $map['default'] ?? 0);
         }
 
@@ -168,10 +170,10 @@ class NutritionGoalCalculatorService
     private function explanation(string $objective, int $tdee, int $target, int $protein, int $carbs, int $fat): string
     {
         $labels = [
-            'muscle_gain'      => 'hipertrofia muscular',
-            'fat_loss'         => 'pérdida de grasa',
-            'endurance'        => 'resistencia',
-            'strength'         => 'fuerza',
+            'muscle_gain' => 'hipertrofia muscular',
+            'fat_loss' => 'pérdida de grasa',
+            'endurance' => 'resistencia',
+            'strength' => 'fuerza',
             'general_wellness' => 'bienestar general',
         ];
         $label = $labels[$objective] ?? 'tu objetivo';
@@ -179,21 +181,22 @@ class NutritionGoalCalculatorService
         if ($delta > 0) {
             $adj = "empezamos con un superávit controlado de {$delta} kcal";
         } elseif ($delta < 0) {
-            $adj = 'aplicamos un déficit de ' . abs($delta) . ' kcal';
+            $adj = 'aplicamos un déficit de '.abs($delta).' kcal';
         } else {
             $adj = 'mantenemos tus calorías de mantenimiento';
         }
 
         return "Tu mantenimiento estimado es {$tdee} kcal. Para {$label}, {$adj}. "
-            . "Tu meta diaria es {$target} kcal, con {$protein} g de proteína, "
-            . "{$carbs} g de carbohidratos y {$fat} g de grasa. "
-            . 'Calculado según tu peso, estatura, edad, actividad y objetivo.';
+            ."Tu meta diaria es {$target} kcal, con {$protein} g de proteína, "
+            ."{$carbs} g de carbohidratos y {$fat} g de grasa. "
+            .'Calculado según tu peso, estatura, edad, actividad y objetivo.';
     }
 
     /** Normaliza el objetivo a una de las 5 claves canónicas. */
     public function normalizeObjective(string $objective): string
     {
         $valid = ['muscle_gain', 'fat_loss', 'endurance', 'strength', 'general_wellness'];
+
         return in_array($objective, $valid, true) ? $objective : 'general_wellness';
     }
 }

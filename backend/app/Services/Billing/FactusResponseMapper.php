@@ -32,7 +32,7 @@ class FactusResponseMapper
 
         $number = $this->first($bill, ['number', 'document_number', 'invoice_number']);
         $prefix = $this->first($bill, ['prefix', 'numbering_range_prefix']);
-        $cufe   = $this->first($bill, ['cufe', 'cude', 'cufe_cude']);
+        $cufe = $this->first($bill, ['cufe', 'cude', 'cufe_cude']);
 
         $dianStatus = $this->first($bill, ['status', 'dian_status', 'status_document', 'document_status']);
 
@@ -47,26 +47,26 @@ class FactusResponseMapper
             || $this->looksLike($dianStatus, ['rechaz', 'reject', 'error']);
 
         return [
-            'factus_id'   => $this->first($bill, ['id', 'bill_id', 'document_id']),
-            'number'      => $number,
-            'prefix'      => $prefix,
+            'factus_id' => $this->first($bill, ['id', 'bill_id', 'document_id']),
+            'number' => $number,
+            'prefix' => $prefix,
             // full_number = el número fiscal real (SETP990006967). JAMÁS el
             // reference_code (uuid interno) ni name. Si no hay full_number
             // explícito, se usa data.number; último recurso prefix+number.
             'full_number' => $this->first($bill, ['full_number'])
                 ?? $number
-                ?? ($prefix && $number ? $prefix . $number : null),
-            'cufe'        => $cufe,
+                ?? ($prefix && $number ? $prefix.$number : null),
+            'cufe' => $cufe,
             'dian_status' => $dianStatus,
-            'qr_url'      => $this->first($bill, ['links.qr', 'qr_image', 'qr_url', 'qr']),
-            'qr_data'     => $this->first($bill, ['qr_data', 'qr_code', 'qrcode']),
-            'pdf_url'     => $this->first($bill, ['links.public_url', 'pdf_url', 'public_url', 'pdf']),
-            'xml_url'     => $this->first($bill, ['xml_url', 'xml']),
-            'pdf_base64'  => $this->first($bill, ['pdf_base_64', 'pdf_base64', 'pdf_content']),
-            'xml_base64'  => $this->first($bill, ['xml_base_64', 'xml_base64', 'xml_content']),
+            'qr_url' => $this->first($bill, ['links.qr', 'qr_image', 'qr_url', 'qr']),
+            'qr_data' => $this->first($bill, ['qr_data', 'qr_code', 'qrcode']),
+            'pdf_url' => $this->first($bill, ['links.public_url', 'pdf_url', 'public_url', 'pdf']),
+            'xml_url' => $this->first($bill, ['xml_url', 'xml']),
+            'pdf_base64' => $this->first($bill, ['pdf_base_64', 'pdf_base64', 'pdf_content']),
+            'xml_base64' => $this->first($bill, ['xml_base_64', 'xml_base64', 'xml_content']),
             'is_validated' => $isValidated && ! $isRejected,
-            'is_rejected'  => $isRejected,
-            'reason'       => $this->first($body, ['message', 'error', 'errors']) === null
+            'is_rejected' => $isRejected,
+            'reason' => $this->first($body, ['message', 'error', 'errors']) === null
                 ? null
                 : (is_array(Arr::get($body, 'errors')) ? json_encode(Arr::get($body, 'errors')) : (string) $this->first($body, ['message', 'error'])),
         ];

@@ -25,9 +25,7 @@ use Illuminate\Support\Facades\Log;
  */
 class MembershipSubscriptionRefreshService
 {
-    public function __construct(private WompiReconciliationService $reconciler)
-    {
-    }
+    public function __construct(private WompiReconciliationService $reconciler) {}
 
     public static function make(): self
     {
@@ -35,6 +33,7 @@ class MembershipSubscriptionRefreshService
     }
 
     private const THROTTLE_TTL = 15; // segundos entre reconciliaciones por suscripción
+
     private const LOCK_TTL = 10;
 
     /** Devuelve la suscripción fresca, reconciliando el cobro en vuelo si aplica. */
@@ -67,7 +66,7 @@ class MembershipSubscriptionRefreshService
         } catch (\Throwable $e) {
             Log::warning('subscriptions.refresh.reconcile_failed', [
                 'subscription_id' => $sub->id,
-                'error'           => mb_substr($e->getMessage(), 0, 200),
+                'error' => mb_substr($e->getMessage(), 0, 200),
             ]);
         } finally {
             $lock->release();

@@ -39,12 +39,12 @@ class FirebaseCustomTokenService
     /**
      * Genera un Firebase Custom Token con `uid = (string) $memberId`.
      *
-     * @param int $memberId ID interno del miembro autenticado en Iron Body.
+     * @param  int  $memberId  ID interno del miembro autenticado en Iron Body.
      * @return string JWT firmado, listo para `signInWithCustomToken` en cliente.
      *
      * @throws RuntimeException Si el service-account.json no existe o no
      *                          se puede leer.
-     * @throws \Throwable        Si kreait/Google falla al firmar.
+     * @throws \Throwable Si kreait/Google falla al firmar.
      */
     public function createCustomToken(int $memberId): string
     {
@@ -70,21 +70,21 @@ class FirebaseCustomTokenService
             return $this->auth;
         }
 
-        $path = storage_path('app/' . self::SERVICE_ACCOUNT_RELATIVE_PATH);
+        $path = storage_path('app/'.self::SERVICE_ACCOUNT_RELATIVE_PATH);
 
-        if (!is_file($path)) {
+        if (! is_file($path)) {
             throw new RuntimeException(
                 'Firebase service account no encontrado en storage/app/'
-                . self::SERVICE_ACCOUNT_RELATIVE_PATH
+                .self::SERVICE_ACCOUNT_RELATIVE_PATH
             );
         }
-        if (!is_readable($path)) {
+        if (! is_readable($path)) {
             throw new RuntimeException(
-                'Firebase service account no es legible: ' . $path
+                'Firebase service account no es legible: '.$path
             );
         }
 
-        $this->auth = (new Factory())
+        $this->auth = (new Factory)
             ->withServiceAccount($path)
             ->createAuth();
 

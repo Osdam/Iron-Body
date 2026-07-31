@@ -32,7 +32,7 @@ class SalesAgentDecisionValidator
         $confidence = max(0.0, min(1.0, $confidence));
 
         $extracted = is_array($raw['extracted_fields'] ?? null) ? $raw['extracted_fields'] : [];
-        $missing   = is_array($raw['missing_fields'] ?? null) ? $raw['missing_fields'] : [];
+        $missing = is_array($raw['missing_fields'] ?? null) ? $raw['missing_fields'] : [];
 
         // 3) Herramientas: solo las permitidas; lo demás se bloquea (no se honra).
         $tools = is_array($raw['tools_requested'] ?? null) ? $raw['tools_requested'] : [];
@@ -90,29 +90,30 @@ class SalesAgentDecisionValidator
         } elseif (in_array($intent, SalesIntents::ESCALATION_INTENTS, true)) {
             $reason = match ($intent) {
                 SalesIntents::MEDICAL_RISK_ESCALATION => 'medical_case',
-                SalesIntents::FRAUD_OR_PAYMENT_CLAIM  => 'payment_or_fraud_claim',
-                SalesIntents::HUMAN_REQUEST           => 'human_requested',
-                SalesIntents::COMPLAINT               => 'complaint',
-                SalesIntents::INVOICE_REQUEST         => 'invoice_request',
-                default                               => 'escalation',
+                SalesIntents::FRAUD_OR_PAYMENT_CLAIM => 'payment_or_fraud_claim',
+                SalesIntents::HUMAN_REQUEST => 'human_requested',
+                SalesIntents::COMPLAINT => 'complaint',
+                SalesIntents::INVOICE_REQUEST => 'invoice_request',
+                default => 'escalation',
             };
         }
 
         return [
-            'intent'            => $intent,
-            'confidence'        => $confidence,
-            'extracted_fields'  => $extracted,
-            'missing_fields'    => $missing,
-            'reply'             => ($reply === '' ? null : $reply),
-            'force_escalate'    => $forceEscalate,
+            'intent' => $intent,
+            'confidence' => $confidence,
+            'extracted_fields' => $extracted,
+            'missing_fields' => $missing,
+            'reply' => ($reply === '' ? null : $reply),
+            'force_escalate' => $forceEscalate,
             'escalation_reason' => $reason,
-            'risk_flags'        => array_values(array_unique($flags)),
+            'risk_flags' => array_values(array_unique($flags)),
         ];
     }
 
     private function normalize(string $s): string
     {
         $lower = mb_strtolower($s);
+
         return strtr($lower, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ñ' => 'n']);
     }
 }

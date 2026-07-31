@@ -13,7 +13,7 @@ class MarketingConversationNoteService
         return MarketingConversationNote::create([
             'conversation_id' => $conversation->id,
             'author_admin_id' => $authorAdminId,
-            'body'            => trim($body),
+            'body' => trim($body),
         ]);
     }
 }

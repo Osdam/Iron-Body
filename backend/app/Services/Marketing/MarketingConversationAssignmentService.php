@@ -12,7 +12,7 @@ use App\Models\MarketingConversation;
 class MarketingConversationAssignmentService
 {
     /**
-     * @param  int|null $assigneeId  Admin a asignar; null = desasignar.
+     * @param  int|null  $assigneeId  Admin a asignar; null = desasignar.
      */
     public function assign(MarketingConversation $conversation, ?int $assigneeId, ?int $actorAdminId): MarketingConversation
     {
@@ -20,8 +20,8 @@ class MarketingConversationAssignmentService
 
         $conversation->forceFill([
             'assigned_to_admin_id' => $assignee?->id,
-            'assigned_at'          => $assignee ? now() : null,
-            'assigned_by'          => $actorAdminId,
+            'assigned_at' => $assignee ? now() : null,
+            'assigned_by' => $actorAdminId,
         ])->save();
 
         // Sincroniza el string legado del lead por compatibilidad (no rompe el

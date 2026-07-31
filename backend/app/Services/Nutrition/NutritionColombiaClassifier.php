@@ -37,6 +37,7 @@ class NutritionColombiaClassifier
     public function normalize(?string $text): string
     {
         $t = mb_strtolower(trim((string) $text));
+
         return strtr($t, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ñ' => 'n', 'ü' => 'u']);
     }
 
@@ -44,6 +45,7 @@ class NutritionColombiaClassifier
     public function isColombiaCountry(?string $countries): bool
     {
         $c = $this->normalize($countries);
+
         return $c !== '' && (str_contains($c, 'colombia') || str_contains($c, 'colombie'));
     }
 
@@ -60,6 +62,7 @@ class NutritionColombiaClassifier
                 $hits[$this->canonicalRetailer($retailer)] = true;
             }
         }
+
         return array_keys($hits);
     }
 
@@ -76,6 +79,7 @@ class NutritionColombiaClassifier
                 return $seed;
             }
         }
+
         return null;
     }
 
@@ -92,6 +96,7 @@ class NutritionColombiaClassifier
                 return true;
             }
         }
+
         return false;
     }
 
@@ -106,14 +111,14 @@ class NutritionColombiaClassifier
     public function classify(array $food): array
     {
         $countries = $food['countries'] ?? null;
-        $stores    = $food['stores'] ?? null;
-        $brand     = $food['brand'] ?? null;
-        $barcode   = $food['barcode'] ?? null;
+        $stores = $food['stores'] ?? null;
+        $brand = $food['brand'] ?? null;
+        $barcode = $food['barcode'] ?? null;
 
-        $isCountry  = $this->isColombiaCountry($countries);
-        $retailers  = $this->matchedRetailers($stores);
-        $brandSeed  = $this->matchedBrandSeed($brand);
-        $prefix     = $this->barcodePrefixMatch($barcode);
+        $isCountry = $this->isColombiaCountry($countries);
+        $retailers = $this->matchedRetailers($stores);
+        $brandSeed = $this->matchedBrandSeed($brand);
+        $prefix = $this->barcodePrefixMatch($barcode);
 
         $score = 0;
         $score += $isCountry ? 50 : 0;
@@ -124,14 +129,14 @@ class NutritionColombiaClassifier
         $isColombia = $isCountry || $retailers !== [] || $brandSeed !== null || $prefix;
 
         return [
-            'country'                  => $isCountry ? 'colombia' : ($countries ? $this->normalize($countries) : null),
-            'stores'                   => $stores ? mb_substr((string) $stores, 0, 255) : null,
-            'normalized_brand'         => $brand ? $this->normalize($brand) : null,
-            'normalized_store'         => $retailers[0] ?? ($stores ? $this->normalize($stores) : null),
-            'imported_region'          => $isColombia ? 'colombia' : null,
-            'imported_priority_score'  => $score,
-            'is_colombia'              => $isColombia,
-            'retailers'                => $retailers,
+            'country' => $isCountry ? 'colombia' : ($countries ? $this->normalize($countries) : null),
+            'stores' => $stores ? mb_substr((string) $stores, 0, 255) : null,
+            'normalized_brand' => $brand ? $this->normalize($brand) : null,
+            'normalized_store' => $retailers[0] ?? ($stores ? $this->normalize($stores) : null),
+            'imported_region' => $isColombia ? 'colombia' : null,
+            'imported_priority_score' => $score,
+            'is_colombia' => $isColombia,
+            'retailers' => $retailers,
         ];
     }
 
@@ -139,15 +144,16 @@ class NutritionColombiaClassifier
     private function canonicalRetailer(string $retailer): string
     {
         $n = $this->normalize($retailer);
+
         return match (true) {
-            str_contains($n, 'd1')       => 'D1',
-            str_contains($n, 'exito')    => 'Éxito',
+            str_contains($n, 'd1') => 'D1',
+            str_contains($n, 'exito') => 'Éxito',
             str_contains($n, 'olimpica') => 'Olímpica',
-            str_contains($n, 'ara')      => 'Ara',
-            str_contains($n, 'carulla')  => 'Carulla',
-            str_contains($n, 'jumbo')    => 'Jumbo',
-            str_contains($n, 'alkosto')  => 'Alkosto',
-            default                       => $retailer,
+            str_contains($n, 'ara') => 'Ara',
+            str_contains($n, 'carulla') => 'Carulla',
+            str_contains($n, 'jumbo') => 'Jumbo',
+            str_contains($n, 'alkosto') => 'Alkosto',
+            default => $retailer,
         };
     }
 }

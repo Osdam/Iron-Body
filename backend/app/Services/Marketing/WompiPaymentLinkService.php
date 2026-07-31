@@ -38,8 +38,7 @@ class WompiPaymentLinkService
         private readonly WompiTransactionService $tx,
         private readonly WompiSignatureService $signature,
         private readonly array $cfg,
-    ) {
-    }
+    ) {}
 
     public static function make(): self
     {
@@ -69,6 +68,7 @@ class WompiPaymentLinkService
         if (empty(data_get($this->cfg, 'checkout.base_url'))) {
             $missing[] = 'WOMPI_CHECKOUT_URL';
         }
+
         return $missing;
     }
 
@@ -76,9 +76,9 @@ class WompiPaymentLinkService
      * Genera (o reutiliza) el link de pago para un lead + plan.
      *
      * @param  array  $options  {
-     *   conversation_id?: int|null, message_id?: int|null, channel?: string|null,
-     *   wants_invoice?: bool, invoice_email?: string|null
-     * }
+     *                          conversation_id?: int|null, message_id?: int|null, channel?: string|null,
+     *                          wants_invoice?: bool, invoice_email?: string|null
+     *                          }
      * @return array resultado seguro (sin secretos) para el caller / n8n.
      */
     public function generateForLead(MarketingLead $lead, Plan $plan, array $options = []): array
@@ -86,10 +86,10 @@ class WompiPaymentLinkService
         // Sin configuración → error controlado, sin crear transacción.
         if (! $this->isConfigured()) {
             return [
-                'configured'  => false,
-                'error'       => 'wompi_checkout_not_configured',
-                'missing'     => $this->missingConfig(),
-                'message'     => 'El link de pago Wompi no está configurado todavía.',
+                'configured' => false,
+                'error' => 'wompi_checkout_not_configured',
+                'missing' => $this->missingConfig(),
+                'message' => 'El link de pago Wompi no está configurado todavía.',
                 'payment_url' => null,
             ];
         }
@@ -101,15 +101,15 @@ class WompiPaymentLinkService
         $approved = $this->latestForPrefix($prefix, [PaymentStateMachine::APPROVED]);
         if ($approved !== null) {
             return [
-                'configured'     => true,
-                'already_paid'   => true,
-                'payment_url'    => null,
-                'reference'      => $approved->reference,
-                'amount'         => (float) $approved->amount,
-                'currency'       => $approved->currency,
+                'configured' => true,
+                'already_paid' => true,
+                'payment_url' => null,
+                'reference' => $approved->reference,
+                'amount' => (float) $approved->amount,
+                'currency' => $approved->currency,
                 'transaction_id' => $approved->provider_ref ?: (string) $approved->id,
-                'status'         => $approved->status,
-                'message'        => 'Este lead ya tiene un pago aprobado para este plan.',
+                'status' => $approved->status,
+                'message' => 'Este lead ya tiene un pago aprobado para este plan.',
             ];
         }
 
@@ -120,19 +120,19 @@ class WompiPaymentLinkService
             ?? $this->tx->createOrReuse([
                 // order_id se OMITE a propósito (es bigint del flujo de órdenes).
                 'idempotency_key' => $prefix.Str::uuid(),  // string único → nunca colisiona
-                'plan_id'         => $plan->id,
-                'member_id'       => $lead->member_id,
-                'method'          => 'web_checkout',
-                'currency'        => $currency,
-                'description'     => 'Membresía Iron Body — '.$plan->name,
-                'customer'        => array_filter([
-                    'name'  => $lead->name,
+                'plan_id' => $plan->id,
+                'member_id' => $lead->member_id,
+                'method' => 'web_checkout',
+                'currency' => $currency,
+                'description' => 'Membresía Iron Body — '.$plan->name,
+                'customer' => array_filter([
+                    'name' => $lead->name,
                     'phone' => $lead->phone,
                 ]),
                 // Factura electrónica: SOLO se guarda metadata; el flujo existente
                 // (PaymentMembershipActivator) decide tras el pago aprobado.
                 'request_invoice' => (bool) ($options['wants_invoice'] ?? false),
-                'invoice_email'   => $options['invoice_email'] ?? null,
+                'invoice_email' => $options['invoice_email'] ?? null,
             ]);
 
         // Enriquecer metadata con la trazabilidad comercial (sin pisar invoice).
@@ -144,19 +144,19 @@ class WompiPaymentLinkService
         // Persistir el link y la vigencia en la transacción (sin secretos).
         $transaction->forceFill([
             'checkout_url' => $url,
-            'expires_at'   => $transaction->expires_at ?: $expiresAt,
+            'expires_at' => $transaction->expires_at ?: $expiresAt,
         ])->save();
 
         return [
-            'configured'     => true,
-            'already_paid'   => false,
-            'payment_url'    => $url,
-            'reference'      => $transaction->reference,
-            'amount'         => (float) $transaction->amount,
-            'currency'       => $transaction->currency,
-            'expires_at'     => optional($transaction->expires_at)->toIso8601String(),
+            'configured' => true,
+            'already_paid' => false,
+            'payment_url' => $url,
+            'reference' => $transaction->reference,
+            'amount' => (float) $transaction->amount,
+            'currency' => $transaction->currency,
+            'expires_at' => optional($transaction->expires_at)->toIso8601String(),
             'transaction_id' => $transaction->provider_ref ?: (string) $transaction->id,
-            'status'         => $transaction->status,
+            'status' => $transaction->status,
         ];
     }
 
@@ -198,12 +198,12 @@ class WompiPaymentLinkService
         $existing = is_array($transaction->metadata) ? $transaction->metadata : [];
 
         $marketing = array_filter([
-            'source'                  => (string) (config('marketing.payment_links.source', 'marketing_agent')),
-            'marketing_lead_id'       => $lead->id,
+            'source' => (string) (config('marketing.payment_links.source', 'marketing_agent')),
+            'marketing_lead_id' => $lead->id,
             'marketing_conversation_id' => $options['conversation_id'] ?? null,
-            'marketing_message_id'    => $options['message_id'] ?? null,
-            'channel'                 => $options['channel'] ?? $lead->channel,
-            'plan_id'                 => $transaction->plan_id,
+            'marketing_message_id' => $options['message_id'] ?? null,
+            'channel' => $options['channel'] ?? $lead->channel,
+            'plan_id' => $transaction->plan_id,
         ], fn ($v) => $v !== null);
 
         $transaction->forceFill(['metadata' => array_merge($existing, $marketing)])->save();
@@ -216,6 +216,7 @@ class WompiPaymentLinkService
             return $transaction->expires_at;
         }
         $minutes = (int) data_get($this->cfg, 'checkout.expiration_minutes', 1440);
+
         return now()->addMinutes(max(5, $minutes));
     }
 
@@ -237,12 +238,12 @@ class WompiPaymentLinkService
         $redirect = (string) (data_get($this->cfg, 'checkout.redirect_url') ?: ($this->cfg['redirect_url'] ?? ''));
 
         $params = array_filter([
-            'public-key'          => (string) $this->cfg['public_key'],
-            'currency'            => $currency,
-            'amount-in-cents'     => (string) $amountInCents,
-            'reference'           => $transaction->reference,
+            'public-key' => (string) $this->cfg['public_key'],
+            'currency' => $currency,
+            'amount-in-cents' => (string) $amountInCents,
+            'reference' => $transaction->reference,
             'signature:integrity' => $signature,
-            'redirect-url'        => $redirect !== '' ? $redirect : null,
+            'redirect-url' => $redirect !== '' ? $redirect : null,
         ], fn ($v) => $v !== null && $v !== '');
 
         $query = collect($params)

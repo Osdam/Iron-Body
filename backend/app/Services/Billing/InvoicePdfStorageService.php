@@ -60,7 +60,7 @@ class InvoicePdfStorageService
      * Descarga PDF y XML por número fiscal y los guarda en disco privado.
      * Best-effort: registra el fallo y devuelve solo lo que sí pudo guardar.
      *
-     * @return array<string,?string>  pdf_path / xml_path (solo los logrados)
+     * @return array<string,?string> pdf_path / xml_path (solo los logrados)
      */
     public function fetchAndStore(ElectronicInvoice $invoice, FactusClient $client, string $number): array
     {
@@ -123,16 +123,18 @@ class InvoicePdfStorageService
         $bytes = base64_decode($base64, true);
         if ($bytes === false || $bytes === '') {
             Log::warning('billing.file_decode_failed', ['invoice' => $invoice->id, 'type' => $type]);
+
             return null;
         }
         if (! $this->isValid($type, $bytes)) {
             Log::warning('billing.file_invalid', ['invoice' => $invoice->id, 'type' => $type]);
+
             return null;
         }
 
         $disk = (string) config('billing.storage.disk', 'local');
         $base = trim((string) config('billing.storage.path', 'invoices'), '/');
-        $path = $base . '/' . $invoice->uuid . '/factura.' . $type;
+        $path = $base.'/'.$invoice->uuid.'/factura.'.$type;
 
         Storage::disk($disk)->put($path, $bytes);
 

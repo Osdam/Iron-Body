@@ -29,8 +29,7 @@ class WompiPaymentSourceService
         private WompiClient $client,
         private WompiAcceptanceService $acceptance,
         private array $cfg,
-    ) {
-    }
+    ) {}
 
     public static function make(): self
     {
@@ -49,6 +48,7 @@ class WompiPaymentSourceService
         if (! in_array($method, ['card', 'nequi'], true)) {
             return false;
         }
+
         return (bool) ($this->cfg['recurring']['methods'][$method] ?? false);
     }
 
@@ -58,19 +58,19 @@ class WompiPaymentSourceService
      * estado local mapeado. Idempotente por token de aceptación + creación única.
      *
      * @param  array  $data  {
-     *     member_id, user_id, type ('CARD'|'NEQUI'), token, customer_email,
-     *     card_brand?, card_last_four?, exp_month?, exp_year?
-     *   }
+     *                       member_id, user_id, type ('CARD'|'NEQUI'), token, customer_email,
+     *                       card_brand?, card_last_four?, exp_month?, exp_year?
+     *                       }
      */
     public function createForMember(array $data): WompiPaymentSource
     {
         $this->assertRecurringEnabled();
 
-        $type   = strtoupper((string) ($data['type'] ?? 'CARD'));
+        $type = strtoupper((string) ($data['type'] ?? 'CARD'));
         // Método interno REAL a partir del tipo Wompi (no forzar a 'card': PSE/
         // DaviPlata/Bancolombia deben caer y ser rechazados, no colarse como tarjeta).
         $method = match ($type) {
-            'CARD'  => 'card',
+            'CARD' => 'card',
             'NEQUI' => 'nequi',
             default => strtolower($type), // pse | daviplata | bancolombia_transfer | …
         };
@@ -94,38 +94,39 @@ class WompiPaymentSourceService
 
         // Registro local PRIMERO (pending), con solo datos NO sensibles.
         $source = WompiPaymentSource::create([
-            'uuid'           => (string) Str::uuid(),
-            'member_id'      => $data['member_id'] ?? null,
-            'user_id'        => $data['user_id'] ?? null,
-            'provider'       => 'wompi',
-            'type'           => in_array($type, [WompiPaymentSource::TYPE_CARD, WompiPaymentSource::TYPE_NEQUI], true) ? $type : WompiPaymentSource::TYPE_CARD,
-            'status'         => WompiPaymentSource::STATUS_PENDING,
-            'card_brand'     => $data['card_brand'] ?? null,
+            'uuid' => (string) Str::uuid(),
+            'member_id' => $data['member_id'] ?? null,
+            'user_id' => $data['user_id'] ?? null,
+            'provider' => 'wompi',
+            'type' => in_array($type, [WompiPaymentSource::TYPE_CARD, WompiPaymentSource::TYPE_NEQUI], true) ? $type : WompiPaymentSource::TYPE_CARD,
+            'status' => WompiPaymentSource::STATUS_PENDING,
+            'card_brand' => $data['card_brand'] ?? null,
             'card_last_four' => $this->safeLast4($data['card_last_four'] ?? null),
-            'exp_month'      => $this->safeExp($data['exp_month'] ?? null, 2),
-            'exp_year'       => $this->safeExp($data['exp_year'] ?? null, 4),
+            'exp_month' => $this->safeExp($data['exp_month'] ?? null, 2),
+            'exp_year' => $this->safeExp($data['exp_year'] ?? null, 4),
             'customer_email' => $email,
-            'environment'    => $this->cfg['env'] ?? 'sandbox',
+            'environment' => $this->cfg['env'] ?? 'sandbox',
         ]);
 
         // Llamada a Wompi (INERTE si recurring off → error controlado, sin red).
         $res = $this->client->createPaymentSource([
-            'type'                 => $type,
-            'token'                => $token, // NO se persiste ni se loguea.
-            'customer_email'       => $email,
-            'acceptance_token'     => $tokens['acceptance_token'],
+            'type' => $type,
+            'token' => $token, // NO se persiste ni se loguea.
+            'customer_email' => $email,
+            'acceptance_token' => $tokens['acceptance_token'],
             'accept_personal_auth' => $tokens['accept_personal_auth_token'],
         ], $source->uuid);
 
         if (! $res['ok']) {
             $source->forceFill([
-                'status'         => WompiPaymentSource::STATUS_FAILED,
+                'status' => WompiPaymentSource::STATUS_FAILED,
                 'status_message' => $this->safeMessage($res['error'] ?? null),
             ])->save();
             Log::info('subscriptions.payment_source.create_failed', [
                 'source_uuid' => $source->uuid,
-                'error_code'  => $res['error_code'] ?? null,
+                'error_code' => $res['error_code'] ?? null,
             ]);
+
             return $source->fresh();
         }
 
@@ -144,6 +145,7 @@ class WompiPaymentSourceService
         if (! $res['ok']) {
             return $source->fresh();
         }
+
         return $this->applyWompiSource($source, is_array($res['data']) ? $res['data'] : []);
     }
 
@@ -152,10 +154,10 @@ class WompiPaymentSourceService
     {
         return match (strtoupper((string) $wompiStatus)) {
             'AVAILABLE' => WompiPaymentSource::STATUS_AVAILABLE,
-            'PENDING'   => WompiPaymentSource::STATUS_PENDING,
-            'DECLINED'  => WompiPaymentSource::STATUS_DECLINED,
-            'ERROR'     => WompiPaymentSource::STATUS_FAILED,
-            default     => WompiPaymentSource::STATUS_PENDING,
+            'PENDING' => WompiPaymentSource::STATUS_PENDING,
+            'DECLINED' => WompiPaymentSource::STATUS_DECLINED,
+            'ERROR' => WompiPaymentSource::STATUS_FAILED,
+            default => WompiPaymentSource::STATUS_PENDING,
         };
     }
 
@@ -168,13 +170,13 @@ class WompiPaymentSourceService
 
         $source->forceFill(array_filter([
             'wompi_payment_source_id' => $ws['id'] ?? $source->wompi_payment_source_id,
-            'status'                  => $status,
-            'three_ds_status'         => isset($ws['status']) ? strtolower((string) $ws['status']) : $source->three_ds_status,
+            'status' => $status,
+            'three_ds_status' => isset($ws['status']) ? strtolower((string) $ws['status']) : $source->three_ds_status,
             // Datos NO sensibles si Wompi los devuelve en public_data.
-            'card_brand'     => data_get($ws, 'public_data.brand') ?? $source->card_brand,
+            'card_brand' => data_get($ws, 'public_data.brand') ?? $source->card_brand,
             'card_last_four' => $this->safeLast4(data_get($ws, 'public_data.last_four')) ?? $source->card_last_four,
-            'exp_month'      => $this->safeExp(data_get($ws, 'public_data.exp_month'), 2) ?? $source->exp_month,
-            'exp_year'       => $this->safeExp(data_get($ws, 'public_data.exp_year'), 4) ?? $source->exp_year,
+            'exp_month' => $this->safeExp(data_get($ws, 'public_data.exp_month'), 2) ?? $source->exp_month,
+            'exp_year' => $this->safeExp(data_get($ws, 'public_data.exp_year'), 4) ?? $source->exp_year,
         ], fn ($v) => $v !== null))->save();
 
         return $source->fresh();
@@ -190,12 +192,14 @@ class WompiPaymentSourceService
     private function safeLast4(mixed $v): ?string
     {
         $s = preg_replace('/\D/', '', (string) $v);
+
         return $s !== '' ? substr($s, -4) : null;
     }
 
     private function safeExp(mixed $v, int $len): ?string
     {
         $s = preg_replace('/\D/', '', (string) $v);
+
         return $s !== '' ? substr($s, -$len) : null;
     }
 

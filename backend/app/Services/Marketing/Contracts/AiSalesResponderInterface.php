@@ -13,8 +13,8 @@ interface AiSalesResponderInterface
     /**
      * Clasifica el cuerpo de un mensaje del lead.
      *
-     * @param  string  $body     texto del lead.
-     * @param  array   $context  contexto opcional (lead, historial, planes…).
+     * @param  string  $body  texto del lead.
+     * @param  array  $context  contexto opcional (lead, historial, planes…).
      * @return array{intent:string, confidence:float, extracted_fields:array, missing_fields:array}
      */
     public function classify(string $body, array $context = []): array;

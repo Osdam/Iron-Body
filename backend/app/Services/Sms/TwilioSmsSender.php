@@ -13,13 +13,14 @@ class TwilioSmsSender implements SmsSender
 {
     public function send(string $to, string $message): bool
     {
-        $sid   = (string) config('otp.twilio.sid');
+        $sid = (string) config('otp.twilio.sid');
         $token = (string) config('otp.twilio.token');
-        $from  = (string) config('otp.twilio.from');
-        $base  = rtrim((string) config('otp.twilio.base'), '/');
+        $from = (string) config('otp.twilio.from');
+        $base = rtrim((string) config('otp.twilio.base'), '/');
 
         if ($sid === '' || $token === '' || $from === '') {
             Log::warning('TwilioSmsSender: credenciales incompletas, no se envía SMS.');
+
             return false;
         }
 
@@ -28,7 +29,7 @@ class TwilioSmsSender implements SmsSender
                 ->withBasicAuth($sid, $token)
                 ->timeout(15)
                 ->post("{$base}/2010-04-01/Accounts/{$sid}/Messages.json", [
-                    'To'   => $to,
+                    'To' => $to,
                     'From' => $from,
                     'Body' => $message,
                 ]);
@@ -39,11 +40,13 @@ class TwilioSmsSender implements SmsSender
 
             Log::warning('TwilioSmsSender: respuesta no exitosa', [
                 'status' => $response->status(),
-                'body'   => $response->body(),
+                'body' => $response->body(),
             ]);
+
             return false;
         } catch (\Throwable $e) {
             Log::warning('TwilioSmsSender: excepción al enviar', ['error' => $e->getMessage()]);
+
             return false;
         }
     }

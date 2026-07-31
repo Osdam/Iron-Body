@@ -47,7 +47,7 @@ class SerialTurnstileService
         );
         @shell_exec($modeCmd);
 
-        $tmp = tempnam(sys_get_temp_dir(), 'irbsr_') . '.ps1';
+        $tmp = tempnam(sys_get_temp_dir(), 'irbsr_').'.ps1';
         try {
             file_put_contents($tmp, $this->buildPowershellScript($port, $baud, $command));
 
@@ -84,6 +84,7 @@ class SerialTurnstileService
             ];
         } catch (Throwable $e) {
             Log::warning('Serial open exception', ['error' => $e->getMessage()]);
+
             return ['ok' => false, 'port' => $port, 'baud' => $baud, 'command' => $command,
                 'error' => $e->getMessage()];
         } finally {

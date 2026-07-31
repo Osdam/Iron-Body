@@ -17,9 +17,7 @@ use Throwable;
  */
 class FcmService
 {
-    public function __construct(private FcmHttpV1Client $client)
-    {
-    }
+    public function __construct(private FcmHttpV1Client $client) {}
 
     public function enabled(): bool
     {
@@ -35,8 +33,9 @@ class FcmService
         if (! $this->enabled()) {
             Log::info('FCM no configurado: push omitido (solo SSE in-app).', [
                 'member' => $member->id,
-                'notif'  => $notification->uuid,
+                'notif' => $notification->uuid,
             ]);
+
             return;
         }
 
@@ -83,6 +82,7 @@ class FcmService
             Log::info('FCM no configurado: broadcast omitido (solo SSE in-app).', [
                 'notif' => $notification->uuid,
             ]);
+
             return;
         }
 
@@ -110,26 +110,22 @@ class FcmService
     private function buildMessage(string $token, Notification $n): array
     {
         $category = NotificationCategory::fromLegacyType($n->type);
-        $urgent = PushChannel::priorityForCategory($category) === 'high';
 
         return [
-            'token'        => $token,
+            'token' => $token,
             'notification' => [
                 'title' => (string) $n->title,
-                'body'  => (string) $n->message,
+                'body' => (string) $n->message,
             ],
             'data' => array_map('strval', array_filter([
-                'uuid'        => $n->uuid,
-                'type'        => $n->type,
-                'category'    => $category,
+                'uuid' => $n->uuid,
+                'type' => $n->type,
+                'category' => $category,
                 'action_type' => $n->action_type,
-                'priority'    => $n->priority,
+                'priority' => $n->priority,
             ], fn ($v) => $v !== null)),
             'android' => PushChannel::androidBlock($category),
-            'apns' => [
-                'headers' => ['apns-priority' => $urgent ? '10' : '5'],
-                'payload' => ['aps' => $urgent ? ['sound' => 'default'] : ['sound' => '']],
-            ],
+            'apns' => PushChannel::apnsBlock($category),
         ];
     }
 }

@@ -59,12 +59,12 @@ class WompiPsePaymentService extends AbstractWompiPaymentService
         }
 
         return [
-            'type'                      => 'PSE',
-            'user_type'                 => $userType,
-            'user_legal_id_type'        => $legalId !== '' ? $legalIdType : 'CC',
-            'user_legal_id'             => $legalId,
-            'financial_institution_code'=> $bank,
-            'payment_description'       => mb_substr($this->description($transaction), 0, 60),
+            'type' => 'PSE',
+            'user_type' => $userType,
+            'user_legal_id_type' => $legalId !== '' ? $legalIdType : 'CC',
+            'user_legal_id' => $legalId,
+            'financial_institution_code' => $bank,
+            'payment_description' => mb_substr($this->description($transaction), 0, 60),
         ];
     }
 
@@ -86,9 +86,10 @@ class WompiPsePaymentService extends AbstractWompiPaymentService
 
         if (! $res['ok']) {
             Log::warning('wompi.pse.institutions.failed', ['status' => $res['status']]);
+
             return [
                 'institutions' => is_array($cached) ? $cached : [],
-                'available'    => is_array($cached),
+                'available' => is_array($cached),
             ];
         }
 

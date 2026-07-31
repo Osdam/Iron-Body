@@ -12,9 +12,7 @@ use Carbon\Carbon;
  */
 class NutritionFoodNormalizer
 {
-    public function __construct(private NutritionColombiaClassifier $colombia)
-    {
-    }
+    public function __construct(private NutritionColombiaClassifier $colombia) {}
 
     /** Open Food Facts product → array normalizado (o null si inservible). */
     public function fromOpenFoodFacts(array $p): ?array
@@ -33,13 +31,13 @@ class NutritionFoodNormalizer
         $nutr = is_array($p['nutriments'] ?? null) ? $p['nutriments'] : [];
         $per100 = [
             // Calorías: kcal dedicadas primero; si solo hay energía en kJ, convertir.
-            'calories'      => $this->energyKcal($nutr),
-            'protein'       => $this->num($nutr['proteins_100g'] ?? $nutr['proteins_value'] ?? null),
-            'carbs'         => $this->num($nutr['carbohydrates_100g'] ?? $nutr['carbohydrates_value'] ?? null),
-            'fat'           => $this->num($nutr['fat_100g'] ?? $nutr['fat_value'] ?? null),
-            'sugar'         => $this->num($nutr['sugars_100g'] ?? null),
-            'fiber'         => $this->num($nutr['fiber_100g'] ?? null),
-            'sodium'        => $this->sodium($nutr['sodium_100g'] ?? null, $nutr['salt_100g'] ?? null),
+            'calories' => $this->energyKcal($nutr),
+            'protein' => $this->num($nutr['proteins_100g'] ?? $nutr['proteins_value'] ?? null),
+            'carbs' => $this->num($nutr['carbohydrates_100g'] ?? $nutr['carbohydrates_value'] ?? null),
+            'fat' => $this->num($nutr['fat_100g'] ?? $nutr['fat_value'] ?? null),
+            'sugar' => $this->num($nutr['sugars_100g'] ?? null),
+            'fiber' => $this->num($nutr['fiber_100g'] ?? null),
+            'sodium' => $this->sodium($nutr['sodium_100g'] ?? null, $nutr['salt_100g'] ?? null),
             'saturated_fat' => $this->num($nutr['saturated-fat_100g'] ?? null),
         ];
         [$servingSize, $servingUnit] = $this->parseServing(
@@ -48,20 +46,20 @@ class NutritionFoodNormalizer
         );
 
         return $this->assemble([
-            'source'       => 'open_food_facts',
-            'external_id'  => (string) ($p['code'] ?? $p['_id'] ?? ($p['barcode'] ?? '')),
-            'barcode'      => (string) ($p['code'] ?? $p['barcode'] ?? '') ?: null,
-            'name'         => $this->cleanName($name),
-            'brand'        => $this->firstCsv((string) ($p['brands'] ?? '')),
-            'category'     => $this->firstCsv((string) ($p['categories'] ?? '')),
-            'image_url'    => $this->offImage($p),
+            'source' => 'open_food_facts',
+            'external_id' => (string) ($p['code'] ?? $p['_id'] ?? ($p['barcode'] ?? '')),
+            'barcode' => (string) ($p['code'] ?? $p['barcode'] ?? '') ?: null,
+            'name' => $this->cleanName($name),
+            'brand' => $this->firstCsv((string) ($p['brands'] ?? '')),
+            'category' => $this->firstCsv((string) ($p['categories'] ?? '')),
+            'image_url' => $this->offImage($p),
             'serving_size' => $servingSize,
             'serving_unit' => $servingUnit,
-            'per_100g'     => $per100,
+            'per_100g' => $per100,
             // Señales de cobertura Colombia (país y cadenas donde se vende).
-            'countries'    => (string) ($p['countries_tags'] ?? $p['countries'] ?? '') ?: null,
-            'stores'       => (string) ($p['stores_tags'] ?? $p['stores'] ?? '') ?: null,
-            'raw'          => ['code' => $p['code'] ?? null, 'serving_size' => $p['serving_size'] ?? null],
+            'countries' => (string) ($p['countries_tags'] ?? $p['countries'] ?? '') ?: null,
+            'stores' => (string) ($p['stores_tags'] ?? $p['stores'] ?? '') ?: null,
+            'raw' => ['code' => $p['code'] ?? null, 'serving_size' => $p['serving_size'] ?? null],
         ]);
     }
 
@@ -83,6 +81,7 @@ class NutritionFoodNormalizer
                 return round($v / 4.184, 2); // kJ → kcal
             }
         }
+
         return null;
     }
 
@@ -98,6 +97,7 @@ class NutritionFoodNormalizer
         if (is_array($sel)) {
             return $sel['es'] ?? $sel['en'] ?? (reset($sel) ?: null);
         }
+
         return null;
     }
 
@@ -119,25 +119,25 @@ class NutritionFoodNormalizer
         // IDs USDA: 1008 kcal, 1003 protein, 1005 carbs, 1004 fat, 2000 sugars,
         // 1079 fiber, 1093 sodium(mg), 1258 saturated fat.
         $per100 = [
-            'calories'      => $by[1008] ?? null,
-            'protein'       => $by[1003] ?? null,
-            'carbs'         => $by[1005] ?? null,
-            'fat'           => $by[1004] ?? null,
-            'sugar'         => $by[2000] ?? null,
-            'fiber'         => $by[1079] ?? null,
-            'sodium'        => $by[1093] ?? null, // ya en mg/100g
+            'calories' => $by[1008] ?? null,
+            'protein' => $by[1003] ?? null,
+            'carbs' => $by[1005] ?? null,
+            'fat' => $by[1004] ?? null,
+            'sugar' => $by[2000] ?? null,
+            'fiber' => $by[1079] ?? null,
+            'sodium' => $by[1093] ?? null, // ya en mg/100g
             'saturated_fat' => $by[1258] ?? null,
         ];
 
         return $this->assemble([
-            'source'      => 'usda',
+            'source' => 'usda',
             'external_id' => (string) ($item['fdcId'] ?? ''),
-            'barcode'     => $item['gtinUpc'] ?? null,
-            'name'        => $this->cleanName($name),
-            'brand'       => $item['brandOwner'] ?? $item['brandName'] ?? null,
-            'category'    => $item['foodCategory'] ?? null,
-            'per_100g'    => $per100,
-            'raw'         => ['fdcId' => $item['fdcId'] ?? null],
+            'barcode' => $item['gtinUpc'] ?? null,
+            'name' => $this->cleanName($name),
+            'brand' => $item['brandOwner'] ?? $item['brandName'] ?? null,
+            'category' => $item['foodCategory'] ?? null,
+            'per_100g' => $per100,
+            'raw' => ['fdcId' => $item['fdcId'] ?? null],
         ]);
     }
 
@@ -167,22 +167,22 @@ class NutritionFoodNormalizer
         $confidence = round(count($core) / 4, 3);
 
         return [
-            'source'           => $d['source'],
-            'external_id'      => $d['external_id'] ?: null,
-            'barcode'          => $d['barcode'] ?? null,
-            'name'             => $d['name'],
-            'brand'            => $d['brand'] ?? null,
-            'category'         => $d['category'] ?? null,
-            'image_url'        => $d['image_url'] ?? null,
-            'serving_size'     => $size,
-            'serving_unit'     => $d['serving_unit'] ?? ($size ? 'g' : null),
-            'per_100g'         => $per100,
-            'per_serving'      => $perServing,
+            'source' => $d['source'],
+            'external_id' => $d['external_id'] ?: null,
+            'barcode' => $d['barcode'] ?? null,
+            'name' => $d['name'],
+            'brand' => $d['brand'] ?? null,
+            'category' => $d['category'] ?? null,
+            'image_url' => $d['image_url'] ?? null,
+            'serving_size' => $size,
+            'serving_unit' => $d['serving_unit'] ?? ($size ? 'g' : null),
+            'per_100g' => $per100,
+            'per_serving' => $perServing,
             'confidence_score' => $confidence,
-            'countries'        => $d['countries'] ?? null,
-            'stores'           => $d['stores'] ?? null,
-            'raw'              => $d['raw'] ?? [],
-            'incomplete'       => count($core) < 4,
+            'countries' => $d['countries'] ?? null,
+            'stores' => $d['stores'] ?? null,
+            'raw' => $d['raw'] ?? [],
+            'incomplete' => count($core) < 4,
         ];
     }
 
@@ -200,7 +200,7 @@ class NutritionFoodNormalizer
         } else {
             $query->whereRaw('1 = 0'); // sin clave estable → siempre crea
         }
-        $food = $query->first() ?? new NutritionFood();
+        $food = $query->first() ?? new NutritionFood;
 
         $food->fill($this->toModelAttributes($n));
         $food->last_synced_at = Carbon::now();
@@ -213,38 +213,38 @@ class NutritionFoodNormalizer
     public function toModelAttributes(array $n): array
     {
         $attrs = [
-            'source'           => $n['source'],
-            'external_id'      => $n['external_id'] ?? null,
-            'barcode'          => $n['barcode'] ?? null,
-            'name'             => $n['name'],
-            'brand'            => $n['brand'] ?? null,
-            'category'         => $n['category'] ?? null,
-            'image_url'        => $n['image_url'] ?? null,
-            'serving_size'     => $n['serving_size'] ?? null,
-            'serving_unit'     => $n['serving_unit'] ?? null,
+            'source' => $n['source'],
+            'external_id' => $n['external_id'] ?? null,
+            'barcode' => $n['barcode'] ?? null,
+            'name' => $n['name'],
+            'brand' => $n['brand'] ?? null,
+            'category' => $n['category'] ?? null,
+            'image_url' => $n['image_url'] ?? null,
+            'serving_size' => $n['serving_size'] ?? null,
+            'serving_unit' => $n['serving_unit'] ?? null,
             'confidence_score' => $n['confidence_score'] ?? null,
-            'is_public'        => in_array($n['source'], ['open_food_facts', 'usda', 'nutritionix', 'iron_body'], true),
-            'raw_payload'      => $n['raw'] ?? null,
+            'is_public' => in_array($n['source'], ['open_food_facts', 'usda', 'nutritionix', 'iron_body'], true),
+            'raw_payload' => $n['raw'] ?? null,
         ];
         foreach (['calories', 'protein', 'carbs', 'fat', 'sugar', 'fiber', 'sodium', 'saturated_fat'] as $k) {
-            $attrs[$k . '_per_100g'] = $n['per_100g'][$k] ?? null;
+            $attrs[$k.'_per_100g'] = $n['per_100g'][$k] ?? null;
         }
         foreach (['calories', 'protein', 'carbs', 'fat', 'sugar', 'fiber', 'sodium'] as $k) {
-            $attrs[$k . '_per_serving'] = $n['per_serving'][$k] ?? null;
+            $attrs[$k.'_per_serving'] = $n['per_serving'][$k] ?? null;
         }
 
         // Columnas de cobertura Colombia (país, cadenas, marca/tienda, score).
         $c = $this->colombia->classify([
             'countries' => $n['countries'] ?? null,
-            'stores'    => $n['stores'] ?? null,
-            'brand'     => $n['brand'] ?? null,
-            'barcode'   => $n['barcode'] ?? null,
+            'stores' => $n['stores'] ?? null,
+            'brand' => $n['brand'] ?? null,
+            'barcode' => $n['barcode'] ?? null,
         ]);
-        $attrs['country']                 = $c['country'];
-        $attrs['stores']                  = $c['stores'];
-        $attrs['normalized_brand']        = $c['normalized_brand'];
-        $attrs['normalized_store']        = $c['normalized_store'];
-        $attrs['imported_region']         = $c['imported_region'];
+        $attrs['country'] = $c['country'];
+        $attrs['stores'] = $c['stores'];
+        $attrs['normalized_brand'] = $c['normalized_brand'];
+        $attrs['normalized_store'] = $c['normalized_store'];
+        $attrs['imported_region'] = $c['imported_region'];
         $attrs['imported_priority_score'] = $c['imported_priority_score'];
 
         return $attrs;
@@ -258,6 +258,7 @@ class NutritionFoodNormalizer
             return null;
         }
         $f = (float) $v;
+
         return $f < 0 ? null : round($f, 2);
     }
 
@@ -270,6 +271,7 @@ class NutritionFoodNormalizer
         if ($saltG !== null && is_numeric($saltG)) {
             return round((float) $saltG * 1000 / 2.5, 2); // sal → sodio (≈/2.5) en mg
         }
+
         return null;
     }
 
@@ -281,6 +283,7 @@ class NutritionFoodNormalizer
     private function firstCsv(string $csv): ?string
     {
         $parts = array_filter(array_map('trim', explode(',', $csv)));
+
         return $parts[0] ?? null;
     }
 
@@ -298,6 +301,7 @@ class NutritionFoodNormalizer
         if ($servingQuantity !== null && is_numeric($servingQuantity) && (float) $servingQuantity > 0) {
             return [round((float) $servingQuantity, 2), 'g'];
         }
+
         return [null, null];
     }
 }

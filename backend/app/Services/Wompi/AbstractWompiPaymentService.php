@@ -22,8 +22,7 @@ abstract class AbstractWompiPaymentService
         protected WompiSignatureService $signature,
         protected WompiAcceptanceService $acceptance,
         protected array $cfg,
-    ) {
-    }
+    ) {}
 
     /** Nombre interno del método (card|pse|nequi|daviplata). */
     abstract protected function method(): string;
@@ -80,10 +79,11 @@ abstract class AbstractWompiPaymentService
 
         if (! $res['ok']) {
             Log::info('wompi.create_transaction.failed', [
-                'reference'  => $transaction->reference,
-                'status'     => $res['status'],
+                'reference' => $transaction->reference,
+                'status' => $res['status'],
                 'error_code' => $res['error_code'],
             ]);
+
             return $this->tx->markError(
                 $transaction,
                 $this->friendlyError($res),
@@ -112,19 +112,19 @@ abstract class AbstractWompiPaymentService
         $c = is_array($transaction->customer) ? $transaction->customer : [];
 
         return array_filter([
-            'amount_in_cents'            => $cents,
-            'currency'                   => $currency,
-            'reference'                  => $transaction->reference,
-            'customer_email'             => $transaction->customer_email ?: ($c['email'] ?? null),
-            'signature'                  => $this->signature->integritySignature($transaction->reference, $cents, $currency),
-            'acceptance_token'           => $tokens['acceptance_token'],
+            'amount_in_cents' => $cents,
+            'currency' => $currency,
+            'reference' => $transaction->reference,
+            'customer_email' => $transaction->customer_email ?: ($c['email'] ?? null),
+            'signature' => $this->signature->integritySignature($transaction->reference, $cents, $currency),
+            'acceptance_token' => $tokens['acceptance_token'],
             'accept_personal_auth_token' => $tokens['accept_personal_auth_token'],
-            'redirect_url'               => $this->cfg['redirect_url'] ?? null,
-            'payment_method'             => $paymentMethod,
-            'customer_data'              => array_filter([
-                'full_name'     => $c['name'] ?? null,
-                'phone_number'  => $transaction->customer_phone ?: ($c['phone'] ?? null),
-                'legal_id'      => $transaction->customer_legal_id ?: ($c['doc_number'] ?? null),
+            'redirect_url' => $this->cfg['redirect_url'] ?? null,
+            'payment_method' => $paymentMethod,
+            'customer_data' => array_filter([
+                'full_name' => $c['name'] ?? null,
+                'phone_number' => $transaction->customer_phone ?: ($c['phone'] ?? null),
+                'legal_id' => $transaction->customer_legal_id ?: ($c['doc_number'] ?? null),
                 'legal_id_type' => $transaction->customer_legal_id_type ?: ($c['doc_type'] ?? 'CC'),
             ], fn ($v) => $v !== null && $v !== ''),
         ], fn ($v) => $v !== null && $v !== '' && $v !== []);
@@ -140,6 +140,7 @@ abstract class AbstractWompiPaymentService
                 return $msg;
             }
         }
+
         return $map['ERROR'] ?? 'No pudimos procesar el pago. No se realizó ningún cobro.';
     }
 

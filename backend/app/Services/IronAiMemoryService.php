@@ -138,6 +138,7 @@ class IronAiMemoryService
                 }
                 $out[$key] = is_array($value) ? $clean($value) : $value;
             }
+
             return $out;
         };
 

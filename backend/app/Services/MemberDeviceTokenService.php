@@ -44,6 +44,7 @@ class MemberDeviceTokenService
             ->where('id', $id)
             ->where('member_id', $member->id)
             ->update(['is_active' => false]);
+
         return $affected > 0;
     }
 

@@ -26,21 +26,21 @@ class MarketingAttributionService
     ): MarketingAttribution {
         $attribution = MarketingAttribution::firstOrCreate(
             [
-                'lead_id'    => $lead->id,
+                'lead_id' => $lead->id,
                 'payment_id' => $paymentId,
             ],
             [
-                'member_id'     => $memberId ?? $lead->member_id,
-                'campaign_id'   => $lead->campaign_id,
-                'sale_amount'   => $saleAmount,
+                'member_id' => $memberId ?? $lead->member_id,
+                'campaign_id' => $lead->campaign_id,
+                'sale_amount' => $saleAmount,
                 'membership_id' => $membershipId,
-                'converted_at'  => now(),
+                'converted_at' => now(),
             ],
         );
 
         $lead->forceFill([
-            'status'       => MarketingLead::STATUS_CONVERTED,
-            'member_id'    => $memberId ?? $lead->member_id,
+            'status' => MarketingLead::STATUS_CONVERTED,
+            'member_id' => $memberId ?? $lead->member_id,
             'converted_at' => $lead->converted_at ?? now(),
         ])->save();
 

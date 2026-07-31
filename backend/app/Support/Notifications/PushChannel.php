@@ -92,4 +92,38 @@ final class PushChannel
             'notification' => $notification,
         ];
     }
+
+    /**
+     * Bloque `apns` equivalente para iPhone.
+     *
+     * iOS no tiene canales: la diferencia entre «esto te interesa ahora» y «esto
+     * puede esperar» se expresa con la prioridad de entrega y el
+     * `interruption-level`. Sin este bloque, un pago rechazado y un consejo de
+     * hidratación llegaban al iPhone exactamente igual — el mismo error que en
+     * Android, solo que ahí lo causaba el canal ausente.
+     *
+     * Se usa `active` y no `time-sensitive` a propósito: `time-sensitive` exige
+     * el entitlement `com.apple.developer.usernotifications.time-sensitive`, y
+     * pedir un nivel que la app no tiene autorizado hace que iOS lo ignore.
+     */
+    public static function apnsBlock(string $category): array
+    {
+        $urgent = self::priorityForCategory($category) === 'high';
+
+        $aps = [
+            // 10 entrega de inmediato; 5 deja que iOS agrupe y ahorre batería.
+            'interruption-level' => $urgent ? 'active' : 'passive',
+        ];
+
+        // El sonido se OMITE en las silenciosas. Mandar una cadena vacía no es
+        // lo mismo que no mandar nada: iOS la trata como nombre de sonido.
+        if ($urgent) {
+            $aps['sound'] = 'default';
+        }
+
+        return [
+            'headers' => ['apns-priority' => $urgent ? '10' : '5'],
+            'payload' => ['aps' => $aps],
+        ];
+    }
 }

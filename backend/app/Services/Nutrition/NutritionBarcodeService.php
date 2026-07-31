@@ -12,9 +12,7 @@ use App\Models\Member;
  */
 class NutritionBarcodeService
 {
-    public function __construct(private FoodBarcodeResolver $resolver)
-    {
-    }
+    public function __construct(private FoodBarcodeResolver $resolver) {}
 
     /** @return array{status:string, food?:array, message?:string, reason?:string} */
     public function lookup(string $barcode, Member $member): array

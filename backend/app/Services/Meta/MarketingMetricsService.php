@@ -30,18 +30,18 @@ class MarketingMetricsService
             ->count('member_id');
 
         return [
-            'spend_total'          => round($spendTotal, 2),
-            'leads_total'          => $leadsTotal,
-            'conversations_total'  => (int) MarketingConversation::count(),
-            'converted_leads'      => $convertedLeads,
-            'revenue_total'        => round($revenueTotal, 2),
-            'roas'                 => $spendTotal > 0 ? round($revenueTotal / $spendTotal, 2) : null,
-            'cac'                  => $convertedCustomers > 0 ? round($spendTotal / $convertedCustomers, 2) : null,
-            'conversion_rate'      => $leadsTotal > 0 ? round($convertedLeads / $leadsTotal, 4) : null,
-            'hot_leads'            => (int) MarketingLead::where('temperature', 'hot')
+            'spend_total' => round($spendTotal, 2),
+            'leads_total' => $leadsTotal,
+            'conversations_total' => (int) MarketingConversation::count(),
+            'converted_leads' => $convertedLeads,
+            'revenue_total' => round($revenueTotal, 2),
+            'roas' => $spendTotal > 0 ? round($revenueTotal / $spendTotal, 2) : null,
+            'cac' => $convertedCustomers > 0 ? round($spendTotal / $convertedCustomers, 2) : null,
+            'conversion_rate' => $leadsTotal > 0 ? round($convertedLeads / $leadsTotal, 4) : null,
+            'hot_leads' => (int) MarketingLead::where('temperature', 'hot')
                 ->orWhere('status', MarketingLead::STATUS_HOT)->count(),
-            'pending_followups'    => (int) MarketingFollowup::where('status', MarketingFollowup::STATUS_PENDING)->count(),
-            'ai_actions_count'     => (int) MarketingAiAction::count(),
+            'pending_followups' => (int) MarketingFollowup::where('status', MarketingFollowup::STATUS_PENDING)->count(),
+            'ai_actions_count' => (int) MarketingAiAction::count(),
             'human_takeover_count' => (int) MarketingConversation::where('human_takeover', true)->count(),
         ];
     }

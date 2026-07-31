@@ -16,9 +16,8 @@ class SalesConversationReplyService
     public const ADDRESS = 'Cl. 24 Sur #33-53, Neiva, Huila';
 
     public function __construct(
-        private readonly SalesObjectionResponderService $objections = new SalesObjectionResponderService(),
-    ) {
-    }
+        private readonly SalesObjectionResponderService $objections = new SalesObjectionResponderService,
+    ) {}
 
     /**
      * Respuesta sugerida (curada) para una intención. null = no responder.
@@ -37,90 +36,69 @@ class SalesConversationReplyService
         }
 
         return match ($intent) {
-            SalesIntents::GREETING =>
-                'Hola, bienvenido a Iron Body. ¿Buscas información de planes, ubicación o quieres '
+            SalesIntents::GREETING => 'Hola, bienvenido a Iron Body. ¿Buscas información de planes, ubicación o quieres '
                 .'empezar con algún objetivo?',
 
-            SalesIntents::PRICING_QUESTION =>
-                'Sí, claro. Para recomendarte mejor, ¿quieres empezar por bajar grasa, ganar masa '
+            SalesIntents::PRICING_QUESTION => 'Sí, claro. Para recomendarte mejor, ¿quieres empezar por bajar grasa, ganar masa '
                 .'o simplemente coger hábito?',
 
-            SalesIntents::PAYMENT_LINK_REQUEST, SalesIntents::HIGH_INTENT_CLOSE =>
-                $this->paymentPendingReply(),
+            SalesIntents::PAYMENT_LINK_REQUEST, SalesIntents::HIGH_INTENT_CLOSE => $this->paymentPendingReply(),
 
-            SalesIntents::GOAL_FAT_LOSS =>
-                'Listo. Para bajar grasa lo más importante es empezar con algo que puedas sostener. '
+            SalesIntents::GOAL_FAT_LOSS => 'Listo. Para bajar grasa lo más importante es empezar con algo que puedas sostener. '
                 .'¿Ya vienes entrenando o arrancas desde cero?',
 
-            SalesIntents::GOAL_MUSCLE_GAIN =>
-                'Perfecto. Para ganar masa lo clave es entrenar constante y con buena guía. '
+            SalesIntents::GOAL_MUSCLE_GAIN => 'Perfecto. Para ganar masa lo clave es entrenar constante y con buena guía. '
                 .'¿Ya has entrenado antes o estás empezando?',
 
-            SalesIntents::GOAL_RECOMPOSITION =>
-                'Eso se puede trabajar como recomposición corporal: ganar músculo y bajar grasa '
+            SalesIntents::GOAL_RECOMPOSITION => 'Eso se puede trabajar como recomposición corporal: ganar músculo y bajar grasa '
                 .'poco a poco. Lo clave es hacerlo con constancia y buena guía. '
                 .'¿Ya has entrenado antes o estás empezando?',
 
-            SalesIntents::LOCATION_QUESTION =>
-                'Estamos en '.self::ADDRESS.'. ¿Vas a ir por primera vez?',
+            SalesIntents::LOCATION_QUESTION => 'Estamos en '.self::ADDRESS.'. ¿Vas a ir por primera vez?',
 
-            SalesIntents::SCHEDULE_QUESTION =>
-                'No quiero darte un horario incorrecto. Te paso con alguien del equipo para '
+            SalesIntents::SCHEDULE_QUESTION => 'No quiero darte un horario incorrecto. Te paso con alguien del equipo para '
                 .'confirmarlo bien.',
 
-            SalesIntents::GENERAL_INFO =>
-                'Con gusto te cuento. El mensual te sirve para entrenar constante, y según tu '
+            SalesIntents::GENERAL_INFO => 'Con gusto te cuento. El mensual te sirve para entrenar constante, y según tu '
                 .'objetivo miramos lo que mejor te sirva. ¿Quieres entrenar por salud, bajar grasa '
                 .'o ganar masa?',
 
-            SalesIntents::THANKS =>
-                'Con gusto. Si después quieres empezar o comparar planes, me escribes y te ayudo '
+            SalesIntents::THANKS => 'Con gusto. Si después quieres empezar o comparar planes, me escribes y te ayudo '
                 .'sin problema.',
 
-            SalesIntents::NOT_INTERESTED =>
-                'Listo, tranquilo. No hay problema. Si después te animas o solo quieres resolver '
+            SalesIntents::NOT_INTERESTED => 'Listo, tranquilo. No hay problema. Si después te animas o solo quieres resolver '
                 .'dudas, aquí te ayudamos.',
 
-            SalesIntents::BOT_QUESTION =>
-                'Soy el asistente de Iron Body y te puedo ayudar con información inicial. Si '
+            SalesIntents::BOT_QUESTION => 'Soy el asistente de Iron Body y te puedo ayudar con información inicial. Si '
                 .'prefieres, también te paso con una persona del equipo.',
 
-            SalesIntents::HUMAN_REQUEST =>
-                'Claro, dejo marcada tu solicitud para que alguien del equipo la revise. Igual sigo '
+            SalesIntents::HUMAN_REQUEST => 'Claro, dejo marcada tu solicitud para que alguien del equipo la revise. Igual sigo '
                 .'por aquí si quieres que te ayude con precios, ubicación o planes.',
 
-            SalesIntents::COMPLAINT =>
-                'Entiendo. Lo dejo marcado como caso para revisión del equipo. Para ayudarte mejor, '
+            SalesIntents::COMPLAINT => 'Entiendo. Lo dejo marcado como caso para revisión del equipo. Para ayudarte mejor, '
                 .'¿me cuentas qué pasó exactamente?',
 
-            SalesIntents::INVOICE_REQUEST =>
-                'Claro. Para factura necesito que el equipo confirme los datos correctos para no '
+            SalesIntents::INVOICE_REQUEST => 'Claro. Para factura necesito que el equipo confirme los datos correctos para no '
                 .'cometer errores. Te dejo marcada la solicitud de facturación. Si quieres, también '
                 .'puedo ayudarte con información de planes o ubicación.',
 
-            SalesIntents::MEDICAL_RISK_ESCALATION =>
-                'Gracias por contarlo. Con una lesión es mejor no recomendar ejercicios específicos '
+            SalesIntents::MEDICAL_RISK_ESCALATION => 'Gracias por contarlo. Con una lesión es mejor no recomendar ejercicios específicos '
                 .'por aquí para no darte una orientación irresponsable. Te dejo marcado que necesitas '
                 .'revisión del equipo, y mientras tanto puedo ayudarte con información general de '
                 .'planes o ubicación.',
 
-            SalesIntents::FRAUD_OR_PAYMENT_CLAIM =>
-                'Tranquilo, lo dejo marcado para que el equipo revise tu caso de pago con cuidado. La '
+            SalesIntents::FRAUD_OR_PAYMENT_CLAIM => 'Tranquilo, lo dejo marcado para que el equipo revise tu caso de pago con cuidado. La '
                 .'membresía solo queda activa cuando el pago está confirmado. ¿Quieres que te ayude '
                 .'con algo más mientras tanto?',
 
-            SalesIntents::GOODBYE =>
-                'De una, tranquilo. Si más adelante quieres empezar o resolver dudas, me escribes y '
+            SalesIntents::GOODBYE => 'De una, tranquilo. Si más adelante quieres empezar o resolver dudas, me escribes y '
                 .'te ayudo.',
 
-            SalesIntents::DO_NOT_CONTACT_REQUEST =>
-                null, // respetamos: no insistimos.
+            SalesIntents::DO_NOT_CONTACT_REQUEST => null, // respetamos: no insistimos.
 
-            SalesIntents::SPAM_LOW_QUALITY =>
-                null, // no enganchamos con mensajes sin contenido.
+            SalesIntents::SPAM_LOW_QUALITY => null, // no enganchamos con mensajes sin contenido.
 
-            default =>
-                'No quiero responderte cualquier cosa. ¿Te refieres a los planes, horarios o '
+            default => 'No quiero responderte cualquier cosa. ¿Te refieres a los planes, horarios o '
                 .'ubicación?',
         };
     }
@@ -175,7 +153,7 @@ class SalesConversationReplyService
         if ($plan !== null) {
             $price = $this->formatCop((float) $plan->price);
 
-            return "De una, tranquilo. Te dejo el dato por si lo quieres mirar después: el "
+            return 'De una, tranquilo. Te dejo el dato por si lo quieres mirar después: el '
                 ."{$plan->name} está en {$price} y estamos en ".self::ADDRESS.'. Si más adelante '
                 .'quieres empezar, me escribes y te ayudo.';
         }
@@ -202,6 +180,7 @@ class SalesConversationReplyService
                 return true;
             }
         }
+
         return false;
     }
 
@@ -228,6 +207,7 @@ class SalesConversationReplyService
         if (! str_contains($out, '?')) {
             $out .= ' ¿Quieres que te explique los planes?';
         }
+
         return $out;
     }
 
@@ -246,6 +226,7 @@ class SalesConversationReplyService
                 return true;
             }
         }
+
         return false;
     }
 
@@ -272,12 +253,14 @@ class SalesConversationReplyService
         if (! str_contains($out, '?')) {
             $out .= ' '.$softClosing;
         }
+
         return $out;
     }
 
     private function normalize(string $s): string
     {
         $lower = mb_strtolower(trim($s));
+
         return strtr($lower, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ñ' => 'n']);
     }
 

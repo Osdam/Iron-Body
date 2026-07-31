@@ -19,18 +19,18 @@ class AppNotificationService
 {
     /** Límites anti-spam (Fase I). */
     private const DEFAULT_WINDOW_MINUTES = 720; // 12h
+
     private const MAX_PER_TYPE_PER_DAY = 1;
+
     private const MAX_TOTAL_PER_DAY = 3;
 
-    public function __construct(private readonly AppPushService $push)
-    {
-    }
+    public function __construct(private readonly AppPushService $push) {}
 
     /**
      * Crea una notificación para el miembro respetando los límites.
      *
      * @return array{notification: ?AppNotification, status: string}
-     *   status: created | skipped_duplicate | skipped_limit
+     *                                                               status: created | skipped_duplicate | skipped_limit
      */
     public function createForMember(
         int $memberId,
@@ -102,6 +102,7 @@ class AppNotificationService
         if ($n->read_at === null) {
             $n->update(['read_at' => now()]);
         }
+
         return true;
     }
 
@@ -159,8 +160,10 @@ class AppNotificationService
                 }
                 $out[$key] = is_array($value) ? $clean($value) : $value;
             }
+
             return $out;
         };
+
         return $clean($payload);
     }
 }

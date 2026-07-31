@@ -15,7 +15,9 @@ use RuntimeException;
 class FcmHttpV1Client
 {
     private const TOKEN_URL = 'https://oauth2.googleapis.com/token';
-    private const SCOPE     = 'https://www.googleapis.com/auth/firebase.messaging';
+
+    private const SCOPE = 'https://www.googleapis.com/auth/firebase.messaging';
+
     private const CACHE_KEY = 'fcm.access_token';
 
     /** @var array{client_email:string,private_key:string,project_id:string}|null */
@@ -33,6 +35,7 @@ class FcmHttpV1Client
         if ($explicit) {
             return (string) $explicit;
         }
+
         return $this->loadCredentials()['project_id'] ?? null;
     }
 
@@ -61,14 +64,16 @@ class FcmHttpV1Client
             }
 
             $status = $response->status();
-            $error  = (string) $response->json('error.status', '');
+            $error = (string) $response->json('error.status', '');
             if ($status === 404 || $error === 'NOT_FOUND' || $error === 'UNREGISTERED') {
                 $unregistered = true;
             }
             Log::warning('FCM: envío no exitoso', ['status' => $status, 'body' => $response->body()]);
+
             return false;
         } catch (\Throwable $e) {
             Log::warning('FCM: excepción al enviar', ['error' => $e->getMessage()]);
+
             return false;
         }
     }
@@ -90,11 +95,12 @@ class FcmHttpV1Client
             $jwt = $this->buildJwt($creds);
             $response = Http::asForm()->timeout(15)->post(self::TOKEN_URL, [
                 'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-                'assertion'  => $jwt,
+                'assertion' => $jwt,
             ]);
 
             if (! $response->successful()) {
                 Log::warning('FCM: no se pudo obtener access token', ['body' => $response->body()]);
+
                 return null;
             }
 
@@ -104,9 +110,11 @@ class FcmHttpV1Client
             }
 
             Cache::put(self::CACHE_KEY, $token, (int) config('fcm.token_ttl', 3300));
+
             return $token;
         } catch (\Throwable $e) {
             Log::warning('FCM: excepción obteniendo token', ['error' => $e->getMessage()]);
+
             return null;
         }
     }
@@ -116,11 +124,11 @@ class FcmHttpV1Client
         $now = time();
         $header = ['alg' => 'RS256', 'typ' => 'JWT'];
         $claims = [
-            'iss'   => $creds['client_email'],
+            'iss' => $creds['client_email'],
             'scope' => self::SCOPE,
-            'aud'   => self::TOKEN_URL,
-            'iat'   => $now,
-            'exp'   => $now + 3600,
+            'aud' => self::TOKEN_URL,
+            'iat' => $now,
+            'exp' => $now + 3600,
         ];
 
         $segments = [
@@ -160,13 +168,14 @@ class FcmHttpV1Client
         $json = json_decode((string) file_get_contents($path), true);
         if (! is_array($json) || empty($json['client_email']) || empty($json['private_key'])) {
             Log::warning('FCM: service account JSON inválido o incompleto.');
+
             return null;
         }
 
         return $this->credentials = [
             'client_email' => (string) $json['client_email'],
-            'private_key'  => (string) $json['private_key'],
-            'project_id'   => (string) ($json['project_id'] ?? config('fcm.project_id', '')),
+            'private_key' => (string) $json['private_key'],
+            'project_id' => (string) ($json['project_id'] ?? config('fcm.project_id', '')),
         ];
     }
 

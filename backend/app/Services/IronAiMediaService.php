@@ -26,8 +26,8 @@ class IronAiMediaService
     /**
      * Guarda un archivo subido y crea su adjunto (sin message_id aún).
      *
-     * @param  array  $ctx   contexto del propietario (user/member/document)
-     * @param  array  $extra metadata adicional (duration_seconds, etc.)
+     * @param  array  $ctx  contexto del propietario (user/member/document)
+     * @param  array  $extra  metadata adicional (duration_seconds, etc.)
      */
     public function store(
         UploadedFile $file,
@@ -40,28 +40,28 @@ class IronAiMediaService
             ? config('iron_ai.media.image_disk', 'public')
             : config('iron_ai.media.audio_disk', 'local');
 
-        $dir = "iron-ai/{$type}s/" . ($conversation->uuid ?: 'misc');
+        $dir = "iron-ai/{$type}s/".($conversation->uuid ?: 'misc');
         $ext = strtolower($file->getClientOriginalExtension() ?: $file->extension() ?: 'bin');
-        $filename = (string) Str::uuid() . '.' . $ext;
+        $filename = (string) Str::uuid().'.'.$ext;
 
         $storedPath = $file->storeAs($dir, $filename, ['disk' => $disk]);
 
         return IronAiMessageAttachment::create([
-            'message_id'              => null,
+            'message_id' => null,
             'iron_ai_conversation_id' => $conversation->id,
-            'conversation_uuid'       => $conversation->uuid,
-            'user_id'                 => $ctx['user']?->id,
-            'member_id'               => $ctx['member']?->id,
-            'document'                => $ctx['identity_key'] ?? $ctx['document'] ?? null,
-            'type'                    => $type,
-            'original_name'           => $file->getClientOriginalName(),
-            'stored_path'             => $storedPath,
-            'disk'                    => $disk,
-            'mime_type'               => $file->getClientMimeType() ?: $file->getMimeType(),
-            'size_bytes'              => $file->getSize(),
-            'duration_seconds'        => isset($extra['duration_seconds']) ? (int) $extra['duration_seconds'] : null,
-            'transcript'              => null,
-            'metadata'                => $extra['metadata'] ?? null,
+            'conversation_uuid' => $conversation->uuid,
+            'user_id' => $ctx['user']?->id,
+            'member_id' => $ctx['member']?->id,
+            'document' => $ctx['identity_key'] ?? $ctx['document'] ?? null,
+            'type' => $type,
+            'original_name' => $file->getClientOriginalName(),
+            'stored_path' => $storedPath,
+            'disk' => $disk,
+            'mime_type' => $file->getClientMimeType() ?: $file->getMimeType(),
+            'size_bytes' => $file->getSize(),
+            'duration_seconds' => isset($extra['duration_seconds']) ? (int) $extra['duration_seconds'] : null,
+            'transcript' => null,
+            'metadata' => $extra['metadata'] ?? null,
         ]);
     }
 
@@ -110,7 +110,7 @@ class IronAiMediaService
             }
             $mime = $attachment->mime_type ?: 'image/jpeg';
 
-            return 'data:' . $mime . ';base64,' . base64_encode($bytes);
+            return 'data:'.$mime.';base64,'.base64_encode($bytes);
         } catch (Throwable) {
             return null;
         }

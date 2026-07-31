@@ -23,14 +23,12 @@ use Carbon\CarbonImmutable;
  */
 class ProactiveCoachService
 {
-    public function __construct(private readonly AutomationEventService $events)
-    {
-    }
+    public function __construct(private readonly AutomationEventService $events) {}
 
     /**
      * Decide y (si procede) emite un evento proactivo para un miembro.
      *
-     * @param array<string,mixed> $context  Datos seguros del contexto (sin PII sensible).
+     * @param  array<string,mixed>  $context  Datos seguros del contexto (sin PII sensible).
      * @return array{status:string, reason:?string, event_type:string, member_id:int,
      *               notification:?array, idempotency_key:string}
      *   status: would_emit | emitted | skipped | duplicate
@@ -93,6 +91,7 @@ class ProactiveCoachService
         $tag = ProactiveCoachCatalog::cadence($eventType) === 'weekly'
             ? $now->format('o-\WW')          // año-semana ISO
             : $now->toDateString();          // fecha
+
         return "{$eventType}:{$memberId}:{$tag}";
     }
 
@@ -124,6 +123,7 @@ class ProactiveCoachService
                 return 'budget_strong';
             }
         }
+
         return null;
     }
 
@@ -138,6 +138,7 @@ class ProactiveCoachService
         if ($start > $end) {
             return $hour >= $start || $hour < $end;
         }
+
         return $hour >= $start && $hour < $end;
     }
 

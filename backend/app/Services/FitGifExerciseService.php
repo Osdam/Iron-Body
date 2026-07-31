@@ -3,9 +3,11 @@
 namespace App\Services;
 
 use App\Models\Exercise;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Throwable;
@@ -32,42 +34,51 @@ use Throwable;
 class FitGifExerciseService
 {
     private string $baseUrl;
+
     private ?string $apiKey;
+
     private string $source;
+
     private float $vSpeed;
+
     private int $vFps;
+
     private int $vWidth;
+
     private int $vCrf;
 
     private const GIF_DIR = 'fitgif';
+
     private const VIDEO_DIR = 'fitgif_video';
+
     private const MIN_INTERVAL = 21;   // s entre llamadas (límite 3/min)
+
     private const MAX_ATTEMPTS = 16;   // candidatos por ejercicio (la mayoría
-                                       // matchea en el 1.º; solo casos difíciles
-                                       // como Plancha agotan la lista)
+    // matchea en el 1.º; solo casos difíciles
+    // como Plancha agotan la lista)
 
     /**
      * Diccionario robusto: nombre local ES → bodyPart preferido + lista
      * ordenada de candidatos EN que FitGif suele resolver.
      */
     public const DICTIONARY = [
-        'press de banca'        => ['chest',      ['barbell bench press', 'bench press', 'dumbbell bench press', 'chest press']],
-        'press banca'           => ['chest',      ['barbell bench press', 'bench press', 'chest press']],
-        'sentadilla'            => ['upper legs', ['barbell full squat', 'barbell squat', 'squat', 'bodyweight squat']],
-        'peso muerto'           => ['upper legs', ['barbell deadlift', 'deadlift', 'romanian deadlift', 'dumbbell deadlift']],
-        'dominadas'             => ['back',       ['pull-up', 'pull up', 'assisted pull-up', 'wide grip pull-up']],
-        'dominada'              => ['back',       ['pull-up', 'pull up', 'assisted pull-up']],
-        'press militar'         => ['shoulders',  ['barbell shoulder press', 'shoulder press', 'overhead press', 'dumbbell shoulder press', 'military press']],
-        'curl con mancuernas'   => ['upper arms', ['dumbbell biceps curl', 'dumbbell curl', 'dumbbell alternate biceps curl', 'hammer curl']],
-        'curl biceps'           => ['upper arms', ['dumbbell biceps curl', 'barbell curl', 'biceps curl', 'hammer curl']],
-        'curl bíceps'           => ['upper arms', ['dumbbell biceps curl', 'barbell curl', 'biceps curl', 'hammer curl']],
-        'jalon al pecho'        => ['back',       ['lat pulldown', 'cable pulldown', 'pulldown', 'wide grip lat pulldown']],
-        'jalón al pecho'        => ['back',       ['lat pulldown', 'cable pulldown', 'pulldown']],
-        'fondos'                => ['upper arms', ['triceps dip', 'chest dip', 'dips', 'bench dip']],
-        'extension de triceps'  => ['upper arms', ['triceps extension', 'cable triceps pushdown', 'overhead triceps extension']],
-        'extensión de tríceps'  => ['upper arms', ['triceps extension', 'cable triceps pushdown', 'overhead triceps extension']],
-        'remo'                  => ['back',       ['barbell row', 'seated row', 'cable row', 'bent over row']],
-        'zancadas'              => ['upper legs', ['lunge', 'barbell lunge', 'dumbbell lunge', 'walking lunge']],
+        'press de banca' => ['chest',      ['barbell bench press', 'bench press', 'dumbbell bench press', 'chest press']],
+        'press banca' => ['chest',      ['barbell bench press', 'bench press', 'chest press']],
+        'sentadilla' => ['upper legs', ['barbell full squat', 'barbell squat', 'squat', 'bodyweight squat']],
+        'peso muerto' => ['upper legs', ['barbell deadlift', 'deadlift', 'romanian deadlift', 'dumbbell deadlift']],
+        'dominadas' => ['back',       ['pull-up', 'pull up', 'assisted pull-up', 'wide grip pull-up']],
+        'dominada' => ['back',       ['pull-up', 'pull up', 'assisted pull-up']],
+        'press militar' => ['shoulders',  ['barbell shoulder press', 'shoulder press', 'overhead press', 'dumbbell shoulder press', 'military press']],
+        'curl con mancuernas' => ['upper arms', ['dumbbell biceps curl', 'dumbbell curl', 'dumbbell alternate biceps curl', 'hammer curl']],
+        'curl biceps' => ['upper arms', ['dumbbell biceps curl', 'barbell curl', 'biceps curl', 'hammer curl']],
+        'curl bíceps' => ['upper arms', ['dumbbell biceps curl', 'barbell curl', 'biceps curl', 'hammer curl']],
+        'jalon al pecho' => ['back',       ['lat pulldown', 'cable pulldown', 'pulldown', 'wide grip lat pulldown']],
+        'jalón al pecho' => ['back',       ['lat pulldown', 'cable pulldown', 'pulldown']],
+        'fondos' => ['upper arms', ['triceps dip', 'chest dip', 'dips', 'bench dip']],
+        'extension de triceps' => ['upper arms', ['triceps extension', 'cable triceps pushdown', 'overhead triceps extension']],
+        'extensión de tríceps' => ['upper arms', ['triceps extension', 'cable triceps pushdown', 'overhead triceps extension']],
+        'remo' => ['back',       ['barbell row', 'seated row', 'cable row', 'bent over row']],
+        'zancadas' => ['upper legs', ['lunge', 'barbell lunge', 'dumbbell lunge', 'walking lunge']],
 
         // ── Ampliación de cobertura (reduce placeholders) ────────────────────
         // Plancha: lista amplia EN orden del usuario. bodyPart=null para no
@@ -77,7 +88,7 @@ class FitGifExerciseService
         // 'push up plank' va 1.º: el probe real confirmó que FitGif resuelve
         // ese término a "3/4 sit-up" (bodyPart=waist, target=abs) — un
         // ejercicio de abdomen/core válido. Resto como fallback en orden.
-        'plancha'               => [null, [
+        'plancha' => [null, [
             'push up plank', 'push-up plank', 'plank', 'front plank',
             'forearm plank', 'elbow plank', 'high plank', 'bodyweight plank',
             'abdominal plank', 'core plank', 'hover',
@@ -85,50 +96,50 @@ class FitGifExerciseService
         ]],
         // Burpees: sin burpee real → fallback explosivo "jump squat"
         // (FitGif: "barbell jump squat"), el patrón más cercano.
-        'burpees'               => [null,         ['burpee', 'burpees', 'bodyweight burpee', 'jump squat']],
-        'burpee'                => [null,         ['burpee', 'burpees', 'bodyweight burpee', 'jump squat']],
-        'mountain climbers'     => ['cardio',     ['mountain climber', 'mountain climbers']],
-        'escaladores'           => ['cardio',     ['mountain climber', 'mountain climbers']],
-        'jumping jacks'         => ['cardio',     ['jumping jack', 'jumping jacks']],
-        'saltos de tijera'      => ['cardio',     ['jumping jack', 'jumping jacks']],
-        'flexiones'             => ['chest',      ['push up', 'push-up', 'pushup', 'close grip push up']],
-        'flexiones de pecho'    => ['chest',      ['push up', 'push-up', 'pushup', 'close grip push up']],
-        'push ups'              => ['chest',      ['push up', 'push-up', 'pushup', 'close grip push up']],
-        'abdominales'           => ['waist',      ['crunch', 'sit up', 'sit-up', 'abdominal crunch']],
-        'crunch'                => ['waist',      ['crunch', 'abdominal crunch', 'sit up', 'sit-up']],
-        'hip thrust'            => ['upper legs', ['hip thrust', 'barbell hip thrust', 'glute bridge']],
-        'empuje de cadera'      => ['upper legs', ['hip thrust', 'barbell hip thrust', 'glute bridge']],
-        'puente de gluteos'     => ['upper legs', ['glute bridge', 'hip thrust', 'barbell hip thrust']],
-        'prensa de pierna'      => ['upper legs', ['leg press', 'sled leg press']],
-        'leg press'             => ['upper legs', ['leg press', 'sled leg press']],
-        'curl femoral'          => ['upper legs', ['leg curl', 'lying leg curl', 'seated leg curl']],
-        'leg curl'              => ['upper legs', ['leg curl', 'lying leg curl', 'seated leg curl']],
-        'extension de pierna'   => ['upper legs', ['leg extension', 'seated leg extension']],
-        'extensión de pierna'   => ['upper legs', ['leg extension', 'seated leg extension']],
-        'leg extension'         => ['upper legs', ['leg extension', 'seated leg extension']],
+        'burpees' => [null,         ['burpee', 'burpees', 'bodyweight burpee', 'jump squat']],
+        'burpee' => [null,         ['burpee', 'burpees', 'bodyweight burpee', 'jump squat']],
+        'mountain climbers' => ['cardio',     ['mountain climber', 'mountain climbers']],
+        'escaladores' => ['cardio',     ['mountain climber', 'mountain climbers']],
+        'jumping jacks' => ['cardio',     ['jumping jack', 'jumping jacks']],
+        'saltos de tijera' => ['cardio',     ['jumping jack', 'jumping jacks']],
+        'flexiones' => ['chest',      ['push up', 'push-up', 'pushup', 'close grip push up']],
+        'flexiones de pecho' => ['chest',      ['push up', 'push-up', 'pushup', 'close grip push up']],
+        'push ups' => ['chest',      ['push up', 'push-up', 'pushup', 'close grip push up']],
+        'abdominales' => ['waist',      ['crunch', 'sit up', 'sit-up', 'abdominal crunch']],
+        'crunch' => ['waist',      ['crunch', 'abdominal crunch', 'sit up', 'sit-up']],
+        'hip thrust' => ['upper legs', ['hip thrust', 'barbell hip thrust', 'glute bridge']],
+        'empuje de cadera' => ['upper legs', ['hip thrust', 'barbell hip thrust', 'glute bridge']],
+        'puente de gluteos' => ['upper legs', ['glute bridge', 'hip thrust', 'barbell hip thrust']],
+        'prensa de pierna' => ['upper legs', ['leg press', 'sled leg press']],
+        'leg press' => ['upper legs', ['leg press', 'sled leg press']],
+        'curl femoral' => ['upper legs', ['leg curl', 'lying leg curl', 'seated leg curl']],
+        'leg curl' => ['upper legs', ['leg curl', 'lying leg curl', 'seated leg curl']],
+        'extension de pierna' => ['upper legs', ['leg extension', 'seated leg extension']],
+        'extensión de pierna' => ['upper legs', ['leg extension', 'seated leg extension']],
+        'leg extension' => ['upper legs', ['leg extension', 'seated leg extension']],
         'elevacion de pantorrilla' => ['lower legs', ['calf raise', 'standing calf raise', 'seated calf raise']],
         'elevación de pantorrilla' => ['lower legs', ['calf raise', 'standing calf raise', 'seated calf raise']],
-        'gemelos'               => ['lower legs', ['calf raise', 'standing calf raise', 'seated calf raise']],
-        'calf raise'            => ['lower legs', ['calf raise', 'standing calf raise', 'seated calf raise']],
+        'gemelos' => ['lower legs', ['calf raise', 'standing calf raise', 'seated calf raise']],
+        'calf raise' => ['lower legs', ['calf raise', 'standing calf raise', 'seated calf raise']],
         'elevaciones laterales' => ['shoulders',  ['lateral raise', 'dumbbell lateral raise', 'side lateral raise']],
-        'elevacion lateral'     => ['shoulders',  ['lateral raise', 'dumbbell lateral raise', 'side lateral raise']],
-        'lateral raise'         => ['shoulders',  ['lateral raise', 'dumbbell lateral raise', 'side lateral raise']],
-        'vuelos posteriores'    => ['shoulders',  ['rear delt fly', 'reverse fly', 'dumbbell reverse fly']],
-        'pajaros'               => ['shoulders',  ['rear delt fly', 'reverse fly', 'dumbbell reverse fly']],
-        'rear delt'             => ['shoulders',  ['rear delt fly', 'reverse fly', 'dumbbell reverse fly']],
-        'aperturas'             => ['chest',      ['chest fly', 'dumbbell fly', 'cable fly']],
+        'elevacion lateral' => ['shoulders',  ['lateral raise', 'dumbbell lateral raise', 'side lateral raise']],
+        'lateral raise' => ['shoulders',  ['lateral raise', 'dumbbell lateral raise', 'side lateral raise']],
+        'vuelos posteriores' => ['shoulders',  ['rear delt fly', 'reverse fly', 'dumbbell reverse fly']],
+        'pajaros' => ['shoulders',  ['rear delt fly', 'reverse fly', 'dumbbell reverse fly']],
+        'rear delt' => ['shoulders',  ['rear delt fly', 'reverse fly', 'dumbbell reverse fly']],
+        'aperturas' => ['chest',      ['chest fly', 'dumbbell fly', 'cable fly']],
         'aperturas con mancuernas' => ['chest',   ['dumbbell fly', 'chest fly', 'cable fly']],
-        'chest fly'             => ['chest',      ['chest fly', 'dumbbell fly', 'cable fly']],
-        'press frances'         => ['upper arms', ['french press', 'skull crusher', 'lying triceps extension']],
-        'press francés'         => ['upper arms', ['french press', 'skull crusher', 'lying triceps extension']],
-        'rompecraneos'          => ['upper arms', ['skull crusher', 'french press', 'lying triceps extension']],
-        'pullover'              => ['back',       ['pullover', 'dumbbell pullover']],
-        'pull over'             => ['back',       ['pullover', 'dumbbell pullover']],
-        'remo con mancuerna'    => ['back',       ['dumbbell row', 'one arm dumbbell row']],
-        'remo mancuerna'        => ['back',       ['dumbbell row', 'one arm dumbbell row']],
-        'remo sentado'          => ['back',       ['seated row', 'cable row']],
-        'press inclinado'       => ['chest',      ['incline bench press', 'incline dumbbell press']],
-        'press declinado'       => ['chest',      ['decline bench press']],
+        'chest fly' => ['chest',      ['chest fly', 'dumbbell fly', 'cable fly']],
+        'press frances' => ['upper arms', ['french press', 'skull crusher', 'lying triceps extension']],
+        'press francés' => ['upper arms', ['french press', 'skull crusher', 'lying triceps extension']],
+        'rompecraneos' => ['upper arms', ['skull crusher', 'french press', 'lying triceps extension']],
+        'pullover' => ['back',       ['pullover', 'dumbbell pullover']],
+        'pull over' => ['back',       ['pullover', 'dumbbell pullover']],
+        'remo con mancuerna' => ['back',       ['dumbbell row', 'one arm dumbbell row']],
+        'remo mancuerna' => ['back',       ['dumbbell row', 'one arm dumbbell row']],
+        'remo sentado' => ['back',       ['seated row', 'cable row']],
+        'press inclinado' => ['chest',      ['incline bench press', 'incline dumbbell press']],
+        'press declinado' => ['chest',      ['decline bench press']],
     ];
 
     /** ES→EN de músculos → bodyPart válido de FitGif (para by-muscle). */
@@ -330,7 +341,7 @@ class FitGifExerciseService
      */
     private const OVERRIDE_ES = [
         'burpees' => ['body_part' => 'Cuerpo completo', 'target' => 'Full Body', 'equipment' => 'Peso corporal'],
-        'burpee'  => ['body_part' => 'Cuerpo completo', 'target' => 'Full Body', 'equipment' => 'Peso corporal'],
+        'burpee' => ['body_part' => 'Cuerpo completo', 'target' => 'Full Body', 'equipment' => 'Peso corporal'],
         'plancha' => ['body_part' => 'Abdomen', 'target' => 'Core', 'equipment' => 'Peso corporal'],
     ];
 
@@ -345,12 +356,12 @@ class FitGifExerciseService
     {
         $cfg = config('services.fitgif');
         $this->baseUrl = $cfg['base_url'] ?? 'https://fitgif.vercel.app';
-        $this->apiKey  = $cfg['api_key'] ?? null;
-        $this->source  = $cfg['source_label'] ?? 'FitGif';
-        $this->vSpeed  = (float) ($cfg['video_speed'] ?? 1.5);
-        $this->vFps    = (int) ($cfg['video_fps'] ?? 60);
-        $this->vWidth  = (int) ($cfg['video_width'] ?? 540);
-        $this->vCrf    = (int) ($cfg['video_crf'] ?? 26);
+        $this->apiKey = $cfg['api_key'] ?? null;
+        $this->source = $cfg['source_label'] ?? 'FitGif';
+        $this->vSpeed = (float) ($cfg['video_speed'] ?? 1.5);
+        $this->vFps = (int) ($cfg['video_fps'] ?? 60);
+        $this->vWidth = (int) ($cfg['video_width'] ?? 540);
+        $this->vCrf = (int) ($cfg['video_crf'] ?? 26);
     }
 
     /**
@@ -361,20 +372,20 @@ class FitGifExerciseService
     {
         $local = Str::lower(trim((string) ($ref['local_name'] ?? '')));
 
-        $origName  = $ref['name'] ?? '';
-        $origPart  = $ref['body_part'] ?? null;
-        $origTgt   = $ref['target'] ?? null;
+        $origName = $ref['name'] ?? '';
+        $origPart = $ref['body_part'] ?? null;
+        $origTgt = $ref['target'] ?? null;
         $origEquip = $ref['equipment'] ?? null;
         $origInstr = array_values($ref['instructions'] ?? []);
 
-        $ref['original_name']         = $origName;
-        $ref['original_body_part']    = $origPart;
-        $ref['original_equipment']    = $origEquip;
+        $ref['original_name'] = $origName;
+        $ref['original_body_part'] = $origPart;
+        $ref['original_equipment'] = $origEquip;
         $ref['original_instructions'] = $origInstr;
 
-        $ref['name']      = self::NAME_ES[$local] ?? Str::title($local !== '' ? $local : $origName);
+        $ref['name'] = self::NAME_ES[$local] ?? Str::title($local !== '' ? $local : $origName);
         $ref['body_part'] = $this->es(self::PART_ES, $origPart);
-        $ref['target']    = $this->es(self::PART_ES, $origTgt);
+        $ref['target'] = $this->es(self::PART_ES, $origTgt);
         $ref['equipment'] = $this->es(self::EQUIP_ES, $origEquip);
         $ref['instructions'] = self::INSTRUCTIONS_ES[$local]
             ?? (! empty($origInstr) ? $origInstr : self::INSTRUCTIONS_ES_FALLBACK);
@@ -383,7 +394,7 @@ class FitGifExerciseService
         // correcta; el nombre inglés real solo queda en original_name.
         if (isset(self::OVERRIDE_ES[$local])) {
             $ref['body_part'] = self::OVERRIDE_ES[$local]['body_part'];
-            $ref['target']    = self::OVERRIDE_ES[$local]['target'];
+            $ref['target'] = self::OVERRIDE_ES[$local]['target'];
             $ref['equipment'] = self::OVERRIDE_ES[$local]['equipment'];
         }
 
@@ -395,6 +406,7 @@ class FitGifExerciseService
         if ($v === null || trim($v) === '') {
             return $v;
         }
+
         return $map[Str::lower(trim($v))] ?? $v;
     }
 
@@ -461,6 +473,7 @@ class FitGifExerciseService
         if (! $row || ! $row->gif_path || ! Storage::exists($row->gif_path)) {
             return null;
         }
+
         return Storage::get($row->gif_path);
     }
 
@@ -468,12 +481,15 @@ class FitGifExerciseService
 
     /**
      * Sincroniza todos los ejercicios del diccionario (o los pasados).
+     *
      * @param  callable|null  $progress  fn(string $line)
      * @return array{ok:int,fail:int,details:array}
      */
     public function sync(?callable $progress = null): array
     {
-        $ok = 0; $fail = 0; $details = [];
+        $ok = 0;
+        $fail = 0;
+        $details = [];
         foreach (array_keys(self::DICTIONARY) as $localName) {
             $r = $this->resolveAndStore($localName);
             $details[$localName] = $r;
@@ -491,16 +507,19 @@ class FitGifExerciseService
                 ));
             }
         }
+
         return ['ok' => $ok, 'fail' => $fail, 'details' => $details];
     }
 
     /**
      * Resuelve un ejercicio probando candidatos y guarda el GIF.
-     * @return array  estructura de diagnóstico (sin API key)
+     *
+     * @return array estructura de diagnóstico (sin API key)
      */
     public function resolveAndStore(string $localName): array
     {
         $diag = $this->diagnose($localName, store: true);
+
         return $diag;
     }
 
@@ -522,9 +541,9 @@ class FitGifExerciseService
         foreach (array_slice($candidates, 0, self::MAX_ATTEMPTS) as $cand) {
             $res = $this->fetch($cand, $bodyPart);
             $tried[] = [
-                'query'        => $cand,
-                'bodyPart'     => $bodyPart,
-                'http_status'  => $res['status'],
+                'query' => $cand,
+                'bodyPart' => $bodyPart,
+                'http_status' => $res['status'],
                 'result_count' => count($res['results']),
             ];
             if ($res['rate_limited']) {
@@ -557,21 +576,21 @@ class FitGifExerciseService
         $this->log($localName, count($candidates), $selected['query'] ?? null, $hasGif);
 
         return [
-            'query'           => $localName,
-            'body_part'       => $bodyPart,
-            'candidates'      => $candidates,
-            'candidates_count'=> count($candidates),
-            'attempts'        => $tried,
-            'selected_query'  => $selected['query'] ?? null,
-            'selected_name'   => $selected['result']['name'] ?? null,
-            'has_gif_url'     => $hasGif,
-            'rate_limited'    => $rateLimited,
-            'external_id'     => $stored,
+            'query' => $localName,
+            'body_part' => $bodyPart,
+            'candidates' => $candidates,
+            'candidates_count' => count($candidates),
+            'attempts' => $tried,
+            'selected_query' => $selected['query'] ?? null,
+            'selected_name' => $selected['result']['name'] ?? null,
+            'has_gif_url' => $hasGif,
+            'rate_limited' => $rateLimited,
+            'external_id' => $stored,
         ];
     }
 
     /** Proxy: el GIF se guardó en disco; gifContents lo sirve. */
-    public function gifResponse(string $externalId): ?\Illuminate\Http\Client\Response
+    public function gifResponse(string $externalId): ?Response
     {
         return null; // ya no se proxa en vivo; ver gifContents()
     }
@@ -591,6 +610,7 @@ class FitGifExerciseService
     private function validBodyPart(?string $bp): ?string
     {
         $bp = $bp !== null ? Str::lower(trim($bp)) : '';
+
         return in_array($bp, self::VALID_BODYPARTS, true) ? $bp : null;
     }
 
@@ -612,6 +632,7 @@ class FitGifExerciseService
 
     /**
      * POST {base}/api/search con throttle.
+     *
      * @return array{status:?int,results:array,rate_limited:bool}
      */
     private function fetch(string $search, ?string $bodyPart): array
@@ -620,8 +641,8 @@ class FitGifExerciseService
             return ['status' => null, 'results' => [], 'rate_limited' => false];
         }
         $payload = [
-            'key'         => $this->apiKey,
-            'search'      => $search,
+            'key' => $this->apiKey,
+            'search' => $search,
             'includeData' => true,
         ];
         if (filled($bodyPart)) {
@@ -631,21 +652,24 @@ class FitGifExerciseService
         try {
             $this->throttle();
             $resp = Http::asJson()->timeout(20)
-                ->post($this->baseUrl . '/api/search', $payload);
+                ->post($this->baseUrl.'/api/search', $payload);
             $status = $resp->status();
 
             if ($status === 429) {
                 Log::warning('FitGif rate limit', ['provider' => 'fitgif', 'http_status' => 429]);
+
                 return ['status' => 429, 'results' => [], 'rate_limited' => true];
             }
             $json = $resp->json();
             $results = is_array($json['results'] ?? null) ? $json['results'] : [];
+
             return ['status' => $status, 'results' => $results, 'rate_limited' => false];
         } catch (Throwable $e) {
             Log::warning('FitGif request falló', [
                 'provider' => 'fitgif',
-                'reason'   => $this->sanitize($e->getMessage()),
+                'reason' => $this->sanitize($e->getMessage()),
             ]);
+
             return ['status' => null, 'results' => [], 'rate_limited' => false];
         }
     }
@@ -660,14 +684,15 @@ class FitGifExerciseService
     private function isCoreRelevant(array $r): bool
     {
         $name = Str::lower($r['name'] ?? '');
-        $bp   = Str::lower($r['bodyPart'] ?? '');
-        $tgt  = Str::lower($r['target'] ?? '');
+        $bp = Str::lower($r['bodyPart'] ?? '');
+        $tgt = Str::lower($r['target'] ?? '');
         foreach (['plank', 'crawl', 'hover', 'climber', 'abdominal', 'core',
-                  'hollow', 'crunch', 'sit-up', 'sit up', 'leg raise'] as $kw) {
+            'hollow', 'crunch', 'sit-up', 'sit up', 'leg raise'] as $kw) {
             if (str_contains($name, $kw)) {
                 return true;
             }
         }
+
         return in_array($bp, ['waist'], true)
             || in_array($tgt, ['abs', 'core', 'abductors'], true);
     }
@@ -682,6 +707,7 @@ class FitGifExerciseService
         usort($withUrl, function ($a, $b) use ($cand, $bodyPart) {
             return $this->scoreOf($b, $cand, $bodyPart) <=> $this->scoreOf($a, $cand, $bodyPart);
         });
+
         return $withUrl[0];
     }
 
@@ -697,6 +723,7 @@ class FitGifExerciseService
         if ($bodyPart && Str::lower($r['bodyPart'] ?? '') === $bodyPart) {
             $s += 200;
         }
+
         return $s;
     }
 
@@ -713,15 +740,16 @@ class FitGifExerciseService
         if (empty($steps) && ! empty($r['summary'])) {
             $steps = [trim((string) $r['summary'])];
         }
+
         return [
-            'external_id'  => $this->extId($name),
-            'name'         => $name,
-            'body_part'    => $r['bodyPart'] ?? null,
-            'target'       => $r['target'] ?? null,
-            'equipment'    => $r['equipment'] ?? null,
+            'external_id' => $this->extId($name),
+            'name' => $name,
+            'body_part' => $r['bodyPart'] ?? null,
+            'target' => $r['target'] ?? null,
+            'equipment' => $r['equipment'] ?? null,
             'instructions' => is_array($steps) ? array_values($steps) : [],
-            'provider'     => 'fitgif',
-            'source'       => $this->source,
+            'provider' => 'fitgif',
+            'source' => $this->source,
         ];
     }
 
@@ -740,30 +768,32 @@ class FitGifExerciseService
             // varios nombres que matchean el mismo ejercicio FitGif NO se
             // pisan entre sí (ese era el bug de "sin GIF" pese a OK en sync).
             $extId = $this->extId($localName);
-            $path = self::GIF_DIR . '/' . $extId . '.gif';
+            $path = self::GIF_DIR.'/'.$extId.'.gif';
             Storage::put($path, $resp->body());
 
             Exercise::updateOrCreate(
                 ['provider' => 'fitgif', 'external_id' => $extId],
                 array_merge($ref, [
-                    'external_id'    => $extId,
-                    'local_name'     => $localName,
-                    'matched_query'  => $matchedQuery,
-                    'gif_url'        => 'stored',          // sentinel → proxy
-                    'gif_path'       => $path,
-                    'thumbnail_url'  => null,
+                    'external_id' => $extId,
+                    'local_name' => $localName,
+                    'matched_query' => $matchedQuery,
+                    'gif_url' => 'stored',          // sentinel → proxy
+                    'gif_path' => $path,
+                    'thumbnail_url' => null,
                     'last_synced_at' => now(),
                 ]),
             );
             // MP4 optimizado (más rápido/fluido). El GIF se conserva como
             // fallback; si ffmpeg falla, no rompe nada.
             $this->transcode($extId);
+
             return $extId;
         } catch (Throwable $e) {
             Log::warning('FitGif store falló', [
                 'provider' => 'fitgif',
-                'reason'   => $this->sanitize($e->getMessage()),
+                'reason' => $this->sanitize($e->getMessage()),
             ]);
+
             return null;
         }
     }
@@ -781,9 +811,9 @@ class FitGifExerciseService
             return false;
         }
 
-        $gifAbs   = Storage::path($row->gif_path);
-        $relMp4   = self::VIDEO_DIR . '/' . $externalId . '.mp4';
-        $mp4Abs   = Storage::path($relMp4);
+        $gifAbs = Storage::path($row->gif_path);
+        $relMp4 = self::VIDEO_DIR.'/'.$externalId.'.mp4';
+        $mp4Abs = Storage::path($relMp4);
 
         if (! $force
             && $row->video_path
@@ -812,32 +842,35 @@ class FitGifExerciseService
         ];
 
         try {
-            $res = \Illuminate\Support\Facades\Process::timeout(120)->run($cmd);
+            $res = Process::timeout(120)->run($cmd);
             if (! $res->successful() || ! is_file($mp4Abs) || filesize($mp4Abs) < 1024) {
                 Log::warning('FitGif transcode falló', [
-                    'provider'    => 'fitgif',
+                    'provider' => 'fitgif',
                     'external_id' => $externalId,
-                    'exit'        => $res->exitCode(),
-                    'reason'      => $this->sanitize(Str::limit($res->errorOutput(), 200)),
+                    'exit' => $res->exitCode(),
+                    'reason' => $this->sanitize(Str::limit($res->errorOutput(), 200)),
                 ]);
+
                 return false;
             }
             $row->update([
-                'video_path'     => $relMp4,
-                'media_type'     => 'video',
+                'video_path' => $relMp4,
+                'media_type' => 'video',
                 'playback_speed' => $this->vSpeed,
             ]);
             Log::info('FitGif transcode OK', [
-                'provider'    => 'fitgif',
+                'provider' => 'fitgif',
                 'external_id' => $externalId,
-                'bytes'       => filesize($mp4Abs),
+                'bytes' => filesize($mp4Abs),
             ]);
+
             return true;
         } catch (Throwable $e) {
             Log::warning('FitGif transcode excepción', [
                 'provider' => 'fitgif',
-                'reason'   => $this->sanitize($e->getMessage()),
+                'reason' => $this->sanitize($e->getMessage()),
             ]);
+
             return false;
         }
     }
@@ -845,6 +878,7 @@ class FitGifExerciseService
     /**
      * Transcodea TODOS los GIFs FitGif ya cacheados que no tengan MP4.
      * 100% local (ffmpeg) → no consume el límite de FitGif.
+     *
      * @param  callable|null  $progress  fn(string $line)
      * @return array{ok:int,fail:int,total:int}
      */
@@ -853,7 +887,8 @@ class FitGifExerciseService
         $rows = Exercise::where('provider', 'fitgif')
             ->whereNotNull('gif_path')->orderBy('external_id')->get();
 
-        $ok = 0; $fail = 0;
+        $ok = 0;
+        $fail = 0;
         foreach ($rows as $row) {
             $done = $this->transcode($row->external_id, $force);
             $done ? $ok++ : $fail++;
@@ -861,6 +896,7 @@ class FitGifExerciseService
                 $progress(sprintf('%-26s -> %s', $row->external_id, $done ? 'MP4 OK' : 'falló'));
             }
         }
+
         return ['ok' => $ok, 'fail' => $fail, 'total' => $rows->count()];
     }
 
@@ -873,17 +909,18 @@ class FitGifExerciseService
             return null;
         }
         $abs = Storage::path($row->video_path);
+
         return is_file($abs) ? $abs : null;
     }
 
     private function log(string $exercise, int $candidatesCount, ?string $selected, bool $hasGif): void
     {
         Log::info('FitGif sync', [
-            'provider'         => 'fitgif',
-            'exercise'         => Str::limit($exercise, 60),
+            'provider' => 'fitgif',
+            'exercise' => Str::limit($exercise, 60),
             'candidates_count' => $candidatesCount,
-            'selected_query'   => $selected,
-            'has_gif_url'      => $hasGif,
+            'selected_query' => $selected,
+            'has_gif_url' => $hasGif,
         ]);
     }
 
@@ -892,6 +929,7 @@ class FitGifExerciseService
         if (filled($this->apiKey)) {
             $msg = str_ireplace((string) $this->apiKey, '[REDACTED]', $msg);
         }
+
         return Str::limit($msg, 300);
     }
 }

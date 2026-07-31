@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ClassReservation;
 use App\Models\IronAiConversation;
 use App\Models\IronAiMessage;
 use App\Models\IronAiMessageAttachment;
@@ -11,7 +12,6 @@ use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\Routine;
 use App\Models\User;
-use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -83,8 +83,7 @@ TXT;
         private readonly IronAiTranscriptionService $transcription,
         private readonly IronAiVisionService $vision,
         private readonly GymEquipmentContextService $gymEquipment,
-    ) {
-    }
+    ) {}
 
     /**
      * Bloque de contexto GENERAL del gimnasio (no por usuario): qué equipos/
@@ -163,26 +162,26 @@ TXT;
         $resolvedDocument = $member?->document_number ?? $user?->document;
 
         return [
-            'member'          => $member,
-            'user'            => $user,
+            'member' => $member,
+            'user' => $user,
             'conversation_id' => $conversationId,
-            'document'        => $resolvedDocument,
+            'document' => $resolvedDocument,
         ];
     }
 
     private function conversationKey(?Member $member, ?User $user, ?string $provided): string
     {
         if ($member) {
-            return 'member-' . $member->id;
+            return 'member-'.$member->id;
         }
         if ($user) {
-            return 'user-' . $user->id;
+            return 'user-'.$user->id;
         }
         if ($provided && Str::startsWith($provided, 'anon-')) {
             return $provided;
         }
 
-        return 'anon-' . Str::uuid();
+        return 'anon-'.Str::uuid();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -241,16 +240,16 @@ TXT;
             // No se pudo transcribir → no consumimos cuota ni llamamos al chat.
             return [
                 'transcription_failed' => true,
-                'reply'                => self::AUDIO_ERROR,
-                'conversation_id'      => $conversation->uuid,
-                'conversation_uuid'    => $conversation->uuid,
-                'transcript'           => null,
-                'suggestions'          => [],
-                'is_fallback'          => true,
-                'message_id'           => null,
-                'model'                => config('services.openai.transcription_model'),
-                'input_tokens'         => null,
-                'output_tokens'        => null,
+                'reply' => self::AUDIO_ERROR,
+                'conversation_id' => $conversation->uuid,
+                'conversation_uuid' => $conversation->uuid,
+                'transcript' => null,
+                'suggestions' => [],
+                'is_fallback' => true,
+                'message_id' => null,
+                'model' => config('services.openai.transcription_model'),
+                'input_tokens' => null,
+                'output_tokens' => null,
             ];
         }
 
@@ -312,16 +311,16 @@ TXT;
         }
 
         $context = $this->buildUserContext($member, $user, $contextLevel);
-        $payload = [['role' => 'system', 'content' => self::SYSTEM_PROMPT . self::IMAGE_SAFETY_PROMPT]];
+        $payload = [['role' => 'system', 'content' => self::SYSTEM_PROMPT.self::IMAGE_SAFETY_PROMPT]];
         $payload = array_merge($payload, $this->gymEquipmentMessages());
         if ($context !== '') {
-            $payload[] = ['role' => 'system', 'content' => "CONTEXTO DEL USUARIO (datos reales; no inventes lo que no esté aquí):\n" . $context];
+            $payload[] = ['role' => 'system', 'content' => "CONTEXTO DEL USUARIO (datos reales; no inventes lo que no esté aquí):\n".$context];
         }
         foreach ($history as $h) {
             $payload[] = ['role' => $h->role, 'content' => $h->content];
         }
         $payload[] = [
-            'role'    => 'user',
+            'role' => 'user',
             'content' => [
                 ['type' => 'text', 'text' => $promptText],
                 ['type' => 'image_url', 'image_url' => ['url' => $dataUrl]],
@@ -355,7 +354,7 @@ TXT;
         $payload = [['role' => 'system', 'content' => $systemPrompt]];
         $payload = array_merge($payload, $this->gymEquipmentMessages());
         if ($context !== '') {
-            $payload[] = ['role' => 'system', 'content' => "CONTEXTO DEL USUARIO (datos reales; no inventes lo que no esté aquí):\n" . $context];
+            $payload[] = ['role' => 'system', 'content' => "CONTEXTO DEL USUARIO (datos reales; no inventes lo que no esté aquí):\n".$context];
         }
         foreach ($history as $h) {
             $payload[] = ['role' => $h->role, 'content' => $h->content];
@@ -382,15 +381,15 @@ TXT;
             $this->updateConversationMeta($conversation, $userMessageForMeta, null);
 
             return [
-                'reply'             => $fallbackReply ?? self::FRIENDLY_ERROR,
-                'conversation_id'   => $conversation->uuid,
+                'reply' => $fallbackReply ?? self::FRIENDLY_ERROR,
+                'conversation_id' => $conversation->uuid,
                 'conversation_uuid' => $conversation->uuid,
-                'suggestions'       => self::DEFAULT_SUGGESTIONS,
-                'is_fallback'       => true,
-                'message_id'        => $userMsg->id,
-                'model'             => config('services.openai.model'),
-                'input_tokens'      => null,
-                'output_tokens'     => null,
+                'suggestions' => self::DEFAULT_SUGGESTIONS,
+                'is_fallback' => true,
+                'message_id' => $userMsg->id,
+                'model' => config('services.openai.model'),
+                'input_tokens' => null,
+                'output_tokens' => null,
             ];
         }
 
@@ -398,15 +397,15 @@ TXT;
         $this->updateConversationMeta($conversation, $userMessageForMeta, $ai['content']);
 
         return [
-            'reply'             => $ai['content'],
-            'conversation_id'   => $conversation->uuid,
+            'reply' => $ai['content'],
+            'conversation_id' => $conversation->uuid,
             'conversation_uuid' => $conversation->uuid,
-            'suggestions'       => self::DEFAULT_SUGGESTIONS,
-            'is_fallback'       => false,
-            'message_id'        => $assistantMsg->id,
-            'model'             => $ai['model'] ?? config('services.openai.model'),
-            'input_tokens'      => $ai['input_tokens'] ?? null,
-            'output_tokens'     => $ai['output_tokens'] ?? null,
+            'suggestions' => self::DEFAULT_SUGGESTIONS,
+            'is_fallback' => false,
+            'message_id' => $assistantMsg->id,
+            'model' => $ai['model'] ?? config('services.openai.model'),
+            'input_tokens' => $ai['input_tokens'] ?? null,
+            'output_tokens' => $ai['output_tokens'] ?? null,
         ];
     }
 
@@ -427,14 +426,14 @@ TXT;
     private function store(IronAiConversation $conversation, ?Member $member, ?User $user, string $role, string $content, array $metadata = []): IronAiMessage
     {
         return IronAiMessage::create([
-            'user_id'                 => $user?->id,
-            'member_id'               => $member?->id,
+            'user_id' => $user?->id,
+            'member_id' => $member?->id,
             'iron_ai_conversation_id' => $conversation->id,
-            'conversation_uuid'       => $conversation->uuid,
-            'conversation_id'         => $conversation->uuid, // legacy string = uuid
-            'role'                    => $role,
-            'content'                 => $content,
-            'metadata'                => $metadata !== [] ? $metadata : null,
+            'conversation_uuid' => $conversation->uuid,
+            'conversation_id' => $conversation->uuid, // legacy string = uuid
+            'role' => $role,
+            'content' => $content,
+            'metadata' => $metadata !== [] ? $metadata : null,
         ]);
     }
 
@@ -446,9 +445,9 @@ TXT;
     private function ownerAttributes(array $ctx): array
     {
         return [
-            'user_id'   => $ctx['user']?->id,
+            'user_id' => $ctx['user']?->id,
             'member_id' => $ctx['member']?->id,
-            'document'  => $ctx['identity_key'] ?? $ctx['document'] ?? null,
+            'document' => $ctx['identity_key'] ?? $ctx['document'] ?? null,
         ];
     }
 
@@ -496,16 +495,16 @@ TXT;
         $title = $title && trim($title) !== '' ? trim($title) : $this->titleForTopic($topic);
 
         $conversation = IronAiConversation::create(array_merge($this->ownerAttributes($ctx), [
-            'uuid'   => (string) Str::uuid(),
-            'title'  => $title,
-            'topic'  => $topic,
+            'uuid' => (string) Str::uuid(),
+            'title' => $title,
+            'topic' => $topic,
             'status' => IronAiConversation::STATUS_ACTIVE,
         ]));
 
         Log::info('iron-ai conversation_created', [
             'conversation_id' => $conversation->id,
-            'user_id'         => $ctx['user']?->id,
-            'member_id'       => $ctx['member']?->id,
+            'user_id' => $ctx['user']?->id,
+            'member_id' => $ctx['member']?->id,
         ]);
 
         return $conversation;
@@ -545,9 +544,9 @@ TXT;
             ->orderBy('id')
             ->get()
             ->map(fn (IronAiMessage $m) => [
-                'role'        => $m->role,
-                'content'     => $m->content,
-                'created_at'  => optional($m->created_at)->toIso8601String(),
+                'role' => $m->role,
+                'content' => $m->content,
+                'created_at' => optional($m->created_at)->toIso8601String(),
                 'attachments' => $m->attachments
                     ->map(fn (IronAiMessageAttachment $a) => $a->toPublicArray())
                     ->all(),
@@ -612,10 +611,10 @@ TXT;
     {
         $conversation->messages()->delete();
         $conversation->update([
-            'messages_count'       => 0,
+            'messages_count' => 0,
             'last_message_preview' => null,
-            'summary'              => null,
-            'last_message_at'      => null,
+            'summary' => null,
+            'last_message_at' => null,
         ]);
         Log::info('iron-ai conversation_cleared', ['conversation_id' => $conversation->id]);
     }
@@ -627,9 +626,9 @@ TXT;
         $preview = $assistantReply ?: $userMessage;
 
         $attrs = [
-            'messages_count'       => $count,
+            'messages_count' => $count,
             'last_message_preview' => mb_substr(trim($preview), 0, 200),
-            'last_message_at'      => Carbon::now(),
+            'last_message_at' => Carbon::now(),
         ];
 
         // Si el título sigue genérico, derívalo del primer mensaje del usuario.
@@ -678,14 +677,14 @@ TXT;
     public function titleForTopic(?string $topic): string
     {
         return match ($topic) {
-            'routine'    => 'Rutina y entrenamiento',
-            'progress'   => 'Análisis de progreso',
-            'technique'  => 'Técnica de ejercicio',
-            'nutrition'  => 'Nutrición general',
-            'care'       => 'Cuidado y prevención',
+            'routine' => 'Rutina y entrenamiento',
+            'progress' => 'Análisis de progreso',
+            'technique' => 'Técnica de ejercicio',
+            'nutrition' => 'Nutrición general',
+            'care' => 'Cuidado y prevención',
             'membership' => 'Membresía y acceso',
             'motivation' => 'Motivación',
-            default      => 'Consulta con IRON IA',
+            default => 'Consulta con IRON IA',
         };
     }
 
@@ -693,7 +692,7 @@ TXT;
     {
         $s = mb_strtolower(trim($s));
 
-        return str_replace(['á','é','í','ó','ú','ü','ñ'], ['a','e','i','o','u','u','n'], $s);
+        return str_replace(['á', 'é', 'í', 'ó', 'ú', 'ü', 'ñ'], ['a', 'e', 'i', 'o', 'u', 'u', 'n'], $s);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -802,7 +801,7 @@ TXT;
             if ($plan) {
                 $benefits = array_slice($plan->benefitsArray(), 0, 5);
                 if (! empty($benefits)) {
-                    $lines[] = 'Beneficios del plan: ' . implode('; ', $benefits);
+                    $lines[] = 'Beneficios del plan: '.implode('; ', $benefits);
                 }
             }
         }
@@ -845,7 +844,7 @@ TXT;
 
             return implode(' — ', $bits);
         })->all();
-        $lines[] = 'Rutinas disponibles: ' . implode(' | ', $names);
+        $lines[] = 'Rutinas disponibles: '.implode(' | ', $names);
 
         // Ejercicios recientes presentes en esas rutinas.
         $exercises = $all
@@ -858,7 +857,7 @@ TXT;
             ->all();
 
         if (! empty($exercises)) {
-            $lines[] = 'Ejercicios recientes en sus rutinas: ' . implode(', ', $exercises);
+            $lines[] = 'Ejercicios recientes en sus rutinas: '.implode(', ', $exercises);
         }
 
         return $lines;
@@ -867,7 +866,7 @@ TXT;
     /** @return array<int, string> */
     private function classLines(Member $member): array
     {
-        $reservations = \App\Models\ClassReservation::with('gymClass')
+        $reservations = ClassReservation::with('gymClass')
             ->where('member_id', $member->id)
             ->latest('id')
             ->limit(5)
@@ -878,7 +877,8 @@ TXT;
             ->filter()
             ->map(function ($c) {
                 $when = $c->date_time ? Carbon::parse($c->date_time)->format('Y-m-d H:i') : ($c->day_of_week ?? null);
-                return trim($c->name . ($when ? " ({$when})" : ''));
+
+                return trim($c->name.($when ? " ({$when})" : ''));
             })
             ->filter()
             ->take(3)
@@ -889,7 +889,7 @@ TXT;
             return [];
         }
 
-        return ['Clases reservadas/próximas: ' . implode(' | ', $upcoming)];
+        return ['Clases reservadas/próximas: '.implode(' | ', $upcoming)];
     }
 
     /** @return array<int, string> */
@@ -914,11 +914,11 @@ TXT;
 
         $bits = array_filter([
             $payment->status ? "estado: {$payment->status}" : null,
-            $payment->amount ? 'monto: $' . number_format((float) $payment->amount, 0, ',', '.') : null,
-            $payment->paid_at ? 'fecha: ' . Carbon::parse($payment->paid_at)->format('Y-m-d') : null,
+            $payment->amount ? 'monto: $'.number_format((float) $payment->amount, 0, ',', '.') : null,
+            $payment->paid_at ? 'fecha: '.Carbon::parse($payment->paid_at)->format('Y-m-d') : null,
         ]);
 
-        return empty($bits) ? [] : ['Último pago registrado: ' . implode(', ', $bits)];
+        return empty($bits) ? [] : ['Último pago registrado: '.implode(', ', $bits)];
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -940,10 +940,12 @@ TXT;
 
         if (empty($cfg['enabled'])) {
             Log::warning('iron-ai deshabilitado por configuración');
+
             return null;
         }
         if (empty($cfg['api_key'])) {
             Log::error('iron-ai sin OPENAI_API_KEY configurada');
+
             return null;
         }
 
@@ -956,11 +958,11 @@ TXT;
                 ->timeout((int) ($cfg['timeout'] ?? 30))
                 ->acceptJson()
                 ->asJson()
-                ->post(rtrim($cfg['base_url'], '/') . '/v1/chat/completions', [
-                    'model'       => $cfg['model'] ?? 'gpt-4.1-mini',
-                    'messages'    => $messages,
+                ->post(rtrim($cfg['base_url'], '/').'/v1/chat/completions', [
+                    'model' => $cfg['model'] ?? 'gpt-4.1-mini',
+                    'messages' => $messages,
                     'temperature' => (float) ($cfg['temperature'] ?? 0.4),
-                    'max_tokens'  => $maxTokens,
+                    'max_tokens' => $maxTokens,
                 ]);
 
             $latencyMs = (int) round((microtime(true) - $started) * 1000);
@@ -968,12 +970,13 @@ TXT;
             if ($response->failed()) {
                 // No registramos el cuerpo crudo (puede traer datos sensibles).
                 Log::error('iron-ai openai http error', [
-                    'user_id'     => $user?->id,
-                    'member_id'   => $member?->id,
-                    'status'      => $response->status(),
-                    'latency_ms'  => $latencyMs,
+                    'user_id' => $user?->id,
+                    'member_id' => $member?->id,
+                    'status' => $response->status(),
+                    'latency_ms' => $latencyMs,
                     'error_class' => 'OpenAIHttpError',
                 ]);
+
                 return null;
             }
 
@@ -983,37 +986,39 @@ TXT;
 
             if ($content === '') {
                 Log::error('iron-ai openai respuesta vacía', [
-                    'user_id'    => $user?->id,
-                    'member_id'  => $member?->id,
-                    'status'     => $response->status(),
+                    'user_id' => $user?->id,
+                    'member_id' => $member?->id,
+                    'status' => $response->status(),
                     'latency_ms' => $latencyMs,
                 ]);
+
                 return null;
             }
 
             Log::info('iron-ai chat ok', [
-                'user_id'    => $user?->id,
-                'member_id'  => $member?->id,
-                'endpoint'   => 'chat',
-                'status'     => $response->status(),
+                'user_id' => $user?->id,
+                'member_id' => $member?->id,
+                'endpoint' => 'chat',
+                'status' => $response->status(),
                 'latency_ms' => $latencyMs,
-                'model'      => $cfg['model'] ?? null,
+                'model' => $cfg['model'] ?? null,
             ]);
 
             return [
-                'content'       => $content,
-                'model'         => data_get($json, 'model', $cfg['model'] ?? null),
-                'input_tokens'  => data_get($json, 'usage.prompt_tokens'),
+                'content' => $content,
+                'model' => data_get($json, 'model', $cfg['model'] ?? null),
+                'input_tokens' => data_get($json, 'usage.prompt_tokens'),
                 'output_tokens' => data_get($json, 'usage.completion_tokens'),
             ];
         } catch (Throwable $e) {
             Log::error('iron-ai openai exception', [
-                'user_id'     => $user?->id,
-                'member_id'   => $member?->id,
-                'endpoint'    => 'chat',
-                'latency_ms'  => (int) round((microtime(true) - $started) * 1000),
+                'user_id' => $user?->id,
+                'member_id' => $member?->id,
+                'endpoint' => 'chat',
+                'latency_ms' => (int) round((microtime(true) - $started) * 1000),
                 'error_class' => get_class($e),
             ]);
+
             return null;
         }
     }
@@ -1044,12 +1049,12 @@ TXT;
             $record = IronAiRecommendation::updateOrCreate(
                 [
                     'member_id' => $member?->id,
-                    'user_id'   => $user?->id,
-                    'type'      => $rec['type'],
-                    'status'    => IronAiRecommendation::STATUS_PENDING,
+                    'user_id' => $user?->id,
+                    'type' => $rec['type'],
+                    'status' => IronAiRecommendation::STATUS_PENDING,
                 ],
                 [
-                    'title'   => $rec['title'],
+                    'title' => $rec['title'],
                     'message' => $rec['message'],
                 ],
             );
@@ -1092,14 +1097,14 @@ TXT;
                 $days = Carbon::now()->startOfDay()->diffInDays($end->startOfDay(), false);
                 if ($days < 0) {
                     $recs[] = [
-                        'type'    => 'membership',
-                        'title'   => 'Tu membresía está vencida',
+                        'type' => 'membership',
+                        'title' => 'Tu membresía está vencida',
                         'message' => 'Renueva tu membresía para no perder el acceso al gimnasio y a tus rutinas. Puedes hacerlo desde la sección de Membresías.',
                     ];
                 } elseif ($days <= 7) {
                     $recs[] = [
-                        'type'    => 'reminder',
-                        'title'   => 'Tu membresía vence pronto',
+                        'type' => 'reminder',
+                        'title' => 'Tu membresía vence pronto',
                         'message' => "Tu membresía vence en {$days} día(s). Renuévala desde Membresías para seguir entrenando sin interrupciones.",
                     ];
                 }
@@ -1110,7 +1115,7 @@ TXT;
 
         // 2) Clases próximas (recordatorio).
         if ($member) {
-            $next = \App\Models\ClassReservation::with('gymClass')
+            $next = ClassReservation::with('gymClass')
                 ->where('member_id', $member->id)
                 ->latest('id')
                 ->first();
@@ -1119,9 +1124,9 @@ TXT;
                     ? Carbon::parse($next->gymClass->date_time)->format('Y-m-d H:i')
                     : null;
                 $recs[] = [
-                    'type'    => 'class',
-                    'title'   => 'Tienes una clase reservada',
-                    'message' => 'Recuerda tu clase ' . $next->gymClass->name . ($when ? " ({$when})" : '') . '. ¡Te esperamos!',
+                    'type' => 'class',
+                    'title' => 'Tienes una clase reservada',
+                    'message' => 'Recuerda tu clase '.$next->gymClass->name.($when ? " ({$when})" : '').'. ¡Te esperamos!',
                 ];
             }
         }
@@ -1130,14 +1135,14 @@ TXT;
         $goal = $member?->goal;
         if ($goal) {
             $recs[] = [
-                'type'    => 'motivation',
-                'title'   => $firstName ? "Sigue avanzando, {$firstName}" : 'Sigue avanzando',
+                'type' => 'motivation',
+                'title' => $firstName ? "Sigue avanzando, {$firstName}" : 'Sigue avanzando',
                 'message' => "Tu objetivo es {$goal}. La constancia es la clave: prográmate tus entrenamientos de esta semana y revisa tu técnica con IRON IA.",
             ];
         } else {
             $recs[] = [
-                'type'    => 'progress',
-                'title'   => 'Define tu objetivo',
+                'type' => 'progress',
+                'title' => 'Define tu objetivo',
                 'message' => 'Cuéntame tu objetivo (perder grasa, ganar músculo, fuerza, salud) y armemos juntos tu plan de entrenamiento.',
             ];
         }

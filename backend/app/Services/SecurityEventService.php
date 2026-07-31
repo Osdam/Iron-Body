@@ -22,23 +22,24 @@ class SecurityEventService
     ): ?MemberSecurityEvent {
         try {
             return MemberSecurityEvent::create([
-                'member_id'   => $member->id,
-                'type'        => $type,
+                'member_id' => $member->id,
+                'type' => $type,
                 'description' => $description,
-                'device_id'   => $context['device_id'] ?? null,
+                'device_id' => $context['device_id'] ?? null,
                 'device_name' => $context['device_name'] ?? null,
-                'platform'    => $context['platform'] ?? null,
-                'ip_address'  => $context['ip_address'] ?? null,
-                'user_agent'  => isset($context['user_agent'])
+                'platform' => $context['platform'] ?? null,
+                'ip_address' => $context['ip_address'] ?? null,
+                'user_agent' => isset($context['user_agent'])
                     ? mb_substr((string) $context['user_agent'], 0, 500)
                     : null,
-                'metadata'    => $metadata ?: null,
+                'metadata' => $metadata ?: null,
             ]);
         } catch (Throwable $e) {
             Log::warning('SecurityEventService: no se pudo registrar el evento', [
-                'type'  => $type,
+                'type' => $type,
                 'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
