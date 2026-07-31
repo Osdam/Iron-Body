@@ -311,8 +311,12 @@ class WellnessPlannerTest extends NotificationTestCase
 
     public function test_ninguna_plantilla_para_vencidos_menciona_entrenar_hoy(): void
     {
+        // Frases que dan por hecho que la persona va a ir hoy al gimnasio.
+        // «Lleva tu botella» entró en esta lista después de encontrarla
+        // ofreciéndose a un socio con la membresía vencida.
         $prohibido = ['durante el entrenamiento', 'antes de entrenar', 'en el gimnasio',
-            'revisa tu rutina', 'al terminar', 'tu entrenador'];
+            'revisa tu rutina', 'al terminar', 'tu entrenador', 'lleva tu botella',
+            'la sesión', 'próxima sesión'];
 
         foreach (NotificationTemplate::query()->forLapsedMembership()->get() as $t) {
             $texto = mb_strtolower($t->title.' '.$t->body);
