@@ -70,6 +70,7 @@ class WellnessRunController extends Controller
                 'considered' => 0,
                 'sent' => 0,
                 'suppressed' => 0,
+                'already_handled' => 0,
                 'skipped' => 'outside_window',
                 'window' => $window,
                 'next_opening' => SendingWindow::nextOpening()->toIso8601String(),

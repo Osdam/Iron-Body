@@ -35,10 +35,11 @@ class SendWellnessNotifications extends Command
         $stats = $planner->planDaily($now);
 
         $this->info(sprintf(
-            'Considerados: %d · enviados: %d · no enviados: %d',
+            'Considerados: %d · enviados ahora: %d · no enviados: %d · ya resueltos hoy: %d',
             $stats['considered'],
             $stats['sent'],
             $stats['suppressed'],
+            $stats['already_handled'],
         ));
 
         Log::info('notifications.wellness.run', $stats);

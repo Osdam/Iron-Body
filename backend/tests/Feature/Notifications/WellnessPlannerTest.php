@@ -69,6 +69,32 @@ class WellnessPlannerTest extends NotificationTestCase
         );
     }
 
+    /**
+     * La segunda tanda del día no envía nada, y debe decirlo.
+     *
+     * El 31 de julio de 2026 la tanda de las 10:00 informó `enviados: 3` cuando
+     * solo había sonado un teléfono: los otros dos socios ya tenían su fila del
+     * día y el despachador la devolvió tal cual. Contar eso como envío deja el
+     * número sin valor justo para lo que se mira desde n8n.
+     */
+    public function test_la_segunda_tanda_del_dia_no_cuenta_como_enviada(): void
+    {
+        $this->fakeFcmSuccess();
+        $member = $this->makeMember();
+        $this->giveDevice($member);
+
+        $primera = $this->planner()->planDaily($this->midday());
+        $segunda = $this->planner()->planDaily($this->midday()->addHours(3));
+
+        $this->assertSame(1, $primera['sent'], 'La primera tanda sí envía.');
+        $this->assertSame(0, $primera['already_handled']);
+
+        $this->assertSame(1, $segunda['considered']);
+        $this->assertSame(0, $segunda['sent'], 'La segunda tanda no mandó nada; no puede decir que sí.');
+        $this->assertSame(0, $segunda['suppressed'], 'No se decidió callar: ya estaba resuelto.');
+        $this->assertSame(1, $segunda['already_handled']);
+    }
+
     public function test_no_repite_la_misma_plantilla_al_dia_siguiente(): void
     {
         $this->fakeFcmSuccess();

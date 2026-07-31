@@ -39,12 +39,18 @@ class WellnessPlanner
     /**
      * Planifica el día para todos los socios con dispositivo activo.
      *
-     * @return array{considered:int,sent:int,suppressed:int}
+     * `sent` cuenta lo que ha salido AHORA. Lo que ya estaba resuelto de una
+     * tanda anterior del mismo día va en `already_handled`, no en `sent`: la
+     * segunda pasada del día no envía nada, y decir que envió tres convierte el
+     * contador en un adorno. Con la separación, `sent` vuelve a ser el número de
+     * teléfonos que sonaron.
+     *
+     * @return array{considered:int,sent:int,suppressed:int,already_handled:int}
      */
     public function planDaily(?CarbonImmutable $now = null): array
     {
         $now ??= CarbonImmutable::now();
-        $stats = ['considered' => 0, 'sent' => 0, 'suppressed' => 0];
+        $stats = ['considered' => 0, 'sent' => 0, 'suppressed' => 0, 'already_handled' => 0];
 
         $memberIds = MemberDeviceToken::query()
             ->where('is_active', true)
@@ -86,6 +92,15 @@ class WellnessPlanner
                 idempotencyKey: sprintf('wellness:%d:%s', $member->id, $this->localDate($now)),
                 now: $now,
             );
+
+            // `wasRecentlyCreated` distingue la fila escrita en esta pasada de
+            // la que el despachador devolvió por llave repetida. Sin esto ambas
+            // se cuentan igual y una tanda que no manda nada informa envíos.
+            if (! $dispatch->wasRecentlyCreated) {
+                $stats['already_handled']++;
+
+                continue;
+            }
 
             $dispatch->status === NotificationDispatch::STATUS_SENT
                 ? $stats['sent']++
