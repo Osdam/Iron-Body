@@ -9,8 +9,10 @@ use App\Models\MemberNotificationPreference;
 use App\Models\NotificationDispatch;
 use App\Models\NotificationTemplate;
 use App\Support\Notifications\NotificationCategory as Cat;
+use App\Support\Notifications\SendingWindow;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
+use Throwable;
 
 /**
  * Decide QUÉ recibe cada socio hoy, si es que recibe algo.
@@ -74,7 +76,13 @@ class WellnessPlanner
                 templateKey: $plan['key'],
                 supplementKind: $plan['supplement_kind'],
                 // Una y solo una por socio y día, pase lo que pase.
-                idempotencyKey: sprintf('wellness:%d:%s', $member->id, $now->format('Y-m-d')),
+                //
+                // La fecha se toma en la zona del gimnasio, NO en UTC. El día
+                // local va de las 05:00 UTC a las 05:00 UTC siguientes, así que
+                // con una fecha en UTC una tanda de las 21:00 de Neiva caería
+                // ya en el día siguiente y el mismo socio podría recibir dos
+                // avisos en su mismo día.
+                idempotencyKey: sprintf('wellness:%d:%s', $member->id, $this->localDate($now)),
                 now: $now,
             );
 
@@ -228,6 +236,16 @@ class WellnessPlanner
         // Si ya las vio todas, se reinicia el ciclo con la más antigua.
         return $templates->firstWhere(fn (NotificationTemplate $t): bool => ! in_array($t->key, $seen, true))
             ?? $templates->first();
+    }
+
+    /** Fecha del calendario del gimnasio, que es la que vive el socio. */
+    private function localDate(CarbonImmutable $now): string
+    {
+        try {
+            return $now->setTimezone(SendingWindow::timezone())->format('Y-m-d');
+        } catch (Throwable) {
+            return $now->format('Y-m-d');
+        }
     }
 
     private function lastAttendance(int $memberId): ?CarbonImmutable

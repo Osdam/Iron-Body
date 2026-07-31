@@ -223,6 +223,39 @@ class WellnessPlannerTest extends NotificationTestCase
         }
     }
 
+    /**
+     * El día que cuenta es el del gimnasio, no el del servidor.
+     *
+     * Las 10:00 y las 21:00 de Neiva son el mismo día para el socio, pero en
+     * UTC caen en fechas distintas (15:00 del día N y 02:00 del día N+1). Con
+     * una llave construida en UTC, la segunda tanda le mandaría un segundo
+     * aviso el mismo día.
+     */
+    public function test_dos_tandas_del_mismo_dia_local_no_duplican_aunque_cambie_el_dia_utc(): void
+    {
+        $this->fakeFcmSuccess();
+        $member = $this->makeMember();
+        $this->giveDevice($member);
+
+        $manana = CarbonImmutable::parse('2026-07-30 10:00:00', 'America/Bogota')->setTimezone('UTC');
+        $noche = CarbonImmutable::parse('2026-07-30 21:00:00', 'America/Bogota')->setTimezone('UTC');
+
+        $this->assertNotSame(
+            $manana->format('Y-m-d'),
+            $noche->format('Y-m-d'),
+            'El escenario pierde sentido si ambos instantes caen en el mismo día UTC.',
+        );
+
+        $this->planner()->planDaily($manana);
+        $this->planner()->planDaily($noche);
+
+        $this->assertSame(
+            1,
+            NotificationDispatch::query()->where('member_id', $member->id)->count(),
+            'El socio recibió dos avisos en un mismo día suyo.',
+        );
+    }
+
     public function test_no_planifica_para_quien_no_tiene_dispositivo(): void
     {
         $member = $this->makeMember();
