@@ -49,7 +49,7 @@ class NotificationCampaignTest extends NotificationTestCase
         $member = $this->makeMember();
         $this->giveDevice($member);
 
-        $res = $this->postJson('/api/admin/notifications/campaigns', [
+        $res = $this->postJson('/api/admin/push/campaigns', [
             'name' => 'Campaña',
             'category' => NotificationCategory::MEMBERSHIP,
             'title' => 'Novedad',
@@ -62,7 +62,7 @@ class NotificationCampaignTest extends NotificationTestCase
 
     public function test_rechaza_una_categoria_desconocida(): void
     {
-        $this->postJson('/api/admin/notifications/campaigns', [
+        $this->postJson('/api/admin/push/campaigns', [
             'name' => 'Campaña',
             'category' => 'lo_que_sea',
             'title' => 'Novedad',
@@ -84,19 +84,19 @@ class NotificationCampaignTest extends NotificationTestCase
         $campaign = $this->draft();
 
         // Sin confirmar: no sale.
-        $this->postJson("/api/admin/notifications/campaigns/{$campaign->id}/send", [], $this->asAdmin())
+        $this->postJson("/api/admin/push/campaigns/{$campaign->id}/send", [], $this->asAdmin())
             ->assertStatus(422)
             ->assertJsonPath('code', 'confirmation_required');
 
         // Con un número equivocado: tampoco.
-        $this->postJson("/api/admin/notifications/campaigns/{$campaign->id}/send", [
+        $this->postJson("/api/admin/push/campaigns/{$campaign->id}/send", [
             'confirm_recipients' => 2,
         ], $this->asAdmin())->assertStatus(422);
 
         $this->assertSame(0, NotificationDispatch::query()->count());
 
         // Con el número exacto: sale.
-        $this->postJson("/api/admin/notifications/campaigns/{$campaign->id}/send", [
+        $this->postJson("/api/admin/push/campaigns/{$campaign->id}/send", [
             'confirm_recipients' => 4,
         ], $this->asAdmin())->assertOk();
 
@@ -111,10 +111,10 @@ class NotificationCampaignTest extends NotificationTestCase
 
         $campaign = $this->draft();
 
-        $this->postJson("/api/admin/notifications/campaigns/{$campaign->id}/send", [], $this->asAdmin())
+        $this->postJson("/api/admin/push/campaigns/{$campaign->id}/send", [], $this->asAdmin())
             ->assertOk();
 
-        $this->postJson("/api/admin/notifications/campaigns/{$campaign->id}/send", [], $this->asAdmin())
+        $this->postJson("/api/admin/push/campaigns/{$campaign->id}/send", [], $this->asAdmin())
             ->assertStatus(422)
             ->assertJsonPath('code', 'campaign_not_sendable');
 
@@ -144,7 +144,7 @@ class NotificationCampaignTest extends NotificationTestCase
             'categories' => [NotificationCategory::PROMOTIONS => true],
         ]);
 
-        $res = $this->postJson("/api/admin/notifications/campaigns/{$campaign->id}/send", [], $this->asAdmin());
+        $res = $this->postJson("/api/admin/push/campaigns/{$campaign->id}/send", [], $this->asAdmin());
 
         $res->assertOk();
         $this->assertSame(1, $res->json('stats.sent'));
@@ -158,7 +158,7 @@ class NotificationCampaignTest extends NotificationTestCase
     {
         $campaign = $this->draft();
 
-        $this->postJson("/api/admin/notifications/campaigns/{$campaign->id}/send", [], $this->asAdmin())
+        $this->postJson("/api/admin/push/campaigns/{$campaign->id}/send", [], $this->asAdmin())
             ->assertStatus(422)
             ->assertJsonPath('code', 'empty_audience');
     }
@@ -167,11 +167,11 @@ class NotificationCampaignTest extends NotificationTestCase
     {
         $campaign = $this->draft();
 
-        $this->postJson("/api/admin/notifications/campaigns/{$campaign->id}/cancel", [], $this->asAdmin())
+        $this->postJson("/api/admin/push/campaigns/{$campaign->id}/cancel", [], $this->asAdmin())
             ->assertOk()
             ->assertJsonPath('data.status', NotificationCampaign::STATUS_CANCELLED);
 
-        $this->postJson("/api/admin/notifications/campaigns/{$campaign->id}/send", [], $this->asAdmin())
+        $this->postJson("/api/admin/push/campaigns/{$campaign->id}/send", [], $this->asAdmin())
             ->assertStatus(422);
     }
 
@@ -182,9 +182,9 @@ class NotificationCampaignTest extends NotificationTestCase
         $this->giveDevice($this->makeMember());
         $campaign = $this->draft();
 
-        $this->postJson("/api/admin/notifications/campaigns/{$campaign->id}/send", [], $this->asAdmin())->assertOk();
+        $this->postJson("/api/admin/push/campaigns/{$campaign->id}/send", [], $this->asAdmin())->assertOk();
 
-        $this->putJson("/api/admin/notifications/campaigns/{$campaign->id}", [
+        $this->putJson("/api/admin/push/campaigns/{$campaign->id}", [
             'title' => 'Otro título',
         ], $this->asAdmin())
             ->assertStatus(422)
@@ -193,9 +193,9 @@ class NotificationCampaignTest extends NotificationTestCase
 
     public function test_las_rutas_de_notificaciones_exigen_admin(): void
     {
-        $this->getJson('/api/admin/notifications/templates')->assertUnauthorized();
-        $this->getJson('/api/admin/notifications/campaigns')->assertUnauthorized();
-        $this->getJson('/api/admin/notifications/metrics')->assertUnauthorized();
+        $this->getJson('/api/admin/push/templates')->assertUnauthorized();
+        $this->getJson('/api/admin/push/campaigns')->assertUnauthorized();
+        $this->getJson('/api/admin/push/metrics')->assertUnauthorized();
     }
 
     public function test_editar_una_plantilla_sube_su_version(): void
@@ -203,7 +203,7 @@ class NotificationCampaignTest extends NotificationTestCase
         $this->artisan('notifications:seed-templates')->assertSuccessful();
         $t = NotificationTemplate::query()->firstWhere('key', 'mot_constancia');
 
-        $this->putJson("/api/admin/notifications/templates/{$t->id}", [
+        $this->putJson("/api/admin/push/templates/{$t->id}", [
             'title' => 'Sigue así',
         ], $this->asAdmin())->assertOk();
 
@@ -223,7 +223,7 @@ class NotificationCampaignTest extends NotificationTestCase
             body: 'Cuerpo',
         );
 
-        $res = $this->getJson('/api/admin/notifications/metrics', $this->asAdmin());
+        $res = $this->getJson('/api/admin/push/metrics', $this->asAdmin());
 
         $res->assertOk();
         $this->assertSame(1, $res->json('data.suppression_reasons.'.NotificationDispatch::REASON_NO_TOKEN));

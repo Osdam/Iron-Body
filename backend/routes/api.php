@@ -853,6 +853,29 @@ Route::post('admin/lives/{live}/end', [\App\Http\Controllers\Api\Admin\LiveContr
 Route::get('admin/members/{member}',               [\App\Http\Controllers\Api\Admin\MemberStaffController::class, 'show']);
 Route::patch('admin/members/{member}/staff-access',[\App\Http\Controllers\Api\Admin\MemberStaffController::class, 'updateStaffAccess']);
 
+// ── Notificaciones push (CRM admin) ────────────────────────────────────────
+// Prefijo `admin/push` y NO `admin/notifications`: ese espacio ya lo ocupa la
+// bandeja de avisos del propio administrador, y compartirlo dejaría dos
+// superficies distintas peleándose por las mismas rutas.
+// Bajo /api/admin/* → blindado por ProtectAdminPaths. El envío masivo está
+// deliberadamente incómodo: crear una campaña NUNCA envía, y con audiencia
+// grande hay que repetir el número exacto de destinatarios para confirmarla.
+Route::prefix('admin/push')->group(function (): void {
+    $notif = \App\Http\Controllers\Api\Admin\NotificationAdminController::class;
+
+    Route::get('templates',              [$notif, 'templates']);
+    Route::put('templates/{template}',   [$notif, 'updateTemplate']);
+
+    Route::get('campaigns',                    [$notif, 'campaigns']);
+    Route::post('campaigns',                   [$notif, 'createCampaign']);
+    Route::put('campaigns/{campaign}',         [$notif, 'updateCampaign']);
+    Route::get('campaigns/{campaign}/estimate', [$notif, 'estimateCampaign']);
+    Route::post('campaigns/{campaign}/send',   [$notif, 'sendCampaign'])->middleware('throttle:10,60');
+    Route::post('campaigns/{campaign}/cancel', [$notif, 'cancelCampaign']);
+
+    Route::get('metrics', [$notif, 'metrics']);
+});
+
 // ── Moderación de comunidad (CRM admin) ────────────────────────────────────
 // Bajo /api/admin/* → ya blindado por ProtectAdminPaths. Encima, CADA acción
 // exige su permiso concreto (App\Support\Moderation\ModerationPermission):
