@@ -32,8 +32,7 @@ class NotificationDispatcher
     public function __construct(
         private readonly FcmHttpV1Client $client,
         private readonly SuspensionService $suspensions,
-    ) {
-    }
+    ) {}
 
     /**
      * Intenta enviar. Devuelve SIEMPRE la fila del intento, enviada o no.

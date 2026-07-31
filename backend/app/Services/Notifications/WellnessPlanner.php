@@ -31,9 +31,7 @@ class WellnessPlanner
     /** Días sin fichar a partir de los cuales el mensaje cambia de tono. */
     private const AWAY_DAYS = 5;
 
-    public function __construct(private readonly NotificationDispatcher $dispatcher)
-    {
-    }
+    public function __construct(private readonly NotificationDispatcher $dispatcher) {}
 
     /**
      * Planifica el día para todos los socios con dispositivo activo.

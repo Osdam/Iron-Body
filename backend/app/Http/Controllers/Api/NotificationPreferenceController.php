@@ -4,10 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\MemberNotificationPreference;
+use App\Services\Notifications\NotificationCatalog;
 use App\Support\Notifications\NotificationCategory;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 /**
  * Preferencias de notificación del socio autenticado.
@@ -142,7 +142,7 @@ class NotificationPreferenceController extends Controller
         return [
             'categories' => $categories,
             'supplement_kinds' => $supplements,
-            'supplement_notice' => \App\Services\Notifications\NotificationCatalog::SUPPLEMENT_DISCLAIMER,
+            'supplement_notice' => NotificationCatalog::SUPPLEMENT_DISCLAIMER,
         ];
     }
 
