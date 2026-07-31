@@ -147,6 +147,26 @@ final class NotificationCategory
         return self::LEGACY_TYPE_MAP[strtolower($type)] ?? self::MEMBERSHIP;
     }
 
+    /**
+     * Tipo que entiende el óvalo in-app de Flutter
+     * (`ironNotificationTypeFromString`), para que elija icono y color.
+     *
+     * Sin esto, todo lo que sale por el motor nuevo cae en el caso por defecto
+     * («info») y una alerta de seguridad se vería con el estilo más genérico de
+     * todos, que es justo al revés de lo que conviene.
+     */
+    public static function appType(string $category): string
+    {
+        return match ($category) {
+            self::ACCOUNT_SECURITY => 'security',
+            self::PAYMENTS, self::MEMBERSHIP => 'membership',
+            self::CLASSES, self::WORKOUTS => 'training',
+            self::NUTRITION, self::SUPPLEMENTS => 'nutrition',
+            self::MOTIVATION, self::RECOVERY, self::HYDRATION => 'progress',
+            default => 'info',
+        };
+    }
+
     /** Etiquetas para el CRM y la pantalla de ajustes de la app. */
     public static function label(string $category): string
     {

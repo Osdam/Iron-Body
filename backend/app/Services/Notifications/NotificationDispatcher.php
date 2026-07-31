@@ -264,6 +264,9 @@ class NotificationDispatcher
                     'notification' => ['title' => $title, 'body' => $body],
                     'data' => array_map('strval', array_filter([
                         'category' => $category,
+                        // La app rutea y estiliza por `type`; sin él, todo lo
+                        // que sale de aquí se vería como un aviso genérico.
+                        'type' => NotificationCategory::appType($category),
                         'template_key' => $templateKey,
                         'action_route' => $actionRoute,
                         'action_type' => $actionRoute !== null ? 'route' : null,
