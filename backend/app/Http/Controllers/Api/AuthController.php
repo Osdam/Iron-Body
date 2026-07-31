@@ -1150,13 +1150,25 @@ class AuthController extends Controller
                 'device_id' => $ctx['device_id'] ?? null,
                 'platform' => $validated['platform'] ?? $ctx['platform'] ?? null,
                 'last_used_at' => now(),
+                'last_seen_at' => now(),
+                // Volver a registrar REACTIVA. Sin esto, un token dado de baja
+                // en un logout anterior se quedaba inactivo para siempre: el
+                // socio volvía a entrar y no recibía nada, sin señal de por qué.
+                'is_active' => true,
             ],
         );
 
         return response()->json(['ok' => true]);
     }
 
-    /** POST members/push-token/remove — da de baja un token FCM (logout). */
+    /**
+     * POST members/push-token/remove — da de baja un token FCM (logout).
+     *
+     * DESACTIVA, no borra. Borrarlo perdía el rastro de qué dispositivo tuvo el
+     * socio y desde cuándo, y hacía que el mismo teléfono reapareciera como si
+     * fuera nuevo en cada cierre de sesión. Es la misma regla que sigue el resto
+     * del sistema cuando FCM marca un token como muerto.
+     */
     public function removePushToken(Request $request): JsonResponse
     {
         $member = $request->attributes->get('auth_member');
@@ -1165,7 +1177,7 @@ class AuthController extends Controller
         MemberDeviceToken::query()
             ->where('member_id', $member->id)
             ->where('token', $validated['token'])
-            ->delete();
+            ->update(['is_active' => false, 'updated_at' => now()]);
 
         return response()->json(['ok' => true]);
     }
