@@ -1,36 +1,71 @@
 {
-  "name": "Iron Body - Notificaciones de Bienestar",
+  "name": "Iron Body - Notificaciones de bienestar",
   "active": false,
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "availableInMCP": true
   },
   "meta": {
-    "description": "Dispara la tanda diaria de motivacion, habitos y suplementos. n8n decide CUANDO; Laravel decide QUE y A QUIEN: preferencias del socio, horas de silencio, limites de frecuencia, exclusion de menores e idempotencia viven en el servidor. Disparar dos veces el mismo dia no envia nada dos veces. Sin secretos en el fichero: usa las credenciales/variables de entorno de n8n."
+    "description": "Dispara la tanda diaria de motivación, hábitos y suplementos. n8n decide cuándo (10:00 y 17:00 Bogotá, dentro de la franja 07:00–22:00); Laravel decide qué y a quién."
   },
   "nodes": [
     {
+      "id": "3c993168-48cd-435e-acae-77f176c18357",
+      "name": "Cron 10:00 y 17:00 (Bogota)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
       "parameters": {
         "rule": {
           "interval": [
             {
-              "field": "cronExpression",
-              "expression": "0 15,22 * * *"
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 10,
+              "triggerAtMinute": 0
+            },
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 17,
+              "triggerAtMinute": 0
             }
           ]
         }
-      },
-      "id": "node-cron",
-      "name": "Cron 15:00 y 22:00 UTC",
-      "notes": "10:00 y 17:00 en Neiva (UTC-5). Dos pasadas porque cada socio tiene sus propias horas de silencio; la idempotencia diaria garantiza como maximo un aviso por persona.",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.2,
-      "position": [-720, 0]
+      }
     },
     {
+      "id": "8a3dd254-3ae8-4066-a280-4dbb8fbbd9f6",
+      "name": "Ventana 07:00-22:00 (Bogota)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Hora local de Neiva, calculada explicitamente y no heredada del\n// servidor: si esto dependiera de UTC, \"las diez de la noche\" serian en\n// realidad las cinco de la tarde.\nconst INICIO = 7;   // inclusivo\nconst CIERRE = 22;  // exclusivo: a las 22:00 en punto ya no sale nada\n\nconst hora = Number(new Intl.DateTimeFormat('en-GB', {\n  timeZone: 'America/Bogota', hour: '2-digit', hour12: false,\n}).format(new Date()));\n\nconst dentro = hora >= INICIO && hora < CIERRE;\nconst manual = $execution.mode === 'test';\n\n// Las ejecuciones PROGRAMADAS se cortan aqui: fuera de hora no tiene sentido\n// molestar al backend. Las MANUALES si pasan, para poder probar la cadena a\n// cualquier hora — y no debilita nada, porque Laravel comprueba la misma\n// ventana con su propio reloj y se niega a enviar igual.\nif (!dentro && !manual) {\n  return [];\n}\n\nreturn [{ json: {\n  hora_local: hora,\n  zona: 'America/Bogota',\n  ventana: '07:00-22:00',\n  dentro_de_ventana: dentro,\n  modo: $execution.mode,\n} }];"
+      }
+    },
+    {
+      "id": "a24688f4-d1cc-4aa4-bd95-97437257549e",
+      "name": "Disparar tanda en Laravel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        0
+      ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.LARAVEL_BASE_URL || '{{LARAVEL_BASE_URL}}' }}/api/internal/automation/wellness-run",
+        "url": "={{ $env.LARAVEL_BASE_URL }}/api/internal/automation/wellness-run",
         "sendHeaders": true,
+        "specifyHeaders": "keypair",
         "headerParameters": {
           "parameters": [
             {
@@ -44,54 +79,72 @@
           ]
         },
         "sendBody": true,
+        "contentType": "json",
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ dry_run: false }) }}",
         "options": {
           "timeout": 60000,
           "response": {
             "response": {
-              "neverError": true,
-              "fullResponse": true
+              "fullResponse": true,
+              "neverError": true
             }
           }
         }
       },
-      "id": "node-run",
-      "name": "Disparar tanda en Laravel",
-      "notes": "No manda textos ni listas de socios. Solo dice 'ahora'. El cuerpo va firmado por el Bearer; Laravel valida antes de hacer nada.",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [-480, 0]
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
     },
     {
-      "parameters": {
-        "jsCode": "// Traduce la respuesta a algo legible en el historial de n8n.\n//\n// 409 wellness_disabled NO es un error: es el modulo apagado a proposito con\n// NOTIFICATIONS_WELLNESS_ENABLED=false. Marcarlo como fallo llenaria el\n// historial de rojo cuando todo esta correcto.\nconst status = $json.statusCode ?? 0;\nconst body = $json.body ?? {};\n\nif (status === 409 && body.reason === 'wellness_disabled') {\n  return [{ json: { resultado: 'inerte', mensaje: 'Modulo de bienestar apagado en el servidor.', alerta: false } }];\n}\n\nif (status !== 200 || body.ok !== true) {\n  return [{ json: { resultado: 'fallo', status, mensaje: body.message || 'Laravel no acepto la tanda.', alerta: true } }];\n}\n\nreturn [{ json: {\n  resultado: 'ok',\n  considerados: body.considered ?? 0,\n  enviados: body.sent ?? 0,\n  no_enviados: body.suppressed ?? 0,\n  alerta: false,\n  nota: 'Los no enviados no son errores: son preferencias, horas de silencio o limites de frecuencia.'\n} }];"
-      },
-      "id": "node-result",
+      "id": "981ada52-5305-462d-b1bf-5278e5b49408",
       "name": "Interpretar resultado",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-240, 0]
-    },
-    {
-      "parameters": {},
-      "id": "node-out",
-      "name": "Salida (conectar destino: log/Slack/email)",
-      "notes": "Conectar aqui el aviso al equipo solo cuando alerta = true.",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [0, 0]
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const r = $input.first()?.json ?? {};\nconst status = r.statusCode ?? 0;\nconst body = r.body ?? {};\n\nif (status === 401 || status === 403) {\n  return [{ json: { resultado: 'credencial', status, alerta: true,\n    mensaje: 'Laravel rechazo la credencial. Revisar AUTOMATION_INTERNAL_SECRET en n8n y en el backend.' } }];\n}\n\nif (status === 409 && body.reason === 'wellness_disabled') {\n  return [{ json: { resultado: 'inerte', status, alerta: false,\n    mensaje: 'Modulo de bienestar apagado en el servidor (NOTIFICATIONS_WELLNESS_ENABLED=false).' } }];\n}\n\nif (status === 429) {\n  return [{ json: { resultado: 'limitado', status, alerta: true,\n    mensaje: 'Demasiadas peticiones. No reintentar en bucle.' } }];\n}\n\nif (status >= 500) {\n  return [{ json: { resultado: 'error_servidor', status, alerta: true,\n    mensaje: 'El backend fallo. La idempotencia diaria evita duplicados al reintentar.' } }];\n}\n\nif (status !== 200 || body.ok !== true) {\n  return [{ json: { resultado: 'fallo', status, alerta: true,\n    mensaje: body.message || 'Laravel no acepto la tanda.' } }];\n}\n\nif (body.skipped === 'outside_window') {\n  return [{ json: { resultado: 'fuera_de_ventana', status, alerta: false,\n    mensaje: body.message, proxima_apertura: body.next_opening ?? null } }];\n}\n\nreturn [{ json: {\n  resultado: 'ok',\n  status,\n  considerados: body.considered ?? 0,\n  enviados: body.sent ?? 0,\n  no_enviados: body.suppressed ?? 0,\n  hora_local: body.window?.local_hour ?? null,\n  alerta: false,\n  nota: 'Los no enviados no son errores: son preferencias, horas de silencio o limites de frecuencia.',\n} }];"
+      }
     }
   ],
   "connections": {
-    "Cron 15:00 y 22:00 UTC": {
-      "main": [[{ "node": "Disparar tanda en Laravel", "type": "main", "index": 0 }]]
+    "Cron 10:00 y 17:00 (Bogota)": {
+      "main": [
+        [
+          {
+            "node": "Ventana 07:00-22:00 (Bogota)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ventana 07:00-22:00 (Bogota)": {
+      "main": [
+        [
+          {
+            "node": "Disparar tanda en Laravel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Disparar tanda en Laravel": {
-      "main": [[{ "node": "Interpretar resultado", "type": "main", "index": 0 }]]
-    },
-    "Interpretar resultado": {
-      "main": [[{ "node": "Salida (conectar destino: log/Slack/email)", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Interpretar resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "pinData": {},
