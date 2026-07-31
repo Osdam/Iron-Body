@@ -110,6 +110,7 @@ class WellnessAutomationTest extends NotificationTestCase
                 NotificationCategory::MOTIVATION => false,
                 NotificationCategory::HYDRATION => false,
                 NotificationCategory::RECOVERY => false,
+                NotificationCategory::NUTRITION => false,
             ],
         ]);
 

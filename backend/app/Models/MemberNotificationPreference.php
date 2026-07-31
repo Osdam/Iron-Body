@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\Notifications\NotificationCategory;
+use App\Support\Notifications\NotificationSlot;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -26,6 +27,7 @@ class MemberNotificationPreference extends Model
         'categories',
         'supplement_kinds',
         'max_per_day',
+        'max_wellness_per_day',
         'max_wellness_per_week',
         'opted_out_at',
     ];
@@ -39,6 +41,7 @@ class MemberNotificationPreference extends Model
             'categories' => 'array',
             'supplement_kinds' => 'array',
             'max_per_day' => 'integer',
+            'max_wellness_per_day' => 'integer',
             'max_wellness_per_week' => 'integer',
             'opted_out_at' => 'datetime',
         ];
@@ -77,14 +80,35 @@ class MemberNotificationPreference extends Model
         return $this->timezone ?: 'America/Bogota';
     }
 
+    /**
+     * Techo global del día: bienestar y operativas juntas.
+     *
+     * Es una red de cortesía, no el límite de bienestar. Se dimensiona por
+     * encima de las cinco franjas para que un día con varios avisos de pago no
+     * se coma el acompañamiento.
+     */
     public function dailyLimit(): int
     {
-        return $this->max_per_day ?? 4;
+        return $this->max_per_day ?? 12;
     }
 
+    /** Cuántas notificaciones de bienestar puede recibir en un día. */
+    public function wellnessDailyLimit(): int
+    {
+        return $this->max_wellness_per_day ?? count(NotificationSlot::ALL);
+    }
+
+    /**
+     * Cupo semanal de bienestar.
+     *
+     * Cinco al día durante siete días son treinta y cinco. El valor por defecto
+     * los cubre justo, para que el tope semanal sea una barrera contra fallos
+     * —una franja que se dispare de más, un reintento en bucle— y no un
+     * recorte silencioso de lo que el gimnasio decidió enviar.
+     */
     public function weeklyWellnessLimit(): int
     {
-        return $this->max_wellness_per_week ?? 3;
+        return $this->max_wellness_per_week ?? (count(NotificationSlot::ALL) * 7);
     }
 
     /** ¿Quiere el socio esta categoría? */
@@ -139,7 +163,11 @@ class MemberNotificationPreference extends Model
             return false;
         }
 
-        $start = $this->quiet_hours_start ?? 21;
+        // El silencio por defecto empieza a las 22, no a las 21: la franja de
+        // cierre dispara a las 21:45 y con el valor anterior habría nacido
+        // muerta para todo el que no hubiera tocado nunca sus preferencias, que
+        // hoy son todos. Quien elija 21 explícitamente conserva su elección.
+        $start = $this->quiet_hours_start ?? 22;
         $end = $this->quiet_hours_end ?? 7;
         if ($start === $end) {
             return false;
@@ -174,6 +202,7 @@ class MemberNotificationPreference extends Model
         }
 
         $end = $this->quiet_hours_end ?? 7;
+        /** @var int $end */
         $target = $local->setTime($end, 0);
         if ($target <= $local) {
             $target = $target->addDay();
@@ -198,9 +227,10 @@ class MemberNotificationPreference extends Model
         return [
             'timezone' => $this->timezoneName(),
             'quiet_hours_enabled' => (bool) ($this->quiet_hours_enabled ?? true),
-            'quiet_hours_start' => $this->quiet_hours_start ?? 21,
+            'quiet_hours_start' => $this->quiet_hours_start ?? 22,
             'quiet_hours_end' => $this->quiet_hours_end ?? 7,
             'max_per_day' => $this->dailyLimit(),
+            'max_wellness_per_day' => $this->wellnessDailyLimit(),
             'max_wellness_per_week' => $this->weeklyWellnessLimit(),
             'opted_out' => $this->opted_out_at !== null,
             'categories' => $categories,

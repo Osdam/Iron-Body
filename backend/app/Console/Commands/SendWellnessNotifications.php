@@ -8,12 +8,15 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Tanda diaria de motivación, hábitos y suplementos.
+ * Tanda de bienestar de la franja en curso.
  *
- * Corre varias veces al día a propósito: cada socio tiene sus propias horas de
- * silencio y su zona horaria, así que una sola pasada dejaría fuera a quien
- * duerme cuando corre el cron. La llave de idempotencia (`wellness:socio:fecha`)
- * garantiza que aun así reciba UNA como mucho.
+ * El día se divide en cinco franjas (07:00, 11:00, 15:00, 19:00 y 21:45 en hora
+ * de Bogotá) y cada ejecución atiende la que corresponda a la hora actual. La
+ * llave de idempotencia (`wellness:socio:fecha:franja`) garantiza que el socio
+ * reciba UNA como mucho en cada una, aunque la tanda se dispare dos veces.
+ *
+ * En producción quien manda la hora es n8n; este comando es el camino de
+ * respaldo y el que se usa para probar a mano.
  */
 class SendWellnessNotifications extends Command
 {
@@ -35,12 +38,19 @@ class SendWellnessNotifications extends Command
         $stats = $planner->planDaily($now);
 
         $this->info(sprintf(
-            'Considerados: %d · enviados ahora: %d · no enviados: %d · ya resueltos hoy: %d',
+            'Franja: %s · considerados: %d · enviados ahora: %d · no enviados: %d · ya resueltos: %d',
+            $stats['slot'] ?? 'fuera de horario',
             $stats['considered'],
             $stats['sent'],
             $stats['suppressed'],
             $stats['already_handled'],
         ));
+
+        foreach ($stats as $clave => $valor) {
+            if (str_starts_with($clave, 'skipped_') && $valor > 0) {
+                $this->line("  · {$clave}: {$valor}");
+            }
+        }
 
         Log::info('notifications.wellness.run', $stats);
 

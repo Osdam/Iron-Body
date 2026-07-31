@@ -128,6 +128,14 @@ class NotificationDispatcherTest extends NotificationTestCase
     {
         $member = $this->makeMember();
         $this->giveDevice($member);
+        // El silencio se declara explícitamente. Por defecto empieza a las 22,
+        // justo donde cierra la ventana del gimnasio, así que con los valores
+        // de fábrica esta comprobación no probaría el silencio sino la ventana.
+        MemberNotificationPreference::create([
+            'member_id' => $member->id,
+            'quiet_hours_start' => 21,
+            'quiet_hours_end' => 7,
+        ]);
 
         $dispatch = $this->dispatcher()->dispatch(
             memberId: $member->id,
@@ -148,6 +156,8 @@ class NotificationDispatcherTest extends NotificationTestCase
         MemberNotificationPreference::create([
             'member_id' => $member->id,
             'timezone' => 'America/Los_Angeles',
+            'quiet_hours_start' => 21,
+            'quiet_hours_end' => 7,
         ]);
 
         // El MISMO instante que el test anterior. Para un socio en Bogotá son

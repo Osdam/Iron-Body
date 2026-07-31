@@ -39,9 +39,23 @@ class NotificationDispatch extends Model
 
     public const REASON_FCM_DISABLED = 'fcm_disabled';
 
+    /** Ya salió una notificación de bienestar hace muy poco. */
+    public const REASON_MIN_INTERVAL = 'min_interval';
+
+    /** No queda contenido que el socio no haya visto en los últimos 14 días. */
+    public const REASON_RECENT_TEMPLATE = 'recent_template';
+
+    /** Todos los dispositivos del socio los rechazó el proveedor por caducados. */
+    public const REASON_INVALID_TOKEN = 'invalid_token';
+
+    /** El proveedor (FCM/APNs) no aceptó el envío. */
+    public const REASON_PROVIDER_FAILED = 'delivery_failed';
+
     protected $fillable = [
         'member_id',
         'category',
+        'slot',
+        'selection_reason',
         'supplement_kind',
         'template_key',
         'title',

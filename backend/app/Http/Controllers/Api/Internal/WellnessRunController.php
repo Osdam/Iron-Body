@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Internal;
 
 use App\Http\Controllers\Controller;
 use App\Services\Notifications\WellnessPlanner;
+use App\Support\Notifications\NotificationSlot;
 use App\Support\Notifications\SendingWindow;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -51,6 +52,8 @@ class WellnessRunController extends Controller
                 'ok' => true,
                 'dry_run' => true,
                 'window' => $window,
+                'slot' => NotificationSlot::at(),
+                'schedule' => NotificationSlot::schedule(),
                 'message' => 'Conexión correcta. No se envió nada.',
             ]);
         }
@@ -71,6 +74,7 @@ class WellnessRunController extends Controller
                 'sent' => 0,
                 'suppressed' => 0,
                 'already_handled' => 0,
+                'slot' => null,
                 'skipped' => 'outside_window',
                 'window' => $window,
                 'next_opening' => SendingWindow::nextOpening()->toIso8601String(),

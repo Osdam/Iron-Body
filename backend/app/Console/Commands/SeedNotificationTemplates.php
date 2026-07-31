@@ -38,9 +38,10 @@ class SeedNotificationTemplates extends Command
                 'supplement_kind' => $row['supplement_kind'],
                 'is_seeded' => true,
                 // Es estructura, no redacción: si el catálogo dice que un texto
-                // asume poder entrenar, esa clasificación manda aunque el CRM
-                // haya retocado las palabras.
+                // asume poder entrenar, o que solo tiene sentido de noche, esa
+                // clasificación manda aunque el CRM haya retocado las palabras.
                 'requires_active_membership' => $row['requires_active_membership'],
+                'slots' => $row['slots'],
             ];
 
             if ($this->option('force-text')) {

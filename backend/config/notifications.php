@@ -57,12 +57,26 @@ return [
         // depende de que un contenedor externo esté vivo.
         'orchestrator' => env('NOTIFICATIONS_WELLNESS_ORCHESTRATOR', 'laravel'),
 
-        // El servidor corre en UTC y el gimnasio está en UTC-5. Estas dos
-        // pasadas caen a media mañana y media tarde en Neiva, lejos de las
-        // horas de silencio por defecto (21:00–07:00 locales). Se hacen dos
-        // porque cada socio tiene su propio horario; la idempotencia diaria
-        // garantiza que aun así reciba una como mucho.
-        'runs_at' => ['15:00', '22:00'],
+        // Horas a las que n8n dispara cada franja, en hora de Bogotá. La lista
+        // la manda `App\Support\Notifications\NotificationSlot`; esto es su
+        // reflejo para quien lea la configuración y para documentar el cron.
+        //
+        // La última va a las 21:45 y no a las 22:00 porque el cierre duro es a
+        // las 22:00: disparar en ese minuto dejaría el envío a merced de
+        // cualquier retraso de red.
+        'runs_at' => ['07:00', '11:00', '15:00', '19:00', '21:45'],
+
+        // Minutos que deben pasar como mínimo entre dos avisos de bienestar al
+        // mismo socio. Es la red para reintentos, ejecuciones solapadas o un
+        // cron duplicado: casos en los que la llave de idempotencia no ayuda
+        // porque las franjas implicadas son distintas.
+        //
+        // El valor tiene que quedar POR DEBAJO del hueco legítimo más estrecho,
+        // que es el de 19:00 a 21:45 — 165 minutos. Con 150 la franja de cierre
+        // se bloqueaba a sí misma en cuanto la de las siete se retrasaba un
+        // cuarto de hora; 120 deja margen para ese retraso y sigue atrapando los
+        // disparos dobles, que ocurren con segundos o minutos de diferencia.
+        'min_interval_minutes' => (int) env('NOTIFICATIONS_WELLNESS_MIN_INTERVAL', 120),
     ],
 
     /*

@@ -23,6 +23,7 @@ class NotificationTemplate extends Model
         'is_seeded',
         'disclaimer',
         'requires_active_membership',
+        'slots',
     ];
 
     protected function casts(): array
@@ -32,6 +33,7 @@ class NotificationTemplate extends Model
             'is_active' => 'boolean',
             'is_seeded' => 'boolean',
             'requires_active_membership' => 'boolean',
+            'slots' => 'array',
         ];
     }
 
@@ -49,6 +51,29 @@ class NotificationTemplate extends Model
     public function scopeForLapsedMembership($q)
     {
         return $q->where('requires_active_membership', false);
+    }
+
+    /**
+     * ¿Sirve esta plantilla para esa franja del día?
+     *
+     * Sin franjas declaradas vale para todas: es el caso mayoritario y el que
+     * tenían las plantillas antes de que existiera la columna, así que una
+     * plantilla vieja o recién creada desde el CRM sigue estando disponible en
+     * vez de desaparecer en silencio.
+     *
+     * El filtro se hace en PHP y no en SQL a propósito: consultar dentro de un
+     * JSON tiene una sintaxis distinta en PostgreSQL y en SQLite, y el catálogo
+     * completo cabe de sobra en memoria.
+     */
+    public function servesSlot(?string $slot): bool
+    {
+        $slots = $this->slots;
+
+        if ($slot === null || ! is_array($slots) || $slots === []) {
+            return true;
+        }
+
+        return in_array($slot, $slots, true);
     }
 
     /** Texto final que verá el socio, con el aviso educativo si lo hay. */

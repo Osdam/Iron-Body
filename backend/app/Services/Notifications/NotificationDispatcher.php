@@ -51,6 +51,8 @@ class NotificationDispatcher
         ?string $idempotencyKey = null,
         ?int $campaignId = null,
         ?CarbonImmutable $now = null,
+        ?string $slot = null,
+        ?string $selectionReason = null,
     ): NotificationDispatch {
         $now ??= CarbonImmutable::now();
         $title = trim($title);
@@ -77,6 +79,8 @@ class NotificationDispatcher
         $record = fn (string $status, ?string $reason, int $targeted = 0, int $delivered = 0) => $this->record([
             'member_id' => $memberId,
             'category' => $category,
+            'slot' => $slot,
+            'selection_reason' => $selectionReason,
             'supplement_kind' => $supplementKind,
             'template_key' => $templateKey,
             'title' => $title,
@@ -134,13 +138,27 @@ class NotificationDispatcher
             return $record(NotificationDispatch::STATUS_SUPPRESSED, NotificationDispatch::REASON_FCM_DISABLED, $tokens->count());
         }
 
-        $delivered = $this->push($tokens->all(), $category, $title, $body, $actionRoute, $templateKey);
+        ['delivered' => $delivered, 'unregistered' => $unregistered] =
+            $this->push($tokens->all(), $category, $title, $body, $actionRoute, $templateKey);
+
+        if ($delivered > 0) {
+            return $record(NotificationDispatch::STATUS_SENT, null, $tokens->count(), $delivered);
+        }
+
+        // Un token caducado y un proveedor caído no son el mismo problema: el
+        // primero se resuelve solo cuando el socio vuelva a abrir la app, y el
+        // segundo hay que mirarlo. Meterlos en el mismo cajón deja las métricas
+        // sin capacidad de distinguir «nadie tiene la app instalada» de «FCM
+        // está rechazando todo».
+        $todosCaducados = $unregistered === $tokens->count();
 
         return $record(
-            $delivered > 0 ? NotificationDispatch::STATUS_SENT : NotificationDispatch::STATUS_FAILED,
-            $delivered > 0 ? null : 'delivery_failed',
+            NotificationDispatch::STATUS_FAILED,
+            $todosCaducados
+                ? NotificationDispatch::REASON_INVALID_TOKEN
+                : NotificationDispatch::REASON_PROVIDER_FAILED,
             $tokens->count(),
-            $delivered,
+            0,
         );
     }
 
@@ -202,10 +220,16 @@ class NotificationDispatcher
             return null;
         }
 
+        // El día se cuenta desde la medianoche del gimnasio, NO en una ventana
+        // móvil de 24 horas. Con la ventana móvil, el envío de las 21:45 de
+        // ayer seguiría ocupando cupo a las 07:00 de hoy y la promesa de cinco
+        // diarias se incumpliría sola cada mañana.
+        $desdeMedianoche = self::localMidnight($now);
+
         $sentToday = NotificationDispatch::query()
             ->where('member_id', $memberId)
             ->sent()
-            ->where('created_at', '>=', $now->subDay())
+            ->where('created_at', '>=', $desdeMedianoche)
             ->count();
 
         if ($sentToday >= $prefs->dailyLimit()) {
@@ -214,6 +238,17 @@ class NotificationDispatcher
 
         if (! in_array($category, self::WELLNESS, true)) {
             return null;
+        }
+
+        $wellnessToday = NotificationDispatch::query()
+            ->where('member_id', $memberId)
+            ->sent()
+            ->whereIn('category', self::WELLNESS)
+            ->where('created_at', '>=', $desdeMedianoche)
+            ->count();
+
+        if ($wellnessToday >= $prefs->wellnessDailyLimit()) {
+            return NotificationDispatch::REASON_DAILY_LIMIT;
         }
 
         $wellnessThisWeek = NotificationDispatch::query()
@@ -227,33 +262,65 @@ class NotificationDispatcher
             return NotificationDispatch::REASON_WEEKLY_LIMIT;
         }
 
-        // Un suplemento por semana como mucho, y nunca la misma familia dos
-        // semanas seguidas: es información, no una campaña.
-        if ($category === NotificationCategory::SUPPLEMENTS) {
-            $recentSupplement = NotificationDispatch::query()
-                ->where('member_id', $memberId)
-                ->sent()
-                ->where('category', NotificationCategory::SUPPLEMENTS)
-                ->where('created_at', '>=', $now->subWeek())
-                ->exists();
+        // Intervalo mínimo de seguridad. Las franjas están separadas por horas,
+        // así que en marcha normal esto no se activa nunca: existe para el caso
+        // anormal —un reintento, dos ejecuciones solapadas, un cron duplicado—
+        // en el que la llave de idempotencia no ayuda porque las franjas que se
+        // pisan son distintas.
+        $ultimo = NotificationDispatch::query()
+            ->where('member_id', $memberId)
+            ->sent()
+            ->whereIn('category', self::WELLNESS)
+            ->max('sent_at');
 
-            if ($recentSupplement) {
-                return NotificationDispatch::REASON_WEEKLY_LIMIT;
+        if ($ultimo !== null) {
+            $minutos = CarbonImmutable::parse($ultimo)->diffInMinutes($now, absolute: true);
+            if ($minutos < self::minIntervalMinutes()) {
+                return NotificationDispatch::REASON_MIN_INTERVAL;
             }
         }
 
         return null;
     }
 
-    /** Categorías sujetas al cupo semanal de bienestar. */
+    /** Minutos que deben pasar como mínimo entre dos avisos de bienestar. */
+    private static function minIntervalMinutes(): int
+    {
+        return (int) config('notifications.wellness.min_interval_minutes', 150);
+    }
+
+    /** Medianoche del gimnasio expresada en el instante de referencia. */
+    private static function localMidnight(CarbonImmutable $now): CarbonImmutable
+    {
+        try {
+            return $now->setTimezone(SendingWindow::timezone())
+                ->startOfDay()
+                ->setTimezone($now->getTimezone());
+        } catch (Throwable) {
+            return $now->startOfDay();
+        }
+    }
+
+    /**
+     * Categorías sujetas a los cupos de bienestar.
+     *
+     * Nutrición entró aquí al convertirse en contenido de acompañamiento. Los
+     * avisos de nutrición del coach IRON IA no se ven afectados: van por
+     * `AppNotificationService` y no escriben en el libro mayor, así que no
+     * consumen cupo ni desplazan a los del motor.
+     */
     private const WELLNESS = [
         NotificationCategory::MOTIVATION,
         NotificationCategory::HYDRATION,
         NotificationCategory::RECOVERY,
+        NotificationCategory::NUTRITION,
         NotificationCategory::SUPPLEMENTS,
     ];
 
-    /** @param list<string> $tokens */
+    /**
+     * @param  list<string>  $tokens
+     * @return array{delivered:int,unregistered:int}
+     */
     private function push(
         array $tokens,
         string $category,
@@ -261,8 +328,9 @@ class NotificationDispatcher
         string $body,
         ?string $actionRoute,
         ?string $templateKey,
-    ): int {
+    ): array {
         $delivered = 0;
+        $caducados = 0;
 
         foreach ($tokens as $token) {
             try {
@@ -287,6 +355,7 @@ class NotificationDispatcher
                 if ($ok) {
                     $delivered++;
                 } elseif ($unregistered) {
+                    $caducados++;
                     MemberDeviceToken::where('token', $token)
                         ->update(['is_active' => false, 'updated_at' => now()]);
                 }
@@ -295,7 +364,7 @@ class NotificationDispatcher
             }
         }
 
-        return $delivered;
+        return ['delivered' => $delivered, 'unregistered' => $caducados];
     }
 
     /**
