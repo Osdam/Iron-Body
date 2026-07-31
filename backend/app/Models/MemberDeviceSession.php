@@ -40,8 +40,8 @@ class MemberDeviceSession extends Model
     {
         return [
             'last_seen_at' => 'datetime',
-            'trusted_at'   => 'datetime',
-            'revoked_at'   => 'datetime',
+            'trusted_at' => 'datetime',
+            'revoked_at' => 'datetime',
         ];
     }
 
@@ -100,15 +100,15 @@ class MemberDeviceSession extends Model
     public function toPublicArray(?string $currentDeviceId = null): array
     {
         return [
-            'uuid'         => $this->uuid,
-            'device_id'    => $this->device_id,
-            'device_name'  => $this->device_name ?: 'Dispositivo',
-            'platform'     => $this->platform,
-            'app_version'  => $this->app_version,
-            'ip_address'   => $this->ip_address,
+            'uuid' => $this->uuid,
+            'device_id' => $this->device_id,
+            'device_name' => $this->device_name ?: 'Dispositivo',
+            'platform' => $this->platform,
+            'app_version' => $this->app_version,
+            'ip_address' => $this->ip_address,
             'last_seen_at' => $this->last_seen_at?->toIso8601String(),
-            'trusted_at'   => $this->trusted_at?->toIso8601String(),
-            'is_current'   => $currentDeviceId !== null && $this->device_id === $currentDeviceId,
+            'trusted_at' => $this->trusted_at?->toIso8601String(),
+            'is_current' => $currentDeviceId !== null && $this->device_id === $currentDeviceId,
         ];
     }
 }

@@ -29,7 +29,7 @@ class WompiWebhookController extends Controller
 
         return response()->json([
             'received' => $result['http'] === 200,
-            'status'   => $result['status'],
+            'status' => $result['status'],
         ], $result['http']);
     }
 }

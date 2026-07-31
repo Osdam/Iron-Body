@@ -13,7 +13,7 @@ class MarketingAttribution extends Model
     ];
 
     protected $casts = [
-        'sale_amount'  => 'decimal:2',
+        'sale_amount' => 'decimal:2',
         'converted_at' => 'datetime',
     ];
 

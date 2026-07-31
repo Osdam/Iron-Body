@@ -34,13 +34,13 @@ class AppStoreController extends Controller
             $query->where('category', $request->input('category'));
         }
         if ($request->filled('search')) {
-            $query->where('name', 'like', '%' . $request->input('search') . '%');
+            $query->where('name', 'like', '%'.$request->input('search').'%');
         }
 
         $items = $query->orderBy('name')->get();
 
         return response()->json([
-            'data'       => $items->map(fn (Product $p) => $p->toStoreArray()),
+            'data' => $items->map(fn (Product $p) => $p->toStoreArray()),
             'categories' => $items->pluck('category')->unique()->values(),
         ]);
     }
@@ -91,12 +91,12 @@ class AppStoreController extends Controller
         }
 
         $data = $request->validate([
-            'items'              => ['required', 'array', 'min:1'],
+            'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
-            'items.*.quantity'   => ['required', 'integer', 'min:1'],
-            'payment_method'     => ['required', Rule::in(['cash', 'online', 'nequi', 'transfer'])],
-            'receipt_url'        => ['nullable', 'string', 'max:1024'],
-            'notes'              => ['nullable', 'string'],
+            'items.*.quantity' => ['required', 'integer', 'min:1'],
+            'payment_method' => ['required', Rule::in(['cash', 'online', 'nequi', 'transfer'])],
+            'receipt_url' => ['nullable', 'string', 'max:1024'],
+            'notes' => ['nullable', 'string'],
         ]);
 
         // Validar stock disponible antes de crear el pedido.
@@ -112,14 +112,14 @@ class AppStoreController extends Controller
 
         $order = DB::transaction(function () use ($data, $member) {
             $order = ProductSale::create([
-                'channel'        => 'app',
-                'status'         => 'pending',
-                'member_id'      => $member->id,
-                'customer_name'  => $member->full_name,
+                'channel' => 'app',
+                'status' => 'pending',
+                'member_id' => $member->id,
+                'customer_name' => $member->full_name,
                 'payment_method' => $data['payment_method'],
                 'payment_status' => 'pending',
-                'receipt_url'    => $data['receipt_url'] ?? null,
-                'notes'          => $data['notes'] ?? null,
+                'receipt_url' => $data['receipt_url'] ?? null,
+                'notes' => $data['notes'] ?? null,
             ]);
 
             $subtotal = 0;
@@ -130,10 +130,10 @@ class AppStoreController extends Controller
 
                 $order->items()->create([
                     'product_id' => $product->id,
-                    'name'       => $product->name,
+                    'name' => $product->name,
                     'unit_price' => $product->sale_price,
-                    'quantity'   => $line['quantity'],
-                    'subtotal'   => $lineTotal,
+                    'quantity' => $line['quantity'],
+                    'subtotal' => $lineTotal,
                 ]);
             }
 

@@ -11,7 +11,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class MemberTrainerAssignment extends Model
 {
-    public const STATUS_ACTIVE   = 'active';
+    public const STATUS_ACTIVE = 'active';
+
     public const STATUS_INACTIVE = 'inactive';
 
     protected $fillable = [
@@ -28,7 +29,7 @@ class MemberTrainerAssignment extends Model
     {
         return [
             'assigned_at' => 'datetime',
-            'ended_at'    => 'datetime',
+            'ended_at' => 'datetime',
         ];
     }
 

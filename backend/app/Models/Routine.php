@@ -32,14 +32,14 @@ class Routine extends Model
     ];
 
     protected $casts = [
-        'exercises'         => 'array',
-        'days'              => 'array',
-        'duration_minutes'  => 'integer',
+        'exercises' => 'array',
+        'days' => 'array',
+        'duration_minutes' => 'integer',
         'estimated_minutes' => 'integer',
-        'days_per_week'     => 'integer',
-        'is_assigned'       => 'boolean',
-        'created_by_admin'  => 'boolean',
-        'is_template'       => 'boolean',
+        'days_per_week' => 'integer',
+        'is_assigned' => 'boolean',
+        'created_by_admin' => 'boolean',
+        'is_template' => 'boolean',
     ];
 
     public function routineExercises(): HasMany
@@ -78,6 +78,7 @@ class Routine extends Model
         if ($this->hasCatalogLink()) {
             return false; // vinculada al catálogo → personalizada
         }
+
         // Sin dueño ni vínculo: un programa multi-día es un plan base.
         return is_array($this->days) && ! empty($this->days);
     }
@@ -94,6 +95,7 @@ class Routine extends Model
         $inDays = collect(is_array($this->days) ? $this->days : [])
             ->contains(function ($d) {
                 $exs = is_array($d['exercises'] ?? null) ? $d['exercises'] : [];
+
                 return collect($exs)->contains(fn ($e) => is_array($e) && ! empty($e['exercise_id']));
             });
         if ($inDays) {

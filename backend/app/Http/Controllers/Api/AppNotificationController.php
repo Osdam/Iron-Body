@@ -13,17 +13,16 @@ use Illuminate\Http\Request;
  */
 class AppNotificationController extends Controller
 {
-    public function __construct(private readonly AppNotificationService $service)
-    {
-    }
+    public function __construct(private readonly AppNotificationService $service) {}
 
     /** GET /api/app/notifications */
     public function index(Request $request): JsonResponse
     {
         $member = $request->attributes->get('auth_member');
-        if (!$member) {
+        if (! $member) {
             return $this->unauth();
         }
+
         return response()->json([
             'success' => true,
             'data' => $this->service->listForMember($member->id),
@@ -35,9 +34,10 @@ class AppNotificationController extends Controller
     public function unreadCount(Request $request): JsonResponse
     {
         $member = $request->attributes->get('auth_member');
-        if (!$member) {
+        if (! $member) {
             return $this->unauth();
         }
+
         return response()->json([
             'success' => true,
             'unread_count' => $this->service->unreadCount($member->id),
@@ -48,13 +48,14 @@ class AppNotificationController extends Controller
     public function markRead(Request $request, int $id): JsonResponse
     {
         $member = $request->attributes->get('auth_member');
-        if (!$member) {
+        if (! $member) {
             return $this->unauth();
         }
         $ok = $this->service->markAsRead($id, $member->id);
-        if (!$ok) {
+        if (! $ok) {
             return response()->json(['success' => false, 'message' => 'No encontrada.'], 404);
         }
+
         return response()->json(['success' => true]);
     }
 
@@ -62,10 +63,11 @@ class AppNotificationController extends Controller
     public function readAll(Request $request): JsonResponse
     {
         $member = $request->attributes->get('auth_member');
-        if (!$member) {
+        if (! $member) {
             return $this->unauth();
         }
         $updated = $this->service->markAllAsRead($member->id);
+
         return response()->json(['success' => true, 'updated' => $updated]);
     }
 

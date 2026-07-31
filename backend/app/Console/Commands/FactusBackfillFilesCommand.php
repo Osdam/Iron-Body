@@ -31,6 +31,7 @@ use Throwable;
 class FactusBackfillFilesCommand extends Command
 {
     protected $signature = 'billing:factus-backfill-files {--dry-run : Solo reporta, no descarga} {--limit=50 : Máximo de facturas a procesar}';
+
     protected $description = 'Recupera PDF/XML faltantes de facturas validadas (read-safe, no emite).';
 
     public function handle(FactusClient $client, InvoicePdfStorageService $storage): int
@@ -58,12 +59,14 @@ class FactusBackfillFilesCommand extends Command
             // Salta números que no son fiscales reales (uuid interno con guiones).
             if (str_contains($number, '-')) {
                 $skipped++;
+
                 continue;
             }
 
             if ($dryRun) {
                 $this->line("  [dry-run] recuperaría archivos de #{$invoice->id} ({$number})");
                 $processed++;
+
                 continue;
             }
 
@@ -71,7 +74,8 @@ class FactusBackfillFilesCommand extends Command
                 $files = $storage->fetchAndStore($invoice, $client, $number);
             } catch (Throwable $e) {
                 Log::warning('billing.backfill_failed', ['invoice' => $invoice->id, 'error' => $e->getMessage()]);
-                $this->warn("  ✖ #{$invoice->id} ({$number}): " . $e->getMessage());
+                $this->warn("  ✖ #{$invoice->id} ({$number}): ".$e->getMessage());
+
                 continue;
             }
 
@@ -89,7 +93,7 @@ class FactusBackfillFilesCommand extends Command
                 // READ-SAFE: solo se escriben rutas de archivo; nada más.
                 $invoice->forceFill($attrs)->save();
                 Log::info('billing.backfill_recovered', array_merge(['invoice' => $invoice->id, 'number' => $number], $attrs));
-                $this->info("  ✔ #{$invoice->id} ({$number}): " . implode(', ', array_keys($attrs)));
+                $this->info("  ✔ #{$invoice->id} ({$number}): ".implode(', ', array_keys($attrs)));
             } else {
                 $this->line("  · #{$invoice->id} ({$number}): sin archivos recuperables todavía");
             }

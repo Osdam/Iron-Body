@@ -43,7 +43,7 @@ class NotifyExpiringMemberships extends Command
                 continue;
             }
             $notifications->notifyMembershipExpiring($member, [
-                'name'                => $user->plan ?: 'tu plan',
+                'name' => $user->plan ?: 'tu plan',
                 'membership_end_date' => $user->membership_end_date,
             ]);
             $count++;

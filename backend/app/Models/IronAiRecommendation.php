@@ -8,8 +8,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class IronAiRecommendation extends Model
 {
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_SENT = 'sent';
+
     public const STATUS_READ = 'read';
+
     public const STATUS_DISMISSED = 'dismissed';
 
     protected $fillable = [
@@ -32,13 +35,13 @@ class IronAiRecommendation extends Model
     public function toPublicArray(): array
     {
         return [
-            'id'           => $this->id,
-            'type'         => $this->type,
-            'title'        => $this->title,
-            'message'      => $this->message,
-            'status'       => $this->status,
+            'id' => $this->id,
+            'type' => $this->type,
+            'title' => $this->title,
+            'message' => $this->message,
+            'status' => $this->status,
             'scheduled_at' => optional($this->scheduled_at)->toIso8601String(),
-            'created_at'   => optional($this->created_at)->toIso8601String(),
+            'created_at' => optional($this->created_at)->toIso8601String(),
         ];
     }
 

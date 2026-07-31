@@ -14,6 +14,7 @@ use Illuminate\Console\Command;
 class FitgifTranscodeCommand extends Command
 {
     protected $signature = 'fitgif:transcode {--force : Re-generar aunque ya exista}';
+
     protected $description = 'Transcodea a MP4 (1.3x, 24fps, H.264) los GIFs FitGif cacheados';
 
     public function handle(ExerciseProviderService $exercises): int
@@ -22,7 +23,7 @@ class FitgifTranscodeCommand extends Command
         $start = microtime(true);
 
         $res = $exercises->fitgifTranscodeAll(
-            fn ($line) => $this->line('  ' . $line),
+            fn ($line) => $this->line('  '.$line),
             (bool) $this->option('force'),
         );
 

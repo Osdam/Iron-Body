@@ -28,6 +28,7 @@ class LiveController extends Controller
                 'ended_at' => now(),
             ]);
         }
+
         return response()->json(['ok' => true, 'data' => $live->toAppArray()]);
     }
 }

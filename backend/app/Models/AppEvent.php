@@ -37,6 +37,7 @@ class AppEvent extends Model
     public function scopeVisible(Builder $q): Builder
     {
         $now = Carbon::now();
+
         return $q->where('is_active', true)
             ->where(fn ($w) => $w->whereNull('ends_at')->orWhere('ends_at', '>=', $now));
     }

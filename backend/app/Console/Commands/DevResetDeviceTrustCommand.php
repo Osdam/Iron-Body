@@ -8,6 +8,7 @@ use App\Models\MemberDeviceSession;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -51,6 +52,7 @@ class DevResetDeviceTrustCommand extends Command
         // ── Guardas de entorno y base de datos ──────────────────────────────
         if (! app()->environment(['local', 'development', 'testing'])) {
             $this->error('Abortado: este comando solo corre en local/development/testing. APP_ENV='.app()->environment());
+
             return self::FAILURE;
         }
         $db = (string) config('database.connections.'.config('database.default').'.database');
@@ -58,18 +60,20 @@ class DevResetDeviceTrustCommand extends Command
         // que el nombre parezca de desarrollo para no tocar una base real.
         if (! app()->environment('testing') && ! preg_match('/dev|local|test/i', $db)) {
             $this->error("Abortado: DB_DATABASE='{$db}' no parece una base de desarrollo. Cancelo por seguridad.");
+
             return self::FAILURE;
         }
-        $this->info("Entorno seguro: APP_ENV=".app()->environment().", DB={$db}.");
+        $this->info('Entorno seguro: APP_ENV='.app()->environment().", DB={$db}.");
 
         $dryRun = $this->option('dry-run') || ! $this->option('force');
 
         // ── Resolver objetivos ──────────────────────────────────────────────
-        $members  = $this->resolveMembers();
+        $members = $this->resolveMembers();
         $deviceIds = $this->resolveDeviceIds();
 
         if ($members->isEmpty() && $deviceIds->isEmpty()) {
             $this->error('No se indicó ningún objetivo. Usa --email/--document/--phone/--member-id/--user-id o --device-name/--device-id/--device-uuid.');
+
             return self::FAILURE;
         }
 
@@ -96,6 +100,7 @@ class DevResetDeviceTrustCommand extends Command
                 $this->line("  - member#{$m->id} {$m->full_name} (doc {$m->document_number}) [{$m->status}]");
             }
             $this->error('Usa --include-active para incluirlos (no se borran; solo se resetea su device trust).');
+
             return self::FAILURE;
         }
 
@@ -106,10 +111,11 @@ class DevResetDeviceTrustCommand extends Command
 
         $doSessions = $this->option('revoke-sessions');
         $doBindings = $this->option('clear-bindings');
-        $doOtp      = $this->option('clear-otp');
-        $doRisk     = $this->option('clear-risk');
+        $doOtp = $this->option('clear-otp');
+        $doRisk = $this->option('clear-risk');
         if (! $doSessions && ! $doBindings && ! $doOtp && ! $doRisk) {
             $this->warn('No se eligió ninguna acción (--revoke-sessions/--clear-bindings/--clear-otp/--clear-risk). Nada que hacer.');
+
             return self::SUCCESS;
         }
 
@@ -124,6 +130,7 @@ class DevResetDeviceTrustCommand extends Command
             $this->line('');
             $this->comment('DRY-RUN: vuelve a ejecutar con --force para aplicar.');
             $this->localHintsNote();
+
             return self::SUCCESS;
         }
 
@@ -170,7 +177,7 @@ class DevResetDeviceTrustCommand extends Command
         $this->line('');
         $this->info('✔ Device trust reseteado. Membresía, plan, pagos, contratos y biometría NO se tocaron.');
         $this->localHintsNote();
-        \Illuminate\Support\Facades\Log::info('dev:reset-device-trust', [
+        Log::info('dev:reset-device-trust', [
             'member_scope_ids' => $memberScopeIds->all(),
             'binding_member_ids' => $bindingMemberIds->all(),
             'device_ids_count' => $deviceIds->count(),
@@ -182,11 +189,11 @@ class DevResetDeviceTrustCommand extends Command
 
     private function resolveMembers(): Collection
     {
-        $emails    = $this->arr('email');
+        $emails = $this->arr('email');
         $documents = $this->arr('document');
-        $phones    = $this->arr('phone');
+        $phones = $this->arr('phone');
         $memberIds = $this->arr('member-id');
-        $userIds   = $this->arr('user-id');
+        $userIds = $this->arr('user-id');
 
         if (! $emails && ! $documents && ! $phones && ! $memberIds && ! $userIds) {
             return collect();
@@ -194,11 +201,21 @@ class DevResetDeviceTrustCommand extends Command
 
         return Member::query()->with('user')
             ->where(function ($q) use ($emails, $documents, $phones, $memberIds, $userIds): void {
-                if ($emails)    { $q->orWhereIn('email', $emails)->orWhereHas('user', fn ($u) => $u->whereIn('email', $emails)); }
-                if ($documents) { $q->orWhereIn('document_number', $documents); }
-                if ($phones)    { $q->orWhereIn('phone', $phones); }
-                if ($memberIds) { $q->orWhereIn('id', $memberIds); }
-                if ($userIds)   { $q->orWhereIn('user_id', $userIds); }
+                if ($emails) {
+                    $q->orWhereIn('email', $emails)->orWhereHas('user', fn ($u) => $u->whereIn('email', $emails));
+                }
+                if ($documents) {
+                    $q->orWhereIn('document_number', $documents);
+                }
+                if ($phones) {
+                    $q->orWhereIn('phone', $phones);
+                }
+                if ($memberIds) {
+                    $q->orWhereIn('id', $memberIds);
+                }
+                if ($userIds) {
+                    $q->orWhereIn('user_id', $userIds);
+                }
             })
             ->get();
     }
@@ -207,7 +224,7 @@ class DevResetDeviceTrustCommand extends Command
     private function resolveDeviceIds(): Collection
     {
         $names = $this->arr('device-name');
-        $ids   = $this->arr('device-id');
+        $ids = $this->arr('device-id');
         $uuids = $this->arr('device-uuid');
 
         $result = collect($ids);
@@ -228,17 +245,14 @@ class DevResetDeviceTrustCommand extends Command
     {
         $plan = [];
         if ($s) {
-            $plan['Sesiones a revocar'] = MemberDeviceSession::where(fn ($q) =>
-                $q->whereIn('member_id', $bindingMemberIds)->orWhereIn('device_id', $deviceIds)
+            $plan['Sesiones a revocar'] = MemberDeviceSession::where(fn ($q) => $q->whereIn('member_id', $bindingMemberIds)->orWhereIn('device_id', $deviceIds)
             )->whereNull('revoked_at')->count();
             $plan['Push tokens a eliminar'] = Schema::hasTable('member_device_tokens')
-                ? DB::table('member_device_tokens')->where(fn ($q) =>
-                    $q->whereIn('member_id', $bindingMemberIds)->orWhereIn('device_id', $deviceIds))->count()
+                ? DB::table('member_device_tokens')->where(fn ($q) => $q->whereIn('member_id', $bindingMemberIds)->orWhereIn('device_id', $deviceIds))->count()
                 : 0;
         }
         if ($b) {
-            $plan['Vínculos de dispositivo a eliminar'] = MemberDeviceBinding::where(fn ($q) =>
-                $q->whereIn('member_id', $bindingMemberIds)->orWhereIn('device_id', $deviceIds)
+            $plan['Vínculos de dispositivo a eliminar'] = MemberDeviceBinding::where(fn ($q) => $q->whereIn('member_id', $bindingMemberIds)->orWhereIn('device_id', $deviceIds)
             )->count();
         }
         if ($o) {
@@ -287,6 +301,7 @@ class DevResetDeviceTrustCommand extends Command
     private function mask(?string $v): string
     {
         $v = (string) $v;
+
         return strlen($v) <= 8 ? str_repeat('•', strlen($v)) : substr($v, 0, 6).'…'.substr($v, -2);
     }
 }

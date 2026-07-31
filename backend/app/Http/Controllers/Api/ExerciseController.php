@@ -24,7 +24,7 @@ class ExerciseController extends Controller
     // GET /api/exercises
     public function index(Request $request)
     {
-        $limit  = (int) $request->input('limit', 30);
+        $limit = (int) $request->input('limit', 30);
         $offset = (int) $request->input('offset', 0);
 
         return response()->json(['data' => $this->exercises->all($limit, $offset)]);
@@ -67,6 +67,7 @@ class ExerciseController extends Controller
         if ($q === '') {
             return response()->json(['error' => 'q requerido'], 422);
         }
+
         return response()->json($this->exercises->fitgifDiagnose($q));
     }
 
@@ -83,7 +84,7 @@ class ExerciseController extends Controller
         }
 
         return response($resp->body(), 200, [
-            'Content-Type'  => $resp->header('Content-Type') ?: 'image/gif',
+            'Content-Type' => $resp->header('Content-Type') ?: 'image/gif',
             'Cache-Control' => 'public, max-age=604800',
         ]);
     }
@@ -105,10 +106,10 @@ class ExerciseController extends Controller
         // y cualquier proxy pueden guardarlo 1 semana sin revalidar → carga
         // instantánea en aperturas posteriores del flip.
         return response($bytes, 200, [
-            'Content-Type'   => 'image/gif',
+            'Content-Type' => 'image/gif',
             'Content-Length' => (string) strlen($bytes),
-            'Cache-Control'  => 'public, max-age=604800, immutable',
-            'ETag'           => '"' . md5($bytes) . '"',
+            'Cache-Control' => 'public, max-age=604800, immutable',
+            'ETag' => '"'.md5($bytes).'"',
         ]);
     }
 
@@ -120,7 +121,7 @@ class ExerciseController extends Controller
      */
     public function fitgifVideo(string $file)
     {
-        $id  = preg_replace('/\.mp4$/i', '', $file);
+        $id = preg_replace('/\.mp4$/i', '', $file);
         $abs = $this->exercises->fitgifVideoPath($id);
         if ($abs === null) {
             abort(404);
@@ -129,7 +130,7 @@ class ExerciseController extends Controller
         // response()->file() = BinaryFileResponse: Range + ETag + Last-Modified
         // automáticos (clave para que video_player haga loop suave).
         return response()->file($abs, [
-            'Content-Type'  => 'video/mp4',
+            'Content-Type' => 'video/mp4',
             'Cache-Control' => 'public, max-age=604800, immutable',
             'Accept-Ranges' => 'bytes',
         ]);

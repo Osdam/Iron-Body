@@ -14,8 +14,11 @@ use Illuminate\Support\Str;
 class Admin extends Authenticatable
 {
     public const ROLE_SUPER_ADMIN = 'Super Admin';
+
     public const ROLE_ADMINISTRADOR = 'Administrador';
+
     public const ROLE_ADMINISTRATIVO = 'Administrativo';
+
     public const ROLE_RECEPCION = 'Recepción';
 
     public const ROLES = [

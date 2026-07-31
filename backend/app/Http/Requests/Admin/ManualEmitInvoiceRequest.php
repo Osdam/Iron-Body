@@ -22,8 +22,8 @@ class ManualEmitInvoiceRequest extends FormRequest
     {
         return [
             'source_type' => ['required', 'string', Rule::in(array_keys(InvoicingService::SOURCE_MAP))],
-            'source_id'   => ['required', 'integer', 'min:1'],
-            'force'       => ['sometimes', 'boolean'],
+            'source_id' => ['required', 'integer', 'min:1'],
+            'force' => ['sometimes', 'boolean'],
         ];
     }
 }

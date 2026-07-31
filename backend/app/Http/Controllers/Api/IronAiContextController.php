@@ -20,14 +20,12 @@ use Illuminate\Support\Facades\RateLimiter;
  */
 class IronAiContextController extends Controller
 {
-    public function __construct(private readonly IronAiUserContextService $context)
-    {
-    }
+    public function __construct(private readonly IronAiUserContextService $context) {}
 
     public function summary(Request $request): JsonResponse
     {
         $member = $request->attributes->get('auth_member');
-        if (!$member) {
+        if (! $member) {
             return response()->json(['success' => false, 'message' => 'No autenticado.'], 401);
         }
 
@@ -48,7 +46,7 @@ class IronAiContextController extends Controller
     public function coach(Request $request, IronAiCoachService $coach): JsonResponse
     {
         $member = $request->attributes->get('auth_member');
-        if (!$member) {
+        if (! $member) {
             return response()->json(['success' => false, 'message' => 'No autenticado.'], 401);
         }
 
@@ -58,7 +56,7 @@ class IronAiContextController extends Controller
         $focus = $request->input('focus', 'today');
 
         // Rate limit: 15 análisis por miembro por hora.
-        $key = 'iron-ai-coach:' . $member->id;
+        $key = 'iron-ai-coach:'.$member->id;
         if (RateLimiter::tooManyAttempts($key, 15)) {
             return response()->json([
                 'success' => false,
@@ -67,7 +65,7 @@ class IronAiContextController extends Controller
         }
         RateLimiter::hit($key, 3600);
 
-        if (!$coach->isEnabled()) {
+        if (! $coach->isEnabled()) {
             return response()->json([
                 'success' => false,
                 'message' => 'El coach IRON IA no está disponible por ahora.',

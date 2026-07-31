@@ -36,7 +36,7 @@ class ReportsOverviewController extends Controller
     {
         $data = $request->validate([
             'from' => 'nullable|date',
-            'to'   => 'nullable|date',
+            'to' => 'nullable|date',
         ]);
 
         $to = isset($data['to']) ? CarbonImmutable::parse($data['to'])->endOfDay() : CarbonImmutable::now()->endOfDay();
@@ -50,11 +50,11 @@ class ReportsOverviewController extends Controller
                 $this->paymentKpis($from, $to),
                 $this->memberKpis($from, $to),
             ),
-            'revenue_series'     => $this->revenueSeries(),
-            'plan_sales'         => $this->planSales(),
-            'members_by_status'  => $this->membersByStatus(),
+            'revenue_series' => $this->revenueSeries(),
+            'plan_sales' => $this->planSales(),
+            'members_by_status' => $this->membersByStatus(),
             'payments_by_status' => $this->paymentsByStatus(),
-            'activity'           => $this->activity(),
+            'activity' => $this->activity(),
         ]);
     }
 
@@ -78,16 +78,16 @@ class ReportsOverviewController extends Controller
         $date = $this->paymentDateExpr();
 
         $row = Payment::query()->selectRaw(
-            'COALESCE(SUM(CASE WHEN LOWER(status) IN (' . $this->placeholders($paid) . ') THEN amount ELSE 0 END), 0) as total_revenue,'
-            . ' COALESCE(SUM(CASE WHEN LOWER(status) IN (' . $this->placeholders($paid) . ')'
-            . ' AND ' . $date . ' BETWEEN ? AND ? THEN amount ELSE 0 END), 0) as period_revenue,'
-            . ' COUNT(CASE WHEN LOWER(status) IN (' . $this->placeholders($pending) . ') THEN 1 END) as pending_payments',
+            'COALESCE(SUM(CASE WHEN LOWER(status) IN ('.$this->placeholders($paid).') THEN amount ELSE 0 END), 0) as total_revenue,'
+            .' COALESCE(SUM(CASE WHEN LOWER(status) IN ('.$this->placeholders($paid).')'
+            .' AND '.$date.' BETWEEN ? AND ? THEN amount ELSE 0 END), 0) as period_revenue,'
+            .' COUNT(CASE WHEN LOWER(status) IN ('.$this->placeholders($pending).') THEN 1 END) as pending_payments',
             array_merge($paid, $paid, [$from, $to], $pending)
         )->first();
 
         return [
-            'total_revenue'    => round((float) ($row->total_revenue ?? 0), 2),
-            'period_revenue'   => round((float) ($row->period_revenue ?? 0), 2),
+            'total_revenue' => round((float) ($row->total_revenue ?? 0), 2),
+            'period_revenue' => round((float) ($row->period_revenue ?? 0), 2),
             'pending_payments' => (int) ($row->pending_payments ?? 0),
         ];
     }
@@ -104,8 +104,8 @@ class ReportsOverviewController extends Controller
     /** Condición SQL "membresía vencida" (estado vencido o fecha ya pasada). */
     private function expiredExpr(): string
     {
-        return '(' . $this->memberStatusExpr() . " IN ('expired', 'vencido', 'vencida')"
-            . ' OR (membership_end_date IS NOT NULL AND membership_end_date < ?))';
+        return '('.$this->memberStatusExpr()." IN ('expired', 'vencido', 'vencida')"
+            .' OR (membership_end_date IS NOT NULL AND membership_end_date < ?))';
     }
 
     private function memberKpis(CarbonImmutable $from, CarbonImmutable $to): array
@@ -127,17 +127,17 @@ class ReportsOverviewController extends Controller
 
         $row = User::query()->selectRaw(
             "COUNT(CASE WHEN {$status} IN ('active', 'activo', 'activa') AND NOT {$expired} THEN 1 END) as active,"
-            . " COUNT(CASE WHEN {$status} IN ('inactive', 'inactivo', 'inactiva') THEN 1 END) as inactive,"
-            . " COUNT(CASE WHEN {$expired} THEN 1 END) as expired,"
-            . " COUNT(CASE WHEN {$status} IN ('pending', 'pendiente') THEN 1 END) as pending",
+            ." COUNT(CASE WHEN {$status} IN ('inactive', 'inactivo', 'inactiva') THEN 1 END) as inactive,"
+            ." COUNT(CASE WHEN {$expired} THEN 1 END) as expired,"
+            ." COUNT(CASE WHEN {$status} IN ('pending', 'pendiente') THEN 1 END) as pending",
             [$now, $now]
         )->first();
 
         return [
-            'active'   => (int) ($row->active ?? 0),
+            'active' => (int) ($row->active ?? 0),
             'inactive' => (int) ($row->inactive ?? 0),
-            'expired'  => (int) ($row->expired ?? 0),
-            'pending'  => (int) ($row->pending ?? 0),
+            'expired' => (int) ($row->expired ?? 0),
+            'pending' => (int) ($row->pending ?? 0),
         ];
     }
 
@@ -149,15 +149,15 @@ class ReportsOverviewController extends Controller
         $failed = PaymentController::FAILED_STATUSES;
 
         $row = Payment::query()->selectRaw(
-            'COUNT(CASE WHEN LOWER(status) IN (' . $this->placeholders($paid) . ') THEN 1 END) as paid,'
-            . ' COUNT(CASE WHEN LOWER(status) IN (' . $this->placeholders($pending) . ') THEN 1 END) as pending,'
-            . ' COUNT(CASE WHEN LOWER(status) IN (' . $this->placeholders($failed) . ') THEN 1 END) as cancelled',
+            'COUNT(CASE WHEN LOWER(status) IN ('.$this->placeholders($paid).') THEN 1 END) as paid,'
+            .' COUNT(CASE WHEN LOWER(status) IN ('.$this->placeholders($pending).') THEN 1 END) as pending,'
+            .' COUNT(CASE WHEN LOWER(status) IN ('.$this->placeholders($failed).') THEN 1 END) as cancelled',
             array_merge($paid, $pending, $failed)
         )->first();
 
         return [
-            'paid'      => (int) ($row->paid ?? 0),
-            'pending'   => (int) ($row->pending ?? 0),
+            'paid' => (int) ($row->paid ?? 0),
+            'pending' => (int) ($row->pending ?? 0),
             'cancelled' => (int) ($row->cancelled ?? 0),
         ];
     }
@@ -172,7 +172,7 @@ class ReportsOverviewController extends Controller
 
         $rows = Payment::query()
             ->selectRaw("DATE({$date}) as day, COALESCE(SUM(amount), 0) as revenue")
-            ->whereRaw('LOWER(status) IN (' . $this->placeholders($paid) . ')', $paid)
+            ->whereRaw('LOWER(status) IN ('.$this->placeholders($paid).')', $paid)
             ->whereRaw("{$date} BETWEEN ? AND ?", [$start, $end])
             ->groupByRaw("DATE({$date})")
             ->pluck('revenue', 'day');
@@ -196,7 +196,7 @@ class ReportsOverviewController extends Controller
 
         $sales = Payment::query()
             ->leftJoin('plans', 'plans.id', '=', 'payments.plan_id')
-            ->whereRaw('LOWER(payments.status) IN (' . $this->placeholders($paid) . ')', $paid)
+            ->whereRaw('LOWER(payments.status) IN ('.$this->placeholders($paid).')', $paid)
             ->selectRaw("COALESCE(plans.name, 'Sin plan') as plan, COUNT(*) as sales")
             ->groupByRaw("COALESCE(plans.name, 'Sin plan')")
             ->pluck('sales', 'plan');
@@ -241,20 +241,20 @@ class ReportsOverviewController extends Controller
 
         $payments = Payment::query()
             ->with(['user:id,name', 'plan:id,name'])
-            ->orderByRaw($this->paymentDateExpr() . ' DESC')
+            ->orderByRaw($this->paymentDateExpr().' DESC')
             ->limit(self::ACTIVITY_LIMIT)
             ->get(['id', 'user_id', 'plan_id', 'amount', 'status', 'paid_at', 'created_at']);
 
         foreach ($payments as $payment) {
-            $planName = $payment->plan?->name ? 'Plan ' . $payment->plan->name : 'Pago';
-            $userName = $payment->user?->name ? ' - ' . $payment->user->name : '';
+            $planName = $payment->plan?->name ? 'Plan '.$payment->plan->name : 'Pago';
+            $userName = $payment->user?->name ? ' - '.$payment->user->name : '';
 
             $rows[] = [
-                'date'        => optional($payment->paid_at ?? $payment->created_at)->toDateString(),
-                'type'        => 'Pago',
-                'description' => $planName . $userName,
-                'value'       => (float) $payment->amount,
-                'status'      => $this->paymentStatusLabel($payment->status),
+                'date' => optional($payment->paid_at ?? $payment->created_at)->toDateString(),
+                'type' => 'Pago',
+                'description' => $planName.$userName,
+                'value' => (float) $payment->amount,
+                'status' => $this->paymentStatusLabel($payment->status),
             ];
         }
 
@@ -270,7 +270,7 @@ class ReportsOverviewController extends Controller
             $expired = in_array($statusKey, ['expired', 'vencido', 'vencida'], true)
                 || ($endDate !== null && $endDate->lessThan($now));
             $pending = in_array($statusKey, ['pending', 'pendiente'], true);
-            $planSuffix = $user->plan ? ' - ' . $user->plan : '';
+            $planSuffix = $user->plan ? ' - '.$user->plan : '';
 
             $rows[] = [
                 'date' => ($endDate?->toDateString()) ?? optional($user->created_at)->toDateString(),
@@ -278,13 +278,13 @@ class ReportsOverviewController extends Controller
                 'description' => match (true) {
                     $expired => "Membresía vencida: {$user->name}{$planSuffix}",
                     $pending => "Miembro pendiente: {$user->name}{$planSuffix}",
-                    default  => "Miembro activo: {$user->name}{$planSuffix}",
+                    default => "Miembro activo: {$user->name}{$planSuffix}",
                 },
-                'value'  => 0,
+                'value' => 0,
                 'status' => match (true) {
                     $expired => 'Vencida',
                     $pending => 'Pendiente',
-                    default  => 'Activo',
+                    default => 'Activo',
                 },
             ];
         }

@@ -24,9 +24,7 @@ use Throwable;
  */
 class WebhookMetaController extends Controller
 {
-    public function __construct(private readonly MetaWebhookService $webhook)
-    {
-    }
+    public function __construct(private readonly MetaWebhookService $webhook) {}
 
     /** Verificación del webhook (GET). Devuelve el challenge en texto plano. */
     public function verify(Request $request): Response
@@ -53,10 +51,11 @@ class WebhookMetaController extends Controller
         if (! $this->webhook->validateSignature($raw, $signature)) {
             // Instrumentación: firma inválida (NUNCA logueamos la firma ni el secret).
             Log::warning('meta.webhook.skipped', [
-                'reason'        => 'invalid_signature',
+                'reason' => 'invalid_signature',
                 'has_signature' => $signature !== null && $signature !== '',
-                'body_bytes'    => strlen($raw),
+                'body_bytes' => strlen($raw),
             ]);
+
             return response()->json(['ok' => false], 403);
         }
 
@@ -70,7 +69,7 @@ class WebhookMetaController extends Controller
             ProcessMetaWebhookEvent::dispatch($payload);
             Log::info('meta.webhook.queued', [
                 'queue_connection' => (string) config('queue.default'),
-                'inbound_enabled'  => (bool) config('marketing.inbound.meta_enabled', true),
+                'inbound_enabled' => (bool) config('marketing.inbound.meta_enabled', true),
             ]);
         } else {
             Log::info('meta.webhook.skipped', ['reason' => 'empty_payload']);
@@ -89,39 +88,39 @@ class WebhookMetaController extends Controller
     private function logIncoming(array $payload): void
     {
         try {
-            $change   = data_get($payload, 'entry.0.changes.0', []);
-            $value    = (array) data_get($change, 'value', []);
+            $change = data_get($payload, 'entry.0.changes.0', []);
+            $value = (array) data_get($change, 'value', []);
             $messages = (array) data_get($value, 'messages', []);
             $statuses = (array) data_get($value, 'statuses', []);
 
             Log::info('meta.webhook.received', [
-                'object'                   => $payload['object'] ?? null,
-                'entries'                  => is_array($payload['entry'] ?? null) ? count($payload['entry']) : 0,
-                'field'                    => $change['field'] ?? null,
-                'phone_number_id'          => data_get($value, 'metadata.phone_number_id'),
+                'object' => $payload['object'] ?? null,
+                'entries' => is_array($payload['entry'] ?? null) ? count($payload['entry']) : 0,
+                'field' => $change['field'] ?? null,
+                'phone_number_id' => data_get($value, 'metadata.phone_number_id'),
                 'expected_phone_number_id' => (string) config('meta.whatsapp_phone_number_id'),
-                'messages_count'           => count($messages),
-                'statuses_count'           => count($statuses),
+                'messages_count' => count($messages),
+                'statuses_count' => count($statuses),
             ]);
 
             if ($messages !== []) {
                 $m = (array) $messages[0];
                 Log::info('meta.webhook.message_detected', [
                     'message_id' => $m['id'] ?? null,
-                    'type'       => $m['type'] ?? null,
-                    'from'       => $m['from'] ?? null,
-                    'wa_id'      => data_get($value, 'contacts.0.wa_id'),
-                    'has_text'   => isset($m['text']['body']),
+                    'type' => $m['type'] ?? null,
+                    'from' => $m['from'] ?? null,
+                    'wa_id' => data_get($value, 'contacts.0.wa_id'),
+                    'has_text' => isset($m['text']['body']),
                     // Cuerpo del texto ACOTADO, solo para diagnóstico temporal.
-                    'text'       => isset($m['text']['body']) ? mb_substr((string) $m['text']['body'], 0, 120) : null,
+                    'text' => isset($m['text']['body']) ? mb_substr((string) $m['text']['body'], 0, 120) : null,
                 ]);
             }
 
             if ($statuses !== []) {
                 $s = (array) $statuses[0];
                 Log::info('meta.webhook.status_detected', [
-                    'message_id'   => $s['id'] ?? null,
-                    'status'       => $s['status'] ?? null,
+                    'message_id' => $s['id'] ?? null,
+                    'status' => $s['status'] ?? null,
                     'recipient_id' => $s['recipient_id'] ?? null,
                 ]);
             }
@@ -129,7 +128,7 @@ class WebhookMetaController extends Controller
             if ($messages === [] && $statuses === []) {
                 Log::info('meta.webhook.skipped', [
                     'reason' => 'no_messages_no_statuses',
-                    'field'  => $change['field'] ?? null,
+                    'field' => $change['field'] ?? null,
                 ]);
             }
         } catch (Throwable $e) {

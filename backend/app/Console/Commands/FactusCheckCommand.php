@@ -23,6 +23,7 @@ use Throwable;
 class FactusCheckCommand extends Command
 {
     protected $signature = 'billing:factus-check';
+
     protected $description = 'Valida credenciales Factus sandbox y lista rangos de numeración (read-only).';
 
     public function handle(): int
@@ -37,11 +38,13 @@ class FactusCheckCommand extends Command
             $token = FactusTokenManager::fromConfig()->accessToken();
             if ($token === '') {
                 $this->error('  ✖ No se obtuvo access_token.');
+
                 return self::FAILURE;
             }
             $this->info('  ✔ Credenciales OK (token recibido, no se muestra).');
         } catch (Throwable $e) {
-            $this->error('  ✖ Fallo de autenticación: ' . $e->getMessage());
+            $this->error('  ✖ Fallo de autenticación: '.$e->getMessage());
+
             return self::FAILURE;
         }
 
@@ -50,7 +53,8 @@ class FactusCheckCommand extends Command
         $this->line('Consultando rangos de numeración (GET /v2/numbering-ranges)…');
         $res = FactusClient::make()->getNumberingRanges();
         if (! $res['ok']) {
-            $this->error('  ✖ No se pudieron listar rangos (HTTP ' . $res['status'] . ', ' . $res['error_class'] . ').');
+            $this->error('  ✖ No se pudieron listar rangos (HTTP '.$res['status'].', '.$res['error_class'].').');
+
             return self::FAILURE;
         }
 
@@ -59,6 +63,7 @@ class FactusCheckCommand extends Command
         $ranges = is_array($ranges) ? $ranges : [];
         if ($ranges === []) {
             $this->warn('  No hay rangos configurados en la cuenta sandbox.');
+
             return self::SUCCESS;
         }
 
@@ -88,10 +93,12 @@ class FactusCheckCommand extends Command
     {
         if ($this->laravel->environment('production')) {
             $this->error('Bloqueado: no se ejecuta en producción.');
+
             return false;
         }
         if (config('billing.env') !== 'sandbox' || ! str_contains((string) config('billing.base_url'), 'sandbox')) {
             $this->error('Bloqueado: requiere FACTUS_ENV=sandbox y base_url de sandbox.');
+
             return false;
         }
 

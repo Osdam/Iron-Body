@@ -13,6 +13,7 @@ use App\Models\MemberAppActivityDay;
 class DetectStreakNotStarted extends BaseProactiveDetectorCommand
 {
     protected $signature = 'ironbody:detect-streak-not-started {--dry-run} {--member-id=} {--limit=} {--event=}';
+
     protected $description = 'Detecta miembros sin racha iniciada y emite streak.not_started.';
 
     protected function detect(): void

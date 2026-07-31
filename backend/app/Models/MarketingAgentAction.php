@@ -15,15 +15,25 @@ class MarketingAgentAction extends Model
 {
     // Tipos de acción permitidos (whitelist estricta; nada dinámico).
     public const TYPE_CREATE_NOTE = 'create_note';
+
     public const TYPE_ADD_TAG = 'add_tag';
+
     public const TYPE_SUGGEST_APPOINTMENT = 'suggest_appointment';
+
     public const TYPE_CREATE_APPOINTMENT = 'create_appointment';
+
     public const TYPE_CREATE_FOLLOW_UP = 'create_follow_up';
+
     public const TYPE_ASSIGN_CONVERSATION = 'assign_conversation';
+
     public const TYPE_REQUEST_STAFF_REVIEW = 'request_staff_review';
+
     public const TYPE_PAUSE_AI = 'pause_ai';
+
     public const TYPE_RELEASE_AI = 'release_ai';
+
     public const TYPE_DRAFT_REPLY = 'draft_reply';
+
     public const TYPE_UPDATE_LEAD_PROFILE = 'update_lead_profile';
 
     public const TYPES = [
@@ -34,10 +44,15 @@ class MarketingAgentAction extends Model
     ];
 
     public const STATUS_SUGGESTED = 'suggested';
+
     public const STATUS_APPROVED = 'approved';
+
     public const STATUS_EXECUTED = 'executed';
+
     public const STATUS_REJECTED = 'rejected';
+
     public const STATUS_FAILED = 'failed';
+
     public const STATUS_CANCELLED = 'cancelled';
 
     public const STATUSES = [
@@ -59,13 +74,13 @@ class MarketingAgentAction extends Model
     ];
 
     protected $casts = [
-        'payload'           => 'array',
-        'result'            => 'array',
-        'confidence'        => 'float',
+        'payload' => 'array',
+        'result' => 'array',
+        'confidence' => 'float',
         'requires_approval' => 'boolean',
-        'approved_at'       => 'datetime',
-        'executed_at'       => 'datetime',
-        'rejected_at'       => 'datetime',
+        'approved_at' => 'datetime',
+        'executed_at' => 'datetime',
+        'rejected_at' => 'datetime',
     ];
 
     protected static function booted(): void

@@ -2,10 +2,12 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Member;
 use App\Models\NutritionEntry;
 use App\Models\NutritionFood;
 use App\Services\Nutrition\NutritionEntryService;
 use App\Services\Nutrition\NutritionMacroCalculator;
+use Carbon\Carbon;
 use Illuminate\Console\Command;
 
 /**
@@ -57,6 +59,7 @@ class NutritionRecalculateSummaries extends Command
                 $food = $entry->food;
                 if (! $food || ! $food->isMacroComplete()) {
                     $skipped++;
+
                     continue; // sin alimento o aún incompleto → no se inventa
                 }
                 $macros = $calculator->calculateForQuantity($food, (float) $entry->quantity, $entry->unit);
@@ -68,7 +71,7 @@ class NutritionRecalculateSummaries extends Command
                     'sodium' => $macros['sodium'], 'saturated_fat' => $macros['saturated_fat'],
                 ])->save();
                 $updated++;
-                $date = $entry->entry_date instanceof \Carbon\Carbon
+                $date = $entry->entry_date instanceof Carbon
                     ? $entry->entry_date->toDateString() : (string) $entry->entry_date;
                 $touched["{$entry->member_id}|{$date}"] = [$entry->member_id, $date];
             }
@@ -76,13 +79,14 @@ class NutritionRecalculateSummaries extends Command
 
         // Reconstruir resúmenes de los días afectados.
         foreach ($touched as [$memberId, $date]) {
-            $member = \App\Models\Member::find($memberId);
+            $member = Member::find($memberId);
             if ($member) {
                 $entries->recalculateDailySummary($member, $date);
             }
         }
 
-        $this->info("Entradas recalculadas: {$updated} · omitidas (sin macros): {$skipped} · resúmenes reconstruidos: " . count($touched));
+        $this->info("Entradas recalculadas: {$updated} · omitidas (sin macros): {$skipped} · resúmenes reconstruidos: ".count($touched));
+
         return self::SUCCESS;
     }
 }

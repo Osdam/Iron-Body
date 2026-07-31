@@ -20,14 +20,13 @@ use Illuminate\Http\Request;
  */
 class NutritionGoalController extends Controller
 {
-    public function __construct(private readonly NutritionGoalService $service)
-    {
-    }
+    public function __construct(private readonly NutritionGoalService $service) {}
 
     /** GET /api/nutrition/goal — meta actual o estado setup_required. */
     public function show(Request $request): JsonResponse
     {
         $member = $this->member($request);
+
         return response()->json(array_merge(['ok' => true], $this->service->state($member)));
     }
 
@@ -36,6 +35,7 @@ class NutritionGoalController extends Controller
     {
         $member = $this->member($request);
         $result = $this->service->preview($member, $request->overrides());
+
         return response()->json(array_merge(['ok' => true], $result));
     }
 
@@ -50,6 +50,7 @@ class NutritionGoalController extends Controller
         }
 
         RealtimeEvents::nutrition($member->id);
+
         return response()->json(array_merge(['ok' => true], $result), 201);
     }
 
@@ -69,6 +70,7 @@ class NutritionGoalController extends Controller
         }
 
         RealtimeEvents::nutrition($member->id);
+
         return response()->json(array_merge(['ok' => true], $result));
     }
 
@@ -76,6 +78,7 @@ class NutritionGoalController extends Controller
     {
         /** @var Member $member */
         $member = $request->attributes->get('auth_member');
+
         return $member;
     }
 }

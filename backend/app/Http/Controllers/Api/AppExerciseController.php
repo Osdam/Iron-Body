@@ -20,11 +20,11 @@ class AppExerciseController extends Controller
             $query->where('difficulty', $request->input('difficulty'));
         }
         if ($request->filled('search')) {
-            $term = '%' . $request->input('search') . '%';
+            $term = '%'.$request->input('search').'%';
             $query->where(function ($q) use ($term) {
                 $q->where('name', 'like', $term)
-                  ->orWhere('muscle_group', 'like', $term)
-                  ->orWhere('description', 'like', $term);
+                    ->orWhere('muscle_group', 'like', $term)
+                    ->orWhere('description', 'like', $term);
             });
         }
 
@@ -32,22 +32,22 @@ class AppExerciseController extends Controller
 
         return response()->json([
             'data' => $exercises->map(fn (Exercise $e): array => [
-                'id'                => (string) $e->id,
-                'name'              => $e->name,
-                'muscle_group'      => $e->muscle_group ?? $e->body_part ?? '',
-                'equipment'         => $e->equipment ?? '',
-                'difficulty'        => $e->difficulty ?? 'Principiante',
-                'description'       => $e->description ?? '',
-                'steps'             => $e->steps ?? [],
-                'tips'              => $e->tips ?? [],
-                'common_mistakes'   => $e->common_mistakes ?? [],
+                'id' => (string) $e->id,
+                'name' => $e->name,
+                'muscle_group' => $e->muscle_group ?? $e->body_part ?? '',
+                'equipment' => $e->equipment ?? '',
+                'difficulty' => $e->difficulty ?? 'Principiante',
+                'description' => $e->description ?? '',
+                'steps' => $e->steps ?? [],
+                'tips' => $e->tips ?? [],
+                'common_mistakes' => $e->common_mistakes ?? [],
                 'secondary_muscles' => $e->secondary_muscles ?? [],
-                'muscles_worked'    => $e->muscles_worked ?? [],
-                'suggested_sets'    => (int) ($e->suggested_sets ?? 3),
-                'suggested_reps'    => $e->suggested_reps ?? '8-12',
-                'gif_url'           => $e->gif_url,
-                'thumbnail_url'     => $e->thumbnail_url,
-                'video_url'         => $e->video_path,
+                'muscles_worked' => $e->muscles_worked ?? [],
+                'suggested_sets' => (int) ($e->suggested_sets ?? 3),
+                'suggested_reps' => $e->suggested_reps ?? '8-12',
+                'gif_url' => $e->gif_url,
+                'thumbnail_url' => $e->thumbnail_url,
+                'video_url' => $e->video_path,
             ]),
         ]);
     }

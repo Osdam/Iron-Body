@@ -16,9 +16,9 @@ class MemberHiddenRoutine extends Model
     ];
 
     protected $casts = [
-        'member_id'  => 'integer',
+        'member_id' => 'integer',
         'routine_id' => 'integer',
-        'hidden_at'  => 'datetime',
+        'hidden_at' => 'datetime',
     ];
 
     public function member(): BelongsTo

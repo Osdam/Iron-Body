@@ -27,10 +27,11 @@ class ProductController extends Controller
             $items = $query->orderBy('name')->get()
                 ->filter(fn (Product $p) => $p->stock_status === $status)
                 ->values();
+
             return response()->json(['data' => $items]);
         }
         if ($request->filled('search')) {
-            $term = '%' . $request->input('search') . '%';
+            $term = '%'.$request->input('search').'%';
             $query->where(fn ($q) => $q->where('name', 'like', $term)
                 ->orWhere('sku', 'like', $term)
                 ->orWhere('supplier', 'like', $term));
@@ -45,13 +46,13 @@ class ProductController extends Controller
         $all = Product::all();
 
         return response()->json([
-            'total'        => $all->count(),
-            'in_app'       => $all->where('visible_in_app', true)->where('active', true)->count(),
-            'low_stock'    => $all->filter(fn (Product $p) => $p->stock_status === 'low')->count(),
+            'total' => $all->count(),
+            'in_app' => $all->where('visible_in_app', true)->where('active', true)->count(),
+            'low_stock' => $all->filter(fn (Product $p) => $p->stock_status === 'low')->count(),
             'out_of_stock' => $all->filter(fn (Product $p) => $p->stock_status === 'out')->count(),
             'inventory_value' => (float) $all->sum(fn (Product $p) => (float) $p->cost_price * $p->stock),
-            'retail_value'    => (float) $all->sum(fn (Product $p) => (float) $p->sale_price * $p->stock),
-            'categories'   => $all->pluck('category')->unique()->values(),
+            'retail_value' => (float) $all->sum(fn (Product $p) => (float) $p->sale_price * $p->stock),
+            'categories' => $all->pluck('category')->unique()->values(),
         ]);
     }
 
@@ -100,18 +101,18 @@ class ProductController extends Controller
     private function validatePayload(Request $request, ?int $ignoreId = null): array
     {
         return $request->validate([
-            'sku'            => ['nullable', 'string', 'max:255'],
-            'name'           => ['required', 'string', 'max:255'],
-            'category'       => ['nullable', 'string', 'max:255'],
-            'description'    => ['nullable', 'string'],
-            'image_url'      => ['nullable', 'string', 'max:1024'],
-            'sale_price'     => ['required', 'numeric', 'min:0'],
-            'cost_price'     => ['nullable', 'numeric', 'min:0'],
-            'stock'          => ['nullable', 'integer', 'min:0'],
-            'min_stock'      => ['nullable', 'integer', 'min:0'],
-            'supplier'       => ['nullable', 'string', 'max:255'],
+            'sku' => ['nullable', 'string', 'max:255'],
+            'name' => ['required', 'string', 'max:255'],
+            'category' => ['nullable', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
+            'image_url' => ['nullable', 'string', 'max:1024'],
+            'sale_price' => ['required', 'numeric', 'min:0'],
+            'cost_price' => ['nullable', 'numeric', 'min:0'],
+            'stock' => ['nullable', 'integer', 'min:0'],
+            'min_stock' => ['nullable', 'integer', 'min:0'],
+            'supplier' => ['nullable', 'string', 'max:255'],
             'visible_in_app' => ['nullable', 'boolean'],
-            'active'         => ['nullable', 'boolean'],
+            'active' => ['nullable', 'boolean'],
         ]);
     }
 }

@@ -10,6 +10,7 @@ use App\Models\Member;
 use App\Models\Trainer;
 use App\Models\TrainerAuditLog;
 use App\Models\TrainerDeviceSession;
+use App\Models\TrainerFaceReference;
 use App\Services\Identity\IdentityLinkService;
 use App\Services\Trainer\MemberAssignmentService;
 use App\Services\Trainer\TrainerAuditService;
@@ -142,7 +143,7 @@ class TrainerAdminController extends Controller
      */
     public function deleteFace(Request $request, Trainer $trainer): JsonResponse
     {
-        $deleted = \App\Models\TrainerFaceReference::where('trainer_id', $trainer->getKey())->delete();
+        $deleted = TrainerFaceReference::where('trainer_id', $trainer->getKey())->delete();
 
         $this->audit->record(
             TrainerAuditLog::EVENT_PROFILE_UPDATED,

@@ -77,7 +77,7 @@ class DevResetTestMemberCommand extends Command
 
             return self::FAILURE;
         }
-        $this->info("Entorno confirmado local/dev (env=".app()->environment().", db={$db}).");
+        $this->info('Entorno confirmado local/dev (env='.app()->environment().", db={$db}).");
 
         $email = trim((string) $this->option('email')) ?: null;
         $document = Member::normalizeDocumentNumber($this->option('document'));

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Nutrition\NutritionColombiaClassifier;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
@@ -58,14 +59,20 @@ class NutritionFood extends Model
 
     // Visibilidad de un alimento creado por el usuario.
     public const VIS_PRIVATE = 'private';     // solo su creador
+
     public const VIS_COMMUNITY = 'community'; // aporta a la base de todos
+
     public const VIS_VERIFIED = 'verified';   // revisado por staff
 
     // Estado de verificación (calidad de datos).
     public const VS_PRIVATE = 'private';
+
     public const VS_PENDING = 'pending';
+
     public const VS_COMMUNITY = 'community';
+
     public const VS_VERIFIED = 'verified';
+
     public const VS_REJECTED = 'rejected';
 
     /** Umbral de reportes para ocultar un alimento no verificado de búsquedas. */
@@ -81,6 +88,7 @@ class NutritionFood extends Model
     public function scopeVisibleInSearch($query, Member $member)
     {
         $threshold = self::reportsHideThreshold();
+
         return $query->where(function ($q) use ($member, $threshold) {
             $q->where('created_by_member_id', $member->id) // lo propio SIEMPRE visible
                 ->orWhere(function ($pub) use ($threshold) {
@@ -109,6 +117,7 @@ class NutritionFood extends Model
     {
         $n = mb_strtolower(trim($name));
         $n = strtr($n, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ñ' => 'n']);
+
         return preg_replace('/\s+/', ' ', preg_replace('/[^a-z0-9 ]/', ' ', $n)) ?: $n;
     }
 
@@ -125,9 +134,9 @@ class NutritionFood extends Model
     {
         $vals = [
             'calories' => $this->calories_per_100g,
-            'protein'  => $this->protein_per_100g,
-            'carbs'    => $this->carbs_per_100g,
-            'fat'      => $this->fat_per_100g,
+            'protein' => $this->protein_per_100g,
+            'carbs' => $this->carbs_per_100g,
+            'fat' => $this->fat_per_100g,
         ];
         // Si los 4 base son null o 0, se considera que faltan TODOS (no es válido
         // mostrar 0 como real para un alimento normal).
@@ -147,6 +156,7 @@ class NutritionFood extends Model
                 $missing[] = $k;
             }
         }
+
         return $missing;
     }
 
@@ -166,9 +176,9 @@ class NutritionFood extends Model
     public function communityLabel(): ?string
     {
         return match ($this->verification_status) {
-            self::VS_VERIFIED  => 'Verificado Iron Body',
+            self::VS_VERIFIED => 'Verificado Iron Body',
             self::VS_COMMUNITY => 'Aportado por la comunidad',
-            self::VS_REJECTED  => null,
+            self::VS_REJECTED => null,
             default => $this->source === 'user' ? 'Creado por ti' : null,
         };
     }
@@ -185,56 +195,56 @@ class NutritionFood extends Model
         }
         // Badges de cadenas colombianas detectadas (D1/Éxito/Olímpica/Ara…).
         $retailers = $this->stores
-            ? app(\App\Services\Nutrition\NutritionColombiaClassifier::class)->matchedRetailers($this->stores)
+            ? app(NutritionColombiaClassifier::class)->matchedRetailers($this->stores)
             : [];
         $isColombia = $this->country === 'colombia'
             || $retailers !== []
             || (int) ($this->imported_priority_score ?? 0) > 0;
 
         return [
-            'is_complete'      => $isComplete,
-            'missing_macros'   => $missing,
-            'warnings'         => $warnings,
-            'uuid'             => $this->uuid,
-            'source'           => $this->source,
-            'barcode'          => $this->barcode,
-            'name'             => $this->name,
-            'brand'            => $this->brand,
-            'category'         => $this->category,
-            'country'          => $this->country,
-            'is_colombia'      => $isColombia,
-            'retailers'        => $retailers,
+            'is_complete' => $isComplete,
+            'missing_macros' => $missing,
+            'warnings' => $warnings,
+            'uuid' => $this->uuid,
+            'source' => $this->source,
+            'barcode' => $this->barcode,
+            'name' => $this->name,
+            'brand' => $this->brand,
+            'category' => $this->category,
+            'country' => $this->country,
+            'is_colombia' => $isColombia,
+            'retailers' => $retailers,
             // Base comunitaria: estado de calidad para los badges de la app.
-            'visibility'           => $this->visibility,
-            'verification_status'  => $this->verification_status,
+            'visibility' => $this->visibility,
+            'verification_status' => $this->verification_status,
             'is_verified_iron_body' => $this->verification_status === self::VS_VERIFIED,
-            'is_community'         => $this->visibility === self::VIS_COMMUNITY
+            'is_community' => $this->visibility === self::VIS_COMMUNITY
                 || $this->verification_status === self::VS_COMMUNITY,
-            'community_label'      => $this->communityLabel(),
+            'community_label' => $this->communityLabel(),
             'community_confirmations' => (int) ($this->community_confirmations_count ?? 0),
-            'image_url'        => $this->image_url,
-            'serving_size'     => $this->serving_size,
-            'serving_unit'     => $this->serving_unit ?: 'g',
-            'verified'         => (bool) $this->verified,
+            'image_url' => $this->image_url,
+            'serving_size' => $this->serving_size,
+            'serving_unit' => $this->serving_unit ?: 'g',
+            'verified' => (bool) $this->verified,
             'confidence_score' => $this->confidence_score,
-            'is_custom'        => $this->source === 'user',
-            'per_100g'         => [
+            'is_custom' => $this->source === 'user',
+            'per_100g' => [
                 'calories' => $round($this->calories_per_100g),
-                'protein'  => $round($this->protein_per_100g),
-                'carbs'    => $round($this->carbs_per_100g),
-                'fat'      => $round($this->fat_per_100g),
-                'sugar'    => $round($this->sugar_per_100g),
-                'fiber'    => $round($this->fiber_per_100g),
-                'sodium'   => $round($this->sodium_per_100g),
+                'protein' => $round($this->protein_per_100g),
+                'carbs' => $round($this->carbs_per_100g),
+                'fat' => $round($this->fat_per_100g),
+                'sugar' => $round($this->sugar_per_100g),
+                'fiber' => $round($this->fiber_per_100g),
+                'sodium' => $round($this->sodium_per_100g),
             ],
-            'per_serving'      => [
+            'per_serving' => [
                 'calories' => $round($this->calories_per_serving),
-                'protein'  => $round($this->protein_per_serving),
-                'carbs'    => $round($this->carbs_per_serving),
-                'fat'      => $round($this->fat_per_serving),
-                'sugar'    => $round($this->sugar_per_serving),
-                'fiber'    => $round($this->fiber_per_serving),
-                'sodium'   => $round($this->sodium_per_serving),
+                'protein' => $round($this->protein_per_serving),
+                'carbs' => $round($this->carbs_per_serving),
+                'fat' => $round($this->fat_per_serving),
+                'sugar' => $round($this->sugar_per_serving),
+                'fiber' => $round($this->fiber_per_serving),
+                'sodium' => $round($this->sodium_per_serving),
             ],
         ];
     }

@@ -23,9 +23,7 @@ use Illuminate\Http\Request;
  */
 class WeeklyStreakController extends Controller
 {
-    public function __construct(private readonly WeeklyStreakService $service)
-    {
-    }
+    public function __construct(private readonly WeeklyStreakService $service) {}
 
     /**
      * POST /api/app/weekly-streak/touch
@@ -37,7 +35,7 @@ class WeeklyStreakController extends Controller
     public function touch(Request $request): JsonResponse
     {
         $member = $request->attributes->get('auth_member');
-        if (!$member) {
+        if (! $member) {
             return response()->json(['success' => false, 'message' => 'No autenticado.'], 401);
         }
 
@@ -50,7 +48,7 @@ class WeeklyStreakController extends Controller
     public function show(Request $request): JsonResponse
     {
         $member = $request->attributes->get('auth_member');
-        if (!$member) {
+        if (! $member) {
             return response()->json(['success' => false, 'message' => 'No autenticado.'], 401);
         }
 

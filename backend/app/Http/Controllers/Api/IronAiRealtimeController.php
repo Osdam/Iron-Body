@@ -25,8 +25,7 @@ class IronAiRealtimeController extends Controller
         private readonly IronAiService $service,
         private readonly IronAiMembershipAccessService $access,
         private readonly IronAiRealtimeService $realtime,
-    ) {
-    }
+    ) {}
 
     /** POST /api/iron-ai/realtime/session */
     public function session(Request $request): JsonResponse
@@ -38,7 +37,7 @@ class IronAiRealtimeController extends Controller
             $decision = $this->access->decideRealtime($accessState);
             if (! $decision['can']) {
                 $this->access->registerUsage($accessState, IronAiUsageLog::STATUS_BLOCKED, [
-                    'kind'         => IronAiUsageLog::KIND_REALTIME,
+                    'kind' => IronAiUsageLog::KIND_REALTIME,
                     'block_reason' => $decision['block']['code'] ?? 'BLOCKED',
                 ]);
 
@@ -71,40 +70,40 @@ class IronAiRealtimeController extends Controller
             // Si falla, NO se presenta como disponible (regla del producto).
             if ($session === null) {
                 $this->access->registerUsage($accessState, IronAiUsageLog::STATUS_ERROR, [
-                    'kind'         => IronAiUsageLog::KIND_REALTIME,
+                    'kind' => IronAiUsageLog::KIND_REALTIME,
                     'block_reason' => 'REALTIME_UNAVAILABLE',
                 ]);
 
                 return response()->json([
-                    'ok'      => false,
-                    'code'    => 'REALTIME_UNAVAILABLE',
+                    'ok' => false,
+                    'code' => 'REALTIME_UNAVAILABLE',
                     'message' => 'La conversación en vivo no está disponible en este momento. Intenta más tarde.',
                 ], 200);
             }
 
             // 4) Consumo realtime registrado (cuota/costo).
             $this->access->registerUsage($accessState, IronAiUsageLog::STATUS_SUCCESS, [
-                'kind'  => IronAiUsageLog::KIND_REALTIME,
+                'kind' => IronAiUsageLog::KIND_REALTIME,
                 'model' => $session['model'] ?? null,
             ]);
 
             return response()->json([
-                'ok'                => true,
-                'client_secret'     => $session['client_secret'], // efímero (ek_...)
-                'expires_at'        => $session['expires_at'] ?? null,
-                'model'             => $session['model'],
-                'voice'             => $session['voice'],
-                'webrtc_url'        => $session['webrtc_url'],
+                'ok' => true,
+                'client_secret' => $session['client_secret'], // efímero (ek_...)
+                'expires_at' => $session['expires_at'] ?? null,
+                'model' => $session['model'],
+                'voice' => $session['voice'],
+                'webrtc_url' => $session['webrtc_url'],
                 'conversation_uuid' => $conversation->uuid,
-                'conversation_id'   => $conversation->uuid,
-                'quota'             => $this->access->quotaSnapshot($accessState),
+                'conversation_id' => $conversation->uuid,
+                'quota' => $this->access->quotaSnapshot($accessState),
             ]);
         } catch (Throwable $e) {
             report($e);
 
             return response()->json([
-                'ok'      => false,
-                'code'    => 'REALTIME_UNAVAILABLE',
+                'ok' => false,
+                'code' => 'REALTIME_UNAVAILABLE',
                 'message' => 'La conversación en vivo no está disponible en este momento. Intenta más tarde.',
             ], 200);
         }
@@ -119,9 +118,9 @@ class IronAiRealtimeController extends Controller
     {
         $data = $request->validate([
             'conversation_uuid' => 'required|string|max:64',
-            'turns'             => 'required|array',
-            'turns.*.role'      => 'required|string|in:user,assistant',
-            'turns.*.content'   => 'required|string',
+            'turns' => 'required|array',
+            'turns.*.role' => 'required|string|in:user,assistant',
+            'turns.*.content' => 'required|string',
         ]);
 
         try {
@@ -149,21 +148,21 @@ class IronAiRealtimeController extends Controller
     private function blockResponse(array $access, array $block): JsonResponse
     {
         return response()->json([
-            'ok'               => false,
-            'code'             => $block['code'],
-            'reply'            => $block['reply'],
-            'message'          => $block['reply'],
+            'ok' => false,
+            'code' => $block['code'],
+            'reply' => $block['reply'],
+            'message' => $block['reply'],
             'upgrade_required' => $block['upgrade_required'] ?? true,
-            'cta'              => $block['cta'] ?? null,
-            'quota'            => $this->access->quotaSnapshot($access),
+            'cta' => $block['cta'] ?? null,
+            'quota' => $this->access->quotaSnapshot($access),
         ], 200);
     }
 
     private function forbidden(): JsonResponse
     {
         return response()->json([
-            'ok'      => false,
-            'code'    => 'CONVERSATION_NOT_FOUND',
+            'ok' => false,
+            'code' => 'CONVERSATION_NOT_FOUND',
             'message' => 'La conversación no existe o no te pertenece.',
         ], 403);
     }

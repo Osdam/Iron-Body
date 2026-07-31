@@ -11,7 +11,7 @@ class WompiCardPaymentRequest extends AbstractWompiPaymentRequest
     protected function methodRules(): array
     {
         return [
-            'card_token'   => 'required|string|min:10|max:120',
+            'card_token' => 'required|string|min:10|max:120',
             'installments' => 'nullable|integer|min:1|max:36',
         ];
     }

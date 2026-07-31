@@ -5,13 +5,14 @@ namespace App\Http\Controllers\Api\Trainer;
 use App\Http\Controllers\Controller;
 use App\Models\Trainer;
 use App\Models\TrainerRealtimeEvent;
+use App\Services\Trainer\TrainerRealtimeEvents;
 use App\Support\SseStream;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 /**
  * Canal real-time del portal profesional (SSE). Entrega las señales de cambio
- * que el backend emite ({@see \App\Services\Trainer\TrainerRealtimeEvents}) para
+ * que el backend emite ({@see TrainerRealtimeEvents}) para
  * que el panel del entrenador refresque sus clientes al instante, sin polling.
  *
  * Seguridad de canal: va bajo `auth.trainer` (el token valida la conexión) y la
@@ -46,11 +47,11 @@ class TrainerRealtimeController extends Controller
 
             foreach ($items as $e) {
                 SseStream::emit('app', [
-                    'type'       => $e->type,
+                    'type' => $e->type,
                     'trainer_id' => $trainerId,
-                    'version'    => (string) $e->version,
-                    'changed'    => $e->changed ?? [],
-                    'timestamp'  => $e->created_at?->toIso8601String(),
+                    'version' => (string) $e->version,
+                    'changed' => $e->changed ?? [],
+                    'timestamp' => $e->created_at?->toIso8601String(),
                 ], $e->id);
                 $cursor = (int) $e->id;
             }

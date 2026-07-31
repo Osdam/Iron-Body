@@ -18,7 +18,7 @@ class ExerciseAlias extends Model
     ];
 
     protected $casts = [
-        'confidence'  => 'float',
+        'confidence' => 'float',
         'is_verified' => 'boolean',
         'exercise_id' => 'integer',
     ];

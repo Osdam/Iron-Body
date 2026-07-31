@@ -14,19 +14,19 @@ class MarketingCampaign extends Model
     ];
 
     protected $casts = [
-        'spend'        => 'decimal:2',
-        'impressions'  => 'integer',
-        'reach'        => 'integer',
-        'clicks'       => 'integer',
-        'leads'        => 'integer',
-        'conversations'=> 'integer',
-        'ctr'          => 'decimal:4',
-        'cpc'          => 'decimal:4',
-        'cpm'          => 'decimal:4',
-        'date_start'   => 'date',
-        'date_stop'    => 'date',
-        'raw_metrics'  => 'array',
-        'synced_at'    => 'datetime',
+        'spend' => 'decimal:2',
+        'impressions' => 'integer',
+        'reach' => 'integer',
+        'clicks' => 'integer',
+        'leads' => 'integer',
+        'conversations' => 'integer',
+        'ctr' => 'decimal:4',
+        'cpc' => 'decimal:4',
+        'cpm' => 'decimal:4',
+        'date_start' => 'date',
+        'date_stop' => 'date',
+        'raw_metrics' => 'array',
+        'synced_at' => 'datetime',
     ];
 
     public function leads(): HasMany
@@ -46,6 +46,7 @@ class MarketingCampaign extends Model
         if ($spend <= 0) {
             return null;
         }
+
         return round((float) $this->attributions()->sum('sale_amount') / $spend, 2);
     }
 }

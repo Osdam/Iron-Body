@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * @property int $id
  * @property int $member_id
- * @property \Carbon\Carbon $activity_date
+ * @property Carbon $activity_date
  * @property string|null $source
  */
 class MemberAppActivityDay extends Model

@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * @property int $id
  * @property int $member_id
- * @property \Carbon\Carbon $recommendation_date
+ * @property Carbon $recommendation_date
  * @property array|null $context_json
  * @property array|null $response_json
  * @property string|null $summary

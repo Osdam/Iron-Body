@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 class DetectEvaluationOutdated extends Command
 {
     protected $signature = 'ironbody:detect-evaluation-outdated';
+
     protected $description = 'Detecta miembros con evaluación física desactualizada y emite evaluation.outdated.';
 
     public function handle(): int

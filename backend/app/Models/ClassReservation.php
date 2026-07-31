@@ -12,7 +12,7 @@ class ClassReservation extends Model
     protected function casts(): array
     {
         return [
-            'reserved_at'  => 'datetime',
+            'reserved_at' => 'datetime',
             'session_date' => 'date',
         ];
     }

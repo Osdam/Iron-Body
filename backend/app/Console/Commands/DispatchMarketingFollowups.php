@@ -59,6 +59,7 @@ class DispatchMarketingFollowups extends Command
                 'marketing:dispatch-followups → INERTE (agente/despacho off). Vencidos: %d. Usa --force o habilita los flags.',
                 $stats['due'],
             ));
+
             return self::SUCCESS;
         }
 
@@ -77,6 +78,7 @@ class DispatchMarketingFollowups extends Command
                 if ($lead !== null && ! $lead->isContactable()) {
                     $followup->update(['status' => MarketingFollowup::STATUS_CANCELLED]);
                     $stats['skipped_dnc']++;
+
                     return;
                 }
 
@@ -85,6 +87,7 @@ class DispatchMarketingFollowups extends Command
                     $followup->update(['status' => MarketingFollowup::STATUS_DONE]);
                     $stats['calls']++;
                     $stats['dispatched']++;
+
                     return;
                 }
 
@@ -112,18 +115,18 @@ class DispatchMarketingFollowups extends Command
             ['marketing_followup_id' => $followup->id],
             [
                 'marketing_lead_id' => $followup->lead_id,
-                'provider'          => 'twilio',
-                'status'            => MarketingCall::STATUS_PENDING,
-                'direction'         => MarketingCall::DIRECTION_OUTBOUND,
-                'to_phone'          => $lead?->phone,
-                'reason'            => 'followup',
-                'scheduled_at'      => $followup->due_at,
+                'provider' => 'twilio',
+                'status' => MarketingCall::STATUS_PENDING,
+                'direction' => MarketingCall::DIRECTION_OUTBOUND,
+                'to_phone' => $lead?->phone,
+                'reason' => 'followup',
+                'scheduled_at' => $followup->due_at,
             ],
         );
 
         Log::info('marketing.followup.call_scheduled', [
             'followup_id' => $followup->id,
-            'lead_id'     => $followup->lead_id,
+            'lead_id' => $followup->lead_id,
         ]);
     }
 }

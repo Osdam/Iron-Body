@@ -25,8 +25,11 @@ abstract class BaseProactiveDetectorCommand extends Command
     protected ProactiveCoachService $coach;
 
     protected int $emitted = 0;
+
     protected int $would = 0;
+
     protected int $skipped = 0;
+
     protected int $duplicate = 0;
 
     /** @var array<string,int> conteo por motivo de skip */
@@ -53,7 +56,7 @@ abstract class BaseProactiveDetectorCommand extends Command
      * Itera miembros activos (o el --member-id indicado) y aplica $cb.
      * Respeta el tope --limit sobre acciones (emitidas + would_emit).
      *
-     * @param callable(Member):void $cb
+     * @param  callable(Member):void  $cb
      */
     protected function forEachMember(callable $cb): void
     {
@@ -62,9 +65,11 @@ abstract class BaseProactiveDetectorCommand extends Command
             $member = Member::find((int) $single);
             if ($member === null) {
                 $this->error("Miembro {$single} no existe.");
+
                 return;
             }
             $cb($member);
+
             return;
         }
 
@@ -78,6 +83,7 @@ abstract class BaseProactiveDetectorCommand extends Command
                         return false; // detiene el chunking
                     }
                 }
+
                 return true;
             });
     }
@@ -86,7 +92,7 @@ abstract class BaseProactiveDetectorCommand extends Command
      * Evalúa un evento para un miembro: respeta --event, delega en el servicio
      * (con dry-run) y lleva el conteo.
      *
-     * @param array<string,mixed> $context
+     * @param  array<string,mixed>  $context
      */
     protected function consider(Member $member, string $eventType, array $context = []): void
     {
@@ -128,6 +134,7 @@ abstract class BaseProactiveDetectorCommand extends Command
         if ($limit === null || $limit === '') {
             return false;
         }
+
         return ($this->emitted + $this->would) >= (int) $limit;
     }
 

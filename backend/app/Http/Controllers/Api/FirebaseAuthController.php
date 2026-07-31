@@ -25,8 +25,7 @@ class FirebaseAuthController extends Controller
 {
     public function __construct(
         private readonly FirebaseCustomTokenService $tokenService,
-    ) {
-    }
+    ) {}
 
     /**
      * POST /api/app/firebase/custom-token
@@ -56,7 +55,7 @@ class FirebaseAuthController extends Controller
         // El middleware auth.member ya garantiza esto, pero blindamos:
         // si por algún error de configuración el atributo no está, no
         // generamos token "anónimo" — fail-closed.
-        if (!$member || !isset($member->id)) {
+        if (! $member || ! isset($member->id)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Miembro no autenticado.',
@@ -68,16 +67,16 @@ class FirebaseAuthController extends Controller
 
             return response()->json([
                 'success' => true,
-                'token'   => $token,
-                'uid'     => (string) $member->id,
+                'token' => $token,
+                'uid' => (string) $member->id,
             ]);
         } catch (Throwable $e) {
             // Log SIN el token. Solo metadata de fallo — el service
             // account, secretos y tokens jamás se loggean.
             Log::error('Firebase custom token generation failed', [
-                'member_id'       => $member->id,
+                'member_id' => $member->id,
                 'exception_class' => $e::class,
-                'error_message'   => $e->getMessage(),
+                'error_message' => $e->getMessage(),
             ]);
 
             return response()->json([

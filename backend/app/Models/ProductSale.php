@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\InvoiceType;
+use App\Services\Billing\InvoiceEmail;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -73,7 +74,7 @@ class ProductSale extends Model
      */
     public function marcarFacturaSolicitada(?string $email = null): bool
     {
-        $email = \App\Services\Billing\InvoiceEmail::normalizar($email);
+        $email = InvoiceEmail::normalizar($email);
 
         if ($this->invoice_requested && $this->invoice_requested_at !== null) {
             if ($email !== null && blank($this->invoice_email)) {

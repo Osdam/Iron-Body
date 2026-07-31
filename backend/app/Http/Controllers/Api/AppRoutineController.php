@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\RoutineResource;
+use App\Models\Exercise;
 use App\Models\MemberHiddenRoutine;
 use App\Models\MemberRoutineAssignment;
 use App\Models\Plan;
 use App\Models\Routine;
 use App\Models\RoutineCompletion;
 use App\Models\RoutineExercise;
+use App\Models\User;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -45,7 +47,7 @@ class AppRoutineController extends Controller
             ->values();
 
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => RoutineResource::collection($routines),
         ]);
     }
@@ -62,7 +64,7 @@ class AppRoutineController extends Controller
     /**
      * Excluye de una colección de rutinas las ocultadas por el miembro.
      *
-     * @param  Collection<int,Routine> $routines
+     * @param  Collection<int,Routine>  $routines
      * @return Collection<int,Routine>
      */
     private function excludeHidden(Collection $routines, int $memberId): Collection
@@ -91,7 +93,7 @@ class AppRoutineController extends Controller
         // para no esconder rutinas hechas para el miembro.
         if (! $routine->isSemiPersonalized()) {
             return response()->json([
-                'ok'      => false,
+                'ok' => false,
                 'message' => 'Solo puedes quitar rutinas semi-personalizadas del gimnasio.',
             ], 422);
         }
@@ -100,14 +102,14 @@ class AppRoutineController extends Controller
             ['member_id' => $member->id, 'routine_id' => $routine->id],
             [
                 'routine_type' => $routine->classifyType(),
-                'reason'       => $request->input('reason'),
-                'hidden_at'    => now(),
+                'reason' => $request->input('reason'),
+                'hidden_at' => now(),
             ],
         );
 
         return response()->json([
-            'ok'      => true,
-            'hidden'  => true,
+            'ok' => true,
+            'hidden' => true,
             'message' => $record->wasRecentlyCreated
                 ? 'Rutina quitada de tus semi-personalizadas.'
                 : 'Esta rutina ya estaba oculta.',
@@ -128,8 +130,8 @@ class AppRoutineController extends Controller
             ->delete();
 
         return response()->json([
-            'ok'      => true,
-            'hidden'  => false,
+            'ok' => true,
+            'hidden' => false,
             'message' => 'Rutina restaurada en tus semi-personalizadas.',
         ]);
     }
@@ -160,9 +162,9 @@ class AppRoutineController extends Controller
 
         if ($routines->isEmpty()) {
             return response()->json([
-                'ok'          => true,
+                'ok' => true,
                 'has_workout' => false,
-                'message'     => 'Aún no tienes entrenamiento asignado para hoy.',
+                'message' => 'Aún no tienes entrenamiento asignado para hoy.',
             ]);
         }
 
@@ -170,9 +172,9 @@ class AppRoutineController extends Controller
         $index = ((int) now()->dayOfYear) % $routines->count();
 
         return response()->json([
-            'ok'          => true,
+            'ok' => true,
             'has_workout' => true,
-            'workout'     => new RoutineResource($routines[$index]),
+            'workout' => new RoutineResource($routines[$index]),
         ]);
     }
 
@@ -220,11 +222,12 @@ class AppRoutineController extends Controller
             $isHidden = in_array((int) $r->id, $hidden, true);
             $arr['is_hidden'] = $isHidden;
             $arr['can_restore'] = $includeHidden && $isHidden;
+
             return $arr;
         })->all();
 
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => $data,
         ]);
     }
@@ -254,11 +257,11 @@ class AppRoutineController extends Controller
         $routine->load('routineExercises.exercise');
 
         return response()->json([
-            'ok'      => true,
+            'ok' => true,
             'message' => $assignment->wasRecentlyCreated
                 ? 'Rutina agregada a tus entrenamientos.'
                 : 'Esta rutina ya estaba en tus entrenamientos.',
-            'data'    => new RoutineResource($routine),
+            'data' => new RoutineResource($routine),
         ], $assignment->wasRecentlyCreated ? 201 : 200);
     }
 
@@ -276,7 +279,7 @@ class AppRoutineController extends Controller
             ->get();
 
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => RoutineResource::collection($routines),
         ]);
     }
@@ -296,37 +299,37 @@ class AppRoutineController extends Controller
         }
 
         $data = $request->validate([
-            'name'              => 'required|string|max:255',
-            'objective'         => 'nullable|string|max:255',
-            'level'             => 'nullable|in:Principiante,Intermedio,Avanzado',
-            'muscle_group'      => 'nullable|string|max:100',
+            'name' => 'required|string|max:255',
+            'objective' => 'nullable|string|max:255',
+            'level' => 'nullable|in:Principiante,Intermedio,Avanzado',
+            'muscle_group' => 'nullable|string|max:100',
             'estimated_minutes' => 'nullable|integer|min:0|max:1440',
-            'description'       => 'nullable|string',
-            'notes'             => 'nullable|string',
+            'description' => 'nullable|string',
+            'notes' => 'nullable|string',
             // Simplified: just exercise IDs (app selects from catalog)
-            'exercise_ids'      => 'nullable|array',
-            'exercise_ids.*'    => 'exists:exercises,id',
+            'exercise_ids' => 'nullable|array',
+            'exercise_ids.*' => 'exists:exercises,id',
             // Full detail (from app with sets/reps/weight)
-            'exercises'                   => 'nullable|array',
-            'exercises.*.exercise_id'     => 'required_with:exercises|exists:exercises,id',
-            'exercises.*.sets'            => 'nullable|integer|min:1|max:20',
-            'exercises.*.reps'            => 'nullable|string|max:20',
-            'exercises.*.weight'          => 'nullable|numeric|min:0',
-            'exercises.*.notes'           => 'nullable|string|max:500',
+            'exercises' => 'nullable|array',
+            'exercises.*.exercise_id' => 'required_with:exercises|exists:exercises,id',
+            'exercises.*.sets' => 'nullable|integer|min:1|max:20',
+            'exercises.*.reps' => 'nullable|string|max:20',
+            'exercises.*.weight' => 'nullable|numeric|min:0',
+            'exercises.*.notes' => 'nullable|string|max:500',
         ]);
 
         $routine = Routine::create([
-            'name'              => $data['name'],
-            'objective'         => $data['objective'] ?? null,
-            'level'             => $data['level'] ?? 'Principiante',
-            'muscle_group'      => $data['muscle_group'] ?? null,
+            'name' => $data['name'],
+            'objective' => $data['objective'] ?? null,
+            'level' => $data['level'] ?? 'Principiante',
+            'muscle_group' => $data['muscle_group'] ?? null,
             'estimated_minutes' => (int) ($data['estimated_minutes'] ?? 0),
-            'description'       => $data['description'] ?? null,
-            'notes'             => $data['notes'] ?? null,
-            'member_id'         => $member->id,
-            'is_assigned'       => false,
-            'created_by_admin'  => false,
-            'status'            => 'Activa',
+            'description' => $data['description'] ?? null,
+            'notes' => $data['notes'] ?? null,
+            'member_id' => $member->id,
+            'is_assigned' => false,
+            'created_by_admin' => false,
+            'status' => 'Activa',
         ]);
 
         $this->syncExercises($routine, $data);
@@ -334,9 +337,9 @@ class AppRoutineController extends Controller
         $routine->load('routineExercises.exercise');
 
         return response()->json([
-            'ok'      => true,
+            'ok' => true,
             'message' => 'Rutina creada.',
-            'data'    => new RoutineResource($routine),
+            'data' => new RoutineResource($routine),
         ], 201);
     }
 
@@ -376,11 +379,11 @@ class AppRoutineController extends Controller
         }
 
         $completion = RoutineCompletion::create([
-            'member_id'    => $member->id,
-            'routine_id'   => $routine->id,
+            'member_id' => $member->id,
+            'routine_id' => $routine->id,
             'completed_at' => now(),
-            'source'       => 'app',
-            'notes'        => $request->input('notes'),
+            'source' => 'app',
+            'notes' => $request->input('notes'),
         ]);
 
         // Notificación + push interno por CADA guardado real (event_key con el
@@ -388,10 +391,10 @@ class AppRoutineController extends Controller
         app(NotificationService::class)->notifyRoutineCompleted($member, $routine, $completion->id);
 
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => [
                 'completion_id' => $completion->id,
-                'completed_at'  => $completion->completed_at->toIso8601String(),
+                'completed_at' => $completion->completed_at->toIso8601String(),
             ],
         ], 201);
     }
@@ -402,7 +405,7 @@ class AppRoutineController extends Controller
             return false;
         }
 
-        $user = $member->user ?? \App\Models\User::find($member->user_id);
+        $user = $member->user ?? User::find($member->user_id);
         if (! $user || ! $user->plan) {
             return false;
         }
@@ -419,24 +422,24 @@ class AppRoutineController extends Controller
         if (! empty($data['exercises'])) {
             foreach ($data['exercises'] as $i => $ex) {
                 RoutineExercise::create([
-                    'routine_id'  => $routine->id,
+                    'routine_id' => $routine->id,
                     'exercise_id' => $ex['exercise_id'],
-                    'sets'        => (int) ($ex['sets'] ?? 3),
-                    'reps'        => (string) ($ex['reps'] ?? '10'),
-                    'weight'      => isset($ex['weight']) ? (float) $ex['weight'] : null,
-                    'notes'       => $ex['notes'] ?? null,
-                    'sort_order'  => $i,
+                    'sets' => (int) ($ex['sets'] ?? 3),
+                    'reps' => (string) ($ex['reps'] ?? '10'),
+                    'weight' => isset($ex['weight']) ? (float) $ex['weight'] : null,
+                    'notes' => $ex['notes'] ?? null,
+                    'sort_order' => $i,
                 ]);
             }
         } elseif (! empty($data['exercise_ids'])) {
             foreach ($data['exercise_ids'] as $i => $exerciseId) {
-                $ex = \App\Models\Exercise::find($exerciseId);
+                $ex = Exercise::find($exerciseId);
                 RoutineExercise::create([
-                    'routine_id'  => $routine->id,
+                    'routine_id' => $routine->id,
                     'exercise_id' => $exerciseId,
-                    'sets'        => $ex?->suggested_sets ?? 3,
-                    'reps'        => $ex?->suggested_reps ?? '8-12',
-                    'sort_order'  => $i,
+                    'sets' => $ex?->suggested_sets ?? 3,
+                    'reps' => $ex?->suggested_reps ?? '8-12',
+                    'sort_order' => $i,
                 ]);
             }
         }

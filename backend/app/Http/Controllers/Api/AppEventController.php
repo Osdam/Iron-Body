@@ -30,6 +30,7 @@ class AppEventController extends Controller
         if (! $event->is_active) {
             return response()->json(['ok' => false, 'message' => 'Evento no disponible.'], 404);
         }
+
         return response()->json(['ok' => true, 'data' => $event->toAppArray()]);
     }
 }

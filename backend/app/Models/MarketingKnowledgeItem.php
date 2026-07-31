@@ -25,17 +25,18 @@ class MarketingKnowledgeItem extends Model
     ];
 
     protected $casts = [
-        'priority'    => 'integer',
-        'is_active'   => 'boolean',
-        'valid_from'  => 'datetime',
+        'priority' => 'integer',
+        'is_active' => 'boolean',
+        'valid_from' => 'datetime',
         'valid_until' => 'datetime',
-        'metadata'    => 'array',
+        'metadata' => 'array',
     ];
 
     /** Activos y vigentes (respeta valid_from / valid_until). */
     public function scopeActiveNow(Builder $query): Builder
     {
         $now = now();
+
         return $query->where('is_active', true)
             ->where(fn (Builder $q) => $q->whereNull('valid_from')->orWhere('valid_from', '<=', $now))
             ->where(fn (Builder $q) => $q->whereNull('valid_until')->orWhere('valid_until', '>=', $now))

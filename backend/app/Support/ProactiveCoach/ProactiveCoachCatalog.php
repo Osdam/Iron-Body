@@ -202,6 +202,7 @@ final class ProactiveCoachCatalog
         }
         $first = explode(' ', $fullName)[0] ?? '';
         $first = trim($first);
+
         return $first !== '' ? mb_convert_case($first, MB_CASE_TITLE, 'UTF-8') : null;
     }
 
@@ -217,6 +218,7 @@ final class ProactiveCoachCatalog
         // Sin nombre: quita ", {name}" / " {name}" / "{name}, " y limpia espacios.
         $text = preg_replace('/,?\s*\{name\}/u', '', $text);
         $text = preg_replace('/\{name\}\s*,?\s*/u', '', (string) $text);
+
         return trim(preg_replace('/\s{2,}/u', ' ', (string) $text));
     }
 }

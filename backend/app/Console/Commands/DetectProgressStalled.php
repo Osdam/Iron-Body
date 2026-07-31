@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 class DetectProgressStalled extends Command
 {
     protected $signature = 'ironbody:detect-progress-stalled';
+
     protected $description = 'Detecta miembros con progreso estancado y emite progress.stalled.';
 
     public function handle(): int

@@ -103,7 +103,7 @@ class WeeklyStreakAdminController extends Controller
 
         $file = $request->file('file');
         $ext = strtolower($file->getClientOriginalExtension() ?: $file->extension());
-        $filename = Str::uuid()->toString() . '.' . $ext;
+        $filename = Str::uuid()->toString().'.'.$ext;
         $path = $file->storeAs('weekly-streak', $filename, 'public');
 
         return response()->json([

@@ -12,10 +12,13 @@ use Illuminate\Database\Eloquent\Model;
  */
 class PaymentWebhookEvent extends Model
 {
-    public const STATUS_RECEIVED  = 'received';
+    public const STATUS_RECEIVED = 'received';
+
     public const STATUS_PROCESSED = 'processed';
-    public const STATUS_SKIPPED   = 'skipped';
-    public const STATUS_FAILED    = 'failed';
+
+    public const STATUS_SKIPPED = 'skipped';
+
+    public const STATUS_FAILED = 'failed';
 
     protected $fillable = [
         'uuid', 'provider', 'event_type', 'checksum', 'transaction_id',
@@ -24,8 +27,8 @@ class PaymentWebhookEvent extends Model
     ];
 
     protected $casts = [
-        'payload'      => 'array',
+        'payload' => 'array',
         'processed_at' => 'datetime',
-        'retry_count'  => 'integer',
+        'retry_count' => 'integer',
     ];
 }

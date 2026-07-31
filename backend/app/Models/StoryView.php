@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $story_id
  * @property string $viewer_type 'member' | 'user'
  * @property int $viewer_id
- * @property \Carbon\Carbon $viewed_at
+ * @property Carbon $viewed_at
  */
 class StoryView extends Model
 {

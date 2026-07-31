@@ -15,8 +15,7 @@ class NutritionSummaryController extends Controller
     public function __construct(
         private NutritionEntryService $entries,
         private NutritionStatsService $stats,
-    ) {
-    }
+    ) {}
 
     /** GET /api/nutrition/summary?date=YYYY-MM-DD */
     public function show(Request $request): JsonResponse
@@ -41,8 +40,8 @@ class NutritionSummaryController extends Controller
         $days = (int) ($request->query('days') ?: 7);
 
         return response()->json([
-            'ok'          => true,
-            'days'        => $this->entries->historyPayload($member, $days),
+            'ok' => true,
+            'days' => $this->entries->historyPayload($member, $days),
             'streak_days' => $this->entries->streakDays($member),
         ]);
     }

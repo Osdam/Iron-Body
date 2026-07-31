@@ -17,16 +17,18 @@ use Illuminate\Console\Command;
 class ExercisedbSyncCommand extends Command
 {
     protected $signature = 'exercisedb:sync';
+
     protected $description = 'Sincroniza el catálogo de ExerciseDB (RapidAPI) con GIFs animados a la tabla exercises';
 
     public function handle(ExerciseProviderService $exercises): int
     {
         if (config('services.exercises.provider') !== 'exercisedb') {
             $this->warn('EXERCISE_PROVIDER no es "exercisedb". Ajusta el .env y corre config:cache antes de sincronizar.');
+
             return self::FAILURE;
         }
 
-        $this->info('Sincronizando ExerciseDB (' . config('services.exercisedb.base_url') . ')…');
+        $this->info('Sincronizando ExerciseDB ('.config('services.exercisedb.base_url').')…');
         $start = microtime(true);
 
         $res = $exercises->sync();

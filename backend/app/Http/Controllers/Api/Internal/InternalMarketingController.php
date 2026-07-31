@@ -33,8 +33,7 @@ class InternalMarketingController extends Controller
 {
     public function __construct(
         private readonly MarketingMessageDispatcher $dispatcher,
-    ) {
-    }
+    ) {}
 
     /**
      * GET /api/internal/marketing/meta/doctor — readiness de Meta/WhatsApp para
@@ -68,17 +67,17 @@ class InternalMarketingController extends Controller
     {
         $data = $request->validate([
             'marketing_lead_id' => 'required|integer|exists:marketing_leads,id',
-            'body'              => 'required|string|max:4000',
-            'channel'           => 'nullable|string|in:whatsapp',
-            'conversation_id'   => 'nullable|integer|exists:marketing_conversations,id',
-            'auto_execute'      => 'nullable|boolean',
-            'plan_id'           => 'nullable|integer|exists:plans,id',
+            'body' => 'required|string|max:4000',
+            'channel' => 'nullable|string|in:whatsapp',
+            'conversation_id' => 'nullable|integer|exists:marketing_conversations,id',
+            'auto_execute' => 'nullable|boolean',
+            'plan_id' => 'nullable|integer|exists:plans,id',
         ]);
 
-        $lead        = MarketingLead::findOrFail($data['marketing_lead_id']);
-        $channel     = $data['channel'] ?? 'whatsapp';
+        $lead = MarketingLead::findOrFail($data['marketing_lead_id']);
+        $channel = $data['channel'] ?? 'whatsapp';
         $autoExecute = (bool) ($data['auto_execute'] ?? false);
-        $plan        = isset($data['plan_id']) ? Plan::find($data['plan_id']) : null;
+        $plan = isset($data['plan_id']) ? Plan::find($data['plan_id']) : null;
 
         // Conversación + registro del mensaje entrante del lead.
         $conversation = isset($data['conversation_id'])
@@ -90,10 +89,10 @@ class InternalMarketingController extends Controller
 
         $inbound = MarketingMessage::create([
             'conversation_id' => $conversation->id,
-            'direction'       => MarketingMessage::DIRECTION_INBOUND,
-            'sender_type'     => MarketingMessage::SENDER_LEAD,
-            'body'            => $data['body'],
-            'status'          => 'received',
+            'direction' => MarketingMessage::DIRECTION_INBOUND,
+            'sender_type' => MarketingMessage::SENDER_LEAD,
+            'body' => $data['body'],
+            'status' => 'received',
         ]);
         $conversation->update(['last_message_at' => now()]);
 
@@ -102,14 +101,14 @@ class InternalMarketingController extends Controller
         $result = $orchestrator->handle($lead, $conversation, $inbound->id, $data['body'], $plan, $autoExecute);
 
         return response()->json([
-            'ok'              => true,
-            'lead_id'         => $lead->id,
+            'ok' => true,
+            'lead_id' => $lead->id,
             'conversation_id' => $conversation->id,
-            'message_id'      => $inbound->id,
-            'ai_action_id'    => $result['ai_action_id'],
-            'auto_execute'    => $result['auto_execute'],
-            'decision'        => $result['decision'],
-            'executed'        => $result['executed'],
+            'message_id' => $inbound->id,
+            'ai_action_id' => $result['ai_action_id'],
+            'auto_execute' => $result['auto_execute'],
+            'decision' => $result['decision'],
+            'executed' => $result['executed'],
         ]);
     }
 
@@ -117,27 +116,27 @@ class InternalMarketingController extends Controller
     public function aiAction(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'lead_id'         => 'required|integer|exists:marketing_leads,id',
+            'lead_id' => 'required|integer|exists:marketing_leads,id',
             'conversation_id' => 'nullable|integer|exists:marketing_conversations,id',
-            'action_type'     => 'required|string|max:60',
-            'reason'          => 'nullable|string|max:1000',
-            'confidence'      => 'nullable|numeric|min:0|max:1',
-            'status'          => 'nullable|string|in:proposed,executed,skipped,failed',
-            'intent'          => 'nullable|string|max:40',
-            'objection'       => 'nullable|string|max:40',
-            'temperature'     => 'nullable|string|in:hot,warm,cold,unqualified',
+            'action_type' => 'required|string|max:60',
+            'reason' => 'nullable|string|max:1000',
+            'confidence' => 'nullable|numeric|min:0|max:1',
+            'status' => 'nullable|string|in:proposed,executed,skipped,failed',
+            'intent' => 'nullable|string|max:40',
+            'objection' => 'nullable|string|max:40',
+            'temperature' => 'nullable|string|in:hot,warm,cold,unqualified',
         ]);
 
         $action = MarketingAiAction::create([
-            'lead_id'         => $data['lead_id'],
+            'lead_id' => $data['lead_id'],
             'conversation_id' => $data['conversation_id'] ?? null,
-            'action_type'     => $data['action_type'],
-            'reason'          => $data['reason'] ?? null,
-            'confidence'      => $data['confidence'] ?? null,
-            'status'          => $data['status'] ?? 'proposed',
-            'metadata'        => array_filter([
-                'intent'      => $data['intent'] ?? null,
-                'objection'   => $data['objection'] ?? null,
+            'action_type' => $data['action_type'],
+            'reason' => $data['reason'] ?? null,
+            'confidence' => $data['confidence'] ?? null,
+            'status' => $data['status'] ?? 'proposed',
+            'metadata' => array_filter([
+                'intent' => $data['intent'] ?? null,
+                'objection' => $data['objection'] ?? null,
                 'temperature' => $data['temperature'] ?? null,
             ]),
         ]);
@@ -162,12 +161,12 @@ class InternalMarketingController extends Controller
     public function sendMessage(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'marketing_lead_id'      => 'required_without:conversation_id|integer|exists:marketing_leads,id',
-            'conversation_id'        => 'nullable|integer|exists:marketing_conversations,id',
-            'channel'                => 'nullable|string|in:whatsapp',
-            'body'                   => 'required|string|max:4000',
+            'marketing_lead_id' => 'required_without:conversation_id|integer|exists:marketing_leads,id',
+            'conversation_id' => 'nullable|integer|exists:marketing_conversations,id',
+            'channel' => 'nullable|string|in:whatsapp',
+            'body' => 'required|string|max:4000',
             'payment_transaction_id' => 'nullable|integer|exists:payment_transactions,id',
-            'payment_url'            => 'nullable|url|max:2048',
+            'payment_url' => 'nullable|url|max:2048',
         ]);
 
         $lead = $this->resolveLeadForSend($data);
@@ -177,7 +176,7 @@ class InternalMarketingController extends Controller
 
         $channel = $data['channel'] ?? 'whatsapp';
         $result = $this->dispatcher->dispatchWhatsapp($lead, $channel, $data['body'], array_filter([
-            'kind'                   => isset($data['payment_url']) ? 'payment_link' : 'text',
+            'kind' => isset($data['payment_url']) ? 'payment_link' : 'text',
             'payment_transaction_id' => $data['payment_transaction_id'] ?? null,
         ], fn ($v) => $v !== null));
 
@@ -197,10 +196,10 @@ class InternalMarketingController extends Controller
     ): JsonResponse {
         $data = $request->validate([
             'marketing_lead_id' => 'required|integer|exists:marketing_leads,id',
-            'plan_id'           => 'required|integer|exists:plans,id',
-            'channel'           => 'nullable|string|in:whatsapp',
-            'wants_invoice'     => 'nullable|boolean',
-            'invoice_email'     => 'nullable|email|max:160',
+            'plan_id' => 'required|integer|exists:plans,id',
+            'channel' => 'nullable|string|in:whatsapp',
+            'wants_invoice' => 'nullable|boolean',
+            'invoice_email' => 'nullable|email|max:160',
         ]);
 
         $lead = MarketingLead::findOrFail($data['marketing_lead_id']);
@@ -212,16 +211,16 @@ class InternalMarketingController extends Controller
             $guardrail->assertCanGeneratePaymentLink($lead, $plan, $request->all());
         } catch (SalesGuardrailException $e) {
             return response()->json([
-                'ok'       => false,
-                'code'     => $e->errorCode,
-                'message'  => $e->getMessage(),
+                'ok' => false,
+                'code' => $e->errorCode,
+                'message' => $e->getMessage(),
                 'escalate' => $e->escalate,
-                'sent'     => false,
+                'sent' => false,
             ], $e->httpStatus);
         }
 
         $link = WompiPaymentLinkService::make()->generateForLead($lead, $plan, [
-            'channel'       => $channel,
+            'channel' => $channel,
             'wants_invoice' => (bool) ($data['wants_invoice'] ?? false),
             'invoice_email' => $data['invoice_email'] ?? null,
         ]);
@@ -229,11 +228,11 @@ class InternalMarketingController extends Controller
         // Falta config Wompi Web Checkout → 503 controlado (no 500, sin enviar).
         if (($link['configured'] ?? false) === false) {
             return response()->json([
-                'ok'      => false,
-                'code'    => $link['error'] ?? 'wompi_checkout_not_configured',
+                'ok' => false,
+                'code' => $link['error'] ?? 'wompi_checkout_not_configured',
                 'message' => $link['message'] ?? 'Link de pago no disponible.',
                 'missing' => $link['missing'] ?? [],
-                'sent'    => false,
+                'sent' => false,
             ], 503);
         }
 
@@ -245,15 +244,15 @@ class InternalMarketingController extends Controller
         // Si no es seguro mandar el link (ya pagó / sin URL), no se envía.
         if (! $linkSafe) {
             return response()->json([
-                'ok'           => true,
-                'lead_id'      => $lead->id,
-                'payment_url'  => $link['payment_url'] ?? null,
-                'reference'    => $link['reference'] ?? null,
+                'ok' => true,
+                'lead_id' => $lead->id,
+                'payment_url' => $link['payment_url'] ?? null,
+                'reference' => $link['reference'] ?? null,
                 'already_paid' => (bool) ($link['already_paid'] ?? false),
-                'sent'         => false,
-                'dry_run'      => false,
+                'sent' => false,
+                'dry_run' => false,
                 'safe_to_send' => false,
-                'reason'       => ($link['already_paid'] ?? false) ? 'already_paid' : 'link_not_safe_to_send',
+                'reason' => ($link['already_paid'] ?? false) ? 'already_paid' : 'link_not_safe_to_send',
             ]);
         }
 
@@ -261,16 +260,16 @@ class InternalMarketingController extends Controller
         $body = $this->buildPaymentLinkMessage($plan, (float) $link['amount'], $link['payment_url']);
 
         $send = $this->dispatcher->dispatchWhatsapp($lead, $channel, $body, [
-            'kind'      => 'payment_link',
+            'kind' => 'payment_link',
             'reference' => $link['reference'] ?? null,
         ]);
 
         return response()->json(array_merge($send, [
-            'lead_id'       => $lead->id,
-            'payment_url'   => $link['payment_url'],
-            'reference'     => $link['reference'] ?? null,
-            'amount'        => $link['amount'] ?? null,
-            'currency'      => $link['currency'] ?? null,
+            'lead_id' => $lead->id,
+            'payment_url' => $link['payment_url'],
+            'reference' => $link['reference'] ?? null,
+            'amount' => $link['amount'] ?? null,
+            'currency' => $link['currency'] ?? null,
             'prepared_body' => $body,
         ]));
     }
@@ -283,8 +282,10 @@ class InternalMarketingController extends Controller
         }
         if (! empty($data['conversation_id'])) {
             $conversation = MarketingConversation::find($data['conversation_id']);
+
             return $conversation ? MarketingLead::find($conversation->lead_id) : null;
         }
+
         return null;
     }
 
@@ -302,25 +303,25 @@ class InternalMarketingController extends Controller
     {
         $data = $request->validate([
             'conversation_id' => 'required|integer|exists:marketing_conversations,id',
-            'reason'          => 'nullable|string|max:500',
+            'reason' => 'nullable|string|max:500',
         ]);
 
         $conversation = MarketingConversation::findOrFail($data['conversation_id']);
         // Takeover MANUAL (desde CRM): es la ÚNICA forma de pausar la IA. Se marca
         // el origen para que el router lo respete (y no lo recupere como automático).
         $conversation->update([
-            'human_takeover'        => true,
+            'human_takeover' => true,
             'human_takeover_source' => 'manual',
-            'ai_enabled'            => false,
+            'ai_enabled' => false,
         ]);
 
         // Trazabilidad: queda registrado como acción IA.
         MarketingAiAction::create([
-            'lead_id'         => $conversation->lead_id,
+            'lead_id' => $conversation->lead_id,
             'conversation_id' => $conversation->id,
-            'action_type'     => 'human_takeover',
-            'reason'          => $data['reason'] ?? null,
-            'status'          => 'executed',
+            'action_type' => 'human_takeover',
+            'reason' => $data['reason'] ?? null,
+            'status' => 'executed',
         ]);
 
         return response()->json(['ok' => true, 'conversation_id' => $conversation->id, 'human_takeover' => true]);
@@ -330,9 +331,9 @@ class InternalMarketingController extends Controller
     public function followups(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'lead_id'          => 'required|integer|exists:marketing_leads,id',
-            'due_at'           => 'nullable|date',
-            'type'             => 'nullable|string|in:message,call,task',
+            'lead_id' => 'required|integer|exists:marketing_leads,id',
+            'due_at' => 'nullable|date',
+            'type' => 'nullable|string|in:message,call,task',
             'message_template' => 'nullable|string|max:2000',
         ]);
 
@@ -340,17 +341,17 @@ class InternalMarketingController extends Controller
         $followup = MarketingFollowup::firstOrCreate(
             [
                 'lead_id' => $data['lead_id'],
-                'type'    => $data['type'] ?? 'message',
-                'due_at'  => $data['due_at'] ?? null,
-                'status'  => MarketingFollowup::STATUS_PENDING,
+                'type' => $data['type'] ?? 'message',
+                'due_at' => $data['due_at'] ?? null,
+                'status' => MarketingFollowup::STATUS_PENDING,
             ],
             ['message_template' => $data['message_template'] ?? null],
         );
 
         return response()->json([
-            'ok'          => true,
+            'ok' => true,
             'followup_id' => $followup->id,
-            'created'     => $followup->wasRecentlyCreated,
+            'created' => $followup->wasRecentlyCreated,
         ]);
     }
 
@@ -368,11 +369,11 @@ class InternalMarketingController extends Controller
     ): JsonResponse {
         $data = $request->validate([
             'marketing_lead_id' => 'required|integer|exists:marketing_leads,id',
-            'plan_id'           => 'required|integer|exists:plans,id',
-            'channel'           => 'nullable|string|max:40',
-            'conversation_id'   => 'nullable|integer|exists:marketing_conversations,id',
-            'wants_invoice'     => 'nullable|boolean',
-            'invoice_email'     => 'nullable|email|max:160',
+            'plan_id' => 'required|integer|exists:plans,id',
+            'channel' => 'nullable|string|max:40',
+            'conversation_id' => 'nullable|integer|exists:marketing_conversations,id',
+            'wants_invoice' => 'nullable|boolean',
+            'invoice_email' => 'nullable|email|max:160',
         ]);
 
         $lead = MarketingLead::findOrFail($data['marketing_lead_id']);
@@ -384,25 +385,25 @@ class InternalMarketingController extends Controller
             $guardrail->assertCanGeneratePaymentLink($lead, $plan, $request->all());
         } catch (SalesGuardrailException $e) {
             return response()->json([
-                'ok'       => false,
-                'code'     => $e->errorCode,
-                'message'  => $e->getMessage(),
+                'ok' => false,
+                'code' => $e->errorCode,
+                'message' => $e->getMessage(),
                 'escalate' => $e->escalate,
             ], $e->httpStatus);
         }
 
         $result = WompiPaymentLinkService::make()->generateForLead($lead, $plan, [
             'conversation_id' => $data['conversation_id'] ?? null,
-            'channel'         => $data['channel'] ?? null,
-            'wants_invoice'   => (bool) ($data['wants_invoice'] ?? false),
-            'invoice_email'   => $data['invoice_email'] ?? null,
+            'channel' => $data['channel'] ?? null,
+            'wants_invoice' => (bool) ($data['wants_invoice'] ?? false),
+            'invoice_email' => $data['invoice_email'] ?? null,
         ]);
 
         // Falta configuración Wompi Web Checkout → 503 controlado, sin link falso.
         if (($result['configured'] ?? false) === false) {
             return response()->json([
-                'ok'      => false,
-                'code'    => $result['error'] ?? 'wompi_checkout_not_configured',
+                'ok' => false,
+                'code' => $result['error'] ?? 'wompi_checkout_not_configured',
                 'message' => $result['message'] ?? 'Link de pago no disponible.',
                 'missing' => $result['missing'] ?? [],
             ], 503);
@@ -416,16 +417,16 @@ class InternalMarketingController extends Controller
         $this->recordPaymentLinkTrace($lead, $data['conversation_id'] ?? null, $result, $safeToSend);
 
         return response()->json([
-            'ok'             => true,
-            'lead_id'        => $lead->id,
-            'payment_url'    => $result['payment_url'] ?? null,
-            'reference'      => $result['reference'] ?? null,
-            'amount'         => $result['amount'] ?? null,
-            'currency'       => $result['currency'] ?? null,
-            'expires_at'     => $result['expires_at'] ?? null,
+            'ok' => true,
+            'lead_id' => $lead->id,
+            'payment_url' => $result['payment_url'] ?? null,
+            'reference' => $result['reference'] ?? null,
+            'amount' => $result['amount'] ?? null,
+            'currency' => $result['currency'] ?? null,
+            'expires_at' => $result['expires_at'] ?? null,
             'transaction_id' => $result['transaction_id'] ?? null,
-            'already_paid'   => (bool) ($result['already_paid'] ?? false),
-            'safe_to_send'   => $safeToSend,
+            'already_paid' => (bool) ($result['already_paid'] ?? false),
+            'safe_to_send' => $safeToSend,
         ]);
     }
 
@@ -433,28 +434,28 @@ class InternalMarketingController extends Controller
     private function recordPaymentLinkTrace(MarketingLead $lead, ?int $conversationId, array $result, bool $safeToSend): void
     {
         MarketingAiAction::create([
-            'lead_id'         => $lead->id,
+            'lead_id' => $lead->id,
             'conversation_id' => $conversationId,
-            'action_type'     => 'payment_link_generated',
-            'reason'          => $result['already_paid'] ?? false ? 'already_paid' : null,
-            'status'          => 'executed',
-            'metadata'        => array_filter([
-                'reference'      => $result['reference'] ?? null,
+            'action_type' => 'payment_link_generated',
+            'reason' => $result['already_paid'] ?? false ? 'already_paid' : null,
+            'status' => 'executed',
+            'metadata' => array_filter([
+                'reference' => $result['reference'] ?? null,
                 'transaction_id' => $result['transaction_id'] ?? null,
-                'amount'         => $result['amount'] ?? null,
-                'safe_to_send'   => $safeToSend,
+                'amount' => $result['amount'] ?? null,
+                'safe_to_send' => $safeToSend,
             ], fn ($v) => $v !== null),
         ]);
 
         if ($conversationId !== null && $safeToSend) {
             MarketingMessage::create([
                 'conversation_id' => $conversationId,
-                'direction'       => MarketingMessage::DIRECTION_OUTBOUND,
-                'sender_type'     => MarketingMessage::SENDER_SYSTEM,
-                'body'            => 'Link de pago: '.$result['payment_url'],
-                'status'          => 'generated',
-                'metadata'        => array_filter([
-                    'kind'      => 'payment_link',
+                'direction' => MarketingMessage::DIRECTION_OUTBOUND,
+                'sender_type' => MarketingMessage::SENDER_SYSTEM,
+                'body' => 'Link de pago: '.$result['payment_url'],
+                'status' => 'generated',
+                'metadata' => array_filter([
+                    'kind' => 'payment_link',
                     'reference' => $result['reference'] ?? null,
                 ], fn ($v) => $v !== null),
             ]);
@@ -474,49 +475,49 @@ class InternalMarketingController extends Controller
             ? MarketingMessage::where('conversation_id', $conversation->id)
                 ->latest('created_at')->limit(10)->get()
                 ->map(fn (MarketingMessage $m) => [
-                    'direction'   => $m->direction,
+                    'direction' => $m->direction,
                     'sender_type' => $m->sender_type,
-                    'body'        => $m->body,
-                    'created_at'  => $m->created_at?->toIso8601String(),
+                    'body' => $m->body,
+                    'created_at' => $m->created_at?->toIso8601String(),
                 ])->reverse()->values()
             : [];
 
         // Planes reales (evita que la IA invente precios).
         $plans = Plan::where('active', true)->get(['id', 'name', 'price', 'duration_days'])
             ->map(fn (Plan $p) => [
-                'id'            => $p->id,
-                'name'          => $p->name,
-                'price'         => (float) $p->price,
+                'id' => $p->id,
+                'name' => $p->name,
+                'price' => (float) $p->price,
                 'duration_days' => $p->duration_days,
             ]);
 
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => [
                 'lead' => [
-                    'id'                 => $model->id,
-                    'name'               => $model->name,
-                    'channel'            => $model->channel,
-                    'status'             => $model->status,
-                    'temperature'        => $model->temperature,
-                    'objective'          => $model->objective,
+                    'id' => $model->id,
+                    'name' => $model->name,
+                    'channel' => $model->channel,
+                    'status' => $model->status,
+                    'temperature' => $model->temperature,
+                    'objective' => $model->objective,
                     'instagram_username' => $model->instagram_username,
                 ],
                 'conversation' => $conversation ? [
-                    'id'             => $conversation->id,
-                    'channel'        => $conversation->channel,
+                    'id' => $conversation->id,
+                    'channel' => $conversation->channel,
                     'human_takeover' => (bool) $conversation->human_takeover,
-                    'ai_enabled'     => (bool) $conversation->ai_enabled,
+                    'ai_enabled' => (bool) $conversation->ai_enabled,
                 ] : null,
-                'last_messages'    => $lastMessages,
-                'campaign'         => $model->campaign ? [
-                    'id'        => $model->campaign->id,
-                    'name'      => $model->campaign->name,
+                'last_messages' => $lastMessages,
+                'campaign' => $model->campaign ? [
+                    'id' => $model->campaign->id,
+                    'name' => $model->campaign->name,
                     'objective' => $model->campaign->objective,
                 ] : null,
                 'membership_plans' => $plans,
-                'business_info'    => [
-                    'name'     => 'Iron Body Neiva',
+                'business_info' => [
+                    'name' => 'Iron Body Neiva',
                     'whatsapp' => config('meta.whatsapp_display_phone'),
                 ],
             ],

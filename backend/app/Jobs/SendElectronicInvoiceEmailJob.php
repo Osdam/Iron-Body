@@ -34,6 +34,7 @@ class SendElectronicInvoiceEmailJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
+
     public int $backoff = 60;
 
     public function __construct(public int $electronicInvoiceId)
@@ -72,6 +73,7 @@ class SendElectronicInvoiceEmailJob implements ShouldQueue
                 'Sin correo válido del cliente; no se envía.',
             );
             $invoice->markCustomerEmailFailed('Sin correo válido del cliente.');
+
             return;
         }
 
@@ -91,8 +93,9 @@ class SendElectronicInvoiceEmailJob implements ShouldQueue
             );
             Log::warning('billing.customer_email_failed', [
                 'invoice_id' => $invoice->id,
-                'recipient'  => $this->maskEmail($invoice->customer_email),
+                'recipient' => $this->maskEmail($invoice->customer_email),
             ]);
+
             return; // No relanzar: best-effort, sin reintentos a ciegas.
         }
 
@@ -103,7 +106,7 @@ class SendElectronicInvoiceEmailJob implements ShouldQueue
             'ok',
             'Comprobante enviado al correo del cliente.',
             payloadExcerpt: [
-                'recipient'    => $this->maskEmail($invoice->customer_email),
+                'recipient' => $this->maskEmail($invoice->customer_email),
                 'attached_pdf' => $this->hasSpec($attachments, 'pdf'),
                 'attached_xml' => $this->hasSpec($attachments, 'xml'),
             ],
@@ -129,7 +132,7 @@ class SendElectronicInvoiceEmailJob implements ShouldQueue
             $specs[] = [
                 'disk' => $disk,
                 'path' => $invoice->pdf_path,
-                'as'   => "Factura-{$base}.pdf",
+                'as' => "Factura-{$base}.pdf",
                 'mime' => 'application/pdf',
             ];
         }
@@ -140,7 +143,7 @@ class SendElectronicInvoiceEmailJob implements ShouldQueue
             $specs[] = [
                 'disk' => $disk,
                 'path' => $invoice->xml_path,
-                'as'   => "Factura-{$base}.xml",
+                'as' => "Factura-{$base}.xml",
                 'mime' => 'application/xml',
             ];
         }
@@ -152,10 +155,11 @@ class SendElectronicInvoiceEmailJob implements ShouldQueue
     private function hasSpec(array $specs, string $ext): bool
     {
         foreach ($specs as $s) {
-            if (str_ends_with($s['as'], '.' . $ext)) {
+            if (str_ends_with($s['as'], '.'.$ext)) {
                 return true;
             }
         }
+
         return false;
     }
 
@@ -166,6 +170,7 @@ class SendElectronicInvoiceEmailJob implements ShouldQueue
         if ($at === false || $at < 1) {
             return '***';
         }
-        return $email[0] . str_repeat('*', max(1, $at - 1)) . substr($email, $at);
+
+        return $email[0].str_repeat('*', max(1, $at - 1)).substr($email, $at);
     }
 }

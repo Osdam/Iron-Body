@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Concerns;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Tamaño de página negociable por la petición (`?per_page=`), con techo.
@@ -33,7 +34,7 @@ trait ResolvesPagination
      */
     protected function likeOperator(?string $driver = null): string
     {
-        $driver ??= \Illuminate\Support\Facades\DB::connection()->getDriverName();
+        $driver ??= DB::connection()->getDriverName();
 
         return $driver === 'pgsql' ? 'ilike' : 'like';
     }
@@ -41,6 +42,6 @@ trait ResolvesPagination
     /** Envuelve un término de búsqueda en comodines, escapando `%` y `_`. */
     protected function likeTerm(string $search): string
     {
-        return '%' . str_replace(['%', '_'], ['\%', '\_'], trim($search)) . '%';
+        return '%'.str_replace(['%', '_'], ['\%', '\_'], trim($search)).'%';
     }
 }

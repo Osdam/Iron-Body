@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Member;
 use App\Models\MemberAuthChallenge;
 use App\Models\MemberDeviceBinding;
+use App\Models\MemberSecurityEvent;
 use App\Services\AccountRiskService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Schema;
@@ -65,6 +66,7 @@ class AuthAdaptiveLoginDoctorCommand extends Command
 
         if ($document === '' || $deviceId === '') {
             $this->line("\nSugerencia: pasa --document y --device-id para evaluar un equipo concreto.");
+
             return self::SUCCESS;
         }
 
@@ -72,6 +74,7 @@ class AuthAdaptiveLoginDoctorCommand extends Command
         $member = Member::query()->where('document_number', $document)->first();
         if (! $member) {
             $this->error("\nNo existe un miembro con ese documento.");
+
             return self::FAILURE;
         }
 
@@ -81,7 +84,7 @@ class AuthAdaptiveLoginDoctorCommand extends Command
         $trusted = $match;
         $reauthDue = $trusted && $binding !== null && $binding->needsOtpReauth();
         $score = $risk->score($member);
-        $scoreForTier = $risk->score($member, [\App\Models\MemberSecurityEvent::TYPE_NEW_DEVICE]);
+        $scoreForTier = $risk->score($member, [MemberSecurityEvent::TYPE_NEW_DEVICE]);
 
         $tier = $adaptive
             ? $risk->loginTier($member, $trusted, $preferOtp, $reauthDue)

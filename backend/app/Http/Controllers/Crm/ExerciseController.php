@@ -13,11 +13,11 @@ class ExerciseController extends Controller
         $query = Exercise::query();
 
         if ($request->filled('search')) {
-            $term = '%' . $request->input('search') . '%';
+            $term = '%'.$request->input('search').'%';
             $query->where(function ($q) use ($term) {
                 $q->where('name', 'like', $term)
-                  ->orWhere('muscle_group', 'like', $term)
-                  ->orWhere('body_part', 'like', $term);
+                    ->orWhere('muscle_group', 'like', $term)
+                    ->orWhere('body_part', 'like', $term);
             });
         }
         if ($request->filled('difficulty')) {
@@ -72,16 +72,16 @@ class ExerciseController extends Controller
     private function validateInput(Request $request): array
     {
         return $request->validate([
-            'name'          => 'required|string|max:255',
-            'muscle_group'  => 'nullable|string|max:100',
-            'body_part'     => 'nullable|string|max:100',
-            'difficulty'    => 'nullable|string|max:50',
-            'equipment'     => 'nullable|string|max:100',
-            'description'   => 'nullable|string',
-            'steps'         => 'nullable|string',
-            'tips'          => 'nullable|string',
-            'muscles_worked'=> 'nullable|string',
-            'gif_url'       => 'nullable|url|max:1000',
+            'name' => 'required|string|max:255',
+            'muscle_group' => 'nullable|string|max:100',
+            'body_part' => 'nullable|string|max:100',
+            'difficulty' => 'nullable|string|max:50',
+            'equipment' => 'nullable|string|max:100',
+            'description' => 'nullable|string',
+            'steps' => 'nullable|string',
+            'tips' => 'nullable|string',
+            'muscles_worked' => 'nullable|string',
+            'gif_url' => 'nullable|url|max:1000',
             'thumbnail_url' => 'nullable|url|max:1000',
         ]);
     }
@@ -89,18 +89,18 @@ class ExerciseController extends Controller
     private function mapInput(array $data): array
     {
         return [
-            'name'           => $data['name'],
-            'muscle_group'   => $data['muscle_group'] ?? null,
-            'body_part'      => $data['body_part'] ?? null,
-            'difficulty'     => $data['difficulty'] ?? null,
-            'equipment'      => $data['equipment'] ?? null,
-            'description'    => $data['description'] ?? null,
-            'steps'          => $this->parseLines($data['steps'] ?? null),
-            'tips'           => $this->parseLines($data['tips'] ?? null),
+            'name' => $data['name'],
+            'muscle_group' => $data['muscle_group'] ?? null,
+            'body_part' => $data['body_part'] ?? null,
+            'difficulty' => $data['difficulty'] ?? null,
+            'equipment' => $data['equipment'] ?? null,
+            'description' => $data['description'] ?? null,
+            'steps' => $this->parseLines($data['steps'] ?? null),
+            'tips' => $this->parseLines($data['tips'] ?? null),
             'muscles_worked' => $this->parseLines($data['muscles_worked'] ?? null),
-            'gif_url'        => $data['gif_url'] ?? null,
-            'thumbnail_url'  => $data['thumbnail_url'] ?? null,
-            'provider'       => 'manual',
+            'gif_url' => $data['gif_url'] ?? null,
+            'thumbnail_url' => $data['thumbnail_url'] ?? null,
+            'provider' => 'manual',
         ];
     }
 
@@ -109,6 +109,7 @@ class ExerciseController extends Controller
         if ($value === null || trim($value) === '') {
             return null;
         }
+
         return array_values(array_filter(array_map('trim', explode("\n", $value))));
     }
 }

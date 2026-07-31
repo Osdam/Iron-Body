@@ -18,14 +18,12 @@ use Illuminate\Http\Request;
  */
 class ProgressController extends Controller
 {
-    public function __construct(private readonly ProgressSummaryService $service)
-    {
-    }
+    public function __construct(private readonly ProgressSummaryService $service) {}
 
     public function summary(Request $request): JsonResponse
     {
         $member = $request->attributes->get('auth_member');
-        if (!$member) {
+        if (! $member) {
             return response()->json(['success' => false, 'message' => 'No autenticado.'], 401);
         }
 

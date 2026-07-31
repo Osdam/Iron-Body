@@ -18,9 +18,7 @@ use Illuminate\Http\Request;
  */
 class NutritionOcrController extends Controller
 {
-    public function __construct(private NutritionOcrService $ocr)
-    {
-    }
+    public function __construct(private NutritionOcrService $ocr) {}
 
     private function member(Request $request): Member
     {
@@ -32,10 +30,10 @@ class NutritionOcrController extends Controller
     {
         if (! $this->ocr->isEnabled()) {
             return response()->json([
-                'ok'      => false,
-                'status'  => 'unavailable',
+                'ok' => false,
+                'status' => 'unavailable',
                 'message' => 'Lectura automática de etiqueta estará disponible pronto. '
-                    . 'Puedes crear el alimento manualmente.',
+                    .'Puedes crear el alimento manualmente.',
             ]);
         }
 
@@ -46,17 +44,17 @@ class NutritionOcrController extends Controller
         $image = $request->file('image');
         if ($image && $image->getSize() > $maxMb * 1024 * 1024) {
             return response()->json([
-                'ok'      => false,
-                'code'    => 'ocr_image_too_large',
+                'ok' => false,
+                'code' => 'ocr_image_too_large',
                 'message' => 'La imagen es demasiado pesada. Intenta con una foto más cercana o más clara.',
             ], 422);
         }
 
         $request->validate([
-            'image'          => "nullable|image|mimes:jpg,jpeg,png,webp|max:" . ($maxMb * 1024),
-            'text'           => 'nullable|string|max:8000', // OCR de cliente (opcional)
-            'barcode'        => 'nullable|string|max:32',
-            'food_uuid'      => 'nullable|string|max:64',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:'.($maxMb * 1024),
+            'text' => 'nullable|string|max:8000', // OCR de cliente (opcional)
+            'barcode' => 'nullable|string|max:32',
+            'food_uuid' => 'nullable|string|max:64',
             'source_context' => 'nullable|string|max:60',
         ]);
 
@@ -68,10 +66,10 @@ class NutritionOcrController extends Controller
         );
 
         return response()->json([
-            'ok'     => $scan->status === NutritionOcrScan::STATUS_PROCESSED,
+            'ok' => $scan->status === NutritionOcrScan::STATUS_PROCESSED,
             'status' => $scan->status,
             'requires_confirmation' => $this->ocr->requiresConfirmation(),
-            'data'   => $this->present($scan),
+            'data' => $this->present($scan),
         ]);
     }
 
@@ -83,6 +81,7 @@ class NutritionOcrController extends Controller
         if (! $scan) {
             return response()->json(['ok' => false, 'message' => 'Escaneo no encontrado.'], 404);
         }
+
         return response()->json(['ok' => true, 'data' => $this->present($scan)]);
     }
 
@@ -96,26 +95,26 @@ class NutritionOcrController extends Controller
         }
 
         $data = $request->validate([
-            'confirmed'    => 'nullable|boolean',
-            'food_uuid'    => 'nullable|string|max:64',
-            'name'         => 'required|string|max:160',
-            'brand'        => 'nullable|string|max:120',
-            'barcode'      => 'nullable|string|max:32',
+            'confirmed' => 'nullable|boolean',
+            'food_uuid' => 'nullable|string|max:64',
+            'name' => 'required|string|max:160',
+            'brand' => 'nullable|string|max:120',
+            'barcode' => 'nullable|string|max:32',
             'serving_size' => 'required|numeric|gt:0',
             'serving_unit' => 'nullable|string|max:20',
-            'calories'     => 'required|numeric|min:0',
-            'protein'      => 'required|numeric|min:0',
-            'carbs'        => 'required|numeric|min:0',
-            'fat'          => 'required|numeric|min:0',
-            'sugar'        => 'nullable|numeric|min:0',
-            'fiber'        => 'nullable|numeric|min:0',
-            'sodium'       => 'nullable|numeric|min:0',
+            'calories' => 'required|numeric|min:0',
+            'protein' => 'required|numeric|min:0',
+            'carbs' => 'required|numeric|min:0',
+            'fat' => 'required|numeric|min:0',
+            'sugar' => 'nullable|numeric|min:0',
+            'fiber' => 'nullable|numeric|min:0',
+            'sodium' => 'nullable|numeric|min:0',
         ]);
 
         // El OCR SOLO propone: el guardado exige confirmación explícita del usuario.
         if ($this->ocr->requiresConfirmation() && ! $request->boolean('confirmed', false)) {
             return response()->json([
-                'ok'      => false,
+                'ok' => false,
                 'message' => 'Debes revisar y confirmar los datos antes de guardar.',
             ], 422);
         }
@@ -135,19 +134,20 @@ class NutritionOcrController extends Controller
         }
 
         $food = $this->ocr->confirmDraftFood($member, $scan, $data, $existing);
+
         return response()->json(['ok' => true, 'data' => $food->toApiArray()], 201);
     }
 
     private function present(NutritionOcrScan $scan): array
     {
         return [
-            'uuid'             => $scan->uuid,
-            'status'           => $scan->status,
-            'provider'         => $scan->provider,
+            'uuid' => $scan->uuid,
+            'status' => $scan->status,
+            'provider' => $scan->provider,
             'confidence_score' => $scan->confidence_score,
-            'draft'            => $scan->parsed_payload,
-            'error_message'    => $scan->error_message,
-            'created_food_id'  => $scan->created_food_id,
+            'draft' => $scan->parsed_payload,
+            'error_message' => $scan->error_message,
+            'created_food_id' => $scan->created_food_id,
         ];
     }
 }

@@ -20,9 +20,9 @@ class ElectronicInvoiceLog extends Model
     ];
 
     protected $casts = [
-        'action'          => InvoiceLogAction::class,
-        'http_status'     => 'integer',
-        'duration_ms'     => 'integer',
+        'action' => InvoiceLogAction::class,
+        'http_status' => 'integer',
+        'duration_ms' => 'integer',
         'payload_excerpt' => 'array',
     ];
 

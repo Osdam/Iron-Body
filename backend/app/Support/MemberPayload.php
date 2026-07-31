@@ -23,19 +23,19 @@ class MemberPayload
         $user = $member->user;
 
         return [
-            'id'                => $member->id,
-            'member_id'         => $member->id,
-            'member_uuid'       => $member->member_uuid,
-            'full_name'         => $member->full_name,
-            'email'             => $member->email ?: $user?->email,
-            'document_number'   => $member->document_number,
-            'phone'             => $member->phone ?: $user?->phone,
-            'goal'              => $member->goal,
-            'plan_name'         => $user?->plan,
+            'id' => $member->id,
+            'member_id' => $member->id,
+            'member_uuid' => $member->member_uuid,
+            'full_name' => $member->full_name,
+            'email' => $member->email ?: $user?->email,
+            'document_number' => $member->document_number,
+            'phone' => $member->phone ?: $user?->phone,
+            'goal' => $member->goal,
+            'plan_name' => $user?->plan,
             'membership_expiry' => $user?->membershipEndDate,
-            'access_hash'       => $accessToken,
-            'status'            => $member->status,
-            'features'          => self::featuresFor($user),
+            'access_hash' => $accessToken,
+            'status' => $member->status,
+            'features' => self::featuresFor($user),
         ];
     }
 

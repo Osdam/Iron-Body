@@ -24,19 +24,19 @@ class NutritionGoalRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'metabolic_sex'   => ['nullable', 'in:male,female,unspecified'],
-            'birthdate'       => ['nullable', 'date', 'before:today'],
-            'age'             => ['nullable', 'integer', 'min:10', 'max:120'],
-            'weight_kg'       => ['nullable', 'numeric', 'min:20', 'max:400'],
-            'height_cm'       => ['nullable', 'numeric', 'min:80', 'max:260'],
-            'objective'       => ['nullable', 'string', 'max:40'],
+            'metabolic_sex' => ['nullable', 'in:male,female,unspecified'],
+            'birthdate' => ['nullable', 'date', 'before:today'],
+            'age' => ['nullable', 'integer', 'min:10', 'max:120'],
+            'weight_kg' => ['nullable', 'numeric', 'min:20', 'max:400'],
+            'height_cm' => ['nullable', 'numeric', 'min:80', 'max:260'],
+            'objective' => ['nullable', 'string', 'max:40'],
             'experience_level' => ['nullable', 'in:beginner,intermediate,advanced'],
-            'activity_level'  => ['nullable', 'in:sedentary,light,moderate,very_active,athlete'],
+            'activity_level' => ['nullable', 'in:sedentary,light,moderate,very_active,athlete'],
             'activity_factor' => ['nullable', 'numeric', 'min:1', 'max:2.5'],
             'training_days_per_week' => ['nullable', 'integer', 'min:0', 'max:7'],
-            'training_type'   => ['nullable', 'string', 'max:40'],
+            'training_type' => ['nullable', 'string', 'max:40'],
             'target_weight_kg' => ['nullable', 'numeric', 'min:20', 'max:400'],
-            'pace'            => ['nullable', 'in:conservative,moderate,aggressive'],
+            'pace' => ['nullable', 'in:conservative,moderate,aggressive'],
         ];
     }
 

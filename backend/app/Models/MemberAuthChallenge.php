@@ -12,27 +12,39 @@ use Illuminate\Support\Str;
  */
 class MemberAuthChallenge extends Model
 {
-    public const STATUS_PENDING   = 'pending';
-    public const STATUS_VERIFIED  = 'verified';
+    public const STATUS_PENDING = 'pending';
+
+    public const STATUS_VERIFIED = 'verified';
+
     public const STATUS_COMPLETED = 'completed';
-    public const STATUS_EXPIRED   = 'expired';
-    public const STATUS_BLOCKED   = 'blocked';
+
+    public const STATUS_EXPIRED = 'expired';
+
+    public const STATUS_BLOCKED = 'blocked';
 
     /** Propósito del reto: el login es el por defecto; el resto son acciones sensibles. */
-    public const PURPOSE_LOGIN                = 'login';
-    public const PURPOSE_ACCOUNT_DELETE       = 'account_delete';
-    public const PURPOSE_DEVICE_REVOKE        = 'device_revoke';
+    public const PURPOSE_LOGIN = 'login';
+
+    public const PURPOSE_ACCOUNT_DELETE = 'account_delete';
+
+    public const PURPOSE_DEVICE_REVOKE = 'device_revoke';
+
     public const PURPOSE_DEVICE_REVOKE_OTHERS = 'device_revoke_others';
-    public const PURPOSE_DEVICE_UNBIND        = 'device_unbind';
-    public const PURPOSE_PHONE_CHANGE         = 'phone_change';
+
+    public const PURPOSE_DEVICE_UNBIND = 'device_unbind';
+
+    public const PURPOSE_PHONE_CHANGE = 'phone_change';
+
     // Ticket de un solo uso para recuperación de número desde el login (sin
     // sesión): se emite tras validar dispositivo confiable y se canjea en la app
     // tras la biometría LOCAL. No envía SMS ni actualiza nada por sí mismo.
     public const PURPOSE_PHONE_RECOVERY_TICKET = 'phone_recovery_ticket';
 
     /** Nivel del login adaptativo (Bloque 3b). Null = login clásico. */
-    public const TIER_LOCAL    = 'local';
-    public const TIER_OTP      = 'otp';
+    public const TIER_LOCAL = 'local';
+
+    public const TIER_OTP = 'otp';
+
     public const TIER_OTP_FACE = 'otp_face';
 
     protected $fillable = [
@@ -63,11 +75,11 @@ class MemberAuthChallenge extends Model
     protected function casts(): array
     {
         return [
-            'attempts'     => 'integer',
+            'attempts' => 'integer',
             'resend_count' => 'integer',
             'last_sent_at' => 'datetime',
-            'expires_at'   => 'datetime',
-            'consumed_at'  => 'datetime',
+            'expires_at' => 'datetime',
+            'consumed_at' => 'datetime',
         ];
     }
 
@@ -119,6 +131,6 @@ class MemberAuthChallenge extends Model
         $tail = substr($digits, -2);
         $maskCount = max($len - strlen($head) - strlen($tail), 2);
 
-        return $head . str_repeat('*', $maskCount) . $tail;
+        return $head.str_repeat('*', $maskCount).$tail;
     }
 }

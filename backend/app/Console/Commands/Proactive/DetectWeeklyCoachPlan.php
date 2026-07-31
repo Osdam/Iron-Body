@@ -12,6 +12,7 @@ use App\Models\Member;
 class DetectWeeklyCoachPlan extends BaseProactiveDetectorCommand
 {
     protected $signature = 'ironbody:detect-weekly-coach-plan {--dry-run} {--member-id=} {--limit=} {--event=}';
+
     protected $description = 'Invita a planificar la semana y emite weekly.coach_plan.';
 
     protected function detect(): void

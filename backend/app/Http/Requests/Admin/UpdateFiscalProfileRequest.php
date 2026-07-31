@@ -20,18 +20,18 @@ class UpdateFiscalProfileRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'doc_type'             => ['required', 'string', 'max:20'],
-            'doc_number'           => ['required', 'string', 'max:50'],
-            'dv'                   => ['nullable', 'string', 'max:2'],
-            'person_type'          => ['nullable', Rule::in(['natural', 'juridica'])],
-            'legal_name'           => ['nullable', 'string', 'max:255'],
+            'doc_type' => ['required', 'string', 'max:20'],
+            'doc_number' => ['required', 'string', 'max:50'],
+            'dv' => ['nullable', 'string', 'max:2'],
+            'person_type' => ['nullable', Rule::in(['natural', 'juridica'])],
+            'legal_name' => ['nullable', 'string', 'max:255'],
             'tax_responsibilities' => ['nullable', 'array'],
             'tax_responsibilities.*' => ['string', 'max:60'],
-            'email'                => ['nullable', 'email', 'max:255'],
-            'phone'                => ['nullable', 'string', 'max:40'],
-            'address'              => ['nullable', 'string', 'max:255'],
-            'city_code'            => ['nullable', 'string', 'max:20'],
-            'department_code'      => ['nullable', 'string', 'max:20'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:40'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'city_code' => ['nullable', 'string', 'max:20'],
+            'department_code' => ['nullable', 'string', 'max:20'],
         ];
     }
 }

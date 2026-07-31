@@ -26,9 +26,7 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class AuthenticateMember
 {
-    public function __construct(private DeviceSessionService $sessions)
-    {
-    }
+    public function __construct(private DeviceSessionService $sessions) {}
 
     public function handle(Request $request, Closure $next): Response
     {
@@ -158,13 +156,13 @@ class AuthenticateMember
     {
         Log::info('auth:member:failed', [
             'reason' => $code,
-            'path'   => $request->path(),
-            'ip'     => $request->ip(),
+            'path' => $request->path(),
+            'ip' => $request->ip(),
         ]);
 
         return response()->json([
-            'ok'      => false,
-            'code'    => $code,
+            'ok' => false,
+            'code' => $code,
             'message' => $message,
         ], 401);
     }

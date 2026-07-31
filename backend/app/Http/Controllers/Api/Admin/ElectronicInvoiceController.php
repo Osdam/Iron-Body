@@ -28,9 +28,7 @@ use InvalidArgumentException;
  */
 class ElectronicInvoiceController extends Controller
 {
-    public function __construct(private InvoicingService $invoicing)
-    {
-    }
+    public function __construct(private InvoicingService $invoicing) {}
 
     // GET /api/admin/electronic-invoices
     public function index(Request $request): JsonResponse
@@ -49,9 +47,9 @@ class ElectronicInvoiceController extends Controller
             'data' => collect($page->items())->map(fn (ElectronicInvoice $i) => $i->toAdminArray()),
             'meta' => [
                 'current_page' => $page->currentPage(),
-                'last_page'    => $page->lastPage(),
-                'per_page'     => $page->perPage(),
-                'total'        => $page->total(),
+                'last_page' => $page->lastPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
             ],
         ]);
     }
@@ -66,7 +64,7 @@ class ElectronicInvoiceController extends Controller
     public function stats(Request $request): JsonResponse
     {
         $from = $request->input('date_from');
-        $to   = $request->input('date_to');
+        $to = $request->input('date_to');
 
         $scoped = fn () => ElectronicInvoice::query()
             ->when($from, fn ($q, $v) => $q->whereDate('created_at', '>=', $v))
@@ -85,14 +83,14 @@ class ElectronicInvoiceController extends Controller
         return response()->json([
             'data' => [
                 'total_invoiced' => $totalInvoiced,
-                'by_status'      => $byStatus,
-                'total'          => (int) $scoped()->count(),
-                'pending'        => (int) $scoped()->where('status', 'pending')->count(),
-                'processing'     => (int) $scoped()->whereIn('status', ['processing', 'credit_note_processing'])->count(),
-                'validated'      => (int) $scoped()->whereIn('status', ['validated', 'credit_note_validated'])->count(),
-                'rejected'       => (int) $scoped()->whereIn('status', ['rejected', 'credit_note_rejected'])->count(),
-                'error'          => (int) $scoped()->whereIn('status', ['error', 'credit_note_error'])->count(),
-                'cancelled'      => (int) $scoped()->where('status', 'cancelled')->count(),
+                'by_status' => $byStatus,
+                'total' => (int) $scoped()->count(),
+                'pending' => (int) $scoped()->where('status', 'pending')->count(),
+                'processing' => (int) $scoped()->whereIn('status', ['processing', 'credit_note_processing'])->count(),
+                'validated' => (int) $scoped()->whereIn('status', ['validated', 'credit_note_validated'])->count(),
+                'rejected' => (int) $scoped()->whereIn('status', ['rejected', 'credit_note_rejected'])->count(),
+                'error' => (int) $scoped()->whereIn('status', ['error', 'credit_note_error'])->count(),
+                'cancelled' => (int) $scoped()->where('status', 'cancelled')->count(),
             ],
         ]);
     }
@@ -107,24 +105,24 @@ class ElectronicInvoiceController extends Controller
 
         return response()->json([
             'data' => [
-                'enabled'        => (bool) ($c['enabled'] ?? false),
-                'env'            => $c['env'] ?? 'sandbox',
-                'base_url'       => $c['base_url'] ?? null,
-                'queue'          => $c['queue'] ?? 'billing',
-                'http'           => [
-                    'timeout'       => $c['http']['timeout'] ?? null,
-                    'retry_times'   => $c['http']['retry_times'] ?? null,
+                'enabled' => (bool) ($c['enabled'] ?? false),
+                'env' => $c['env'] ?? 'sandbox',
+                'base_url' => $c['base_url'] ?? null,
+                'queue' => $c['queue'] ?? 'billing',
+                'http' => [
+                    'timeout' => $c['http']['timeout'] ?? null,
+                    'retry_times' => $c['http']['retry_times'] ?? null,
                     'retry_backoff' => $c['http']['retry_backoff'] ?? null,
                 ],
-                'company'        => $c['company'] ?? [],
-                'numbering'      => $c['numbering'] ?? [],
-                'defaults'       => $c['defaults'] ?? [],
+                'company' => $c['company'] ?? [],
+                'numbering' => $c['numbering'] ?? [],
+                'defaults' => $c['defaults'] ?? [],
                 'consumer_final' => $c['consumer_final'] ?? [],
                 'reconciliation' => $c['reconciliation'] ?? [],
-                'storage'        => ['disk' => $c['storage']['disk'] ?? null],
-                'webhook'        => ['enabled' => (bool) ($c['webhook']['enabled'] ?? false)],
+                'storage' => ['disk' => $c['storage']['disk'] ?? null],
+                'webhook' => ['enabled' => (bool) ($c['webhook']['enabled'] ?? false)],
                 // Readiness de producción (lista de bloqueos saneada, sin secretos).
-                'production_ready'  => $validator->isReadyForProduction(),
+                'production_ready' => $validator->isReadyForProduction(),
                 'production_issues' => $validator->productionReadiness(),
             ],
         ]);
@@ -151,14 +149,14 @@ class ElectronicInvoiceController extends Controller
 
         $this->audit($request, 'create', 'Emisión manual de factura', (string) $invoice->id, [
             'source_type' => $data['source_type'],
-            'source_id'   => $data['source_id'],
-            'enabled'     => (bool) config('billing.enabled'),
+            'source_id' => $data['source_id'],
+            'enabled' => (bool) config('billing.enabled'),
         ]);
 
         return response()->json([
-            'ok'      => true,
+            'ok' => true,
             'enabled' => (bool) config('billing.enabled'),
-            'data'    => $invoice->toAdminArray(),
+            'data' => $invoice->toAdminArray(),
         ], $invoice->wasRecentlyCreated ? 201 : 200);
     }
 
@@ -241,9 +239,9 @@ class ElectronicInvoiceController extends Controller
         ]);
 
         return response()->json([
-            'ok'      => true,
+            'ok' => true,
             'enabled' => (bool) config('billing.enabled'),
-            'data'    => $note->toAdminArray(),
+            'data' => $note->toAdminArray(),
         ], $note->wasRecentlyCreated ? 201 : 200);
     }
 
@@ -256,11 +254,12 @@ class ElectronicInvoiceController extends Controller
     private function downloadFile(ElectronicInvoice $invoice, string $kind)
     {
         $path = $kind === 'pdf' ? $invoice->pdf_path : $invoice->xml_path;
-        $url  = $kind === 'pdf' ? $invoice->pdf_url : $invoice->xml_url;
+        $url = $kind === 'pdf' ? $invoice->pdf_url : $invoice->xml_url;
         $disk = (string) config('billing.storage.disk', 'local');
 
         if ($path && Storage::disk($disk)->exists($path)) {
             $name = ($invoice->full_number ?: $invoice->uuid).'.'.$kind;
+
             return Storage::disk($disk)->download($path, $name);
         }
 
@@ -288,17 +287,17 @@ class ElectronicInvoiceController extends Controller
         $admin = $request->attributes->get('auth_admin');
 
         AuditLog::create([
-            'action'      => $action,
-            'module'      => 'billing',
-            'entity'      => 'electronic_invoice',
-            'entity_id'   => $entityId,
-            'actor_id'    => $admin?->id,
-            'actor_name'  => $admin?->name ?? 'CRM',
-            'actor_role'  => $admin?->role,
-            'summary'     => $summary,
-            'metadata'    => $metadata ?: null,
-            'ip_address'  => $request->ip(),
-            'user_agent'  => substr((string) $request->userAgent(), 0, 255),
+            'action' => $action,
+            'module' => 'billing',
+            'entity' => 'electronic_invoice',
+            'entity_id' => $entityId,
+            'actor_id' => $admin?->id,
+            'actor_name' => $admin?->name ?? 'CRM',
+            'actor_role' => $admin?->role,
+            'summary' => $summary,
+            'metadata' => $metadata ?: null,
+            'ip_address' => $request->ip(),
+            'user_agent' => substr((string) $request->userAgent(), 0, 255),
         ]);
     }
 }

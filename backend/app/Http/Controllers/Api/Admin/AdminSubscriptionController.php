@@ -23,11 +23,11 @@ class AdminSubscriptionController extends Controller
     public function index(Request $request): JsonResponse
     {
         $request->validate([
-            'status'           => 'nullable|string|max:30',
-            'member_id'        => 'nullable|integer',
-            'past_due'         => 'nullable|boolean',
+            'status' => 'nullable|string|max:30',
+            'member_id' => 'nullable|integer',
+            'past_due' => 'nullable|boolean',
             'next_charge_before' => 'nullable|date',
-            'per_page'         => 'nullable|integer|min:1|max:100',
+            'per_page' => 'nullable|integer|min:1|max:100',
         ]);
 
         $q = MembershipSubscription::query()->with(['plan', 'paymentSource']);
@@ -43,7 +43,7 @@ class AdminSubscriptionController extends Controller
         }
         if ($request->filled('next_charge_before')) {
             $q->whereNotNull('next_charge_at')
-              ->where('next_charge_at', '<=', $request->date('next_charge_before'));
+                ->where('next_charge_at', '<=', $request->date('next_charge_before'));
         }
 
         $page = $q->orderByRaw('next_charge_at is null, next_charge_at asc')
@@ -53,9 +53,9 @@ class AdminSubscriptionController extends Controller
             'data' => SubscriptionResource::collection($page->items()),
             'meta' => [
                 'current_page' => $page->currentPage(),
-                'last_page'    => $page->lastPage(),
-                'total'        => $page->total(),
-                'per_page'     => $page->perPage(),
+                'last_page' => $page->lastPage(),
+                'total' => $page->total(),
+                'per_page' => $page->perPage(),
             ],
         ]);
     }
@@ -83,13 +83,13 @@ class AdminSubscriptionController extends Controller
 
         return response()->json([
             'subscription' => new SubscriptionResource($sub),
-            'member'       => $sub->member ? [
-                'id'        => $sub->member->id,
+            'member' => $sub->member ? [
+                'id' => $sub->member->id,
                 'full_name' => $sub->member->full_name,
-                'email'     => $sub->member->email,
+                'email' => $sub->member->email,
             ] : null,
-            'charges'      => $charges,
-            'events'       => $events,
+            'charges' => $charges,
+            'events' => $events,
         ]);
     }
 
@@ -101,8 +101,8 @@ class AdminSubscriptionController extends Controller
         $result = RecurringBillingService::make()->retryNow($sub);
 
         return response()->json([
-            'ok'           => in_array($result, ['approved', 'pending'], true),
-            'result'       => $result,
+            'ok' => in_array($result, ['approved', 'pending'], true),
+            'result' => $result,
             'subscription' => new SubscriptionResource($sub->fresh()->load(['plan', 'paymentSource'])),
         ]);
     }
@@ -117,7 +117,7 @@ class AdminSubscriptionController extends Controller
             ->cancel($sub, SubscriptionEvent::ACTOR_ADMIN, $request->input('reason'));
 
         return response()->json([
-            'ok'           => true,
+            'ok' => true,
             'subscription' => new SubscriptionResource($updated->load(['plan', 'paymentSource'])),
         ]);
     }

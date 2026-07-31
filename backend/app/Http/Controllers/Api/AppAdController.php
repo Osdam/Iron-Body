@@ -43,6 +43,7 @@ class AppAdController extends Controller
                 ['seen_at' => now()],
             );
         }
+
         return response()->json(['ok' => true]);
     }
 

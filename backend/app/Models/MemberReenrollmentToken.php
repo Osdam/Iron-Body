@@ -13,7 +13,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class MemberReenrollmentToken extends Model
 {
     public const STATUS_PENDING = 'pending';
-    public const STATUS_USED    = 'used';
+
+    public const STATUS_USED = 'used';
+
     public const STATUS_EXPIRED = 'expired';
 
     protected $fillable = [
@@ -36,9 +38,9 @@ class MemberReenrollmentToken extends Model
     protected function casts(): array
     {
         return [
-            'attempts'   => 'integer',
+            'attempts' => 'integer',
             'expires_at' => 'datetime',
-            'used_at'    => 'datetime',
+            'used_at' => 'datetime',
         ];
     }
 

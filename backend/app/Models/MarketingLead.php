@@ -10,19 +10,30 @@ class MarketingLead extends Model
 {
     // Estados del lead.
     public const STATUS_NEW = 'new';
+
     public const STATUS_INTERESTED = 'interested';
+
     public const STATUS_HOT = 'hot';
+
     public const STATUS_WARM = 'warm';
+
     public const STATUS_COLD = 'cold';
+
     public const STATUS_UNQUALIFIED = 'unqualified';
+
     public const STATUS_DISCARDED = 'discarded';
+
     public const STATUS_CONVERTED = 'converted';
+
     public const STATUS_NEEDS_HUMAN = 'needs_human';
 
     // Estado del consentimiento de contacto comercial.
     public const CONSENT_GRANTED = 'granted';
-    public const CONSENT_DENIED  = 'denied';
+
+    public const CONSENT_DENIED = 'denied';
+
     public const CONSENT_PENDING = 'pending';
+
     public const CONSENT_UNKNOWN = 'unknown';
 
     protected $fillable = [
@@ -37,12 +48,12 @@ class MarketingLead extends Model
 
     protected $casts = [
         'first_message_at' => 'datetime',
-        'last_message_at'  => 'datetime',
-        'converted_at'     => 'datetime',
-        'do_not_contact'   => 'boolean',
-        'consent_at'       => 'datetime',
+        'last_message_at' => 'datetime',
+        'converted_at' => 'datetime',
+        'do_not_contact' => 'boolean',
+        'consent_at' => 'datetime',
         'last_human_takeover_at' => 'datetime',
-        'metadata'         => 'array',
+        'metadata' => 'array',
     ];
 
     /** ¿Es seguro para el agente contactar a este lead? */

@@ -19,9 +19,7 @@ use Illuminate\Http\Request;
  */
 class NotifyMemberController extends Controller
 {
-    public function __construct(private readonly AppNotificationService $service)
-    {
-    }
+    public function __construct(private readonly AppNotificationService $service) {}
 
     public function notify(Request $request): JsonResponse
     {

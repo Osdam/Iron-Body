@@ -25,10 +25,10 @@ class N8nTestEvent extends Command
         ]);
 
         $this->info('Evento emitido:');
-        $this->line('  id              = ' . $event->id);
-        $this->line('  event_type      = ' . $event->event_type);
-        $this->line('  status          = ' . $event->status);
-        $this->line('  idempotency_key = ' . $event->idempotency_key);
+        $this->line('  id              = '.$event->id);
+        $this->line('  event_type      = '.$event->event_type);
+        $this->line('  status          = '.$event->status);
+        $this->line('  idempotency_key = '.$event->idempotency_key);
 
         if ($event->status === 'skipped') {
             $this->warn('n8n está deshabilitado (N8N_ENABLED=false): el evento quedó en "skipped" sin enviarse.');

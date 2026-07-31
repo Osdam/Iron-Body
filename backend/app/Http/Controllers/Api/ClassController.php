@@ -28,7 +28,7 @@ class ClassController extends Controller
     public function index(Request $request)
     {
         // Optional member context: app sends access_hash as Bearer token.
-        $member   = $this->resolveMember($request);
+        $member = $this->resolveMember($request);
         $memberId = $member?->id;
 
         $query = MyClass::query()->with('trainer:id,full_name');
@@ -91,6 +91,7 @@ class ClassController extends Controller
             $context = $memberId !== null
                 ? $this->memberClassContext($reserved, $sessions->get($c->id), $attendance->get($c->id))
                 : [];
+
             return new ClassResource($c, $reserved, $context, $myRow?->id);
         });
 
@@ -136,29 +137,29 @@ class ClassController extends Controller
         // Clase ÚNICA (is_recurring=false): exige fecha y deriva el día desde ella.
         $this->normalizeRecurrenceInput($request, requireDateWhenSingle: true);
         $validated = $request->validate([
-            'name'                 => 'required|string|max:255',
-            'type'                 => 'required|string|max:100',
-            'day_of_week'          => 'required|string|in:Lunes,Martes,Miércoles,Jueves,Viernes,Sábado,Domingo',
-            'start_time'           => 'required|date_format:H:i',
-            'end_time'             => 'required|date_format:H:i|after:start_time',
-            'duration_minutes'     => 'nullable|integer|min:15',
-            'max_capacity'         => 'required|integer|min:1',
-            'location'             => 'nullable|string|max:255',
-            'status'               => 'nullable|string|in:active,inactive,finished',
-            'trainer_id'           => 'nullable|exists:trainers,id',
-            'instructor'           => 'nullable|string|max:255',
-            'date_time'            => 'nullable|date',
-            'description'          => 'nullable|string',
-            'notes'                => 'nullable|string',
-            'is_recurring'         => 'nullable|boolean',
-            'renewal_hours'        => 'nullable|integer|in:0,8,12,24,48,168',
+            'name' => 'required|string|max:255',
+            'type' => 'required|string|max:100',
+            'day_of_week' => 'required|string|in:Lunes,Martes,Miércoles,Jueves,Viernes,Sábado,Domingo',
+            'start_time' => 'required|date_format:H:i',
+            'end_time' => 'required|date_format:H:i|after:start_time',
+            'duration_minutes' => 'nullable|integer|min:15',
+            'max_capacity' => 'required|integer|min:1',
+            'location' => 'nullable|string|max:255',
+            'status' => 'nullable|string|in:active,inactive,finished',
+            'trainer_id' => 'nullable|exists:trainers,id',
+            'instructor' => 'nullable|string|max:255',
+            'date_time' => 'nullable|date',
+            'description' => 'nullable|string',
+            'notes' => 'nullable|string',
+            'is_recurring' => 'nullable|boolean',
+            'renewal_hours' => 'nullable|integer|in:0,8,12,24,48,168',
             'allow_online_booking' => 'nullable|boolean',
             'requires_active_plan' => 'nullable|boolean',
         ]);
 
         if (empty($validated['duration_minutes'])) {
             $start = \DateTime::createFromFormat('H:i', $validated['start_time']);
-            $end   = \DateTime::createFromFormat('H:i', $validated['end_time']);
+            $end = \DateTime::createFromFormat('H:i', $validated['end_time']);
             $validated['duration_minutes'] = $end->diff($start)->i + ($end->diff($start)->h * 60);
         }
 
@@ -184,23 +185,23 @@ class ClassController extends Controller
         // única, el día se deriva de ella para mantener coherencia.
         $this->normalizeRecurrenceInput($request, requireDateWhenSingle: false);
         $validated = $request->validate([
-            'name'                 => 'sometimes|string|max:255',
-            'type'                 => 'sometimes|string|max:100',
-            'day_of_week'          => 'sometimes|string|in:Lunes,Martes,Miércoles,Jueves,Viernes,Sábado,Domingo',
-            'start_time'           => 'sometimes|date_format:H:i',
-            'end_time'             => 'sometimes|date_format:H:i|after:start_time',
-            'duration_minutes'     => 'nullable|integer|min:15',
-            'max_capacity'         => 'sometimes|integer|min:1',
-            'enrolled_count'       => 'nullable|integer|min:0',
-            'location'             => 'nullable|string|max:255',
-            'status'               => 'sometimes|string|in:active,inactive,finished',
-            'trainer_id'           => 'nullable|exists:trainers,id',
-            'instructor'           => 'nullable|string|max:255',
-            'date_time'            => 'nullable|date',
-            'description'          => 'nullable|string',
-            'notes'                => 'nullable|string',
-            'is_recurring'         => 'nullable|boolean',
-            'renewal_hours'        => 'nullable|integer|in:0,8,12,24,48,168',
+            'name' => 'sometimes|string|max:255',
+            'type' => 'sometimes|string|max:100',
+            'day_of_week' => 'sometimes|string|in:Lunes,Martes,Miércoles,Jueves,Viernes,Sábado,Domingo',
+            'start_time' => 'sometimes|date_format:H:i',
+            'end_time' => 'sometimes|date_format:H:i|after:start_time',
+            'duration_minutes' => 'nullable|integer|min:15',
+            'max_capacity' => 'sometimes|integer|min:1',
+            'enrolled_count' => 'nullable|integer|min:0',
+            'location' => 'nullable|string|max:255',
+            'status' => 'sometimes|string|in:active,inactive,finished',
+            'trainer_id' => 'nullable|exists:trainers,id',
+            'instructor' => 'nullable|string|max:255',
+            'date_time' => 'nullable|date',
+            'description' => 'nullable|string',
+            'notes' => 'nullable|string',
+            'is_recurring' => 'nullable|boolean',
+            'renewal_hours' => 'nullable|integer|in:0,8,12,24,48,168',
             'allow_online_booking' => 'nullable|boolean',
             'requires_active_plan' => 'nullable|boolean',
         ]);
@@ -211,7 +212,7 @@ class ClassController extends Controller
             ! empty($validated['end_time'])
         ) {
             $start = \DateTime::createFromFormat('H:i', $validated['start_time']);
-            $end   = \DateTime::createFromFormat('H:i', $validated['end_time']);
+            $end = \DateTime::createFromFormat('H:i', $validated['end_time']);
             if ($start && $end && $end > $start) {
                 $validated['duration_minutes'] = $end->diff($start)->i + ($end->diff($start)->h * 60);
             }
@@ -383,19 +384,19 @@ class ClassController extends Controller
             ->get()
             ->map(fn ($r) => [
                 'reservation_id' => $r->id,
-                'reserved_at'    => $r->reserved_at->toIso8601String(),
-                'member'         => [
-                    'id'        => $r->member->id,
-                    'uuid'      => $r->member->member_uuid,
+                'reserved_at' => $r->reserved_at->toIso8601String(),
+                'member' => [
+                    'id' => $r->member->id,
+                    'uuid' => $r->member->member_uuid,
                     'full_name' => $r->member->full_name,
-                    'email'     => $r->member->email,
-                    'phone'     => $r->member->phone,
+                    'email' => $r->member->email,
+                    'phone' => $r->member->phone,
                 ],
             ]);
 
         return response()->json([
-            'class_id'     => $myClass->id,
-            'class_name'   => $myClass->name,
+            'class_id' => $myClass->id,
+            'class_name' => $myClass->name,
             'max_capacity' => $myClass->max_capacity,
             'booked_spots' => $reservations->count(),
             'reservations' => $reservations,
@@ -550,6 +551,7 @@ class ClassController extends Controller
         if (! $token) {
             return null;
         }
+
         return Member::resolveByToken($token);
     }
 }

@@ -102,7 +102,7 @@ class BackfillRoutineExerciseMediaCommand extends Command
      * Devuelve el item enriquecido (solo añade campos faltantes) o null si no
      * cambió. Preserva siempre todas las claves existentes.
      *
-     * @param  array<string,mixed> $item
+     * @param  array<string,mixed>  $item
      * @return array<string,mixed>|null
      */
     private function enrichItem(array $item, ExerciseCatalogResolver $resolver, int &$itemsEnriched, int &$unmatched): ?array
@@ -116,6 +116,7 @@ class BackfillRoutineExerciseMediaCommand extends Command
         $match = $resolver->resolveSafe($exId, $item['name'] ?? null);
         if ($match === null) {
             $unmatched++;
+
             return null;
         }
 

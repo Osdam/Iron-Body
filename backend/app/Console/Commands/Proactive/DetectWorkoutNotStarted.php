@@ -16,6 +16,7 @@ use App\Models\RoutineCompletion;
 class DetectWorkoutNotStarted extends BaseProactiveDetectorCommand
 {
     protected $signature = 'ironbody:detect-workout-not-started {--dry-run} {--member-id=} {--limit=} {--event=}';
+
     protected $description = 'Detecta miembros con entrenamiento esperado hoy sin iniciar y emite workout.not_started_today.';
 
     protected function detect(): void
@@ -33,7 +34,7 @@ class DetectWorkoutNotStarted extends BaseProactiveDetectorCommand
             }
 
             $routines = Routine::query()->whereIn('id', $routineIds)->get(['id', 'days']);
-            if (!$this->expectedToday($routines, $isoDow)) {
+            if (! $this->expectedToday($routines, $isoDow)) {
                 return;
             }
 
@@ -67,7 +68,7 @@ class DetectWorkoutNotStarted extends BaseProactiveDetectorCommand
 
         foreach ($routines as $routine) {
             $days = $routine->days;
-            if (empty($days) || !is_array($days)) {
+            if (empty($days) || ! is_array($days)) {
                 return true; // sin calendario definido → válido cualquier día
             }
             foreach ($days as $d) {
@@ -77,6 +78,7 @@ class DetectWorkoutNotStarted extends BaseProactiveDetectorCommand
                 }
             }
         }
+
         return false;
     }
 }

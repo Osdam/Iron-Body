@@ -8,7 +8,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class MarketingFollowup extends Model
 {
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_DONE = 'done';
+
     public const STATUS_CANCELLED = 'cancelled';
 
     protected $fillable = [

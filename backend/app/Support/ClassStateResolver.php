@@ -31,9 +31,9 @@ final class ClassStateResolver
     {
         return match ($attendance) {
             ClassAttendance::STATUS_PRESENT => 'attended',
-            ClassAttendance::STATUS_LATE    => 'late',
-            ClassAttendance::STATUS_ABSENT  => 'absent',
-            default                         => $reserved ? 'reserved' : 'none',
+            ClassAttendance::STATUS_LATE => 'late',
+            ClassAttendance::STATUS_ABSENT => 'absent',
+            default => $reserved ? 'reserved' : 'none',
         };
     }
 
@@ -53,9 +53,9 @@ final class ClassStateResolver
         if ($sessionStatus === 'finished') {
             return match ($attendance) {
                 ClassAttendance::STATUS_PRESENT => 'attended',
-                ClassAttendance::STATUS_LATE    => 'late',
-                ClassAttendance::STATUS_ABSENT  => 'absent',
-                default                         => 'finished',
+                ClassAttendance::STATUS_LATE => 'late',
+                ClassAttendance::STATUS_ABSENT => 'absent',
+                default => 'finished',
             };
         }
         if ($sessionStatus === 'live') {

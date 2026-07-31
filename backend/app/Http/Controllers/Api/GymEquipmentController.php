@@ -37,7 +37,7 @@ class GymEquipmentController extends Controller
             $query->where('category', $request->input('category'));
         }
         if ($request->filled('search')) {
-            $term = '%' . $request->input('search') . '%';
+            $term = '%'.$request->input('search').'%';
             $query->where(function ($q) use ($term) {
                 $q->where('name', 'like', $term)
                     ->orWhere('brand', 'like', $term)
@@ -55,12 +55,12 @@ class GymEquipmentController extends Controller
     public function stats(): JsonResponse
     {
         return response()->json([
-            'total'        => GymEquipment::count(),
-            'operational'  => GymEquipment::where('status', 'operational')->count(),
-            'maintenance'  => GymEquipment::where('status', 'maintenance')->count(),
+            'total' => GymEquipment::count(),
+            'operational' => GymEquipment::where('status', 'operational')->count(),
+            'maintenance' => GymEquipment::where('status', 'maintenance')->count(),
             'out_of_service' => GymEquipment::where('status', 'out_of_service')->count(),
             'ai_available' => GymEquipment::forAi()->count(),
-            'by_category'  => GymEquipment::selectRaw('category, COUNT(*) as count')
+            'by_category' => GymEquipment::selectRaw('category, COUNT(*) as count')
                 ->groupBy('category')->pluck('count', 'category'),
         ]);
     }
@@ -121,23 +121,23 @@ class GymEquipmentController extends Controller
     private function validatePayload(Request $request, ?int $ignoreId = null): array
     {
         return $request->validate([
-            'name'                => ['required', 'string', 'max:255'],
-            'slug'                => ['nullable', 'string', 'max:255'],
-            'category'            => ['nullable', Rule::in(GymEquipment::CATEGORIES)],
-            'muscle_groups'       => ['nullable', 'array'],
-            'muscle_groups.*'     => ['string', 'max:120'],
-            'aliases'             => ['nullable', 'array'],
-            'aliases.*'           => ['string', 'max:120'],
-            'brand'               => ['nullable', 'string', 'max:255'],
-            'model'               => ['nullable', 'string', 'max:255'],
-            'serial_number'       => ['nullable', 'string', 'max:255'],
-            'zone'                => ['nullable', 'string', 'max:255'],
-            'quantity'            => ['nullable', 'integer', 'min:0'],
-            'status'              => ['nullable', Rule::in(GymEquipment::STATUSES)],
-            'image_url'           => ['nullable', 'string', 'max:1024'],
-            'notes'               => ['nullable', 'string'],
+            'name' => ['required', 'string', 'max:255'],
+            'slug' => ['nullable', 'string', 'max:255'],
+            'category' => ['nullable', Rule::in(GymEquipment::CATEGORIES)],
+            'muscle_groups' => ['nullable', 'array'],
+            'muscle_groups.*' => ['string', 'max:120'],
+            'aliases' => ['nullable', 'array'],
+            'aliases.*' => ['string', 'max:120'],
+            'brand' => ['nullable', 'string', 'max:255'],
+            'model' => ['nullable', 'string', 'max:255'],
+            'serial_number' => ['nullable', 'string', 'max:255'],
+            'zone' => ['nullable', 'string', 'max:255'],
+            'quantity' => ['nullable', 'integer', 'min:0'],
+            'status' => ['nullable', Rule::in(GymEquipment::STATUSES)],
+            'image_url' => ['nullable', 'string', 'max:1024'],
+            'notes' => ['nullable', 'string'],
             'is_available_for_ai' => ['nullable', 'boolean'],
-            'acquired_at'         => ['nullable', 'date'],
+            'acquired_at' => ['nullable', 'date'],
             'last_maintenance_at' => ['nullable', 'date'],
         ]);
     }

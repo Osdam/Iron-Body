@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\InvoiceType;
 use App\Exceptions\PaymentHasInvoiceException;
+use App\Services\Billing\InvoiceEmail;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -51,7 +52,7 @@ class Payment extends Model
      */
     public function marcarFacturaSolicitada(?string $email = null): bool
     {
-        $email = \App\Services\Billing\InvoiceEmail::normalizar($email);
+        $email = InvoiceEmail::normalizar($email);
 
         if ($this->invoice_requested && $this->invoice_requested_at !== null) {
             // Ya solicitada: sólo se completa el correo si faltaba.

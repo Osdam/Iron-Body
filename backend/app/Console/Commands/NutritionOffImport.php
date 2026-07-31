@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\NutritionFood;
+use App\Services\Nutrition\BarcodeNormalizer;
 use App\Services\Nutrition\NutritionColombiaClassifier;
 use App\Services\Nutrition\NutritionFoodNormalizer;
 use Illuminate\Console\Command;
@@ -39,6 +40,7 @@ class NutritionOffImport extends Command
     protected $description = 'Importa productos de Open Food Facts desde un dump local, priorizando Colombia (opcional).';
 
     private const CURSOR_KEY = 'nutrition_off_import_cursor';
+
     private const LOCK_KEY = 'nutrition_off_import_lock';
 
     public function handle(NutritionFoodNormalizer $normalizer, NutritionColombiaClassifier $colombia): int
@@ -48,9 +50,10 @@ class NutritionOffImport extends Command
         }
 
         // Lock: evita dos importadores corriendo al tiempo (corromper cursor/upsert).
-        $lock = \Illuminate\Support\Facades\Cache::lock(self::LOCK_KEY, 3600);
+        $lock = Cache::lock(self::LOCK_KEY, 3600);
         if (! $lock->get()) {
             $this->error('Ya hay un importador en ejecución. Intenta más tarde.');
+
             return self::FAILURE;
         }
         try {
@@ -68,10 +71,12 @@ class NutritionOffImport extends Command
         $enabled = (bool) config('nutrition.openfoodfacts.import.enabled') || $this->option('file');
         if (! $enabled) {
             $this->warn('Importador deshabilitado. Usa --file=... o NUTRITION_OFF_IMPORT_ENABLED=true.');
+
             return self::SUCCESS;
         }
         if (! $file || ! is_readable($file)) {
             $this->error("Archivo no legible: {$file}");
+
             return self::FAILURE;
         }
 
@@ -84,14 +89,14 @@ class NutritionOffImport extends Command
         $resumeFrom = $this->option('resume') ? (int) Cache::get(self::CURSOR_KEY, 0) : 0;
         $isCsv = str_ends_with(strtolower($file), '.csv');
 
-        $this->info('Importando ' . ($isCsv ? 'CSV' : 'JSONL') . " desde {$file}"
-            . ($country ? " · país={$country}" : '')
-            . ($storesFilter ? ' · stores=' . implode('/', $storesFilter) : '')
-            . ($brandSeedsOnly ? ' · solo marcas Colombia' : '')
-            . ($dryRun ? ' · DRY-RUN (sin escribir)' : '')
-            . ($resumeFrom ? " (reanudando en línea {$resumeFrom})" : ''));
+        $this->info('Importando '.($isCsv ? 'CSV' : 'JSONL')." desde {$file}"
+            .($country ? " · país={$country}" : '')
+            .($storesFilter ? ' · stores='.implode('/', $storesFilter) : '')
+            .($brandSeedsOnly ? ' · solo marcas Colombia' : '')
+            .($dryRun ? ' · DRY-RUN (sin escribir)' : '')
+            .($resumeFrom ? " (reanudando en línea {$resumeFrom})" : ''));
 
-        $barcodes = new \App\Services\Nutrition\BarcodeNormalizer();
+        $barcodes = new BarcodeNormalizer;
         $stats = [
             'processed' => 0, 'created' => 0, 'updated' => 0, 'incomplete' => 0, 'complete' => 0,
             'skipped' => 0, 'no_barcode' => 0, 'invalid_barcode' => 0, 'errors' => 0,
@@ -102,6 +107,7 @@ class NutritionOffImport extends Command
         $handle = fopen($file, 'r');
         if ($handle === false) {
             $this->error('No se pudo abrir el archivo.');
+
             return self::FAILURE;
         }
         $header = $isCsv ? $this->csvHeader($handle, $line) : null;
@@ -118,32 +124,37 @@ class NutritionOffImport extends Command
             $product = $isCsv ? $this->csvRowToProduct($header, $row) : $this->jsonLineToProduct($row);
             if ($product === null) {
                 $stats['skipped']++;
+
                 continue;
             }
 
             $countriesRaw = (string) ($product['countries_tags'] ?? $product['countries'] ?? '');
-            $storesRaw    = (string) ($product['stores_tags'] ?? $product['stores'] ?? '');
-            $brandsRaw    = (string) ($product['brands'] ?? '');
+            $storesRaw = (string) ($product['stores_tags'] ?? $product['stores'] ?? '');
+            $brandsRaw = (string) ($product['brands'] ?? '');
 
             // Filtro de país (countries_tags contiene el valor). Los importados
             // vendidos en Colombia traen colombia en countries_tags → NO se excluyen.
             if ($country && ! str_contains($colombia->normalize($countriesRaw), $colombia->normalize($country))) {
                 $stats['skipped']++;
+
                 continue;
             }
             // Filtro opcional por cadenas (--stores).
             if ($storesFilter !== [] && ! $this->storesMatch($colombia, $storesRaw, $storesFilter)) {
                 $stats['skipped']++;
+
                 continue;
             }
             // Filtro opcional por marcas Colombia (--brand-seeds).
             if ($brandSeedsOnly && $colombia->matchedBrandSeed($brandsRaw) === null) {
                 $stats['skipped']++;
+
                 continue;
             }
             if (empty($product['code'])) {
                 $stats['no_barcode']++;
                 $stats['skipped']++;
+
                 continue; // sin barcode → se salta
             }
             // Dígito de control inválido se cuenta pero NO se excluye (recuperable).
@@ -156,6 +167,7 @@ class NutritionOffImport extends Command
                 $normalized = $normalizer->fromOpenFoodFacts($product);
                 if ($normalized === null) {
                     $stats['skipped']++;
+
                     continue;
                 }
                 $exists = NutritionFood::where('barcode', $normalized['barcode'])->exists();
@@ -203,21 +215,22 @@ class NutritionOffImport extends Command
             Cache::put(self::CURSOR_KEY, $line, now()->addDays(7));
         }
 
-        $this->info('Resumen → procesados: ' . $stats['processed']
-            . ' · creados: ' . $stats['created']
-            . ' · actualizados: ' . $stats['updated']
-            . ' · completos: ' . $stats['complete']
-            . ' · incompletos: ' . $stats['incomplete']
-            . ' · omitidos: ' . $stats['skipped']
-            . ' · sin barcode: ' . $stats['no_barcode']
-            . ' · barcode inválido: ' . $stats['invalid_barcode']
-            . ' · errores: ' . $stats['errors']);
-        $this->info('Colombia → detectados: ' . $stats['colombia']
-            . ' · marcas Colombia: ' . $stats['colombian_brands']
-            . ' · D1: ' . $stats['D1']
-            . ' · Éxito: ' . $stats['Éxito']
-            . ' · Olímpica: ' . $stats['Olímpica']
-            . ' · Ara: ' . $stats['Ara']);
+        $this->info('Resumen → procesados: '.$stats['processed']
+            .' · creados: '.$stats['created']
+            .' · actualizados: '.$stats['updated']
+            .' · completos: '.$stats['complete']
+            .' · incompletos: '.$stats['incomplete']
+            .' · omitidos: '.$stats['skipped']
+            .' · sin barcode: '.$stats['no_barcode']
+            .' · barcode inválido: '.$stats['invalid_barcode']
+            .' · errores: '.$stats['errors']);
+        $this->info('Colombia → detectados: '.$stats['colombia']
+            .' · marcas Colombia: '.$stats['colombian_brands']
+            .' · D1: '.$stats['D1']
+            .' · Éxito: '.$stats['Éxito']
+            .' · Olímpica: '.$stats['Olímpica']
+            .' · Ara: '.$stats['Ara']);
+
         return self::SUCCESS;
     }
 
@@ -227,17 +240,18 @@ class NutritionOffImport extends Command
         $complete = NutritionFood::where('source', 'open_food_facts')
             ->whereNotNull('calories_per_100g')->where('calories_per_100g', '>', 0)->count();
         $this->info("Open Food Facts en BD → total: {$total} · con calorías: {$complete} · cursor: "
-            . Cache::get(self::CURSOR_KEY, 0));
+            .Cache::get(self::CURSOR_KEY, 0));
 
         if ($this->option('country')) {
             $colombiaCount = NutritionFood::where('country', 'colombia')
                 ->orWhere('imported_priority_score', '>', 0)->count();
             $byChain = [];
             foreach (['D1', 'Éxito', 'Olímpica', 'Ara'] as $chain) {
-                $byChain[] = "{$chain}: " . NutritionFood::where('stores', 'like', '%' . $chain . '%')->count();
+                $byChain[] = "{$chain}: ".NutritionFood::where('stores', 'like', '%'.$chain.'%')->count();
             }
-            $this->info("Colombia en BD → {$colombiaCount} · " . implode(' · ', $byChain));
+            $this->info("Colombia en BD → {$colombiaCount} · ".implode(' · ', $byChain));
         }
+
         return self::SUCCESS;
     }
 
@@ -250,6 +264,7 @@ class NutritionOffImport extends Command
                 return true;
             }
         }
+
         return false;
     }
 
@@ -258,6 +273,7 @@ class NutritionOffImport extends Command
     {
         $header = fgetcsv($handle) ?: [];
         $line++;
+
         return array_map(fn ($h) => strtolower(trim((string) $h)), $header);
     }
 
@@ -269,6 +285,7 @@ class NutritionOffImport extends Command
             return null;
         }
         $p = json_decode($line, true);
+
         return is_array($p) ? $p : null;
     }
 
@@ -291,18 +308,19 @@ class NutritionOffImport extends Command
                 $nutr[$k] = $r[$k];
             }
         }
+
         return [
-            'code'           => $r['code'] ?? null,
-            'product_name'   => $r['product_name'] ?? null,
+            'code' => $r['code'] ?? null,
+            'product_name' => $r['product_name'] ?? null,
             'product_name_es' => $r['product_name_es'] ?? null,
-            'generic_name'   => $r['generic_name'] ?? null,
-            'brands'         => $r['brands'] ?? null,
-            'categories'     => $r['categories'] ?? null,
-            'stores'         => $r['stores'] ?? $r['stores_tags'] ?? null,
-            'image_url'      => $r['image_url'] ?? null,
-            'serving_size'   => $r['serving_size'] ?? null,
+            'generic_name' => $r['generic_name'] ?? null,
+            'brands' => $r['brands'] ?? null,
+            'categories' => $r['categories'] ?? null,
+            'stores' => $r['stores'] ?? $r['stores_tags'] ?? null,
+            'image_url' => $r['image_url'] ?? null,
+            'serving_size' => $r['serving_size'] ?? null,
             'countries_tags' => $r['countries_tags'] ?? $r['countries'] ?? null,
-            'nutriments'     => $nutr,
+            'nutriments' => $nutr,
         ];
     }
 }

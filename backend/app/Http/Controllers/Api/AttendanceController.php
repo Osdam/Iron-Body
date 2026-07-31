@@ -22,9 +22,7 @@ use Throwable;
 
 class AttendanceController extends Controller
 {
-    public function __construct(private readonly TurnstileService $turnstile)
-    {
-    }
+    public function __construct(private readonly TurnstileService $turnstile) {}
 
     /**
      * Listado paginado de asistencias para el CRM. Filtros opcionales:
@@ -179,12 +177,12 @@ class AttendanceController extends Controller
                 }
 
                 return [
-                    'user_id'     => $user->id,
-                    'member_id'   => $member->id,
+                    'user_id' => $user->id,
+                    'member_id' => $member->id,
                     'member_uuid' => $member->member_uuid,
-                    'name'        => $user->name ?: $member->full_name,
-                    'plan'        => $user->plan,
-                    'face_url'    => url("/api/attendances/face-image/{$user->id}"),
+                    'name' => $user->name ?: $member->full_name,
+                    'plan' => $user->plan,
+                    'face_url' => url("/api/attendances/face-image/{$user->id}"),
                     'captured_at' => optional($biometric->captured_at)->toIso8601String(),
                 ];
             })
@@ -245,7 +243,7 @@ class AttendanceController extends Controller
                 Member::STATUS_INCOMPLETE,
             ])
             ->when($search !== '', function ($q) use ($search): void {
-                $like = '%' . $search . '%';
+                $like = '%'.$search.'%';
                 $q->where(function ($sub) use ($like): void {
                     $sub->where('full_name', 'like', $like)
                         ->orWhere('document_number', 'like', $like)
@@ -260,15 +258,15 @@ class AttendanceController extends Controller
             $user = $member->user;
 
             return [
-                'member_id'     => $member->id,
-                'user_id'       => $user?->id,
-                'member_uuid'   => $member->member_uuid,
-                'name'          => $user?->name ?: $member->full_name,
-                'document'      => $member->document_number,
-                'plan'          => $user?->plan,
-                'status'        => $member->status,
+                'member_id' => $member->id,
+                'user_id' => $user?->id,
+                'member_uuid' => $member->member_uuid,
+                'name' => $user?->name ?: $member->full_name,
+                'document' => $member->document_number,
+                'plan' => $user?->plan,
+                'status' => $member->status,
                 'biometric_status' => $member->biometric_status,
-                'created_at'    => optional($member->created_at)->toIso8601String(),
+                'created_at' => optional($member->created_at)->toIso8601String(),
             ];
         })->values();
 

@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Member;
 use App\Models\NutritionAiRecommendation;
-use App\Models\NutritionGoal;
 use App\Services\NutritionService;
 use App\Services\RealtimeEvents;
 use Illuminate\Http\JsonResponse;
@@ -19,9 +18,7 @@ use Illuminate\Http\Request;
  */
 class NutritionAdminController extends Controller
 {
-    public function __construct(private readonly NutritionService $service)
-    {
-    }
+    public function __construct(private readonly NutritionService $service) {}
 
     /** GET /api/admin/members/{member}/nutrition — meta + día actual + historial. */
     public function show(Member $member): JsonResponse

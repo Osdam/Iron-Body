@@ -53,11 +53,11 @@ class GymEquipment extends Model
     ];
 
     protected $casts = [
-        'muscle_groups'       => 'array',
-        'aliases'             => 'array',
-        'quantity'            => 'integer',
+        'muscle_groups' => 'array',
+        'aliases' => 'array',
+        'quantity' => 'integer',
         'is_available_for_ai' => 'boolean',
-        'acquired_at'         => 'date',
+        'acquired_at' => 'date',
         'last_maintenance_at' => 'date',
     ];
 
@@ -95,13 +95,13 @@ class GymEquipment extends Model
     public function toAiReference(): array
     {
         return [
-            'name'          => $this->name,
-            'slug'          => $this->slug,
-            'category'      => $this->category,
+            'name' => $this->name,
+            'slug' => $this->slug,
+            'category' => $this->category,
             'muscle_groups' => $this->muscle_groups ?? [],
-            'aliases'       => $this->aliases ?? [],
-            'zone'          => $this->zone,
-            'quantity'      => $this->quantity,
+            'aliases' => $this->aliases ?? [],
+            'zone' => $this->zone,
+            'quantity' => $this->quantity,
         ];
     }
 
@@ -128,10 +128,10 @@ class GymEquipment extends Model
 
         return [
             'generated_at' => now()->toIso8601String(),
-            'total'        => $items->count(),
-            'names'        => $items->pluck('name')->values()->all(),
-            'by_category'  => $byCategory,
-            'items'        => $items->map(fn (GymEquipment $e) => $e->toAiReference())->all(),
+            'total' => $items->count(),
+            'names' => $items->pluck('name')->values()->all(),
+            'by_category' => $byCategory,
+            'items' => $items->map(fn (GymEquipment $e) => $e->toAiReference())->all(),
         ];
     }
 }

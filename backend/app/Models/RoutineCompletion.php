@@ -20,7 +20,7 @@ class RoutineCompletion extends Model
     {
         return [
             'completed_at' => 'datetime',
-            'metadata'     => 'array',
+            'metadata' => 'array',
         ];
     }
 

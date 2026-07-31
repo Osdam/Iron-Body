@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 class DetectMembershipExpiring extends Command
 {
     protected $signature = 'ironbody:detect-membership-expiring {--expiring-days=3}';
+
     protected $description = 'Detecta membresías por vencer y emite membership.expiring.';
 
     public function handle(): int

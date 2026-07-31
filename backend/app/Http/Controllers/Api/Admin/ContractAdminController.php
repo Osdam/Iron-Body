@@ -7,8 +7,8 @@ use App\Models\ContractAuditLog;
 use App\Models\Member;
 use App\Models\MemberContract;
 use App\Models\MemberLegalConsent;
-use App\Services\Contracts\MemberContractService;
 use App\Services\Contracts\ContractTemplateService;
+use App\Services\Contracts\MemberContractService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -25,8 +25,7 @@ class ContractAdminController extends Controller
     public function __construct(
         private MemberContractService $contracts,
         private ContractTemplateService $templates,
-    ) {
-    }
+    ) {}
 
     /** GET /api/admin/members/{member}/contracts */
     public function forMember(Member $member): JsonResponse
@@ -35,7 +34,7 @@ class ContractAdminController extends Controller
             ->map(fn (MemberContract $c) => $this->contracts->present($c))->values();
 
         return response()->json([
-            'data'   => $list,
+            'data' => $list,
             'member' => $this->memberSummary($member),
         ]);
     }
@@ -46,10 +45,10 @@ class ContractAdminController extends Controller
         $member->loadMissing(['guardian', 'legalConsent']);
 
         return [
-            'id'               => $member->id,
-            'is_minor'         => (bool) $member->is_minor,
+            'id' => $member->id,
+            'is_minor' => (bool) $member->is_minor,
             'biometric_status' => $member->biometric_status ?? 'pending',
-            'guardian'         => $this->guardianSummary($member),
+            'guardian' => $this->guardianSummary($member),
         ];
     }
 
@@ -74,14 +73,14 @@ class ContractAdminController extends Controller
         $guardian = $member->guardian;
         if ($guardian !== null) {
             return [
-                'full_name'              => $guardian->guardian_full_name,
-                'document_number'        => $guardian->guardian_document_number,
-                'phone'                  => $guardian->guardian_phone,
-                'email'                  => $guardian->guardian_email,
-                'relationship'           => $guardian->guardian_relationship,
+                'full_name' => $guardian->guardian_full_name,
+                'document_number' => $guardian->guardian_document_number,
+                'phone' => $guardian->guardian_phone,
+                'email' => $guardian->guardian_email,
+                'relationship' => $guardian->guardian_relationship,
                 'accepts_responsibility' => (bool) $guardian->guardian_accepts_responsibility,
-                'authorized'             => $consent !== null ? (bool) $consent->guardian_authorization : null,
-                'authorized_at'          => optional($consent?->accepted_at)->toIso8601String(),
+                'authorized' => $consent !== null ? (bool) $consent->guardian_authorization : null,
+                'authorized_at' => optional($consent?->accepted_at)->toIso8601String(),
             ];
         }
 
@@ -126,14 +125,14 @@ class ContractAdminController extends Controller
             : $acceptedGuardian;
 
         return [
-            'full_name'              => $snapshot['guardian_full_name'] ?? null,
-            'document_number'        => $snapshot['guardian_document_number'] ?? null,
-            'phone'                  => $snapshot['guardian_phone'] ?? null,
-            'email'                  => $snapshot['guardian_email'] ?? null,
-            'relationship'           => $snapshot['guardian_relationship'] ?? null,
+            'full_name' => $snapshot['guardian_full_name'] ?? null,
+            'document_number' => $snapshot['guardian_document_number'] ?? null,
+            'phone' => $snapshot['guardian_phone'] ?? null,
+            'email' => $snapshot['guardian_email'] ?? null,
+            'relationship' => $snapshot['guardian_relationship'] ?? null,
             'accepts_responsibility' => $authorized === true,
-            'authorized'             => $authorized,
-            'authorized_at'          => optional($consent?->accepted_at)->toIso8601String()
+            'authorized' => $authorized,
+            'authorized_at' => optional($consent?->accepted_at)->toIso8601String()
                 ?? optional($contract->signed_at)->toIso8601String(),
         ];
     }
@@ -155,7 +154,7 @@ class ContractAdminController extends Controller
             ->map(fn (MemberContract $c) => $this->contracts->present($c))->values();
 
         return response()->json([
-            'data'   => $list,
+            'data' => $list,
             'member' => $this->memberSummary($member),
         ]);
     }
@@ -167,29 +166,29 @@ class ContractAdminController extends Controller
         $model->load('member:id,full_name,document_number,is_minor');
 
         $audit = $model->auditLogs()->latest()->limit(100)->get()->map(fn (ContractAuditLog $l) => [
-            'action'     => $l->action,
+            'action' => $l->action,
             'actor_type' => $l->actor_type,
-            'actor_id'   => $l->actor_id,
+            'actor_id' => $l->actor_id,
             'ip_address' => $l->ip_address,
-            'metadata'   => $l->metadata,
+            'metadata' => $l->metadata,
             'created_at' => optional($l->created_at)->toIso8601String(),
         ]);
 
         return response()->json([
             'data' => array_merge($this->contracts->present($model), [
                 'member' => [
-                    'id'              => $model->member->id,
-                    'full_name'       => $model->member->full_name,
+                    'id' => $model->member->id,
+                    'full_name' => $model->member->full_name,
                     'document_number' => $model->member->document_number,
-                    'is_minor'        => (bool) $model->member->is_minor,
+                    'is_minor' => (bool) $model->member->is_minor,
                 ],
-                'member_snapshot'     => $model->member_snapshot,
-                'guardian_snapshot'   => $model->guardian_snapshot,
-                'medical_snapshot'    => $model->medical_snapshot,
+                'member_snapshot' => $model->member_snapshot,
+                'guardian_snapshot' => $model->guardian_snapshot,
+                'medical_snapshot' => $model->medical_snapshot,
                 'acceptance_snapshot' => $model->acceptance_snapshot,
-                'void_reason'         => $model->void_reason,
-                'voided_at'           => optional($model->voided_at)->toIso8601String(),
-                'audit_logs'          => $audit,
+                'void_reason' => $model->void_reason,
+                'voided_at' => optional($model->voided_at)->toIso8601String(),
+                'audit_logs' => $audit,
             ]),
         ]);
     }
@@ -216,7 +215,7 @@ class ContractAdminController extends Controller
     public function void(Request $request, string $contract): JsonResponse
     {
         $data = $request->validate([
-            'reason'   => ['required', 'string', 'min:5', 'max:500'],
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
             'admin_id' => ['nullable', 'string', 'max:80'],
         ]);
 

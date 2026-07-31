@@ -8,8 +8,11 @@ use Illuminate\Support\Str;
 class NutritionOcrScan extends Model
 {
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_PROCESSED = 'processed';
+
     public const STATUS_FAILED = 'failed';
+
     public const STATUS_CONFIRMED = 'confirmed';
 
     protected $fillable = [

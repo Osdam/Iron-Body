@@ -24,8 +24,7 @@ class MarketingAgentActionController extends Controller
     public function __construct(
         private readonly MarketingAgentActionService $actions,
         private readonly MarketingAgentActionAuthorizationService $authz,
-    ) {
-    }
+    ) {}
 
     private function admin(Request $request): ?Admin
     {
@@ -65,8 +64,8 @@ class MarketingAgentActionController extends Controller
             return $r;
         }
         $request->validate([
-            'status'   => ['nullable', Rule::in(MarketingAgentAction::STATUSES)],
-            'type'     => ['nullable', Rule::in(MarketingAgentAction::TYPES)],
+            'status' => ['nullable', Rule::in(MarketingAgentAction::STATUSES)],
+            'type' => ['nullable', Rule::in(MarketingAgentAction::TYPES)],
             'priority' => ['nullable', Rule::in(MarketingAgentAction::PRIORITIES)],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
@@ -74,13 +73,13 @@ class MarketingAgentActionController extends Controller
         $page = $this->actions->list($request, $this->admin($request));
 
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => collect($page->items())->map(fn ($a) => $this->actions->present($a))->all(),
             'meta' => [
                 'current_page' => $page->currentPage(),
-                'last_page'    => $page->lastPage(),
-                'per_page'     => $page->perPage(),
-                'total'        => $page->total(),
+                'last_page' => $page->lastPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
             ],
         ]);
     }
@@ -138,12 +137,12 @@ class MarketingAgentActionController extends Controller
 
         // Respuesta SIEMPRE 200 con JSON explícito (nunca 204 silencioso).
         return response()->json([
-            'ok'            => true,
+            'ok' => true,
             'created_count' => count($created),
-            'actions'       => collect($created)->map(fn ($a) => $this->actions->present($a))->all(),
-            'skipped'       => $skipped,
-            'reason'        => $reason,
-            'message'       => $this->recommendMessage(count($created), $skipped, $reason),
+            'actions' => collect($created)->map(fn ($a) => $this->actions->present($a))->all(),
+            'skipped' => $skipped,
+            'reason' => $reason,
+            'message' => $this->recommendMessage(count($created), $skipped, $reason),
         ], 200);
     }
 
@@ -157,7 +156,7 @@ class MarketingAgentActionController extends Controller
         return match ($reason) {
             'conversation_has_no_messages' => 'La conversación aún no tiene mensajes del lead para analizar.',
             'all_suggestions_deduplicated' => 'No se generaron acciones nuevas: ya existen sugerencias abiertas para esta conversación.',
-            default                        => 'No se generaron acciones nuevas para esta conversación.',
+            default => 'No se generaron acciones nuevas para esta conversación.',
         };
     }
 
@@ -257,7 +256,7 @@ class MarketingAgentActionController extends Controller
         $httpOk = $executed->status === MarketingAgentAction::STATUS_EXECUTED;
 
         return response()->json([
-            'ok'   => $httpOk,
+            'ok' => $httpOk,
             'data' => $this->actions->present($executed->fresh()),
         ], $httpOk ? 200 : 422);
     }

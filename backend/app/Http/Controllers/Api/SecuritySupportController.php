@@ -28,19 +28,18 @@ class SecuritySupportController extends Controller
         private NotificationService $notifications,
         private DeviceSessionService $sessions,
         private SecurityEventService $security,
-    ) {
-    }
+    ) {}
 
     /** POST security/support-report — reporte público (login). */
     public function submit(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'report_type'     => ['required', 'string', Rule::in(SupportSecurityReport::TYPES)],
+            'report_type' => ['required', 'string', Rule::in(SupportSecurityReport::TYPES)],
             'document_number' => ['nullable', 'string', 'max:40'],
-            'name'            => ['nullable', 'string', 'max:160'],
-            'phone'           => ['nullable', 'string', 'max:40'],
-            'email'           => ['nullable', 'email', 'max:160'],
-            'description'     => ['nullable', 'string', 'max:2000'],
+            'name' => ['nullable', 'string', 'max:160'],
+            'phone' => ['nullable', 'string', 'max:40'],
+            'email' => ['nullable', 'email', 'max:160'],
+            'description' => ['nullable', 'string', 'max:2000'],
             'contact_channel' => ['nullable', 'string', 'max:40'],
         ]);
 
@@ -49,18 +48,18 @@ class SecuritySupportController extends Controller
         $member = $this->resolveMember($data['document_number'] ?? null);
 
         $report = SupportSecurityReport::create([
-            'member_id'       => $member?->id,
+            'member_id' => $member?->id,
             'document_number' => $data['document_number'] ?? null,
-            'name'            => $data['name'] ?? null,
-            'phone'           => $data['phone'] ?? null,
-            'email'           => $data['email'] ?? null,
-            'report_type'     => $data['report_type'],
-            'status'          => SupportSecurityReport::STATUS_PENDING,
-            'description'     => $data['description'] ?? null,
+            'name' => $data['name'] ?? null,
+            'phone' => $data['phone'] ?? null,
+            'email' => $data['email'] ?? null,
+            'report_type' => $data['report_type'],
+            'status' => SupportSecurityReport::STATUS_PENDING,
+            'description' => $data['description'] ?? null,
             'contact_channel' => $data['contact_channel'] ?? null,
-            'ip_address'      => $request->ip(),
-            'user_agent'      => mb_substr((string) $request->userAgent(), 0, 512),
-            'metadata'        => ['source' => 'login'],
+            'ip_address' => $request->ip(),
+            'user_agent' => mb_substr((string) $request->userAgent(), 0, 512),
+            'metadata' => ['source' => 'login'],
         ]);
 
         if ($member) {
@@ -78,7 +77,7 @@ class SecuritySupportController extends Controller
 
         // Respuesta deliberadamente genérica e idéntica exista o no la cuenta.
         return response()->json([
-            'ok'      => true,
+            'ok' => true,
             'message' => 'Recibimos tu solicitud. El equipo del gimnasio revisará tu caso y te contactará.',
         ]);
     }
@@ -108,15 +107,15 @@ class SecuritySupportController extends Controller
     public function adminUpdate(Request $request, SupportSecurityReport $report): JsonResponse
     {
         $data = $request->validate([
-            'status'          => ['nullable', 'string', Rule::in(SupportSecurityReport::STATUSES)],
+            'status' => ['nullable', 'string', Rule::in(SupportSecurityReport::STATUSES)],
             'resolution_note' => ['nullable', 'string', 'max:1000'],
-            'resolved_by'     => ['nullable', 'integer'],
+            'resolved_by' => ['nullable', 'integer'],
         ]);
 
         $report->fill(array_filter([
-            'status'          => $data['status'] ?? null,
+            'status' => $data['status'] ?? null,
             'resolution_note' => $data['resolution_note'] ?? null,
-            'resolved_by'     => $data['resolved_by'] ?? null,
+            'resolved_by' => $data['resolved_by'] ?? null,
         ], fn ($v) => $v !== null))->save();
 
         return response()->json(['ok' => true, 'data' => $this->present($report, full: true)]);
@@ -143,22 +142,22 @@ class SecuritySupportController extends Controller
         }
 
         $this->security->record($member, MemberSecurityEvent::TYPE_DEVICE_REVOKED, [], [
-            'scope'         => 'all_by_support',
-            'report_id'     => $report->id,
+            'scope' => 'all_by_support',
+            'report_id' => $report->id,
             'revoked_count' => $count,
         ]);
 
         $report->forceFill([
             'metadata' => array_merge((array) $report->metadata, [
                 'support_revoked_devices' => $count,
-                'support_revoked_at'      => now()->toIso8601String(),
+                'support_revoked_at' => now()->toIso8601String(),
             ]),
         ])->save();
 
         return response()->json([
-            'ok'            => true,
+            'ok' => true,
             'revoked_count' => $count,
-            'message'       => "Se cerraron {$count} sesión(es) del miembro.",
+            'message' => "Se cerraron {$count} sesión(es) del miembro.",
         ]);
     }
 
@@ -166,11 +165,11 @@ class SecuritySupportController extends Controller
 
     /** Etiquetas legibles (ES) de cada tipo de reporte de acceso. */
     private const REPORT_TYPE_LABELS = [
-        SupportSecurityReport::TYPE_STOLEN_DEVICE       => 'Me robaron el celular',
-        SupportSecurityReport::TYPE_LOST_ACCESS         => 'Perdí acceso a mi número',
-        SupportSecurityReport::TYPE_PHONE_CHANGED       => 'Cambié de teléfono',
+        SupportSecurityReport::TYPE_STOLEN_DEVICE => 'Me robaron el celular',
+        SupportSecurityReport::TYPE_LOST_ACCESS => 'Perdí acceso a mi número',
+        SupportSecurityReport::TYPE_PHONE_CHANGED => 'Cambié de teléfono',
         SupportSecurityReport::TYPE_SUSPICIOUS_ACTIVITY => 'Actividad sospechosa',
-        SupportSecurityReport::TYPE_OTHER               => 'Otro',
+        SupportSecurityReport::TYPE_OTHER => 'Otro',
     ];
 
     /**
@@ -197,23 +196,23 @@ class SecuritySupportController extends Controller
                 $report->document_number ? "Documento: {$report->document_number}" : null,
             ]);
             if ($contact !== []) {
-                $lines[] = 'Contacto: ' . implode(' · ', $contact);
+                $lines[] = 'Contacto: '.implode(' · ', $contact);
             }
 
             $ticket = MemberSupportTicket::create([
                 'member_id' => $member?->id,
-                'user_id'   => $member?->user_id,
-                'document'  => $report->document_number,
-                'type'      => 'access',
-                'message'   => implode("\n", $lines),
-                'status'    => MemberSupportTicket::STATUS_NEW,
-                'platform'  => 'login',
-                'metadata'  => array_filter([
-                    'source'           => 'login_security_report',
+                'user_id' => $member?->user_id,
+                'document' => $report->document_number,
+                'type' => 'access',
+                'message' => implode("\n", $lines),
+                'status' => MemberSupportTicket::STATUS_NEW,
+                'platform' => 'login',
+                'metadata' => array_filter([
+                    'source' => 'login_security_report',
                     'security_report_id' => $report->id,
-                    'report_type'      => $report->report_type,
-                    'contact_phone'    => $report->phone,
-                    'contact_email'    => $report->email,
+                    'report_type' => $report->report_type,
+                    'contact_phone' => $report->phone,
+                    'contact_email' => $report->email,
                 ]),
             ]);
 
@@ -228,7 +227,7 @@ class SecuritySupportController extends Controller
         if ($document === null || trim($document) === '') {
             return null;
         }
-        $raw    = trim($document);
+        $raw = trim($document);
         $digits = preg_replace('/\D+/', '', $raw) ?? '';
 
         return Member::query()
@@ -240,25 +239,25 @@ class SecuritySupportController extends Controller
     private function present(SupportSecurityReport $r, bool $full = false): array
     {
         $base = [
-            'id'           => $r->id,
-            'report_type'  => $r->report_type,
-            'status'       => $r->status,
-            'name'         => $r->name,
-            'document'     => $r->document_number,
-            'phone'        => $r->phone,
-            'email'        => $r->email,
-            'member_id'    => $r->member_id,
-            'created_at'   => $r->created_at?->toIso8601String(),
+            'id' => $r->id,
+            'report_type' => $r->report_type,
+            'status' => $r->status,
+            'name' => $r->name,
+            'document' => $r->document_number,
+            'phone' => $r->phone,
+            'email' => $r->email,
+            'member_id' => $r->member_id,
+            'created_at' => $r->created_at?->toIso8601String(),
         ];
         if ($full) {
             $base += [
-                'description'     => $r->description,
+                'description' => $r->description,
                 'contact_channel' => $r->contact_channel,
                 'resolution_note' => $r->resolution_note,
-                'resolved_by'     => $r->resolved_by,
-                'ip_address'      => $r->ip_address,
-                'metadata'        => $r->metadata,
-                'member_name'     => $r->member?->full_name,
+                'resolved_by' => $r->resolved_by,
+                'ip_address' => $r->ip_address,
+                'metadata' => $r->metadata,
+                'member_name' => $r->member?->full_name,
             ];
         }
 

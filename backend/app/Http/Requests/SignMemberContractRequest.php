@@ -17,44 +17,44 @@ class SignMemberContractRequest extends FormRequest
     {
         return [
             // Firma: archivo PNG/JPG (multipart) O base64 (data URI / crudo).
-            'signature'       => ['nullable', 'file', 'mimes:png,jpg,jpeg', 'max:5120'],
+            'signature' => ['nullable', 'file', 'mimes:png,jpg,jpeg', 'max:5120'],
             'signature_image' => ['nullable', 'string', 'max:5000000'],
 
             // Aceptación explícita de checkboxes.
-            'acceptance'      => ['required', 'array'],
-            'acceptance.*'    => ['boolean'],
+            'acceptance' => ['required', 'array'],
+            'acceptance.*' => ['boolean'],
 
             // Datos del usuario (se confirman/actualizan al firmar).
-            'full_name'       => ['nullable', 'string', 'max:255'],
+            'full_name' => ['nullable', 'string', 'max:255'],
             'document_number' => ['nullable', 'string', 'max:50'],
-            'birth_date'      => ['nullable', 'date', new MinimumRegistrationAge()],
-            'rh'              => ['nullable', 'string', 'max:10'],
-            'address'         => ['nullable', 'string', 'max:255'],
-            'phone'           => ['nullable', 'string', 'max:30'],
-            'email'           => ['nullable', 'email', 'max:255'],
+            'birth_date' => ['nullable', 'date', new MinimumRegistrationAge],
+            'rh' => ['nullable', 'string', 'max:10'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:30'],
+            'email' => ['nullable', 'email', 'max:255'],
 
             // Datos médicos (sensibles).
-            'medical_notes'   => ['nullable', 'string', 'max:2000'],
-            'injuries'        => ['nullable', 'string', 'max:2000'],
+            'medical_notes' => ['nullable', 'string', 'max:2000'],
+            'injuries' => ['nullable', 'string', 'max:2000'],
 
             // Acudiente (solo menor).
-            'guardian_full_name'       => ['nullable', 'string', 'max:255'],
+            'guardian_full_name' => ['nullable', 'string', 'max:255'],
             'guardian_document_number' => ['nullable', 'string', 'max:50'],
-            'guardian_document_city'   => ['nullable', 'string', 'max:120'],
-            'guardian_phone'           => ['nullable', 'string', 'max:30'],
-            'guardian_email'           => ['nullable', 'email', 'max:255'],
-            'guardian_address'         => ['nullable', 'string', 'max:255'],
-            'guardian_city'            => ['nullable', 'string', 'max:120'],
-            'guardian_relationship'    => ['nullable', 'string', 'max:80'],
-            'minor_full_name'          => ['nullable', 'string', 'max:255'],
-            'minor_document_number'    => ['nullable', 'string', 'max:50'],
-            'sign_city'                => ['nullable', 'string', 'max:120'],
+            'guardian_document_city' => ['nullable', 'string', 'max:120'],
+            'guardian_phone' => ['nullable', 'string', 'max:30'],
+            'guardian_email' => ['nullable', 'email', 'max:255'],
+            'guardian_address' => ['nullable', 'string', 'max:255'],
+            'guardian_city' => ['nullable', 'string', 'max:120'],
+            'guardian_relationship' => ['nullable', 'string', 'max:80'],
+            'minor_full_name' => ['nullable', 'string', 'max:255'],
+            'minor_document_number' => ['nullable', 'string', 'max:50'],
+            'sign_city' => ['nullable', 'string', 'max:120'],
 
             // Metadatos de trazabilidad (no sensibles).
-            'device_id'    => ['nullable', 'string', 'max:128'],
+            'device_id' => ['nullable', 'string', 'max:128'],
             'app_platform' => ['nullable', 'string', 'max:40'],
-            'app_version'  => ['nullable', 'string', 'max:40'],
-            'locale'       => ['nullable', 'string', 'max:10'],
+            'app_version' => ['nullable', 'string', 'max:40'],
+            'locale' => ['nullable', 'string', 'max:10'],
         ];
     }
 

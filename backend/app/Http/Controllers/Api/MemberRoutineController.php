@@ -30,7 +30,7 @@ class MemberRoutineController extends Controller
         $routines = $viaAssignment->merge($viaMemberId)->unique('id')->values();
 
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => RoutineResource::collection($routines),
         ]);
     }
@@ -41,16 +41,16 @@ class MemberRoutineController extends Controller
         $data = $this->validateRoutine($request, true);
 
         $routine = Routine::create([
-            'name'              => $data['name'],
-            'level'             => $data['level'] ?? 'Principiante',
-            'muscle_group'      => $data['muscle_group'] ?? null,
+            'name' => $data['name'],
+            'level' => $data['level'] ?? 'Principiante',
+            'muscle_group' => $data['muscle_group'] ?? null,
             'estimated_minutes' => (int) ($data['estimated_minutes'] ?? 0),
-            'description'       => $data['description'] ?? null,
-            'notes'             => $data['notes'] ?? null,
-            'member_id'         => $member->id,
-            'is_assigned'       => true,
-            'created_by_admin'  => true,
-            'status'            => 'Activa',
+            'description' => $data['description'] ?? null,
+            'notes' => $data['notes'] ?? null,
+            'member_id' => $member->id,
+            'is_assigned' => true,
+            'created_by_admin' => true,
+            'status' => 'Activa',
         ]);
 
         $this->syncExercises($routine, $data);
@@ -68,7 +68,7 @@ class MemberRoutineController extends Controller
         $routine->load('routineExercises.exercise');
 
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => new RoutineResource($routine),
         ], 201);
     }
@@ -79,12 +79,12 @@ class MemberRoutineController extends Controller
         $data = $this->validateRoutine($request, false);
 
         $routine->fill(array_filter([
-            'name'              => $data['name']              ?? null,
-            'level'             => $data['level']             ?? null,
-            'muscle_group'      => $data['muscle_group']      ?? null,
+            'name' => $data['name'] ?? null,
+            'level' => $data['level'] ?? null,
+            'muscle_group' => $data['muscle_group'] ?? null,
             'estimated_minutes' => isset($data['estimated_minutes']) ? (int) $data['estimated_minutes'] : null,
-            'description'       => $data['description']       ?? null,
-            'notes'             => $data['notes']             ?? null,
+            'description' => $data['description'] ?? null,
+            'notes' => $data['notes'] ?? null,
         ], fn ($v) => $v !== null));
         $routine->save();
 
@@ -98,7 +98,7 @@ class MemberRoutineController extends Controller
         $routine->load('routineExercises.exercise');
 
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => new RoutineResource($routine),
         ]);
     }
@@ -122,19 +122,20 @@ class MemberRoutineController extends Controller
     private function validateRoutine(Request $request, bool $required): array
     {
         $r = $required ? 'required' : 'sometimes';
+
         return $request->validate([
-            'name'                        => "$r|string|max:255",
-            'level'                       => 'nullable|in:Principiante,Intermedio,Avanzado',
-            'muscle_group'                => 'nullable|string|max:100',
-            'estimated_minutes'           => 'nullable|integer|min:0|max:1440',
-            'description'                 => 'nullable|string',
-            'notes'                       => 'nullable|string',
-            'exercises'                   => 'nullable|array',
-            'exercises.*.exercise_id'     => 'required_with:exercises|exists:exercises,id',
-            'exercises.*.sets'            => 'nullable|integer|min:1|max:20',
-            'exercises.*.reps'            => 'nullable|string|max:20',
-            'exercises.*.weight'          => 'nullable|numeric|min:0',
-            'exercises.*.notes'           => 'nullable|string|max:500',
+            'name' => "$r|string|max:255",
+            'level' => 'nullable|in:Principiante,Intermedio,Avanzado',
+            'muscle_group' => 'nullable|string|max:100',
+            'estimated_minutes' => 'nullable|integer|min:0|max:1440',
+            'description' => 'nullable|string',
+            'notes' => 'nullable|string',
+            'exercises' => 'nullable|array',
+            'exercises.*.exercise_id' => 'required_with:exercises|exists:exercises,id',
+            'exercises.*.sets' => 'nullable|integer|min:1|max:20',
+            'exercises.*.reps' => 'nullable|string|max:20',
+            'exercises.*.weight' => 'nullable|numeric|min:0',
+            'exercises.*.notes' => 'nullable|string|max:500',
         ]);
     }
 
@@ -144,13 +145,13 @@ class MemberRoutineController extends Controller
 
         foreach ($data['exercises'] ?? [] as $i => $ex) {
             RoutineExercise::create([
-                'routine_id'  => $routine->id,
+                'routine_id' => $routine->id,
                 'exercise_id' => $ex['exercise_id'],
-                'sets'        => (int) ($ex['sets'] ?? 3),
-                'reps'        => (string) ($ex['reps'] ?? '10'),
-                'weight'      => isset($ex['weight']) ? (float) $ex['weight'] : null,
-                'notes'       => $ex['notes'] ?? null,
-                'sort_order'  => $i,
+                'sets' => (int) ($ex['sets'] ?? 3),
+                'reps' => (string) ($ex['reps'] ?? '10'),
+                'weight' => isset($ex['weight']) ? (float) $ex['weight'] : null,
+                'notes' => $ex['notes'] ?? null,
+                'sort_order' => $i,
             ]);
         }
     }

@@ -12,12 +12,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class MemberRiskLock extends Model
 {
-    public const STATUS_ACTIVE   = 'active';
+    public const STATUS_ACTIVE = 'active';
+
     public const STATUS_RESOLVED = 'resolved';
-    public const STATUS_EXPIRED  = 'expired';
+
+    public const STATUS_EXPIRED = 'expired';
 
     public const BY_SYSTEM = 'system';
-    public const BY_ADMIN  = 'admin';
+
+    public const BY_ADMIN = 'admin';
 
     protected $fillable = [
         'member_id',
@@ -34,9 +37,9 @@ class MemberRiskLock extends Model
     {
         return [
             'locked_until' => 'datetime',
-            'metadata'     => 'array',
-            'created_at'   => 'datetime',
-            'updated_at'   => 'datetime',
+            'metadata' => 'array',
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
         ];
     }
 

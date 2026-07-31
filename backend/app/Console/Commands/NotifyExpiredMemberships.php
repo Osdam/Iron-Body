@@ -26,7 +26,7 @@ class NotifyExpiredMemberships extends Command
 
     public function handle(NotificationService $notifications): int
     {
-        $days  = max(1, (int) $this->option('days'));
+        $days = max(1, (int) $this->option('days'));
         $today = Carbon::today();
         $since = $today->copy()->subDays($days);
 
@@ -43,7 +43,7 @@ class NotifyExpiredMemberships extends Command
                 continue;
             }
             $notifications->notifyMembershipExpired($member, [
-                'name'                => $user->plan ?: 'tu plan',
+                'name' => $user->plan ?: 'tu plan',
                 'membership_end_date' => $user->membership_end_date,
             ]);
             $count++;

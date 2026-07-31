@@ -29,8 +29,7 @@ class ElectronicInvoiceMail extends Mailable
     public function __construct(
         public ElectronicInvoice $invoice,
         public array $attachmentSpecs = [],
-    ) {
-    }
+    ) {}
 
     public function envelope(): Envelope
     {
@@ -48,21 +47,21 @@ class ElectronicInvoiceMail extends Mailable
             // Solo cambia la PRESENTACIÓN: mismos datos fiscales, mismos adjuntos.
             view: 'mail.electronic-invoice',
             with: [
-                'fullNumber'   => $this->invoice->full_number ?: $this->invoice->number,
-                'total'        => number_format((float) $this->invoice->total, 2, ',', '.'),
-                'currency'     => $this->invoice->currency,
-                'cufe'         => $this->invoice->cufe,
-                'validatedAt'  => optional($this->invoice->validated_at)->format('Y-m-d H:i'),
+                'fullNumber' => $this->invoice->full_number ?: $this->invoice->number,
+                'total' => number_format((float) $this->invoice->total, 2, ',', '.'),
+                'currency' => $this->invoice->currency,
+                'cufe' => $this->invoice->cufe,
+                'validatedAt' => optional($this->invoice->validated_at)->format('Y-m-d H:i'),
                 // Branding (presentación). Logo: si no hay URL absoluta en .env,
                 // cae al asset público de marca (resuelto contra APP_URL como URL
                 // absoluta, requisito de los clientes de correo). Si tampoco, el
                 // header usa el fallback tipográfico "IRON BODY".
-                'logoUrl'      => $this->resolveLogoUrl(),
+                'logoUrl' => $this->resolveLogoUrl(),
                 'supportEmail' => config('billing.customer_email_delivery.support_email')
                     ?: 'facturacion@ironbodyneiva.cloud',
                 // Reflejan los adjuntos REALES que el job decidió incluir.
-                'hasPdf'       => $this->attachmentHasExtension('.pdf'),
-                'hasXml'       => $this->attachmentHasExtension('.xml'),
+                'hasPdf' => $this->attachmentHasExtension('.pdf'),
+                'hasXml' => $this->attachmentHasExtension('.xml'),
             ],
         );
     }

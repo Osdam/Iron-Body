@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -14,13 +15,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $idempotency_key
  * @property int $attempts
  * @property string|null $last_error
- * @property \Carbon\Carbon|null $processed_at
+ * @property Carbon|null $processed_at
  */
 class AutomationEvent extends Model
 {
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_SENT = 'sent';
+
     public const STATUS_FAILED = 'failed';
+
     public const STATUS_SKIPPED = 'skipped';
 
     protected $fillable = [

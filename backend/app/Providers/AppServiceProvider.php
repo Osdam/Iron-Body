@@ -9,6 +9,8 @@ use App\Services\Exercises\ExerciseCatalogResolver;
 use App\Services\Marketing\Contracts\AiSalesResponderInterface;
 use App\Services\Marketing\FakeAiSalesResponder;
 use App\Services\Marketing\OpenAiSalesResponder;
+use App\Services\Marketing\SalesAgentDecisionValidator;
+use App\Services\Marketing\SalesAgentPromptBuilder;
 use App\Services\Marketing\SalesAiConfig;
 use App\Services\Wompi\WompiConfigValidator;
 use Illuminate\Support\Facades\Log;
@@ -41,12 +43,13 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(AiSalesResponderInterface::class, function ($app) {
             if (SalesAiConfig::effectiveDriver() === 'openai') {
                 return new OpenAiSalesResponder(
-                    new FakeAiSalesResponder(),
-                    $app->make(\App\Services\Marketing\SalesAgentPromptBuilder::class),
-                    $app->make(\App\Services\Marketing\SalesAgentDecisionValidator::class),
+                    new FakeAiSalesResponder,
+                    $app->make(SalesAgentPromptBuilder::class),
+                    $app->make(SalesAgentDecisionValidator::class),
                 );
             }
-            return new FakeAiSalesResponder();
+
+            return new FakeAiSalesResponder;
         });
     }
 

@@ -7,14 +7,20 @@ use Illuminate\Database\Eloquent\Model;
 class IronAiUsageLog extends Model
 {
     public const STATUS_SUCCESS = 'success';
+
     public const STATUS_FALLBACK = 'fallback';
+
     public const STATUS_BLOCKED = 'blocked';
+
     public const STATUS_ERROR = 'error';
 
     /** Tipo de consumo (para cuotas por tipo). */
     public const KIND_TEXT = 'text';
+
     public const KIND_AUDIO = 'audio';
+
     public const KIND_IMAGE = 'image';
+
     public const KIND_REALTIME = 'realtime';
 
     /** Estados que consumen cuota (un mensaje "usado"). */
@@ -38,8 +44,8 @@ class IronAiUsageLog extends Model
     protected function casts(): array
     {
         return [
-            'input_tokens'   => 'integer',
-            'output_tokens'  => 'integer',
+            'input_tokens' => 'integer',
+            'output_tokens' => 'integer',
             'estimated_cost' => 'decimal:6',
         ];
     }

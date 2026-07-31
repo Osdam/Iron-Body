@@ -2,10 +2,11 @@
 
 namespace App\Console\Commands;
 
+use App\Models\AutomationEvent;
 use App\Models\Member;
+use App\Models\NutritionAiRecommendation;
 use App\Services\AutomationEventService;
 use App\Services\IronAiCoachService;
-use App\Models\NutritionAiRecommendation;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 
@@ -21,12 +22,14 @@ use Illuminate\Console\Command;
 class GenerateWeeklyAiSummaries extends Command
 {
     protected $signature = 'ironbody:generate-weekly-ai-summaries {--limit=200 : Máx. miembros por corrida}';
+
     protected $description = 'Genera resúmenes semanales IA y emite iron_ai.weekly_summary_ready.';
 
     public function handle(IronAiCoachService $coach, AutomationEventService $events): int
     {
-        if (!$coach->isEnabled()) {
+        if (! $coach->isEnabled()) {
             $this->warn('Coach IA deshabilitado: no se generan resúmenes.');
+
             return self::SUCCESS;
         }
 
@@ -40,9 +43,9 @@ class GenerateWeeklyAiSummaries extends Command
             ->get()
             ->each(function (Member $member) use ($coach, $events, $weekTag, &$count) {
                 // Idempotencia: si ya se emitió esta semana, saltar (evita re-gastar IA).
-                $alreadyEmitted = \App\Models\AutomationEvent::query()
+                $alreadyEmitted = AutomationEvent::query()
                     ->where('event_type', 'iron_ai.weekly_summary_ready')
-                    ->where('idempotency_key', 'iron_ai.weekly_summary_ready:' . $member->id . ':' . $weekTag)
+                    ->where('idempotency_key', 'iron_ai.weekly_summary_ready:'.$member->id.':'.$weekTag)
                     ->exists();
                 if ($alreadyEmitted) {
                     return;
@@ -63,12 +66,13 @@ class GenerateWeeklyAiSummaries extends Command
                     'summary_id' => $summaryId,
                     'priority' => $plan['priority'] ?? 'consistency',
                     'safe_message' => 'Resumen semanal listo',
-                ], 'iron_ai.weekly_summary_ready:' . $member->id . ':' . $weekTag);
+                ], 'iron_ai.weekly_summary_ready:'.$member->id.':'.$weekTag);
 
                 $count++;
             });
 
         $this->info("Resúmenes semanales generados: {$count}");
+
         return self::SUCCESS;
     }
 }

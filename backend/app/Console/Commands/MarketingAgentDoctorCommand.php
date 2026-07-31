@@ -13,6 +13,7 @@ use Illuminate\Console\Command;
 class MarketingAgentDoctorCommand extends Command
 {
     protected $signature = 'marketing:agent-doctor';
+
     protected $description = 'Diagnostica el agente comercial de WhatsApp (OpenAI, Meta, conocimiento, plan, Wompi, auto-execute).';
 
     public function handle(MarketingAgentDoctorService $doctor): int
@@ -23,12 +24,12 @@ class MarketingAgentDoctorCommand extends Command
         $this->newLine();
 
         $labels = [
-            'openai'        => 'Cerebro OpenAI',
-            'meta'          => 'Meta / WhatsApp',
-            'knowledge'     => 'Base de conocimiento',
-            'monthly_plan'  => 'Plan mensual',
+            'openai' => 'Cerebro OpenAI',
+            'meta' => 'Meta / WhatsApp',
+            'knowledge' => 'Base de conocimiento',
+            'monthly_plan' => 'Plan mensual',
             'wompi_payment' => 'Wompi (pago)',
-            'auto_execute'  => 'Auto-ejecución',
+            'auto_execute' => 'Auto-ejecución',
         ];
 
         $rows = [];

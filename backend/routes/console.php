@@ -149,7 +149,13 @@ if ((bool) config('proactive_coach.enabled', false)) {
 // duerme justo cuando corre el cron. La llave de idempotencia
 // (`wellness:socio:fecha`) hace que, aun con dos pasadas, nadie reciba más de
 // una al día. El dispatcher además respeta preferencias y límites.
-if ((bool) config('notifications.wellness.enabled', false)) {
+//
+// Si el horario lo gobierna n8n (`orchestrator = n8n`), Laravel NO lo agenda:
+// dos relojes disparando lo mismo hacen imposible saber cuál mandó qué. n8n
+// llama a /api/internal/automation/wellness-run, que ejecuta este mismo
+// planificador con las mismas comprobaciones.
+if ((bool) config('notifications.wellness.enabled', false)
+    && config('notifications.wellness.orchestrator', 'laravel') === 'laravel') {
     foreach ((array) config('notifications.wellness.runs_at', ['15:00']) as $wellnessRun) {
         Schedule::command('notifications:wellness')
             ->dailyAt($wellnessRun)

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $viewer_type 'member' | 'user'
  * @property int $viewer_id
  * @property string $type heart|fire|muscle|clap|trophy|lightning
- * @property \Carbon\Carbon $reacted_at
+ * @property Carbon $reacted_at
  */
 class StoryReaction extends Model
 {

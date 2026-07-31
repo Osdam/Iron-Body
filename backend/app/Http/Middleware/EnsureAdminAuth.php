@@ -85,13 +85,13 @@ class EnsureAdminAuth
     {
         Log::info('auth:admin:failed', [
             'reason' => $code,
-            'path'   => $request->path(),
-            'ip'     => $request->ip(),
+            'path' => $request->path(),
+            'ip' => $request->ip(),
         ]);
 
         return response()->json([
-            'ok'      => false,
-            'code'    => $code,
+            'ok' => false,
+            'code' => $code,
             'message' => $message,
         ], $status);
     }

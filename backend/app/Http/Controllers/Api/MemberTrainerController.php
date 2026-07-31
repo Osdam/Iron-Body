@@ -21,9 +21,9 @@ class MemberTrainerController extends Controller
     public function assign(Request $request, Member $member): JsonResponse
     {
         $data = $request->validate([
-            'trainer_id'  => 'required|integer|exists:trainers,id',
+            'trainer_id' => 'required|integer|exists:trainers,id',
             'assigned_by' => 'nullable|string|max:120',
-            'notes'       => 'nullable|string|max:500',
+            'notes' => 'nullable|string|max:500',
         ]);
 
         $trainer = Trainer::findOrFail($data['trainer_id']);
@@ -34,11 +34,11 @@ class MemberTrainerController extends Controller
             ->update(['status' => MemberTrainerAssignment::STATUS_INACTIVE, 'ended_at' => now()]);
 
         $assignment = MemberTrainerAssignment::create([
-            'member_id'   => $member->id,
-            'trainer_id'  => $trainer->id,
+            'member_id' => $member->id,
+            'trainer_id' => $trainer->id,
             'assigned_by' => $data['assigned_by'] ?? null,
-            'status'      => MemberTrainerAssignment::STATUS_ACTIVE,
-            'notes'       => $data['notes'] ?? null,
+            'status' => MemberTrainerAssignment::STATUS_ACTIVE,
+            'notes' => $data['notes'] ?? null,
             'assigned_at' => now(),
         ]);
 
@@ -47,7 +47,7 @@ class MemberTrainerController extends Controller
         TrainerRealtimeEvents::membersChanged($trainer->id);
 
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => $this->serializeAssignment($assignment->load('trainer')),
         ], 201);
     }
@@ -82,7 +82,7 @@ class MemberTrainerController extends Controller
         $active = $member->activeTrainerAssignment()->with('trainer')->first();
 
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => $active && $active->trainer ? $this->serializeAssignment($active) : null,
         ]);
     }
@@ -94,7 +94,7 @@ class MemberTrainerController extends Controller
         $active = $member?->activeTrainerAssignment()->with('trainer')->first();
 
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => $active && $active->trainer ? $this->serializeAssignment($active) : null,
         ]);
     }
@@ -105,18 +105,18 @@ class MemberTrainerController extends Controller
 
         return [
             'assignment_id' => $a->id,
-            'assigned_at'   => optional($a->assigned_at)->toIso8601String(),
-            'notes'         => $a->notes,
-            'trainer'       => $t ? [
-                'id'               => $t->id,
-                'full_name'        => $t->full_name,
-                'specialty'        => $t->main_specialty ?? '',
+            'assigned_at' => optional($a->assigned_at)->toIso8601String(),
+            'notes' => $a->notes,
+            'trainer' => $t ? [
+                'id' => $t->id,
+                'full_name' => $t->full_name,
+                'specialty' => $t->main_specialty ?? '',
                 'experience_years' => (int) $t->experience_years,
-                'phone'            => $t->phone,
-                'email'            => $t->email,
-                'photo_url'        => method_exists($t, 'publicPhotoUrl') ? $t->publicPhotoUrl() : $t->avatar_url,
-                'status'           => $t->status,
-                'is_active'        => $t->isActive(),
+                'phone' => $t->phone,
+                'email' => $t->email,
+                'photo_url' => method_exists($t, 'publicPhotoUrl') ? $t->publicPhotoUrl() : $t->avatar_url,
+                'status' => $t->status,
+                'is_active' => $t->isActive(),
             ] : null,
         ];
     }

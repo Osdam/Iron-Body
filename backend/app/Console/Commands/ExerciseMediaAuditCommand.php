@@ -33,7 +33,7 @@ class ExerciseMediaAuditCommand extends Command
             if ($name === '') {
                 return;
             }
-            $key = $resolver->normalize($name) . '|' . ($exerciseId ?? '');
+            $key = $resolver->normalize($name).'|'.($exerciseId ?? '');
             if (! isset($usages[$key])) {
                 $usages[$key] = [
                     'name' => $name, 'exercise_id' => $exerciseId,
@@ -90,12 +90,12 @@ class ExerciseMediaAuditCommand extends Command
 
             $rows[] = [
                 'routine' => $u['routine_id'],
-                'source'  => implode('/', array_keys($u['sources'])),
-                'name'    => mb_strimwidth($u['name'], 0, 38, '…'),
-                'x'       => $u['count'],
-                'status'  => $status,
-                'match'   => $matchTxt,
-                'top5'    => $cands !== '' ? mb_strimwidth($cands, 0, 60, '…') : '—',
+                'source' => implode('/', array_keys($u['sources'])),
+                'name' => mb_strimwidth($u['name'], 0, 38, '…'),
+                'x' => $u['count'],
+                'status' => $status,
+                'match' => $matchTxt,
+                'top5' => $cands !== '' ? mb_strimwidth($cands, 0, 60, '…') : '—',
             ];
 
             // --apply-safe: registra alias verificado SOLO en match seguro y solo

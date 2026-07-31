@@ -20,13 +20,13 @@ class ReplacePaymentSourceRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'type'           => 'nullable|string|max:30',
-            'token'          => 'required|string|max:200',
-            'card_brand'     => 'nullable|string|max:30',
+            'type' => 'nullable|string|max:30',
+            'token' => 'required|string|max:200',
+            'card_brand' => 'nullable|string|max:30',
             'card_last_four' => 'nullable|string|max:4',
-            'exp_month'      => 'nullable|string|max:2',
-            'exp_year'       => 'nullable|string|max:4',
-            'accepted_terms'         => 'required|accepted',
+            'exp_month' => 'nullable|string|max:2',
+            'exp_year' => 'nullable|string|max:4',
+            'accepted_terms' => 'required|accepted',
             'accepted_personal_data' => 'required|accepted',
         ];
     }
@@ -34,8 +34,8 @@ class ReplacePaymentSourceRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'token.required'                  => 'Falta el método de pago.',
-            'accepted_terms.accepted'         => 'Debes aceptar los términos y condiciones para continuar.',
+            'token.required' => 'Falta el método de pago.',
+            'accepted_terms.accepted' => 'Debes aceptar los términos y condiciones para continuar.',
             'accepted_personal_data.accepted' => 'Debes autorizar el tratamiento de tus datos personales para continuar.',
         ];
     }

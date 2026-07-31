@@ -40,6 +40,7 @@ class NutritionFoodAdminController extends Controller
         if (! $food) {
             return response()->json(['ok' => false, 'message' => 'Alimento no encontrado.'], 404);
         }
+
         return response()->json(['ok' => true, 'data' => $this->adminRow($food)]);
     }
 
@@ -66,6 +67,7 @@ class NutritionFoodAdminController extends Controller
         $food->save();
 
         Log::info('nutrition.admin.verify', ['food' => $food->uuid, 'admin' => $data['admin_id'] ?? null]);
+
         return response()->json(['ok' => true, 'data' => $this->adminRow($food->fresh())]);
     }
 
@@ -74,7 +76,7 @@ class NutritionFoodAdminController extends Controller
     {
         $data = $request->validate([
             'admin_id' => 'nullable|integer',
-            'reason'   => 'nullable|string|max:255',
+            'reason' => 'nullable|string|max:255',
         ]);
         $food = NutritionFood::where('uuid', $uuid)->first();
         if (! $food) {
@@ -89,6 +91,7 @@ class NutritionFoodAdminController extends Controller
         Log::info('nutrition.admin.reject', [
             'food' => $food->uuid, 'admin' => $data['admin_id'] ?? null,
         ]);
+
         return response()->json(['ok' => true, 'data' => $this->adminRow($food->fresh())]);
     }
 
@@ -101,7 +104,7 @@ class NutritionFoodAdminController extends Controller
     {
         $data = $request->validate([
             'canonical_uuid' => 'required|string',
-            'admin_id'       => 'nullable|integer',
+            'admin_id' => 'nullable|integer',
         ]);
         $dup = NutritionFood::where('uuid', $uuid)->first();
         $canonical = NutritionFood::where('uuid', $data['canonical_uuid'])->first();
@@ -144,6 +147,7 @@ class NutritionFoodAdminController extends Controller
         Log::info('nutrition.admin.merge', [
             'dup' => $dup->uuid, 'canonical' => $canonical->uuid, 'admin' => $data['admin_id'] ?? null,
         ]);
+
         return response()->json(['ok' => true, 'data' => $this->adminRow($canonical->fresh())]);
     }
 
@@ -155,6 +159,7 @@ class NutritionFoodAdminController extends Controller
             return response()->json(['ok' => false, 'message' => 'Alimento no encontrado.'], 404);
         }
         $result = $review->review($food);
+
         return response()->json($result, ($result['ok'] ?? false) ? 200 : 200);
     }
 
@@ -162,13 +167,13 @@ class NutritionFoodAdminController extends Controller
     private function adminRow(NutritionFood $food): array
     {
         return array_merge($food->toApiArray(), [
-            'id'                            => $food->id,
-            'created_by_member_id'          => $food->created_by_member_id,
-            'reports_count'                 => (int) $food->reports_count,
+            'id' => $food->id,
+            'created_by_member_id' => $food->created_by_member_id,
+            'reports_count' => (int) $food->reports_count,
             'community_confirmations_count' => (int) $food->community_confirmations_count,
-            'verified_at'                   => optional($food->verified_at)->toIso8601String(),
-            'canonical_food_id'             => $food->canonical_food_id,
-            'version'                       => (int) $food->version,
+            'verified_at' => optional($food->verified_at)->toIso8601String(),
+            'canonical_food_id' => $food->canonical_food_id,
+            'version' => (int) $food->version,
         ]);
     }
 }

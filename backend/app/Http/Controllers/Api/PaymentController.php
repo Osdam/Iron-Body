@@ -190,7 +190,7 @@ class PaymentController extends Controller
             // crea transacción de pasarela, así que la solicitud se guarda en el
             // propio pago. Nunca se activa por defecto.
             'request_invoice' => 'nullable|boolean',
-            'invoice_email' => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail()],
+            'invoice_email' => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail],
         ]);
 
         $invoiceRequest = $this->extractInvoiceRequest($data);
@@ -248,7 +248,7 @@ class PaymentController extends Controller
             'amount' => 'nullable|numeric|min:0',
             // El cliente puede pedir la factura al confirmar el pago.
             'request_invoice' => 'nullable|boolean',
-            'invoice_email' => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail()],
+            'invoice_email' => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail],
         ]);
 
         $invoiceRequest = $this->extractInvoiceRequest($data);

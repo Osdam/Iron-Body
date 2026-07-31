@@ -10,6 +10,7 @@ use App\Http\Requests\Wompi\WompiPsePaymentRequest;
 use App\Models\Member;
 use App\Models\PaymentTransaction;
 use App\Models\User;
+use App\Services\Members\MemberUserResolver;
 use App\Services\MembershipService;
 use App\Services\Wompi\WompiAcceptanceService;
 use App\Services\Wompi\WompiCardPaymentService;
@@ -17,10 +18,8 @@ use App\Services\Wompi\WompiDaviplataPaymentService;
 use App\Services\Wompi\WompiNequiPaymentService;
 use App\Services\Wompi\WompiPsePaymentService;
 use App\Services\Wompi\WompiReconciliationService;
-use App\Services\Wompi\WompiTransactionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -37,9 +36,7 @@ use Throwable;
  */
 class WompiPaymentController extends Controller
 {
-    public function __construct(private MembershipService $memberships)
-    {
-    }
+    public function __construct(private MembershipService $memberships) {}
 
     // ── Config / aceptación / bancos ─────────────────────────────────────────
 
@@ -50,11 +47,11 @@ class WompiPaymentController extends Controller
 
         return response()->json([
             'environment' => $cfg['env'] ?? 'sandbox',
-            'public_key'  => $cfg['public_key'] ?? null, // NO secreta
-            'currency'    => $cfg['currency'] ?? 'COP',
-            'methods'     => $cfg['methods'] ?? [],
+            'public_key' => $cfg['public_key'] ?? null, // NO secreta
+            'currency' => $cfg['currency'] ?? 'COP',
+            'methods' => $cfg['methods'] ?? [],
             // La app valida que su llave pública y el backend sean del mismo ambiente.
-            'api_url'     => $cfg['api_url'] ?? null,
+            'api_url' => $cfg['api_url'] ?? null,
         ]);
     }
 
@@ -71,7 +68,7 @@ class WompiPaymentController extends Controller
         $result = WompiPsePaymentService::make()->institutions($fresh);
 
         return response()->json([
-            'data'      => $result['institutions'],
+            'data' => $result['institutions'],
             'available' => $result['available'],
         ]);
     }
@@ -156,21 +153,21 @@ class WompiPaymentController extends Controller
                 $tx->refresh();
             } catch (Throwable $e) {
                 Log::warning('Wompi status: reconciliación falló (estado local)', [
-                    'reference'            => $tx->reference,
+                    'reference' => $tx->reference,
                     'wompi_transaction_id' => $tx->wompi_transaction_id,
-                    'error'                => get_class($e),
+                    'error' => get_class($e),
                 ]);
             }
         }
 
         $member = $tx->member_id ? Member::find($tx->member_id) : null;
-        $user   = $tx->user_id ? User::find($tx->user_id) : ($member?->user);
+        $user = $tx->user_id ? User::find($tx->user_id) : ($member?->user);
         $active = $user ? $this->memberships->isActive($user) : false;
 
         return response()->json(array_merge($tx->toWompiPublicArray(), [
             'membership_active' => $active,
-            'can_access_home'   => $active,
-            'message'           => $this->statusMessage($tx->status),
+            'can_access_home' => $active,
+            'message' => $this->statusMessage($tx->status),
         ]));
     }
 
@@ -244,12 +241,12 @@ class WompiPaymentController extends Controller
         $data['user_id'] = $user->id;
         $data['idempotency_key'] = $data['client_request_id'] ?? null;
         $data['customer'] = array_merge([
-            'name'       => $member->full_name,
-            'email'      => $member->email ?: $user->email,
-            'phone'      => $member->phone,
+            'name' => $member->full_name,
+            'email' => $member->email ?: $user->email,
+            'phone' => $member->phone,
             'doc_number' => $member->document_number,
-            'doc_type'   => 'CC',
-            'country'    => 'CO',
+            'doc_type' => 'CC',
+            'country' => 'CO',
         ], (array) ($data['customer'] ?? []));
 
         return $data;
@@ -282,35 +279,35 @@ class WompiPaymentController extends Controller
     {
         // Lógica extraída a MemberUserResolver (compartida con el pago automático);
         // comportamiento idéntico.
-        return app(\App\Services\Members\MemberUserResolver::class)->resolve($member);
+        return app(MemberUserResolver::class)->resolve($member);
     }
 
     private function statusMessage(string $status): string
     {
         return match ($status) {
-            PaymentTransaction::STATUS_APPROVED        => 'Pago confirmado. Tu membresía fue activada.',
-            PaymentTransaction::STATUS_DECLINED        => 'El pago fue rechazado por el banco.',
-            PaymentTransaction::STATUS_VOIDED          => 'El pago fue anulado.',
-            PaymentTransaction::STATUS_ERROR           => 'No pudimos procesar el pago.',
-            PaymentTransaction::STATUS_EXPIRED         => 'El pago expiró. Genera uno nuevo.',
+            PaymentTransaction::STATUS_APPROVED => 'Pago confirmado. Tu membresía fue activada.',
+            PaymentTransaction::STATUS_DECLINED => 'El pago fue rechazado por el banco.',
+            PaymentTransaction::STATUS_VOIDED => 'El pago fue anulado.',
+            PaymentTransaction::STATUS_ERROR => 'No pudimos procesar el pago.',
+            PaymentTransaction::STATUS_EXPIRED => 'El pago expiró. Genera uno nuevo.',
             PaymentTransaction::STATUS_REQUIRES_ACTION => 'Completa la autenticación para finalizar tu pago.',
-            default                                    => 'Tu pago está pendiente de confirmación.',
+            default => 'Tu pago está pendiente de confirmación.',
         };
     }
 
     private function failSafe(Throwable $e): JsonResponse
     {
         Log::error('Pago Wompi: error controlado', [
-            'type'   => get_class($e),
+            'type' => get_class($e),
             'detail' => mb_substr($e->getMessage(), 0, 300),
         ]);
 
         return response()->json([
-            'ok'        => false,
-            'status'    => 'error',
+            'ok' => false,
+            'status' => 'error',
             'reference' => null,
-            'reason'    => 'No pudimos procesar el pago. No se realizó ningún cobro. '
-                . 'Intenta nuevamente o usa otro método.',
+            'reason' => 'No pudimos procesar el pago. No se realizó ningún cobro. '
+                .'Intenta nuevamente o usa otro método.',
         ], 200);
     }
 }

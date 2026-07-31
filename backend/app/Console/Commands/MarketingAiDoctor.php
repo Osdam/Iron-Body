@@ -13,6 +13,7 @@ use Illuminate\Console\Command;
 class MarketingAiDoctor extends Command
 {
     protected $signature = 'marketing:ai-doctor';
+
     protected $description = 'Diagnostica el cerebro comercial IA (sin imprimir secretos).';
 
     public function handle(MarketingAiDoctorService $doctor): int

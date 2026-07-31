@@ -13,16 +13,23 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class MarketingCall extends Model
 {
-    public const STATUS_PENDING     = 'pending';
-    public const STATUS_QUEUED      = 'queued';
+    public const STATUS_PENDING = 'pending';
+
+    public const STATUS_QUEUED = 'queued';
+
     public const STATUS_IN_PROGRESS = 'in_progress';
-    public const STATUS_COMPLETED   = 'completed';
-    public const STATUS_FAILED      = 'failed';
-    public const STATUS_NO_ANSWER   = 'no_answer';
-    public const STATUS_CANCELED    = 'canceled';
+
+    public const STATUS_COMPLETED = 'completed';
+
+    public const STATUS_FAILED = 'failed';
+
+    public const STATUS_NO_ANSWER = 'no_answer';
+
+    public const STATUS_CANCELED = 'canceled';
 
     public const DIRECTION_OUTBOUND = 'outbound';
-    public const DIRECTION_INBOUND  = 'inbound';
+
+    public const DIRECTION_INBOUND = 'inbound';
 
     protected $fillable = [
         'marketing_lead_id', 'marketing_followup_id', 'provider', 'provider_call_sid',
@@ -32,11 +39,11 @@ class MarketingCall extends Model
     ];
 
     protected $casts = [
-        'scheduled_at'     => 'datetime',
-        'started_at'       => 'datetime',
-        'ended_at'         => 'datetime',
+        'scheduled_at' => 'datetime',
+        'started_at' => 'datetime',
+        'ended_at' => 'datetime',
         'duration_seconds' => 'integer',
-        'metadata'         => 'array',
+        'metadata' => 'array',
     ];
 
     public function lead(): BelongsTo

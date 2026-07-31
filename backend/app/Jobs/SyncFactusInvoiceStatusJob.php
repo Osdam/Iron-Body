@@ -28,9 +28,7 @@ class SyncFactusInvoiceStatusJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public function __construct(public ?int $invoiceId = null)
-    {
-    }
+    public function __construct(public ?int $invoiceId = null) {}
 
     public function handle(
         FactusClient $client,
@@ -99,6 +97,7 @@ class SyncFactusInvoiceStatusJob implements ShouldQueue
         $mapped = $mapper->map($result['body']);
         if ($mapped['is_rejected']) {
             $invoice->markRejected($mapped['reason'] ?? 'Rechazada por DIAN.');
+
             return;
         }
         if ($mapped['is_validated']) {
@@ -108,13 +107,13 @@ class SyncFactusInvoiceStatusJob implements ShouldQueue
                 $files = array_merge($files, $storage->fetchAndStore($invoice, $client, (string) $invoice->full_number));
             }
             $invoice->markValidated(array_merge($files, [
-                'factus_id'   => $mapped['factus_id'] ?? $invoice->factus_id,
-                'number'      => $mapped['number'],
+                'factus_id' => $mapped['factus_id'] ?? $invoice->factus_id,
+                'number' => $mapped['number'],
                 'full_number' => $mapped['full_number'],
-                'cufe'        => $mapped['cufe'],
+                'cufe' => $mapped['cufe'],
                 'dian_status' => $mapped['dian_status'],
-                'qr_url'      => $mapped['qr_url'],
-                'qr_data'     => $mapped['qr_data'],
+                'qr_url' => $mapped['qr_url'],
+                'qr_data' => $mapped['qr_data'],
             ]));
         }
     }

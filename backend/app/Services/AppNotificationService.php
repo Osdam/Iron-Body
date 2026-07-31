@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\AppNotification;
 use App\Models\Member;
+use App\Models\MemberNotificationPreference;
+use App\Support\Notifications\NotificationCategory;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -63,6 +65,17 @@ class AppNotificationService
             return ['notification' => null, 'status' => 'skipped_limit'];
         }
 
+        // 3) Lo que el socio pidió no recibir, no se recibe — venga de donde
+        //    venga. Este camino lo dispara n8n, y sin esta comprobación el
+        //    interruptor de la pantalla de ajustes mentiría: diría «apagado»
+        //    mientras la automatización sigue mandando.
+        $category = NotificationCategory::fromLegacyType($type);
+        $prefs = MemberNotificationPreference::forMember($memberId);
+
+        if (! $prefs->allows($category)) {
+            return ['notification' => null, 'status' => 'skipped_opted_out'];
+        }
+
         $notification = AppNotification::create([
             'member_id' => $memberId,
             'type' => $type,
@@ -76,8 +89,13 @@ class AppNotificationService
         ]);
 
         // Push opcional (no rompe si FCM no está configurado).
+        //
+        // En horas de silencio se crea la notificación pero NO se empuja: el
+        // aviso queda esperando en el centro de la app y el socio lo ve cuando
+        // despierta. Silenciar la interrupción no es lo mismo que ocultar el
+        // mensaje, y borrarlo sería peor que molestar.
         $member = Member::find($memberId);
-        if ($member !== null) {
+        if ($member !== null && ! $prefs->inQuietHours()) {
             $this->push->sendToMember($member, $notification);
         }
 

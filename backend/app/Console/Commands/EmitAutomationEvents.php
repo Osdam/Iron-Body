@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Member;
 use App\Models\NutritionMealLog;
+use App\Models\PhysicalEvaluation;
 use App\Models\RoutineCompletion;
 use App\Models\User;
 use App\Services\AutomationEventService;
@@ -49,7 +50,7 @@ class EmitAutomationEvents extends Command
 
             foreach ($users as $user) {
                 $member = Member::where('user_id', $user->id)->first();
-                if (!$member) {
+                if (! $member) {
                     continue;
                 }
                 $expiresInDays = $today->diffInDays(CarbonImmutable::parse($user->membership_end_date));
@@ -133,7 +134,7 @@ class EmitAutomationEvents extends Command
             $cutoff = $today->subDays(60);
             Member::query()->where('status', Member::STATUS_ACTIVE)->chunkById(200, function ($members) use ($events, $cutoff, $monthTag, &$count) {
                 foreach ($members as $member) {
-                    $last = \App\Models\PhysicalEvaluation::query()
+                    $last = PhysicalEvaluation::query()
                         ->where('member_id', $member->id)
                         ->latest('created_at')
                         ->value('created_at');
@@ -155,7 +156,7 @@ class EmitAutomationEvents extends Command
             $weekTag = $today->format('o-\WW');
             Member::query()->where('status', Member::STATUS_ACTIVE)->chunkById(200, function ($members) use ($events, $weekTag, &$count) {
                 foreach ($members as $member) {
-                    $weights = \App\Models\PhysicalEvaluation::query()
+                    $weights = PhysicalEvaluation::query()
                         ->where('member_id', $member->id)
                         ->whereNotNull('weight_kg')
                         ->latest('created_at')
@@ -178,7 +179,8 @@ class EmitAutomationEvents extends Command
             });
         }
 
-        $this->info("Eventos emitidos: {$count}" . ($only ? " (solo {$only})" : ''));
+        $this->info("Eventos emitidos: {$count}".($only ? " (solo {$only})" : ''));
+
         return self::SUCCESS;
     }
 }

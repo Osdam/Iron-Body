@@ -10,6 +10,7 @@ use App\Models\MemberDeviceBinding;
 use App\Models\MemberSecurityEvent;
 use App\Services\NotificationService;
 use App\Services\OtpService;
+use App\Services\RealtimeEvents;
 use App\Services\SecurityEventService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -44,23 +45,22 @@ class MemberPhoneRecoveryController extends Controller
         private OtpService $otp,
         private SecurityEventService $security,
         private NotificationService $notifications,
-    ) {
-    }
+    ) {}
 
     /** POST member/phone-recovery/can-self-recover — ¿este equipo puede el cambio directo? */
     public function canSelfRecover(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'document'  => ['required', 'string', 'max:40'],
+            'document' => ['required', 'string', 'max:40'],
             'device_id' => ['nullable', 'string', 'max:191'],
         ]);
 
         $member = $this->trustedMember($data['document'], $request->input('device_id'));
 
         return response()->json([
-            'ok'               => true,
+            'ok' => true,
             'can_self_recover' => $member !== null,
-            'reason'           => $member !== null ? 'trusted_device' : 'untrusted_device',
+            'reason' => $member !== null ? 'trusted_device' : 'untrusted_device',
         ]);
     }
 
@@ -72,7 +72,7 @@ class MemberPhoneRecoveryController extends Controller
     public function start(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'document'  => ['required', 'string', 'max:40'],
+            'document' => ['required', 'string', 'max:40'],
             'device_id' => ['nullable', 'string', 'max:191'],
         ]);
 
@@ -80,9 +80,9 @@ class MemberPhoneRecoveryController extends Controller
         if (! $member) {
             // Respuesta genérica: no revela si el documento existe.
             return response()->json([
-                'ok'               => true,
+                'ok' => true,
                 'can_self_recover' => false,
-                'reason'           => 'untrusted_device',
+                'reason' => 'untrusted_device',
             ]);
         }
 
@@ -97,33 +97,33 @@ class MemberPhoneRecoveryController extends Controller
 
         $ttl = (int) config('security.phone_recovery_ticket_ttl', 300);
         $ticket = MemberAuthChallenge::create([
-            'member_id'   => $member->id,
-            'purpose'     => MemberAuthChallenge::PURPOSE_PHONE_RECOVERY_TICKET,
-            'risk_tier'   => MemberAuthChallenge::TIER_LOCAL,
+            'member_id' => $member->id,
+            'purpose' => MemberAuthChallenge::PURPOSE_PHONE_RECOVERY_TICKET,
+            'risk_tier' => MemberAuthChallenge::TIER_LOCAL,
             // Código aleatorio no derivable: este ticket no se valida por OTP.
-            'code_hash'   => Hash::make(Str::random(40)),
-            'channel'     => 'local',
-            'device_id'   => $context['device_id'] ?? null,
+            'code_hash' => Hash::make(Str::random(40)),
+            'channel' => 'local',
+            'device_id' => $context['device_id'] ?? null,
             'device_name' => $context['device_name'] ?? null,
-            'platform'    => $context['platform'] ?? null,
-            'ip_address'  => $context['ip_address'] ?? null,
-            'user_agent'  => isset($context['user_agent']) ? mb_substr((string) $context['user_agent'], 0, 500) : null,
-            'status'      => MemberAuthChallenge::STATUS_PENDING,
-            'expires_at'  => now()->addSeconds($ttl),
+            'platform' => $context['platform'] ?? null,
+            'ip_address' => $context['ip_address'] ?? null,
+            'user_agent' => isset($context['user_agent']) ? mb_substr((string) $context['user_agent'], 0, 500) : null,
+            'status' => MemberAuthChallenge::STATUS_PENDING,
+            'expires_at' => now()->addSeconds($ttl),
         ]);
 
         $this->security->record($member, MemberSecurityEvent::TYPE_PHONE_CHANGE_REQUESTED, $context, [
             'source' => 'lost_number_recovery',
-            'stage'  => 'ticket_issued',
+            'stage' => 'ticket_issued',
             'ticket' => $ticket->uuid,
         ]);
 
         return response()->json([
-            'ok'               => true,
+            'ok' => true,
             'can_self_recover' => true,
-            'reason'           => 'trusted_device',
-            'recovery_ticket'  => $ticket->uuid,
-            'expires_in'       => $ttl,
+            'reason' => 'trusted_device',
+            'recovery_ticket' => $ticket->uuid,
+            'expires_in' => $ttl,
         ]);
     }
 
@@ -136,8 +136,8 @@ class MemberPhoneRecoveryController extends Controller
     {
         $data = $request->validate([
             'recovery_ticket' => ['required', 'string'],
-            'new_phone'       => ['required', 'string', 'min:7', 'max:30'],
-            'device_id'       => ['nullable', 'string', 'max:191'],
+            'new_phone' => ['required', 'string', 'min:7', 'max:30'],
+            'device_id' => ['nullable', 'string', 'max:191'],
         ]);
 
         $ticket = MemberAuthChallenge::query()
@@ -149,7 +149,7 @@ class MemberPhoneRecoveryController extends Controller
 
         if (! $ticket || $ticket->isExpired()) {
             return response()->json([
-                'ok'      => false,
+                'ok' => false,
                 'message' => 'La verificación de seguridad expiró. Vuelve a intentarlo.',
             ], 422);
         }
@@ -159,7 +159,7 @@ class MemberPhoneRecoveryController extends Controller
         // titular (no basta con tener un ticket válido).
         if (! $member || ! $this->deviceTrusted($member, $request->input('device_id'))) {
             return response()->json([
-                'ok'      => false,
+                'ok' => false,
                 'message' => 'No pudimos validar este dispositivo. Solicita ayuda al gimnasio.',
             ], 403);
         }
@@ -167,40 +167,40 @@ class MemberPhoneRecoveryController extends Controller
         $newPhone = trim($data['new_phone']);
         if ($this->phoneInUseByOther($member, $newPhone)) {
             return response()->json([
-                'ok'      => false,
+                'ok' => false,
                 'message' => 'Ese número ya está registrado en otra cuenta.',
             ], 422);
         }
         if ($this->sameDigits($newPhone, (string) $member->phone)) {
             return response()->json([
-                'ok'      => false,
+                'ok' => false,
                 'message' => 'Ese ya es el número de tu cuenta.',
             ], 422);
         }
 
         // Consume el ticket (un solo uso) ANTES de disparar el OTP.
         $ticket->update([
-            'status'      => MemberAuthChallenge::STATUS_COMPLETED,
+            'status' => MemberAuthChallenge::STATUS_COMPLETED,
             'consumed_at' => now(),
         ]);
 
-        $context   = $this->securityContext($request);
-        $result    = $this->otp->startChallenge($member, $context, MemberAuthChallenge::PURPOSE_PHONE_CHANGE, $newPhone);
+        $context = $this->securityContext($request);
+        $result = $this->otp->startChallenge($member, $context, MemberAuthChallenge::PURPOSE_PHONE_CHANGE, $newPhone);
         $challenge = $result['challenge'];
 
         $this->security->record($member, MemberSecurityEvent::TYPE_PHONE_CHANGE_REQUESTED, $context, [
-            'source'       => 'lost_number_recovery',
-            'stage'        => 'otp_sent',
-            'challenge'    => $challenge->uuid,
+            'source' => 'lost_number_recovery',
+            'stage' => 'otp_sent',
+            'challenge' => $challenge->uuid,
             'masked_phone' => $challenge->maskedDestination(),
         ]);
 
         $payload = [
-            'ok'              => true,
-            'requires_otp'    => true,
-            'challenge_id'    => $challenge->uuid,
-            'destination'     => $challenge->maskedDestination(),
-            'expires_in'      => (int) config('otp.ttl', 300),
+            'ok' => true,
+            'requires_otp' => true,
+            'challenge_id' => $challenge->uuid,
+            'destination' => $challenge->maskedDestination(),
+            'expires_in' => (int) config('otp.ttl', 300),
             'resend_cooldown' => (int) config('otp.resend_cooldown', 60),
         ];
         if ($this->otp->exposeCode()) {
@@ -219,8 +219,8 @@ class MemberPhoneRecoveryController extends Controller
     {
         $data = $request->validate([
             'challenge_id' => ['required', 'string'],
-            'code'         => ['required', 'string'],
-            'device_id'    => ['nullable', 'string', 'max:191'],
+            'code' => ['required', 'string'],
+            'device_id' => ['nullable', 'string', 'max:191'],
         ]);
 
         $challenge = MemberAuthChallenge::query()
@@ -231,7 +231,7 @@ class MemberPhoneRecoveryController extends Controller
         $member = $challenge?->member;
         if (! $challenge || ! $member || ! $this->deviceTrusted($member, $request->input('device_id'))) {
             return response()->json([
-                'ok'      => false,
+                'ok' => false,
                 'message' => 'No encontramos esta verificación o el dispositivo no es confiable.',
             ], 404);
         }
@@ -264,16 +264,16 @@ class MemberPhoneRecoveryController extends Controller
         }
 
         $this->security->record($member, MemberSecurityEvent::TYPE_PHONE_CHANGED, $context, [
-            'source'       => 'lost_number_recovery',
+            'source' => 'lost_number_recovery',
             'masked_phone' => MemberAuthChallenge::maskPhone($newPhone),
         ]);
         $this->notifications->notifyPhoneChanged($member, MemberAuthChallenge::maskPhone($newPhone));
-        \App\Services\RealtimeEvents::phone($member->id);
+        RealtimeEvents::phone($member->id);
 
         return response()->json([
-            'ok'      => true,
+            'ok' => true,
             'message' => 'Tu número verificado fue actualizado correctamente.',
-            'phone'   => MemberAuthChallenge::maskPhone($newPhone),
+            'phone' => MemberAuthChallenge::maskPhone($newPhone),
         ]);
     }
 
@@ -343,12 +343,12 @@ class MemberPhoneRecoveryController extends Controller
         $deviceId = ($deviceId !== null && trim((string) $deviceId) !== '') ? (string) $deviceId : null;
 
         return [
-            'device_id'   => $deviceId,
+            'device_id' => $deviceId,
             'device_name' => $request->input('device_name') ?? $request->header('X-Device-Name'),
-            'platform'    => $request->input('platform') ?? $request->header('X-Platform'),
+            'platform' => $request->input('platform') ?? $request->header('X-Platform'),
             'app_version' => $request->input('app_version') ?? $request->header('X-App-Version'),
-            'ip_address'  => $request->ip(),
-            'user_agent'  => $request->userAgent(),
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
         ];
     }
 }

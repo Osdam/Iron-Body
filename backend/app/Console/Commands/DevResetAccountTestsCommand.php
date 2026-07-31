@@ -86,7 +86,7 @@ class DevResetAccountTestsCommand extends Command
 
             return self::FAILURE;
         }
-        $this->info("Entorno seguro confirmado: APP_ENV=".app()->environment().", DB_DATABASE={$db}.");
+        $this->info('Entorno seguro confirmado: APP_ENV='.app()->environment().", DB_DATABASE={$db}.");
 
         // ── 2) Parámetros ───────────────────────────────────────────────────
         $emails = $this->listOption('emails');
@@ -174,7 +174,7 @@ class DevResetAccountTestsCommand extends Command
 
         $deleted = [];
         $deletedUsers = 0;
-        DB::transaction(function () use ($deletable, $memberIds, $emails, $documents, $includeActive, $includeBase, &$deleted, &$deletedUsers): void {
+        DB::transaction(function () use ($deletable, $memberIds, $emails, $documents, $includeBase, &$deleted, &$deletedUsers): void {
             foreach (self::ORPHAN_MEMBER_TABLES as $t) {
                 if (Schema::hasTable($t) && Schema::hasColumn($t, 'member_id')) {
                     $n = DB::table($t)->whereIn('member_id', $memberIds)->delete();
@@ -197,6 +197,7 @@ class DevResetAccountTestsCommand extends Command
                 }
                 if (strcasecmp((string) $u->email, self::BASE_EMAIL) === 0 && ! $includeBase) {
                     $this->warn("Usuario #{$uid} conservado (correo base).");
+
                     continue;
                 }
                 $matchesTest = ($emails && in_array($u->email, $emails, true))

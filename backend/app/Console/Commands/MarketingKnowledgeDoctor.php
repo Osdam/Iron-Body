@@ -13,6 +13,7 @@ use Illuminate\Console\Command;
 class MarketingKnowledgeDoctor extends Command
 {
     protected $signature = 'marketing:knowledge-doctor';
+
     protected $description = 'Diagnostica la base de conocimiento comercial (sin secretos).';
 
     public function handle(MarketingKnowledgeBaseService $kb): int

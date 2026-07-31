@@ -20,9 +20,7 @@ class PlanController extends Controller
     /** Estados de pago que cuentan como cobrados (vocabulario mixto ES/EN). */
     private const PAID_STATUSES = PaymentController::PAID_STATUSES;
 
-    public function __construct(private readonly IronAiMembershipAccessService $aiAccess)
-    {
-    }
+    public function __construct(private readonly IronAiMembershipAccessService $aiAccess) {}
 
     public function index(Request $request)
     {
@@ -96,13 +94,13 @@ class PlanController extends Controller
 
         return response()->json([
             'plans' => $plans->map(fn (Plan $p) => [
-                'plan_id'      => $p->id,
-                'subscribers'  => (int) ($subscribers[$p->id] ?? 0),
+                'plan_id' => $p->id,
+                'subscribers' => (int) ($subscribers[$p->id] ?? 0),
                 'month_income' => round($income[$p->id] ?? 0.0, 2),
             ])->values(),
-            'active_plans'      => Plan::where('active', true)->count(),
+            'active_plans' => Plan::where('active', true)->count(),
             'subscribers_total' => array_sum($subscribers),
-            'monthly_income'    => round($monthlyIncome, 2),
+            'monthly_income' => round($monthlyIncome, 2),
         ]);
     }
 
@@ -140,12 +138,14 @@ class PlanController extends Controller
         }
 
         $plan->update($data);
+
         return response()->json($plan);
     }
 
     public function destroy(Plan $plan)
     {
         $plan->delete();
+
         return response()->json(null, 204);
     }
 
@@ -156,7 +156,7 @@ class PlanController extends Controller
 
         return response()->json([
             'plans' => $plans->map(fn (Plan $p) => [
-                'planId'   => (string) $p->id,
+                'planId' => (string) $p->id,
                 'planName' => $p->name,
                 'features' => $p->resolvedFeatures(),
             ])->values(),
@@ -184,7 +184,7 @@ class PlanController extends Controller
         $this->notifyPlanMembers($plan);
 
         return response()->json([
-            'planId'   => (string) $plan->id,
+            'planId' => (string) $plan->id,
             'planName' => $plan->name,
             'features' => $plan->resolvedFeatures(),
         ]);
@@ -198,16 +198,16 @@ class PlanController extends Controller
     public function aiCapabilities(Plan $plan)
     {
         $caps = $this->aiAccess->getAiCapabilities([
-            'active'    => true,
-            'plan_id'   => $plan->id,
+            'active' => true,
+            'plan_id' => $plan->id,
             'plan_name' => $plan->name,
-            'plan'      => $plan,
-            'end_date'  => null,
+            'plan' => $plan,
+            'end_date' => null,
         ]);
 
         return response()->json([
-            'planId'       => (string) $plan->id,
-            'planName'     => $plan->name,
+            'planId' => (string) $plan->id,
+            'planName' => $plan->name,
             'capabilities' => $this->capabilitiesToApi($caps),
         ]);
     }
@@ -220,42 +220,42 @@ class PlanController extends Controller
     public function updateAiCapabilities(Request $request, Plan $plan)
     {
         $d = $request->validate([
-            'ai_enabled'                        => ['sometimes', 'boolean'],
-            'ai_chat_enabled'                   => ['sometimes', 'boolean'],
-            'ai_image_analysis_enabled'         => ['sometimes', 'boolean'],
-            'ai_voice_chat_enabled'             => ['sometimes', 'boolean'],
-            'ai_realtime_voice_enabled'         => ['sometimes', 'boolean'],
-            'ai_progress_analysis_enabled'      => ['sometimes', 'boolean'],
-            'ai_smart_recommendations_enabled'  => ['sometimes', 'boolean'],
-            'ai_weekly_summary_enabled'         => ['sometimes', 'boolean'],
-            'ai_proactive_notifications_enabled'=> ['sometimes', 'boolean'],
-            'ai_monthly_messages_limit'         => ['sometimes', 'nullable', 'integer', 'min:0'],
-            'ai_daily_messages_limit'           => ['sometimes', 'nullable', 'integer', 'min:0'],
-            'ai_monthly_image_limit'            => ['sometimes', 'nullable', 'integer', 'min:0'],
-            'ai_monthly_audio_limit'            => ['sometimes', 'nullable', 'integer', 'min:0'],
-            'ai_max_audio_seconds'              => ['sometimes', 'integer', 'min:5', 'max:600'],
-            'ai_max_image_size_mb'              => ['sometimes', 'integer', 'min:1', 'max:50'],
-            'ai_context_level'                  => ['sometimes', 'string', 'in:basic,personalized,full'],
+            'ai_enabled' => ['sometimes', 'boolean'],
+            'ai_chat_enabled' => ['sometimes', 'boolean'],
+            'ai_image_analysis_enabled' => ['sometimes', 'boolean'],
+            'ai_voice_chat_enabled' => ['sometimes', 'boolean'],
+            'ai_realtime_voice_enabled' => ['sometimes', 'boolean'],
+            'ai_progress_analysis_enabled' => ['sometimes', 'boolean'],
+            'ai_smart_recommendations_enabled' => ['sometimes', 'boolean'],
+            'ai_weekly_summary_enabled' => ['sometimes', 'boolean'],
+            'ai_proactive_notifications_enabled' => ['sometimes', 'boolean'],
+            'ai_monthly_messages_limit' => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'ai_daily_messages_limit' => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'ai_monthly_image_limit' => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'ai_monthly_audio_limit' => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'ai_max_audio_seconds' => ['sometimes', 'integer', 'min:5', 'max:600'],
+            'ai_max_image_size_mb' => ['sometimes', 'integer', 'min:1', 'max:50'],
+            'ai_context_level' => ['sometimes', 'string', 'in:basic,personalized,full'],
         ]);
 
         // Mapea el contrato del CRM (ai_*) a las columnas reales.
         $map = [
-            'ai_enabled'                         => 'ai_enabled',
-            'ai_chat_enabled'                    => 'ai_chat_enabled',
-            'ai_image_analysis_enabled'          => 'ai_image_analysis_enabled',
-            'ai_voice_chat_enabled'              => 'ai_voice_chat_enabled',
-            'ai_realtime_voice_enabled'          => 'ai_realtime_voice_enabled',
-            'ai_progress_analysis_enabled'       => 'progress_analysis_enabled',
-            'ai_smart_recommendations_enabled'   => 'smart_recommendations_enabled',
-            'ai_weekly_summary_enabled'          => 'weekly_summary_enabled',
+            'ai_enabled' => 'ai_enabled',
+            'ai_chat_enabled' => 'ai_chat_enabled',
+            'ai_image_analysis_enabled' => 'ai_image_analysis_enabled',
+            'ai_voice_chat_enabled' => 'ai_voice_chat_enabled',
+            'ai_realtime_voice_enabled' => 'ai_realtime_voice_enabled',
+            'ai_progress_analysis_enabled' => 'progress_analysis_enabled',
+            'ai_smart_recommendations_enabled' => 'smart_recommendations_enabled',
+            'ai_weekly_summary_enabled' => 'weekly_summary_enabled',
             'ai_proactive_notifications_enabled' => 'proactive_notifications_enabled',
-            'ai_monthly_messages_limit'          => 'monthly_messages_limit',
-            'ai_daily_messages_limit'            => 'daily_messages_limit',
-            'ai_monthly_image_limit'             => 'ai_image_monthly_limit',
-            'ai_monthly_audio_limit'             => 'ai_audio_monthly_limit',
-            'ai_max_audio_seconds'               => 'ai_max_audio_seconds',
-            'ai_max_image_size_mb'               => 'ai_max_image_size_mb',
-            'ai_context_level'                   => 'context_level',
+            'ai_monthly_messages_limit' => 'monthly_messages_limit',
+            'ai_daily_messages_limit' => 'daily_messages_limit',
+            'ai_monthly_image_limit' => 'ai_image_monthly_limit',
+            'ai_monthly_audio_limit' => 'ai_audio_monthly_limit',
+            'ai_max_audio_seconds' => 'ai_max_audio_seconds',
+            'ai_max_image_size_mb' => 'ai_max_image_size_mb',
+            'ai_context_level' => 'context_level',
         ];
 
         $columns = [];
@@ -277,8 +277,8 @@ class PlanController extends Controller
         $this->notifyPlanMembers($plan);
 
         return response()->json([
-            'planId'       => (string) $plan->id,
-            'planName'     => $plan->name,
+            'planId' => (string) $plan->id,
+            'planName' => $plan->name,
             'capabilities' => $this->capabilitiesToApi($row->toCapabilities()),
         ]);
     }
@@ -287,29 +287,29 @@ class PlanController extends Controller
     private function capabilitiesToApi(array $c): array
     {
         return [
-            'ai_enabled'                         => (bool) ($c['ai_enabled'] ?? true),
-            'ai_chat_enabled'                    => (bool) ($c['ai_chat_enabled'] ?? true),
-            'ai_image_analysis_enabled'          => (bool) ($c['ai_image_analysis_enabled'] ?? false),
-            'ai_voice_chat_enabled'              => (bool) ($c['ai_voice_chat_enabled'] ?? false),
-            'ai_realtime_voice_enabled'          => (bool) ($c['ai_realtime_voice_enabled'] ?? false),
-            'ai_progress_analysis_enabled'       => (bool) ($c['progress_analysis_enabled'] ?? false),
-            'ai_smart_recommendations_enabled'   => (bool) ($c['smart_recommendations_enabled'] ?? false),
-            'ai_weekly_summary_enabled'          => (bool) ($c['weekly_summary_enabled'] ?? false),
+            'ai_enabled' => (bool) ($c['ai_enabled'] ?? true),
+            'ai_chat_enabled' => (bool) ($c['ai_chat_enabled'] ?? true),
+            'ai_image_analysis_enabled' => (bool) ($c['ai_image_analysis_enabled'] ?? false),
+            'ai_voice_chat_enabled' => (bool) ($c['ai_voice_chat_enabled'] ?? false),
+            'ai_realtime_voice_enabled' => (bool) ($c['ai_realtime_voice_enabled'] ?? false),
+            'ai_progress_analysis_enabled' => (bool) ($c['progress_analysis_enabled'] ?? false),
+            'ai_smart_recommendations_enabled' => (bool) ($c['smart_recommendations_enabled'] ?? false),
+            'ai_weekly_summary_enabled' => (bool) ($c['weekly_summary_enabled'] ?? false),
             'ai_proactive_notifications_enabled' => (bool) ($c['proactive_notifications_enabled'] ?? false),
-            'ai_monthly_messages_limit'          => $c['monthly_messages_limit'] ?? null,
-            'ai_daily_messages_limit'            => $c['daily_messages_limit'] ?? null,
-            'ai_monthly_image_limit'             => $c['ai_image_monthly_limit'] ?? 0,
-            'ai_monthly_audio_limit'             => $c['ai_audio_monthly_limit'] ?? 0,
-            'ai_max_audio_seconds'               => (int) ($c['ai_max_audio_seconds'] ?? 60),
-            'ai_max_image_size_mb'               => (int) ($c['ai_max_image_size_mb'] ?? 5),
-            'ai_context_level'                   => $c['context_level'] ?? 'basic',
+            'ai_monthly_messages_limit' => $c['monthly_messages_limit'] ?? null,
+            'ai_daily_messages_limit' => $c['daily_messages_limit'] ?? null,
+            'ai_monthly_image_limit' => $c['ai_image_monthly_limit'] ?? 0,
+            'ai_monthly_audio_limit' => $c['ai_audio_monthly_limit'] ?? 0,
+            'ai_max_audio_seconds' => (int) ($c['ai_max_audio_seconds'] ?? 60),
+            'ai_max_image_size_mb' => (int) ($c['ai_max_image_size_mb'] ?? 5),
+            'ai_context_level' => $c['context_level'] ?? 'basic',
         ];
     }
 
     private function planSlug(string $name): string
     {
         $s = mb_strtolower(trim($name));
-        $s = str_replace(['á','é','í','ó','ú','ü','ñ'], ['a','e','i','o','u','u','n'], $s);
+        $s = str_replace(['á', 'é', 'í', 'ó', 'ú', 'ü', 'ñ'], ['a', 'e', 'i', 'o', 'u', 'u', 'n'], $s);
 
         return trim(preg_replace('/[^a-z0-9]+/', '_', $s), '_');
     }
@@ -335,24 +335,24 @@ class PlanController extends Controller
         $req = $updating ? ['sometimes', 'required'] : ['required'];
 
         $data = $request->validate([
-            'name'               => [...$req, 'string', 'max:255'],
-            'tier'               => ['sometimes', 'nullable', 'string', 'in:'.implode(',', Plan::TIERS)],
-            'price'              => [...$req, 'numeric', 'min:0'],
-            'original_price'     => ['nullable', 'numeric', 'min:0'],
-            'duration_days'      => [$updating ? 'sometimes' : 'required_without_all:duration_months,months', 'integer', 'min:1'],
-            'duration_months'    => ['sometimes', 'integer', 'min:1'],
-            'months'             => ['sometimes', 'integer', 'min:1'],
-            'benefits'           => ['nullable'],
-            'is_recommended'     => ['nullable', 'boolean'],
-            'badge'              => ['nullable', 'string', 'max:80'],
-            'sort_order'         => ['nullable', 'integer', 'min:0'],
-            'access_classes'     => ['nullable', 'boolean'],
+            'name' => [...$req, 'string', 'max:255'],
+            'tier' => ['sometimes', 'nullable', 'string', 'in:'.implode(',', Plan::TIERS)],
+            'price' => [...$req, 'numeric', 'min:0'],
+            'original_price' => ['nullable', 'numeric', 'min:0'],
+            'duration_days' => [$updating ? 'sometimes' : 'required_without_all:duration_months,months', 'integer', 'min:1'],
+            'duration_months' => ['sometimes', 'integer', 'min:1'],
+            'months' => ['sometimes', 'integer', 'min:1'],
+            'benefits' => ['nullable'],
+            'is_recommended' => ['nullable', 'boolean'],
+            'badge' => ['nullable', 'string', 'max:80'],
+            'sort_order' => ['nullable', 'integer', 'min:0'],
+            'access_classes' => ['nullable', 'boolean'],
             'reservations_limit' => ['nullable', 'integer', 'min:0'],
-            'access_locations'   => ['nullable', 'string'],
-            'restrictions'       => ['nullable', 'string'],
-            'active'             => [$updating ? 'sometimes' : 'required', 'boolean'],
-            'features'           => ['sometimes', 'nullable', 'array'],
-            'features.*'         => ['boolean'],
+            'access_locations' => ['nullable', 'string'],
+            'restrictions' => ['nullable', 'string'],
+            'active' => [$updating ? 'sometimes' : 'required', 'boolean'],
+            'features' => ['sometimes', 'nullable', 'array'],
+            'features.*' => ['boolean'],
         ]);
 
         if (! isset($data['duration_days'])) {

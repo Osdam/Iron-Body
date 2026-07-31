@@ -17,7 +17,9 @@ use Throwable;
 class IronAiMessageAttachment extends Model
 {
     public const TYPE_AUDIO = 'audio';
+
     public const TYPE_IMAGE = 'image';
+
     public const TYPE_FILE = 'file';
 
     protected $fillable = [
@@ -41,9 +43,9 @@ class IronAiMessageAttachment extends Model
     protected function casts(): array
     {
         return [
-            'size_bytes'       => 'integer',
+            'size_bytes' => 'integer',
             'duration_seconds' => 'integer',
-            'metadata'         => 'array',
+            'metadata' => 'array',
         ];
     }
 
@@ -81,13 +83,13 @@ class IronAiMessageAttachment extends Model
     public function toPublicArray(): array
     {
         return [
-            'type'             => $this->type,
-            'original_name'    => $this->original_name,
-            'mime_type'        => $this->mime_type,
-            'size_bytes'       => $this->size_bytes,
+            'type' => $this->type,
+            'original_name' => $this->original_name,
+            'mime_type' => $this->mime_type,
+            'size_bytes' => $this->size_bytes,
             'duration_seconds' => $this->duration_seconds,
-            'transcript'       => $this->transcript,
-            'preview_url'      => $this->previewUrl(),
+            'transcript' => $this->transcript,
+            'preview_url' => $this->previewUrl(),
         ];
     }
 }

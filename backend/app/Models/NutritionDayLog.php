@@ -24,15 +24,15 @@ class NutritionDayLog extends Model
     protected function casts(): array
     {
         return [
-            'log_date'     => 'date',
-            'calories'     => 'float',
-            'protein'      => 'float',
-            'carbs'        => 'float',
-            'fat'          => 'float',
-            'goal_calories'=> 'float',
+            'log_date' => 'date',
+            'calories' => 'float',
+            'protein' => 'float',
+            'carbs' => 'float',
+            'fat' => 'float',
+            'goal_calories' => 'float',
             'goal_protein' => 'float',
-            'goal_met'     => 'boolean',
-            'metadata'     => 'array',
+            'goal_met' => 'boolean',
+            'metadata' => 'array',
         ];
     }
 

@@ -9,7 +9,7 @@ namespace App\Enums;
  */
 enum InvoiceType: string
 {
-    case INVOICE     = 'invoice';
+    case INVOICE = 'invoice';
     case CREDIT_NOTE = 'credit_note';
 
     /** @return string[] */

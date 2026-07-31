@@ -21,8 +21,7 @@ class MarketingAppointmentController extends Controller
     public function __construct(
         private readonly MarketingAppointmentService $service,
         private readonly MarketingAppointmentAuthorizationService $authz,
-    ) {
-    }
+    ) {}
 
     private function admin(Request $request): ?Admin
     {
@@ -63,24 +62,24 @@ class MarketingAppointmentController extends Controller
             return $r;
         }
         $request->validate([
-            'status'   => ['nullable', Rule::in(MarketingAppointment::STATUSES)],
-            'type'     => ['nullable', Rule::in(MarketingAppointment::TYPES)],
+            'status' => ['nullable', Rule::in(MarketingAppointment::STATUSES)],
+            'type' => ['nullable', Rule::in(MarketingAppointment::TYPES)],
             'date_from' => ['nullable', 'date'],
-            'date_to'  => ['nullable', 'date'],
-            'q'        => ['nullable', 'string', 'max:80'],
+            'date_to' => ['nullable', 'date'],
+            'q' => ['nullable', 'string', 'max:80'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
         $page = $this->service->list($request, $this->admin($request));
 
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => collect($page->items())->map(fn ($a) => $this->service->present($a))->all(),
             'meta' => [
                 'current_page' => $page->currentPage(),
-                'last_page'    => $page->lastPage(),
-                'per_page'     => $page->perPage(),
-                'total'        => $page->total(),
+                'last_page' => $page->lastPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
             ],
         ]);
     }
@@ -185,7 +184,7 @@ class MarketingAppointmentController extends Controller
             return $err;
         }
         $data = $request->validate([
-            'scheduled_at'     => ['required', 'date'],
+            'scheduled_at' => ['required', 'date'],
             'duration_minutes' => ['nullable', 'integer', 'min:5', 'max:600'],
         ]);
         $this->service->reschedule($appointment, $data['scheduled_at'], $data['duration_minutes'] ?? null);
@@ -229,19 +228,19 @@ class MarketingAppointmentController extends Controller
     private function validatePayload(Request $request, bool $creating): array
     {
         return $request->validate([
-            'type'                      => [$creating ? 'required' : 'sometimes', Rule::in(MarketingAppointment::TYPES)],
-            'title'                     => [$creating ? 'required' : 'sometimes', 'string', 'max:160'],
-            'scheduled_at'              => [$creating ? 'required' : 'sometimes', 'date'],
-            'duration_minutes'          => ['nullable', 'integer', 'min:5', 'max:600'],
-            'notes'                     => ['nullable', 'string', 'max:2000'],
-            'location'                  => ['nullable', 'string', 'max:200'],
-            'contact_name'              => ['nullable', 'string', 'max:160'],
-            'contact_phone'             => ['nullable', 'string', 'max:40'],
-            'reminder_at'               => ['nullable', 'date'],
-            'status'                    => ['nullable', Rule::in(MarketingAppointment::STATUSES)],
-            'marketing_lead_id'         => ['nullable', 'integer', 'exists:marketing_leads,id'],
+            'type' => [$creating ? 'required' : 'sometimes', Rule::in(MarketingAppointment::TYPES)],
+            'title' => [$creating ? 'required' : 'sometimes', 'string', 'max:160'],
+            'scheduled_at' => [$creating ? 'required' : 'sometimes', 'date'],
+            'duration_minutes' => ['nullable', 'integer', 'min:5', 'max:600'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+            'location' => ['nullable', 'string', 'max:200'],
+            'contact_name' => ['nullable', 'string', 'max:160'],
+            'contact_phone' => ['nullable', 'string', 'max:40'],
+            'reminder_at' => ['nullable', 'date'],
+            'status' => ['nullable', Rule::in(MarketingAppointment::STATUSES)],
+            'marketing_lead_id' => ['nullable', 'integer', 'exists:marketing_leads,id'],
             'marketing_conversation_id' => ['nullable', 'integer', 'exists:marketing_conversations,id'],
-            'assigned_to_admin_id'      => ['nullable', 'integer', 'exists:admins,id'],
+            'assigned_to_admin_id' => ['nullable', 'integer', 'exists:admins,id'],
         ]);
     }
 }

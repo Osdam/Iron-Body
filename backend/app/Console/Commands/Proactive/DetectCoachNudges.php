@@ -16,6 +16,7 @@ use App\Models\RoutineCompletion;
 class DetectCoachNudges extends BaseProactiveDetectorCommand
 {
     protected $signature = 'ironbody:detect-coach-nudges {--dry-run} {--member-id=} {--limit=} {--event=}';
+
     protected $description = 'Detecta cumplimiento parcial del día y emite coach.nudge contextual.';
 
     protected function detect(): void

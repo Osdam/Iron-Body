@@ -31,8 +31,7 @@ class IronAiMediaController extends Controller
         private readonly IronAiService $service,
         private readonly IronAiMembershipAccessService $access,
         private readonly IronAiMediaService $media,
-    ) {
-    }
+    ) {}
 
     /** POST /api/iron-ai/audio-chat (multipart: document?, conversation_uuid?, audio, duration?) */
     public function audioChat(Request $request): JsonResponse
@@ -48,7 +47,7 @@ class IronAiMediaController extends Controller
             $decision = $this->access->decideAudio($access);
             if (! $decision['can']) {
                 $this->access->registerUsage($access, IronAiUsageLog::STATUS_BLOCKED, [
-                    'kind'         => IronAiUsageLog::KIND_AUDIO,
+                    'kind' => IronAiUsageLog::KIND_AUDIO,
                     'block_reason' => $decision['block']['code'] ?? 'BLOCKED',
                 ]);
 
@@ -82,19 +81,19 @@ class IronAiMediaController extends Controller
             // 5) Si no se pudo transcribir → no consume cuota; mensaje amable.
             if (! empty($result['transcription_failed'])) {
                 $this->access->registerUsage($access, IronAiUsageLog::STATUS_ERROR, [
-                    'kind'         => IronAiUsageLog::KIND_AUDIO,
+                    'kind' => IronAiUsageLog::KIND_AUDIO,
                     'block_reason' => 'TRANSCRIPTION_FAILED',
                 ]);
                 $this->media->deleteFile($attachment);
 
                 return response()->json([
-                    'ok'                => false,
-                    'code'              => 'TRANSCRIPTION_FAILED',
-                    'reply'             => $result['reply'],
-                    'transcript'        => null,
+                    'ok' => false,
+                    'code' => 'TRANSCRIPTION_FAILED',
+                    'reply' => $result['reply'],
+                    'transcript' => null,
                     'conversation_uuid' => $conversation->uuid,
-                    'conversation_id'   => $conversation->uuid,
-                    'quota'             => $this->access->quotaSnapshot($access),
+                    'conversation_id' => $conversation->uuid,
+                    'quota' => $this->access->quotaSnapshot($access),
                 ], 200);
             }
 
@@ -103,31 +102,31 @@ class IronAiMediaController extends Controller
                 $access,
                 $result['is_fallback'] ? IronAiUsageLog::STATUS_FALLBACK : IronAiUsageLog::STATUS_SUCCESS,
                 [
-                    'kind'          => IronAiUsageLog::KIND_AUDIO,
-                    'model'         => $result['model'] ?? null,
-                    'input_tokens'  => $result['input_tokens'] ?? null,
+                    'kind' => IronAiUsageLog::KIND_AUDIO,
+                    'model' => $result['model'] ?? null,
+                    'input_tokens' => $result['input_tokens'] ?? null,
                     'output_tokens' => $result['output_tokens'] ?? null,
-                    'message_id'    => $result['message_id'] ?? null,
+                    'message_id' => $result['message_id'] ?? null,
                 ],
             );
 
             return response()->json([
-                'ok'                => true,
-                'transcript'        => $result['transcript'] ?? null,
-                'reply'             => $result['reply'],
-                'duration_seconds'  => $result['duration_seconds'] ?? null,
+                'ok' => true,
+                'transcript' => $result['transcript'] ?? null,
+                'reply' => $result['reply'],
+                'duration_seconds' => $result['duration_seconds'] ?? null,
                 'conversation_uuid' => $conversation->uuid,
-                'conversation_id'   => $conversation->uuid,
-                'quota'             => $this->access->quotaSnapshot($access),
-                'suggestions'       => $result['suggestions'] ?? [],
+                'conversation_id' => $conversation->uuid,
+                'quota' => $this->access->quotaSnapshot($access),
+                'suggestions' => $result['suggestions'] ?? [],
             ]);
         } catch (Throwable $e) {
             report($e);
 
             return response()->json([
-                'ok'      => false,
-                'code'    => 'AUDIO_ERROR',
-                'reply'   => IronAiService::AUDIO_ERROR,
+                'ok' => false,
+                'code' => 'AUDIO_ERROR',
+                'reply' => IronAiService::AUDIO_ERROR,
                 'message' => IronAiService::AUDIO_ERROR,
             ], 200);
         }
@@ -147,7 +146,7 @@ class IronAiMediaController extends Controller
             $decision = $this->access->decideImage($access);
             if (! $decision['can']) {
                 $this->access->registerUsage($access, IronAiUsageLog::STATUS_BLOCKED, [
-                    'kind'         => IronAiUsageLog::KIND_IMAGE,
+                    'kind' => IronAiUsageLog::KIND_IMAGE,
                     'block_reason' => $decision['block']['code'] ?? 'BLOCKED',
                 ]);
 
@@ -182,30 +181,30 @@ class IronAiMediaController extends Controller
                 $access,
                 $result['is_fallback'] ? IronAiUsageLog::STATUS_FALLBACK : IronAiUsageLog::STATUS_SUCCESS,
                 [
-                    'kind'          => IronAiUsageLog::KIND_IMAGE,
-                    'model'         => $result['model'] ?? null,
-                    'input_tokens'  => $result['input_tokens'] ?? null,
+                    'kind' => IronAiUsageLog::KIND_IMAGE,
+                    'model' => $result['model'] ?? null,
+                    'input_tokens' => $result['input_tokens'] ?? null,
                     'output_tokens' => $result['output_tokens'] ?? null,
-                    'message_id'    => $result['message_id'] ?? null,
+                    'message_id' => $result['message_id'] ?? null,
                 ],
             );
 
             return response()->json([
-                'ok'                => true,
-                'reply'             => $result['reply'],
+                'ok' => true,
+                'reply' => $result['reply'],
                 'conversation_uuid' => $conversation->uuid,
-                'conversation_id'   => $conversation->uuid,
+                'conversation_id' => $conversation->uuid,
                 'image_preview_url' => $attachment->previewUrl(),
-                'quota'             => $this->access->quotaSnapshot($access),
-                'suggestions'       => $result['suggestions'] ?? [],
+                'quota' => $this->access->quotaSnapshot($access),
+                'suggestions' => $result['suggestions'] ?? [],
             ]);
         } catch (Throwable $e) {
             report($e);
 
             return response()->json([
-                'ok'      => false,
-                'code'    => 'IMAGE_ERROR',
-                'reply'   => IronAiService::IMAGE_ERROR,
+                'ok' => false,
+                'code' => 'IMAGE_ERROR',
+                'reply' => IronAiService::IMAGE_ERROR,
                 'message' => IronAiService::IMAGE_ERROR,
             ], 200);
         }
@@ -262,14 +261,14 @@ class IronAiMediaController extends Controller
     private function blockResponse(array $access, array $block): JsonResponse
     {
         return response()->json([
-            'ok'               => false,
-            'code'             => $block['code'],
-            'reply'            => $block['reply'],
+            'ok' => false,
+            'code' => $block['code'],
+            'reply' => $block['reply'],
             'upgrade_required' => $block['upgrade_required'] ?? true,
-            'access_type'      => $access['access_type'] ?? null,
-            'quota'            => $this->access->quotaSnapshot($access),
-            'cta'              => $block['cta'] ?? null,
-            'suggestions'      => $block['suggestions'] ?? ['Ver membresías'],
+            'access_type' => $access['access_type'] ?? null,
+            'quota' => $this->access->quotaSnapshot($access),
+            'cta' => $block['cta'] ?? null,
+            'suggestions' => $block['suggestions'] ?? ['Ver membresías'],
         ], 200);
     }
 
@@ -281,8 +280,8 @@ class IronAiMediaController extends Controller
     private function forbiddenConversation(): JsonResponse
     {
         return response()->json([
-            'ok'      => false,
-            'code'    => 'CONVERSATION_NOT_FOUND',
+            'ok' => false,
+            'code' => 'CONVERSATION_NOT_FOUND',
             'message' => 'La conversación no existe o no te pertenece.',
         ], 403);
     }

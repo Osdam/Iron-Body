@@ -20,18 +20,18 @@ namespace App\Enums;
  */
 enum InvoiceStatus: string
 {
-    case PENDING    = 'pending';
+    case PENDING = 'pending';
     case PROCESSING = 'processing';
-    case VALIDATED  = 'validated';
-    case REJECTED   = 'rejected';
-    case ERROR      = 'error';
-    case CANCELLED  = 'cancelled';
+    case VALIDATED = 'validated';
+    case REJECTED = 'rejected';
+    case ERROR = 'error';
+    case CANCELLED = 'cancelled';
 
-    case CREDIT_NOTE_PENDING    = 'credit_note_pending';
+    case CREDIT_NOTE_PENDING = 'credit_note_pending';
     case CREDIT_NOTE_PROCESSING = 'credit_note_processing';
-    case CREDIT_NOTE_VALIDATED  = 'credit_note_validated';
-    case CREDIT_NOTE_REJECTED   = 'credit_note_rejected';
-    case CREDIT_NOTE_ERROR      = 'credit_note_error';
+    case CREDIT_NOTE_VALIDATED = 'credit_note_validated';
+    case CREDIT_NOTE_REJECTED = 'credit_note_rejected';
+    case CREDIT_NOTE_ERROR = 'credit_note_error';
 
     /** Estado terminal: no se reintenta automáticamente. */
     public function isFinal(): bool

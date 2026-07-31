@@ -17,9 +17,7 @@ use Illuminate\Http\Request;
  */
 class LiveController extends Controller
 {
-    public function __construct(private LiveKitService $livekit)
-    {
-    }
+    public function __construct(private LiveKitService $livekit) {}
 
     /** Crea una sesión (solo staff). Queda 'scheduled' hasta start(). */
     public function create(Request $request): JsonResponse
@@ -57,6 +55,7 @@ class LiveController extends Controller
             'status' => LiveStream::STATUS_LIVE,
             'started_at' => $live->started_at ?? now(),
         ]);
+
         return response()->json(['ok' => true, 'data' => $live->toAppArray()]);
     }
 
@@ -70,6 +69,7 @@ class LiveController extends Controller
             'status' => LiveStream::STATUS_ENDED,
             'ended_at' => now(),
         ]);
+
         return response()->json(['ok' => true, 'data' => $live->toAppArray()]);
     }
 
@@ -92,6 +92,7 @@ class LiveController extends Controller
     public function show(LiveStream $live): JsonResponse
     {
         $live->loadMissing('host');
+
         return response()->json(['ok' => true, 'data' => $live->toAppArray()]);
     }
 
@@ -143,6 +144,7 @@ class LiveController extends Controller
     private function canManage(Request $request, LiveStream $live): bool
     {
         $member = $this->member($request);
+
         return $member && $member->is_staff
             && ($live->host_member_id === $member->id || $member->is_staff);
     }

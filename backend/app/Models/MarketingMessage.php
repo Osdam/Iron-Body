@@ -8,11 +8,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class MarketingMessage extends Model
 {
     public const DIRECTION_INBOUND = 'inbound';
+
     public const DIRECTION_OUTBOUND = 'outbound';
 
     public const SENDER_LEAD = 'lead';
+
     public const SENDER_AI = 'ai';
+
     public const SENDER_HUMAN = 'human';
+
     public const SENDER_SYSTEM = 'system';
 
     protected $fillable = [

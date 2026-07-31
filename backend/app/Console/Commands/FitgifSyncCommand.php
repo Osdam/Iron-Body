@@ -15,6 +15,7 @@ use Illuminate\Console\Command;
 class FitgifSyncCommand extends Command
 {
     protected $signature = 'fitgif:sync';
+
     protected $description = 'Descarga y cachea los GIFs de FitGif de las rutinas (throttled 3/min)';
 
     public function handle(ExerciseProviderService $exercises): int
@@ -22,7 +23,7 @@ class FitgifSyncCommand extends Command
         $this->info('Sincronizando FitGif (throttle 3 req/min, paciencia)…');
         $start = microtime(true);
 
-        $res = $exercises->fitgifSync(fn ($line) => $this->line('  ' . $line));
+        $res = $exercises->fitgifSync(fn ($line) => $this->line('  '.$line));
 
         $secs = round(microtime(true) - $start);
         $this->newLine();

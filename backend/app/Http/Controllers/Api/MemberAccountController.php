@@ -13,9 +13,9 @@ use App\Models\SupportSecurityReport;
 use App\Services\DeviceSessionService;
 use App\Services\NotificationService;
 use App\Services\OtpService;
+use App\Services\RealtimeEvents;
 use App\Services\SecurityEventService;
 use Carbon\Carbon;
-use Illuminate\Validation\Rule;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -36,8 +36,7 @@ class MemberAccountController extends Controller
         private OtpService $otp,
         private SecurityEventService $security,
         private NotificationService $notifications,
-    ) {
-    }
+    ) {}
 
     public function status(Request $request): JsonResponse
     {
@@ -154,10 +153,10 @@ class MemberAccountController extends Controller
             ]);
         }
 
-        $result    = $this->otp->startChallenge($member, $context, MemberAuthChallenge::PURPOSE_ACCOUNT_DELETE);
+        $result = $this->otp->startChallenge($member, $context, MemberAuthChallenge::PURPOSE_ACCOUNT_DELETE);
         $challenge = $result['challenge'];
         $this->security->record($member, MemberSecurityEvent::TYPE_SENSITIVE_OTP_SENT, $context, [
-            'purpose'   => MemberAuthChallenge::PURPOSE_ACCOUNT_DELETE,
+            'purpose' => MemberAuthChallenge::PURPOSE_ACCOUNT_DELETE,
             'challenge' => $challenge->uuid,
         ]);
 
@@ -201,7 +200,7 @@ class MemberAccountController extends Controller
         if ($this->otp->canChallenge($member)) {
             $validated = $request->validate([
                 'challenge_id' => ['required', 'string'],
-                'code'         => ['required', 'string'],
+                'code' => ['required', 'string'],
             ]);
             try {
                 $this->otp->verifyAction(
@@ -309,7 +308,7 @@ class MemberAccountController extends Controller
 
         $this->security->record($member, MemberSecurityEvent::TYPE_ACCOUNT_DELETED, $context, [
             'otp_verified' => $otpVerified,
-            'request_id'   => $req->id,
+            'request_id' => $req->id,
         ]);
 
         return response()->json([
@@ -351,19 +350,19 @@ class MemberAccountController extends Controller
             ], 422);
         }
 
-        $result    = $this->otp->startChallenge($member, $context, MemberAuthChallenge::PURPOSE_PHONE_CHANGE, $newPhone);
+        $result = $this->otp->startChallenge($member, $context, MemberAuthChallenge::PURPOSE_PHONE_CHANGE, $newPhone);
         $challenge = $result['challenge'];
         $this->security->record($member, MemberSecurityEvent::TYPE_PHONE_CHANGE_REQUESTED, $context, [
-            'challenge'    => $challenge->uuid,
+            'challenge' => $challenge->uuid,
             'masked_phone' => $challenge->maskedDestination(),
         ]);
 
         $payload = [
-            'ok'              => true,
-            'requires_otp'    => true,
-            'challenge_id'    => $challenge->uuid,
-            'destination'     => $challenge->maskedDestination(),
-            'expires_in'      => (int) config('otp.ttl', 300),
+            'ok' => true,
+            'requires_otp' => true,
+            'challenge_id' => $challenge->uuid,
+            'destination' => $challenge->maskedDestination(),
+            'expires_in' => (int) config('otp.ttl', 300),
             'resend_cooldown' => (int) config('otp.resend_cooldown', 60),
         ];
         if ($this->otp->exposeCode()) {
@@ -384,7 +383,7 @@ class MemberAccountController extends Controller
         $member = $request->attributes->get('auth_member');
         $validated = $request->validate([
             'challenge_id' => ['required', 'string'],
-            'code'         => ['required', 'string'],
+            'code' => ['required', 'string'],
         ]);
         $context = $this->securityContext($request);
 
@@ -418,12 +417,12 @@ class MemberAccountController extends Controller
             'masked_phone' => MemberAuthChallenge::maskPhone($newPhone),
         ]);
         $this->notifications->notifyPhoneChanged($member, MemberAuthChallenge::maskPhone($newPhone));
-        \App\Services\RealtimeEvents::phone($member->id);
+        RealtimeEvents::phone($member->id);
 
         return response()->json([
-            'ok'      => true,
+            'ok' => true,
             'message' => 'Tu número de teléfono se actualizó correctamente.',
-            'phone'   => MemberAuthChallenge::maskPhone($newPhone),
+            'phone' => MemberAuthChallenge::maskPhone($newPhone),
         ]);
     }
 
@@ -437,24 +436,24 @@ class MemberAccountController extends Controller
         /** @var Member $member */
         $member = $request->attributes->get('auth_member');
         $data = $request->validate([
-            'description'     => ['nullable', 'string', 'max:2000'],
+            'description' => ['nullable', 'string', 'max:2000'],
             'contact_channel' => ['nullable', 'string', 'max:40'],
-            'new_phone'       => ['nullable', 'string', 'max:30'],
+            'new_phone' => ['nullable', 'string', 'max:30'],
         ]);
 
         $report = SupportSecurityReport::create([
-            'member_id'       => $member->id,
+            'member_id' => $member->id,
             'document_number' => $member->document_number,
-            'name'            => $member->full_name,
-            'phone'           => $data['new_phone'] ?? null,
-            'email'           => $member->email,
-            'report_type'     => SupportSecurityReport::TYPE_PHONE_CHANGED,
-            'status'          => SupportSecurityReport::STATUS_PENDING,
-            'description'     => $data['description'] ?? null,
+            'name' => $member->full_name,
+            'phone' => $data['new_phone'] ?? null,
+            'email' => $member->email,
+            'report_type' => SupportSecurityReport::TYPE_PHONE_CHANGED,
+            'status' => SupportSecurityReport::STATUS_PENDING,
+            'description' => $data['description'] ?? null,
             'contact_channel' => $data['contact_channel'] ?? null,
-            'ip_address'      => $request->ip(),
-            'user_agent'      => mb_substr((string) $request->userAgent(), 0, 512),
-            'metadata'        => ['source' => 'app_phone_change'],
+            'ip_address' => $request->ip(),
+            'user_agent' => mb_substr((string) $request->userAgent(), 0, 512),
+            'metadata' => ['source' => 'app_phone_change'],
         ]);
 
         $this->security->record($member, MemberSecurityEvent::TYPE_SUPPORT_REPORT, $this->securityContext($request), [
@@ -464,7 +463,7 @@ class MemberAccountController extends Controller
         $this->notifications->notifySecuritySupportReport($report, $member);
 
         return response()->json([
-            'ok'      => true,
+            'ok' => true,
             'message' => 'Recibimos tu solicitud. El equipo del gimnasio revisará tu caso.',
         ]);
     }
@@ -513,12 +512,12 @@ class MemberAccountController extends Controller
         $deviceId = ($deviceId !== null && trim((string) $deviceId) !== '') ? (string) $deviceId : null;
 
         return [
-            'device_id'   => $deviceId,
+            'device_id' => $deviceId,
             'device_name' => $request->input('device_name') ?? $request->header('X-Device-Name'),
-            'platform'    => $request->input('platform') ?? $request->header('X-Platform'),
+            'platform' => $request->input('platform') ?? $request->header('X-Platform'),
             'app_version' => $request->input('app_version') ?? $request->header('X-App-Version'),
-            'ip_address'  => $request->ip(),
-            'user_agent'  => $request->userAgent(),
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
         ];
     }
 }

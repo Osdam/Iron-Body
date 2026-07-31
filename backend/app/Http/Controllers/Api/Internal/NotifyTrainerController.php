@@ -21,23 +21,21 @@ use Illuminate\Http\Request;
  */
 class NotifyTrainerController extends Controller
 {
-    public function __construct(private readonly TrainerTaskService $service)
-    {
-    }
+    public function __construct(private readonly TrainerTaskService $service) {}
 
     public function notify(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'trainer_id'   => 'required|integer',
-            'member_id'    => 'required|integer',
-            'type'         => 'required|string|max:80',
-            'title'        => 'required|string|max:140',
-            'body'         => 'required|string|max:500',
-            'priority'     => 'nullable|string|in:low,normal,high',
+            'trainer_id' => 'required|integer',
+            'member_id' => 'required|integer',
+            'type' => 'required|string|max:80',
+            'title' => 'required|string|max:140',
+            'body' => 'required|string|max:500',
+            'priority' => 'nullable|string|in:low,normal,high',
             'action_route' => 'nullable|string|max:200',
-            'metadata'     => 'nullable|array',
+            'metadata' => 'nullable|array',
             // Permite idempotencia controlada desde n8n (opcional).
-            'idempotency_key'     => 'nullable|string|max:191',
+            'idempotency_key' => 'nullable|string|max:191',
             'automation_event_id' => 'nullable|integer',
         ]);
 
@@ -57,15 +55,15 @@ class NotifyTrainerController extends Controller
         // skipped_no_assignment: el entrenador no es el activo del miembro.
         if ($result['status'] === 'skipped_no_assignment') {
             return response()->json([
-                'ok'      => false,
-                'status'  => $result['status'],
+                'ok' => false,
+                'status' => $result['status'],
                 'message' => 'El entrenador no está asignado a ese miembro.',
             ], 409);
         }
 
         return response()->json([
-            'ok'      => true,
-            'status'  => $result['status'], // created | skipped_duplicate | skipped_limit
+            'ok' => true,
+            'status' => $result['status'], // created | skipped_duplicate | skipped_limit
             'task_id' => $result['task']?->id,
         ]);
     }

@@ -26,13 +26,13 @@ abstract class AbstractWompiPaymentRequest extends FormRequest
     public function rules(): array
     {
         return array_merge([
-            'plan_id'           => 'nullable|integer|exists:plans,id',
-            'order_id'          => 'nullable|integer',
-            'purpose'           => 'nullable|string|in:membership,store',
+            'plan_id' => 'nullable|integer|exists:plans,id',
+            'order_id' => 'nullable|integer',
+            'purpose' => 'nullable|string|in:membership,store',
             // Solo referencia visual: el backend recalcula el precio real.
-            'amount'            => 'nullable|numeric|min:1',
-            'currency'          => 'nullable|string|size:3',
-            'description'       => 'nullable|string|max:160',
+            'amount' => 'nullable|numeric|min:1',
+            'currency' => 'nullable|string|size:3',
+            'description' => 'nullable|string|max:160',
             // Idempotencia desde la app (doble toque / reintento de red).
             'client_request_id' => 'nullable|string|max:120',
             // Factura electrónica (opt-in del cliente). Si llega en true, al
@@ -40,21 +40,21 @@ abstract class AbstractWompiPaymentRequest extends FormRequest
             // comprobante (PDF/XML) al correo, sin depender del flag global
             // auto_emit. `invoice_email` es el correo de contacto (opcional:
             // el backend usa el del miembro autenticado si no llega).
-            'request_invoice'   => 'nullable|boolean',
+            'request_invoice' => 'nullable|boolean',
             // `entregable` rechaza dominios reservados (.local/.invalid/.test/
             // .example). Un correo sintético pasa `email` pero la factura nunca
             // llegaría a nadie. Ver App\Rules\DeliverableInvoiceEmail.
-            'invoice_email'     => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail()],
+            'invoice_email' => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail],
             // Consentimientos Wompi (ambos obligatorios).
-            'accepted_terms'          => 'required|accepted',
-            'accepted_personal_data'  => 'required|accepted',
+            'accepted_terms' => 'required|accepted',
+            'accepted_personal_data' => 'required|accepted',
         ], $this->methodRules());
     }
 
     public function messages(): array
     {
         return [
-            'accepted_terms.accepted'         => 'Debes aceptar los términos y condiciones para continuar.',
+            'accepted_terms.accepted' => 'Debes aceptar los términos y condiciones para continuar.',
             'accepted_personal_data.accepted' => 'Debes autorizar el tratamiento de tus datos personales para continuar.',
         ];
     }

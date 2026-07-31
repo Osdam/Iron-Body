@@ -19,6 +19,7 @@ use Illuminate\Console\Command;
 class SyncMembershipAiCapabilitiesCommand extends Command
 {
     protected $signature = 'iron-ai:sync-membership-capabilities {--force : Sobrescribe capacidades existentes con los valores base}';
+
     protected $description = 'Crea/actualiza capacidades IA de IRON IA según los planes/membresías existentes (idempotente)';
 
     public function handle(): int
@@ -29,11 +30,11 @@ class SyncMembershipAiCapabilitiesCommand extends Command
 
         // 1) Filas especiales (plan_code, sin plan del catálogo).
         $special = [
-            'free_trial'         => config('iron_ai.free_trial'),
+            'free_trial' => config('iron_ai.free_trial'),
             'default_membership' => config('iron_ai.default_membership'),
-            'basic'              => config('iron_ai.tiers.basic'),
-            'intermediate'       => config('iron_ai.tiers.intermediate'),
-            'premium'            => config('iron_ai.tiers.premium'),
+            'basic' => config('iron_ai.tiers.basic'),
+            'intermediate' => config('iron_ai.tiers.intermediate'),
+            'premium' => config('iron_ai.tiers.premium'),
         ];
 
         foreach ($special as $code => $caps) {
@@ -46,6 +47,7 @@ class SyncMembershipAiCapabilitiesCommand extends Command
             if ($existing && ! $force) {
                 $skipped++;
                 $this->line("  = plan_code '{$code}' ya existe (sin cambios)");
+
                 continue;
             }
 
@@ -54,7 +56,7 @@ class SyncMembershipAiCapabilitiesCommand extends Command
                 array_merge($caps, ['is_active' => true]),
             );
             $created++;
-            $this->line(($existing ? "  ~ " : "  + ") . "plan_code '{$code}' " . ($existing ? 'actualizado' : 'creado'));
+            $this->line(($existing ? '  ~ ' : '  + ')."plan_code '{$code}' ".($existing ? 'actualizado' : 'creado'));
         }
 
         // 2) Una fila por cada plan existente del catálogo.
@@ -74,6 +76,7 @@ class SyncMembershipAiCapabilitiesCommand extends Command
             if ($existing && ! $force) {
                 $skipped++;
                 $this->line("  = plan #{$plan->id} '{$plan->name}' ya tiene capacidades (sin cambios)");
+
                 continue;
             }
 
@@ -85,11 +88,11 @@ class SyncMembershipAiCapabilitiesCommand extends Command
                 ]),
             );
             $created++;
-            $this->line(($existing ? "  ~ " : "  + ") . "plan #{$plan->id} '{$plan->name}' → tier '{$tier}'");
+            $this->line(($existing ? '  ~ ' : '  + ')."plan #{$plan->id} '{$plan->name}' → tier '{$tier}'");
         }
 
         $this->newLine();
-        $this->info("Listo — escritas/actualizadas: {$created} · sin cambios: {$skipped} · total filas: " . MembershipAiCapability::count());
+        $this->info("Listo — escritas/actualizadas: {$created} · sin cambios: {$skipped} · total filas: ".MembershipAiCapability::count());
 
         return self::SUCCESS;
     }
@@ -115,7 +118,7 @@ class SyncMembershipAiCapabilitiesCommand extends Command
     {
         $s = mb_strtolower(trim($s));
 
-        return str_replace(['á','é','í','ó','ú','ü','ñ'], ['a','e','i','o','u','u','n'], $s);
+        return str_replace(['á', 'é', 'í', 'ó', 'ú', 'ü', 'ñ'], ['a', 'e', 'i', 'o', 'u', 'u', 'n'], $s);
     }
 
     private function slug(string $s): string

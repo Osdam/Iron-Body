@@ -20,6 +20,18 @@ return [
     'wellness' => [
         'enabled' => filter_var(env('NOTIFICATIONS_WELLNESS_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
 
+        // Quién decide la HORA de envío: 'laravel' (el cron del servidor) o
+        // 'n8n' (que llama a /api/internal/automation/wellness-run).
+        //
+        // Debe haber un solo dueño del horario. Con 'n8n', Laravel deja de
+        // agendarlo para que no haya dos relojes compitiendo — aunque si por
+        // error corrieran los dos, la llave de idempotencia diaria impide que
+        // nadie reciba dos avisos.
+        //
+        // Se elige 'laravel' por defecto a propósito: es el camino que no
+        // depende de que un contenedor externo esté vivo.
+        'orchestrator' => env('NOTIFICATIONS_WELLNESS_ORCHESTRATOR', 'laravel'),
+
         // El servidor corre en UTC y el gimnasio está en UTC-5. Estas dos
         // pasadas caen a media mañana y media tarde en Neiva, lejos de las
         // horas de silencio por defecto (21:00–07:00 locales). Se hacen dos

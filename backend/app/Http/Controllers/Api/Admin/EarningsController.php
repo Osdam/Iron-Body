@@ -26,15 +26,16 @@ class EarningsController extends Controller
 {
     /** Estados que cuentan como dinero recibido. */
     private const GYM_PAID = ['paid', 'approved'];
+
     private const CAFE_PAID = ['paid', 'delivered'];
 
     public function index(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'from'     => ['nullable', 'date'],
-            'to'       => ['nullable', 'date'],
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date'],
             'group_by' => ['nullable', 'in:day,month'],
-            'source'   => ['nullable', 'in:all,gym,cafeteria'],
+            'source' => ['nullable', 'in:all,gym,cafeteria'],
         ]);
 
         $groupBy = $data['group_by'] ?? 'day';
@@ -81,11 +82,11 @@ class EarningsController extends Controller
 
         $periods = collect(array_keys($gymByPeriod + $cafeByPeriod))->unique()->sort()->values();
         $series = $periods->map(fn (string $p) => [
-            'period'          => $p,
-            'gym'             => round($gymByPeriod[$p] ?? 0, 2),
-            'cafeteria'       => round($cafeByPeriod[$p] ?? 0, 2),
-            'total'           => round(($gymByPeriod[$p] ?? 0) + ($cafeByPeriod[$p] ?? 0), 2),
-            'cafeteria_profit'=> round($cafeProfitByPeriod[$p] ?? 0, 2),
+            'period' => $p,
+            'gym' => round($gymByPeriod[$p] ?? 0, 2),
+            'cafeteria' => round($cafeByPeriod[$p] ?? 0, 2),
+            'total' => round(($gymByPeriod[$p] ?? 0) + ($cafeByPeriod[$p] ?? 0), 2),
+            'cafeteria_profit' => round($cafeProfitByPeriod[$p] ?? 0, 2),
         ])->all();
 
         // ── Desglose por método de pago ───────────────────────────────────────
@@ -105,22 +106,22 @@ class EarningsController extends Controller
 
         return response()->json([
             'range' => [
-                'from'     => $from->toDateString(),
-                'to'       => $to->toDateString(),
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
                 'group_by' => $groupBy,
-                'source'   => $source,
+                'source' => $source,
             ],
             'totals' => [
-                'gym_revenue'       => round($gymRevenue, 2),
+                'gym_revenue' => round($gymRevenue, 2),
                 'cafeteria_revenue' => round($cafeRevenue, 2),
-                'combined_revenue'  => round($gymRevenue + $cafeRevenue, 2),
-                'cafeteria_profit'  => round($cafeProfit, 2),
+                'combined_revenue' => round($gymRevenue + $cafeRevenue, 2),
+                'cafeteria_profit' => round($cafeProfit, 2),
                 // Utilidad gimnasio = ingresos (sin costo asociado).
-                'combined_profit'   => round($gymRevenue + $cafeProfit, 2),
-                'gym_count'         => $gymCount,
-                'cafeteria_count'   => $cafeCount,
+                'combined_profit' => round($gymRevenue + $cafeProfit, 2),
+                'gym_count' => $gymCount,
+                'cafeteria_count' => $cafeCount,
             ],
-            'series'    => $series,
+            'series' => $series,
             'by_method' => $byMethod,
         ]);
     }
@@ -133,9 +134,8 @@ class EarningsController extends Controller
      */
     public function stream(Request $request): StreamedResponse
     {
-        $signature = static fn (): string =>
-            Payment::count() . ':' . (string) Payment::max('updated_at') . '|' .
-            ProductSale::count() . ':' . (string) ProductSale::max('updated_at');
+        $signature = static fn (): string => Payment::count().':'.(string) Payment::max('updated_at').'|'.
+            ProductSale::count().':'.(string) ProductSale::max('updated_at');
 
         $last = null;
 
@@ -143,6 +143,7 @@ class EarningsController extends Controller
             $now = $signature();
             if ($last === null) {
                 $last = $now; // línea base
+
                 return;
             }
             if ($now !== $last) {
@@ -212,9 +213,9 @@ class EarningsController extends Controller
         $fmtMysql = $groupBy === 'month' ? '%Y-%m' : '%Y-%m-%d';
 
         return match ($driver) {
-            'pgsql'  => "TO_CHAR(($column AT TIME ZONE 'UTC' AT TIME ZONE 'America/Bogota'), '$fmtPg')",
+            'pgsql' => "TO_CHAR(($column AT TIME ZONE 'UTC' AT TIME ZONE 'America/Bogota'), '$fmtPg')",
             'sqlite' => "strftime('$fmtSqlite', $column)",
-            default  => "DATE_FORMAT(CONVERT_TZ($column, '+00:00', '-05:00'), '$fmtMysql')",
+            default => "DATE_FORMAT(CONVERT_TZ($column, '+00:00', '-05:00'), '$fmtMysql')",
         };
     }
 }

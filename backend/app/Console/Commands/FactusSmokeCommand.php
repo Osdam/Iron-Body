@@ -47,6 +47,7 @@ class FactusSmokeCommand extends Command
         $paymentId = (int) $this->option('payment-id');
         if ($paymentId <= 0) {
             $this->error('Falta --payment-id.');
+
             return self::FAILURE;
         }
 
@@ -54,10 +55,12 @@ class FactusSmokeCommand extends Command
         $payment = Payment::find($paymentId);
         if ($payment === null) {
             $this->error("Payment #{$paymentId} no existe.");
+
             return self::FAILURE;
         }
         if ($payment->status !== 'paid') {
             $this->error("Payment #{$paymentId} no está 'paid' (está '{$payment->status}').");
+
             return self::FAILURE;
         }
 
@@ -68,6 +71,7 @@ class FactusSmokeCommand extends Command
 
         if ($invoice === null) {
             $this->error('No se pudo crear la factura local (revisa datos del payment/plan).');
+
             return self::FAILURE;
         }
 
@@ -78,12 +82,14 @@ class FactusSmokeCommand extends Command
         if ($invoice->status === InvoiceStatus::VALIDATED) {
             $this->warn('La factura ya estaba VALIDADA. No se reemite.');
             $this->report($invoice->refresh());
+
             return self::SUCCESS;
         }
 
         if (! $this->option('confirm')
             && ! $this->confirm("¿Emitir factura REAL en SANDBOX para el payment #{$paymentId} (monto {$payment->amount})?")) {
             $this->line('Cancelado.');
+
             return self::SUCCESS;
         }
 
@@ -93,8 +99,9 @@ class FactusSmokeCommand extends Command
         try {
             $this->laravel->call([new EmitElectronicInvoiceJob($invoice->id), 'handle']);
         } catch (Throwable $e) {
-            $this->error('Error técnico al emitir: ' . $e->getMessage());
+            $this->error('Error técnico al emitir: '.$e->getMessage());
             $this->report($invoice->refresh());
+
             return self::FAILURE;
         }
 
@@ -132,9 +139,9 @@ class FactusSmokeCommand extends Command
             $res = FactusClient::make()->destroyByReference($ref);
             $this->line($res['ok']
                 ? '✔ Eliminada en Factus sandbox.'
-                : '⚠ No se pudo eliminar en Factus (HTTP ' . $res['status'] . '); puede estar ya validada por DIAN.');
+                : '⚠ No se pudo eliminar en Factus (HTTP '.$res['status'].'); puede estar ya validada por DIAN.');
         } catch (Throwable $e) {
-            $this->warn('⚠ Error al eliminar en Factus: ' . $e->getMessage());
+            $this->warn('⚠ Error al eliminar en Factus: '.$e->getMessage());
         }
         $invoice->delete();
         $this->info("Fila local eliminada (reference {$ref}).");
@@ -146,16 +153,19 @@ class FactusSmokeCommand extends Command
     {
         if ($this->laravel->environment('production')) {
             $this->error('Bloqueado: no se ejecuta en producción.');
+
             return false;
         }
         if (config('billing.env') !== 'sandbox' || ! str_contains((string) config('billing.base_url'), 'sandbox')) {
             $this->error('Bloqueado: requiere FACTUS_ENV=sandbox y base_url de sandbox.');
+
             return false;
         }
         $creds = (array) config('billing.credentials');
         foreach (['username', 'password', 'client_id', 'client_secret'] as $k) {
             if (empty($creds[$k])) {
                 $this->error("Bloqueado: falta credencial '{$k}' en .env.");
+
                 return false;
             }
         }

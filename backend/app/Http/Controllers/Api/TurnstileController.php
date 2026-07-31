@@ -18,8 +18,7 @@ class TurnstileController extends Controller
         private readonly TurnstileService $turnstile,
         private readonly ZktecoTurnstileService $zkteco,
         private readonly SerialTurnstileService $serial,
-    ) {
-    }
+    ) {}
 
     public function show(): JsonResponse
     {
@@ -100,8 +99,8 @@ class TurnstileController extends Controller
         try {
             $request = Http::timeout(3)->connectTimeout(3)->acceptJson();
             $response = match ($method) {
-                'GET'   => $request->get($data['url']),
-                'PUT'   => $request->withBody($payload ?? '', 'application/json')->put($data['url']),
+                'GET' => $request->get($data['url']),
+                'PUT' => $request->withBody($payload ?? '', 'application/json')->put($data['url']),
                 'PATCH' => $request->withBody($payload ?? '', 'application/json')->patch($data['url']),
                 default => $payload
                     ? $request->withBody($payload, 'application/json')->post($data['url'])
@@ -111,9 +110,9 @@ class TurnstileController extends Controller
             $ok = $response->successful();
             $settings->forceFill([
                 'last_triggered_at' => now(),
-                'last_status'       => $ok ? 'success' : 'error',
-                'last_http_code'    => $response->status(),
-                'last_error'        => $ok ? null : substr((string) $response->body(), 0, 480),
+                'last_status' => $ok ? 'success' : 'error',
+                'last_http_code' => $response->status(),
+                'last_error' => $ok ? null : substr((string) $response->body(), 0, 480),
             ])->save();
 
             return response()->json([
@@ -128,9 +127,9 @@ class TurnstileController extends Controller
         } catch (Throwable $e) {
             $settings->forceFill([
                 'last_triggered_at' => now(),
-                'last_status'       => 'error',
-                'last_http_code'    => null,
-                'last_error'        => substr($e->getMessage(), 0, 480),
+                'last_status' => 'error',
+                'last_http_code' => null,
+                'last_error' => substr($e->getMessage(), 0, 480),
             ])->save();
 
             return response()->json([
@@ -169,9 +168,9 @@ class TurnstileController extends Controller
 
         $settings->forceFill([
             'last_triggered_at' => now(),
-            'last_status'       => $result['ok'] ? 'success' : 'error',
-            'last_http_code'    => null,
-            'last_error'        => $result['ok'] ? null : substr((string) ($result['error'] ?? 'unknown'), 0, 480),
+            'last_status' => $result['ok'] ? 'success' : 'error',
+            'last_http_code' => null,
+            'last_error' => $result['ok'] ? null : substr((string) ($result['error'] ?? 'unknown'), 0, 480),
         ])->save();
 
         return response()->json([
@@ -218,9 +217,9 @@ class TurnstileController extends Controller
 
         $settings->forceFill([
             'last_triggered_at' => now(),
-            'last_status'       => $result['ok'] ? 'success' : 'error',
-            'last_http_code'    => null,
-            'last_error'        => $result['ok'] ? null : substr((string) ($result['error'] ?? 'unknown'), 0, 480),
+            'last_status' => $result['ok'] ? 'success' : 'error',
+            'last_http_code' => null,
+            'last_error' => $result['ok'] ? null : substr((string) ($result['error'] ?? 'unknown'), 0, 480),
         ])->save();
 
         return response()->json([

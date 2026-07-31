@@ -28,12 +28,11 @@ class ProcessMetaWebhookEvent implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
+
     public int $backoff = 20;
 
     /** @param array<string,mixed> $payload Payload crudo (ya sin secretos). */
-    public function __construct(public array $payload)
-    {
-    }
+    public function __construct(public array $payload) {}
 
     public function handle(
         MetaWebhookService $webhook,
@@ -44,6 +43,7 @@ class ProcessMetaWebhookEvent implements ShouldQueue
     ): void {
         if (! (bool) config('marketing.inbound.meta_enabled', true)) {
             Log::info('meta.webhook.skipped', ['reason' => 'inbound_meta_disabled']);
+
             return; // procesamiento de entrantes deshabilitado (modo registro off).
         }
 
@@ -53,7 +53,7 @@ class ProcessMetaWebhookEvent implements ShouldQueue
         $events = $webhook->parseEvents($this->payload);
         Log::info('meta.webhook.job_started', [
             'queue_connection' => (string) config('queue.default'),
-            'events'           => is_countable($events) ? count($events) : null,
+            'events' => is_countable($events) ? count($events) : null,
         ]);
 
         foreach ($webhook->parseEvents($this->payload) as $event) {
@@ -61,10 +61,11 @@ class ProcessMetaWebhookEvent implements ShouldQueue
             if ($expectedPhoneId !== '' && ! empty($event['phone_number_id'])
                 && ! hash_equals($expectedPhoneId, (string) $event['phone_number_id'])) {
                 Log::warning('meta.webhook.skipped', [
-                    'reason'                   => 'phone_number_mismatch',
+                    'reason' => 'phone_number_mismatch',
                     'received_phone_number_id' => (string) $event['phone_number_id'],
                     'expected_phone_number_id' => $expectedPhoneId,
                 ]);
+
                 continue;
             }
 
@@ -72,9 +73,10 @@ class ProcessMetaWebhookEvent implements ShouldQueue
             if (str_starts_with((string) $event['kind'], 'status:')) {
                 Log::info('meta.webhook.status_detected', [
                     'message_id' => $event['message_id'] ?? null,
-                    'status'     => substr((string) $event['kind'], 7),
+                    'status' => substr((string) $event['kind'], 7),
                 ]);
                 $conversations->recordStatus($event['message_id'], substr((string) $event['kind'], 7));
+
                 continue;
             }
 
@@ -82,16 +84,17 @@ class ProcessMetaWebhookEvent implements ShouldQueue
             if ($event['kind'] !== 'message' || empty($event['meta_user_id'])) {
                 Log::info('meta.webhook.skipped', [
                     'reason' => 'not_a_message_or_no_sender',
-                    'kind'   => $event['kind'] ?? null,
+                    'kind' => $event['kind'] ?? null,
                 ]);
+
                 continue;
             }
 
             Log::info('meta.webhook.message_detected', [
-                'type'       => $event['message_type'] ?? 'text',
-                'wa_id'      => $event['wa_id'] ?? null,
+                'type' => $event['message_type'] ?? 'text',
+                'wa_id' => $event['wa_id'] ?? null,
                 'message_id' => $event['message_id'] ?? null,
-                'has_text'   => ! empty($event['text']),
+                'has_text' => ! empty($event['text']),
             ]);
 
             $type = (string) ($event['message_type'] ?? 'text');
@@ -118,22 +121,24 @@ class ProcessMetaWebhookEvent implements ShouldQueue
             // Idempotencia: si el mensaje ya existía, no re-analizar.
             if ($message === null || ! $message->wasRecentlyCreated) {
                 Log::info('meta.webhook.skipped', [
-                    'reason'          => 'duplicate_message',
+                    'reason' => 'duplicate_message',
                     'conversation_id' => $conversation->id,
                 ]);
+
                 continue;
             }
 
             Log::info('meta.webhook.inbound_saved', [
-                'message_id'      => $message->id,
+                'message_id' => $message->id,
                 'conversation_id' => $conversation->id,
-                'lead_id'         => $lead->id,
+                'lead_id' => $lead->id,
             ]);
 
             if (! $supported) {
                 // Media no soportada → registrar para humano, sin OpenAI.
                 Log::info('meta.webhook.skipped', ['reason' => 'unsupported_message_type', 'type' => $type]);
                 $router->recordUnsupported($lead, $conversation, $message, $type);
+
                 continue;
             }
 
@@ -141,11 +146,11 @@ class ProcessMetaWebhookEvent implements ShouldQueue
             $result = $router->analyze($lead, $conversation, $message);
 
             Log::info('meta.webhook.auto_analyze_dispatched', [
-                'channel'         => $event['channel'],
-                'lead_id'         => $lead->id,
+                'channel' => $event['channel'],
+                'lead_id' => $lead->id,
                 'conversation_id' => $conversation->id,
-                'skipped'         => $result['skipped'] ?? false,
-                'reason'          => $result['skipped'] ?? false ? ($result['reason'] ?? null) : null,
+                'skipped' => $result['skipped'] ?? false,
+                'reason' => $result['skipped'] ?? false ? ($result['reason'] ?? null) : null,
             ]);
         }
     }
@@ -154,11 +159,11 @@ class ProcessMetaWebhookEvent implements ShouldQueue
     private function messageMetadata(array $event, bool $supported): array
     {
         $meta = array_filter([
-            'wa_id'                => $event['wa_id'] ?? null,
-            'phone_number_id'      => $event['phone_number_id'] ?? null,
+            'wa_id' => $event['wa_id'] ?? null,
+            'phone_number_id' => $event['phone_number_id'] ?? null,
             'display_phone_number' => $event['display_phone_number'] ?? null,
-            'message_type'         => $event['message_type'] ?? null,
-            'timestamp'            => $event['timestamp'] ?? null,
+            'message_type' => $event['message_type'] ?? null,
+            'timestamp' => $event['timestamp'] ?? null,
         ], fn ($v) => $v !== null);
 
         if (! $supported) {

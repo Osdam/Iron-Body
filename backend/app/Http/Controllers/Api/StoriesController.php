@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Member;
 use App\Models\MemberUgcConsent;
 use App\Models\Story;
 use App\Models\StoryReaction;
@@ -13,9 +14,12 @@ use App\Services\Moderation\BlockService;
 use App\Services\Moderation\EvidenceService;
 use App\Services\Moderation\SuspensionService;
 use App\Services\NotificationService;
+use App\Services\RealtimeEvents;
 use App\Support\Moderation\ModerationScope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -47,8 +51,7 @@ class StoriesController extends Controller
         private BlockService $blocks,
         private SuspensionService $suspensions,
         private EvidenceService $evidence,
-    ) {
-    }
+    ) {}
 
     // ── Endpoints autenticados (member) ─────────────────────────────────
 
@@ -93,7 +96,7 @@ class StoriesController extends Controller
         // deduplicación por event_key y la entrega de push.
         app(NotificationService::class)->notifyStoryCreated($story);
         // Real-time: el autor ve su story en la fila al instante (sin relogin).
-        \App\Services\RealtimeEvents::emit($member->id, \App\Services\RealtimeEvents::STORY_NEW, ['stories']);
+        RealtimeEvents::emit($member->id, RealtimeEvents::STORY_NEW, ['stories']);
 
         return response()->json([
             'ok' => true,
@@ -208,7 +211,7 @@ class StoriesController extends Controller
 
         app(NotificationService::class)->notifyStoryCreated($story);
         // Real-time: el autor ve su story en la fila al instante (sin relogin).
-        \App\Services\RealtimeEvents::emit($member->id, \App\Services\RealtimeEvents::STORY_NEW, ['stories']);
+        RealtimeEvents::emit($member->id, RealtimeEvents::STORY_NEW, ['stories']);
 
         return response()->json([
             'ok' => true,
@@ -246,6 +249,7 @@ class StoriesController extends Controller
         // Agrupado por autor (estilo Instagram: cada autor = un anillo).
         $grouped = $serialized->groupBy('author_key')->map(function ($group) {
             $first = $group->first();
+
             return [
                 'author_type' => $first['author_type'],
                 'author_id' => $first['author_id'],
@@ -308,7 +312,7 @@ class StoriesController extends Controller
         $memberIds = $views->where('viewer_type', 'member')->pluck('viewer_id')->unique();
         $userIds = $views->where('viewer_type', 'user')->pluck('viewer_id')->unique();
 
-        $members = \App\Models\Member::whereIn('id', $memberIds)
+        $members = Member::whereIn('id', $memberIds)
             ->get(['id', 'full_name'])
             ->keyBy('id');
         $users = User::whereIn('id', $userIds)
@@ -327,6 +331,7 @@ class StoriesController extends Controller
                 $name = $u?->name ?? 'Admin Iron Body';
                 $avatar = null;
             }
+
             return [
                 'viewer_type' => $v->viewer_type,
                 'viewer_id' => $v->viewer_id,
@@ -368,7 +373,7 @@ class StoriesController extends Controller
         }
 
         $data = $request->validate([
-            'type' => 'required|string|in:' . implode(',', StoryReaction::VALID_TYPES),
+            'type' => 'required|string|in:'.implode(',', StoryReaction::VALID_TYPES),
         ]);
 
         $story = $this->feedQuery((int) $member->id)->findOrFail($id);
@@ -435,7 +440,7 @@ class StoriesController extends Controller
             ->all();
         $counts = [];
         foreach (StoryReaction::VALID_TYPES as $t) {
-            if (!empty($countsRaw[$t])) {
+            if (! empty($countsRaw[$t])) {
                 $counts[$t] = (int) $countsRaw[$t];
             }
         }
@@ -464,7 +469,7 @@ class StoriesController extends Controller
 
             $memberIds = $reactions->where('viewer_type', 'member')
                 ->pluck('viewer_id')->unique();
-            $members = \App\Models\Member::whereIn('id', $memberIds)
+            $members = Member::whereIn('id', $memberIds)
                 ->get(['id', 'full_name'])
                 ->keyBy('id');
 
@@ -473,6 +478,7 @@ class StoriesController extends Controller
                 $name = $m
                     ? (trim((string) ($m->full_name ?? '')) ?: 'Miembro Iron Body')
                     : 'Miembro Iron Body';
+
                 return [
                     'viewer_type' => $r->viewer_type,
                     'viewer_id' => $r->viewer_id,
@@ -500,7 +506,7 @@ class StoriesController extends Controller
 
         $this->deleteStoryWithFile($story);
         // Real-time: la story desaparece de la fila del autor sin relogin.
-        \App\Services\RealtimeEvents::emit($member->id, \App\Services\RealtimeEvents::STORY_DEL, ['stories']);
+        RealtimeEvents::emit($member->id, RealtimeEvents::STORY_DEL, ['stories']);
 
         return response()->json(['ok' => true]);
     }
@@ -542,6 +548,7 @@ class StoriesController extends Controller
     {
         $story = Story::findOrFail($id);
         $this->deleteStoryWithFile($story);
+
         return response()->json(['ok' => true]);
     }
 
@@ -549,6 +556,7 @@ class StoriesController extends Controller
     public function indexAsAdmin(): JsonResponse
     {
         $stories = Story::orderBy('created_at', 'desc')->limit(200)->get();
+
         return response()->json([
             'ok' => true,
             'data' => $stories->map(fn (Story $s) => $this->serializeStory($s, 0, 'user')),
@@ -558,7 +566,7 @@ class StoriesController extends Controller
     // ── Helpers internos ────────────────────────────────────────────────
 
     private function createStory(
-        \Illuminate\Http\UploadedFile $file,
+        UploadedFile $file,
         string $authorType,
         int $authorId,
         string $authorName,
@@ -568,7 +576,7 @@ class StoriesController extends Controller
     ): Story {
         $ext = strtolower($file->getClientOriginalExtension() ?: $file->extension());
         $type = in_array($ext, ['mp4', 'mov'], true) ? 'video' : 'image';
-        $filename = Str::uuid()->toString() . '.' . $ext;
+        $filename = Str::uuid()->toString().'.'.$ext;
         $path = $file->storeAs('stories', $filename, 'public');
 
         return Story::create([
@@ -682,7 +690,7 @@ class StoriesController extends Controller
      * pueda "olvidarse" del filtro. El bloqueo se aplica en el servidor: aunque
      * el cliente conociera el id, la API no le entrega la story.
      */
-    private function feedQuery(int $memberId): \Illuminate\Database\Eloquent\Builder
+    private function feedQuery(int $memberId): Builder
     {
         $hidden = $this->blocks->hiddenMemberIdsFor($memberId);
 
@@ -751,8 +759,8 @@ class StoriesController extends Controller
                 'ok' => false,
                 'code' => 'posting_age_restricted',
                 'message' => 'Debes tener al menos '
-                    . (int) config('ugc.posting_min_age', 13)
-                    . ' años para publicar estados.',
+                    .(int) config('ugc.posting_min_age', 13)
+                    .' años para publicar estados.',
             ], 403);
         }
 
@@ -771,7 +779,7 @@ class StoriesController extends Controller
             'id' => $s->id,
             'author_type' => $s->author_type,
             'author_id' => $s->author_id,
-            'author_key' => $s->author_type . ':' . $s->author_id,
+            'author_key' => $s->author_type.':'.$s->author_id,
             'author_name' => $s->author_name,
             'author_avatar' => $s->author_avatar,
             'type' => $s->type,

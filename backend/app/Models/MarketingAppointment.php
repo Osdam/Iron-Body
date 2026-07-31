@@ -13,9 +13,13 @@ use Illuminate\Support\Str;
 class MarketingAppointment extends Model
 {
     public const TYPE_VISIT = 'visit';
+
     public const TYPE_CALL = 'call';
+
     public const TYPE_ASSESSMENT = 'assessment';
+
     public const TYPE_FOLLOW_UP = 'follow_up';
+
     public const TYPE_OTHER = 'other';
 
     public const TYPES = [
@@ -24,9 +28,13 @@ class MarketingAppointment extends Model
     ];
 
     public const STATUS_SCHEDULED = 'scheduled';
+
     public const STATUS_COMPLETED = 'completed';
+
     public const STATUS_CANCELLED = 'cancelled';
+
     public const STATUS_NO_SHOW = 'no_show';
+
     public const STATUS_RESCHEDULED = 'rescheduled';
 
     public const STATUSES = [
@@ -45,12 +53,12 @@ class MarketingAppointment extends Model
     ];
 
     protected $casts = [
-        'scheduled_at'     => 'datetime',
-        'reminder_at'      => 'datetime',
-        'completed_at'     => 'datetime',
-        'cancelled_at'     => 'datetime',
+        'scheduled_at' => 'datetime',
+        'reminder_at' => 'datetime',
+        'completed_at' => 'datetime',
+        'cancelled_at' => 'datetime',
         'duration_minutes' => 'integer',
-        'metadata'         => 'array',
+        'metadata' => 'array',
     ];
 
     protected static function booted(): void

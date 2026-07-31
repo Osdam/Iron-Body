@@ -52,7 +52,7 @@ class AuditLogController extends Controller
             $query->whereNotNull('changes')->where('changes', '!=', '[]');
         }
         if ($request->filled('search')) {
-            $term = '%' . $request->query('search') . '%';
+            $term = '%'.$request->query('search').'%';
             $query->where(fn ($q) => $q->where('summary', 'like', $term)
                 ->orWhere('module', 'like', $term)
                 ->orWhere('entity', 'like', $term)
@@ -79,7 +79,7 @@ class AuditLogController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'action' => 'required|string|in:' . implode(',', AuditLog::ACTIONS),
+            'action' => 'required|string|in:'.implode(',', AuditLog::ACTIONS),
             'module' => 'required|string|max:60',
             'entity' => 'required|string|max:60',
             'entityId' => 'nullable',

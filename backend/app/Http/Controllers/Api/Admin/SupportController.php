@@ -32,8 +32,7 @@ class SupportController extends Controller
         private DeviceSessionService $sessions,
         private SecurityEventService $security,
         private NotificationService $notifications,
-    ) {
-    }
+    ) {}
 
     /** GET /api/admin/support?status=&search=&page= */
     public function index(Request $request): JsonResponse
@@ -46,7 +45,7 @@ class SupportController extends Controller
         }
 
         if ($request->filled('search')) {
-            $like = '%' . trim((string) $request->query('search')) . '%';
+            $like = '%'.trim((string) $request->query('search')).'%';
             $query->where(function ($q) use ($like): void {
                 $q->where('message', 'like', $like)
                     ->orWhere('document', 'like', $like)
@@ -59,14 +58,14 @@ class SupportController extends Controller
         $page = $query->paginate((int) min(max($request->integer('per_page', 20), 1), 100));
 
         return response()->json([
-            'ok'        => true,
-            'data'      => collect($page->items())->map->toPublicArray()->values(),
+            'ok' => true,
+            'data' => collect($page->items())->map->toPublicArray()->values(),
             'new_count' => $unread,
-            'meta'      => [
+            'meta' => [
                 'current_page' => $page->currentPage(),
-                'last_page'    => $page->lastPage(),
-                'per_page'     => $page->perPage(),
-                'total'        => $page->total(),
+                'last_page' => $page->lastPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
             ],
         ]);
     }
@@ -81,7 +80,7 @@ class SupportController extends Controller
     public function update(Request $request, MemberSupportTicket $ticket): JsonResponse
     {
         $data = $request->validate([
-            'status'     => ['nullable', 'in:new,in_progress,resolved'],
+            'status' => ['nullable', 'in:new,in_progress,resolved'],
             'admin_note' => ['nullable', 'string', 'max:2000'],
         ]);
 
@@ -101,7 +100,7 @@ class SupportController extends Controller
     public function unreadCount(): JsonResponse
     {
         return response()->json([
-            'ok'        => true,
+            'ok' => true,
             'new_count' => MemberSupportTicket::where('status', MemberSupportTicket::STATUS_NEW)->count(),
         ]);
     }
@@ -123,7 +122,7 @@ class SupportController extends Controller
         $member = $this->resolveMember($document);
 
         return response()->json([
-            'ok'     => true,
+            'ok' => true,
             'member' => $member ? $this->memberSummary($member) : null,
         ]);
     }
@@ -141,7 +140,7 @@ class SupportController extends Controller
         }
 
         return response()->json([
-            'ok'     => true,
+            'ok' => true,
             'linked' => true,
             'member' => $this->memberSummary($member),
             'active_devices' => $this->sessions->activeSessions($member)->count(),
@@ -167,13 +166,13 @@ class SupportController extends Controller
         }
         $ticket->save();
 
-        $this->trace($ticket, $request, 'Vinculó al miembro ' . $member->full_name . '.', [
-            'action'    => 'link_member',
+        $this->trace($ticket, $request, 'Vinculó al miembro '.$member->full_name.'.', [
+            'action' => 'link_member',
             'member_id' => $member->id,
         ]);
 
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => $ticket->fresh('member')->toPublicArray(),
         ]);
     }
@@ -186,7 +185,7 @@ class SupportController extends Controller
     public function changePhone(Request $request, MemberSupportTicket $ticket): JsonResponse
     {
         $data = $request->validate([
-            'phone'   => ['required', 'string', 'max:30'],
+            'phone' => ['required', 'string', 'max:30'],
             'resolve' => ['nullable', 'boolean'],
         ]);
 
@@ -213,23 +212,23 @@ class SupportController extends Controller
 
         $masked = MemberAuthChallenge::maskPhone($newPhone);
         $this->security->record($member, MemberSecurityEvent::TYPE_PHONE_CHANGED, $this->context_($request), [
-            'source'       => 'admin_support',
-            'ticket_id'    => $ticket->id,
-            'admin_id'     => $this->adminId($request),
+            'source' => 'admin_support',
+            'ticket_id' => $ticket->id,
+            'admin_id' => $this->adminId($request),
             'masked_phone' => $masked,
         ]);
         $this->notifications->notifyPhoneChanged($member, $masked);
         RealtimeEvents::phone($member->id);
 
-        $this->trace($ticket, $request, 'Actualizó el número del miembro a ' . $masked . '.', [
-            'action'       => 'phone_change',
+        $this->trace($ticket, $request, 'Actualizó el número del miembro a '.$masked.'.', [
+            'action' => 'phone_change',
             'masked_phone' => $masked,
         ], resolve: (bool) ($data['resolve'] ?? false));
 
         return response()->json([
-            'ok'      => true,
-            'message' => 'Número actualizado a ' . $masked . '.',
-            'data'    => $ticket->fresh('member')->toPublicArray(),
+            'ok' => true,
+            'message' => 'Número actualizado a '.$masked.'.',
+            'data' => $ticket->fresh('member')->toPublicArray(),
         ]);
     }
 
@@ -251,22 +250,22 @@ class SupportController extends Controller
         }
 
         $this->security->record($member, MemberSecurityEvent::TYPE_DEVICE_REVOKED, $this->context_($request), [
-            'scope'         => 'all_by_support',
-            'ticket_id'     => $ticket->id,
-            'admin_id'      => $this->adminId($request),
+            'scope' => 'all_by_support',
+            'ticket_id' => $ticket->id,
+            'admin_id' => $this->adminId($request),
             'revoked_count' => $count,
         ]);
 
         $this->trace($ticket, $request, "Cerró {$count} sesión(es) del miembro.", [
-            'action'        => 'revoke_devices',
+            'action' => 'revoke_devices',
             'revoked_count' => $count,
         ]);
 
         return response()->json([
-            'ok'            => true,
+            'ok' => true,
             'revoked_count' => $count,
-            'message'       => "Se cerraron {$count} sesión(es).",
-            'data'          => $ticket->fresh('member')->toPublicArray(),
+            'message' => "Se cerraron {$count} sesión(es).",
+            'data' => $ticket->fresh('member')->toPublicArray(),
         ]);
     }
 
@@ -288,22 +287,22 @@ class SupportController extends Controller
         }
 
         $this->security->record($member, MemberSecurityEvent::TYPE_DEVICE_RELEASED, $this->context_($request), [
-            'source'          => 'admin_support',
-            'ticket_id'       => $ticket->id,
-            'admin_id'        => $this->adminId($request),
-            'released_count'  => $count,
+            'source' => 'admin_support',
+            'ticket_id' => $ticket->id,
+            'admin_id' => $this->adminId($request),
+            'released_count' => $count,
         ]);
 
         $this->trace($ticket, $request, "Restableció la confianza de dispositivo ({$count} vínculo(s) liberado(s)).", [
-            'action'         => 'reset_trust',
+            'action' => 'reset_trust',
             'released_count' => $count,
         ]);
 
         return response()->json([
-            'ok'             => true,
+            'ok' => true,
             'released_count' => $count,
-            'message'        => "Confianza restablecida ({$count} vínculo(s)).",
-            'data'           => $ticket->fresh('member')->toPublicArray(),
+            'message' => "Confianza restablecida ({$count} vínculo(s)).",
+            'data' => $ticket->fresh('member')->toPublicArray(),
         ]);
     }
 
@@ -315,7 +314,7 @@ class SupportController extends Controller
         $member = $ticket->member_id ? Member::find($ticket->member_id) : null;
         if (! $member) {
             return response()->json([
-                'ok'      => false,
+                'ok' => false,
                 'message' => 'Vincula un miembro al ticket antes de aplicar esta acción.',
             ], 422);
         }
@@ -327,18 +326,18 @@ class SupportController extends Controller
     private function memberSummary(Member $member): array
     {
         return [
-            'id'          => $member->id,
-            'full_name'   => $member->full_name,
-            'document'    => $member->document_number,
+            'id' => $member->id,
+            'full_name' => $member->full_name,
+            'document' => $member->document_number,
             'phone_masked' => MemberAuthChallenge::maskPhone($member->phone),
-            'status'      => $member->status,
+            'status' => $member->status,
         ];
     }
 
     /** Resuelve un miembro por documento (raw + solo dígitos), como en el reporte. */
     private function resolveMember(string $document): ?Member
     {
-        $raw    = trim($document);
+        $raw = trim($document);
         $digits = preg_replace('/\D+/', '', $raw) ?? '';
 
         return Member::query()
@@ -425,12 +424,12 @@ class SupportController extends Controller
     {
         $stamp = now()->format('Y-m-d H:i');
         $line = "[{$stamp}] {$this->adminName($request)}: {$summary}";
-        $ticket->admin_note = trim(($ticket->admin_note ? $ticket->admin_note . "\n" : '') . $line);
+        $ticket->admin_note = trim(($ticket->admin_note ? $ticket->admin_note."\n" : '').$line);
 
         $actions = (array) ($ticket->metadata['support_actions'] ?? []);
         $actions[] = array_merge($meta, [
             'admin_id' => $this->adminId($request),
-            'at'       => now()->toIso8601String(),
+            'at' => now()->toIso8601String(),
         ]);
         $ticket->metadata = array_merge((array) $ticket->metadata, ['support_actions' => $actions]);
 

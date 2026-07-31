@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Internal;
 
 use App\Http\Controllers\Controller;
 use App\Models\Member;
+use App\Models\NutritionAiRecommendation;
 use App\Services\AutomationEventService;
 use App\Services\IronAiCoachService;
 use Illuminate\Http\JsonResponse;
@@ -22,8 +23,7 @@ class WeeklySummaryController extends Controller
     public function __construct(
         private readonly IronAiCoachService $coach,
         private readonly AutomationEventService $events,
-    ) {
-    }
+    ) {}
 
     public function generate(Request $request): JsonResponse
     {
@@ -32,11 +32,11 @@ class WeeklySummaryController extends Controller
         ]);
 
         $member = Member::find($data['member_id']);
-        if (!$member) {
+        if (! $member) {
             return response()->json(['success' => false, 'message' => 'Miembro no encontrado.'], 404);
         }
 
-        if (!$this->coach->isEnabled()) {
+        if (! $this->coach->isEnabled()) {
             return response()->json(['success' => false, 'message' => 'Coach IA no disponible.'], 503);
         }
 
@@ -47,7 +47,7 @@ class WeeklySummaryController extends Controller
         }
 
         // El coach ya persistió la recomendación; recuperamos su id.
-        $summaryId = \App\Models\NutritionAiRecommendation::query()
+        $summaryId = NutritionAiRecommendation::query()
             ->where('member_id', $member->id)
             ->latest('id')
             ->value('id');
@@ -58,7 +58,7 @@ class WeeklySummaryController extends Controller
             'summary_id' => $summaryId,
             'priority' => $plan['priority'] ?? 'consistency',
             'safe_message' => 'Resumen semanal listo',
-        ], 'iron_ai.weekly_summary_ready:' . $member->id . ':' . now()->toDateString());
+        ], 'iron_ai.weekly_summary_ready:'.$member->id.':'.now()->toDateString());
 
         return response()->json([
             'success' => true,

@@ -38,12 +38,12 @@ class MemberAiContextController extends Controller
         }
 
         return response()->json([
-            'ok'          => true,
-            'ai_enabled'  => $aiEnabled,
-            'context'     => $context->build($member),
+            'ok' => true,
+            'ai_enabled' => $aiEnabled,
+            'context' => $context->build($member),
             'restrictions' => [
                 'medical_disclaimer_required' => true,
-                'avoid_diagnosis'             => true,
+                'avoid_diagnosis' => true,
             ],
         ])->header('Cache-Control', 'no-store, max-age=0, must-revalidate');
     }

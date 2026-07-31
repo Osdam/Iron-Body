@@ -18,12 +18,16 @@ use Illuminate\Support\Str;
 class Notification extends Model
 {
     public const STATUS_UNREAD = 'unread';
-    public const STATUS_READ   = 'read';
 
-    public const AUDIENCE_MEMBER  = 'member';
-    public const AUDIENCE_ADMIN   = 'admin';
+    public const STATUS_READ = 'read';
+
+    public const AUDIENCE_MEMBER = 'member';
+
+    public const AUDIENCE_ADMIN = 'admin';
+
     public const AUDIENCE_TRAINER = 'trainer';
-    public const AUDIENCE_SYSTEM  = 'system';
+
+    public const AUDIENCE_SYSTEM = 'system';
 
     protected $fillable = [
         'uuid',
@@ -50,9 +54,9 @@ class Notification extends Model
     {
         return [
             'action_payload' => 'array',
-            'metadata'       => 'array',
-            'read_at'        => 'datetime',
-            'should_popup'   => 'boolean',
+            'metadata' => 'array',
+            'read_at' => 'datetime',
+            'should_popup' => 'boolean',
             'popup_shown_at' => 'datetime',
         ];
     }
@@ -148,7 +152,7 @@ class Notification extends Model
         if ($term === '') {
             return $q;
         }
-        $like = '%' . $term . '%';
+        $like = '%'.$term.'%';
 
         return $q->where(function (Builder $sub) use ($like): void {
             $sub->where('title', 'like', $like)
@@ -165,23 +169,23 @@ class Notification extends Model
     public function toPublicArray(): array
     {
         return [
-            'uuid'           => $this->uuid,
-            'type'           => $this->type,
-            'audience'       => $this->audience,
-            'title'          => $this->title,
-            'message'        => $this->message,
-            'status'         => $this->status,
-            'priority'       => $this->priority,
-            'document'       => $this->document,
-            'member_id'      => $this->member_id,
-            'action_type'    => $this->action_type,
-            'action_url'     => $this->action_url,
+            'uuid' => $this->uuid,
+            'type' => $this->type,
+            'audience' => $this->audience,
+            'title' => $this->title,
+            'message' => $this->message,
+            'status' => $this->status,
+            'priority' => $this->priority,
+            'document' => $this->document,
+            'member_id' => $this->member_id,
+            'action_type' => $this->action_type,
+            'action_url' => $this->action_url,
             'action_payload' => $this->action_payload,
-            'metadata'       => $this->metadata,
-            'should_popup'   => (bool) $this->should_popup,
-            'read_at'        => optional($this->read_at)->toIso8601String(),
-            'created_at'     => optional($this->created_at)->toIso8601String(),
-            'time_ago'       => $this->timeAgo(),
+            'metadata' => $this->metadata,
+            'should_popup' => (bool) $this->should_popup,
+            'read_at' => optional($this->read_at)->toIso8601String(),
+            'created_at' => optional($this->created_at)->toIso8601String(),
+            'time_ago' => $this->timeAgo(),
         ];
     }
 
@@ -198,15 +202,18 @@ class Notification extends Model
         }
         if ($diff < 3600) {
             $m = (int) floor($diff / 60);
+
             return "Hace {$m} min";
         }
         if ($diff < 86400) {
             $h = (int) floor($diff / 3600);
-            return 'Hace ' . $h . ' ' . ($h === 1 ? 'hora' : 'horas');
+
+            return 'Hace '.$h.' '.($h === 1 ? 'hora' : 'horas');
         }
         if ($diff < 604800) {
             $d = (int) floor($diff / 86400);
-            return 'Hace ' . $d . ' ' . ($d === 1 ? 'día' : 'días');
+
+            return 'Hace '.$d.' '.($d === 1 ? 'día' : 'días');
         }
 
         return $created->translatedFormat('d M Y');

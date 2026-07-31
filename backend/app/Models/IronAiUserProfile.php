@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -15,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $preferences_summary
  * @property string|null $injuries_summary
  * @property string|null $ai_memory_summary
- * @property \Carbon\Carbon|null $last_context_refresh_at
+ * @property Carbon|null $last_context_refresh_at
  */
 class IronAiUserProfile extends Model
 {

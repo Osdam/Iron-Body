@@ -41,7 +41,7 @@ class NutritionDoctor extends Command
         $candidates = $query->get()->filter(fn (NutritionFood $f) => ! $f->isMacroComplete());
 
         $this->info(($apply ? '[FIX] ' : '[DRY-RUN] ')
-            . "Alimentos externos con macros incompletos: {$candidates->count()}");
+            ."Alimentos externos con macros incompletos: {$candidates->count()}");
 
         $fixed = 0;
         $stillIncomplete = 0;
@@ -50,12 +50,14 @@ class NutritionDoctor extends Command
         foreach ($candidates as $food) {
             if (! $off->isEnabled()) {
                 $skipped++;
+
                 continue;
             }
             $normalized = $off->lookupByBarcode((string) $food->barcode);
             if (! $normalized) {
                 $stillIncomplete++;
                 $this->line("  · {$food->barcode}: sin datos en Open Food Facts → queda incompleto");
+
                 continue;
             }
             // ¿La re-normalización trae los 4 macros base?
@@ -68,6 +70,7 @@ class NutritionDoctor extends Command
             if (! $complete) {
                 $stillIncomplete++;
                 $this->line("  · {$food->barcode}: el producto sigue sin macros completos");
+
                 continue;
             }
             if ($apply) {
@@ -76,14 +79,15 @@ class NutritionDoctor extends Command
             }
             $fixed++;
             $this->line("  ✓ {$food->barcode}: "
-                . ($apply ? 'reparado' : 'reparable')
-                . " (kcal=" . ($p['calories'] ?? '?') . ")");
+                .($apply ? 'reparado' : 'reparable')
+                .' (kcal='.($p['calories'] ?? '?').')');
         }
 
         $this->info("Resumen → reparables/reparados: {$fixed} · siguen incompletos: {$stillIncomplete} · omitidos: {$skipped}");
         if (! $apply && $fixed > 0) {
             $this->warn('Ejecuta con --fix-zero-macros para aplicar los cambios.');
         }
+
         return self::SUCCESS;
     }
 }

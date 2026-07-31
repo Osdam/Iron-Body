@@ -66,7 +66,7 @@ class SseStream
             echo "id: {$id}\n";
         }
         echo "event: {$event}\n";
-        echo 'data: ' . json_encode($data, JSON_UNESCAPED_UNICODE) . "\n\n";
+        echo 'data: '.json_encode($data, JSON_UNESCAPED_UNICODE)."\n\n";
     }
 
     public static function flush(): void

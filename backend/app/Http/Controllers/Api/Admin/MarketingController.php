@@ -27,9 +27,7 @@ use Illuminate\Http\Request;
  */
 class MarketingController extends Controller
 {
-    public function __construct(private readonly MarketingMetricsService $metrics)
-    {
-    }
+    public function __construct(private readonly MarketingMetricsService $metrics) {}
 
     /** GET /api/admin/marketing/overview */
     public function overview(): JsonResponse
@@ -49,26 +47,27 @@ class MarketingController extends Controller
         return $this->paginated($page, function (MarketingCampaign $c) {
             $revenue = (float) ($c->revenue_attributed ?? 0);
             $spend = (float) $c->spend;
+
             return [
-                'id'                 => $c->id,
-                'meta_campaign_id'   => $c->meta_campaign_id,
-                'name'               => $c->name,
-                'status'             => $c->status,
-                'objective'          => $c->objective,
-                'spend'              => $spend,
-                'impressions'        => (int) $c->impressions,
-                'reach'              => (int) $c->reach,
-                'clicks'             => (int) $c->clicks,
-                'ctr'                => $c->ctr,
-                'cpc'                => $c->cpc,
-                'cpm'                => $c->cpm,
-                'leads'              => (int) $c->leads,
-                'conversations'      => (int) $c->conversations,
+                'id' => $c->id,
+                'meta_campaign_id' => $c->meta_campaign_id,
+                'name' => $c->name,
+                'status' => $c->status,
+                'objective' => $c->objective,
+                'spend' => $spend,
+                'impressions' => (int) $c->impressions,
+                'reach' => (int) $c->reach,
+                'clicks' => (int) $c->clicks,
+                'ctr' => $c->ctr,
+                'cpc' => $c->cpc,
+                'cpm' => $c->cpm,
+                'leads' => (int) $c->leads,
+                'conversations' => (int) $c->conversations,
                 'revenue_attributed' => round($revenue, 2),
-                'roas'               => $spend > 0 ? round($revenue / $spend, 2) : null,
-                'date_range'         => ['start' => $c->date_start?->toDateString(), 'stop' => $c->date_stop?->toDateString()],
-                'created_at'         => $c->created_at?->toIso8601String(),
-                'updated_at'         => $c->updated_at?->toIso8601String(),
+                'roas' => $spend > 0 ? round($revenue / $spend, 2) : null,
+                'date_range' => ['start' => $c->date_start?->toDateString(), 'stop' => $c->date_stop?->toDateString()],
+                'created_at' => $c->created_at?->toIso8601String(),
+                'updated_at' => $c->updated_at?->toIso8601String(),
             ];
         });
     }
@@ -87,20 +86,20 @@ class MarketingController extends Controller
             ->paginate($this->perPage($request));
 
         return $this->paginated($page, fn (MarketingLead $l) => [
-            'id'                 => $l->id,
-            'channel'            => $l->channel,
-            'source'             => $l->source,
-            'name'               => $l->name,
-            'phone'              => $l->phone,
+            'id' => $l->id,
+            'channel' => $l->channel,
+            'source' => $l->source,
+            'name' => $l->name,
+            'phone' => $l->phone,
             'instagram_username' => $l->instagram_username,
-            'status'             => $l->status,
-            'temperature'        => $l->temperature,
-            'objective'          => $l->objective,
-            'campaign_id'        => $l->campaign_id,
-            'first_message_at'   => $l->first_message_at?->toIso8601String(),
-            'last_message_at'    => $l->last_message_at?->toIso8601String(),
-            'converted_at'       => $l->converted_at?->toIso8601String(),
-            'created_at'         => $l->created_at?->toIso8601String(),
+            'status' => $l->status,
+            'temperature' => $l->temperature,
+            'objective' => $l->objective,
+            'campaign_id' => $l->campaign_id,
+            'first_message_at' => $l->first_message_at?->toIso8601String(),
+            'last_message_at' => $l->last_message_at?->toIso8601String(),
+            'converted_at' => $l->converted_at?->toIso8601String(),
+            'created_at' => $l->created_at?->toIso8601String(),
         ]);
     }
 
@@ -116,18 +115,18 @@ class MarketingController extends Controller
             ->paginate($this->perPage($request));
 
         return $this->paginated($page, fn (MarketingConversation $c) => [
-            'id'              => $c->id,
-            'channel'         => $c->channel,
-            'status'          => $c->status,
+            'id' => $c->id,
+            'channel' => $c->channel,
+            'status' => $c->status,
             'last_message_at' => $c->last_message_at?->toIso8601String(),
-            'human_takeover'  => (bool) $c->human_takeover,
-            'ai_enabled'      => (bool) $c->ai_enabled,
-            'message_count'   => (int) $c->messages_count,
-            'lead'            => $c->lead ? [
-                'id'          => $c->lead->id,
-                'name'        => $c->lead->name,
-                'channel'     => $c->lead->channel,
-                'status'      => $c->lead->status,
+            'human_takeover' => (bool) $c->human_takeover,
+            'ai_enabled' => (bool) $c->ai_enabled,
+            'message_count' => (int) $c->messages_count,
+            'lead' => $c->lead ? [
+                'id' => $c->lead->id,
+                'name' => $c->lead->name,
+                'channel' => $c->lead->channel,
+                'status' => $c->lead->status,
                 'temperature' => $c->lead->temperature,
             ] : null,
         ]);
@@ -148,12 +147,12 @@ class MarketingController extends Controller
 
         // No se expone metadata cruda (puede traer datos del proveedor).
         return $this->paginated($page, fn (MarketingMessage $m) => [
-            'id'          => $m->id,
-            'direction'   => $m->direction,
+            'id' => $m->id,
+            'direction' => $m->direction,
             'sender_type' => $m->sender_type,
-            'body'        => $m->body,
-            'status'      => $m->status,
-            'created_at'  => $m->created_at?->toIso8601String(),
+            'body' => $m->body,
+            'status' => $m->status,
+            'created_at' => $m->created_at?->toIso8601String(),
         ]);
     }
 
@@ -166,13 +165,13 @@ class MarketingController extends Controller
             ->paginate($this->perPage($request));
 
         return $this->paginated($page, fn (MarketingFollowup $f) => [
-            'id'               => $f->id,
-            'lead_id'          => $f->lead_id,
-            'due_at'           => $f->due_at?->toIso8601String(),
-            'type'             => $f->type,
-            'status'           => $f->status,
+            'id' => $f->id,
+            'lead_id' => $f->lead_id,
+            'due_at' => $f->due_at?->toIso8601String(),
+            'type' => $f->type,
+            'status' => $f->status,
             'message_template' => $f->message_template,
-            'created_at'       => $f->created_at?->toIso8601String(),
+            'created_at' => $f->created_at?->toIso8601String(),
         ]);
     }
 
@@ -185,14 +184,14 @@ class MarketingController extends Controller
             ->paginate($this->perPage($request));
 
         return $this->paginated($page, fn (MarketingAiAction $a) => [
-            'id'              => $a->id,
-            'lead_id'         => $a->lead_id,
+            'id' => $a->id,
+            'lead_id' => $a->lead_id,
             'conversation_id' => $a->conversation_id,
-            'action_type'     => $a->action_type,
-            'reason'          => $a->reason,
-            'confidence'      => $a->confidence,
-            'status'          => $a->status,
-            'created_at'      => $a->created_at?->toIso8601String(),
+            'action_type' => $a->action_type,
+            'reason' => $a->reason,
+            'confidence' => $a->confidence,
+            'status' => $a->status,
+            'created_at' => $a->created_at?->toIso8601String(),
         ]);
     }
 
@@ -205,13 +204,13 @@ class MarketingController extends Controller
             ->paginate($this->perPage($request));
 
         return $this->paginated($page, fn (MarketingAttribution $a) => [
-            'id'            => $a->id,
-            'lead_id'       => $a->lead_id,
-            'member_id'     => $a->member_id,
-            'campaign_id'   => $a->campaign_id,
-            'sale_amount'   => (float) $a->sale_amount,
+            'id' => $a->id,
+            'lead_id' => $a->lead_id,
+            'member_id' => $a->member_id,
+            'campaign_id' => $a->campaign_id,
+            'sale_amount' => (float) $a->sale_amount,
             'membership_id' => $a->membership_id,
-            'converted_at'  => $a->converted_at?->toIso8601String(),
+            'converted_at' => $a->converted_at?->toIso8601String(),
         ]);
     }
 
@@ -227,7 +226,7 @@ class MarketingController extends Controller
         SalesPaymentGuardrailService $guardrail,
     ): JsonResponse {
         $data = $request->validate([
-            'plan_id'       => 'required|integer|exists:plans,id',
+            'plan_id' => 'required|integer|exists:plans,id',
             'wants_invoice' => 'nullable|boolean',
             'invoice_email' => 'nullable|email|max:160',
         ]);
@@ -239,38 +238,38 @@ class MarketingController extends Controller
             $guardrail->assertCanGeneratePaymentLink($leadModel, $plan, $request->all());
         } catch (SalesGuardrailException $e) {
             return response()->json([
-                'ok'       => false,
-                'code'     => $e->errorCode,
-                'message'  => $e->getMessage(),
+                'ok' => false,
+                'code' => $e->errorCode,
+                'message' => $e->getMessage(),
                 'escalate' => $e->escalate,
             ], $e->httpStatus);
         }
 
         $result = WompiPaymentLinkService::make()->generateForLead($leadModel, $plan, [
-            'channel'       => $leadModel->channel,
+            'channel' => $leadModel->channel,
             'wants_invoice' => (bool) ($data['wants_invoice'] ?? false),
             'invoice_email' => $data['invoice_email'] ?? null,
         ]);
 
         if (($result['configured'] ?? false) === false) {
             return response()->json([
-                'ok'      => false,
-                'code'    => $result['error'] ?? 'wompi_checkout_not_configured',
+                'ok' => false,
+                'code' => $result['error'] ?? 'wompi_checkout_not_configured',
                 'message' => $result['message'] ?? 'Link de pago no disponible.',
                 'missing' => $result['missing'] ?? [],
             ], 503);
         }
 
         return response()->json([
-            'ok'             => true,
-            'lead_id'        => $leadModel->id,
-            'payment_url'    => $result['payment_url'] ?? null,
-            'reference'      => $result['reference'] ?? null,
-            'amount'         => $result['amount'] ?? null,
-            'currency'       => $result['currency'] ?? null,
-            'expires_at'     => $result['expires_at'] ?? null,
+            'ok' => true,
+            'lead_id' => $leadModel->id,
+            'payment_url' => $result['payment_url'] ?? null,
+            'reference' => $result['reference'] ?? null,
+            'amount' => $result['amount'] ?? null,
+            'currency' => $result['currency'] ?? null,
+            'expires_at' => $result['expires_at'] ?? null,
             'transaction_id' => $result['transaction_id'] ?? null,
-            'already_paid'   => (bool) ($result['already_paid'] ?? false),
+            'already_paid' => (bool) ($result['already_paid'] ?? false),
         ]);
     }
 
@@ -285,13 +284,13 @@ class MarketingController extends Controller
     private function paginated($page, callable $map): JsonResponse
     {
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => collect($page->items())->map($map)->all(),
             'meta' => [
                 'current_page' => $page->currentPage(),
-                'last_page'    => $page->lastPage(),
-                'per_page'     => $page->perPage(),
-                'total'        => $page->total(),
+                'last_page' => $page->lastPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
             ],
         ]);
     }

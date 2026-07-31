@@ -11,6 +11,8 @@ use App\Services\Nutrition\NutritionBarcodeService;
 use App\Services\Nutrition\NutritionFoodSearchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Alimentos: búsqueda, barcode, detalle, creación manual, edición y borrado.
@@ -21,8 +23,7 @@ class NutritionFoodController extends Controller
     public function __construct(
         private NutritionFoodSearchService $searchService,
         private NutritionBarcodeService $barcodeService,
-    ) {
-    }
+    ) {}
 
     private function member(Request $request): Member
     {
@@ -34,6 +35,7 @@ class NutritionFoodController extends Controller
     {
         $request->validate(['q' => 'required|string|max:120']);
         $foods = $this->searchService->search($request->query('q'), $this->member($request));
+
         return response()->json(['ok' => true, 'data' => $foods]);
     }
 
@@ -42,6 +44,7 @@ class NutritionFoodController extends Controller
     {
         $result = $this->barcodeService->lookup($barcode, $this->member($request));
         $status = $result['status'] === 'error' ? 200 : 200; // siempre JSON controlado
+
         return response()->json(array_merge(['ok' => $result['status'] === 'found'], $result), $status);
     }
 
@@ -52,6 +55,7 @@ class NutritionFoodController extends Controller
         if (! $food) {
             return response()->json(['ok' => false, 'message' => 'Alimento no encontrado.'], 404);
         }
+
         return response()->json(['ok' => true, 'data' => $food->toApiArray()]);
     }
 
@@ -68,20 +72,20 @@ class NutritionFoodController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'name'         => 'required|string|max:160',
-            'brand'        => 'nullable|string|max:120',
-            'barcode'      => 'nullable|string|max:32',
-            'category'     => 'nullable|string|max:120',
+            'name' => 'required|string|max:160',
+            'brand' => 'nullable|string|max:120',
+            'barcode' => 'nullable|string|max:32',
+            'category' => 'nullable|string|max:120',
             'serving_size' => 'required|numeric|gt:0',
             'serving_unit' => 'nullable|string|max:20',
-            'calories'     => 'required|numeric|min:0|max:9000',
-            'protein'      => 'required|numeric|min:0|max:1000',
-            'carbs'        => 'required|numeric|min:0|max:1000',
-            'fat'          => 'required|numeric|min:0|max:1000',
-            'sugar'        => 'nullable|numeric|min:0|max:1000',
-            'fiber'        => 'nullable|numeric|min:0|max:1000',
-            'sodium'       => 'nullable|numeric|min:0|max:100000',
-            'image_url'    => 'nullable|url|max:1024',
+            'calories' => 'required|numeric|min:0|max:9000',
+            'protein' => 'required|numeric|min:0|max:1000',
+            'carbs' => 'required|numeric|min:0|max:1000',
+            'fat' => 'required|numeric|min:0|max:1000',
+            'sugar' => 'nullable|numeric|min:0|max:1000',
+            'fiber' => 'nullable|numeric|min:0|max:1000',
+            'sodium' => 'nullable|numeric|min:0|max:100000',
+            'image_url' => 'nullable|url|max:1024',
         ]);
         $member = $this->member($request);
         $barcode = isset($data['barcode']) ? (preg_replace('/\D/', '', $data['barcode']) ?: null) : null;
@@ -92,13 +96,13 @@ class NutritionFoodController extends Controller
         $per100 = [];
         foreach (['calories', 'protein', 'carbs', 'fat', 'sugar', 'fiber', 'sodium'] as $k) {
             $val = isset($data[$k]) && $data[$k] !== null ? max(0.0, (float) $data[$k]) : null;
-            $perServing[$k . '_per_serving'] = $val === null ? null : round($val, 2);
-            $per100[$k . '_per_100g'] = $val === null ? null : round($val * $factor, 2);
+            $perServing[$k.'_per_serving'] = $val === null ? null : round($val, 2);
+            $per100[$k.'_per_100g'] = $val === null ? null : round($val * $factor, 2);
         }
 
         // ── Con barcode: anti-duplicado concurrente (lock por barcode) ──────────
         if ($barcode) {
-            return \Illuminate\Support\Facades\DB::transaction(function () use ($member, $data, $barcode, $size, $perServing, $per100) {
+            return DB::transaction(function () use ($member, $data, $barcode, $size, $perServing, $per100) {
                 $existing = NutritionFood::where('barcode', $barcode)->lockForUpdate()->first();
                 if ($existing) {
                     // Ya existe: si está incompleto y es completable, se completa;
@@ -112,6 +116,7 @@ class NutritionFoodController extends Controller
                         $existing->version = (int) $existing->version + 1;
                         $existing->save();
                     }
+
                     return response()->json([
                         'ok' => true, 'data' => $existing->fresh()->toApiArray(),
                         'deduplicated' => true,
@@ -119,6 +124,7 @@ class NutritionFoodController extends Controller
                 }
 
                 $food = $this->createCommunityFood($member, $data, $barcode, $size, $perServing, $per100);
+
                 return response()->json(['ok' => true, 'data' => $food->toApiArray()], 201);
             });
         }
@@ -135,23 +141,23 @@ class NutritionFoodController extends Controller
         }
 
         $food = NutritionFood::create(array_merge([
-            'source'               => 'user',
-            'name'                 => $data['name'],
-            'brand'                => $data['brand'] ?? null,
-            'barcode'              => null,
-            'category'             => $data['category'] ?? null,
-            'serving_size'         => $size,
-            'serving_unit'         => $data['serving_unit'] ?? 'g',
-            'image_url'            => $data['image_url'] ?? null,
+            'source' => 'user',
+            'name' => $data['name'],
+            'brand' => $data['brand'] ?? null,
+            'barcode' => null,
+            'category' => $data['category'] ?? null,
+            'serving_size' => $size,
+            'serving_unit' => $data['serving_unit'] ?? 'g',
+            'image_url' => $data['image_url'] ?? null,
             'created_by_member_id' => $member->id,
-            'is_public'            => false, // privado por defecto
-            'visibility'           => NutritionFood::VIS_PRIVATE,
-            'verification_status'  => NutritionFood::VS_PRIVATE,
-            'verified'             => false,
-            'confidence_score'     => 1.0, // datos provistos por el usuario
+            'is_public' => false, // privado por defecto
+            'visibility' => NutritionFood::VIS_PRIVATE,
+            'verification_status' => NutritionFood::VS_PRIVATE,
+            'verified' => false,
+            'confidence_score' => 1.0, // datos provistos por el usuario
         ], $perServing, $per100));
 
-        \Illuminate\Support\Facades\Log::info('nutrition.food.created', [
+        Log::info('nutrition.food.created', [
             'member_id' => $member->id, 'food' => $food->uuid, 'source' => 'user', 'visibility' => 'private',
         ]);
 
@@ -162,26 +168,27 @@ class NutritionFoodController extends Controller
     private function createCommunityFood(Member $member, array $data, string $barcode, float $size, array $perServing, array $per100): NutritionFood
     {
         $food = NutritionFood::create(array_merge([
-            'source'               => 'community',
-            'name'                 => $data['name'],
-            'brand'                => $data['brand'] ?? null,
-            'barcode'              => $barcode,
-            'category'             => $data['category'] ?? null,
-            'serving_size'         => $size,
-            'serving_unit'         => $data['serving_unit'] ?? 'g',
-            'image_url'            => $data['image_url'] ?? null,
+            'source' => 'community',
+            'name' => $data['name'],
+            'brand' => $data['brand'] ?? null,
+            'barcode' => $barcode,
+            'category' => $data['category'] ?? null,
+            'serving_size' => $size,
+            'serving_unit' => $data['serving_unit'] ?? 'g',
+            'image_url' => $data['image_url'] ?? null,
             'created_by_member_id' => $member->id,
-            'is_public'            => true,
-            'visibility'           => NutritionFood::VIS_COMMUNITY,
-            'verification_status'  => NutritionFood::VS_COMMUNITY,
-            'verified'             => false,
-            'confidence_score'     => 0.85, // comunitario sin verificar
+            'is_public' => true,
+            'visibility' => NutritionFood::VIS_COMMUNITY,
+            'verification_status' => NutritionFood::VS_COMMUNITY,
+            'verified' => false,
+            'confidence_score' => 0.85, // comunitario sin verificar
         ], $perServing, $per100));
 
-        \Illuminate\Support\Facades\Log::info('nutrition.food.created', [
+        Log::info('nutrition.food.created', [
             'member_id' => $member->id, 'food' => $food->uuid,
             'source' => 'community', 'visibility' => 'community',
         ]);
+
         return $food;
     }
 
@@ -216,18 +223,18 @@ class NutritionFoodController extends Controller
         }
         $completingExternal = $food->created_by_member_id !== $member->id;
         $data = $request->validate([
-            'name'         => 'sometimes|string|max:160',
-            'brand'        => 'nullable|string|max:120',
-            'category'     => 'nullable|string|max:120',
+            'name' => 'sometimes|string|max:160',
+            'brand' => 'nullable|string|max:120',
+            'category' => 'nullable|string|max:120',
             'serving_size' => 'sometimes|numeric|gt:0',
             'serving_unit' => 'nullable|string|max:20',
-            'calories'     => 'sometimes|numeric|min:0',
-            'protein'      => 'sometimes|numeric|min:0',
-            'carbs'        => 'sometimes|numeric|min:0',
-            'fat'          => 'sometimes|numeric|min:0',
-            'sugar'        => 'nullable|numeric|min:0',
-            'fiber'        => 'nullable|numeric|min:0',
-            'sodium'       => 'nullable|numeric|min:0',
+            'calories' => 'sometimes|numeric|min:0',
+            'protein' => 'sometimes|numeric|min:0',
+            'carbs' => 'sometimes|numeric|min:0',
+            'fat' => 'sometimes|numeric|min:0',
+            'sugar' => 'nullable|numeric|min:0',
+            'fiber' => 'nullable|numeric|min:0',
+            'sodium' => 'nullable|numeric|min:0',
         ]);
 
         foreach (['name', 'brand', 'category', 'serving_unit'] as $k) {
@@ -241,8 +248,8 @@ class NutritionFoodController extends Controller
         foreach (['calories', 'protein', 'carbs', 'fat', 'sugar', 'fiber', 'sodium'] as $k) {
             if (array_key_exists($k, $data)) {
                 $val = $data[$k] === null ? null : (float) $data[$k];
-                $food->{$k . '_per_serving'} = $val === null ? null : round($val, 2);
-                $food->{$k . '_per_100g'} = $val === null ? null : round($val * $factor, 2);
+                $food->{$k.'_per_serving'} = $val === null ? null : round($val, 2);
+                $food->{$k.'_per_100g'} = $val === null ? null : round($val * $factor, 2);
             }
         }
         // Al completar un externo con datos del usuario, sube la confianza.
@@ -250,6 +257,7 @@ class NutritionFoodController extends Controller
             $food->confidence_score = max((float) ($food->confidence_score ?? 0), 0.9);
         }
         $food->save();
+
         return response()->json(['ok' => true, 'data' => $food->fresh()->toApiArray()]);
     }
 
@@ -263,6 +271,7 @@ class NutritionFoodController extends Controller
             return response()->json(['ok' => false, 'message' => 'No puedes eliminar este alimento.'], 404);
         }
         $food->delete();
+
         return response()->json(['ok' => true]);
     }
 
@@ -275,6 +284,7 @@ class NutritionFoodController extends Controller
             return response()->json(['ok' => false, 'message' => 'Alimento no encontrado.'], 404);
         }
         NutritionFavorite::firstOrCreate(['member_id' => $member->id, 'food_id' => $food->id]);
+
         return response()->json(['ok' => true]);
     }
 
@@ -286,6 +296,7 @@ class NutritionFoodController extends Controller
         if ($food) {
             NutritionFavorite::where('member_id', $member->id)->where('food_id', $food->id)->delete();
         }
+
         return response()->json(['ok' => true]);
     }
 
@@ -296,6 +307,7 @@ class NutritionFoodController extends Controller
         $foods = NutritionFavorite::where('member_id', $member->id)
             ->with('food')->latest()->limit(50)->get()
             ->map(fn ($f) => $f->food?->toApiArray())->filter()->values();
+
         return response()->json(['ok' => true, 'data' => $foods]);
     }
 
@@ -306,6 +318,7 @@ class NutritionFoodController extends Controller
         $foods = NutritionRecentFood::where('member_id', $member->id)
             ->with('food')->orderByDesc('last_used_at')->limit(30)->get()
             ->map(fn ($r) => $r->food?->toApiArray())->filter()->values();
+
         return response()->json(['ok' => true, 'data' => $foods]);
     }
 
@@ -321,10 +334,11 @@ class NutritionFoodController extends Controller
         $food->increment('reports_count');
         $hidden = $food->reports_count >= NutritionFood::reportsHideThreshold()
             && $food->verification_status !== NutritionFood::VS_VERIFIED;
-        \Illuminate\Support\Facades\Log::info('nutrition.food.reported', [
+        Log::info('nutrition.food.reported', [
             'member_id' => $member->id, 'food' => $food->uuid,
             'reports' => $food->reports_count, 'hidden' => $hidden,
         ]);
+
         return response()->json([
             'ok' => true, 'message' => 'Gracias, revisaremos este producto.', 'hidden' => $hidden,
         ]);

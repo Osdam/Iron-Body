@@ -23,9 +23,7 @@ use Illuminate\Http\Request;
  */
 class MembershipController extends Controller
 {
-    public function __construct(private MembershipService $memberships)
-    {
-    }
+    public function __construct(private MembershipService $memberships) {}
 
     public function status(Request $request): JsonResponse
     {
@@ -38,6 +36,7 @@ class MembershipController extends Controller
         if (! $user || ! $user->plan) {
             return $this->noMembership();
         }
+
         return response()->json([
             'ok' => true,
             'data' => $this->memberships->previewCancellation($user),
@@ -50,6 +49,7 @@ class MembershipController extends Controller
         if (! $user || ! $user->plan) {
             return $this->noMembership();
         }
+
         return response()->json([
             'ok' => true,
             'message' => 'Tu renovación fue cancelada. Conservas el acceso hasta el fin del periodo.',
@@ -63,6 +63,7 @@ class MembershipController extends Controller
         if (! $user || ! $user->plan) {
             return $this->noMembership();
         }
+
         return response()->json([
             'ok' => true,
             'message' => 'Tu renovación quedó activa nuevamente.',
@@ -79,6 +80,7 @@ class MembershipController extends Controller
                 'data' => ['status' => MembershipService::STATUS_NONE, 'is_active' => false],
             ]);
         }
+
         return response()->json(['ok' => true, 'data' => $this->memberships->snapshot($user)]);
     }
 
@@ -87,6 +89,7 @@ class MembershipController extends Controller
         /** @var Member|null $member */
         $member = $request->attributes->get('auth_member');
         $member?->loadMissing('user');
+
         return $member?->user;
     }
 

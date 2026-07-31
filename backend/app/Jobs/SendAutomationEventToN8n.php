@@ -25,11 +25,10 @@ class SendAutomationEventToN8n implements ShouldQueue
 
     /** Reintentos controlados (Laravel reintenta el job; cada intento suma attempts). */
     public int $tries = 3;
+
     public int $backoff = 30;
 
-    public function __construct(public int $eventId)
-    {
-    }
+    public function __construct(public int $eventId) {}
 
     public function handle(): void
     {
@@ -41,11 +40,12 @@ class SendAutomationEventToN8n implements ShouldQueue
         $url = (string) config('automation.webhook_url');
         $secret = (string) config('automation.webhook_secret');
 
-        if (!config('automation.enabled') || $url === '' || $secret === '') {
+        if (! config('automation.enabled') || $url === '' || $secret === '') {
             $event->update([
                 'status' => AutomationEvent::STATUS_SKIPPED,
                 'last_error' => 'n8n deshabilitado o sin configuración',
             ]);
+
             return;
         }
 
@@ -58,7 +58,7 @@ class SendAutomationEventToN8n implements ShouldQueue
         try {
             $response = Http::timeout((int) config('automation.timeout', 10))
                 ->withHeaders([
-                    'Authorization' => 'Bearer ' . $secret,
+                    'Authorization' => 'Bearer '.$secret,
                     'X-IronBody-Event' => $event->event_type,
                     'X-Idempotency-Key' => $event->idempotency_key,
                     'X-IronBody-Signature' => $signature,
@@ -78,11 +78,12 @@ class SendAutomationEventToN8n implements ShouldQueue
                     'event_type' => $event->event_type,
                     'status_code' => $response->status(),
                 ]);
+
                 return;
             }
 
             // Respuesta no-2xx: marcar failed (sin loguear el body crudo).
-            $this->markFailed($event, 'http_' . $response->status());
+            $this->markFailed($event, 'http_'.$response->status());
         } catch (Throwable $e) {
             $this->markFailed($event, class_basename($e));
             throw $e; // permite el retry del job
@@ -93,7 +94,7 @@ class SendAutomationEventToN8n implements ShouldQueue
     {
         $event = AutomationEvent::find($this->eventId);
         if ($event !== null && $event->status !== AutomationEvent::STATUS_SENT) {
-            $this->markFailed($event, 'job_failed:' . class_basename($e));
+            $this->markFailed($event, 'job_failed:'.class_basename($e));
         }
     }
 

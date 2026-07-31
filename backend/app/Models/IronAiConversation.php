@@ -12,7 +12,9 @@ class IronAiConversation extends Model
     use SoftDeletes;
 
     public const STATUS_ACTIVE = 'active';
+
     public const STATUS_ARCHIVED = 'archived';
+
     public const STATUS_DELETED = 'deleted';
 
     protected $fillable = [
@@ -33,8 +35,8 @@ class IronAiConversation extends Model
     protected function casts(): array
     {
         return [
-            'metadata'        => 'array',
-            'messages_count'  => 'integer',
+            'metadata' => 'array',
+            'messages_count' => 'integer',
             'last_message_at' => 'datetime',
         ];
     }
@@ -57,15 +59,15 @@ class IronAiConversation extends Model
     public function toPublicArray(): array
     {
         return [
-            'uuid'                 => $this->uuid,
-            'title'                => $this->title,
-            'topic'                => $this->topic,
-            'summary'              => $this->summary,
+            'uuid' => $this->uuid,
+            'title' => $this->title,
+            'topic' => $this->topic,
+            'summary' => $this->summary,
             'last_message_preview' => $this->last_message_preview,
-            'messages_count'       => (int) $this->messages_count,
-            'last_message_at'      => optional($this->last_message_at)->toIso8601String(),
-            'status'               => $this->status,
-            'created_at'           => optional($this->created_at)->toIso8601String(),
+            'messages_count' => (int) $this->messages_count,
+            'last_message_at' => optional($this->last_message_at)->toIso8601String(),
+            'status' => $this->status,
+            'created_at' => optional($this->created_at)->toIso8601String(),
         ];
     }
 }

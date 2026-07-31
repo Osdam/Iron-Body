@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -22,21 +23,24 @@ use Illuminate\Support\Facades\Storage;
  * @property int|null $duration_ms
  * @property string|null $caption
  * @property int|null $size_bytes
- * @property \Carbon\Carbon $expires_at
+ * @property Carbon $expires_at
  * @property string $moderation_state 'visible' | 'quarantined' | 'removed'
  * @property int $reports_count
  */
 class Story extends Model
 {
     use HasFactory;
+
     // Borrar una story deja de destruir la fila: un caso de moderación abierto
     // necesita poder investigarla aunque su autor la haya eliminado.
     use SoftDeletes;
 
     /** Estado normal — visible en el feed. */
     public const MODERATION_VISIBLE = 'visible';
+
     /** Oculta temporalmente mientras se revisa. Reversible. */
     public const MODERATION_QUARANTINED = 'quarantined';
+
     /** Retirada por decisión de moderación. Reversible por un admin. */
     public const MODERATION_REMOVED = 'removed';
 

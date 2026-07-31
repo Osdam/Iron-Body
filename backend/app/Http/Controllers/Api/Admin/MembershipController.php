@@ -17,9 +17,7 @@ use Illuminate\Http\Request;
  */
 class MembershipController extends Controller
 {
-    public function __construct(private MembershipService $memberships)
-    {
-    }
+    public function __construct(private MembershipService $memberships) {}
 
     public function show(Member $member): JsonResponse
     {
@@ -27,6 +25,7 @@ class MembershipController extends Controller
         if (! $member->user) {
             return $this->noUser();
         }
+
         return response()->json(['ok' => true, 'data' => $this->memberships->snapshot($member->user)]);
     }
 
@@ -37,6 +36,7 @@ class MembershipController extends Controller
             return $this->noUser();
         }
         $immediate = $request->boolean('immediate');
+
         return response()->json([
             'ok' => true,
             'message' => $immediate
@@ -52,6 +52,7 @@ class MembershipController extends Controller
         if (! $member->user) {
             return $this->noUser();
         }
+
         return response()->json([
             'ok' => true,
             'message' => 'Renovación reactivada.',

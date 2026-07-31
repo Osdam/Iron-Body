@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
@@ -28,8 +29,7 @@ class MemberContractController extends Controller
     public function __construct(
         private MemberContractService $contracts,
         private ContractTemplateService $templates,
-    ) {
-    }
+    ) {}
 
     private function member(Request $request): Member
     {
@@ -50,13 +50,13 @@ class MemberContractController extends Controller
             : (string) config('contracts.default_registration_template', 'workout_registration');
 
         return response()->json([
-            'contract_type'      => $type,
-            'template_name'      => config("contracts.templates.{$type}.name", $type),
-            'is_minor'           => $isMinor,
-            'checkboxes'         => $this->templates->checkboxes($type),
+            'contract_type' => $type,
+            'template_name' => config("contracts.templates.{$type}.name", $type),
+            'is_minor' => $isMinor,
+            'checkboxes' => $this->templates->checkboxes($type),
             'privacy_policy_url' => config('contracts.privacy_policy_url') ?: url('/api/legal/privacy'),
-            'terms_url'          => config('contracts.terms_url') ?: url('/api/legal/terms'),
-            'support_contact'    => config('contracts.support_contact'),
+            'terms_url' => config('contracts.terms_url') ?: url('/api/legal/terms'),
+            'support_contact' => config('contracts.support_contact'),
         ]);
     }
 
@@ -111,13 +111,13 @@ class MemberContractController extends Controller
 
         return response()->json([
             'data' => [
-                'contract'         => $this->contracts->present($model),
-                'template_name'    => $this->templates->definition($type)['name'] ?? $type,
-                'checkboxes'       => $this->templates->checkboxes($type),
-                'prefill'          => $model->member_snapshot,
+                'contract' => $this->contracts->present($model),
+                'template_name' => $this->templates->definition($type)['name'] ?? $type,
+                'checkboxes' => $this->templates->checkboxes($type),
+                'prefill' => $model->member_snapshot,
                 'privacy_policy_url' => config('contracts.privacy_policy_url'),
-                'terms_url'        => config('contracts.terms_url'),
-                'support_contact'  => config('contracts.support_contact'),
+                'terms_url' => config('contracts.terms_url'),
+                'support_contact' => config('contracts.support_contact'),
             ],
         ]);
     }
@@ -141,7 +141,7 @@ class MemberContractController extends Controller
             Log::warning('contract:onboarding:sign:error', ['type' => 'template', 'message' => $e->getMessage()]);
 
             return response()->json(['message' => $e->getMessage()], 503);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             throw $e; // 422 con errores de validación (checkboxes, etc.)
         } catch (Throwable $e) {
             // Cualquier fallo (p. ej. generación de PDF): NO se marca signed; se
@@ -261,7 +261,7 @@ class MemberContractController extends Controller
         // Imagick disponible: aplanar alfa.
         if ($hasImagick) {
             try {
-                $im = new \Imagick();
+                $im = new \Imagick;
                 $im->setBackgroundColor('white');
                 $im->readImageBlob($raw);
                 $im->setImageBackgroundColor('white');

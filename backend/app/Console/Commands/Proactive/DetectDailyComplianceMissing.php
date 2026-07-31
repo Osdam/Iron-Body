@@ -16,6 +16,7 @@ use App\Models\RoutineCompletion;
 class DetectDailyComplianceMissing extends BaseProactiveDetectorCommand
 {
     protected $signature = 'ironbody:detect-daily-compliance-missing {--dry-run} {--member-id=} {--limit=} {--event=}';
+
     protected $description = 'Detecta miembros sin ninguna acción clave hoy y emite daily.compliance_missing.';
 
     protected function detect(): void

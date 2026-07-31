@@ -16,19 +16,19 @@ class MemberRoutineController extends Controller
     /** Lista de miembros con buscador; al seleccionar → sus rutinas. */
     public function index(Request $request)
     {
-        $search  = $request->input('search');
+        $search = $request->input('search');
         $members = Member::query()
             ->when($search, fn ($q) => $q->where(function ($q) use ($search) {
-                $term = '%' . $search . '%';
+                $term = '%'.$search.'%';
                 $q->where('full_name', 'like', $term)
-                  ->orWhere('document_number', 'like', $term);
+                    ->orWhere('document_number', 'like', $term);
             }))
             ->orderBy('full_name')
             ->paginate(20)
             ->withQueryString();
 
         $selectedMember = null;
-        $routines       = collect();
+        $routines = collect();
 
         if ($request->filled('member_id')) {
             $selectedMember = Member::find($request->integer('member_id'));
@@ -53,8 +53,9 @@ class MemberRoutineController extends Controller
     /** Formulario para crear rutina asignada a un miembro. */
     public function create(Request $request)
     {
-        $member    = Member::findOrFail($request->integer('member_id'));
+        $member = Member::findOrFail($request->integer('member_id'));
         $exercises = Exercise::orderBy('muscle_group')->orderBy('name')->get();
+
         return view('crm.member-routines.create', compact('member', 'exercises'));
     }
 
@@ -62,34 +63,34 @@ class MemberRoutineController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'member_id'         => 'required|integer|exists:members,id',
-            'name'              => 'required|string|max:255',
-            'level'             => 'nullable|in:Principiante,Intermedio,Avanzado',
-            'muscle_group'      => 'nullable|string|max:100',
+            'member_id' => 'required|integer|exists:members,id',
+            'name' => 'required|string|max:255',
+            'level' => 'nullable|in:Principiante,Intermedio,Avanzado',
+            'muscle_group' => 'nullable|string|max:100',
             'estimated_minutes' => 'nullable|integer|min:0|max:1440',
-            'description'       => 'nullable|string',
-            'notes'             => 'nullable|string',
-            'exercise_ids'      => 'nullable|array',
-            'exercise_ids.*'    => 'exists:exercises,id',
-            'sets_list'         => 'nullable|array',
-            'reps_list'         => 'nullable|array',
-            'weight_list'       => 'nullable|array',
-            'ex_notes_list'     => 'nullable|array',
+            'description' => 'nullable|string',
+            'notes' => 'nullable|string',
+            'exercise_ids' => 'nullable|array',
+            'exercise_ids.*' => 'exists:exercises,id',
+            'sets_list' => 'nullable|array',
+            'reps_list' => 'nullable|array',
+            'weight_list' => 'nullable|array',
+            'ex_notes_list' => 'nullable|array',
         ]);
 
         $member = Member::findOrFail($data['member_id']);
 
         $routine = Routine::create([
-            'name'              => $data['name'],
-            'level'             => $data['level'] ?? 'Principiante',
-            'muscle_group'      => $data['muscle_group'] ?? null,
+            'name' => $data['name'],
+            'level' => $data['level'] ?? 'Principiante',
+            'muscle_group' => $data['muscle_group'] ?? null,
             'estimated_minutes' => (int) ($data['estimated_minutes'] ?? 0),
-            'description'       => $data['description'] ?? null,
-            'notes'             => $data['notes'] ?? null,
-            'member_id'         => $member->id,
-            'is_assigned'       => true,
-            'created_by_admin'  => true,
-            'status'            => 'Activa',
+            'description' => $data['description'] ?? null,
+            'notes' => $data['notes'] ?? null,
+            'member_id' => $member->id,
+            'is_assigned' => true,
+            'created_by_admin' => true,
+            'status' => 'Activa',
         ]);
 
         $this->syncExercises($routine, $request);
@@ -109,9 +110,10 @@ class MemberRoutineController extends Controller
     /** Formulario de edición de una rutina asignada. */
     public function edit(Request $request, Routine $routine)
     {
-        $member       = Member::findOrFail($request->integer('member_id', $routine->member_id));
-        $exercises    = Exercise::orderBy('muscle_group')->orderBy('name')->get();
+        $member = Member::findOrFail($request->integer('member_id', $routine->member_id));
+        $exercises = Exercise::orderBy('muscle_group')->orderBy('name')->get();
         $routineItems = $routine->routineExercises()->with('exercise')->orderBy('sort_order')->get();
+
         return view('crm.member-routines.edit', compact('routine', 'member', 'exercises', 'routineItems'));
     }
 
@@ -119,30 +121,30 @@ class MemberRoutineController extends Controller
     public function update(Request $request, Routine $routine)
     {
         $data = $request->validate([
-            'member_id'         => 'required|integer|exists:members,id',
-            'name'              => 'required|string|max:255',
-            'level'             => 'nullable|in:Principiante,Intermedio,Avanzado',
-            'muscle_group'      => 'nullable|string|max:100',
+            'member_id' => 'required|integer|exists:members,id',
+            'name' => 'required|string|max:255',
+            'level' => 'nullable|in:Principiante,Intermedio,Avanzado',
+            'muscle_group' => 'nullable|string|max:100',
             'estimated_minutes' => 'nullable|integer|min:0|max:1440',
-            'description'       => 'nullable|string',
-            'notes'             => 'nullable|string',
-            'exercise_ids'      => 'nullable|array',
-            'exercise_ids.*'    => 'exists:exercises,id',
-            'sets_list'         => 'nullable|array',
-            'reps_list'         => 'nullable|array',
-            'weight_list'       => 'nullable|array',
-            'ex_notes_list'     => 'nullable|array',
+            'description' => 'nullable|string',
+            'notes' => 'nullable|string',
+            'exercise_ids' => 'nullable|array',
+            'exercise_ids.*' => 'exists:exercises,id',
+            'sets_list' => 'nullable|array',
+            'reps_list' => 'nullable|array',
+            'weight_list' => 'nullable|array',
+            'ex_notes_list' => 'nullable|array',
         ]);
 
         $member = Member::findOrFail($data['member_id']);
 
         $routine->fill([
-            'name'              => $data['name'],
-            'level'             => $data['level'] ?? $routine->level,
-            'muscle_group'      => $data['muscle_group'] ?? null,
+            'name' => $data['name'],
+            'level' => $data['level'] ?? $routine->level,
+            'muscle_group' => $data['muscle_group'] ?? null,
             'estimated_minutes' => (int) ($data['estimated_minutes'] ?? 0),
-            'description'       => $data['description'] ?? null,
-            'notes'             => $data['notes'] ?? null,
+            'description' => $data['description'] ?? null,
+            'notes' => $data['notes'] ?? null,
         ]);
         $routine->save();
 
@@ -175,10 +177,10 @@ class MemberRoutineController extends Controller
     private function syncExercises(Routine $routine, Request $request): void
     {
         $exerciseIds = array_values((array) $request->input('exercise_ids', []));
-        $sets        = array_values((array) $request->input('sets_list', []));
-        $reps        = array_values((array) $request->input('reps_list', []));
-        $weights     = array_values((array) $request->input('weight_list', []));
-        $notes       = array_values((array) $request->input('ex_notes_list', []));
+        $sets = array_values((array) $request->input('sets_list', []));
+        $reps = array_values((array) $request->input('reps_list', []));
+        $weights = array_values((array) $request->input('weight_list', []));
+        $notes = array_values((array) $request->input('ex_notes_list', []));
 
         $routine->routineExercises()->delete();
 
@@ -189,13 +191,13 @@ class MemberRoutineController extends Controller
             }
             $ex = Exercise::find($exerciseId);
             RoutineExercise::create([
-                'routine_id'  => $routine->id,
+                'routine_id' => $routine->id,
                 'exercise_id' => (int) $exerciseId,
-                'sets'        => (int) ($sets[$i] ?? $ex?->suggested_sets ?? 3),
-                'reps'        => ($reps[$i] ?? '') ?: ($ex?->suggested_reps ?? '8-12'),
-                'weight'      => ($weights[$i] ?? '') ?: null,
-                'notes'       => ($notes[$i] ?? '') ?: null,
-                'sort_order'  => $order++,
+                'sets' => (int) ($sets[$i] ?? $ex?->suggested_sets ?? 3),
+                'reps' => ($reps[$i] ?? '') ?: ($ex?->suggested_reps ?? '8-12'),
+                'weight' => ($weights[$i] ?? '') ?: null,
+                'notes' => ($notes[$i] ?? '') ?: null,
+                'sort_order' => $order++,
             ]);
         }
     }

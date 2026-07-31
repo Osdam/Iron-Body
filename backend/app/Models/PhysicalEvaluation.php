@@ -54,8 +54,11 @@ class PhysicalEvaluation extends Model
 
     /** Rangos válidos para adultos (deben coincidir con la validación del request). */
     public const WEIGHT_MIN = 25.0;
+
     public const WEIGHT_MAX = 300.0;
+
     public const HEIGHT_MIN = 100.0;
+
     public const HEIGHT_MAX = 230.0;
 
     /**
@@ -75,6 +78,7 @@ class PhysicalEvaluation extends Model
             || $h < self::HEIGHT_MIN || $h > self::HEIGHT_MAX) {
             return 'invalid_data';
         }
+
         return 'valid';
     }
 
@@ -92,9 +96,10 @@ class PhysicalEvaluation extends Model
         }
         $m = $this->height_cm / 100;
         $bmi = $this->weight_kg / ($m * $m);
-        if (!is_finite($bmi)) {
+        if (! is_finite($bmi)) {
             return null;
         }
+
         return round($bmi, 1);
     }
 
@@ -105,9 +110,16 @@ class PhysicalEvaluation extends Model
         if ($bmi === null) {
             return null;
         }
-        if ($bmi < 18.5) return 'Bajo peso';
-        if ($bmi < 25) return 'Peso saludable';
-        if ($bmi < 30) return 'Sobrepeso';
+        if ($bmi < 18.5) {
+            return 'Bajo peso';
+        }
+        if ($bmi < 25) {
+            return 'Peso saludable';
+        }
+        if ($bmi < 30) {
+            return 'Sobrepeso';
+        }
+
         return 'Obesidad';
     }
 

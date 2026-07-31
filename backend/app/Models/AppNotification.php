@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -14,8 +15,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $action_type
  * @property string|null $action_route
  * @property array|null $payload_json
- * @property \Carbon\Carbon|null $read_at
- * @property \Carbon\Carbon|null $delivered_at
+ * @property Carbon|null $read_at
+ * @property Carbon|null $delivered_at
  * @property string|null $source
  * @property string|null $priority
  */

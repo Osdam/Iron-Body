@@ -7,6 +7,7 @@ use App\Models\Member;
 use App\Models\MemberAppActivityDay;
 use App\Models\NutritionAiRecommendation;
 use App\Models\RoutineCompletion;
+use Carbon\CarbonImmutable;
 
 /**
  * Invitaciones a IA — un solo detector que evalúa varias señales de "aún no
@@ -22,6 +23,7 @@ use App\Models\RoutineCompletion;
 class DetectIronAiInvites extends BaseProactiveDetectorCommand
 {
     protected $signature = 'ironbody:detect-iron-ai-invites {--dry-run} {--member-id=} {--limit=} {--event=}';
+
     protected $description = 'Detecta usuarios que no usan módulos de IA y emite invitaciones (chat/nutrition/progress/streak).';
 
     protected function detect(): void
@@ -69,7 +71,7 @@ class DetectIronAiInvites extends BaseProactiveDetectorCommand
             $hasStreakActivity = MemberAppActivityDay::query()
                 ->where('member_id', $member->id)
                 ->exists();
-            if ($trainsRecently && !$hasStreakActivity) {
+            if ($trainsRecently && ! $hasStreakActivity) {
                 $this->consider($member, 'iron_ai.streak_invite', ['ai' => ['trains' => true, 'uses_streak' => false]]);
             }
         });
@@ -79,7 +81,7 @@ class DetectIronAiInvites extends BaseProactiveDetectorCommand
     private function isBefore($value, $cutoff): bool
     {
         try {
-            return \Carbon\CarbonImmutable::parse((string) $value)->lessThan($cutoff);
+            return CarbonImmutable::parse((string) $value)->lessThan($cutoff);
         } catch (\Throwable) {
             return false;
         }

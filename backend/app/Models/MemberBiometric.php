@@ -7,10 +7,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class MemberBiometric extends Model
 {
-    public const STATUS_ACTIVE                 = 'active';
-    public const STATUS_LEGACY                 = 'legacy';
+    public const STATUS_ACTIVE = 'active';
+
+    public const STATUS_LEGACY = 'legacy';
+
     public const STATUS_RE_ENROLLMENT_REQUIRED = 're_enrollment_required';
-    public const STATUS_DISABLED               = 'disabled';
+
+    public const STATUS_DISABLED = 'disabled';
 
     protected $fillable = [
         'member_id',
@@ -32,7 +35,7 @@ class MemberBiometric extends Model
     protected function casts(): array
     {
         return [
-            'captured_at'                => 'datetime',
+            'captured_at' => 'datetime',
             'last_biometric_enrolled_at' => 'datetime',
             'last_biometric_verified_at' => 'datetime',
         ];

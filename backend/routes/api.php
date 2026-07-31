@@ -1120,6 +1120,11 @@ Route::middleware(['automation.internal', 'throttle:120,1'])->prefix('internal/a
     Route::post('notify-member',  [\App\Http\Controllers\Api\Internal\NotifyMemberController::class, 'notify']);
     // Coach humano: crea/enriquece la tarea del entrenador asignado.
     Route::post('notify-trainer', [\App\Http\Controllers\Api\Internal\NotifyTrainerController::class, 'notify']);
+
+    // Tanda de bienestar. n8n dice CUÁNDO; el qué, a quién y si procede lo
+    // sigue decidiendo Laravel. La idempotencia diaria hace que disparar esto
+    // y el cron a la vez no le dé a nadie dos avisos.
+    Route::post('wellness-run', [\App\Http\Controllers\Api\Internal\WellnessRunController::class, 'run']);
 });
 
 // ── Asesor comercial IA (F3) — disparado por n8n, firmado HMAC ────────────────

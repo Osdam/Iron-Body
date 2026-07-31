@@ -167,7 +167,7 @@ class MemberAppStateController extends Controller
      * habilitan con el acceso. `can_use_full_app` = acceso + plan premium completo
      * (todas las features núcleo del plan en true → p. ej. Plan Total).
      *
-     * @param array<string,bool> $features  mapa de Member::resolvedFeatures()
+     * @param  array<string,bool>  $features  mapa de Member::resolvedFeatures()
      */
     private function buildFeatures(array $features, bool $canAccessHome, bool $membershipActive): array
     {
@@ -181,34 +181,35 @@ class MemberAppStateController extends Controller
             && collect($premiumCoreKeys)->every(fn ($k) => $f($k));
 
         return [
-            'can_access_home'             => $canAccessHome,
-            'requires_activation'         => ! $canAccessHome,
+            'can_access_home' => $canAccessHome,
+            'requires_activation' => ! $canAccessHome,
             // Gateadas por plan:
-            'can_use_ai'                  => $f('iron_ia') && $canAccessHome,
-            'can_use_training'            => $f('workouts') && $canAccessHome,
-            'can_use_progress'            => $f('progress') && $canAccessHome,
-            'can_use_nutrition'           => $f('nutrition') && $canAccessHome,
-            'can_use_classes'             => $f('classes') && $canAccessHome,
-            'can_use_custom_routines'     => $f('custom_routines') && $canAccessHome,
-            'can_use_ranking'             => $f('ranking') && $canAccessHome,
+            'can_use_ai' => $f('iron_ia') && $canAccessHome,
+            'can_use_training' => $f('workouts') && $canAccessHome,
+            'can_use_progress' => $f('progress') && $canAccessHome,
+            'can_use_nutrition' => $f('nutrition') && $canAccessHome,
+            'can_use_classes' => $f('classes') && $canAccessHome,
+            'can_use_custom_routines' => $f('custom_routines') && $canAccessHome,
+            'can_use_ranking' => $f('ranking') && $canAccessHome,
             // Secciones base (disponibles con acceso a la app):
-            'can_use_exercise_library'    => $canAccessHome,
-            'can_use_stories'             => $canAccessHome,
-            'can_use_reels'               => $canAccessHome,
-            'can_use_profile'             => $canAccessHome,
-            'can_use_security_devices'    => $canAccessHome,
-            'can_use_membership_details'  => $canAccessHome,
-            'can_use_store'               => $canAccessHome,
-            'can_use_notifications_center'=> $canAccessHome,
+            'can_use_exercise_library' => $canAccessHome,
+            'can_use_stories' => $canAccessHome,
+            'can_use_reels' => $canAccessHome,
+            'can_use_profile' => $canAccessHome,
+            'can_use_security_devices' => $canAccessHome,
+            'can_use_membership_details' => $canAccessHome,
+            'can_use_store' => $canAccessHome,
+            'can_use_notifications_center' => $canAccessHome,
             // Resumen:
-            'can_use_full_app'            => $hasFullPremium,
+            'can_use_full_app' => $hasFullPremium,
             // Mapa crudo del plan para gating fino del cliente (no hardcode).
-            'plan_features'               => $features,
+            'plan_features' => $features,
         ];
     }
 
     /**
      * Misma selección que AppRoutineController::today (rutina asignada del día).
+     *
      * @return array{id:int,title:string,estimated_minutes:int,updated_at:mixed}|null
      */
     private function todayWorkout(Member $member): ?array

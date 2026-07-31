@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\AppEvent;
 use App\Services\FirebaseStorageService;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -16,9 +17,7 @@ use Illuminate\Support\Facades\Storage;
  */
 class EventController extends Controller
 {
-    public function __construct(private FirebaseStorageService $firebase)
-    {
-    }
+    public function __construct(private FirebaseStorageService $firebase) {}
 
     public function index(): JsonResponse
     {
@@ -35,8 +34,9 @@ class EventController extends Controller
         $event = AppEvent::create($data);
         // Recién publicado y activo → avisa a los miembros (notificación + SSE).
         if ($event->is_active) {
-            app(\App\Services\NotificationService::class)->notifyEventPublished($event);
+            app(NotificationService::class)->notifyEventPublished($event);
         }
+
         return response()->json(['ok' => true, 'data' => $event], 201);
     }
 
@@ -48,6 +48,7 @@ class EventController extends Controller
             $data = array_merge($data, $image);
         }
         $event->update($data);
+
         return response()->json(['ok' => true, 'data' => $event]);
     }
 
@@ -55,6 +56,7 @@ class EventController extends Controller
     {
         $this->deleteImage($event->image_path);
         $event->delete();
+
         return response()->json(['ok' => true]);
     }
 
@@ -62,13 +64,15 @@ class EventController extends Controller
     {
         $event->update(['is_active' => true]);
         // Al publicar manualmente, avisa a los miembros (notificación + SSE).
-        app(\App\Services\NotificationService::class)->notifyEventPublished($event->fresh());
+        app(NotificationService::class)->notifyEventPublished($event->fresh());
+
         return response()->json(['ok' => true, 'data' => $event]);
     }
 
     public function deactivate(AppEvent $event): JsonResponse
     {
         $event->update(['is_active' => false]);
+
         return response()->json(['ok' => true, 'data' => $event]);
     }
 
@@ -78,13 +82,15 @@ class EventController extends Controller
      */
     public function notify(AppEvent $event): JsonResponse
     {
-        app(\App\Services\NotificationService::class)->notifyEventPublished($event, force: true);
+        app(NotificationService::class)->notifyEventPublished($event, force: true);
+
         return response()->json(['ok' => true, 'message' => 'Notificación enviada a los miembros.']);
     }
 
     private function validateEvent(Request $request, ?AppEvent $event = null): array
     {
         $required = $event ? 'sometimes' : 'required';
+
         return $request->validate([
             'title' => [$required, 'string', 'max:255'],
             'description' => ['nullable', 'string'],
@@ -105,8 +111,10 @@ class EventController extends Controller
     {
         if ($request->hasFile('image')) {
             $path = $request->file('image')->store('app_events', 'public');
+
             return ['image_url' => Storage::disk('public')->url($path), 'image_path' => $path];
         }
+
         return array_filter([
             'image_url' => $request->input('image_url'),
             'image_path' => $request->input('image_path'),
@@ -120,6 +128,7 @@ class EventController extends Controller
         }
         if (str_starts_with($path, 'app_events/')) {
             Storage::disk('public')->delete($path);
+
             return;
         }
         if (! str_starts_with($path, 'http')) {

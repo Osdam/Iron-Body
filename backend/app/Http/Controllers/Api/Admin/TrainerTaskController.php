@@ -21,9 +21,7 @@ use Illuminate\Http\Request;
  */
 class TrainerTaskController extends Controller
 {
-    public function __construct(private readonly TrainerTaskService $service)
-    {
-    }
+    public function __construct(private readonly TrainerTaskService $service) {}
 
     /** GET /api/admin/trainers/{trainer}/tasks?status=&priority=&per_page= */
     public function index(Request $request, Trainer $trainer): JsonResponse
@@ -51,13 +49,13 @@ class TrainerTaskController extends Controller
             ->paginate($perPage);
 
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => collect($page->items())->map(fn (TrainerTask $t) => $t->toPublicArray())->all(),
             'meta' => [
                 'current_page' => $page->currentPage(),
-                'last_page'    => $page->lastPage(),
-                'per_page'     => $page->perPage(),
-                'total'        => $page->total(),
+                'last_page' => $page->lastPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
             ],
         ]);
     }
@@ -66,7 +64,7 @@ class TrainerTaskController extends Controller
     public function unreadCount(Trainer $trainer): JsonResponse
     {
         return response()->json([
-            'ok'      => true,
+            'ok' => true,
             'pending' => $this->service->pendingCountForTrainer($trainer->id),
         ]);
     }
@@ -101,9 +99,9 @@ class TrainerTaskController extends Controller
             ->all();
 
         return response()->json([
-            'ok'        => true,
+            'ok' => true,
             'member_id' => $member->id,
-            'data'      => $tasks,
+            'data' => $tasks,
         ]);
     }
 
@@ -112,6 +110,7 @@ class TrainerTaskController extends Controller
         if ($task === null) {
             return response()->json(['ok' => false, 'message' => 'Tarea no encontrada.'], 404);
         }
+
         return response()->json(['ok' => true, 'data' => $task->toPublicArray()]);
     }
 }

@@ -289,43 +289,43 @@ class AppClassController extends Controller
             // Razón de bloqueo trazable (null si es seleccionable). Fuente única.
             $blockedReason = match (true) {
                 $isClosed => 'closed',
-                $isLive   => 'live',
+                $isLive => 'live',
                 $isReserved => 'reserved',
-                $isFull   => 'full',
-                $isPast   => 'past',
-                default   => null,
+                $isFull => 'full',
+                $isPast => 'past',
+                default => null,
             };
 
             $days[$idx]['classes'][] = [
                 'reservation_key' => $key,
-                'class_id'        => (int) $class->id,
-                'session_date'    => $dateStr,
-                'name'            => $class->name,
-                'type'            => $class->type,
-                'instructor'      => $class->instructor ?? $class->trainer?->full_name ?? '',
-                'start_time'      => $class->start_time,
-                'end_time'        => $class->end_time,
-                'date_time'       => $occ->toIso8601String(),
+                'class_id' => (int) $class->id,
+                'session_date' => $dateStr,
+                'name' => $class->name,
+                'type' => $class->type,
+                'instructor' => $class->instructor ?? $class->trainer?->full_name ?? '',
+                'start_time' => $class->start_time,
+                'end_time' => $class->end_time,
+                'date_time' => $occ->toIso8601String(),
                 'duration_minutes' => $class->duration_minutes,
-                'location'        => $class->location,
-                'total_spots'     => $capacity,
-                'booked_spots'    => $booked,
+                'location' => $class->location,
+                'total_spots' => $capacity,
+                'booked_spots' => $booked,
                 'available_spots' => $available,
-                'is_reserved'     => $isReserved,
-                'is_full'         => $isFull,
-                'is_past'         => $isPast,
-                'is_closed'       => $isClosed,
-                'is_live'         => $isLive,
-                'is_finished'     => $isClosed, // cierre del entrenador = finalizada (mismo origen)
-                'reservation_id'  => $reservation?->id,
-                'session_status'  => $sessionStatus,          // scheduled|live|finished
+                'is_reserved' => $isReserved,
+                'is_full' => $isFull,
+                'is_past' => $isPast,
+                'is_closed' => $isClosed,
+                'is_live' => $isLive,
+                'is_finished' => $isClosed, // cierre del entrenador = finalizada (mismo origen)
+                'reservation_id' => $reservation?->id,
+                'session_status' => $sessionStatus,          // scheduled|live|finished
                 'reservation_status' => $reservationStatus,   // none|reserved|attended|late|absent
-                'attendance_status'  => $attendanceStatus,    // present|late|absent|null
-                'display_state'   => $state,                  // estado resuelto (alias de state)
-                'state'           => $state,                  // back-compat con clientes previos
-                'blocked_reason'  => $blockedReason,
-                'can_reserve'     => $canReserve,
-                'can_cancel'      => $canCancel,
+                'attendance_status' => $attendanceStatus,    // present|late|absent|null
+                'display_state' => $state,                  // estado resuelto (alias de state)
+                'state' => $state,                  // back-compat con clientes previos
+                'blocked_reason' => $blockedReason,
+                'can_reserve' => $canReserve,
+                'can_cancel' => $canCancel,
             ];
         }
 
@@ -335,8 +335,8 @@ class AppClassController extends Controller
 
         return response()->json([
             'week_start' => $weekStart->toDateString(),
-            'week_end'   => $weekEnd->toDateString(),
-            'days'       => array_values($days),
+            'week_end' => $weekEnd->toDateString(),
+            'days' => array_values($days),
         ]);
     }
 
@@ -352,8 +352,8 @@ class AppClassController extends Controller
         $member = $this->member($request);
 
         $data = $request->validate([
-            'items'                => ['required', 'array', 'min:1', 'max:40'],
-            'items.*.class_id'     => ['required', 'integer'],
+            'items' => ['required', 'array', 'min:1', 'max:40'],
+            'items.*.class_id' => ['required', 'integer'],
             'items.*.session_date' => ['required', 'date'],
         ]);
 
@@ -371,6 +371,7 @@ class AppClassController extends Controller
 
             if (! $class || $class->status !== 'active' || ! $class->allow_online_booking) {
                 $results['unavailable'][] = $tag;
+
                 continue;
             }
 
@@ -385,22 +386,26 @@ class AppClassController extends Controller
 
             if ($sessionStatus === 'finished') {
                 $results['closed'][] = $tag; // cerrada/finalizada por el entrenador
+
                 continue;
             }
             if ($sessionStatus === 'live') {
                 // Blindaje: no se puede reservar una clase que el entrenador ya inició.
                 $results['live'][] = $tag;
+
                 continue;
             }
             // Vencida por DÍA OPERATIVO (Bogotá), no por hora (alineado con weeklyPlan).
             if ($date < Carbon::today(self::TZ)->toDateString()) {
                 $results['past'][] = $tag;
+
                 continue;
             }
 
             // Conflicto de horario dentro de la propia selección (mismo día, solape).
             if ($this->conflictsWithSelection($acceptedSlots, $date, $occStart, $occEnd)) {
                 $results['conflict'][] = $tag;
+
                 continue;
             }
 
@@ -437,15 +442,15 @@ class AppClassController extends Controller
 
         return response()->json([
             'summary' => [
-                'reserved'    => $reservedCount,
-                'failed'      => $failedCount,
-                'already'     => count($results['already']),
-                'full'        => count($results['full']),
+                'reserved' => $reservedCount,
+                'failed' => $failedCount,
+                'already' => count($results['already']),
+                'full' => count($results['full']),
                 'unavailable' => count($results['unavailable']),
-                'past'        => count($results['past']),
-                'closed'      => count($results['closed']),
-                'live'        => count($results['live']),
-                'conflict'    => count($results['conflict']),
+                'past' => count($results['past']),
+                'closed' => count($results['closed']),
+                'live' => count($results['live']),
+                'conflict' => count($results['conflict']),
             ],
             'results' => $results,
         ]);

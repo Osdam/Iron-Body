@@ -24,8 +24,7 @@ class IronAiConversationController extends Controller
     public function __construct(
         private readonly IronAiService $service,
         private readonly IronAiMembershipAccessService $access,
-    ) {
-    }
+    ) {}
 
     /** GET /api/iron-ai/conversations — conversaciones activas del usuario. */
     public function index(Request $request): JsonResponse
@@ -34,7 +33,7 @@ class IronAiConversationController extends Controller
             $ctx = $this->access->resolveMember($request);
 
             return response()->json([
-                'ok'   => true,
+                'ok' => true,
                 'data' => $this->service->listConversations($ctx),
             ]);
         } catch (Throwable $e) {
@@ -61,7 +60,7 @@ class IronAiConversationController extends Controller
             );
 
             return response()->json([
-                'ok'   => true,
+                'ok' => true,
                 'data' => $conversation->toPublicArray(),
             ], 201);
         } catch (Throwable $e) {
@@ -82,9 +81,9 @@ class IronAiConversationController extends Controller
             }
 
             return response()->json([
-                'ok'           => true,
+                'ok' => true,
                 'conversation' => $conversation->toPublicArray(),
-                'data'         => $this->service->conversationMessages($conversation),
+                'data' => $this->service->conversationMessages($conversation),
             ]);
         } catch (Throwable $e) {
             report($e);
@@ -156,8 +155,8 @@ class IronAiConversationController extends Controller
     private function forbidden(): JsonResponse
     {
         return response()->json([
-            'ok'      => false,
-            'code'    => 'CONVERSATION_NOT_FOUND',
+            'ok' => false,
+            'code' => 'CONVERSATION_NOT_FOUND',
             'message' => 'La conversación no existe o no te pertenece.',
         ], 403);
     }

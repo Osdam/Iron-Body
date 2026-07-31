@@ -32,8 +32,7 @@ class MarketingInboxController extends Controller
     public function __construct(
         private readonly MarketingInboxService $inbox,
         private readonly MarketingInboxAuthorizationService $authz,
-    ) {
-    }
+    ) {}
 
     /** El admin autenticado (sesión real). Null cuando se usa el secreto compartido. */
     private function adminId(Request $request): ?int
@@ -60,8 +59,8 @@ class MarketingInboxController extends Controller
         $deny = $this->authz->deny($this->admin($request), $capability);
         if ($deny !== null) {
             return response()->json([
-                'ok'      => false,
-                'code'    => $deny['code'],
+                'ok' => false,
+                'code' => $deny['code'],
                 'message' => $deny['message'],
             ], $deny['status']);
         }
@@ -82,25 +81,25 @@ class MarketingInboxController extends Controller
         }
 
         $request->validate([
-            'q'            => ['nullable', 'string', 'max:80'],
-            'status'       => ['nullable', Rule::in(['open', 'closed', 'snoozed', 'pending'])],
-            'ai'           => ['nullable', Rule::in(['active', 'paused'])],
+            'q' => ['nullable', 'string', 'max:80'],
+            'status' => ['nullable', Rule::in(['open', 'closed', 'snoozed', 'pending'])],
+            'ai' => ['nullable', Rule::in(['active', 'paused'])],
             'staff_review' => ['nullable', Rule::in(['pending', 'resolved'])],
-            'unread'       => ['nullable', 'boolean'],
-            'channel'      => ['nullable', 'string', 'max:20'],
-            'per_page'     => ['nullable', 'integer', 'min:1', 'max:50'],
+            'unread' => ['nullable', 'boolean'],
+            'channel' => ['nullable', 'string', 'max:20'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:50'],
         ]);
 
         $page = $this->inbox->list($request, $this->adminId($request));
 
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => collect($page->items())->map(fn ($c) => $this->inbox->presentListItem($c))->all(),
             'meta' => [
                 'current_page' => $page->currentPage(),
-                'last_page'    => $page->lastPage(),
-                'per_page'     => $page->perPage(),
-                'total'        => $page->total(),
+                'last_page' => $page->lastPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
             ],
         ]);
     }
@@ -128,7 +127,7 @@ class MarketingInboxController extends Controller
         }
 
         $data = $request->validate([
-            'body'     => ['required', 'string', 'min:1', 'max:4096'],
+            'body' => ['required', 'string', 'min:1', 'max:4096'],
             'pause_ai' => ['nullable', 'boolean'],
         ]);
 
@@ -148,10 +147,10 @@ class MarketingInboxController extends Controller
         );
 
         return response()->json([
-            'ok'        => $result['ok'],
-            'dry_run'   => (bool) ($result['dispatch']['dry_run'] ?? false),
-            'sent'      => (bool) ($result['dispatch']['sent'] ?? false),
-            'reason'    => $result['dispatch']['reason'] ?? null,
+            'ok' => $result['ok'],
+            'dry_run' => (bool) ($result['dispatch']['dry_run'] ?? false),
+            'sent' => (bool) ($result['dispatch']['sent'] ?? false),
+            'reason' => $result['dispatch']['reason'] ?? null,
             'message_id' => $result['dispatch']['message_id'] ?? null,
             'ai_paused' => $result['ai_paused'],
         ]);
@@ -213,7 +212,7 @@ class MarketingInboxController extends Controller
         $fresh = $conversation->fresh('assignedAdmin');
 
         return response()->json([
-            'ok'          => true,
+            'ok' => true,
             'assigned_to' => $fresh?->assignedAdmin ? ['id' => $fresh->assignedAdmin->id, 'name' => $fresh->assignedAdmin->name] : null,
         ]);
     }
@@ -235,8 +234,8 @@ class MarketingInboxController extends Controller
         $note = $notes->add($conversation, $data['body'], $this->adminId($request));
 
         return response()->json(['ok' => true, 'note' => [
-            'id'         => $note->id,
-            'body'       => $note->body,
+            'id' => $note->id,
+            'body' => $note->body,
             'created_at' => $note->created_at?->toIso8601String(),
         ]]);
     }
@@ -249,9 +248,9 @@ class MarketingInboxController extends Controller
         }
 
         $data = $request->validate([
-            'add'      => ['nullable', 'array', 'max:10'],
-            'add.*'    => ['string', 'max:40'],
-            'remove'   => ['nullable', 'array', 'max:10'],
+            'add' => ['nullable', 'array', 'max:10'],
+            'add.*' => ['string', 'max:40'],
+            'remove' => ['nullable', 'array', 'max:10'],
             'remove.*' => ['string', 'max:40'],
         ]);
 
@@ -273,7 +272,7 @@ class MarketingInboxController extends Controller
         }
 
         $data = $request->validate([
-            'status'       => ['required', Rule::in(['open', 'closed', 'snoozed'])],
+            'status' => ['required', Rule::in(['open', 'closed', 'snoozed'])],
             'snooze_until' => ['nullable', 'date', 'after:now'],
         ]);
 
@@ -289,8 +288,8 @@ class MarketingInboxController extends Controller
         $conversation->forceFill($changes)->save();
 
         return response()->json([
-            'ok'        => true,
-            'status'    => $conversation->status,
+            'ok' => true,
+            'status' => $conversation->status,
             'closed_at' => $conversation->closed_at?->toIso8601String(),
         ]);
     }

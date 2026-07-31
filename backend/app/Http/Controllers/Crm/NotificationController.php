@@ -22,26 +22,24 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class NotificationController extends Controller
 {
     private const CATEGORY_TYPES = [
-        'payment'     => 'payment',
-        'pagos'       => 'payment',
-        'membership'  => 'membership',
-        'membresias'  => 'membership',
-        'class'       => 'class',
-        'clases'      => 'class',
-        'system'      => 'system',
-        'sistema'     => 'system',
-        'trainer'     => 'trainer',
-        'entrenador'  => 'trainer',
-        'promotion'   => 'promotion',
+        'payment' => 'payment',
+        'pagos' => 'payment',
+        'membership' => 'membership',
+        'membresias' => 'membership',
+        'class' => 'class',
+        'clases' => 'class',
+        'system' => 'system',
+        'sistema' => 'system',
+        'trainer' => 'trainer',
+        'entrenador' => 'trainer',
+        'promotion' => 'promotion',
         'promociones' => 'promotion',
-        'iron_ai'     => 'iron_ai',
-        'routine'     => 'routine',
-        'rutina'      => 'routine',
+        'iron_ai' => 'iron_ai',
+        'routine' => 'routine',
+        'rutina' => 'routine',
     ];
 
-    public function __construct(private NotificationService $notifications)
-    {
-    }
+    public function __construct(private NotificationService $notifications) {}
 
     /** GET /api/admin/notifications?search=&category=&status=&from=&to=&page= */
     public function index(Request $request): JsonResponse
@@ -71,14 +69,14 @@ class NotificationController extends Controller
         $page = $query->orderByDesc('created_at')->paginate($perPage);
 
         return response()->json([
-            'ok'           => true,
-            'data'         => collect($page->items())->map->toPublicArray()->values(),
+            'ok' => true,
+            'data' => collect($page->items())->map->toPublicArray()->values(),
             'unread_count' => $unread,
-            'meta'         => [
+            'meta' => [
                 'current_page' => $page->currentPage(),
-                'last_page'    => $page->lastPage(),
-                'per_page'     => $page->perPage(),
-                'total'        => $page->total(),
+                'last_page' => $page->lastPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
             ],
         ]);
     }
@@ -151,12 +149,12 @@ class NotificationController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'title'    => 'required|string|max:160',
-            'message'  => 'required|string|max:1000',
+            'title' => 'required|string|max:160',
+            'message' => 'required|string|max:1000',
             'audience' => 'nullable|in:member,admin',
-            'type'     => 'nullable|string|max:40',
+            'type' => 'nullable|string|max:40',
             'priority' => 'nullable|in:low,medium,high',
-            'member_id'=> 'nullable|integer|exists:members,id',
+            'member_id' => 'nullable|integer|exists:members,id',
             'document' => 'nullable|string|max:40',
         ]);
 
@@ -169,9 +167,9 @@ class NotificationController extends Controller
         }
 
         $attrs = [
-            'type'     => $data['type'] ?? 'promotion',
-            'title'    => $data['title'],
-            'message'  => $data['message'],
+            'type' => $data['type'] ?? 'promotion',
+            'title' => $data['title'],
+            'message' => $data['message'],
             'priority' => $data['priority'] ?? 'medium',
         ];
 
@@ -192,6 +190,7 @@ class NotificationController extends Controller
         }
         if (in_array($category, ['unread', 'no_leidas', 'noleidas'], true)) {
             $query->where('status', Notification::STATUS_UNREAD);
+
             return;
         }
         if (isset(self::CATEGORY_TYPES[$category])) {
@@ -206,7 +205,7 @@ class NotificationController extends Controller
         if ($term === '') {
             return;
         }
-        $like = '%' . $term . '%';
+        $like = '%'.$term.'%';
 
         $query->where(function (Builder $sub) use ($like): void {
             $sub->where('title', 'like', $like)

@@ -13,6 +13,7 @@ use Illuminate\Console\Command;
 class WompiReconcile extends Command
 {
     protected $signature = 'payments:wompi-reconcile {--limit=100 : Máximo de transacciones a revisar}';
+
     protected $description = 'Reconcilia pagos Wompi pendientes contra la API de Wompi (respaldo del webhook).';
 
     public function handle(): int

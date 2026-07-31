@@ -18,6 +18,7 @@ use Carbon\CarbonImmutable;
 class DetectCoachReactivation extends BaseProactiveDetectorCommand
 {
     protected $signature = 'ironbody:detect-coach-reactivation {--dry-run} {--member-id=} {--limit=} {--event=}';
+
     protected $description = 'Detecta miembros inactivos varios días y emite coach.reactivation.';
 
     protected function detect(): void
@@ -74,6 +75,7 @@ class DetectCoachReactivation extends BaseProactiveDetectorCommand
         if ($dates === []) {
             return null;
         }
+
         return collect($dates)->sortDesc()->first();
     }
 }

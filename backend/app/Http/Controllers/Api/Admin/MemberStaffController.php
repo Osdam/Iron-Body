@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Member;
+use App\Services\RealtimeEvents;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -39,12 +40,12 @@ class MemberStaffController extends Controller
 
         Log::info('member.staff_access.updated', [
             'by_admin_id' => $data['admin_id'] ?? null,
-            'member_id'   => $member->id,
-            'is_staff'    => (bool) $data['is_staff'],
+            'member_id' => $member->id,
+            'is_staff' => (bool) $data['is_staff'],
         ]);
 
         // Real-time: "Transmitir en vivo" aparece/desaparece sin relogin.
-        \App\Services\RealtimeEvents::livePermissions($member->id);
+        RealtimeEvents::livePermissions($member->id);
 
         return response()->json([
             'ok' => true,

@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 class DetectWorkoutMissed extends Command
 {
     protected $signature = 'ironbody:detect-workout-missed {--workout-days=3}';
+
     protected $description = 'Detecta miembros sin entrenar y emite workout.missed.';
 
     public function handle(): int

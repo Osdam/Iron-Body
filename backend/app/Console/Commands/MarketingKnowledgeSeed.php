@@ -13,6 +13,7 @@ use Illuminate\Console\Command;
 class MarketingKnowledgeSeed extends Command
 {
     protected $signature = 'marketing:knowledge-seed';
+
     protected $description = 'Siembra (idempotente) la base de conocimiento comercial de Iron Body.';
 
     public function handle(MarketingKnowledgeSeeder $seeder): int
@@ -21,6 +22,7 @@ class MarketingKnowledgeSeed extends Command
         $seeder->run();
 
         $this->info('Base de conocimiento comercial sembrada/actualizada (idempotente).');
+
         return self::SUCCESS;
     }
 }

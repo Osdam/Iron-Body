@@ -14,7 +14,7 @@ class MarketingAiAction extends Model
 
     protected $casts = [
         'confidence' => 'decimal:4',
-        'metadata'   => 'array',
+        'metadata' => 'array',
     ];
 
     public function lead(): BelongsTo

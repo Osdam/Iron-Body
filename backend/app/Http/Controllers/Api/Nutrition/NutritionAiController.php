@@ -27,9 +27,9 @@ class NutritionAiController extends Controller
     private function httpFor(array $r): int
     {
         return match ($r['status'] ?? '') {
-            'rate_limited'      => 429,
+            'rate_limited' => 429,
             'validation_failed' => 422,
-            default             => 200, // success | partial | ai_unavailable | timeout
+            default => 200, // success | partial | ai_unavailable | timeout
         };
     }
 
@@ -45,7 +45,7 @@ class NutritionAiController extends Controller
             ], 422);
         }
         $request->validate([
-            'image'   => "required|image|mimes:jpg,jpeg,png,webp|max:" . ($maxMb * 1024),
+            'image' => 'required|image|mimes:jpg,jpeg,png,webp|max:'.($maxMb * 1024),
             'barcode' => 'nullable|string|max:32',
         ]);
 
@@ -55,8 +55,9 @@ class NutritionAiController extends Controller
         }
 
         $mime = $image->getMimeType();
-        $dataUrl = 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($image->getPathname()));
+        $dataUrl = 'data:'.$mime.';base64,'.base64_encode(file_get_contents($image->getPathname()));
         $result = $extractor->extract($this->member($request), $dataUrl, $request->input('barcode'));
+
         return response()->json($result, $this->httpFor($result));
     }
 
@@ -64,12 +65,13 @@ class NutritionAiController extends Controller
     public function parseText(Request $request, NutritionAITextParser $parser): JsonResponse
     {
         $data = $request->validate([
-            'text'         => 'required|string|max:6000',
-            'barcode'      => 'nullable|string|max:32',
+            'text' => 'required|string|max:6000',
+            'barcode' => 'nullable|string|max:32',
             'product_name' => 'nullable|string|max:160',
-            'brand'        => 'nullable|string|max:120',
+            'brand' => 'nullable|string|max:120',
         ]);
         $result = $parser->parse($this->member($request), $data['text'], $data);
+
         return response()->json($result, $this->httpFor($result));
     }
 
@@ -78,15 +80,16 @@ class NutritionAiController extends Controller
     {
         $data = $request->validate([
             'description' => 'required|string|max:200',
-            'quantity'    => 'nullable|numeric|gt:0',
-            'unit'        => 'nullable|string|max:20',
-            'context'     => 'nullable|string|max:200',
+            'quantity' => 'nullable|numeric|gt:0',
+            'unit' => 'nullable|string|max:20',
+            'context' => 'nullable|string|max:200',
         ]);
         $result = $estimator->estimate(
             $this->member($request), $data['description'],
             isset($data['quantity']) ? (float) $data['quantity'] : null,
             $data['unit'] ?? null, $data['context'] ?? null,
         );
+
         return response()->json($result, $this->httpFor($result));
     }
 
@@ -95,6 +98,7 @@ class NutritionAiController extends Controller
     {
         $request->validate(['range' => 'nullable|in:week,month']);
         $result = $insights->insights($this->member($request), (string) ($request->query('range') ?: 'week'));
+
         return response()->json($result);
     }
 }

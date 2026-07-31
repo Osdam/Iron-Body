@@ -26,21 +26,20 @@ class IronAiController extends Controller
     public function __construct(
         private readonly IronAiService $service,
         private readonly IronAiMembershipAccessService $access,
-    ) {
-    }
+    ) {}
 
     /** POST /api/iron-ai/chat */
     public function chat(Request $request): JsonResponse
     {
         try {
             $data = $request->validate([
-                'message'           => 'required|string|max:2000',
-                'feature'           => 'nullable|string|in:progress_analysis,smart_recommendations',
+                'message' => 'required|string|max:2000',
+                'feature' => 'nullable|string|in:progress_analysis,smart_recommendations',
                 'conversation_uuid' => 'nullable|string|max:64',
             ]);
         } catch (ValidationException $e) {
             return response()->json([
-                'ok'      => false,
+                'ok' => false,
                 'message' => 'Escribe un mensaje válido para IRON IA.',
             ], 422);
         }
@@ -77,8 +76,8 @@ class IronAiController extends Controller
             $conversation = $this->service->resolveConversationForChat($access, $uuid, $data['message']);
             if ($uuid && ! $conversation) {
                 return response()->json([
-                    'ok'      => false,
-                    'code'    => 'CONVERSATION_NOT_FOUND',
+                    'ok' => false,
+                    'code' => 'CONVERSATION_NOT_FOUND',
                     'message' => 'La conversación no existe o no te pertenece.',
                 ], 403);
             }
@@ -96,10 +95,10 @@ class IronAiController extends Controller
                 $access,
                 $result['is_fallback'] ? IronAiUsageLog::STATUS_FALLBACK : IronAiUsageLog::STATUS_SUCCESS,
                 [
-                    'model'         => $result['model'] ?? null,
-                    'input_tokens'  => $result['input_tokens'] ?? null,
+                    'model' => $result['model'] ?? null,
+                    'input_tokens' => $result['input_tokens'] ?? null,
                     'output_tokens' => $result['output_tokens'] ?? null,
-                    'message_id'    => $result['message_id'] ?? null,
+                    'message_id' => $result['message_id'] ?? null,
                 ],
             );
 
@@ -110,24 +109,24 @@ class IronAiController extends Controller
             // diagnóstico no se enmascare detrás de un reply inventado.
             if ($result['is_fallback'] ?? false) {
                 return response()->json([
-                    'ok'                => false,
-                    'code'              => 'AI_SERVICE_UNAVAILABLE',
-                    'message'           => $result['reply'] ?? IronAiService::FRIENDLY_ERROR,
-                    'reply'             => null,
-                    'conversation_id'   => $result['conversation_uuid'],
+                    'ok' => false,
+                    'code' => 'AI_SERVICE_UNAVAILABLE',
+                    'message' => $result['reply'] ?? IronAiService::FRIENDLY_ERROR,
+                    'reply' => null,
+                    'conversation_id' => $result['conversation_uuid'],
                     'conversation_uuid' => $result['conversation_uuid'],
-                    'quota'             => $this->access->quotaSnapshot($access),
-                    'suggestions'       => $result['suggestions'] ?? [],
+                    'quota' => $this->access->quotaSnapshot($access),
+                    'suggestions' => $result['suggestions'] ?? [],
                 ], 200);
             }
 
             return response()->json([
-                'ok'                => true,
-                'reply'             => $result['reply'],
-                'conversation_id'   => $result['conversation_uuid'],
+                'ok' => true,
+                'reply' => $result['reply'],
+                'conversation_id' => $result['conversation_uuid'],
                 'conversation_uuid' => $result['conversation_uuid'],
-                'quota'             => $this->access->quotaSnapshot($access),
-                'suggestions'       => $result['suggestions'],
+                'quota' => $this->access->quotaSnapshot($access),
+                'suggestions' => $result['suggestions'],
             ]);
         } catch (Throwable $e) {
             report($e);
@@ -136,12 +135,12 @@ class IronAiController extends Controller
             // específico). Antes devolvía ok:true con reply=FRIENDLY_ERROR, lo que
             // hacía que la app pintara el error como un mensaje del bot.
             return response()->json([
-                'ok'              => false,
-                'code'            => 'AI_SERVICE_UNAVAILABLE',
-                'message'         => IronAiService::FRIENDLY_ERROR,
-                'reply'           => null,
+                'ok' => false,
+                'code' => 'AI_SERVICE_UNAVAILABLE',
+                'message' => IronAiService::FRIENDLY_ERROR,
+                'reply' => null,
                 'conversation_id' => $request->input('conversation_uuid'),
-                'suggestions'     => [],
+                'suggestions' => [],
             ], 200);
         }
     }
@@ -166,35 +165,35 @@ class IronAiController extends Controller
             $freeMessages = (int) config('iron_ai.free_trial.free_trial_messages', 5);
 
             return response()->json([
-                'ok'                              => true,
-                'has_active_membership'           => false,
-                'plan_name'                       => null,
-                'access_type'                    => 'free_trial',
-                'ai_enabled'                     => false,
-                'can_use_chat'                   => false,
-                'upgrade_required'               => true,
-                'context_level'                  => 'basic',
-                'chat_enabled'                   => false,
-                'voice_chat_enabled'             => false,
-                'image_analysis_enabled'         => false,
-                'realtime_voice_enabled'         => false,
-                'file_upload_enabled'            => false,
-                'progress_analysis_enabled'      => false,
-                'smart_recommendations_enabled'  => false,
-                'weekly_summary_enabled'         => false,
-                'proactive_notifications_enabled'=> false,
-                'audio_remaining'                => 0,
-                'image_remaining'                => 0,
-                'max_audio_seconds'              => (int) config('iron_ai.media.max_audio_seconds', 60),
-                'max_image_size_mb'              => (int) config('iron_ai.media.max_image_size_mb', 5),
-                'used_messages'                  => 0,
-                'message_limit'                  => $freeMessages,
-                'remaining_messages'             => $freeMessages,
-                'used_month'                     => 0,
-                'daily_limit'                    => null,
-                'monthly_limit'                  => null,
-                'remaining_month'                => null,
-                'cta'                            => null,
+                'ok' => true,
+                'has_active_membership' => false,
+                'plan_name' => null,
+                'access_type' => 'free_trial',
+                'ai_enabled' => false,
+                'can_use_chat' => false,
+                'upgrade_required' => true,
+                'context_level' => 'basic',
+                'chat_enabled' => false,
+                'voice_chat_enabled' => false,
+                'image_analysis_enabled' => false,
+                'realtime_voice_enabled' => false,
+                'file_upload_enabled' => false,
+                'progress_analysis_enabled' => false,
+                'smart_recommendations_enabled' => false,
+                'weekly_summary_enabled' => false,
+                'proactive_notifications_enabled' => false,
+                'audio_remaining' => 0,
+                'image_remaining' => 0,
+                'max_audio_seconds' => (int) config('iron_ai.media.max_audio_seconds', 60),
+                'max_image_size_mb' => (int) config('iron_ai.media.max_image_size_mb', 5),
+                'used_messages' => 0,
+                'message_limit' => $freeMessages,
+                'remaining_messages' => $freeMessages,
+                'used_month' => 0,
+                'daily_limit' => null,
+                'monthly_limit' => null,
+                'remaining_month' => null,
+                'cta' => null,
             ], 200, ['Cache-Control' => 'no-store, max-age=0, must-revalidate']);
         }
     }
@@ -206,19 +205,19 @@ class IronAiController extends Controller
             $access = $this->access->resolveAccess($request);
 
             return response()->json([
-                'ok'    => true,
+                'ok' => true,
                 'quota' => $this->access->quotaSnapshot($access),
             ]);
         } catch (Throwable $e) {
             report($e);
 
             return response()->json([
-                'ok'    => true,
+                'ok' => true,
                 'quota' => [
                     'access_type' => 'free_trial',
-                    'used'        => 0,
-                    'limit'       => (int) config('iron_ai.free_trial.free_trial_messages', 5),
-                    'remaining'   => (int) config('iron_ai.free_trial.free_trial_messages', 5),
+                    'used' => 0,
+                    'limit' => (int) config('iron_ai.free_trial.free_trial_messages', 5),
+                    'remaining' => (int) config('iron_ai.free_trial.free_trial_messages', 5),
                 ],
             ]);
         }
@@ -233,16 +232,16 @@ class IronAiController extends Controller
             // Recomendaciones inteligentes gated por la membresía.
             if (! ($access['capabilities']['smart_recommendations_enabled'] ?? false)) {
                 return response()->json([
-                    'ok'               => true,
-                    'data'             => [],
-                    'locked'           => true,
+                    'ok' => true,
+                    'data' => [],
+                    'locked' => true,
                     'upgrade_required' => true,
-                    'message'          => 'Las recomendaciones inteligentes están disponibles en una membresía superior.',
+                    'message' => 'Las recomendaciones inteligentes están disponibles en una membresía superior.',
                 ]);
             }
 
             return response()->json([
-                'ok'   => true,
+                'ok' => true,
                 'data' => $this->service->recommendations($access['member'], $access['user']),
             ]);
         } catch (Throwable $e) {
@@ -256,15 +255,15 @@ class IronAiController extends Controller
     private function blockResponse(array $access, array $block): JsonResponse
     {
         return response()->json([
-            'ok'               => false,
-            'code'             => $block['code'],
-            'reply'            => $block['reply'],
+            'ok' => false,
+            'code' => $block['code'],
+            'reply' => $block['reply'],
             'upgrade_required' => $block['upgrade_required'] ?? true,
-            'access_type'      => $access['access_type'] ?? null,
-            'conversation_id'  => $access['conversation_id'] ?? null,
-            'quota'            => $this->access->quotaSnapshot($access),
-            'cta'              => $block['cta'] ?? null,
-            'suggestions'      => $block['suggestions'] ?? ['Ver membresías'],
+            'access_type' => $access['access_type'] ?? null,
+            'conversation_id' => $access['conversation_id'] ?? null,
+            'quota' => $this->access->quotaSnapshot($access),
+            'cta' => $block['cta'] ?? null,
+            'suggestions' => $block['suggestions'] ?? ['Ver membresías'],
         ]);
     }
 }

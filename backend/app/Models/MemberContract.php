@@ -10,8 +10,11 @@ use Illuminate\Support\Str;
 class MemberContract extends Model
 {
     public const STATUS_DRAFT = 'draft';
+
     public const STATUS_PENDING = 'pending_signature';
+
     public const STATUS_SIGNED = 'signed';
+
     public const STATUS_VOID = 'void';
 
     protected $fillable = [
@@ -48,12 +51,12 @@ class MemberContract extends Model
     protected function casts(): array
     {
         return [
-            'member_snapshot'     => 'array',
-            'guardian_snapshot'   => 'array',
-            'medical_snapshot'    => 'array',
+            'member_snapshot' => 'array',
+            'guardian_snapshot' => 'array',
+            'medical_snapshot' => 'array',
             'acceptance_snapshot' => 'array',
-            'signed_at'           => 'datetime',
-            'voided_at'           => 'datetime',
+            'signed_at' => 'datetime',
+            'voided_at' => 'datetime',
         ];
     }
 

@@ -13,16 +13,25 @@ use Illuminate\Support\Str;
 class NutritionAiRun extends Model
 {
     public const MODE_LABEL_IMAGE = 'label_image';
+
     public const MODE_OCR_TEXT = 'ocr_text';
+
     public const MODE_ESTIMATE = 'estimate';
+
     public const MODE_INSIGHT = 'insight';
+
     public const MODE_ADMIN_REVIEW = 'admin_review';
 
     public const STATUS_SUCCESS = 'success';
+
     public const STATUS_FAILED = 'failed';
+
     public const STATUS_TIMEOUT = 'timeout';
+
     public const STATUS_RATE_LIMITED = 'rate_limited';
+
     public const STATUS_REJECTED = 'rejected';
+
     public const STATUS_VALIDATION_FAILED = 'validation_failed';
 
     protected $fillable = [
@@ -32,8 +41,8 @@ class NutritionAiRun extends Model
     ];
 
     protected $casts = [
-        'response_json'    => 'array',
-        'warnings'         => 'array',
+        'response_json' => 'array',
+        'warnings' => 'array',
         'confidence_score' => 'float',
     ];
 

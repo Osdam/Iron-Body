@@ -30,7 +30,7 @@ class VerifyInternalAutomationSignature
 
         // 1) Bearer (obligatorio): prueba de autenticidad del origen interno.
         $bearer = $request->bearerToken();
-        if ($bearer === null || !hash_equals($secret, $bearer)) {
+        if ($bearer === null || ! hash_equals($secret, $bearer)) {
             return response()->json(['success' => false, 'message' => 'No autorizado.'], 401);
         }
 
@@ -38,7 +38,7 @@ class VerifyInternalAutomationSignature
         $signature = (string) $request->header('X-IronBody-Signature', '');
         if ($signature !== '') {
             $expected = hash_hmac('sha256', $request->getContent(), $secret);
-            if (!hash_equals($expected, $signature)) {
+            if (! hash_equals($expected, $signature)) {
                 return response()->json(['success' => false, 'message' => 'Firma inválida.'], 403);
             }
         }

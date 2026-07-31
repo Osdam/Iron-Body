@@ -48,8 +48,7 @@ class AuthController extends Controller
         private SecurityEventService $security,
         private NotificationService $notifications,
         private AccountRiskService $risk,
-    ) {
-    }
+    ) {}
 
     /** POST members/login — paso 1: documento → reto OTP (o acceso directo). */
     public function login(LoginMemberRequest $request): JsonResponse
@@ -95,12 +94,12 @@ class AuthController extends Controller
             $challenge = $this->otp->startDemoChallenge($member, $context);
 
             return response()->json(['ok' => true, 'data' => [
-                'requires_otp'    => true,
-                'challenge_id'    => $challenge->uuid,
-                'destination'     => $challenge->maskedDestination(),
-                'expires_in'      => (int) config('otp.ttl', 300),
+                'requires_otp' => true,
+                'challenge_id' => $challenge->uuid,
+                'destination' => $challenge->maskedDestination(),
+                'expires_in' => (int) config('otp.ttl', 300),
                 'resend_cooldown' => (int) config('otp.resend_cooldown', 60),
-                'channel'         => 'sms',
+                'channel' => 'sms',
             ]]);
         }
 
@@ -129,11 +128,11 @@ class AuthController extends Controller
 
         // Login adaptativo por riesgo (Bloque 3b). Con el flag APAGADO
         // $riskTier queda null y todo se comporta EXACTAMENTE como antes.
-        $riskTier  = null;
-        $adaptive  = (bool) config('security.adaptive_login', false);
-        $deviceId  = $context['device_id'] ?? null;
-        $binding   = MemberDeviceBinding::forDevice($deviceId);
-        $trusted   = $this->isTrustedDevice($member, $deviceId);
+        $riskTier = null;
+        $adaptive = (bool) config('security.adaptive_login', false);
+        $deviceId = $context['device_id'] ?? null;
+        $binding = MemberDeviceBinding::forDevice($deviceId);
+        $trusted = $this->isTrustedDevice($member, $deviceId);
         // Revalidación periódica: aunque el equipo sea confiable, si pasaron
         // > trusted_reauth_days desde el último OTP (o nunca lo hubo), se pide un
         // OTP una vez antes de volver al desbloqueo local.
@@ -143,16 +142,16 @@ class AuthController extends Controller
         // Log seguro de diagnóstico (sin tokens, sin códigos, sin device_id):
         // permite verificar en producción por qué un equipo cae a OTP o a local.
         Log::info('auth.login.adaptive', [
-            'member_id'            => $member->id,
-            'adaptive_login'       => $adaptive,
-            'trusted_device'       => $trusted,
+            'member_id' => $member->id,
+            'adaptive_login' => $adaptive,
+            'trusted_device' => $trusted,
             'device_binding_found' => $binding !== null,
             'binding_member_match' => $binding !== null && (int) $binding->member_id === (int) $member->id,
-            'risk_score'           => $this->risk->score($member),
-            'reauth_due'           => $reauthDue,
-            'last_otp_reauth_at'   => optional($binding?->last_otp_reauth_at)->toIso8601String(),
-            'prefer_otp'           => $preferOtp,
-            'trusted_reauth_days'  => (int) config('security.trusted_reauth_days', 30),
+            'risk_score' => $this->risk->score($member),
+            'reauth_due' => $reauthDue,
+            'last_otp_reauth_at' => optional($binding?->last_otp_reauth_at)->toIso8601String(),
+            'prefer_otp' => $preferOtp,
+            'trusted_reauth_days' => (int) config('security.trusted_reauth_days', 30),
         ]);
 
         if ($adaptive) {
@@ -165,10 +164,10 @@ class AuthController extends Controller
                 $ticket = $this->otp->createLocalTicket($member, $context);
 
                 return response()->json(['ok' => true, 'data' => [
-                    'requires_otp'          => false,
+                    'requires_otp' => false,
                     'requires_local_unlock' => true,
-                    'unlock_ticket'         => $ticket->uuid,
-                    'expires_in'            => (int) config('security.local_ticket_ttl', 180),
+                    'unlock_ticket' => $ticket->uuid,
+                    'expires_in' => (int) config('security.local_ticket_ttl', 180),
                 ]]);
             }
 
@@ -179,24 +178,25 @@ class AuthController extends Controller
         if (! $this->otp->canChallenge($member)) {
             if (! config('otp.skip_when_no_phone', true)) {
                 return response()->json([
-                    'ok'      => false,
+                    'ok' => false,
                     'message' => 'Tu cuenta no tiene teléfono para la verificación. Contacta a recepción.',
                 ], 422);
             }
+
             // Modo demo: entra sin OTP pero sí con control de dispositivo.
             return $this->grantSession($member, $context, otpVerified: false);
         }
 
-        $result    = $this->otp->startChallenge($member, $context, MemberAuthChallenge::PURPOSE_LOGIN, null, $riskTier);
+        $result = $this->otp->startChallenge($member, $context, MemberAuthChallenge::PURPOSE_LOGIN, null, $riskTier);
         $challenge = $result['challenge'];
 
         $data = [
-            'requires_otp'    => true,
-            'challenge_id'    => $challenge->uuid,
-            'destination'     => $challenge->maskedDestination(),
-            'expires_in'      => (int) config('otp.ttl', 300),
+            'requires_otp' => true,
+            'challenge_id' => $challenge->uuid,
+            'destination' => $challenge->maskedDestination(),
+            'expires_in' => (int) config('otp.ttl', 300),
             'resend_cooldown' => (int) config('otp.resend_cooldown', 60),
-            'channel'         => 'sms',
+            'channel' => 'sms',
         ];
 
         if ($this->otp->exposeCode()) {
@@ -214,7 +214,7 @@ class AuthController extends Controller
     {
         $validated = $request->validate([
             'challenge_id' => ['required', 'string'],
-            'code'         => ['required', 'string'],
+            'code' => ['required', 'string'],
         ]);
 
         $context = $this->context($request);
@@ -254,12 +254,12 @@ class AuthController extends Controller
         // los pasos face-reference/face-verify.
         if (! $skipFace && $member && $this->faceRequiredFor($member)) {
             return response()->json([
-                'ok'   => true,
+                'ok' => true,
                 'data' => [
-                    'requires_otp'  => false,
+                    'requires_otp' => false,
                     'requires_face' => true,
-                    'ticket'        => $res['challenge']->uuid,
-                    'face_ttl'      => (int) config('otp.face.ticket_ttl', 600),
+                    'ticket' => $res['challenge']->uuid,
+                    'face_ttl' => (int) config('otp.face.ticket_ttl', 600),
                 ],
             ]);
         }
@@ -326,7 +326,7 @@ class AuthController extends Controller
         $member->loadMissing('user');
         // Consume el reto (un solo uso) y emite la sesión por la ruta normal.
         $challenge->update([
-            'status'      => MemberAuthChallenge::STATUS_VERIFIED,
+            'status' => MemberAuthChallenge::STATUS_VERIFIED,
             'consumed_at' => now(),
         ]);
 
@@ -347,7 +347,7 @@ class AuthController extends Controller
         }
 
         $validated = $request->validate([
-            'ticket'          => ['required', 'string'],
+            'ticket' => ['required', 'string'],
             'document_number' => ['required', 'string'],
         ]);
 
@@ -373,8 +373,8 @@ class AuthController extends Controller
         $trusted = $binding !== null && $binding->member_id === $member->id;
         if (! $trusted || $binding->needsOtpReauth()) {
             return response()->json([
-                'ok'      => false,
-                'code'    => 'verification_required',
+                'ok' => false,
+                'code' => 'verification_required',
                 'message' => 'Necesitamos verificar tu identidad. Inicia sesión con tu documento.',
             ], 409);
         }
@@ -382,8 +382,8 @@ class AuthController extends Controller
         $challenge = $this->otp->consumeLocalTicket($member, $validated['ticket']);
         if (! $challenge) {
             return response()->json([
-                'ok'      => false,
-                'code'    => 'ticket_expired',
+                'ok' => false,
+                'code' => 'ticket_expired',
                 'message' => 'La verificación expiró. Inténtalo de nuevo.',
             ], 410);
         }
@@ -424,9 +424,9 @@ class AuthController extends Controller
         }
 
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => [
-                'mime'  => $bio->face_mime ?: 'image/jpeg',
+                'mime' => $bio->face_mime ?: 'image/jpeg',
                 'image' => base64_encode($disk->get($bio->face_path)),
             ],
         ]);
@@ -445,9 +445,9 @@ class AuthController extends Controller
     public function faceVerify(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'ticket'             => ['required', 'string'],
-            'matched'            => ['required', 'boolean'],
-            'score'              => ['nullable', 'numeric'],
+            'ticket' => ['required', 'string'],
+            'matched' => ['required', 'boolean'],
+            'score' => ['nullable', 'numeric'],
             'normalizer_version' => ['nullable', 'string', 'max:40'],
         ]);
 
@@ -456,7 +456,7 @@ class AuthController extends Controller
             return response()->json(['ok' => false, 'message' => 'La verificación expiró. Inicia sesión nuevamente.'], 410);
         }
 
-        $member  = $challenge->member;
+        $member = $challenge->member;
         $context = $this->context($request);
 
         // Por si cambió el estado durante el escaneo.
@@ -465,7 +465,7 @@ class AuthController extends Controller
         }
 
         $matched = (bool) $validated['matched'];
-        $score   = isset($validated['score']) ? (float) $validated['score'] : null;
+        $score = isset($validated['score']) ? (float) $validated['score'] : null;
 
         $member?->loadMissing('biometric');
         $bio = $member?->biometric;
@@ -497,7 +497,7 @@ class AuthController extends Controller
         }
         if ($member) {
             $this->security->record($member, MemberSecurityEvent::TYPE_FACE_FAILED, $context, array_filter([
-                'score'  => $score,
+                'score' => $score,
                 'selfie' => $selfiePath,
             ]));
             $this->notifications->notifyFaceMismatch($member, $context['device_name'] ?? null, $context['device_id'] ?? null);
@@ -520,18 +520,18 @@ class AuthController extends Controller
         // un near-miss (banda controlada) cuenta como incompatibilidad de
         // plantilla; una distancia enorme es otra persona → low_score normal.
         $reenrollEnabled = (bool) config('otp.face.reenroll.enabled', true);
-        $scoreMax        = (float) config('otp.face.reenroll.score_max', 1.6);
-        $isLegacy        = $bio && $bio->isLegacy();
-        $nearMiss        = $score !== null && $score <= $scoreMax;
+        $scoreMax = (float) config('otp.face.reenroll.score_max', 1.6);
+        $isLegacy = $bio && $bio->isLegacy();
+        $nearMiss = $score !== null && $score <= $scoreMax;
 
         if ($reenrollEnabled && $isLegacy && $nearMiss) {
             $bio->update([
                 'biometric_reference_status' => MemberBiometric::STATUS_RE_ENROLLMENT_REQUIRED,
-                'biometric_legacy_reason'    => 'cross_platform_template',
+                'biometric_legacy_reason' => 'cross_platform_template',
             ]);
             if ($member) {
                 $this->security->record($member, MemberSecurityEvent::TYPE_FACE_REENROLL_REQUIRED, $context, array_filter([
-                    'score'    => $score,
+                    'score' => $score,
                     'platform' => $context['platform'] ?? null,
                 ]));
             }
@@ -571,7 +571,7 @@ class AuthController extends Controller
             return response()->json(['ok' => false, 'message' => 'La verificación expiró. Inicia sesión nuevamente.'], 410);
         }
 
-        $member  = $challenge->member;
+        $member = $challenge->member;
         $context = $this->context($request);
 
         $member->loadMissing('biometric');
@@ -583,14 +583,14 @@ class AuthController extends Controller
 
         if (! $this->otp->canChallenge($member)) {
             return response()->json([
-                'ok'      => false,
+                'ok' => false,
                 'message' => 'Tu cuenta no tiene teléfono para enviar el código. Contacta a recepción.',
             ], 422);
         }
 
         // Segundo factor: OTP fresco. No afecta al ticket facial (verificado).
-        $result    = $this->otp->startChallenge($member, $context);
-        $otpChall  = $result['challenge'];
+        $result = $this->otp->startChallenge($member, $context);
+        $otpChall = $result['challenge'];
 
         $this->security->record($member, MemberSecurityEvent::TYPE_FACE_REENROLL_REQUESTED, $context, array_filter([
             'reason' => $validated['reason'] ?? null,
@@ -598,10 +598,10 @@ class AuthController extends Controller
 
         $data = [
             'reenroll_challenge_id' => $otpChall->uuid,
-            'destination'           => $otpChall->maskedDestination(),
-            'expires_in'            => (int) config('otp.ttl', 300),
-            'resend_cooldown'       => (int) config('otp.resend_cooldown', 60),
-            'channel'               => 'sms',
+            'destination' => $otpChall->maskedDestination(),
+            'expires_in' => (int) config('otp.ttl', 300),
+            'resend_cooldown' => (int) config('otp.resend_cooldown', 60),
+            'channel' => 'sms',
         ];
         if ($this->otp->exposeCode()) {
             $data['dev_code'] = $result['code'];
@@ -620,16 +620,16 @@ class AuthController extends Controller
     public function faceReenrollConfirm(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'ticket'                => ['required', 'string'],
+            'ticket' => ['required', 'string'],
             'reenroll_challenge_id' => ['required', 'string'],
-            'otp_code'              => ['required', 'string'],
+            'otp_code' => ['required', 'string'],
         ]);
 
         $challenge = $this->validFaceTicket($validated['ticket']);
         if (! $challenge || ! $challenge->member) {
             return response()->json(['ok' => false, 'message' => 'La verificación expiró. Inicia sesión nuevamente.'], 410);
         }
-        $member  = $challenge->member;
+        $member = $challenge->member;
         $context = $this->context($request);
 
         try {
@@ -645,23 +645,23 @@ class AuthController extends Controller
 
         // Token de un solo uso. Se persiste sólo su hash (sha256 del secreto).
         $secret = Str::random(64);
-        $ttl    = (int) config('otp.face.reenroll.token_ttl', 300);
+        $ttl = (int) config('otp.face.reenroll.token_ttl', 300);
         MemberReenrollmentToken::create([
-            'member_id'      => $member->id,
+            'member_id' => $member->id,
             'challenge_uuid' => $challenge->uuid,
-            'token_hash'     => hash('sha256', $secret),
-            'reason'         => 'template_legacy',
-            'status'         => MemberReenrollmentToken::STATUS_PENDING,
-            'device_id'      => $context['device_id'] ?? null,
-            'ip_address'     => $context['ip_address'] ?? null,
-            'expires_at'     => now()->addSeconds($ttl),
+            'token_hash' => hash('sha256', $secret),
+            'reason' => 'template_legacy',
+            'status' => MemberReenrollmentToken::STATUS_PENDING,
+            'device_id' => $context['device_id'] ?? null,
+            'ip_address' => $context['ip_address'] ?? null,
+            'expires_at' => now()->addSeconds($ttl),
         ]);
 
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => [
                 're_enrollment_token' => $secret,
-                'expires_in'          => $ttl,
+                'expires_in' => $ttl,
             ],
         ]);
     }
@@ -676,12 +676,12 @@ class AuthController extends Controller
     {
         $validated = $request->validate([
             're_enrollment_token' => ['required', 'string'],
-            'face'                => ['required', 'file', 'mimes:jpg,jpeg,png', 'max:8192'],
-            'normalizer_version'  => ['required', 'string', 'max:40'],
-            'platform'            => ['nullable', 'string', 'max:20'],
-            'camera'              => ['nullable', 'string', 'max:20'],
-            'image_width'         => ['nullable', 'integer', 'min:0'],
-            'image_height'        => ['nullable', 'integer', 'min:0'],
+            'face' => ['required', 'file', 'mimes:jpg,jpeg,png', 'max:8192'],
+            'normalizer_version' => ['required', 'string', 'max:40'],
+            'platform' => ['nullable', 'string', 'max:20'],
+            'camera' => ['nullable', 'string', 'max:20'],
+            'image_width' => ['nullable', 'integer', 'min:0'],
+            'image_height' => ['nullable', 'integer', 'min:0'],
         ]);
 
         $context = $this->context($request);
@@ -695,7 +695,7 @@ class AuthController extends Controller
         }
 
         $challenge = $this->validFaceTicket($token->challenge_uuid);
-        $member    = $challenge?->member ?? $token->member;
+        $member = $challenge?->member ?? $token->member;
         if (! $member || ! $challenge || $challenge->member?->id !== $member->id) {
             return response()->json(['ok' => false, 'message' => 'La verificación expiró. Inicia sesión nuevamente.'], 410);
         }
@@ -721,17 +721,17 @@ class AuthController extends Controller
         $member->biometric()->updateOrCreate(
             ['member_id' => $member->id],
             [
-                'face_path'                   => $stored,
-                'face_mime'                   => $request->file('face')->getClientMimeType() ?: 'image/jpeg',
-                'face_size'                   => $disk->exists($stored) ? $disk->size($stored) : null,
-                'captured_at'                 => now(),
-                'bytes_length'                => $disk->exists($stored) ? $disk->size($stored) : null,
-                'normalizer_version'          => $validated['normalizer_version'],
-                'enrolled_platform'           => $validated['platform'] ?? ($context['platform'] ?? null),
-                'enrolled_device_type'        => $context['device_name'] ?? null,
-                'biometric_reference_status'  => MemberBiometric::STATUS_ACTIVE,
-                'biometric_legacy_reason'     => null,
-                'last_biometric_enrolled_at'  => now(),
+                'face_path' => $stored,
+                'face_mime' => $request->file('face')->getClientMimeType() ?: 'image/jpeg',
+                'face_size' => $disk->exists($stored) ? $disk->size($stored) : null,
+                'captured_at' => now(),
+                'bytes_length' => $disk->exists($stored) ? $disk->size($stored) : null,
+                'normalizer_version' => $validated['normalizer_version'],
+                'enrolled_platform' => $validated['platform'] ?? ($context['platform'] ?? null),
+                'enrolled_device_type' => $context['device_name'] ?? null,
+                'biometric_reference_status' => MemberBiometric::STATUS_ACTIVE,
+                'biometric_legacy_reason' => null,
+                'last_biometric_enrolled_at' => now(),
             ],
         );
 
@@ -739,13 +739,14 @@ class AuthController extends Controller
         if ($oldPath && $oldPath !== $stored) {
             try {
                 $disk->delete($oldPath);
-            } catch (\Throwable) {/* best-effort */}
+            } catch (\Throwable) {/* best-effort */
+            }
         }
 
         $challenge->update(['status' => MemberAuthChallenge::STATUS_COMPLETED]);
         $this->security->record($member, MemberSecurityEvent::TYPE_FACE_REENROLL_COMPLETED, $context, array_filter([
             'normalizer_version' => $validated['normalizer_version'],
-            'platform'           => $validated['platform'] ?? null,
+            'platform' => $validated['platform'] ?? null,
         ]));
         $this->security->record($member, MemberSecurityEvent::TYPE_FACE_VERIFIED, $context, []);
 
@@ -773,10 +774,10 @@ class AuthController extends Controller
 
         $challenge = $res['challenge'];
         $data = [
-            'requires_otp'    => true,
-            'challenge_id'    => $challenge->uuid,
-            'destination'     => $challenge->maskedDestination(),
-            'expires_in'      => (int) config('otp.ttl', 300),
+            'requires_otp' => true,
+            'challenge_id' => $challenge->uuid,
+            'destination' => $challenge->maskedDestination(),
+            'expires_in' => (int) config('otp.ttl', 300),
             'resend_cooldown' => (int) config('otp.resend_cooldown', 60),
         ];
         if ($this->otp->exposeCode()) {
@@ -790,7 +791,7 @@ class AuthController extends Controller
     public function biometricUnlock(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'device_id'     => ['required', 'string'],
+            'device_id' => ['required', 'string'],
             'session_token' => ['required', 'string'],
         ]);
 
@@ -799,9 +800,9 @@ class AuthController extends Controller
 
         if (! $session || $session->device_id !== $validated['device_id']) {
             return response()->json([
-                'ok'             => false,
+                'ok' => false,
                 'requires_login' => true,
-                'message'        => 'Tu sesión expiró o se cerró desde otro dispositivo. Ingresa con tu documento.',
+                'message' => 'Tu sesión expiró o se cerró desde otro dispositivo. Ingresa con tu documento.',
             ], 401);
         }
 
@@ -814,12 +815,12 @@ class AuthController extends Controller
         $token = $validated['session_token'];
 
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => [
                 'requires_otp' => false,
-                'token'        => $token,
-                'session'      => ['uuid' => $session->uuid, 'device_id' => $session->device_id],
-                'member'       => MemberPayload::build($member, $token),
+                'token' => $token,
+                'session' => ['uuid' => $session->uuid, 'device_id' => $session->device_id],
+                'member' => MemberPayload::build($member, $token),
             ],
         ]);
     }
@@ -897,20 +898,20 @@ class AuthController extends Controller
         }
 
         $this->security->record($member, MemberSecurityEvent::TYPE_DEVICE_REVOKED, $this->context($request), [
-            'scope'               => 'others',
-            'revoked_count'       => $count,
+            'scope' => 'others',
+            'revoked_count' => $count,
             'access_hash_revoked' => $accessHashRevoked,
         ]);
         Log::info('session:logout-others', [
-            'member_id'           => $member->id,
-            'count'               => $count,
+            'member_id' => $member->id,
+            'count' => $count,
             'access_hash_revoked' => $accessHashRevoked,
         ]);
 
         return response()->json([
-            'ok'            => true,
+            'ok' => true,
             'revoked_count' => $count,
-            'message'       => $count > 0
+            'message' => $count > 0
                 ? 'Se cerraron las sesiones en los demás dispositivos.'
                 : 'No había otras sesiones activas.',
         ]);
@@ -919,7 +920,7 @@ class AuthController extends Controller
     /** POST members/logout — cierra la sesión del dispositivo actual. */
     public function logout(Request $request): JsonResponse
     {
-        $member  = $request->attributes->get('auth_member');
+        $member = $request->attributes->get('auth_member');
         $session = $request->attributes->get('auth_device_session');
 
         if ($session instanceof MemberDeviceSession) {
@@ -939,7 +940,7 @@ class AuthController extends Controller
     /** POST members/devices/{uuid}/revoke-request — dispara el OTP para revocar. */
     public function revokeDeviceRequest(Request $request, string $uuid): JsonResponse
     {
-        $member  = $request->attributes->get('auth_member');
+        $member = $request->attributes->get('auth_member');
         $session = MemberDeviceSession::query()
             ->where('member_id', $member->id)
             ->where('uuid', $uuid)
@@ -1016,7 +1017,7 @@ class AuthController extends Controller
             return $err;
         }
 
-        $session  = $request->attributes->get('auth_device_session');
+        $session = $request->attributes->get('auth_device_session');
         $deviceId = $this->currentDeviceId($request)
             ?? ($session instanceof MemberDeviceSession ? $session->device_id : null);
 
@@ -1035,7 +1036,7 @@ class AuthController extends Controller
         ]);
 
         return response()->json([
-            'ok'      => true,
+            'ok' => true,
             'message' => 'Dispositivo desvinculado. El próximo ingreso pedirá verificación completa.',
         ]);
     }
@@ -1051,19 +1052,19 @@ class AuthController extends Controller
             return response()->json(array_merge(['ok' => true, 'requires_otp' => false], $extra));
         }
 
-        $result    = $this->otp->startChallenge($member, $context, $purpose);
+        $result = $this->otp->startChallenge($member, $context, $purpose);
         $challenge = $result['challenge'];
         $this->security->record($member, MemberSecurityEvent::TYPE_SENSITIVE_OTP_SENT, $context, [
-            'purpose'   => $purpose,
+            'purpose' => $purpose,
             'challenge' => $challenge->uuid,
         ]);
 
         $payload = array_merge([
-            'ok'              => true,
-            'requires_otp'    => true,
-            'challenge_id'    => $challenge->uuid,
-            'destination'     => $challenge->maskedDestination(),
-            'expires_in'      => (int) config('otp.ttl', 300),
+            'ok' => true,
+            'requires_otp' => true,
+            'challenge_id' => $challenge->uuid,
+            'destination' => $challenge->maskedDestination(),
+            'expires_in' => (int) config('otp.ttl', 300),
             'resend_cooldown' => (int) config('otp.resend_cooldown', 60),
         ], $extra);
         if ($this->otp->exposeCode()) {
@@ -1085,7 +1086,7 @@ class AuthController extends Controller
 
         $validated = $request->validate([
             'challenge_id' => ['required', 'string'],
-            'code'         => ['required', 'string'],
+            'code' => ['required', 'string'],
         ]);
 
         try {
@@ -1125,9 +1126,9 @@ class AuthController extends Controller
         $lock = $member->activeRiskLock();
 
         return response()->json([
-            'ok'           => false,
-            'code'         => 'account_suspended',
-            'message'      => 'Por seguridad, tu cuenta fue suspendida temporalmente. Acércate al gimnasio o contacta a soporte.',
+            'ok' => false,
+            'code' => 'account_suspended',
+            'message' => 'Por seguridad, tu cuenta fue suspendida temporalmente. Acércate al gimnasio o contacta a soporte.',
             'locked_until' => $lock?->locked_until?->toIso8601String(),
         ], 423);
     }
@@ -1137,7 +1138,7 @@ class AuthController extends Controller
     {
         $member = $request->attributes->get('auth_member');
         $validated = $request->validate([
-            'token'    => ['required', 'string', 'max:512'],
+            'token' => ['required', 'string', 'max:512'],
             'platform' => ['nullable', 'string', 'max:20'],
         ]);
         $ctx = $this->context($request);
@@ -1145,9 +1146,9 @@ class AuthController extends Controller
         MemberDeviceToken::updateOrCreate(
             ['token' => $validated['token']],
             [
-                'member_id'    => $member->id,
-                'device_id'    => $ctx['device_id'] ?? null,
-                'platform'     => $validated['platform'] ?? $ctx['platform'] ?? null,
+                'member_id' => $member->id,
+                'device_id' => $ctx['device_id'] ?? null,
+                'platform' => $validated['platform'] ?? $ctx['platform'] ?? null,
                 'last_used_at' => now(),
             ],
         );
@@ -1200,12 +1201,12 @@ class AuthController extends Controller
         bool $requiresAdditionalFactor,
     ): JsonResponse {
         return response()->json([
-            'ok'                         => false,
-            'approved'                   => false,
-            'reason'                     => $reason,
-            'message'                    => $message,
-            'can_retry'                  => $canRetry,
-            'can_reenroll'               => $canReenroll,
+            'ok' => false,
+            'approved' => false,
+            'reason' => $reason,
+            'message' => $message,
+            'can_retry' => $canRetry,
+            'can_reenroll' => $canReenroll,
             'requires_additional_factor' => $requiresAdditionalFactor,
         ], 200);
     }
@@ -1223,16 +1224,16 @@ class AuthController extends Controller
         ?string $decision,
     ): void {
         Log::info('2fa:face', [
-            'stage'              => $stage, // start | approved | denied
-            'member_id'          => $member?->id,
-            'challenge'          => $this->maskUuid($challenge->uuid),
-            'reference_exists'   => $bio !== null,
+            'stage' => $stage, // start | approved | denied
+            'member_id' => $member?->id,
+            'challenge' => $this->maskUuid($challenge->uuid),
+            'reference_exists' => $bio !== null,
             'reference_platform' => $bio?->enrolled_platform,
-            'reference_status'   => $bio?->biometric_reference_status,
+            'reference_status' => $bio?->biometric_reference_status,
             'normalizer_version' => $bio?->normalizer_version,
-            'match_score'        => $score !== null ? round($score, 3) : null,
+            'match_score' => $score !== null ? round($score, 3) : null,
             'reenroll_score_max' => (float) config('otp.face.reenroll.score_max', 1.6),
-            'decision'           => $decision,
+            'decision' => $decision,
         ]);
     }
 
@@ -1242,7 +1243,7 @@ class AuthController extends Controller
             return null;
         }
 
-        return substr($uuid, 0, 8) . '…';
+        return substr($uuid, 0, 8).'…';
     }
 
     /** Emite la sesión del dispositivo y dispara avisos de seguridad. */
@@ -1260,8 +1261,8 @@ class AuthController extends Controller
         // si esta entrada fue por OTP real, refresca la marca de revalidación.
         $this->bindDevice($member, $context, $otpReauth);
 
-        $issued  = $this->sessions->issueSession($member, $context);
-        $token   = $issued['token'];
+        $issued = $this->sessions->issueSession($member, $context);
+        $token = $issued['token'];
         $session = $issued['session'];
 
         if (! empty($issued['revoked'])) {
@@ -1277,14 +1278,14 @@ class AuthController extends Controller
         }
 
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => [
-                'requires_otp'          => false,
-                'otp_verified'          => $otpVerified,
-                'face_verified'         => $faceVerified,
-                'token'                 => $token,
-                'session'               => ['uuid' => $session->uuid, 'device_id' => $session->device_id],
-                'member'                => MemberPayload::build($member, $token),
+                'requires_otp' => false,
+                'otp_verified' => $otpVerified,
+                'face_verified' => $faceVerified,
+                'token' => $token,
+                'session' => ['uuid' => $session->uuid, 'device_id' => $session->device_id],
+                'member' => MemberPayload::build($member, $token),
                 'revoked_other_devices' => count($issued['revoked']),
             ],
         ]);
@@ -1315,10 +1316,10 @@ class AuthController extends Controller
         MemberDeviceBinding::updateOrCreate(
             ['device_id' => $deviceId],
             [
-                'member_id'   => $member->id,
+                'member_id' => $member->id,
                 'device_name' => $context['device_name'] ?? null,
-                'platform'    => $context['platform'] ?? null,
-                'bound_at'    => now(),
+                'platform' => $context['platform'] ?? null,
+                'bound_at' => now(),
                 // Un binding nuevo siempre nace de un login fuerte (OTP); marca la
                 // revalidación para no exigir OTP de nuevo dentro de la ventana.
                 'last_otp_reauth_at' => $otpReauth ? now() : null,
@@ -1357,7 +1358,7 @@ class AuthController extends Controller
             return null;
         }
         $deviceId = $context['device_id'] ?? null;
-        $binding  = MemberDeviceBinding::forDevice($deviceId);
+        $binding = MemberDeviceBinding::forDevice($deviceId);
         if (! $binding || $binding->member_id === $member->id) {
             return null;
         }
@@ -1366,7 +1367,7 @@ class AuthController extends Controller
         if ($owner) {
             $this->security->record($owner, MemberSecurityEvent::TYPE_DEVICE_MISMATCH, $context, [
                 'attempted_document' => $member->document_number,
-                'attempted_member'   => $member->id,
+                'attempted_member' => $member->id,
             ]);
             $this->notifications->notifyDeviceMismatch(
                 $owner,
@@ -1377,18 +1378,18 @@ class AuthController extends Controller
         }
 
         return response()->json([
-            'ok'          => false,
-            'code'        => 'account_mismatch',
+            'ok' => false,
+            'code' => 'account_mismatch',
             'reason_code' => 'device_bound_to_another_member',
-            'message'     => 'Acceso denegado: cuenta asociada a otro usuario.',
-            'data'        => [
+            'message' => 'Acceso denegado: cuenta asociada a otro usuario.',
+            'data' => [
                 // Solo el nombre genérico del equipo ("iPhone"); NUNCA el
                 // email/nombre/documento del titular del binding.
-                'owner_device'     => $binding->device_name,
+                'owner_device' => $binding->device_name,
                 'recovery_options' => [
-                    'support_report'          => true,  // abrir flujo de soporte
+                    'support_report' => true,  // abrir flujo de soporte
                     'can_reset_local_session' => true,  // limpiar sesión local del device
-                    'can_request_rebind'      => false, // rebind exige OTP+cara o revisión CRM
+                    'can_request_rebind' => false, // rebind exige OTP+cara o revisión CRM
                 ],
             ],
         ], 403);
@@ -1428,7 +1429,7 @@ class AuthController extends Controller
     private function concurrencyBlocked(Member $member, MemberDeviceSession $active, array $context): JsonResponse
     {
         $this->security->record($member, MemberSecurityEvent::TYPE_CONCURRENT_BLOCKED, $context, [
-            'active_device'    => $active->device_name,
+            'active_device' => $active->device_name,
             'active_device_id' => $active->device_id,
             'active_last_seen' => $active->last_seen_at?->toIso8601String(),
         ]);
@@ -1440,12 +1441,12 @@ class AuthController extends Controller
         );
 
         return response()->json([
-            'ok'      => false,
-            'code'    => 'concurrency_blocked',
+            'ok' => false,
+            'code' => 'concurrency_blocked',
             'message' => 'La cuenta ya está en uso en otro dispositivo principal.',
-            'data'    => [
-                'active_device'    => $active->device_name ?: 'Dispositivo principal',
-                'active_platform'  => $active->platform,
+            'data' => [
+                'active_device' => $active->device_name ?: 'Dispositivo principal',
+                'active_platform' => $active->platform,
                 'active_last_seen' => $active->last_seen_at?->diffForHumans(),
             ],
         ], 409);
@@ -1454,12 +1455,12 @@ class AuthController extends Controller
     private function context(Request $request): array
     {
         return [
-            'device_id'   => $this->currentDeviceId($request),
+            'device_id' => $this->currentDeviceId($request),
             'device_name' => $request->input('device_name') ?? $request->header('X-Device-Name'),
-            'platform'    => $request->input('platform') ?? $request->header('X-Platform'),
+            'platform' => $request->input('platform') ?? $request->header('X-Platform'),
             'app_version' => $request->input('app_version') ?? $request->header('X-App-Version'),
-            'ip_address'  => $request->ip(),
-            'user_agent'  => $request->userAgent(),
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
         ];
     }
 

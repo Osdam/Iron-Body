@@ -16,9 +16,7 @@ use Illuminate\Validation\Rule;
  */
 class InternalMarketingKnowledgeController extends Controller
 {
-    public function __construct(private readonly MarketingKnowledgeBaseService $kb)
-    {
-    }
+    public function __construct(private readonly MarketingKnowledgeBaseService $kb) {}
 
     /** GET /api/internal/marketing/knowledge/doctor — resumen del conocimiento. */
     public function doctor(): JsonResponse
@@ -30,7 +28,7 @@ class InternalMarketingKnowledgeController extends Controller
     public function index(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'category'    => ['nullable', Rule::in(MarketingKnowledgeItem::CATEGORIES)],
+            'category' => ['nullable', Rule::in(MarketingKnowledgeItem::CATEGORIES)],
             'only_active' => 'nullable|boolean',
         ]);
 
@@ -40,19 +38,19 @@ class InternalMarketingKnowledgeController extends Controller
             ->orderBy('category')->orderBy('priority')->orderBy('id');
 
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => $query->get()->map(fn (MarketingKnowledgeItem $i) => [
-                'id'          => $i->id,
-                'category'    => $i->category,
-                'key'         => $i->key,
-                'title'       => $i->title,
-                'content'     => $i->content,
-                'priority'    => $i->priority,
-                'is_active'   => (bool) $i->is_active,
-                'valid_from'  => optional($i->valid_from)->toIso8601String(),
+                'id' => $i->id,
+                'category' => $i->category,
+                'key' => $i->key,
+                'title' => $i->title,
+                'content' => $i->content,
+                'priority' => $i->priority,
+                'is_active' => (bool) $i->is_active,
+                'valid_from' => optional($i->valid_from)->toIso8601String(),
                 'valid_until' => optional($i->valid_until)->toIso8601String(),
-                'source'      => $i->source,
-                'updated_at'  => optional($i->updated_at)->toIso8601String(),
+                'source' => $i->source,
+                'updated_at' => optional($i->updated_at)->toIso8601String(),
             ]),
         ]);
     }
@@ -61,15 +59,15 @@ class InternalMarketingKnowledgeController extends Controller
     public function upsert(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'category'    => ['required', Rule::in(MarketingKnowledgeItem::CATEGORIES)],
-            'key'         => 'required|string|max:120',
-            'title'       => 'nullable|string|max:160',
-            'content'     => 'required|string|max:4000',
-            'priority'    => 'nullable|integer|min:0|max:10000',
-            'is_active'   => 'nullable|boolean',
-            'valid_from'  => 'nullable|date',
+            'category' => ['required', Rule::in(MarketingKnowledgeItem::CATEGORIES)],
+            'key' => 'required|string|max:120',
+            'title' => 'nullable|string|max:160',
+            'content' => 'required|string|max:4000',
+            'priority' => 'nullable|integer|min:0|max:10000',
+            'is_active' => 'nullable|boolean',
+            'valid_from' => 'nullable|date',
             'valid_until' => 'nullable|date',
-            'metadata'    => 'nullable|array',
+            'metadata' => 'nullable|array',
         ]);
 
         $existing = MarketingKnowledgeItem::where('key', $data['key'])->first();
@@ -77,23 +75,23 @@ class InternalMarketingKnowledgeController extends Controller
         $item = MarketingKnowledgeItem::updateOrCreate(
             ['key' => $data['key']],
             [
-                'category'    => $data['category'],
-                'title'       => $data['title'] ?? null,
-                'content'     => $data['content'],
-                'priority'    => $data['priority'] ?? 100,
-                'is_active'   => $data['is_active'] ?? true,
-                'valid_from'  => $data['valid_from'] ?? null,
+                'category' => $data['category'],
+                'title' => $data['title'] ?? null,
+                'content' => $data['content'],
+                'priority' => $data['priority'] ?? 100,
+                'is_active' => $data['is_active'] ?? true,
+                'valid_from' => $data['valid_from'] ?? null,
                 'valid_until' => $data['valid_until'] ?? null,
-                'metadata'    => $data['metadata'] ?? null,
-                'source'      => $existing?->source ?? 'api',
+                'metadata' => $data['metadata'] ?? null,
+                'source' => $existing?->source ?? 'api',
             ],
         );
 
         return response()->json([
-            'ok'      => true,
+            'ok' => true,
             'created' => $item->wasRecentlyCreated,
-            'id'      => $item->id,
-            'key'     => $item->key,
+            'id' => $item->id,
+            'key' => $item->key,
         ]);
     }
 }

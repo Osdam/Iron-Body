@@ -15,12 +15,14 @@ use Illuminate\Support\Facades\Log;
 class ChargeDueSubscriptions extends Command
 {
     protected $signature = 'subscriptions:charge-due {--limit=100 : Máximo de suscripciones a procesar}';
+
     protected $description = 'Cobra las suscripciones de membresía vencidas (pago automático Wompi).';
 
     public function handle(): int
     {
         if (! (bool) config('wompi.recurring.enabled', false)) {
             $this->info('Pago automático deshabilitado (WOMPI_RECURRING_ENABLED=false); nada que cobrar.');
+
             return self::SUCCESS;
         }
 

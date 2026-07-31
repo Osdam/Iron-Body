@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $event_type
  * @property array|null $payload_json
  * @property int $importance
- * @property \Carbon\Carbon|null $occurred_at
+ * @property Carbon|null $occurred_at
  * @property string|null $idempotency_key
  */
 class IronAiUserEvent extends Model

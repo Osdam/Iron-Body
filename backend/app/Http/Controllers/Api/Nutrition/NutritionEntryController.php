@@ -7,15 +7,14 @@ use App\Models\Member;
 use App\Models\NutritionEntry;
 use App\Models\NutritionFood;
 use App\Services\Nutrition\NutritionEntryService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /** Entradas de tracking (agregar/listar/eliminar). Macros los calcula el backend. */
 class NutritionEntryController extends Controller
 {
-    public function __construct(private NutritionEntryService $entries)
-    {
-    }
+    public function __construct(private NutritionEntryService $entries) {}
 
     private function member(Request $request): Member
     {
@@ -26,11 +25,11 @@ class NutritionEntryController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'food_uuid'  => 'required|string',
-            'meal_type'  => 'required|in:breakfast,lunch,dinner,snack',
+            'food_uuid' => 'required|string',
+            'meal_type' => 'required|in:breakfast,lunch,dinner,snack',
             'entry_date' => 'nullable|date',
-            'quantity'   => 'required|numeric|gt:0',
-            'unit'       => 'required|string|in:g,gr,ml,serving,porcion,unit,unidad,tbsp,tsp,cup,oz',
+            'quantity' => 'required|numeric|gt:0',
+            'unit' => 'required|string|in:g,gr,ml,serving,porcion,unit,unidad,tbsp,tsp,cup,oz',
         ]);
         $member = $this->member($request);
 
@@ -46,10 +45,10 @@ class NutritionEntryController extends Controller
         // debe completarlos antes (la app abre el flujo de completar información).
         if (! $food->isMacroComplete()) {
             return response()->json([
-                'ok'      => false,
-                'code'    => 'food_macros_incomplete',
+                'ok' => false,
+                'code' => 'food_macros_incomplete',
                 'message' => 'Completa la información nutricional antes de agregar este alimento.',
-                'food'    => $food->toApiArray(),
+                'food' => $food->toApiArray(),
             ], 422);
         }
 
@@ -59,14 +58,14 @@ class NutritionEntryController extends Controller
         );
         $entry = $entry->fresh('food');
 
-        $date = $entry->entry_date instanceof \Carbon\Carbon
+        $date = $entry->entry_date instanceof Carbon
             ? $entry->entry_date->toDateString() : (string) $entry->entry_date;
 
         return response()->json([
-            'ok'      => true,
-            'message' => 'Alimento agregado a ' . self::mealLabel($entry->meal_type) . '.',
-            'data'    => self::present($entry), // compat
-            'entry'   => self::present($entry),
+            'ok' => true,
+            'message' => 'Alimento agregado a '.self::mealLabel($entry->meal_type).'.',
+            'data' => self::present($entry), // compat
+            'entry' => self::present($entry),
             'summary' => $this->entries->summaryPayload($member, $date),
         ], 201);
     }
@@ -103,6 +102,7 @@ class NutritionEntryController extends Controller
             return response()->json(['ok' => false, 'message' => 'Entrada no encontrada.'], 404);
         }
         $this->entries->deleteEntry($member, $entry);
+
         return response()->json(['ok' => true]);
     }
 
@@ -110,21 +110,21 @@ class NutritionEntryController extends Controller
     public static function present(NutritionEntry $e): array
     {
         return [
-            'uuid'       => $e->uuid,
-            'meal_type'  => $e->meal_type,
-            'entry_date' => $e->entry_date instanceof \Carbon\Carbon
+            'uuid' => $e->uuid,
+            'meal_type' => $e->meal_type,
+            'entry_date' => $e->entry_date instanceof Carbon
                 ? $e->entry_date->toDateString() : (string) $e->entry_date,
-            'quantity'   => (float) $e->quantity,
-            'unit'       => $e->unit,
-            'food'       => $e->food?->toApiArray(),
-            'macros'     => [
+            'quantity' => (float) $e->quantity,
+            'unit' => $e->unit,
+            'food' => $e->food?->toApiArray(),
+            'macros' => [
                 'calories' => (float) $e->calories,
-                'protein'  => (float) $e->protein,
-                'carbs'    => (float) $e->carbs,
-                'fat'      => (float) $e->fat,
-                'sugar'    => $e->sugar,
-                'fiber'    => $e->fiber,
-                'sodium'   => $e->sodium,
+                'protein' => (float) $e->protein,
+                'carbs' => (float) $e->carbs,
+                'fat' => (float) $e->fat,
+                'sugar' => $e->sugar,
+                'fiber' => $e->fiber,
+                'sodium' => $e->sodium,
             ],
         ];
     }

@@ -70,23 +70,23 @@ class FiscalProfileController extends Controller
         }
 
         return [
-            'id'                   => $p->id,
-            'user_id'              => $p->user_id,
-            'member_id'            => $p->member_id,
-            'identity_id'          => $p->identity_id,
-            'doc_type'             => $p->doc_type,
-            'doc_number'           => $p->doc_number,
-            'dv'                   => $p->dv,
-            'person_type'          => $p->person_type,
-            'legal_name'           => $p->legal_name,
+            'id' => $p->id,
+            'user_id' => $p->user_id,
+            'member_id' => $p->member_id,
+            'identity_id' => $p->identity_id,
+            'doc_type' => $p->doc_type,
+            'doc_number' => $p->doc_number,
+            'dv' => $p->dv,
+            'person_type' => $p->person_type,
+            'legal_name' => $p->legal_name,
             'tax_responsibilities' => $p->tax_responsibilities,
-            'email'                => $p->email,
-            'phone'                => $p->phone,
-            'address'              => $p->address,
-            'city_code'            => $p->city_code,
-            'department_code'      => $p->department_code,
-            'is_complete'          => $p->isComplete(),
-            'updated_at'           => optional($p->updated_at)->toIso8601String(),
+            'email' => $p->email,
+            'phone' => $p->phone,
+            'address' => $p->address,
+            'city_code' => $p->city_code,
+            'department_code' => $p->department_code,
+            'is_complete' => $p->isComplete(),
+            'updated_at' => optional($p->updated_at)->toIso8601String(),
         ];
     }
 
@@ -95,15 +95,15 @@ class FiscalProfileController extends Controller
         $admin = $request->attributes->get('auth_admin');
 
         AuditLog::create([
-            'action'     => 'update',
-            'module'     => 'billing',
-            'entity'     => $entity,
-            'entity_id'  => $entityId,
-            'actor_id'   => $admin?->id,
+            'action' => 'update',
+            'module' => 'billing',
+            'entity' => $entity,
+            'entity_id' => $entityId,
+            'actor_id' => $admin?->id,
             'actor_name' => $admin?->name ?? 'CRM',
             'actor_role' => $admin?->role,
-            'summary'    => 'Actualización de perfil fiscal',
-            'metadata'   => $metadata ?: null,
+            'summary' => 'Actualización de perfil fiscal',
+            'metadata' => $metadata ?: null,
             'ip_address' => $request->ip(),
             'user_agent' => substr((string) $request->userAgent(), 0, 255),
         ]);

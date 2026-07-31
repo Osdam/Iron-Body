@@ -90,7 +90,7 @@ class CajaController extends Controller
             // cliente. Sin esto la venta no se factura, por mucho que esté
             // cobrada. Nunca se activa por defecto.
             'request_invoice' => ['nullable', 'boolean'],
-            'invoice_email' => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail()],
+            'invoice_email' => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail],
         ]);
 
         $this->assertInvoiceRequestIsComplete($data);
@@ -125,7 +125,7 @@ class CajaController extends Controller
             // El cliente puede pedir la factura al pagar, aunque no la pidiera
             // al crear la venta.
             'request_invoice' => ['nullable', 'boolean'],
-            'invoice_email' => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail()],
+            'invoice_email' => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail],
         ]);
 
         $this->assertInvoiceRequestIsComplete($data);

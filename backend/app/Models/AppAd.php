@@ -11,7 +11,9 @@ use Illuminate\Support\Str;
 class AppAd extends Model
 {
     public const FREQ_ONCE = 'once';
+
     public const FREQ_DAILY = 'daily';
+
     public const FREQ_ALWAYS = 'always';
 
     protected $fillable = [
@@ -48,6 +50,7 @@ class AppAd extends Model
     public function scopeActive(Builder $q): Builder
     {
         $now = Carbon::now();
+
         return $q->where('is_active', true)
             ->where(fn ($w) => $w->whereNull('starts_at')->orWhere('starts_at', '<=', $now))
             ->where(fn ($w) => $w->whereNull('ends_at')->orWhere('ends_at', '>=', $now));
@@ -69,6 +72,7 @@ class AppAd extends Model
         if ($this->frequency_rule === self::FREQ_DAILY) {
             return ! $view->seen_at?->isToday();
         }
+
         // once
         return false;
     }

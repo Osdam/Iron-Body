@@ -39,11 +39,12 @@ class EmitCreditNoteJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries;
+
     public int $backoff;
 
     public function __construct(public int $creditNoteInvoiceId)
     {
-        $this->tries   = (int) config('billing.http.retry_times', 5);
+        $this->tries = (int) config('billing.http.retry_times', 5);
         $this->backoff = (int) config('billing.http.retry_backoff', 60);
     }
 
@@ -63,6 +64,7 @@ class EmitCreditNoteJob implements ShouldQueue
         // 🔒 Servidor de producción con Factus en sandbox: no emitir (ver Emit job).
         if (app()->environment('production') && config('billing.env') !== 'production') {
             Log::warning('billing.refused_sandbox_on_production_server', ['credit_note' => $this->creditNoteInvoiceId]);
+
             return;
         }
 
@@ -70,6 +72,7 @@ class EmitCreditNoteJob implements ShouldQueue
         if (config('billing.env') === 'production'
             && ! FactusConfigValidator::fromConfig()->isReadyForProduction()) {
             Log::warning('billing.production_not_ready', ['credit_note' => $this->creditNoteInvoiceId]);
+
             return;
         }
 
@@ -84,12 +87,14 @@ class EmitCreditNoteJob implements ShouldQueue
         $original = $note->referencesInvoice;
         if ($original === null || empty($original->full_number)) {
             $note->markError('Nota crédito sin factura original válida (número).');
+
             return;
         }
 
         $source = $note->source; // Payment | ProductSale (mismo que la original)
         if ($source === null) {
             $note->markError('Fuente de la nota crédito no encontrada.');
+
             return;
         }
 
@@ -100,16 +105,16 @@ class EmitCreditNoteJob implements ShouldQueue
         $base = $built['payload'];
 
         $payload = [
-            'reference_code'          => $note->uuid,
+            'reference_code' => $note->uuid,
             'correction_concept_code' => (string) config('billing.credit_note.correction_concept_code', '2'),
-            'customization_id'        => (string) config('billing.credit_note.customization_id', '20'),
-            'bill_number'             => $original->full_number,
-            'numbering_range_id'      => (int) (config('billing.numbering.credit_range_id') ?: $note->numbering_range_id),
-            'observation'             => $note->failure_reason ?? 'Anulación',
-            'cash_rounding_amount'    => '0.00',
-            'payment_details'         => $base['payment_details'],
-            'customer'                => $base['customer'],
-            'items'                   => $base['items'],
+            'customization_id' => (string) config('billing.credit_note.customization_id', '20'),
+            'bill_number' => $original->full_number,
+            'numbering_range_id' => (int) (config('billing.numbering.credit_range_id') ?: $note->numbering_range_id),
+            'observation' => $note->failure_reason ?? 'Anulación',
+            'cash_rounding_amount' => '0.00',
+            'payment_details' => $base['payment_details'],
+            'customer' => $base['customer'],
+            'items' => $base['items'],
         ];
 
         $note->markProcessing();
@@ -131,33 +136,36 @@ class EmitCreditNoteJob implements ShouldQueue
             if ($mapped['is_validated']) {
                 $files = $storage->store($note, $mapped);
                 $note->markValidated(array_merge($files, [
-                    'factus_id'   => $mapped['factus_id'],
-                    'number'      => $mapped['number'],
+                    'factus_id' => $mapped['factus_id'],
+                    'number' => $mapped['number'],
                     'full_number' => $mapped['full_number'],
-                    'cufe'        => $mapped['cufe'],
+                    'cufe' => $mapped['cufe'],
                     'dian_status' => $mapped['dian_status'],
                 ]));
                 // La factura original queda anulada por la nota crédito validada.
                 $original->update(['status' => InvoiceStatus::CANCELLED->value]);
+
                 return;
             }
             $note->markRejected($mapped['reason'] ?? 'Nota crédito rechazada.');
+
             return;
         }
 
         $status = (int) $result['status'];
         if ($status >= 400 && $status < 500) {
-            $note->markRejected('Rechazo de Factus/DIAN (HTTP ' . $status . ').');
+            $note->markRejected('Rechazo de Factus/DIAN (HTTP '.$status.').');
+
             return;
         }
 
-        $note->markError('Error técnico nota crédito (HTTP ' . $status . ').');
-        throw new RuntimeException('Factus credit-note failed (HTTP ' . $status . ') invoice=' . $note->id);
+        $note->markError('Error técnico nota crédito (HTTP '.$status.').');
+        throw new RuntimeException('Factus credit-note failed (HTTP '.$status.') invoice='.$note->id);
     }
 
     public function failed(Throwable $e): void
     {
         $note = ElectronicInvoice::find($this->creditNoteInvoiceId);
-        $note?->markError('Reintentos agotados: ' . $e->getMessage());
+        $note?->markError('Reintentos agotados: '.$e->getMessage());
     }
 }

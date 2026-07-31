@@ -13,6 +13,7 @@ use Illuminate\Console\Command;
 class MetaDoctor extends Command
 {
     protected $signature = 'meta:doctor';
+
     protected $description = 'Diagnostica la configuración Meta/WhatsApp Cloud API (sin imprimir secretos).';
 
     public function handle(MetaDoctorService $doctor): int

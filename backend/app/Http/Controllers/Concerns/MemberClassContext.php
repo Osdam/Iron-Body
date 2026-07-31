@@ -8,6 +8,7 @@ use App\Models\ClassSession;
 use App\Models\Member;
 use App\Models\MyClass;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -33,8 +34,8 @@ trait MemberClassContext
     /**
      * Sesión relevante de varias clases en bloque (sin N+1), una por clase.
      *
-     * @param  \Illuminate\Support\Collection<int, int>  $classIds
-     * @return \Illuminate\Support\Collection<int, ClassSession>
+     * @param  Collection<int, int>  $classIds
+     * @return Collection<int, ClassSession>
      */
     protected function relevantSessionsFor($classIds)
     {
@@ -79,9 +80,9 @@ trait MemberClassContext
 
         return [
             'session_status' => $status,
-            'my_attendance'  => $myAttendance,
-            'can_check_in'   => $reserved && $status === 'live' && $myAttendance !== ClassAttendance::STATUS_PRESENT,
-            'can_cancel'     => $reserved && $status === 'scheduled',
+            'my_attendance' => $myAttendance,
+            'can_check_in' => $reserved && $status === 'live' && $myAttendance !== ClassAttendance::STATUS_PRESENT,
+            'can_cancel' => $reserved && $status === 'scheduled',
         ];
     }
 
@@ -141,10 +142,10 @@ trait MemberClassContext
             }
 
             ClassReservation::create([
-                'class_id'     => $class->getKey(),
-                'member_id'    => $member->getKey(),
+                'class_id' => $class->getKey(),
+                'member_id' => $member->getKey(),
                 'session_date' => $date,
-                'reserved_at'  => now(),
+                'reserved_at' => now(),
             ]);
 
             return 'reserved';

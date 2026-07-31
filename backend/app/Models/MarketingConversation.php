@@ -25,22 +25,22 @@ class MarketingConversation extends Model
     ];
 
     protected $casts = [
-        'last_message_at'          => 'datetime',
-        'human_takeover'           => 'boolean',
-        'ai_enabled'               => 'boolean',
-        'lead_score'               => 'integer',
+        'last_message_at' => 'datetime',
+        'human_takeover' => 'boolean',
+        'ai_enabled' => 'boolean',
+        'lead_score' => 'integer',
         // Inbox CRM.
-        'assigned_at'              => 'datetime',
-        'unread_count'             => 'integer',
-        'last_read_at'             => 'datetime',
-        'last_inbound_at'          => 'datetime',
-        'last_outbound_at'         => 'datetime',
-        'first_response_at'        => 'datetime',
-        'staff_review_pending'     => 'boolean',
+        'assigned_at' => 'datetime',
+        'unread_count' => 'integer',
+        'last_read_at' => 'datetime',
+        'last_inbound_at' => 'datetime',
+        'last_outbound_at' => 'datetime',
+        'first_response_at' => 'datetime',
+        'staff_review_pending' => 'boolean',
         'staff_review_resolved_at' => 'datetime',
-        'manual_takeover_at'       => 'datetime',
-        'closed_at'                => 'datetime',
-        'snooze_until'             => 'datetime',
+        'manual_takeover_at' => 'datetime',
+        'closed_at' => 'datetime',
+        'snooze_until' => 'datetime',
     ];
 
     public function lead(): BelongsTo

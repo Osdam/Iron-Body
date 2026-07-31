@@ -16,14 +16,12 @@ use Illuminate\Http\Request;
  */
 class DeviceTokenController extends Controller
 {
-    public function __construct(private readonly MemberDeviceTokenService $service)
-    {
-    }
+    public function __construct(private readonly MemberDeviceTokenService $service) {}
 
     public function store(Request $request): JsonResponse
     {
         $member = $request->attributes->get('auth_member');
-        if (!$member) {
+        if (! $member) {
             return response()->json(['success' => false, 'message' => 'No autenticado.'], 401);
         }
 
@@ -46,21 +44,23 @@ class DeviceTokenController extends Controller
     public function destroy(Request $request, int $id): JsonResponse
     {
         $member = $request->attributes->get('auth_member');
-        if (!$member) {
+        if (! $member) {
             return response()->json(['success' => false, 'message' => 'No autenticado.'], 401);
         }
         $ok = $this->service->deactivateOwned($member, $id);
+
         return response()->json(['success' => $ok]);
     }
 
     public function deactivateCurrent(Request $request): JsonResponse
     {
         $member = $request->attributes->get('auth_member');
-        if (!$member) {
+        if (! $member) {
             return response()->json(['success' => false, 'message' => 'No autenticado.'], 401);
         }
         $data = $request->validate(['token' => 'required|string|max:512']);
         $this->service->deactivate($data['token']);
+
         return response()->json(['success' => true]);
     }
 }

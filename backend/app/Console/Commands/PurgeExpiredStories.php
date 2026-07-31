@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Storage;
 class PurgeExpiredStories extends Command
 {
     protected $signature = 'stories:purge {--dry-run : No borrar, solo reportar}';
+
     protected $description = 'Borra stories expirados (archivo + row).';
 
     public function handle(): int
@@ -29,16 +30,19 @@ class PurgeExpiredStories extends Command
 
         if ($expired->isEmpty()) {
             $this->info('No hay stories expirados.');
+
             return self::SUCCESS;
         }
 
-        $this->info(($dryRun ? '[DRY-RUN] ' : '') . "Encontrados {$expired->count()} stories expirados.");
+        $this->info(($dryRun ? '[DRY-RUN] ' : '')."Encontrados {$expired->count()} stories expirados.");
 
         $deleted = 0;
         foreach ($expired as $story) {
             $this->line("  · #{$story->id} ({$story->type}) creado {$story->created_at} — expiró {$story->expires_at}");
 
-            if ($dryRun) continue;
+            if ($dryRun) {
+                continue;
+            }
 
             try {
                 if ($story->isFirebaseStored()) {
@@ -54,9 +58,10 @@ class PurgeExpiredStories extends Command
             $deleted++;
         }
 
-        if (!$dryRun) {
+        if (! $dryRun) {
             $this->info("Borrados: $deleted");
         }
+
         return self::SUCCESS;
     }
 }

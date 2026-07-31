@@ -22,25 +22,25 @@ class NotificationController extends Controller
 {
     /** Mapa categoría (app) → type (BD). 'all' y 'unread' son especiales. */
     private const CATEGORY_TYPES = [
-        'payment'    => 'payment',
-        'pagos'      => 'payment',
+        'payment' => 'payment',
+        'pagos' => 'payment',
         'membership' => 'membership',
         'membresias' => 'membership',
-        'class'      => 'class',
-        'clases'     => 'class',
-        'system'     => 'system',
-        'sistema'    => 'system',
-        'trainer'    => 'trainer',
+        'class' => 'class',
+        'clases' => 'class',
+        'system' => 'system',
+        'sistema' => 'system',
+        'trainer' => 'trainer',
         'entrenador' => 'trainer',
-        'promotion'  => 'promotion',
-        'promociones'=> 'promotion',
-        'iron_ai'    => 'iron_ai',
-        'routine'    => 'routine',
-        'rutina'     => 'routine',
-        'nutrition'  => 'nutrition',
-        'nutricion'  => 'nutrition',
-        'security'   => 'security',
-        'seguridad'  => 'security',
+        'promotion' => 'promotion',
+        'promociones' => 'promotion',
+        'iron_ai' => 'iron_ai',
+        'routine' => 'routine',
+        'rutina' => 'routine',
+        'nutrition' => 'nutrition',
+        'nutricion' => 'nutrition',
+        'security' => 'security',
+        'seguridad' => 'security',
     ];
 
     /** GET /api/notifications?document=&category=&search=&status= */
@@ -75,8 +75,8 @@ class NotificationController extends Controller
             ->count();
 
         return response()->json([
-            'ok'           => true,
-            'data'         => $items->map->toPublicArray()->values(),
+            'ok' => true,
+            'data' => $items->map->toPublicArray()->values(),
             'unread_count' => $unread,
         ]);
     }
@@ -157,7 +157,7 @@ class NotificationController extends Controller
             ->get();
 
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => $items->map->toPublicArray()->values(),
         ]);
     }
@@ -263,8 +263,8 @@ class NotificationController extends Controller
         }
 
         return response()->json([
-            'ok'      => false,
-            'code'    => 'session_revoked',
+            'ok' => false,
+            'code' => 'session_revoked',
             'message' => 'Tu sesión se cerró porque la cuenta se está usando en otro dispositivo.',
         ], 401);
     }
@@ -296,6 +296,7 @@ class NotificationController extends Controller
         if ($n->document && $n->document === $member->document_number) {
             return true;
         }
+
         // Difusión global (sin destinatario concreto).
         return $n->member_id === null && $n->document === null;
     }
@@ -309,6 +310,7 @@ class NotificationController extends Controller
         }
         if (in_array($category, ['unread', 'no_leidas', 'noleidas', 'no-leidas'], true)) {
             $query->unread();
+
             return;
         }
         if (isset(self::CATEGORY_TYPES[$category])) {

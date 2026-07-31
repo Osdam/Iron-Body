@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 class DetectNutritionMissing extends Command
 {
     protected $signature = 'ironbody:detect-nutrition-missing {--nutrition-days=2}';
+
     protected $description = 'Detecta miembros sin registrar nutrición y emite nutrition.missing.';
 
     public function handle(): int

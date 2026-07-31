@@ -122,6 +122,7 @@ class TrainerAuthController extends Controller
                 metadata: ['face_login' => true, 'matched' => false, 'distance' => $result['distance']],
                 request: $request,
             );
+
             return $genericFail;
         }
 

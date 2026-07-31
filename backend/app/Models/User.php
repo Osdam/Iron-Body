@@ -64,12 +64,14 @@ class User extends Authenticatable
     public function getMembershipStartDateAttribute(): ?string
     {
         $value = $this->attributes['membership_start_date'] ?? null;
+
         return $value ? substr($value, 0, 10) : null;
     }
 
     public function getMembershipEndDateAttribute(): ?string
     {
         $value = $this->attributes['membership_end_date'] ?? null;
+
         return $value ? substr($value, 0, 10) : null;
     }
 

@@ -21,17 +21,20 @@ use Illuminate\Support\Facades\Schema;
 class DetectModuleDiscovery extends BaseProactiveDetectorCommand
 {
     protected $signature = 'ironbody:detect-module-discovery {--dry-run} {--member-id=} {--limit=} {--event=}';
+
     protected $description = '[INACTIVO] Invita a descubrir módulos poco usados. Requiere tracking app_module_usages (Fase 3).';
 
     protected function detect(): void
     {
-        if (!config('proactive_coach.discovery_enabled', false)) {
+        if (! config('proactive_coach.discovery_enabled', false)) {
             $this->warn('module.discovery está INACTIVO (PROACTIVE_COACH_DISCOVERY_ENABLED=false). Requiere instrumentación de uso de módulos (Fase 3). No se emite nada.');
+
             return;
         }
 
-        if (!Schema::hasTable('app_module_usages') || DB::table('app_module_usages')->limit(1)->count() === 0) {
+        if (! Schema::hasTable('app_module_usages') || DB::table('app_module_usages')->limit(1)->count() === 0) {
             $this->warn('Sin datos en app_module_usages: no hay base para inferir módulos no usados. No se emite nada.');
+
             return;
         }
 

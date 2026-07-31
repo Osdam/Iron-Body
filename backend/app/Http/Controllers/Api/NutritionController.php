@@ -20,17 +20,16 @@ use Illuminate\Support\Facades\RateLimiter;
  */
 class NutritionController extends Controller
 {
-    public function __construct(private readonly NutritionService $service)
-    {
-    }
+    public function __construct(private readonly NutritionService $service) {}
 
     /** GET /api/app/nutrition/today */
     public function today(Request $request): JsonResponse
     {
         $member = $this->member($request);
-        if (!$member) {
+        if (! $member) {
             return $this->unauth();
         }
+
         return response()->json(['success' => true, 'data' => $this->service->dayPayload($member)]);
     }
 
@@ -38,10 +37,11 @@ class NutritionController extends Controller
     public function day(Request $request): JsonResponse
     {
         $member = $this->member($request);
-        if (!$member) {
+        if (! $member) {
             return $this->unauth();
         }
         $request->validate(['date' => 'nullable|date']);
+
         return response()->json([
             'success' => true,
             'data' => $this->service->dayPayload($member, $request->query('date')),
@@ -52,9 +52,10 @@ class NutritionController extends Controller
     public function getGoals(Request $request): JsonResponse
     {
         $member = $this->member($request);
-        if (!$member) {
+        if (! $member) {
             return $this->unauth();
         }
+
         return response()->json(['success' => true, 'data' => $this->service->activeGoal($member)]);
     }
 
@@ -62,7 +63,7 @@ class NutritionController extends Controller
     public function saveGoals(Request $request): JsonResponse
     {
         $member = $this->member($request);
-        if (!$member) {
+        if (! $member) {
             return $this->unauth();
         }
         $data = $request->validate([
@@ -84,10 +85,10 @@ class NutritionController extends Controller
     public function addItem(Request $request, string $mealType): JsonResponse
     {
         $member = $this->member($request);
-        if (!$member) {
+        if (! $member) {
             return $this->unauth();
         }
-        if (!in_array($mealType, NutritionService::MEAL_TYPES, true)) {
+        if (! in_array($mealType, NutritionService::MEAL_TYPES, true)) {
             return response()->json(['success' => false, 'message' => 'Tipo de comida inválido.'], 422);
         }
 
@@ -108,6 +109,7 @@ class NutritionController extends Controller
         }
 
         $item = $this->service->addItem($member, $mealType, $data);
+
         return response()->json(['success' => true, 'data' => $item], 201);
     }
 
@@ -115,13 +117,14 @@ class NutritionController extends Controller
     public function deleteItem(Request $request, int $id): JsonResponse
     {
         $member = $this->member($request);
-        if (!$member) {
+        if (! $member) {
             return $this->unauth();
         }
         $ok = $this->service->deleteItem($member, $id);
-        if (!$ok) {
+        if (! $ok) {
             return response()->json(['success' => false, 'message' => 'No encontrado.'], 404);
         }
+
         return response()->json(['success' => true]);
     }
 
@@ -129,11 +132,12 @@ class NutritionController extends Controller
     public function history(Request $request): JsonResponse
     {
         $member = $this->member($request);
-        if (!$member) {
+        if (! $member) {
             return $this->unauth();
         }
         $today = $this->service->today(NutritionService::TZ);
         $goal = $this->service->activeGoal($member);
+
         return response()->json([
             'success' => true,
             'data' => $this->service->weeklyHistory($member, $today, $goal['daily_calories']),
@@ -144,7 +148,7 @@ class NutritionController extends Controller
     public function foods(Request $request): JsonResponse
     {
         $member = $this->member($request);
-        if (!$member) {
+        if (! $member) {
             return $this->unauth();
         }
         $q = trim((string) $request->query('q', ''));
@@ -166,7 +170,7 @@ class NutritionController extends Controller
     public function createFood(Request $request): JsonResponse
     {
         $member = $this->member($request);
-        if (!$member) {
+        if (! $member) {
             return $this->unauth();
         }
         $data = $request->validate([
@@ -197,12 +201,12 @@ class NutritionController extends Controller
     public function aiRecommendation(Request $request, NutritionAiCoachService $coach): JsonResponse
     {
         $member = $this->member($request);
-        if (!$member) {
+        if (! $member) {
             return $this->unauth();
         }
 
         // Rate limit: 10 análisis por miembro por hora.
-        $key = 'nutrition-ai:' . $member->id;
+        $key = 'nutrition-ai:'.$member->id;
         if (RateLimiter::tooManyAttempts($key, 10)) {
             return response()->json([
                 'success' => false,
@@ -211,7 +215,7 @@ class NutritionController extends Controller
         }
         RateLimiter::hit($key, 3600);
 
-        if (!$coach->isEnabled()) {
+        if (! $coach->isEnabled()) {
             return response()->json([
                 'success' => false,
                 'message' => 'El coach nutricional no está disponible por ahora.',
@@ -233,7 +237,7 @@ class NutritionController extends Controller
     public function aiLast(Request $request): JsonResponse
     {
         $member = $this->member($request);
-        if (!$member) {
+        if (! $member) {
             return $this->unauth();
         }
 

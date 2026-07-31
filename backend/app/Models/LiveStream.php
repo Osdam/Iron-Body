@@ -10,8 +10,11 @@ use Illuminate\Support\Str;
 class LiveStream extends Model
 {
     public const STATUS_SCHEDULED = 'scheduled';
+
     public const STATUS_LIVE = 'live';
+
     public const STATUS_ENDED = 'ended';
+
     public const STATUS_FAILED = 'failed';
 
     protected $fillable = [

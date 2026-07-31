@@ -73,7 +73,7 @@ class ImportLegacyMembersCommand extends Command
         $dryRun = (bool) $this->option('dry-run');
 
         $c = ['users_new' => 0, 'users_upd' => 0, 'members_new' => 0, 'members_upd' => 0,
-              'payments_new' => 0, 'no_phone' => 0, 'plan_missing' => 0, 'skipped' => 0, 'errors' => 0];
+            'payments_new' => 0, 'no_phone' => 0, 'plan_missing' => 0, 'skipped' => 0, 'errors' => 0];
         $missingPlans = [];
 
         DB::beginTransaction();
@@ -150,7 +150,7 @@ class ImportLegacyMembersCommand extends Command
         $user = User::query()->where('document', $doc)->first();
         $userIsNew = $user === null;
         if ($userIsNew) {
-            $user = new User();
+            $user = new User;
             $user->password = Str::random(40); // el cast 'hashed' lo bcrypt-ea; el login es por OTP, no por password
         }
 
@@ -188,7 +188,7 @@ class ImportLegacyMembersCommand extends Command
         $member = Member::query()->where('document_number', $doc)->first();
         $memberIsNew = $member === null;
         if ($memberIsNew) {
-            $member = new Member(); // member_uuid / access_hash se autogeneran al crear
+            $member = new Member; // member_uuid / access_hash se autogeneran al crear
         }
         $member->user_id = $user->id;
         $member->full_name = $fullName;

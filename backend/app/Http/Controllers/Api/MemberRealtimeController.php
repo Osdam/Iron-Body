@@ -5,13 +5,14 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Member;
 use App\Models\MemberRealtimeEvent;
+use App\Services\RealtimeEvents;
 use App\Support\SseStream;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 /**
  * Canal real-time PRIVADO del miembro (SSE). Entrega las señales de cambio que
- * el backend emite ({@see \App\Services\RealtimeEvents}) para que la app
+ * el backend emite ({@see RealtimeEvents}) para que la app
  * actualice AppState/módulos al instante, sin polling como mecanismo principal.
  *
  * Seguridad de canal (Bloque 3): la ruta va bajo `auth_member` (el token valida
@@ -47,10 +48,10 @@ class MemberRealtimeController extends Controller
 
             foreach ($items as $e) {
                 SseStream::emit('app', [
-                    'type'      => $e->type,
+                    'type' => $e->type,
                     'member_id' => $memberId,
-                    'version'   => (string) $e->version,
-                    'changed'   => $e->changed ?? [],
+                    'version' => (string) $e->version,
+                    'changed' => $e->changed ?? [],
                     'timestamp' => $e->created_at?->toIso8601String(),
                 ], $e->id);
                 $cursor = (int) $e->id;

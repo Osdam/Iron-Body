@@ -23,20 +23,20 @@ class CreateSubscriptionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'plan_id'           => 'required|integer|exists:plans,id',
+            'plan_id' => 'required|integer|exists:plans,id',
             // Tipo de fuente. El servicio rechaza cualquiera que no sea tarjeta
             // (PSE/DaviPlata/Bancolombia no admiten cobro desatendido).
-            'type'              => 'nullable|string|max:30',
+            'type' => 'nullable|string|max:30',
             // Token de tarjeta (tok_...) O una fuente existente del miembro.
-            'token'             => 'required_without:payment_source_id|nullable|string|max:200',
+            'token' => 'required_without:payment_source_id|nullable|string|max:200',
             'payment_source_id' => 'nullable|integer',
             // Datos NO sensibles de la tarjeta (marca/últimos 4/expiración).
-            'card_brand'        => 'nullable|string|max:30',
-            'card_last_four'    => 'nullable|string|max:4',
-            'exp_month'         => 'nullable|string|max:2',
-            'exp_year'          => 'nullable|string|max:4',
+            'card_brand' => 'nullable|string|max:30',
+            'card_last_four' => 'nullable|string|max:4',
+            'exp_month' => 'nullable|string|max:2',
+            'exp_year' => 'nullable|string|max:4',
             // Consentimientos Wompi (ambos obligatorios).
-            'accepted_terms'         => 'required|accepted',
+            'accepted_terms' => 'required|accepted',
             'accepted_personal_data' => 'required|accepted',
         ];
     }
@@ -44,9 +44,9 @@ class CreateSubscriptionRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'accepted_terms.accepted'         => 'Debes aceptar los términos y condiciones para continuar.',
+            'accepted_terms.accepted' => 'Debes aceptar los términos y condiciones para continuar.',
             'accepted_personal_data.accepted' => 'Debes autorizar el tratamiento de tus datos personales para continuar.',
-            'token.required_without'          => 'Falta el método de pago.',
+            'token.required_without' => 'Falta el método de pago.',
         ];
     }
 }

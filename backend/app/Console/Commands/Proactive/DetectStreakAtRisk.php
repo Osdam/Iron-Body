@@ -13,6 +13,7 @@ use App\Services\WeeklyStreakService;
 class DetectStreakAtRisk extends BaseProactiveDetectorCommand
 {
     protected $signature = 'ironbody:detect-streak-at-risk {--dry-run} {--member-id=} {--limit=} {--event=}';
+
     protected $description = 'Detecta miembros con racha activa sin acción hoy y emite streak.at_risk.';
 
     public function __construct(private readonly WeeklyStreakService $streak)
@@ -29,7 +30,7 @@ class DetectStreakAtRisk extends BaseProactiveDetectorCommand
                 || ($summary['active_days_this_week'] ?? 0) > 0;
             $todayMarked = (bool) ($summary['today_marked'] ?? false);
 
-            if (!$hasMomentum || $todayMarked) {
+            if (! $hasMomentum || $todayMarked) {
                 return; // sin racha que proteger, o ya cumplió hoy
             }
 

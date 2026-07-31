@@ -12,16 +12,23 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class SupportSecurityReport extends Model
 {
-    public const TYPE_STOLEN_DEVICE       = 'stolen_device';
-    public const TYPE_LOST_ACCESS         = 'lost_access';
-    public const TYPE_PHONE_CHANGED        = 'phone_changed';
-    public const TYPE_SUSPICIOUS_ACTIVITY = 'suspicious_activity';
-    public const TYPE_OTHER               = 'other';
+    public const TYPE_STOLEN_DEVICE = 'stolen_device';
 
-    public const STATUS_PENDING   = 'pending';
+    public const TYPE_LOST_ACCESS = 'lost_access';
+
+    public const TYPE_PHONE_CHANGED = 'phone_changed';
+
+    public const TYPE_SUSPICIOUS_ACTIVITY = 'suspicious_activity';
+
+    public const TYPE_OTHER = 'other';
+
+    public const STATUS_PENDING = 'pending';
+
     public const STATUS_REVIEWING = 'reviewing';
-    public const STATUS_RESOLVED  = 'resolved';
-    public const STATUS_REJECTED  = 'rejected';
+
+    public const STATUS_RESOLVED = 'resolved';
+
+    public const STATUS_REJECTED = 'rejected';
 
     public const TYPES = [
         self::TYPE_STOLEN_DEVICE,
@@ -58,7 +65,7 @@ class SupportSecurityReport extends Model
     protected function casts(): array
     {
         return [
-            'metadata'   => 'array',
+            'metadata' => 'array',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
         ];

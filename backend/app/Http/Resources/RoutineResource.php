@@ -60,28 +60,28 @@ class RoutineResource extends JsonResource
         }
 
         return [
-            'id'                => (string) $this->id,
-            'name'              => $this->name,
-            'objective'         => $this->objective ?? '',
-            'level'             => $this->level ?? 'Principiante',
-            'gender'            => $this->gender ?? '',
-            'muscle_group'      => $muscleGroup,
+            'id' => (string) $this->id,
+            'name' => $this->name,
+            'objective' => $this->objective ?? '',
+            'level' => $this->level ?? 'Principiante',
+            'gender' => $this->gender ?? '',
+            'muscle_group' => $muscleGroup,
             'estimated_minutes' => (int) ($this->estimated_minutes ?? $this->duration_minutes ?? 0),
-            'days_per_week'     => (int) ($this->days_per_week ?? (! empty($days) ? count($days) : 0)),
-            'description'       => $this->description ?? '',
-            'notes'             => $this->notes ?? '',
-            'is_assigned'       => (bool) $this->is_assigned,
-            'created_by_admin'  => (bool) $this->created_by_admin,
-            'is_template'       => (bool) $this->is_template,
+            'days_per_week' => (int) ($this->days_per_week ?? (! empty($days) ? count($days) : 0)),
+            'description' => $this->description ?? '',
+            'notes' => $this->notes ?? '',
+            'is_assigned' => (bool) $this->is_assigned,
+            'created_by_admin' => (bool) $this->created_by_admin,
+            'is_template' => (bool) $this->is_template,
             // Clasificación (fuente única en el modelo Routine):
             //  - semi_personalized: plan base del gimnasio (plantilla/Seeder) →
             //    premium SIN forzar video; ocultable por miembro.
             //  - personalized: hecha para el miembro con catálogo (exercise_id).
-            'routine_type'      => $this->resource->classifyType(),
-            'exercises'         => $exercises,
-            'exercise_count'    => count($exercises),
-            'days'              => $days,
-            'created_at'        => optional($this->created_at)->toIso8601String(),
+            'routine_type' => $this->resource->classifyType(),
+            'exercises' => $exercises,
+            'exercise_count' => count($exercises),
+            'days' => $days,
+            'created_at' => optional($this->created_at)->toIso8601String(),
         ];
     }
 
@@ -100,26 +100,26 @@ class RoutineResource extends JsonResource
             $rawExercises = is_array($day['exercises'] ?? null) ? $day['exercises'] : [];
 
             return [
-                'day'       => (string) ($day['day'] ?? $day['weekday'] ?? ''),
-                'title'     => (string) ($day['title'] ?? $day['name'] ?? ''),
+                'day' => (string) ($day['day'] ?? $day['weekday'] ?? ''),
+                'title' => (string) ($day['title'] ?? $day['name'] ?? ''),
                 'objective' => (string) ($day['objective'] ?? ''),
-                'sort_order'=> (int) ($day['sort_order'] ?? $i),
+                'sort_order' => (int) ($day['sort_order'] ?? $i),
                 'exercises' => collect($rawExercises)->map(function ($ex, int $j) use ($i, $resolver): array {
                     $base = [
-                        'id'           => (string) ($ex['id'] ?? ($i + 1) . '-' . ($j + 1)),
-                        'exercise_id'  => $ex['exercise_id'] ?? null,
-                        'name'         => (string) ($ex['name'] ?? ''),
+                        'id' => (string) ($ex['id'] ?? ($i + 1).'-'.($j + 1)),
+                        'exercise_id' => $ex['exercise_id'] ?? null,
+                        'name' => (string) ($ex['name'] ?? ''),
                         'muscle_group' => (string) ($ex['muscle_group'] ?? $ex['muscleGroup'] ?? ''),
-                        'equipment'    => (string) ($ex['equipment'] ?? ''),
-                        'sets'         => (int) ($ex['sets'] ?? 3),
-                        'reps'         => (string) ($ex['reps'] ?? '10'),
-                        'weight'       => (string) ($ex['weight'] ?? $ex['suggestedWeight'] ?? ''),
-                        'notes'        => (string) ($ex['notes'] ?? ''),
-                        'sort_order'   => (int) ($ex['sort_order'] ?? $ex['order'] ?? $j),
-                        'gif_url'      => $ex['gif_url'] ?? null,
-                        'thumbnail_url'=> $ex['thumbnail_url'] ?? null,
-                        'video_url'    => $ex['video_url'] ?? null,
-                        'media_type'   => $ex['media_type'] ?? null,
+                        'equipment' => (string) ($ex['equipment'] ?? ''),
+                        'sets' => (int) ($ex['sets'] ?? 3),
+                        'reps' => (string) ($ex['reps'] ?? '10'),
+                        'weight' => (string) ($ex['weight'] ?? $ex['suggestedWeight'] ?? ''),
+                        'notes' => (string) ($ex['notes'] ?? ''),
+                        'sort_order' => (int) ($ex['sort_order'] ?? $ex['order'] ?? $j),
+                        'gif_url' => $ex['gif_url'] ?? null,
+                        'thumbnail_url' => $ex['thumbnail_url'] ?? null,
+                        'video_url' => $ex['video_url'] ?? null,
+                        'media_type' => $ex['media_type'] ?? null,
                     ];
 
                     return $this->withCatalogMedia($base, $resolver);
@@ -137,39 +137,39 @@ class RoutineResource extends JsonResource
         $media = $ex ? $resolver->mediaFor($ex) : null;
 
         return [
-            'id'             => (string) $re->id,
-            'exercise_id'    => $ex ? (int) $ex->id : null,
-            'sets'           => (int) $re->sets,
-            'reps'           => (string) ($re->reps ?: '10'),
-            'weight'         => $re->weight !== null ? (float) $re->weight : null,
-            'notes'          => $re->notes ?? '',
-            'sort_order'     => (int) $re->sort_order,
+            'id' => (string) $re->id,
+            'exercise_id' => $ex ? (int) $ex->id : null,
+            'sets' => (int) $re->sets,
+            'reps' => (string) ($re->reps ?: '10'),
+            'weight' => $re->weight !== null ? (float) $re->weight : null,
+            'notes' => $re->notes ?? '',
+            'sort_order' => (int) $re->sort_order,
             // Media también a nivel de item (forma estable que la app puede leer
             // directo, igual que en los ejercicios JSON).
-            'video_url'      => $media['video_url'] ?? null,
-            'media_type'     => $media['media_type'] ?? null,
-            'gif_url'        => $media['gif_url'] ?? null,
-            'thumbnail_url'  => $media['thumbnail_url'] ?? null,
+            'video_url' => $media['video_url'] ?? null,
+            'media_type' => $media['media_type'] ?? null,
+            'gif_url' => $media['gif_url'] ?? null,
+            'thumbnail_url' => $media['thumbnail_url'] ?? null,
             'playback_speed' => $media['playback_speed'] ?? null,
-            'exercise'   => $ex ? [
-                'id'                => (string) $ex->id,
-                'name'              => $ex->name,
-                'muscle_group'      => $ex->muscle_group ?? $ex->body_part ?? '',
-                'equipment'         => $ex->equipment ?? '',
-                'difficulty'        => $ex->difficulty ?? 'Principiante',
-                'description'       => $ex->description ?? '',
-                'steps'             => $ex->steps ?? [],
-                'tips'              => $ex->tips ?? [],
-                'common_mistakes'   => $ex->common_mistakes ?? [],
+            'exercise' => $ex ? [
+                'id' => (string) $ex->id,
+                'name' => $ex->name,
+                'muscle_group' => $ex->muscle_group ?? $ex->body_part ?? '',
+                'equipment' => $ex->equipment ?? '',
+                'difficulty' => $ex->difficulty ?? 'Principiante',
+                'description' => $ex->description ?? '',
+                'steps' => $ex->steps ?? [],
+                'tips' => $ex->tips ?? [],
+                'common_mistakes' => $ex->common_mistakes ?? [],
                 'secondary_muscles' => $ex->secondary_muscles ?? [],
-                'muscles_worked'    => $ex->muscles_worked ?? [],
-                'suggested_sets'    => (int) ($ex->suggested_sets ?? 3),
-                'suggested_reps'    => $ex->suggested_reps ?? '8-12',
-                'gif_url'           => $media['gif_url'] ?? $ex->gif_url,
-                'thumbnail_url'     => $media['thumbnail_url'] ?? $ex->thumbnail_url,
-                'video_url'         => $media['video_url'] ?? $ex->video_path,
-                'media_type'        => $media['media_type'] ?? null,
-                'playback_speed'    => $media['playback_speed'] ?? null,
+                'muscles_worked' => $ex->muscles_worked ?? [],
+                'suggested_sets' => (int) ($ex->suggested_sets ?? 3),
+                'suggested_reps' => $ex->suggested_reps ?? '8-12',
+                'gif_url' => $media['gif_url'] ?? $ex->gif_url,
+                'thumbnail_url' => $media['thumbnail_url'] ?? $ex->thumbnail_url,
+                'video_url' => $media['video_url'] ?? $ex->video_path,
+                'media_type' => $media['media_type'] ?? null,
+                'playback_speed' => $media['playback_speed'] ?? null,
             ] : null,
         ];
     }
@@ -181,7 +181,7 @@ class RoutineResource extends JsonResource
      * un match SEGURO (id/external_id/alias/nombre exacto). NO sobrescribe media
      * que ya viniera; si no hay match, conserva el item sin romper la rutina.
      *
-     * @param  array<string,mixed> $item
+     * @param  array<string,mixed>  $item
      * @return array<string,mixed>
      */
     private function withCatalogMedia(array $item, ExerciseCatalogResolver $resolver): array
@@ -192,6 +192,7 @@ class RoutineResource extends JsonResource
         if ($match === null) {
             $item['media_type'] = $item['media_type']
                 ?? (! empty($item['video_url']) ? 'video' : 'gif');
+
             return $item;
         }
 
@@ -227,26 +228,26 @@ class RoutineResource extends JsonResource
     }
 
     /**
-     * @param  array<string,mixed> $ex
+     * @param  array<string,mixed>  $ex
      * @return array<string,mixed>
      */
     private function enrichJsonExercise(array $ex, int $i, ExerciseCatalogResolver $resolver): array
     {
         $base = [
-            'id'            => $ex['id'] ?? ($i + 1),
-            'exercise_id'   => $ex['exercise_id'] ?? null,
-            'name'          => $ex['name'] ?? '',
-            'muscle_group'  => $ex['muscleGroup'] ?? $ex['muscle_group'] ?? '',
-            'equipment'     => $ex['equipment'] ?? '',
-            'sets'          => (int) ($ex['sets'] ?? 3),
-            'reps'          => (int) ($ex['reps'] ?? 10),
-            'weight'        => (string) ($ex['suggestedWeight'] ?? $ex['weight'] ?? ''),
-            'notes'         => (string) ($ex['notes'] ?? ''),
-            'sort_order'    => (int) ($ex['order'] ?? ($i + 1)),
-            'gif_url'       => $ex['gif_url'] ?? null,
+            'id' => $ex['id'] ?? ($i + 1),
+            'exercise_id' => $ex['exercise_id'] ?? null,
+            'name' => $ex['name'] ?? '',
+            'muscle_group' => $ex['muscleGroup'] ?? $ex['muscle_group'] ?? '',
+            'equipment' => $ex['equipment'] ?? '',
+            'sets' => (int) ($ex['sets'] ?? 3),
+            'reps' => (int) ($ex['reps'] ?? 10),
+            'weight' => (string) ($ex['suggestedWeight'] ?? $ex['weight'] ?? ''),
+            'notes' => (string) ($ex['notes'] ?? ''),
+            'sort_order' => (int) ($ex['order'] ?? ($i + 1)),
+            'gif_url' => $ex['gif_url'] ?? null,
             'thumbnail_url' => $ex['thumbnail_url'] ?? null,
-            'video_url'     => $ex['video_url'] ?? null,
-            'media_type'    => $ex['media_type'] ?? null,
+            'video_url' => $ex['video_url'] ?? null,
+            'media_type' => $ex['media_type'] ?? null,
         ];
 
         return $this->withCatalogMedia($base, $resolver);

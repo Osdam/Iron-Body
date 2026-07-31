@@ -27,7 +27,7 @@ class NotifyClassReminders extends Command
     public function handle(NotificationService $notifications): int
     {
         $hours = max(1, (int) $this->option('hours'));
-        $now   = Carbon::now();
+        $now = Carbon::now();
         $limit = $now->copy()->addHours($hours);
 
         $classes = MyClass::query()

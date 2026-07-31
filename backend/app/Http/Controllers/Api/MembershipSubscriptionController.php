@@ -10,17 +10,16 @@ use App\Http\Resources\SubscriptionResource;
 use App\Models\Member;
 use App\Models\MembershipSubscription;
 use App\Models\Plan;
+use App\Models\SubscriptionEvent;
 use App\Models\User;
 use App\Models\WompiPaymentSource;
+use App\Services\Members\MemberUserResolver;
 use App\Services\Subscriptions\MembershipSubscriptionRefreshService;
 use App\Services\Subscriptions\MembershipSubscriptionService;
 use App\Services\Subscriptions\RecurringBillingService;
-use App\Models\SubscriptionEvent;
 use App\Services\Wompi\WompiAcceptanceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 
 /**
  * Pago automático de membresías para el MIEMBRO autenticado (auth.member). El
@@ -45,16 +44,16 @@ class MembershipSubscriptionController extends Controller
 
         return response()->json([
             'recurring_enabled' => $enabled,
-            'methods'           => $cfg['recurring']['methods'] ?? ['card' => true, 'nequi' => false],
-            'environment'       => $cfg['env'] ?? 'sandbox',
-            'public_key'        => $cfg['public_key'] ?? null, // pública, NO secreta
-            'currency'          => $cfg['currency'] ?? 'COP',
+            'methods' => $cfg['recurring']['methods'] ?? ['card' => true, 'nequi' => false],
+            'environment' => $cfg['env'] ?? 'sandbox',
+            'public_key' => $cfg['public_key'] ?? null, // pública, NO secreta
+            'currency' => $cfg['currency'] ?? 'COP',
             // Con el flag apagado NO se consulta a Wompi (evita tráfico innecesario).
-            'acceptance'        => $enabled ? WompiAcceptanceService::make()->publicForApp() : ['available' => false],
-            'plan'              => $plan ? [
-                'id'            => $plan->id,
-                'name'          => $plan->name,
-                'price'         => (float) $plan->price,
+            'acceptance' => $enabled ? WompiAcceptanceService::make()->publicForApp() : ['available' => false],
+            'plan' => $plan ? [
+                'id' => $plan->id,
+                'name' => $plan->name,
+                'price' => (float) $plan->price,
                 'duration_days' => (int) $plan->duration_days,
             ] : null,
         ]);
@@ -69,17 +68,17 @@ class MembershipSubscriptionController extends Controller
     public function store(CreateSubscriptionRequest $request): JsonResponse
     {
         $member = $this->member($request);
-        $user   = $this->resolveUser($member);
+        $user = $this->resolveUser($member);
 
         $data = array_merge($request->safe()->except(['accepted_terms', 'accepted_personal_data']), [
             // El sujeto SIEMPRE del miembro autenticado (nunca del body).
-            'member_id'      => $member->id,
-            'user_id'        => $user->id,
+            'member_id' => $member->id,
+            'user_id' => $user->id,
             'customer_email' => $member->email ?: $user->email,
-            'customer'       => [
-                'email'      => $member->email ?: $user->email,
-                'name'       => $member->full_name,
-                'phone'      => $member->phone,
+            'customer' => [
+                'email' => $member->email ?: $user->email,
+                'name' => $member->full_name,
+                'phone' => $member->phone,
                 'doc_number' => $member->document_number,
             ],
         ]);
@@ -89,18 +88,18 @@ class MembershipSubscriptionController extends Controller
                 ->subscribeWithFirstCharge($data, $request->ip(), $request->userAgent());
         } catch (SubscriptionException $e) {
             return response()->json([
-                'ok'         => false,
+                'ok' => false,
                 'error_code' => $e->errorCode,
-                'message'    => $e->getMessage(),
+                'message' => $e->getMessage(),
             ], $e->status);
         }
 
         $status = $this->responseStatus($out);
 
         return response()->json([
-            'ok'           => ! in_array($status, ['failed', 'payment_source_unavailable'], true),
-            'status'       => $status,
-            'message'      => $this->statusMessage($status),
+            'ok' => ! in_array($status, ['failed', 'payment_source_unavailable'], true),
+            'status' => $status,
+            'message' => $this->statusMessage($status),
             'subscription' => new SubscriptionResource($out['subscription']->load(['plan', 'paymentSource'])),
         ]);
     }
@@ -128,6 +127,7 @@ class MembershipSubscriptionController extends Controller
         if (in_array($chargeStatus, ['declined', 'voided', 'error'], true)) {
             return 'failed';
         }
+
         return 'pending_first_payment';
     }
 
@@ -171,9 +171,9 @@ class MembershipSubscriptionController extends Controller
             ->cancel($sub, SubscriptionEvent::ACTOR_MEMBER, $request->input('reason'));
 
         return response()->json([
-            'ok'      => true,
+            'ok' => true,
             'message' => 'Renovación automática cancelada. Tu membresía sigue activa hasta su vencimiento.',
-            'data'    => new SubscriptionResource($updated->load(['plan', 'paymentSource'])),
+            'data' => new SubscriptionResource($updated->load(['plan', 'paymentSource'])),
         ]);
     }
 
@@ -206,8 +206,8 @@ class MembershipSubscriptionController extends Controller
 
         if ($source->status !== WompiPaymentSource::STATUS_AVAILABLE) {
             return response()->json([
-                'ok'      => false,
-                'status'  => 'payment_source_unavailable',
+                'ok' => false,
+                'status' => 'payment_source_unavailable',
                 'message' => 'No pudimos validar la nueva tarjeta. Intenta con otra.',
             ], 422);
         }
@@ -221,9 +221,9 @@ class MembershipSubscriptionController extends Controller
         $fresh = $sub->fresh()->load(['plan', 'paymentSource']);
 
         return response()->json([
-            'ok'           => true,
+            'ok' => true,
             'retry_result' => $retry, // approved|declined|pending|past_due|skipped|null
-            'message'      => $retry === 'approved'
+            'message' => $retry === 'approved'
                 ? 'Tarjeta actualizada y tu pago quedó al día.'
                 : 'Tarjeta actualizada correctamente.',
             'subscription' => new SubscriptionResource($fresh),
@@ -244,17 +244,17 @@ class MembershipSubscriptionController extends Controller
     private function statusMessage(string $status): string
     {
         return match ($status) {
-            'active'                     => 'Pago automático activado. Tu membresía se renovará automáticamente.',
-            'pending_first_payment'      => 'Estamos confirmando tu primer pago. Te avisaremos al aprobarse.',
-            'past_due'                   => 'Tu suscripción quedó pendiente de pago. Actualiza tu método de pago.',
+            'active' => 'Pago automático activado. Tu membresía se renovará automáticamente.',
+            'pending_first_payment' => 'Estamos confirmando tu primer pago. Te avisaremos al aprobarse.',
+            'past_due' => 'Tu suscripción quedó pendiente de pago. Actualiza tu método de pago.',
             'payment_source_unavailable' => 'No pudimos validar tu método de pago. Intenta con otra tarjeta.',
-            default                      => 'No pudimos activar el pago automático. No se realizó ningún cobro.',
+            default => 'No pudimos activar el pago automático. No se realizó ningún cobro.',
         };
     }
 
     /** Resuelve (o crea) el User enlazado al miembro (helper compartido). */
     private function resolveUser(Member $member): User
     {
-        return app(\App\Services\Members\MemberUserResolver::class)->resolve($member);
+        return app(MemberUserResolver::class)->resolve($member);
     }
 }

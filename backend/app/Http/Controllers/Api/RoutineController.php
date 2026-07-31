@@ -7,6 +7,7 @@ use App\Models\Member;
 use App\Models\MemberRoutineAssignment;
 use App\Models\Routine;
 use App\Models\User;
+use App\Services\Exercises\ExerciseCatalogResolver;
 use App\Services\NotificationService;
 use App\Services\RealtimeEvents;
 use Illuminate\Http\Request;
@@ -24,12 +25,12 @@ class RoutineController extends Controller
             $query->where('level', $request->input('level'));
         }
         if ($request->filled('search')) {
-            $term = '%' . $request->input('search') . '%';
+            $term = '%'.$request->input('search').'%';
             $query->where(function ($q) use ($term) {
                 $q->where('name', 'like', $term)
-                  ->orWhere('objective', 'like', $term)
-                  ->orWhere('trainer_name', 'like', $term)
-                  ->orWhere('assigned_member_name', 'like', $term);
+                    ->orWhere('objective', 'like', $term)
+                    ->orWhere('trainer_name', 'like', $term)
+                    ->orWhere('assigned_member_name', 'like', $term);
             });
         }
 
@@ -45,7 +46,7 @@ class RoutineController extends Controller
 
     public function store(Request $request)
     {
-        $data   = $this->validateInput($request, true);
+        $data = $this->validateInput($request, true);
         $mapped = $this->mapInput($data);
 
         $member = $this->resolveMember(
@@ -54,15 +55,15 @@ class RoutineController extends Controller
         );
 
         if ($member) {
-            $mapped['is_assigned']         = true;
-            $mapped['member_id']           = $member->id;
-            $mapped['assigned_member_id']  = $member->id;
+            $mapped['is_assigned'] = true;
+            $mapped['member_id'] = $member->id;
+            $mapped['assigned_member_id'] = $member->id;
             $mapped['assigned_member_name'] = $mapped['assigned_member_name'] ?? $member->full_name;
         }
 
         $routine = Routine::create(array_merge($mapped, [
             'created_by_admin' => true,
-            'status'           => 'Activa',
+            'status' => 'Activa',
         ]));
 
         // Aviso operativo al CRM de rutina creada (ADITIVO; idempotente).
@@ -114,6 +115,7 @@ class RoutineController extends Controller
         }
 
         $routine->delete();
+
         return response()->json(null, 204);
     }
 
@@ -121,7 +123,7 @@ class RoutineController extends Controller
     {
         $validated = $request->validate([
             'assignedMemberName' => 'nullable|string|max:255',
-            'assignedMemberId'   => 'nullable|integer',
+            'assignedMemberId' => 'nullable|integer',
         ]);
 
         $member = $this->resolveMember(
@@ -131,14 +133,14 @@ class RoutineController extends Controller
 
         if ($member) {
             $routine->assigned_member_name = $validated['assignedMemberName'] ?? $member->full_name;
-            $routine->assigned_member_id   = $member->id;
-            $routine->member_id            = $member->id;
-            $routine->is_assigned          = true;
+            $routine->assigned_member_id = $member->id;
+            $routine->member_id = $member->id;
+            $routine->is_assigned = true;
         } else {
             $routine->assigned_member_name = $validated['assignedMemberName'] ?? 'Plantilla general';
-            $routine->assigned_member_id   = null;
-            $routine->member_id            = null;
-            $routine->is_assigned          = false;
+            $routine->assigned_member_id = null;
+            $routine->member_id = null;
+            $routine->is_assigned = false;
         }
         $routine->save();
 
@@ -229,26 +231,40 @@ class RoutineController extends Controller
     {
         $out = [];
         foreach (['name', 'objective', 'level', 'status', 'description', 'notes'] as $f) {
-            if (array_key_exists($f, $data)) $out[$f] = $data[$f];
+            if (array_key_exists($f, $data)) {
+                $out[$f] = $data[$f];
+            }
         }
-        if (array_key_exists('durationMinutes', $data)) $out['duration_minutes'] = (int) $data['durationMinutes'];
-        if (array_key_exists('daysPerWeek', $data)) $out['days_per_week'] = (int) $data['daysPerWeek'];
-        if (array_key_exists('trainerName', $data)) $out['trainer_name'] = $data['trainerName'];
-        if (array_key_exists('trainerId', $data)) $out['trainer_id'] = $data['trainerId'];
-        if (array_key_exists('assignedMemberName', $data)) $out['assigned_member_name'] = $data['assignedMemberName'];
-        if (array_key_exists('assignedMemberId', $data)) $out['assigned_member_id'] = $data['assignedMemberId'];
+        if (array_key_exists('durationMinutes', $data)) {
+            $out['duration_minutes'] = (int) $data['durationMinutes'];
+        }
+        if (array_key_exists('daysPerWeek', $data)) {
+            $out['days_per_week'] = (int) $data['daysPerWeek'];
+        }
+        if (array_key_exists('trainerName', $data)) {
+            $out['trainer_name'] = $data['trainerName'];
+        }
+        if (array_key_exists('trainerId', $data)) {
+            $out['trainer_id'] = $data['trainerId'];
+        }
+        if (array_key_exists('assignedMemberName', $data)) {
+            $out['assigned_member_name'] = $data['assignedMemberName'];
+        }
+        if (array_key_exists('assignedMemberId', $data)) {
+            $out['assigned_member_id'] = $data['assignedMemberId'];
+        }
         if (array_key_exists('exercises', $data)) {
             // Vínculo real al catálogo: si el ejercicio viene del catálogo (o se
             // resuelve de forma SEGURA por id/alias/nombre exacto), persistimos
             // `exercise_id` + media. El nombre visible se conserva tal cual.
-            $resolver = app(\App\Services\Exercises\ExerciseCatalogResolver::class);
+            $resolver = app(ExerciseCatalogResolver::class);
 
             $out['exercises'] = array_map(function ($ex, $i) use ($resolver) {
                 $exId = $ex['exerciseId'] ?? $ex['exercise_id'] ?? null;
                 $exId = $exId !== null && $exId !== '' ? (int) $exId : null;
 
                 $item = [
-                    'id' => $ex['id'] ?? ('ex-' . ($i + 1)),
+                    'id' => $ex['id'] ?? ('ex-'.($i + 1)),
                     'exercise_id' => $exId,
                     'name' => $ex['name'] ?? '',
                     'muscleGroup' => $ex['muscleGroup'] ?? '',
@@ -263,16 +279,17 @@ class RoutineController extends Controller
                 $match = $resolver->resolveSafe($exId, $item['name']);
                 if ($match !== null) {
                     $media = $resolver->mediaFor($match);
-                    $item['exercise_id']  = $media['exercise_id'];
-                    $item['video_url']    = $media['video_url'];
-                    $item['gif_url']      = $media['gif_url'];
-                    $item['thumbnail_url']= $media['thumbnail_url'];
-                    $item['media_type']   = $media['media_type'];
+                    $item['exercise_id'] = $media['exercise_id'];
+                    $item['video_url'] = $media['video_url'];
+                    $item['gif_url'] = $media['gif_url'];
+                    $item['thumbnail_url'] = $media['thumbnail_url'];
+                    $item['media_type'] = $media['media_type'];
                 }
 
                 return $item;
             }, $data['exercises'] ?? [], array_keys($data['exercises'] ?? []));
         }
+
         return $out;
     }
 

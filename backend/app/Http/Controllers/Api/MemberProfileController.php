@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Member;
+use App\Services\RealtimeEvents;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -32,12 +33,12 @@ class MemberProfileController extends Controller
         $member = $request->attributes->get('auth_member');
 
         $data = $request->validate([
-            'full_name'      => ['sometimes', 'string', 'min:3', 'max:120'],
-            'phone'          => ['sometimes', 'nullable', 'string', 'max:30'],
-            'gender'         => ['sometimes', 'nullable', 'string', 'max:40'],
-            'goal'           => ['sometimes', 'nullable', 'string', 'max:120'],
+            'full_name' => ['sometimes', 'string', 'min:3', 'max:120'],
+            'phone' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'gender' => ['sometimes', 'nullable', 'string', 'max:40'],
+            'goal' => ['sometimes', 'nullable', 'string', 'max:120'],
             'training_level' => ['sometimes', 'nullable', 'string', 'max:80'],
-            'injuries'       => ['sometimes', 'nullable', 'string', 'max:1000'],
+            'injuries' => ['sometimes', 'nullable', 'string', 'max:1000'],
         ]);
 
         // El teléfono es dato VERIFICADO (OTP/2FA): NO se cambia desde la edición
@@ -46,12 +47,12 @@ class MemberProfileController extends Controller
         // ignora para no romper un guardado normal.
         if (array_key_exists('phone', $data)) {
             $incoming = $data['phone'] !== null ? trim((string) $data['phone']) : null;
-            $current  = $member->phone !== null ? trim((string) $member->phone) : null;
+            $current = $member->phone !== null ? trim((string) $member->phone) : null;
             if ($incoming !== null && $incoming !== '' && $incoming !== $current) {
                 Log::warning('profile.phone_change_blocked', ['member_id' => $member->id]);
 
                 return response()->json([
-                    'ok'      => false,
+                    'ok' => false,
                     'message' => 'El teléfono solo puede cambiarse desde el flujo de cambio de número verificado.',
                 ], 422);
             }
@@ -77,10 +78,10 @@ class MemberProfileController extends Controller
 
         Log::info('member:profile:updated', ['member_id' => $member->id, 'fields' => array_keys($data)]);
         // Real-time: el perfil se refleja en otras pantallas/dispositivos sin relogin.
-        \App\Services\RealtimeEvents::profile($member->id);
+        RealtimeEvents::profile($member->id);
 
         return response()->json([
-            'ok'   => true,
+            'ok' => true,
             'data' => $this->payload($member->fresh('user')),
         ]);
     }
@@ -95,13 +96,13 @@ class MemberProfileController extends Controller
         $member = $request->attributes->get('auth_member');
 
         $data = $request->validate([
-            'url'  => ['required', 'url', 'max:2000'],
+            'url' => ['required', 'url', 'max:2000'],
             'path' => ['nullable', 'string', 'max:512'],
         ]);
 
         $member->forceFill([
-            'profile_photo_url'        => $data['url'],
-            'profile_photo_path'       => $data['path'] ?? null,
+            'profile_photo_url' => $data['url'],
+            'profile_photo_path' => $data['path'] ?? null,
             'profile_photo_updated_at' => now(),
         ])->save();
 
@@ -115,19 +116,19 @@ class MemberProfileController extends Controller
         $user = $member->user;
 
         return [
-            'id'                => $member->id,
-            'full_name'         => $member->full_name,
-            'email'             => $member->email ?: $user?->email,
+            'id' => $member->id,
+            'full_name' => $member->full_name,
+            'email' => $member->email ?: $user?->email,
             'document_number_masked' => $this->mask($member->document_number),
-            'phone'             => $member->phone,
-            'gender'            => $member->gender,
-            'goal'              => $member->goal,
-            'training_level'    => $member->training_level,
-            'injuries'          => $member->injuries,
-            'birth_date'        => optional($member->birth_date)->toDateString(),
+            'phone' => $member->phone,
+            'gender' => $member->gender,
+            'goal' => $member->goal,
+            'training_level' => $member->training_level,
+            'injuries' => $member->injuries,
+            'birth_date' => optional($member->birth_date)->toDateString(),
             'profile_photo_url' => $member->profile_photo_url,
             'profile_photo_updated_at' => optional($member->profile_photo_updated_at)->toIso8601String(),
-            'biometric_status'  => $member->biometric_status,
+            'biometric_status' => $member->biometric_status,
         ];
     }
 
