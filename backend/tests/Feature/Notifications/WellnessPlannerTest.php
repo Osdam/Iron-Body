@@ -3,6 +3,7 @@
 namespace Tests\Feature\Notifications;
 
 use App\Models\Attendance;
+use App\Models\Member;
 use App\Models\MemberNotificationPreference;
 use App\Models\NotificationDispatch;
 use App\Models\NotificationTemplate;
@@ -254,6 +255,75 @@ class WellnessPlannerTest extends NotificationTestCase
             NotificationDispatch::query()->where('member_id', $member->id)->count(),
             'El socio recibió dos avisos en un mismo día suyo.',
         );
+    }
+
+    // ── Membresía vencida ───────────────────────────────────────────────
+
+    /** Deja la membresía del socio vencida ayer. */
+    private function vencerMembresia(Member $member): void
+    {
+        $member->user->update([
+            'membership_end_date' => CarbonImmutable::parse('2026-07-29')->toDateString(),
+        ]);
+    }
+
+    public function test_a_quien_tiene_la_membresia_vencida_no_se_le_habla_de_entrenar(): void
+    {
+        $this->fakeFcmSuccess();
+        $member = $this->makeMember();
+        $this->giveDevice($member);
+        $this->vencerMembresia($member);
+
+        $plan = $this->planner()->planFor($member->fresh(), $this->midday());
+
+        $this->assertNotNull($plan, 'Debe recibir algo: el tono cambia, no se le silencia.');
+
+        $plantilla = NotificationTemplate::firstWhere('key', $plan['key']);
+        $this->assertFalse(
+            $plantilla->requires_active_membership,
+            "La plantilla «{$plan['title']}» da por hecho que puede entrenar, y hoy no puede.",
+        );
+    }
+
+    public function test_el_socio_al_dia_si_recibe_el_contenido_de_entrenamiento(): void
+    {
+        $this->fakeFcmSuccess();
+        $member = $this->makeMember();
+        $this->giveDevice($member);
+        // La fecha de fin la pone `makeMember` 30 días por delante.
+
+        $plan = $this->planner()->planFor($member->fresh(), $this->midday());
+
+        $this->assertNotNull($plan);
+    }
+
+    public function test_el_vencido_sigue_teniendo_variedad_suficiente(): void
+    {
+        $disponibles = NotificationTemplate::query()
+            ->active()->forLapsedMembership()->count();
+
+        $this->assertGreaterThanOrEqual(
+            10,
+            $disponibles,
+            'Con pocas plantillas para socios vencidos, el mensaje se repetiría enseguida.',
+        );
+    }
+
+    public function test_ninguna_plantilla_para_vencidos_menciona_entrenar_hoy(): void
+    {
+        $prohibido = ['durante el entrenamiento', 'antes de entrenar', 'en el gimnasio',
+            'revisa tu rutina', 'al terminar', 'tu entrenador'];
+
+        foreach (NotificationTemplate::query()->forLapsedMembership()->get() as $t) {
+            $texto = mb_strtolower($t->title.' '.$t->body);
+            foreach ($prohibido as $frase) {
+                $this->assertStringNotContainsString(
+                    $frase,
+                    $texto,
+                    "La plantilla {$t->key} se ofrece a socios vencidos pero les habla de entrenar.",
+                );
+            }
+        }
     }
 
     public function test_no_planifica_para_quien_no_tiene_dispositivo(): void

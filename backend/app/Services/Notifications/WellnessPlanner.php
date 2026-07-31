@@ -8,6 +8,7 @@ use App\Models\MemberDeviceToken;
 use App\Models\MemberNotificationPreference;
 use App\Models\NotificationDispatch;
 use App\Models\NotificationTemplate;
+use App\Services\MembershipService;
 use App\Support\Notifications\NotificationCategory as Cat;
 use App\Support\Notifications\SendingWindow;
 use Carbon\CarbonImmutable;
@@ -102,6 +103,7 @@ class WellnessPlanner
     public function planFor(Member $member, CarbonImmutable $now): ?array
     {
         $prefs = MemberNotificationPreference::forMember($member->id);
+        $puedeEntrenar = $this->hasActiveMembership($member);
 
         foreach ($this->categoryPreference($member, $now) as $category) {
             if ($category === Cat::SUPPLEMENTS) {
@@ -109,12 +111,12 @@ class WellnessPlanner
                 if ($kind === null) {
                     continue;
                 }
-                $template = $this->pickTemplate($member->id, $category, $kind);
+                $template = $this->pickTemplate($member->id, $category, $kind, $puedeEntrenar);
             } else {
                 if (! $prefs->allows($category)) {
                     continue;
                 }
-                $template = $this->pickTemplate($member->id, $category, null);
+                $template = $this->pickTemplate($member->id, $category, null, $puedeEntrenar);
             }
 
             if ($template === null) {
@@ -209,13 +211,45 @@ class WellnessPlanner
         return $candidates[((int) $now->format('z') + $member->id) % count($candidates)];
     }
 
-    /** Plantilla activa que este socio no haya visto recientemente. */
-    private function pickTemplate(int $memberId, string $category, ?string $kind): ?NotificationTemplate
+    /**
+     * ¿Puede este socio entrenar hoy?
+     *
+     * Se consulta el estado real de la membresía, no el del registro: alguien
+     * puede estar `active` como persona y tener el plan vencido desde ayer.
+     */
+    private function hasActiveMembership(Member $member): bool
     {
+        try {
+            $user = $member->user;
+            if ($user === null) {
+                return false;
+            }
+
+            return (bool) (app(MembershipService::class)->snapshot($user)['is_active'] ?? false);
+        } catch (Throwable) {
+            // Ante la duda, tratarlo como vencido: el contenido de reactivación
+            // no molesta a quien sí puede entrenar, y al revés sí molesta.
+            return false;
+        }
+    }
+
+    /** Plantilla activa que este socio no haya visto recientemente. */
+    private function pickTemplate(
+        int $memberId,
+        string $category,
+        ?string $kind,
+        bool $puedeEntrenar = true,
+    ): ?NotificationTemplate {
         $query = NotificationTemplate::query()->active()->where('category', $category);
         $kind === null
             ? $query->whereNull('supplement_kind')
             : $query->where('supplement_kind', $kind);
+
+        // Sin membresía al día, solo el contenido que no da por hecho que hoy
+        // puede entrar al gimnasio.
+        if (! $puedeEntrenar) {
+            $query->forLapsedMembership();
+        }
 
         /** @var Collection<int,NotificationTemplate> $templates */
         $templates = $query->orderBy('id')->get();

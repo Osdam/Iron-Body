@@ -22,6 +22,7 @@ class NotificationTemplate extends Model
         'is_active',
         'is_seeded',
         'disclaimer',
+        'requires_active_membership',
     ];
 
     protected function casts(): array
@@ -30,12 +31,24 @@ class NotificationTemplate extends Model
             'version' => 'integer',
             'is_active' => 'boolean',
             'is_seeded' => 'boolean',
+            'requires_active_membership' => 'boolean',
         ];
     }
 
     public function scopeActive($q)
     {
         return $q->where('is_active', true);
+    }
+
+    /**
+     * Plantillas que puede recibir alguien SIN membresía al día.
+     *
+     * No es censura: es tono. A quien no puede entrar hoy se le habla de
+     * volver, no de revisar su rutina.
+     */
+    public function scopeForLapsedMembership($q)
+    {
+        return $q->where('requires_active_membership', false);
     }
 
     /** Texto final que verá el socio, con el aviso educativo si lo hay. */
