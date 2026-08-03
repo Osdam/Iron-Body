@@ -135,7 +135,7 @@ class MarketingInboxController extends Controller
         if (! $conversation) {
             return $this->notFound();
         }
-        if ($conversation->lead && ! $conversation->lead->isContactable()) {
+        if ($conversation->lead && ! $conversation->lead->canReplyReactively()) {
             return response()->json(['ok' => false, 'code' => 'dnc_blocked', 'message' => 'El lead pidió no ser contactado.'], 422);
         }
 

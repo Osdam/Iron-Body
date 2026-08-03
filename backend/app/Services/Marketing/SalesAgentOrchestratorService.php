@@ -224,7 +224,7 @@ class SalesAgentOrchestratorService
 
         // Refleja temperatura y objetivo detectado en el lead (CRM Mercadeo)
         // salvo do_not_contact. El objetivo solo se fija si aún no había uno.
-        if ($lead->isContactable()) {
+        if ($lead->canReplyReactively()) {
             $changes = ['temperature' => $decision['crm_temperature'] ?? $this->crmTemperature($decision['temperature'])];
             $objective = $decision['extracted_fields']['objective'] ?? null;
             if (is_string($objective) && $objective !== '' && empty($lead->objective)) {

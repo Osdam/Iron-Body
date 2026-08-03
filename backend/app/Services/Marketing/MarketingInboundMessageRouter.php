@@ -30,8 +30,8 @@ class MarketingInboundMessageRouter
             return $this->skip($lead, $conversation, 'auto_analyze_disabled');
         }
 
-        // Respeta do_not_contact (no contactar nunca) — es opt-out del usuario.
-        if (! $lead->isContactable()) {
+        // Respeta el opt-out del usuario: do_not_contact o consentimiento denegado.
+        if (! $lead->canReplyReactively()) {
             return $this->skip($lead, $conversation, 'do_not_contact');
         }
 

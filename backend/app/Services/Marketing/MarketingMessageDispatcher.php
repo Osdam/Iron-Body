@@ -40,8 +40,8 @@ class MarketingMessageDispatcher
             'message_id' => null, 'provider_message_id' => null, 'reason' => null, 'conversation_id' => null,
         ];
 
-        // Guardrail: do_not_contact.
-        if (! $lead->isContactable()) {
+        // Guardrail: do_not_contact o consentimiento denegado.
+        if (! $lead->canReplyReactively()) {
             return array_merge($base, ['reason' => 'do_not_contact']);
         }
 

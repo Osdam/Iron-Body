@@ -35,8 +35,8 @@ class SalesPaymentGuardrailService
      */
     public function assertCanGeneratePaymentLink(MarketingLead $lead, Plan $plan, array $input = []): void
     {
-        // 1) do_not_contact: bloqueo duro.
-        if (! $lead->isContactable()) {
+        // 1) do_not_contact o consentimiento denegado: bloqueo duro.
+        if (! $lead->canReplyReactively()) {
             throw SalesGuardrailException::make(
                 'lead_do_not_contact',
                 'Este lead está marcado como no contactar (do_not_contact).',

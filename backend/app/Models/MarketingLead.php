@@ -36,6 +36,16 @@ class MarketingLead extends Model
 
     public const CONSENT_UNKNOWN = 'unknown';
 
+    /**
+     * Dominio reconocido de consent_status. La columna es un string sin CHECK,
+     * así que cualquier valor fuera de esta lista se trata como NO reconocido y
+     * se bloquea (fail-closed): ante un estado que no sabemos leer, no se contacta.
+     */
+    public const CONSENT_STATUSES = [
+        self::CONSENT_GRANTED, self::CONSENT_DENIED,
+        self::CONSENT_PENDING, self::CONSENT_UNKNOWN,
+    ];
+
     protected $fillable = [
         'channel', 'source', 'meta_user_id', 'phone', 'instagram_username',
         'name', 'status', 'temperature', 'objective', 'assigned_to',
@@ -56,10 +66,56 @@ class MarketingLead extends Model
         'metadata' => 'array',
     ];
 
-    /** ¿Es seguro para el agente contactar a este lead? */
+    /**
+     * Freno duro: el lead pidió expresamente no ser contactado. Gana sobre
+     * cualquier consent_status y sobre cualquier canal.
+     *
+     * Se mantiene con la semántica original (solo do_not_contact) porque hay
+     * siete llamadores que dependen de ella. Para decidir si se puede hablar con
+     * el lead, usa canReplyReactively() o canContactProactively(), que además
+     * miran el consentimiento.
+     */
     public function isContactable(): bool
     {
         return ! (bool) $this->do_not_contact;
+    }
+
+    /**
+     * ¿Podemos RESPONDER a un lead que nos escribió a nosotros?
+     *
+     * Un consentimiento ausente (null) no bloquea: el titular inició el contacto
+     * por un canal comercial publicado, y no responderle sería peor servicio y
+     * peor experiencia que responderle. Lo que sí bloquea es una negativa expresa
+     * y cualquier valor que no sepamos interpretar.
+     */
+    public function canReplyReactively(): bool
+    {
+        if (! $this->isContactable()) {
+            return false;
+        }
+
+        $consent = $this->consent_status;
+        if ($consent === null || $consent === '') {
+            return true;
+        }
+        if (! in_array($consent, self::CONSENT_STATUSES, true)) {
+            return false;
+        }
+
+        return $consent !== self::CONSENT_DENIED;
+    }
+
+    /**
+     * ¿Podemos ESCRIBIR NOSOTROS PRIMERO (seguimiento, reactivación, campaña)?
+     *
+     * Exige consentimiento expreso: iniciar el contacto es tratamiento de datos
+     * con finalidad comercial (Ley 1581 de 2012). Ni null ni pending ni unknown
+     * bastan — solo granted.
+     */
+    public function canContactProactively(): bool
+    {
+        return $this->canReplyReactively()
+            && $this->consent_status === self::CONSENT_GRANTED;
     }
 
     public function campaign(): BelongsTo

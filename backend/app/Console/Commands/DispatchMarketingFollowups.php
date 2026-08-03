@@ -52,7 +52,7 @@ class DispatchMarketingFollowups extends Command
             ->limit($limit)
             ->pluck('id');
 
-        $stats = ['due' => $due->count(), 'dispatched' => 0, 'calls' => 0, 'held' => 0, 'skipped_dnc' => 0];
+        $stats = ['due' => $due->count(), 'dispatched' => 0, 'calls' => 0, 'held' => 0, 'skipped_dnc' => 0, 'skipped_no_optin' => 0];
 
         if (! $dispatchEnabled) {
             $this->info(sprintf(
@@ -74,10 +74,24 @@ class DispatchMarketingFollowups extends Command
 
                 $lead = MarketingLead::find($followup->lead_id);
 
-                // Respeta do_not_contact: cancela, no reintenta.
-                if ($lead !== null && ! $lead->isContactable()) {
+                // Negativa EXPRESA (do_not_contact o consentimiento denegado): cancela,
+                // no reintenta. Es la única condición que destruye el seguimiento.
+                $refused = $lead !== null
+                    && ((bool) $lead->do_not_contact || $lead->consent_status === MarketingLead::CONSENT_DENIED);
+
+                if ($refused) {
                     $followup->update(['status' => MarketingFollowup::STATUS_CANCELLED]);
                     $stats['skipped_dnc']++;
+
+                    return;
+                }
+
+                // Cualquier otro motivo por el que no podamos INICIAR el contacto
+                // (sin opt-in, o consent_status con un valor que no sabemos leer) deja
+                // el seguimiento PENDIENTE: el consentimiento puede llegar después y un
+                // dato corrupto no es razón para destruir trabajo comercial.
+                if ($lead !== null && ! $lead->canContactProactively()) {
+                    $stats['skipped_no_optin']++;
 
                     return;
                 }
@@ -98,8 +112,8 @@ class DispatchMarketingFollowups extends Command
         }
 
         $this->info(sprintf(
-            'marketing:dispatch-followups → vencidos: %d · despachados: %d (llamadas: %d) · retenidos: %d · cancelados(DNC): %d',
-            $stats['due'], $stats['dispatched'], $stats['calls'], $stats['held'], $stats['skipped_dnc'],
+            'marketing:dispatch-followups → vencidos: %d · despachados: %d (llamadas: %d) · retenidos: %d · cancelados(DNC): %d · sin opt-in: %d',
+            $stats['due'], $stats['dispatched'], $stats['calls'], $stats['held'], $stats['skipped_dnc'], $stats['skipped_no_optin'],
         ));
 
         return self::SUCCESS;

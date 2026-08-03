@@ -24,8 +24,8 @@ class SalesAgentGuardrailService
     /** Aplica los guardrails a la decisión ya ensamblada y la devuelve saneada. */
     public function apply(array $decision, MarketingLead $lead): array
     {
-        // 1) do_not_contact: bloqueo total (gana sobre todo).
-        if (! $lead->isContactable()) {
+        // 1) do_not_contact o consentimiento denegado: bloqueo total (gana sobre todo).
+        if (! $lead->canReplyReactively()) {
             return array_merge($decision, [
                 'should_reply' => false,
                 'should_generate_payment_link' => false,
