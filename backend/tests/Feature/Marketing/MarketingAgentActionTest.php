@@ -219,6 +219,60 @@ class MarketingAgentActionTest extends TestCase
         ]);
     }
 
+    /**
+     * Los tres campos que añadió la migración 2026_06_30_000008 y que el modelo
+     * descartaba por mass assignment deben quedar persistidos, no solo la
+     * conversación: sin assigned_to_admin_id el seguimiento nace sin dueño y sin
+     * reason nace sin contexto para el asesor que lo abra.
+     */
+    public function test_execute_create_follow_up_persists_assignee_and_reason(): void
+    {
+        $assignee = Admin::create(['name' => 'Asesora', 'email' => 'asesora-aa@ironbody.test', 'password' => 'x', 'role' => Admin::ROLE_SUPER_ADMIN, 'status' => 'active']);
+
+        $a = $this->suggestion('create_follow_up', [
+            'due_at'               => now()->addDay()->toIso8601String(),
+            'type'                 => 'call',
+            'reason'               => 'pidio pensarlo hasta el lunes',
+            'assigned_to_admin_id' => $assignee->id,
+        ]);
+
+        $this->postJson($this->url("/{$a->id}/execute"), [], $this->saHeaders)
+            ->assertOk()->assertJsonPath('data.status', 'executed');
+
+        $this->assertDatabaseHas('marketing_followups', [
+            'lead_id'                   => $this->lead->id,
+            'marketing_conversation_id' => $this->conversation->id,
+            'assigned_to_admin_id'      => $assignee->id,
+            'reason'                    => 'pidio pensarlo hasta el lunes',
+            'type'                      => 'call',
+            'status'                    => 'pending',
+        ]);
+    }
+
+    /**
+     * Sin assigned_to_admin_id en el payload, el seguimiento queda a nombre del
+     * admin que ejecutó la acción (comportamiento de ExecutionService::execCreateFollowUp).
+     */
+    public function test_execute_create_follow_up_defaults_assignee_to_executor(): void
+    {
+        $executor = Admin::create(['name' => 'Ejecutor', 'email' => 'ejecutor-aa@ironbody.test', 'password' => 'x', 'role' => Admin::ROLE_SUPER_ADMIN, 'status' => 'active']);
+        $headers = $this->actingAsAdmin($executor);
+
+        $a = $this->suggestion('create_follow_up', [
+            'due_at' => now()->addDay()->toIso8601String(),
+            'reason' => 'sin responsable explicito',
+        ]);
+
+        $this->postJson($this->url("/{$a->id}/execute"), [], $headers)
+            ->assertOk()->assertJsonPath('data.status', 'executed');
+
+        $this->assertDatabaseHas('marketing_followups', [
+            'lead_id'              => $this->lead->id,
+            'assigned_to_admin_id' => $executor->id,
+            'reason'               => 'sin responsable explicito',
+        ]);
+    }
+
     public function test_execute_draft_reply_does_not_send_whatsapp(): void
     {
         $a = $this->suggestion('draft_reply', ['draft' => 'Hola, te comparto info']);

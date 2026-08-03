@@ -14,7 +14,8 @@ class MarketingFollowup extends Model
     public const STATUS_CANCELLED = 'cancelled';
 
     protected $fillable = [
-        'lead_id', 'due_at', 'type', 'status', 'message_template',
+        'lead_id', 'marketing_conversation_id', 'assigned_to_admin_id',
+        'due_at', 'type', 'status', 'message_template', 'reason',
     ];
 
     protected $casts = ['due_at' => 'datetime'];
