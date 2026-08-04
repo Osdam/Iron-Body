@@ -251,7 +251,7 @@ class SalesAgentOrchestratorService
             $executed[] = match ($tool) {
                 SalesIntents::TOOL_MARK_DNC => $this->execMarkDoNotContact($lead, $conversation),
                 SalesIntents::TOOL_STAFF_REVIEW => $this->execStaffReview($lead, $conversation, $decision),
-                SalesIntents::TOOL_SCHEDULE_FOLLOWUP => $this->execScheduleFollowup($lead, $decision),
+                SalesIntents::TOOL_SCHEDULE_FOLLOWUP => $this->execScheduleFollowup($lead, $conversation, $decision),
                 SalesIntents::TOOL_PAYMENT_LINK_SEND => $this->execPaymentLink($lead, $conversation, $plan),
                 default => ['tool' => $tool, 'status' => 'skipped', 'reason' => 'unknown_tool'],
             };
@@ -386,7 +386,18 @@ class SalesAgentOrchestratorService
         ];
     }
 
-    private function execScheduleFollowup(MarketingLead $lead, array $decision): array
+    /**
+     * Programa el seguimiento automático del cerebro comercial.
+     *
+     * Las claves de búsqueda NO cambian a propósito: la deduplicación sigue
+     * siendo "un único seguimiento de mensaje pendiente por lead", no por
+     * conversación. Meterlas en la búsqueda duplicaría los seguimientos de un
+     * lead con varias conversaciones.
+     *
+     * La conversación viaja en los valores por defecto, así que solo se aplica a
+     * los seguimientos que se CREAN. Los ya existentes no se tocan.
+     */
+    private function execScheduleFollowup(MarketingLead $lead, MarketingConversation $conversation, array $decision): array
     {
         $delay = (int) ($decision['followup_delay_minutes'] ?? 0);
         $dueAt = $delay > 0 ? now()->addMinutes($delay) : null;
@@ -397,7 +408,10 @@ class SalesAgentOrchestratorService
                 'type' => 'message',
                 'status' => MarketingFollowup::STATUS_PENDING,
             ],
-            ['due_at' => $dueAt],
+            [
+                'due_at' => $dueAt,
+                'marketing_conversation_id' => $conversation->id,
+            ],
         );
 
         return [

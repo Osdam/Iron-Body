@@ -174,6 +174,73 @@ class SalesAgentTest extends TestCase
         $this->assertDatabaseHas('marketing_followups', ['lead_id' => $this->lead->id, 'status' => 'pending']);
     }
 
+    /**
+     * El seguimiento automático del orquestador debe nacer atado a su conversación.
+     * En producción, 17 de 18 seguimientos quedaron huérfanos porque esta vía nunca
+     * pasaba marketing_conversation_id: el asesor que abría la cola veía tareas sin
+     * ningún contexto.
+     */
+    public function test_orchestrator_followup_is_never_orphan(): void
+    {
+        $this->analyze(['body' => 'está muy caro', 'auto_execute' => true])->assertOk();
+
+        $followup = \App\Models\MarketingFollowup::where('lead_id', $this->lead->id)->firstOrFail();
+        $conversation = \App\Models\MarketingConversation::where('lead_id', $this->lead->id)->firstOrFail();
+
+        $this->assertSame(
+            $conversation->id,
+            $followup->marketing_conversation_id,
+            'El seguimiento del orquestador debe quedar atado a la conversación.',
+        );
+        $this->assertDatabaseMissing('marketing_followups', [
+            'lead_id' => $this->lead->id,
+            'marketing_conversation_id' => null,
+        ]);
+    }
+
+    /**
+     * La deduplicación NO cambia con la conversación: sigue siendo un único
+     * seguimiento de mensaje pendiente por lead. Si las claves de búsqueda
+     * incluyeran la conversación, un lead con varias conversaciones acumularía
+     * un seguimiento por cada una.
+     */
+    public function test_orchestrator_followup_is_idempotent_per_lead(): void
+    {
+        $this->analyze(['body' => 'está muy caro', 'auto_execute' => true])->assertOk();
+        $this->analyze(['body' => 'sigue estando caro', 'auto_execute' => true])->assertOk();
+        $this->analyze(['body' => 'muy caro la verdad', 'auto_execute' => true])->assertOk();
+
+        $this->assertSame(
+            1,
+            \App\Models\MarketingFollowup::where('lead_id', $this->lead->id)
+                ->where('type', 'message')
+                ->where('status', 'pending')
+                ->count(),
+            'Tres análisis no pueden producir tres seguimientos para el mismo lead.',
+        );
+    }
+
+    /**
+     * Un seguimiento ya existente no se toca al reutilizarlo: firstOrCreate solo
+     * aplica los valores por defecto cuando crea. Esto protege los seguimientos
+     * huérfanos históricos de mutar por sorpresa.
+     */
+    public function test_existing_followup_is_not_mutated_on_reuse(): void
+    {
+        $existing = \App\Models\MarketingFollowup::create([
+            'lead_id' => $this->lead->id,
+            'type' => 'message',
+            'status' => 'pending',
+            'due_at' => now()->addDays(5),
+        ]);
+
+        $this->analyze(['body' => 'está muy caro', 'auto_execute' => true])->assertOk();
+
+        $existing->refresh();
+        $this->assertNull($existing->marketing_conversation_id);
+        $this->assertSame(1, \App\Models\MarketingFollowup::where('lead_id', $this->lead->id)->count());
+    }
+
     public function test_does_not_invent_prices_in_reply(): void
     {
         // Sin plan activo NO se inventa precio: se pregunta el objetivo.
