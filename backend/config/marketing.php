@@ -85,6 +85,27 @@ return [
         // se usa si openai.enabled=true Y existe OPENAI_API_KEY (services.openai).
         // La API key NO se duplica aquí: se reutiliza config('services.openai').
         // Laravel SIEMPRE tiene la última palabra (validator + guardrails).
+        // Hermes (motor de razonamiento adicional). INERTE por defecto y por
+        // partida doble: driver debe ser 'hermes' Y hermes.enabled true Y debe
+        // haber base_url. Si algo falta, cae a OpenAI y de ahí a fake, así que
+        // apagar el flag devuelve el comportamiento exacto de hoy (kill switch).
+        //
+        // Hermes SOLO razona: no habla con PostgreSQL, no controla WhatsApp y no
+        // se salta Laravel. Su salida pasa por SalesAgentDecisionValidator y por
+        // los guardrails igual que la de OpenAI.
+        'hermes' => [
+            'enabled'     => filter_var(env('MARKETING_HERMES_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+            'base_url'    => rtrim((string) env('MARKETING_HERMES_BASE_URL', ''), '/'),
+            'api_key'     => env('MARKETING_HERMES_API_KEY'),
+            'model'       => env('MARKETING_HERMES_MODEL', 'gpt-4.1'),
+            'timeout'     => (int) env('MARKETING_HERMES_TIMEOUT', 15),
+            // Cero reintentos a propósito: si Hermes tarda, se cae a OpenAI en
+            // lugar de hacer esperar al prospecto de WhatsApp.
+            'max_retries' => (int) env('MARKETING_HERMES_MAX_RETRIES', 0),
+            'temperature' => (float) env('MARKETING_HERMES_TEMPERATURE', 0.2),
+            'max_output_tokens' => (int) env('MARKETING_HERMES_MAX_OUTPUT_TOKENS', 1200),
+        ],
+
         'openai' => [
             'enabled'           => filter_var(env('MARKETING_OPENAI_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
             // Modelo; por defecto reusa el de IRON IA (services.openai.model).

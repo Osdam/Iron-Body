@@ -9,10 +9,26 @@ namespace App\Services\Marketing;
  */
 final class SalesAiConfig
 {
-    /** Driver efectivo a usar: 'openai' solo si TODO está listo; si no, 'fake'. */
+    /**
+     * Driver efectivo. Degrada siempre hacia abajo y nunca rompe producción:
+     * hermes → openai → fake. Si Hermes no está listo se usa OpenAI; si OpenAI
+     * tampoco, reglas deterministas.
+     */
     public static function effectiveDriver(): string
     {
+        if (self::hermesReady()) {
+            return 'hermes';
+        }
+
         return self::openAiReady() ? 'openai' : 'fake';
+    }
+
+    /** ¿Hermes está realmente listo (driver + flag + base_url)? */
+    public static function hermesReady(): bool
+    {
+        return (string) config('marketing.ai.driver', 'fake') === 'hermes'
+            && (bool) config('marketing.ai.hermes.enabled', false)
+            && trim((string) config('marketing.ai.hermes.base_url')) !== '';
     }
 
     /** ¿Está OpenAI realmente listo (driver + flag + API key + modelo)? */

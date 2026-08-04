@@ -8,6 +8,7 @@ use App\Services\Billing\Factus\FactusTokenManager;
 use App\Services\Exercises\ExerciseCatalogResolver;
 use App\Services\Marketing\Contracts\AiSalesResponderInterface;
 use App\Services\Marketing\FakeAiSalesResponder;
+use App\Services\Marketing\HermesSalesResponder;
 use App\Services\Marketing\OpenAiSalesResponder;
 use App\Services\Marketing\SalesAgentDecisionValidator;
 use App\Services\Marketing\SalesAgentPromptBuilder;
@@ -36,20 +37,27 @@ class AppServiceProvider extends ServiceProvider
             fn ($app) => new FactusClient($app->make(FactusTokenManager::class), (array) config('billing')),
         );
 
-        // Cerebro comercial IA. Por defecto el responder DETERMINISTA (fake, sin
-        // OpenAI). Solo usa OpenAI si TODO está listo (driver=openai + flag +
-        // OPENAI_API_KEY + modelo); si falta algo, cae a fake (nunca rompe prod).
-        // El responder efectivo (fake/openai/fallback) se registra en metadata.
+        // Cerebro comercial IA. Cadena de degradación hermes → openai → fake:
+        // cada eslabón solo se usa si TODO lo suyo está listo, y si falta algo
+        // cae al siguiente. Por defecto queda el responder DETERMINISTA (fake),
+        // así que ningún fallo de proveedor rompe producción. El responder
+        // efectivo se registra en metadata para auditoría.
         $this->app->bind(AiSalesResponderInterface::class, function ($app) {
-            if (SalesAiConfig::effectiveDriver() === 'openai') {
-                return new OpenAiSalesResponder(
-                    new FakeAiSalesResponder,
+            $openAi = fn () => new OpenAiSalesResponder(
+                new FakeAiSalesResponder,
+                $app->make(SalesAgentPromptBuilder::class),
+                $app->make(SalesAgentDecisionValidator::class),
+            );
+
+            return match (SalesAiConfig::effectiveDriver()) {
+                'hermes' => new HermesSalesResponder(
+                    $openAi(),
                     $app->make(SalesAgentPromptBuilder::class),
                     $app->make(SalesAgentDecisionValidator::class),
-                );
-            }
-
-            return new FakeAiSalesResponder;
+                ),
+                'openai' => $openAi(),
+                default => new FakeAiSalesResponder,
+            };
         });
     }
 
