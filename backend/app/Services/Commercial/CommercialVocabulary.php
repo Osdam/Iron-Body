@@ -168,9 +168,22 @@ final class CommercialVocabulary
 
     public const EV_PAYMENT_APPROVED = 'payment_approved';
 
+    /** Enviado a la pasarela y sin resolver. NO es un fracaso: es una espera. */
+    public const EV_PAYMENT_PENDING = 'payment_pending';
+
     public const EV_PAYMENT_FAILED = 'payment_failed';
 
+    /**
+     * El intento venció sin resolverse. Se distingue del rechazo porque la
+     * conversación posterior es otra: al rechazado se le ofrece otro medio de
+     * pago; al que dejó vencer el enlace se le vuelve a abrir la puerta.
+     */
+    public const EV_PAYMENT_EXPIRED = 'payment_expired';
+
     public const EV_MEMBERSHIP_ACTIVATED = 'membership_activated';
+
+    /** Renovación de alguien que ya era miembro, distinta del alta inicial. */
+    public const EV_MEMBERSHIP_RENEWED = 'membership_renewed';
 
     public const EV_FIRST_CHECKIN = 'first_checkin';
 
@@ -188,22 +201,46 @@ final class CommercialVocabulary
 
     public const EV_INVOICE_REQUESTED = 'invoice_requested';
 
+    /** La DIAN la aceptó: hay PDF y XML que entregar. */
+    public const EV_INVOICE_VALIDATED = 'invoice_validated';
+
+    /** Rechazada. Casi siempre por datos fiscales del cliente, no por el pago. */
+    public const EV_INVOICE_REJECTED = 'invoice_rejected';
+
     public const EV_APP_LINKED = 'app_linked';
 
     public const EV_OBJECTION_RAISED = 'objection_raised';
 
     public const EV_COMPLAINT_CREATED = 'complaint_created';
 
+    /**
+     * Señal positiva explícita. Importa porque es el único momento en que pedir
+     * un referido no resulta oportunista.
+     */
+    public const EV_CUSTOMER_SATISFIED = 'customer_satisfied';
+
+    public const EV_REFERRAL_OPPORTUNITY = 'referral_opportunity';
+
     public const EV_OFFER_REJECTED = 'offer_rejected';
+
+    /**
+     * Pidió hablar con una persona. El evento más importante de la lista: es el
+     * único que hace que el sistema se calle en lugar de actuar.
+     */
+    public const EV_HUMAN_REQUESTED = 'human_requested';
 
     public const EVENTS = [
         self::EV_LEAD_CREATED, self::EV_LEAD_QUALIFIED, self::EV_OFFER_PRESENTED,
-        self::EV_PAYMENT_LINK_CREATED, self::EV_PAYMENT_APPROVED, self::EV_PAYMENT_FAILED,
-        self::EV_MEMBERSHIP_ACTIVATED, self::EV_FIRST_CHECKIN, self::EV_ATTENDANCE_MILESTONE,
+        self::EV_PAYMENT_LINK_CREATED, self::EV_PAYMENT_APPROVED, self::EV_PAYMENT_PENDING,
+        self::EV_PAYMENT_FAILED, self::EV_PAYMENT_EXPIRED,
+        self::EV_MEMBERSHIP_ACTIVATED, self::EV_MEMBERSHIP_RENEWED,
+        self::EV_FIRST_CHECKIN, self::EV_ATTENDANCE_MILESTONE,
         self::EV_INACTIVITY_DETECTED, self::EV_RENEWAL_WINDOW_OPENED, self::EV_MEMBERSHIP_EXPIRED,
-        self::EV_APPOINTMENT_CREATED, self::EV_APPOINTMENT_COMPLETED, self::EV_INVOICE_REQUESTED,
+        self::EV_APPOINTMENT_CREATED, self::EV_APPOINTMENT_COMPLETED,
+        self::EV_INVOICE_REQUESTED, self::EV_INVOICE_VALIDATED, self::EV_INVOICE_REJECTED,
         self::EV_APP_LINKED, self::EV_OBJECTION_RAISED, self::EV_COMPLAINT_CREATED,
-        self::EV_OFFER_REJECTED,
+        self::EV_CUSTOMER_SATISFIED, self::EV_REFERRAL_OPPORTUNITY,
+        self::EV_OFFER_REJECTED, self::EV_HUMAN_REQUESTED,
     ];
 
     // ── Estados de la oportunidad ────────────────────────────────────────────

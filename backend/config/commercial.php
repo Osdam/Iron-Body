@@ -18,6 +18,12 @@ return [
     // Interruptor general. Con false el motor no evalúa ni crea oportunidades.
     'enabled' => filter_var(env('COMMERCIAL_NBA_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
 
+    // Registro de hechos (observers). Independiente del anterior a propósito:
+    // observar es inofensivo —solo escribe filas en commercial_events— y sirve
+    // para comprobar durante semanas que los hechos se detectan bien y a tiempo
+    // antes de dejar que alguien decida sobre ellos.
+    'events_enabled' => filter_var(env('COMMERCIAL_EVENTS_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
     // Autonomía: que el agente EJECUTE la acción decidida sin que un humano la
     // apruebe. Independiente del anterior a propósito: durante semanas se puede
     // querer que el motor decida y que una persona revise lo que habría hecho.

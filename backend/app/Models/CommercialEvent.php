@@ -15,7 +15,7 @@ class CommercialEvent extends Model
 {
     protected $fillable = [
         'marketing_lead_id', 'member_id', 'commercial_opportunity_id',
-        'event', 'payload', 'occurred_at', 'evaluated_at', 'correlation_id',
+        'event', 'dedupe_key', 'payload', 'occurred_at', 'evaluated_at', 'correlation_id',
     ];
 
     protected $casts = [
