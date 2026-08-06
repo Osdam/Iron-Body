@@ -217,3 +217,26 @@ if ((bool) config('marketing.followups.scheduler_enabled', false)) {
         ->withoutOverlapping()
         ->onOneServer();
 }
+
+// ── Canal de WhatsApp: rescate de eventos atascados ───────────────────────────
+// El worker se cae, la base se satura, un despliegue pilla un job a mitad. Antes
+// ese mensaje del prospecto se perdía sin que nadie se enterara; ahora el cuerpo
+// original está guardado y esta corrida lo devuelve a la cola.
+//
+// Es seguro ejecutarlo de más: reprocesar no duplica nada porque la idempotencia
+// por meta_message_id sigue vigente aguas abajo. Cada 5 minutos es un
+// compromiso entre no dejar a nadie esperando y no competir con el worker.
+Schedule::command('marketing:replay-webhooks')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// ── Canal de WhatsApp: retención de adjuntos y eventos crudos ─────────────────
+// Sin esta entrada, las fotos y notas de voz de los prospectos se acumularían
+// para siempre en el disco del servidor y la retención declarada
+// (`marketing.media.retention_days`) sería papel mojado. Borra el binario y deja
+// la ficha, así que el historial del inbox no se agujerea.
+Schedule::command('marketing:prune-media')
+    ->dailyAt('04:15')
+    ->withoutOverlapping()
+    ->onOneServer();

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\Admin\MarketingAgentActionController;
 use App\Http\Controllers\Api\Admin\MarketingAppointmentController;
+use App\Http\Controllers\Api\Admin\MarketingAttachmentController;
 use App\Http\Controllers\Api\Admin\MarketingController;
 use App\Http\Controllers\Api\Admin\MarketingInboxController;
 use App\Http\Controllers\Api\Internal\InternalMarketingController;
@@ -88,7 +89,21 @@ Route::middleware('throttle:120,1')
         // Acciones del agente para la conversación (panel "Acciones sugeridas").
         Route::get('conversations/{id}/agent-actions', [MarketingAgentActionController::class, 'forConversation']);
         Route::post('conversations/{id}/agent-actions/recommend', [MarketingAgentActionController::class, 'recommendForConversation']);
+
+        // Paso 1 de los adjuntos: pedir una URL firmada de vida corta. Exige
+        // sesión de administrador y permiso de Inbox como cualquier otra acción.
+        Route::get('attachments/{id}/link', [MarketingAttachmentController::class, 'link']);
     });
+
+// ── Paso 2 de los adjuntos: el binario ────────────────────────────────────────
+// FUERA de /api/admin/* a propósito: la firma temporal ES la autorización, y así
+// el navegador puede pedirla desde un <img> o un <audio> sin cabeceras. La URL
+// solo se obtiene con sesión válida (paso 1) y caduca sola en minutos, de modo
+// que copiarla fuera del CRM no da acceso duradero a nada.
+Route::middleware(['signed', 'throttle:120,1'])
+    ->get('marketing/attachments/{id}/download', [MarketingAttachmentController::class, 'download'])
+    ->where('id', '[0-9]+')
+    ->name('marketing.attachment.download');
 
 // ── Acciones CRM del agente comercial (Fase 4C) ───────────────────────────────
 // Human-in-the-loop: recomendar / aprobar / rechazar / ejecutar / cancelar.

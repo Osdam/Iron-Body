@@ -139,6 +139,7 @@ class MarketingInboxService
         ]);
 
         $messages = MarketingMessage::where('conversation_id', $conversation->id)
+            ->with('attachments')
             ->orderBy('created_at')
             ->get()
             ->map(fn (MarketingMessage $m) => [
@@ -149,6 +150,11 @@ class MarketingInboxService
                 'body' => $m->body,
                 'status' => $m->status,
                 'created_at' => $m->created_at?->toIso8601String(),
+                // Motivo legible cuando Meta rechazó el envío. Sin esto, un
+                // "failed" en la burbuja no le dice nada a quien atiende.
+                'failure' => $this->failureFor($m),
+                'attachments' => $this->attachmentsFor($m),
+                'quoted_meta_message_id' => data_get($m->metadata, 'context.quoted_meta_message_id'),
                 // No se expone metadata cruda del proveedor.
             ])->all();
 
@@ -204,6 +210,76 @@ class MarketingInboxService
             ])->all(),
             'tags' => $conversation->tags->pluck('tag')->all(),
         ];
+    }
+
+    /**
+     * Adjuntos de un mensaje para el inbox.
+     *
+     * NO se devuelve la ruta ni el disco: el frontend recibe un id y pide la
+     * URL firmada cuando de verdad va a mostrar el archivo. Sí se devuelve el
+     * estado, porque "esta nota de voz no se pudo descargar y por qué" es
+     * información que quien atiende necesita ver.
+     *
+     * @return array<int, array<string,mixed>>
+     */
+    private function attachmentsFor(MarketingMessage $message): array
+    {
+        return $message->attachments->map(fn ($a) => [
+            'id' => $a->id,
+            'kind' => $a->kind,
+            'status' => $a->status,
+            'available' => $a->isServable(),
+            'reason' => $a->failure_reason,
+            'mime_type' => $a->detected_mime_type,
+            'size_bytes' => $a->size_bytes,
+            'filename' => $a->original_filename,
+            'voice' => (bool) $a->voice,
+            'width' => $a->width,
+            'height' => $a->height,
+            'duration_seconds' => $a->duration_seconds,
+            'caption' => data_get($a->metadata, 'caption'),
+            'transcript' => $a->transcript,
+        ])->all();
+    }
+
+    /**
+     * Motivo por el que Meta rechazó un envío, en términos que un asesor pueda
+     * accionar. El código crudo se conserva para soporte técnico.
+     *
+     * @return array<string,mixed>|null
+     */
+    private function failureFor(MarketingMessage $message): ?array
+    {
+        $failure = data_get($message->metadata, 'failure');
+
+        if (! is_array($failure) || $failure === []) {
+            return null;
+        }
+
+        return [
+            'code' => $failure['code'] ?? null,
+            'title' => $failure['title'] ?? null,
+            'message' => $failure['message'] ?? null,
+            'hint' => $this->failureHint($failure['code'] ?? null),
+        ];
+    }
+
+    /**
+     * Traducción de los códigos de Meta que de verdad aparecen en el día a día
+     * de un gimnasio. Un código sin traducir devuelve null en vez de inventar.
+     */
+    private function failureHint(mixed $code): ?string
+    {
+        return match ((int) $code) {
+            131047 => 'Pasaron más de 24 horas desde el último mensaje del cliente. Para retomar hay que usar una plantilla aprobada.',
+            131026 => 'El número no tiene WhatsApp o no puede recibir mensajes.',
+            131051 => 'Ese tipo de mensaje no se puede enviar por este canal.',
+            131000, 131016 => 'Error temporal de Meta. Se puede reintentar.',
+            132000, 132001, 132005, 132007, 132012 => 'La plantilla no coincide con lo aprobado o no existe en este idioma.',
+            130429, 131048 => 'Se superó el límite de envíos de Meta. Hay que esperar antes de reintentar.',
+            131031 => 'La cuenta de WhatsApp está restringida por Meta.',
+            default => null,
+        };
     }
 
     /** Métricas básicas de operación de la bandeja. */
