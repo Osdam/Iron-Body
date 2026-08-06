@@ -84,4 +84,42 @@ return [
 
     // Cuántas oportunidades evalúa una corrida del motor (anti-avalancha).
     'evaluation_batch' => (int) env('COMMERCIAL_EVALUATION_BATCH', 100),
+
+    /*
+    | Herramientas operativas del agente, por familia.
+    |
+    | Separadas del interruptor de autonomía a propósito: `autonomy_enabled`
+    | decide si el MOTOR puede ejecutar por su cuenta, y estos deciden qué
+    | herramientas existen siquiera. Se pueden encender las de solo lectura
+    | —catálogo, estado de pago, estado de membresía— mucho antes que las que
+    | escriben, y de hecho ese es el orden recomendado.
+    */
+    'tools' => [
+        'catalog'     => filter_var(env('COMMERCIAL_TOOL_CATALOG', false), FILTER_VALIDATE_BOOLEAN),
+        'lead'        => filter_var(env('COMMERCIAL_TOOL_LEAD', false), FILTER_VALIDATE_BOOLEAN),
+        'payments'    => filter_var(env('COMMERCIAL_TOOL_PAYMENTS', false), FILTER_VALIDATE_BOOLEAN),
+        'memberships' => filter_var(env('COMMERCIAL_TOOL_MEMBERSHIPS', false), FILTER_VALIDATE_BOOLEAN),
+        'agenda'      => filter_var(env('COMMERCIAL_TOOL_AGENDA', false), FILTER_VALIDATE_BOOLEAN),
+        'invoicing'   => filter_var(env('COMMERCIAL_TOOL_INVOICING', false), FILTER_VALIDATE_BOOLEAN),
+        'app'         => filter_var(env('COMMERCIAL_TOOL_APP', false), FILTER_VALIDATE_BOOLEAN),
+    ],
+
+    /*
+    | El catálogo cerrado de herramientas. El nombre que pida un modelo se busca
+    | aquí y en ningún otro sitio: no hay resolución dinámica de clases. Si no
+    | está en esta lista, no se ejecuta.
+    */
+    'tool_classes' => [
+        \App\Services\Commercial\Tools\Commercial\ListPlansTool::class,
+        \App\Services\Commercial\Tools\Commercial\UpdateLeadTool::class,
+        \App\Services\Commercial\Tools\Commercial\EscalateToHumanTool::class,
+        \App\Services\Commercial\Tools\Payments\CreatePaymentLinkTool::class,
+        \App\Services\Commercial\Tools\Payments\GetPaymentStatusTool::class,
+        \App\Services\Commercial\Tools\Memberships\GetMembershipStatusTool::class,
+        \App\Services\Commercial\Tools\Memberships\EnsureMemberTool::class,
+        \App\Services\Commercial\Tools\Agenda\BookAppointmentTool::class,
+        \App\Services\Commercial\Tools\Invoicing\ValidateInvoiceDataTool::class,
+        \App\Services\Commercial\Tools\Invoicing\GetInvoiceStatusTool::class,
+        \App\Services\Commercial\Tools\App\GetAppAccountStatusTool::class,
+    ],
 ];

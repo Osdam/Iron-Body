@@ -52,6 +52,19 @@ class CommercialEventServiceProvider extends ServiceProvider
         ElectronicInvoice::class => ElectronicInvoiceCommercialObserver::class,
     ];
 
+    public function register(): void
+    {
+        // El registro se construye desde la configuración, que es la lista
+        // cerrada. Singleton porque resolver once herramientas en cada llamada
+        // sería gasto puro.
+        $this->app->singleton(
+            \App\Services\Commercial\Tools\ToolRegistry::class,
+            fn () => new \App\Services\Commercial\Tools\ToolRegistry(
+                (array) config('commercial.tool_classes', []),
+            ),
+        );
+    }
+
     public function boot(): void
     {
         // Se registran siempre; cada observer comprueba el flag por su cuenta.
