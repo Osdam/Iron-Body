@@ -1,0 +1,156 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Hermes Agent — motor de razonamiento de Iron Body Neiva
+#
+# Copia de referencia de lo desplegado en /opt/hermes/docker-compose.yml. Vive
+# en el repositorio para que el despliegue sea auditable y reproducible; los
+# SECRETOS no están aquí: van en /opt/hermes/.env, con permisos 600 y fuera de
+# Git.
+#
+# Qué es Hermes en esta arquitectura: SOLO un motor de razonamiento. Laravel
+# sigue siendo el dueño de las conversaciones, los mensajes, los permisos y las
+# herramientas. Hermes no recibe el webhook de Meta, no habla con PostgreSQL, no
+# envía nada a WhatsApp y no toca miembros ni pagos. Devuelve JSON; Laravel lo
+# valida y decide.
+#
+# ── Por qué DOS contenedores y no dos perfiles en uno ────────────────────────
+#
+# Hermes sabe correr varios perfiles dentro de un mismo contenedor, pero el init
+# de la imagen solo supervisa UN gateway: los demás hay que levantarlos a mano y
+# nadie los reinicia si se caen. Además compartirían volumen, y el requisito es
+# que iron-guard NO comparta memoria con iron-sales.
+#
+# Con un contenedor por perfil cada uno tiene su propio volumen (memoria, skills
+# y sesiones separadas de verdad, no por convención), su propio supervisor, sus
+# propios límites de recursos y su propio reinicio. Comparten la imagen, así que
+# en disco sigue siendo una sola copia.
+#
+# ── Decisiones de seguridad ──────────────────────────────────────────────────
+#
+#  · Versión FIJADA a v2026.7.30. Es la release que Nous Research designa
+#    explícitamente como estable para consumidores downstream (imágenes Docker,
+#    instalaciones nuevas). `latest` en producción significa que un martes
+#    cualquiera cambia el motor sin que nadie lo haya decidido.
+#
+#  · Puertos publicados SOLO en 127.0.0.1. Sin ese prefijo, Docker abre el
+#    puerto en todas las interfaces y se salta el firewall del host: la API de
+#    Hermes quedaría en Internet. Laravel le habla por loopback y nadie más.
+#
+#  · Sin el socket de Docker montado. Montarlo equivale a dar root en el host al
+#    contenedor, y aquí corre un agente que interpreta texto de desconocidos.
+#
+#  · Sin /var/www, sin /root, sin la base de datos. El único volumen de cada
+#    contenedor es su propio directorio de estado.
+#
+#  · no-new-privileges y cap_drop ALL, devolviendo SOLO las capacidades que el
+#    init necesita para BAJAR de privilegios. Se probó con ALL a secas y el
+#    contenedor entraba en bucle de reinicio: s6-overlay arranca como root y usa
+#    SETUID/SETGID para dejar corriendo a Hermes como usuario sin privilegios
+#    (uid 10000), así que quitárselas impedía precisamente la de-escalada que
+#    queremos. Devolverlas es más seguro que renunciar a cap_drop, no menos.
+#
+#  · Límites de CPU y memoria. Un bucle de razonamiento no puede dejar sin RAM a
+#    PostgreSQL ni a PHP-FPM, que son los que sostienen el gimnasio.
+#
+#  · Rotación de logs. Sin ella, un contenedor charlatán llena el disco y tumba
+#    la base de datos.
+# ─────────────────────────────────────────────────────────────────────────────
+
+x-hermes-base: &hermes-base
+  image: nousresearch/hermes-agent:v2026.7.30
+  restart: unless-stopped
+  env_file:
+    - /opt/hermes/.env
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  # Lo mínimo para que el init prepare sus directorios y suelte privilegios.
+  # Nada de NET_ADMIN, SYS_ADMIN, SYS_PTRACE ni montaje de dispositivos.
+  cap_add:
+    - CHOWN          # ajustar dueño de sus propios directorios de estado
+    - DAC_OVERRIDE   # escribir en ellos durante el arranque
+    - FOWNER         # ajustar permisos de esos mismos directorios
+    - SETUID         # dejar de ser root
+    - SETGID         # dejar de ser root
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+services:
+  # ── iron-sales — el cerebro comercial que atiende a clientes ───────────────
+  # Le llega texto de desconocidos por WhatsApp, así que es el perfil con menos
+  # permisos del sistema: sin terminal, sin ficheros, sin navegador, sin
+  # ejecución de código y sin salida a Internet. Todo dato comercial (precios,
+  # horarios, planes) viene de las herramientas de Laravel; una búsqueda web es
+  # justo por donde se colaría una promoción inventada.
+  hermes-sales:
+    <<: *hermes-base
+    container_name: hermes-sales
+    command: gateway run
+    ports:
+      - "127.0.0.1:8642:8642"
+    volumes:
+      - /opt/hermes/sales-data:/opt/data
+    environment:
+      - API_SERVER_ENABLED=true
+      # Dentro del contenedor escucha en todas sus interfaces; el aislamiento
+      # real lo da el binding a 127.0.0.1 de `ports`, no esta variable.
+      - API_SERVER_HOST=0.0.0.0
+      - API_SERVER_PORT=8642
+      # CORS vacío: ningún navegador debe poder llamar a Hermes. El único
+      # cliente legítimo es Laravel, servidor a servidor.
+      - API_SERVER_CORS_ORIGINS=
+      # Dashboard apagado: una superficie web menos que defender.
+      - HERMES_DASHBOARD=0
+      - TZ=America/Bogota
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "1.5"
+        reservations:
+          memory: 384M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8642/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+
+  # ── iron-guard — observabilidad e investigación de incidentes ──────────────
+  # No recibe mensajes de clientes y no es accesible desde Internet. Tampoco
+  # tiene terminal: los runbooks seguros los ejecuta Laravel desde su allowlist
+  # auditada, no el modelo. Aquí solo razona sobre la evidencia que se le entrega.
+  hermes-guard:
+    <<: *hermes-base
+    container_name: hermes-guard
+    command: gateway run
+    ports:
+      - "127.0.0.1:8643:8642"
+    volumes:
+      # Volumen DISTINTO: memoria, skills y sesiones separadas de iron-sales.
+      - /opt/hermes/guard-data:/opt/data
+    environment:
+      - API_SERVER_ENABLED=true
+      - API_SERVER_HOST=0.0.0.0
+      - API_SERVER_PORT=8642
+      - API_SERVER_CORS_ORIGINS=
+      - HERMES_DASHBOARD=0
+      - TZ=America/Bogota
+    deploy:
+      resources:
+        limits:
+          # Menos que el comercial: su trabajo es esporádico (analizar un
+          # incidente), no atender a gente esperando respuesta.
+          memory: 1536M
+          cpus: "1.0"
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8642/health || exit 1"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 90s

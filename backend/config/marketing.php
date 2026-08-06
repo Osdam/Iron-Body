@@ -174,6 +174,9 @@ return [
         // los guardrails igual que la de OpenAI.
         'hermes' => [
             'enabled'     => filter_var(env('MARKETING_HERMES_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+            // Loopback SIEMPRE: Hermes escucha en 127.0.0.1 del propio servidor
+            // y no debe ser accesible desde fuera. Si algún día esto apunta a un
+            // host remoto, es que algo se hizo mal.
             'base_url'    => rtrim((string) env('MARKETING_HERMES_BASE_URL', ''), '/'),
             'api_key'     => env('MARKETING_HERMES_API_KEY'),
             'model'       => env('MARKETING_HERMES_MODEL', 'gpt-4.1'),
@@ -183,6 +186,28 @@ return [
             'max_retries' => (int) env('MARKETING_HERMES_MAX_RETRIES', 0),
             'temperature' => (float) env('MARKETING_HERMES_TEMPERATURE', 0.2),
             'max_output_tokens' => (int) env('MARKETING_HERMES_MAX_OUTPUT_TOKENS', 1200),
+
+            // Cortacircuitos. Sin él, con Hermes caído cada prospecto paga el
+            // timeout completo antes de degradar a OpenAI: quince personas
+            // escribiendo son quince esperas inútiles y quince workers ocupados.
+            'circuit_breaker' => [
+                'failure_threshold' => (int) env('MARKETING_HERMES_CB_THRESHOLD', 3),
+                'window_seconds'    => (int) env('MARKETING_HERMES_CB_WINDOW', 120),
+                'cooldown_seconds'  => (int) env('MARKETING_HERMES_CB_COOLDOWN', 60),
+            ],
+
+            // Techo de gasto. MEDIDO en el servidor: Hermes antepone su propio
+            // andamiaje (identidad, skills, memoria) al prompt, de modo que una
+            // clasificación trivial consume ~14 000 tokens de entrada, no ~500.
+            // Con el límite de 30 000 TPM de la organización eso son ~2
+            // clasificaciones por minuto antes de que OpenAI empiece a rechazar.
+            // Este contador corta ANTES de llegar ahí y degrada a OpenAI directo,
+            // que para la misma tarea gasta una fracción.
+            'budget' => [
+                'max_calls_per_hour' => (int) env('MARKETING_HERMES_MAX_CALLS_HOUR', 60),
+                // Coste observado por llamada, para estimar gasto sin adivinar.
+                'observed_prompt_tokens' => (int) env('MARKETING_HERMES_OBSERVED_PROMPT_TOKENS', 14350),
+            ],
         ],
 
         'openai' => [

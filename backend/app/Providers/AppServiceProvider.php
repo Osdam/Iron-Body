@@ -8,6 +8,7 @@ use App\Services\Billing\Factus\FactusTokenManager;
 use App\Services\Exercises\ExerciseCatalogResolver;
 use App\Services\Marketing\Contracts\AiSalesResponderInterface;
 use App\Services\Marketing\FakeAiSalesResponder;
+use App\Services\Marketing\HermesCircuitBreaker;
 use App\Services\Marketing\HermesSalesResponder;
 use App\Services\Marketing\OpenAiSalesResponder;
 use App\Services\Marketing\SalesAgentDecisionValidator;
@@ -54,6 +55,7 @@ class AppServiceProvider extends ServiceProvider
                     $openAi(),
                     $app->make(SalesAgentPromptBuilder::class),
                     $app->make(SalesAgentDecisionValidator::class),
+                    $app->make(HermesCircuitBreaker::class),
                 ),
                 'openai' => $openAi(),
                 default => new FakeAiSalesResponder,
