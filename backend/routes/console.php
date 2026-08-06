@@ -262,3 +262,28 @@ Schedule::command('iron-guard:scan')
     ->everyFiveMinutes()
     ->withoutOverlapping()
     ->onOneServer();
+
+// ── Motor comercial: hechos que consisten en que algo dejó de pasar ──────────
+// Los observers cubren lo que alguien HACE (pagar, venir, vincular la app). Esta
+// corrida cubre lo contrario: la membresía que va a vencer, el socio que lleva
+// tres semanas sin aparecer, el enlace de pago que nadie abrió. No hay ninguna
+// fila que cambie cuando alguien deja de venir, así que sin esto esos hechos
+// —los más caros comercialmente— no existirían para el sistema.
+//
+// Cada hora es suficiente: son fenómenos que se miden en días. Idempotente por
+// construcción (la clave de cada hecho lleva su fecha), así que repetirla no
+// duplica eventos. Respeta COMMERCIAL_EVENTS_ENABLED.
+Schedule::command('commercial:scan')
+    ->hourly()
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// ── Motor comercial: red de seguridad de la evaluación ───────────────────────
+// Recoge los hechos registrados que se quedaron sin evaluar —Redis caído al
+// despachar, un worker que murió a mitad, o el motor apagado cuando ocurrieron—.
+// `evaluated_at IS NULL` es literalmente la cola pendiente, así que nada se
+// pierde: solo se retrasa. Respeta COMMERCIAL_NBA_ENABLED.
+Schedule::command('commercial:evaluate-pending')
+    ->everyTenMinutes()
+    ->withoutOverlapping()
+    ->onOneServer();
