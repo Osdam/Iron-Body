@@ -21,8 +21,8 @@ solo pasa a **PASS** cuando hay una prueba ejecutada que lo demuestra.
 
 | Dato | Valor |
 |---|---|
-| Suite backend | **1833 pasan / 0 fallan** (11 588 aserciones, 78 s) |
-| Pruebas añadidas | **+193** |
+| Suite backend | **1873 pasan / 0 fallan** (11 685 aserciones, 80 s) |
+| Pruebas añadidas | **+233** |
 | Build Angular | Correcto (avisos de presupuesto CSS preexistentes, en archivos no tocados) |
 | Los 4 fallos de la línea base | Pasan hoy **solos**. Eran sensibles a la fecha: no se tocó nada del módulo de membresías. Siguen siendo frágiles. |
 
@@ -68,6 +68,67 @@ distinguida · adjunto fallido que se explica · pausar y reanudar IA · asignac
 · reintento de un 429 hasta que entra · **dos operadores a la vez sin pisarse** ·
 **un operador respondiendo impide que la IA conteste encima** · una reentrega
 nunca genera una segunda respuesta.
+
+## Tercera fase (2026-08-06) — motor comercial
+
+### 15. Decisión arquitectónica aplicada — **PASS**
+
+Hermes queda fuera del canal comercial por decisión del propietario, respaldada
+por la medición de la fase 2. El motor es **Laravel → OpenAI directo →
+herramientas Laravel → Meta Cloud API**. Hermes sigue instalado, apagado y
+disponible para IRON GUARD y análisis internos no interactivos.
+
+### 16. Motor Next Best Action / Next Best Offer — **PASS** (25 pruebas)
+
+Tres tablas nuevas (`commercial_opportunities`, `commercial_segments`,
+`commercial_events`) y un motor **determinista en PHP**: la IA redacta, Laravel
+decide. Cada oportunidad guarda objetivo, acción, oferta principal, alternativa,
+mínimo aceptable, momento, prioridad, confianza, razón, **exclusiones** y
+evidencia.
+
+Reglas implementadas, en orden de prioridad: escalado humano · recuperar enlace
+de pago · reintentar pago rechazado · activar tras pago · onboarding de miembro
+nuevo · rescate de miembro en riesgo · renovación · reactivación · upgrade ·
+cierre de prospecto · calificación · referidos.
+
+Decisiones de criterio que quedan fijadas por prueba:
+
+- Un miembro nuevo que **no ha venido** nunca recibe oferta de plan más largo.
+- Quien **paga y no aparece** recibe una pregunta, no un empujón de renovación.
+- El upgrade exige **uso demostrado** (≥2,5 visitas/semana) y ≥21 días de
+  antigüedad.
+- Cuando sí toca subir, se ofrece la **escalera completa** para que una negativa
+  al anual acabe en renovación mensual y no en cliente perdido.
+- `wait` es una decisión de pleno derecho, con fecha de reintento.
+
+Dos fallos reales que encontraron las pruebas y se corrigieron **en el código**:
+«nunca vino» se deducía de una fecha ausente y marcaba como desaparecido a quien
+había venido 17 veces ese mes; y el catálogo se cacheaba en una `static`, de modo
+que un plan desactivado se habría seguido ofreciendo hasta reiniciar el worker.
+
+### 17. Política de contacto — **PASS** (15 pruebas)
+
+El freno que impide que el motor se vuelva un acoso. Límite **por persona** y no
+por oportunidad; las respuestas y los mensajes humanos no consumen cuota; horas
+de silencio medidas en Neiva y no en el reloj UTC del servidor; detección de la
+ventana de 24 h de Meta para exigir plantilla. Cada rechazo dice por qué y
+cuándo se podrá reintentar.
+
+### 18. Pendiente de esta fase — **NO ENTREGADO**
+
+Se declara explícitamente lo que **no** está hecho, para que nadie lo dé por
+supuesto:
+
+| Área | Estado |
+|---|---|
+| Rediseño total del Inbox V2 (layout 3 columnas, scroll propio, virtualización) | **TODO** |
+| Herramientas del agente para Wompi / membresías / agenda / Factus / app | **TODO** — la infraestructura existe (`WompiPaymentLinkService`, `InvoicingService`, `MembershipService`), falta exponerla como herramientas tipadas del agente |
+| Panel de supervisión humana (P3) | **TODO** |
+| Métricas económicas atribuibles | **TODO** — el esquema las soporta (`estimated_value`, `realized_value`, `outcome`) |
+| Recorder de eventos + listeners que disparan el motor | **TODO** — la tabla existe, falta el cableado |
+| Flujos E2E A–J | **TODO** |
+| Pruebas de frontend y verificación visual en 4 resoluciones | **TODO** |
+| Máquina de estados comercial explícita | Parcial: los estados existen en la oportunidad; falta el objeto de transiciones |
 
 ### 14. Plan de activación — **ENTREGADO**
 
