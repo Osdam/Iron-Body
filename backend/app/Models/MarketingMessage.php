@@ -23,9 +23,16 @@ class MarketingMessage extends Model
     protected $fillable = [
         'conversation_id', 'direction', 'sender_type', 'sender_user_id', 'body',
         'meta_message_id', 'status', 'metadata',
+        'send_attempts', 'next_attempt_at', 'last_error_code', 'last_error_message',
+        'correlation_id',
     ];
 
-    protected $casts = ['metadata' => 'array'];
+    protected $casts = [
+        'metadata' => 'array',
+        'send_attempts' => 'integer',
+        'next_attempt_at' => 'datetime',
+        'last_error_code' => 'integer',
+    ];
 
     public function conversation(): BelongsTo
     {

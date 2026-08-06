@@ -240,3 +240,14 @@ Schedule::command('marketing:prune-media')
     ->dailyAt('04:15')
     ->withoutOverlapping()
     ->onOneServer();
+
+// ── Canal de WhatsApp: reintento de los salientes que fallaron ────────────────
+// Un 429 de Meta ocurre por diseño cuando se envía rápido. Sin esta corrida ese
+// mensaje se quedaba en 'failed' para siempre y el prospecto sin respuesta.
+// Solo entran los fallos que el outbox marcó como transitorios; los definitivos
+// quedan 'dead' a la vista de un humano. Seguro de repetir: un mensaje que ya
+// tiene meta_message_id nunca se reenvía.
+Schedule::command('marketing:retry-outbox')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->onOneServer();

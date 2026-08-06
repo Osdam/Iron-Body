@@ -66,6 +66,24 @@ return [
     ],
 
     /*
+    | Salida hacia Meta. Un envío fallido no era recuperable: se marcaba
+    | 'failed' y ahí moría, aunque el motivo fuera un límite de tasa pasajero.
+    | Ahora los fallos transitorios se reintentan con espera creciente y los
+    | definitivos quedan 'dead' y visibles para un humano.
+    */
+    'outbox' => [
+        // Intentos totales por mensaje (el primero incluido). Cuatro cubre un
+        // pico de límite de tasa sin dejar a nadie esperando media hora.
+        'max_attempts' => (int) env('WHATSAPP_OUTBOX_MAX_ATTEMPTS', 4),
+        // Base de la espera exponencial, en segundos: 30s, 60s, 120s…
+        'retry_base_seconds' => (int) env('WHATSAPP_OUTBOX_RETRY_BASE', 30),
+        // Techo de la espera: pasado esto, insistir más tarde no ayuda.
+        'retry_max_seconds' => (int) env('WHATSAPP_OUTBOX_RETRY_MAX', 1800),
+        // Mensajes reintentados por corrida (anti-avalancha tras una caída).
+        'retry_batch' => (int) env('WHATSAPP_OUTBOX_RETRY_BATCH', 50),
+    ],
+
+    /*
     | Adjuntos de WhatsApp (imagen, audio, nota de voz, video, documento,
     | sticker). Todo archivo entrante es CONTENIDO NO CONFIABLE: se descarga a
     | un disco privado, se le comprueba el tipo real y solo se sirve mediante

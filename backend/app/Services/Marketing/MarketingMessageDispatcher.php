@@ -6,7 +6,6 @@ use App\Models\MarketingConversation;
 use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
 use App\Services\Meta\MetaAuthService;
-use App\Services\Meta\MetaMessagingService;
 
 /**
  * Despacho de mensajes salientes de marketing por WhatsApp, con guardrails y
@@ -18,14 +17,14 @@ use App\Services\Meta\MetaMessagingService;
 class MarketingMessageDispatcher
 {
     public function __construct(
-        private readonly MetaMessagingService $messaging,
         private readonly MetaAuthService $auth,
+        private readonly WhatsappOutboxService $outbox,
     ) {}
 
     /**
      * @param  string  $senderType  Autor del outbound (ai por defecto; human para envío manual del Inbox).
      * @param  int|null  $senderUserId  Admin/asesor que envía (solo para sender_type=human).
-     * @return array{ok:bool,sent:bool,dry_run:bool,safe_to_send:bool,message_id:?int,provider_message_id:?string,reason:?string,conversation_id:?int}
+     * @return array{ok:bool,sent:bool,dry_run:bool,safe_to_send:bool,message_id:?int,provider_message_id:?string,reason:?string,conversation_id:?int,will_retry:bool}
      */
     public function dispatchWhatsapp(
         MarketingLead $lead,
@@ -37,7 +36,8 @@ class MarketingMessageDispatcher
     ): array {
         $base = [
             'ok' => true, 'sent' => false, 'dry_run' => false, 'safe_to_send' => false,
-            'message_id' => null, 'provider_message_id' => null, 'reason' => null, 'conversation_id' => null,
+            'message_id' => null, 'provider_message_id' => null, 'reason' => null,
+            'conversation_id' => null, 'will_retry' => false,
         ];
 
         // Guardrail: do_not_contact o consentimiento denegado.
@@ -78,25 +78,31 @@ class MarketingMessageDispatcher
             ]);
         }
 
-        // Envío real (best-effort; sendWhatsappText nunca lanza ni loguea secretos).
-        $providerId = $this->messaging->sendWhatsappText($to, $body);
+        // El mensaje se registra ANTES de salir a la red. Si el proceso muere
+        // en mitad del POST a Meta, el mensaje existe, el inbox lo muestra y el
+        // outbox puede retomarlo; antes desaparecía sin dejar rastro.
         $message = $this->recordOutbound(
             $conversation,
             $body,
-            $providerId !== null ? 'sent' : 'failed',
-            $providerId,
+            WhatsappOutboxService::STATUS_QUEUED,
+            null,
             $metadata,
             $senderType,
             $senderUserId,
         );
 
+        $delivery = $this->outbox->deliver($message, $to);
+
         return array_merge($base, [
-            'sent' => $providerId !== null,
+            'sent' => $delivery['sent'],
             'safe_to_send' => true,
             'message_id' => $message->id,
-            'provider_message_id' => $providerId,
+            'provider_message_id' => $delivery['provider_message_id'],
             'conversation_id' => $conversation->id,
-            'reason' => $providerId !== null ? null : 'provider_send_failed',
+            'reason' => $delivery['reason'],
+            // Un fallo con reintento programado no es lo mismo que uno
+            // definitivo: quien llama puede decidir si avisar o esperar.
+            'will_retry' => $delivery['retryable'],
         ]);
     }
 
@@ -119,6 +125,9 @@ class MarketingMessageDispatcher
             'meta_message_id' => $providerId,
             'status' => $status,
             'metadata' => $metadata ?: null,
+            // Cose la respuesta con el mensaje entrante que la provocó: en el
+            // log, un solo id lleva del webhook hasta lo que salió de vuelta.
+            'correlation_id' => WhatsappOutboxService::currentCorrelationId(),
         ]);
 
         // Bookkeeping del Inbox (aditivo, no cambia el comportamiento de envío):
