@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\ProcessMetaWebhookEvent;
+use App\Services\Meta\MetaWebhookIngestService;
 use App\Services\Meta\MetaWebhookService;
+use App\Services\Observability\ChannelLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Context;
 use Throwable;
 
 /**
@@ -16,15 +18,26 @@ use Throwable;
  *
  *  GET  /api/webhooks/meta  → verificación (hub.challenge + verify_token).
  *  POST /api/webhooks/meta  → eventos. Valida firma X-Hub-Signature-256,
- *                             responde 200 de inmediato y delega a la cola.
+ *                             PERSISTE el evento crudo, responde 200 de
+ *                             inmediato y delega el trabajo pesado a la cola.
  *
  * Rutas SIN auth de sesión (Meta las llama): la seguridad es el verify_token
- * (GET) y la firma HMAC (POST). NO se guardan tokens; el procesamiento pesado
- * va a cola para no bloquear ni exceder el timeout de Meta.
+ * (GET) y la firma HMAC (POST). NO se guardan tokens; ninguna lógica de IA corre
+ * dentro de este request.
+ *
+ * El orden importa: primero se guarda lo que Meta dijo, después se encola. Si el
+ * worker no está vivo, el mensaje del prospecto sigue existiendo y se puede
+ * reprocesar; antes se perdía.
  */
 class WebhookMetaController extends Controller
 {
-    public function __construct(private readonly MetaWebhookService $webhook) {}
+    /** Techo del cuerpo aceptado. Meta no envía payloads grandes; uno enorme es un abuso. */
+    private const MAX_BODY_BYTES = 512 * 1024;
+
+    public function __construct(
+        private readonly MetaWebhookService $webhook,
+        private readonly MetaWebhookIngestService $ingest,
+    ) {}
 
     /** Verificación del webhook (GET). Devuelve el challenge en texto plano. */
     public function verify(Request $request): Response
@@ -42,15 +55,29 @@ class WebhookMetaController extends Controller
         return response($challenge, 200)->header('Content-Type', 'text/plain');
     }
 
-    /** Recepción de eventos (POST). 200 rápido + procesamiento en cola. */
+    /** Recepción de eventos (POST). Persistir → 200 rápido → cola. */
     public function receive(Request $request): JsonResponse
     {
         $raw = $request->getContent();
         $signature = $request->header('X-Hub-Signature-256');
 
+        // El correlation_id nace aquí y acompaña al evento por todo el sistema:
+        // job, mensaje, decisión del agente, envío a Meta y status callback.
+        $correlationId = $this->ingest->newCorrelationId();
+        Context::add('correlation_id', $correlationId);
+
+        if (strlen($raw) > self::MAX_BODY_BYTES) {
+            ChannelLog::warning('meta.webhook.rejected', [
+                'reason' => 'body_too_large',
+                'body_bytes' => strlen($raw),
+            ]);
+
+            return response()->json(['ok' => false], 413);
+        }
+
         if (! $this->webhook->validateSignature($raw, $signature)) {
             // Instrumentación: firma inválida (NUNCA logueamos la firma ni el secret).
-            Log::warning('meta.webhook.skipped', [
+            ChannelLog::warning('meta.webhook.rejected', [
                 'reason' => 'invalid_signature',
                 'has_signature' => $signature !== null && $signature !== '',
                 'body_bytes' => strlen($raw),
@@ -61,78 +88,56 @@ class WebhookMetaController extends Controller
 
         $payload = $request->json()->all();
 
-        // Instrumentación SÍNCRONA y SEGURA (sin tokens/secret/headers): deja en
-        // laravel.log qué llegó de Meta, aunque el worker de cola no esté corriendo.
-        $this->logIncoming($payload);
+        if (empty($payload)) {
+            ChannelLog::info('meta.webhook.skipped', ['reason' => 'empty_payload']);
 
-        if (! empty($payload)) {
-            ProcessMetaWebhookEvent::dispatch($payload);
-            Log::info('meta.webhook.queued', [
-                'queue_connection' => (string) config('queue.default'),
-                'inbound_enabled' => (bool) config('marketing.inbound.meta_enabled', true),
-            ]);
-        } else {
-            Log::info('meta.webhook.skipped', ['reason' => 'empty_payload']);
+            return response()->json(['ok' => true]);
         }
+
+        // Persistencia SÍNCRONA del hecho original. Si esto falla no podemos
+        // garantizar el mensaje, así que se devuelve 500 y Meta reintenta: es
+        // preferible una reentrega (que el hash deduplica) a perder al prospecto.
+        try {
+            ['event' => $event, 'duplicate' => $duplicate] = $this->ingest->record($raw, $payload, $correlationId);
+        } catch (Throwable $e) {
+            ChannelLog::error('meta.webhook.persist_failed', [
+                'error_class' => class_basename($e),
+                'body_bytes' => strlen($raw),
+            ]);
+
+            return response()->json(['ok' => false], 500);
+        }
+
+        ChannelLog::info('meta.webhook.received', [
+            'event_id' => $event->id,
+            'object' => $event->object,
+            'phone_number_id' => $event->phone_number_id,
+            'expected_phone_number_id' => (string) config('meta.whatsapp_phone_number_id'),
+            'messages_count' => $event->messages_count,
+            'statuses_count' => $event->statuses_count,
+            'body_bytes' => $event->payload_bytes,
+            'duplicate' => $duplicate,
+        ]);
+
+        if ($duplicate) {
+            // Reentrega de Meta o replay del mismo cuerpo firmado: ya lo tenemos.
+            ChannelLog::info('meta.webhook.skipped', [
+                'reason' => 'duplicate_delivery',
+                'event_id' => $event->id,
+                'original_correlation_id' => $event->correlation_id,
+            ]);
+
+            return response()->json(['ok' => true]);
+        }
+
+        ProcessMetaWebhookEvent::dispatch($event->id);
+        ChannelLog::info('meta.webhook.queued', [
+            'event_id' => $event->id,
+            'queue_connection' => (string) config('queue.default'),
+            'inbound_enabled' => (bool) config('marketing.inbound.meta_enabled', true),
+        ]);
 
         // Meta solo necesita un 200 rápido para no reintentar.
         return response()->json(['ok' => true]);
-    }
-
-    /**
-     * Logging diagnóstico de un payload de Meta SIN datos sensibles (no tokens,
-     * no app_secret, no headers de auth). Resume estructura entry/changes/value,
-     * detecta messages vs statuses, el phone_number_id recibido vs el esperado, y
-     * los campos clave del primer mensaje/estado. Nunca lanza.
-     */
-    private function logIncoming(array $payload): void
-    {
-        try {
-            $change = data_get($payload, 'entry.0.changes.0', []);
-            $value = (array) data_get($change, 'value', []);
-            $messages = (array) data_get($value, 'messages', []);
-            $statuses = (array) data_get($value, 'statuses', []);
-
-            Log::info('meta.webhook.received', [
-                'object' => $payload['object'] ?? null,
-                'entries' => is_array($payload['entry'] ?? null) ? count($payload['entry']) : 0,
-                'field' => $change['field'] ?? null,
-                'phone_number_id' => data_get($value, 'metadata.phone_number_id'),
-                'expected_phone_number_id' => (string) config('meta.whatsapp_phone_number_id'),
-                'messages_count' => count($messages),
-                'statuses_count' => count($statuses),
-            ]);
-
-            if ($messages !== []) {
-                $m = (array) $messages[0];
-                Log::info('meta.webhook.message_detected', [
-                    'message_id' => $m['id'] ?? null,
-                    'type' => $m['type'] ?? null,
-                    'from' => $m['from'] ?? null,
-                    'wa_id' => data_get($value, 'contacts.0.wa_id'),
-                    'has_text' => isset($m['text']['body']),
-                    // Cuerpo del texto ACOTADO, solo para diagnóstico temporal.
-                    'text' => isset($m['text']['body']) ? mb_substr((string) $m['text']['body'], 0, 120) : null,
-                ]);
-            }
-
-            if ($statuses !== []) {
-                $s = (array) $statuses[0];
-                Log::info('meta.webhook.status_detected', [
-                    'message_id' => $s['id'] ?? null,
-                    'status' => $s['status'] ?? null,
-                    'recipient_id' => $s['recipient_id'] ?? null,
-                ]);
-            }
-
-            if ($messages === [] && $statuses === []) {
-                Log::info('meta.webhook.skipped', [
-                    'reason' => 'no_messages_no_statuses',
-                    'field' => $change['field'] ?? null,
-                ]);
-            }
-        } catch (Throwable $e) {
-            Log::warning('meta.webhook.log_error', ['error' => class_basename($e)]);
-        }
     }
 }

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MarketingMessage extends Model
 {
@@ -29,5 +30,20 @@ class MarketingMessage extends Model
     public function conversation(): BelongsTo
     {
         return $this->belongsTo(MarketingConversation::class, 'conversation_id');
+    }
+
+    /** Archivos que acompañan al mensaje. El binario vive fuera de la BD. */
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(MarketingMessageAttachment::class, 'message_id');
+    }
+
+    /**
+     * Historial de callbacks de entrega. Incluye los que llegaron fuera de
+     * orden y no movieron el estado: son evidencia, no ruido.
+     */
+    public function statuses(): HasMany
+    {
+        return $this->hasMany(MarketingMessageStatus::class, 'message_id');
     }
 }

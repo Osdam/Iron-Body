@@ -78,6 +78,33 @@ return [
             'replace_placeholders' => true,
         ],
 
+        /*
+         * Canal de WhatsApp (webhook, cola, agente, envíos) y IRON GUARD.
+         *
+         * Va aparte de laravel.log a propósito: es el único log que se lee como
+         * DATOS. Una línea = un JSON con el mismo esqueleto (event, correlation_id,
+         * duration_ms, status…), lo que permite agrupar incidentes con jq o con el
+         * detector determinista sin escribir expresiones regulares frágiles sobre
+         * prosa. Se escribe siempre a través de App\Services\Observability\ChannelLog,
+         * que enmascara teléfonos y elimina secretos antes de llegar aquí.
+         *
+         * Rotación propia y más larga que la de laravel.log: cuando alguien
+         * investiga por qué un prospecto no recibió respuesta, suele hacerlo días
+         * después.
+         */
+        'channel' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/channel.log'),
+            'level' => env('CHANNEL_LOG_LEVEL', 'info'),
+            'days' => env('CHANNEL_LOG_DAYS', 30),
+            'formatter' => Monolog\Formatter\JsonFormatter::class,
+            'formatter_with' => [
+                'batchMode' => Monolog\Formatter\JsonFormatter::BATCH_MODE_JSON,
+                'appendNewline' => true,
+            ],
+            'replace_placeholders' => false,
+        ],
+
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),

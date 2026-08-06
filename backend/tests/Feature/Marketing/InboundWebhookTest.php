@@ -110,20 +110,48 @@ class InboundWebhookTest extends TestCase
             ->atLeast()->once();
     }
 
-    public function test_webhook_logs_received_message_detected_and_inbound_saved(): void
+    /**
+     * La traza sigue el hilo completo: el borde HTTP (meta.webhook.*), el
+     * procesamiento en cola (meta.event.*) y lo que le pasó al mensaje
+     * (meta.message.*). Los nombres son estables a propósito: IRON GUARD agrupa
+     * incidentes por ellos, así que renombrarlos rompe el panel.
+     */
+    public function test_webhook_logs_the_full_thread_from_edge_to_saved_message(): void
     {
         Log::spy();
 
         $this->postMeta($this->textPayload('wamid.LOG1', '573150536026', 'precio'))->assertOk();
 
-        // Instrumentación síncrona del controlador + del job (sin secretos).
         $this->loggedMessage('info', 'meta.webhook.received');
-        $this->loggedMessage('info', 'meta.webhook.message_detected');
         $this->loggedMessage('info', 'meta.webhook.queued');
-        $this->loggedMessage('info', 'meta.webhook.inbound_saved');
+        $this->loggedMessage('info', 'meta.event.started');
+        $this->loggedMessage('info', 'meta.message.saved');
     }
 
-    public function test_webhook_logs_status_detected_for_status_events(): void
+    /** Todo lo que se registra lleva el mismo correlation_id de punta a punta. */
+    public function test_the_whole_thread_shares_one_correlation_id(): void
+    {
+        $seen = [];
+        Log::spy();
+
+        $this->postMeta($this->textPayload('wamid.CORR1', '573150536026', 'precio'))->assertOk();
+
+        Log::shouldHaveReceived('info')->withArgs(function (...$args) use (&$seen) {
+            $id = $args[1]['correlation_id'] ?? null;
+            if (in_array($args[0] ?? null, ['meta.webhook.received', 'meta.event.started', 'meta.message.saved'], true)) {
+                $seen[$args[0]] = $id;
+            }
+
+            return true;
+        })->atLeast()->once();
+
+        $this->assertCount(3, $seen, 'Los tres hitos del hilo deben haberse registrado.');
+        $this->assertNotNull($seen['meta.webhook.received']);
+        // Un solo valor distinto: el id nace en el webhook y sobrevive a la cola.
+        $this->assertCount(1, array_unique($seen));
+    }
+
+    public function test_webhook_logs_status_callbacks(): void
     {
         Log::spy();
 
@@ -133,10 +161,10 @@ class InboundWebhookTest extends TestCase
         ]]]]]];
         $this->postMeta($payload)->assertOk();
 
-        $this->loggedMessage('info', 'meta.webhook.status_detected');
+        $this->loggedMessage('info', 'meta.status.recorded');
     }
 
-    public function test_webhook_invalid_signature_logs_skipped(): void
+    public function test_webhook_invalid_signature_is_rejected_and_never_persisted(): void
     {
         Log::spy();
 
@@ -146,18 +174,24 @@ class InboundWebhookTest extends TestCase
             'CONTENT_TYPE'             => 'application/json',
         ], $raw)->assertStatus(403);
 
-        $this->loggedMessage('warning', 'meta.webhook.skipped');
+        $this->loggedMessage('warning', 'meta.webhook.rejected');
+        // Una firma inválida no deja NADA guardado: ni evento crudo ni mensaje.
+        $this->assertDatabaseCount('meta_webhook_events', 0);
+        $this->assertDatabaseMissing('marketing_messages', ['body' => 'precio']);
     }
 
-    public function test_webhook_phone_mismatch_logs_skipped(): void
+    public function test_webhook_phone_mismatch_is_persisted_but_not_processed(): void
     {
         Log::spy();
 
         // phone_number_id distinto del configurado → el job lo descarta y loguea.
         $this->postMeta($this->textPayload('wamid.MM', '573150536026', 'precio', '999999'))->assertOk();
 
-        $this->loggedMessage('warning', 'meta.webhook.skipped');
+        $this->loggedMessage('warning', 'meta.event.skipped');
         $this->assertDatabaseMissing('marketing_messages', ['body' => 'precio']);
+        // El evento SÍ queda guardado: llegó firmado y hay que poder auditar
+        // que alguien nos escribió a un número que no es el nuestro.
+        $this->assertDatabaseHas('meta_webhook_events', ['status' => 'processed']);
     }
 
     public function test_auto_execute_inbound_creates_outbound_reply(): void

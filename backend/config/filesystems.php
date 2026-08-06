@@ -47,6 +47,29 @@ return [
             'report' => false,
         ],
 
+        /*
+         * Adjuntos de WhatsApp. Disco PRIVADO y separado del resto: fotos,
+         * notas de voz y documentos que manda un prospecto no son contenido
+         * público y no deben poder servirse por URL directa nunca.
+         *
+         * Se eligió disco local frente a MinIO o S3 tras medir el servidor:
+         * 184 GB libres y 4 vCPU para un solo gimnasio. Levantar MinIO añadiría
+         * un contenedor, su RAM, su backup y su superficie de ataque para
+         * resolver un problema de escala que este negocio no tiene. Cuando
+         * llegue —si llega—, WHATSAPP_MEDIA_DISK apunta a un disco S3 y el
+         * resto del código no cambia: nada fuera de esta capa conoce la ruta.
+         */
+        'whatsapp' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private/whatsapp'),
+            // Sin 'url' y sin visibilidad pública a propósito: el acceso pasa
+            // SIEMPRE por el controlador, que valida sesión, permiso y firma.
+            'visibility' => 'private',
+            'serve' => false,
+            'throw' => false,
+            'report' => false,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

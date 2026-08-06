@@ -57,8 +57,69 @@ return [
         'auto_execute'  => filter_var(env('MARKETING_INBOUND_AUTO_EXECUTE', false), FILTER_VALIDATE_BOOLEAN),
         // Guardar el evento crudo de Meta en metadata (debug). Off por defecto.
         'store_raw_payload' => filter_var(env('MARKETING_INBOUND_STORE_RAW_PAYLOAD', false), FILTER_VALIDATE_BOOLEAN),
-        // Tipos de mensaje soportados hoy (solo texto). El resto se escala.
-        'supported_message_types' => ['text'],
+        // Tipos que el CEREBRO COMERCIAL puede analizar por sí mismo. Ojo: NO
+        // es la lista de lo que el inbox acepta. El inbox guarda y muestra todo
+        // lo que Meta entregue; esta lista decide únicamente qué puede leer la
+        // IA. Un audio o una foto se registran, se descargan y se escalan a un
+        // humano aunque no estén aquí.
+        'supported_message_types' => ['text', 'interactive', 'button'],
+    ],
+
+    /*
+    | Adjuntos de WhatsApp (imagen, audio, nota de voz, video, documento,
+    | sticker). Todo archivo entrante es CONTENIDO NO CONFIABLE: se descarga a
+    | un disco privado, se le comprueba el tipo real y solo se sirve mediante
+    | URLs firmadas de vida corta y con permiso del CRM.
+    */
+    'media' => [
+        // Descargar los adjuntos entrantes. Si se apaga, el mensaje se sigue
+        // registrando y viéndose en el inbox: solo falta el archivo.
+        'download_enabled' => filter_var(env('WHATSAPP_MEDIA_DOWNLOAD_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+
+        'disk' => env('WHATSAPP_MEDIA_DISK', 'whatsapp'),
+
+        // Techo por archivo. Los límites de WhatsApp hoy son 16 MB para audio,
+        // imagen y video y 100 MB para documento; se recorta a 25 MB porque a
+        // un gimnasio nadie le manda un video de 100 MB con buena intención y
+        // cada archivo se guarda en el mismo disco del servidor.
+        'max_size_bytes' => (int) env('WHATSAPP_MEDIA_MAX_SIZE', 25 * 1024 * 1024),
+
+        // Días que se conserva el BINARIO. Pasado el plazo se borra el archivo
+        // y la ficha queda como 'expired': el inbox sigue mostrando que hubo un
+        // adjunto y de qué tipo, sin conservar el contenido para siempre.
+        'retention_days' => (int) env('WHATSAPP_MEDIA_RETENTION_DAYS', 180),
+
+        // Vida de la URL firmada que recibe el navegador. Corta a propósito:
+        // si alguien la copia y la pega fuera, caduca sola.
+        'signed_url_minutes' => (int) env('WHATSAPP_MEDIA_URL_MINUTES', 10),
+
+        // Reintentos de descarga ante fallo transitorio (la URL de Meta caduca
+        // en minutos, así que insistir mucho tampoco sirve).
+        'max_attempts' => (int) env('WHATSAPP_MEDIA_MAX_ATTEMPTS', 3),
+        'timeout' => (int) env('WHATSAPP_MEDIA_TIMEOUT', 60),
+
+        // Tipos REALES aceptados, comprobados sobre los bytes del archivo y no
+        // sobre lo que declare Meta o la extensión. Lo que no esté aquí se
+        // rechaza: nada de HTML (XSS servido desde nuestro dominio), nada de
+        // SVG (lleva scripts), nada ejecutable, nada de comprimidos (zip bomb).
+        'allowed_mime_types' => [
+            'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+            'audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/aac', 'audio/amr', 'audio/wav', 'audio/opus',
+            'video/mp4', 'video/3gpp',
+            'application/pdf',
+            'text/plain', 'text/csv',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ],
+
+        // Transcripción de notas de voz. APAGADA por defecto: manda audio de
+        // clientes a un tercero y eso se activa a conciencia, no por descuido.
+        'transcription' => [
+            'enabled' => filter_var(env('WHATSAPP_MEDIA_TRANSCRIBE', false), FILTER_VALIDATE_BOOLEAN),
+            'max_seconds' => (int) env('WHATSAPP_MEDIA_TRANSCRIBE_MAX_SECONDS', 120),
+        ],
     ],
 
     // Cerebro comercial IA (Fase 2). Por defecto usa un responder DETERMINISTA
