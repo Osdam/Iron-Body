@@ -1,0 +1,586 @@
+<?php
+
+namespace App\Services\Commercial;
+
+use App\Models\CommercialOpportunity;
+use App\Models\Plan;
+use App\Services\Observability\ChannelLog;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * Qué hacer con esta persona, cuándo, y por qué no otra cosa.
+ *
+ * Determinista y auditable a propósito. La IA redacta el mensaje; **esto**
+ * decide si toca escribir, qué ofrecer y en qué momento. Una oferta la tiene
+ * que poder explicar un humano mirando una fila, y eso no se consigue dejando
+ * la decisión dentro de un modelo de lenguaje.
+ *
+ * Las reglas están ordenadas por prioridad y la primera que encaja gana. El
+ * orden no es casual: primero lo que ya está en marcha (un pago a medias, una
+ * membresía que vence), después lo que abre negocio nuevo. El dinero
+ * comprometido vale más que el dinero hipotético.
+ *
+ * `wait` es una decisión de pleno derecho, y la más infravalorada: escribirle a
+ * alguien que acaba de pagar para venderle otra cosa destruye más relación de
+ * la que construye.
+ */
+class NextBestActionEngine
+{
+    /** Catálogo activo, leído una vez por instancia (ver planLadder). */
+    private ?\Illuminate\Support\Collection $planCache = null;
+
+    public function __construct(private readonly SegmentCalculator $segments) {}
+
+    /**
+     * Evalúa un sujeto y devuelve la decisión, sin persistir nada.
+     *
+     * @return array{goal:string,action:string,offer:?string,reason:string,confidence:float,
+     *               act_after:?Carbon,exclusions:array,offer_plan_id:?int,
+     *               alternative_plan_id:?int,floor_plan_id:?int,estimated_value:?float,
+     *               max_attempts:int}|null
+     */
+    public function decide(CommercialSubject $subject): ?array
+    {
+        // El opt-out está por encima de cualquier oportunidad comercial. No es
+        // una regla más: es la primera y no admite excepciones.
+        if (! $subject->isContactable()) {
+            return null;
+        }
+
+        $rules = [
+            'ruleNeedsHuman',
+            'ruleRecoverPendingPayment',
+            'ruleRetryDeclinedPayment',
+            'ruleActivateAfterPayment',
+            'ruleOnboardNewMember',
+            'ruleRescueAtRisk',
+            'ruleRenewExpiring',
+            'ruleReactivateExpired',
+            'ruleUpgrade',
+            'ruleCloseProspect',
+            'ruleQualifyProspect',
+            'ruleRequestReferral',
+        ];
+
+        foreach ($rules as $rule) {
+            $decision = $this->{$rule}($subject);
+            if ($decision !== null) {
+                return $this->normalize($decision, $subject);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Evalúa y persiste como oportunidad. Idempotente por sujeto+objetivo: si
+     * ya hay una abierta para el mismo objetivo, se actualiza en vez de abrir
+     * una segunda, que acabaría en dos mensajes por lo mismo.
+     */
+    public function evaluate(CommercialSubject $subject, ?string $correlationId = null): ?CommercialOpportunity
+    {
+        $this->segments->refresh($subject);
+
+        $decision = $this->decide($subject);
+
+        if ($decision === null) {
+            return null;
+        }
+
+        $leadId = $subject->lead?->id;
+        $memberId = $subject->member?->id;
+
+        return DB::transaction(function () use ($decision, $subject, $leadId, $memberId, $correlationId) {
+            $existing = CommercialOpportunity::query()
+                ->where('goal', $decision['goal'])
+                ->whereIn('status', CommercialVocabulary::OPEN_STATUSES)
+                ->when($leadId !== null, fn ($q) => $q->where('marketing_lead_id', $leadId))
+                ->when($leadId === null && $memberId !== null, fn ($q) => $q->where('member_id', $memberId))
+                ->lockForUpdate()
+                ->first();
+
+            $attributes = [
+                'marketing_lead_id' => $leadId,
+                'member_id' => $memberId,
+                'goal' => $decision['goal'],
+                'next_action' => $decision['action'],
+                'next_offer' => $decision['offer'],
+                'offer_plan_id' => $decision['offer_plan_id'],
+                'alternative_plan_id' => $decision['alternative_plan_id'],
+                'floor_plan_id' => $decision['floor_plan_id'],
+                'priority' => CommercialVocabulary::priorityFor($decision['goal']),
+                'confidence' => $decision['confidence'],
+                'reason' => $decision['reason'],
+                'exclusions' => $decision['exclusions'] ?: null,
+                'evidence' => $subject->toEvidence(),
+                'act_after' => $decision['act_after'],
+                'estimated_value' => $decision['estimated_value'],
+                'max_attempts' => $decision['max_attempts'],
+                'correlation_id' => $correlationId,
+            ];
+
+            if ($existing !== null) {
+                // Se refresca la decisión pero NO se reinician los intentos:
+                // recalcular no puede convertirse en una vía para insistir más
+                // veces de las permitidas.
+                $existing->forceFill($attributes)->save();
+
+                return $existing;
+            }
+
+            $opportunity = CommercialOpportunity::create($attributes + [
+                'status' => CommercialVocabulary::STATUS_OPEN,
+                'created_by' => 'engine',
+            ]);
+
+            ChannelLog::info('commercial.opportunity.created', [
+                'opportunity_id' => $opportunity->id,
+                'goal' => $opportunity->goal,
+                'action' => $opportunity->next_action,
+                'priority' => $opportunity->priority,
+                'estimated_value' => $opportunity->estimated_value,
+            ]);
+
+            return $opportunity;
+        });
+    }
+
+    /** Completa la decisión con los valores por defecto que faltan. */
+    private function normalize(array $decision, CommercialSubject $subject): array
+    {
+        return array_merge([
+            'offer' => null,
+            'confidence' => 0.7,
+            'act_after' => null,
+            'exclusions' => [],
+            'offer_plan_id' => null,
+            'alternative_plan_id' => null,
+            'floor_plan_id' => null,
+            'estimated_value' => null,
+            'max_attempts' => 3,
+        ], $decision);
+    }
+
+    // ── Reglas, en orden de prioridad ────────────────────────────────────────
+
+    /** Si alguien pidió una persona, no hay nada comercial que decidir. */
+    private function ruleNeedsHuman(CommercialSubject $s): ?array
+    {
+        if (! $s->needsHuman) {
+            return null;
+        }
+
+        return [
+            'goal' => CommercialVocabulary::GOAL_ESCALATE,
+            'action' => CommercialVocabulary::ACTION_ESCALATE_HUMAN,
+            'reason' => 'La conversación está marcada para revisión humana o la tomó una persona.',
+            'confidence' => 1.0,
+            'exclusions' => ['no_automated_offer' => 'Nada automático mientras un humano lleve el caso.'],
+            'max_attempts' => 1,
+        ];
+    }
+
+    /**
+     * Un enlace de pago sin usar es la oportunidad más valiosa que existe: esa
+     * persona ya dijo que sí y solo le faltó terminar. Pero hay que darle aire
+     * unas horas antes de recordárselo.
+     */
+    private function ruleRecoverPendingPayment(CommercialSubject $s): ?array
+    {
+        if (! $s->hasPendingPaymentLink) {
+            return null;
+        }
+
+        $createdAt = $s->pendingPaymentLinkAt;
+        $hoursSince = $createdAt !== null ? $createdAt->diffInHours(now()) : 0;
+
+        // Menos de seis horas: puede estar pagando ahora mismo. Recordárselo
+        // sería impaciente y contraproducente.
+        if ($hoursSince < 6) {
+            return [
+                'goal' => CommercialVocabulary::GOAL_RECOVER_PAYMENT_LINK,
+                'action' => CommercialVocabulary::ACTION_WAIT,
+                'reason' => 'Tiene un enlace de pago reciente; se le da tiempo antes de insistir.',
+                'confidence' => 0.9,
+                'act_after' => ($createdAt ?? now())->copy()->addHours(6),
+                'exclusions' => ['too_soon' => 'Menos de 6 h desde que se generó el enlace.'],
+            ];
+        }
+
+        $plan = $s->pendingPaymentPlanId !== null ? Plan::find($s->pendingPaymentPlanId) : null;
+
+        return [
+            'goal' => CommercialVocabulary::GOAL_RECOVER_PAYMENT_LINK,
+            'action' => CommercialVocabulary::ACTION_RESEND_PAYMENT_LINK,
+            'offer' => $plan?->name,
+            'offer_plan_id' => $plan?->id,
+            'reason' => sprintf(
+                'Dejó un enlace de pago sin completar hace %d h. Ya mostró intención: solo falta cerrar.',
+                $hoursSince,
+            ),
+            'confidence' => 0.9,
+            'estimated_value' => $plan !== null ? (float) $plan->price : null,
+            'max_attempts' => 2, // dos recordatorios; el tercero es acoso
+        ];
+    }
+
+    private function ruleRetryDeclinedPayment(CommercialSubject $s): ?array
+    {
+        if (! $s->hasDeclinedPayment || $s->hasActiveMembership || $s->hasPendingPaymentLink) {
+            return null;
+        }
+
+        return [
+            'goal' => CommercialVocabulary::GOAL_COLLECT_PAYMENT,
+            'action' => CommercialVocabulary::ACTION_RESEND_PAYMENT_LINK,
+            'reason' => 'Un pago suyo fue rechazado. Suele ser el banco o el medio, no la decisión de compra.',
+            'confidence' => 0.8,
+            'exclusions' => ['no_discount' => 'Un rechazo del banco no justifica cambiar el precio.'],
+            'max_attempts' => 2,
+        ];
+    }
+
+    /** Pagó y todavía no tiene acceso: esto es urgente y no es una venta. */
+    private function ruleActivateAfterPayment(CommercialSubject $s): ?array
+    {
+        if ($s->approvedPaymentsCount === 0 || $s->hasActiveMembership) {
+            return null;
+        }
+
+        return [
+            'goal' => CommercialVocabulary::GOAL_ACTIVATE_MEMBERSHIP,
+            'action' => CommercialVocabulary::ACTION_CONFIRM_ACTIVATION,
+            'reason' => 'Tiene un pago aprobado pero no figura con membresía activa. Hay que resolverlo antes de nada.',
+            'confidence' => 0.95,
+            'exclusions' => ['no_selling' => 'No se le ofrece nada hasta que tenga lo que ya pagó.'],
+            'max_attempts' => 1,
+        ];
+    }
+
+    /**
+     * Primeros treinta días. Aquí se decide la permanencia, y por eso NO se
+     * vende: se acompaña. Un upgrade a alguien que aún no ha venido nunca es la
+     * forma más rápida de que pida la baja.
+     */
+    private function ruleOnboardNewMember(CommercialSubject $s): ?array
+    {
+        if (! $s->hasActiveMembership || $s->daysAsMember === null || $s->daysAsMember > 30) {
+            return null;
+        }
+
+        if ($s->attendancesLast30Days === 0) {
+            return [
+                'goal' => CommercialVocabulary::GOAL_COMPLETE_ONBOARDING,
+                'action' => CommercialVocabulary::ACTION_OFFER_APPOINTMENT,
+                'reason' => 'Es miembro nuevo y todavía no ha venido. Una valoración inicial es lo que más sube la permanencia.',
+                'confidence' => 0.85,
+                'exclusions' => [
+                    'no_upsell' => 'No se ofrece plan más largo: aún no ha usado el que tiene.',
+                ],
+                'max_attempts' => 2,
+            ];
+        }
+
+        if (! $s->hasAppAccount) {
+            return [
+                'goal' => CommercialVocabulary::GOAL_LINK_APP,
+                'action' => CommercialVocabulary::ACTION_GUIDE_APP_LINK,
+                'reason' => 'Ya viene al gimnasio pero no tiene la app vinculada; con ella se sigue mejor el progreso.',
+                'confidence' => 0.7,
+                'max_attempts' => 2,
+            ];
+        }
+
+        return [
+            'goal' => CommercialVocabulary::GOAL_INCREASE_ADHERENCE,
+            'action' => CommercialVocabulary::ACTION_CHECK_IN,
+            'reason' => 'Miembro nuevo que ya está viniendo. Un acompañamiento breve consolida el hábito.',
+            'confidence' => 0.6,
+            'act_after' => now()->addDays(3),
+            'exclusions' => ['no_upsell_yet' => 'Antes de ofrecer nada, confirmar que el plan actual le funciona.'],
+            'max_attempts' => 2,
+        ];
+    }
+
+    /** Paga y no viene. Desde caja parece un cliente sano hasta que no renueva. */
+    private function ruleRescueAtRisk(CommercialSubject $s): ?array
+    {
+        if (! $s->hasActiveMembership) {
+            return null;
+        }
+
+        $noShow = $s->daysSinceLastAttendance !== null && $s->daysSinceLastAttendance >= 14;
+        // «Nunca vino» exige AMBAS cosas: que no haya fecha de última visita y
+        // que no haya visitas recientes. Deducirlo solo de la fecha ausente
+        // marcaba como desaparecido a quien vino diecisiete veces este mes.
+        $neverCame = $s->daysSinceLastAttendance === null
+            && $s->attendancesLast30Days === 0
+            && $s->daysAsMember !== null && $s->daysAsMember >= 14;
+
+        if (! $noShow && ! $neverCame) {
+            return null;
+        }
+
+        return [
+            'goal' => CommercialVocabulary::GOAL_INCREASE_ADHERENCE,
+            'action' => CommercialVocabulary::ACTION_CHECK_IN,
+            'reason' => $neverCame
+                ? 'Lleva más de dos semanas de membresía sin haber venido ni una vez. Hay una fricción que resolver.'
+                : sprintf('Paga pero lleva %d días sin venir. Es el patrón previo a no renovar.', (int) $s->daysSinceLastAttendance),
+            'confidence' => 0.85,
+            'exclusions' => [
+                'no_upsell' => 'No se ofrece nada más: primero hay que entender por qué no viene.',
+                'no_renewal_push' => 'Empujar la renovación de alguien que no usa el servicio genera reclamos.',
+            ],
+            'max_attempts' => 2,
+        ];
+    }
+
+    /**
+     * Renovación. Aquí sí entra el upgrade, pero **solo si viene de verdad**, y
+     * siempre con alternativa y mínimo aceptable: ir a por el anual y volver
+     * sin nada es el error clásico.
+     */
+    private function ruleRenewExpiring(CommercialSubject $s): ?array
+    {
+        if (! $s->hasActiveMembership || $s->daysToExpiry === null) {
+            return null;
+        }
+
+        if ($s->daysToExpiry > 10 || $s->daysToExpiry < 0) {
+            return null;
+        }
+
+        $rate = $s->weeklyAttendanceRate();
+        $engaged = $rate >= 2.5;
+
+        $ladder = $this->planLadder($s->currentPlanDurationDays);
+
+        return [
+            'goal' => CommercialVocabulary::GOAL_RENEW,
+            'action' => $engaged
+                ? CommercialVocabulary::ACTION_OFFER_UPGRADE
+                : CommercialVocabulary::ACTION_OFFER_RENEWAL,
+            'offer' => $engaged ? ($ladder['primary']?->name) : ($ladder['floor']?->name),
+            'offer_plan_id' => $engaged ? $ladder['primary']?->id : $ladder['floor']?->id,
+            'alternative_plan_id' => $engaged ? $ladder['alternative']?->id : null,
+            'floor_plan_id' => $ladder['floor']?->id,
+            'reason' => $engaged
+                ? sprintf(
+                    'Le vence en %d días y viene %.1f veces por semana. Con ese uso, un plan más largo le sale mejor por mes.',
+                    $s->daysToExpiry, $rate,
+                )
+                : sprintf(
+                    'Le vence en %d días. Su uso es bajo (%.1f/semana), así que lo sensato es asegurar la renovación, no alargar el compromiso.',
+                    $s->daysToExpiry, $rate,
+                ),
+            'confidence' => $engaged ? 0.85 : 0.7,
+            'estimated_value' => $engaged
+                ? (float) ($ladder['primary']?->price ?? 0)
+                : (float) ($ladder['floor']?->price ?? 0),
+            'exclusions' => $engaged ? [] : [
+                'no_upgrade' => sprintf('Uso semanal %.1f: por debajo del umbral de 2,5 para proponer un plan más largo.', $rate),
+            ],
+            'max_attempts' => 3,
+        ];
+    }
+
+    private function ruleReactivateExpired(CommercialSubject $s): ?array
+    {
+        if ($s->hasActiveMembership || $s->daysSinceExpiry === null || $s->daysSinceExpiry <= 0) {
+            return null;
+        }
+
+        // Pasado el año, un mensaje de reactivación es spam, no comercial.
+        if ($s->daysSinceExpiry > 365) {
+            return null;
+        }
+
+        // Los tres primeros días puede estar renovando por su cuenta.
+        if ($s->daysSinceExpiry < 3) {
+            return [
+                'goal' => CommercialVocabulary::GOAL_REACTIVATE,
+                'action' => CommercialVocabulary::ACTION_WAIT,
+                'reason' => 'Acaba de vencer; se le da margen por si renueva por su cuenta.',
+                'confidence' => 0.8,
+                'act_after' => now()->addDays(3),
+                'exclusions' => ['too_soon' => 'Menos de 3 días desde el vencimiento.'],
+            ];
+        }
+
+        return [
+            'goal' => CommercialVocabulary::GOAL_REACTIVATE,
+            'action' => CommercialVocabulary::ACTION_CHECK_IN,
+            'reason' => sprintf(
+                'Su membresía venció hace %d días. Antes de ofrecer nada, entender si dejó de venir por algo concreto.',
+                $s->daysSinceExpiry,
+            ),
+            'confidence' => 0.7,
+            'exclusions' => [
+                'no_discount' => 'No se ofrecen descuentos de reactivación sin autorización.',
+            ],
+            // Uno cada vez, y como mucho dos. Insistir a quien ya se fue quema
+            // la posibilidad de que vuelva por su cuenta.
+            'max_attempts' => 2,
+        ];
+    }
+
+    /** Upgrade fuera de la ventana de renovación: solo con uso demostrado. */
+    private function ruleUpgrade(CommercialSubject $s): ?array
+    {
+        if (! $s->hasActiveMembership) {
+            return null;
+        }
+
+        if ($s->weeklyAttendanceRate() < 2.5 || $s->daysAsMember === null || $s->daysAsMember < 21) {
+            return null;
+        }
+
+        // Quién puede subir lo decide el CATÁLOGO, no un número mágico: si no
+        // existe ningún plan más largo que el suyo, no hay nada que ofrecer.
+        // Con un umbral fijo de días, quien tuviera trimestral nunca habría
+        // recibido la propuesta de anual aunque entrenara a diario.
+        if ($this->planLadder($s->currentPlanDurationDays)['primary'] === null) {
+            return null;
+        }
+
+        // Si le queda más de un mes, no es el momento: se guarda para la
+        // ventana de renovación, donde la conversación es natural.
+        if ($s->daysToExpiry !== null && $s->daysToExpiry > 30) {
+            return [
+                'goal' => CommercialVocabulary::GOAL_UPGRADE,
+                'action' => CommercialVocabulary::ACTION_WAIT,
+                'reason' => 'Buen candidato a plan más largo, pero le queda mucho del actual.',
+                'confidence' => 0.7,
+                'act_after' => now()->addDays(max(1, $s->daysToExpiry - 20)),
+                'exclusions' => ['bad_timing' => 'Faltan más de 30 días para que venza.'],
+            ];
+        }
+
+        $ladder = $this->planLadder($s->currentPlanDurationDays);
+
+        return [
+            'goal' => CommercialVocabulary::GOAL_UPGRADE,
+            'action' => CommercialVocabulary::ACTION_OFFER_UPGRADE,
+            'offer' => $ladder['primary']?->name,
+            'offer_plan_id' => $ladder['primary']?->id,
+            'alternative_plan_id' => $ladder['alternative']?->id,
+            'floor_plan_id' => $ladder['floor']?->id,
+            'reason' => sprintf(
+                'Entrena %.1f veces por semana desde hace %d días. Un plan más largo le baja el costo mensual.',
+                $s->weeklyAttendanceRate(), $s->daysAsMember,
+            ),
+            'confidence' => 0.8,
+            'estimated_value' => (float) ($ladder['primary']?->price ?? 0),
+            'max_attempts' => 2,
+        ];
+    }
+
+    /** Prospecto que ya dijo qué quiere: toca recomendar y cerrar. */
+    private function ruleCloseProspect(CommercialSubject $s): ?array
+    {
+        if ($s->hasActiveMembership || $s->lead === null || empty($s->objective)) {
+            return null;
+        }
+
+        $ladder = $this->planLadder(null);
+
+        return [
+            'goal' => CommercialVocabulary::GOAL_CLOSE_PLAN,
+            'action' => CommercialVocabulary::ACTION_RECOMMEND_PLAN,
+            'offer' => $ladder['floor']?->name,
+            'offer_plan_id' => $ladder['floor']?->id,
+            'alternative_plan_id' => $ladder['alternative']?->id,
+            'floor_plan_id' => $ladder['floor']?->id,
+            'reason' => sprintf('Ya sabemos qué busca (%s). Toca recomendar el plan que encaje y proponer un siguiente paso.', $s->objective),
+            'confidence' => 0.75,
+            'estimated_value' => (float) ($ladder['floor']?->price ?? 0),
+            'exclusions' => $s->priceObjections > 0
+                ? ['price_sensitive' => 'Ya objetó el precio: empezar por la opción de entrada, no por la más cara.']
+                : [],
+            'max_attempts' => 3,
+        ];
+    }
+
+    /** No sabemos qué quiere: preguntar antes de ofrecer nada. */
+    private function ruleQualifyProspect(CommercialSubject $s): ?array
+    {
+        if ($s->hasActiveMembership || $s->lead === null) {
+            return null;
+        }
+
+        return [
+            'goal' => CommercialVocabulary::GOAL_COLLECT_DATA,
+            'action' => CommercialVocabulary::ACTION_ASK_DISCOVERY,
+            'reason' => 'Todavía no sabemos qué busca. Recomendar sin eso es adivinar.',
+            'confidence' => 0.7,
+            'exclusions' => ['no_offer' => 'No se ofrece plan sin conocer objetivo y disponibilidad.'],
+            'max_attempts' => 2,
+        ];
+    }
+
+    /** Referidos: solo a quien está contento y lleva tiempo. */
+    private function ruleRequestReferral(CommercialSubject $s): ?array
+    {
+        if (! $s->hasActiveMembership || $s->weeklyAttendanceRate() < 3.0) {
+            return null;
+        }
+
+        if ($s->daysAsMember === null || $s->daysAsMember < 45) {
+            return null;
+        }
+
+        return [
+            'goal' => CommercialVocabulary::GOAL_REQUEST_REFERRAL,
+            'action' => CommercialVocabulary::ACTION_ASK_REFERRAL,
+            'reason' => sprintf(
+                'Lleva %d días entrenando %.1f veces por semana. Es quien mejor puede recomendar el gimnasio.',
+                $s->daysAsMember, $s->weeklyAttendanceRate(),
+            ),
+            'confidence' => 0.6,
+            'max_attempts' => 1,
+        ];
+    }
+
+    /**
+     * Escalera de planes: principal, alternativa y mínimo aceptable.
+     *
+     * Se lee del catálogo REAL. Si no hay planes cargados devuelve nulos y las
+     * reglas siguen funcionando sin oferta concreta: es preferible una
+     * recomendación sin plan que un plan inventado.
+     *
+     * @return array{primary:?Plan, alternative:?Plan, floor:?Plan}
+     */
+    private function planLadder(?int $currentDurationDays): array
+    {
+        // Caché de INSTANCIA, no estática. Una estática sobrevive entre
+        // ejecuciones dentro del mismo worker de cola: si alguien desactiva un
+        // plan desde el CRM, el agente seguiría ofreciéndolo hasta que el
+        // proceso se reiniciara. Ofrecer un plan que ya no existe es
+        // exactamente lo que el agente tiene prohibido.
+        $cache = $this->planCache ??= Plan::query()
+            ->where('active', true)
+            ->orderBy('duration_days')
+            ->get(['id', 'name', 'price', 'duration_days']);
+
+        if ($cache->isEmpty()) {
+            return ['primary' => null, 'alternative' => null, 'floor' => null];
+        }
+
+        // El mínimo es el plan activo más corto: la renovación que siempre se
+        // debe poder cerrar.
+        $floor = $currentDurationDays !== null
+            ? ($cache->firstWhere('duration_days', $currentDurationDays) ?? $cache->first())
+            : $cache->first();
+
+        // Los candidatos a subir son los más largos que el actual.
+        $longer = $cache->filter(fn ($p) => $p->duration_days > ($floor->duration_days ?? 0))->values();
+
+        return [
+            'primary' => $longer->last() ?: null,      // el más largo disponible
+            'alternative' => $longer->first() ?: null, // el escalón inmediato
+            'floor' => $floor,
+        ];
+    }
+}
