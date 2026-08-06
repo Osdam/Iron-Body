@@ -125,7 +125,7 @@ supuesto:
 | Herramientas del agente para Wompi / membresías / agenda / Factus / app | **TODO** — la infraestructura existe (`WompiPaymentLinkService`, `InvoicingService`, `MembershipService`), falta exponerla como herramientas tipadas del agente |
 | Panel de supervisión humana (P3) | **TODO** |
 | Métricas económicas atribuibles | **TODO** — el esquema las soporta (`estimated_value`, `realized_value`, `outcome`) |
-| Recorder de eventos + listeners que disparan el motor | **TODO** — la tabla existe, falta el cableado |
+| Recorder de eventos + listeners que disparan el motor | **ENTREGADO** — ver §19 |
 | Flujos E2E A–J | **TODO** |
 | Pruebas de frontend y verificación visual en 4 resoluciones | **TODO** |
 | Máquina de estados comercial explícita | Parcial: los estados existen en la oportunidad; falta el objeto de transiciones |
@@ -313,3 +313,104 @@ Ninguna de las dos es una decisión técnica que corresponda tomar aquí.
 El registro del número real en Meta mediante OTP **no se ha ejecutado**: es una
 acción irreversible sobre el número productivo y está fuera de lo autorizado.
 Ver el procedimiento exacto en el informe de entrega.
+
+---
+
+## Fase A — Eventos reales conectados al motor
+
+Commits: `3801fcf` (correcciones) · `991ac34` (alta de hechos) · `883ff30` (ciclo).
+Suite: **1899 pasan, 0 fallan** (+26). Desplegado con **todos los flags apagados**.
+
+### 19. Cableado de hechos — **ENTREGADO**
+
+Los 24 hechos del encargo quedan conectados. Decisión de diseño central: se
+observan **tablas**, no servicios.
+
+La razón es que un pago se aprueba por cuatro caminos —webhook de Wompi,
+reconciliación cada 5 minutos, cobro recurrente y push de Nequi—. Enganchar en
+cada servicio obligaría a acordarse de los cuatro y del quinto que se escriba
+más adelante. El observer escucha donde queda el resultado, así que ninguno se
+escapa, y **no se tocó ni una línea de pagos ni de facturación**, que el encargo
+marca como zona intocable.
+
+| Hecho | Origen observado |
+|---|---|
+| lead creado / calificado / pide humano | `marketing_leads` |
+| enlace de pago generado | `payment_transactions.created` con `checkout_url` |
+| pago aprobado / pendiente / rechazado / expirado | `payment_transactions.status` (solo al ENTRAR en el estado) |
+| membresía creada / renovada | `users.membership_end_date` |
+| app vinculada | `members.user_id` (null → valor) |
+| cita creada / completada | `marketing_appointments` |
+| primera asistencia / hito | `attendances` (entradas distintas por día) |
+| factura solicitada / validada / rechazada | `electronic_invoices` (**solo lectura**) |
+| atención humana | `marketing_conversations.human_takeover` |
+| vencimiento próximo / vencida / inactividad / enlace abandonado | `commercial:scan` (cada hora) |
+
+**Idempotencia.** Cada hecho lleva una clave construida con *lo que pasó*
+(«pago 4821 aprobado»), no con *cuándo se observó*. La reconciliación puede ver
+la misma aprobación veinte veces y produce un evento. Índice único en
+`commercial_events.dedupe_key`; la violación de unicidad es el árbitro cuando
+dos procesos coinciden.
+
+**El recorder nunca lanza.** Corre dentro de la transacción de un cobro. Perder
+un evento comercial es un problema menor; revertir un pago real por un fallo del
+motor sería inaceptable.
+
+### 20. Ciclo de decisión — **ENTREGADO**
+
+`EvaluateCommercialSubject` (job, `afterCommit`) ejecuta, en este orden:
+
+1. **Reconciliar** — cerrar lo que los hechos ya dan por cumplido.
+2. **Evaluar** — elegir el objetivo siguiente.
+3. **Marcar evaluado** — al final, para que un fallo deje el hecho pendiente.
+
+El orden no es arbitrario: al revés, el motor volvería a proponer el objetivo
+recién conseguido y la persona recibiría un recordatorio de un pago que ya hizo.
+
+Cerrar en el paso 1 es lo que hace ejecutable el principio del módulo: *ninguna
+venta termina la relación comercial*. Probado — tras cerrar el cobro aparece un
+objetivo nuevo y distinto.
+
+Distinciones que el reconciliador respeta:
+- **Bloqueada ≠ perdida.** Quien pidió hablar con una persona no fracasó, se
+  apartó; su caso tiene que poder retomarse y no debe ensuciar la conversión.
+- Una renovación **no** se da por ganada al abrirse: la membresía vigente que se
+  quiere renovar es justo la que haría verdadera la condición.
+
+**Concurrencia:** candado por *persona*, no por evento; el lead convertido y su
+ficha de miembro comparten clave.
+
+### 21. Tres defectos corregidos del motor anterior
+
+Los encontró la prueba del ciclo al construir el sujeto contra datos reales en
+lugar de a mano. Los tres estaban en código ya desplegado:
+
+1. Las asistencias se filtraban por `action='in'`; la columna es
+   `enum('entry','exit')`. La consulta no coincidía nunca: **todo socio parecía
+   no haber pisado el gimnasio**, y sin visitas nadie alcanza el umbral de uso,
+   así que la mejora de plan no se habría ofrecido jamás.
+2. `CommercialSubject` lanzaba `TypeError` en cuanto un socio tenía membresía
+   vigente (`Carbon\Carbon` vs `Illuminate\Support\Carbon`). Ocurría fuera del
+   `try`, así que **se llevaba por delante la evaluación entera**.
+3. La fecha de alta solo se leía de `membership_subscriptions`, que no existe
+   para quien paga de una sola vez —la mayoría—, dejando nulo `days_as_member`.
+
+### 22. Flags
+
+`COMMERCIAL_EVENTS_ENABLED` es **independiente** de `COMMERCIAL_NBA_ENABLED`.
+Observar es inofensivo: permite registrar hechos durante semanas y comprobar que
+se detectan bien y a tiempo, antes de dejar que alguien decida sobre ellos.
+Ambos apagados en producción.
+
+### 23. Pendiente tras la Fase A
+
+| Área | Estado |
+|---|---|
+| Herramientas operativas tipadas (Fase B) | **TODO** — siguiente paso |
+| Recorridos E2E 1–10 (Fase C) | **TODO** |
+| Inbox V2 (Fase D) | **TODO** — bloqueado por B y C |
+| Supervisión y métricas (Fase E) | **TODO** |
+| Verificación visual (Fase F) | **TODO** |
+
+El motor ya **decide** y los eventos ya lo **automatizan**. Falta que las
+herramientas **ejecuten**: hoy una decisión no se convierte en una acción real.
