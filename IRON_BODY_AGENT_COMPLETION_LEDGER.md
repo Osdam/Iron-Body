@@ -21,10 +21,59 @@ solo pasa a **PASS** cuando hay una prueba ejecutada que lo demuestra.
 
 | Dato | Valor |
 |---|---|
-| Suite backend | **1793 pasan / 0 fallan** (11 413 aserciones, 77 s) |
-| Pruebas añadidas | **+153** |
+| Suite backend | **1833 pasan / 0 fallan** (11 588 aserciones, 78 s) |
+| Pruebas añadidas | **+193** |
 | Build Angular | Correcto (avisos de presupuesto CSS preexistentes, en archivos no tocados) |
 | Los 4 fallos de la línea base | Pasan hoy **solos**. Eran sensibles a la fecha: no se tocó nada del módulo de membresías. Siguen siendo frágiles. |
+
+## Segunda fase (2026-08-06)
+
+### 10. Secretos en disco — **PASS**
+
+57 ficheros `.env` con credenciales vivas a `644` en el directorio de la
+aplicación, incluido el `.env` en uso. **No eran accesibles por web** (docroot
+`public/` + `deny all` de nginx, comprobado con traversal en claro, codificado y
+doble codificado), pero sí por cualquier usuario con shell.
+
+56 movidos a `/root/env-backups` a `600`; el `.env` en uso pasado a `600`.
+`security:check-secret-exposure` + `SecretExposureTest` (18) impiden la
+reincidencia. Inventario y propuesta de borrado en `docs/whatsapp/INVENTARIO-ENV.md`
+— **no se ha borrado nada**.
+
+### 11. Optimización de Hermes — **FAIL objetivo, decisión tomada**
+
+| | OpenAI directo | Hermes minimal |
+|---|---|---|
+| Tokens de entrada | **37** | 12 465 |
+| p95 con 10 simultáneas | **1,19 s** | 14,62 s |
+| Éxito con 10 simultáneas | **10/10** | 7/10 |
+
+Se creó `iron-sales-minimal` con todo desactivado: el prompt fijo cayó un 93 %
+(40 985 B → 2 986 B) y el coste real solo un 13 %. Un prompt de dos palabras
+cuesta 12 440 tokens: **el gasto es fijo y estructural del runtime**, fuera del
+alcance de la configuración. Detalle en `docs/hermes/COMPARATIVA.md`.
+
+**Hermes permanece apagado.** Cumple 1 de 5 criterios objetivos.
+
+### 12. Fallback probado — **PASS** (9 pruebas)
+
+Degradación en la misma petición · cortacircuitos tras fallos repetidos ·
+enfriamiento y llamada de prueba · techo de gasto · kill switch sin desplegar ·
+con ambos motores caídos, el mensaje queda esperando a un humano.
+
+### 13. Inbox operado sin Meta — **PASS** (13 pruebas)
+
+Respuesta manual con autor · imagen, audio, video y documento · nota de voz
+distinguida · adjunto fallido que se explica · pausar y reanudar IA · asignación
+· reintento de un 429 hasta que entra · **dos operadores a la vez sin pisarse** ·
+**un operador respondiendo impide que la IA conteste encima** · una reentrega
+nunca genera una segunda respuesta.
+
+### 14. Plan de activación — **ENTREGADO**
+
+`docs/whatsapp/ACTIVACION.md`: cinco fases, variables exactas sin valores, orden
+del registro por OTP, canary, rollback inmediato, ocho condiciones que obligan a
+apagar `META_ENABLED` y checklist de 15 puntos. **No ejecutado.**
 
 **Recursos del VPS medidos antes de decidir arquitectura** (`srv1728633`):
 4 vCPU · 15,9 GB RAM (14,2 GB disponibles) · 194 GB disco con 184 GB libres ·
