@@ -251,3 +251,14 @@ Schedule::command('marketing:retry-outbox')
     ->everyMinute()
     ->withoutOverlapping()
     ->onOneServer();
+
+// ── IRON GUARD: pasada de detección ──────────────────────────────────────────
+// Determinista y barata: consulta estado propio (eventos sin procesar, mensajes
+// muertos, adjuntos fallidos, errores de Meta, jobs caídos). No manda nada a un
+// modelo. Idempotente: correrla diez veces con el mismo problema deja UN
+// incidente con diez ocurrencias, no diez incidentes.
+// Respeta IRON_GUARD_ENABLED: con el flag apagado no hace nada.
+Schedule::command('iron-guard:scan')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->onOneServer();

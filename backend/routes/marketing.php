@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\IronGuardController;
 use App\Http\Controllers\Api\Admin\MarketingAgentActionController;
 use App\Http\Controllers\Api\Admin\MarketingAppointmentController;
 use App\Http\Controllers\Api\Admin\MarketingAttachmentController;
@@ -137,4 +138,24 @@ Route::middleware('throttle:120,1')
         Route::post('{id}/complete',  [MarketingAppointmentController::class, 'complete']);
         Route::post('{id}/cancel',    [MarketingAppointmentController::class, 'cancel']);
         Route::post('{id}/reschedule', [MarketingAppointmentController::class, 'reschedule']);
+    });
+
+// ── IRON GUARD — panel de incidentes del canal ────────────────────────────────
+// Protegido por el blindaje global de /api/admin/* y, además, restringido a
+// administradores plenos dentro del propio controlador: aquí se ven ids
+// internos, códigos de error e infraestructura, que no es información para un
+// asesor comercial.
+Route::middleware('throttle:120,1')
+    ->prefix('admin/iron-guard')
+    ->where(['id' => '[0-9]+'])
+    ->group(function (): void {
+        Route::get('overview',        [IronGuardController::class, 'overview']);
+        Route::get('incidents',       [IronGuardController::class, 'index']);
+        Route::get('incidents/{id}',  [IronGuardController::class, 'show']);
+        Route::patch('incidents/{id}/status', [IronGuardController::class, 'updateStatus']);
+
+        // Acciones que tocan el sistema: throttle más estricto.
+        Route::post('scan', [IronGuardController::class, 'scan'])->middleware('throttle:10,1');
+        Route::post('incidents/{id}/remediate', [IronGuardController::class, 'remediate'])
+            ->middleware('throttle:20,1');
     });
