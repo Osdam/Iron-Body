@@ -88,11 +88,31 @@ class CommercialOpportunity extends Model
         return $this->expires_at === null || $this->expires_at->isFuture();
     }
 
-    /** Cierra la oportunidad con su resultado, para poder atribuir después. */
+    /**
+     * Cierra la oportunidad con su resultado, para poder atribuir después.
+     *
+     * El estado terminal se conserva TAL CUAL cuando el resultado ya es uno de
+     * ellos. Aplastar todo lo que no sea `won` contra `lost` mezclaba tres cosas
+     * distintas: una oferta rechazada (perdida), una que venció sin respuesta
+     * (expirada) y una detenida porque la persona pidió no recibir mensajes
+     * (bloqueada). Solo la primera es una derrota comercial; las otras dos
+     * ensuciarían cualquier métrica de conversión y, en el caso de la
+     * bloqueada, impedirían reabrir el caso si la persona vuelve a escribir.
+     */
     public function close(string $outcome, ?string $reason = null, ?float $realizedValue = null): void
     {
+        $terminal = [
+            CommercialVocabulary::STATUS_WON,
+            CommercialVocabulary::STATUS_LOST,
+            CommercialVocabulary::STATUS_EXPIRED,
+            CommercialVocabulary::STATUS_CANCELLED,
+            CommercialVocabulary::STATUS_BLOCKED,
+        ];
+
         $this->forceFill([
-            'status' => $outcome === 'won' ? CommercialVocabulary::STATUS_WON : CommercialVocabulary::STATUS_LOST,
+            'status' => in_array($outcome, $terminal, true)
+                ? $outcome
+                : CommercialVocabulary::STATUS_LOST,
             'outcome' => $outcome,
             'outcome_reason' => $reason,
             'realized_value' => $realizedValue,

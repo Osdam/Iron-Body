@@ -145,6 +145,32 @@ class CommercialSubject
      *
      * @return array<string,mixed>
      */
+    /**
+     * Lleva cualquier fecha al Carbon de Laravel.
+     *
+     * El sistema mezcla las dos clases: los servicios antiguos usan
+     * `Carbon\Carbon` y Eloquent devuelve `Illuminate\Support\Carbon`. Como la
+     * segunda hereda de la primera, un valor de la clase base NO satisface un
+     * parámetro tipado con la derivada, y el fallo aparece lejos del origen.
+     */
+    private static function asCarbon(mixed $value): ?Carbon
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if ($value instanceof Carbon) {
+            return $value;
+        }
+
+        try {
+            return Carbon::parse($value);
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /** @return array<string,mixed> */
     private static function membershipFacts(?User $user): array
     {
         $empty = [
@@ -176,13 +202,27 @@ class CommercialSubject
                     ->first(['plan_id', 'price_snapshot', 'interval_days', 'current_period_start'])
                 : null;
 
-            $startedAt = $subscription?->current_period_start
-                ? Carbon::parse($subscription->current_period_start)
-                : null;
+            // La suscripción manda cuando existe, pero la mayoría de la gente
+            // paga de una vez y nunca tiene fila en membership_subscriptions.
+            // Sin este respaldo, `started_at` era null para casi todos los
+            // socios, y con él `days_as_member`, que es la condición que exige
+            // llevar un tiempo mínimo antes de proponer una mejora de plan: el
+            // resultado era que a los clientes de pago único no se les ofrecía
+            // nunca nada.
+            $startedAt = self::asCarbon(
+                $subscription?->current_period_start ?? $user->membership_start_date,
+            );
 
             return [
                 'active' => $active,
-                'ends_at' => $endsAt,
+                // Se normaliza el tipo a propósito. MembershipService devuelve
+                // Carbon\Carbon y este objeto declara Illuminate\Support\Carbon,
+                // que es una subclase: la conversión NO es automática en esa
+                // dirección. Sin este ajuste, construir el sujeto de cualquier
+                // socio con membresía vigente lanzaba un TypeError, y como
+                // ocurre fuera del try de este método, se llevaba por delante
+                // la evaluación entera.
+                'ends_at' => self::asCarbon($endsAt),
                 'days_to_expiry' => $daysToExpiry,
                 'days_since_expiry' => $daysSinceExpiry,
                 'plan_id' => $subscription->plan_id ?? null,
@@ -207,9 +247,16 @@ class CommercialSubject
 
         try {
             // Solo entradas: una salida no es una visita adicional.
+            //
+            // El valor es 'entry'. La columna es un enum('entry','exit') y así
+            // lo escriben el torniquete y la app. Antes se filtraba por 'in',
+            // que no coincide con ninguna fila: la consulta devolvía siempre
+            // cero y TODO socio parecía no haber pisado nunca el gimnasio, lo
+            // que a su vez hacía que nadie llegara nunca al umbral de uso para
+            // una mejora de plan.
             $base = DB::table('attendances')
                 ->where('member_id', $member->id)
-                ->where('action', 'in');
+                ->where('action', 'entry');
 
             $last30 = (clone $base)->where('captured_at', '>=', now()->subDays(30))->count();
             $lastRow = (clone $base)->orderByDesc('captured_at')->first(['captured_at']);
