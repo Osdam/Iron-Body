@@ -371,6 +371,31 @@ class MarketingInboxController extends Controller
         ]);
     }
 
+    /**
+     * Catalogo de etiquetas para el autocompletado del inbox.
+     *
+     * Devuelve tambien las bloqueadas, marcadas como no editables: el equipo
+     * tiene que poder VER que existe "Meta Ads" y filtrar por ella aunque no
+     * pueda ponerla a mano. Ocultarlas haria pensar que no existen.
+     */
+    public function tagCatalog(Request $request): JsonResponse
+    {
+        if ($r = $this->guard($request, MarketingInboxAuthorizationService::CAP_VIEW)) {
+            return $r;
+        }
+
+        $tags = \App\Models\MarketingTag::query()
+            ->where('active', true)
+            ->orderBy('category')
+            ->orderBy('sort_order')
+            ->get();
+
+        return response()->json([
+            'ok' => true,
+            'data' => $tags->map(fn ($t) => $t->present())->all(),
+        ]);
+    }
+
     private function notFound(): JsonResponse
     {
         return response()->json(['ok' => false, 'code' => 'not_found', 'message' => 'Conversación no encontrada.'], 404);

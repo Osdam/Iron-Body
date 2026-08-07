@@ -70,6 +70,8 @@ Route::middleware('throttle:120,1')
         Route::get('conversations',                      [MarketingInboxController::class, 'index']);
         Route::get('metrics',                            [MarketingInboxController::class, 'metrics']);
         Route::get('capabilities',                       [MarketingInboxController::class, 'capabilities']);
+        // Catalogo de etiquetas para autocompletar y filtrar en el inbox.
+        Route::get('tags',                               [MarketingInboxController::class, 'tagCatalog']);
         Route::get('conversations/{id}',                 [MarketingInboxController::class, 'show']);
         // Panel derecho del Inbox V2: contexto agregado y de SOLO LECTURA.
         Route::get('conversations/{id}/context',         [MarketingInboxController::class, 'context']);

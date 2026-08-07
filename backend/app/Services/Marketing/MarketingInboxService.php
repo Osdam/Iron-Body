@@ -27,7 +27,7 @@ class MarketingInboxService
                 // y dejaba la lista vacía aunque las métricas sí contaran.
                 'lead:id,name,phone,channel,status,temperature,objective,do_not_contact',
                 'assignedAdmin:id,name',
-                'tags:id,conversation_id,tag',
+                'tags:id,conversation_id,tag,assigned_kind',
             ])
             ->latest('last_message_at');
 
@@ -119,6 +119,12 @@ class MarketingInboxService
             'staff_review_pending' => (bool) $c->staff_review_pending,
             'staff_review_reason' => $c->staff_review_reason,
             'tags' => $c->tags->pluck('tag')->all(),
+            // Como mucho DOS y de familias distintas: la lista sirve para
+            // decidir a quien atender primero, no para enumerar atributos.
+            // Se decora en memoria contra un catalogo cacheado; consultar el
+            // catalogo por conversacion seria un N+1 en cuanto alguien
+            // etiquetara de verdad.
+            'tags_detailed' => $this->decorateTags($c->tags, limit: 2),
             'last_message_preview' => $preview !== null ? mb_strimwidth((string) $preview, 0, 120, '…') : null,
         ];
     }
@@ -209,6 +215,7 @@ class MarketingInboxService
                 'created_at' => $n->created_at?->toIso8601String(),
             ])->all(),
             'tags' => $conversation->tags->pluck('tag')->all(),
+            'tags_detailed' => $this->decorateTags($conversation->tags),
         ];
     }
 
@@ -324,5 +331,90 @@ class MarketingInboxService
             'first_response_time_avg_seconds' => $ttfr,
             'conversations_by_status' => $byStatus,
         ];
+    }
+
+    /**
+     * El catalogo de etiquetas, leido UNA vez.
+     *
+     * Son menos de veinte filas que cambian casi nunca, y la alternativa es
+     * consultarlas por cada conversacion de la lista. Se cachea corto para que
+     * crear una etiqueta nueva se vea enseguida sin tener que invalidar nada a
+     * mano.
+     *
+     * @return array<string,array<string,mixed>>
+     */
+    private function tagCatalog(): array
+    {
+        return \Illuminate\Support\Facades\Cache::remember(
+            'marketing:tag-catalog',
+            now()->addMinutes(5),
+            fn () => \App\Models\MarketingTag::query()
+                ->get(['slug', 'name', 'description', 'category', 'kind', 'color', 'locked'])
+                ->keyBy('slug')
+                ->map(fn ($t) => [
+                    'name' => $t->name,
+                    'description' => $t->description,
+                    'category' => $t->category,
+                    'kind' => $t->kind,
+                    'color' => $t->color,
+                    'editable' => $t->isManuallyEditable(),
+                    'priority' => $t->listPriority(),
+                ])
+                ->all(),
+        );
+    }
+
+    /**
+     * Enriquece las asignaciones con el catalogo, en memoria.
+     *
+     * Con `limit` devuelve una por FAMILIA: dos etiquetas operativas informan
+     * menos que una operativa y una de origen.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private function decorateTags(\Illuminate\Support\Collection $assignments, ?int $limit = null): array
+    {
+        if ($assignments->isEmpty()) {
+            return [];
+        }
+
+        $catalog = $this->tagCatalog();
+
+        $decorated = $assignments->map(function ($assignment) use ($catalog) {
+            $slug = $assignment->tag;
+            // Una etiqueta que alguien invento y aun no esta en el catalogo se
+            // muestra igual: no desaparece por no estar registrada.
+            $meta = $catalog[$slug] ?? [
+                'name' => $slug, 'description' => null, 'category' => 'commercial',
+                'kind' => 'manual', 'color' => 'neutral', 'editable' => true, 'priority' => 30,
+            ];
+
+            return [
+                'slug' => $slug,
+                'kind' => $assignment->assigned_kind ?? $meta['kind'],
+                ...$meta,
+            ];
+        })->sortBy('priority')->values();
+
+        if ($limit === null) {
+            return $decorated->all();
+        }
+
+        $seen = [];
+        $chosen = [];
+
+        foreach ($decorated as $tag) {
+            if (isset($seen[$tag['category']])) {
+                continue;
+            }
+            $seen[$tag['category']] = true;
+            $chosen[] = $tag;
+
+            if (count($chosen) === $limit) {
+                break;
+            }
+        }
+
+        return $chosen;
     }
 }

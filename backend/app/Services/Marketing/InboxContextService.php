@@ -54,6 +54,8 @@ class InboxContextService
 
         $context = [
             'customer' => $this->customer($conversation, $lead, $member),
+            'tags' => $this->tags($conversation),
+            'attribution' => $this->attribution($lead),
             'commercial' => $this->commercial($lead, $member),
             'opportunity' => $this->opportunity($lead, $member),
             'payments' => $this->payments($member),
@@ -110,6 +112,62 @@ class InboxContextService
                 'document_number' => $m->document_number,
                 'matched_by' => 'phone',
             ])->all();
+    }
+
+    /**
+     * Etiquetas con su origen y su evidencia.
+     *
+     * Van completas aqui -no las dos de la lista- porque el panel es donde se
+     * mira cuando ya se eligio a quien atender.
+     */
+    private function tags(MarketingConversation $conversation): array
+    {
+        return $this->safe(
+            fn () => app(MarketingConversationTagService::class)->detailed($conversation),
+            [],
+        );
+    }
+
+    /**
+     * De donde vino esta persona.
+     *
+     * Se entrega la lectura normalizada y NO el payload crudo: el panel
+     * necesita saber que anuncio la trajo, no los identificadores internos.
+     */
+    private function attribution(?MarketingLead $lead): ?array
+    {
+        return $this->safe(function () use ($lead) {
+            if ($lead === null || ! Schema::hasTable('marketing_lead_attributions')) {
+                return null;
+            }
+
+            $a = \App\Models\MarketingLeadAttribution::query()
+                ->where('marketing_lead_id', $lead->id)
+                ->first();
+
+            if ($a === null) {
+                return null;
+            }
+
+            return [
+                'source_type' => $a->source_type,
+                'platform' => $a->source_platform,
+                'ad_id' => $a->ad_id,
+                'campaign_name' => $a->campaign_name,
+                'headline' => $a->headline,
+                'source_url' => $a->source_url,
+                'confidence' => $a->attribution_confidence,
+                'first_touch_at' => $a->first_touch_at?->toIso8601String(),
+                'first_touch_source' => $a->first_touch_source_type,
+                'last_touch_at' => $a->last_touch_at?->toIso8601String(),
+                'last_touch_source' => $a->last_touch_source_type,
+                'evidence' => $a->evidence,
+                // El texto del anuncio lo escribio alguien fuera del sistema.
+                // Se marca para que la interfaz no lo presente como palabra
+                // nuestra ni el agente lo tome por una instruccion.
+                'untrusted_text' => $a->headline !== null,
+            ];
+        }, null);
     }
 
     // ── 2. Comercial ────────────────────────────────────────────────────────
