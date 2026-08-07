@@ -70,6 +70,14 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->guardWompiConfig();
         $this->guardFactusConfig();
+
+        // La previsualizacion de la lista se mantiene desde la TABLA de
+        // mensajes, no desde cada servicio que envia. Los mensajes nacen por
+        // seis caminos distintos y basta que uno se olvide para que la bandeja
+        // muestre texto viejo; un observador no se lo puede saltar ninguno.
+        \App\Models\MarketingMessage::observe(
+            \App\Observers\Marketing\ConversationPreviewObserver::class,
+        );
     }
 
     /**

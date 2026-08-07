@@ -15,6 +15,25 @@ use Illuminate\Http\Request;
  */
 class MarketingInboxService
 {
+    /**
+     * Catalogo de etiquetas ya leido en esta peticion.
+     *
+     * El servicio se resuelve una vez por peticion, asi que este valor vive lo
+     * que vive la peticion: no hay riesgo de servir un catalogo obsoleto entre
+     * peticiones distintas.
+     *
+     * @var array<string,array<string,mixed>>|null
+     */
+    private ?array $catalogMemo = null;
+
+    /**
+     * Minimo de caracteres para buscar dentro de los mensajes.
+     *
+     * Es el tamanio de un trigrama: por debajo, el indice no se puede usar y la
+     * consulta degenera en un escaneo de la tabla entera.
+     */
+    private const MIN_MESSAGE_SEARCH_LENGTH = 3;
+
     /** Lista paginada de conversaciones con filtros del Inbox. */
     public function list(Request $request, ?int $viewerAdminId): LengthAwarePaginator
     {
@@ -81,25 +100,115 @@ class MarketingInboxService
             $query->whereHas('tags', fn (Builder $q) => $q->where('tag', $tag));
         }
 
-        // Búsqueda libre: nombre / teléfono del lead o texto de un mensaje.
-        $q = trim((string) $request->query('q', ''));
-        if ($q !== '') {
-            $like = '%'.str_replace(['%', '_'], ['\%', '\_'], $q).'%';
-            $query->where(function (Builder $outer) use ($like): void {
-                $outer->whereHas('lead', fn (Builder $l) => $l
-                    ->where('name', 'like', $like)
-                    ->orWhere('phone', 'like', $like))
-                    ->orWhereHas('messages', fn (Builder $m) => $m->where('body', 'like', $like));
-            });
+        $this->applySearch($query, trim((string) $request->query('q', '')));
+    }
+
+    /**
+     * Búsqueda libre sobre nombre, teléfono y texto de los mensajes.
+     *
+     * Dos decisiones que no se ven y sostienen el rendimiento:
+     *
+     * · **Con menos de tres caracteres NO se busca en los mensajes.** El índice
+     *   de trigramas necesita tres para poder usarse; por debajo, PostgreSQL
+     *   recorre los cientos de miles de mensajes uno a uno. Se buscaba así
+     *   antes y costaba ~190 ms por pulsación. Dos letras tampoco identifican
+     *   a nadie, así que no se pierde nada útil.
+     *
+     * · **Un teléfono se busca por sus dígitos.** La gente escribe
+     *   «315 053 60» o «+57 315…» y lo guardado es «3150536026»; comparar tal
+     *   cual no encontraba nada y parecía que el buscador estaba roto.
+     */
+    private function applySearch(Builder $query, string $q): void
+    {
+        if ($q === '') {
+            return;
         }
+
+        $like = '%'.$this->escapeLike($q).'%';
+        $digits = preg_replace('/\D+/', '', $q) ?? '';
+        $searchesMessages = mb_strlen($q) >= self::MIN_MESSAGE_SEARCH_LENGTH;
+
+        /*
+         * Una sola clausula, escrita a mano, y por dos motivos.
+         *
+         * El primero es el escape. `LIKE` necesita saber cual es el caracter de
+         * escape: PostgreSQL asume la barra invertida y SQLite no asume
+         * ninguna, asi que buscar un `%` literal -«50%»- encontraba cosas en
+         * produccion y nada en las pruebas. Declararlo con `ESCAPE` lo iguala.
+         *
+         * El segundo es que hubo que aprenderlo por las malas: escrito con
+         * `whereRaw` dentro de los closures de `whereHas`, Laravel pierde las
+         * ataduras al montar la subconsulta `exists`. SQLite lo dejaba pasar y
+         * PostgreSQL contestaba «Invalid parameter number», o sea que el fallo
+         * solo existia en el motor de produccion. En una sola llamada al
+         * constructor principal, las ataduras van donde tienen que ir.
+         *
+         * El `IN (SELECT DISTINCT ...)` tampoco es cosmetico. Como `EXISTS`
+         * correlacionado, el planificador resolvia un semi join anidado -un
+         * escaneo por conversacion, 5.004 de ellos- y no tocaba el indice de
+         * trigramas ni una vez: 173 ms. Con DISTINCT lo recorre UNA vez: 44 ms,
+         * y sin recortar ni un resultado.
+         *
+         * Todos los nombres de tabla y columna son constantes de este archivo.
+         * Lo unico que viene de fuera es el patron, y va enlazado.
+         */
+        $conditions = [
+            "EXISTS (
+                SELECT 1 FROM marketing_leads l
+                WHERE l.id = marketing_conversations.lead_id
+                  AND (l.name LIKE ? ESCAPE '!' OR l.phone LIKE ? ESCAPE '!')
+            )",
+        ];
+        $bindings = [$like, $like];
+
+        // El telefono tal y como lo escribe la gente: «315 053 60», «+57 315…».
+        // Guardado esta sin separadores, asi que se busca tambien por digitos.
+        if (strlen($digits) >= 3) {
+            $conditions[] = "EXISTS (
+                SELECT 1 FROM marketing_leads l2
+                WHERE l2.id = marketing_conversations.lead_id AND l2.phone LIKE ?
+            )";
+            $bindings[] = '%'.$digits.'%';
+        }
+
+        if ($searchesMessages) {
+            $conditions[] = "marketing_conversations.id IN (
+                SELECT DISTINCT conversation_id FROM marketing_messages
+                WHERE body LIKE ? ESCAPE '!'
+            )";
+            $bindings[] = $like;
+        }
+
+        $query->whereRaw('('.implode(' OR ', $conditions).')', $bindings);
+    }
+
+    /**
+     * Neutraliza los comodines de SQL para que se busquen como texto.
+     *
+     * El caracter de escape es `!` y NO la barra invertida, que seria lo
+     * habitual. La barra rompia por un sitio inesperado: dentro de `ESCAPE
+     * '\\'`, el analizador de PDO que cuenta los `?` toma la barra como si
+     * escapara la comilla de cierre, cree que el literal sigue abierto, cuenta
+     * mal los parametros y devuelve «Invalid parameter number» aunque el SQL y
+     * las ataduras esten bien. Con `!` no hay ambiguedad en ningun motor.
+     *
+     * El propio `!` se escapa primero: si no, buscar «hola!» dejaria un escape
+     * suelto al final del patron.
+     */
+    private function escapeLike(string $value): string
+    {
+        return str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $value);
     }
 
     /** Tarjeta resumida para la lista. */
     public function presentListItem(MarketingConversation $c): array
     {
-        $preview = MarketingMessage::where('conversation_id', $c->id)
-            ->latest('created_at')
-            ->value('body');
+        // La previsualizacion viene YA en la conversacion. Antes se consultaba
+        // el ultimo mensaje aqui, o sea una consulta POR FILA: veinte
+        // conversaciones costaban veinte viajes a la base solo para enseniar
+        // un trozo de texto. La mantiene un observador sobre la tabla de
+        // mensajes, asi que no puede quedarse atrasada.
+        $preview = $c->last_message_preview;
 
         return [
             'id' => $c->id,
@@ -338,7 +447,15 @@ class MarketingInboxService
      */
     private function tagCatalog(): array
     {
-        return \Illuminate\Support\Facades\Cache::remember(
+        // Memorizado ADEMAS de cacheado. El cache evita la consulta, pero no
+        // el viaje al almacen: con el driver de base de datos, decorar veinte
+        // filas hacia veinte lecturas de la tabla `cache`. Dentro de una misma
+        // peticion el catalogo no puede cambiar, asi que se lee una vez.
+        if ($this->catalogMemo !== null) {
+            return $this->catalogMemo;
+        }
+
+        return $this->catalogMemo = \Illuminate\Support\Facades\Cache::remember(
             'marketing:tag-catalog',
             now()->addMinutes(5),
             fn () => \App\Models\MarketingTag::query()

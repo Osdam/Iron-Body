@@ -39,7 +39,26 @@ use Illuminate\Support\Facades\Schema;
  */
 class InboxContextService
 {
+    /**
+     * Tablas ya comprobadas en esta peticion.
+     *
+     * `Schema::hasTable()` no es gratis: cada llamada consulta el catalogo del
+     * sistema de PostgreSQL. Con una comprobacion por bloque, abrir el panel
+     * costaba OCHO consultas a `pg_class` que no devuelven ni un dato del
+     * cliente. El esquema no cambia a mitad de peticion, asi que se pregunta
+     * una vez por tabla.
+     *
+     * @var array<string,bool>
+     */
+    private array $tableExists = [];
+
     public function __construct(private readonly MembershipService $memberships) {}
+
+    /** Igual que `Schema::hasTable()`, pero preguntando una sola vez. */
+    private function hasTable(string $table): bool
+    {
+        return $this->tableExists[$table] ??= Schema::hasTable($table);
+    }
 
     /**
      * @param  bool  $includeDiagnostics  solo para quien tiene permiso: expone
@@ -137,7 +156,7 @@ class InboxContextService
     private function attribution(?MarketingLead $lead): ?array
     {
         return $this->safe(function () use ($lead) {
-            if ($lead === null || ! Schema::hasTable('marketing_lead_attributions')) {
+            if ($lead === null || ! $this->hasTable('marketing_lead_attributions')) {
                 return null;
             }
 
@@ -177,7 +196,7 @@ class InboxContextService
         return $this->safe(function () use ($lead, $member) {
             $subject = CommercialSubject::build($lead, $member);
 
-            $segments = Schema::hasTable('commercial_segments')
+            $segments = $this->hasTable('commercial_segments')
                 ? CommercialSegment::query()
                     ->when($lead !== null, fn ($q) => $q->where('marketing_lead_id', $lead->id))
                     ->when($lead === null && $member !== null, fn ($q) => $q->where('member_id', $member->id))
@@ -205,7 +224,7 @@ class InboxContextService
     private function opportunity(?MarketingLead $lead, ?Member $member): ?array
     {
         return $this->safe(function () use ($lead, $member) {
-            if (! Schema::hasTable('commercial_opportunities')) {
+            if (! $this->hasTable('commercial_opportunities')) {
                 return null;
             }
 
@@ -350,7 +369,7 @@ class InboxContextService
     private function invoicing(?Member $member): array
     {
         return $this->safe(function () use ($member) {
-            if ($member === null || ! Schema::hasTable('electronic_invoices')) {
+            if ($member === null || ! $this->hasTable('electronic_invoices')) {
                 return ['invoices' => [], 'requires_human_approval' => true];
             }
 
@@ -427,7 +446,7 @@ class InboxContextService
         return $this->safe(function () use ($conversation, $lead, $member) {
             $items = [];
 
-            if (Schema::hasTable('commercial_events')) {
+            if ($this->hasTable('commercial_events')) {
                 foreach ($this->scopedQuery(CommercialEvent::query(), $lead, $member)
                     ->latest('occurred_at')->limit(20)->get() as $event) {
                     $items[] = [
@@ -440,7 +459,7 @@ class InboxContextService
                 }
             }
 
-            if (Schema::hasTable('commercial_tool_invocations')) {
+            if ($this->hasTable('commercial_tool_invocations')) {
                 foreach ($this->scopedQuery(CommercialToolInvocation::query(), $lead, $member)
                     ->latest('id')->limit(20)->get() as $invocation) {
                     $items[] = [
@@ -474,7 +493,7 @@ class InboxContextService
     private function diagnostics(MarketingConversation $conversation, ?MarketingLead $lead, ?Member $member): array
     {
         return $this->safe(function () use ($conversation, $lead, $member) {
-            $lastInvocation = Schema::hasTable('commercial_tool_invocations')
+            $lastInvocation = $this->hasTable('commercial_tool_invocations')
                 ? $this->scopedQuery(CommercialToolInvocation::query(), $lead, $member)->latest('id')->first()
                 : null;
 
@@ -486,7 +505,7 @@ class InboxContextService
                 'last_tool_error' => $lastInvocation?->error_message,
                 'last_tool_retryable' => (bool) ($lastInvocation?->retryable ?? false),
                 'attempts' => $lastInvocation?->attempts,
-                'unevaluated_events' => Schema::hasTable('commercial_events')
+                'unevaluated_events' => $this->hasTable('commercial_events')
                     ? $this->scopedQuery(CommercialEvent::query(), $lead, $member)->whereNull('evaluated_at')->count()
                     : 0,
                 'flags' => [

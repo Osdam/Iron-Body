@@ -21,7 +21,21 @@ return [
 
     'exposed_headers' => [],
 
-    'max_age' => 0,
+    /*
+    | Cuanto puede el navegador recordar el permiso de una peticion previa.
+    |
+    | Estaba en 0, o sea: NUNCA. El SPA vive en ironbodyneiva.cloud y la API en
+    | api.ironbodyneiva.cloud, asi que son origenes distintos y cada llamada
+    | pedia permiso primero. Medido en el inbox, eso significaba DOS viajes de
+    | red por cada peticion -abrir una conversacion son dos llamadas, luego
+    | cuatro viajes-, y el primero de cada uno paga ademas la conexion TLS.
+    |
+    | Dos horas es el techo que respeta Chrome; mas no sirve de nada. No relaja
+    | ninguna comprobacion: la respuesta real sigue validandose contra la lista
+    | de origenes permitidos. Lo unico que se retrasa hasta dos horas es que un
+    | navegador ya abierto note un cambio en los metodos o cabeceras admitidos.
+    */
+    'max_age' => 7200,
 
     'supports_credentials' => false,
 ];
