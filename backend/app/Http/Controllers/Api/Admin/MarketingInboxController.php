@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Admin;
 use App\Models\MarketingConversation;
+use App\Services\Marketing\InboxContextService;
 use App\Services\Marketing\MarketingConversationAssignmentService;
 use App\Services\Marketing\MarketingConversationNoteService;
 use App\Services\Marketing\MarketingConversationTagService;
@@ -337,6 +338,37 @@ class MarketingInboxController extends Controller
         }
 
         return response()->json(['ok' => true, 'data' => $this->authz->frontendCapabilities($admin)]);
+    }
+
+    /**
+     * Contexto completo de la conversación para el panel derecho del Inbox V2.
+     *
+     * Una sola respuesta con lo que vive en siete sitios distintos. Pedirlo con
+     * siete llamadas desde el navegador daría una cascada visible: el panel se
+     * rellenaría a trozos, en un orden distinto cada vez, mientras quien atiende
+     * ya está leyendo.
+     *
+     * Es de solo lectura. El diagnóstico técnico solo viaja para roles con
+     * visión completa: a recepción no le dice nada y le añade ruido.
+     */
+    public function context(Request $request, int $id, InboxContextService $context): JsonResponse
+    {
+        if ($r = $this->guard($request, MarketingInboxAuthorizationService::CAP_VIEW)) {
+            return $r;
+        }
+
+        $conversation = $this->findConversation($id);
+        if (! $conversation) {
+            return $this->notFound();
+        }
+
+        return response()->json([
+            'ok' => true,
+            'data' => $context->build(
+                $conversation,
+                includeDiagnostics: $this->authz->isFull($this->admin($request)),
+            ),
+        ]);
     }
 
     private function notFound(): JsonResponse

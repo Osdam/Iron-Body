@@ -101,6 +101,25 @@ class MarketingInboxAuthorizationService
     }
 
     /**
+     * ¿Es un rol con visión completa del sistema?
+     *
+     * Hace falta como puerta propia porque los roles comerciales tienen casi
+     * todas las capacidades —todas menos asignar—, así que ninguna de ellas
+     * sirve para decidir quién ve el diagnóstico técnico. Y esa distinción sí
+     * importa: identificadores de correlación, estados de job y códigos de Meta
+     * no le dicen nada a recepción y solo añaden ruido a una pantalla que se
+     * usa con un cliente esperando al otro lado.
+     */
+    public function isFull(?Admin $admin): bool
+    {
+        if (! $admin instanceof Admin || ! $admin->isActive()) {
+            return false;
+        }
+
+        return in_array($this->normalizeRole($admin->role), self::FULL_ROLES, true);
+    }
+
+    /**
      * Decide el rechazo de una acción. Devuelve null si está permitida, o un
      * arreglo {status, code, message} para responder 401/403.
      *
