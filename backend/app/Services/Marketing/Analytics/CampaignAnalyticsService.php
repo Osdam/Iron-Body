@@ -5,6 +5,7 @@ namespace App\Services\Marketing\Analytics;
 use App\Services\Commercial\CommercialVocabulary as V;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Qué pauta generó dinero de verdad.
@@ -317,6 +318,235 @@ class CampaignAnalyticsService
                 ) THEN p.amount ELSE 0 END),0)";
     }
 
+    /**
+     * Ingresos separados por QUÉ los produjo.
+     *
+     * La distinción que hace útil este bloque: una campaña adquirió a alguien
+     * que después pagó cinco veces más. Meterlo todo en «ingresos de la
+     * campaña» hace que una pauta de hace dos años parezca la mejor del año, y
+     * decidir el presupuesto de este mes con esa cifra es un error caro.
+     *
+     * Por eso se separa el ingreso de ADQUISICIÓN —el primer pago de esa
+     * persona— del ingreso POSTERIOR, que existe porque el gimnasio la
+     * retuvo, no porque el anuncio fuera bueno.
+     *
+     * @return array<string,mixed>
+     */
+    public function revenueCategories(Carbon $from, Carbon $to, array $filters = []): array
+    {
+        $base = DB::table('payment_transactions as p')
+            ->join('marketing_leads as l', 'l.member_id', '=', 'p.member_id')
+            ->join('marketing_lead_attributions as a', 'a.marketing_lead_id', '=', 'l.id')
+            ->where('p.status', 'approved')
+            ->whereBetween('p.paid_at', [$from, $to])
+            ->when($filters !== [], fn ($q) => $this->applyFilters($q, $filters));
+
+        $row = (clone $base)
+            ->selectRaw($this->firstPaymentRevenueExpression().' as acquisition')
+            ->selectRaw($this->renewalRevenueExpression().' as renewal')
+            ->selectRaw($this->upgradeRevenueExpression().' as upgrade')
+            ->selectRaw($this->reactivationRevenueExpression().' as reactivation')
+            ->first();
+
+        $acquisition = round((float) ($row->acquisition ?? 0), 2);
+        $renewal = round((float) ($row->renewal ?? 0), 2);
+        $upgrade = round((float) ($row->upgrade ?? 0), 2);
+        $reactivation = round((float) ($row->reactivation ?? 0), 2);
+
+        return [
+            'acquisition_revenue' => $acquisition,
+            'renewal_revenue' => $renewal,
+            'upgrade_revenue' => $upgrade,
+            // Hoy el gimnasio vende un solo tipo de producto -membresías-, así
+            // que no hay venta cruzada que medir. Se declara en cero y no se
+            // esconde: el día que haya tienda o entrenador personal, este es el
+            // sitio donde entra.
+            'cross_sell_revenue' => 0.0,
+            'reactivation_revenue' => $reactivation,
+            // Lo que la campaña trajo el día que trajo al cliente, frente a lo
+            // que ese cliente ha dado después.
+            'subsequent_revenue' => round($renewal + $reactivation, 2),
+        ];
+    }
+
+    /** El primer pago aprobado de cada miembro: eso es adquisición. */
+    private function firstPaymentRevenueExpression(): string
+    {
+        return "COALESCE(SUM(CASE WHEN NOT EXISTS (
+                    SELECT 1 FROM payment_transactions pp
+                    WHERE pp.member_id = p.member_id AND pp.status = 'approved' AND pp.id < p.id
+                ) THEN p.amount ELSE 0 END),0)";
+    }
+
+    /**
+     * Reactivación: volvió después de más de 90 días sin pagar.
+     *
+     * El umbral es una convención declarada, no un descubrimiento. Se elige 90
+     * porque el plan más largo del catálogo dura menos: pasado eso, quien
+     * vuelve a pagar es alguien que se había ido, no alguien que renueva.
+     */
+    private function reactivationRevenueExpression(): string
+    {
+        // La resta de fechas se escribe distinto en cada motor y no hay forma
+        // portable de hacerlo en SQL crudo. Se elige por driver en vez de
+        // asumir PostgreSQL: las pruebas corren sobre SQLite y un fallo que
+        // solo aparece en produccion es el peor de todos.
+        $cutoff = DB::connection()->getDriverName() === 'pgsql'
+            ? "p.paid_at - INTERVAL '90 days'"
+            : "datetime(p.paid_at, '-90 days')";
+
+        return "COALESCE(SUM(CASE WHEN EXISTS (
+                    SELECT 1 FROM payment_transactions pp
+                    WHERE pp.member_id = p.member_id AND pp.status = 'approved' AND pp.id < p.id
+                ) AND NOT EXISTS (
+                    SELECT 1 FROM payment_transactions pr
+                    WHERE pr.member_id = p.member_id AND pr.status = 'approved' AND pr.id < p.id
+                      AND pr.paid_at > {$cutoff}
+                ) THEN p.amount ELSE 0 END),0)";
+    }
+
+    /**
+     * Qué tan de fiar son estos números.
+     *
+     * Va con los datos, no aparte, porque sin esto los números se leen mal. Un
+     * panel que dice «Instagram trajo 40 % de las ventas» significa una cosa si
+     * el 10 % está sin atribuir y otra muy distinta si es el 70 %.
+     *
+     * @return array<string,mixed>
+     */
+    public function attributionQuality(Carbon $from, Carbon $to): array
+    {
+        $row = DB::table('marketing_lead_attributions as a')
+            ->whereBetween('a.first_touch_at', [$from, $to])
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw("COUNT(CASE WHEN a.source_type <> 'unknown' THEN 1 END) as known")
+            ->selectRaw("COUNT(CASE WHEN a.attribution_confidence = 'high' THEN 1 END) as high")
+            ->selectRaw("COUNT(CASE WHEN a.attribution_confidence = 'medium' THEN 1 END) as medium")
+            ->selectRaw("COUNT(CASE WHEN a.attribution_confidence = 'low' THEN 1 END) as low")
+            ->selectRaw("COUNT(CASE WHEN a.attribution_confidence = 'unknown' OR a.attribution_confidence IS NULL THEN 1 END) as unknown")
+            // Parcial: se sabe que vino de un anuncio pero no cuál.
+            ->selectRaw("COUNT(CASE WHEN a.source_type = 'ad' AND a.ad_id IS NULL THEN 1 END) as partial")
+            ->first();
+
+        $total = (int) ($row->total ?? 0);
+        $revenue = $this->revenueTotals($from, $to);
+
+        return [
+            'records' => $total,
+            'known' => (int) ($row->known ?? 0),
+            'unknown' => $total - (int) ($row->known ?? 0),
+            'known_share' => $this->safeDivide((int) ($row->known ?? 0), $total),
+            'confidence' => [
+                'high' => (int) ($row->high ?? 0),
+                'medium' => (int) ($row->medium ?? 0),
+                'low' => (int) ($row->low ?? 0),
+                'unknown' => (int) ($row->unknown ?? 0),
+            ],
+            'partial_records' => (int) ($row->partial ?? 0),
+            'outdated_campaigns' => $this->outdatedCampaignCount(),
+            'unattributed_revenue_share' => $revenue['unattributed_share'],
+        ];
+    }
+
+    /**
+     * Conversaciones marcadas por el sistema como llegadas con una oferta que
+     * ya no existe. Es la única señal de incoherencia anuncio↔catálogo que se
+     * registra, y se registra al detectarla, no al leer.
+     */
+    private function outdatedCampaignCount(): int
+    {
+        return (int) DB::table('marketing_conversation_tags')
+            ->where('tag', 'pauta-desactualizada')
+            ->count();
+    }
+
+    /**
+     * Todo lo de una campaña concreta: anuncios, producto, tiempo hasta venta.
+     *
+     * @return array<string,mixed>
+     */
+    public function campaignDetail(string $campaign, Carbon $from, Carbon $to): array
+    {
+        $filters = ['campaign' => $campaign];
+
+        return [
+            'campaign' => $campaign,
+            'period' => ['from' => $from->toIso8601String(), 'to' => $to->toIso8601String()],
+            'ads' => $this->breakdown('ad', $from, $to, $filters),
+            'creatives' => $this->breakdown('creative', $from, $to, $filters),
+            'advertised_products' => $this->breakdown('advertised_product', $from, $to, $filters),
+            'revenue_categories' => $this->revenueCategories($from, $to, $filters),
+            'time_to_sale' => $this->timeToSale($from, $to, $filters),
+            'objections' => $this->topObjections($from, $to, $filters),
+        ];
+    }
+
+    /**
+     * Cuánto tarda en comprar quien llega por aquí.
+     *
+     * Se mide desde el primer contacto hasta el primer pago aprobado. La
+     * mediana además de la media, porque una sola venta a los seis meses
+     * desplaza la media y hace parecer lento un canal que cierra en dos días.
+     *
+     * @return array<string,mixed>
+     */
+    public function timeToSale(Carbon $from, Carbon $to, array $filters = []): array
+    {
+        $days = DB::table('marketing_lead_attributions as a')
+            ->join('marketing_leads as l', 'l.id', '=', 'a.marketing_lead_id')
+            ->join('payment_transactions as p', 'p.member_id', '=', 'l.member_id')
+            ->where('p.status', 'approved')
+            ->whereNotNull('p.paid_at')
+            ->whereBetween('a.first_touch_at', [$from, $to])
+            ->when($filters !== [], fn ($q) => $this->applyFilters($q, $filters))
+            ->selectRaw('a.marketing_lead_id, MIN(p.paid_at) as first_paid, MIN(a.first_touch_at) as touched')
+            ->groupBy('a.marketing_lead_id')
+            ->get()
+            ->map(fn ($r) => Carbon::parse($r->touched)->diffInDays(Carbon::parse($r->first_paid), false))
+            ->filter(fn ($d) => $d >= 0)
+            ->sort()
+            ->values();
+
+        if ($days->isEmpty()) {
+            return ['samples' => 0, 'median_days' => null, 'average_days' => null];
+        }
+
+        return [
+            'samples' => $days->count(),
+            'median_days' => (float) $days[(int) floor(($days->count() - 1) / 2)],
+            'average_days' => round($days->avg(), 1),
+        ];
+    }
+
+    /**
+     * Las objeciones más frecuentes de quien llega por aquí.
+     *
+     * Salen de hechos comerciales registrados, no de leer los mensajes con un
+     * modelo: una objeción contada por una IA no es un dato, es una opinión.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public function topObjections(Carbon $from, Carbon $to, array $filters = []): array
+    {
+        if (! Schema::hasTable('commercial_events')) {
+            return [];
+        }
+
+        return DB::table('marketing_lead_attributions as a')
+            ->join('commercial_events as e', 'e.marketing_lead_id', '=', 'a.marketing_lead_id')
+            ->where('e.event', V::EV_OBJECTION_RAISED)
+            ->whereBetween('e.occurred_at', [$from, $to])
+            ->when($filters !== [], fn ($q) => $this->applyFilters($q, $filters))
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw("COALESCE({$this->jsonField('e.payload', 'kind')}, ?) as kind", [self::UNKNOWN_LABEL])
+            ->groupBy('kind')
+            ->orderByDesc('total')
+            ->limit(5)
+            ->get()
+            ->map(fn ($r) => ['kind' => $r->kind, 'count' => (int) $r->total])
+            ->all();
+    }
+
     // ── Piezas sueltas ──────────────────────────────────────────────────────
 
     private function countOpportunities(\Illuminate\Support\Collection $leadIds): int
@@ -487,6 +717,14 @@ class CampaignAnalyticsService
         }
 
         return $query;
+    }
+
+    /** Leer una clave de un JSON, con la sintaxis que entiende cada motor. */
+    private function jsonField(string $column, string $key): string
+    {
+        return DB::connection()->getDriverName() === 'pgsql'
+            ? "{$column}->>'{$key}'"
+            : "json_extract({$column}, '$.{$key}')";
     }
 
     /**

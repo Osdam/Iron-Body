@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Admin\IronGuardController;
 use App\Http\Controllers\Api\Admin\MarketingAgentActionController;
 use App\Http\Controllers\Api\Admin\MarketingAppointmentController;
+use App\Http\Controllers\Api\Admin\MarketingAnalyticsController;
 use App\Http\Controllers\Api\Admin\MarketingAttachmentController;
 use App\Http\Controllers\Api\Admin\MarketingController;
 use App\Http\Controllers\Api\Admin\MarketingInboxController;
@@ -106,6 +107,24 @@ Route::middleware('throttle:120,1')
         // en disco, así que no puede compartir cupo con las lecturas del inbox.
         Route::post('attachments', [MarketingInboxController::class, 'uploadAttachment'])
             ->middleware('throttle:40,1');
+    });
+
+// ── Analitica comercial de pautas (D.2.4) ─────────────────────────────────────
+// SOLO LECTURA y detras del blindaje global de /api/admin/*. Endpoints
+// pequeños a proposito: uno gigante obligaria a calcularlo todo aunque la
+// pantalla enseñe solo el resumen, y cuando fuera lento nadie sabria que parte
+// lo es. Exigen permiso de METRICAS, no el de atender: ver la facturacion por
+// campaña y contestar conversaciones son cosas distintas.
+Route::middleware('throttle:60,1')
+    ->prefix('admin/marketing/analytics')
+    ->group(function (): void {
+        Route::get('summary',                [MarketingAnalyticsController::class, 'summary']);
+        Route::get('funnel',                 [MarketingAnalyticsController::class, 'funnel']);
+        Route::get('quality',                [MarketingAnalyticsController::class, 'quality']);
+        Route::get('insights',               [MarketingAnalyticsController::class, 'insights']);
+        Route::get('campaigns/{campaign}',   [MarketingAnalyticsController::class, 'campaign'])
+            ->where('campaign', '.*');
+        Route::get('breakdown/{dimension}',  [MarketingAnalyticsController::class, 'breakdown']);
     });
 
 // ── Paso 2 de los adjuntos: el binario ────────────────────────────────────────
