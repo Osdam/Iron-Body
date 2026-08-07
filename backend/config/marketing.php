@@ -46,6 +46,12 @@ return [
     //  - analizar (cerebro) SÍ puede estar habilitado,
     //  - EJECUTAR herramientas reales queda en false (y además exige
     //    agent_enabled), y el envío real sigue bloqueado por META_ENABLED.
+    'inbox' => [
+        // Mensajes por pagina del historial. 40 cabe de sobra en cualquier
+        // pantalla y evita traer de mas al abrir una conversacion.
+        'message_page_size' => (int) env('MARKETING_INBOX_PAGE_SIZE', 40),
+    ],
+
     'inbound' => [
         // Permite el procesamiento de entrantes; si false, el webhook solo
         // registra (no analiza). Derivado/independiente de META_ENABLED.

@@ -396,6 +396,52 @@ class MarketingInboxController extends Controller
         ]);
     }
 
+    /**
+     * Historial paginado por cursor.
+     *
+     * Existe porque el detalle cargaba la conversacion entera: con miles de
+     * mensajes eso son megabytes de JSON y varios segundos para leer el
+     * ultimo, que es lo unico que se quiere ver al abrir.
+     *
+     * Se pagina por cursor y no por offset: en una conversacion viva, un
+     * mensaje nuevo desplaza todas las paginas y con offset acabarias viendo
+     * repetidos o saltandote alguno.
+     */
+    public function messages(Request $request, int $id): JsonResponse
+    {
+        if ($r = $this->guard($request, MarketingInboxAuthorizationService::CAP_VIEW)) {
+            return $r;
+        }
+
+        $data = $request->validate([
+            'before' => ['nullable', 'string', 'max:200'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:200'],
+        ]);
+
+        $conversation = $this->findConversation($id);
+        if (! $conversation) {
+            return $this->notFound();
+        }
+
+        $page = $this->inbox->messagePage(
+            $conversation,
+            before: $data['before'] ?? null,
+            limit: isset($data['limit']) ? (int) $data['limit'] : null,
+        );
+
+        return response()->json([
+            'ok' => true,
+            'items' => $page['items'],
+            'next_cursor' => $page['next_cursor'],
+            'has_more' => $page['has_more'],
+            'oldest_id' => $page['oldest_id'],
+            'newest_id' => $page['newest_id'],
+            // Reloj del servidor: el navegador puede ir desfasado y las horas
+            // relativas ("hace 5 min") saldrian mal.
+            'server_time' => now()->toIso8601String(),
+        ]);
+    }
+
     private function notFound(): JsonResponse
     {
         return response()->json(['ok' => false, 'code' => 'not_found', 'message' => 'Conversación no encontrada.'], 404);

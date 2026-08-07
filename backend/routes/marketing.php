@@ -75,6 +75,8 @@ Route::middleware('throttle:120,1')
         Route::get('conversations/{id}',                 [MarketingInboxController::class, 'show']);
         // Panel derecho del Inbox V2: contexto agregado y de SOLO LECTURA.
         Route::get('conversations/{id}/context',         [MarketingInboxController::class, 'context']);
+        // Historial paginado por cursor (hacia atras).
+        Route::get('conversations/{id}/messages',        [MarketingInboxController::class, 'messages']);
 
         // Envío manual (throttle más estricto para frenar spam de salida).
         Route::post('conversations/{id}/messages', [MarketingInboxController::class, 'sendMessage'])

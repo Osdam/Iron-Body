@@ -144,25 +144,12 @@ class MarketingInboxService
             'notes' => fn ($q) => $q->with('author:id,name')->latest('created_at'),
         ]);
 
-        $messages = MarketingMessage::where('conversation_id', $conversation->id)
-            ->with('attachments')
-            ->orderBy('created_at')
-            ->get()
-            ->map(fn (MarketingMessage $m) => [
-                'id' => $m->id,
-                'direction' => $m->direction,
-                'sender_type' => $m->sender_type,
-                'sender_user_id' => $m->sender_user_id,
-                'body' => $m->body,
-                'status' => $m->status,
-                'created_at' => $m->created_at?->toIso8601String(),
-                // Motivo legible cuando Meta rechazó el envío. Sin esto, un
-                // "failed" en la burbuja no le dice nada a quien atiende.
-                'failure' => $this->failureFor($m),
-                'attachments' => $this->attachmentsFor($m),
-                'quoted_meta_message_id' => data_get($m->metadata, 'context.quoted_meta_message_id'),
-                // No se expone metadata cruda del proveedor.
-            ])->all();
+        // Solo la ULTIMA pagina. Antes se cargaba la conversacion entera: con
+        // cinco mil mensajes eso son varios megabytes de JSON y unos segundos
+        // de espera para leer el ultimo, que es lo unico que se quiere ver al
+        // abrir. El resto llega al subir, por cursor.
+        $page = $this->messagePage($conversation, before: null);
+        $messages = $page['items'];
 
         $aiActions = MarketingAiAction::where('conversation_id', $conversation->id)
             ->latest('created_at')
@@ -207,6 +194,12 @@ class MarketingInboxService
                 'do_not_contact' => (bool) $lead->do_not_contact,
             ] : null,
             'messages' => $messages,
+            'messages_page' => [
+                'has_more' => $page['has_more'],
+                'next_cursor' => $page['next_cursor'],
+                'oldest_id' => $page['oldest_id'],
+                'newest_id' => $page['newest_id'],
+            ],
             'ai_actions' => $aiActions,
             'notes' => $conversation->notes->map(fn ($n) => [
                 'id' => $n->id,
@@ -416,5 +409,137 @@ class MarketingInboxService
         }
 
         return $chosen;
+    }
+
+    /** Cuantos mensajes trae una pagina. Configurable sin tocar codigo. */
+    private function pageSize(): int
+    {
+        return max(10, min(200, (int) config('marketing.inbox.message_page_size', 40)));
+    }
+
+    /**
+     * Una pagina del historial, de la mas reciente hacia atras.
+     *
+     * El cursor lleva `created_at` Y `id`. Solo con la fecha, dos mensajes del
+     * mismo lote -y WhatsApp los entrega en lotes- quedan sin orden definido
+     * entre si; con paginacion eso hace que uno aparezca dos veces o no
+     * aparezca nunca. El identificador desempata y el orden pasa a ser estable
+     * entre peticiones.
+     *
+     * Se ordena por fecha y no por identificador porque los mensajes pueden
+     * llegar fuera de orden: uno recibido tarde pertenece cronologicamente
+     * donde le toca, no al final.
+     *
+     * @param  string|null  $before  cursor opaco devuelto por la llamada anterior
+     * @return array{items:array<int,array<string,mixed>>, has_more:bool, next_cursor:?string, oldest_id:?int, newest_id:?int}
+     */
+    public function messagePage(MarketingConversation $conversation, ?string $before = null, ?int $limit = null): array
+    {
+        $size = $limit !== null ? max(1, min(200, $limit)) : $this->pageSize();
+
+        $query = MarketingMessage::query()
+            ->where('conversation_id', $conversation->id)
+            ->with('attachments')
+            // Descendente para tomar las MAS RECIENTES; se invierte despues.
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
+
+        $cursor = $this->decodeCursor($before);
+
+        if ($cursor !== null) {
+            [$at, $id] = $cursor;
+
+            // Estrictamente anterior en (fecha, id): sin el desempate por id se
+            // repetirian los mensajes que comparten marca de tiempo con el
+            // ultimo de la pagina previa.
+            $query->where(function ($q) use ($at, $id): void {
+                $q->where('created_at', '<', $at)
+                    ->orWhere(function ($q2) use ($at, $id): void {
+                        $q2->where('created_at', '=', $at)->where('id', '<', $id);
+                    });
+            });
+        }
+
+        // Se pide uno de mas para saber si queda historial sin traer otra
+        // consulta de conteo, que sobre conversaciones largas es cara.
+        $rows = $query->limit($size + 1)->get();
+        $hasMore = $rows->count() > $size;
+        $rows = $rows->take($size);
+
+        // De vuelta a orden cronologico, que es como se leen.
+        $ordered = $rows->reverse()->values();
+
+        $oldest = $ordered->first();
+        $newest = $ordered->last();
+
+        return [
+            'items' => $ordered->map(fn (MarketingMessage $m) => $this->presentMessage($m))->all(),
+            'has_more' => $hasMore,
+            // El cursor apunta al mas ANTIGUO de esta pagina: es desde donde
+            // sigue la siguiente hacia atras.
+            'next_cursor' => $hasMore && $oldest !== null ? $this->encodeCursor($oldest) : null,
+            'oldest_id' => $oldest?->id,
+            'newest_id' => $newest?->id,
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function presentMessage(MarketingMessage $m): array
+    {
+        return [
+            'id' => $m->id,
+            'direction' => $m->direction,
+            'sender_type' => $m->sender_type,
+            'sender_user_id' => $m->sender_user_id,
+            'body' => $m->body,
+            'status' => $m->status,
+            'created_at' => $m->created_at?->toIso8601String(),
+            // Motivo legible cuando Meta rechazo el envio. Sin esto, un
+            // "failed" en la burbuja no le dice nada a quien atiende.
+            'failure' => $this->failureFor($m),
+            'attachments' => $this->attachmentsFor($m),
+            'quoted_meta_message_id' => data_get($m->metadata, 'context.quoted_meta_message_id'),
+            // No se expone metadata cruda del proveedor.
+        ];
+    }
+
+    private function encodeCursor(MarketingMessage $m): string
+    {
+        /*
+         * Se usa el valor TAL COMO ESTA GUARDADO, no una version formateada.
+         *
+         * Formatear con microsegundos parecia mas preciso y era un error: SQLite
+         * guarda la fecha sin fraccion y compara como TEXTO, asi que
+         * '...11:13:00' < '...11:13:00.000000' resulta cierto y el mensaje del
+         * borde volvia en la pagina siguiente. En PostgreSQL no se notaba porque
+         * compara como fecha. Comparar contra lo almacenado funciona igual en
+         * los dos motores.
+         *
+         * Opaco a proposito: quien consume no debe construirlo a mano ni
+         * depender de su forma.
+         */
+        $storedAt = $m->getRawOriginal('created_at') ?? $m->created_at?->format('Y-m-d H:i:s');
+
+        return base64_encode($storedAt.'|'.$m->id);
+    }
+
+    /** @return array{0:string,1:int}|null */
+    private function decodeCursor(?string $cursor): ?array
+    {
+        if (blank($cursor)) {
+            return null;
+        }
+
+        $raw = base64_decode($cursor, true);
+
+        if ($raw === false || ! str_contains($raw, '|')) {
+            // Un cursor ilegible se ignora y se sirve la primera pagina. Es
+            // preferible a un error: quien atiende ve la conversacion igual.
+            return null;
+        }
+
+        [$at, $id] = explode('|', $raw, 2);
+
+        return ctype_digit($id) ? [$at, (int) $id] : null;
     }
 }
