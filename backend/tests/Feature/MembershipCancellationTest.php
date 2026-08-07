@@ -18,6 +18,39 @@ class MembershipCancellationTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * El reloj se congela y las fechas se construyen en la zona del NEGOCIO.
+     *
+     * Estas pruebas fallaban entre las 19:00 y las 24:00 locales, y el motivo
+     * no era una fragilidad inevitable: `MembershipService` interpreta
+     * `membership_end_date` en la zona de Neiva y toma el final del dia,
+     * mientras que las pruebas construian las fechas con `Carbon::today()`,
+     * que usa UTC. Pasadas las 19:00 en Colombia ya es el dia siguiente en
+     * UTC, asi que la prueba pedia "ayer" y el servicio veia una membresia
+     * todavia vigente.
+     *
+     * El servicio tenia razon: quien entra al gimnasio a las 23:00 del dia que
+     * vence su plan tiene derecho a entrar. Lo que estaba mal era la prueba.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Carbon::setTestNow(Carbon::parse('2026-06-15 14:00:00', Member::BUSINESS_TZ));
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
+    }
+
+    /** Hoy en la zona del negocio, que es como lo lee el servicio. */
+    private function businessToday(): Carbon
+    {
+        return Carbon::today(Member::BUSINESS_TZ);
+    }
+
     private function memberWithPlan(string $endDate): Member
     {
         $user = User::create([
@@ -28,7 +61,7 @@ class MembershipCancellationTest extends TestCase
             'phone' => '3001234567',
             'status' => 'active',
             'plan' => 'Plan Total',
-            'membership_start_date' => Carbon::today()->subMonth()->toDateString(),
+            'membership_start_date' => $this->businessToday()->subMonth()->toDateString(),
             'membership_end_date' => $endDate,
         ]);
 
@@ -49,7 +82,7 @@ class MembershipCancellationTest extends TestCase
 
     public function test_active_membership_status(): void
     {
-        $m = $this->memberWithPlan(Carbon::today()->addDays(20)->toDateString());
+        $m = $this->memberWithPlan($this->businessToday()->addDays(20)->toDateString());
         $snap = $this->svc()->snapshot($m->user);
 
         $this->assertSame('active', $snap['status']);
@@ -59,7 +92,7 @@ class MembershipCancellationTest extends TestCase
 
     public function test_request_cancellation_keeps_access_until_period_end(): void
     {
-        $m = $this->memberWithPlan(Carbon::today()->addDays(20)->toDateString());
+        $m = $this->memberWithPlan($this->businessToday()->addDays(20)->toDateString());
         $snap = $this->svc()->requestCancellation($m->user);
 
         $this->assertSame('cancel_requested', $snap['status']);
@@ -70,7 +103,7 @@ class MembershipCancellationTest extends TestCase
 
     public function test_cancelled_after_period_ends(): void
     {
-        $m = $this->memberWithPlan(Carbon::today()->subDay()->toDateString());
+        $m = $this->memberWithPlan($this->businessToday()->subDay()->toDateString());
         $this->svc()->requestCancellation($m->user);
         $snap = $this->svc()->snapshot($m->user->fresh());
 
@@ -80,14 +113,14 @@ class MembershipCancellationTest extends TestCase
 
     public function test_expired_without_cancellation(): void
     {
-        $m = $this->memberWithPlan(Carbon::today()->subDay()->toDateString());
+        $m = $this->memberWithPlan($this->businessToday()->subDay()->toDateString());
 
         $this->assertSame('expired', $this->svc()->status($m->user));
     }
 
     public function test_reactivate_undoes_cancellation(): void
     {
-        $m = $this->memberWithPlan(Carbon::today()->addDays(20)->toDateString());
+        $m = $this->memberWithPlan($this->businessToday()->addDays(20)->toDateString());
         $this->svc()->requestCancellation($m->user);
         $snap = $this->svc()->reactivate($m->user->fresh());
 
@@ -97,7 +130,7 @@ class MembershipCancellationTest extends TestCase
 
     public function test_admin_cancel_immediate_revokes_access(): void
     {
-        $m = $this->memberWithPlan(Carbon::today()->addDays(20)->toDateString());
+        $m = $this->memberWithPlan($this->businessToday()->addDays(20)->toDateString());
 
         $r = $this->adminPostJson("/api/admin/memberships/{$m->id}/cancel", ['immediate' => true]);
 
@@ -107,7 +140,7 @@ class MembershipCancellationTest extends TestCase
 
     public function test_admin_cancel_scheduled_keeps_access(): void
     {
-        $m = $this->memberWithPlan(Carbon::today()->addDays(20)->toDateString());
+        $m = $this->memberWithPlan($this->businessToday()->addDays(20)->toDateString());
 
         $r = $this->adminPostJson("/api/admin/memberships/{$m->id}/cancel");
 
@@ -118,7 +151,7 @@ class MembershipCancellationTest extends TestCase
 
     public function test_admin_reactivate(): void
     {
-        $m = $this->memberWithPlan(Carbon::today()->addDays(20)->toDateString());
+        $m = $this->memberWithPlan($this->businessToday()->addDays(20)->toDateString());
         $this->adminPostJson("/api/admin/memberships/{$m->id}/cancel");
 
         $r = $this->adminPostJson("/api/admin/memberships/{$m->id}/reactivate");

@@ -70,7 +70,16 @@ class AppStateRealtimeTest extends TestCase
     public function test_app_state_membership_reflects_expiration(): void
     {
         // Membresía ya vencida → app-state la reporta inactiva en tiempo real.
-        $member = $this->member('PLAN TOTAL', now()->subDay()->toDateString());
+        //
+        // La fecha se construye en la zona del NEGOCIO, no en la del servidor.
+        // MembershipService lee `membership_end_date` en hora de Neiva y toma
+        // el final del dia; con `now()` en UTC, entre las 19:00 y las 24:00
+        // locales "ayer" seguia siendo una membresia vigente y la prueba
+        // fallaba sin que nada estuviera roto.
+        $member = $this->member(
+            'PLAN TOTAL',
+            \Carbon\Carbon::today(\App\Models\Member::BUSINESS_TZ)->subDay()->toDateString(),
+        );
 
         $this->getJson('/api/member/app-state', [
             'Authorization' => 'Bearer '.$member->access_hash,
