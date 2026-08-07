@@ -523,3 +523,58 @@ Los 4 fallos del backend son los **mismos de la línea base**
 hora del sistema y rompen entre las 19:00 y las 24:00 locales, cuando UTC ya
 cambió de día. **Comprobado que no los causa este trabajo**: desactivando por
 completo los observers comerciales, fallan exactamente igual.
+
+---
+
+## Estado a 8 de agosto de 2026 — Fases D.2 y E cerradas
+
+**Suites:** backend 2.164 · frontend 107 + 13 de contrato · **0 fallos.**
+Los 4 fallos históricos de zona horaria quedaron corregidos en D.2.9.
+
+### Cerrado desde la entrada anterior
+
+| Fase | Qué quedó | Commit |
+|---|---|---|
+| D.2.5/6 | Adjuntos salientes y notas de voz | `6653b9f`, `02026aa` |
+| D.2.7 | Historial paginado por cursor | `f0f7ca2` |
+| D.2.8 | Rendimiento medido y optimizado | `b2e1046`, `0221090` |
+| D.2.3 | Contexto de atribución para el agente | `3dba517` |
+| D.2.4 | Analítica de pautas, panel e insights | `e00baeb`, `81e412c`, `59bdb9f` |
+| E | Centro de supervisión, aprobaciones, alertas | `03d1f0e`, `6ecea61` |
+| UX | Compositor de barra única | `bfa3bb1` |
+
+### Defectos reales encontrados midiendo, no mirando
+
+Se dejan escritos porque los cinco pasaban las comprobaciones que había:
+
+1. **Cursor con microsegundos** — repetía el mensaje del borde en SQLite y no
+   en PostgreSQL. Habría aparecido en producción como mensajes duplicados.
+2. **N+1 en la bandeja** — 36 consultas para 20 filas; 20 eran la misma.
+3. **El índice de trigramas existía y no se usaba** — `whereHas` hacía 5.004
+   escaneos. Invertido con `DISTINCT`: 173 ms → 44 ms.
+4. **`iron_guard.auto_remediation` no existe como clave** — el panel mostraba
+   «Apagada» y acertaba por casualidad.
+5. **El compositor heredaba `height: 100%`** de la hoja compartida y dejaba el
+   hilo en cero píxeles; la columna recortaba lo que sobraba y las capturas
+   parecían correctas.
+
+Cada uno tiene hoy una prueba o un verificador que falla si vuelve.
+
+### Afirmaciones que corregí
+
+- Dije que **no existía entidad de incidentes**. Era falso: `Incident`,
+  `IncidentRecorder` y el detector ya existían. Lo que faltaba era vigilar
+  Wompi, Factus y almacenamiento, y enseñarlo en supervisión.
+- Dije que la Fase D estaba **desplegada** habiendo desplegado solo el backend.
+
+### Estado de producción
+
+`META_ENABLED`, `MARKETING_AGENT_ENABLED`, `COMMERCIAL_AUTONOMY_ENABLED`,
+`HERMES_ENABLED` y la remediación automática: **todos en `false`**. Número real
+sin registrar. Cero mensajes reales y cero operaciones financieras de prueba.
+
+### Lo que falta
+
+**Fase F**: verificación integral pre-Meta —50 flujos E2E, concurrencia,
+inyección de fallos, seguridad, accesibilidad y matriz final—. El proyecto
+**no está terminado** hasta cerrarla.
