@@ -150,6 +150,14 @@ Route::middleware('throttle:120,1')
         // una carrera.
         Route::post('approvals/{id}/decide', [SupervisionController::class, 'decide'])
             ->middleware('throttle:30,1');
+
+        // E.8 y E.9: dos bandejas distintas a proposito. Los incidentes son
+        // averias tecnicas y exigen vision completa; las alertas comerciales son
+        // personas esperando y las ve cualquiera que atienda.
+        Route::get('incidents', [SupervisionController::class, 'incidents']);
+        Route::get('alerts',    [SupervisionController::class, 'alerts']);
+        Route::post('alerts/{id}/decide', [SupervisionController::class, 'decideAlert'])
+            ->middleware('throttle:30,1');
     });
 
 // ── Paso 2 de los adjuntos: el binario ────────────────────────────────────────

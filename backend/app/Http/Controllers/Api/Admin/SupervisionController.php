@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Admin;
 use App\Models\CommercialApproval;
 use App\Services\Commercial\ApprovalQueueService;
+use App\Services\Commercial\CommercialAlertService;
 use App\Services\Commercial\CommercialVocabulary as V;
 use App\Services\Commercial\SupervisionService;
 use App\Services\Marketing\MarketingInboxAuthorizationService;
@@ -358,6 +359,163 @@ class SupervisionController extends Controller
             'lead_id' => $r->marketing_lead_id,
             'member_id' => $r->member_id,
         ])->all()]);
+    }
+
+    // ── E.8 Incidentes ──────────────────────────────────────────────────
+
+    /**
+     * Averías técnicas. Solo para roles con visión completa.
+     *
+     * Un identificador de correlación, un código de Meta o un estado de job no
+     * le dicen nada a recepción y solo añaden ruido a una pantalla que se usa
+     * con un cliente esperando al otro lado.
+     */
+    public function incidents(Request $request): JsonResponse
+    {
+        $admin = $this->admin($request);
+
+        if (! $admin instanceof Admin || ! $this->authz->isFull($admin)) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'incidents_forbidden',
+                'message' => 'Tu rol no tiene acceso al diagnóstico técnico.',
+            ], $admin instanceof Admin ? 403 : 401);
+        }
+
+        $data = $request->validate([
+            'severity' => ['nullable', 'string', 'max:20'],
+            'source' => ['nullable', 'string', 'max:40'],
+            'status' => ['nullable', 'string', 'max:20'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $rows = \App\Models\Incident::query()
+            ->when($data['severity'] ?? null, fn ($q, $v) => $q->where('severity', $v))
+            ->when($data['source'] ?? null, fn ($q, $v) => $q->where('source', $v))
+            ->when($data['status'] ?? null, fn ($q, $v) => $q->where('status', $v))
+            // Abiertos primero y los graves arriba: es como se lee una guardia.
+            ->orderByRaw("CASE WHEN status = 'open' THEN 0 ELSE 1 END")
+            ->orderByRaw("CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END")
+            ->orderByDesc('last_seen_at')
+            ->limit((int) ($data['limit'] ?? 50))
+            ->get();
+
+        return response()->json(['ok' => true, 'data' => $rows->map(fn ($i) => [
+            'id' => $i->id,
+            'severity' => $i->severity,
+            'status' => $i->status,
+            'source' => $i->source,
+            'kind' => $i->kind,
+            'title' => $i->title,
+            'occurrences' => (int) $i->occurrences,
+            'first_seen_at' => $i->first_seen_at?->toIso8601String(),
+            'last_seen_at' => $i->last_seen_at?->toIso8601String(),
+            'affected_conversations' => (int) $i->affected_conversations,
+            'affected_messages' => (int) $i->affected_messages,
+            'root_cause' => $i->root_cause,
+            'confidence' => $i->confidence,
+            'recommended_action' => $i->recommended_action,
+            'prevention' => $i->prevention,
+            'evidence' => $i->evidence,
+            'correlation_ids' => $i->correlation_ids,
+            'resolution' => $i->resolution,
+            'resolved_at' => $i->resolved_at?->toIso8601String(),
+        ])->all()]);
+    }
+
+    // ── E.9 Alertas comerciales ─────────────────────────────────────────
+
+    /**
+     * Personas esperando algo. Las ve cualquiera que atienda.
+     *
+     * Al revés que los incidentes: esto NO es técnico y es exactamente el
+     * trabajo de quien está en recepción.
+     */
+    public function alerts(Request $request): JsonResponse
+    {
+        if ($denied = $this->guardView($request)) {
+            return $denied;
+        }
+
+        $data = $request->validate([
+            'severity' => ['nullable', 'string', 'max:20'],
+            'type' => ['nullable', 'string', 'max:60'],
+            'status' => ['nullable', 'string', 'max:20'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $rows = \App\Models\CommercialAlert::query()
+            ->when($data['severity'] ?? null, fn ($q, $v) => $q->where('severity', $v))
+            ->when($data['type'] ?? null, fn ($q, $v) => $q->where('type', $v))
+            ->when(
+                $data['status'] ?? null,
+                fn ($q, $v) => $q->where('status', $v),
+                fn ($q) => $q->whereIn('status', \App\Models\CommercialAlert::OPEN_STATUSES),
+            )
+            ->orderByRaw("CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END")
+            ->orderBy('detected_at')
+            ->limit((int) ($data['limit'] ?? 50))
+            ->get();
+
+        return response()->json(['ok' => true, 'data' => $rows->map(fn ($a) => [
+            'id' => $a->id,
+            'type' => $a->type,
+            'severity' => $a->severity,
+            'status' => $a->status,
+            'title' => $a->title,
+            'summary' => $a->summary,
+            'suggested_action' => $a->suggested_action,
+            'opportunity_value' => $a->opportunity_value !== null ? (float) $a->opportunity_value : null,
+            'evidence' => $a->evidence,
+            'lead_id' => $a->marketing_lead_id,
+            'member_id' => $a->member_id,
+            'conversation_id' => $a->marketing_conversation_id,
+            'opportunity_id' => $a->commercial_opportunity_id,
+            'detected_at' => $a->detected_at?->toIso8601String(),
+            'due_at' => $a->due_at?->toIso8601String(),
+            'is_overdue' => $a->isOverdue(),
+            'owner_admin_id' => $a->owner_admin_id,
+            'resolution_note' => $a->resolution_note,
+        ])->all()]);
+    }
+
+    /** Resolver, ignorar con motivo o asignar. */
+    public function decideAlert(Request $request, int $id, CommercialAlertService $alerts): JsonResponse
+    {
+        if ($denied = $this->guardView($request)) {
+            return $denied;
+        }
+
+        $admin = $this->admin($request);
+        $data = $request->validate([
+            'action' => ['required', Rule::in(['resolve', 'ignore', 'assign'])],
+            'note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $alert = \App\Models\CommercialAlert::find($id);
+
+        if ($alert === null) {
+            return response()->json(['ok' => false, 'code' => 'not_found'], 404);
+        }
+
+        // Ignorar SIN motivo no se admite: una alerta que desaparece sin
+        // explicación es indistinguible de un fallo, y nadie sabrá después por
+        // qué se decidió no hacer nada.
+        if ($data['action'] === 'ignore' && trim((string) ($data['note'] ?? '')) === '') {
+            return response()->json([
+                'ok' => false,
+                'code' => 'note_required',
+                'message' => 'Para ignorar una alerta hay que decir por qué.',
+            ], 422);
+        }
+
+        $result = match ($data['action']) {
+            'assign' => $alerts->assign($alert, (int) $admin->id),
+            'ignore' => $alerts->resolve($alert, (int) $admin->id, 'ignored', $data['note'] ?? null),
+            'resolve' => $alerts->resolve($alert, (int) $admin->id, 'resolved', $data['note'] ?? null),
+        };
+
+        return response()->json(['ok' => true, 'data' => ['id' => $result->id, 'status' => $result->status]]);
     }
 
     // ── E.6 Dinero ──────────────────────────────────────────────────────

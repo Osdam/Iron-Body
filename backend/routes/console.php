@@ -287,3 +287,17 @@ Schedule::command('commercial:evaluate-pending')
     ->everyTenMinutes()
     ->withoutOverlapping()
     ->onOneServer();
+
+/*
+ * Alertas comerciales.
+ *
+ * Cada quince minutos, que es el ritmo al que una alerta sigue siendo util:
+ * enterarse a la hora de que alguien lleva esperando respuesta ya es tarde, y
+ * cada minuto seria evaluar constantemente para no encontrar nada.
+ *
+ * La deduplicacion por huella es lo que hace que esta frecuencia no llene la
+ * bandeja: una misma situacion actualiza su alerta en vez de abrir otra.
+ */
+Schedule::call(function (): void {
+    app(\App\Services\Commercial\CommercialAlertService::class)->evaluate();
+})->everyFifteenMinutes()->name('commercial-alerts')->withoutOverlapping();

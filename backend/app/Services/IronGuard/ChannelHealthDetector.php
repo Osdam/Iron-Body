@@ -9,6 +9,7 @@ use App\Models\MetaWebhookEvent;
 use App\Services\Marketing\HermesCircuitBreaker;
 use App\Services\Marketing\WhatsappOutboxService;
 use App\Services\Observability\ChannelLog;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -52,6 +53,13 @@ class ChannelHealthDetector
             'failedJobs',
             'hermesCircuitOpen',
             'unattendedEscalations',
+            // Servicios que mueven dinero y documentos. No estaban vigilados y
+            // son justo donde un fallo silencioso se nota tarde: cuando un
+            // cliente reclama un cobro o pide su factura.
+            'stuckPayments',
+            'repeatedPaymentDeclines',
+            'failingInvoices',
+            'storageUnavailable',
         ];
 
         $incidents = [];
@@ -77,6 +85,151 @@ class ChannelHealthDetector
         }
 
         return $incidents;
+    }
+
+    /**
+     * Pagos que se quedaron a medias.
+     *
+     * Alguien dio a pagar, se creó la transacción y nunca llegó una respuesta.
+     * Desde fuera es una persona que cree que pagó y no tiene membresía, o que
+     * no sabe si le cobraron. Es de lo que más quema una relación.
+     */
+    private function stuckPayments(): ?Incident
+    {
+        if (! Schema::hasTable('payment_transactions')) {
+            return null;
+        }
+
+        $minutes = (int) config('observability.payments.stuck_after_minutes', 60);
+
+        $stuck = DB::table('payment_transactions')
+            ->where('status', 'pending')
+            ->where('created_at', '<=', now()->subMinutes($minutes))
+            ->where('created_at', '>=', now()->subDay())
+            ->get(['id', 'reference', 'created_at']);
+
+        if ($stuck->isEmpty()) {
+            return null;
+        }
+
+        return $this->recorder->record([
+            'source' => 'wompi',
+            'kind' => 'payments_stuck',
+            'title' => sprintf('%d pago(s) llevan más de %d minutos sin resolverse', $stuck->count(), $minutes),
+            // Alto y no crítico: el dinero no se ha perdido, pero hay gente
+            // esperando. Crítico se reserva para pérdida o doble cobro.
+            'severity' => Incident::SEVERITY_HIGH,
+            'fingerprint_keys' => ['pending_timeout'],
+            'evidence' => [
+                'count' => $stuck->count(),
+                // Referencias, NO datos de la tarjeta ni del cliente.
+                'sample_references' => $stuck->take(5)->pluck('reference')->all(),
+                'oldest_at' => $stuck->min('created_at'),
+            ],
+            'affected_conversations' => 0,
+        ]);
+    }
+
+    /**
+     * El mismo cliente rechazado una y otra vez.
+     *
+     * Suele ser un medio de pago que no funciona, y quien lo intenta cinco
+     * veces se va convencido de que el problema es del gimnasio.
+     */
+    private function repeatedPaymentDeclines(): ?Incident
+    {
+        if (! Schema::hasTable('payment_transactions')) {
+            return null;
+        }
+
+        $repeat = DB::table('payment_transactions')
+            ->where('status', 'declined')
+            ->where('created_at', '>=', now()->subDay())
+            ->whereNotNull('member_id')
+            ->selectRaw('member_id, COUNT(*) as total')
+            ->groupBy('member_id')
+            ->having(DB::raw('COUNT(*)'), '>=', 3)
+            ->get();
+
+        if ($repeat->isEmpty()) {
+            return null;
+        }
+
+        return $this->recorder->record([
+            'source' => 'wompi',
+            'kind' => 'repeated_declines',
+            'title' => sprintf('%d persona(s) con 3 o más pagos rechazados en 24 h', $repeat->count()),
+            'severity' => Incident::SEVERITY_MEDIUM,
+            'fingerprint_keys' => ['repeated_declines'],
+            'evidence' => [
+                'members_affected' => $repeat->count(),
+                'max_attempts' => (int) $repeat->max('total'),
+            ],
+        ]);
+    }
+
+    /**
+     * Facturas que la DIAN no aceptó o que se quedaron sin emitir.
+     *
+     * Una factura pendiente no es solo un papel: es una obligación fiscal con
+     * plazo, y el gimnasio se entera cuando ya es tarde.
+     */
+    private function failingInvoices(): ?Incident
+    {
+        if (! Schema::hasTable('electronic_invoices')) {
+            return null;
+        }
+
+        $failing = DB::table('electronic_invoices')
+            ->whereIn('status', ['failed', 'rejected'])
+            ->where('updated_at', '>=', now()->subDay())
+            ->count();
+
+        if ($failing === 0) {
+            return null;
+        }
+
+        return $this->recorder->record([
+            'source' => 'factus',
+            'kind' => 'invoices_failing',
+            'title' => sprintf('%d factura(s) electrónica(s) fallaron en 24 h', $failing),
+            'severity' => Incident::SEVERITY_HIGH,
+            'fingerprint_keys' => ['invoice_failure'],
+            'evidence' => ['count' => $failing],
+        ]);
+    }
+
+    /**
+     * El disco donde viven los adjuntos no acepta escrituras.
+     *
+     * Con esto roto, cada foto y cada nota de voz que llegue se pierde. Es
+     * crítico porque el mensaje del cliente entra y su contenido no.
+     */
+    private function storageUnavailable(): ?Incident
+    {
+        $disk = (string) config('marketing.media.disk', 'whatsapp');
+
+        try {
+            $probe = 'health/.guard-'.now()->timestamp;
+            Storage::disk($disk)->put($probe, 'ok');
+            Storage::disk($disk)->delete($probe);
+
+            return null;
+        } catch (\Throwable $e) {
+            return $this->recorder->record([
+                'source' => 'storage',
+                'kind' => 'disk_unavailable',
+                'title' => 'No se puede escribir en el disco de adjuntos',
+                'severity' => Incident::SEVERITY_CRITICAL,
+                'fingerprint_keys' => [$disk, class_basename($e)],
+                'evidence' => [
+                    'disk' => $disk,
+                    'error_class' => class_basename($e),
+                    // El mensaje puede llevar rutas del servidor: se acota.
+                    'error' => mb_substr($e->getMessage(), 0, 200),
+                ],
+            ]);
+        }
     }
 
     /**
