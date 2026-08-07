@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\Admin\MarketingAnalyticsController;
 use App\Http\Controllers\Api\Admin\MarketingAttachmentController;
 use App\Http\Controllers\Api\Admin\MarketingController;
 use App\Http\Controllers\Api\Admin\MarketingInboxController;
+use App\Http\Controllers\Api\Admin\SupervisionController;
 use App\Http\Controllers\Api\Internal\InternalMarketingController;
 use App\Http\Controllers\Api\Internal\InternalMarketingKnowledgeController;
 use Illuminate\Support\Facades\Route;
@@ -125,6 +126,30 @@ Route::middleware('throttle:60,1')
         Route::get('campaigns/{campaign}',   [MarketingAnalyticsController::class, 'campaign'])
             ->where('campaign', '.*');
         Route::get('breakdown/{dimension}',  [MarketingAnalyticsController::class, 'breakdown']);
+    });
+
+// ── Centro de supervision del agente (Fase E) ─────────────────────────────────
+// SOLO LECTURA salvo la decision sobre una aprobacion. Los permisos NO son uno
+// solo: ver la pantalla lo puede cualquiera con acceso al inbox -es desde donde
+// se trabaja-, pero autorizar un reembolso exige vision completa. Devolver
+// dinero no es una tarea de atencion al cliente.
+Route::middleware('throttle:120,1')
+    ->prefix('admin/marketing/supervision')
+    ->where(['id' => '[0-9]+'])
+    ->group(function (): void {
+        Route::get('state',          [SupervisionController::class, 'state']);
+        Route::get('capabilities',   [SupervisionController::class, 'capabilities']);
+        Route::get('activity',       [SupervisionController::class, 'activity']);
+        Route::get('decisions',      [SupervisionController::class, 'decisions']);
+        Route::get('opportunities',  [SupervisionController::class, 'opportunities']);
+        Route::get('revenue',        [SupervisionController::class, 'revenue']);
+        Route::get('approvals',      [SupervisionController::class, 'approvals']);
+
+        // La unica escritura de la fase, y la mas delicada. Throttle propio:
+        // pulsar aprobar en bucle no puede convertirse en una via para forzar
+        // una carrera.
+        Route::post('approvals/{id}/decide', [SupervisionController::class, 'decide'])
+            ->middleware('throttle:30,1');
     });
 
 // ── Paso 2 de los adjuntos: el binario ────────────────────────────────────────
