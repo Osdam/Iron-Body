@@ -2,7 +2,9 @@
 
 namespace App\Services\Marketing;
 
+use App\Models\MarketingConversation;
 use App\Models\MarketingLeadAttribution;
+use App\Models\MarketingTag;
 use App\Services\Observability\ChannelLog;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Context;
@@ -187,6 +189,8 @@ class LeadAttributionService
                 'confidence' => $attribution->attribution_confidence,
             ]);
 
+            $this->reflectAsTags($attribution, $conversationId);
+
             return $attribution;
         } catch (QueryException $e) {
             // Carrera entre dos mensajes del mismo lead: gana el primero.
@@ -237,6 +241,8 @@ class LeadAttributionService
             'first_touch' => $attribution->first_touch_source_type,
             'last_touch' => $n['source_type'],
         ]);
+
+        $this->reflectAsTags($attribution, $conversationId);
 
         return $attribution;
     }
@@ -323,6 +329,64 @@ class LeadAttributionService
         ];
 
         return substr(implode(':', $parts), 0, 250);
+    }
+
+    /**
+     * Refleja el origen como etiquetas BLOQUEADAS en la conversacion.
+     *
+     * La entidad de atribucion sigue siendo la fuente de verdad; las etiquetas
+     * son su cara visible en el inbox, para poder filtrar y ver de un vistazo
+     * de donde vino alguien. Por eso se marcan como `source` y quedan fuera del
+     * alcance de la edicion manual: si alguien pudiera quitarlas, la etiqueta y
+     * la entidad dirian cosas distintas y ninguna de las dos seria fiable.
+     *
+     * Best-effort: que falle el etiquetado no puede tumbar la atribucion.
+     */
+    private function reflectAsTags(MarketingLeadAttribution $attribution, ?int $conversationId): void
+    {
+        if ($conversationId === null) {
+            return;
+        }
+
+        try {
+            $conversation = MarketingConversation::find($conversationId);
+
+            if ($conversation === null) {
+                return;
+            }
+
+            $tags = app(MarketingConversationTagService::class);
+            $evidence = [
+                'fact' => 'derived_from_attribution',
+                'attribution_id' => $attribution->id,
+                'source_type' => $attribution->source_type,
+                'ad_id' => $attribution->ad_id,
+                'confidence' => $attribution->attribution_confidence,
+            ];
+
+            $slugs = match ($attribution->source_type) {
+                MarketingLeadAttribution::SOURCE_AD => ['meta-ads'],
+                MarketingLeadAttribution::SOURCE_ORGANIC => ['organico'],
+                MarketingLeadAttribution::SOURCE_REFERRAL => ['referido'],
+                default => ['origen-desconocido'],
+            };
+
+            // La plataforma es un dato aparte del tipo de fuente: un anuncio
+            // puede estar en Instagram o en Facebook, y saber cual cambia donde
+            // se pone el siguiente peso.
+            if ($attribution->source_platform !== null) {
+                $slugs[] = $attribution->source_platform;
+            }
+
+            foreach ($slugs as $slug) {
+                $tags->attachSystem($conversation, $slug, MarketingTag::KIND_SOURCE, $evidence);
+            }
+        } catch (\Throwable $e) {
+            ChannelLog::warning('attribution.tagging_failed', [
+                'attribution_id' => $attribution->id,
+                'exception' => class_basename($e),
+            ]);
+        }
     }
 
     private function correlationId(): ?string

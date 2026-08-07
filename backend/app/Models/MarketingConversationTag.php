@@ -9,7 +9,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class MarketingConversationTag extends Model
 {
     protected $fillable = [
-        'conversation_id', 'tag', 'created_by',
+        'conversation_id', 'tag', 'tag_id', 'created_by',
+        'assigned_kind', 'evidence', 'removed_at', 'removed_by',
+    ];
+
+    protected $casts = [
+        'evidence' => 'array',
+        'removed_at' => 'datetime',
     ];
 
     public function conversation(): BelongsTo
