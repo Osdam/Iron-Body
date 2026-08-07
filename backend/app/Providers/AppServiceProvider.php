@@ -25,6 +25,15 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        // Hoy NO hay fuente de gasto publicitario. Se enlaza la implementacion
+        // que lo dice en vez de una que devuelva cero: un ROAS calculado sobre
+        // gasto cero es una mentira con formato de numero, y alguien tomaria
+        // una decision de presupuesto con ella.
+        $this->app->bind(
+            \App\Services\Marketing\Analytics\AdvertisingSpendProvider::class,
+            \App\Services\Marketing\Analytics\UnavailableSpendProvider::class,
+        );
+
         // Resolver de catálogo de ejercicios: una sola carga de catálogo+aliases
         // por request (evita N+1 al serializar muchas rutinas).
         $this->app->singleton(ExerciseCatalogResolver::class);
