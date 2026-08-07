@@ -208,6 +208,25 @@ class ProcessMetaWebhookEvent implements ShouldQueue
         $conversation = $leads->ensureConversation($lead, $parsed['channel']);
         Context::add('conversation_id', $conversation->id);
 
+        /*
+         * Atribucion: de donde vino esta persona.
+         *
+         * Se registra AQUI, con el lead y la conversacion ya resueltos, y antes
+         * de enrutar el mensaje. Hasta ahora el bloque `referral` -el que dice
+         * que anuncio toco alguien antes de escribir- solo quedaba dentro del
+         * metadata del mensaje: util para mirarlo de a uno e inservible para
+         * agrupar por campana o saber que pauta trae ventas.
+         *
+         * Es best-effort a proposito: perder una atribucion es infinitamente
+         * preferible a perder el mensaje de un prospecto.
+         */
+        app(\App\Services\Marketing\LeadAttributionService::class)->record(
+            leadId: $lead->id,
+            referral: $parsed['referral'] ?? null,
+            conversationId: $conversation->id,
+            contactId: $parsed['wa_id'] ?? $parsed['meta_user_id'] ?? null,
+        );
+
         // Mensajes de una misma conversación se procesan en orden y sin
         // solaparse: dos entregas casi simultáneas no pueden intercalar sus
         // efectos sobre el mismo hilo. Si en 10s no se consigue el turno, se
