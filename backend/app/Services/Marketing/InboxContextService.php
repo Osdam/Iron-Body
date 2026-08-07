@@ -153,6 +153,29 @@ class InboxContextService
      * Se entrega la lectura normalizada y NO el payload crudo: el panel
      * necesita saber que anuncio la trajo, no los identificadores internos.
      */
+    /**
+     * Lo que ha pagado esta persona, sumado.
+     *
+     * Solo pagos APROBADOS y solo si el lead esta enlazado a un miembro. Sin
+     * ese enlace no hay forma honesta de decir que este origen produjo dinero,
+     * y se devuelve null -no cero-: son cosas distintas.
+     */
+    private function attributedRevenueFor(?MarketingLead $lead): ?float
+    {
+        if ($lead?->member_id === null) {
+            return null;
+        }
+
+        return $this->safe(function () use ($lead) {
+            $total = \Illuminate\Support\Facades\DB::table('payment_transactions')
+                ->where('member_id', $lead->member_id)
+                ->where('status', 'approved')
+                ->sum('amount');
+
+            return $total > 0 ? round((float) $total, 2) : null;
+        }, null);
+    }
+
     private function attribution(?MarketingLead $lead): ?array
     {
         return $this->safe(function () use ($lead) {
@@ -180,11 +203,18 @@ class InboxContextService
                 'first_touch_source' => $a->first_touch_source_type,
                 'last_touch_at' => $a->last_touch_at?->toIso8601String(),
                 'last_touch_source' => $a->last_touch_source_type,
+                'adset_name' => $a->adset_name,
+                'ad_name' => $a->ad_name,
+                'advertised_product' => $a->advertised_product,
                 'evidence' => $a->evidence,
                 // El texto del anuncio lo escribio alguien fuera del sistema.
                 // Se marca para que la interfaz no lo presente como palabra
                 // nuestra ni el agente lo tome por una instruccion.
                 'untrusted_text' => $a->headline !== null,
+                // Lo que esta persona ha pagado, atribuible a esta llegada.
+                // Va aqui y no en un endpoint aparte porque quien atiende lo
+                // mira junto al resto: cuanto vale ya este cliente.
+                'attributed_revenue' => $this->attributedRevenueFor($lead),
             ];
         }, null);
     }
