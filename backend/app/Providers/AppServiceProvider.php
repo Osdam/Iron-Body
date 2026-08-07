@@ -78,6 +78,13 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\MarketingMessage::observe(
             \App\Observers\Marketing\ConversationPreviewObserver::class,
         );
+
+        // Cuando alguien mapea un anuncio a un plan, hay que volver a mirar si
+        // lo que promete la pauta sigue existiendo. Meta no manda ese dato, asi
+        // que ese mapeo llega SIEMPRE despues del contacto.
+        \App\Models\MarketingLeadAttribution::observe(
+            \App\Observers\Marketing\AttributionOfferObserver::class,
+        );
     }
 
     /**

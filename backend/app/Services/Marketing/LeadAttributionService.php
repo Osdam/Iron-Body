@@ -190,6 +190,7 @@ class LeadAttributionService
             ]);
 
             $this->reflectAsTags($attribution, $conversationId);
+            $this->reviewOffer($attribution);
 
             return $attribution;
         } catch (QueryException $e) {
@@ -243,8 +244,33 @@ class LeadAttributionService
         ]);
 
         $this->reflectAsTags($attribution, $conversationId);
+        $this->reviewOffer($attribution);
 
         return $attribution;
+    }
+
+    /**
+     * ¿Sigue existiendo lo que anunciaba la pauta?
+     *
+     * Se comprueba AQUÍ, al registrar el contacto, y no al leer el contexto:
+     * es cuando el hecho es nuevo. Hecho en la lectura, cada mensaje entrante
+     * repetiría la misma advertencia y escribiría en un camino que debe ser de
+     * solo lectura.
+     *
+     * Nunca lanza: esto llega desde el procesado de un webhook y un aviso no
+     * puede costar el mensaje de un prospecto.
+     */
+    private function reviewOffer(MarketingLeadAttribution $attribution): void
+    {
+        try {
+            app(\App\Services\Marketing\Attribution\AttributionContextService::class)
+                ->reviewAndAlert($attribution);
+        } catch (\Throwable $e) {
+            ChannelLog::warning('attribution.offer_review_failed', [
+                'lead_id' => $attribution->marketing_lead_id,
+                'error_class' => class_basename($e),
+            ]);
+        }
     }
 
     private function createUnknown(

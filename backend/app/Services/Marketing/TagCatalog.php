@@ -75,6 +75,13 @@ class TagCatalog
             ['slug' => 'requiere-revision', 'name' => 'Requiere revisión', 'category' => $c, 'kind' => $sys,
                 'color' => 'red', 'sort_order' => 1,
                 'description' => 'Algo necesita que lo mire una persona.'],
+            // La pauta sigue publicada en Meta y el catalogo ya cambio. Quien
+            // atiende tiene que verlo ANTES de contestar, y quien lleva la
+            // pauta tiene que poder listar cuantas conversaciones llegaron con
+            // una oferta que ya no existe.
+            ['slug' => 'pauta-desactualizada', 'name' => 'Pauta desactualizada', 'category' => $c, 'kind' => $sys,
+                'color' => 'amber', 'sort_order' => 2,
+                'description' => 'Llego por un anuncio que promete algo que ya no esta vigente.'],
             ['slug' => 'humano', 'name' => 'Humano', 'category' => $c, 'kind' => $sys,
                 'color' => 'amber', 'sort_order' => 2,
                 'description' => 'La conversación la lleva una persona; la IA está en pausa.'],

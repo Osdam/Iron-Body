@@ -486,21 +486,72 @@ class NextBestActionEngine
 
         $ladder = $this->planLadder(null);
 
+        /*
+         * Por dónde llegó la persona es una SEÑAL, no la regla.
+         *
+         * Si vino de una pauta que promocionaba un plan concreto y ese plan
+         * sigue vigente, se arranca por ahí: es lo que vino a mirar y empezar
+         * por otra cosa obliga a explicar de más. Pero es solo el punto de
+         * partida —el escalón alternativo y el suelo no cambian—, y si el plan
+         * anunciado ya no existe o cambió de precio, la señal se descarta
+         * entera en vez de arrastrar una oferta que no se puede sostener.
+         *
+         * Que esto solo ocurra aquí no es casualidad: las reglas de renovación,
+         * rescate y mejora se evalúan ANTES, así que quien ya es cliente nunca
+         * llega a esta línea. El anuncio de hace ocho meses no puede pesar en
+         * lo que se le ofrece hoy a alguien que ya entrena.
+         */
+        $signals = $s->acquisitionSignals();
+        $advertised = $this->advertisedPlanFor($signals);
+
+        $offer = $advertised ?? $ladder['floor'];
+
         return [
             'goal' => CommercialVocabulary::GOAL_CLOSE_PLAN,
             'action' => CommercialVocabulary::ACTION_RECOMMEND_PLAN,
-            'offer' => $ladder['floor']?->name,
-            'offer_plan_id' => $ladder['floor']?->id,
+            'offer' => $offer?->name,
+            'offer_plan_id' => $offer?->id,
             'alternative_plan_id' => $ladder['alternative']?->id,
             'floor_plan_id' => $ladder['floor']?->id,
-            'reason' => sprintf('Ya sabemos qué busca (%s). Toca recomendar el plan que encaje y proponer un siguiente paso.', $s->objective),
+            'reason' => $advertised !== null
+                ? sprintf(
+                    'Ya sabemos qué busca (%s) y llegó por una pauta del plan %s, que sigue vigente. Se arranca por ahí.',
+                    $s->objective,
+                    $advertised->name,
+                )
+                : sprintf('Ya sabemos qué busca (%s). Toca recomendar el plan que encaje y proponer un siguiente paso.', $s->objective),
             'confidence' => 0.75,
-            'estimated_value' => (float) ($ladder['floor']?->price ?? 0),
+            'estimated_value' => (float) ($offer?->price ?? 0),
             'exclusions' => $s->priceObjections > 0
                 ? ['price_sensitive' => 'Ya objetó el precio: empezar por la opción de entrada, no por la más cara.']
                 : [],
             'max_attempts' => 3,
         ];
+    }
+
+    /**
+     * El plan que anunciaba la pauta, si sigue siendo ofrecible.
+     *
+     * `advertised_offer_usable` es la condición que importa: lo pone el
+     * contraste con el catálogo vigente, y en false significa que el plan
+     * desapareció o cambió de precio. En ese caso NO se devuelve nada, porque
+     * abrir por una oferta que no se puede cumplir es peor que abrir genérico.
+     *
+     * @param  array<string,mixed>  $signals
+     */
+    private function advertisedPlanFor(array $signals): ?Plan
+    {
+        $planId = $signals['advertised_plan_id'] ?? null;
+
+        if ($planId === null || ($signals['advertised_offer_usable'] ?? false) !== true) {
+            return null;
+        }
+
+        // Se busca en el catalogo ACTIVO. Si el plan se desactivo entre que se
+        // calculo el contraste y esto, aqui no aparece y no se ofrece.
+        $this->planLadder(null);
+
+        return $this->planCache?->firstWhere('id', (int) $planId);
     }
 
     /** No sabemos qué quiere: preguntar antes de ofrecer nada. */

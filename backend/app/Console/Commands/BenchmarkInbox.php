@@ -89,6 +89,17 @@ class BenchmarkInbox extends Command
             'panel derecho: contexto' => fn () => $context->build($this->fresh($longest->id), false),
 
             'metricas' => fn () => $inbox->metrics(),
+
+            // Contexto de adquisicion: lo piden el prompt del agente, el motor
+            // comercial y el panel. Si costara caro se pagaria en cada mensaje
+            // entrante, que es el camino mas caliente que hay.
+            'atribucion: contexto del agente' => function () use ($longest) {
+                $leadId = \App\Models\MarketingConversation::query()
+                    ->where('id', $longest->id)->value('lead_id');
+
+                return app(\App\Services\Marketing\Attribution\AttributionContextService::class)
+                    ->forLead($leadId)->toAgentPayload();
+            },
         ];
 
         $results = [];

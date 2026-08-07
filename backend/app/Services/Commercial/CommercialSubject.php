@@ -66,6 +66,29 @@ class CommercialSubject
     ) {}
 
     /**
+     * Por dónde llegó esta persona, como señales para el motor.
+     *
+     * Se resuelve al pedirlo y no al construir el sujeto: la mayoría de las
+     * reglas -renovacion, rescate, mejora, pago pendiente- no lo necesitan, y
+     * cargarlo siempre seria una consulta por evaluacion para nada.
+     *
+     * Devuelve NUMEROS Y BANDERAS. El texto publicitario no llega hasta aqui a
+     * proposito: una decision comercial no puede depender de como redacto
+     * alguien un anuncio.
+     *
+     * @return array<string,mixed>
+     */
+    public function acquisitionSignals(): array
+    {
+        return $this->acquisitionMemo ??= app(
+            \App\Services\Marketing\Attribution\AttributionContextService::class,
+        )->forLead($this->lead?->id)->toSignals();
+    }
+
+    /** @var array<string,mixed>|null */
+    private ?array $acquisitionMemo = null;
+
+    /**
      * Construye la fotografía a partir de un lead y/o un miembro.
      *
      * Nunca lanza: si algo no se puede leer, ese hecho queda vacío.
@@ -419,6 +442,15 @@ class CommercialSubject
             'objective' => $this->objective,
             'price_objections' => $this->priceObjections,
             'has_app_account' => $this->hasAppAccount,
+            // Contexto de ADQUISICION, marcado como tal. Va en la evidencia
+            // para que una oportunidad se pueda explicar entera mirando una
+            // fila, pero separado del estado actual: son cosas distintas y
+            // confundirlas es lo que lleva a tratar como prospecto a alguien
+            // que lleva meses entrenando.
+            'acquisition' => array_filter(
+                $this->acquisitionSignals(),
+                fn ($v) => $v !== null && $v !== false,
+            ) ?: null,
         ], fn ($v) => $v !== null && $v !== false && $v !== 0 && $v !== 0.0);
     }
 }
