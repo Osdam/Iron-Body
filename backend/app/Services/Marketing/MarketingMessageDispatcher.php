@@ -5,6 +5,7 @@ namespace App\Services\Marketing;
 use App\Models\MarketingConversation;
 use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
+use App\Models\MarketingMessageAttachment;
 use App\Services\Meta\MetaAuthService;
 
 /**
@@ -24,6 +25,7 @@ class MarketingMessageDispatcher
     /**
      * @param  string  $senderType  Autor del outbound (ai por defecto; human para envío manual del Inbox).
      * @param  int|null  $senderUserId  Admin/asesor que envía (solo para sender_type=human).
+     * @param  MarketingMessageAttachment|null  $attachment  Archivo que acompaña al mensaje (borrador ya subido).
      * @return array{ok:bool,sent:bool,dry_run:bool,safe_to_send:bool,message_id:?int,provider_message_id:?string,reason:?string,conversation_id:?int,will_retry:bool}
      */
     public function dispatchWhatsapp(
@@ -33,6 +35,7 @@ class MarketingMessageDispatcher
         array $metadata = [],
         string $senderType = MarketingMessage::SENDER_AI,
         ?int $senderUserId = null,
+        ?MarketingMessageAttachment $attachment = null,
     ): array {
         $base = [
             'ok' => true, 'sent' => false, 'dry_run' => false, 'safe_to_send' => false,
@@ -68,6 +71,7 @@ class MarketingMessageDispatcher
         // META deshabilitado o sin credenciales → dry_run (prepara, no entrega).
         if (! $this->auth->isConfigured()) {
             $message = $this->recordOutbound($conversation, $body, 'dry_run', null, $metadata, $senderType, $senderUserId);
+            $this->linkAttachment($message, $attachment);
 
             return array_merge($base, [
                 'dry_run' => true,
@@ -91,6 +95,11 @@ class MarketingMessageDispatcher
             $senderUserId,
         );
 
+        // El archivo se ata al mensaje ANTES de salir a la red: el outbox
+        // decide por él si esto es un envío de texto o de media, y un reintento
+        // que lo encontrara suelto mandaría el pie de foto sin la foto.
+        $this->linkAttachment($message, $attachment);
+
         $delivery = $this->outbox->deliver($message, $to);
 
         return array_merge($base, [
@@ -104,6 +113,26 @@ class MarketingMessageDispatcher
             // definitivo: quien llama puede decidir si avisar o esperar.
             'will_retry' => $delivery['retryable'],
         ]);
+    }
+
+    /**
+     * Convierte un borrador en el archivo de este mensaje.
+     *
+     * Es aquí donde el adjunto deja de ser de quien lo subió y pasa a ser del
+     * mensaje. La condición `whereNull('message_id')` es la que impide que dos
+     * envíos simultáneos reclamen el mismo borrador y el cliente reciba la foto
+     * dos veces: el segundo no actualiza ninguna fila.
+     */
+    private function linkAttachment(MarketingMessage $message, ?MarketingMessageAttachment $attachment): void
+    {
+        if ($attachment === null) {
+            return;
+        }
+
+        MarketingMessageAttachment::query()
+            ->where('id', $attachment->id)
+            ->whereNull('message_id')
+            ->update(['message_id' => $message->id, 'updated_at' => now()]);
     }
 
     /** Registra el mensaje saliente y avanza los timestamps de la conversación. */

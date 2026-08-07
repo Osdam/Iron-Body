@@ -100,6 +100,12 @@ Route::middleware('throttle:120,1')
         // Paso 1 de los adjuntos: pedir una URL firmada de vida corta. Exige
         // sesión de administrador y permiso de Inbox como cualquier otra acción.
         Route::get('attachments/{id}/link', [MarketingAttachmentController::class, 'link']);
+
+        // Subida de un archivo para adjuntar a una respuesta. Throttle propio y
+        // más estrecho que el del grupo: cada petición mueve megabytes y escribe
+        // en disco, así que no puede compartir cupo con las lecturas del inbox.
+        Route::post('attachments', [MarketingInboxController::class, 'uploadAttachment'])
+            ->middleware('throttle:40,1');
     });
 
 // ── Paso 2 de los adjuntos: el binario ────────────────────────────────────────

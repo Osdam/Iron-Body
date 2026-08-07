@@ -28,7 +28,7 @@ class MarketingMessageAttachment extends Model
     public const STATUS_EXPIRED = 'expired';
 
     protected $fillable = [
-        'message_id', 'direction', 'kind', 'media_id',
+        'message_id', 'direction', 'uploaded_by_admin_id', 'kind', 'media_id',
         'declared_mime_type', 'detected_mime_type', 'meta_sha256', 'sha256',
         'size_bytes', 'original_filename', 'disk', 'path', 'thumbnail_path',
         'width', 'height', 'duration_seconds', 'voice',

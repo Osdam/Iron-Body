@@ -3,6 +3,8 @@
 namespace App\Services\Marketing;
 
 use App\Models\MarketingMessage;
+use App\Models\MarketingMessageAttachment;
+use App\Services\Meta\MetaMediaService;
 use App\Services\Meta\MetaMessagingService;
 use App\Services\Observability\ChannelLog;
 use Illuminate\Support\Facades\Context;
@@ -77,11 +79,15 @@ class WhatsappOutboxService
             'next_attempt_at' => null,
         ])->save();
 
-        $result = $this->messaging->sendWhatsappText(
-            $to,
-            (string) $message->body,
-            $this->quotedIdFor($message),
-        );
+        // Un mensaje con archivo no viaja como texto: hay que subir el binario a
+        // Meta, obtener su id y mandar ESE id. Si la subida falla, el envío no
+        // se intenta —mandar el pie de foto sin la foto es peor que no mandar
+        // nada, porque el cliente lee "mira esto" y no hay nada que mirar—.
+        $attachment = $this->attachmentFor($message);
+
+        $result = $attachment === null
+            ? $this->messaging->sendWhatsappText($to, (string) $message->body, $this->quotedIdFor($message))
+            : $this->deliverMedia($message, $attachment, $to);
 
         if ($result['ok'] && $result['message_id'] !== null) {
             $message->forceFill([
@@ -188,6 +194,72 @@ class WhatsappOutboxService
             ->orderBy('next_attempt_at')
             ->limit($limit)
             ->get();
+    }
+
+    /**
+     * El archivo que lleva este mensaje, si lleva alguno.
+     *
+     * Un saliente carga como mucho uno: WhatsApp entrega un archivo por
+     * mensaje, así que adjuntar tres fotos son tres mensajes y no uno con tres.
+     * Modelarlo de otra forma haría que el inbox mostrara algo distinto de lo
+     * que le llegó al cliente.
+     */
+    private function attachmentFor(MarketingMessage $message): ?MarketingMessageAttachment
+    {
+        return MarketingMessageAttachment::query()
+            ->where('message_id', $message->id)
+            ->where('direction', 'outbound')
+            ->orderBy('id')
+            ->first();
+    }
+
+    /**
+     * Sube el archivo y manda el mensaje que lo cita.
+     *
+     * La subida se hace aquí y no al adjuntar a propósito: entre que alguien
+     * suelta la foto en el compositor y pulsa enviar pueden pasar minutos, y
+     * subir a Meta lo que quizá nunca se mande gasta cuota y deja archivos
+     * nuestros en su servidor sin motivo.
+     *
+     * `media_id` queda guardado en la ficha, así que un reintento reutiliza la
+     * subida en vez de crear un archivo nuevo en Meta.
+     *
+     * @return array{ok:bool,message_id:?string,http_status:?int,error_code:?int,error_title:?string,error_message:?string,retryable:bool,reason:?string}
+     */
+    private function deliverMedia(MarketingMessage $message, MarketingMessageAttachment $attachment, string $to): array
+    {
+        $mediaId = app(MetaMediaService::class)->upload($attachment);
+
+        if ($mediaId === null) {
+            ChannelLog::warning('outbox.media_upload_failed', [
+                'message_id' => $message->id,
+                'attachment_id' => $attachment->id,
+            ]);
+
+            // Reintentable: casi siempre es red o un 5xx de Meta. Si es el
+            // archivo el que está mal, los intentos se agotan y queda 'dead'
+            // con el motivo a la vista, que es lo que necesita quien atiende.
+            return [
+                'ok' => false, 'message_id' => null, 'http_status' => null,
+                'error_code' => null, 'error_title' => 'media_upload_failed',
+                'error_message' => 'No se pudo subir el archivo a WhatsApp.',
+                'retryable' => true, 'reason' => 'media_upload_failed',
+            ];
+        }
+
+        // Audio y sticker no admiten pie de foto en Cloud API: mandarlo es un
+        // 400. El texto del asesor ya viajó como mensaje aparte.
+        $caption = in_array($attachment->kind, ['image', 'video', 'document'], true)
+            ? (trim((string) $message->body) ?: null)
+            : null;
+
+        return $this->messaging->sendWhatsappMedia(
+            $to,
+            (string) $attachment->kind,
+            $mediaId,
+            $caption,
+            $attachment->kind === 'document' ? $attachment->original_filename : null,
+        );
     }
 
     /**

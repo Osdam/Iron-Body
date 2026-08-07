@@ -98,19 +98,25 @@ class PruneWhatsappMedia extends Command
             (int) config('observability.raw_events.retention_days', 30),
         );
 
+        // Borradores salientes que nadie llegó a mandar: alguien soltó un
+        // archivo en el compositor y cerró la pestaña. No se ven en ningún
+        // sitio y, sin esto, se quedarían en disco para siempre.
+        $drafts = $dryRun ? 0 : app(\App\Services\Marketing\OutboundAttachmentService::class)->pruneDrafts();
+
         if (! $dryRun) {
             ChannelLog::info('media.prune.completed', [
                 'attachments_expired' => $expired->count(),
                 'binaries_deleted' => $deleted,
                 'binaries_shared_kept' => $kept,
                 'raw_events_purged' => $purgedEvents,
+                'outbound_drafts_removed' => $drafts,
             ]);
         }
 
         $this->info(sprintf(
-            '%sadjuntos vencidos: %d · binarios borrados: %d · compartidos conservados: %d · eventos crudos purgados: %d',
+            '%sadjuntos vencidos: %d · binarios borrados: %d · compartidos conservados: %d · eventos crudos purgados: %d · borradores salientes: %d',
             $dryRun ? '[simulación] ' : '',
-            $expired->count(), $deleted, $kept, $purgedEvents,
+            $expired->count(), $deleted, $kept, $purgedEvents, $drafts,
         ));
 
         return self::SUCCESS;

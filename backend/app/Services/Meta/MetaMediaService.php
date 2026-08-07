@@ -431,6 +431,94 @@ class MetaMediaService
     }
 
     /**
+     * Sube a Meta un adjunto ya guardado y devuelve su `media_id`.
+     *
+     * Cloud API no acepta el binario dentro del mensaje: primero se sube el
+     * archivo y después se manda el mensaje citando el id que devuelve. Ese id
+     * se guarda en la ficha porque un reintento del envío NO debe volver a
+     * subir el archivo: sería otro id, otro archivo en Meta y el riesgo de que
+     * los dos acaben saliendo.
+     *
+     * El MIME que se declara es el DETECTADO, nunca el que trajo el navegador.
+     */
+    public function upload(MarketingMessageAttachment $attachment): ?string
+    {
+        if (! empty($attachment->media_id)) {
+            return (string) $attachment->media_id; // ya subido: idempotente.
+        }
+
+        if (! $this->auth->isConfigured() || ! $attachment->isServable()) {
+            return null;
+        }
+
+        $phoneNumberId = (string) config('meta.whatsapp_phone_number_id');
+        if ($phoneNumberId === '') {
+            return null;
+        }
+
+        try {
+            $binary = Storage::disk((string) $attachment->disk)->get((string) $attachment->path);
+        } catch (Throwable $e) {
+            ChannelLog::error('media.upload.unreadable', [
+                'attachment_id' => $attachment->id,
+                'error_class' => class_basename($e),
+            ]);
+
+            return null;
+        }
+
+        if (! is_string($binary) || $binary === '') {
+            return null;
+        }
+
+        $mime = (string) ($attachment->detected_mime_type ?: 'application/octet-stream');
+        $startedAt = microtime(true);
+
+        try {
+            $response = Http::withToken((string) $this->auth->accessToken())
+                ->timeout((int) config('marketing.media.timeout', 60))
+                ->attach('file', $binary, basename((string) $attachment->path), ['Content-Type' => $mime])
+                ->post($this->auth->graphUrl("{$phoneNumberId}/media"), [
+                    'messaging_product' => 'whatsapp',
+                    'type' => $mime,
+                ]);
+        } catch (Throwable $e) {
+            ChannelLog::warning('media.upload.exception', [
+                'attachment_id' => $attachment->id,
+                'error_class' => class_basename($e),
+                'duration_ms' => round((microtime(true) - $startedAt) * 1000, 2),
+            ]);
+
+            return null;
+        }
+
+        if ($response->failed()) {
+            ChannelLog::warning('media.upload.failed', [
+                'attachment_id' => $attachment->id,
+                'http_status' => $response->status(),
+                'error_code' => $response->json('error.code'),
+            ]);
+
+            return null;
+        }
+
+        $mediaId = $response->json('id');
+        if (! is_string($mediaId) || $mediaId === '') {
+            return null;
+        }
+
+        $attachment->forceFill(['media_id' => $mediaId])->save();
+
+        ChannelLog::info('media.upload.ok', [
+            'attachment_id' => $attachment->id,
+            'kind' => $attachment->kind,
+            'duration_ms' => round((microtime(true) - $startedAt) * 1000, 2),
+        ]);
+
+        return $mediaId;
+    }
+
+    /**
      * Nombre original saneado: solo para MOSTRARLO y para la cabecera de
      * descarga. Se le quita cualquier rastro de ruta y se acota.
      */

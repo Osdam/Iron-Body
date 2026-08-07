@@ -127,9 +127,20 @@ class MarketingInboxController extends Controller
             return $r;
         }
 
+        $maxFiles = max(1, (int) config('marketing.media.outbound.max_per_send', 5));
+
         $data = $request->validate([
-            'body' => ['required', 'string', 'min:1', 'max:4096'],
+            // El texto deja de ser obligatorio cuando hay archivo: mandar una
+            // foto sin pie es normal, y exigir una palabra para poder hacerlo
+            // llevaría a que la gente escriba un punto.
+            'body' => ['nullable', 'string', 'max:4096', 'required_without:attachment_ids'],
             'pause_ai' => ['nullable', 'boolean'],
+            'attachment_ids' => ['nullable', 'array', 'max:'.$maxFiles],
+            'attachment_ids.*' => ['integer', 'min:1'],
+            // Mensaje del cliente al que se responde. Se acepta el id INTERNO;
+            // el del proveedor se resuelve aquí para que el navegador no
+            // necesite conocerlo ni pueda inventárselo.
+            'reply_to_message_id' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $conversation = $this->findConversation($id);
@@ -140,11 +151,31 @@ class MarketingInboxController extends Controller
             return response()->json(['ok' => false, 'code' => 'dnc_blocked', 'message' => 'El lead pidió no ser contactado.'], 422);
         }
 
+        $attachmentIds = array_map('intval', (array) ($data['attachment_ids'] ?? []));
+
+        // Se comprueba ANTES de enviar nada: si un id no es reclamable (de otro
+        // asesor, ya enviado, caducado), el asesor tiene que enterarse en vez
+        // de ver salir media respuesta.
+        if ($attachmentIds !== []) {
+            $claimable = app(\App\Services\Marketing\OutboundAttachmentService::class)
+                ->claim($attachmentIds, $this->adminId($request));
+
+            if ($claimable->count() !== count(array_unique($attachmentIds))) {
+                return response()->json([
+                    'ok' => false,
+                    'code' => 'attachment_unavailable',
+                    'message' => 'Alguno de los archivos ya no está disponible. Vuelve a adjuntarlo.',
+                ], 409);
+            }
+        }
+
         $result = $replies->send(
             $conversation,
-            trim($data['body']),
+            trim((string) ($data['body'] ?? '')),
             (bool) ($data['pause_ai'] ?? false),
             $this->adminId($request),
+            $attachmentIds,
+            $this->quotedMetaIdFor($conversation, $data['reply_to_message_id'] ?? null),
         );
 
         return response()->json([
@@ -153,8 +184,96 @@ class MarketingInboxController extends Controller
             'sent' => (bool) ($result['dispatch']['sent'] ?? false),
             'reason' => $result['dispatch']['reason'] ?? null,
             'message_id' => $result['dispatch']['message_id'] ?? null,
+            // Con archivos sale más de un mensaje: el frontend necesita saber
+            // cuántos para no creer que el envío se quedó a medias.
+            'message_ids' => array_values(array_filter(array_map(
+                fn (array $d) => $d['message_id'] ?? null,
+                $result['dispatches'],
+            ))),
+            'attachments_sent' => $result['attachments_sent'],
             'ai_paused' => $result['ai_paused'],
         ]);
+    }
+
+    /**
+     * Sube un archivo para adjuntarlo a una respuesta.
+     *
+     * Va aparte del envío a propósito. El archivo tiene que estar arriba y
+     * validado ANTES de que el asesor pulse enviar: así ve la miniatura, sabe
+     * que pesa lo que debe y puede quitarlo. Metido dentro del envío, un
+     * archivo de 20 MB dejaría la respuesta bloqueada sin explicar por qué, y
+     * un rechazo llegaría cuando ya no hay nada que corregir.
+     *
+     * POST /api/admin/marketing/inbox/attachments
+     */
+    public function uploadAttachment(Request $request, \App\Services\Marketing\OutboundAttachmentService $outbound): JsonResponse
+    {
+        if ($r = $this->guard($request, MarketingInboxAuthorizationService::CAP_REPLY)) {
+            return $r;
+        }
+
+        $ceiling = (int) config('marketing.media.max_size_bytes', 25 * 1024 * 1024);
+
+        $request->validate([
+            // El techo de `max` es la primera barrera y está en kilobytes. Las
+            // de verdad —tipo real, límite de Meta por familia— las aplica el
+            // servicio sobre los bytes; esta solo evita tragarse el cuerpo.
+            'file' => ['required', 'file', 'max:'.(int) ($ceiling / 1024)],
+            'voice' => ['nullable', 'boolean'],
+        ]);
+
+        $result = $outbound->store(
+            $request->file('file'),
+            $this->adminId($request),
+            $request->boolean('voice'),
+        );
+
+        if (! $result['ok']) {
+            return response()->json([
+                'ok' => false,
+                'code' => $result['code'],
+                'message' => $result['message'],
+            ], 422);
+        }
+
+        $attachment = $result['attachment'];
+
+        return response()->json([
+            'ok' => true,
+            'data' => [
+                'id' => $attachment->id,
+                'kind' => $attachment->kind,
+                'mime_type' => $attachment->detected_mime_type,
+                'size_bytes' => $attachment->size_bytes,
+                'filename' => $attachment->original_filename,
+                'width' => $attachment->width,
+                'height' => $attachment->height,
+                'voice' => (bool) $attachment->voice,
+            ],
+        ], 201);
+    }
+
+    /**
+     * El id de proveedor del mensaje citado.
+     *
+     * Se exige que el mensaje sea de ESTA conversación: sin esa comprobación,
+     * pasar el id de otra dejaría citar ante el cliente algo que se dijo en un
+     * chat ajeno.
+     */
+    private function quotedMetaIdFor(MarketingConversation $conversation, ?int $messageId): ?string
+    {
+        if ($messageId === null) {
+            return null;
+        }
+
+        $quoted = \App\Models\MarketingMessage::query()
+            ->where('id', $messageId)
+            ->where('conversation_id', $conversation->id)
+            ->first();
+
+        $metaId = $quoted?->meta_message_id;
+
+        return is_string($metaId) && $metaId !== '' ? $metaId : null;
     }
 
     // ── 4. Pausar IA (manual) ────────────────────────────────────────────────────
@@ -337,7 +456,28 @@ class MarketingInboxController extends Controller
             return response()->json(['ok' => false, 'code' => 'inbox_admin_inactive', 'message' => 'Tu cuenta no está activa.'], 403);
         }
 
-        return response()->json(['ok' => true, 'data' => $this->authz->frontendCapabilities($admin)]);
+        /*
+         * Las capacidades de archivo se calculan en el servidor y no se
+         * suponen en el navegador. Que exista ffmpeg —lo que decide si una
+         * nota de voz grabada en Chrome se puede convertir a lo que WhatsApp
+         * reproduce— es un hecho de ESTA máquina. Enseñar el micrófono sin
+         * saberlo llevaría a que alguien grabe treinta segundos y descubra al
+         * final que no se puede mandar.
+         */
+        $outbound = app(\App\Services\Marketing\OutboundAttachmentService::class);
+
+        return response()->json(['ok' => true, 'data' => array_merge(
+            $this->authz->frontendCapabilities($admin),
+            [
+                'attachments' => [
+                    'enabled' => (bool) config('marketing.media.outbound.enabled', true),
+                    'voice_notes' => $outbound->voiceNotesAvailable(),
+                    'max_per_send' => (int) config('marketing.media.outbound.max_per_send', 5),
+                    'max_size_bytes' => (array) config('marketing.media.outbound.max_size_bytes', []),
+                    'voice_max_seconds' => (int) config('marketing.media.outbound.voice.max_seconds', 300),
+                ],
+            ],
+        )]);
     }
 
     /**

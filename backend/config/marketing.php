@@ -144,6 +144,63 @@ return [
             'enabled' => filter_var(env('WHATSAPP_MEDIA_TRANSCRIBE', false), FILTER_VALIDATE_BOOLEAN),
             'max_seconds' => (int) env('WHATSAPP_MEDIA_TRANSCRIBE_MAX_SECONDS', 120),
         ],
+
+        /*
+        | Archivos que SALEN del CRM hacia el cliente.
+        |
+        | Se validan con el mismo rigor que los que entran, y no por simetría:
+        | un archivo subido desde el CRM va a acabar guardado en el teléfono de
+        | un cliente con el nombre del gimnasio encima. Que el origen sea un
+        | asesor de confianza no cambia que el navegador de ese asesor pueda
+        | estar comprometido, ni que un despiste mande el archivo equivocado.
+        */
+        'outbound' => [
+            // Adjuntar desde el inbox. Apagarlo deja el compositor solo con
+            // texto, sin romper nada de lo ya enviado.
+            'enabled' => filter_var(env('WHATSAPP_OUTBOUND_MEDIA_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+
+            // Techos REALES de WhatsApp Cloud API por familia. Mandar algo más
+            // grande no es un error nuestro que se pueda reintentar: Meta lo
+            // rechaza, así que se corta antes de ocupar disco.
+            'max_size_bytes' => [
+                'image' => (int) env('WHATSAPP_OUTBOUND_MAX_IMAGE', 5 * 1024 * 1024),
+                'audio' => (int) env('WHATSAPP_OUTBOUND_MAX_AUDIO', 16 * 1024 * 1024),
+                'video' => (int) env('WHATSAPP_OUTBOUND_MAX_VIDEO', 16 * 1024 * 1024),
+                'document' => (int) env('WHATSAPP_OUTBOUND_MAX_DOCUMENT', 25 * 1024 * 1024),
+            ],
+
+            // Cuántos archivos caben en un envío. Cada uno viaja como mensaje
+            // propio, así que este número es también cuántas notificaciones
+            // recibe el cliente de golpe.
+            'max_per_send' => (int) env('WHATSAPP_OUTBOUND_MAX_PER_SEND', 5),
+
+            // Horas que sobrevive un borrador sin enviar. Pasadas, el binario
+            // se borra: son archivos que alguien soltó en el compositor y
+            // nunca mandó, y no tienen por qué quedarse para siempre.
+            'draft_ttl_hours' => (int) env('WHATSAPP_OUTBOUND_DRAFT_TTL_HOURS', 24),
+
+            /*
+            | Notas de voz.
+            |
+            | WhatsApp solo reproduce como nota de voz el OGG/Opus. El problema
+            | es que ningún navegador graba en los tres formatos: Firefox da
+            | ogg/opus, Safari da mp4, y Chrome —el que usa casi todo el
+            | mundo— solo da WebM, que WhatsApp no acepta.
+            |
+            | Sin conversión, "grabar una nota de voz" funcionaría en Firefox y
+            | fallaría en Chrome, que es la peor forma posible de entregar algo.
+            | Por eso el WebM se transcodifica aquí antes de salir. Si el
+            | servidor no tiene ffmpeg, la capacidad se anuncia como no
+            | disponible y el botón no aparece: mejor no ofrecerlo que ofrecerlo
+            | roto.
+            */
+            'voice' => [
+                'enabled' => filter_var(env('WHATSAPP_VOICE_NOTES_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+                'ffmpeg' => env('WHATSAPP_FFMPEG_PATH', 'ffmpeg'),
+                'transcode_timeout' => (int) env('WHATSAPP_FFMPEG_TIMEOUT', 30),
+                'max_seconds' => (int) env('WHATSAPP_VOICE_MAX_SECONDS', 300),
+            ],
+        ],
     ],
 
     // Cerebro comercial IA (Fase 2). Por defecto usa un responder DETERMINISTA

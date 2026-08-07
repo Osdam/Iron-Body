@@ -53,6 +53,13 @@ class MarketingAttachmentController extends Controller
             return response()->json(['ok' => false, 'code' => 'attachment_not_found'], 404);
         }
 
+        // Un borrador (subido, aún sin mensaje) solo lo ve quien lo subió. Sin
+        // esto, probar ids consecutivos enseñaría lo que otro asesor tiene a
+        // medio escribir en otra conversación.
+        if ($attachment->message_id === null && $attachment->uploaded_by_admin_id !== $admin?->id) {
+            return response()->json(['ok' => false, 'code' => 'attachment_not_found'], 404);
+        }
+
         if (! $attachment->isServable()) {
             // No es un 404: el adjunto EXISTE y el inbox necesita poder decir
             // por qué no hay archivo (aún descargando, rechazado, caducado).
