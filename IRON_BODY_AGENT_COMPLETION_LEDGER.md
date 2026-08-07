@@ -414,3 +414,112 @@ Ambos apagados en producción.
 
 El motor ya **decide** y los eventos ya lo **automatizan**. Falta que las
 herramientas **ejecuten**: hoy una decisión no se convierte en una acción real.
+
+---
+
+## Fase D — Inbox V2
+
+Commits: `a0c35bb` (API de contexto) · `2f2f3d2` (frontend) · `2f73a01` (submódulo).
+Backend **1952 pasan / 4 fallan** · Frontend **56 pasan** · Build de producción correcto.
+Desplegado con `whatsappInboxV2Enabled = false`.
+
+### 30. Wireframe implementado
+
+```
+┌──────────────────┬───────────────────────────────┬──────────────────┐
+│ Conversaciones   │ Conversación                  │ Contexto         │
+│ ── buscador fijo │ ── cabecera fija              │ ── 5 pestañas    │
+│ ── 6 filtros     │ ── aviso de estado            │    Cliente ·     │
+│ ── lista scroll  │ ── hilo con SCROLL PROPIO     │    Comercial ·   │
+│    propio        │    · ancla al cargar arriba   │    Operación ·   │
+│ ── máx. 2        │    · no salta con adjuntos    │    Actividad ·   │
+│    indicadores   │    · aviso de nuevos          │    Técnico       │
+│    por fila      │ ── compositor fijo            │ ── colapsable    │
+└──────────────────┴───────────────────────────────┴──────────────────┘
+```
+
+### 31. Componentes
+
+| Archivo | Qué resuelve |
+|---|---|
+| `inbox-v2-page.ts` | Contenedor de tres columnas, estado, envío, control humano |
+| `conversation-list.ts` | Lista, filtros, búsqueda con retardo, paginación |
+| `chat-thread.ts` | Hilo, autores, adjuntos, estados de entrega, fallos |
+| `context-panel.ts` | Diez bloques en cinco pestañas |
+| `scroll-anchor.ts` | Los tres cálculos de scroll, puros y probados |
+| `inbox-theme.css` | Identidad Iron Body en variables CSS |
+| `inbox-preview.ts` | Banco de pruebas visual (no se enruta en producción) |
+
+### 32. APIs consumidas
+
+Todas preexistentes salvo una añadida en esta fase:
+
+`GET conversations` · `GET conversations/{id}` · `GET capabilities` ·
+`POST messages` · `POST takeover` · `POST release` · `GET attachments/{id}/link` ·
+**`GET conversations/{id}/context`** (nueva, solo lectura, 15 pruebas).
+
+### 33. Verificación visual — capturas inspeccionadas
+
+| Resolución | Resultado |
+|---|---|
+| 1920×1080 | **PASS** |
+| 1440×900 | **PASS** |
+| 1366×768 | **PASS** |
+
+Medido en el navegador, no supuesto: `bodyScroll = no`, `rows: SCROLL`,
+`stream: SCROLL`. La página no se desplaza y cada columna gestiona su espacio.
+
+### 34. Defectos que encontraron las capturas
+
+1. **Filas de 136 px con el avatar encima del texto.** Un `<button>` encierra su
+   contenido en una caja anónima, así que `display:flex` en el botón **no**
+   convierte a sus hijos en elementos flexibles. El flex bajó a un envoltorio
+   interno. El estilo computado decía `display:flex` y aun así apilaba: sin
+   medir en el navegador esto no se encuentra.
+2. **La quinta pestaña del panel se cortaba** contra el borde en las tres
+   resoluciones. Acortar el texto no bastó; ahora envuelven.
+3. **El build de producción fallaba** con un error que apuntaba a otro sitio.
+   Causa: una comilla invertida dentro de un comentario CSS, que parte el
+   literal de plantilla. Ocurrió dos veces.
+
+### 35. Matriz PASS/FAIL del Inbox V2
+
+| Requisito | Estado |
+|---|---|
+| Tres columnas | **PASS** |
+| La página no se desplaza | **PASS** (medido) |
+| Scroll independiente por columna | **PASS** (medido) |
+| Cabecera y compositor fijos | **PASS** |
+| Conservación de posición al cargar arriba | **PASS** (12 pruebas) |
+| Sin salto con adjuntos de altura tardía | **PASS** (ResizeObserver + pruebas) |
+| Autoscroll solo cerca del final | **PASS** |
+| Aviso y botón de volver al final | **PASS** |
+| Autores diferenciados sin depender del color | **PASS** |
+| Estados de entrega con explicación y reintento | **PASS** |
+| Enter envía · Shift+Enter salta | **PASS** |
+| Prevención de doble envío | **PASS** |
+| Ventana de 24 h explicada | **PASS** |
+| Pausar IA al responder | **PASS** |
+| Panel derecho colapsable con pestañas | **PASS** |
+| Diagnóstico solo con permiso | **PASS** |
+| Acciones no autorizadas mostradas como estado | **PASS** |
+| Máx. 2 indicadores por fila | **PASS** |
+| Esqueleto, vacío, error, sin selección | **PASS** |
+| Responsive < 900 px (drawer y navegación) | **PARCIAL** — implementado, **no verificado visualmente** |
+| Carga incremental hacia arriba | **NO** — el backend no pagina el detalle |
+| Adjuntar archivos desde el compositor | **NO** — el backend solo acepta texto |
+| Tiempo real sin recarga | **NO** — hoy recarga tras cada acción |
+
+### 36. Pendiente real para Fases E y F
+
+- **Fase E**: panel de supervisión y métricas económicas.
+- **Fase F**: verificación visual del responsive, accesibilidad, concurrencia
+  entre operadores en la interfaz, y matriz final.
+- **Backend que falta** para completar el Inbox V2: paginación del detalle
+  (`before_id`), envío de adjuntos, y transporte de tiempo real.
+
+Los 4 fallos del backend son los **mismos de la línea base**
+(`MembershipCancellationTest` ×3, `AppStateRealtimeTest` ×1): dependen de la
+hora del sistema y rompen entre las 19:00 y las 24:00 locales, cuando UTC ya
+cambió de día. **Comprobado que no los causa este trabajo**: desactivando por
+completo los observers comerciales, fallan exactamente igual.
