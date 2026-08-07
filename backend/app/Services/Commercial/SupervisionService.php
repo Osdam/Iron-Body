@@ -122,7 +122,12 @@ class SupervisionService
                 'writable' => $this->storageWritable(),
             ],
             'iron_guard' => [
-                'auto_remediation' => (bool) config('iron_guard.auto_remediation', false),
+                // La clave es `observability.remediation.enabled`, no
+                // `iron_guard.*`. La primera version leia una clave que NO
+                // EXISTE: devolvia null, el panel enseñaba "Apagada" y acertaba
+                // por casualidad. Un panel de supervision que acierta por
+                // casualidad no esta supervisando nada.
+                'auto_remediation' => (bool) config('observability.remediation.enabled', false),
             ],
         ];
     }
@@ -153,19 +158,31 @@ class SupervisionService
     private function channelState(): array
     {
         $configured = filled(config('meta.access_token')) && filled(config('meta.app_secret'));
-        $numberRegistered = filled(config('meta.whatsapp_phone_number_id'));
+
+        /*
+         * Hay un `phone_number_id` en la configuración. Eso es TODO lo que se
+         * puede afirmar desde aquí.
+         *
+         * La primera versión llamaba a esto `number_registered`, y era una
+         * afirmación falsa: que exista un identificador en el fichero no
+         * significa que el número real esté dado de alta en Meta -puede ser uno
+         * de pruebas, que es justo el caso hoy-. Comprobar el alta de verdad
+         * exige preguntárselo a Meta, y el canal está apagado.
+         */
+        $phoneConfigured = filled(config('meta.whatsapp_phone_number_id'));
+        $live = (bool) config('meta.enabled', false) && $phoneConfigured;
 
         return [
             'meta_configured' => $configured,
             'meta_enabled' => (bool) config('meta.enabled', false),
-            'number_registered' => $numberRegistered,
-            'status' => match (true) {
-                (bool) config('meta.enabled', false) && $numberRegistered => 'live',
-                default => 'not_activated',
-            },
-            'label' => (bool) config('meta.enabled', false) && $numberRegistered
+            'phone_number_configured' => $phoneConfigured,
+            'status' => $live ? 'live' : 'not_activated',
+            'label' => $live
                 ? 'WhatsApp productivo activo'
                 : 'WhatsApp productivo todavía no activado',
+            // Informativo, nunca error: es la configuración pedida hasta que
+            // termine la verificación. Alarmar por algo correcto enseña a
+            // ignorar las alarmas.
             'severity' => 'info',
         ];
     }
