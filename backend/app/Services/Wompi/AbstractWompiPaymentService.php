@@ -51,6 +51,17 @@ abstract class AbstractWompiPaymentService
             // Ya hay una transacción viva en Wompi: no se crea otra.
             return $transaction;
         }
+        // Y tampoco se manda otra cuando del intento anterior no se sabe si
+        // llegó a cobrarse: sin id de Wompi el guardia de arriba no lo ve, y es
+        // justo el caso en el que un segundo POST cobraría dos veces.
+        if (! empty(data_get($transaction->metadata, 'outcome_unknown'))
+            && in_array($transaction->status, PaymentStateMachine::IN_FLIGHT, true)) {
+            Log::info('wompi.create_transaction.skipped_indeterminate', [
+                'reference' => $transaction->reference,
+            ]);
+
+            return $transaction;
+        }
 
         // Método habilitado.
         if (! ($this->cfg['methods'][$this->method()] ?? false)) {
@@ -82,7 +93,14 @@ abstract class AbstractWompiPaymentService
                 'reference' => $transaction->reference,
                 'status' => $res['status'],
                 'error_code' => $res['error_code'],
+                'outcome_known' => ! $this->outcomeIsUnknown($res),
             ]);
+
+            // Un fallo del que NO sabemos el desenlace no se puede sellar como
+            // rechazo: ver más abajo.
+            if ($this->outcomeIsUnknown($res)) {
+                return $this->markIndeterminate($transaction, $res);
+            }
 
             return $this->tx->markError(
                 $transaction,
@@ -98,6 +116,56 @@ abstract class AbstractWompiPaymentService
         }
 
         return $this->tx->applyWompiTransaction($transaction, $wt);
+    }
+
+    /**
+     * ¿El fallo nos deja SIN SABER si Wompi creó la transacción?
+     *
+     * La distinción no es cosmética, es la diferencia entre un pago perdido y
+     * uno resuelto. Un 4xx es una respuesta: Wompi leyó la petición, la rechazó
+     * y no cobró nada; ahí `error` es la verdad. Un timeout (`status` 0) o un
+     * 5xx no son respuestas sobre el cobro, son la ausencia de una: la petición
+     * pudo llegar entera, crearse la transacción y cobrarse, y lo único que se
+     * perdió por el camino fue el acuse.
+     *
+     * Tratar ese silencio como rechazo es afirmar algo que nadie comprobó, y se
+     * paga caro: `error` es TERMINAL, así que el webhook que llegara después
+     * diciendo «aprobada» no podría mover el estado, y el cobro real quedaría
+     * enterrado con el cliente pagando y sin membresía.
+     */
+    protected function outcomeIsUnknown(array $res): bool
+    {
+        $status = (int) ($res['status'] ?? 0);
+
+        return $status === 0 || $status >= 500;
+    }
+
+    /**
+     * Deja el intento EN VUELO y dicho que su desenlace se desconoce.
+     *
+     * No es un limbo: `pending` es exactamente lo que significa —enviado a la
+     * pasarela, sin resultado— y es el estado que el resto del sistema ya sabe
+     * resolver. El webhook lo cierra en cuanto Wompi cuente qué pasó; si el
+     * webhook no llegara, IRON GUARD lo levanta como `payments_stuck` a la hora
+     * y la bandeja comercial abre «pago a medias» a las dos, que es como una
+     * persona se entera de que tiene que mirar el panel de Wompi.
+     *
+     * Lo que NO se hace es reintentar el cobro solo. Un segundo POST sobre algo
+     * que quizá ya se cobró es precisamente el doble cargo que se quiere evitar.
+     */
+    private function markIndeterminate(PaymentTransaction $transaction, array $res): PaymentTransaction
+    {
+        return $this->tx->transitionTo($transaction, PaymentStateMachine::PENDING, [
+            'status_message' => 'Estamos confirmando tu pago con la pasarela.',
+            'metadata' => array_merge((array) $transaction->metadata, [
+                'outcome_unknown' => [
+                    'at' => now()->toIso8601String(),
+                    'http_status' => (int) ($res['status'] ?? 0),
+                    'error_code' => $res['error_code'] ?? null,
+                    'correlation_id' => $res['correlation_id'] ?? null,
+                ],
+            ]),
+        ]);
     }
 
     /** Payload común de POST /transactions (firma de integridad incluida). */

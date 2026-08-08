@@ -82,6 +82,22 @@ class WompiTransactionService
                 }
             }
 
+            // 3b) Un intento anterior del que NO se sabe el desenlace.
+            //
+            // `idempotency_key` solo llega si la app manda `client_request_id`;
+            // sin él, volver a pulsar «pagar» crea una referencia nueva. Da
+            // igual casi siempre, salvo justo aquí: si el POST anterior se
+            // perdió por un timeout, Wompi pudo haberlo cobrado, y mandar otro
+            // es cobrar dos veces por lo mismo.
+            //
+            // Se reutiliza solo lo marcado como indeterminado, no cualquier
+            // pendiente: un pendiente normal ya tiene id de Wompi y lo cubre el
+            // guardia de AbstractWompiPaymentService.
+            $unknown = $this->recentIndeterminateFor($data);
+            if ($unknown !== null) {
+                return $unknown;
+            }
+
             $reference = $data['reference'] ?? $this->generateReference();
             while (PaymentTransaction::where('reference', $reference)->exists()) {
                 $reference = $this->generateReference();
@@ -149,6 +165,34 @@ class WompiTransactionService
                 throw $e;
             }
         });
+    }
+
+    /**
+     * Intento reciente del mismo miembro y plan cuyo desenlace se desconoce.
+     *
+     * La ventana existe porque un intento indeterminado no se queda así para
+     * siempre: el webhook o la reconciliación acaban cerrándolo. Pasado ese
+     * tiempo, insistir es una compra nueva de verdad y bloquearla sería peor
+     * que el problema que se quiere evitar.
+     */
+    private function recentIndeterminateFor(array $data): ?PaymentTransaction
+    {
+        $memberId = $data['member_id'] ?? null;
+        if ($memberId === null) {
+            return null;
+        }
+
+        $window = (int) data_get($this->cfg, 'indeterminate_reuse_minutes', 30);
+
+        return PaymentTransaction::query()
+            ->where('provider', 'wompi')
+            ->where('member_id', $memberId)
+            ->where('plan_id', $data['plan_id'] ?? null)
+            ->whereIn('status', PaymentStateMachine::IN_FLIGHT)
+            ->where('created_at', '>=', now()->subMinutes($window))
+            ->whereNotNull('metadata')
+            ->get()
+            ->first(fn (PaymentTransaction $tx) => ! empty(data_get($tx->metadata, 'outcome_unknown')));
     }
 
     /**

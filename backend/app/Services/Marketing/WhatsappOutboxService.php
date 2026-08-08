@@ -69,6 +69,28 @@ class WhatsappOutboxService
             return ['sent' => false, 'provider_message_id' => null, 'reason' => 'dead', 'retryable' => false];
         }
 
+        // Una persona manda sobre la IA, también hacia atrás.
+        if ($this->supersededByHuman($message)) {
+            $message->forceFill([
+                'status' => self::STATUS_DEAD,
+                'last_error_message' => 'superseded_by_human_takeover',
+                'next_attempt_at' => null,
+            ])->save();
+
+            ChannelLog::info('outbox.cancelled', [
+                'reason' => 'human_takeover',
+                'message_id' => $message->id,
+                'conversation_id' => $message->conversation_id,
+            ]);
+
+            return [
+                'sent' => false,
+                'provider_message_id' => null,
+                'reason' => 'human_takeover',
+                'retryable' => false,
+            ];
+        }
+
         $attempt = (int) $message->send_attempts + 1;
 
         // El intento se registra ANTES de salir a la red. Si el proceso muere
@@ -112,6 +134,40 @@ class WhatsappOutboxService
         }
 
         return $this->recordFailure($message, $result, $attempt);
+    }
+
+    /**
+     * ¿Una persona tomó el control después de que la IA escribiera esto?
+     *
+     * El caso que obliga a esta comprobación no tiene nada roto dentro: la IA
+     * redactó una respuesta, Meta la rechazó con un 429, y quedó esperando su
+     * turno en la cola de reintentos. Media hora después una persona entró en
+     * la conversación —normalmente porque el cliente se quejó o porque el
+     * agente se equivocó— y está hablando ella. Si ese reintento sale ahora, el
+     * cliente recibe al bot justo después de que un humano le dijera que a
+     * partir de ahora le atiende él, y con un texto que responde a una
+     * conversación que ya no existe.
+     *
+     * El corte es por AUTOR, no por conversación: el mensaje que escribió el
+     * propio asesor sí se reintenta. Cancelarlo también sería quitarle al
+     * humano su mensaje justo cuando acaba de tomar el mando, que es el
+     * problema contrario y igual de malo.
+     *
+     * Va aquí y no en el comando de reintentos porque este es el único punto
+     * por el que sale un mensaje: una barrera que hay que acordarse de poner en
+     * cada sitio es una barrera que algún día falta.
+     */
+    private function supersededByHuman(MarketingMessage $message): bool
+    {
+        if ($message->sender_type !== MarketingMessage::SENDER_AI) {
+            return false;
+        }
+
+        $conversation = $message->conversation;
+
+        return $conversation !== null
+            && (bool) $conversation->human_takeover
+            && $conversation->human_takeover_source === 'manual';
     }
 
     /**

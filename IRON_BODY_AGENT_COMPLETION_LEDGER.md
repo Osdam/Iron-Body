@@ -587,8 +587,41 @@ validación visual en **producción real** a 4 resoluciones sobre Inbox,
 Analítica y Supervisión, rendimiento comparado, y el checklist de activación en
 Meta documentado sin ejecutar.
 
-**Sin cubrir**: los 50 flujos E2E como suite nombrada, inyección sistemática de
-fallos (F.6), simulación del ciclo comercial largo (F.9), ensayo de vuelta
+**Sin cubrir**: simulación del ciclo comercial largo (F.9), ensayo de vuelta
 atrás (F.12) y el repaso completo de documentación (F.13).
 
-**El proyecto NO está PRE-META READY.** Falta cerrar esos cinco puntos.
+**El proyecto NO está PRE-META READY.** Falta cerrar esos tres puntos.
+
+### F.6 — inyección de fallos · PASS
+
+52 escenarios sobre los 45 exigidos, 0 FAIL. Cada uno rompe una dependencia de
+verdad —timeout, 429, 5xx, JSON ilegible, disco caído, deadlock, worker muerto—
+y sigue el rastro completo: evento → persistencia → job → servicio → fallo →
+reintento → auditoría → incidente → recuperación.
+
+**Cinco fallos reales encontrados y corregidos**, todos de la misma familia: el
+sistema afirmaba por escrito algo que nadie había comprobado.
+
+1. **Un timeout de Wompi enterraba cobros reales.** El POST sin respuesta se
+   sellaba como `error`, que es TERMINAL; el webhook posterior con la
+   aprobación no podía mover el estado. Cliente cobrado, sin membresía, sin
+   rastro. Ahora un desenlace desconocido queda `pending` y lo resuelven el
+   webhook o la reconciliación.
+2. **Doble cobro al reintentar tras ese timeout.** Sin `client_request_id` de
+   la app, el segundo intento abría una transacción nueva mientras la primera
+   podía estar viva en Wompi.
+3. **Adjuntos marcados `stored` con el disco caído.** No se miraba el resultado
+   de la escritura: el inbox enseñaba un comprobante inexistente y la descarga
+   no se reintentaba porque ya constaba guardada.
+4. **Facturas `validated` sin CUFE ni número.** Un 201 con el cuerpo incompleto
+   —o vacío— daba por bueno un documento indefendible ante la DIAN, y
+   `validated` es terminal.
+5. **La IA hablaba después del humano.** Una respuesta suya atascada en la cola
+   de reintentos salía igual aunque una persona hubiera tomado la conversación.
+
+Medido además el reparto de capacidad: **un solo worker** atiende la cola
+`default` (entrantes, agente, multimedia, eventos comerciales, alertas);
+`billing` tiene el suyo. Con el agente apagado sobra. Con el agente encendido
+el rendimiento cae de 4,46 a 0,52 trabajos/s y una ráfaga de 50 mensajes deja
+al último esperando ~97 s. Hay propuesta de separación de colas con números,
+sin ejecutar.

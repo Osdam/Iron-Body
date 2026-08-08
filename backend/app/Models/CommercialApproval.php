@@ -134,6 +134,23 @@ class CommercialApproval extends Model
             && in_array($this->status, self::OPEN_STATUSES, true);
     }
 
+    /**
+     * Pasada la fecha límite, decidida o no.
+     *
+     * Distinta de `hasExpired()` a propósito. Aquella pregunta «¿caducó sin que
+     * nadie la decidiera?» y por eso exige que siga abierta; sirve para que la
+     * bandeja no ofrezca aprobar algo que ya no se puede aprobar.
+     *
+     * Esta pregunta otra cosa: «¿se pasó la fecha?». Hace falta para el momento
+     * de EJECUTAR, cuando la autorización ya está aprobada —y por tanto no está
+     * abierta— pero el permiso que concedía tenía fecha. Una aprobación de ayer
+     * ejecutada hoy es una acción sin permiso, aunque el permiso existiera.
+     */
+    public function isPastDeadline(): bool
+    {
+        return $this->expires_at !== null && $this->expires_at->isPast();
+    }
+
     /** Estado real, contando la caducidad. */
     public function effectiveStatus(): string
     {

@@ -233,6 +233,27 @@ class ApprovalQueueService
                 return ['ok' => false, 'code' => 'not_approved', 'approval' => $fresh];
             }
 
+            /*
+             * Una autorización con fecha caduca aunque ya estuviera aprobada.
+             *
+             * `decide()` comprobaba el vencimiento y aquí no, y esa asimetría
+             * abría el hueco entero: basta con que el ejecutor tarde —una cola
+             * cargada, un reintento con backoff, un worker caído— para que la
+             * acción se ejecute pasada la fecha. El permiso existía cuando se
+             * pidió; ejecutarlo tarde es actuar sin él.
+             */
+            if ($fresh->isPastDeadline()) {
+                $fresh->forceFill(['status' => CommercialApproval::STATUS_EXPIRED])->save();
+
+                ChannelLog::warning('approval.execution_blocked_expired', [
+                    'approval_id' => $fresh->id,
+                    'type' => $fresh->type,
+                    'expired_at' => $fresh->expires_at?->toIso8601String(),
+                ]);
+
+                return ['ok' => false, 'code' => 'expired', 'approval' => $fresh];
+            }
+
             $fresh->forceFill([
                 'status' => CommercialApproval::STATUS_EXECUTED,
                 'executed_at' => now(),
