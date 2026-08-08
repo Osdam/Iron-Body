@@ -310,19 +310,27 @@ class SupervisionService
             return 'none';
         }
 
+        /*
+         * Que una persona TENGA el control basta, escriba o no.
+         *
+         * Esto estaba después de exigir un mensaje humano, y eso dejaba un hueco
+         * por el que el agente se llevaba ventas que no cerró: un asesor toma la
+         * conversación, llama al cliente por teléfono y cobra: como no escribió
+         * nada en el chat, la venta contaba como autónoma. Sobreatribuir así es
+         * peor que no medir, porque la cifra se usa para decidir si el agente
+         * merece más autonomía.
+         */
+        if ($row->human_takeover) {
+            return 'influenced';
+        }
+
         $humanActed = $this->safe(fn () => DB::table('marketing_messages')
             ->where('conversation_id', $row->conversation_id)
             ->where('sender_type', 'human')
             ->where('created_at', '<=', $row->paid_at)
             ->exists(), false);
 
-        if (! $humanActed) {
-            return 'autonomous';
-        }
-
-        // Con la conversación ya en manos de una persona, el agente influyó
-        // pero no cerró. Afirmar lo contrario sería sobreatribuir.
-        return $row->human_takeover ? 'influenced' : 'assisted';
+        return $humanActed ? 'assisted' : 'autonomous';
     }
 
     // ── Utilidades ──────────────────────────────────────────────────────

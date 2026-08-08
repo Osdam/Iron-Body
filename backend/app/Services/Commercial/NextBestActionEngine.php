@@ -57,6 +57,22 @@ class NextBestActionEngine
             return null;
         }
 
+        /*
+         * Y el opt-out COMERCIAL, igual, pero sin silenciar a la persona.
+         *
+         * «No me ofrezcan más planes» y «no me contacten» no son lo mismo. El
+         * segundo es `do_not_contact` y calla todo. El primero solo retira el
+         * permiso de OFRECER: quien lo pide sigue teniendo derecho a que le
+         * contesten cuando pregunta algo, y si además dejara de poder preguntar
+         * el precio, ejercer su preferencia le habría empeorado el servicio.
+         *
+         * Aquí se corta lo que el sistema INICIA. Responder vive en
+         * `canReplyReactively()` y no pasa por este motor.
+         */
+        if (! $subject->acceptsCommercialOffers()) {
+            return null;
+        }
+
         $rules = [
             'ruleNeedsHuman',
             'ruleRecoverPendingPayment',
@@ -345,6 +361,25 @@ class NextBestActionEngine
             return null;
         }
 
+        /*
+         * Que la membresía haya CADUCADO no es una activación fallida.
+         *
+         * Esta regla existe para un caso concreto: el pago entró y la membresía
+         * no se activó, así que hay que resolverlo antes de nada. Pero la
+         * condición «tiene pago aprobado y no tiene membresía activa» también la
+         * cumple, para siempre, cualquiera cuya membresía venció de forma normal.
+         *
+         * El resultado era que a un exsocio se le decía «tienes un pago
+         * aprobado pero no figuras con membresía activa, vamos a resolverlo»
+         * —falso: se resolvió hace meses y luego se le acabó— y, peor, que la
+         * regla de reactivación, que va después, no llegaba a mirarlo nunca.
+         *
+         * Si sabemos CUÁNDO caducó, es que estuvo activa: el pago sí activó.
+         */
+        if ($s->daysSinceExpiry !== null && $s->daysSinceExpiry > 0) {
+            return null; // caducó: es reactivación, no una activación pendiente
+        }
+
         return [
             'goal' => CommercialVocabulary::GOAL_ACTIVATE_MEMBERSHIP,
             'action' => CommercialVocabulary::ACTION_CONFIRM_ACTIVATION,
@@ -439,6 +474,26 @@ class NextBestActionEngine
     private function ruleRescueAtRisk(CommercialSubject $s): ?array
     {
         if (! $s->hasActiveMembership) {
+            return null;
+        }
+
+        /*
+         * Dentro de la ventana de renovación manda la continuidad.
+         *
+         * Es el mismo límite que aparta al acompañamiento, y por el mismo
+         * motivo: a dos días del vencimiento, rescatar la adherencia de alguien
+         * que está a punto de quedarse sin membresía es empezar por el final. Si
+         * no renueva, no hay adherencia que rescatar.
+         *
+         * Y no se pierde nada por el camino: `ruleRenewExpiring` ya distingue al
+         * socio comprometido del que no lo está —al segundo le ofrece el plan
+         * mínimo y sin discurso de mejora—, así que la persona en riesgo sigue
+         * recibiendo el trato que le corresponde, dentro del mensaje que de
+         * verdad importa esta semana.
+         */
+        if ($s->daysToExpiry !== null
+            && $s->daysToExpiry >= 0
+            && $s->daysToExpiry <= self::RENEWAL_WINDOW_DAYS) {
             return null;
         }
 

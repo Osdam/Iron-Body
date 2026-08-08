@@ -47,6 +47,12 @@ class ContactPolicy
             return $this->deny('do_not_contact', null);
         }
 
+        // Pidió no recibir ofertas. Se distingue del silencio total para que
+        // el panel pueda decir cuál de las dos cosas está pasando.
+        if (! $subject->acceptsCommercialOffers()) {
+            return $this->deny('commercial_opt_out', null);
+        }
+
         // Una conversación que lleva una persona no recibe nada automático.
         if ($subject->needsHuman) {
             return $this->deny('human_in_control', null);

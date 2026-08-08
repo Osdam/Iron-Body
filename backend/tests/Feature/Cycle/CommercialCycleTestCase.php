@@ -405,7 +405,19 @@ abstract class CommercialCycleTestCase extends TestCase
             app()->call([new EvaluateCommercialSubject($last->id), 'handle']);
         }
 
-        return $this->openOpportunity($lead);
+        /*
+         * El hecho pasa por el ciclo real —se registra y el job reconcilia lo
+         * que ya está cumplido—, y la decisión se lee después sobre el sujeto
+         * completo.
+         *
+         * Hace falta separarlo porque el job resuelve al sujeto desde las claves
+         * del propio evento, y un evento al que le falte el `member_id` deja al
+         * motor decidiendo sobre un prospecto sin membresía ni pagos. Eso daba
+         * `collect_data` en escenarios de renovación y de pago a medias, y
+         * parecía que el motor no sabía leer el estado del cliente cuando lo que
+         * pasaba es que no se lo estábamos dando.
+         */
+        return $this->reevaluate($lead, $member);
     }
 
     /**

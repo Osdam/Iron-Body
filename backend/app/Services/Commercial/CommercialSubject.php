@@ -63,6 +63,15 @@ class CommercialSubject
         public readonly ?string $objective = null,
         public readonly int $priceObjections = 0,
         public readonly bool $hasAppAccount = false,
+        /**
+         * El cliente pidió no recibir ofertas, sin pedir silencio total.
+         *
+         * Se guarda como hecho de conversación y no como columna del lead a
+         * propósito: `do_not_contact` ya existe y significa otra cosa —no me
+         * contactes— mientras esto significa —contéstame, pero no me ofrezcas—.
+         * Mezclarlos convertiría cada preferencia comercial en un silencio.
+         */
+        public readonly bool $commercialOptOut = false,
     ) {}
 
     /**
@@ -132,6 +141,7 @@ class CommercialSubject
             objective: $conversation['objective'],
             priceObjections: $conversation['price_objections'],
             hasAppAccount: $user !== null,
+            commercialOptOut: $conversation['commercial_opt_out'],
         );
     }
 
@@ -365,7 +375,7 @@ class CommercialSubject
             return [
                 'last_inbound_at' => null, 'days_since' => null, 'do_not_contact' => false,
                 'needs_human' => false, 'temperature' => null, 'objective' => null,
-                'price_objections' => 0,
+                'price_objections' => 0, 'commercial_opt_out' => false,
             ];
         }
 
@@ -373,6 +383,7 @@ class CommercialSubject
 
         $priceObjections = 0;
         $needsHuman = false;
+        $commercialOptOut = false;
 
         try {
             if (Schema::hasTable('marketing_conversations')) {
@@ -394,6 +405,16 @@ class CommercialSubject
                     ->where('lead_id', $lead->id)
                     ->where('action_type', 'register_objection')
                     ->count();
+
+                // Vale el ÚLTIMO gesto: si después de pedir que no le ofrezcan
+                // nada la persona vuelve a autorizarlo, manda lo nuevo.
+                $ultimo = DB::table('marketing_ai_actions')
+                    ->where('lead_id', $lead->id)
+                    ->whereIn('action_type', ['commercial_opt_out', 'commercial_opt_in'])
+                    ->orderByDesc('id')
+                    ->value('action_type');
+
+                $commercialOptOut = $ultimo === 'commercial_opt_out';
             }
         } catch (Throwable) {
             // Los hechos de conversación son un extra: su ausencia no bloquea.
@@ -407,6 +428,7 @@ class CommercialSubject
             'temperature' => $lead->temperature,
             'objective' => $lead->objective,
             'price_objections' => $priceObjections,
+            'commercial_opt_out' => $commercialOptOut,
         ];
     }
 
@@ -420,6 +442,19 @@ class CommercialSubject
     public function isContactable(): bool
     {
         return ! $this->doNotContact;
+    }
+
+    /**
+     * ¿Se le puede OFRECER algo?
+     *
+     * Distinto de `isContactable()`: quien pidió no recibir ofertas sigue
+     * siendo contactable para lo operativo —su membresía, su pago, su cita— y
+     * sigue mereciendo respuesta cuando pregunta. Lo que se apaga es la
+     * iniciativa comercial.
+     */
+    public function acceptsCommercialOffers(): bool
+    {
+        return $this->isContactable() && ! $this->commercialOptOut;
     }
 
     /** Resumen sin datos personales, para dejarlo como evidencia auditable. */
