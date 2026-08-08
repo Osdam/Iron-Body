@@ -46,6 +46,16 @@ class MetaConversationService
                 'body' => $body,
                 'meta_message_id' => $metaMessageId,
                 'metadata' => $metadata ?: null,
+                /*
+                 * El identificador que nace en el webhook y cose todo el
+                 * recorrido: evento, job, mensaje, decision y envio de vuelta.
+                 *
+                 * Faltaba SOLO en el mensaje entrante -el saliente si lo
+                 * llevaba-, y sin el no se puede ir del webhook al mensaje que
+                 * produjo. Es justo lo que hace falta cuando alguien pregunta
+                 * por que no se contesto a una persona concreta.
+                 */
+                'correlation_id' => Context::get('correlation_id'),
             ]);
         } catch (Throwable $e) {
             // Choque contra el índice único → otra entrega ganó la carrera.
