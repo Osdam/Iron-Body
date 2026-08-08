@@ -54,6 +54,15 @@ class IronGuardController extends Controller
                 'incidents' => $open->map(fn (Incident $i) => $this->summarize($i))->all(),
                 'guard_enabled' => (bool) config('observability.enabled', false),
                 'auto_remediation_enabled' => (bool) config('observability.remediation.enabled', false),
+                /*
+                 * Estado de los carriles de cola.
+                 *
+                 * Va en el panel y no solo en un comando de servidor porque la
+                 * pregunta que responde —«¿hay alguien atendiendo los mensajes
+                 * de los clientes?»— la tiene que poder contestar quien atiende
+                 * el inbox, sin entrar por SSH.
+                 */
+                'queues' => app(\App\Services\Observability\QueueHealthService::class)->snapshot(),
             ],
         ]);
     }

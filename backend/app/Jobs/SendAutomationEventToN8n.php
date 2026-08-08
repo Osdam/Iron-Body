@@ -28,7 +28,12 @@ class SendAutomationEventToN8n implements ShouldQueue
 
     public int $backoff = 30;
 
-    public function __construct(public int $eventId) {}
+    public function __construct(public int $eventId)
+    {
+        // P4: nadie está esperando esto con el teléfono en la mano.
+        $lane = (array) config('queue.lanes.commercial');
+        $this->onQueue($lane['queue'] ?? 'commercial');
+    }
 
     public function handle(): void
     {

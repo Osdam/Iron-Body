@@ -1,0 +1,36 @@
+[Unit]
+# IRON BODY · Worker de facturación electrónica.
+#
+# Un solo cambio respecto a la versión que llevaba meses funcionando, y no es
+# cosmético: el primer argumento de `queue:work` pasa de `database` a `billing`.
+#
+# Ese argumento es la CONEXIÓN, y de la conexión sale el `retry_after`: el tiempo
+# tras el cual la cola da por muerto un trabajo reservado y deja que otro worker
+# lo tome. Con `database` valía 90 s contra un `--timeout` de 180 s, es decir, la
+# cola se rendía antes que el worker. Una emisión a Factus que pasara de 90 s
+# habría sido reservada por un segundo proceso mientras el primero seguía
+# emitiendo: dos números fiscales consumidos por la misma venta, y una nota
+# crédito que hacer a mano. No llegó a pasar porque nunca hubo un segundo
+# proceso; era un agujero esperando a que alguien subiera `numprocs`.
+#
+# Con `billing`, retry_after=900 contra timeout=600. Todo lo demás —un proceso,
+# usuario, reintentos— se mantiene: ya funcionaba.
+Description=Iron Body Laravel Billing Queue Worker
+After=network.target postgresql.service
+
+[Service]
+User=www-data
+Group=www-data
+Restart=always
+RestartSec=5
+WorkingDirectory=/var/www/api/backend
+ExecStart=/usr/bin/php artisan queue:work billing --queue=billing --sleep=3 --tries=3 --timeout=600 --max-jobs=200 --max-time=3600
+StandardOutput=append:/var/www/api/backend/storage/logs/billing-worker.log
+StandardError=append:/var/www/api/backend/storage/logs/billing-worker.log
+# Que systemd le dé tiempo a cerrar una emisión en curso antes de matarlo: un
+# SIGKILL a mitad de un POST a Factus es exactamente el estado indeterminado que
+# la fase F.6 se pasó entera evitando.
+TimeoutStopSec=630
+
+[Install]
+WantedBy=multi-user.target

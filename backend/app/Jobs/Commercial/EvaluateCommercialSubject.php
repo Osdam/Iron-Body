@@ -45,7 +45,12 @@ class EvaluateCommercialSubject implements ShouldQueue
 
     public int $backoff = 30;
 
-    public function __construct(public readonly int $commercialEventId) {}
+    public function __construct(public readonly int $commercialEventId)
+    {
+        // P4: una analítica comercial no puede retrasar el mensaje de nadie.
+        $lane = (array) config('queue.lanes.commercial');
+        $this->onQueue($lane['queue'] ?? 'commercial');
+    }
 
     public function handle(
         NextBestActionEngine $engine,

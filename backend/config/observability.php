@@ -49,6 +49,18 @@ return [
         'timeout' => (int) env('IRON_GUARD_AI_TIMEOUT', 45),
     ],
 
+    /*
+    | Vigilancia de los carriles de cola.
+    |
+    | `unattended_after_seconds` es cuánto se tolera que un trabajo espere sin
+    | que nadie de ese carril termine nada antes de considerar que no hay worker.
+    | Dos minutos es holgado a propósito: un despliegue reinicia los procesos y
+    | no queremos un incidente en cada despliegue.
+    */
+    'queues' => [
+        'unattended_after_seconds' => (int) env('QUEUE_UNATTENDED_AFTER_SECONDS', 120),
+    ],
+
     // Remediación automática. Doble llave: el flag general Y la allowlist.
     // Nada que no esté nombrado aquí puede ejecutarse solo, jamás.
     'remediation' => [

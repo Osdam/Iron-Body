@@ -94,6 +94,28 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\MarketingLeadAttribution::observe(
             \App\Observers\Marketing\AttributionOfferObserver::class,
         );
+
+        /*
+         * El latido de los carriles de cola.
+         *
+         * Cada trabajo terminado deja constancia de que SU carril tiene a
+         * alguien atendiéndolo. Es la única señal que no se puede falsear: un
+         * worker puede estar arrancado y bloqueado, o vivo pero escuchando la
+         * cola equivocada por un error de configuración, y en los dos casos
+         * Supervisor diría que todo va bien. Lo que importa es si el trabajo
+         * avanza, y esto lo registra.
+         *
+         * Es best-effort a propósito: si el cache no está disponible, se pierde
+         * visibilidad, pero ni un solo trabajo falla por ello.
+         */
+        \Illuminate\Support\Facades\Queue::after(function (\Illuminate\Queue\Events\JobProcessed $event): void {
+            try {
+                app(\App\Services\Observability\QueueHealthService::class)
+                    ->heartbeat($event->job->getQueue() ?: 'default');
+            } catch (\Throwable) {
+                // La vigilancia no puede ser el motivo de que algo se rompa.
+            }
+        });
     }
 
     /**

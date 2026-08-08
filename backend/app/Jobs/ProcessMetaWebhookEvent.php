@@ -40,7 +40,15 @@ class ProcessMetaWebhookEvent implements ShouldQueue
     /** Backoff creciente: si Meta o la BD tosen, no insistimos cada 20s. */
     public array $backoff = [20, 60, 180];
 
-    public function __construct(public int $eventId) {}
+    public function __construct(public int $eventId)
+    {
+        // El carril P0. Se fija en el constructor y no en cada `dispatch`
+        // porque este job se encola desde cuatro sitios —webhook, replay,
+        // remediación y simulación— y una barrera que hay que acordarse de
+        // poner en cuatro sitios es una barrera que algún día falta en uno.
+        $lane = (array) config('queue.lanes.whatsapp');
+        $this->onQueue($lane['queue'] ?? 'whatsapp-high');
+    }
 
     /**
      * Un evento se procesa una sola vez a la vez. Sin esto, un reintento que se
@@ -232,10 +240,22 @@ class ProcessMetaWebhookEvent implements ShouldQueue
         // efectos sobre el mismo hilo. Si en 10s no se consigue el turno, se
         // deja escapar LockTimeoutException y el job entero se reintenta, que
         // es preferible a procesar fuera de orden.
-        Cache::lock('marketing:conversation:'.$conversation->id, 30)->block(
+        $result = Cache::lock('marketing:conversation:'.$conversation->id, 30)->block(
             10,
             fn () => $this->recordAndRoute($event, $parsed, $type, $lead, $conversation, $conversations, $router),
         );
+
+        /*
+         * El agente se encola con el cerrojo YA SOLTADO.
+         *
+         * El job del agente pide este mismo cerrojo para no analizar dos
+         * mensajes de la misma persona a la vez. Encolarlo desde dentro se
+         * bloquea contra sí mismo en cuanto la cola es síncrona —la simulación,
+         * `dispatchSync`, la suite—, y con una cola real solo funciona por
+         * casualidad de que el job corra más tarde. Fuera del cerrojo es
+         * correcto en los dos casos.
+         */
+        MarketingInboundMessageRouter::flushDeferred((array) $result);
     }
 
     private function recordAndRoute(
@@ -246,7 +266,7 @@ class ProcessMetaWebhookEvent implements ShouldQueue
         $conversation,
         MetaConversationService $conversations,
         MarketingInboundMessageRouter $router,
-    ): void {
+    ): array {
         $message = $conversations->recordInbound(
             $conversation,
             $parsed['message_id'],
@@ -262,7 +282,7 @@ class ProcessMetaWebhookEvent implements ShouldQueue
                 'meta_message_id' => $parsed['message_id'] ?? null,
             ]);
 
-            return;
+            return [];
         }
 
         ChannelLog::info('meta.message.saved', [
@@ -285,7 +305,10 @@ class ProcessMetaWebhookEvent implements ShouldQueue
             'message_type' => $type,
             'skipped' => $result['skipped'] ?? false,
             'reason' => $result['reason'] ?? null,
+            'agent_queued' => isset($result['analyze_async']),
         ]);
+
+        return $result;
     }
 
     /** Metadatos saneados del mensaje (sin datos sensibles). */

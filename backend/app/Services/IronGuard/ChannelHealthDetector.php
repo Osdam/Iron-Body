@@ -9,6 +9,7 @@ use App\Models\MetaWebhookEvent;
 use App\Services\Marketing\HermesCircuitBreaker;
 use App\Services\Marketing\WhatsappOutboxService;
 use App\Services\Observability\ChannelLog;
+use App\Services\Observability\QueueHealthService;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -60,6 +61,11 @@ class ChannelHealthDetector
             'repeatedPaymentDeclines',
             'failingInvoices',
             'storageUnavailable',
+            // Los carriles de cola. Separar las colas trajo un modo de fallo
+            // que antes no existía: que UNO se quede sin atender mientras los
+            // otros cuatro funcionan y por fuera todo parezca normal.
+            'unattendedQueues',
+            'queueBacklog',
         ];
 
         $incidents = [];
@@ -421,6 +427,120 @@ class ChannelHealthDetector
                     : 'Fallo al descargar de Meta: revisar credenciales, red o caducidad de las URLs.',
                 'attachment_ids' => $failed->take(10)->pluck('id')->all(),
                 'safe_remediation' => $isDefensive ? null : 'retry_media_download',
+            ],
+        ]);
+    }
+
+    /**
+     * Un carril con trabajo esperando y nadie atendiéndolo.
+     *
+     * Es el fallo que introdujo la separación de colas. Antes, quedarse sin
+     * worker se notaba en todo a la vez; ahora puede pasar en uno solo, y si el
+     * que se cae es el de los mensajes de clientes, el sistema sigue aceptando
+     * webhooks con un 200 y encolando sin error mientras nadie contesta a
+     * nadie. Por fuera no se ve nada.
+     *
+     * La gravedad la decide la prioridad del carril, no el tamaño de la cola:
+     * un solo mensaje sin atender en `whatsapp-high` es más urgente que cien
+     * analíticas pendientes.
+     */
+    private function unattendedQueues(): ?Incident
+    {
+        $snapshot = app(QueueHealthService::class)->snapshot();
+
+        $unattended = collect($snapshot)->filter(fn (array $lane) => $lane['looks_unattended'] === true);
+
+        if ($unattended->isEmpty()) {
+            return null;
+        }
+
+        /*
+         * UN incidente por CARRIL, no uno por corrida.
+         *
+         * El carril es la clave que de verdad discrimina: que se caiga el
+         * worker de multimedia y que se caiga el de facturación son dos averías
+         * con dos culpables y dos arreglos distintos. Agruparlas escondería la
+         * segunda detrás de la primera —y al reparar una, el panel diría que
+         * todo está bien mientras la otra sigue—.
+         *
+         * Se devuelve el más grave para que quede arriba en el panel; los demás
+         * ya quedaron registrados.
+         */
+        $abiertos = [];
+
+        foreach ($unattended->sortBy('priority') as $nombre => $lane) {
+            $abiertos[] = $this->recorder->record([
+                'source' => 'queue',
+                'kind' => 'queue_unattended',
+                'fingerprint_keys' => [(string) $nombre],
+                'title' => sprintf(
+                    'La cola %s lleva %d s con trabajo sin que nadie lo procese',
+                    $lane['queue'], $lane['oldest_pending_seconds'],
+                ),
+                // La gravedad la decide a quién afecta, no cuánta cola hay: un
+                // mensaje de cliente sin atender pesa más que cien analíticas.
+                'severity' => ((int) $lane['priority']) <= 1
+                    ? Incident::SEVERITY_CRITICAL
+                    : Incident::SEVERITY_HIGH,
+                'evidence' => [
+                    'queue' => $lane['queue'],
+                    'backlog' => $lane['backlog'],
+                    'oldest_pending_seconds' => $lane['oldest_pending_seconds'],
+                    'last_processed_seconds_ago' => $lane['last_processed_seconds_ago'],
+                    'check_command' => 'supervisorctl status',
+                    // Reencolar no arregla un carril sin worker: lo que falta es
+                    // el proceso. Se nombra el arreglo, no se ejecuta.
+                    'hint' => 'Comprobar que el worker de ese carril está arrancado.',
+                ],
+            ]);
+        }
+
+        return $abiertos[0] ?? null;
+    }
+
+    /**
+     * Un carril que acumula más espera de la que prometió.
+     *
+     * Distinto del anterior: aquí SÍ hay workers y están trabajando, pero no
+     * dan. Es la señal de que hace falta capacidad, no de que algo esté roto, y
+     * por eso nunca es crítica: nadie tiene que levantarse de madrugada por
+     * esto, pero alguien tiene que verlo antes de que se convierta en el otro.
+     */
+    private function queueBacklog(): ?Incident
+    {
+        $snapshot = app(QueueHealthService::class)->snapshot();
+
+        $breaching = collect($snapshot)->filter(
+            fn (array $lane) => $lane['breaching_slo'] === true && $lane['looks_unattended'] === false,
+        );
+
+        if ($breaching->isEmpty()) {
+            return null;
+        }
+
+        $peor = $breaching->sortBy('priority')->first();
+        $nombre = (string) $breaching->sortBy('priority')->keys()->first();
+
+        return $this->recorder->record([
+            'source' => 'queue',
+            'kind' => 'queue_backlog',
+            'fingerprint_keys' => [$nombre],
+            'title' => sprintf(
+                'La cola %s acumula %d s de espera (compromiso: %d ms)',
+                $peor['queue'], $peor['oldest_pending_seconds'], $peor['slo_wait_ms'],
+            ),
+            'severity' => ((int) $peor['priority']) <= 1
+                ? Incident::SEVERITY_HIGH
+                : Incident::SEVERITY_MEDIUM,
+            'evidence' => [
+                'lanes' => $breaching->map(fn (array $l) => [
+                    'queue' => $l['queue'],
+                    'backlog' => $l['backlog'],
+                    'oldest_pending_seconds' => $l['oldest_pending_seconds'],
+                    'slo_wait_ms' => $l['slo_wait_ms'],
+                    'jobs_last_minute' => $l['jobs_last_minute'],
+                ])->all(),
+                'hint' => 'Hay workers vivos pero no dan: es capacidad, no avería.',
             ],
         ]);
     }

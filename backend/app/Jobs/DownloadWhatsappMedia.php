@@ -32,7 +32,12 @@ class DownloadWhatsappMedia implements ShouldQueue
     public function __construct(
         public int $attachmentId,
         public ?string $correlationId = null,
-    ) {}
+    ) {
+        // Carril propio: un vídeo de 50 MB tarda lo que tarda, y no puede
+        // hacerlo por delante del mensaje de texto de otra persona.
+        $lane = (array) config('queue.lanes.media');
+        $this->onQueue($lane['queue'] ?? 'media');
+    }
 
     /** Un adjunto no se descarga dos veces en paralelo. */
     public function uniqueId(): string

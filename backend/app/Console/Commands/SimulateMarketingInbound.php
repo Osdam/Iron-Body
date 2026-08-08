@@ -79,6 +79,11 @@ class SimulateMarketingInbound extends Command
         if ($duplicateDelivery) {
             $this->warn('  El mismo cuerpo exacto ya se había recibido: no se reprocesa (anti-replay OK).');
         } else {
+            // El simulador informa de lo que decidió el agente, así que aquí el
+            // análisis sí corre en línea: si se despachara al carril `agent`,
+            // el comando terminaría antes de que el modelo hubiera pensado y
+            // el informe diría que no se decidió nada.
+            config()->set('marketing.inbound.analyze_inline', true);
             ProcessMetaWebhookEvent::dispatchSync($event->id);
         }
 

@@ -19,6 +19,18 @@ class RetryElectronicInvoiceJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    public int $tries = 3;
+
+    public function __construct()
+    {
+        // Hoy nadie lo encola —solo se menciona en un comentario— pero se le da
+        // su carril igual. Después de retirar el worker de `default`, un job sin
+        // carril no lo procesaría nadie: se quedaría en la tabla indefinidamente
+        // sin error visible. El día que alguien lo conecte, ya está en su sitio.
+        $lane = (array) config('queue.lanes.billing');
+        $this->onQueue($lane['queue'] ?? 'billing');
+    }
+
     public function handle(): void
     {
         if (! config('billing.enabled')) {

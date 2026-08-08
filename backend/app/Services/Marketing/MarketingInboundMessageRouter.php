@@ -2,6 +2,7 @@
 
 namespace App\Services\Marketing;
 
+use App\Jobs\AnalyzeInboundMessage;
 use App\Jobs\DownloadWhatsappMedia;
 use App\Models\MarketingAiAction;
 use App\Models\MarketingConversation;
@@ -102,9 +103,86 @@ class MarketingInboundMessageRouter
         $autoExecute = (bool) config('marketing.agent_enabled', false)
             && (bool) config('marketing.inbound.auto_execute', false);
 
-        return $this->orchestrator->handle(
-            $lead, $conversation, $message->id, (string) $message->body, null, $autoExecute,
+        /*
+         * Aquí termina el trabajo urgente y empieza el caro.
+         *
+         * Todo lo anterior —resolver el lead, guardar el mensaje, decidir si
+         * hay que analizarlo— es rápido y determinista: cuesta milisegundos y
+         * es lo que hace que el cliente aparezca en el inbox. Lo que viene
+         * después es una llamada a un modelo que puede tardar quince segundos.
+         *
+         * Hacerlo aquí mismo significaba que el worker que acababa de guardar
+         * este mensaje se quedaba esperando al modelo, y el siguiente cliente
+         * que escribiera no existía en el sistema hasta que OpenAI contestara
+         * sobre el anterior. Se despacha a su propio carril y este worker
+         * queda libre en el acto.
+         *
+         * `dispatchSync` cuando el análisis se pide en línea (el comando de
+         * simulación, y las pruebas que afirman sobre la decisión en la misma
+         * petición): ahí no hay nadie esperando al otro lado del teléfono.
+         */
+        if ($this->analyzeInline()) {
+            return $this->orchestrator->handle(
+                $lead, $conversation, $message->id, (string) $message->body, null, $autoExecute,
+            );
+        }
+
+        /*
+         * NO se despacha aquí: se DEVUELVE la intención de despachar.
+         *
+         * Quien llama tiene tomado el cerrojo de esta conversación mientras
+         * dura el enrutado, y el job del agente vuelve a pedir ese mismo
+         * cerrojo para no analizar dos mensajes de la misma persona a la vez.
+         * Encolarlo dentro del cerrojo funciona con una cola de verdad —el job
+         * corre después, en otro proceso— pero se bloquea contra sí mismo en
+         * cuanto la cola es síncrona: la simulación, `dispatchSync` y la suite
+         * entera. Lo descubrió la suite tardando treinta segundos por prueba en
+         * lugar de fallar, que es la forma más cara de enterarse.
+         *
+         * Devolverlo deja el despacho fuera del cerrojo sin perder el orden: la
+         * cola es FIFO y el agente vuelve a tomarlo por su cuenta.
+         */
+        return [
+            'analyze_async' => [
+                'message_id' => $message->id,
+                'auto_execute' => $autoExecute,
+                'correlation_id' => Context::get('correlation_id'),
+            ],
+            'lane' => (string) config('queue.lanes.agent.queue', 'agent'),
+        ];
+    }
+
+    /**
+     * Despacha lo que `route()` dejó pendiente. Se llama FUERA del cerrojo.
+     *
+     * @param  array<string,mixed>  $result  lo devuelto por route()
+     */
+    public static function flushDeferred(array $result): void
+    {
+        $pending = $result['analyze_async'] ?? null;
+
+        if (! is_array($pending)) {
+            return;
+        }
+
+        AnalyzeInboundMessage::dispatch(
+            (int) $pending['message_id'],
+            (bool) $pending['auto_execute'],
+            $pending['correlation_id'] ?? null,
         );
+    }
+
+    /**
+     * ¿El análisis corre aquí mismo en vez de encolarse?
+     *
+     * Solo cuando quien llama necesita la decisión de vuelta: el comando de
+     * simulación y las pruebas que comprueban el razonamiento del agente sobre
+     * una petición concreta. En el camino real —un webhook de Meta— nunca:
+     * ahí lo que importa es soltar el worker cuanto antes.
+     */
+    private function analyzeInline(): bool
+    {
+        return (bool) config('marketing.inbound.analyze_inline', false);
     }
 
     /**

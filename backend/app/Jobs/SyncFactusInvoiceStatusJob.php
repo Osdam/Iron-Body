@@ -28,7 +28,17 @@ class SyncFactusInvoiceStatusJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public function __construct(public ?int $invoiceId = null) {}
+    public function __construct(public ?int $invoiceId = null)
+    {
+        // Carril de facturación. El nombre de la cola sale del mapa; el
+        // `retry_after` lo pone la CONEXIÓN con la que arranca el worker, y esa
+        // era la pieza rota: 90 s por defecto contra un timeout de 180 s. Con
+        // un solo proceso no llegó a doler; con dos, un Factus lento habría
+        // sido reservado por el segundo mientras el primero seguía emitiendo, y
+        // eso son dos números fiscales consumidos por la misma venta.
+        $lane = (array) config('queue.lanes.billing');
+        $this->onQueue($lane['queue'] ?? 'billing');
+    }
 
     public function handle(
         FactusClient $client,

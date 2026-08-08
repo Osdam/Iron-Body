@@ -63,6 +63,13 @@ return [
         'auto_execute'  => filter_var(env('MARKETING_INBOUND_AUTO_EXECUTE', false), FILTER_VALIDATE_BOOLEAN),
         // Guardar el evento crudo de Meta en metadata (debug). Off por defecto.
         'store_raw_payload' => filter_var(env('MARKETING_INBOUND_STORE_RAW_PAYLOAD', false), FILTER_VALIDATE_BOOLEAN),
+        // ¿El agente piensa EN LÍNEA, dentro de la misma ejecución que guardó
+        // el mensaje? Falso en el camino real: la llamada al modelo se despacha
+        // al carril `agent` para que el worker que atiende a Meta quede libre
+        // en el acto. Solo se enciende donde alguien espera la decisión de
+        // vuelta —el comando de simulación y las pruebas del razonamiento—,
+        // porque ahí no hay un cliente al otro lado del teléfono.
+        'analyze_inline' => filter_var(env('MARKETING_INBOUND_ANALYZE_INLINE', false), FILTER_VALIDATE_BOOLEAN),
         // Tipos que el CEREBRO COMERCIAL puede analizar por sí mismo. Ojo: NO
         // es la lista de lo que el inbox acepta. El inbox guarda y muestra todo
         // lo que Meta entregue; esta lista decide únicamente qué puede leer la
