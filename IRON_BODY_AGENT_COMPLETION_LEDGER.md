@@ -578,3 +578,17 @@ sin registrar. Cero mensajes reales y cero operaciones financieras de prueba.
 **Fase F**: verificación integral pre-Meta —50 flujos E2E, concurrencia,
 inyección de fallos, seguridad, accesibilidad y matriz final—. El proyecto
 **no está terminado** hasta cerrarla.
+
+### Fase F — parcial
+
+Cubierto y verificado: baseline, suites completas (2.182 backend · 107 + 13
+frontend · builds), concurrencia (5 carreras), seguridad (13 comprobaciones),
+validación visual en **producción real** a 4 resoluciones sobre Inbox,
+Analítica y Supervisión, rendimiento comparado, y el checklist de activación en
+Meta documentado sin ejecutar.
+
+**Sin cubrir**: los 50 flujos E2E como suite nombrada, inyección sistemática de
+fallos (F.6), simulación del ciclo comercial largo (F.9), ensayo de vuelta
+atrás (F.12) y el repaso completo de documentación (F.13).
+
+**El proyecto NO está PRE-META READY.** Falta cerrar esos cinco puntos.
