@@ -83,7 +83,10 @@
       "Bash(php -l app/Services/IronAiRealtimeService.php)",
       "Bash(php -l database/seeders/ProductSeeder.php)",
       "Bash(grep -rn 'plan_id\\\\|activateMembership\\\\|extendMembership\\\\|memberships->\\\\|MembershipService\\\\|->plan_id ?\\\\|if \\($plan\\\\|if \\(! $plan\\\\|if \\($tx->plan_id' app/Services/EpaycoPaymentService.php)",
-      "Bash(php -l app/Http/Controllers/Api/EpaycoPaymentController.php)"
+      "Bash(php -l app/Http/Controllers/Api/EpaycoPaymentController.php)",
+      "Bash(git -C d:/Github/Iron-Body log --oneline -30 --all)",
+      "Bash(php -l app/Console/Commands/GrantTesterDemoAccess.php)",
+      "Bash(php artisan *)"
     ],
     "additionalDirectories": [
       "D:\\Github\\Iron_Body_App\\lib\\core\\config",
