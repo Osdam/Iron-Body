@@ -33,6 +33,15 @@ class NextBestActionEngine
     public function __construct(private readonly SegmentCalculator $segments) {}
 
     /**
+     * Días antes del vencimiento en los que la renovación pasa a ser el objetivo.
+     *
+     * Vive aquí y no repetido en dos reglas porque son dos las que lo necesitan
+     * —la de renovación para activarse y la de acompañamiento para apartarse— y
+     * dos números que tienen que coincidir acaban no coincidiendo.
+     */
+    public const RENEWAL_WINDOW_DAYS = 10;
+
+    /**
      * Evalúa un sujeto y devuelve la decisión, sin persistir nada.
      *
      * @return array{goal:string,action:string,offer:?string,reason:string,confidence:float,
@@ -92,11 +101,34 @@ class NextBestActionEngine
         $memberId = $subject->member?->id;
 
         return DB::transaction(function () use ($decision, $subject, $leadId, $memberId, $correlationId) {
+            /*
+             * Se busca la oportunidad de este objetivo abierta O DESPLAZADA.
+             *
+             * Incluir las desplazadas no es un detalle: sin eso, un objetivo que
+             * va y viene —un socio mensual alterna «acompañar» a mitad de ciclo
+             * con «renovar» los últimos diez días— crea una fila nueva en cada
+             * vaivén. Una simulación de seis meses dejó 34 filas por persona.
+             *
+             * Y lo caro no es el ruido en el histórico, es que cada fila nueva
+             * nace con `attempts` en cero. El techo de intentos —lo único que
+             * impide insistirle a alguien más veces de las permitidas— se
+             * reiniciaba solo, cada vez que el objetivo se alejaba y volvía.
+             *
+             * Nunca se revive una RECHAZADA ni una GANADA: un «no» del cliente y
+             * una venta cerrada son hechos, no estados intermedios. Solo se
+             * recupera lo que desplazó el propio motor.
+             */
             $existing = CommercialOpportunity::query()
                 ->where('goal', $decision['goal'])
-                ->whereIn('status', CommercialVocabulary::OPEN_STATUSES)
+                ->where(function ($q) {
+                    $q->whereIn('status', CommercialVocabulary::OPEN_STATUSES)
+                        ->orWhere(fn ($q2) => $q2
+                            ->where('status', CommercialVocabulary::STATUS_CANCELLED)
+                            ->where('outcome', 'superseded'));
+                })
                 ->when($leadId !== null, fn ($q) => $q->where('marketing_lead_id', $leadId))
                 ->when($leadId === null && $memberId !== null, fn ($q) => $q->where('member_id', $memberId))
+                ->orderByDesc('id')
                 ->lockForUpdate()
                 ->first();
 
@@ -124,7 +156,17 @@ class NextBestActionEngine
                 // Se refresca la decisión pero NO se reinician los intentos:
                 // recalcular no puede convertirse en una vía para insistir más
                 // veces de las permitidas.
-                $existing->forceFill($attributes)->save();
+                $existing->forceFill($attributes + [
+                    // Vuelve a estar vigente si venía desplazada. Se limpia el
+                    // desenlace para no dejar una fila abierta que dice a la vez
+                    // que fue reemplazada.
+                    'status' => CommercialVocabulary::STATUS_OPEN,
+                    'outcome' => null,
+                    'outcome_reason' => null,
+                    'closed_at' => null,
+                ])->save();
+
+                $this->supersedeOthers($existing, $leadId, $memberId);
 
                 return $existing;
             }
@@ -142,8 +184,63 @@ class NextBestActionEngine
                 'estimated_value' => $opportunity->estimated_value,
             ]);
 
+            $this->supersedeOthers($opportunity, $leadId, $memberId);
+
             return $opportunity;
         });
+    }
+
+    /**
+     * Cierra los objetivos que este acaba de dejar obsoletos.
+     *
+     * `decide()` devuelve UN objetivo: el siguiente mejor. La deduplicación por
+     * objetivo evitaba dos filas del mismo, pero nada cerraba las de los
+     * objetivos anteriores, así que se acumulaban decisiones de momentos
+     * distintos y contradictorias entre sí. Una simulación de tres semanas dejó
+     * estas tres vivas a la vez sobre la misma persona:
+     *
+     *   collect_data         «todavía no sabemos qué busca»
+     *   complete_onboarding  «es miembro nuevo y todavía no ha venido»
+     *   increase_adherence   «miembro nuevo que ya está viniendo»
+     *
+     * Las dos últimas se contradicen literalmente. Con las tres abiertas, lo que
+     * acabe recibiendo el cliente depende del orden en que alguien las lea, y en
+     * el peor caso es una invitación a su valoración inicial a alguien que lleva
+     * tres semanas entrenando tres veces por semana. Eso no es un objetivo mal
+     * elegido: es haber perdido el contexto.
+     *
+     * Solo se tocan las que abrió el MOTOR. Una oportunidad creada por una
+     * persona representa un compromiso humano —una llamada acordada, una
+     * excepción autorizada— y no la puede cerrar un recálculo.
+     */
+    private function supersedeOthers(CommercialOpportunity $winner, ?int $leadId, ?int $memberId): void
+    {
+        $stale = CommercialOpportunity::query()
+            ->whereIn('status', CommercialVocabulary::OPEN_STATUSES)
+            ->where('id', '!=', $winner->id)
+            ->where('created_by', 'engine')
+            ->when($leadId !== null, fn ($q) => $q->where('marketing_lead_id', $leadId))
+            ->when($leadId === null && $memberId !== null, fn ($q) => $q->where('member_id', $memberId))
+            ->get();
+
+        foreach ($stale as $opportunity) {
+            $opportunity->forceFill([
+                'status' => CommercialVocabulary::STATUS_CANCELLED,
+                'outcome' => 'superseded',
+                // Queda escrito QUÉ lo reemplazó: sin eso, el historial dice que
+                // alguien canceló una oportunidad y no por qué.
+                'outcome_reason' => 'reemplazada por el objetivo '.$winner->goal,
+                'closed_at' => now(),
+            ])->save();
+        }
+
+        if ($stale->isNotEmpty()) {
+            ChannelLog::info('commercial.opportunity.superseded', [
+                'winner_id' => $winner->id,
+                'winner_goal' => $winner->goal,
+                'superseded' => $stale->pluck('goal')->all(),
+            ]);
+        }
     }
 
     /** Completa la decisión con los valores por defecto que faltan. */
@@ -269,6 +366,41 @@ class NextBestActionEngine
             return null;
         }
 
+        /*
+         * Si se le está venciendo, la continuidad manda sobre el acompañamiento.
+         *
+         * Las dos ventanas se solapan SIEMPRE en el plan mensual: con 30 días de
+         * vigencia, a partir del día 20 la persona es a la vez «miembro nuevo»
+         * (≤30 días) y «se le vence» (≤10 días). Como esta regla va antes que la
+         * de renovación, un socio mensual no llegaba nunca a tener el objetivo de
+         * renovar en su primer ciclo: justo en la ventana que decide si sigue o
+         * no, el motor estaba ocupado consolidándole el hábito.
+         *
+         * Y no es intercambiable: el acompañamiento se puede dar mañana, el
+         * vencimiento no. Sin renovación no hay hábito que consolidar.
+         */
+        if ($s->daysToExpiry !== null
+            && $s->daysToExpiry >= 0
+            && $s->daysToExpiry <= self::RENEWAL_WINDOW_DAYS) {
+            return null;
+        }
+
+        /*
+         * «No ha venido nunca» y «no ha venido últimamente» no son lo mismo.
+         *
+         * `attendancesLast30Days` mide una ventana, no una historia. Para un
+         * socio que renueva, la fecha de inicio se mueve con la renovación, así
+         * que alguien que vino dos veces hace dos meses y desapareció vuelve a
+         * contar como «miembro nuevo con cero asistencias» y recibe la
+         * invitación a su valoración inicial. Es absurdo de leer —lleva dos
+         * meses apuntado— y además tapa el problema real: esa persona no es
+         * nueva, está a punto de irse, y la regla de rescate que existe para
+         * exactamente eso va después de esta y nunca llega a mirarla.
+         */
+        if ($s->attendancesLast30Days === 0 && $s->lastAttendanceAt !== null) {
+            return null; // que lo mire ruleRescueAtRisk: es retención, no alta
+        }
+
         if ($s->attendancesLast30Days === 0) {
             return [
                 'goal' => CommercialVocabulary::GOAL_COMPLETE_ONBOARDING,
@@ -348,7 +480,7 @@ class NextBestActionEngine
             return null;
         }
 
-        if ($s->daysToExpiry > 10 || $s->daysToExpiry < 0) {
+        if ($s->daysToExpiry > self::RENEWAL_WINDOW_DAYS || $s->daysToExpiry < 0) {
             return null;
         }
 
