@@ -19,6 +19,48 @@ alguien lo intente, porque `META_ENABLED=false` corta antes de la red.
       mensajes por la app y pasa a llegar solo al CRM.
 - [ ] Hacer copia de seguridad de la base de datos.
 
+## 0.b Respaldo, antes de nada más
+
+**Esto bloquea el go-live, no la preparación.** A fecha de la auditoría F.13 no
+hay automatización: `crontab` no tiene ninguna entrada de respaldo, no hay
+temporizador de systemd, `archive_mode` de PostgreSQL está en `off`, y el volcado
+completo más reciente es manual y del 1 de julio de 2026.
+
+Mientras Meta está apagado eso es un riesgo acotado: los datos cambian despacio.
+En el momento en que el número se registra empiezan a entrar conversaciones de
+clientes, que son irremplazables —no se pueden volver a pedir—. Un volcado de
+hace cinco semanas significa perder cinco semanas de conversaciones y pagos.
+
+Antes del OTP tiene que existir:
+
+- volcado de PostgreSQL automatizado (cron o timer), comprimido;
+- retención declarada y permisos `0600` en el destino;
+- **una restauración probada** sobre una base desechable — un respaldo que nunca
+  se restauró es una suposición, no un respaldo;
+- aviso cuando el respaldo falle (un respaldo silencioso que lleva un mes roto es
+  el escenario habitual).
+
+Y justo antes del OTP, un snapshot manual de: base de datos, `backend/`,
+`frontend/dist`, `/etc/nginx`, `/etc/supervisor/conf.d`,
+`/etc/systemd/system/ironbody-*`, y el inventario de variables de entorno **por
+nombre, sin valores**.
+
+## 0.c Rotación de credenciales
+
+En `/root/backups/` hay un volcado de entorno (`env-before-guard-*`) y en la
+máquina de desarrollo un `backend/.env.backup-*`. Ninguno se ha versionado nunca
+—el histórico de git está limpio— y los dos están a `0600`, así que no hay fuga
+demostrada. Pero son copias de credenciales fuera del gestor de secretos.
+
+Antes de registrar el número, rotar y volver a desplegar:
+
+- `APP_KEY` no: rotarla invalida sesiones y datos cifrados. Se deja constancia.
+- Token de acceso de Meta y App Secret: se generan nuevos en la activación, así
+  que la rotación es implícita.
+- `OPENAI_API_KEY`, llaves de Wompi (`private`, `integrity`, `events`),
+  credenciales de Factus, contraseña de PostgreSQL y SMTP: **rotar**.
+- Tras rotar, borrar las copias sueltas y añadir `.env.backup-*` a `.gitignore`.
+
 ## 1. Registro administrativo
 
 - [ ] Entrar al Business Manager con la cuenta de Iron Body.
