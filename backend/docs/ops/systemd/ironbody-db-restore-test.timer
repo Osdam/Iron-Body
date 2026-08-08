@@ -1,0 +1,13 @@
+[Unit]
+Description=Iron Body · verificación semanal de restauración (lunes 04:30 Neiva)
+
+[Timer]
+# Semanal y no diaria: crea y destruye una base entera, y con 70 MB el coste es
+# bajo pero no nulo. Lunes temprano, después de que ya exista el respaldo del día.
+OnCalendar=Mon *-*-* 04:30:00 America/Bogota
+Persistent=true
+RandomizedDelaySec=300
+Unit=ironbody-db-restore-test.service
+
+[Install]
+WantedBy=timers.target

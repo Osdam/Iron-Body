@@ -66,6 +66,9 @@ class ChannelHealthDetector
             // otros cuatro funcionan y por fuera todo parezca normal.
             'unattendedQueues',
             'queueBacklog',
+            // Los respaldos los hace systemd, pero si fallan en silencio es como
+            // no tenerlos. Esto los mira.
+            'backupsUnhealthy',
         ];
 
         $incidents = [];
@@ -542,6 +545,88 @@ class ChannelHealthDetector
                 ])->all(),
                 'hint' => 'Hay workers vivos pero no dan: es capacidad, no avería.',
             ],
+        ]);
+    }
+
+    /**
+     * El respaldo falló, o lleva demasiado sin ejecutarse, o nunca se verificó.
+     *
+     * La aplicación no respalda nada —eso es un timer de systemd— pero es el
+     * único sitio desde el que alguien mira el estado del sistema. Un respaldo
+     * roto que nadie ve equivale a no tener respaldos, y con Meta encendido lo
+     * que se pierde son conversaciones de clientes, que no se pueden volver a
+     * pedir.
+     *
+     * Severidad ALTA y no crítica: no hay una avería en curso, hay una red de
+     * seguridad ausente. Crítico se reserva para lo que ya está rompiéndose.
+     */
+    private function backupsUnhealthy(): ?Incident
+    {
+        $cfg = (array) config('observability.backups', []);
+
+        if (! ($cfg['monitoring_enabled'] ?? false)) {
+            return null; // esta máquina no es la que respalda
+        }
+
+        $problemas = [];
+        $evidencia = [];
+
+        foreach ([
+            ['file' => $cfg['status_file'] ?? null, 'kind' => 'respaldo',
+             'stale' => ((int) ($cfg['stale_after_hours'] ?? 30)) * 3600, 'time' => 'finished_at'],
+            ['file' => $cfg['restore_status_file'] ?? null, 'kind' => 'verificación de restauración',
+             'stale' => ((int) ($cfg['restore_stale_after_days'] ?? 10)) * 86400, 'time' => 'finished_at'],
+        ] as $check) {
+            $path = (string) ($check['file'] ?? '');
+
+            if ($path === '' || ! is_readable($path)) {
+                // Sin fichero de estado no se puede afirmar que haya respaldos.
+                // Se dice, en vez de asumir que van bien.
+                $problemas[] = sprintf('no hay constancia de %s', $check['kind']);
+                $evidencia[$check['kind']] = ['status' => 'sin fichero de estado', 'path' => $path];
+
+                continue;
+            }
+
+            $estado = json_decode((string) file_get_contents($path), true);
+
+            if (! is_array($estado)) {
+                $problemas[] = sprintf('el estado de %s no se puede leer', $check['kind']);
+
+                continue;
+            }
+
+            $edad = time() - strtotime((string) ($estado[$check['time']] ?? '@0'));
+
+            $evidencia[$check['kind']] = [
+                'result' => $estado['result'] ?? 'desconocido',
+                'age_hours' => (int) round($edad / 3600),
+                'size_bytes' => $estado['size_bytes'] ?? null,
+                'duration_seconds' => $estado['duration_seconds'] ?? $estado['restore_seconds'] ?? null,
+                'next_run' => $estado['next_run'] ?? null,
+            ];
+
+            if (($estado['result'] ?? '') !== 'ok') {
+                $problemas[] = sprintf('%s falló: %s', $check['kind'], mb_substr((string) ($estado['message'] ?? ''), 0, 120));
+            } elseif ($edad > $check['stale']) {
+                $problemas[] = sprintf('%s tiene %d h de antigüedad', $check['kind'], (int) round($edad / 3600));
+            }
+        }
+
+        if ($problemas === []) {
+            return null;
+        }
+
+        return $this->recorder->record([
+            'source' => 'backups',
+            'kind' => 'backup_unhealthy',
+            'fingerprint_keys' => ['estado'],
+            'title' => 'Los respaldos de la base no están sanos: '.implode(' · ', $problemas),
+            'severity' => Incident::SEVERITY_HIGH,
+            'evidence' => array_merge($evidencia, [
+                'check_command' => 'systemctl status ironbody-db-backup.timer',
+                'runbook' => 'backend/docs/ops/BACKUPS.md',
+            ]),
         ]);
     }
 

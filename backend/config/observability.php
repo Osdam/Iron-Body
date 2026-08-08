@@ -61,6 +61,27 @@ return [
         'unattended_after_seconds' => (int) env('QUEUE_UNATTENDED_AFTER_SECONDS', 120),
     ],
 
+    /*
+    | Respaldos. La aplicación no los hace —eso es systemd— pero sí los VIGILA:
+    | un respaldo que lleva una semana fallando en silencio es indistinguible de
+    | no tener respaldos, y esa es justo la situación que había antes de F.13.
+    |
+    | Los scripts dejan su resultado en estos ficheros, sin secretos dentro.
+    */
+    'backups' => [
+        // Solo el servidor que TIENE los timers puede opinar sobre sus respaldos.
+        // En desarrollo y en la suite no hay respaldos que vigilar, y un detector
+        // que alarma ahí enseña a ignorar la alarma. Se enciende explícitamente
+        // en producción y no por omisión.
+        'monitoring_enabled' => filter_var(env('BACKUP_MONITORING_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'status_file' => env('BACKUP_STATUS_FILE', '/var/lib/ironbody/backup-status.json'),
+        'restore_status_file' => env('RESTORE_STATUS_FILE', '/var/lib/ironbody/restore-test-status.json'),
+        // Diario a las 03:15: a las 30 h ya se saltó una ejecución entera.
+        'stale_after_hours' => (int) env('BACKUP_STALE_AFTER_HOURS', 30),
+        // La verificación es semanal; 10 días da margen a un lunes festivo.
+        'restore_stale_after_days' => (int) env('RESTORE_STALE_AFTER_DAYS', 10),
+    ],
+
     // Remediación automática. Doble llave: el flag general Y la allowlist.
     // Nada que no esté nombrado aquí puede ejecutarse solo, jamás.
     'remediation' => [

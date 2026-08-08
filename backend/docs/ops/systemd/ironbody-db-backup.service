@@ -1,0 +1,18 @@
+[Unit]
+# Respaldo diario de PostgreSQL. Ver /usr/local/sbin/ironbody-db-backup.sh
+Description=Iron Body · respaldo de PostgreSQL
+Documentation=file:///var/www/api/backend/docs/ops/BACKUPS.md
+After=postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ironbody-db-backup.sh
+User=root
+# El respaldo no compite con quien esté usando el gimnasio: prioridad baja de
+# CPU y de disco. Tarda unos segundos más y no se nota desde fuera.
+Nice=10
+IOSchedulingClass=idle
+# Si el volcado se queda colgado, se corta: un respaldo eterno bloquea el timer
+# del día siguiente y deja de haber respaldos sin que nadie lo note.
+TimeoutStartSec=1800

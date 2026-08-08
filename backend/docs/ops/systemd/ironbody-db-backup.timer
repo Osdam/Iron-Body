@@ -1,0 +1,18 @@
+[Unit]
+Description=Iron Body · respaldo diario de PostgreSQL (03:15 hora de Neiva)
+
+[Timer]
+# 03:15 en Neiva. Se declara la zona explícitamente porque el servidor corre en
+# UTC: sin esto, "03:15" habría sido 22:15 del día anterior en Neiva, que es
+# justo cuando el gimnasio todavía está cerrando.
+OnCalendar=*-*-* 03:15:00 America/Bogota
+# Si el servidor estuvo apagado a esa hora, se ejecuta al arrancar en vez de
+# saltarse el día.
+Persistent=true
+# Dispersión de un minuto: evita que el respaldo caiga en el mismo segundo que
+# cualquier otra tarea programada.
+RandomizedDelaySec=60
+Unit=ironbody-db-backup.service
+
+[Install]
+WantedBy=timers.target

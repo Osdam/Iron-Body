@@ -1,0 +1,13 @@
+[Unit]
+Description=Iron Body · verificación de restauración sobre base desechable
+Documentation=file:///var/www/api/backend/docs/ops/BACKUPS.md
+After=postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ironbody-db-restore-test.sh
+User=root
+Nice=15
+IOSchedulingClass=idle
+TimeoutStartSec=3600
