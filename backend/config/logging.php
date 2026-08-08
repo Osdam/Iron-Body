@@ -97,6 +97,14 @@ return [
             'path' => storage_path('logs/channel.log'),
             'level' => env('CHANNEL_LOG_LEVEL', 'info'),
             'days' => env('CHANNEL_LOG_DAYS', 30),
+            // Este log lo escriben tres identidades distintas: php-fpm y los
+            // workers como www-data, y el scheduler —que en este servidor
+            // arrancaba desde el crontab de root—. Sin permiso de grupo, el
+            // primero que crea el fichero del día deja fuera a los demás: eso
+            // es lo que hacía que el webhook de Meta contestara 500 en vez de
+            // 403. El 0664 es la mitad del arreglo; la otra es que el scheduler
+            // no corra como root (ver docs/ops/ROTACION-CREDENCIALES.md).
+            'permission' => 0664,
             'formatter' => Monolog\Formatter\JsonFormatter::class,
             'formatter_with' => [
                 'batchMode' => Monolog\Formatter\JsonFormatter::BATCH_MODE_JSON,

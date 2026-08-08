@@ -79,7 +79,39 @@ class ChannelLog
         $logger = self::hasChannel() ? Log::channel(self::CHANNEL) : null;
         $logger ??= Log::getFacadeRoot();
 
-        $logger->{$level}($event, $payload);
+        try {
+            $logger->{$level}($event, $payload);
+        } catch (\Throwable $e) {
+            // Escribir el log puede fallar por causas que no tienen nada que ver
+            // con la petición: en producción el cron del scheduler corría como
+            // root y dejaba `channel-<fecha>.log` en propiedad de root, con lo
+            // que php-fpm (www-data) no podía abrirlo en modo append. Monolog
+            // lanzaba, la excepción subía por el controlador y el webhook de
+            // Meta contestaba 500 —incluido el camino que RECHAZA una firma
+            // inválida, que ya había hecho su trabajo correctamente—.
+            //
+            // Con Meta enviando de verdad, un 500 sostenido no es un log feo:
+            // Meta reintenta y acaba dando de baja la suscripción del webhook.
+            // Perder la línea de log es un daño menor que perder el canal.
+            self::fallback($level, $event, $payload, $e);
+        }
+    }
+
+    /**
+     * Último intento por el canal por defecto, y silencio si tampoco puede.
+     *
+     * No se re-lanza nunca: el contrato de esta clase es que observar no cambia
+     * el comportamiento de lo observado.
+     */
+    private static function fallback(string $level, string $event, array $payload, \Throwable $original): void
+    {
+        try {
+            Log::getFacadeRoot()->{$level}($event, $payload + [
+                'channel_log_degraded' => class_basename($original),
+            ]);
+        } catch (\Throwable) {
+            // Sin sitio donde escribir. Se pierde la línea, no la petición.
+        }
     }
 
     /** Esqueleto común a toda línea del canal. */
