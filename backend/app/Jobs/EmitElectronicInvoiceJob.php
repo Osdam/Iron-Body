@@ -311,6 +311,38 @@ class EmitElectronicInvoiceJob implements ShouldQueue
             return;
         }
 
+        /*
+         * Un 2xx no basta para dar por validado un documento fiscal.
+         *
+         * El CUFE y el número son lo que hace que una factura EXISTA ante la
+         * DIAN: el primero la identifica de forma única, el segundo consume un
+         * consecutivo del rango autorizado. Una respuesta correcta a la que le
+         * falten es la clase de fallo que más se parece a un éxito —código 201,
+         * cuerpo presente, ningún error a la vista— y la que peor termina:
+         * `validated` es TERMINAL, así que el comprobante nunca se reintentaría
+         * y el panel afirmaría tener un documento que no se puede defender en
+         * una inspección.
+         *
+         * Queda en `error`, que sí es recuperable, con el motivo escrito.
+         */
+        if (empty($mapped['cufe']) || empty($mapped['number'])) {
+            $invoice->markError(
+                'Factus respondió sin los campos que identifican el documento'
+                .' (CUFE: '.($mapped['cufe'] ? 'sí' : 'no')
+                .', número: '.($mapped['number'] ? 'sí' : 'no').').'
+                .' No se marca validada: requiere comprobación en Factus antes de reintentar.',
+            );
+
+            Log::warning('billing.incomplete_validation_response', [
+                'invoice_id' => $invoice->id,
+                'has_cufe' => ! empty($mapped['cufe']),
+                'has_number' => ! empty($mapped['number']),
+                'dian_status' => $mapped['dian_status'],
+            ]);
+
+            return;
+        }
+
         // Archivos del create (si vinieron inline).
         $files = $storage->store($invoice, $mapped);
 

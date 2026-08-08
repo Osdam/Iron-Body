@@ -260,7 +260,29 @@ class MetaMediaService
             // Nombre ALEATORIO. El nombre original del cliente jamás forma
             // parte de la ruta: es la vía directa al path traversal.
             $path = $this->buildPath($attachment, $detected, $sha);
-            Storage::disk($disk)->put($path, $binary);
+
+            /*
+             * El resultado de la escritura se MIRA.
+             *
+             * `put()` devuelve false cuando el disco no admite la escritura
+             * —montaje caído, permisos, cuota— y sin comprobarlo el flujo seguía
+             * hasta marcar el adjunto como `stored`. Es el peor desenlace
+             * posible de esta familia: no se pierde el archivo con un error, se
+             * pierde con un éxito. El inbox enseña un comprobante que no existe,
+             * la descarga no se reintenta porque ya consta guardada, y nadie se
+             * entera hasta que alguien va a abrirlo meses después.
+             */
+            if (Storage::disk($disk)->put($path, $binary) === false) {
+                $this->fail($attachment, 'storage_write_failed');
+
+                ChannelLog::error('media.store_failed', [
+                    'attachment_id' => $attachment->id,
+                    'disk' => $disk,
+                    'size_bytes' => strlen($binary),
+                ]);
+
+                return false;
+            }
         }
 
         $retention = (int) config('marketing.media.retention_days', 180);
