@@ -95,6 +95,46 @@ class SecretExposureTest extends TestCase
     }
 
     /**
+     * La configuración COMPILADA cuenta como fichero con secretos.
+     *
+     * En producción el `.env` estaba a 600 y el comando decía que no había nada
+     * expuesto, mientras `bootstrap/cache/config.php` —el volcado de `config()`
+     * con APP_KEY, la contraseña de la base, Wompi, Meta, OpenAI y Factus ya
+     * resueltos— estaba a 664. Lo escribe `config:cache` con el umask del
+     * proceso, así que no basta con arreglarlo una vez: vuelve a nacer legible
+     * en cada despliegue. Esta prueba fija que el comando lo mire.
+     */
+    public function test_the_compiled_config_cache_is_not_world_readable(): void
+    {
+        $path = base_path('bootstrap/cache/config.php');
+        $existed = File::exists($path);
+        $originalPerms = $existed ? (fileperms($path) & 0777) : null;
+
+        if (! $existed) {
+            File::ensureDirectoryExists(dirname($path));
+            File::put($path, "<?php return ['app' => ['key' => 'base64:loquesea']];");
+        }
+
+        try {
+            chmod($path, 0664);
+            clearstatcache(true, $path);
+
+            $this->artisan('security:check-secret-exposure')->assertFailed();
+
+            chmod($path, 0600);
+            clearstatcache(true, $path);
+
+            $this->artisan('security:check-secret-exposure')->assertSuccessful();
+        } finally {
+            if ($existed) {
+                chmod($path, $originalPerms);
+            } else {
+                File::delete($path);
+            }
+        }
+    }
+
+    /**
      * Los ficheros de ejemplo SÍ pueden ser legibles, pero justo por eso no
      * pueden llevar valores de verdad: son los que acaban en Git.
      */

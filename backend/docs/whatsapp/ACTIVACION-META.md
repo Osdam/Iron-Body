@@ -88,11 +88,17 @@ En el servidor, en `/var/www/api/backend/.env`:
 
 ```
 META_WHATSAPP_PHONE_NUMBER_ID=<nuevo>
-META_WABA_ID=<nuevo>
+META_WHATSAPP_BUSINESS_ACCOUNT_ID=<WABA ID nuevo>
 META_ACCESS_TOKEN=<token permanente>
 META_APP_SECRET=<app secret>
 META_VERIFY_TOKEN=<cadena larga inventada, la misma que en el paso 4>
+META_WEBHOOK_SECRET=<opcional: si se omite, se usa META_APP_SECRET>
 ```
+
+> La variable del WABA es `META_WHATSAPP_BUSINESS_ACCOUNT_ID`. Este documento
+> decía `META_WABA_ID`, que **no la lee nadie** (`config/meta.php` sólo mira la
+> primera): escribirla habría dejado el WABA anterior en uso y el fallo no se
+> vería hasta intentar operar sobre la cuenta.
 
 Después: `php artisan config:clear && php artisan config:cache`.
 
@@ -102,10 +108,15 @@ abrir la puerta.
 
 ## 4. Webhook
 
-- [ ] URL: `https://api.ironbodyneiva.cloud/api/meta/webhook`
+- [ ] URL: `https://api.ironbodyneiva.cloud/api/webhooks/meta`
 - [ ] Verify token: el mismo que `META_VERIFY_TOKEN`.
 - [ ] Suscribir los campos: `messages`, `message_template_status_update`.
 - [ ] Comprobar que Meta marca la verificación como correcta.
+
+> La URL es `/api/webhooks/meta`. Este documento decía `/api/meta/webhook`, que
+> **no existe** (`routes/api.php` registra `webhooks/meta` en GET y POST, y es la
+> que imprime `php artisan meta:doctor`). Con la URL invertida, la verificación
+> de Meta falla con 404 y no llega ni un solo mensaje entrante.
 
 ## 5. Comprobación antes de encender
 

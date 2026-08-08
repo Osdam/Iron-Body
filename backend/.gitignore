@@ -1,7 +1,10 @@
 *.log
 .DS_Store
 .env
-.env.backup
+# Con comodín: `.env.backup` exacto dejaba fuera `.env.backup-antes-de-X`,
+# que es como se llaman las copias que se hacen de verdad. Una de ellas
+# estaba a un `git add -A` de acabar en el histórico.
+.env.backup*
 .env.save
 .env.production
 *.env.save

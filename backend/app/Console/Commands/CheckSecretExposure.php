@@ -13,12 +13,20 @@ use Illuminate\Console\Command;
  * cualquier usuario del sistema. Nadie se dio cuenta durante meses porque
  * ninguna alarma miraba eso.
  *
- * Se revisan tres cosas:
+ * Se revisan cuatro cosas:
  *
  *  1. Que ningún fichero con secretos tenga permiso de lectura para «otros».
  *  2. Que no haya ficheros de entorno DENTRO del docroot público, donde nginx
  *     podría servirlos por muy bien configurado que esté hoy.
  *  3. Que el `.env` en uso no esté a la vista.
+ *  4. Que la CONFIGURACIÓN COMPILADA no esté a la vista. Esta se añadió después
+ *     de encontrarla en producción a 664: `config:cache` vuelca en
+ *     `bootstrap/cache/config.php` el valor RESUELTO de todo —APP_KEY, la
+ *     contraseña de la base, Wompi, Meta, OpenAI, Factus— y lo escribe con el
+ *     umask del proceso, que deja 644 por defecto. El `.env` estaba
+ *     impecable a 600 y esta orden decía que no había nada expuesto, mientras
+ *     al lado había una copia legible de todos los secretos. Proteger el
+ *     original y no su copia compilada es no proteger nada.
  *
  * Devuelve código de salida 1 si encuentra algo, para poder engancharlo a un
  * despliegue o a un cron y que falle de forma visible.
@@ -52,6 +60,7 @@ class CheckSecretExposure extends Command
         $findings = array_merge(
             $this->worldReadableSecrets(),
             $this->envInsidePublicRoot(),
+            $this->worldReadableCompiledConfig(),
         );
 
         if ($this->option('json')) {
@@ -77,8 +86,40 @@ class CheckSecretExposure extends Command
         );
         $this->newLine();
         $this->line('  Arreglo: <fg=yellow>chmod 600 <fichero></> y mover los respaldos fuera del directorio de la aplicación.');
+        $this->line('  La configuración compilada se vuelve a escribir en cada <fg=yellow>config:cache</>:');
+        $this->line('  el chmod hay que repetirlo ahí, no una sola vez.');
 
         return self::FAILURE;
+    }
+
+    /**
+     * La configuración compilada (`bootstrap/cache/config.php`) legible por
+     * «otros».
+     *
+     * No se comprueba si "contiene secretos": si existe, los contiene. Es el
+     * volcado literal de `config()` con los valores ya resueltos desde el .env.
+     *
+     * @return array<int, array<string,string>>
+     */
+    private function worldReadableCompiledConfig(): array
+    {
+        $path = base_path('bootstrap/cache/config.php');
+
+        if (! is_file($path)) {
+            return []; // sin cachear no hay copia que proteger
+        }
+
+        $perms = fileperms($path);
+
+        if (($perms & 0004) === 0) {
+            return [];
+        }
+
+        return [[
+            'issue' => 'configuración compilada legible por cualquier usuario',
+            'permissions' => substr(sprintf('%o', $perms), -4),
+            'path' => $path,
+        ]];
     }
 
     /**
