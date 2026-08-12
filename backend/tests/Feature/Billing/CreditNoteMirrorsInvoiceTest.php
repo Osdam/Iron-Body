@@ -70,12 +70,18 @@ class CreditNoteMirrorsInvoiceTest extends TestCase
         $capturado = null;
         Http::fake([
             '*/oauth/token' => Http::response(['access_token' => 'tok', 'expires_in' => 3600]),
+            // Forma REAL de la respuesta productiva de credit-notes/validate:
+            // la nota va en `data` (number + cude) y `data.bill` es la factura
+            // que se anula. Copiada de la respuesta de NC1.
             '*/credit-notes/validate' => function ($request) use (&$capturado) {
                 $capturado = $request->data();
 
-                return Http::response(['data' => ['bill' => [
-                    'id' => 'NC-1', 'number' => 'IBNC1', 'cufe' => 'cufe-nc', 'status' => 'Validada',
-                ]]], 201);
+                return Http::response(['data' => [
+                    'number' => 'NC1',
+                    'cude' => 'cude-de-la-nota',
+                    'is_validated' => true,
+                    'bill' => ['number' => 'IBFE10', 'cufe' => 'cufe-original'],
+                ]], 201);
             },
             '*' => Http::response([], 200),
         ]);
@@ -165,5 +171,48 @@ class CreditNoteMirrorsInvoiceTest extends TestCase
 
         // Y la factura original sigue como estaba: nadie la anuló.
         $this->assertSame(InvoiceStatus::VALIDATED, $original->fresh()->status);
+    }
+
+    /**
+     * La respuesta de una nota credito trae la FACTURA REFERENCIADA en
+     * `data.bill`, y la nota en `data` con su propio numero y su CUDE.
+     *
+     * Pasandola por el mapeo de facturas, NC1 se guardo con el numero y el CUFE
+     * de IBFE10: el comprobante quedaba registrado como si fuese la factura que
+     * anula. Ante la DIAN la nota estaba bien; en el CRM apuntaba a otro sitio,
+     * y la descarga del PDF pedia el numero equivocado.
+     */
+    public function test_la_nota_credito_guarda_su_propio_numero_y_cude(): void
+    {
+        Http::fake([
+            '*/oauth/token' => Http::response(['access_token' => 'tok', 'expires_in' => 3600]),
+            '*/credit-notes/validate' => Http::response(['data' => [
+                'number' => 'NC1',
+                'cude' => 'cude-de-la-nota',
+                'is_validated' => true,
+                'links' => ['qr' => 'https://catalogo-vpfe.dian.gov.co/document/searchqr?documentkey=cude-de-la-nota'],
+                // Esto es la factura ANULADA, no la nota.
+                'bill' => ['number' => 'IBFE10', 'cufe' => 'cufe-de-la-factura'],
+            ]], 201),
+            '*' => Http::response([], 200),
+        ]);
+
+        $payment = $this->paidPayment();
+        $original = app(InvoicingService::class)->manualEmit('payment', $payment->id, finalConsumer: true);
+        $original->forceFill([
+            'status' => InvoiceStatus::VALIDATED->value,
+            'full_number' => 'IBFE10',
+            'cufe' => 'cufe-de-la-factura',
+        ])->save();
+
+        $nota = app(InvoicingService::class)->createCreditNote($original->fresh(), 'Anulacion');
+        app()->call([new EmitCreditNoteJob($nota->id), 'handle']);
+
+        $nota->refresh();
+        $this->assertSame(InvoiceStatus::CREDIT_NOTE_VALIDATED, $nota->status);
+        $this->assertSame('NC1', $nota->full_number, 'la nota debe guardar SU numero, no el de la factura');
+        $this->assertSame('cude-de-la-nota', $nota->cufe, 'una nota credito se identifica por su CUDE');
+        $this->assertNotSame('IBFE10', $nota->full_number);
+        $this->assertNotSame('cufe-de-la-factura', $nota->cufe);
     }
 }

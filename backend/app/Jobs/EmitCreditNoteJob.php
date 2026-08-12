@@ -190,7 +190,10 @@ class EmitCreditNoteJob implements ShouldQueue
         );
 
         if ($result['ok']) {
-            $mapped = $mapper->map($result['body']);
+            // mapCreditNote, no map: en esta respuesta `data.bill` es la factura
+            // que se anula. Con `map()` la nota se guardaba con el número y el
+            // CUFE de la factura referenciada en vez de los suyos.
+            $mapped = $mapper->mapCreditNote($result['body']);
             if ($mapped['is_validated']) {
                 $files = $storage->store($note, $mapped);
                 $note->markValidated(array_merge($files, [

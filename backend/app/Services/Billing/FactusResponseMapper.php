@@ -25,10 +25,36 @@ class FactusResponseMapper
      *   is_validated: bool, is_rejected: bool, reason: ?string
      * }
      */
-    public function map(array $body): array
+    /**
+     * Traduce la respuesta de una NOTA CRÉDITO.
+     *
+     * No vale `map()`: en la respuesta de una nota crédito, `data.bill` es la
+     * FACTURA REFERENCIADA, no el documento emitido. Al pasarla por `map()` se
+     * guardó en NC1 el número y el CUFE de IBFE10 —la factura que anula— y el
+     * comprobante quedó registrado como si fuese ella misma. La nota vive
+     * directamente en `data`, y su identificador único es el **CUDE**, no el
+     * CUFE.
+     *
+     * @param  array  $body  Cuerpo JSON ya decodificado.
+     * @return array<string,mixed> mismo shape que {@see map()}
+     */
+    public function mapCreditNote(array $body): array
     {
-        // Factus suele anidar el documento en data.bill / data.
-        $bill = Arr::get($body, 'data.bill', Arr::get($body, 'data', $body));
+        $mapped = $this->map(['data' => Arr::get($body, 'data', [])], skipBill: true);
+
+        // Trazabilidad hacia la factura anulada, que sí está en data.bill.
+        $mapped['references_number'] = Arr::get($body, 'data.bill.number');
+
+        return $mapped;
+    }
+
+    public function map(array $body, bool $skipBill = false): array
+    {
+        // Factus anida la FACTURA en data.bill. Para una nota crédito ese nodo
+        // es la factura referenciada, así que el llamador pide saltárselo.
+        $bill = $skipBill
+            ? Arr::get($body, 'data', $body)
+            : Arr::get($body, 'data.bill', Arr::get($body, 'data', $body));
 
         $number = $this->first($bill, ['number', 'document_number', 'invoice_number']);
         $prefix = $this->first($bill, ['prefix', 'numbering_range_prefix']);
