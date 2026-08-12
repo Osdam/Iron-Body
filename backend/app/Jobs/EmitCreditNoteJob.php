@@ -196,6 +196,14 @@ class EmitCreditNoteJob implements ShouldQueue
             $mapped = $mapper->mapCreditNote($result['body']);
             if ($mapped['is_validated']) {
                 $files = $storage->store($note, $mapped);
+
+                // Factus no devuelve PDF/XML en /validate: se descargan por
+                // número, desde el endpoint de notas crédito. Sin esto la nota
+                // quedaba sin copia privada — NC1 se emitió así.
+                $numero = $mapped['full_number'] ?: $mapped['number'];
+                if ($numero && empty($files['pdf_path'])) {
+                    $files = array_merge($files, $storage->fetchAndStore($note, $client, (string) $numero));
+                }
                 $note->markValidated(array_merge($files, [
                     'factus_id' => $mapped['factus_id'],
                     'number' => $mapped['number'],
