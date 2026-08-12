@@ -551,6 +551,36 @@ class AdministrativeEmissionTest extends TestCase
         Http::assertNothingSent();
     }
 
+    /**
+     * El guardarraíl tributario sobre el TOTAL debe seguir vivo en la ruta del
+     * payload congelado, que ahora es la normal.
+     *
+     * Leía `$built['snapshot']['tax_total'] ?? 0`, y `$built` sólo se define en
+     * la rama que reconstruye el payload. Con snapshot congelado la variable no
+     * existía, el operando caía al `?? 0` y la comprobación pasaba siempre.
+     * Nunca dio error: simplemente dejó de comprobar.
+     */
+    public function test_el_guardarrail_tributario_ve_el_impuesto_congelado(): void
+    {
+        $this->conBarreraDeProduccion();
+        Http::preventStrayRequests();
+        Queue::fake();
+
+        $payment = $this->payment(['method' => 'cash', 'reference' => 'REC-1004']);
+        $invoice = app(InvoicingService::class)->manualEmit('payment', $payment->id, finalConsumer: true);
+
+        // Un comprobante con IVA, emisor no responsable: debe abortar antes de
+        // tocar la red, no colarse por una variable indefinida.
+        $invoice->forceFill(['tax_total' => '15200.00'])->save();
+
+        app()->call([new EmitElectronicInvoiceJob($invoice->id), 'handle']);
+
+        $invoice->refresh();
+        $this->assertSame(InvoiceStatus::ERROR, $invoice->status);
+        $this->assertStringContainsString('IVA', (string) $invoice->failure_reason);
+        $this->assertNull($invoice->cufe);
+    }
+
     // ── Utilidad ──────────────────────────────────────────────────────────
 
     /**

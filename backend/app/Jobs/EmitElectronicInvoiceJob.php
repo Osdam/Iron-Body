@@ -201,7 +201,11 @@ class EmitElectronicInvoiceJob implements ShouldQueue
             'invoice_id' => $invoice->id,
             'reference_code' => $invoice->uuid,
             'email_requested' => (bool) ($payload['send_email'] ?? false),
-            'has_customer_email' => InvoiceDtoBuilder::hasValidEmail($built['snapshot']['customer_email'] ?? null),
+            // Del comprobante persistido, NO de `$built`: esa variable sólo
+            // existe en la rama que reconstruye el payload, así que en el camino
+            // normal —factura con snapshot congelado— estaba sin definir y el
+            // campo salía siempre en false.
+            'has_customer_email' => InvoiceDtoBuilder::hasValidEmail($invoice->customer_email),
         ]);
 
         // request_payload SANEADO y persistido ANTES de enviarlo: si la llamada
@@ -231,7 +235,13 @@ class EmitElectronicInvoiceJob implements ShouldQueue
             app(InvoiceEmissionGuard::class)->assertMayEmit($payload);
 
             // Doble comprobación tributaria: total del comprobante y cada línea.
-            $taxPolicy->assertNoVatAmount($built['snapshot']['tax_total'] ?? 0, 'factura '.$invoice->uuid);
+            // El total de impuesto se lee del COMPROBANTE, que es el snapshot
+            // fiscal congelado y existe en las dos ramas. Antes salía de
+            // `$built`, definida sólo cuando el payload se reconstruye: en el
+            // camino normal la variable no existía, el operando caía al `?? 0`
+            // y esta comprobación pasaba siempre pasara lo que pasara. La de
+            // cada línea (assertPayloadHasNoVat) sí funcionaba; ésta, no.
+            $taxPolicy->assertNoVatAmount($invoice->tax_total ?? 0, 'factura '.$invoice->uuid);
             $this->assertPayloadHasNoVat($payload, $taxPolicy, $invoice->uuid);
         } catch (Throwable $e) {
             $invoice->markError($e->getMessage());
