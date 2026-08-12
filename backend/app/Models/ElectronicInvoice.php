@@ -33,6 +33,8 @@ class ElectronicInvoice extends Model
         'request_payload', 'response_payload', 'failure_reason',
         'retry_count', 'last_attempt_at', 'issued_at', 'created_by_admin_id',
         'customer_email_sent_at', 'customer_email_status', 'customer_email_failure_reason',
+        // Autorización administrativa posterior (independiente de invoice_requested).
+        'manual_authorization_at', 'manual_authorization_note',
         // Pricing V2: payload congelado + conciliación.
         'payload_snapshot', 'line_items_snapshot', 'source_amount_snapshot',
         'reconciliation_status', 'reconciliation_difference', 'reconciled_at',
@@ -66,6 +68,7 @@ class ElectronicInvoice extends Model
         'reconciliation_difference' => 'decimal:2',
         'source_amount_snapshot' => 'decimal:2',
         'reconciled_at' => 'datetime',
+        'manual_authorization_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -169,6 +172,33 @@ class ElectronicInvoice extends Model
             'failure_reason' => $reason,
             'retry_count' => $this->retry_count + 1,
         ])->save();
+    }
+
+    // ── Autorización administrativa ─────────────────────────────────────────
+
+    /**
+     * ¿Un administrador autorizó expresamente ESTA emisión?
+     *
+     * Es la vía alternativa a la solicitud del cliente en el checkout
+     * (`invoice_requested`). Ambas son válidas; ninguna sustituye al resto de
+     * barreras (cobro real, duplicados, ambiente, conciliación).
+     */
+    public function isManuallyAuthorized(): bool
+    {
+        return $this->manual_authorization_at !== null;
+    }
+
+    /**
+     * ¿El comprobante ya salió hacia el proveedor alguna vez?
+     *
+     * Marca la frontera de lo que todavía se puede corregir: mientras sea
+     * false, el snapshot del adquiriente aún puede rehacerse; en cuanto hay
+     * número, CUFE o id de Factus, el documento existe fuera de este sistema y
+     * no se reescribe jamás.
+     */
+    public function hasBeenTransmitted(): bool
+    {
+        return filled($this->full_number) || filled($this->cufe) || filled($this->factus_id);
     }
 
     // ── Conciliación (guardarraíl pre-emisión) ──────────────────────────────
@@ -288,6 +318,12 @@ class ElectronicInvoice extends Model
                 'reconciled_at' => optional($this->reconciled_at)->toIso8601String(),
             ],
             'has_payload_snapshot' => $this->hasPayloadSnapshot(),
+            // Constancia de la vía administrativa (quién y cuándo la autorizó).
+            'manual_authorization' => [
+                'at' => optional($this->manual_authorization_at)->toIso8601String(),
+                'admin_id' => $this->created_by_admin_id,
+                'note' => $this->manual_authorization_note,
+            ],
             'pricing_rules_version' => $this->pricing_rules_version,
             'immutable' => $this->status->isFinal(),
             'can_retry' => $this->status->canRetry() && ! $this->reconciliationFailed(),

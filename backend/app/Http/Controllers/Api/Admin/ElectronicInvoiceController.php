@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Exceptions\ManualEmissionRejectedException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\CreateCreditNoteRequest;
 use App\Http\Requests\Admin\ManualEmitInvoiceRequest;
@@ -133,12 +134,24 @@ class ElectronicInvoiceController extends Controller
     {
         $data = $request->validated();
 
+        // El administrador sale SIEMPRE de la credencial verificada por
+        // EnsureAdminAuth, nunca de nada que mande el frontend: la autorización
+        // que queda sellada en el comprobante tiene valor probatorio.
+        $admin = $request->attributes->get('auth_admin');
+
         try {
             $invoice = $this->invoicing->manualEmit(
                 $data['source_type'],
                 (int) $data['source_id'],
                 (bool) ($data['force'] ?? true),
+                adminId: $admin?->id,
+                finalConsumer: array_key_exists('final_consumer', $data)
+                    ? (bool) $data['final_consumer']
+                    : null,
             );
+        } catch (ManualEmissionRejectedException $e) {
+            // 422 = corrige algo; 409 = mira la factura que ya existe.
+            return response()->json(['ok' => false, 'message' => $e->getMessage()], $e->status);
         } catch (InvalidArgumentException $e) {
             return response()->json(['ok' => false, 'message' => $e->getMessage()], 422);
         }
@@ -151,6 +164,8 @@ class ElectronicInvoiceController extends Controller
             'source_type' => $data['source_type'],
             'source_id' => $data['source_id'],
             'enabled' => (bool) config('billing.enabled'),
+            'final_consumer' => $data['final_consumer'] ?? null,
+            'manual_authorization_at' => optional($invoice->manual_authorization_at)->toIso8601String(),
         ]);
 
         return response()->json([

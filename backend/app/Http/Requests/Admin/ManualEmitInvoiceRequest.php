@@ -24,6 +24,11 @@ class ManualEmitInvoiceRequest extends FormRequest
             'source_type' => ['required', 'string', Rule::in(array_keys(InvoicingService::SOURCE_MAP))],
             'source_id' => ['required', 'integer', 'min:1'],
             'force' => ['sometimes', 'boolean'],
+            // Decisión EXPRESA de adquiriente tomada en el modal. Ausente = la
+            // política automática de FiscalProfileResolver. Presente y false =
+            // el operador quiere factura nominativa, así que un perfil fiscal
+            // inservible debe fallar con el detalle en vez de degradar solo.
+            'final_consumer' => ['sometimes', 'boolean'],
         ];
     }
 }

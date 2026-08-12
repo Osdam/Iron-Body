@@ -216,12 +216,25 @@ class InvoiceEmissionGuard
             ));
         }
 
-        if (! $origin['wants_invoice']) {
+        // Dos vías legítimas, ninguna implícita:
+        //
+        //   a) El CLIENTE la pidió al comprar. Consta en el origen económico
+        //      (payments/product_sales.invoice_requested) o, para pagos de
+        //      Wompi anteriores, en metadata.wants_invoice.
+        //   b) Un ADMINISTRADOR la autorizó después desde el CRM, y esa
+        //      autorización quedó sellada en la propia solicitud.
+        //
+        // La vía (b) existe porque la (a) sola convertía un `false` del día de
+        // la compra en una prohibición perpetua: un cliente que pide la factura
+        // en el mostrador una semana después no tenía forma de obtenerla. Lo
+        // que NO cambia es la emisión automática, que sigue exigiendo (a): esta
+        // marca sólo la escribe InvoicingService::manualEmit().
+        if (! $origin['wants_invoice'] && ! $invoice->isManuallyAuthorized()) {
             throw $this->reject(sprintf(
-                'la factura de la solicitud #%d no fue solicitada por el cliente. '
-                .'La solicitud debe constar en el origen económico '
-                .'(payments/product_sales.invoice_requested) o, para pagos de Wompi '
-                .'anteriores, en metadata.wants_invoice. No se factura lo que nadie pidió.',
+                'la factura de la solicitud #%d ni fue solicitada por el cliente '
+                .'(payments/product_sales.invoice_requested, o metadata.wants_invoice '
+                .'en pagos de Wompi anteriores) ni autorizada por un administrador. '
+                .'No se factura lo que nadie pidió.',
                 $invoice->id,
             ));
         }
