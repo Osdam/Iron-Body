@@ -460,6 +460,14 @@ class MemberRegistrationController extends Controller
             'email' => $email,
             'document' => $data['document_number'],
             'phone' => $data['phone'] ?? $user->phone,
+            // El CRM lee género y fecha de nacimiento del User, no del Member
+            // (ver UserController::serialize). Sin replicarlos aquí, lo que el
+            // socio escribía al registrarse desde la app quedaba solo en
+            // `members` y su ficha del CRM aparecía sin sexo ni fecha. El
+            // fallback conserva lo que ya hubiera: reanudar un registro nunca
+            // debe borrar un dato que el CRM ya tenía.
+            'gender' => $data['gender'] ?? $user->gender,
+            'birth_date' => $data['birth_date'] ?? $user->birth_date,
             'status' => $this->crmStatusFor($member->status ?: Member::STATUS_PENDING_REGISTRATION),
         ]);
 

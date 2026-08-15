@@ -62,7 +62,7 @@ class MemberProfileController extends Controller
         $member->fill($data);
         $member->save();
 
-        // Sincroniza nombre/teléfono al User vinculado (lo lee el CRM).
+        // Sincroniza nombre/teléfono/género al User vinculado (lo lee el CRM).
         if ($member->user) {
             $userPatch = [];
             if (array_key_exists('full_name', $data)) {
@@ -70,6 +70,11 @@ class MemberProfileController extends Controller
             }
             if (array_key_exists('phone', $data)) {
                 $userPatch['phone'] = $data['phone'];
+            }
+            // El CRM muestra el género del User: si solo se guardara en el
+            // Member, la ficha administrativa se quedaría con el valor viejo.
+            if (array_key_exists('gender', $data)) {
+                $userPatch['gender'] = $data['gender'];
             }
             if ($userPatch) {
                 $member->user->fill($userPatch)->save();

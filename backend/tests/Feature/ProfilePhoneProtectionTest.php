@@ -33,6 +33,22 @@ class ProfilePhoneProtectionTest extends TestCase
         return ['Authorization' => 'Bearer '.$m->access_hash];
     }
 
+    /**
+     * El CRM muestra el género que guarda el User. Si la edición de perfil solo
+     * lo escribiera en el Member, la ficha administrativa se quedaría con el
+     * valor viejo.
+     */
+    public function test_el_genero_editado_en_la_app_llega_al_usuario_del_crm(): void
+    {
+        $m = $this->member();
+
+        $this->patchJson('/api/member/profile', ['gender' => 'Femenino'], $this->auth($m))
+            ->assertOk();
+
+        $this->assertSame('Femenino', $m->fresh()->gender);
+        $this->assertSame('Femenino', $m->fresh()->user->gender);
+    }
+
     public function test_changing_phone_from_profile_is_blocked(): void
     {
         $m = $this->member();

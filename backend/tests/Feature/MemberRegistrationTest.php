@@ -125,6 +125,48 @@ class MemberRegistrationTest extends TestCase
         ])->assertStatus(422)->assertJsonValidationErrors(['gender']);
     }
 
+    /**
+     * El CRM lee sexo y fecha de nacimiento del User (UserController::serialize),
+     * no del Member. Al registrarse desde la app esos datos se guardaban solo en
+     * `members` y la ficha administrativa aparecía vacía.
+     */
+    public function test_register_propaga_genero_y_fecha_al_usuario_del_crm(): void
+    {
+        $adult = now()->subYears(30)->format('Y-m-d');
+
+        $this->postJson('/api/members/register', $this->registerPayload([
+            'document_number' => '1004301551',
+            'gender' => 'Femenino',
+            'birth_date' => $adult,
+        ]))->assertCreated();
+
+        $member = Member::where('document_number', '1004301551')->firstOrFail();
+
+        $this->assertSame('Femenino', $member->gender);
+        $this->assertNotNull($member->user, 'El registro debe dejar el User del CRM enlazado.');
+        $this->assertSame('Femenino', $member->user->gender);
+        $this->assertSame($adult, substr((string) $member->user->birth_date, 0, 10));
+    }
+
+    /** Reanudar un registro no puede borrar datos que el CRM ya tuviera. */
+    public function test_reanudar_registro_no_borra_el_genero_previo_del_crm(): void
+    {
+        $this->postJson('/api/members/register', $this->registerPayload([
+            'document_number' => '1004301552',
+            'gender' => 'Femenino',
+        ]))->assertCreated();
+
+        // Segundo intento sin fecha de nacimiento: el género sigue llegando y la
+        // fecha ausente no debe pisar la que ya hubiera.
+        $this->postJson('/api/members/register', $this->registerPayload([
+            'document_number' => '1004301552',
+            'gender' => 'Femenino',
+        ]))->assertOk()->assertJsonPath('status', 'resumed');
+
+        $member = Member::where('document_number', '1004301552')->firstOrFail();
+        $this->assertSame('Femenino', $member->user->gender);
+    }
+
     /** Payload base de registro válido (datos ficticios). */
     private function registerPayload(array $override = []): array
     {
