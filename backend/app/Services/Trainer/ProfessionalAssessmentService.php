@@ -151,10 +151,42 @@ class ProfessionalAssessmentService
         });
 
         // FUERA de la transacción (best-effort): la corrección también alimenta el
-        // historial de Evaluación Física del miembro.
-        $this->syncToPhysicalEvaluation($amendment);
+        // historial de Evaluación Física del miembro, pero SOLO si cambió alguna
+        // medida. Una corrección que únicamente ajusta observaciones o
+        // recomendaciones no es una medición nueva: volcarla añadiría un punto
+        // repetido al historial de peso del miembro (mismo kg, otra fecha) y su
+        // app mostraría varios registros para una única medición real.
+        if (! $this->measurementsMatch($amendment, $original)) {
+            $this->syncToPhysicalEvaluation($amendment);
+        }
 
         return $amendment;
+    }
+
+    /** True si dos valoraciones traen exactamente las mismas medidas. */
+    private function measurementsMatch(ProfessionalAssessment $a, ProfessionalAssessment $b): bool
+    {
+        foreach (ProfessionalAssessment::MEASUREMENT_FIELDS as $field) {
+            $left = $a->{$field};
+            $right = $b->{$field};
+
+            if ($left === null || $right === null) {
+                if ($left !== $right) {
+                    return false;
+                }
+
+                continue;
+            }
+
+            // El cast del modelo es `decimal:2`, así que las medidas llegan como
+            // string ("80.50"). Comparar numéricamente con tolerancia evita que
+            // 80.5 y "80.50" se traten como medidas distintas.
+            if (abs((float) $left - (float) $right) > 0.0001) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

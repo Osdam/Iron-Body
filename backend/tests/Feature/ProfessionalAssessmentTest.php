@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Member;
 use App\Models\MemberTrainerAssignment;
+use App\Models\PhysicalEvaluation;
 use App\Models\ProfessionalAssessment;
 use App\Models\Trainer;
 use App\Models\TrainerRole;
@@ -150,6 +151,44 @@ class ProfessionalAssessmentTest extends TestCase
         // El miembro ve ambas versiones (enviada + corrección).
         $this->getJson('/api/member/assessments', $this->asMember())
             ->assertOk()->assertJsonCount(2, 'data');
+    }
+
+    /**
+     * Una corrección que solo reescribe las observaciones NO es una medición
+     * nueva: si volcara otra fila a `physical_evaluations`, el miembro vería en
+     * su app varios registros con el mismo peso para una única medición real.
+     */
+    public function test_amendment_without_measurement_changes_does_not_duplicate_weight_history(): void
+    {
+        $uuid = $this->createDraft();
+        $this->postJson("/api/trainer/assessments/{$uuid}/submit", [], $this->asTrainer())->assertOk();
+
+        $this->assertSame(1, PhysicalEvaluation::where('member_id', $this->member->id)->count());
+
+        $this->postJson("/api/trainer/assessments/{$uuid}/amend", [
+            'weight_kg' => 80.5, // mismo peso, el formulario lo reenvía tal cual
+            'observations' => 'Corrige la redacción de la observación',
+            'amendment_reason' => 'Error de redacción',
+        ], $this->asTrainer())->assertCreated();
+
+        $this->assertSame(1, PhysicalEvaluation::where('member_id', $this->member->id)->count());
+    }
+
+    /** Una corrección que sí cambia una medida sigue alimentando el historial. */
+    public function test_amendment_with_new_measurement_adds_weight_history_point(): void
+    {
+        $uuid = $this->createDraft();
+        $this->postJson("/api/trainer/assessments/{$uuid}/submit", [], $this->asTrainer())->assertOk();
+
+        $this->postJson("/api/trainer/assessments/{$uuid}/amend", [
+            'weight_kg' => 78.0,
+            'amendment_reason' => 'Corrige peso mal digitado',
+        ], $this->asTrainer())->assertCreated();
+
+        $weights = PhysicalEvaluation::where('member_id', $this->member->id)
+            ->orderBy('id')->pluck('weight_kg')->map(fn ($w) => (float) $w)->all();
+
+        $this->assertSame([80.5, 78.0], $weights);
     }
 
     public function test_amendment_requires_reason(): void
