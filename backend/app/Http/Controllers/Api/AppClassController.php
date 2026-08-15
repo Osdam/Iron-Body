@@ -31,7 +31,7 @@ class AppClassController extends Controller
      * y "hoy" del planificador se calculan en America/Bogota. Evita que una clase
      * de la tarde se vea "vencida" ~5 h antes por comparar contra UTC.
      */
-    private const TZ = 'America/Bogota';
+    private const TZ = self::OPERATIONAL_TZ;
 
     private function member(Request $request): Member
     {
@@ -49,7 +49,7 @@ class AppClassController extends Controller
             ->get();
 
         $classIds = $classes->pluck('id');
-        $today = Carbon::today();
+        $today = $this->operationalToday();
 
         // Reservas vigentes/futuras (por fecha) + legacy sin fecha, en bloque.
         $reservations = ClassReservation::whereIn('class_id', $classIds)
@@ -99,7 +99,7 @@ class AppClassController extends Controller
         }
 
         // Reserva individual = la PRÓXIMA ocurrencia de la clase (sin cambiar la UX).
-        $date = optional($myClass->operationalOccurrence())->toDateString() ?? Carbon::today()->toDateString();
+        $date = optional($myClass->operationalOccurrence())->toDateString() ?? $this->operationalToday()->toDateString();
 
         $outcome = $this->reserveOccurrence($member, $myClass, $date);
 
@@ -156,7 +156,7 @@ class AppClassController extends Controller
             ], 422);
         }
 
-        $date = $explicit ?? (optional($myClass->operationalOccurrence())->toDateString() ?? Carbon::today()->toDateString());
+        $date = $explicit ?? (optional($myClass->operationalOccurrence())->toDateString() ?? $this->operationalToday()->toDateString());
         $query = ClassReservation::where('class_id', $myClass->id)
             ->where('member_id', $member->id);
         if ($explicit !== null) {
@@ -464,7 +464,7 @@ class AppClassController extends Controller
     public function checkIn(Request $request, MyClass $myClass): JsonResponse
     {
         $member = $this->member($request);
-        $today = Carbon::today();
+        $today = $this->operationalToday();
 
         $reserved = ClassReservation::where('class_id', $myClass->id)
             ->where('member_id', $member->id)
@@ -513,7 +513,7 @@ class AppClassController extends Controller
     private function resourceFor(MyClass $class, Member $member, bool $reserved): ClassResource
     {
         $session = $this->currentClassSession($class);
-        $sessionDate = optional($session?->session_date)->toDateString() ?? Carbon::today()->toDateString();
+        $sessionDate = optional($session?->session_date)->toDateString() ?? $this->operationalToday()->toDateString();
         $attendance = ClassAttendance::where('class_id', $class->id)
             ->where('member_id', $member->id)
             ->whereDate('session_date', $sessionDate)

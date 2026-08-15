@@ -18,6 +18,20 @@ use Illuminate\Support\Facades\DB;
  */
 trait MemberClassContext
 {
+    /** Zona horaria operativa del gimnasio (el backend corre en UTC). */
+    public const OPERATIONAL_TZ = 'America/Bogota';
+
+    /**
+     * "Hoy" del gimnasio. `Carbon::today()` devuelve el día en UTC, que en
+     * Colombia (UTC-5) ya avanzó al día siguiente desde las 19:00: usarlo para
+     * filtrar reservas descartaba las de la clase en curso y el cupo se veía
+     * libre cuando ya estaba lleno.
+     */
+    protected function operationalToday(): Carbon
+    {
+        return Carbon::today(self::OPERATIONAL_TZ);
+    }
+
     /**
      * Sesión relevante de la clase para el miembro. Prioriza: (1) EN CURSO
      * (iniciada y sin finalizar), (2) recién FINALIZADA (en las últimas 8 h, para
@@ -59,10 +73,10 @@ trait MemberClassContext
         return ClassSession::query()
             ->whereNull('renewed_at')
             ->where(function ($q) {
-                $q->whereDate('session_date', Carbon::today())
+                $q->whereDate('session_date', $this->operationalToday())
                     ->orWhere(fn ($q2) => $q2->whereNotNull('started_at')->whereNull('ended_at'))
                     ->orWhere(fn ($q2) => $q2->whereNotNull('ended_at')
-                        ->where('session_date', '>=', Carbon::today()->subDays(8)));
+                        ->where('session_date', '>=', $this->operationalToday()->subDays(8)));
             })
             ->orderByRaw('CASE WHEN started_at IS NOT NULL AND ended_at IS NULL THEN 0 ELSE 1 END')
             ->orderByDesc('session_date')

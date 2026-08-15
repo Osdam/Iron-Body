@@ -54,7 +54,7 @@ class ClassController extends Controller
         $paginated = $query->paginate($this->resolvePerPage($request));
 
         $classIds = $paginated->pluck('id');
-        $today = Carbon::today();
+        $today = $this->operationalToday();
 
         // Reservas vigentes/futuras (por fecha) + legacy sin fecha, en bloque. El
         // cupo/estado de la card se refieren a la PRÓXIMA ocurrencia de la clase,
@@ -72,7 +72,7 @@ class ClassController extends Controller
         $attendance = $memberId
             ? ClassAttendance::where('member_id', $memberId)
                 ->whereIn('class_id', $classIds)
-                ->whereDate('session_date', Carbon::today())
+                ->whereDate('session_date', $this->operationalToday())
                 ->get()
                 ->keyBy('class_id')
             : collect();
@@ -104,7 +104,7 @@ class ClassController extends Controller
         $myClass->load('trainer:id,full_name');
 
         // Cupo/estado referidos a la próxima ocurrencia (coherente con index()).
-        $date = optional($myClass->operationalOccurrence())->toDateString() ?? Carbon::today()->toDateString();
+        $date = optional($myClass->operationalOccurrence())->toDateString() ?? $this->operationalToday()->toDateString();
         $myClass->reservations_count = $this->occurrenceBookedCount($myClass, $date);
 
         $reservation = $member
@@ -414,7 +414,7 @@ class ClassController extends Controller
 
         // Reserva individual = la PRÓXIMA ocurrencia (por fecha), con lock y cupo
         // por fecha para no sobrepasar el aforo ante concurrencia.
-        $date = optional($myClass->operationalOccurrence())->toDateString() ?? Carbon::today()->toDateString();
+        $date = optional($myClass->operationalOccurrence())->toDateString() ?? $this->operationalToday()->toDateString();
         $outcome = $this->reserveOccurrence($member, $myClass, $date);
 
         if ($outcome === 'already') {
@@ -461,7 +461,7 @@ class ClassController extends Controller
             ], 422);
         }
 
-        $date = $explicit ?? (optional($myClass->operationalOccurrence())->toDateString() ?? Carbon::today()->toDateString());
+        $date = $explicit ?? (optional($myClass->operationalOccurrence())->toDateString() ?? $this->operationalToday()->toDateString());
         $query = ClassReservation::where('class_id', $myClass->id)
             ->where('member_id', $member->id);
         if ($explicit !== null) {
@@ -513,7 +513,7 @@ class ClassController extends Controller
 
         // Se guarda con la FECHA DE LA SESIÓN (no "hoy") para que coincida con la
         // vista del entrenador y la supervisión, aunque haya desfase horario.
-        $sessionDate = optional($session->session_date)->toDateString() ?? Carbon::today()->toDateString();
+        $sessionDate = optional($session->session_date)->toDateString() ?? $this->operationalToday()->toDateString();
         ClassAttendance::updateOrCreate(
             ['class_id' => $myClass->id, 'member_id' => $member->id, 'session_date' => $sessionDate],
             ['status' => ClassAttendance::STATUS_PRESENT, 'marked_at' => now()],
@@ -536,7 +536,7 @@ class ClassController extends Controller
     private function memberResource(MyClass $class, Member $member, bool $reserved): ClassResource
     {
         $session = $this->currentClassSession($class);
-        $sessionDate = optional($session?->session_date)->toDateString() ?? Carbon::today()->toDateString();
+        $sessionDate = optional($session?->session_date)->toDateString() ?? $this->operationalToday()->toDateString();
         $attendance = ClassAttendance::where('class_id', $class->id)
             ->where('member_id', $member->id)
             ->whereDate('session_date', $sessionDate)
