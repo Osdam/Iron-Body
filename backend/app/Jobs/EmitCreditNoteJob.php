@@ -107,11 +107,60 @@ class EmitCreditNoteJob implements ShouldQueue
             return;
         }
 
-        // Reconstruye customer + items + payment_details con el mismo builder.
-        $built = $source instanceof ProductSale
-            ? $builder->forSale($source, $resolver->resolveForSale($source))
-            : $builder->forPayment($source, $resolver->resolveForPayment($source));
-        $base = $built['payload'];
+        /*
+         * Una nota crédito ESPEJA el documento que anula. Su adquiriente y sus
+         * líneas son los que se declararon ante la DIAN en la factura original,
+         * no los que resultarían de resolver el origen HOY.
+         *
+         * Reconstruirlos desde el origen parecía equivalente y no lo es: entre
+         * la emisión y la anulación puede cambiar el perfil fiscal del cliente,
+         * y entonces la nota sale a nombre de otro. Ocurrió con IBFE10, emitida
+         * a consumidor final: cuando se fue a anular, el perfil ya tenía NIT y
+         * el payload reconstruido llevaba «901499742 / COSTRUMETALICA ROCHIS
+         * S.A.S» para anular un documento de «222222222222 / CONSUMIDOR FINAL».
+         *
+         * El payload congelado de la original es la única fuente fiel. La
+         * reconstrucción queda como respaldo para comprobantes anteriores al
+         * congelado, y en ese caso la verificación de abajo hace de red.
+         */
+        $congelado = is_array($original->payload_snapshot) ? $original->payload_snapshot : [];
+
+        if (isset($congelado['customer'], $congelado['items'], $congelado['payment_details'])) {
+            $base = $congelado;
+        } else {
+            $built = $source instanceof ProductSale
+                ? $builder->forSale($source, $resolver->resolveForSale($source))
+                : $builder->forPayment($source, $resolver->resolveForPayment($source));
+            $base = $built['payload'];
+
+            Log::warning('billing.credit_note_rebuilt_payload', [
+                'credit_note' => $note->id,
+                'original' => $original->id,
+                'motivo' => 'la factura original no tiene payload congelado',
+            ]);
+        }
+
+        // 🔒 El adquiriente tiene que ser el mismo, venga de donde venga. Anular
+        // a nombre de otro no es un detalle de formato: es un documento legal
+        // atribuido a quien no corresponde.
+        $documentoOriginal = (string) $original->customer_doc_number;
+        $documentoNota = (string) ($base['customer']['identification'] ?? '');
+
+        if ($documentoOriginal !== '' && $documentoOriginal !== $documentoNota) {
+            $note->markError(sprintf(
+                'Adquiriente incoherente: la factura %s se emitió a «%s» y la nota crédito '
+                .'iba a enviarse a «%s». No se anula un documento a nombre de otro.',
+                $original->full_number, $documentoOriginal, $documentoNota ?: '(vacío)',
+            ));
+            $invoicing->recordLog(
+                $note,
+                InvoiceLogAction::CREDIT_NOTE,
+                'error',
+                'Bloqueada: adquiriente distinto al de la factura original.',
+            );
+
+            return;
+        }
 
         $payload = [
             'reference_code' => $note->uuid,
@@ -141,9 +190,20 @@ class EmitCreditNoteJob implements ShouldQueue
         );
 
         if ($result['ok']) {
-            $mapped = $mapper->map($result['body']);
+            // mapCreditNote, no map: en esta respuesta `data.bill` es la factura
+            // que se anula. Con `map()` la nota se guardaba con el número y el
+            // CUFE de la factura referenciada en vez de los suyos.
+            $mapped = $mapper->mapCreditNote($result['body']);
             if ($mapped['is_validated']) {
                 $files = $storage->store($note, $mapped);
+
+                // Factus no devuelve PDF/XML en /validate: se descargan por
+                // número, desde el endpoint de notas crédito. Sin esto la nota
+                // quedaba sin copia privada — NC1 se emitió así.
+                $numero = $mapped['full_number'] ?: $mapped['number'];
+                if ($numero && empty($files['pdf_path'])) {
+                    $files = array_merge($files, $storage->fetchAndStore($note, $client, (string) $numero));
+                }
                 $note->markValidated(array_merge($files, [
                     'factus_id' => $mapped['factus_id'],
                     'number' => $mapped['number'],

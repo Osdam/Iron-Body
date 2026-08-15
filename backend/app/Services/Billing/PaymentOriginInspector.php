@@ -37,6 +37,18 @@ class PaymentOriginInspector
     public const IMPORTED_REFERENCE_PREFIX = 'MIGR-';
 
     /**
+     * Métodos que NO pasan por pasarela: el dinero se recibe en el mostrador y
+     * la trazabilidad la da el registro interno del CRM, no una API externa.
+     *
+     * Son valores REALES en uso: `payments.method` en producción sólo contiene
+     * `manual`, `efectivo`, `cash` y `wompi`; `ProductSale::PAYMENT_METHODS`
+     * añade `transfer`. Los de pasarela (`wompi`, `nequi`, `card`, `online`,
+     * `pse`) quedan deliberadamente fuera: para esos, la ausencia de
+     * transacción sí es una señal de que algo no cuadra.
+     */
+    public const MANUAL_PAYMENT_METHODS = ['cash', 'efectivo', 'transfer', 'transferencia', 'manual'];
+
+    /**
      * Radiografía del origen. Ningún campo lanza excepción si falta: se
      * prefiere `null` y que la barrera decida, a romper el flujo de pago.
      *
@@ -54,7 +66,30 @@ class PaymentOriginInspector
      */
     public function inspect(ElectronicInvoice $invoice): array
     {
-        $payment = $invoice->source;
+        return $this->inspectSource($invoice->source);
+    }
+
+    /**
+     * La misma radiografía, a partir del origen económico directamente.
+     *
+     * Existe para poder comprobar la trazabilidad ANTES de crear la solicitud:
+     * la emisión manual necesita rechazar un pago no verificable sin dejar
+     * primero una fila `pending` que luego alguien tenga que ir a limpiar.
+     *
+     * @return array{
+     *     transaction: ?PaymentTransaction,
+     *     environment: ?string,
+     *     card_last_four: ?string,
+     *     reference: ?string,
+     *     payment_status: ?string,
+     *     is_sandbox: bool,
+     *     is_test_card: bool,
+     *     wants_invoice: bool,
+     *     has_verifiable_reference: bool
+     * }
+     */
+    public function inspectSource(mixed $payment): array
+    {
         $reference = $payment->reference ?? null;
 
         $transaction = $this->transactionFor($reference);
@@ -102,27 +137,38 @@ class PaymentOriginInspector
     /**
      * ¿Se puede rastrear de dónde vino el dinero?
      *
-     * Tres casos legítimos y uno que no lo es:
+     * El orden importa, y antes estaba mal. La regla se leía «si NO hay
+     * referencia y el pago es manual → válido», de modo que un cobro en
+     * efectivo quedaba bloqueado por el simple hecho de llevar número de
+     * recibo: el CRM autogenera referencias internas tipo `REC-1001` al
+     * registrar el pago, y esa referencia se comparaba contra
+     * `payment_transactions` como si fuese de pasarela. El resultado era que
+     * NINGÚN pago de mostrador podía facturarse — justo lo contrario de lo que
+     * este método dice proteger, porque un `REC-*` **es** el registro de caja.
      *
-     *   - Sin referencia y pago manual (efectivo, transferencia, mostrador):
-     *     válido. La trazabilidad la da el registro de caja.
-     *   - Con referencia de pasarela y transacción que la respalde: válido.
-     *   - Referencia `MIGR-*`: NO. Son importaciones del sistema anterior cuya
-     *     referencia IMITA a una de pasarela sin serlo; no existe transacción
-     *     que confirmar, y aceptarlas sería fabricar verificabilidad.
-     *   - Con referencia y sin transacción: no se puede confirmar nada.
+     * Casos, en este orden:
+     *
+     *   - Referencia `MIGR-*`: NO, siempre. Son importaciones del sistema
+     *     anterior cuya referencia IMITA a una de pasarela sin serlo; no existe
+     *     transacción que confirmar, y aceptarlas sería fabricar verificabilidad.
+     *   - Transacción de pasarela que respalda la referencia: válido.
+     *   - Método manual (mostrador) sin transacción: válido, con o sin recibo
+     *     interno. La trazabilidad la da el registro de caja.
+     *   - Todo lo demás —métodos de pasarela sin transacción que los respalde—:
+     *     NO. Ahí la ausencia de transacción sí significa que no se puede
+     *     confirmar que el dinero entrase.
      */
     private function hasVerifiableReference(mixed $payment, ?string $reference, ?PaymentTransaction $transaction): bool
     {
-        if ($reference === null || trim($reference) === '') {
-            return $this->isManualPayment($payment);
-        }
-
-        if ($this->isImportedReference($reference)) {
+        if ($reference !== null && $this->isImportedReference($reference)) {
             return false;
         }
 
-        return $transaction !== null;
+        if ($transaction !== null) {
+            return true;
+        }
+
+        return $this->isManualPayment($payment);
     }
 
     /** Referencia fabricada por la importación del sistema anterior. */
@@ -144,9 +190,9 @@ class PaymentOriginInspector
 
     private function isManualPayment(mixed $payment): bool
     {
-        $method = strtolower((string) ($payment->payment_method ?? $payment->method ?? ''));
+        $method = strtolower(trim((string) ($payment->payment_method ?? $payment->method ?? '')));
 
-        return in_array($method, ['cash', 'efectivo', 'transfer', 'transferencia', 'manual'], true);
+        return in_array($method, self::MANUAL_PAYMENT_METHODS, true);
     }
 
     /**

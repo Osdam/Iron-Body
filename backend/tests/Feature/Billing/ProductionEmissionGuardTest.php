@@ -7,6 +7,7 @@ use App\Models\Payment;
 use App\Models\PaymentTransaction;
 use App\Models\User;
 use App\Services\Billing\Factus\FactusClient;
+use App\Services\Billing\InvoiceEmissionGuard;
 use App\Services\Billing\SandboxProbe;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -205,13 +206,47 @@ class ProductionEmissionGuardTest extends TestCase
         $this->assertBlocked($this->payloadFor($invoice), 'no «paid»');
     }
 
-    public function test_una_factura_no_solicitada_no_se_emite(): void
+    public function test_una_factura_no_solicitada_ni_autorizada_no_se_emite(): void
     {
         $payment = $this->payment(['reference' => 'IRON-SIN-SOLICITUD']);
         $invoice = $this->invoiceFor($payment);
         $this->transaction($payment, ['metadata' => ['wants_invoice' => false]]);
 
-        $this->assertBlocked($this->payloadFor($invoice), 'no fue solicitada por el cliente');
+        $this->assertBlocked($this->payloadFor($invoice), 'ni autorizada por un administrador');
+    }
+
+    /**
+     * La vía administrativa es la SEGUNDA puerta legítima: el cliente no la
+     * pidió al comprar, pero un administrador la autorizó después y esa
+     * autorización consta en la solicitud. El resto de barreras siguen en pie
+     * (aquí las cumple todas, así que el guard deja pasar).
+     */
+    public function test_una_factura_autorizada_por_un_administrador_se_emite(): void
+    {
+        $payment = $this->payment(['reference' => 'IRON-AUTORIZADA']);
+        $invoice = $this->invoiceFor($payment);
+        $this->transaction($payment, ['metadata' => ['wants_invoice' => false]]);
+
+        $invoice->forceFill(['manual_authorization_at' => now()])->save();
+
+        // No lanza: la autorización administrativa sustituye a la solicitud del
+        // cliente, y sólo a eso.
+        app(InvoiceEmissionGuard::class)->assertMayEmit($this->payloadFor($invoice->fresh()));
+        $this->assertTrue(true);
+    }
+
+    /**
+     * Y no la convierte en una llave maestra: autorizada o no, un pago que no
+     * se cobró sigue sin poder facturarse.
+     */
+    public function test_la_autorizacion_no_salta_las_demas_barreras(): void
+    {
+        $payment = $this->payment(['reference' => 'IRON-AUTORIZADA-SIN-COBRO', 'status' => 'pending']);
+        $invoice = $this->invoiceFor($payment);
+        $this->transaction($payment);
+        $invoice->forceFill(['manual_authorization_at' => now()])->save();
+
+        $this->assertBlocked($this->payloadFor($invoice->fresh()), 'no «paid»');
     }
 
     public function test_un_pago_sin_referencia_verificable_no_se_factura(): void

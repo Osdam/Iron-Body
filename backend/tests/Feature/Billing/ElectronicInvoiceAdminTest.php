@@ -18,15 +18,15 @@ class ElectronicInvoiceAdminTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function payment(): Payment
+    private function payment(array $attrs = []): Payment
     {
         $plan = Plan::create(['name' => 'Pro', 'price' => 100000, 'duration_days' => 30, 'benefits' => '']);
         $user = User::factory()->create();
 
-        return Payment::create([
+        return Payment::create(array_merge([
             'user_id' => $user->id, 'plan_id' => $plan->id, 'amount' => 119000,
             'method' => 'cash', 'reference' => 'PAY-'.uniqid(), 'status' => 'paid', 'paid_at' => now(),
-        ]);
+        ], $attrs));
     }
 
     private function invoice(array $attrs = []): ElectronicInvoice
@@ -112,12 +112,18 @@ class ElectronicInvoiceAdminTest extends TestCase
     }
 
     /**
-     * Regresión de la solicitud #18 (venta V-000003): el botón «Emitir factura»
-     * encolaba un job condenado para una venta sin solicitud, y la venta quedaba
-     * en «Procesando» sin salida. Ahora se rechaza en el endpoint, con el motivo
-     * en pantalla y sin crear ninguna solicitud.
+     * Escenario 1: un pago COBRADO que nunca pidió factura sí puede facturarse
+     * por la vía administrativa, y la autorización queda sellada.
+     *
+     * Es lo contrario de lo que este test comprobaba antes. La regla vieja
+     * («sin `invoice_requested` no se emite nunca») nació de la solicitud #18,
+     * donde el botón encolaba un job condenado; pero cerraba la puerta a un caso
+     * legítimo y frecuente: el cliente que pide la factura en el mostrador días
+     * después de pagar. Lo que sigue vigente es que no se encola nada condenado
+     * —de eso se encargan ahora las comprobaciones de cobro, duplicado y
+     * trazabilidad, no un booleano del día de la compra.
      */
-    public function test_manual_emit_refuses_a_source_without_an_explicit_request(): void
+    public function test_manual_emit_authorizes_a_source_without_an_explicit_request(): void
     {
         config(['billing.enabled' => true]);
         Http::fake();
@@ -126,15 +132,55 @@ class ElectronicInvoiceAdminTest extends TestCase
 
         $this->adminPostJson('/api/admin/electronic-invoices/manual-emit', [
             'source_type' => 'payment', 'source_id' => $payment->id,
-        ])->assertStatus(422)
-            ->assertJsonPath('ok', false)
-            ->assertJsonFragment(['message' => 'Esta venta no fue creada con solicitud de factura electrónica. '
-                .'La factura debe solicitarse al registrar la venta, marcando la casilla '
-                .'«El cliente solicita factura electrónica» antes de cobrar.']);
+        ])->assertStatus(201)->assertJsonPath('ok', true);
+
+        $invoice = ElectronicInvoice::where('source_id', $payment->id)->sole();
+        $this->assertNotNull($invoice->manual_authorization_at, 'la autorización debe quedar sellada');
+        // El hecho histórico NO se toca: el cliente no la pidió al comprar.
+        $this->assertFalse((bool) $payment->fresh()->invoice_requested);
+
+        Queue::assertPushed(EmitElectronicInvoiceJob::class, 1);
+        Http::assertNothingSent();
+    }
+
+    /** Escenario 4: un pago cancelado no se factura por ninguna vía. */
+    public function test_manual_emit_refuses_a_cancelled_payment(): void
+    {
+        config(['billing.enabled' => true]);
+        Queue::fake();
+        $payment = $this->payment(['status' => 'cancelled']);
+
+        $this->adminPostJson('/api/admin/electronic-invoices/manual-emit', [
+            'source_type' => 'payment', 'source_id' => $payment->id,
+        ])->assertStatus(422)->assertJsonPath('ok', false);
 
         $this->assertSame(0, ElectronicInvoice::where('source_id', $payment->id)->count());
         Queue::assertNothingPushed();
-        Http::assertNothingSent();
+    }
+
+    /** Escenario 3: con documento fiscal ya emitido, el endpoint responde 409. */
+    public function test_manual_emit_conflicts_when_already_invoiced(): void
+    {
+        config(['billing.enabled' => true]);
+        Queue::fake();
+        $payment = $this->payment();
+        ElectronicInvoice::create([
+            'source_type' => $payment->getMorphClass(),
+            'source_id' => $payment->id,
+            'type' => 'invoice',
+            'status' => 'validated',
+            'full_number' => 'IBFE100',
+            'cufe' => 'CUFE-DEMO',
+            'total' => $payment->amount,
+        ]);
+
+        $this->adminPostJson('/api/admin/electronic-invoices/manual-emit', [
+            'source_type' => 'payment', 'source_id' => $payment->id,
+        ])->assertStatus(409)
+            ->assertJsonPath('ok', false);
+
+        $this->assertSame(1, ElectronicInvoice::where('source_id', $payment->id)->count());
+        Queue::assertNothingPushed();
     }
 
     public function test_manual_emit_rejects_unknown_source_type(): void

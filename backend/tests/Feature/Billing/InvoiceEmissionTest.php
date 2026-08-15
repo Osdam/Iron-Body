@@ -194,22 +194,42 @@ class InvoiceEmissionTest extends TestCase
         Queue::assertPushed(EmitElectronicInvoiceJob::class, 1); // manual sí emite
     }
 
-    /** Sin solicitud expresa, la emisión manual no encola nada. */
-    public function test_manual_emit_without_request_dispatches_nothing(): void
+    /**
+     * Escenario 1: sin solicitud del cliente, la vía administrativa sí emite.
+     *
+     * `auto_emit` sigue apagado y el pago sigue con `invoice_requested=false`:
+     * lo que autoriza la emisión es el acto administrativo, que queda sellado.
+     */
+    public function test_manual_emit_without_request_dispatches_by_authorization(): void
     {
         config(['billing.enabled' => true, 'billing.auto_emit.memberships' => false]);
         Queue::fake();
 
         $payment = $this->paidPayment(); // sin solicitud
 
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessageMatches('/no fue creada con solicitud de factura/');
+        $invoice = app(InvoicingService::class)->manualEmit('payment', $payment->id);
 
-        try {
-            app(InvoicingService::class)->manualEmit('payment', $payment->id);
-        } finally {
-            Queue::assertNothingPushed();
-        }
+        $this->assertNotNull($invoice->manual_authorization_at);
+        $this->assertFalse((bool) $payment->fresh()->invoice_requested);
+        Queue::assertPushed(EmitElectronicInvoiceJob::class, 1);
+    }
+
+    /**
+     * Escenario 17: el hook AUTOMÁTICO no se contagia. Un pago sin solicitud
+     * sigue creando su comprobante como evidencia y sin despachar nada, que es
+     * justo lo que impide que este cambio empiece a facturar por su cuenta.
+     */
+    public function test_auto_hook_still_does_not_emit_without_request(): void
+    {
+        config(['billing.enabled' => true, 'billing.auto_emit.memberships' => false]);
+        Queue::fake();
+
+        $payment = $this->paidPayment();
+        $invoice = app(InvoicingService::class)->enqueueForPayment($payment);
+
+        $this->assertSame(InvoiceStatus::PENDING, $invoice->status);
+        $this->assertNull($invoice->manual_authorization_at, 'el hook automático no autoriza nada');
+        Queue::assertNothingPushed();
     }
 
     public function test_emit_refused_on_production_server_with_sandbox_env(): void

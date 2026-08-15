@@ -8,6 +8,7 @@ use App\Models\AuditLog;
 use App\Models\FiscalProfile;
 use App\Models\Member;
 use App\Models\User;
+use App\Services\Billing\FiscalProfileResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -86,6 +87,12 @@ class FiscalProfileController extends Controller
             'city_code' => $p->city_code,
             'department_code' => $p->department_code,
             'is_complete' => $p->isComplete(),
+            // `is_complete` sólo mira que los campos no estén vacíos. Esto dice
+            // si el perfil sirve REALMENTE para una factura nominativa (formato
+            // del documento incluido) y, si no, qué le falta exactamente — es lo
+            // que el modal de emisión le muestra al operador.
+            'usable_for_invoice' => FiscalProfileResolver::camposFaltantes($p) === [],
+            'missing_for_invoice' => FiscalProfileResolver::camposFaltantes($p),
             'updated_at' => optional($p->updated_at)->toIso8601String(),
         ];
     }

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Billing;
 
 use App\Enums\InvoiceStatus;
+use App\Exceptions\ManualEmissionRejectedException;
 use App\Jobs\EmitElectronicInvoiceJob;
 use App\Models\ElectronicInvoice;
 use App\Models\Payment;
@@ -121,13 +122,34 @@ class StuckProcessingTest extends TestCase
 
     // ── El botón no encola lo que está condenado ──────────────────────────
 
-    public function test_una_venta_sin_solicitud_no_encola_nada(): void
+    public function test_una_venta_sin_solicitud_se_encola_por_autorizacion_administrativa(): void
     {
         Queue::fake();
         $sale = $this->sale(); // sin invoice_requested
 
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessageMatches('/no fue creada con solicitud de factura/');
+        app(InvoicingService::class)->manualEmit('product_sale', $sale->id);
+
+        $invoice = ElectronicInvoice::sole();
+        $this->assertNotNull($invoice->manual_authorization_at, 'la autorización debe quedar sellada');
+        // La intención original del cliente se conserva: no la pidió al comprar.
+        $this->assertFalse((bool) $sale->fresh()->invoice_requested);
+        Queue::assertPushed(EmitElectronicInvoiceJob::class, 1);
+    }
+
+    /**
+     * Lo que SÍ sigue sin encolarse: una venta que no se cobró.
+     *
+     * Esa era la lección real de la solicitud #18 —no despachar jobs
+     * condenados—, y ahora la sostiene el estado del cobro en vez de un booleano
+     * marcado (o no) el día de la compra.
+     */
+    public function test_una_venta_no_cobrada_no_encola_nada(): void
+    {
+        Queue::fake();
+        $sale = $this->sale(['status' => 'delivered', 'payment_status' => 'pending']);
+
+        $this->expectException(ManualEmissionRejectedException::class);
+        $this->expectExceptionMessageMatches('/no «pagado»/');
 
         try {
             app(InvoicingService::class)->manualEmit('product_sale', $sale->id);
@@ -153,9 +175,9 @@ class StuckProcessingTest extends TestCase
 
     public function test_la_barrera_rechaza_sin_dejar_la_solicitud_en_processing(): void
     {
-        // Exactamente el caso #18: venta cobrada, real, pero sin solicitud.
-        // La solicitud ya existe (la crea el hook de caja como evidencia) y el
-        // job se ejecuta; debe terminar en `error` con el motivo, no en
+        // Exactamente el caso #18: venta cobrada y real, con una solicitud que
+        // nadie pidió ni autorizó (la crea el hook de caja como evidencia). El
+        // job se ejecuta y debe terminar en `error` con el motivo, no en
         // `processing`.
         Http::fake();
         $sale = $this->sale();
@@ -165,7 +187,7 @@ class StuckProcessingTest extends TestCase
 
         $invoice->refresh();
         $this->assertSame(InvoiceStatus::ERROR, $invoice->status);
-        $this->assertStringContainsString('no fue solicitada por el cliente', (string) $invoice->failure_reason);
+        $this->assertStringContainsString('ni autorizada por un administrador', (string) $invoice->failure_reason);
         // Nada salió al proveedor y no se consumió consecutivo.
         Http::assertNothingSent();
         $this->assertNull($invoice->full_number);

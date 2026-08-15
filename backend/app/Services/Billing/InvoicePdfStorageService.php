@@ -2,6 +2,7 @@
 
 namespace App\Services\Billing;
 
+use App\Enums\InvoiceType;
 use App\Models\ElectronicInvoice;
 use App\Services\Billing\Factus\FactusClient;
 use Illuminate\Support\Arr;
@@ -66,7 +67,11 @@ class InvoicePdfStorageService
     {
         $out = [];
 
-        $pdf = $client->downloadPdf($number);
+        // Una nota crédito no vive en /v2/bills: pedirle su PDF por ahí devuelve
+        // 404 o, peor, el de otra cosa. Cada tipo tiene su propio endpoint.
+        $esNotaCredito = $invoice->type === InvoiceType::CREDIT_NOTE;
+
+        $pdf = $esNotaCredito ? $client->downloadCreditNotePdf($number) : $client->downloadPdf($number);
         if ($pdf['ok']) {
             $b64 = $this->extractBase64($pdf['body'], [
                 'data.pdf_base_64_encoded', 'data.pdf_base_64', 'data.pdf_base64',
@@ -81,7 +86,7 @@ class InvoicePdfStorageService
             ]);
         }
 
-        $xml = $client->downloadXml($number);
+        $xml = $esNotaCredito ? $client->downloadCreditNoteXml($number) : $client->downloadXml($number);
         if ($xml['ok']) {
             $b64 = $this->extractBase64($xml['body'], [
                 'data.xml_base_64_encoded', 'data.xml_base_64', 'data.xml_base64',

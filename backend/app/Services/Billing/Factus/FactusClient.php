@@ -250,6 +250,12 @@ class FactusClient
         return $this->send('get', self::PATH_CREDIT.rawurlencode($number).'/download-pdf');
     }
 
+    /** Descarga el XML UBL de una nota crédito por número. GET. */
+    public function downloadCreditNoteXml(string $number): array
+    {
+        return $this->send('get', self::PATH_CREDIT.rawurlencode($number).'/download-xml');
+    }
+
     /** Lista de rangos de numeración configurados en la cuenta. GET. */
     public function getNumberingRanges(): array
     {
