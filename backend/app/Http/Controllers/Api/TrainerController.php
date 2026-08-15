@@ -154,7 +154,10 @@ class TrainerController extends Controller
         return $trainer->loadAvg('reviews', 'rating')
             ->loadCount('reviews')
             ->loadCount(['professionalSessions as active_sessions_count' => fn ($q) => $q->whereNull('revoked_at')])
-            ->load('roleAssignments');
+            // Sin cargar `reviews` aquí, serialize() veía la relación descargada y
+            // devolvía recentReviews=[]: el detalle del entrenador nunca mostraba
+            // las calificaciones, aunque el listado sí.
+            ->load(['roleAssignments', 'reviews.member:id,full_name']);
     }
 
     public function destroy(Trainer $trainer)
@@ -196,6 +199,15 @@ class TrainerController extends Controller
         // El ranking cambió → refresca el módulo para todos en vivo.
         RealtimeEvents::rankingChanged();
 
+        // Aviso al CRM: es lo que recarga el módulo de Entrenadores en vivo
+        // (rankingChanged solo llega a la app, no al panel).
+        app(NotificationService::class)->notifyTrainerReviewed(
+            $trainer,
+            $member,
+            $data['rating'],
+            $data['comment'] ?? null,
+        );
+
         return response()->json([
             'data' => new TrainerResource($trainer),
         ]);
@@ -227,6 +239,13 @@ class TrainerController extends Controller
 
         // El ranking cambió → refresca el módulo para todos en vivo.
         RealtimeEvents::rankingChanged();
+
+        app(NotificationService::class)->notifyTrainerReviewed(
+            $trainer,
+            $review->member,
+            $validated['rating'],
+            $validated['comment'] ?? null,
+        );
 
         return response()->json([
             'ok' => true,
@@ -307,10 +326,12 @@ class TrainerController extends Controller
 
     private function serialize(Trainer $t): array
     {
+        // Se mandan TODAS las reseñas cargadas (antes solo 3): el CRM es la única
+        // vista donde se puede leer lo que escriben los miembros, y truncar aquí
+        // hacía imposible revisar el histórico de un entrenador.
         $recentReviews = $t->relationLoaded('reviews')
             ? $t->reviews
                 ->sortByDesc('created_at')
-                ->take(3)
                 ->values()
                 ->map(fn ($r) => [
                     'memberName' => $r->member?->full_name ?? 'Miembro',
@@ -319,6 +340,11 @@ class TrainerController extends Controller
                     'createdAt' => optional($r->created_at)->toIso8601String(),
                 ])
             : [];
+
+        // Cuántas de esas reseñas traen texto. La tarjeta lo usa para distinguir
+        // "nadie ha calificado" de "calificaron pero sin escribir nada", que es
+        // justo la confusión de no ver ningún comentario.
+        $withComment = collect($recentReviews)->filter(fn ($r) => trim((string) $r['comment']) !== '')->count();
 
         return [
             'id' => (string) $t->id,
@@ -351,6 +377,7 @@ class TrainerController extends Controller
             'assignedMembers' => (int) $t->assigned_members,
             'reviewsAvgRating' => round((float) ($t->reviews_avg_rating ?? 0), 1),
             'reviewsCount' => (int) ($t->reviews_count ?? 0),
+            'reviewsWithCommentCount' => $withComment,
             'recentReviews' => $recentReviews,
             'createdAt' => optional($t->created_at)->toIso8601String(),
             'updatedAt' => optional($t->updated_at)->toIso8601String(),

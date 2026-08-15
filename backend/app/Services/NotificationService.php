@@ -862,6 +862,48 @@ class NotificationService
         });
     }
 
+    /**
+     * Un miembro calificó a un entrenador desde la app. Solo avisa al CRM (el
+     * entrenador no recibe nada): además de informar, es lo que hace que el
+     * módulo de Entrenadores se recargue en vivo, porque escucha las
+     * notificaciones con `action_type = trainer_detail`. Sin esto, una
+     * calificación nueva no aparecía hasta recargar la página a mano.
+     *
+     * `event_key` incluye la fecha: si la misma persona reajusta su reseña el
+     * mismo día no se duplica el aviso.
+     */
+    public function notifyTrainerReviewed($trainer, $member, $rating, ?string $comment = null): void
+    {
+        $this->safe(function () use ($trainer, $member, $rating, $comment): void {
+            $trainerId = $this->attr($trainer, 'id');
+            $trainerName = $this->attr($trainer, 'full_name') ?? $this->attr($trainer, 'name') ?? 'un entrenador';
+            $memberName = $this->attr($member, 'full_name') ?? 'Un miembro';
+            $stars = rtrim(rtrim(number_format((float) $rating, 1, '.', ''), '0'), '.');
+            $hasComment = trim((string) $comment) !== '';
+            $date = now()->toDateString();
+            $memberId = $this->attr($member, 'id');
+
+            $this->createAdminNotification([
+                'type' => 'trainer',
+                'title' => 'Nueva calificación de entrenador',
+                'message' => "{$memberName} calificó a {$trainerName} con {$stars}★"
+                    .($hasComment ? ' y dejó un comentario.' : ' (sin comentario).'),
+                'priority' => 'low',
+                'member' => $member,
+                'action_type' => 'trainer_detail',
+                'action_payload' => array_filter(['trainer_id' => $trainerId]),
+                'metadata' => array_filter([
+                    'trainer_id' => $trainerId,
+                    'trainer' => $trainerName,
+                    'member_name' => $memberName,
+                    'rating' => (float) $rating,
+                    'has_comment' => $hasComment,
+                ], fn ($v) => $v !== null),
+                'event_key' => ($trainerId && $memberId) ? "trainer_reviewed_{$trainerId}_{$memberId}_{$date}" : null,
+            ]);
+        });
+    }
+
     // ── PROMOCIÓN / NUEVO MIEMBRO ──────────────────────────────────────────────────
 
     /** Promoción publicada: broadcast a miembros + copia operativa al CRM. */
