@@ -248,6 +248,37 @@ class UserController extends Controller
             'guardianAccepts' => 'sometimes|boolean',
         ]);
 
+        // El documento es la llave de acceso del miembro y es ÚNICO en `members`.
+        // Al editar hay que comprobarlo igual que al crear: sin esta guarda, un
+        // documento ya usado se escribía en `users.document` (esa columna no
+        // tiene índice único) y estallaba después al replicarlo en
+        // `members.document_number`, dejando las dos tablas desincronizadas y
+        // devolviendo un 500 en vez de un mensaje claro.
+        if (array_key_exists('document', $validated) && filled($validated['document'])) {
+            $document = Member::normalizeDocumentNumber($validated['document']);
+
+            if ($document === null) {
+                return response()->json(['message' => 'El documento no es válido.'], 422);
+            }
+
+            $takenByAnotherMember = Member::where('document_number', $document)
+                ->when($user->appMember, fn ($q) => $q->whereKeyNot($user->appMember->getKey()))
+                ->exists();
+            $takenByAnotherUser = User::where('document', $document)
+                ->whereKeyNot($user->getKey())
+                ->exists();
+
+            if ($takenByAnotherMember || $takenByAnotherUser) {
+                return response()->json([
+                    'message' => 'Ya existe un miembro registrado con ese documento.',
+                ], 422);
+            }
+
+            // Se guarda normalizado en AMBAS tablas (como hace `store`), para que
+            // el login por documento encuentre siempre al miembro.
+            $validated['document'] = $document;
+        }
+
         // Estado anterior para detectar cambios reales (notificaciones).
         $originalStatus = $user->status;
 
