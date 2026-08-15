@@ -47,13 +47,14 @@ class ClassAvailabilityTimezoneTest extends TestCase
 
     private function makeMember(string $doc): Member
     {
-        return Member::create([
+        // Reservar exige un plan con clases (ver MemberClassContext).
+        return $this->givePlanWithClasses(Member::create([
             'full_name' => 'Socio '.$doc,
             'document_number' => $doc,
             'phone' => '+57300'.substr($doc, -7),
             'access_hash' => 'tok-'.$doc,
             'status' => Member::STATUS_ACTIVE,
-        ]);
+        ]));
     }
 
     private function auth(Member $m): array
@@ -145,5 +146,61 @@ class ClassAvailabilityTimezoneTest extends TestCase
         $this->postJson("/api/app/classes/{$class->id}/reserve", [], $this->auth($this->member))
             ->assertStatus(422)
             ->assertJsonPath('message', 'Clase completa.');
+    }
+
+    /**
+     * La app bloquea la pestaña Clases cuando el plan no las incluye, pero la
+     * API no lo comprobaba: una llamada directa reservaba igual y ocupaba un
+     * cupo que corresponde a otro socio.
+     */
+    public function test_un_plan_sin_clases_no_puede_reservar(): void
+    {
+        $class = $this->makeClass(capacity: 10);
+
+        $sinClases = Member::create([
+            'full_name' => 'Sin clases',
+            'document_number' => '700700703',
+            'phone' => '+573007007003',
+            'access_hash' => 'tok-700700703',
+            'status' => Member::STATUS_ACTIVE,
+        ]);
+        $this->givePlanWithClasses($sinClases, ['classes' => false]);
+
+        $this->postJson("/api/app/classes/{$class->id}/reserve", [], $this->auth($sinClases))
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'classes_not_in_plan');
+
+        // La ruta alias que usa la app móvil cierra el mismo hueco.
+        $this->postJson("/api/classes/{$class->id}/reserve", [], $this->auth($sinClases))
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'classes_not_in_plan');
+
+        // Y la reserva semanal en lote.
+        $this->postJson('/api/app/classes/weekly/reserve', [
+            'items' => [['class_id' => $class->id, 'session_date' => self::LOCAL_DATE]],
+        ], $this->auth($sinClases))
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'classes_not_in_plan');
+
+        $this->assertSame(0, ClassReservation::where('member_id', $sinClases->id)->count());
+    }
+
+    /**
+     * Una membresía vencida tampoco puede tomar cupo. Se usa una fecha de hace
+     * varios días a propósito: el plan sigue vigente hasta la medianoche LOCAL
+     * del último día, así que "ayer" en UTC todavía contaría como vigente.
+     */
+    public function test_una_membresia_vencida_no_puede_reservar(): void
+    {
+        $class = $this->makeClass(capacity: 10);
+
+        $vencido = $this->makeMember('700700704');
+        $vencido->user->forceFill([
+            'membership_end_date' => now()->subDays(3)->toDateString(),
+        ])->save();
+
+        $this->postJson("/api/app/classes/{$class->id}/reserve", [], $this->auth($vencido))
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'classes_not_in_plan');
     }
 }

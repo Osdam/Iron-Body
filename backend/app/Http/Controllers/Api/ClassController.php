@@ -408,6 +408,10 @@ class ClassController extends Controller
     {
         $member = $request->attributes->get('auth_member');
 
+        if (! $this->memberHasClassesFeature($member)) {
+            return $this->classesNotInPlanResponse();
+        }
+
         if ($myClass->status !== 'active' || ! $myClass->allow_online_booking) {
             return response()->json(['message' => 'Clase no disponible para reservas.'], 422);
         }

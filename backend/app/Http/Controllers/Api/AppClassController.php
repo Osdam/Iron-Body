@@ -94,6 +94,10 @@ class AppClassController extends Controller
     {
         $member = $this->member($request);
 
+        if (! $this->memberHasClassesFeature($member)) {
+            return $this->classesNotInPlanResponse();
+        }
+
         if ($myClass->status !== 'active' || ! $myClass->allow_online_booking) {
             return response()->json(['message' => 'Clase no disponible para reservas.'], 422);
         }
@@ -350,6 +354,10 @@ class AppClassController extends Controller
     public function reserveWeek(Request $request): JsonResponse
     {
         $member = $this->member($request);
+
+        if (! $this->memberHasClassesFeature($member)) {
+            return $this->classesNotInPlanResponse();
+        }
 
         $data = $request->validate([
             'items' => ['required', 'array', 'min:1', 'max:40'],

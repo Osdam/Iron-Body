@@ -47,13 +47,16 @@ class WeeklyClassPlannerTest extends TestCase
 
     private function makeMember(string $doc): Member
     {
-        return Member::create([
+        $member = Member::create([
             'full_name' => 'Plan '.$doc,
             'document_number' => $doc,
             'phone' => '+57300'.substr($doc, -7),
             'access_hash' => 'tok-'.$doc,
             'status' => Member::STATUS_ACTIVE,
         ]);
+
+        // Reservar exige un plan con clases (ver MemberClassContext).
+        return $this->givePlanWithClasses($member);
     }
 
     private function auth(Member $m): array

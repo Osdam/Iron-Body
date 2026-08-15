@@ -7,6 +7,7 @@ use App\Models\ClassReservation;
 use App\Models\ClassSession;
 use App\Models\Member;
 use App\Models\MyClass;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +21,29 @@ trait MemberClassContext
 {
     /** Zona horaria operativa del gimnasio (el backend corre en UTC). */
     public const OPERATIONAL_TZ = 'America/Bogota';
+
+    /**
+     * ¿El plan del miembro incluye clases?
+     *
+     * La app ya bloquea la pestaña Clases con este mismo flag
+     * (`Member::resolvedFeatures()`, que es lo que consume el cliente), pero la
+     * API no lo comprobaba: una llamada directa reservaba igual y ocupaba un
+     * cupo que corresponde a otro socio. Se usa la MISMA fuente que el cliente
+     * para que backend y app no puedan divergir.
+     */
+    protected function memberHasClassesFeature(Member $member): bool
+    {
+        return (bool) ($member->resolvedFeatures()['classes'] ?? false);
+    }
+
+    /** Respuesta única cuando el plan no incluye clases. */
+    protected function classesNotInPlanResponse(): JsonResponse
+    {
+        return response()->json([
+            'message' => 'Tu plan no incluye reserva de clases.',
+            'code' => 'classes_not_in_plan',
+        ], 403);
+    }
 
     /**
      * "Hoy" del gimnasio. `Carbon::today()` devuelve el día en UTC, que en

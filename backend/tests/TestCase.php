@@ -3,12 +3,54 @@
 namespace Tests;
 
 use App\Models\Admin;
+use App\Models\Member;
+use App\Models\Plan;
+use App\Models\User;
 use App\Services\Admin\AdminSessionService;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Testing\TestResponse;
 
 abstract class TestCase extends BaseTestCase
 {
+    /**
+     * Enlaza al miembro con un User y un plan VIGENTE que incluye clases.
+     *
+     * Reservar exige que el plan del miembro tenga la feature `classes` (misma
+     * fuente que usa la app para bloquear la pestaña). Un miembro suelto, sin
+     * User ni plan, resuelve todas las features en false y recibiría un 403.
+     */
+    protected function givePlanWithClasses(Member $member, array $features = []): Member
+    {
+        $resolved = array_merge(Plan::defaultFeatures(), ['classes' => true], $features);
+        // Un plan distinto por combinación de features: si todos compartieran
+        // nombre, el primero creado ganaría y los overrides se ignorarían.
+        $name = 'Plan Test '.substr(md5(json_encode($resolved)), 0, 8);
+
+        $plan = Plan::firstOrCreate(
+            ['name' => $name],
+            [
+                'price' => 100000,
+                'duration_days' => 30,
+                'active' => true,
+                'features' => $resolved,
+            ],
+        );
+
+        $user = User::create([
+            'name' => $member->full_name,
+            'email' => 'plan-'.$member->document_number.'@ironbody.test',
+            'password' => bcrypt('secret-password'),
+            'document' => $member->document_number,
+            'status' => 'active',
+            'plan' => $plan->name,
+            'membership_end_date' => now()->addYear()->toDateString(),
+        ]);
+
+        $member->forceFill(['user_id' => $user->id])->save();
+
+        return $member->refresh();
+    }
+
     /**
      * Cabecera con una sesión admin REAL (login email+contraseña). Crea el admin
      * si no se pasa, emite una sesión vía AdminSessionService y devuelve el

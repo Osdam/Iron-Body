@@ -30,10 +30,10 @@ class RecurringClassTest extends TestCase
         $this->monday = Carbon::parse('2026-06-15 08:00:00')->startOfWeek(Carbon::MONDAY)->setTime(8, 0);
         Carbon::setTestNow($this->monday);
 
-        $this->member = Member::create([
+        $this->member = $this->givePlanWithClasses(Member::create([
             'full_name' => 'Rec Member', 'document_number' => '910910910',
             'phone' => '+573009109109', 'access_hash' => 'tok-910', 'status' => Member::STATUS_ACTIVE,
-        ]);
+        ]));
     }
 
     protected function tearDown(): void
