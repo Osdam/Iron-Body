@@ -45,6 +45,12 @@ class WeeklyTrainingService
     private const WEEKDAYS = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
 
     /**
+     * Semanas de pasado reciente que siempre se pueden mirar, haya o no
+     * entrenamientos. Más atrás solo se llega si de verdad hay historial.
+     */
+    private const BROWSABLE_WEEKS = 12;
+
+    /**
      * Resumen de la semana que contiene `$weekStart`, con la anterior para
      * comparar. Sin `$weekStart` devuelve la semana en curso.
      *
@@ -93,10 +99,9 @@ class WeeklyTrainingService
             'has_previous_sessions' => $this->hasAnySession($member),
             'last_session_at' => $this->lastSessionAt($member),
 
-            // Navegación. Al futuro no se va; hacia atrás, solo mientras haya
-            // algo que ver.
+            // Navegación. Al futuro no se va nunca.
             'can_go_next' => $week->lt($currentWeek),
-            'can_go_previous' => $this->hasSessionsBefore($member, $week),
+            'can_go_previous' => $this->canGoPrevious($member, $week, $currentWeek),
 
             'previous_week' => [
                 'week_start' => $previous->toDateString(),
@@ -224,8 +229,25 @@ class WeeklyTrainingService
         return WorkoutSession::query()->where('member_id', $member->id)->exists();
     }
 
-    private function hasSessionsBefore(Member $member, CarbonImmutable $week): bool
+    /**
+     * ¿Tiene sentido dejar retroceder?
+     *
+     * Dos motivos, y basta uno:
+     *
+     *  - queda historial detrás, evidentemente;
+     *  - o la semana anterior cae dentro del pasado reciente. "¿Entrené la
+     *    semana pasada?" es una pregunta legítima y "no" es una respuesta útil:
+     *    apagar la flecha la deja sin contestar.
+     *
+     * El tope existe para que el socio no pueda caminar indefinidamente hacia
+     * un pasado vacío en el que nunca hubo nada.
+     */
+    private function canGoPrevious(Member $member, CarbonImmutable $week, CarbonImmutable $currentWeek): bool
     {
+        if ($week->subWeek()->gte($currentWeek->subWeeks(self::BROWSABLE_WEEKS))) {
+            return true;
+        }
+
         return WorkoutSession::query()
             ->where('member_id', $member->id)
             ->where('completed_at', '<', $this->utc($week))

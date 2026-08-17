@@ -309,19 +309,40 @@ class WeeklyTrainingHistoryTest extends TestCase
         $this->assertSame('2026-08-03', $dosAtras['week_start']);
         $this->assertEqualsWithDelta(300, $dosAtras['total_volume_kg'], 0.01);
         $this->assertFalse($dosAtras['is_current_week']);
-        $this->assertFalse($dosAtras['can_go_previous'], 'no hay nada antes: la flecha se apaga');
+        $this->assertTrue($dosAtras['can_go_previous'], 'sigue siendo pasado reciente');
 
         // La comparación de esa semana mira a la anterior a ella, que está vacía.
         $this->assertFalse($dosAtras['previous_week']['has_sessions']);
         $this->assertNull($dosAtras['volume_change_pct']);
     }
 
-    public function test_can_go_previous_indica_si_queda_historia_detras(): void
+    /**
+     * El pasado reciente se puede mirar aunque esté vacío: "¿entrené la semana
+     * pasada?" es una pregunta legítima y "no" es una respuesta útil. Más atrás
+     * la flecha se apaga si nunca hubo nada, para no caminar indefinidamente
+     * hacia un pasado vacío.
+     */
+    public function test_el_pasado_reciente_se_puede_mirar_aunque_este_vacio(): void
     {
-        $this->sessionAtLocal('2026-08-11 10:00:00', [[10, 90, true]]);
+        $this->assertTrue(
+            $this->weekly()['can_go_previous'],
+            'un socio sin historial puede asomarse a la semana pasada',
+        );
 
-        $this->assertTrue($this->weekly()['can_go_previous'], 'hay algo la semana pasada');
-        $this->assertFalse($this->weekly('2026-08-10')['can_go_previous'], 'y nada antes de ella');
+        // 12 semanas atrás es el límite: más allá hace falta historial real.
+        $lejos = $this->weekly('2026-05-25');
+        $this->assertFalse($lejos['can_go_previous'], 'ahí atrás nunca hubo nada');
+    }
+
+    public function test_con_historial_antiguo_se_puede_seguir_retrocediendo(): void
+    {
+        // Un entrenamiento muy anterior al límite de pasado reciente.
+        $this->sessionAtLocal('2026-01-15 10:00:00', [[10, 90, true]]);
+
+        $this->assertTrue(
+            $this->weekly('2026-05-25')['can_go_previous'],
+            'hay historial detrás: la flecha sigue viva',
+        );
     }
 
     // ──────────────────────────────────────────── 10 y 11. fronteras de Bogotá
