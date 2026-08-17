@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\AppPaymentController;
 use App\Http\Controllers\Api\WompiPaymentController;
 use App\Http\Controllers\Api\WompiWebhookController;
 use App\Http\Controllers\Api\AppRoutineController;
+use App\Http\Controllers\Api\AppWorkoutSessionController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AdminAuthController;
 use App\Http\Controllers\Api\MemberRegistrationController;
@@ -620,6 +621,11 @@ Route::middleware('auth.member')->group(function (): void {
     Route::post('app/routines/templates/{routine}/adopt', [AppRoutineController::class, 'adopt']);
     Route::post('app/routines',                   [AppRoutineController::class, 'store']);
     Route::post('app/routines/{routine}/complete',[AppRoutineController::class, 'complete']);
+    // Sesión de entrenamiento REALMENTE ejecutada (duración, series, cargas).
+    // Idempotente por `client_session_id`: un reintento devuelve la sesión ya
+    // registrada en vez de duplicarla. Sustituye a /complete para la app.
+    Route::post('app/workout-sessions',            [AppWorkoutSessionController::class, 'store']);
+    Route::get('app/workout-sessions/{clientSessionId}', [AppWorkoutSessionController::class, 'show']);
     // Ocultar/restaurar una rutina semi-personalizada SOLO para este miembro
     // (no borra la rutina global). Ver MemberHiddenRoutine.
     Route::post('app/routines/{routine}/hide',    [AppRoutineController::class, 'hide']);
