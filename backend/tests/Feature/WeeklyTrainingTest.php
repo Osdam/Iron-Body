@@ -184,6 +184,31 @@ class WeeklyTrainingTest extends TestCase
         $this->assertEqualsWithDelta(3000, $domingo['volume_kg'], 0.01);
     }
 
+    /**
+     * Con entrenamientos previos, la semana vacía debe poder decirlo: a quien
+     * ya entrenó no se le puede sugerir que empiece.
+     */
+    public function test_una_semana_vacia_distingue_si_ya_entreno_antes(): void
+    {
+        $this->sessionAtLocal('2026-08-16 19:10:00', 4900); // domingo anterior
+
+        $w = $this->weekly();
+
+        $this->assertFalse($w['has_sessions'], 'esta semana no hay');
+        $this->assertTrue($w['has_previous_sessions'], 'pero sí entrenó antes');
+        $this->assertNotNull($w['last_session_at']);
+    }
+
+    /** Un socio recién llegado no tiene nada previo. */
+    public function test_un_socio_sin_historial_no_tiene_sesiones_previas(): void
+    {
+        $w = $this->weekly();
+
+        $this->assertFalse($w['has_sessions']);
+        $this->assertFalse($w['has_previous_sessions']);
+        $this->assertNull($w['last_session_at']);
+    }
+
     /** 7 — una sesión de la semana anterior no entra en la actual. */
     public function test_la_semana_anterior_no_se_cuela(): void
     {

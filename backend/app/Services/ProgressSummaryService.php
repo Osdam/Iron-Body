@@ -236,12 +236,26 @@ class ProgressSummaryService
             ];
         }
 
+        // Contexto para que la pantalla no mienta cuando la semana está vacía
+        // pero el socio SÍ ha entrenado antes: decirle "completa uno para
+        // empezar" a quien lleva cinco entrenamientos es sencillamente falso.
+        // Es dato real, no relleno.
+        $lastEver = WorkoutSession::query()
+            ->where('member_id', $member->id)
+            ->orderByDesc('completed_at')
+            ->first(['completed_at']);
+
         return [
             'week_start' => $weekStart->toDateString(),
             'week_end' => $weekStart->addDays(6)->toDateString(),
             'timezone' => self::TZ,
             // La app decide el estado vacío SOLO con esto.
             'has_sessions' => $rows->isNotEmpty(),
+            'has_previous_sessions' => $lastEver !== null,
+            'last_session_at' => $lastEver?->completed_at
+                ? CarbonImmutable::parse($lastEver->completed_at)
+                    ->setTimezone(self::TZ)->toIso8601String()
+                : null,
             'total_sessions' => $rows->count(),
             'total_sets' => (int) $rows->sum('total_sets'),
             'total_volume_kg' => round((float) $rows->sum(fn ($r) => (float) $r->total_volume_kg), 2),
