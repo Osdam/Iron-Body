@@ -46,8 +46,11 @@ class AppWorkoutSessionController extends Controller
             'exercises.*.order' => ['nullable', 'integer', 'min:0', 'max:200'],
             'exercises.*.sets' => ['nullable', 'array', 'max:40'],
             'exercises.*.sets.*.set_number' => ['nullable', 'integer', 'min:1', 'max:200'],
+            // Flutter ya normaliza y acota, pero el backend valida por su
+            // cuenta: la app no puede ser la única barrera y el endpoint es
+            // alcanzable directamente.
             'exercises.*.sets.*.reps' => ['nullable', 'integer', 'min:0', 'max:1000'],
-            'exercises.*.sets.*.weight_kg' => ['nullable', 'numeric', 'min:0', 'max:1000'],
+            'exercises.*.sets.*.weight_kg' => ['nullable', 'numeric', 'min:0', 'max:500'],
             'exercises.*.sets.*.rpe' => ['nullable', 'integer', 'min:0', 'max:10'],
             'exercises.*.sets.*.completed' => ['nullable', 'boolean'],
         ]);

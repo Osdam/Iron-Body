@@ -433,6 +433,61 @@ class WorkoutSessionTest extends TestCase
         $this->assertSame(1, RoutineCompletion::count());
     }
 
+    /**
+     * El backend valida el peso por su cuenta: Flutter normaliza y acota, pero
+     * el endpoint es alcanzable directamente y no puede fiarse del cliente.
+     *
+     * @dataProvider pesosInvalidos
+     */
+    public function test_rechaza_pesos_imposibles(mixed $peso): void
+    {
+        $this->postJson('/api/app/workout-sessions', $this->payload([
+            'client_session_id' => 'sess-peso-malo',
+            'exercises' => [[
+                'name' => 'Press',
+                'sets' => [['set_number' => 1, 'reps' => 10, 'weight_kg' => $peso, 'completed' => true]],
+            ]],
+        ]), $this->auth())->assertStatus(422);
+
+        $this->assertSame(0, WorkoutSession::count());
+    }
+
+    public static function pesosInvalidos(): array
+    {
+        return [
+            'negativo' => [-10],
+            'absurdo' => [99999],
+            'texto' => ['ochenta'],
+        ];
+    }
+
+    /** Un decimal legítimo llega intacto hasta la base. */
+    public function test_acepta_pesos_decimales(): void
+    {
+        $this->postJson('/api/app/workout-sessions', $this->payload([
+            'client_session_id' => 'sess-decimal',
+            'exercises' => [[
+                'name' => 'Press',
+                'sets' => [
+                    ['set_number' => 1, 'reps' => 10, 'weight_kg' => 72.25, 'completed' => true],
+                    ['set_number' => 2, 'reps' => 8, 'weight_kg' => 80.5, 'completed' => true],
+                ],
+            ]],
+        ]), $this->auth())->assertCreated();
+
+        $pesos = WorkoutSessionSet::orderBy('set_number')
+            ->pluck('weight_kg')->map(fn ($w) => (float) $w)->all();
+
+        $this->assertSame([72.25, 80.5], $pesos);
+
+        // 10×72.25 + 8×80.5 = 722.5 + 644 = 1366.5
+        $this->assertEqualsWithDelta(
+            1366.5,
+            (float) WorkoutSession::first()->total_volume_kg,
+            0.01,
+        );
+    }
+
     public function test_requiere_autenticacion(): void
     {
         $this->postJson('/api/app/workout-sessions', $this->payload())->assertStatus(401);
