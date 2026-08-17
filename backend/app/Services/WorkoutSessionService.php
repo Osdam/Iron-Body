@@ -62,15 +62,23 @@ class WorkoutSessionService
 
         $routine = $this->resolveRoutine($member, $payload['routine_id'] ?? null);
 
-        $session = DB::transaction(function () use ($member, $payload, $clientId, $routine): WorkoutSession {
+        $result = DB::transaction(function () use ($member, $payload, $clientId, $routine): array {
             $completedAt = $this->parseTime($payload['completed_at'] ?? null) ?? CarbonImmutable::now();
             $startedAt = $this->parseTime($payload['started_at'] ?? null);
 
             // La duración sale de timestamps reales, nunca del cronómetro de la
             // pantalla. Si la app no mandó inicio, no se inventa: queda en 0.
+            //
+            // El redondeo a entero NO es cosmético: `diffInSeconds()` devuelve
+            // FLOAT en Carbon 3 (en Carbon 2 devolvía int) y la app manda las
+            // horas con milisegundos, así que salía 61.081. La columna es
+            // `unsignedInteger` y PostgreSQL rechazaba el insert con 22P02
+            // ("invalid input syntax for type integer"). SQLite, que es lo que
+            // usan los tests, sí lo aceptaba: por eso pasaba en local y
+            // reventaba en producción.
             $duration = 0;
             if ($startedAt !== null) {
-                $duration = max(0, $startedAt->diffInSeconds($completedAt));
+                $duration = (int) round(max(0, $startedAt->diffInSeconds($completedAt)));
             }
 
             $completion = null;
@@ -100,20 +108,25 @@ class WorkoutSessionService
             $this->storeSets($session, $payload['exercises'] ?? [], $completedAt);
             $this->refreshTotals($session);
 
-            return $session;
+            // Los récords se derivan DENTRO de la transacción: o queda todo
+            // (sesión + series + completion + récords) o no queda nada. Un fallo
+            // aquí no puede dejar una sesión guardada con récords a medias.
+            $session->load('sets');
+            $records = $this->records->evaluateSession($member, $session);
+
+            return ['session' => $session, 'records' => $records];
         });
+
+        /** @var WorkoutSession $session */
+        $session = $result['session'];
+        /** @var \Illuminate\Support\Collection $records */
+        $records = $result['records'];
 
         $session->load('sets.exercise');
 
-        // Fuera de la transacción y best-effort: nada de esto puede tumbar un
-        // entrenamiento que el socio ya terminó.
-        $records = collect();
-        try {
-            $records = $this->records->evaluateSession($member, $session);
-        } catch (\Throwable $e) {
-            Log::warning('workout.records_failed', ['session' => $session->id, 'error' => $e->getMessage()]);
-        }
-
+        // Efectos externos, fuera de la transacción y best-effort: no forman
+        // parte del registro durable y no pueden tumbar un entrenamiento que el
+        // socio ya terminó.
         try {
             // Entrenar cuenta como día activo. `touch` es idempotente por
             // (miembro, fecha) en hora de Bogotá: dos rutinas el mismo día no

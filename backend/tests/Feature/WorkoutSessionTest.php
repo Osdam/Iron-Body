@@ -12,6 +12,10 @@ use App\Models\WorkoutSession;
 use App\Models\WorkoutSessionSet;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use App\Services\PersonalRecordService;
+use Illuminate\Support\Collection;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -291,6 +295,142 @@ class WorkoutSessionTest extends TestCase
         ]), $this->auth())->assertCreated();
 
         $this->assertSame(0, $res->json('data.duration_seconds'));
+    }
+
+    /**
+     * Reproduce el fallo real del iPhone: 3 ejercicios, 9 series y una duración
+     * de 1 min 1 s con MILISEGUNDOS.
+     *
+     * `DateTime.now().toIso8601String()` incluye milisegundos, y en Carbon 3
+     * `diffInSeconds()` devuelve float (en Carbon 2 devolvía int). Ese float
+     * llegaba a `duration_seconds`, que es `unsignedInteger`, y PostgreSQL lo
+     * rechazaba con 22P02: "invalid input syntax for type integer: 24.081829".
+     *
+     * Se comprueba el valor CRUDO de la columna, no el del modelo: el cast
+     * `'integer'` de Eloquent convierte al leer y ocultaría el problema.
+     */
+    public function test_la_duracion_se_guarda_como_entero_aunque_lleguen_milisegundos(): void
+    {
+        $res = $this->postJson('/api/app/workout-sessions', $this->payload([
+            'client_session_id' => 'sess-iphone-real',
+            'started_at' => '2026-08-16T23:53:37.100-05:00',
+            'completed_at' => '2026-08-16T23:54:38.181-05:00', // 61,081 s
+        ]), $this->auth())->assertCreated();
+
+        $this->assertSame(61, $res->json('data.duration_seconds'));
+
+        $raw = DB::table('workout_sessions')
+            ->where('client_session_id', 'sess-iphone-real')
+            ->value('duration_seconds');
+
+        $this->assertSame(61, $raw, 'la columna es entera: un float la rompe en PostgreSQL');
+    }
+
+    /** La sesión completa del iPhone: 3 ejercicios y 9 series con carga. */
+    public function test_una_sesion_de_tres_ejercicios_y_nueve_series(): void
+    {
+        $exercises = [];
+        foreach (['Press de banca', 'Sentadilla', 'Peso muerto'] as $i => $name) {
+            $sets = [];
+            for ($s = 1; $s <= 3; $s++) {
+                $sets[] = [
+                    'set_number' => $s,
+                    'reps' => 10,
+                    'weight_kg' => 20 + ($i * 10) + $s,
+                    'rpe' => 7,
+                    'completed' => true,
+                ];
+            }
+            $exercises[] = ['name' => $name, 'order' => $i, 'sets' => $sets];
+        }
+
+        $res = $this->postJson('/api/app/workout-sessions', $this->payload([
+            'client_session_id' => 'sess-3x3',
+            'started_at' => '2026-08-16T23:53:37.100-05:00',
+            'completed_at' => '2026-08-16T23:54:38.181-05:00',
+            'exercises' => $exercises,
+        ]), $this->auth())->assertCreated();
+
+        $this->assertSame(61, $res->json('data.duration_seconds'));
+        $this->assertSame(9, $res->json('data.total_sets'));
+        $this->assertSame(3, $res->json('data.total_exercises'));
+
+        // 10×(21+22+23) + 10×(31+32+33) + 10×(41+42+43) = 660+960+1260 = 2880
+        $this->assertEqualsWithDelta(2880, $res->json('data.total_volume_kg'), 0.01);
+        $this->assertSame(9, WorkoutSessionSet::count());
+    }
+
+    /**
+     * Si algo falla a mitad de la persistencia, no puede quedar media sesión
+     * guardada: ni la completion legacy, ni series sueltas, ni récords.
+     *
+     * Se simula un fallo en la derivación de récords, que ocurre DENTRO de la
+     * transacción y después de haber creado sesión, series y completion.
+     */
+    public function test_un_fallo_al_guardar_no_deja_estados_parciales(): void
+    {
+        $this->app->bind(PersonalRecordService::class, fn () => new class extends PersonalRecordService
+        {
+            public function __construct() {}
+
+            public function evaluateSession(Member $member, WorkoutSession $session): Collection
+            {
+                throw new RuntimeException('fallo simulado al derivar récords');
+            }
+        });
+
+        $this->postJson('/api/app/workout-sessions', $this->payload([
+            'client_session_id' => 'sess-rota',
+        ]), $this->auth())->assertStatus(500)
+            // Nunca "Server Error": el mensaje tiene que poder enseñarse.
+            ->assertJsonPath('code', 'workout_session_not_saved');
+
+        $this->assertSame(0, WorkoutSession::count(), 'la sesión debe revertirse');
+        $this->assertSame(0, WorkoutSessionSet::count());
+        $this->assertSame(0, RoutineCompletion::count());
+        $this->assertSame(0, PersonalRecord::count());
+    }
+
+    /** Tras un fallo, reintentar con el mismo id guarda la sesión una sola vez. */
+    public function test_reintentar_tras_un_fallo_guarda_una_unica_sesion(): void
+    {
+        // Falla SOLO el primer intento; el segundo se comporta con normalidad.
+        // Modela exactamente lo ocurrido en el iPhone: error, y luego reintento.
+        $this->app->bind(PersonalRecordService::class, fn () => new class extends PersonalRecordService
+        {
+            private static int $calls = 0;
+
+            public function __construct() {}
+
+            public function evaluateSession(Member $member, WorkoutSession $session): Collection
+            {
+                self::$calls++;
+                if (self::$calls === 1) {
+                    throw new RuntimeException('fallo simulado en el primer intento');
+                }
+
+                return (new PersonalRecordService)->evaluateSession($member, $session);
+            }
+        });
+
+        $this->postJson('/api/app/workout-sessions', $this->payload([
+            'client_session_id' => 'sess-retry',
+        ]), $this->auth())->assertStatus(500);
+
+        $this->assertSame(0, WorkoutSession::count(), 'el primer intento no deja nada');
+
+        // La app reintenta con el MISMO client_session_id.
+        $this->postJson('/api/app/workout-sessions', $this->payload([
+            'client_session_id' => 'sess-retry',
+        ]), $this->auth())->assertCreated()->assertJsonPath('created', true);
+
+        // Y un tercer envío ya es idempotente.
+        $this->postJson('/api/app/workout-sessions', $this->payload([
+            'client_session_id' => 'sess-retry',
+        ]), $this->auth())->assertOk()->assertJsonPath('created', false);
+
+        $this->assertSame(1, WorkoutSession::count());
+        $this->assertSame(1, RoutineCompletion::count());
     }
 
     public function test_requiere_autenticacion(): void

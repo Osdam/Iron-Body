@@ -7,6 +7,7 @@ use App\Services\PersonalRecordService;
 use App\Services\WorkoutSessionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Sesiones de entrenamiento del miembro.
@@ -51,7 +52,28 @@ class AppWorkoutSessionController extends Controller
             'exercises.*.sets.*.completed' => ['nullable', 'boolean'],
         ]);
 
-        $result = $this->sessions->complete($member, $data);
+        try {
+            $result = $this->sessions->complete($member, $data);
+        } catch (\Throwable $e) {
+            // Un fallo inesperado sigue siendo 500 —no se disfraza de éxito—
+            // pero se registra con contexto y se devuelve un mensaje que la app
+            // pueda enseñar. Sin esto Laravel respondía `{"message":"Server
+            // Error"}` y el socio leía literalmente "Server Error".
+            Log::error('workout.session_store_failed', [
+                'member_id' => $member->id,
+                'client_session_id' => $data['client_session_id'],
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'ok' => false,
+                'code' => 'workout_session_not_saved',
+                'message' => 'No pudimos guardar tu entrenamiento. Ya estamos revisándolo; '
+                    .'vuelve a intentarlo en unos minutos.',
+            ], 500);
+        }
+
         /** @var \App\Models\WorkoutSession $session */
         $session = $result['session'];
 
