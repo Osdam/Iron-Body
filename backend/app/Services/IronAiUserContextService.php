@@ -6,7 +6,7 @@ use App\Models\ClassReservation;
 use App\Models\Member;
 use App\Models\NutritionAiRecommendation;
 use App\Models\PhysicalEvaluation;
-use App\Models\RoutineCompletion;
+use App\Models\WorkoutSession;
 use Carbon\CarbonImmutable;
 
 /**
@@ -28,6 +28,7 @@ class IronAiUserContextService
         private readonly ProgressSummaryService $progress,
         private readonly WeeklyStreakService $streak,
         private readonly GymEquipmentContextService $equipment,
+        private readonly PersonalRecordService $records,
     ) {}
 
     /**
@@ -160,20 +161,49 @@ class IronAiUserContextService
         ];
     }
 
+    /**
+     * Entrenamiento REAL del miembro.
+     *
+     * Sale de `workout_sessions`, que es idempotente por sesión, en vez de
+     * contar `routine_completions` a secas. Los límites se convierten a UTC
+     * antes de consultar: construidos en hora de Bogotá, Laravel los comparaba
+     * tal cual contra columnas UTC y perdía lo entrenado a partir de las 19:00.
+     *
+     * Los campos sin dato viajan como null, nunca como 0 inventado: la IA debe
+     * poder distinguir "no entrenó" de "no lo sabemos".
+     */
     private function workouts(Member $member): array
     {
         $today = CarbonImmutable::now(NutritionService::TZ);
-        $weekStart = $today->startOfWeek(CarbonImmutable::MONDAY);
+        $weekStart = $today->startOfWeek(CarbonImmutable::MONDAY)->setTimezone('UTC');
+        $last30 = $today->subDays(30)->setTimezone('UTC');
+
+        $week = WorkoutSession::query()
+            ->where('member_id', $member->id)
+            ->where('completed_at', '>=', $weekStart)
+            ->get(['duration_seconds', 'total_volume_kg']);
+
+        $month = WorkoutSession::query()
+            ->where('member_id', $member->id)
+            ->where('completed_at', '>=', $last30)
+            ->get(['duration_seconds', 'total_volume_kg']);
 
         return [
-            'completed_this_week' => RoutineCompletion::query()
-                ->where('member_id', $member->id)
-                ->where('completed_at', '>=', $weekStart)
-                ->count(),
-            'completed_last_30d' => RoutineCompletion::query()
-                ->where('member_id', $member->id)
-                ->where('completed_at', '>=', $today->subDays(30))
-                ->count(),
+            'completed_this_week' => $week->count(),
+            'completed_last_30d' => $month->count(),
+            'volume_kg_this_week' => $week->isEmpty() ? null : round($week->sum(fn ($s) => (float) $s->total_volume_kg), 1),
+            'avg_duration_minutes_last_30d' => $month->isEmpty()
+                ? null
+                : (int) round($month->avg('duration_seconds') / 60),
+            'personal_records' => $this->records->forMember($member, 5)
+                ->map(fn ($r) => [
+                    'exercise' => $r->exercise_name,
+                    'metric' => $r->metric,
+                    'value' => (float) $r->value,
+                    'unit' => $r->unit,
+                    'achieved_at' => $r->achieved_at?->toDateString(),
+                ])
+                ->all(),
         ];
     }
 
