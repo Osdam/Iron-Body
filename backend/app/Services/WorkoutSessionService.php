@@ -36,6 +36,9 @@ class WorkoutSessionService
     /** Zona horaria operativa del gimnasio. */
     public const TZ = 'America/Bogota';
 
+    /** ISO-8601 SIN zona: `2026-08-17T01:16:41.123`. Ver {@see self::parseTime()}. */
+    private const NAIVE_TIMESTAMP = '/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/';
+
     public function __construct(
         private readonly PersonalRecordService $records,
         private readonly WeeklyStreakService $streak,
@@ -149,10 +152,23 @@ class WorkoutSessionService
     }
 
     /**
-     * Interpreta un instante enviado por la app. Llega en ISO-8601 CON offset
-     * (la app manda su hora local con zona), así que se normaliza a UTC, que es
-     * como se almacena. Una fecha ilegible se descarta en vez de romper el
-     * registro de un entrenamiento ya terminado.
+     * Interpreta un instante enviado por la app y lo normaliza a UTC, que es
+     * como se almacena.
+     *
+     * El valor puede llegar de dos formas y NO son equivalentes:
+     *
+     *  - CON zona (`...Z` o `...-05:00`): el instante es inequívoco. Se
+     *    conserva tal cual y solo se cambia la representación a UTC.
+     *  - SIN zona (`2026-08-17T01:16:41.123`): así mandaban las versiones
+     *    anteriores de la app, porque `DateTime.now().toIso8601String()` de
+     *    Dart emite la hora LOCAL sin designador. Carbon la leía como UTC y el
+     *    entrenamiento se archivaba 5 h en el pasado: uno hecho el lunes a la
+     *    1 a.m. quedaba fechado el domingo y desaparecía de "esta semana".
+     *    Ese formato solo puede venir de un reloj de Bogotá, así que se
+     *    interpreta explícitamente en {@see self::TZ} antes de convertir.
+     *
+     * Una fecha ilegible se descarta en vez de romper el registro de un
+     * entrenamiento ya terminado.
      */
     private function parseTime(?string $value): ?CarbonImmutable
     {
@@ -160,8 +176,12 @@ class WorkoutSessionService
             return null;
         }
 
+        $value = trim($value);
+
         try {
-            return CarbonImmutable::parse($value)->setTimezone('UTC');
+            $tz = preg_match(self::NAIVE_TIMESTAMP, $value) === 1 ? self::TZ : null;
+
+            return CarbonImmutable::parse($value, $tz)->setTimezone('UTC');
         } catch (\Throwable) {
             return null;
         }
