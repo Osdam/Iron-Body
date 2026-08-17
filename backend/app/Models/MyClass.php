@@ -49,6 +49,28 @@ class MyClass extends Model
         ];
     }
 
+    /**
+     * ¿Esta clase se puede ofrecer al miembro para reservar?
+     *
+     * FUENTE ÚNICA de la regla. La usan el listado que consume la app, el
+     * recurso que pinta la card y el endpoint de reserva, para que sea
+     * imposible mostrar "Disponible" sobre algo que la reserva va a rechazar.
+     *
+     * Una clase duplicada desde el CRM nace `inactive` (borrador) conservando
+     * `allow_online_booking`: es un borrador legítimo, pero el listado de la app
+     * lo mostraba como reservable y al pulsar devolvía 422.
+     */
+    public function isBookableByMembers(): bool
+    {
+        return $this->status === 'active' && (bool) $this->allow_online_booking;
+    }
+
+    /** Ámbito del catálogo visible para un miembro. */
+    public function scopeBookableByMembers($query)
+    {
+        return $query->where('status', 'active')->where('allow_online_booking', true);
+    }
+
     public function trainer(): BelongsTo
     {
         return $this->belongsTo(Trainer::class, 'trainer_id');

@@ -33,6 +33,15 @@ class ClassController extends Controller
 
         $query = MyClass::query()->with('trainer:id,full_name');
 
+        // Contexto de MIEMBRO (la app): solo el catálogo reservable. Sin esto
+        // el listado devolvía también los borradores —una clase duplicada nace
+        // `inactive`— y la app los pintaba como "Disponible" hasta que la
+        // reserva respondía 422. El CRM entra con sesión admin (sin miembro) y
+        // sigue viendo el catálogo completo para poder gestionarlo.
+        if ($memberId !== null) {
+            $query->bookableByMembers();
+        }
+
         if ($request->filled('status')) {
             $query->where('status', $request->input('status'));
         }

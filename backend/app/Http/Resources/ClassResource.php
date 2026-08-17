@@ -31,8 +31,14 @@ class ClassResource extends JsonResource
         $totalSpots = $this->max_capacity;
         $available = max(0, $totalSpots - $bookedSpots);
 
+        // Una clase que el backend no aceptaría reservar (borrador o con la
+        // reserva online apagada) nunca puede anunciarse como disponible: es la
+        // misma regla que aplica `reserve()`, leída de la fuente única.
+        $bookable = $this->resource->isBookableByMembers();
+
         $status = match (true) {
             $this->isReserved => 'reserved',
+            ! $bookable => 'unavailable',
             $bookedSpots >= $totalSpots => 'full',
             $available <= 3 => 'few_spots',
             default => 'available',
@@ -45,7 +51,8 @@ class ClassResource extends JsonResource
         $attendance = $this->memberContext['my_attendance'] ?? null;
         $displayState = ClassStateResolver::displayState($sessionStatus, (bool) $this->isReserved, $attendance, $available);
         $reservationStatus = ClassStateResolver::reservationStatus((bool) $this->isReserved, $attendance);
-        $canReserve = ClassStateResolver::canReserve($sessionStatus, (bool) $this->isReserved, $available);
+        $canReserve = $bookable
+            && ClassStateResolver::canReserve($sessionStatus, (bool) $this->isReserved, $available);
         $canCancel = ClassStateResolver::canCancel($sessionStatus, (bool) $this->isReserved);
 
         $dt = $this->date_time ?? $this->resource->operationalOccurrence();
