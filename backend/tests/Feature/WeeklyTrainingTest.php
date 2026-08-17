@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Member;
 use App\Models\WorkoutSession;
+use App\Models\WorkoutSessionSet;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -53,18 +54,40 @@ class WeeklyTrainingTest extends TestCase
         return ['Authorization' => 'Bearer '.$this->member->access_hash];
     }
 
-    /** Crea una sesión dando la hora LOCAL de Bogotá. */
+    /**
+     * Crea una sesión dando la hora LOCAL de Bogotá.
+     *
+     * Las series son reales porque el volumen se deriva de ellas, no del
+     * contador de la sesión: la primera carga todo el peso pedido y el resto
+     * quedan completadas sin carga, como una serie de peso corporal.
+     */
     private function sessionAtLocal(string $localDateTime, float $volume, int $sets = 3): void
     {
-        WorkoutSession::create([
+        $at = Carbon::parse($localDateTime, 'America/Bogota')->utc();
+
+        $session = WorkoutSession::create([
             'member_id' => $this->member->id,
-            'client_session_id' => 'ws-'.uniqid(),
-            'completed_at' => Carbon::parse($localDateTime, 'America/Bogota')->utc(),
+            'client_session_id' => 'ws-'.uniqid('', true),
+            'completed_at' => $at,
             'duration_seconds' => 1800,
             'total_volume_kg' => $volume,
             'total_sets' => $sets,
             'total_exercises' => 2,
         ]);
+
+        for ($i = 1; $i <= $sets; $i++) {
+            WorkoutSessionSet::create([
+                'workout_session_id' => $session->id,
+                'exercise_name' => 'Sentadilla',
+                'exercise_key' => 'sentadilla',
+                'exercise_order' => 0,
+                'set_number' => $i,
+                'reps' => 1,
+                'weight_kg' => $i === 1 ? $volume : 0,
+                'completed' => true,
+                'performed_at' => $at,
+            ]);
+        }
     }
 
     private function weekly(): array

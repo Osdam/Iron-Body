@@ -31,6 +31,7 @@ class ProgressSummaryService
     public function __construct(
         private readonly WeeklyStreakService $streak,
         private readonly PersonalRecordService $records,
+        private readonly WeeklyTrainingService $weekly,
     ) {}
 
     public function build(Member $member): array
@@ -55,6 +56,11 @@ class ProgressSummaryService
         // Racha: del módulo weekly-streak (fuente única de verdad).
         $streakSummary = $this->streak->summary($member);
 
+        // La semana en curso. El histórico navegable vive en su propio endpoint
+        // (`/app/progress/weekly`) para no rehacer evaluaciones, récords y racha
+        // cada vez que el socio pasa de una semana a otra.
+        $weeklyTraining = $this->weekly->forMember($member);
+
         return [
             'current_weight_kg' => $currentWeight,
             'weight_delta_kg' => $weightDelta,
@@ -64,8 +70,8 @@ class ProgressSummaryService
             'bmi' => $latest?->bmi(),
             'bmi_label' => $latest?->bmiLabel(),
             'weight_history' => $this->weightHistory($member),
-            'weekly_volume' => $this->weeklyVolume($member, $today),
-            'weekly_training' => $this->weeklyTraining($member, $today),
+            'weekly_volume' => $this->weeklyVolume($weeklyTraining),
+            'weekly_training' => $weeklyTraining,
             'personal_records' => $this->personalRecords($member),
             'last_evaluation' => $latest?->toPublicArray(),
             'has_evaluation' => $latest !== null,
@@ -133,134 +139,21 @@ class ProgressSummaryService
     }
 
     /**
-     * Volumen semanal REAL (kg levantados por día, lunes→domingo de la semana
-     * en curso en hora de Bogotá).
+     * Gráfico de volumen semanal en el formato ANTIGUO, derivado del mismo
+     * cálculo que `weekly_training` para que no puedan discrepar.
      *
-     * Cada barra trae también `sessions`, el número de entrenamientos de ese
-     * día: una semana entrenada solo con peso corporal tiene volumen 0 pero NO
-     * está vacía, y la app necesita distinguir ambos casos para no decir "aún
-     * no registras entrenamientos" a quien sí entrenó.
+     * Se mantiene porque las versiones de la app ya instaladas lo leen; las
+     * nuevas usan `weekly_training`, que además distingue entrenar de levantar
+     * kilos. Cuando no queden clientes viejos, este campo se retira.
      */
-    private function weeklyVolume(Member $member, CarbonImmutable $today): array
+    private function weeklyVolume(array $weeklyTraining): array
     {
-        $weekStart = $today->startOfWeek(CarbonImmutable::MONDAY);
-        $weekEnd = $weekStart->addDays(6)->endOfDay();
-
-        $rows = WorkoutSession::query()
-            ->where('member_id', $member->id)
-            ->whereBetween('completed_at', [$this->utc($weekStart), $this->utc($weekEnd)])
-            ->get(['completed_at', 'total_volume_kg']);
-
-        $volume = array_fill(0, 7, 0.0);
-        $sessions = array_fill(0, 7, 0);
-
-        foreach ($rows as $row) {
-            // El día se decide en hora local, no en la UTC del almacenamiento.
-            $local = CarbonImmutable::parse($row->completed_at)->setTimezone(self::TZ);
-            $idx = (int) $weekStart->diffInDays($local->startOfDay());
-            if ($idx >= 0 && $idx < 7) {
-                $volume[$idx] += (float) $row->total_volume_kg;
-                $sessions[$idx]++;
-            }
-        }
-
-        $labels = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
-        $todayIdx = (int) $weekStart->diffInDays($today);
-        $out = [];
-        for ($i = 0; $i < 7; $i++) {
-            $out[] = [
-                'label' => $labels[$i],
-                'value' => (int) round($volume[$i]),
-                'sessions' => $sessions[$i],
-                'highlight' => $i === $todayIdx,
-            ];
-        }
-
-        return $out;
-    }
-
-    /**
-     * Entrenamiento de la semana en curso, con el contrato EXPLÍCITO.
-     *
-     * La app no tiene que deducir si hubo entrenamiento mirando los kilos: una
-     * sesión de peso corporal levanta 0 kg y aun así es un entrenamiento. Por
-     * eso `has_sessions` y `total_sessions` viajan aparte del volumen, y cada
-     * día trae su fecha, su número de sesiones y sus kilos.
-     *
-     * La semana va de lunes a domingo en hora del gimnasio. Un entrenamiento
-     * del domingo por la noche pertenece a esa semana, no a la siguiente:
-     * pasada la medianoche del lunes deja de contar aquí, que es el
-     * comportamiento correcto de una vista "esta semana".
-     */
-    private function weeklyTraining(Member $member, CarbonImmutable $today): array
-    {
-        $weekStart = $today->startOfWeek(CarbonImmutable::MONDAY);
-        $weekEnd = $weekStart->addDays(6)->endOfDay();
-
-        $rows = WorkoutSession::query()
-            ->where('member_id', $member->id)
-            ->whereBetween('completed_at', [$this->utc($weekStart), $this->utc($weekEnd)])
-            ->get(['completed_at', 'total_volume_kg', 'total_sets']);
-
-        $volume = array_fill(0, 7, 0.0);
-        $sessions = array_fill(0, 7, 0);
-        $sets = array_fill(0, 7, 0);
-
-        foreach ($rows as $row) {
-            $local = CarbonImmutable::parse($row->completed_at)->setTimezone(self::TZ);
-            $idx = (int) $weekStart->diffInDays($local->startOfDay());
-            if ($idx < 0 || $idx >= 7) {
-                continue;
-            }
-            // Varias sesiones el mismo día se suman en la barra de ese día.
-            $volume[$idx] += (float) $row->total_volume_kg;
-            $sessions[$idx]++;
-            $sets[$idx] += (int) $row->total_sets;
-        }
-
-        $labels = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
-        $weekdays = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
-        $todayIdx = (int) $weekStart->diffInDays($today);
-
-        $days = [];
-        for ($i = 0; $i < 7; $i++) {
-            $date = $weekStart->addDays($i);
-            $days[] = [
-                'date' => $date->toDateString(),
-                'weekday' => $weekdays[$i],
-                'label' => $labels[$i],
-                'sessions' => $sessions[$i],
-                'sets' => $sets[$i],
-                'volume_kg' => round($volume[$i], 2),
-                'is_today' => $i === $todayIdx,
-            ];
-        }
-
-        // Contexto para que la pantalla no mienta cuando la semana está vacía
-        // pero el socio SÍ ha entrenado antes: decirle "completa uno para
-        // empezar" a quien lleva cinco entrenamientos es sencillamente falso.
-        // Es dato real, no relleno.
-        $lastEver = WorkoutSession::query()
-            ->where('member_id', $member->id)
-            ->orderByDesc('completed_at')
-            ->first(['completed_at']);
-
-        return [
-            'week_start' => $weekStart->toDateString(),
-            'week_end' => $weekStart->addDays(6)->toDateString(),
-            'timezone' => self::TZ,
-            // La app decide el estado vacío SOLO con esto.
-            'has_sessions' => $rows->isNotEmpty(),
-            'has_previous_sessions' => $lastEver !== null,
-            'last_session_at' => $lastEver?->completed_at
-                ? CarbonImmutable::parse($lastEver->completed_at)
-                    ->setTimezone(self::TZ)->toIso8601String()
-                : null,
-            'total_sessions' => $rows->count(),
-            'total_sets' => (int) $rows->sum('total_sets'),
-            'total_volume_kg' => round((float) $rows->sum(fn ($r) => (float) $r->total_volume_kg), 2),
-            'days' => $days,
-        ];
+        return array_map(fn (array $day) => [
+            'label' => $day['label'],
+            'value' => (int) round($day['volume_kg']),
+            'sessions' => $day['sessions'],
+            'highlight' => $day['is_today'],
+        ], $weeklyTraining['days']);
     }
 
     /**

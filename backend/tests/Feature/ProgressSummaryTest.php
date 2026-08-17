@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Member;
 use App\Models\PhysicalEvaluation;
 use App\Models\WorkoutSession;
+use App\Models\WorkoutSessionSet;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -52,17 +53,41 @@ class ProgressSummaryTest extends TestCase
         return ['Authorization' => 'Bearer '.$this->member->access_hash];
     }
 
+    /**
+     * Sesión con SERIES reales: el volumen semanal se deriva de ellas, no del
+     * contador de la sesión, así que una sesión de mentira sin series valdría 0.
+     * La primera serie carga todo el peso pedido; las demás quedan sin carga
+     * para que el conteo de series siga siendo 6.
+     */
     private function makeSession(string $completedAtUtc, float $volume, string $clientId): WorkoutSession
     {
-        return WorkoutSession::create([
+        $at = Carbon::parse($completedAtUtc, 'UTC');
+
+        $session = WorkoutSession::create([
             'member_id' => $this->member->id,
             'client_session_id' => $clientId,
-            'completed_at' => Carbon::parse($completedAtUtc, 'UTC'),
+            'completed_at' => $at,
             'duration_seconds' => 1800,
             'total_volume_kg' => $volume,
             'total_sets' => 6,
             'total_exercises' => 2,
         ]);
+
+        for ($i = 1; $i <= 6; $i++) {
+            WorkoutSessionSet::create([
+                'workout_session_id' => $session->id,
+                'exercise_name' => 'Sentadilla',
+                'exercise_key' => 'sentadilla',
+                'exercise_order' => 0,
+                'set_number' => $i,
+                'reps' => 1,
+                'weight_kg' => $i === 1 ? $volume : 0,
+                'completed' => true,
+                'performed_at' => $at,
+            ]);
+        }
+
+        return $session;
     }
 
     public function test_un_entrenamiento_de_la_noche_cuenta_en_el_mes(): void

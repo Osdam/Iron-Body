@@ -744,6 +744,8 @@ Route::middleware('auth.member')->group(function (): void {
 
     // ── Progreso ────────────────────────────────────────────────────────────
     Route::get('app/progress/summary',     [ProgressController::class, 'summary']);
+    // Historial de volumen semanal navegable (?week_start=YYYY-MM-DD).
+    Route::get('app/progress/weekly',      [ProgressController::class, 'weekly']);
 
     // ── Evaluación física (rutas estáticas ANTES de {id}) ───────────────────
     Route::get('app/physical-evaluations/latest', [PhysicalEvaluationController::class, 'latest']);
