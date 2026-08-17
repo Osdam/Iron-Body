@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\WompiPaymentController;
 use App\Http\Controllers\Api\WompiWebhookController;
 use App\Http\Controllers\Api\AppRoutineController;
 use App\Http\Controllers\Api\AppWorkoutSessionController;
+use App\Http\Controllers\Api\Admin\MemberIdentityReviewController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AdminAuthController;
 use App\Http\Controllers\Api\MemberRegistrationController;
@@ -238,6 +239,11 @@ Route::middleware('member.registration.token')->group(function () {
 Route::middleware('auth.admin')->group(function (): void {
     Route::get('admin/members/incomplete', [MemberRegistrationController::class, 'incomplete']);
     Route::delete('admin/members/{member}', [MemberRegistrationController::class, 'destroy']);
+    // Revisión manual de identidad: el estado "Revisión manual" solo tiene
+    // sentido si alguien puede MIRAR las capturas. Se sirven desde el disco
+    // privado y solo con sesión admin.
+    Route::get('admin/members/{member}/identity', [MemberIdentityReviewController::class, 'show']);
+    Route::get('admin/members/{member}/identity/{side}', [MemberIdentityReviewController::class, 'image']);
 });
 
 // Plantilla de consentimiento (PÚBLICA, solo config estática: textos de
