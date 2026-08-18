@@ -70,6 +70,30 @@ class PrivacyPolicyTest extends TestCase
         $this->assertStringContainsString('mailto:'.config('legal.privacy_email'), $body);
     }
 
+    public function test_publisher_and_data_controller_are_named_separately(): void
+    {
+        $body = $this->fetch(self::CANONICAL)->getContent();
+
+        $publisher = config('legal.developer_name');
+        $controller = config('legal.controller_name');
+
+        // Google exige el nombre del desarrollador TAL CUAL figura en la ficha.
+        // Habeas Data exige identificar al responsable del tratamiento. Aquí no
+        // son la misma persona, así que el documento tiene que nombrar a los dos
+        // y decir cuál es cuál: poner solo uno deja cojo el otro requisito.
+        $this->assertStringContainsString($publisher, $body);
+        $this->assertStringContainsString($controller, $body);
+        $this->assertStringContainsString('publicador en google play', mb_strtolower($body));
+        $this->assertStringContainsString('responsable del tratamiento', mb_strtolower($body));
+
+        $this->assertNotSame(
+            $publisher,
+            $controller,
+            'Si algún día coinciden, revisa que el texto siga leyéndose bien: '
+            .'esta prueba asume que son dos figuras distintas.'
+        );
+    }
+
     public function test_policy_discloses_data_retention_practices(): void
     {
         $body = $this->fetch(self::CANONICAL)->getContent();

@@ -38,12 +38,17 @@ return [
     // Marca / nombre del servicio.
     'brand' => env('LEGAL_BRAND', 'Iron Body'),
 
-    // Desarrollador / entidad legal de la ficha de Play. Ver REGLA de arriba.
-    'developer_name' => env('LEGAL_DEVELOPER_NAME', 'IRONBODY — Fredy Alberto Pajoy Medina'),
+    // Desarrollador / publicador de la ficha de Play. Ver REGLA de arriba.
+    // Cuenta personal de Google Play; el nombre visible es literalmente este.
+    'developer_name' => env('LEGAL_DEVELOPER_NAME', 'CardenCode'),
 
-    // Responsable del tratamiento (Ley 1581 de 2012, Colombia). Puede coincidir
-    // con el desarrollador o no; se imprime siempre, aunque coincida.
-    'controller_name' => env('LEGAL_CONTROLLER_NAME', 'Fredy Alberto Pajoy Medina'),
+    // Responsable del tratamiento (Ley 1581 de 2012, Colombia). NO coincide con
+    // el publicador de Play, y eso no es un descuido: quien publica la app en la
+    // tienda y quien decide qué se hace con los datos del socio son dos figuras
+    // distintas. La política imprime las dos por separado; fundirlas en una sola
+    // línea dejaría sin identificar al responsable ante la SIC, o pondría en la
+    // ficha de Play un nombre que Google no reconoce.
+    'controller_name' => env('LEGAL_CONTROLLER_NAME', 'IRONBODY — Fredy Alberto Pajoy Medina'),
 
     // Dirección física del establecimiento.
     'address' => env('LEGAL_ADDRESS', 'Cl. 24 Sur #33-53, Neiva, Huila, Colombia'),

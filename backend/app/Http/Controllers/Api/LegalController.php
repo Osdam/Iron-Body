@@ -74,15 +74,22 @@ class LegalController extends Controller
   <tr><th>Aplicación</th><td>{$app}</td></tr>
   <tr><th>Identificador Android (Google Play)</th><td><code>{$package}</code></td></tr>
   <tr><th>Servicio / marca</th><td>{$brand}</td></tr>
-  <tr><th>Desarrollador (ficha de Google Play)</th><td>{$developer}</td></tr>
-  <tr><th>Responsable del tratamiento</th><td>{$controller}</td></tr>
+  <tr><th>Desarrollador / publicador en Google Play</th><td>{$developer}</td></tr>
+  <tr><th>Responsable del tratamiento de datos</th><td>{$controller}</td></tr>
   <tr><th>Dirección</th><td>{$address}</td></tr>
   <tr><th>Contacto de privacidad</th><td><a href="mailto:{$email}">{$email}</a> · {$phone}</td></tr>
   <tr><th>Dirección de esta política</th><td><a href="{$url}">{$url}</a></td></tr>
 </table>
-<p>{$developer} es el responsable de {$app} en Google Play y de decidir cómo se
-tratan los datos personales que se describen en este documento, conforme a la
+<p><strong>{$developer}</strong> es el desarrollador y publicador de {$app} en
+Google Play: es quien firma, publica y mantiene la aplicación en la tienda.</p>
+<p><strong>{$controller}</strong> es el <em>responsable del tratamiento</em> de
+los datos personales descritos en este documento: es quien decide para qué se
+recogen y cómo se usan, y ante quien puedes ejercer tus derechos, conforme a la
 Ley 1581 de 2012 y sus normas reglamentarias (Habeas Data, Colombia).</p>
+<p>Son dos papeles distintos y se identifican por separado a propósito. Para
+cualquier asunto de privacidad —acceso, rectificación, supresión de tus datos o
+eliminación de tu cuenta— el destinatario es el responsable del tratamiento, en
+el contacto indicado arriba.</p>
 
 <h2>2. Alcance</h2>
 <p>Esta política cubre la aplicación móvil <strong>{$app}</strong>
@@ -388,7 +395,8 @@ te lo comunicaremos por la app o por correo antes de aplicarlo.</p>
 <p>Para cualquier asunto relacionado con privacidad, eliminación de cuenta o
 ejercicio de derechos:</p>
 <table class="id">
-  <tr><th>Responsable</th><td>{$developer}</td></tr>
+  <tr><th>Responsable del tratamiento</th><td>{$controller}</td></tr>
+  <tr><th>Publicador en Google Play</th><td>{$developer}</td></tr>
   <tr><td colspan="2" class="sep"></td></tr>
   <tr><th>Correo</th><td><a href="mailto:{$email}">{$email}</a></td></tr>
   <tr><th>Teléfono</th><td>{$phone}</td></tr>
