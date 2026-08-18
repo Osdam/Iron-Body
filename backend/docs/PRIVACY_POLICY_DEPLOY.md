@@ -73,12 +73,24 @@ php artisan config:cache
 php artisan route:cache
 ```
 
+### Servidor
+
+Producción: `root@2.25.167.216` (hostname `srv1728633`). El backend vive en
+`/var/www/api/backend` y nginx sirve `/var/www/api/backend/public`
+(`/etc/nginx/sites-enabled/api`). El `104.131.124.203` que aparece en documentos
+antiguos está **obsoleto y no responde**.
+
 ### Nombre del desarrollador
 
-`config/legal.php` → `developer_name` debe coincidir **exactamente**, carácter
-por carácter, con el «Desarrollador» que muestra la ficha de Google Play Store
-(Play Console → Configuración → Detalles de la cuenta de desarrollador). Si en
-la ficha figura otro nombre, se ajusta por entorno sin tocar código:
+Son **dos identidades distintas** y el documento las imprime por separado:
+
+| `config/legal.php` | valor | por qué |
+|---|---|---|
+| `developer_name` | `CardenCode` | El «Desarrollador» que muestra la ficha de Play (cuenta personal). Google compara este nombre; si no lo encuentra, rechaza. |
+| `controller_name` | `IRONBODY — Fredy Alberto Pajoy Medina` | El responsable del tratamiento ante la SIC (Ley 1581 de 2012). Es a quien se dirigen las solicitudes de privacidad. |
+
+Fundirlos incumple uno de los dos requisitos, siempre. Si algún día cambian, se
+ajustan por entorno sin tocar código:
 
 ```bash
 echo 'LEGAL_DEVELOPER_NAME="<nombre exacto de la ficha de Play>"' >> .env
