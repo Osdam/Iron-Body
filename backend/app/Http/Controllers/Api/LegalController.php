@@ -515,6 +515,20 @@ HTML;
 </html>
 HTML;
 
-        return response($content, 200)->header('Content-Type', 'text/html; charset=UTF-8');
+        return response($content, 200)
+            ->header('Content-Type', 'text/html; charset=UTF-8')
+            // Caché explícita y CORTA. Sin esta cabecera el fichero estático
+            // anterior se servía solo con `Last-Modified` (29 de junio), y la
+            // heurística de RFC 9111 —el 10 % de la antigüedad— dejaba a los
+            // navegadores guardándolo unos CINCO días sin volver a preguntar.
+            // Por eso, ya desplegada la política nueva, seguía viéndose la
+            // vieja. Un rastreador de la tienda puede caer en lo mismo, y en un
+            // documento legal eso significa que alguien lee una versión que ya
+            // no rige. Cinco minutos: suficiente para no castigar al servidor,
+            // demasiado poco para que una corrección tarde en verse.
+            ->header('Cache-Control', 'public, max-age=300, must-revalidate')
+            // Que el buscador pueda indexarla: es un documento que debe poder
+            // encontrarse y enlazarse desde fuera.
+            ->header('X-Robots-Tag', 'index, follow');
     }
 }

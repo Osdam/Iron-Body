@@ -5,7 +5,12 @@ use App\Http\Controllers\Crm\ExerciseController as CrmExerciseController;
 use App\Http\Controllers\Crm\MemberRoutineController as CrmMemberRoutineController;
 use App\Http\Controllers\Crm\RoutineController as CrmRoutineController;
 use App\Http\Controllers\Crm\TrainerController as CrmTrainerController;
+use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
+use Illuminate\Cookie\Middleware\EncryptCookies;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 Route::get('/', function () {
     return view('welcome');
@@ -28,10 +33,29 @@ Route::get('/', function () {
  * existiendo en el servidor seguirá ganando él y esta ruta no se ejecutará. Hay
  * que borrarlo. Ver docs/PRIVACY_POLICY_DEPLOY.md.
  */
+/*
+ * Sin sesión ni CSRF. Son documentos públicos que se leen sin identificarse: no
+ * hay nada que recordar entre peticiones y nada que enviar de vuelta. Dejarlos
+ * en el grupo `web` completo tenía dos consecuencias molestas — la página de
+ * privacidad respondía plantando una cookie de sesión al visitante (mal sitio
+ * para hacer eso, precisamente), y `StartSession` pisaba la cabecera de caché
+ * con `no-cache, private`, que es lo contrario de lo que queremos: un documento
+ * legal debe poder cachearse un poco, pero nunca durante días.
+ */
+$publicLegal = [
+    EncryptCookies::class,
+    AddQueuedCookiesToResponse::class,
+    StartSession::class,
+    ShareErrorsFromSession::class,
+    ValidateCsrfToken::class,
+];
+
 Route::get('privacy-policy.html', [LegalController::class, 'privacy'])
+    ->withoutMiddleware($publicLegal)
     ->name('legal.privacy.canonical');
 
 Route::get('terms.html', [LegalController::class, 'terms'])
+    ->withoutMiddleware($publicLegal)
     ->name('legal.terms.canonical');
 
 // Pagos: NO hay bridge web ni WebView. Todo el flujo es Wompi IN-APP; cuando se

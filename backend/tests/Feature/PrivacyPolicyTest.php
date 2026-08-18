@@ -147,6 +147,37 @@ class PrivacyPolicyTest extends TestCase
         );
     }
 
+    public function test_policy_is_not_cacheable_for_days(): void
+    {
+        $res = $this->get(self::CANONICAL);
+        $cacheControl = (string) $res->headers->get('cache-control');
+
+        // Esto es lo que hizo que, ya desplegada la política nueva, se siguiera
+        // viendo la vieja: el estático solo mandaba `Last-Modified` y la
+        // heurística de RFC 9111 (10 % de la antigüedad) la congelaba durante
+        // días en el navegador. Un plazo explícito y corto lo impide.
+        $this->assertStringContainsString('max-age=300', $cacheControl);
+        $this->assertStringNotContainsString('no-store', $cacheControl);
+
+        // `private` significaría que un intermediario no puede guardarla; no es
+        // el problema, pero delataría que StartSession volvió a colarse.
+        $this->assertStringNotContainsString('private', $cacheControl);
+    }
+
+    public function test_public_legal_page_does_not_set_session_cookies(): void
+    {
+        $res = $this->get(self::CANONICAL);
+
+        // Una política de privacidad que planta una cookie de sesión al
+        // visitante que viene justamente a leer cómo se tratan sus datos es una
+        // contradicción, y además delata que la ruta sigue en el grupo `web`
+        // completo (lo que reintroduce el `no-cache, private` de arriba).
+        $this->assertEmpty(
+            $res->headers->getCookies(),
+            'La página legal pública no debe devolver cookies.'
+        );
+    }
+
     public function test_terms_page_still_works(): void
     {
         $this->fetch('/api/legal/terms');
