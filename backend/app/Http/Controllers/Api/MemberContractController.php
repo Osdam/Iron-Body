@@ -54,8 +54,13 @@ class MemberContractController extends Controller
             'template_name' => config("contracts.templates.{$type}.name", $type),
             'is_minor' => $isMinor,
             'checkboxes' => $this->templates->checkboxes($type),
-            'privacy_policy_url' => config('contracts.privacy_policy_url') ?: url('/api/legal/privacy'),
-            'terms_url' => config('contracts.terms_url') ?: url('/api/legal/terms'),
+            // Sin PRIVACY_POLICY_URL por entorno se usa la URL CANÓNICA — la misma
+            // que se declara en Google Play. Antes caía en `/api/legal/privacy`, que
+            // sirve el mismo documento pero es una dirección distinta: tener dos
+            // direcciones vivas para el mismo texto legal es exactamente el enredo
+            // que provocó el rechazo de la tienda.
+            'privacy_policy_url' => config('contracts.privacy_policy_url') ?: config('legal.privacy_url'),
+            'terms_url' => config('contracts.terms_url') ?: config('legal.terms_url'),
             'support_contact' => config('contracts.support_contact'),
         ]);
     }

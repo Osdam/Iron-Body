@@ -60,8 +60,13 @@ class MemberContractService
             'signed_contracts' => $signed->map(fn ($c) => $this->present($c))->values(),
             'missing_required_fields' => $this->missingMemberFields($member),
             'checkboxes' => $this->templates->checkboxes($recommended),
-            'privacy_policy_url' => Config::get('contracts.privacy_policy_url') ?: url('/api/legal/privacy'),
-            'terms_url' => Config::get('contracts.terms_url') ?: url('/api/legal/terms'),
+            // Sin PRIVACY_POLICY_URL por entorno se usa la URL CANÓNICA — la misma
+            // que se declara en Google Play. Antes caía en `/api/legal/privacy`, que
+            // sirve el mismo documento pero es una dirección distinta: tener dos
+            // direcciones vivas para el mismo texto legal es exactamente el enredo
+            // que provocó el rechazo de la tienda.
+            'privacy_policy_url' => Config::get('contracts.privacy_policy_url') ?: Config::get('legal.privacy_url'),
+            'terms_url' => Config::get('contracts.terms_url') ?: Config::get('legal.terms_url'),
             'support_contact' => Config::get('contracts.support_contact'),
         ];
     }

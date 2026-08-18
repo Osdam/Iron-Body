@@ -338,11 +338,14 @@ class MemberContractTest extends TestCase
 
     public function test_consent_template_urls_fall_back_to_backend(): void
     {
-        // Sin PRIVACY_POLICY_URL configurada → apunta al legal del backend.
+        // Sin PRIVACY_POLICY_URL configurada → apunta a la URL CANÓNICA, la
+        // misma que se declara en Google Play. Antes caía en `/api/legal/*`:
+        // el mismo texto servido desde otra dirección, que es justo la
+        // duplicidad que hizo que la tienda rechazara la política.
         $res = $this->getJson('/api/contracts/consent-template');
         $res->assertOk();
-        $this->assertStringContainsString('/api/legal/privacy', (string) $res->json('privacy_policy_url'));
-        $this->assertStringContainsString('/api/legal/terms', (string) $res->json('terms_url'));
+        $this->assertSame(config('legal.privacy_url'), (string) $res->json('privacy_policy_url'));
+        $this->assertSame(config('legal.terms_url'), (string) $res->json('terms_url'));
     }
 
     public function test_public_consent_template(): void
