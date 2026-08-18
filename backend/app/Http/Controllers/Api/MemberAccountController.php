@@ -182,6 +182,8 @@ class MemberAccountController extends Controller
      *  - revoca todas las sesiones (logout inmediato y bloqueo de login);
      *  - borra datos personales NO requeridos legalmente (rostro/documento,
      *    tokens y vínculos de dispositivo, retos de auth, biometría);
+     *  - borra el contenido conversacional de IRON IA (conversaciones, mensajes
+     *    y adjuntos, con sus ficheros en disco);
      *  - anonimiza el PII del miembro y del usuario;
      *  - CONSERVA contratos firmados y pagos/facturación por obligación legal.
      *
@@ -255,7 +257,12 @@ class MemberAccountController extends Controller
             }
         }
 
-        DB::transaction(function () use ($member, $user, $req, $deletedFiles): void {
+        // 2b) Ficheros adjuntos a IRON IA (audios en disco privado, imágenes en
+        //     el público). Se borran ANTES de la transacción, igual que el resto:
+        //     un fallo de disco no debe dejar la transacción abierta a mitad.
+        $deletedAiFiles = $this->purgeIronAiFiles($member);
+
+        DB::transaction(function () use ($member, $user, $req, $deletedFiles, $deletedAiFiles): void {
             // 3) Borrar PII sensible no contable + credenciales de dispositivo.
             $member->biometric()->delete();
             $member->identityDocument()->delete();
@@ -266,6 +273,33 @@ class MemberAccountController extends Controller
                 if (Schema::hasTable($table) && Schema::hasColumn($table, 'member_id')) {
                     DB::table($table)->where('member_id', $member->id)->delete();
                 }
+            }
+
+            // 3b) IRON IA: se BORRA, no se anonimiza. Son mensajes de texto libre
+            //     donde el socio cuenta lesiones, dolencias y hábitos, y varias de
+            //     estas tablas guardan su número de documento en una columna
+            //     propia: dejarlas anonimizando solo la ficha del miembro haría
+            //     falsa la palabra «anonimizado». Ninguna norma obliga a
+            //     conservarlas, así que no hay nada que sopesar.
+            foreach ([
+                'iron_ai_message_attachments', 'iron_ai_messages',
+                'iron_ai_conversations', 'iron_ai_user_events',
+                'iron_ai_user_profiles', 'iron_ai_recommendations',
+            ] as $table) {
+                if (Schema::hasTable($table) && Schema::hasColumn($table, 'member_id')) {
+                    // DB::table() y no el modelo: `iron_ai_conversations` usa
+                    // SoftDeletes y aquí hace falta que desaparezca de verdad.
+                    DB::table($table)->where('member_id', $member->id)->delete();
+                }
+            }
+
+            // El registro de consumo (modelo, tokens, coste) se conserva: es
+            // contabilidad de uso del servicio, no contenido del socio. Lo que se
+            // va es el documento que lleva dentro, que sí lo identifica.
+            if (Schema::hasTable('iron_ai_usage_logs') && Schema::hasColumn('iron_ai_usage_logs', 'document')) {
+                DB::table('iron_ai_usage_logs')
+                    ->where('member_id', $member->id)
+                    ->update(['document' => null]);
             }
 
             // 4) Anonimizar el miembro (se conserva el id para contratos/pagos).
@@ -300,6 +334,8 @@ class MemberAccountController extends Controller
                 'completed_at' => now(),
                 'metadata' => array_merge((array) $req->metadata, [
                     'deleted_files' => $deletedFiles,
+                    'deleted_iron_ai_files' => $deletedAiFiles,
+                    'purged' => ['iron_ai_conversations', 'iron_ai_messages', 'iron_ai_attachments'],
                     'anonymized' => ['member', $user ? 'user' : null],
                     'retained_for_legal' => ['member_contracts', 'payments'],
                 ]),
@@ -469,6 +505,55 @@ class MemberAccountController extends Controller
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Borra del disco los ficheros adjuntos a las conversaciones de IRON IA del
+     * miembro (audios en el disco privado, imágenes en el público) y devuelve
+     * cuántos se eliminaron.
+     *
+     * Se recorre con `cursor()` porque un socio veterano puede acumular cientos
+     * de adjuntos y no hay razón para tenerlos todos en memoria a la vez.
+     *
+     * Ningún fallo de almacenamiento aborta la eliminación de la cuenta: un
+     * disco mal configurado o un fichero ya inexistente no puede convertirse en
+     * un motivo para dejar a alguien sin poder borrarse. Lo que sí se garantiza
+     * es que la FILA desaparece siempre (eso ocurre en la transacción), de modo
+     * que como mucho queda un huérfano en disco al que ya nadie puede llegar.
+     */
+    private function purgeIronAiFiles(Member $member): int
+    {
+        if (! Schema::hasTable('iron_ai_message_attachments')
+            || ! Schema::hasColumn('iron_ai_message_attachments', 'member_id')) {
+            return 0;
+        }
+
+        $deleted = 0;
+
+        foreach (
+            DB::table('iron_ai_message_attachments')
+                ->where('member_id', $member->id)
+                ->select('stored_path', 'disk')
+                ->cursor() as $attachment
+        ) {
+            $path = trim((string) ($attachment->stored_path ?? ''));
+            if ($path === '') {
+                continue;
+            }
+
+            $disk = trim((string) ($attachment->disk ?? '')) ?: 'local';
+
+            try {
+                if (Storage::disk($disk)->exists($path)) {
+                    Storage::disk($disk)->delete($path);
+                    $deleted++;
+                }
+            } catch (\Throwable) {
+                // Disco desconocido o ilegible: se continúa. La fila se borra igual.
+            }
+        }
+
+        return $deleted;
+    }
 
     /** ¿El teléfono (por dígitos) pertenece a OTRO miembro? */
     private function phoneInUseByOther(Member $member, string $phone): bool
