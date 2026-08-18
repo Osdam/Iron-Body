@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\LegalController;
 use App\Http\Controllers\Crm\ExerciseController as CrmExerciseController;
 use App\Http\Controllers\Crm\MemberRoutineController as CrmMemberRoutineController;
 use App\Http\Controllers\Crm\RoutineController as CrmRoutineController;
@@ -9,6 +10,29 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return view('welcome');
 });
+
+/*
+ * URL CANÓNICA de la política de privacidad — la que se declara en Google Play
+ * Console → Contenido de la aplicación → Política de privacidad.
+ *
+ * Hasta ahora esta dirección la servía un `.html` estático suelto en `public/`,
+ * creado a mano en el servidor y fuera de git: hablaba del CRM y de WhatsApp, no
+ * nombraba la app ni el paquete ni al desarrollador, y no decía nada sobre
+ * conservación de datos. Google la rechazó por esos dos motivos exactos.
+ *
+ * Ahora la sirve el MISMO método que `/api/legal/privacy` (el enlace que abre la
+ * app desde Perfil), así que las dos direcciones no pueden divergir nunca más.
+ *
+ * IMPORTANTE al desplegar: nginx resuelve `try_files $uri` antes de llegar a
+ * Laravel, así que mientras el fichero `public/privacy-policy.html` siga
+ * existiendo en el servidor seguirá ganando él y esta ruta no se ejecutará. Hay
+ * que borrarlo. Ver docs/PRIVACY_POLICY_DEPLOY.md.
+ */
+Route::get('privacy-policy.html', [LegalController::class, 'privacy'])
+    ->name('legal.privacy.canonical');
+
+Route::get('terms.html', [LegalController::class, 'terms'])
+    ->name('legal.terms.canonical');
 
 // Pagos: NO hay bridge web ni WebView. Todo el flujo es Wompi IN-APP; cuando se
 // requiere autenticación (PSE/3DS) se abre la URL OFICIAL que entrega la propia
