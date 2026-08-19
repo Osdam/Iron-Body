@@ -62,6 +62,14 @@ return [
     'privacy_url' => env('LEGAL_PRIVACY_URL', 'https://api.ironbodyneiva.cloud/privacy-policy.html'),
     'terms_url' => env('LEGAL_TERMS_URL', 'https://api.ironbodyneiva.cloud/terms.html'),
 
+    // URL pública de eliminación de cuenta. Google Play la exige, aparte del
+    // borrado dentro de la app, para que alguien que ya desinstaló pueda pedir
+    // la baja sin reinstalar: Play Console → Seguridad de los datos →
+    // Eliminación de datos. Vive aquí y no escrita dentro del HTML porque la
+    // política de privacidad también la enlaza, y las dos páginas tienen que
+    // apuntar al mismo sitio siempre.
+    'account_deletion_url' => env('LEGAL_ACCOUNT_DELETION_URL', 'https://api.ironbodyneiva.cloud/account-deletion.html'),
+
     // Fecha de última actualización que se imprime en la página. Se cambia a
     // mano cuando el texto cambia: una fecha automática (now()) haría creer que
     // la política se revisa a diario y no dejaría rastro de la versión.

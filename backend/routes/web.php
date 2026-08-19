@@ -58,6 +58,20 @@ Route::get('terms.html', [LegalController::class, 'terms'])
     ->withoutMiddleware($publicLegal)
     ->name('legal.terms.canonical');
 
+/*
+ * URL PÚBLICA de eliminación de cuenta — la que se declara en Play Console →
+ * Seguridad de los datos → Eliminación de datos.
+ *
+ * Google la pide, además del borrado que ya existe dentro de la app, para que
+ * alguien que la desinstaló pueda iniciar la baja sin volver a instalarla. Va
+ * por controlador y no por un `.html` en `public/` por lo mismo que la política:
+ * un fichero suelto lo tapa nginx con `try_files` y acaba desincronizado del
+ * documento que sí mantenemos.
+ */
+Route::get('account-deletion.html', [LegalController::class, 'accountDeletion'])
+    ->withoutMiddleware($publicLegal)
+    ->name('legal.account-deletion.canonical');
+
 // Pagos: NO hay bridge web ni WebView. Todo el flujo es Wompi IN-APP; cuando se
 // requiere autenticación (PSE/3DS) se abre la URL OFICIAL que entrega la propia
 // transacción de Wompi en el navegador del sistema.

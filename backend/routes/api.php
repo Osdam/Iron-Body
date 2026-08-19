@@ -255,6 +255,9 @@ Route::get('contracts/consent-template', [MemberContractController::class, 'cons
 // en un visor interno (WebView), nunca abre un dominio externo muerto.
 Route::get('legal/privacy', [\App\Http\Controllers\Api\LegalController::class, 'privacy']);
 Route::get('legal/terms',   [\App\Http\Controllers\Api\LegalController::class, 'terms']);
+// Misma página que /account-deletion.html: un solo origen para las dos rutas,
+// para que no puedan divergir como pasó con la política de privacidad.
+Route::get('legal/account-deletion', [\App\Http\Controllers\Api\LegalController::class, 'accountDeletion']);
 
 // ── PASARELA: WOMPI (única pasarela activa) ───────────────────────────────────
 // Pasarelas anteriores y el Nequi-directo (push) se RETIRARON como rutas

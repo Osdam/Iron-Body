@@ -45,6 +45,24 @@ class LegalController extends Controller
         );
     }
 
+    /**
+     * Página PÚBLICA de eliminación de cuenta.
+     *
+     * Google Play exige, para toda app que permite crear cuenta, un recurso web
+     * donde se pueda pedir la baja SIN reinstalar la aplicación — aparte del
+     * borrado dentro de la app, que ya existe. Es la URL que se declara en Play
+     * Console → Seguridad de los datos → Eliminación de datos.
+     *
+     * Es una página de INSTRUCCIONES, no un formulario, y es una decisión
+     * meditada: ver el comentario de accountDeletionBody().
+     */
+    public function accountDeletion(): Response
+    {
+        $title = 'Eliminar tu cuenta — '.(string) Config::get('legal.app_name');
+
+        return $this->html('Eliminar tu cuenta y tus datos', $title, $this->accountDeletionBody());
+    }
+
     private function support(): string
     {
         return (string) Config::get('legal.privacy_email')
@@ -62,6 +80,7 @@ class LegalController extends Controller
         $email = e($this->support());
         $phone = e((string) Config::get('legal.privacy_phone'));
         $url = e((string) Config::get('legal.privacy_url'));
+        $deletionUrl = e((string) Config::get('legal.account_deletion_url'));
         $updated = e((string) Config::get('legal.last_updated'));
         $evidence = (int) Config::get('legal.retention.moderation_evidence_days', 90);
         $storyHours = (int) Config::get('legal.retention.story_hours', 24);
@@ -351,7 +370,11 @@ tu nombre, tu documento, tu correo o tu teléfono. El resto de tu historial de u
 desvinculado de una persona identificada.</p>
 <p>Eliminar la cuenta no es lo mismo que una suspensión: la suspensión es
 temporal y reversible; la eliminación no tiene vuelta atrás.</p>
-<p>Si prefieres no hacerlo desde la app, escríbenos a
+<p>Si ya desinstalaste la aplicación o prefieres no hacerlo desde ella, tienes
+una página pública con el procedimiento completo, sin necesidad de volver a
+instalar nada:</p>
+<p class="path"><a href="{$deletionUrl}">{$deletionUrl}</a></p>
+<p>También puedes escribirnos directamente a
 <a href="mailto:{$email}">{$email}</a> desde el correo de tu cuenta, o indicando
 tu número de documento, y lo tramitamos nosotros.</p>
 
@@ -446,6 +469,173 @@ número completo de tu tarjeta.</p>
 
 <h2>Contacto</h2>
 <p>Para cualquier solicitud: <strong>{$support}</strong>.</p>
+HTML;
+    }
+
+    /**
+     * Por qué esto son instrucciones y no un formulario que borra la cuenta.
+     *
+     * El borrado real exige identificar al titular y confirmarlo con un segundo
+     * factor. Los endpoints que lo hacen (`/api/member/account/delete-request` y
+     * `delete-confirm`) trabajan SIEMPRE sobre una sesión ya autenticada. Abrir
+     * ese camino a un visitante anónimo no es «poner un formulario»: es una
+     * arquitectura nueva, y las tres puertas que abriría son serias.
+     *
+     *   1. Enumeración. Un campo «número de documento» que responde distinto
+     *      según exista o no la cuenta convierte la página en un oráculo para
+     *      averiguar quién está inscrito en el gimnasio.
+     *   2. Abuso del SMS. Si el formulario dispara el OTP, cualquiera puede
+     *      mandar mensajes a números ajenos a costa nuestra — acoso pagado con
+     *      nuestra cuenta de Twilio.
+     *   3. Fuerza bruta sobre una acción irreversible. Un código de seis dígitos
+     *      expuesto en internet, sin sesión previa, protegiendo algo que no
+     *      tiene vuelta atrás.
+     *
+     * Cerrar esas tres bien —limitación por IP y por documento, respuestas
+     * indistinguibles, captcha, techo de gasto en SMS, auditoría del origen web—
+     * es un proyecto propio, no un añadido a esta página.
+     *
+     * Y hay una razón que zanja el debate: `account_deletion_requests` es una
+     * tabla de AUDITORÍA que escribe la app y que ninguna pantalla del CRM lee.
+     * Una solicitud guardada ahí desde la web no la vería nadie. El canal que sí
+     * atiende una persona es el correo de privacidad, así que es el que se
+     * documenta. La página cumple lo que Google pide —un recurso web público
+     * para INICIAR la solicitud sin reinstalar— y describe un proceso que existe
+     * de verdad.
+     */
+    private function accountDeletionBody(): string
+    {
+        $app = e((string) Config::get('legal.app_name'));
+        $package = e((string) Config::get('legal.android_package'));
+        $developer = e((string) Config::get('legal.developer_name'));
+        $controller = e((string) Config::get('legal.controller_name'));
+        $address = e((string) Config::get('legal.address'));
+        $email = e($this->support());
+        $phone = e((string) Config::get('legal.privacy_phone'));
+        $privacyUrl = e((string) Config::get('legal.privacy_url'));
+        $updated = e((string) Config::get('legal.last_updated'));
+        $evidence = (int) Config::get('legal.retention.moderation_evidence_days', 90);
+        $storyHours = (int) Config::get('legal.retention.story_hours', 24);
+
+        return <<<HTML
+<p class="updated"><strong>Última actualización:</strong> {$updated}</p>
+
+<p>Esta página explica cómo eliminar tu cuenta de {$app} y los datos asociados,
+tanto si tienes la aplicación instalada como si ya la desinstalaste. El trámite
+es <strong>gratuito</strong>.</p>
+
+<h2>1. A qué aplicación se refiere</h2>
+<table class="id">
+  <tr><th>Aplicación</th><td>{$app}</td></tr>
+  <tr><th>Identificador Android (Google Play)</th><td><code>{$package}</code></td></tr>
+  <tr><th>Desarrollador / publicador en Google Play</th><td>{$developer}</td></tr>
+  <tr><th>Responsable del tratamiento de datos</th><td>{$controller}</td></tr>
+  <tr><th>Contacto de privacidad</th><td><a href="mailto:{$email}">{$email}</a></td></tr>
+</table>
+
+<h2>2. Si tienes la aplicación instalada</h2>
+<p>Es la vía más rápida y la puedes completar tú, sin escribir a nadie y sin
+necesidad de tener una membresía activa:</p>
+<p class="path"><strong>Perfil → Eliminar cuenta y datos</strong><br>
+También disponible en la pantalla de activación, para cuentas sin membresía.</p>
+<p>Te pediremos confirmar con un código enviado por SMS al teléfono de tu cuenta.
+No es un trámite burocrático: eliminar una cuenta es irreversible y ese código
+evita que ocurra por un descuido o desde un teléfono ajeno. Si tu cuenta no tiene
+un teléfono donde recibirlo, la eliminación se ejecuta igual — nunca te dejamos
+atrapado.</p>
+
+<h2>3. Si ya desinstalaste la aplicación</h2>
+<p>No hace falta que la vuelvas a instalar. Escríbenos a
+<a href="mailto:{$email}">{$email}</a> con este asunto, tal cual, para que la
+solicitud entre por el canal correcto:</p>
+<p class="path"><strong>Asunto:</strong> ELIMINAR CUENTA</p>
+<p>En el cuerpo del mensaje indícanos:</p>
+<ul>
+  <li>Tu <strong>nombre completo</strong>, tal como lo registraste.</li>
+  <li>Tu <strong>número de documento de identidad</strong>.</li>
+  <li>El <strong>teléfono</strong> asociado a tu cuenta.</li>
+  <li>Si quieres, el motivo. No es obligatorio y no condiciona la solicitud.</li>
+</ul>
+
+<h2>4. Cómo comprobamos que eres tú</h2>
+<p>Antes de borrar nada tenemos que estar seguros de que la solicitud viene del
+titular. Es la misma protección que te ampara a ti: sin ella, cualquiera que
+conociera tu número de documento podría borrar tu historial.</p>
+<ul>
+  <li><strong>La vía directa:</strong> escríbenos <strong>desde el correo
+      electrónico registrado en tu cuenta</strong>. Con eso suele bastar.</li>
+  <li><strong>Si no recuerdas cuál era o ya no tienes acceso a él:</strong>
+      mándanos igualmente el mensaje y te contactaremos por el
+      <strong>teléfono registrado</strong> para confirmar la solicitud.</li>
+  <li>Si no logramos verificar que la petición es tuya, <strong>no la
+      ejecutamos</strong> y te lo decimos.</li>
+</ul>
+<p><strong>Nunca te pediremos tu contraseña</strong>, ni un código de verificación
+por correo, ni fotos de tu documento para este trámite. Si recibes un mensaje que
+te los pide en nombre de {$app}, no es nuestro.</p>
+<p>Te confirmaremos por el mismo medio cuando la eliminación esté hecha.</p>
+
+<h2>5. Qué se elimina</h2>
+<ul>
+  <li>Tus datos identificativos: nombre, correo, teléfono, género, fecha de
+      nacimiento, objetivo y lesiones.</li>
+  <li>Las imágenes de tu documento de identidad y tu fotografía facial, borradas
+      del disco del servidor.</li>
+  <li>Tus conversaciones con IRON IA, sus mensajes y los archivos que adjuntaste.</li>
+  <li>Los tokens de notificaciones, los vínculos de dispositivo y los códigos de
+      verificación pendientes.</li>
+  <li>Todas las sesiones abiertas, que se cierran de inmediato, y el acceso queda
+      bloqueado.</li>
+</ul>
+<p>Tus estados publicados (foto o vídeo) caducan por sí solos a las
+<strong>{$storyHours} horas</strong> y una tarea automática borra el registro y el
+archivo.</p>
+
+<h2>6. Qué puede conservarse, y por qué</h2>
+<p>No todo se puede borrar: hay información que la ley colombiana nos obliga a
+guardar. Estas son las excepciones, y no hay más:</p>
+<ul>
+  <li>Los <strong>pagos, los contratos que firmaste y las facturas
+      electrónicas</strong>, por obligación legal, contable y tributaria.</li>
+  <li>Las <strong>pruebas de un caso de moderación</strong>, hasta
+      <strong>{$evidence} días</strong> desde el cierre del caso; después se
+      eliminan automáticamente.</li>
+  <li>Los <strong>registros de seguridad y auditoría</strong> necesarios para
+      prevenir el fraude y atender reclamaciones.</li>
+</ul>
+<p>Lo que se conserva queda <strong>anonimizado</strong>: deja de estar asociado a
+tu nombre, tu documento, tu correo o tu teléfono. El resto de tu historial de uso
+—entrenamientos, nutrición, asistencia— permanece únicamente como registro
+desvinculado de una persona identificada.</p>
+
+<h2>7. Eliminar no es desactivar</h2>
+<p>Conviene que quede claro antes de que lo pidas:</p>
+<ul>
+  <li>Una <strong>suspensión</strong> es temporal y reversible: la cuenta deja de
+      funcionar, pero sigue ahí y puede reactivarse.</li>
+  <li>Una <strong>eliminación</strong> no tiene vuelta atrás. No recuperamos tu
+      historial de entrenamientos, tus récords, tus evaluaciones ni tus
+      conversaciones. No hay copia que restaurar.</li>
+</ul>
+<p>Si lo que quieres es dejar de recibir notificaciones o pausar tu membresía,
+escríbenos y lo resolvemos sin borrar nada.</p>
+
+<h2>8. Contacto</h2>
+<table class="id">
+  <tr><th>Correo de privacidad</th><td><a href="mailto:{$email}">{$email}</a></td></tr>
+  <tr><th>Teléfono</th><td>{$phone}</td></tr>
+  <tr><th>Dirección</th><td>{$address}</td></tr>
+  <tr><th>Responsable del tratamiento</th><td>{$controller}</td></tr>
+</table>
+<p>El detalle completo de qué datos tratamos, durante cuánto tiempo y con qué
+proveedores está en nuestra política de privacidad:
+<a href="{$privacyUrl}">{$privacyUrl}</a> — secciones 9 (Conservación de los
+datos) y 10 (Eliminación de la cuenta y de los datos).</p>
+<p>Si consideras que no atendimos tu solicitud, puedes presentar una queja ante la
+<strong>Superintendencia de Industria y Comercio</strong> de Colombia.</p>
+
+<p class="foot">Documento aplicable a {$app} (<code>{$package}</code>) ·
+Publicado en Google Play por {$developer} · Última actualización: {$updated}</p>
 HTML;
     }
 
