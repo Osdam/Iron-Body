@@ -159,7 +159,7 @@ class MetaMessagingService
             return array_merge($base, ['reason' => 'meta_disabled_or_unconfigured']);
         }
 
-        $phoneNumberId = (string) config('meta.whatsapp_phone_number_id');
+        $phoneNumberId = (string) $this->auth->phoneNumberId();
         if ($phoneNumberId === '') {
             return array_merge($base, ['reason' => 'missing_phone_number_id']);
         }

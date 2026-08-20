@@ -20,14 +20,18 @@ class MetaDoctorService
     {
         $enabled = (bool) config('meta.enabled');
 
+        // Presencia de la credencial EFECTIVA, que puede venir del .env o de la
+        // conexión hecha desde el CRM. Preguntar solo por el fichero daría
+        // MISSING con el canal funcionando, que es el peor diagnóstico posible:
+        // manda a alguien a arreglar lo que no está roto.
         $present = [
-            'access_token' => $this->isSet(config('meta.access_token')),
+            'access_token' => $this->isSet($this->auth->accessToken()),
             'app_secret' => $this->isSet(config('meta.app_secret')),
             'verify_token' => $this->isSet(config('meta.verify_token')),
             'webhook_secret' => $this->isSet(config('meta.webhook_secret')),
-            'whatsapp_business_account_id' => $this->isSet(config('meta.whatsapp_business_account_id')),
-            'whatsapp_phone_number_id' => $this->isSet(config('meta.whatsapp_phone_number_id')),
-            'whatsapp_display_phone' => $this->isSet(config('meta.whatsapp_display_phone')),
+            'whatsapp_business_account_id' => $this->isSet($this->auth->wabaId()),
+            'whatsapp_phone_number_id' => $this->isSet($this->auth->phoneNumberId()),
+            'whatsapp_display_phone' => $this->isSet($this->auth->displayPhone()),
         ];
 
         // MetaMessagingService considera "configurado" = enabled + access_token + app_secret.
@@ -39,6 +43,11 @@ class MetaDoctorService
         return [
             'enabled' => $enabled,
             'graph_version' => (string) config('meta.graph_version'),
+            // De dónde salen las credenciales que rigen ahora mismo. Sin este
+            // dato, un token del .env y uno guardado por Embedded Signup son
+            // indistinguibles en el diagnóstico, y son cosas muy distintas
+            // cuando hay que decidir dónde corregir un valor.
+            'credential_source' => $this->auth->credentialSource(),
             'present' => $present,
             'auth_configured' => $authConfigured,
             'live_send_allowed' => $liveSendAllowed,
@@ -129,7 +138,7 @@ class MetaDoctorService
             $tips[] = 'Define META_APP_SECRET (también usado para la firma del webhook si META_WEBHOOK_SECRET no se establece).';
         }
         if (! $present['whatsapp_phone_number_id']) {
-            $tips[] = 'Define META_WHATSAPP_PHONE_NUMBER_ID (el ID del número en Cloud API, NO el teléfono visible).';
+            $tips[] = 'Conecta la cuenta desde el CRM (Configuración → Integraciones → WhatsApp Business) o define META_WHATSAPP_PHONE_NUMBER_ID (el ID del número en Cloud API, NO el teléfono visible).';
         }
         if (! $present['verify_token']) {
             $tips[] = 'Define META_VERIFY_TOKEN para verificar el webhook (GET hub.verify_token).';

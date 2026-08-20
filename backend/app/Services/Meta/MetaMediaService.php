@@ -473,7 +473,7 @@ class MetaMediaService
             return null;
         }
 
-        $phoneNumberId = (string) config('meta.whatsapp_phone_number_id');
+        $phoneNumberId = (string) $this->auth->phoneNumberId();
         if ($phoneNumberId === '') {
             return null;
         }

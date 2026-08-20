@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\Admin\MarketingAttachmentController;
 use App\Http\Controllers\Api\Admin\MarketingController;
 use App\Http\Controllers\Api\Admin\MarketingInboxController;
 use App\Http\Controllers\Api\Admin\SupervisionController;
+use App\Http\Controllers\Api\Admin\WhatsappIntegrationController;
 use App\Http\Controllers\Api\Internal\InternalMarketingController;
 use App\Http\Controllers\Api\Internal\InternalMarketingKnowledgeController;
 use Illuminate\Support\Facades\Route;
@@ -60,6 +61,28 @@ Route::middleware(['automation.internal', 'throttle:120,1'])
 // mensaje automáticamente: solo devuelve el link para que un humano lo comparta.
 Route::post('admin/marketing/leads/{lead}/payment-link', [MarketingController::class, 'paymentLink'])
     ->where('lead', '[0-9]+');
+
+// ── Conexión de WhatsApp Business (Embedded Signup de Meta) ───────────────────
+// Configuración → Integraciones → WhatsApp Business. Vive en este fichero y no
+// en api.php porque es el mismo canal que todo lo de abajo: el WABA, el número y
+// el token que usa el Inbox salen justo de aquí, y tenerlos en dos ficheros
+// distintos garantiza que un día se cambie uno y se olvide el otro.
+//
+// Protegido por el blindaje global de /api/admin/* (ProtectAdminPaths), que deja
+// el Admin resuelto en `auth_admin`; encima, el controlador exige sesión REAL y
+// rol pleno para conectar o desconectar.
+//
+// Throttle bajo y separado: son acciones humanas de una vez al año, no tráfico.
+// Un bucle contra `callback` sería un bucle contra el canje de códigos de Meta.
+Route::middleware('throttle:30,1')
+    ->prefix('admin/integrations/whatsapp')
+    ->group(function (): void {
+        Route::get('/',            [WhatsappIntegrationController::class, 'status']);
+        Route::post('start',       [WhatsappIntegrationController::class, 'start']);
+        Route::post('callback',    [WhatsappIntegrationController::class, 'callback']);
+        Route::post('disconnect',  [WhatsappIntegrationController::class, 'disconnect']);
+        Route::post('refresh',     [WhatsappIntegrationController::class, 'refresh']);
+    });
 
 // ── Inbox CRM de WhatsApp (Fase 2A) ───────────────────────────────────────────
 // Bandeja para operar WhatsApp Cloud API desde el CRM. Protegido por el blindaje

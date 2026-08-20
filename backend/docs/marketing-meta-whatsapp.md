@@ -190,12 +190,19 @@ facturación.
 Business (personal, incluido WhatsApp Web) y en Cloud API (Laravel y el agente).
 Meta sincroniza el historial en ambos sentidos.
 
+> **Actualización 2026-08-20.** La entrada al Embedded Signup ya existe dentro
+> del CRM: `Configuración → Integraciones → WhatsApp Business`, con endpoints,
+> persistencia cifrada y precedencia sobre el `.env`. Lo único que falta es
+> crear la configuración de Facebook Login for Business en el panel de Meta
+> (`META_EMBEDDED_SIGNUP_CONFIG_ID`). Ver **`docs/whatsapp/EMBEDDED-SIGNUP.md`**,
+> que además trae el guion para grabar la evidencia de la App Review.
+
 ### Requisitos de Meta
 
 | Requisito | Estado en Iron Body |
 |---|---|
 | El onboarding lo ejecuta un **Solution Partner o Tech Provider** | ❌ no lo somos |
-| **Embedded Signup** con *session logging* (v3/v4; v2 se retira el 2026-10-15) | ❌ sin configurar |
+| **Embedded Signup** con *session logging* (v3/v4; v2 se retira el 2026-10-15) | ⚠️ construido en el CRM; falta el `config_id` en el panel de Meta |
 | Número activo en la app WhatsApp Business, versión ≥ 2.24.17 | ✅ confirmado |
 | Sincronizar el historial en las 24 h siguientes al onboarding | pendiente |
 
@@ -220,6 +227,9 @@ impide arrancar** el onboarding.
    necesitará una rama para ese campo.
 3. `MetaMessagingService` sigue sirviendo tal cual **si** el proveedor deja
    hablar con Graph API directamente contra nuestro WABA.
+4. El `phone_number_id` y el token ya NO tienen que pegarse a mano en el `.env`:
+   los guarda el onboarding desde el CRM y tienen precedencia sobre el fichero
+   (`WhatsappIntegrationRegistry`). El `.env` sigue siendo el respaldo.
 
 ### Qué exigir al proveedor
 

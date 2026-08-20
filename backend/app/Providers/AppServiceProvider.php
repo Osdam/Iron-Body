@@ -2,10 +2,16 @@
 
 namespace App\Providers;
 
+use App\Models\MarketingLeadAttribution;
+use App\Models\MarketingMessage;
+use App\Observers\Marketing\AttributionOfferObserver;
+use App\Observers\Marketing\ConversationPreviewObserver;
 use App\Services\Billing\Factus\FactusClient;
 use App\Services\Billing\Factus\FactusConfigValidator;
 use App\Services\Billing\Factus\FactusTokenManager;
 use App\Services\Exercises\ExerciseCatalogResolver;
+use App\Services\Marketing\Analytics\AdvertisingSpendProvider;
+use App\Services\Marketing\Analytics\UnavailableSpendProvider;
 use App\Services\Marketing\Contracts\AiSalesResponderInterface;
 use App\Services\Marketing\FakeAiSalesResponder;
 use App\Services\Marketing\HermesCircuitBreaker;
@@ -14,8 +20,12 @@ use App\Services\Marketing\OpenAiSalesResponder;
 use App\Services\Marketing\SalesAgentDecisionValidator;
 use App\Services\Marketing\SalesAgentPromptBuilder;
 use App\Services\Marketing\SalesAiConfig;
+use App\Services\Meta\WhatsappIntegrationRegistry;
+use App\Services\Observability\QueueHealthService;
 use App\Services\Wompi\WompiConfigValidator;
+use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -30,13 +40,19 @@ class AppServiceProvider extends ServiceProvider
         // gasto cero es una mentira con formato de numero, y alguien tomaria
         // una decision de presupuesto con ella.
         $this->app->bind(
-            \App\Services\Marketing\Analytics\AdvertisingSpendProvider::class,
-            \App\Services\Marketing\Analytics\UnavailableSpendProvider::class,
+            AdvertisingSpendProvider::class,
+            UnavailableSpendProvider::class,
         );
 
         // Resolver de catálogo de ejercicios: una sola carga de catálogo+aliases
         // por request (evita N+1 al serializar muchas rutinas).
         $this->app->singleton(ExerciseCatalogResolver::class);
+
+        // De dónde salen las credenciales de WhatsApp Cloud API: la conexión
+        // hecha desde el CRM si existe, y si no el .env de siempre. Singleton
+        // porque la respuesta no cambia a mitad de petición y sin memoria
+        // enviar diez mensajes serían diez consultas idénticas.
+        $this->app->singleton(WhatsappIntegrationRegistry::class);
 
         // Facturación electrónica (Factus): el token manager y el cliente HTTP
         // se construyen desde config(billing) (constructores con array $cfg),
@@ -84,16 +100,31 @@ class AppServiceProvider extends ServiceProvider
         // mensajes, no desde cada servicio que envia. Los mensajes nacen por
         // seis caminos distintos y basta que uno se olvide para que la bandeja
         // muestre texto viejo; un observador no se lo puede saltar ninguno.
-        \App\Models\MarketingMessage::observe(
-            \App\Observers\Marketing\ConversationPreviewObserver::class,
+        MarketingMessage::observe(
+            ConversationPreviewObserver::class,
         );
 
         // Cuando alguien mapea un anuncio a un plan, hay que volver a mirar si
         // lo que promete la pauta sigue existiendo. Meta no manda ese dato, asi
         // que ese mapeo llega SIEMPRE despues del contacto.
-        \App\Models\MarketingLeadAttribution::observe(
-            \App\Observers\Marketing\AttributionOfferObserver::class,
+        MarketingLeadAttribution::observe(
+            AttributionOfferObserver::class,
         );
+
+        /*
+         * Los workers viven horas. Sin esto, el primero que resolviera «no hay
+         * conexión de WhatsApp» se quedaría con esa respuesta en memoria y
+         * seguiría usando el `.env` para siempre, aunque alguien conectara la
+         * cuenta desde el CRM cinco minutos después. El síntoma sería de los
+         * malos: el canal funciona en la web y no en las colas, y sólo se
+         * arregla reiniciando el worker sin que nadie sepa por qué.
+         *
+         * Una consulta por trabajo es un precio que no se nota; el trabajo ya
+         * abrió la base de datos para todo lo demás.
+         */
+        Queue::before(function (): void {
+            app(WhatsappIntegrationRegistry::class)->forget();
+        });
 
         /*
          * El latido de los carriles de cola.
@@ -108,9 +139,9 @@ class AppServiceProvider extends ServiceProvider
          * Es best-effort a propósito: si el cache no está disponible, se pierde
          * visibilidad, pero ni un solo trabajo falla por ello.
          */
-        \Illuminate\Support\Facades\Queue::after(function (\Illuminate\Queue\Events\JobProcessed $event): void {
+        Queue::after(function (JobProcessed $event): void {
             try {
-                app(\App\Services\Observability\QueueHealthService::class)
+                app(QueueHealthService::class)
                     ->heartbeat($event->job->getQueue() ?: 'default');
             } catch (\Throwable) {
                 // La vigilancia no puede ser el motivo de que algo se rompa.

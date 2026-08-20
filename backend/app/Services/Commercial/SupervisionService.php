@@ -3,9 +3,12 @@
 namespace App\Services\Commercial;
 
 use App\Models\CommercialApproval;
+use App\Services\Meta\MetaAuthService;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 /**
@@ -135,7 +138,7 @@ class SupervisionService
     private function storageWritable(): bool
     {
         return $this->safe(function () {
-            $disk = \Illuminate\Support\Facades\Storage::disk(
+            $disk = Storage::disk(
                 (string) config('marketing.media.disk', 'whatsapp'),
             );
             $probe = 'health/.probe-'.now()->timestamp;
@@ -157,7 +160,11 @@ class SupervisionService
      */
     private function channelState(): array
     {
-        $configured = filled(config('meta.access_token')) && filled(config('meta.app_secret'));
+        $auth = app(MetaAuthService::class);
+        // La credencial EFECTIVA, no la del fichero: si el canal se conectó
+        // desde el CRM, el .env puede seguir vacío y esta pantalla diría que
+        // no hay nada configurado mientras el canal funciona.
+        $configured = filled($auth->accessToken()) && filled(config('meta.app_secret'));
 
         /*
          * Hay un `phone_number_id` en la configuración. Eso es TODO lo que se
@@ -169,7 +176,7 @@ class SupervisionService
          * de pruebas, que es justo el caso hoy-. Comprobar el alta de verdad
          * exige preguntárselo a Meta, y el canal está apagado.
          */
-        $phoneConfigured = filled(config('meta.whatsapp_phone_number_id'));
+        $phoneConfigured = filled($auth->phoneNumberId());
         $live = (bool) config('meta.enabled', false) && $phoneConfigured;
 
         return [
@@ -335,7 +342,7 @@ class SupervisionService
 
     // ── Utilidades ──────────────────────────────────────────────────────
 
-    /** @param \Illuminate\Support\Collection<int,mixed> $values */
+    /** @param Collection<int,mixed> $values */
     private function percentile($values, int $p): ?float
     {
         $sorted = collect($values)->filter(fn ($v) => $v !== null)->sort()->values();

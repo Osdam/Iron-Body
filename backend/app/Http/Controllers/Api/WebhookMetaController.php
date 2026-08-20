@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\ProcessMetaWebhookEvent;
+use App\Services\Meta\MetaAuthService;
 use App\Services\Meta\MetaWebhookIngestService;
 use App\Services\Meta\MetaWebhookService;
 use App\Services\Observability\ChannelLog;
@@ -112,7 +113,7 @@ class WebhookMetaController extends Controller
             'event_id' => $event->id,
             'object' => $event->object,
             'phone_number_id' => $event->phone_number_id,
-            'expected_phone_number_id' => (string) config('meta.whatsapp_phone_number_id'),
+            'expected_phone_number_id' => (string) app(MetaAuthService::class)->phoneNumberId(),
             'messages_count' => $event->messages_count,
             'statuses_count' => $event->statuses_count,
             'body_bytes' => $event->payload_bytes,

@@ -3,8 +3,10 @@
 namespace App\Jobs;
 
 use App\Models\MetaWebhookEvent;
+use App\Services\Marketing\LeadAttributionService;
 use App\Services\Marketing\MarketingInboundMessageRouter;
 use App\Services\Marketing\MarketingMessageDispatcher;
+use App\Services\Meta\MetaAuthService;
 use App\Services\Meta\MetaConversationService;
 use App\Services\Meta\MetaLeadService;
 use App\Services\Meta\MetaWebhookService;
@@ -127,7 +129,10 @@ class ProcessMetaWebhookEvent implements ShouldQueue
             return; // procesamiento de entrantes deshabilitado (modo registro off).
         }
 
-        $expectedPhoneId = (string) config('meta.whatsapp_phone_number_id');
+        // El número esperado sale del resolvedor, no del .env directo: si el
+        // canal se conectó desde el CRM, el .env todavía apunta al número
+        // anterior y este filtro descartaría TODOS los mensajes entrantes.
+        $expectedPhoneId = (string) app(MetaAuthService::class)->phoneNumberId();
         $events = $webhook->parseEvents((array) $event->payload);
 
         ChannelLog::info('meta.event.started', [
@@ -228,7 +233,7 @@ class ProcessMetaWebhookEvent implements ShouldQueue
          * Es best-effort a proposito: perder una atribucion es infinitamente
          * preferible a perder el mensaje de un prospecto.
          */
-        app(\App\Services\Marketing\LeadAttributionService::class)->record(
+        app(LeadAttributionService::class)->record(
             leadId: $lead->id,
             referral: $parsed['referral'] ?? null,
             conversationId: $conversation->id,
