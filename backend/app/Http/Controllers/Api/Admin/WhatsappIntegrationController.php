@@ -82,7 +82,16 @@ class WhatsappIntegrationController extends Controller
                  * configuración de dos minutos en una sesión de depuración.
                  */
                 'onboarding' => [
-                    'available' => $this->signup->isConfigured(),
+                    /*
+                     * `available` responde a "¿se puede pulsar el botón?", que
+                     * solo necesita los dos identificadores públicos. El App
+                     * Secret se comprueba al canjear el código, y por eso puede
+                     * faltar aquí y aparecer en `missing_configuration`: la
+                     * pantalla enseña el botón Y el aviso a la vez, en vez de
+                     * esconder uno de los dos.
+                     */
+                    'available' => $this->signup->canLaunch(),
+                    'can_exchange' => $this->signup->canExchange(),
                     'missing_configuration' => $this->signup->missingConfiguration(),
                 ],
 

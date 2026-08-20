@@ -29,7 +29,12 @@ class WhatsappEmbeddedSignupTest extends TestCase
 
     private const URL = '/api/admin/integrations/whatsapp';
 
-    private const APP_SECRET = 'SECRETO-DE-LA-APP-QUE-JAMAS-DEBE-SALIR';
+    /** Secreto de la app del canal. NO debe usarse en el canje del onboarding. */
+    private const CHANNEL_SECRET = 'SECRETO-DEL-CANAL-QUE-JAMAS-DEBE-SALIR';
+
+    private const SIGNUP_APP_ID = '1747474522949342';
+
+    private const SIGNUP_SECRET = 'SECRETO-DE-EMBEDDED-SIGNUP-QUE-JAMAS-DEBE-SALIR';
 
     private Admin $superAdmin;
 
@@ -40,8 +45,12 @@ class WhatsappEmbeddedSignupTest extends TestCase
         parent::setUp();
 
         config()->set('meta.enabled', false);
+        // La app del CANAL (webhook + Cloud API).
         config()->set('meta.app_id', '906146885861728');
-        config()->set('meta.app_secret', self::APP_SECRET);
+        config()->set('meta.app_secret', self::CHANNEL_SECRET);
+        // La app de EMBEDDED SIGNUP, distinta a propósito: es el caso real.
+        config()->set('meta.embedded_signup.app_id', self::SIGNUP_APP_ID);
+        config()->set('meta.embedded_signup.app_secret', self::SIGNUP_SECRET);
         config()->set('meta.embedded_signup.config_id', '1234567890');
         config()->set('meta.graph_version', 'v21.0');
         config()->set('meta.graph_base', 'https://graph.facebook.com');
@@ -185,13 +194,16 @@ class WhatsappEmbeddedSignupTest extends TestCase
     {
         $response = $this->postJson(self::URL.'/start', [], $this->saHeaders)->assertOk();
 
-        $response->assertJsonPath('data.app_id', '906146885861728')
+        // El diálogo se abre con la app de Embedded Signup, NO con la del canal.
+        $response->assertJsonPath('data.app_id', self::SIGNUP_APP_ID)
             ->assertJsonPath('data.config_id', '1234567890')
             ->assertJsonPath('data.feature_type', 'whatsapp_business_app_onboarding');
 
         $this->assertNotEmpty($response->json('data.state'));
-        // La prueba que de verdad importa de este endpoint.
-        $this->assertStringNotContainsString(self::APP_SECRET, $response->getContent());
+        // Las pruebas que de verdad importan de este endpoint.
+        $this->assertStringNotContainsString(self::CHANNEL_SECRET, $response->getContent());
+        $this->assertStringNotContainsString(self::SIGNUP_SECRET, $response->getContent());
+        $this->assertStringNotContainsString('906146885861728', $response->getContent());
     }
 
     public function test_start_refuses_when_the_server_is_not_configured(): void
@@ -232,7 +244,7 @@ class WhatsappEmbeddedSignupTest extends TestCase
 
         $body = $this->connect()->assertOk()->getContent();
         $this->assertStringNotContainsString('EAA-TOKEN-DE-NEGOCIO', $body);
-        $this->assertStringNotContainsString(self::APP_SECRET, $body);
+        $this->assertStringNotContainsString(self::CHANNEL_SECRET, $body);
 
         // En la columna hay cifrado, no el token en claro: un volcado de la base
         // de datos no puede convertirse en permiso para escribir a los clientes.

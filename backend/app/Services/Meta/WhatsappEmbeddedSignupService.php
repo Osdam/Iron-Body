@@ -52,12 +52,13 @@ class WhatsappEmbeddedSignupService
      */
     public function launchConfig(Admin $admin): array
     {
-        if (! $this->isConfigured()) {
+        if (! $this->canLaunch()) {
             throw WhatsappOnboardingException::notConfigured();
         }
 
         return [
-            'app_id' => (string) config('meta.app_id'),
+            // La app de Embedded Signup, que NO tiene por qué ser la del canal.
+            'app_id' => (string) config('meta.embedded_signup.app_id'),
             'config_id' => (string) config('meta.embedded_signup.config_id'),
             'graph_version' => (string) config('meta.graph_version'),
             'sdk_version' => (string) config('meta.embedded_signup.sdk_version'),
@@ -69,31 +70,57 @@ class WhatsappEmbeddedSignupService
     }
 
     /**
-     * ¿El servidor tiene lo mínimo para ejecutar el onboarding?
+     * ¿Se puede ABRIR el diálogo de Meta?
      *
-     * Los tres a la vez. Sin `config_id` el diálogo ni siquiera abre, y es la
-     * pieza que hoy falta en esta app: se crea a mano en el panel de Meta y no
-     * hay forma de generarla desde código.
+     * Solo hacen falta los dos identificadores públicos. El secreto no
+     * interviene en el navegador, y separar esta pregunta permite comprobar que
+     * el diálogo arranca con la app correcta antes de tener el secreto puesto.
+     *
+     * Meta exige además que el `config_id` PERTENEZCA a este `app_id`: cruzados,
+     * el diálogo responde «Función no disponible» y no devuelve ningún código.
      */
+    public function canLaunch(): bool
+    {
+        return (string) config('meta.embedded_signup.app_id') !== ''
+            && (string) config('meta.embedded_signup.config_id') !== '';
+    }
+
+    /**
+     * ¿Se puede CANJEAR el código por un token?
+     *
+     * Exige el App Secret de la MISMA app que abrió el diálogo. Con el de otra
+     * app, Meta rechaza el canje —y lo hace al final del recorrido, cuando
+     * alguien ya autorizó todo, que es el peor momento para descubrirlo.
+     */
+    public function canExchange(): bool
+    {
+        return (string) config('meta.embedded_signup.app_secret') !== '';
+    }
+
+    /** ¿El onboarding puede completarse de principio a fin? */
     public function isConfigured(): bool
     {
-        return (string) config('meta.app_id') !== ''
-            && (string) config('meta.app_secret') !== ''
-            && (string) config('meta.embedded_signup.config_id') !== '';
+        return $this->canLaunch() && $this->canExchange();
     }
 
     /** Qué falta, por nombre de variable y sin valores, para poder decirlo en pantalla. */
     public function missingConfiguration(): array
     {
         $missing = [];
-        if ((string) config('meta.app_id') === '') {
-            $missing[] = 'META_APP_ID';
-        }
-        if ((string) config('meta.app_secret') === '') {
-            $missing[] = 'META_APP_SECRET';
+
+        if ((string) config('meta.embedded_signup.app_id') === '') {
+            $missing[] = 'META_EMBEDDED_SIGNUP_APP_ID';
         }
         if ((string) config('meta.embedded_signup.config_id') === '') {
             $missing[] = 'META_EMBEDDED_SIGNUP_CONFIG_ID';
+        }
+        if (! $this->canExchange()) {
+            /*
+             * Se nombra la variable dedicada, no META_APP_SECRET: cuando el
+             * Embedded Signup corre en otra app, poner ahí el secreto del canal
+             * no arregla nada y de paso arriesga la firma del webhook.
+             */
+            $missing[] = 'META_EMBEDDED_SIGNUP_APP_SECRET';
         }
 
         return $missing;
@@ -150,6 +177,8 @@ class WhatsappEmbeddedSignupService
      */
     public function complete(array $payload, Admin $admin): WhatsappBusinessIntegration
     {
+        // Aquí sí hace falta el secreto: se comprueba ANTES de gastar contra
+        // Meta un código que solo sirve una vez.
         if (! $this->isConfigured()) {
             throw WhatsappOnboardingException::notConfigured();
         }
@@ -175,7 +204,7 @@ class WhatsappEmbeddedSignupService
         $integration = WhatsappBusinessIntegration::updateOrCreate(
             ['waba_id' => $wabaId, 'phone_number_id' => $phoneNumberId],
             [
-                'meta_app_id' => (string) config('meta.app_id'),
+                'meta_app_id' => (string) config('meta.embedded_signup.app_id'),
                 'business_id' => $payload['business_id'] ?? $existing?->business_id,
                 'status' => WhatsappBusinessIntegration::STATUS_CONNECTED,
                 'access_token' => $token['access_token'],
@@ -223,8 +252,8 @@ class WhatsappEmbeddedSignupService
         try {
             $response = Http::timeout($this->auth->timeout())
                 ->get($this->auth->graphUrl('oauth/access_token'), [
-                    'client_id' => (string) config('meta.app_id'),
-                    'client_secret' => (string) config('meta.app_secret'),
+                    'client_id' => (string) config('meta.embedded_signup.app_id'),
+                    'client_secret' => (string) config('meta.embedded_signup.app_secret'),
                     'code' => $code,
                 ]);
         } catch (Throwable $e) {
@@ -292,7 +321,7 @@ class WhatsappEmbeddedSignupService
             $response = Http::timeout($this->auth->timeout())
                 ->get($this->auth->graphUrl('debug_token'), [
                     'input_token' => $userToken,
-                    'access_token' => config('meta.app_id').'|'.config('meta.app_secret'),
+                    'access_token' => config('meta.embedded_signup.app_id').'|'.config('meta.embedded_signup.app_secret'),
                 ]);
 
             if (! $response->successful()) {
@@ -475,7 +504,7 @@ class WhatsappEmbeddedSignupService
         }
 
         WhatsappBusinessIntegration::create([
-            'meta_app_id' => (string) config('meta.app_id'),
+            'meta_app_id' => (string) config('meta.embedded_signup.app_id'),
             'business_id' => $payload['business_id'] ?? null,
             'waba_id' => $wabaId,
             'phone_number_id' => $phoneNumberId,

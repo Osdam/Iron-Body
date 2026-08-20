@@ -1,5 +1,34 @@
 <?php
 
+/*
+|------------------------------------------------------------------------------
+| Identidad de la app que ejecuta Embedded Signup
+|------------------------------------------------------------------------------
+| Puede NO ser la misma app que el resto del canal. Aqui hay dos apps de Meta:
+|
+|   · META_APP_ID / META_APP_SECRET  → la app historica del canal. Es la dueña
+|     del webhook y del token de Cloud API, y su secreto firma los POST
+|     entrantes. Tocarla rompe la mensajeria.
+|   · META_EMBEDDED_SIGNUP_APP_ID    → la app donde vive la configuracion de
+|     Facebook Login for Business (el config_id) y la revision de permisos.
+|
+| Meta comprueba que el config_id PERTENEZCA al app_id con el que se abre el
+| dialogo. Cruzarlos da "Funcion no disponible" y `FB.login` no devuelve codigo.
+|
+| El secreto NO se hereda a ciegas: solo cuando las dos apps son la MISMA se
+| reutiliza META_APP_SECRET. Si el Embedded Signup corre en otra app, su secreto
+| tiene que declararse aparte, porque canjear un codigo de la app A firmando con
+| el secreto de la app B siempre falla, y falla al final del recorrido -despues
+| de que una persona haya autorizado todo- que es el peor momento para enterarse.
+*/
+$embeddedSignupAppId = env('META_EMBEDDED_SIGNUP_APP_ID', env('META_APP_ID'));
+$embeddedSignupAppSecret = env('META_EMBEDDED_SIGNUP_APP_SECRET');
+
+if ((string) $embeddedSignupAppSecret === ''
+    && (string) $embeddedSignupAppId === (string) env('META_APP_ID')) {
+    $embeddedSignupAppSecret = env('META_APP_SECRET');
+}
+
 return [
 
     /*
@@ -61,6 +90,19 @@ return [
     | backend contra Graph API.
     */
     'embedded_signup' => [
+        /*
+         * La app que abre el diálogo. Por defecto, la misma del canal — que es
+         * el comportamiento anterior y no cambia nada donde ambas coinciden.
+         */
+        'app_id' => $embeddedSignupAppId,
+
+        /*
+         * Su App Secret. Solo se hereda del canal cuando es la misma app (ver
+         * la cabecera del fichero). Nunca viaja al navegador: se usa únicamente
+         * para canjear el código servidor contra servidor.
+         */
+        'app_secret' => $embeddedSignupAppSecret,
+
         // Configuración de Facebook Login for Business (config_id).
         'config_id' => env('META_EMBEDDED_SIGNUP_CONFIG_ID'),
 

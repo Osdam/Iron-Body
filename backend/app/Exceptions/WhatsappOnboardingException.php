@@ -30,7 +30,7 @@ class WhatsappOnboardingException extends RuntimeException
     public static function notConfigured(): self
     {
         return new self(
-            'La conexión con Meta no está configurada en el servidor. Falta META_APP_ID, META_APP_SECRET o META_EMBEDDED_SIGNUP_CONFIG_ID.',
+            'La conexión con Meta no está configurada en el servidor. Falta META_EMBEDDED_SIGNUP_APP_ID, META_EMBEDDED_SIGNUP_CONFIG_ID o META_EMBEDDED_SIGNUP_APP_SECRET.',
             'meta_app_not_configured',
             503,
         );
