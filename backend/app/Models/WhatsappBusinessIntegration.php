@@ -28,8 +28,18 @@ class WhatsappBusinessIntegration extends Model
 
     public const STATUS_ERROR = 'error';
 
+    /** La conexión que opera el canal. Es la ÚNICA que da credenciales. */
+    public const PURPOSE_PRODUCTION = 'production';
+
+    /**
+     * Conexión de DEMOSTRACIÓN para la revisión de Meta, sobre una WABA de
+     * prueba. Se guarda y se enseña, pero nunca alimenta el canal.
+     */
+    public const PURPOSE_REVIEW = 'review';
+
     protected $fillable = [
         'meta_app_id',
+        'purpose',
         'business_id',
         'waba_id',
         'phone_number_id',
@@ -83,10 +93,66 @@ class WhatsappBusinessIntegration extends Model
         return $query->where('status', self::STATUS_CONNECTED);
     }
 
-    /** La conexión vigente, o null si el canal nunca se conectó desde el CRM. */
+    public function scopePurpose(Builder $query, string $purpose): Builder
+    {
+        return $query->where('purpose', $purpose);
+    }
+
+    /**
+     * La conexión vigente del CANAL, o null si nunca se conectó desde el CRM.
+     *
+     * Filtra por propósito a propósito (valga la redundancia). Sin ese filtro,
+     * una conexión de demostración recién hecha sería la más reciente y pasaría
+     * a dar las credenciales de producción: el sistema enviaría desde el número
+     * de prueba y descartaría los eventos del real. La demostración no puede
+     * tener ese poder, y la garantía tiene que estar aquí y no en la memoria de
+     * quien escriba la próxima consulta.
+     */
     public static function current(): ?self
     {
-        return static::query()->connected()->latest('connected_at')->first();
+        return static::query()
+            ->purpose(self::PURPOSE_PRODUCTION)
+            ->connected()
+            ->latest('connected_at')
+            ->first();
+    }
+
+    /** La conexión de demostración vigente, si existe. Nunca da credenciales. */
+    public static function currentReview(): ?self
+    {
+        return static::query()
+            ->purpose(self::PURPOSE_REVIEW)
+            ->connected()
+            ->latest('connected_at')
+            ->first();
+    }
+
+    public function isReview(): bool
+    {
+        return $this->purpose === self::PURPOSE_REVIEW;
+    }
+
+    /**
+     * ¿Ese número pertenece a una conexión de DEMOSTRACIÓN?
+     *
+     * Lo pregunta el procesado de webhooks. La app de Meta esta suscrita a un
+     * unico endpoint, asi que los eventos de una WABA de prueba llegan al mismo
+     * sitio que los reales; sin esta comprobacion acabarian creando leads,
+     * conversaciones y disparando al agente comercial.
+     *
+     * Se mira sin filtrar por estado a proposito: una demostracion desconectada
+     * puede seguir emitiendo eventos un rato, y tampoco deben entrar.
+     */
+    public static function isReviewPhoneNumberId(string $phoneNumberId): bool
+    {
+        if ($phoneNumberId === '') {
+            return false;
+        }
+
+        return static::query()
+            ->purpose(self::PURPOSE_REVIEW)
+            ->where('phone_number_id', $phoneNumberId)
+            ->exists();
     }
 
     public function isConnected(): bool
@@ -125,6 +191,7 @@ class WhatsappBusinessIntegration extends Model
     {
         return [
             'id' => $this->id,
+            'purpose' => $this->purpose,
             'status' => $this->status,
             'business_id' => $this->business_id,
             'business_name' => $this->business_name,

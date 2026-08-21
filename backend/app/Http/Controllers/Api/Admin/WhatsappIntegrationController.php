@@ -52,6 +52,7 @@ class WhatsappIntegrationController extends Controller
         }
 
         $integration = WhatsappBusinessIntegration::current();
+        $review = WhatsappBusinessIntegration::currentReview();
 
         return response()->json([
             'ok' => true,
@@ -95,9 +96,39 @@ class WhatsappIntegrationController extends Controller
                     'missing_configuration' => $this->signup->missingConfiguration(),
                 ],
 
+                /*
+                 * La DEMOSTRACIÓN para la revisión de Meta, en su propio bloque.
+                 *
+                 * Separada del canal a propósito, y no como un estado más de la
+                 * conexión productiva: son dos cosas con vidas distintas, y
+                 * mezclarlas en la misma estructura invitaría a que la pantalla
+                 * -o cualquier consulta futura- confundiera una WABA de prueba
+                 * con la que opera el negocio.
+                 */
+                'review' => [
+                    'enabled' => $this->signup->reviewEnabled(),
+                    'status' => $review ? 'connected' : 'not_connected',
+                    'integration' => $review?->toPublicArray(),
+                ],
+
                 'capabilities' => $this->authz->frontendCapabilities($this->admin($request)),
             ],
         ]);
+    }
+
+    /**
+     * El propósito pedido, validado contra la lista cerrada.
+     *
+     * Cualquier valor desconocido cae en producción NO: cae en una validación
+     * que lo rechaza. Un typo en el parámetro no puede acabar operando el canal.
+     */
+    private function purpose(Request $request): string
+    {
+        $mode = $request->input('mode', WhatsappBusinessIntegration::PURPOSE_PRODUCTION);
+
+        return $mode === WhatsappBusinessIntegration::PURPOSE_REVIEW
+            ? WhatsappBusinessIntegration::PURPOSE_REVIEW
+            : WhatsappBusinessIntegration::PURPOSE_PRODUCTION;
     }
 
     // ── 1. Iniciar conexión ───────────────────────────────────────────────────
@@ -109,16 +140,22 @@ class WhatsappIntegrationController extends Controller
             return $r;
         }
 
+        $request->validate([
+            'mode' => ['nullable', 'string', 'in:production,review'],
+        ]);
+
         $admin = $this->admin($request);
+        $purpose = $this->purpose($request);
 
         try {
-            $config = $this->signup->launchConfig($admin);
+            $config = $this->signup->launchConfig($admin, $purpose);
         } catch (WhatsappOnboardingException $e) {
             return $this->fail($e);
         }
 
         ChannelLog::info('whatsapp.onboarding.started', [
             'admin_id' => $admin->id,
+            'purpose' => $purpose,
         ]);
 
         return response()->json(['ok' => true, 'data' => $config]);
@@ -145,16 +182,21 @@ class WhatsappIntegrationController extends Controller
             'waba_id' => ['required', 'string', 'max:64', 'regex:/^[0-9]+$/'],
             'phone_number_id' => ['required', 'string', 'max:64', 'regex:/^[0-9]+$/'],
             'business_id' => ['nullable', 'string', 'max:64', 'regex:/^[0-9]+$/'],
+            'mode' => ['nullable', 'string', 'in:production,review'],
         ], [
             'waba_id.regex' => 'El identificador del WABA debe ser numérico.',
             'phone_number_id.regex' => 'El identificador del número debe ser numérico.',
         ]);
 
         $admin = $this->admin($request);
+        $purpose = $this->purpose($request);
 
         try {
-            $this->signup->consumeState($data['state'], $admin);
-            $integration = $this->signup->complete($data, $admin);
+            // El propósito se valida CONTRA EL STATE: un onboarding iniciado
+            // como demostración no puede cerrarse como producción aunque el
+            // cuerpo de la petición diga lo contrario.
+            $this->signup->consumeState($data['state'], $admin, $purpose);
+            $integration = $this->signup->complete($data, $admin, $purpose);
         } catch (WhatsappOnboardingException $e) {
             return $this->fail($e);
         }
@@ -163,6 +205,7 @@ class WhatsappIntegrationController extends Controller
             'ok' => true,
             'data' => [
                 'status' => 'connected',
+                'purpose' => $purpose,
                 'integration' => $integration->toPublicArray(),
                 /*
                  * Conectar NO enciende el envío. Se avisa en la respuesta para
@@ -183,8 +226,14 @@ class WhatsappIntegrationController extends Controller
             return $r;
         }
 
+        $request->validate([
+            'mode' => ['nullable', 'string', 'in:production,review'],
+        ]);
+
+        $purpose = $this->purpose($request);
+
         try {
-            $integration = $this->signup->disconnect($this->admin($request));
+            $integration = $this->signup->disconnect($this->admin($request), $purpose);
         } catch (WhatsappOnboardingException $e) {
             return $this->fail($e);
         }
@@ -193,6 +242,7 @@ class WhatsappIntegrationController extends Controller
             'ok' => true,
             'data' => [
                 'status' => 'not_connected',
+                'purpose' => $purpose,
                 'integration' => $integration->toPublicArray(),
             ],
         ]);

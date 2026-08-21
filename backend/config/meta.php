@@ -155,5 +155,50 @@ return [
 
         // Minutos de validez del `state` que emite el CRM antes de abrir Meta.
         'state_ttl_minutes' => (int) env('META_EMBEDDED_SIGNUP_STATE_TTL', 30),
+
+        /*
+        |----------------------------------------------------------------------
+        | Modo DEMOSTRACIÓN para la revisión de Meta
+        |----------------------------------------------------------------------
+        | Existe por un bloqueo circular: la coexistencia
+        | (`whatsapp_business_app_onboarding`) exige Advanced Access sobre los
+        | permisos de WhatsApp, y Advanced Access es justo lo que se está
+        | pidiendo en la revisión. Meta corta con el error #4563039 antes de
+        | llegar a ninguna parte.
+        |
+        | Este modo ejecuta el MISMO Embedded Signup sin ese parámetro, sobre una
+        | WABA de prueba. No es una simulación: el login, la selección de activos,
+        | la autorización, el código y el canje son reales; lo único que cambia
+        | es que no se pide el emparejamiento con la app WhatsApp Business.
+        |
+        | Apagado por defecto. Encenderlo es una decisión explícita y temporal:
+        | en cuanto Meta apruebe, se apaga y la sección desaparece del CRM.
+        */
+        'review' => [
+            'enabled' => filter_var(
+                env('META_EMBEDDED_SIGNUP_REVIEW_ENABLED', false),
+                FILTER_VALIDATE_BOOLEAN,
+            ),
+        ],
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Números que NADIE puede conectar desde el CRM
+    |--------------------------------------------------------------------------
+    | El número del gimnasio vive en la app WhatsApp Business y ahí tiene que
+    | seguir: registrarlo en Cloud API se lo quita al personal, que pierde
+    | WhatsApp Web. Ya pasó el 2026-06-30 y hubo que deshacerlo.
+    |
+    | Si un onboarding devuelve uno de estos números, el backend se niega a
+    | guardarlo y lo dice. Es una red de seguridad, no la principal: la elección
+    | ocurre dentro del diálogo de Meta y esto actúa después. Pero convierte un
+    | descuido en un mensaje de error en vez de en una conexión que nadie quería.
+    */
+    'protected_numbers' => array_values(array_filter(array_map(
+        // Se comparan solo los dígitos: +57 314 345 5483 y 573143455483 son el
+        // mismo teléfono escrito de dos maneras.
+        static fn (string $n): string => preg_replace('/\D+/', '', $n) ?? '',
+        explode(',', (string) env('WHATSAPP_PROTECTED_NUMBERS', (string) env('WHATSAPP_DISPLAY_PHONE', ''))),
+    ))),
 ];

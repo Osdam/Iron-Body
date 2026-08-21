@@ -50,8 +50,10 @@ class WhatsappEmbeddedSignupService
      *
      * @throws WhatsappOnboardingException si falta configuración del servidor.
      */
-    public function launchConfig(Admin $admin): array
+    public function launchConfig(Admin $admin, string $purpose = WhatsappBusinessIntegration::PURPOSE_PRODUCTION): array
     {
+        $this->assertPurposeUsable($purpose);
+
         if (! $this->canLaunch()) {
             throw WhatsappOnboardingException::notConfigured();
         }
@@ -63,10 +65,57 @@ class WhatsappEmbeddedSignupService
             'graph_version' => (string) config('meta.graph_version'),
             'sdk_version' => (string) config('meta.embedded_signup.sdk_version'),
             'scopes' => (array) config('meta.embedded_signup.scopes', []),
-            'feature_type' => (string) config('meta.embedded_signup.feature_type'),
-            'state' => $this->issueState($admin),
+            'purpose' => $purpose,
+            /*
+             * La ÚNICA diferencia entre los dos modos.
+             *
+             * Producción pide coexistencia (`whatsapp_business_app_onboarding`),
+             * que es lo que conserva el número en la app WhatsApp Business. Ese
+             * parámetro activa el emparejamiento con Cloud API, y Meta lo corta
+             * con el error #4563039 mientras no haya Advanced Access — que es
+             * justo lo que se está pidiendo en la revisión.
+             *
+             * El modo demostración ejecuta el MISMO Embedded Signup sin pedir
+             * ese emparejamiento, para poder enseñar de verdad la selección y
+             * autorización de activos del negocio. No es una simulación: cambia
+             * lo que se le pide a Meta, no lo que se le enseña al revisor.
+             */
+            'feature_type' => $purpose === WhatsappBusinessIntegration::PURPOSE_REVIEW
+                ? null
+                : (string) config('meta.embedded_signup.feature_type'),
+            'state' => $this->issueState($admin, $purpose),
             'state_ttl_minutes' => (int) config('meta.embedded_signup.state_ttl_minutes', 30),
         ];
+    }
+
+    /**
+     * Propósitos válidos, y si ese propósito está habilitado ahora mismo.
+     *
+     * @throws WhatsappOnboardingException
+     */
+    public function assertPurposeUsable(string $purpose): void
+    {
+        if ($purpose === WhatsappBusinessIntegration::PURPOSE_REVIEW) {
+            if (! $this->reviewEnabled()) {
+                throw WhatsappOnboardingException::reviewModeDisabled();
+            }
+
+            return;
+        }
+
+        if ($purpose !== WhatsappBusinessIntegration::PURPOSE_PRODUCTION) {
+            throw new WhatsappOnboardingException(
+                'Propósito de conexión desconocido.',
+                'unknown_purpose',
+                422,
+            );
+        }
+    }
+
+    /** ¿El modo demostración para la revisión de Meta está habilitado? */
+    public function reviewEnabled(): bool
+    {
+        return (bool) config('meta.embedded_signup.review.enabled', false);
     }
 
     /**
@@ -133,13 +182,20 @@ class WhatsappEmbeddedSignupService
      * propio CRM al enviar el código. Sirve para lo que sirve: que un código
      * capturado no pueda canjearlo otra sesión ni reutilizarse dos veces.
      */
-    public function issueState(Admin $admin): string
+    public function issueState(Admin $admin, string $purpose = WhatsappBusinessIntegration::PURPOSE_PRODUCTION): string
     {
         $state = Str::random(48);
 
         Cache::put(
             self::STATE_CACHE_PREFIX.hash('sha256', $state),
-            ['admin_id' => $admin->id, 'issued_at' => now()->toIso8601String()],
+            [
+                'admin_id' => $admin->id,
+                // El propósito viaja EN el state. Sin esto, un onboarding
+                // iniciado como demostración podría cerrarse como producción y
+                // colar una WABA de prueba en el canal.
+                'purpose' => $purpose,
+                'issued_at' => now()->toIso8601String(),
+            ],
             now()->addMinutes((int) config('meta.embedded_signup.state_ttl_minutes', 30)),
         );
 
@@ -152,7 +208,7 @@ class WhatsappEmbeddedSignupService
      * reintento automático—, el segundo intento se rechaza en vez de repetir el
      * canje contra Meta con un código ya gastado.
      */
-    public function consumeState(?string $state, Admin $admin): void
+    public function consumeState(?string $state, Admin $admin, string $purpose = WhatsappBusinessIntegration::PURPOSE_PRODUCTION): void
     {
         if (! is_string($state) || $state === '') {
             throw WhatsappOnboardingException::invalidState();
@@ -162,6 +218,13 @@ class WhatsappEmbeddedSignupService
         $stored = Cache::pull($key);
 
         if (! is_array($stored) || (int) ($stored['admin_id'] ?? 0) !== $admin->id) {
+            throw WhatsappOnboardingException::invalidState();
+        }
+
+        // Empezar como demostración y terminar como producción (o al revés) es
+        // exactamente la vía por la que una WABA de prueba acabaría operando el
+        // canal. El state los mantiene atados.
+        if (($stored['purpose'] ?? WhatsappBusinessIntegration::PURPOSE_PRODUCTION) !== $purpose) {
             throw WhatsappOnboardingException::invalidState();
         }
     }
@@ -175,8 +238,13 @@ class WhatsappEmbeddedSignupService
      *
      * @throws WhatsappOnboardingException
      */
-    public function complete(array $payload, Admin $admin): WhatsappBusinessIntegration
-    {
+    public function complete(
+        array $payload,
+        Admin $admin,
+        string $purpose = WhatsappBusinessIntegration::PURPOSE_PRODUCTION,
+    ): WhatsappBusinessIntegration {
+        $this->assertPurposeUsable($purpose);
+
         // Aquí sí hace falta el secreto: se comprueba ANTES de gastar contra
         // Meta un código que solo sirve una vez.
         if (! $this->isConfigured()) {
@@ -191,19 +259,39 @@ class WhatsappEmbeddedSignupService
             ->where('phone_number_id', $phoneNumberId)
             ->first();
 
+        /*
+         * Conflicto de propósito. Se comprueba ANTES de canjear —y no después,
+         * como pedía el orden original— porque el código sirve una sola vez:
+         * rechazar después obligaría a repetir el diálogo de Meta entero por
+         * algo que ya se sabía. No persiste nada, así que la garantía se
+         * mantiene igual.
+         */
+        if ($existing !== null && (string) $existing->purpose !== $purpose) {
+            throw WhatsappOnboardingException::purposeConflict((string) $existing->purpose, $purpose);
+        }
+
         try {
             $token = $this->exchangeCode((string) $payload['code']);
         } catch (WhatsappOnboardingException $e) {
             // Un canje fallido NO puede tumbar una conexión que funcionaba: se
             // deja constancia del error y el estado anterior sigue rigiendo.
-            $this->recordFailure($existing, $wabaId, $phoneNumberId, $payload, $admin, $e);
+            $this->recordFailure($existing, $wabaId, $phoneNumberId, $payload, $admin, $e, $purpose);
 
             throw $e;
         }
 
+        /*
+         * Con el token recién obtenido se le pregunta a Meta QUÉ número es, y se
+         * comprueba contra la lista protegida ANTES de escribir una sola fila.
+         * Es el último punto en el que una demostración puede pararse sin haber
+         * dejado rastro.
+         */
+        $this->assertNumberAllowedFor($purpose, $token['access_token'], $phoneNumberId);
+
         $integration = WhatsappBusinessIntegration::updateOrCreate(
             ['waba_id' => $wabaId, 'phone_number_id' => $phoneNumberId],
             [
+                'purpose' => $purpose,
                 'meta_app_id' => (string) config('meta.embedded_signup.app_id'),
                 'business_id' => $payload['business_id'] ?? $existing?->business_id,
                 'status' => WhatsappBusinessIntegration::STATUS_CONNECTED,
@@ -231,6 +319,7 @@ class WhatsappEmbeddedSignupService
 
         ChannelLog::info('whatsapp.onboarding.connected', [
             'integration_id' => $integration->id,
+            'purpose' => $purpose,
             'waba_id' => $wabaId,
             'phone_number_id' => $phoneNumberId,
             'admin_id' => $admin->id,
@@ -238,6 +327,69 @@ class WhatsappEmbeddedSignupService
         ]);
 
         return $integration->refresh();
+    }
+
+    /**
+     * Barrera del número protegido.
+     *
+     * Solo se aplica al modo DEMOSTRACIÓN, y esa distinción es deliberada: el
+     * número del gimnasio es precisamente el que la coexistencia productiva
+     * debe acabar conectando —esa es toda la razón de existir de este módulo—,
+     * así que bloquearlo también ahí rompería el objetivo final. Lo que no
+     * puede pasar es que aparezca en una demostración, donde el onboarding
+     * estándar sí lo registraría en Cloud API y se lo quitaría al personal.
+     *
+     * @throws WhatsappOnboardingException
+     */
+    private function assertNumberAllowedFor(string $purpose, string $accessToken, string $phoneNumberId): void
+    {
+        if ($purpose !== WhatsappBusinessIntegration::PURPOSE_REVIEW) {
+            return;
+        }
+
+        $protegidos = array_filter((array) config('meta.protected_numbers', []));
+        if ($protegidos === []) {
+            return;
+        }
+
+        // Comprobación barata primero: el identificador del número productivo
+        // no necesita preguntarle nada a la red.
+        $productivo = (string) config('meta.whatsapp_phone_number_id');
+        if ($productivo !== '' && hash_equals($productivo, $phoneNumberId)) {
+            throw WhatsappOnboardingException::protectedNumber($productivo);
+        }
+
+        $telefono = $this->fetchPhoneNumber($accessToken, $phoneNumberId);
+        $mostrado = (string) ($telefono['display_phone_number'] ?? '');
+        $digitos = preg_replace('/\D+/', '', $mostrado) ?? '';
+
+        if ($digitos !== '' && in_array($digitos, $protegidos, true)) {
+            throw WhatsappOnboardingException::protectedNumber($mostrado);
+        }
+    }
+
+    /**
+     * Lee un número de WhatsApp desde Graph. Devuelve [] si no se puede.
+     *
+     * @return array<string,mixed>
+     */
+    private function fetchPhoneNumber(string $accessToken, string $phoneNumberId): array
+    {
+        try {
+            $r = Http::timeout($this->auth->timeout())
+                ->withToken($accessToken)
+                ->get($this->auth->graphUrl($phoneNumberId), [
+                    'fields' => 'id,display_phone_number,verified_name,quality_rating,platform_type',
+                ]);
+
+            return $r->successful() ? (array) $r->json() : [];
+        } catch (Throwable $e) {
+            ChannelLog::info('whatsapp.onboarding.phone_read_failed', [
+                'error_class' => class_basename($e),
+            ]);
+
+            return [];
+        }
     }
 
     /**
@@ -456,9 +608,21 @@ class WhatsappEmbeddedSignupService
      * de llegar. El token sí se destruye — una credencial que ya no se usa no
      * debe seguir guardada.
      */
-    public function disconnect(Admin $admin): WhatsappBusinessIntegration
-    {
-        $integration = WhatsappBusinessIntegration::current();
+    public function disconnect(
+        Admin $admin,
+        string $purpose = WhatsappBusinessIntegration::PURPOSE_PRODUCTION,
+    ): WhatsappBusinessIntegration {
+        $this->assertPurposeUsable($purpose);
+
+        /*
+         * Cada modo resuelve SU conexión y solo la suya. `current()` ya no ve
+         * las de demostración y `currentReview()` no ve las de producción, así
+         * que el botón de la tarjeta de revisión no puede desconectar el canal
+         * ni por error ni manipulando la petición.
+         */
+        $integration = $purpose === WhatsappBusinessIntegration::PURPOSE_REVIEW
+            ? WhatsappBusinessIntegration::currentReview()
+            : WhatsappBusinessIntegration::current();
 
         if (! $integration) {
             throw WhatsappOnboardingException::noConnection();
@@ -477,6 +641,7 @@ class WhatsappEmbeddedSignupService
 
         ChannelLog::info('whatsapp.onboarding.disconnected', [
             'integration_id' => $integration->id,
+            'purpose' => $purpose,
             'admin_id' => $admin->id,
         ]);
 
@@ -493,6 +658,7 @@ class WhatsappEmbeddedSignupService
         array $payload,
         Admin $admin,
         WhatsappOnboardingException $e,
+        string $purpose = WhatsappBusinessIntegration::PURPOSE_PRODUCTION,
     ): void {
         if ($existing) {
             $existing->forceFill([
@@ -504,6 +670,7 @@ class WhatsappEmbeddedSignupService
         }
 
         WhatsappBusinessIntegration::create([
+            'purpose' => $purpose,
             'meta_app_id' => (string) config('meta.embedded_signup.app_id'),
             'business_id' => $payload['business_id'] ?? null,
             'waba_id' => $wabaId,

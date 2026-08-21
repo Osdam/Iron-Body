@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\MetaWebhookEvent;
+use App\Models\WhatsappBusinessIntegration;
 use App\Services\Marketing\LeadAttributionService;
 use App\Services\Marketing\MarketingInboundMessageRouter;
 use App\Services\Marketing\MarketingMessageDispatcher;
@@ -142,13 +143,40 @@ class ProcessMetaWebhookEvent implements ShouldQueue
         ]);
 
         foreach ($events as $parsed) {
+            $numeroEntrante = (string) ($parsed['phone_number_id'] ?? '');
+
+            /*
+             * Aislamiento de la DEMOSTRACIÓN de la revisión de Meta.
+             *
+             * La app de Meta está suscrita a un único endpoint, así que los
+             * eventos de una WABA de prueba llegan exactamente por aquí, con la
+             * misma firma válida que los reales. Se cortan antes de nada: sin
+             * este filtro crearían leads y conversaciones en la bandeja del
+             * negocio, dispararían al agente comercial y contarían como
+             * actividad real en la analítica.
+             *
+             * Va ANTES de la comprobación de número esperado a propósito. Esa
+             * depende de que haya un número configurado, y si algún día llegara
+             * vacío dejaría pasar todo; esta no depende de nada más que de la
+             * fila de la integración, así que decide siempre.
+             */
+            if ($numeroEntrante !== '' && WhatsappBusinessIntegration::isReviewPhoneNumberId($numeroEntrante)) {
+                ChannelLog::info('meta.event.skipped', [
+                    'reason' => 'review_integration',
+                    'event_id' => $event->id,
+                    'received_phone_number_id' => $numeroEntrante,
+                ]);
+
+                continue;
+            }
+
             // Seguridad multi-número: si el número configurado no coincide, ignorar.
-            if ($expectedPhoneId !== '' && ! empty($parsed['phone_number_id'])
-                && ! hash_equals($expectedPhoneId, (string) $parsed['phone_number_id'])) {
+            if ($expectedPhoneId !== '' && $numeroEntrante !== ''
+                && ! hash_equals($expectedPhoneId, $numeroEntrante)) {
                 ChannelLog::warning('meta.event.skipped', [
                     'reason' => 'phone_number_mismatch',
                     'event_id' => $event->id,
-                    'received_phone_number_id' => (string) $parsed['phone_number_id'],
+                    'received_phone_number_id' => $numeroEntrante,
                 ]);
 
                 continue;

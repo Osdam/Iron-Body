@@ -55,6 +55,53 @@ class WhatsappOnboardingException extends RuntimeException
         );
     }
 
+    public static function reviewModeDisabled(): self
+    {
+        return new self(
+            'El modo de demostración para la revisión de Meta no está habilitado en el servidor.',
+            'review_mode_disabled',
+            403,
+        );
+    }
+
+    /**
+     * El onboarding devolvió un número que no se puede conectar desde el CRM.
+     *
+     * Es el número que el personal usa en la app WhatsApp Business. Registrarlo
+     * en Cloud API se lo quita y pierden WhatsApp Web; ya pasó una vez y hubo
+     * que deshacerlo. Antes que guardar eso, se falla.
+     */
+    public static function protectedNumber(string $display): self
+    {
+        return new self(
+            'El número '.$display.' está protegido y no puede conectarse desde el CRM. '
+            .'Es la línea que el equipo usa en la aplicación WhatsApp Business. '
+            .'Vuelve a intentarlo eligiendo un número de prueba.',
+            'protected_number',
+            422,
+        );
+    }
+
+    /**
+     * Ese WABA + número ya existe con OTRO propósito.
+     *
+     * Se rechaza en vez de reescribirlo. Si una demostración pudiera adoptar el
+     * par que opera el canal, la conexión productiva perderia sus credenciales
+     * sin que nadie hubiera pedido desconectarla.
+     */
+    public static function purposeConflict(string $existing, string $requested): self
+    {
+        return new self(
+            'Esa cuenta y ese número ya están registrados como conexión de '
+            .($existing === 'review' ? 'demostración' : 'producción')
+            .', y no pueden reutilizarse como conexión de '
+            .($requested === 'review' ? 'demostración' : 'producción')
+            .'. Desconéctala primero, o usa una cuenta de prueba distinta.',
+            'purpose_conflict',
+            409,
+        );
+    }
+
     public static function noConnection(): self
     {
         return new self(
