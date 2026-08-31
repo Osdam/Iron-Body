@@ -27,3 +27,7 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Export/CSV de migracion de socios: datos personales reales, NUNCA al repo.
+/storage/*.csv
+/storage/migracion/
