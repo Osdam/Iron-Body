@@ -17,6 +17,24 @@ class CajaInvoiceHookTest extends TestCase
     use RefreshDatabase;
 
     /**
+     * Credencial de estas pruebas: una SESIÓN de administrador real.
+     *
+     * Estas rutas (`/admin/caja/*`, `/admin/products/*`) exigen ahora permiso
+     * por ruta. El token compartido de automatizaciones es de SOLO LECTURA por
+     * política —igual que en moderación—, así que cobrar con él ya no procede.
+     * Autenticar como administrador refleja además cómo llama el CRM de verdad:
+     * un cajero con sesión, no un secreto estático.
+     */
+    private ?array $adminSessionHeaders = null;
+
+    protected function adminHeaders(array $headers = []): array
+    {
+        $this->adminSessionHeaders ??= $this->actingAsAdmin();
+
+        return array_merge($this->adminSessionHeaders, $headers);
+    }
+
+    /**
      * Producto con tratamiento tributario asignado, como los 8 productos
      * activos de producción. Desde Pricing V2 un producto facturable SIN tarifa
      * no se puede vender: el POS devuelve 422 en vez de cobrar y facturar con un

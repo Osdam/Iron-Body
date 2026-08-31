@@ -962,35 +962,70 @@ Route::get('iron-ai/equipment-catalog', [GymEquipmentController::class, 'aiCatal
 //
 // Inventario administra EXISTENCIAS; no vende. El cobro vive en /admin/caja/*
 // y la venta de planes en /api/payments. Ver docs/STORE_CAJA_MODULE.md.
-Route::get('admin/products/stats', [ProductController::class, 'stats']);
+//
+// AUTORIZACIÓN: `admin.can:<permiso>` por ruta (App\Http\Middleware\EnsureAdminPermission).
+// ProtectAdminPaths solo comprueba QUIÉN eres; esto comprueba QUÉ puedes hacer.
+// Lectura y escritura van separadas: Recepción consulta existencias pero no
+// edita el catálogo ni mueve stock.
+Route::get('admin/products/stats', [ProductController::class, 'stats'])
+    ->middleware('admin.can:inventory.view');
 
 // Movimientos de existencias (trazados, con autor y motivo).
-Route::get('admin/inventory/movements',         [InventoryController::class, 'movements']);
-Route::get('admin/inventory/movement-options',  [InventoryController::class, 'movementOptions']);
-Route::get('admin/products/{product}/movements', [InventoryController::class, 'productMovements'])->whereNumber('product');
-Route::post('admin/products/{product}/entry',    [InventoryController::class, 'entry'])->whereNumber('product');
-Route::post('admin/products/{product}/exit',     [InventoryController::class, 'exit'])->whereNumber('product');
-// Ajuste heredado (delta suelto). Conservado por compatibilidad; ahora traza.
-Route::post('admin/products/{product}/stock', [ProductController::class, 'adjustStock']);
+Route::get('admin/inventory/movements',         [InventoryController::class, 'movements'])
+    ->middleware('admin.can:inventory.view');
+Route::get('admin/inventory/movement-options',  [InventoryController::class, 'movementOptions'])
+    ->middleware('admin.can:inventory.view');
+Route::get('admin/products/{product}/movements', [InventoryController::class, 'productMovements'])
+    ->whereNumber('product')->middleware('admin.can:inventory.view');
 
-Route::apiResource('admin/products', ProductController::class)
-    ->parameters(['products' => 'product'])
-    ->only(['index', 'show', 'store', 'update', 'destroy']);
+// Mover existencias es ESCRITURA de inventario, no una venta.
+Route::post('admin/products/{product}/entry',    [InventoryController::class, 'entry'])
+    ->whereNumber('product')->middleware('admin.can:inventory.edit');
+Route::post('admin/products/{product}/exit',     [InventoryController::class, 'exit'])
+    ->whereNumber('product')->middleware('admin.can:inventory.edit');
+// Ajuste heredado (delta suelto). Conservado por compatibilidad; ahora traza.
+Route::post('admin/products/{product}/stock', [ProductController::class, 'adjustStock'])
+    ->middleware('admin.can:inventory.edit');
+
+// Catálogo: cada verbo exige su permiso. `sale_price` es lo que Caja cobra, así
+// que editar el catálogo es una operación con dinero detrás.
+Route::get('admin/products',              [ProductController::class, 'index'])
+    ->middleware('admin.can:inventory.view');
+Route::get('admin/products/{product}',    [ProductController::class, 'show'])
+    ->whereNumber('product')->middleware('admin.can:inventory.view');
+Route::post('admin/products',             [ProductController::class, 'store'])
+    ->middleware('admin.can:inventory.create');
+Route::match(['put', 'patch'], 'admin/products/{product}', [ProductController::class, 'update'])
+    ->whereNumber('product')->middleware('admin.can:inventory.edit');
+Route::delete('admin/products/{product}', [ProductController::class, 'destroy'])
+    ->whereNumber('product')->middleware('admin.can:inventory.delete');
 
 // ── Caja / Punto de venta (CRM) ───────────────────────────────────────────────
-// POS en mostrador + gestión de pedidos que llegan de la app. (Luego se
-// restringirá a ciertos usuarios.) Ver docs/STORE_CAJA_MODULE.md.
+// POS en mostrador + gestión de pedidos que llegan de la app. Restringido por
+// permiso (ver más abajo); el «luego se restringirá» de la nota original ya está
+// hecho. Ver docs/STORE_CAJA_MODULE.md.
 // Reporte de ganancias del CRM (gimnasio + cafetería). Bajo /api/admin/* → blindado.
 Route::get('admin/earnings',                     [EarningsController::class, 'index']);
 Route::get('admin/earnings/stream',              [EarningsController::class, 'stream']); // SSE tiempo real
 
-Route::get('admin/caja/stats',                  [CajaController::class, 'stats']);
-Route::get('admin/caja/sales',                  [CajaController::class, 'index']);
-Route::post('admin/caja/sales',                 [CajaController::class, 'store']);
-Route::get('admin/caja/sales/{sale}',           [CajaController::class, 'show']);
-Route::post('admin/caja/sales/{sale}/pay',      [CajaController::class, 'pay']);
-Route::post('admin/caja/sales/{sale}/deliver',  [CajaController::class, 'deliver']);
-Route::post('admin/caja/sales/{sale}/cancel',   [CajaController::class, 'cancel']);
+// AUTORIZACIÓN por permiso: consultar (caja.view), cobrar (caja.sell) y
+// anular (caja.manage) son tres capacidades distintas. Anular una venta ya
+// registrada es la única que revierte un hecho económico, así que exige el
+// permiso de gestión y no el de venta.
+Route::get('admin/caja/stats',                  [CajaController::class, 'stats'])
+    ->middleware('admin.can:caja.view');
+Route::get('admin/caja/sales',                  [CajaController::class, 'index'])
+    ->middleware('admin.can:caja.view');
+Route::get('admin/caja/sales/{sale}',           [CajaController::class, 'show'])
+    ->middleware('admin.can:caja.view');
+Route::post('admin/caja/sales',                 [CajaController::class, 'store'])
+    ->middleware('admin.can:caja.sell');
+Route::post('admin/caja/sales/{sale}/pay',      [CajaController::class, 'pay'])
+    ->middleware('admin.can:caja.sell');
+Route::post('admin/caja/sales/{sale}/deliver',  [CajaController::class, 'deliver'])
+    ->middleware('admin.can:caja.sell');
+Route::post('admin/caja/sales/{sale}/cancel',   [CajaController::class, 'cancel'])
+    ->middleware('admin.can:caja.manage');
 
 // ── Facturación electrónica (Factus) — API administrativa (Fase 2) ────────────
 // Bajo /api/admin/* → blindado por ProtectAdminPaths (sesión admin o token).

@@ -3,6 +3,7 @@
 use App\Http\Middleware\AuthenticateMember;
 use App\Http\Middleware\AuthenticateTrainer;
 use App\Http\Middleware\EnsureAdminAuth;
+use App\Http\Middleware\EnsureAdminPermission;
 use App\Http\Middleware\EnsureMemberRegistrationToken;
 use App\Http\Middleware\ProtectAdminPaths;
 use App\Http\Middleware\SecurityHeaders;
@@ -36,6 +37,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'auth.member'               => AuthenticateMember::class,
             'auth.trainer'              => AuthenticateTrainer::class,
             'auth.admin'                => EnsureAdminAuth::class,
+            'admin.can'                 => EnsureAdminPermission::class,
             'automation.internal'       => VerifyInternalAutomationSignature::class,
             'trainer.can'               => EnsureTrainerPermission::class,
             'trainer.feature'           => EnsureTrainerFeature::class,

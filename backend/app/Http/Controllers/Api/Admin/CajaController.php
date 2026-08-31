@@ -36,7 +36,9 @@ use Illuminate\Validation\ValidationException;
  * vende: solo administra existencias y consulta los movimientos que este cobro
  * genera.
  *
- * Patrón /admin/* del CRM. Este módulo se restringirá luego a ciertos usuarios.
+ * Patrón /admin/* del CRM. Cada ruta exige su permiso vía `admin.can:` (ver
+ * routes/api.php y App\Support\Access\CrmPermission): consultar, cobrar y
+ * anular son capacidades distintas, y el servidor —no el navegador— decide.
  */
 class CajaController extends Controller
 {

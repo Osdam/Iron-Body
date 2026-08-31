@@ -45,12 +45,44 @@ y deja traza. Si una línea no alcanza lanza `InsufficientStockException`, la
 transacción se deshace y **la venta no queda cobrada** — antes el fallo se
 descartaba en silencio y quedaba una venta pagada con el stock intacto.
 
+## Autorización
+
+`ProtectAdminPaths` comprueba **quién** eres (sesión admin o token compartido).
+Desde la separación de dominios, cada ruta comprueba además **qué puedes hacer**
+con `admin.can:<permiso>` ({@see App\Http\Middleware\EnsureAdminPermission}),
+resuelto contra `App\Support\Access\CrmPermission` — el espejo servidor de la
+política de roles del CRM, hermano de `ModerationPermission`.
+
+Antes, `caja.sell` e `inventory.edit` solo se comprobaban en el navegador: una
+llamada directa a la API con la sesión de cualquier admin podía vender o cambiar
+precios, costos y existencias.
+
+| Rol | caja.view | caja.sell | caja.manage | inventory.view | inventory.create/edit/delete |
+|---|:--:|:--:|:--:|:--:|:--:|
+| Super Admin | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Administrador | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Recepción | ✓ | ✓ | — | ✓ | — |
+| Administrativo | — | — | — | — | — |
+| Token compartido (n8n) | ✓ | — | — | ✓ | — |
+
+El token de automatizaciones no resuelve a una persona: obtiene **solo lectura**,
+nunca cobra ni mueve existencias. Misma política que moderación.
+
+Un rechazo devuelve **403** con `code: forbidden` y `required_permission`, para
+que el CRM pueda decir qué permiso falta:
+
+```json
+{ "ok": false, "code": "forbidden",
+  "message": "No tienes permiso para esta acción.",
+  "required_permission": "inventory.edit" }
+```
+
 ## API — CRM (admin, patrón `/admin/*`)
 
 Inventario:
-| Método | Ruta | Acción |
-|---|---|---|
-| GET | `/api/admin/products` | Listar (filtros: `category`, `status`=ok\|low\|out, `search`) |
+| Método | Ruta | Acción | Permiso |
+|---|---|---|---|
+| GET | `/api/admin/products` | Listar (filtros: `category`, `status`=ok\|low\|out, `search`) | `inventory.view` |
 | GET | `/api/admin/products/stats` | KPIs (valor inventario, bajo stock, en app…) |
 | GET/POST | `/api/admin/products` `/{id}` | CRUD |
 | PUT/PATCH/DELETE | `/api/admin/products/{id}` | CRUD |
