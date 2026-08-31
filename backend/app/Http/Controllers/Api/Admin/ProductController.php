@@ -2,14 +2,22 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Enums\InventoryMovementOrigin;
+use App\Exceptions\InsufficientStockException;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
+use App\Services\Inventory\InventoryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Inventario de productos (CRM). Fuente única que también alimenta la Tienda de
+ * Catálogo de productos (CRM). Fuente única que también alimenta la Tienda de
  * la app (los `visible_in_app`). Patrón /admin/* del CRM.
+ *
+ * Solo CATÁLOGO y consulta. Las existencias se mueven en
+ * App\Http\Controllers\Api\Admin\InventoryController (entradas y salidas
+ * administrativas trazadas) y en Caja al cobrar una venta. Este controlador
+ * nunca vende.
  */
 class ProductController extends Controller
 {
@@ -62,20 +70,82 @@ class ProductController extends Controller
         return response()->json(['data' => $product]);
     }
 
-    // POST /api/admin/products
+    /**
+     * POST /api/admin/products
+     *
+     * El stock inicial no se escribe a pelo: se crea el producto en cero y la
+     * carga entra como movimiento `initial_stock`, para que la historia del
+     * producto empiece en su primera unidad y no en un saldo sin explicar.
+     */
     public function store(Request $request): JsonResponse
     {
         $data = $this->validatePayload($request);
+        $initialStock = (int) ($data['stock'] ?? 0);
+        $data['stock'] = 0;
+
         $product = Product::create($data);
 
-        return response()->json(['data' => $product], 201);
+        if ($initialStock > 0) {
+            app(InventoryService::class)->registerEntry(
+                product: $product,
+                quantity: $initialStock,
+                origin: InventoryMovementOrigin::INITIAL_STOCK,
+                reason: 'Carga inicial al crear el producto',
+                user: $request->user(),
+            );
+        }
+
+        return response()->json(['data' => $product->fresh()], 201);
     }
 
-    // PUT/PATCH /api/admin/products/{product}
+    /**
+     * PUT/PATCH /api/admin/products/{product}
+     *
+     * Editar la ficha no mueve existencias por la puerta de atrás: si el
+     * payload trae un `stock` distinto, la diferencia se aplica como ajuste
+     * trazado en lugar de sobrescribir el saldo en silencio.
+     */
     public function update(Request $request, Product $product): JsonResponse
     {
         $data = $this->validatePayload($request, $product->id);
+
+        $requestedStock = array_key_exists('stock', $data) && $data['stock'] !== null
+            ? (int) $data['stock']
+            : null;
+        unset($data['stock']);
+
         $product->update($data);
+
+        if ($requestedStock !== null && $requestedStock !== (int) $product->stock) {
+            $delta = $requestedStock - (int) $product->stock;
+            $inventory = app(InventoryService::class);
+
+            try {
+                if ($delta > 0) {
+                    $inventory->registerEntry(
+                        product: $product,
+                        quantity: $delta,
+                        origin: InventoryMovementOrigin::ADJUSTMENT,
+                        reason: 'Corrección de existencias al editar el producto',
+                        user: $request->user(),
+                    );
+                } else {
+                    $inventory->registerExit(
+                        product: $product,
+                        quantity: abs($delta),
+                        origin: InventoryMovementOrigin::ADJUSTMENT,
+                        reason: 'Corrección de existencias al editar el producto',
+                        user: $request->user(),
+                    );
+                }
+            } catch (InsufficientStockException $e) {
+                return response()->json([
+                    'message' => $e->getMessage(),
+                    'error' => 'insufficient_stock',
+                    'stock' => $e->toArray(),
+                ], 422);
+            }
+        }
 
         return response()->json(['data' => $product->fresh()]);
     }
@@ -88,14 +158,55 @@ class ProductController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    // POST /api/admin/products/{product}/stock   { delta: +/- }  ajuste manual
+    /**
+     * POST /api/admin/products/{product}/stock   { delta: +/-, reason? }
+     *
+     * Ajuste manual heredado. Se conserva por compatibilidad con clientes
+     * antiguos, pero ya NO escribe el stock a mano: delega en InventoryService,
+     * así que deja movimiento con origen `adjustment` y autor. Antes hacía
+     * `max(0, stock + delta)`, de modo que una salida mayor que las existencias
+     * se recortaba en silencio y el descuadre nunca se veía.
+     *
+     * Para registrar entradas y salidas con su naturaleza real usa
+     * `/products/{product}/entry` y `/products/{product}/exit`.
+     */
     public function adjustStock(Request $request, Product $product): JsonResponse
     {
-        $data = $request->validate(['delta' => ['required', 'integer']]);
-        $product->stock = max(0, $product->stock + $data['delta']);
-        $product->save();
+        $data = $request->validate([
+            'delta' => ['required', 'integer', 'not_in:0'],
+            'reason' => ['nullable', 'string', 'max:255'],
+        ]);
 
-        return response()->json(['data' => $product]);
+        $delta = (int) $data['delta'];
+        $inventory = app(InventoryService::class);
+
+        try {
+            if ($delta > 0) {
+                $inventory->registerEntry(
+                    product: $product,
+                    quantity: $delta,
+                    origin: InventoryMovementOrigin::ADJUSTMENT,
+                    reason: $data['reason'] ?? 'Ajuste manual de inventario',
+                    user: $request->user(),
+                );
+            } else {
+                $inventory->registerExit(
+                    product: $product,
+                    quantity: abs($delta),
+                    origin: InventoryMovementOrigin::ADJUSTMENT,
+                    reason: $data['reason'] ?? 'Ajuste manual de inventario',
+                    user: $request->user(),
+                );
+            }
+        } catch (InsufficientStockException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'error' => 'insufficient_stock',
+                'stock' => $e->toArray(),
+            ], 422);
+        }
+
+        return response()->json(['data' => $product->fresh()]);
     }
 
     private function validatePayload(Request $request, ?int $ignoreId = null): array

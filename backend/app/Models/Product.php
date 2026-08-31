@@ -6,14 +6,16 @@ use App\Services\Billing\PricingMode;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 /**
  * Producto del gimnasio (inventario CRM + tienda de la app).
  *
- * Ver App\Models\ProductSale para las ventas. El stock se descuenta vía
- * {@see Product::decrementStock()} desde la confirmación de pago.
+ * Ver App\Models\ProductSale para las ventas. El stock NUNCA se escribe desde
+ * aquí: la única puerta es App\Services\Inventory\InventoryService, que valida
+ * existencias y deja traza en `inventory_movements`.
  */
 class Product extends Model
 {
@@ -118,18 +120,24 @@ class Product extends Model
         return (bool) $this->visible_in_app;
     }
 
-    /** Descuenta stock de forma segura (no baja de 0). Devuelve true si alcanzó. */
-    public function decrementStock(int $qty): bool
+    /**
+     * ¿Alcanza el stock para esta cantidad? Comprobación de LECTURA.
+     *
+     * Sustituye a `decrementStock()`, que escribía existencias devolviendo un
+     * bool que su único llamador descartaba: una venta con stock insuficiente
+     * quedaba cobrada y el saldo intacto. Escribir el stock es ahora
+     * responsabilidad exclusiva de App\Services\Inventory\InventoryService, que
+     * bloquea la fila, falla en voz alta y deja movimiento.
+     */
+    public function hasStockFor(int $qty): bool
     {
-        if ($qty <= 0) {
-            return true;
-        }
-        if ($this->stock < $qty) {
-            return false;
-        }
-        $this->decrement('stock', $qty);
+        return $qty <= 0 || $this->stock >= $qty;
+    }
 
-        return true;
+    /** Movimientos de existencias del producto (más recientes primero). */
+    public function inventoryMovements(): HasMany
+    {
+        return $this->hasMany(InventoryMovement::class)->latest('id');
     }
 
     /** Forma para la tienda de la app (sin datos de costo/proveedor). */

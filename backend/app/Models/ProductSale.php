@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use App\Enums\InvoiceType;
+use App\Exceptions\InsufficientStockException;
 use App\Services\Billing\InvoiceEmail;
+use App\Services\Inventory\InventoryService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -181,17 +183,23 @@ class ProductSale extends Model
     /**
      * Confirma el pago y descuenta el stock de cada ítem (transacción).
      * Idempotente: si ya está `paid`/`delivered` no vuelve a descontar.
+     *
+     * El descuento pasa por InventoryService, que bloquea la fila del producto,
+     * valida existencias y deja el movimiento en `inventory_movements`. Si una
+     * línea no alcanza, la excepción tumba la transacción entera y la venta NO
+     * queda cobrada: antes se descartaba el fallo en silencio y quedaba una
+     * venta pagada con el stock intacto.
+     *
+     * @throws InsufficientStockException
      */
-    public function markPaid(?string $method = null, ?string $reference = null): void
+    public function markPaid(?string $method = null, ?string $reference = null, ?User $actor = null): void
     {
         if (in_array($this->status, ['paid', 'delivered'], true)) {
             return;
         }
 
-        DB::transaction(function () use ($method, $reference): void {
-            foreach ($this->items as $item) {
-                $item->product?->decrementStock($item->quantity);
-            }
+        DB::transaction(function () use ($method, $reference, $actor): void {
+            app(InventoryService::class)->registerSaleExit($this, $actor);
 
             $this->update([
                 'status' => 'paid',

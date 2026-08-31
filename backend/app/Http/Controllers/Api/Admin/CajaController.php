@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Exceptions\InsufficientStockException;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\ProductSale;
@@ -11,6 +12,7 @@ use App\Services\Billing\InvoicingService;
 use App\Services\Billing\Money;
 use App\Services\Billing\PricingException;
 use App\Services\Billing\PricingService;
+use App\Services\Inventory\InventoryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,12 +20,21 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Caja / Punto de venta (CRM).
+ * Caja / Punto de venta (CRM) — VENTA DE PRODUCTO FÍSICO.
  *
  * Dos funciones:
  *  • Registrar ventas en mostrador (POS): elegir productos, cobrar, descontar stock.
  *  • Gestionar los pedidos que llegan de la Tienda de la app: confirmar pago en
  *    caja, marcar entregado o cancelar.
+ *
+ * FRONTERA DE DOMINIO: aquí solo se venden productos físicos, y por eso cada
+ * cobro mueve inventario. La venta de un PLAN o MEMBRESÍA no pasa por este
+ * controlador: vive en App\Http\Controllers\Api\PaymentController (tabla
+ * `payments`), extiende la vigencia del miembro y NO toca existencias.
+ *
+ * Inventario (App\Http\Controllers\Api\Admin\InventoryController) tampoco
+ * vende: solo administra existencias y consulta los movimientos que este cobro
+ * genera.
  *
  * Patrón /admin/* del CRM. Este módulo se restringirá luego a ciertos usuarios.
  */
@@ -95,6 +106,17 @@ class CajaController extends Controller
 
         $this->assertInvoiceRequestIsComplete($data);
 
+        // Existencias ANTES de crear nada: cobrar lo que no hay deja el
+        // inventario y la caja contando historias distintas. La comprobación
+        // definitiva la repite InventoryService con la fila bloqueada; esta
+        // primera pasada existe para devolver un 422 limpio al cajero en vez de
+        // reventar a mitad del cobro.
+        try {
+            app(InventoryService::class)->assertAvailability($data['items']);
+        } catch (InsufficientStockException $e) {
+            return $this->insufficientStockResponse($e);
+        }
+
         try {
             $sale = DB::transaction(fn () => $this->buildSale($data, $request));
         } catch (PricingException $e) {
@@ -106,10 +128,17 @@ class CajaController extends Controller
         // crédito, entrega diferida) o aunque el encolado falle.
         $this->persistInvoiceRequest($sale, $data);
 
-        // En POS normalmente se cobra al instante → descuenta stock.
+        // En POS normalmente se cobra al instante → descuenta stock y deja el
+        // movimiento de inventario (origen: venta de cafetería).
         if ($data['paid'] ?? true) {
             $sale->load('items');
-            $sale->markPaid($data['payment_method']);
+            try {
+                $sale->markPaid($data['payment_method'], null, $request->user());
+            } catch (InsufficientStockException $e) {
+                // La venta queda `pending`, sin stock movido: el cajero puede
+                // corregirla o cancelarla, y nada se cobró a medias.
+                return $this->insufficientStockResponse($e, $sale);
+            }
             $this->enqueueInvoice($sale);
         }
 
@@ -132,7 +161,20 @@ class CajaController extends Controller
         $this->persistInvoiceRequest($sale, $data);
 
         $sale->load('items');
-        $sale->markPaid($data['payment_method'] ?? null, $data['payment_reference'] ?? null);
+
+        try {
+            $sale->markPaid(
+                $data['payment_method'] ?? null,
+                $data['payment_reference'] ?? null,
+                $request->user(),
+            );
+        } catch (InsufficientStockException $e) {
+            // Un pedido de la app puede haberse quedado sin stock entre que se
+            // reservó y se cobra en mostrador. Se rechaza el cobro en vez de
+            // dejar el saldo en negativo.
+            return $this->insufficientStockResponse($e, $sale);
+        }
+
         $this->enqueueInvoice($sale->fresh('items'));
 
         return response()->json(['data' => $this->serialize($sale->fresh(['items', 'member:id,full_name']))]);
@@ -329,6 +371,26 @@ class CajaController extends Controller
         }
 
         $sale->marcarFacturaSolicitada($data['invoice_email'] ?? null);
+    }
+
+    /**
+     * 422 con el detalle de qué producto faltó y cuánto había.
+     *
+     * El cajero tiene al cliente delante: necesita saber cuál de los artículos
+     * falló, no un «no se pudo cobrar».
+     */
+    private function insufficientStockResponse(
+        InsufficientStockException $e,
+        ?ProductSale $sale = null,
+    ): JsonResponse {
+        return response()->json(array_filter([
+            'message' => $e->getMessage(),
+            'error' => 'insufficient_stock',
+            'stock' => $e->toArray(),
+            'sale' => $sale !== null
+                ? $this->serialize($sale->fresh(['items', 'member:id,full_name']))
+                : null,
+        ], static fn ($v) => $v !== null), 422);
     }
 
     private function serialize(ProductSale $sale): array

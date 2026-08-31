@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\RoutineController;
 use App\Http\Controllers\Api\TrainerController;
 use App\Http\Controllers\Api\GymEquipmentController;
 use App\Http\Controllers\Api\AppStoreController;
+use App\Http\Controllers\Api\Admin\InventoryController;
 use App\Http\Controllers\Api\Admin\ProductController;
 use App\Http\Controllers\Api\Admin\CajaController;
 use App\Http\Controllers\Api\Admin\EarningsController;
@@ -958,8 +959,20 @@ Route::get('iron-ai/equipment-catalog', [GymEquipmentController::class, 'aiCatal
 
 // ── Inventario de productos (CRM) ─────────────────────────────────────────────
 // Fuente única que también alimenta la Tienda de la app (visible_in_app).
+//
+// Inventario administra EXISTENCIAS; no vende. El cobro vive en /admin/caja/*
+// y la venta de planes en /api/payments. Ver docs/STORE_CAJA_MODULE.md.
 Route::get('admin/products/stats', [ProductController::class, 'stats']);
+
+// Movimientos de existencias (trazados, con autor y motivo).
+Route::get('admin/inventory/movements',         [InventoryController::class, 'movements']);
+Route::get('admin/inventory/movement-options',  [InventoryController::class, 'movementOptions']);
+Route::get('admin/products/{product}/movements', [InventoryController::class, 'productMovements'])->whereNumber('product');
+Route::post('admin/products/{product}/entry',    [InventoryController::class, 'entry'])->whereNumber('product');
+Route::post('admin/products/{product}/exit',     [InventoryController::class, 'exit'])->whereNumber('product');
+// Ajuste heredado (delta suelto). Conservado por compatibilidad; ahora traza.
 Route::post('admin/products/{product}/stock', [ProductController::class, 'adjustStock']);
+
 Route::apiResource('admin/products', ProductController::class)
     ->parameters(['products' => 'product'])
     ->only(['index', 'show', 'store', 'update', 'destroy']);
