@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Enums\InventoryMovementOrigin;
 use App\Exceptions\InsufficientStockException;
 use App\Http\Controllers\Controller;
+use App\Models\InventoryMovement;
 use App\Models\Product;
+use App\Models\ProductSaleItem;
 use App\Services\Inventory\InventoryService;
 use App\Support\Access\AdminActor;
 use Illuminate\Http\JsonResponse;
@@ -151,12 +153,74 @@ class ProductController extends Controller
         return response()->json(['data' => $product->fresh()]);
     }
 
-    // DELETE /api/admin/products/{product}
+    /**
+     * DELETE /api/admin/products/{product}
+     *
+     * ARCHIVA por defecto y solo borra físicamente cuando el producto no dejó
+     * rastro. Un producto vendido o con movimientos no se puede destruir: sus
+     * líneas de venta, sus comprobantes y su historial de existencias dejarían
+     * de poder explicarse contra nada.
+     *
+     * El borrado lógico ya existía (`SoftDeletes`), pero nadie lo exponía: el
+     * frontend no tenía ningún control que llamara aquí, y por eso «no se podían
+     * eliminar productos».
+     */
     public function destroy(Product $product): JsonResponse
     {
-        $product->delete();
+        $usage = $this->historyOf($product);
+        $hasHistory = array_sum($usage) > 0;
 
-        return response()->json(['ok' => true]);
+        if ($hasHistory) {
+            // Archivar: desaparece del catálogo activo y de la tienda, pero
+            // sigue existiendo para las ventas y los movimientos que lo citan.
+            $product->update(['active' => false, 'visible_in_app' => false]);
+            $product->delete();
+
+            return response()->json([
+                'ok' => true,
+                'archived' => true,
+                'usage' => $usage,
+                'message' => 'El producto tiene historial y se archivó para conservar la trazabilidad.',
+            ]);
+        }
+
+        // Sin historial no hay nada que preservar.
+        $product->forceDelete();
+
+        return response()->json([
+            'ok' => true,
+            'archived' => false,
+            'message' => 'El producto no tenía historial y se eliminó permanentemente.',
+        ]);
+    }
+
+    /**
+     * GET /api/admin/products/{product}/usage — qué pasaría al eliminarlo.
+     *
+     * Lo consulta el CRM ANTES de confirmar, para poder decir si va a archivar
+     * o a borrar en vez de prometer una cosa y hacer otra.
+     */
+    public function usage(Product $product): JsonResponse
+    {
+        $usage = $this->historyOf($product);
+
+        return response()->json([
+            'usage' => $usage,
+            'can_hard_delete' => array_sum($usage) === 0,
+        ]);
+    }
+
+    /**
+     * Rastro histórico del producto.
+     *
+     * @return array{sale_items: int, movements: int}
+     */
+    private function historyOf(Product $product): array
+    {
+        return [
+            'sale_items' => ProductSaleItem::where('product_id', $product->id)->count(),
+            'movements' => InventoryMovement::where('product_id', $product->id)->count(),
+        ];
     }
 
     /**

@@ -999,6 +999,8 @@ Route::post('admin/products',             [ProductController::class, 'store'])
     ->middleware('admin.can:inventory.create');
 Route::match(['put', 'patch'], 'admin/products/{product}', [ProductController::class, 'update'])
     ->whereNumber('product')->middleware('admin.can:inventory.edit');
+Route::get('admin/products/{product}/usage', [ProductController::class, 'usage'])
+    ->whereNumber('product')->middleware('admin.can:inventory.view');
 Route::delete('admin/products/{product}', [ProductController::class, 'destroy'])
     ->whereNumber('product')->middleware('admin.can:inventory.delete');
 
