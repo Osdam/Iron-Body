@@ -274,6 +274,27 @@ class ProductController extends Controller
         return response()->json(['data' => $product->fresh()]);
     }
 
+    /**
+     * PATCH admin/products/{product}/visibility — publica o retira el producto
+     * de la tienda de la app.
+     *
+     * Endpoint aparte, y no `update`, por una razón concreta: `update` valida
+     * `name` y `sale_price` como OBLIGATORIOS, así que un PUT con sólo la
+     * visibilidad daría 422, y mandarlos "para rellenar" significaría reescribir
+     * con valores que el CRM leyó hace rato — pisando el cambio de precio de
+     * otro administrador sin querer. Aquí sólo puede cambiar una columna.
+     */
+    public function setVisibility(Request $request, Product $product): JsonResponse
+    {
+        $data = $request->validate([
+            'visible' => ['required', 'boolean'],
+        ]);
+
+        $product->update(['visible_in_app' => $data['visible']]);
+
+        return response()->json(['data' => $product->fresh()]);
+    }
+
     private function validatePayload(Request $request, ?int $ignoreId = null): array
     {
         return $request->validate([
