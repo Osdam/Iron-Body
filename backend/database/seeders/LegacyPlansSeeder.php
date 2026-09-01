@@ -48,6 +48,10 @@ class LegacyPlansSeeder extends Seeder
             // entrenamiento personalizado. Se crea solo para que los socios cuyo
             // único registro es este no queden con un plan inexistente.
             ['name' => 'Comisión de personalizados', 'price' => 0,      'duration_days' => 30],
+            // Aparecidos en el export del 31/08/2026: son pocos socios, pero sin
+            // la fila en `plans` entrarían con todos los módulos bloqueados.
+            ['name' => 'PLAN FAMILIAR',              'price' => 70000,  'duration_days' => 30],
+            ['name' => 'ACTIVACIÓN FUNCIONAL X15',   'price' => 180000, 'duration_days' => 30],
         ];
 
         foreach ($plans as $i => $plan) {

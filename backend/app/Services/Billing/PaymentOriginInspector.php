@@ -45,8 +45,13 @@ class PaymentOriginInspector
      * añade `transfer`. Los de pasarela (`wompi`, `nequi`, `card`, `online`,
      * `pse`) quedan deliberadamente fuera: para esos, la ausencia de
      * transacción sí es una señal de que algo no cuadra.
+     *
+     * `datafono` es del mismo lado del mostrador: lo trae la importación del
+     * sistema anterior y designa el cobro presencial con la terminal física del
+     * gimnasio. No pasa por ninguna pasarela nuestra, así que exigirle una
+     * transacción sería pedirle algo que nunca existió.
      */
-    public const MANUAL_PAYMENT_METHODS = ['cash', 'efectivo', 'transfer', 'transferencia', 'manual'];
+    public const MANUAL_PAYMENT_METHODS = ['cash', 'efectivo', 'transfer', 'transferencia', 'manual', 'datafono'];
 
     /**
      * Radiografía del origen. Ningún campo lanza excepción si falta: se
