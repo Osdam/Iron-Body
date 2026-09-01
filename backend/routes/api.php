@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\Admin\InventoryController;
 use App\Http\Controllers\Api\Admin\ProductController;
 use App\Http\Controllers\Api\Admin\CajaController;
 use App\Http\Controllers\Api\Admin\CashShiftController;
+use App\Http\Controllers\Api\Admin\RolePermissionController;
 use App\Http\Controllers\Api\Admin\EarningsController;
 use App\Http\Controllers\Api\Admin\BillingQuoteController;
 use App\Http\Controllers\Api\Admin\BillingTaxController;
@@ -1013,6 +1014,13 @@ Route::get('admin/earnings/stream',              [EarningsController::class, 'st
 // anular (caja.manage) son tres capacidades distintas. Anular una venta ya
 // registrada es la única que revierte un hecho económico, así que exige el
 // permiso de gestión y no el de venta.
+// ── Política de permisos por rol (Configuración → Roles) ──────────────────────
+// La autorización la resuelve el propio controlador y no `admin.can:`: quien
+// reparte permisos podría concederse el permiso que le abriría esta pantalla.
+// La puerta es el rol de Super Admin, que no se puede otorgar desde aquí.
+Route::get('admin/roles/permissions', [RolePermissionController::class, 'index']);
+Route::put('admin/roles/permissions', [RolePermissionController::class, 'update']);
+
 // ── Turnos de caja ────────────────────────────────────────────────────────
 // Consultar el turno es parte de ver Caja; abrirlo y cerrarlo es operar, así
 // que exige `caja.sell`. Cerrar el turno de OTRA persona exige además
