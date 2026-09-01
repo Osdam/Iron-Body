@@ -12,6 +12,8 @@ use App\Http\Controllers\Api\AppStoreController;
 use App\Http\Controllers\Api\Admin\InventoryController;
 use App\Http\Controllers\Api\Admin\ProductController;
 use App\Http\Controllers\Api\Admin\CajaController;
+use App\Http\Controllers\Api\Admin\CashShiftController;
+use App\Http\Controllers\Api\Admin\RolePermissionController;
 use App\Http\Controllers\Api\Admin\EarningsController;
 use App\Http\Controllers\Api\Admin\BillingQuoteController;
 use App\Http\Controllers\Api\Admin\BillingTaxController;
@@ -997,6 +999,8 @@ Route::post('admin/products',             [ProductController::class, 'store'])
     ->middleware('admin.can:inventory.create');
 Route::match(['put', 'patch'], 'admin/products/{product}', [ProductController::class, 'update'])
     ->whereNumber('product')->middleware('admin.can:inventory.edit');
+Route::get('admin/products/{product}/usage', [ProductController::class, 'usage'])
+    ->whereNumber('product')->middleware('admin.can:inventory.view');
 Route::delete('admin/products/{product}', [ProductController::class, 'destroy'])
     ->whereNumber('product')->middleware('admin.can:inventory.delete');
 
@@ -1012,6 +1016,27 @@ Route::get('admin/earnings/stream',              [EarningsController::class, 'st
 // anular (caja.manage) son tres capacidades distintas. Anular una venta ya
 // registrada es la única que revierte un hecho económico, así que exige el
 // permiso de gestión y no el de venta.
+// ── Política de permisos por rol (Configuración → Roles) ──────────────────────
+// La autorización la resuelve el propio controlador y no `admin.can:`: quien
+// reparte permisos podría concederse el permiso que le abriría esta pantalla.
+// La puerta es el rol de Super Admin, que no se puede otorgar desde aquí.
+Route::get('admin/roles/permissions', [RolePermissionController::class, 'index']);
+Route::put('admin/roles/permissions', [RolePermissionController::class, 'update']);
+
+// ── Turnos de caja ────────────────────────────────────────────────────────
+// Consultar el turno es parte de ver Caja; abrirlo y cerrarlo es operar, así
+// que exige `caja.sell`. Cerrar el turno de OTRA persona exige además
+// `caja.manage`, y eso lo comprueba el controlador porque depende de quién lo
+// abrió, no de la ruta.
+Route::get('admin/caja/shift',        [CashShiftController::class, 'current'])
+    ->middleware('admin.can:caja.view');
+Route::get('admin/caja/shifts',       [CashShiftController::class, 'index'])
+    ->middleware('admin.can:caja.view');
+Route::post('admin/caja/shift/open',  [CashShiftController::class, 'open'])
+    ->middleware('admin.can:caja.sell');
+Route::post('admin/caja/shift/close', [CashShiftController::class, 'close'])
+    ->middleware('admin.can:caja.sell');
+
 Route::get('admin/caja/stats',                  [CajaController::class, 'stats'])
     ->middleware('admin.can:caja.view');
 Route::get('admin/caja/sales',                  [CajaController::class, 'index'])

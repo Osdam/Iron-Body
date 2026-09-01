@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Models\InventoryMovement;
 use App\Models\Product;
 use App\Services\Inventory\InventoryService;
+use App\Support\Access\AdminActor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -110,7 +111,7 @@ class InventoryController extends Controller
             quantity: (int) $data['quantity'],
             origin: InventoryMovementOrigin::from($data['origin'] ?? InventoryMovementOrigin::PURCHASE->value),
             reason: $data['reason'] ?? null,
-            user: $request->user(),
+            user: AdminActor::from($request),
             unitAmount: isset($data['unit_amount']) ? (float) $data['unit_amount'] : null,
             notes: $data['notes'] ?? null,
         );
@@ -143,7 +144,7 @@ class InventoryController extends Controller
                 quantity: (int) $data['quantity'],
                 origin: InventoryMovementOrigin::from($data['origin']),
                 reason: $data['reason'],
-                user: $request->user(),
+                user: AdminActor::from($request),
                 notes: $data['notes'] ?? null,
             );
         } catch (InsufficientStockException $e) {

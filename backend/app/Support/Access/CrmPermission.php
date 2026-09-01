@@ -125,6 +125,11 @@ final class CrmPermission
      * Falla CERRADO en los dos bordes: un admin inactivo o de rol desconocido no
      * obtiene nada, y una credencial sin persona detrás obtiene solo lectura.
      *
+     * Sobre el mapa del código se aplica la política PERSISTIDA
+     * ({@see RolePermissionPolicy}), que es lo que edita Configuración → Roles.
+     * Con la tabla vacía el resultado es idéntico al de antes: la persistencia
+     * añade excepciones, no reemplaza la política base.
+     *
      * @return list<string>
      */
     public static function forAdmin(?Admin $admin): array
@@ -138,7 +143,19 @@ final class CrmPermission
             return [];
         }
 
-        return self::byRole()[$admin->role] ?? [];
+        return app(RolePermissionPolicy::class)->effectiveFor($admin->role);
+    }
+
+    /**
+     * Permisos por defecto de un rol, tal y como los define el CÓDIGO, sin
+     * aplicar la política persistida. Lo usa la propia política como base y la
+     * pantalla de Roles para poder mostrar qué se ha cambiado respecto a esto.
+     *
+     * @return list<string>
+     */
+    public static function defaultsFor(string $role): array
+    {
+        return self::byRole()[$role] ?? [];
     }
 
     public static function allows(?Admin $admin, string $permission): bool

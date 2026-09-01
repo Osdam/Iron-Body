@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
+use App\Support\Access\AdminActor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -78,20 +79,32 @@ class AuditLogController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        // El actor YA NO se acepta del cliente. Antes `actorId`, `actorName` y
+        // `actorRole` venían en el cuerpo, así que cualquier administrador con
+        // sesión podía escribir un evento firmado por otra persona: una traza
+        // que cualquiera puede falsificar no sirve como evidencia de nada.
         $data = $request->validate([
             'action' => 'required|string|in:'.implode(',', AuditLog::ACTIONS),
             'module' => 'required|string|max:60',
             'entity' => 'required|string|max:60',
             'entityId' => 'nullable',
             'targetName' => 'nullable|string|max:191',
-            'actorId' => 'nullable',
-            'actorName' => 'nullable|string|max:120',
-            'actorRole' => 'nullable|string|max:60',
             'summary' => 'nullable|string|max:1000',
             'changes' => 'nullable|array',
             'changes.*.field' => 'required|string|max:120',
             'metadata' => 'nullable|array',
         ]);
+
+        // Sin persona detrás no se escribe traza: el token compartido de
+        // automatizaciones podría firmar cualquier cosa sin responsable.
+        $admin = AdminActor::from($request);
+        if ($admin === null) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'forbidden',
+                'message' => 'La traza de auditoría exige una sesión de administrador.',
+            ], 403);
+        }
 
         $log = AuditLog::create([
             'action' => $data['action'],
@@ -99,9 +112,10 @@ class AuditLogController extends Controller
             'entity' => $data['entity'],
             'entity_id' => isset($data['entityId']) ? (string) $data['entityId'] : null,
             'target_name' => $data['targetName'] ?? null,
-            'actor_id' => isset($data['actorId']) ? (string) $data['actorId'] : null,
-            'actor_name' => $data['actorName'] ?? 'Sistema',
-            'actor_role' => $data['actorRole'] ?? null,
+            // Actor tomado de la credencial verificada, nunca del cuerpo.
+            'actor_id' => (string) $admin->id,
+            'actor_name' => $admin->name,
+            'actor_role' => $admin->role,
             'summary' => $data['summary'] ?? null,
             'changes' => $data['changes'] ?? null,
             'metadata' => $data['metadata'] ?? null,

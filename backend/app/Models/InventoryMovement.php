@@ -29,6 +29,7 @@ class InventoryMovement extends Model
         'reference_type',
         'reference_id',
         'user_id',
+        'admin_id',
         'user_name',
         'reason',
         'notes',
@@ -48,9 +49,10 @@ class InventoryMovement extends Model
         return $this->belongsTo(Product::class);
     }
 
-    public function user(): BelongsTo
+    /** El administrador que registró el movimiento. */
+    public function admin(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Admin::class);
     }
 
     /** Documento origen (ProductSale en las ventas; null en lo administrativo). */
@@ -101,7 +103,7 @@ class InventoryMovement extends Model
             'reference_code' => $this->reference instanceof ProductSale
                 ? $this->reference->code
                 : null,
-            'user_id' => $this->user_id,
+            'admin_id' => $this->admin_id,
             'user_name' => $this->user_name,
             'reason' => $this->reason,
             'notes' => $this->notes,

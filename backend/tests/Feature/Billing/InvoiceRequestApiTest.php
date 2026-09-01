@@ -46,6 +46,8 @@ class InvoiceRequestApiTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // Cobrar exige turno de caja abierto.
+        $this->openCashShift();
         Http::preventStrayRequests();
         Queue::fake();
         config(['billing.enabled' => false]);

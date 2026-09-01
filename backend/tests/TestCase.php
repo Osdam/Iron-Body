@@ -78,6 +78,25 @@ abstract class TestCase extends BaseTestCase
      * helpers admin* de abajo la inyectan para que los tests de funcionalidad
      * CRM crucen el middleware EnsureAdminAuth sin repetir el header a mano.
      */
+    /**
+     * Abre un turno de caja para el administrador dado (o uno nuevo).
+     *
+     * Cobrar exige turno abierto desde que Caja lleva arqueo: sin esto, toda
+     * prueba que registre una venta recibiría 409. Devuelve el turno.
+     */
+    protected function openCashShift(?Admin $admin = null): \App\Models\CashShift
+    {
+        $admin ??= Admin::create([
+            'name' => 'Cajero de pruebas',
+            'email' => 'cajero-'.uniqid().'@ironbody.test',
+            'password' => 'secret-password',
+            'role' => Admin::ROLE_SUPER_ADMIN,
+            'status' => 'active',
+        ]);
+
+        return app(\App\Services\Caja\CashShiftService::class)->open($admin, 0.0);
+    }
+
     protected function adminHeaders(array $headers = []): array
     {
         $token = config('admin.api_token') ?: 'test-admin-secret';

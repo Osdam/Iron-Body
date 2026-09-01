@@ -5,10 +5,10 @@ namespace App\Services\Inventory;
 use App\Enums\InventoryMovementOrigin;
 use App\Enums\InventoryMovementType;
 use App\Exceptions\InsufficientStockException;
+use App\Models\Admin;
 use App\Models\InventoryMovement;
 use App\Models\Product;
 use App\Models\ProductSale;
-use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
@@ -35,7 +35,7 @@ class InventoryService
         int $quantity,
         InventoryMovementOrigin $origin,
         ?string $reason = null,
-        ?User $user = null,
+        ?Admin $user = null,
         ?float $unitAmount = null,
         ?string $notes = null,
     ): InventoryMovement {
@@ -62,7 +62,7 @@ class InventoryService
         int $quantity,
         InventoryMovementOrigin $origin,
         string $reason,
-        ?User $user = null,
+        ?Admin $user = null,
         ?string $notes = null,
     ): InventoryMovement {
         return DB::transaction(fn () => $this->apply(
@@ -88,7 +88,7 @@ class InventoryService
      *
      * @throws InsufficientStockException
      */
-    public function registerSaleExit(ProductSale $sale, ?User $user = null): array
+    public function registerSaleExit(ProductSale $sale, ?Admin $user = null): array
     {
         $movements = [];
 
@@ -164,7 +164,7 @@ class InventoryService
         int $quantity,
         InventoryMovementOrigin $origin,
         ?string $reason,
-        ?User $user,
+        ?Admin $user,
         ?float $unitAmount,
         ?string $notes,
         ?Model $reference = null,
@@ -198,7 +198,9 @@ class InventoryService
             'unit_amount' => $unitAmount,
             'reference_type' => $reference?->getMorphClass(),
             'reference_id' => $reference?->getKey(),
-            'user_id' => $user?->id,
+            // `admin_id` y no `user_id`: el personal del CRM vive en `admins`,
+            // mientras que `users` son los miembros de la aplicación.
+            'admin_id' => $user?->id,
             'user_name' => $user?->name,
             'reason' => $reason,
             'notes' => $notes,
