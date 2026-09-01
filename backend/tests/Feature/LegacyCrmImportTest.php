@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Admin;
 use App\Models\Member;
 use App\Models\Payment;
 use App\Models\Plan;
@@ -402,6 +403,17 @@ class LegacyCrmImportTest extends TestCase
 
     public function test_importa_productos_con_su_carga_inicial_trazada(): void
     {
+        // Quien mueve existencias es personal del CRM (`admins`), no un socio de
+        // la app: el movimiento tiene que quedar atribuido a una cuenta real.
+        $admin = Admin::create([
+            'name' => 'Recepción Uno', 'email' => 'recepcion@ironbody.test',
+            'password' => 'secret', 'role' => Admin::ROLE_RECEPCION,
+        ]);
+        $jefe = Admin::create([
+            'name' => 'Jefa Total', 'email' => 'jefa@ironbody.test',
+            'password' => 'secret', 'role' => Admin::ROLE_SUPER_ADMIN,
+        ]);
+
         $this->artisan('iron:import-legacy-products', [
             '--archivo' => $this->productos([
                 '43;No;Activo;AGUA;ESTANCO JOSE LOZANO;AGUA CRISTAL;329 Unds;1583;1583;3000;0%;3000',
@@ -422,6 +434,28 @@ class LegacyCrmImportTest extends TestCase
         $this->assertSame(0, $movimiento->stock_before);
         $this->assertSame(329, $movimiento->stock_after);
         $this->assertSame('initial_stock', $movimiento->origin->value);
+
+        // Atribuido a la cuenta con más mando, no a la primera que exista.
+        $this->assertSame($jefe->id, $movimiento->admin_id);
+        $this->assertSame('Jefa Total', $movimiento->user_name);
+        $this->assertNotSame($admin->id, $movimiento->admin_id);
+    }
+
+    public function test_los_productos_entran_aunque_no_haya_ningun_administrador(): void
+    {
+        // Un gimnasio recién montado puede no tener cuentas de CRM todavía. El
+        // catálogo no se queda fuera por eso: el movimiento admite no tener autor.
+        $this->assertSame(0, Admin::count());
+
+        $this->artisan('iron:import-legacy-products', [
+            '--archivo' => $this->productos([
+                '43;No;Activo;AGUA;ESTANCO JOSE LOZANO;AGUA CRISTAL;329 Unds;1583;1583;3000;0%;3000',
+            ]),
+        ])->assertSuccessful();
+
+        $producto = Product::where('sku', 'LEG-43')->firstOrFail();
+        $this->assertSame(329, $producto->stock);
+        $this->assertNull($producto->inventoryMovements()->sole()->admin_id);
     }
 
     public function test_reimportar_productos_no_vuelve_a_cargar_existencias(): void
@@ -438,6 +472,26 @@ class LegacyCrmImportTest extends TestCase
         $this->assertSame(329, $producto->stock);
         $this->assertSame(1, $producto->inventoryMovements()->count());
         $this->assertSame(1, Product::where('sku', 'LEG-43')->count());
+    }
+
+    public function test_el_resumen_cuenta_lo_que_de_verdad_entro(): void
+    {
+        // El resumen es lo único que ve quien corre esto en el servidor. Si
+        // dijera «0 nuevos» con el catálogo ya cargado, lo natural sería volver
+        // a lanzarlo — y esa segunda pasada es la que dobla las existencias.
+        $this->artisan('iron:import-legacy-products', [
+            '--archivo' => $this->productos([
+                '43;No;Activo;AGUA;ESTANCO;AGUA CRISTAL;329 Unds;1583;1583;3000;0%;3000',
+                '44;No;Activo;GATORADE;ESTANCO;GATORADE;100 Unds;2916;2916;5000;0%;5000',
+                '41;No;Activo;AMINOX;MONO;AMINOACIDO;0 Unds;0;0;120000;0%;120000',
+            ]),
+        ])
+            ->expectsOutputToContain('nuevos')
+            ->assertSuccessful();
+
+        $this->assertSame(3, Product::where('sku', 'like', 'LEG-%')->count());
+        // Dos con existencias; el de stock cero no genera movimiento.
+        $this->assertSame(429, (int) Product::where('sku', 'like', 'LEG-%')->sum('stock'));
     }
 
     public function test_no_revive_un_producto_retirado_del_catalogo(): void

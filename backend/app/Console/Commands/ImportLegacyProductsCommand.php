@@ -3,8 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Enums\InventoryMovementOrigin;
+use App\Models\Admin;
 use App\Models\Product;
-use App\Models\User;
 use App\Services\Inventory\InventoryService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -65,9 +65,21 @@ class ImportLegacyProductsCommand extends Command
 
         $this->info('Productos leídos: '.count($filas));
 
-        // Autor de la carga inicial: el movimiento guarda un nombre aunque la
-        // cuenta desaparezca, pero conviene que apunte a alguien real si existe.
-        $autor = User::query()->orderBy('id')->first();
+        // Autor de la carga inicial. El actor de un movimiento de inventario es
+        // personal del CRM (`admins`), no un socio de la app (`users`): quien
+        // mueve existencias está detrás del mostrador. Se prefiere la cuenta con
+        // más mando, y si no hay ninguna el movimiento queda sin autor —cosa que
+        // el servicio admite— antes que atribuírselo a alguien que no fue.
+        $autor = Admin::query()
+            ->orderByRaw($this->ordenPorMando())
+            ->orderBy('id')
+            ->first();
+
+        if ($autor === null) {
+            $this->warn('No hay ninguna cuenta de administrador: la carga inicial quedará sin autor.');
+        } else {
+            $this->info("Autor de la carga inicial: {$autor->name} ({$autor->role}).");
+        }
 
         $c = ['nuevos' => 0, 'actualizados' => 0, 'stock_cargado' => 0, 'unidades' => 0, 'omitidos' => 0, 'errores' => 0];
         $seco = (bool) $this->option('dry-run');
@@ -79,7 +91,15 @@ class ImportLegacyProductsCommand extends Command
                     // Punto de guardado por producto: en PostgreSQL un error de
                     // clave deja abortada la transacción entera, y una fila mala
                     // del export se llevaría por delante todo el catálogo.
-                    DB::transaction(fn () => $this->importarProducto($fila, $autor, $c));
+                    //
+                    // Closure con `&$c` y no una arrow function: éstas capturan
+                    // por VALOR, y el recuento se quedaría en cero aunque la
+                    // importación hubiera entrado entera. Un resumen que miente
+                    // invita a volver a correr el comando «porque no hizo nada»,
+                    // que es justo lo que duplicaría las existencias.
+                    DB::transaction(function () use ($fila, $autor, &$c): void {
+                        $this->importarProducto($fila, $autor, $c);
+                    });
                 } catch (Throwable $e) {
                     $c['errores']++;
                     $this->warn('Fila '.($i + 2).": {$e->getMessage()}");
@@ -105,7 +125,7 @@ class ImportLegacyProductsCommand extends Command
         return self::SUCCESS;
     }
 
-    private function importarProducto(array $fila, ?User $autor, array &$c): void
+    private function importarProducto(array $fila, ?Admin $autor, array &$c): void
     {
         $idLegacy = trim((string) ($fila['ID del producto'] ?? ''));
         $nombre = trim((string) ($fila['Nombre del producto'] ?? ''));
@@ -176,6 +196,22 @@ class ImportLegacyProductsCommand extends Command
         );
         $c['stock_cargado']++;
         $c['unidades'] += $existencias;
+    }
+
+    /**
+     * Orden de preferencia para elegir al autor: Super Admin antes que
+     * Administrador, y así hacia abajo. Se construye desde `Admin::ROLES`, que
+     * ya está ordenada de más a menos mando, para no repetir aquí una lista que
+     * tendría que actualizarse cada vez que cambie el catálogo de roles.
+     */
+    private function ordenPorMando(): string
+    {
+        $casos = '';
+        foreach (Admin::ROLES as $i => $rol) {
+            $casos .= " WHEN '".str_replace("'", "''", $rol)."' THEN {$i}";
+        }
+
+        return "CASE role{$casos} ELSE 99 END";
     }
 
     /** «329 Unds» → 329. */
