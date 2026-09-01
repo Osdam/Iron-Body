@@ -46,6 +46,11 @@ final class CrmPermission
 
     public const CAJA_MANAGE = 'caja.manage';
 
+    // ── Facturación electrónica (Factus / DIAN) ─────────────────────────────
+    public const BILLING_VIEW = 'billing.view';
+
+    public const BILLING_MANAGE = 'billing.manage';
+
     // ── Inventario ──────────────────────────────────────────────────────────
     public const INVENTORY_VIEW = 'inventory.view';
 
@@ -62,6 +67,8 @@ final class CrmPermission
             self::CAJA_VIEW,
             self::CAJA_SELL,
             self::CAJA_MANAGE,
+            self::BILLING_VIEW,
+            self::BILLING_MANAGE,
             self::INVENTORY_VIEW,
             self::INVENTORY_CREATE,
             self::INVENTORY_EDIT,
@@ -91,8 +98,9 @@ final class CrmPermission
     public static function byRole(): array
     {
         // Recepción atiende el mostrador: cobra y consulta existencias para
-        // saber qué hay. No toca el catálogo ni da de baja mercancía, y no
-        // cancela ventas ya registradas.
+        // saber qué hay. No toca el catálogo ni da de baja mercancía, no
+        // cancela ventas ya registradas y NO emite comprobantes fiscales: una
+        // factura electrónica es un documento ante la DIAN a nombre del cliente.
         $reception = [
             self::CAJA_VIEW,
             self::CAJA_SELL,

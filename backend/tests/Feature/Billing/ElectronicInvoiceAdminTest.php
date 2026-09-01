@@ -18,6 +18,23 @@ class ElectronicInvoiceAdminTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Credencial de estas pruebas: una SESIÓN de administrador real.
+     *
+     * Emitir comprobantes y cambiar tarifas exige ahora `billing.manage`. El
+     * token compartido de automatizaciones no resuelve a una persona y no firma
+     * documentos fiscales, así que estas pruebas se autentican como el CRM real.
+     * Lo que verifican no cambia: solo con qué credencial llegan.
+     */
+    private ?array $adminSessionHeaders = null;
+
+    protected function adminHeaders(array $headers = []): array
+    {
+        $this->adminSessionHeaders ??= $this->actingAsAdmin();
+
+        return array_merge($this->adminSessionHeaders, $headers);
+    }
+
     private function payment(array $attrs = []): Payment
     {
         $plan = Plan::create(['name' => 'Pro', 'price' => 100000, 'duration_days' => 30, 'benefits' => '']);
@@ -278,10 +295,15 @@ class ElectronicInvoiceAdminTest extends TestCase
     {
         $inv = $this->invoice(['status' => 'validated', 'cufe' => 'cufe-orig']);
 
-        // adminHeaders() usa el secreto compartido (no sesión de dueño) → 403.
-        $this->adminPostJson("/api/admin/electronic-invoices/{$inv->id}/credit-note", [
+        // Esta prueba SÍ quiere el secreto compartido, así que lo construye
+        // aparte: `adminHeaders()` está sobrescrito en esta clase para usar una
+        // sesión real, que es lo que necesitan las demás.
+        $token = config('admin.api_token') ?: 'test-admin-secret';
+        config(['admin.api_token' => $token]);
+
+        $this->postJson("/api/admin/electronic-invoices/{$inv->id}/credit-note", [
             'reason' => 'Devolución total',
-        ])->assertStatus(403);
+        ], ['Authorization' => 'Bearer '.$token])->assertStatus(403);
     }
 
     public function test_credit_note_created_when_original_validated(): void

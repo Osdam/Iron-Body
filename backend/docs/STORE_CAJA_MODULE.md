@@ -57,13 +57,23 @@ Antes, `caja.sell` e `inventory.edit` solo se comprobaban en el navegador: una
 llamada directa a la API con la sesión de cualquier admin podía vender o cambiar
 precios, costos y existencias.
 
-| Rol | caja.view | caja.sell | caja.manage | inventory.view | inventory.create/edit/delete |
-|---|:--:|:--:|:--:|:--:|:--:|
-| Super Admin | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Administrador | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Recepción | ✓ | ✓ | — | ✓ | — |
-| Administrativo | — | — | — | — | — |
-| Token compartido (n8n) | ✓ | — | — | ✓ | — |
+| Rol | caja.view | caja.sell | caja.manage | inventory.view | inventory.create/edit/delete | billing.manage |
+|---|:--:|:--:|:--:|:--:|:--:|:--:|
+| Super Admin | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Administrador | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Recepción | ✓ | ✓ | — | ✓ | — | — |
+| Administrativo | — | — | — | — | — | — |
+| Token compartido (n8n) | ✓ | — | — | ✓ | — | — |
+
+`billing.manage` cubre la superficie FISCAL, que antes solo exigía credencial
+administrativa: emitir, reemitir, sincronizar y anular comprobantes ante la DIAN
+(`/admin/electronic-invoices/*`), y cambiar la tarifa de IVA o el modo de precio
+de productos y planes (`/admin/billing/*`) — es decir, **lo que Caja cobra y lo
+que se declara**. Recepción podía emitir una factura real de cualquier venta y
+después no poder anularla, porque la nota crédito sí comprobaba el rol.
+
+Los endpoints de LECTURA de facturación (listado, detalle, PDF, XML, `config`)
+siguen exigiendo solo credencial administrativa. Ver riesgos residuales.
 
 El token de automatizaciones no resuelve a una persona: obtiene **solo lectura**,
 nunca cobra ni mueve existencias. Misma política que moderación.

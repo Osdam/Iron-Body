@@ -12,6 +12,23 @@ class FiscalConfigTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Credencial de estas pruebas: una SESIÓN de administrador real.
+     *
+     * Emitir comprobantes y cambiar tarifas exige ahora `billing.manage`. El
+     * token compartido de automatizaciones no resuelve a una persona y no firma
+     * documentos fiscales, así que estas pruebas se autentican como el CRM real.
+     * Lo que verifican no cambia: solo con qué credencial llegan.
+     */
+    private ?array $adminSessionHeaders = null;
+
+    protected function adminHeaders(array $headers = []): array
+    {
+        $this->adminSessionHeaders ??= $this->actingAsAdmin();
+
+        return array_merge($this->adminSessionHeaders, $headers);
+    }
+
     private function ivaIncl(): TaxRate
     {
         return TaxRate::create([

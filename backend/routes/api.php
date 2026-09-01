@@ -1034,13 +1034,22 @@ Route::post('admin/caja/sales/{sale}/cancel',   [CajaController::class, 'cancel'
 Route::get('admin/electronic-invoices',               [ElectronicInvoiceController::class, 'index']);
 Route::get('admin/electronic-invoices/stats',         [ElectronicInvoiceController::class, 'stats']);
 Route::get('admin/electronic-invoices/config',        [ElectronicInvoiceController::class, 'config']);
-Route::post('admin/electronic-invoices/manual-emit',  [ElectronicInvoiceController::class, 'manualEmit']);
+// AUTORIZACIÓN: emitir, reemitir, sincronizar o anular un comprobante son
+// actos FISCALES ante la DIAN a nombre del cliente. Antes solo exigían
+// credencial administrativa: con la sesión de Recepción —que no tiene
+// billing.manage— se podía emitir una factura real de cualquier venta, y
+// además no poder anularla después (creditNote sí comprobaba rol).
+Route::post('admin/electronic-invoices/manual-emit',  [ElectronicInvoiceController::class, 'manualEmit'])
+    ->middleware('admin.can:billing.manage');
 Route::get('admin/electronic-invoices/{invoice}',             [ElectronicInvoiceController::class, 'show'])->whereNumber('invoice');
-Route::post('admin/electronic-invoices/{invoice}/retry',      [ElectronicInvoiceController::class, 'retry'])->whereNumber('invoice');
-Route::post('admin/electronic-invoices/{invoice}/sync',       [ElectronicInvoiceController::class, 'sync'])->whereNumber('invoice');
+Route::post('admin/electronic-invoices/{invoice}/retry',      [ElectronicInvoiceController::class, 'retry'])->whereNumber('invoice')
+    ->middleware('admin.can:billing.manage');
+Route::post('admin/electronic-invoices/{invoice}/sync',       [ElectronicInvoiceController::class, 'sync'])->whereNumber('invoice')
+    ->middleware('admin.can:billing.manage');
 Route::get('admin/electronic-invoices/{invoice}/pdf',         [ElectronicInvoiceController::class, 'pdf'])->whereNumber('invoice');
 Route::get('admin/electronic-invoices/{invoice}/xml',         [ElectronicInvoiceController::class, 'xml'])->whereNumber('invoice');
-Route::post('admin/electronic-invoices/{invoice}/credit-note',[ElectronicInvoiceController::class, 'creditNote'])->whereNumber('invoice');
+Route::post('admin/electronic-invoices/{invoice}/credit-note',[ElectronicInvoiceController::class, 'creditNote'])->whereNumber('invoice')
+    ->middleware('admin.can:billing.manage');
 
 // Perfiles fiscales por usuario/miembro (datos DIAN; no bloquean pagos).
 Route::get('admin/users/{user}/fiscal-profile',    [FiscalProfileController::class, 'showForUser'])->whereNumber('user');
@@ -1051,11 +1060,19 @@ Route::put('admin/members/{member}/fiscal-profile', [FiscalProfileController::cl
 // ── Configuración fiscal de planes/productos (Fase 9) ─────────────────────────
 Route::get('admin/billing/tax-rates',                 [BillingTaxController::class, 'index']);
 Route::get('admin/billing/fiscal-assignments',        [BillingTaxController::class, 'assignments']);
-Route::put('admin/billing/plans/{plan}/tax-rate',     [BillingTaxController::class, 'assignPlan'])->whereNumber('plan');
-Route::put('admin/billing/products/{product}/tax-rate', [BillingTaxController::class, 'assignProduct'])->whereNumber('product');
-Route::post('admin/billing/products/bulk-tax',        [BillingTaxController::class, 'bulkProducts']);
-Route::put('admin/billing/plans/{plan}/pricing-mode', [BillingTaxController::class, 'updatePlanPricing'])->whereNumber('plan');
-Route::put('admin/billing/products/{product}/pricing-mode', [BillingTaxController::class, 'updateProductPricing'])->whereNumber('product');
+// AUTORIZACIÓN: la tarifa de IVA y el modo de precio deciden LO QUE CAJA COBRA
+// y lo que se declara. `bulk-tax` alcanza al catálogo entero de una llamada.
+// Sin permiso, cualquier admin con sesión podía cambiarlos por API directa.
+Route::put('admin/billing/plans/{plan}/tax-rate',     [BillingTaxController::class, 'assignPlan'])
+    ->whereNumber('plan')->middleware('admin.can:billing.manage');
+Route::put('admin/billing/products/{product}/tax-rate', [BillingTaxController::class, 'assignProduct'])
+    ->whereNumber('product')->middleware('admin.can:billing.manage');
+Route::post('admin/billing/products/bulk-tax',        [BillingTaxController::class, 'bulkProducts'])
+    ->middleware('admin.can:billing.manage');
+Route::put('admin/billing/plans/{plan}/pricing-mode', [BillingTaxController::class, 'updatePlanPricing'])
+    ->whereNumber('plan')->middleware('admin.can:billing.manage');
+Route::put('admin/billing/products/{product}/pricing-mode', [BillingTaxController::class, 'updateProductPricing'])
+    ->whereNumber('product')->middleware('admin.can:billing.manage');
 
 // Cotización oficial (base / IVA / total). El frontend la MUESTRA, no la calcula.
 Route::post('admin/billing/quote', BillingQuoteController::class);
