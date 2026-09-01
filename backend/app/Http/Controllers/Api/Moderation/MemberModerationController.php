@@ -20,6 +20,7 @@ use App\Support\Moderation\ModerationScope;
 use App\Support\Moderation\ReportReason;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
@@ -401,6 +402,60 @@ class MemberModerationController extends Controller
     }
 
     // ── Lineamientos de comunidad ─────────────────────────────────────────
+
+    /**
+     * GET /api/app/moderation/guidelines
+     *
+     * Sirve el documento íntegro para que la app lo pinte de forma NATIVA.
+     *
+     * Antes esto dependía de `ugc.guidelines_url`, que apuntaba a un dominio
+     * que ni siquiera resolvía: el socio veía un enlace roto justo en el paso
+     * en que se le pide aceptar algo. El texto vive ahora versionado junto al
+     * código (`resources/legal/community_guidelines.php`), viaja por la API y
+     * no hay página web que mantener.
+     */
+    public function guidelines(Request $request): JsonResponse
+    {
+        /** @var Member $member */
+        $member = $request->attributes->get('auth_member');
+
+        $doc = $this->guidelinesDocument();
+        $current = (string) config('ugc.guidelines_version');
+
+        // El documento en disco y la versión vigente tienen que coincidir. Si
+        // alguien sube `UGC_GUIDELINES_VERSION` sin actualizar el texto, el
+        // socio aceptaría una versión que no es la que está leyendo.
+        if (($doc['version'] ?? null) !== $current) {
+            Log::warning('ugc:guidelines:version-mismatch', [
+                'config' => $current,
+                'document' => $doc['version'] ?? null,
+            ]);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'data' => [
+                'version' => $doc['version'],
+                'effective_date' => $doc['effective_date'],
+                'title' => $doc['title'],
+                'subtitle' => $doc['subtitle'],
+                'intro' => $doc['intro'],
+                'sections' => $doc['sections'],
+                'full_text' => $doc['full_text'],
+                'required_to_post' => (bool) config('ugc.guidelines_required_to_post', true),
+                'accepted' => MemberUgcConsent::hasAcceptedCurrent((int) $member->id),
+                'url' => config('ugc.guidelines_url'),
+            ],
+        ]);
+    }
+
+    /** El documento, leído una sola vez por proceso. */
+    private function guidelinesDocument(): array
+    {
+        static $doc = null;
+
+        return $doc ??= require resource_path('legal/community_guidelines.php');
+    }
 
     /**
      * POST /api/app/moderation/guidelines/accept

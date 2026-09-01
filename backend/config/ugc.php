@@ -117,6 +117,12 @@ return [
     */
     'guidelines_version' => env('UGC_GUIDELINES_VERSION', '1.0'),
     'guidelines_required_to_post' => (bool) env('UGC_GUIDELINES_REQUIRED', true),
-    'guidelines_url' => env('UGC_GUIDELINES_URL', 'https://ironbody.com.co/lineamientos-comunidad'),
+    // El documento lo sirve `GET /api/app/moderation/guidelines` y la app lo
+    // pinta de forma nativa: NO hace falta una página web. Este valor era
+    // 'https://ironbody.com.co/lineamientos-comunidad', un dominio que no
+    // resuelve (NXDOMAIN), así que el enlace estaba roto. Queda en null; si
+    // algún día existe una página pública, se define por entorno y la app la
+    // ofrece como enlace adicional, nunca como única vía.
+    'guidelines_url' => env('UGC_GUIDELINES_URL'),
 
 ];

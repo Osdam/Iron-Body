@@ -703,7 +703,11 @@ Route::middleware('auth.member')->group(function (): void {
     Route::get('app/moderation/actions',         [$ugc, 'actions']);
     Route::post('app/moderation/actions/{action}/appeal', [$ugc, 'appeal'])
         ->middleware('throttle:10,60');
-    Route::post('app/moderation/guidelines/accept', [$ugc, 'acceptGuidelines']);
+    Route::get('app/moderation/guidelines',       [$ugc, 'guidelines']);
+    // Aceptar es idempotente, pero el throttle evita que un cliente en bucle
+    // machaque la tabla de consentimientos y su auditoría.
+    Route::post('app/moderation/guidelines/accept', [$ugc, 'acceptGuidelines'])
+        ->middleware('throttle:20,60');
 
     // ── Racha semanal "Esta semana" ────────────────────────────────────────
     Route::post('app/weekly-streak/touch', [WeeklyStreakController::class, 'touch']);
