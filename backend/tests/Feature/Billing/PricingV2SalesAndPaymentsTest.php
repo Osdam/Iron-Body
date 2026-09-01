@@ -46,6 +46,8 @@ class PricingV2SalesAndPaymentsTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // Cobrar exige turno de caja abierto.
+        $this->openCashShift();
 
         // Estas pruebas verifican el MOTOR de calculo, no la politica
         // vigente de Iron Body (no responsable de IVA). Ver el trait.

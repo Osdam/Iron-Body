@@ -17,6 +17,16 @@ class CajaInvoiceHookTest extends TestCase
     use RefreshDatabase;
 
     /**
+     * Cobrar exige un turno de caja abierto desde que Caja lleva arqueo. Lo que
+     * verifican estas pruebas no cambia; solo necesitan el turno para llegar.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->openCashShift();
+    }
+
+    /**
      * Credencial de estas pruebas: una SESIÓN de administrador real.
      *
      * Estas rutas (`/admin/caja/*`, `/admin/products/*`) exigen ahora permiso

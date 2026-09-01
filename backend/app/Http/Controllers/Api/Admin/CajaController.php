@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Exceptions\CashShiftException;
 use App\Exceptions\InsufficientStockException;
 use App\Http\Controllers\Controller;
+use App\Models\CashShift;
 use App\Models\Product;
 use App\Models\ProductSale;
 use App\Rules\DeliverableInvoiceEmail;
@@ -12,7 +14,9 @@ use App\Services\Billing\InvoicingService;
 use App\Services\Billing\Money;
 use App\Services\Billing\PricingException;
 use App\Services\Billing\PricingService;
+use App\Services\Caja\CashShiftService;
 use App\Services\Inventory\InventoryService;
+use App\Support\Access\AdminActor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -42,23 +46,70 @@ use Illuminate\Validation\ValidationException;
  */
 class CajaController extends Controller
 {
-    // GET /api/admin/caja/sales
+    /**
+     * GET /api/admin/caja/sales — listado paginado.
+     *
+     * Antes devolvía `limit(200)` sin paginar: el CRM se descargaba el
+     * histórico entero para pintar una tabla, y a partir de la venta 201 el
+     * tope recortaba en silencio sin que nada lo dijera. Los filtros se aplican
+     * ANTES de paginar, que es el único orden que da resultados correctos.
+     */
     public function index(Request $request): JsonResponse
     {
-        $query = ProductSale::query()->with(['items', 'member:id,full_name', 'electronicInvoice'])->latest('id');
+        $filters = $request->validate([
+            'channel' => ['nullable', Rule::in(ProductSale::CHANNELS)],
+            'status' => ['nullable', Rule::in(ProductSale::STATUSES)],
+            'today' => ['nullable', 'boolean'],
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date'],
+            'search' => ['nullable', 'string', 'max:120'],
+            'shift_id' => ['nullable', 'integer'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
 
-        if ($request->filled('channel')) {
-            $query->where('channel', $request->input('channel'));
+        $query = ProductSale::query()
+            ->with(['items', 'member:id,full_name', 'electronicInvoice'])
+            ->latest('id');
+
+        if (isset($filters['channel'])) {
+            $query->where('channel', $filters['channel']);
         }
-        if ($request->filled('status')) {
-            $query->where('status', $request->input('status'));
+        if (isset($filters['status'])) {
+            $query->where('status', $filters['status']);
         }
         if ($request->boolean('today')) {
             $query->whereDate('created_at', now()->toDateString());
         }
+        if (isset($filters['from'])) {
+            $query->whereDate('created_at', '>=', $filters['from']);
+        }
+        if (isset($filters['to'])) {
+            $query->whereDate('created_at', '<=', $filters['to']);
+        }
+        if (isset($filters['shift_id'])) {
+            $query->where('cash_shift_id', $filters['shift_id']);
+        }
+        if (isset($filters['search'])) {
+            // `ilike` en PostgreSQL: con `like` no encontraba nada escrito en
+            // minúsculas, el mismo detalle que ya corrigió el módulo de pagos.
+            $op = $query->getConnection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+            $term = '%'.$filters['search'].'%';
+            $query->where(fn ($q) => $q->where('code', $op, $term)
+                ->orWhere('customer_name', $op, $term)
+                ->orWhereHas('member', fn ($m) => $m->where('full_name', $op, $term)));
+        }
+
+        $page = $query->paginate($filters['per_page'] ?? 25);
 
         return response()->json([
-            'data' => $query->limit(200)->get()->map(fn (ProductSale $s) => $this->serialize($s)),
+            'data' => $page->getCollection()->map(fn (ProductSale $s) => $this->serialize($s))->all(),
+            'meta' => [
+                'current_page' => $page->currentPage(),
+                'last_page' => $page->lastPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
+            ],
         ]);
     }
 
@@ -119,8 +170,17 @@ class CajaController extends Controller
             return $this->insufficientStockResponse($e);
         }
 
+        // Sin turno abierto no se cobra: ese dinero no tendría dónde cuadrar al
+        // arquear ni a quién atribuirse. La comprobación es de backend; el
+        // frontend solo la refleja.
         try {
-            $sale = DB::transaction(fn () => $this->buildSale($data, $request));
+            $shift = app(CashShiftService::class)->requireOpen();
+        } catch (CashShiftException $e) {
+            return $this->cashShiftError($e);
+        }
+
+        try {
+            $sale = DB::transaction(fn () => $this->buildSale($data, $request, $shift));
         } catch (PricingException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -135,7 +195,7 @@ class CajaController extends Controller
         if ($data['paid'] ?? true) {
             $sale->load('items');
             try {
-                $sale->markPaid($data['payment_method'], null, $request->user());
+                $sale->markPaid($data['payment_method'], null, AdminActor::from($request));
             } catch (InsufficientStockException $e) {
                 // La venta queda `pending`, sin stock movido: el cajero puede
                 // corregirla o cancelarla, y nada se cobró a medias.
@@ -168,7 +228,7 @@ class CajaController extends Controller
             $sale->markPaid(
                 $data['payment_method'] ?? null,
                 $data['payment_reference'] ?? null,
-                $request->user(),
+                AdminActor::from($request),
             );
         } catch (InsufficientStockException $e) {
             // Un pedido de la app puede haberse quedado sin stock entre que se
@@ -214,7 +274,7 @@ class CajaController extends Controller
      * @throws PricingException si un producto gravable no tiene tarifa, la
      *                          cantidad es inválida o el descuento es excesivo.
      */
-    private function buildSale(array $data, Request $request): ProductSale
+    private function buildSale(array $data, Request $request, ?CashShift $shift = null): ProductSale
     {
         $pricing = app(PricingService::class);
         $discount = Money::fromAmount($data['discount'] ?? 0);
@@ -243,7 +303,12 @@ class CajaController extends Controller
         $sale = ProductSale::create([
             'channel' => 'pos',
             'status' => 'pending',
-            'cashier_user_id' => optional($request->user())->id,
+            // `$request->user()` es null en /api/admin/*: el administrador vive
+            // en un atributo del request. Por eso las 17 ventas anteriores se
+            // guardaron sin cajero. Ahora sale de la credencial verificada.
+            'cashier_admin_id' => AdminActor::id($request),
+            'cashier_name' => AdminActor::name($request),
+            'cash_shift_id' => $shift?->id,
             'customer_name' => $data['customer_name'] ?? null,
             'payment_method' => $data['payment_method'],
             'discount' => $discount->toDatabase(),
@@ -395,6 +460,16 @@ class CajaController extends Controller
         ], static fn ($v) => $v !== null), 422);
     }
 
+    /** 409 con el motivo exacto: el cajero necesita saber qué hacer. */
+    private function cashShiftError(CashShiftException $e): JsonResponse
+    {
+        return response()->json([
+            'ok' => false,
+            'code' => $e->code_,
+            'message' => $e->getMessage(),
+        ], 409);
+    }
+
     private function serialize(ProductSale $sale): array
     {
         return array_merge($sale->toReceiptArray(), [
@@ -405,6 +480,8 @@ class CajaController extends Controller
             'receipt_url' => $sale->receipt_url,
             'notes' => $sale->notes,
             'cashier_user_id' => $sale->cashier_user_id,
+            'cashier_name' => $sale->cashier_name,
+            'cash_shift_id' => $sale->cash_shift_id,
             // Sin esto el CRM no puede saber si la venta pidió factura, y el
             // botón «Factura» aparecería para ventas que la barrera va a
             // rechazar (el caso de la solicitud #18).

@@ -7,6 +7,7 @@ use App\Exceptions\InsufficientStockException;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Services\Inventory\InventoryService;
+use App\Support\Access\AdminActor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -91,7 +92,7 @@ class ProductController extends Controller
                 quantity: $initialStock,
                 origin: InventoryMovementOrigin::INITIAL_STOCK,
                 reason: 'Carga inicial al crear el producto',
-                user: $request->user(),
+                user: AdminActor::from($request),
             );
         }
 
@@ -127,7 +128,7 @@ class ProductController extends Controller
                         quantity: $delta,
                         origin: InventoryMovementOrigin::ADJUSTMENT,
                         reason: 'Corrección de existencias al editar el producto',
-                        user: $request->user(),
+                        user: AdminActor::from($request),
                     );
                 } else {
                     $inventory->registerExit(
@@ -135,7 +136,7 @@ class ProductController extends Controller
                         quantity: abs($delta),
                         origin: InventoryMovementOrigin::ADJUSTMENT,
                         reason: 'Corrección de existencias al editar el producto',
-                        user: $request->user(),
+                        user: AdminActor::from($request),
                     );
                 }
             } catch (InsufficientStockException $e) {
@@ -187,7 +188,7 @@ class ProductController extends Controller
                     quantity: $delta,
                     origin: InventoryMovementOrigin::ADJUSTMENT,
                     reason: $data['reason'] ?? 'Ajuste manual de inventario',
-                    user: $request->user(),
+                    user: AdminActor::from($request),
                 );
             } else {
                 $inventory->registerExit(
@@ -195,7 +196,7 @@ class ProductController extends Controller
                     quantity: abs($delta),
                     origin: InventoryMovementOrigin::ADJUSTMENT,
                     reason: $data['reason'] ?? 'Ajuste manual de inventario',
-                    user: $request->user(),
+                    user: AdminActor::from($request),
                 );
             }
         } catch (InsufficientStockException $e) {

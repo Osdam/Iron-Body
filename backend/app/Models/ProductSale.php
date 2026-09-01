@@ -36,6 +36,12 @@ class ProductSale extends Model
         'status',
         'member_id',
         'cashier_user_id',
+        // Quién cobró, de verdad. `cashier_user_id` apuntaba a `users` (los
+        // miembros de la app) y además se rellenaba con `$request->user()`,
+        // que en /api/admin/* siempre es null.
+        'cashier_admin_id',
+        'cashier_name',
+        'cash_shift_id',
         'customer_name',
         'payment_method',
         'payment_status',
@@ -133,6 +139,18 @@ class ProductSale extends Model
         return $this->belongsTo(User::class, 'cashier_user_id');
     }
 
+    /** El administrador que cobró la venta. */
+    public function cashierAdmin(): BelongsTo
+    {
+        return $this->belongsTo(Admin::class, 'cashier_admin_id');
+    }
+
+    /** Turno de caja en el que se registró. */
+    public function cashShift(): BelongsTo
+    {
+        return $this->belongsTo(CashShift::class);
+    }
+
     /** Comprobantes electrónicos (factura + posibles notas crédito) de la venta. */
     public function electronicInvoices(): MorphMany
     {
@@ -192,7 +210,7 @@ class ProductSale extends Model
      *
      * @throws InsufficientStockException
      */
-    public function markPaid(?string $method = null, ?string $reference = null, ?User $actor = null): void
+    public function markPaid(?string $method = null, ?string $reference = null, ?Admin $actor = null): void
     {
         if (in_array($this->status, ['paid', 'delivered'], true)) {
             return;

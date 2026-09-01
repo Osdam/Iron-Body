@@ -23,6 +23,16 @@ class InventoryAuthorizationTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Cobrar exige un turno de caja abierto desde que Caja lleva arqueo. Lo que
+     * verifican estas pruebas no cambia; solo necesitan el turno para llegar.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->openCashShift();
+    }
+
     private function admin(string $role): Admin
     {
         return Admin::create([

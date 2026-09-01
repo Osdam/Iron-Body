@@ -5,6 +5,7 @@ namespace Tests\Feature\Inventory;
 use App\Enums\InventoryMovementOrigin;
 use App\Enums\InventoryMovementType;
 use App\Exceptions\InsufficientStockException;
+use App\Models\Admin;
 use App\Models\InventoryMovement;
 use App\Models\Payment;
 use App\Models\Plan;
@@ -153,7 +154,10 @@ class InventorySeparationTest extends TestCase
     public function test_salida_manual_por_dano_exige_motivo_y_queda_trazada(): void
     {
         $product = $this->product(stock: 10);
-        $actor = User::factory()->create(['name' => 'Cajera Ana']);
+        $actor = Admin::create([
+            'name' => 'Cajera Ana', 'email' => 'ana-'.uniqid().'@ironbody.test',
+            'password' => 'secret-password', 'role' => Admin::ROLE_RECEPCION, 'status' => 'active',
+        ]);
 
         $movement = app(InventoryService::class)->registerExit(
             product: $product,
@@ -166,7 +170,7 @@ class InventorySeparationTest extends TestCase
         $this->assertSame(7, $product->fresh()->stock);
         $this->assertSame(InventoryMovementOrigin::DAMAGE, $movement->origin);
         $this->assertSame('Botellas rotas en bodega', $movement->reason);
-        $this->assertSame($actor->id, $movement->user_id);
+        $this->assertSame($actor->id, $movement->admin_id);
         $this->assertSame('Cajera Ana', $movement->user_name);
         $this->assertNull($movement->reference_type, 'una merma no tiene venta detrás');
         $this->assertSame(10, $movement->stock_before);
