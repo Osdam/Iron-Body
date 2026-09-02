@@ -8,6 +8,7 @@ use App\Models\MemberAuthChallenge;
 use App\Models\MemberDeviceBinding;
 use App\Models\MemberSecurityEvent;
 use App\Models\MemberSupportTicket;
+use App\Services\DeviceConflictService;
 use App\Services\DeviceSessionService;
 use App\Services\NotificationService;
 use App\Services\RealtimeEvents;
@@ -32,6 +33,7 @@ class SupportController extends Controller
         private DeviceSessionService $sessions,
         private SecurityEventService $security,
         private NotificationService $notifications,
+        private DeviceConflictService $conflicts,
     ) {}
 
     /** GET /api/admin/support?status=&search=&page= */
@@ -139,12 +141,18 @@ class SupportController extends Controller
             return response()->json(['ok' => true, 'linked' => false]);
         }
 
+        // "0 dispositivos / no confiable" NO significa que pueda entrar: el
+        // vínculo que lo bloquea puede ser de OTRO titular, y esas dos métricas
+        // solo miran las filas del propio miembro. Por eso se expone aparte.
+        $conflict = $this->conflicts->findConflict($member);
+
         return response()->json([
             'ok' => true,
             'linked' => true,
             'member' => $this->memberSummary($member),
             'active_devices' => $this->sessions->activeSessions($member)->count(),
             'trusted_device' => MemberDeviceBinding::where('member_id', $member->id)->exists(),
+            'device_conflict' => $conflict ? $this->conflicts->describe($conflict) : null,
         ]);
     }
 
@@ -302,6 +310,86 @@ class SupportController extends Controller
             'ok' => true,
             'released_count' => $count,
             'message' => "Confianza restablecida ({$count} vínculo(s)).",
+            'data' => $ticket->fresh('member')->toPublicArray(),
+        ]);
+    }
+
+    /**
+     * POST /api/admin/support/{ticket}/release-device — libera el equipo que
+     * está bloqueando al miembro del ticket porque pertenece a OTRA cuenta.
+     *
+     * Es la acción que falta cuando "Restablecer confianza" devuelve 0: aquella
+     * borra los vínculos DEL miembro; esta borra EL vínculo que lo bloquea, que
+     * es de otro titular. Acotada a un único `device_id` —el de la denegación
+     * registrada—, nunca a "todos los dispositivos".
+     */
+    public function releaseDevice(Request $request, MemberSupportTicket $ticket): JsonResponse
+    {
+        $member = $this->requireMember($ticket);
+        if ($member instanceof JsonResponse) {
+            return $member;
+        }
+
+        $data = $request->validate([
+            'reason' => ['nullable', 'string', 'max:200'],
+        ]);
+        $reason = trim((string) ($data['reason'] ?? '')) ?: 'Liberación por soporte';
+
+        $binding = $this->conflicts->findConflict($member);
+        if (! $binding) {
+            // Respuesta segura: no se distingue "no hay conflicto" de "ya se
+            // liberó", y no se filtra nada sobre otros miembros.
+            return response()->json([
+                'ok' => false,
+                'code' => 'no_device_conflict',
+                'message' => 'Este miembro no tiene ningún equipo bloqueado por otra cuenta.',
+            ], 409);
+        }
+
+        $ownerBefore = $binding->member;
+        $released = $this->conflicts->release($binding, $reason);
+        $maskedId = $this->conflicts->mask($released['device_id']);
+
+        // Auditoría por partida doble: al titular que pierde el equipo y al
+        // miembro que lo recupera. Ambos eventos guardan quién actuó y por qué.
+        $audit = [
+            'source' => 'admin_support',
+            'ticket_id' => $ticket->id,
+            'admin_id' => $this->adminId($request),
+            'device_id' => $released['device_id'],
+            'reason' => $reason,
+            'revoked_sessions' => $released['revoked_sessions'],
+        ];
+        if ($ownerBefore) {
+            $this->security->record($ownerBefore, MemberSecurityEvent::TYPE_DEVICE_RELEASED, $this->context_($request), $audit + [
+                'released_for_member' => $member->id,
+            ]);
+        }
+        $this->security->record($member, MemberSecurityEvent::TYPE_DEVICE_RELEASED, $this->context_($request), $audit + [
+            'previous_member_id' => $released['previous_member_id'],
+        ]);
+
+        $this->trace($ticket, $request, "Liberó el equipo {$maskedId}, que estaba vinculado a otra cuenta ({$released['revoked_sessions']} sesión(es) cerrada(s)).", [
+            'action' => 'release_device',
+            'device_id_masked' => $maskedId,
+            'previous_member_id' => $released['previous_member_id'],
+            'revoked_sessions' => $released['revoked_sessions'],
+            'reason' => $reason,
+        ]);
+
+        // SSE: el titular anterior debe enterarse de que perdió el equipo (su
+        // sesión acaba de morir) y el miembro del ticket, de que ya puede
+        // entrar. Sin esto, ambas apps se quedarían con un estado obsoleto.
+        if ($released['previous_member_id']) {
+            RealtimeEvents::security($released['previous_member_id']);
+        }
+        RealtimeEvents::security($member->id);
+
+        return response()->json([
+            'ok' => true,
+            'released_device' => $maskedId,
+            'revoked_sessions' => $released['revoked_sessions'],
+            'message' => 'Equipo liberado. El miembro ya puede iniciar sesión desde él.',
             'data' => $ticket->fresh('member')->toPublicArray(),
         ]);
     }

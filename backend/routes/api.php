@@ -871,6 +871,9 @@ Route::post('admin/support/{ticket}/link-member',   [\App\Http\Controllers\Api\A
 Route::post('admin/support/{ticket}/phone',         [\App\Http\Controllers\Api\Admin\SupportController::class, 'changePhone']);
 Route::post('admin/support/{ticket}/revoke-devices', [\App\Http\Controllers\Api\Admin\SupportController::class, 'revokeDevices']);
 Route::post('admin/support/{ticket}/reset-trust',   [\App\Http\Controllers\Api\Admin\SupportController::class, 'resetTrust']);
+// Libera el equipo que bloquea al miembro por pertenecer a OTRA cuenta (lo que
+// `reset-trust` no puede hacer: aquella solo borra vínculos del propio miembro).
+Route::post('admin/support/{ticket}/release-device', [\App\Http\Controllers\Api\Admin\SupportController::class, 'releaseDevice']);
 
 // ── Story Live (CRM admin): historial + finalizar — Bloque 5 ────────────────
 Route::get('admin/lives',             [\App\Http\Controllers\Api\Admin\LiveController::class, 'index']);
