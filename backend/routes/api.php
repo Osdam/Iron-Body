@@ -112,6 +112,10 @@ Route::middleware('auth.admin')->get('/dashboard', function () {
 
 // Gestión de usuarios del CRM (PII de miembros): blindado para administración.
 Route::middleware('auth.admin')->group(function (): void {
+    // Vale de corta vida para abrir los streams SSE. Se pide con la cabecera
+    // Authorization, así que el token de sesión nunca viaja por la URL.
+    Route::get('admin/stream-ticket', [\App\Http\Controllers\Api\Admin\StreamTicketController::class, 'issue']);
+
     Route::get('users', [UserController::class, 'index']);
     Route::post('users', [UserController::class, 'store']);
     Route::get('users/{user}', [UserController::class, 'show']);

@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\Admin;
 use App\Services\Admin\AdminSessionService;
+use App\Services\Admin\StreamTicketService;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -44,13 +45,30 @@ class EnsureAdminAuth
     {
         $token = $request->bearerToken();
 
-        // El navegador NO puede enviar el header Authorization en recursos que
-        // carga directo: SSE (`EventSource`) e imágenes (`<img src>`). SOLO para
-        // esas rutas (streams y face-image) aceptamos el token por query
-        // (`?token=`); se limita para no normalizar tokens-en-URL en el resto.
+        // El navegador NO puede enviar la cabecera Authorization en recursos que
+        // carga directo: SSE (`EventSource`) e imágenes (`<img src>`). Para esas
+        // rutas se admite un VALE por query (`?ticket=`), nunca el token de
+        // sesión.
+        //
+        // Antes se aceptaba `?token=` con el token real, y nginx registra la
+        // línea de petición entera: quedaban en claro en access.log y en sus
+        // rotaciones, y quien pudiera leerlos tenía sesión de administrador.
+        // El vale caduca en minutos y sólo abre streams, así que filtrarlo ya
+        // no entrega la sesión. Ver StreamTicketService.
         if (! $token && ($request->is('*/stream') || $request->is('*/face-image/*'))) {
-            $queryToken = $request->query('token');
-            $token = is_string($queryToken) ? $queryToken : null;
+            $ticket = $request->query('ticket');
+            if (is_string($ticket) && $ticket !== '') {
+                $session = app(StreamTicketService::class)->resolve($ticket);
+                $admin = $session?->admin;
+                if ($session && $admin instanceof Admin && $admin->isActive()) {
+                    $request->attributes->set('auth_admin', $admin);
+                    $request->attributes->set('auth_admin_session', $session);
+
+                    return null;
+                }
+
+                return self::deny($request, 'admin_ticket_invalid', 'Vale de stream inválido o caducado.', 403);
+            }
         }
 
         if (! $token) {
