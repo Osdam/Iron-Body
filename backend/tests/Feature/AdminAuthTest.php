@@ -99,13 +99,32 @@ class AdminAuthTest extends TestCase
             ->assertJsonPath('code', 'admin_token_invalid');
     }
 
-    public function test_stream_acepta_token_de_sesion_por_query(): void
+    public function test_stream_ya_no_acepta_el_token_de_sesion_por_query(): void
     {
-        // EventSource no puede mandar header: las rutas /stream aceptan ?token=.
+        // Esta prueba afirmaba lo CONTRARIO: que `?token=` abría un stream,
+        // porque EventSource no puede mandar la cabecera Authorization. El
+        // precio era que nginx registraba la línea de petición entera y esos
+        // tokens quedaban en claro en access.log y en sus rotaciones; quien
+        // pudiera leerlos tenía sesión de administrador.
+        //
+        // Ahora esas rutas piden un VALE de corta vida (StreamTicketService).
+        // Se conserva el caso, invertido, para que quede constancia de que el
+        // token por query se retiró a propósito y no por descuido.
         $admin = $this->makeAdmin();
         $issued = app(AdminSessionService::class)->issueSession($admin);
 
         $request = Request::create('/api/admin/exercises/stream', 'GET', ['token' => $issued['token']]);
+
+        $this->assertNotNull(EnsureAdminAuth::challenge($request), 'el token de sesión no puede abrir un stream por la URL');
+    }
+
+    public function test_stream_acepta_un_vale_de_corta_vida(): void
+    {
+        $admin = $this->makeAdmin();
+        $issued = app(AdminSessionService::class)->issueSession($admin);
+        $ticket = app(\App\Services\Admin\StreamTicketService::class)->issue($issued['session'])['ticket'];
+
+        $request = Request::create('/api/admin/exercises/stream', 'GET', ['ticket' => $ticket]);
 
         $this->assertNull(EnsureAdminAuth::challenge($request)); // pasa (autenticado)
     }
