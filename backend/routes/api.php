@@ -1003,6 +1003,11 @@ Route::post('admin/products',             [ProductController::class, 'store'])
     ->middleware('admin.can:inventory.create');
 Route::match(['put', 'patch'], 'admin/products/{product}', [ProductController::class, 'update'])
     ->whereNumber('product')->middleware('admin.can:inventory.edit');
+// Imagen del producto para la tienda de la app.
+Route::post('admin/products/{product}/image', [ProductController::class, 'uploadImage'])
+    ->whereNumber('product')->middleware('admin.can:inventory.edit');
+Route::delete('admin/products/{product}/image', [ProductController::class, 'deleteImage'])
+    ->whereNumber('product')->middleware('admin.can:inventory.edit');
 // Publicar/retirar de la tienda. Ruta propia: cambia UNA columna y nada más.
 Route::patch('admin/products/{product}/visibility', [ProductController::class, 'setVisibility'])
     ->whereNumber('product')->middleware('admin.can:inventory.edit');

@@ -141,11 +141,31 @@ class Product extends Model
     }
 
     /** Forma para la tienda de la app (sin datos de costo/proveedor). */
+    /**
+     * Disponibilidad tal y como debe verla la app.
+     *
+     * La decide el SERVIDOR a partir de `stock` y `min_stock`; `min_stock` es
+     * un dato interno de reposición y no se expone. Así la app no tiene que
+     * reimplementar la regla —ni podría, porque le falta la mitad de la
+     * información— y todos los clientes dicen lo mismo.
+     */
+    public function getAvailabilityAttribute(): string
+    {
+        return match ($this->stock_status) {
+            'out' => 'out_of_stock',
+            'low' => 'low',
+            default => 'in_stock',
+        };
+    }
+
     public function toStoreArray(): array
     {
         return [
             'id' => $this->id,
             'uuid' => $this->uuid,
+            // Identificador estable de cara al gimnasio: es el que aparece en
+            // el CRM y en el sistema anterior.
+            'sku' => $this->sku,
             'name' => $this->name,
             'category' => $this->category,
             'description' => $this->description,
@@ -153,6 +173,11 @@ class Product extends Model
             'price' => (float) $this->sale_price,
             'stock' => $this->stock,
             'available' => $this->stock > 0,
+            // Aditivo: la app publicada ignora lo que no conoce.
+            'availability' => $this->availability,
+            // Permite al cliente descartar respuestas viejas y deduplicar tras
+            // una resincronización.
+            'updated_at' => $this->updated_at?->toIso8601String(),
         ];
     }
 }

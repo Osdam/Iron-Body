@@ -12,6 +12,7 @@ use App\Services\Inventory\InventoryService;
 use App\Support\Access\AdminActor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Catálogo de productos (CRM). Fuente única que también alimenta la Tienda de
@@ -293,6 +294,94 @@ class ProductController extends Controller
         $product->update(['visible_in_app' => $data['visible']]);
 
         return response()->json(['data' => $product->fresh()]);
+    }
+
+    /**
+     * POST admin/products/{product}/image — imagen del producto para la tienda.
+     *
+     * Va al disco `public`, que es el que ya usa el proyecto para material
+     * servido por HTTPS (`exercises/videos/…`, `iron-ai/…`) y tiene su enlace
+     * simbólico puesto. No se añade proveedor nuevo: Firebase Storage sirve el
+     * contenido de socios y necesita sesión Firebase, que el CRM no tiene.
+     *
+     * Al reemplazar se borra el fichero anterior: si no, cada edición dejaría
+     * un huérfano en disco para siempre.
+     */
+    public function uploadImage(Request $request, Product $product): JsonResponse
+    {
+        $request->validate([
+            'image' => [
+                'required', 'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:4096',                       // 4 MB
+                'dimensions:min_width=200,min_height=200,max_width=4000,max_height=4000',
+            ],
+        ]);
+
+        $anterior = $this->relativeImagePath($product);
+
+        // Nombre derivado del uuid: no se confía en el nombre que trae el
+        // fichero (recorridos de ruta, extensiones dobles, caracteres raros).
+        $ext = strtolower($request->file('image')->extension());
+        $path = $request->file('image')->storeAs('products', "{$product->uuid}.{$ext}", 'public');
+
+        $product->update(['image_url' => $this->absoluteUrl($path)]);
+
+        if ($anterior !== null && $anterior !== $path) {
+            Storage::disk('public')->delete($anterior);
+        }
+
+        return response()->json(['data' => $product->fresh()]);
+    }
+
+    /** DELETE admin/products/{product}/image — retira la imagen. */
+    public function deleteImage(Product $product): JsonResponse
+    {
+        $path = $this->relativeImagePath($product);
+        if ($path !== null) {
+            Storage::disk('public')->delete($path);
+        }
+        $product->update(['image_url' => null]);
+
+        return response()->json(['data' => $product->fresh()]);
+    }
+
+    /**
+     * URL absoluta del objeto en el disco público.
+     *
+     * `Storage::url()` devuelve una ruta relativa si el disco no tiene `url`
+     * configurada, y la app necesita una absoluta: una ruta suelta apuntaría al
+     * host de la app, no al de la API. Se normaliza aquí en vez de dar por
+     * hecho que la configuración es correcta.
+     */
+    private function absoluteUrl(string $path): string
+    {
+        $url = Storage::disk('public')->url($path);
+
+        return str_starts_with($url, 'http') ? $url : url($url);
+    }
+
+    /**
+     * Ruta relativa dentro del disco público, o null si la imagen no vive ahí.
+     *
+     * `image_url` guarda una URL absoluta y puede apuntar a cualquier sitio
+     * (una imagen externa cargada a mano, por ejemplo). Sólo se borra del disco
+     * lo que realmente está en el disco.
+     */
+    private function relativeImagePath(Product $product): ?string
+    {
+        $url = (string) $product->image_url;
+        if ($url === '') {
+            return null;
+        }
+        foreach ([$this->absoluteUrl(''), Storage::disk('public')->url('')] as $base) {
+            $base = rtrim($base, '/').'/';
+            if ($base !== '/' && str_starts_with($url, $base)) {
+                return substr($url, strlen($base));
+            }
+        }
+
+        return null;
     }
 
     private function validatePayload(Request $request, ?int $ignoreId = null): array
