@@ -9,6 +9,7 @@ use App\Models\Admin;
 use App\Models\InventoryMovement;
 use App\Models\Product;
 use App\Models\ProductSale;
+use App\Services\CatalogEvents;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
@@ -187,6 +188,12 @@ class InventoryService
         }
 
         $locked->forceFill(['stock' => $after])->save();
+
+        // Único punto por el que pasa TODO cambio de stock —entradas, salidas,
+        // ajustes y ventas de Caja—, así que es el único sitio donde hay que
+        // avisar. El aviso sale después del commit: si la venta se deshace, el
+        // stock nunca cambió y nadie debe enterarse de lo contrario.
+        CatalogEvents::productChanged((int) $locked->getKey(), ['stock']);
 
         $movement = InventoryMovement::create([
             'product_id' => $locked->id,

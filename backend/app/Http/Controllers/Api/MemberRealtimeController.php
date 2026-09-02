@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\CatalogEvent;
 use App\Models\Member;
 use App\Models\MemberRealtimeEvent;
 use App\Services\RealtimeEvents;
@@ -38,7 +39,16 @@ class MemberRealtimeController extends Controller
 
         $memberId = (int) $member->id;
 
-        return SseStream::response(function () use ($memberId, &$cursor): void {
+        // Canal GLOBAL de catálogo, multiplexado en esta misma conexión. Tiene
+        // su propio cursor porque son dos secuencias de id independientes:
+        // mezclarlas en `Last-Event-ID` haría que un evento personal tapara uno
+        // de catálogo, o al revés. Y va aquí, y no en una segunda conexión SSE,
+        // porque el teléfono ya mantiene ésta abierta.
+        $catalogCursor = $request->filled('after_catalog_id')
+            ? (int) $request->query('after_catalog_id')
+            : (int) (CatalogEvent::max('id') ?? 0);
+
+        return SseStream::response(function () use ($memberId, &$cursor, &$catalogCursor): void {
             $items = MemberRealtimeEvent::query()
                 ->where('member_id', $memberId)
                 ->where('id', '>', $cursor)
@@ -55,6 +65,26 @@ class MemberRealtimeController extends Controller
                     'timestamp' => $e->created_at?->toIso8601String(),
                 ], $e->id);
                 $cursor = (int) $e->id;
+            }
+
+            // Catálogo: mismo patrón, pero sin destinatario. El id lleva prefijo
+            // `c` para que el cliente sepa a qué cursor pertenece.
+            $catalog = CatalogEvent::query()
+                ->where('id', '>', $catalogCursor)
+                ->orderBy('id')
+                ->limit(50)
+                ->get();
+
+            foreach ($catalog as $e) {
+                SseStream::emit('catalog', [
+                    'type' => $e->type,
+                    'product_id' => $e->product_id,
+                    'changed' => $e->changed ?? [],
+                    'version' => (string) $e->version,
+                    'event_id' => (int) $e->id,
+                    'timestamp' => $e->created_at?->toIso8601String(),
+                ], 'c'.$e->id);
+                $catalogCursor = (int) $e->id;
             }
         }, 25, 1500); // tick 1.5s durante ~25s; el cliente reconecta solo.
     }

@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\InventoryMovement;
 use App\Models\Product;
 use App\Models\ProductSaleItem;
+use App\Services\CatalogEvents;
 use App\Services\Inventory\InventoryService;
 use App\Support\Access\AdminActor;
 use Illuminate\Http\JsonResponse;
@@ -118,7 +119,19 @@ class ProductController extends Controller
             : null;
         unset($data['stock']);
 
-        $product->update($data);
+        // Qué cambió de verdad, para que el cliente sepa si le afecta. El
+        // `fill` va ANTES de leer `getDirty()`: antes de rellenar el modelo no
+        // hay nada sucio y el aviso no salía nunca. El stock no entra aquí, lo
+        // avisa InventoryService, que es quien lo mueve.
+        $product->fill($data);
+        $tocados = array_values(array_intersect(
+            array_keys($product->getDirty()),
+            ['name', 'category', 'description', 'sale_price', 'image_url', 'visible_in_app', 'active', 'sku'],
+        ));
+        $product->save();
+        if ($tocados !== []) {
+            CatalogEvents::productChanged((int) $product->id, $tocados);
+        }
 
         if ($requestedStock !== null && $requestedStock !== (int) $product->stock) {
             $delta = $requestedStock - (int) $product->stock;
@@ -292,6 +305,7 @@ class ProductController extends Controller
         ]);
 
         $product->update(['visible_in_app' => $data['visible']]);
+        CatalogEvents::productChanged((int) $product->id, ['visibility']);
 
         return response()->json(['data' => $product->fresh()]);
     }
@@ -330,6 +344,7 @@ class ProductController extends Controller
         if ($anterior !== null && $anterior !== $path) {
             Storage::disk('public')->delete($anterior);
         }
+        CatalogEvents::productChanged((int) $product->id, ['image']);
 
         return response()->json(['data' => $product->fresh()]);
     }
@@ -342,6 +357,7 @@ class ProductController extends Controller
             Storage::disk('public')->delete($path);
         }
         $product->update(['image_url' => null]);
+        CatalogEvents::productChanged((int) $product->id, ['image']);
 
         return response()->json(['data' => $product->fresh()]);
     }
