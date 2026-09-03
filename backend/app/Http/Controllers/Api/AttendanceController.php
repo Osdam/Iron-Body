@@ -62,7 +62,7 @@ class AttendanceController extends Controller
         $data = $request->validate([
             'user_id' => ['required', 'integer', 'exists:users,id'],
             'action' => ['nullable', 'in:entry,exit'],
-            'source' => ['nullable', 'in:facial,manual'],
+            'source' => ['nullable', 'in:facial,manual,auto-close'],
             'confidence' => ['nullable', 'numeric', 'min:0', 'max:1'],
             'note' => ['nullable', 'string', 'max:255'],
         ]);
@@ -73,6 +73,30 @@ class AttendanceController extends Controller
 
             $action = $data['action'] ?? $this->nextActionFor($user->id);
             $source = $data['source'] ?? 'manual';
+
+            // Un cierre automático de jornada solo tiene sentido sobre alguien
+            // que sigue dentro. El cliente reintenta hasta que le respondemos
+            // que sí, así que sin esto la primera reconexión con un backlog de
+            // días inventaría una salida por cada reintento. Se responde 200
+            // para que dé el registro por entregado y siga con el siguiente.
+            if ($source === 'auto-close') {
+                $ultima = Attendance::query()
+                    ->where('user_id', $user->id)
+                    ->orderByDesc('captured_at')
+                    ->first();
+
+                if (! $ultima || $ultima->action !== 'entry') {
+                    return response()->json([
+                        'ok' => true,
+                        'deduplicated' => true,
+                        'attendance' => $ultima ? $this->serialize($ultima) : null,
+                    ]);
+                }
+
+                // Cerrar la jornada es salir. Lo que diga el cliente en `action`
+                // no puede convertir un cierre en una entrada.
+                $action = 'exit';
+            }
 
             // Anti-doble-marcado para lectura facial: evita re-registrar la
             // misma acción si ocurrió hace menos de 60 segundos.
