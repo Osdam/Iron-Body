@@ -204,7 +204,10 @@ final class AuthorizationMap
         'POST api/admin/devices/{deviceId}/release' => 'support.manage',
 
         // Paneles de inicio: agregados de negocio, no un dominio propio.
-        'GET api/dashboard' => 'reports.view',
+        // Devuelve solo los contadores que el actor ya puede ver por su cuenta,
+        // y `revenue` únicamente con `reports.view`. Exigir ese permiso en la
+        // puerta dejaba a recepción sin pantalla de inicio. Ver routes/api.php.
+        'GET api/dashboard' => self::SELF,
         'GET api/reports/stats' => 'reports.view',
         'GET api/admin/reports/overview' => 'reports.view',
         // Cotizar es un cálculo fiscal previo a cobrar: pertenece a facturación.

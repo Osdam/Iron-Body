@@ -61,6 +61,7 @@ use App\Http\Controllers\Api\DeviceTokenController;
 use App\Http\Controllers\Api\NotificationPreferenceController;
 use App\Http\Controllers\Crm\NotificationController as AdminNotificationController;
 use App\Models\Member;
+use Illuminate\Http\Request;
 use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\User;
@@ -99,15 +100,36 @@ Route::prefix('admin/auth')->group(function (): void {
     });
 });
 
-// Dashboard del CRM (conteos/ingresos agregados) — solo administración.
-Route::middleware('auth.admin')->get('/dashboard', function () {
-    return response()->json([
-        'users' => User::count(),
-        'active_plans' => Plan::where('active', true)->count(),
-        'payments' => Payment::count(),
-        'revenue' => (float) Payment::where('status', 'paid')->sum('amount'),
-        'classes' => MyClass::where('status', 'active')->count(),
-    ]);
+/*
+ * Dashboard del CRM: los contadores que CADA administrador tiene derecho a ver.
+ *
+ * Antes devolvía las cinco cifras a quien tuviera `reports.view`, y como es la
+ * pantalla de inicio, recepción recibía un 403 nada más entrar y se quedaba sin
+ * portada. Darle `reports.view` habría sido peor: ese permiso abre además los
+ * informes y el detalle de ingresos.
+ *
+ * Así que se acota la RESPUESTA en vez de la puerta. Cada cifra se devuelve solo
+ * si quien pregunta ya puede ver ese dominio —los cuatro contadores no dicen
+ * nada que recepción no obtenga listando socios, planes, pagos o clases—, y
+ * `revenue`, que es la facturación histórica del negocio, sigue exigiendo
+ * `reports.view`. Un campo ausente no es un cero: el CRM no pinta esa tarjeta.
+ */
+Route::middleware('auth.admin')->get('/dashboard', function (Request $request) {
+    $admin = \App\Support\Access\AdminActor::from($request);
+    $puede = fn (string $permiso): bool => $admin !== null
+        && \App\Support\Access\CrmPermission::allows($admin, $permiso);
+
+    $cifras = [
+        'users' => $puede('members.view') ? User::count() : null,
+        'active_plans' => $puede('plans.view') ? Plan::where('active', true)->count() : null,
+        'payments' => $puede('payments.view') ? Payment::count() : null,
+        'revenue' => $puede('reports.view') ? (float) Payment::where('status', 'paid')->sum('amount') : null,
+        'classes' => $puede('classes.view') ? MyClass::where('status', 'active')->count() : null,
+    ];
+
+    // Se filtra por `!== null` y no por vacío: un contador en cero es un dato
+    // legítimo y debe llegar, mientras que ausente significa "no te compete".
+    return response()->json(array_filter($cifras, static fn ($v) => $v !== null));
 });
 
 // Gestión de usuarios del CRM (PII de miembros): blindado para administración.
