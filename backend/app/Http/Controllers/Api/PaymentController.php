@@ -10,6 +10,8 @@ use App\Services\Caja\CashShiftService;
 use App\Support\Caja\PaymentOrigin;
 use App\Models\AuditLog;
 use App\Models\Payment;
+use App\Services\Audit\FinancialAudit;
+use App\Support\Access\AdminActor;
 use App\Models\Plan;
 use App\Models\User;
 use App\Rules\DeliverableInvoiceEmail;
@@ -21,6 +23,7 @@ use App\Services\Billing\PricingException;
 use App\Services\Billing\PricingService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -226,7 +229,7 @@ class PaymentController extends Controller
         // payload: si el cliente pudiera elegirlo, podría mandar su cobro a un
         // turno ajeno o a ninguno.
         unset($data['cash_shift_id']);
-        $origen = PaymentOrigin::forCrmRequest(\App\Support\Access\AdminActor::from($request));
+        $origen = PaymentOrigin::forCrmRequest(AdminActor::from($request));
         if ($origen->requiresOpenGymShift()) {
             try {
                 $data['cash_shift_id'] = app(CashShiftService::class)
@@ -240,7 +243,16 @@ class PaymentController extends Controller
             }
         }
 
-        $payment = Payment::create($data);
+        // Creación y traza en la MISMA transacción. Sueltas, un fallo entre
+        // ambas dejaría un cobro sin constancia de quién lo registró, que es
+        // justo lo que este trabajo corrige.
+        $actor = AdminActor::from($request);
+        $payment = DB::transaction(function () use ($data, $actor, $request) {
+            $cobro = Payment::create($data);
+            app(FinancialAudit::class)->paymentCreated($cobro, $actor, $request);
+
+            return $cobro;
+        });
 
         if ($override) {
             $this->auditAmountOverride($payment, $reason, $request);
@@ -287,7 +299,15 @@ class PaymentController extends Controller
             $data['paid_at'] = now();
         }
 
-        $payment->update($data);
+        // El estado ANTERIOR, antes de tocarlo: sin él la traza diría a qué
+        // quedó el cobro pero no de dónde venía, y el salto es el dato.
+        $estadoPrevio = $payment->status;
+
+        $actor = AdminActor::from($request);
+        DB::transaction(function () use ($payment, $data, $estadoPrevio, $actor, $request) {
+            $payment->update($data);
+            app(FinancialAudit::class)->paymentUpdated($payment, $estadoPrevio, $actor, $request);
+        });
 
         if ($invoiceRequest['requested']) {
             $payment->marcarFacturaSolicitada($invoiceRequest['email']);
@@ -406,16 +426,19 @@ class PaymentController extends Controller
     private function auditAmountOverride(Payment $payment, ?string $reason, Request $request): void
     {
         try {
-            // `actor_name` es NOT NULL con default: se omite si no hay usuario
-            // en sesión (por ejemplo, acceso por token de servicio).
+            // `actor_name` es NOT NULL con default: se omite si no hay una
+            // persona detrás (por ejemplo, el token de automatizaciones).
             AuditLog::create(array_filter([
                 'action' => 'update',
                 'module' => 'payments',
                 'entity' => 'payment',
                 'entity_id' => (string) $payment->id,
                 'target_name' => $payment->reference,
-                'actor_id' => optional($request->user())->id,
-                'actor_name' => optional($request->user())->name,
+                // `$request->user()` está VACÍO en las rutas del CRM, así que
+                // esta traza se guardaba sin responsable: decía que alguien
+                // forzó un importe, no quién. Ver AdminActor.
+                'actor_id' => AdminActor::id($request),
+                'actor_name' => AdminActor::name($request),
                 'summary' => 'Importe manual distinto al cotizado por el plan',
                 'metadata' => [
                     'amount' => (float) $payment->amount,

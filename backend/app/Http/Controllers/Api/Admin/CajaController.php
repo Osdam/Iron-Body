@@ -17,6 +17,7 @@ use App\Services\Billing\PricingService;
 use App\Enums\CashShiftType;
 use App\Services\Caja\CashShiftService;
 use App\Services\Inventory\InventoryService;
+use App\Services\Audit\FinancialAudit;
 use App\Support\Access\AdminActor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -181,7 +182,16 @@ class CajaController extends Controller
         }
 
         try {
-            $sale = DB::transaction(fn () => $this->buildSale($data, $request, $shift));
+            $sale = DB::transaction(function () use ($data, $request, $shift) {
+                $venta = $this->buildSale($data, $request, $shift);
+
+                // La traza se escribe AQUÍ, no en una segunda petición del
+                // navegador: si la venta se deshace, la auditoría se deshace
+                // con ella, y si la venta queda, su traza también.
+                app(FinancialAudit::class)->saleCreated($venta, AdminActor::from($request), $request);
+
+                return $venta;
+            });
         } catch (PricingException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
