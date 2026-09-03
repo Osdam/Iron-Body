@@ -48,6 +48,9 @@ class InvoiceRequestApiTest extends TestCase
         parent::setUp();
         // Cobrar exige turno de caja abierto.
         $this->openCashShift();
+        // Cobrar una membresía desde el CRM es una operación de mostrador: exige
+        // la caja del gimnasio abierta, igual que vender exige la de productos.
+        $this->openCashShift(null, \App\Enums\CashShiftType::GYM);
         Http::preventStrayRequests();
         Queue::fake();
         config(['billing.enabled' => false]);

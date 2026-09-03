@@ -81,13 +81,15 @@ class CashShiftTest extends TestCase
         $headers = $this->actingAsAdmin($ana);
         $p = $this->product();
 
-        $this->postJson('/api/admin/caja/shift/open', ['opening_amount' => 100000], $headers)
+        $this->postJson('/api/admin/caja/shift/open', [], $headers)
             ->assertStatus(201)
-            ->assertJsonPath('data.status', 'open')
-            ->assertJsonPath('data.opened_by_name', 'Ana')
-            ->assertJsonPath('data.opening_amount', 100000);
+            ->assertJsonPath('results.products.result', 'opened')
+            ->assertJsonPath('results.products.shift.status', 'open')
+            ->assertJsonPath('results.products.shift.opened_by_name', 'Ana')
+            // Política `zero`: el turno abre contablemente en 0, sin pedir nada.
+            ->assertJsonPath('results.products.shift.opening_amount', 0);
 
-        $shift = CashShift::current();
+        $shift = CashShift::currentOfType(\App\Enums\CashShiftType::PRODUCTS);
         $this->sell($headers, $p, 2)->assertStatus(201);
 
         $sale = ProductSale::first();
@@ -108,20 +110,47 @@ class CashShiftTest extends TestCase
         $headers = $this->actingAsAdmin($this->admin(name: 'Ana'));
         $p = $this->product();
 
-        $this->postJson('/api/admin/caja/shift/open', ['opening_amount' => 100000], $headers)->assertStatus(201);
+        $this->postJson('/api/admin/caja/shift/open', [], $headers)->assertStatus(201);
         $this->sell($headers, $p, 2)->assertStatus(201);   // 2 × 3000 = 6000 en efectivo
 
-        // Se cuenta 1.000 de menos: la diferencia debe quedar registrada.
         $res = $this->postJson('/api/admin/caja/shift/close', [
-            'counted_amount' => 105000,
-            'notes' => 'Falta un billete',
+            'note' => 'Turno tranquilo',
         ], $headers)->assertOk();
 
-        $this->assertEqualsWithDelta(6000.0, $res->json('data.cash_sales_total'), 0.001);
-        $this->assertEqualsWithDelta(106000.0, $res->json('data.expected_amount'), 0.001, '100.000 inicial + 6.000 en efectivo');
-        $this->assertEqualsWithDelta(105000.0, $res->json('data.counted_amount'), 0.001);
+        $shift = $res->json('results.products.shift');
+        $this->assertEqualsWithDelta(6000.0, $shift['cash_total'], 0.001);
+        $this->assertEqualsWithDelta(6000.0, $shift['gross_total'], 0.001);
+        // Apertura 0 + 6.000 en efectivo. Nadie contó billetes, así que el
+        // arqueo físico queda pendiente y sin inventar.
+        $this->assertEqualsWithDelta(6000.0, $shift['expected_cash'], 0.001);
+        $this->assertNull($shift['counted_amount'], 'el cierre cotidiano no cuenta efectivo');
+        $this->assertNull($shift['difference'], 'sin conteo no hay diferencia que declarar');
+        $this->assertSame('closed', $shift['status']);
+        $this->assertStringContainsString('Cierre automático', $shift['auto_observation']);
+    }
+
+    public function test_el_arqueo_fisico_es_una_accion_aparte(): void
+    {
+        $ana = $this->admin(Admin::ROLE_ADMINISTRADOR, 'Ana');
+        $headers = $this->actingAsAdmin($ana);
+        $p = $this->product();
+
+        $this->postJson('/api/admin/caja/shift/open', [], $headers)->assertStatus(201);
+        $this->sell($headers, $p, 2)->assertStatus(201);
+        $this->postJson('/api/admin/caja/shift/close', [], $headers)->assertOk();
+
+        $shift = CashShift::latest('id')->first();
+
+        // Se contaron 1.000 de menos: la diferencia queda con signo.
+        $res = $this->postJson("/api/admin/caja/shifts/{$shift->id}/difference", [
+            'counted_amount' => 5000,
+            'reason' => 'Arqueo de cierre de jornada',
+        ], $headers)->assertOk();
+
+        $this->assertEqualsWithDelta(5000.0, $res->json('data.counted_amount'), 0.001);
         $this->assertEqualsWithDelta(-1000.0, $res->json('data.difference'), 0.001, 'negativo = falta dinero');
-        $this->assertSame('closed', $res->json('data.status'));
+        // El esperado NO se recalcula: es el que se congeló al cerrar.
+        $this->assertEqualsWithDelta(6000.0, $res->json('data.expected_cash'), 0.001);
     }
 
     public function test_el_arqueo_solo_cuenta_el_efectivo(): void
@@ -131,19 +160,20 @@ class CashShiftTest extends TestCase
         $headers = $this->actingAsAdmin($this->admin());
         $p = $this->product();
 
-        $this->postJson('/api/admin/caja/shift/open', ['opening_amount' => 50000], $headers)->assertStatus(201);
+        $this->postJson('/api/admin/caja/shift/open', [], $headers)->assertStatus(201);
         $this->sell($headers, $p, 1)->assertStatus(201);
         $this->postJson('/api/admin/caja/sales', [
             'items' => [['product_id' => $p->id, 'quantity' => 1]],
             'payment_method' => 'card', 'paid' => true,
         ], $headers)->assertStatus(201);
 
-        $res = $this->postJson('/api/admin/caja/shift/close', ['counted_amount' => 53000], $headers)->assertOk();
+        $res = $this->postJson('/api/admin/caja/shift/close', [], $headers)->assertOk();
+        $shift = $res->json('results.products.shift');
 
-        $this->assertEqualsWithDelta(6000.0, $res->json('data.sales_total'), 0.001, 'total cobrado incluye la tarjeta');
-        $this->assertEqualsWithDelta(3000.0, $res->json('data.cash_sales_total'), 0.001, 'pero el arqueo solo el efectivo');
-        $this->assertEqualsWithDelta(53000.0, $res->json('data.expected_amount'), 0.001);
-        $this->assertEqualsWithDelta(0.0, $res->json('data.difference'), 0.001, 'cuadra');
+        $this->assertEqualsWithDelta(6000.0, $shift['gross_total'], 0.001, 'total cobrado incluye la tarjeta');
+        $this->assertEqualsWithDelta(3000.0, $shift['cash_total'], 0.001, 'pero el arqueo solo el efectivo');
+        $this->assertEqualsWithDelta(3000.0, $shift['card_total'], 0.001, 'la tarjeta se desglosa aparte');
+        $this->assertEqualsWithDelta(3000.0, $shift['expected_cash'], 0.001, 'apertura 0 + solo el efectivo');
     }
 
     // ── CASO 8, 9 · relevo de empleado ──────────────────────────────────────
@@ -155,12 +185,12 @@ class CashShiftTest extends TestCase
         $p = $this->product();
 
         $ah = $this->actingAsAdmin($ana);
-        $this->postJson('/api/admin/caja/shift/open', ['opening_amount' => 100000], $ah)->assertStatus(201);
+        $this->postJson('/api/admin/caja/shift/open', [], $ah)->assertStatus(201);
         $this->sell($ah, $p, 1)->assertStatus(201);
-        $this->postJson('/api/admin/caja/shift/close', ['counted_amount' => 103000], $ah)->assertOk();
+        $this->postJson('/api/admin/caja/shift/close', [], $ah)->assertOk();
 
         $bh = $this->actingAsAdmin($beto);
-        $this->postJson('/api/admin/caja/shift/open', ['opening_amount' => 20000], $bh)->assertStatus(201);
+        $this->postJson('/api/admin/caja/shift/open', [], $bh)->assertStatus(201);
         $this->sell($bh, $p, 1)->assertStatus(201);
 
         $this->assertSame(2, CashShift::count());
@@ -177,12 +207,13 @@ class CashShiftTest extends TestCase
     public function test_no_se_pueden_abrir_dos_turnos_a_la_vez(): void
     {
         $ah = $this->actingAsAdmin($this->admin(name: 'Ana'));
-        $this->postJson('/api/admin/caja/shift/open', ['opening_amount' => 100000], $ah)->assertStatus(201);
+        $this->postJson('/api/admin/caja/shift/open', [], $ah)->assertStatus(201);
 
-        $this->postJson('/api/admin/caja/shift/open', ['opening_amount' => 50000],
+        $this->postJson('/api/admin/caja/shift/open', [],
             $this->actingAsAdmin($this->admin(name: 'Beto')))
-            ->assertStatus(409)
-            ->assertJsonPath('code', 'shift_already_open');
+            ->assertStatus(207)
+            ->assertJsonPath('ok', false)
+            ->assertJsonPath('results.products.result', 'already_open');
 
         $this->assertSame(1, CashShift::count());
     }
@@ -192,45 +223,74 @@ class CashShiftTest extends TestCase
     public function test_caso_11_recepcion_no_puede_cerrar_el_turno_de_otro(): void
     {
         $ah = $this->actingAsAdmin($this->admin(name: 'Ana'));
-        $this->postJson('/api/admin/caja/shift/open', ['opening_amount' => 100000], $ah)->assertStatus(201);
+        $this->postJson('/api/admin/caja/shift/open', [], $ah)->assertStatus(201);
 
-        // Recepción tiene caja.sell pero no caja.manage.
-        $this->postJson('/api/admin/caja/shift/close', ['counted_amount' => 100000],
+        // Recepción puede operar la caja, pero no supervisar (cash.products.manage).
+        $this->postJson('/api/admin/caja/shift/close', [],
             $this->actingAsAdmin($this->admin(name: 'Beto')))
-            ->assertStatus(403)
-            ->assertJsonPath('required_permission', 'caja.manage');
+            ->assertStatus(207)
+            ->assertJsonPath('ok', false)
+            ->assertJsonPath('results.products.result', 'error');
 
-        $this->assertTrue(CashShift::current()->isOpen(), 'el turno sigue abierto');
+        $this->assertTrue(
+            CashShift::currentOfType(\App\Enums\CashShiftType::PRODUCTS)->isOpen(),
+            'el turno sigue abierto',
+        );
     }
 
     public function test_el_cierre_forzado_exige_motivo_y_queda_marcado(): void
     {
         $ah = $this->actingAsAdmin($this->admin(name: 'Ana'));
-        $this->postJson('/api/admin/caja/shift/open', ['opening_amount' => 100000], $ah)->assertStatus(201);
+        $this->postJson('/api/admin/caja/shift/open', [], $ah)->assertStatus(201);
 
         $super = $this->actingAsAdmin($this->admin(Admin::ROLE_SUPER_ADMIN, 'Super'));
 
-        $this->postJson('/api/admin/caja/shift/close', ['counted_amount' => 100000], $super)
-            ->assertStatus(422)
-            ->assertJsonPath('code', 'forced_reason_required');
+        // Supervisar no exime de explicarse.
+        $this->postJson('/api/admin/caja/shift/close', [], $super)
+            ->assertStatus(207)
+            ->assertJsonPath('results.products.result', 'error')
+            ->assertJsonPath('results.products.message', 'Cerrar el turno de otra persona exige indicar el motivo.');
 
         $res = $this->postJson('/api/admin/caja/shift/close', [
-            'counted_amount' => 100000,
             'forced_reason' => 'La cajera se fue sin cerrar el turno',
         ], $super)->assertOk();
 
-        $this->assertTrue($res->json('data.forced'));
-        $this->assertSame('Super', $res->json('data.closed_by_name'));
+        $this->assertTrue($res->json('results.products.shift.forced'));
+        $this->assertSame('Super', $res->json('results.products.shift.closed_by_name'));
     }
 
     // ── CASO 10 · permisos ──────────────────────────────────────────────────
 
     public function test_caso_10_sin_caja_sell_no_se_abre_turno(): void
     {
-        $this->postJson('/api/admin/caja/shift/open', ['opening_amount' => 100000],
+        $this->postJson('/api/admin/caja/shift/open', [],
             $this->actingAsAdmin($this->admin(Admin::ROLE_ADMINISTRATIVO)))
+            // Administrativo no tiene NINGÚN permiso de caja, así que lo frena
+            // el middleware de la ruta antes de llegar al orquestador.
             ->assertStatus(403)
-            ->assertJsonPath('required_permission', 'caja.sell');
+            ->assertJsonPath('required_permission', 'cash.products.view');
+
+        $this->assertSame(0, CashShift::count());
+    }
+
+    public function test_quien_solo_ve_la_caja_no_puede_abrirla(): void
+    {
+        // Un rol con `view` pero sin `operate` pasa el middleware de la ruta y
+        // lo detiene el orquestador, que es quien comprueba caja por caja.
+        $mirón = $this->admin(Admin::ROLE_ADMINISTRATIVO, 'Mirón');
+        \App\Models\RolePermission::create([
+            'role' => Admin::ROLE_ADMINISTRATIVO,
+            'permission' => 'cash.products.view',
+            'granted' => true,
+        ]);
+        app(\App\Support\Access\RolePermissionPolicy::class)->flush();
+
+        $this->postJson('/api/admin/caja/shift/open', [], $this->actingAsAdmin($mirón))
+            ->assertStatus(207)
+            ->assertJsonPath('ok', false)
+            ->assertJsonPath('results.products.result', 'forbidden');
+
+        $this->assertSame(0, CashShift::count());
     }
 
     public function test_el_token_compartido_no_abre_caja(): void
@@ -238,7 +298,7 @@ class CashShiftTest extends TestCase
         // Un turno necesita un responsable con nombre; un secreto estático no lo es.
         config(['admin.api_token' => 'token-de-automatizacion']);
 
-        $this->postJson('/api/admin/caja/shift/open', ['opening_amount' => 100000],
+        $this->postJson('/api/admin/caja/shift/open', [],
             ['Authorization' => 'Bearer token-de-automatizacion'])
             ->assertStatus(403);
     }
@@ -249,8 +309,8 @@ class CashShiftTest extends TestCase
     {
         for ($i = 0; $i < 3; $i++) {
             $h = $this->actingAsAdmin($this->admin(name: "Emp{$i}"));
-            $this->postJson('/api/admin/caja/shift/open', ['opening_amount' => 1000 * $i], $h)->assertStatus(201);
-            $this->postJson('/api/admin/caja/shift/close', ['counted_amount' => 1000 * $i], $h)->assertOk();
+            $this->postJson('/api/admin/caja/shift/open', [], $h)->assertStatus(201);
+            $this->postJson('/api/admin/caja/shift/close', [], $h)->assertOk();
         }
 
         $res = $this->getJson('/api/admin/caja/shifts?per_page=2', $this->actingAsAdmin($this->admin()))->assertOk();

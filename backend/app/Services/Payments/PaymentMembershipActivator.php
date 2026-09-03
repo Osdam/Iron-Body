@@ -59,6 +59,13 @@ class PaymentMembershipActivator
                     'method' => $method,
                     'status' => 'paid',
                     'paid_at' => $tx->paid_at ?? now(),
+                    // SIN cash_shift_id, deliberadamente. Este es el origen
+                    // GATEWAY (ver App\Support\Caja\PaymentOrigin): lo dispara
+                    // un webhook, sin nadie presente y a cualquier hora. Atarlo
+                    // a una caja física haría que un pago legítimo dependiera de
+                    // que alguien hubiera abierto el turno, y ensuciaría un
+                    // arqueo de billetes con dinero que nunca pasó por el cajón.
+                    'cash_shift_id' => null,
                 ], self::snapshotFromTransaction($tx))
             );
             if ($payment->wasRecentlyCreated && $tx->plan_id) {

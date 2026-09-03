@@ -36,6 +36,18 @@ class CashShiftException extends RuntimeException
         );
     }
 
+    /**
+     * Cerrar el turno de otra persona sin explicar por qué. Un cierre forzado
+     * sin motivo es un descuadre sin responsable.
+     */
+    public static function forcedReasonRequired(): self
+    {
+        return new self(
+            'Cerrar el turno de otra persona exige indicar el motivo.',
+            'forced_reason_required',
+        );
+    }
+
     public static function notOwner(): self
     {
         return new self(

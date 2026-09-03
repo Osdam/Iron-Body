@@ -84,8 +84,10 @@ abstract class TestCase extends BaseTestCase
      * Cobrar exige turno abierto desde que Caja lleva arqueo: sin esto, toda
      * prueba que registre una venta recibiría 409. Devuelve el turno.
      */
-    protected function openCashShift(?Admin $admin = null): \App\Models\CashShift
-    {
+    protected function openCashShift(
+        ?Admin $admin = null,
+        \App\Enums\CashShiftType $type = \App\Enums\CashShiftType::PRODUCTS,
+    ): \App\Models\CashShift {
         $admin ??= Admin::create([
             'name' => 'Cajero de pruebas',
             'email' => 'cajero-'.uniqid().'@ironbody.test',
@@ -94,7 +96,7 @@ abstract class TestCase extends BaseTestCase
             'status' => 'active',
         ]);
 
-        return app(\App\Services\Caja\CashShiftService::class)->open($admin, 0.0);
+        return app(\App\Services\Caja\CashShiftService::class)->open($admin, $type);
     }
 
     protected function adminHeaders(array $headers = []): array

@@ -25,6 +25,11 @@ class Payment extends Model
 
     protected $fillable = [
         'user_id', 'member_id', 'plan_id', 'amount', 'method', 'reference', 'status', 'paid_at',
+        // Turno de la caja del gimnasio al que pertenece este cobro. Lo fija el
+        // SERVIDOR (PaymentController lo resuelve y lo borra del payload antes
+        // de validar); nunca llega del cliente. Los pagos de pasarela y los
+        // históricos importados son null por diseño.
+        'cash_shift_id',
         // Snapshot fiscal congelado (Pricing V2). `amount` sigue siendo el bruto cobrado.
         'base_amount', 'tax_amount', 'gross_amount', 'discount_amount',
         'tax_rate_id', 'tax_rate', 'pricing_mode', 'pricing_rules_version',

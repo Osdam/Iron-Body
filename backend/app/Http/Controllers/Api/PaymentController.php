@@ -3,7 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Concerns\ResolvesPagination;
+use App\Enums\CashShiftType;
+use App\Exceptions\CashShiftException;
 use App\Http\Controllers\Controller;
+use App\Services\Caja\CashShiftService;
+use App\Support\Caja\PaymentOrigin;
 use App\Models\AuditLog;
 use App\Models\Payment;
 use App\Models\Plan;
@@ -210,6 +214,31 @@ class PaymentController extends Controller
         $override = (bool) ($data['amount_override'] ?? false);
         $reason = $data['override_reason'] ?? null;
         unset($data['amount_override'], $data['override_reason']);
+
+        // CAJA DEL GIMNASIO. Este endpoint es el mostrador: lo ejecuta una
+        // persona con sesión de administrador y el dinero cambia de manos aquí.
+        // PaymentOrigin::COUNTER exige turno abierto, porque sin él ese cobro
+        // presencial quedaría fuera de todo arqueo — el agujero que este
+        // trabajo cierra. Los pagos de pasarela NO pasan por aquí: los crea
+        // PaymentMembershipActivator y nunca llevan turno.
+        //
+        // El turno lo resuelve el SERVIDOR. `cash_shift_id` no se acepta del
+        // payload: si el cliente pudiera elegirlo, podría mandar su cobro a un
+        // turno ajeno o a ninguno.
+        unset($data['cash_shift_id']);
+        $origen = PaymentOrigin::forCrmRequest(\App\Support\Access\AdminActor::from($request));
+        if ($origen->requiresOpenGymShift()) {
+            try {
+                $data['cash_shift_id'] = app(CashShiftService::class)
+                    ->requireOpen(CashShiftType::GYM)->id;
+            } catch (CashShiftException $e) {
+                return response()->json([
+                    'ok' => false,
+                    'code' => $e->code_,
+                    'message' => 'No hay una caja de gimnasio abierta. Ábrela antes de registrar el cobro.',
+                ], 409);
+            }
+        }
 
         $payment = Payment::create($data);
 

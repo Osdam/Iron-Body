@@ -14,6 +14,7 @@ use App\Services\Billing\InvoicingService;
 use App\Services\Billing\Money;
 use App\Services\Billing\PricingException;
 use App\Services\Billing\PricingService;
+use App\Enums\CashShiftType;
 use App\Services\Caja\CashShiftService;
 use App\Services\Inventory\InventoryService;
 use App\Support\Access\AdminActor;
@@ -174,7 +175,7 @@ class CajaController extends Controller
         // arquear ni a quién atribuirse. La comprobación es de backend; el
         // frontend solo la refleja.
         try {
-            $shift = app(CashShiftService::class)->requireOpen();
+            $shift = app(CashShiftService::class)->requireOpen(CashShiftType::PRODUCTS);
         } catch (CashShiftException $e) {
             return $this->cashShiftError($e);
         }

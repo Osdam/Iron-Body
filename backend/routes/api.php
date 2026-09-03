@@ -1047,14 +1047,22 @@ Route::put('admin/roles/permissions', [RolePermissionController::class, 'update'
 // que exige `caja.sell`. Cerrar el turno de OTRA persona exige además
 // `caja.manage`, y eso lo comprueba el controlador porque depende de quién lo
 // abrió, no de la ruta.
+// Dos cajas independientes (products | gym) sobre el mismo controlador. El
+// permiso FINO depende del `type` pedido y de si se marca la operación doble,
+// así que lo comprueba el controlador/orquestador caja por caja; el middleware
+// solo garantiza que quien llama puede ver ALGUNA caja.
 Route::get('admin/caja/shift',        [CashShiftController::class, 'current'])
-    ->middleware('admin.can:caja.view');
+    ->middleware('admin.can:cash.products.view');
 Route::get('admin/caja/shifts',       [CashShiftController::class, 'index'])
-    ->middleware('admin.can:caja.view');
+    ->middleware('admin.can:cash.products.view');
 Route::post('admin/caja/shift/open',  [CashShiftController::class, 'open'])
-    ->middleware('admin.can:caja.sell');
+    ->middleware('admin.can:cash.products.view');
 Route::post('admin/caja/shift/close', [CashShiftController::class, 'close'])
-    ->middleware('admin.can:caja.sell');
+    ->middleware('admin.can:cash.products.view');
+// Arqueo físico: acción excepcional de supervisión sobre un turno ya cerrado.
+Route::post('admin/caja/shifts/{shift}/difference', [CashShiftController::class, 'difference'])
+    ->middleware('admin.can:cash.products.view');
+
 
 Route::get('admin/caja/stats',                  [CajaController::class, 'stats'])
     ->middleware('admin.can:caja.view');

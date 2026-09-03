@@ -40,11 +40,43 @@ use App\Support\Moderation\ModerationPermission;
 final class CrmPermission
 {
     // ── Caja / punto de venta ───────────────────────────────────────────────
+    //
+    // LEGADO. Se conservan como ALIAS de la caja de productos: existen rutas,
+    // roles persistidos en `role_permissions` y clientes que aún los nombran.
+    // Conceder `cash.products.*` concede también su alias, y viceversa, así que
+    // nada de lo que ya funcionaba deja de funcionar. Ver ALIASES.
     public const CAJA_VIEW = 'caja.view';
 
     public const CAJA_SELL = 'caja.sell';
 
     public const CAJA_MANAGE = 'caja.manage';
+
+    // ── Caja de PRODUCTOS (cafetería / mostrador) ───────────────────────────
+    public const CASH_PRODUCTS_VIEW = 'cash.products.view';
+
+    public const CASH_PRODUCTS_OPERATE = 'cash.products.operate';
+
+    public const CASH_PRODUCTS_MANAGE = 'cash.products.manage';
+
+    // ── Caja del GIMNASIO (membresías / planes) ─────────────────────────────
+    public const CASH_GYM_VIEW = 'cash.gym.view';
+
+    public const CASH_GYM_OPERATE = 'cash.gym.operate';
+
+    public const CASH_GYM_MANAGE = 'cash.gym.manage';
+
+    /**
+     * Equivalencias legado ↔ nuevo. Conceder cualquiera de los dos lados
+     * concede el otro: es lo que permite renombrar el vocabulario sin una
+     * migración de datos que reescriba `role_permissions`.
+     *
+     * @var array<string, string>
+     */
+    private const ALIASES = [
+        self::CAJA_VIEW => self::CASH_PRODUCTS_VIEW,
+        self::CAJA_SELL => self::CASH_PRODUCTS_OPERATE,
+        self::CAJA_MANAGE => self::CASH_PRODUCTS_MANAGE,
+    ];
 
     // ── Facturación electrónica (Factus / DIAN) ─────────────────────────────
     public const BILLING_VIEW = 'billing.view';
@@ -67,6 +99,12 @@ final class CrmPermission
             self::CAJA_VIEW,
             self::CAJA_SELL,
             self::CAJA_MANAGE,
+            self::CASH_PRODUCTS_VIEW,
+            self::CASH_PRODUCTS_OPERATE,
+            self::CASH_PRODUCTS_MANAGE,
+            self::CASH_GYM_VIEW,
+            self::CASH_GYM_OPERATE,
+            self::CASH_GYM_MANAGE,
             self::BILLING_VIEW,
             self::BILLING_MANAGE,
             self::INVENTORY_VIEW,
@@ -86,6 +124,8 @@ final class CrmPermission
     {
         return [
             self::CAJA_VIEW,
+            self::CASH_PRODUCTS_VIEW,
+            self::CASH_GYM_VIEW,
             self::INVENTORY_VIEW,
         ];
     }
@@ -101,9 +141,16 @@ final class CrmPermission
         // saber qué hay. No toca el catálogo ni da de baja mercancía, no
         // cancela ventas ya registradas y NO emite comprobantes fiscales: una
         // factura electrónica es un documento ante la DIAN a nombre del cliente.
+        // Recepción cobra en las DOS cajas: es quien está en el mostrador
+        // cuando alguien paga una mensualidad. Lo que no tiene es supervisión
+        // (`manage`): cerrar turnos ajenos y registrar arqueos físicos.
         $reception = [
             self::CAJA_VIEW,
             self::CAJA_SELL,
+            self::CASH_PRODUCTS_VIEW,
+            self::CASH_PRODUCTS_OPERATE,
+            self::CASH_GYM_VIEW,
+            self::CASH_GYM_OPERATE,
             self::INVENTORY_VIEW,
         ];
 
@@ -158,8 +205,26 @@ final class CrmPermission
         return self::byRole()[$role] ?? [];
     }
 
+    /**
+     * Nombre CANÓNICO de un permiso: los legados se resuelven a su equivalente
+     * nuevo.
+     *
+     * Es una identidad, no un "o": `caja.sell` y `cash.products.operate` son el
+     * MISMO permiso con dos nombres. Tratarlos como dos permisos que se conceden
+     * mutuamente haría que revocar uno no sirviera de nada, porque el otro lo
+     * devolvería — justo el agujero que esto evita.
+     */
+    public static function canonical(string $permission): string
+    {
+        return self::ALIASES[$permission] ?? $permission;
+    }
+
     public static function allows(?Admin $admin, string $permission): bool
     {
-        return in_array($permission, self::forAdmin($admin), true);
+        return in_array(
+            self::canonical($permission),
+            array_map(self::canonical(...), self::forAdmin($admin)),
+            true,
+        );
     }
 }
