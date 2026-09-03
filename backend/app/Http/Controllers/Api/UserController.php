@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Member;
 use App\Models\Plan;
 use App\Models\User;
+use App\Services\Audit\AuditTrail;
 use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -219,6 +220,15 @@ class UserController extends Controller
         app(NotificationService::class)
             ->notifyMemberCreated($user, $user->name, $user->document);
 
+        app(AuditTrail::class)->record($request, [
+            'action' => 'create', 'module' => 'Miembros', 'entity' => 'cliente',
+            'entity_id' => $user->id, 'target_name' => $user->name,
+            'summary' => "Dio de alta a {$user->name}",
+            // Sin documento ni contacto: la traza dice QUÉ pasó y sobre quién,
+            // no reproduce los datos personales del socio.
+            'metadata' => ['plan_id' => $user->plan_id],
+        ]);
+
         return response()->json($this->serialize($user), 201);
     }
 
@@ -361,14 +371,29 @@ class UserController extends Controller
             $notifier->notifyMemberUpdated($user->appMember, $user->name);
         }
 
+        app(AuditTrail::class)->record($request, [
+            'action' => 'update', 'module' => 'Miembros', 'entity' => 'cliente',
+            'entity_id' => $user->id, 'target_name' => $user->name,
+            'summary' => "Modificó la ficha de {$user->name}",
+            'changes' => array_map(static fn (string $c) => ['field' => $c], array_keys($request->all())),
+        ]);
+
         return response()->json($this->serialize($user));
     }
 
-    public function destroy(User $user)
+    public function destroy(Request $request, User $user)
     {
         // Auditoría: miembro eliminado (ANTES de borrar, conserva nombre/doc).
         app(NotificationService::class)
             ->notifyMemberDeleted($user, $user->name, $user->document);
+
+        // La traza también se escribe antes: después de `delete()` el nombre ya
+        // no está, y una baja sin nombre no sirve para auditar nada.
+        app(AuditTrail::class)->record($request, [
+            'action' => 'delete', 'module' => 'Miembros', 'entity' => 'cliente',
+            'entity_id' => $user->id, 'target_name' => $user->name,
+            'summary' => "Dio de baja a {$user->name}",
+        ]);
 
         if ($user->appMember) {
             $user->appMember->deleteStoredFiles();

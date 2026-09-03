@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\TurnstileSetting;
+use App\Services\Audit\AuditTrail;
 use App\Services\SerialTurnstileService;
 use App\Services\TurnstileService;
 use App\Services\ZktecoTurnstileService;
@@ -53,6 +54,16 @@ class TurnstileController extends Controller
         $settings = TurnstileSetting::current();
         $settings->fill($data)->save();
 
+        // Configuración del control de acceso físico: quién la cambió importa
+        // tanto como el cambio. La traza NO guarda credenciales del dispositivo.
+        app(AuditTrail::class)->record($request, [
+            'action' => 'settings', 'module' => 'Asistencias', 'entity' => 'torniquete',
+            'entity_id' => $settings->id,
+            'summary' => 'Cambió la configuración del torniquete',
+            'changes' => array_map(static fn (string $c) => ['field' => $c], array_keys($data)),
+            'metadata' => ['enabled' => (bool) $settings->enabled],
+        ]);
+
         return response()->json([
             'ok' => true,
             'data' => $this->serialize($settings->refresh()),
@@ -71,6 +82,15 @@ class TurnstileController extends Controller
         $result = $this->turnstile->trigger($settings, [
             'member_name' => $data['reason'] ?? 'Disparo manual',
             'action' => $data['action'] ?? 'entry',
+        ]);
+
+        // Abrir la puerta a mano es una acción física: queda registrada tanto
+        // si el dispositivo respondió como si falló.
+        app(AuditTrail::class)->record($request, [
+            'action' => 'status', 'module' => 'Asistencias', 'entity' => 'torniquete',
+            'entity_id' => $settings->id,
+            'summary' => 'Abrió el torniquete manualmente desde el CRM',
+            'metadata' => ['ok' => (bool) ($result['ok'] ?? false), 'reason' => $data['reason'] ?? null],
         ]);
 
         return response()->json([
@@ -173,6 +193,13 @@ class TurnstileController extends Controller
             'last_error' => $result['ok'] ? null : substr((string) ($result['error'] ?? 'unknown'), 0, 480),
         ])->save();
 
+        app(AuditTrail::class)->record($request, [
+            'action' => 'status', 'module' => 'Asistencias', 'entity' => 'torniquete',
+            'entity_id' => $settings->id,
+            'summary' => 'Abrió el torniquete por puerto serie',
+            'metadata' => ['ok' => (bool) $result['ok'], 'via' => 'serial'],
+        ]);
+
         return response()->json([
             'ok' => (bool) $result['ok'],
             'result' => $result,
@@ -221,6 +248,13 @@ class TurnstileController extends Controller
             'last_http_code' => null,
             'last_error' => $result['ok'] ? null : substr((string) ($result['error'] ?? 'unknown'), 0, 480),
         ])->save();
+
+        app(AuditTrail::class)->record($request, [
+            'action' => 'status', 'module' => 'Asistencias', 'entity' => 'torniquete',
+            'entity_id' => $settings->id,
+            'summary' => 'Abrió el torniquete por ZKTeco',
+            'metadata' => ['ok' => (bool) ($result['ok'] ?? false), 'via' => 'zkteco'],
+        ]);
 
         return response()->json([
             'ok' => (bool) ($result['ok'] ?? false),

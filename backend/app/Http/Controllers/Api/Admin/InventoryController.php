@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Models\InventoryMovement;
 use App\Models\Product;
 use App\Services\Inventory\InventoryService;
+use App\Services\Audit\AuditTrail;
 use App\Support\Access\AdminActor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -116,6 +117,21 @@ class InventoryController extends Controller
             notes: $data['notes'] ?? null,
         );
 
+        app(AuditTrail::class)->record($request, [
+            'action' => 'update',
+            'module' => 'Inventario',
+            'entity' => 'entrada',
+            'entity_id' => $movement->id,
+            'target_name' => $product->name,
+            'summary' => "Registró una entrada de {$data['quantity']} unidades",
+            'metadata' => [
+                'product_id' => $product->id,
+                'quantity' => (int) $data['quantity'],
+                'origin' => $movement->origin instanceof \BackedEnum ? $movement->origin->value : $movement->origin,
+                'stock_after' => $product->fresh()->stock,
+            ],
+        ]);
+
         return response()->json([
             'data' => $product->fresh(),
             'movement' => $movement->fresh('product')->toCrmArray(),
@@ -154,6 +170,23 @@ class InventoryController extends Controller
                 'stock' => $e->toArray(),
             ], 422);
         }
+
+        // Una salida es una merma: sin traza no se sabe quién descontó stock.
+        app(AuditTrail::class)->record($request, [
+            'action' => 'update',
+            'module' => 'Inventario',
+            'entity' => 'salida',
+            'entity_id' => $movement->id,
+            'target_name' => $product->name,
+            'summary' => "Registró una salida de {$data['quantity']} unidades: {$data['reason']}",
+            'metadata' => [
+                'product_id' => $product->id,
+                'quantity' => (int) $data['quantity'],
+                'origin' => $data['origin'],
+                'reason' => $data['reason'],
+                'stock_after' => $product->fresh()->stock,
+            ],
+        ]);
 
         return response()->json([
             'data' => $product->fresh(),

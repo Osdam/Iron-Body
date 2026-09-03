@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\MembershipAiCapability;
 use App\Models\Payment;
 use App\Models\Plan;
+use App\Services\Audit\AuditTrail;
 use App\Models\User;
 use App\Services\IronAiMembershipAccessService;
 use App\Services\RealtimeEvents;
@@ -123,6 +124,13 @@ class PlanController extends Controller
 
         $plan = Plan::create($data);
 
+        app(AuditTrail::class)->record($request, [
+            'action' => 'create', 'module' => 'Planes', 'entity' => 'plan',
+            'entity_id' => $plan->id, 'target_name' => $plan->name,
+            'summary' => "Creó el plan {$plan->name}",
+            'metadata' => ['price' => (string) $plan->price, 'duration_days' => $plan->duration_days],
+        ]);
+
         return response()->json($plan, 201);
     }
 
@@ -139,12 +147,28 @@ class PlanController extends Controller
 
         $plan->update($data);
 
+        app(AuditTrail::class)->record($request, [
+            'action' => 'update', 'module' => 'Planes', 'entity' => 'plan',
+            'entity_id' => $plan->id, 'target_name' => $plan->name,
+            'summary' => "Modificó el plan {$plan->name}",
+            'changes' => array_map(static fn (string $c) => ['field' => $c], array_keys($request->all())),
+            'metadata' => ['price' => (string) $plan->price],
+        ]);
+
         return response()->json($plan);
     }
 
-    public function destroy(Plan $plan)
+    public function destroy(Request $request, Plan $plan)
     {
+        $nombre = $plan->name;
+        $id = $plan->id;
         $plan->delete();
+
+        app(AuditTrail::class)->record($request, [
+            'action' => 'delete', 'module' => 'Planes', 'entity' => 'plan',
+            'entity_id' => $id, 'target_name' => $nombre,
+            'summary' => "Eliminó el plan {$nombre}",
+        ]);
 
         return response()->json(null, 204);
     }
@@ -182,6 +206,13 @@ class PlanController extends Controller
         // Empuja la señal de cambio por SSE a los miembros activos del plan para
         // que la app reevalúe el gating de módulos al instante (sin reiniciar).
         $this->notifyPlanMembers($plan);
+
+        app(AuditTrail::class)->record($request, [
+            'action' => 'update', 'module' => 'Planes', 'entity' => 'plan',
+            'entity_id' => $plan->id, 'target_name' => $plan->name,
+            'summary' => "Cambió las funciones incluidas en {$plan->name}",
+            'changes' => [['field' => 'features']],
+        ]);
 
         return response()->json([
             'planId' => (string) $plan->id,
@@ -272,6 +303,13 @@ class PlanController extends Controller
                 'is_active' => true,
             ]),
         );
+
+        app(AuditTrail::class)->record($request, [
+            'action' => 'update', 'module' => 'Planes', 'entity' => 'plan',
+            'entity_id' => $plan->id, 'target_name' => $plan->name,
+            'summary' => "Cambió las capacidades de IRON IA de {$plan->name}",
+            'changes' => array_map(static fn (string $c) => ['field' => $c], array_keys($columns)),
+        ]);
 
         // Notifica a los miembros activos del plan (SSE) para refrescar acceso.
         $this->notifyPlanMembers($plan);

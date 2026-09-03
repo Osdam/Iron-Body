@@ -11,6 +11,7 @@ use App\Models\ClassReservation;
 use App\Models\ClassSession;
 use App\Models\Member;
 use App\Models\MyClass;
+use App\Services\Audit\AuditTrail;
 use App\Models\Trainer;
 use App\Models\TrainerRole;
 use App\Services\NotificationService;
@@ -184,6 +185,12 @@ class ClassController extends Controller
         // Refresco en vivo del módulo de Clases para todos los miembros.
         RealtimeEvents::classesChanged();
 
+        app(AuditTrail::class)->record($request, [
+            'action' => 'create', 'module' => 'Clases', 'entity' => 'clase',
+            'entity_id' => $class->id, 'target_name' => $class->name,
+            'summary' => "Creó la clase {$class->name}",
+        ]);
+
         return (new ClassResource($class->load('trainer:id,full_name')))->response()->setStatusCode(201);
     }
 
@@ -239,6 +246,14 @@ class ClassController extends Controller
 
         // Refresco en vivo (horario/cupo/estado) para todos los miembros.
         RealtimeEvents::classesChanged();
+
+        app(AuditTrail::class)->record($request, [
+            'action' => $request->has('status') ? 'status' : 'update',
+            'module' => 'Clases', 'entity' => 'clase',
+            'entity_id' => $myClass->id, 'target_name' => $myClass->name,
+            'summary' => "Modificó la clase {$myClass->name}",
+            'changes' => array_map(static fn (string $c) => ['field' => $c], array_keys($request->all())),
+        ]);
 
         return new ClassResource($myClass->loadCount('reservations')->load('trainer:id,full_name'));
     }
@@ -369,8 +384,11 @@ class ClassController extends Controller
         ])));
     }
 
-    public function destroy(MyClass $myClass)
+    public function destroy(Request $request, MyClass $myClass)
     {
+        $nombre = $myClass->name;
+        $id = $myClass->id;
+
         // Captura inscritos ANTES de eliminar para poder avisarles (ADITIVO).
         $members = $myClass->reservations()->with('member')->get()
             ->pluck('member')->filter()->values();
@@ -380,6 +398,12 @@ class ClassController extends Controller
 
         // Refresco en vivo: la clase desaparece del módulo para todos.
         RealtimeEvents::classesChanged();
+
+        app(AuditTrail::class)->record($request, [
+            'action' => 'delete', 'module' => 'Clases', 'entity' => 'clase',
+            'entity_id' => $id, 'target_name' => $nombre,
+            'summary' => "Eliminó la clase {$nombre}",
+        ]);
 
         return response()->json(['message' => 'Clase eliminada correctamente'], 200);
     }

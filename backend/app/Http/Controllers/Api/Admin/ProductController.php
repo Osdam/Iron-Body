@@ -11,6 +11,7 @@ use App\Services\Billing\SaleReadiness;
 use App\Models\ProductSaleItem;
 use App\Services\CatalogEvents;
 use App\Services\Inventory\InventoryService;
+use App\Services\Audit\AuditTrail;
 use App\Support\Access\AdminActor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -121,6 +122,13 @@ class ProductController extends Controller
             );
         }
 
+        app(AuditTrail::class)->record($request, [
+            'action' => 'create', 'module' => 'Inventario', 'entity' => 'producto',
+            'entity_id' => $product->id, 'target_name' => $product->name,
+            'summary' => "Creó el producto {$product->name}",
+            'metadata' => ['sale_price' => (string) $product->sale_price, 'stock' => (int) $product->stock],
+        ]);
+
         return response()->json(['data' => $product->fresh()], 201);
     }
 
@@ -185,6 +193,14 @@ class ProductController extends Controller
             }
         }
 
+        app(AuditTrail::class)->record($request, [
+            'action' => 'update', 'module' => 'Inventario', 'entity' => 'producto',
+            'entity_id' => $product->id, 'target_name' => $product->name,
+            'summary' => "Modificó el producto {$product->name}",
+            'changes' => array_map(static fn (string $c) => ['field' => $c], $tocados),
+            'metadata' => ['sale_price' => (string) $product->sale_price, 'stock' => (int) $product->fresh()->stock],
+        ]);
+
         return response()->json(['data' => $product->fresh()]);
     }
 
@@ -200,8 +216,9 @@ class ProductController extends Controller
      * frontend no tenía ningún control que llamara aquí, y por eso «no se podían
      * eliminar productos».
      */
-    public function destroy(Product $product): JsonResponse
+    public function destroy(Request $request, Product $product): JsonResponse
     {
+        $nombre = $product->name;
         $usage = $this->historyOf($product);
         $hasHistory = array_sum($usage) > 0;
 
@@ -210,6 +227,15 @@ class ProductController extends Controller
             // sigue existiendo para las ventas y los movimientos que lo citan.
             $product->update(['active' => false, 'visible_in_app' => false]);
             $product->delete();
+
+            // Archivar no es borrar, pero saca el producto del catálogo: la
+            // traza distingue las dos cosas para quien audite después.
+            app(AuditTrail::class)->record($request, [
+                'action' => 'delete', 'module' => 'Inventario', 'entity' => 'producto',
+                'entity_id' => $product->id, 'target_name' => $nombre,
+                'summary' => "Archivó el producto {$nombre} (tenía historial)",
+                'metadata' => ['archived' => true, 'usage' => $usage],
+            ]);
 
             return response()->json([
                 'ok' => true,
@@ -220,7 +246,15 @@ class ProductController extends Controller
         }
 
         // Sin historial no hay nada que preservar.
+        $id = $product->id;
         $product->forceDelete();
+
+        app(AuditTrail::class)->record($request, [
+            'action' => 'delete', 'module' => 'Inventario', 'entity' => 'producto',
+            'entity_id' => $id, 'target_name' => $nombre,
+            'summary' => "Eliminó el producto {$nombre}",
+            'metadata' => ['archived' => false],
+        ]);
 
         return response()->json([
             'ok' => true,
@@ -326,6 +360,14 @@ class ProductController extends Controller
         ]);
 
         $product->update(['visible_in_app' => $data['visible']]);
+
+        app(AuditTrail::class)->record($request, [
+            'action' => 'update', 'module' => 'Inventario', 'entity' => 'producto',
+            'entity_id' => $product->id, 'target_name' => $product->name,
+            'summary' => $data['visible'] ? 'Publicó el producto en la tienda' : 'Retiró el producto de la tienda',
+            'changes' => [['field' => 'visible_in_app']],
+            'metadata' => ['visible_in_app' => (bool) $data['visible']],
+        ]);
         CatalogEvents::productChanged((int) $product->id, ['visibility']);
 
         return response()->json(['data' => $product->fresh()]);
@@ -367,11 +409,18 @@ class ProductController extends Controller
         }
         CatalogEvents::productChanged((int) $product->id, ['image']);
 
+        app(AuditTrail::class)->record($request, [
+            'action' => 'update', 'module' => 'Inventario', 'entity' => 'producto',
+            'entity_id' => $product->id, 'target_name' => $product->name,
+            'summary' => "Cambió la imagen de {$product->name}",
+            'changes' => [['field' => 'image_url']],
+        ]);
+
         return response()->json(['data' => $product->fresh()]);
     }
 
     /** DELETE admin/products/{product}/image — retira la imagen. */
-    public function deleteImage(Product $product): JsonResponse
+    public function deleteImage(Request $request, Product $product): JsonResponse
     {
         $path = $this->relativeImagePath($product);
         if ($path !== null) {
@@ -379,6 +428,13 @@ class ProductController extends Controller
         }
         $product->update(['image_url' => null]);
         CatalogEvents::productChanged((int) $product->id, ['image']);
+
+        app(AuditTrail::class)->record($request, [
+            'action' => 'update', 'module' => 'Inventario', 'entity' => 'producto',
+            'entity_id' => $product->id, 'target_name' => $product->name,
+            'summary' => "Retiró la imagen de {$product->name}",
+            'changes' => [['field' => 'image_url']],
+        ]);
 
         return response()->json(['data' => $product->fresh()]);
     }

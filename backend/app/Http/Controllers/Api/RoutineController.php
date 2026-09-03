@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Member;
 use App\Models\MemberRoutineAssignment;
 use App\Models\Routine;
+use App\Services\Audit\AuditTrail;
 use App\Models\User;
 use App\Services\Exercises\ExerciseCatalogResolver;
 use App\Services\NotificationService;
@@ -84,6 +85,12 @@ class RoutineController extends Controller
             RealtimeEvents::routine($member->id);
         }
 
+        app(AuditTrail::class)->record($request, [
+            'action' => 'create', 'module' => 'Rutinas', 'entity' => 'rutina',
+            'entity_id' => $routine->id, 'target_name' => $routine->name,
+            'summary' => "Creó la rutina {$routine->name}",
+        ]);
+
         return response()->json($this->serialize($routine), 201);
     }
 
@@ -92,6 +99,13 @@ class RoutineController extends Controller
         $data = $this->validateInput($request, false);
         $routine->fill($this->mapInput($data));
         $routine->save();
+
+        app(AuditTrail::class)->record($request, [
+            'action' => 'update', 'module' => 'Rutinas', 'entity' => 'rutina',
+            'entity_id' => $routine->id, 'target_name' => $routine->name,
+            'summary' => "Modificó la rutina {$routine->name}",
+            'changes' => array_map(static fn (string $c) => ['field' => $c], array_keys($request->all())),
+        ]);
 
         // Si la rutina está asignada a un miembro, notifícale la actualización.
         if ($routine->member_id) {
@@ -105,8 +119,10 @@ class RoutineController extends Controller
         return response()->json($this->serialize($routine));
     }
 
-    public function destroy(Routine $routine)
+    public function destroy(Request $request, Routine $routine)
     {
+        $nombre = $routine->name;
+        $id = $routine->id;
         // Notifica ANTES de borrar (admin + miembro si estaba asignada).
         $member = $routine->member_id ? Member::find($routine->member_id) : null;
         app(NotificationService::class)->notifyRoutineDeleted($routine, $member);
@@ -115,6 +131,12 @@ class RoutineController extends Controller
         }
 
         $routine->delete();
+
+        app(AuditTrail::class)->record($request, [
+            'action' => 'delete', 'module' => 'Rutinas', 'entity' => 'rutina',
+            'entity_id' => $id, 'target_name' => $nombre,
+            'summary' => "Eliminó la rutina {$nombre}",
+        ]);
 
         return response()->json(null, 204);
     }
@@ -143,6 +165,15 @@ class RoutineController extends Controller
             $routine->is_assigned = false;
         }
         $routine->save();
+
+        app(AuditTrail::class)->record($request, [
+            'action' => 'assign', 'module' => 'Rutinas', 'entity' => 'rutina',
+            'entity_id' => $routine->id, 'target_name' => $routine->name,
+            'summary' => $routine->is_assigned
+                ? "Asignó la rutina {$routine->name} a {$routine->assigned_member_name}"
+                : "Dejó la rutina {$routine->name} sin asignar",
+            'metadata' => ['member_id' => $routine->assigned_member_id, 'is_assigned' => (bool) $routine->is_assigned],
+        ]);
 
         if ($member) {
             $assignment = MemberRoutineAssignment::firstOrCreate(

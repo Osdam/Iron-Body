@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\GymEquipment;
+use App\Services\Audit\AuditTrail;
 use App\Services\GymEquipmentContextService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -79,6 +80,12 @@ class GymEquipmentController extends Controller
         $equipment = GymEquipment::create($data);
         $this->context->flush();
 
+        app(AuditTrail::class)->record($request, [
+            'action' => 'create', 'module' => 'Equipos', 'entity' => 'equipo',
+            'entity_id' => $equipment->id, 'target_name' => $equipment->name,
+            'summary' => "Registró el equipo {$equipment->name}",
+        ]);
+
         return response()->json(['data' => $equipment], 201);
     }
 
@@ -90,14 +97,30 @@ class GymEquipmentController extends Controller
         $equipment->update($data);
         $this->context->flush();
 
+        app(AuditTrail::class)->record($request, [
+            'action' => $request->has('status') ? 'status' : 'update',
+            'module' => 'Equipos', 'entity' => 'equipo',
+            'entity_id' => $equipment->id, 'target_name' => $equipment->name,
+            'summary' => "Modificó el equipo {$equipment->name}",
+            'changes' => array_map(static fn (string $c) => ['field' => $c], array_keys($request->all())),
+        ]);
+
         return response()->json(['data' => $equipment->fresh()]);
     }
 
     // DELETE /api/admin/equipment/{equipment}
-    public function destroy(GymEquipment $equipment): JsonResponse
+    public function destroy(Request $request, GymEquipment $equipment): JsonResponse
     {
+        $nombre = $equipment->name;
+        $id = $equipment->id;
         $equipment->delete();
         $this->context->flush();
+
+        app(AuditTrail::class)->record($request, [
+            'action' => 'delete', 'module' => 'Equipos', 'entity' => 'equipo',
+            'entity_id' => $id, 'target_name' => $nombre,
+            'summary' => "Eliminó el equipo {$nombre}",
+        ]);
 
         return response()->json(['ok' => true]);
     }

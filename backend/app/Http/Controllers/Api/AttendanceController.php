@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\Member;
+use App\Services\Audit\AuditTrail;
 use App\Models\MemberBiometric;
 use App\Models\TurnstileSetting;
 use App\Models\User;
@@ -138,6 +139,19 @@ class AttendanceController extends Controller
             }
 
             $turnstileResult = $this->maybeOpenTurnstile($attendance, $user);
+
+            // Solo el marcaje MANUAL deja traza de administrador: el facial lo
+            // hace el lector, sin persona detrás, y `record()` lo descarta solo
+            // al no haber actor. Auditar cada lectura de rostro llenaría la
+            // tabla de ruido y escondería lo que sí hizo alguien a mano.
+            if ($source === 'manual') {
+                app(AuditTrail::class)->record($request, [
+                    'action' => 'create', 'module' => 'Asistencias', 'entity' => 'asistencia',
+                    'entity_id' => $attendance->id, 'target_name' => $user->name,
+                    'summary' => "Registró a mano la {$action} de {$user->name}",
+                    'metadata' => ['action' => $action, 'user_id' => $user->id],
+                ]);
+            }
 
             return response()->json([
                 'ok' => true,
@@ -342,6 +356,14 @@ class AttendanceController extends Controller
             // Aviso real-time: CRM (re-index del terminal facial) + miembro (app).
             app(NotificationService::class)->notifyFaceEnrolled($member->fresh());
 
+            // Dato biométrico: quién lo registró y cuándo debe quedar escrito.
+            // La traza NO guarda la imagen ni la ruta del fichero.
+            app(AuditTrail::class)->record($request, [
+                'action' => 'create', 'module' => 'Punto físico', 'entity' => 'rostro biométrico',
+                'entity_id' => $member->id, 'target_name' => $member->full_name,
+                'summary' => "Registró el rostro de {$member->full_name}",
+            ]);
+
             return response()->json([
                 'ok' => true,
                 'message' => 'Rostro registrado correctamente.',
@@ -360,7 +382,7 @@ class AttendanceController extends Controller
      * Borra el registro biométrico y su imagen, devuelve el estado a "pendiente"
      * y avisa en tiempo real (SSE) al CRM (re-index del terminal) y al miembro.
      */
-    public function deleteFace(Member $member): JsonResponse
+    public function deleteFace(Request $request, Member $member): JsonResponse
     {
         try {
             $biometric = $member->biometric;
@@ -383,6 +405,12 @@ class AttendanceController extends Controller
 
             // Aviso real-time: CRM (re-index del terminal facial) + miembro (app).
             app(NotificationService::class)->notifyFaceDeleted($member->fresh());
+
+            app(AuditTrail::class)->record($request, [
+                'action' => 'delete', 'module' => 'Punto físico', 'entity' => 'rostro biométrico',
+                'entity_id' => $member->id, 'target_name' => $member->full_name,
+                'summary' => "Eliminó el rostro de {$member->full_name}",
+            ]);
 
             return response()->json([
                 'ok' => true,
