@@ -33,21 +33,29 @@ class ModerationPermissionMatrixTest extends ModerationTestCase
 
     // ── Lectura ───────────────────────────────────────────────────────────
 
-    public function test_los_cuatro_roles_pueden_ver_la_cola(): void
+    public function test_los_roles_con_moderacion_ven_la_cola(): void
     {
         $this->makeReport();
 
-        foreach (Admin::ROLES as $role) {
+        // Recepción ya no: dejó de moderar por decisión de negocio. Los demás
+        // roles del sistema conservan su acceso exactamente igual.
+        foreach ([Admin::ROLE_ADMINISTRATIVO, Admin::ROLE_ADMINISTRADOR, Admin::ROLE_SUPER_ADMIN] as $role) {
             $this->getJson('/api/admin/moderation/reports', $this->asAdmin($this->makeAdmin($role)))
                 ->assertOk();
         }
+
+        $this->getJson('/api/admin/moderation/reports',
+            $this->asAdmin($this->makeAdmin(Admin::ROLE_RECEPCION)))
+            ->assertStatus(403);
     }
 
     public function test_el_dashboard_devuelve_los_permisos_efectivos_del_rol(): void
     {
         // El CRM usa esta lista como autoridad para pintar los botones.
         $expected = [
-            Admin::ROLE_RECEPCION => [ModerationPermission::VIEW],
+            // Recepción ya no aparece: no entra en moderación, así que el
+            // dashboard le responde 403 y no una lista vacía. Lo comprueba
+            // test_recepcion_ya_no_entra_en_moderacion().
             Admin::ROLE_ADMINISTRATIVO => [
                 ModerationPermission::VIEW,
                 ModerationPermission::REVIEW,
@@ -81,6 +89,14 @@ class ModerationPermissionMatrixTest extends ModerationTestCase
 
     // ── Recepción: solo lectura ───────────────────────────────────────────
 
+    public function test_recepcion_ya_no_entra_en_moderacion(): void
+    {
+        // Cambio de política deliberado: antes veía la cola en solo lectura.
+        $this->getJson('/api/admin/moderation/reports',
+            $this->asAdmin($this->makeAdmin(Admin::ROLE_RECEPCION)))
+            ->assertStatus(403);
+    }
+
     public function test_recepcion_no_puede_revisar_asignar_ni_sancionar(): void
     {
         $report = $this->makeReport();
@@ -90,13 +106,16 @@ class ModerationPermissionMatrixTest extends ModerationTestCase
         $this->postJson("/api/admin/moderation/reports/{$report->public_id}/transition",
             ['status' => 'triaged'], $headers)
             ->assertStatus(403)
-            ->assertJsonPath('required_permission', ModerationPermission::REVIEW);
+            // Ahora deniega la puerta EXTERIOR, que es más gruesa y llega
+            // antes. El permiso fino de moderación sigue existiendo detrás como
+            // defensa en profundidad; simplemente ya no hace falta llegar a él.
+            ->assertJsonPath('required_permission', 'moderation.manage');
 
         // Asignación.
         $this->postJson("/api/admin/moderation/reports/{$report->public_id}/assign",
             ['assign_to_self' => true], $headers)
             ->assertStatus(403)
-            ->assertJsonPath('required_permission', ModerationPermission::ASSIGN);
+            ->assertJsonPath('required_permission', 'moderation.manage');
 
         // Sanción social.
         $this->postJson("/api/admin/moderation/reports/{$report->public_id}/decision",
@@ -106,12 +125,15 @@ class ModerationPermissionMatrixTest extends ModerationTestCase
         // Resolver apelaciones.
         $this->postJson('/api/admin/moderation/appeals/'
             .'00000000-0000-0000-0000-000000000000/resolve',
-            ['status' => 'granted'], $headers)->assertStatus(404);
+            // 403 y no 404: la puerta deniega antes de buscar la apelación, así
+            // que Recepción tampoco puede averiguar qué ids existen.
+            ['status' => 'granted'], $headers)->assertStatus(403);
 
         // Evidencia sensible.
         $this->getJson("/api/admin/moderation/reports/{$report->public_id}/evidence", $headers)
             ->assertStatus(403)
-            ->assertJsonPath('required_permission', ModerationPermission::VIEW_SENSITIVE_EVIDENCE);
+            // Deniega la puerta exterior, que llega antes.
+            ->assertJsonPath('required_permission', 'moderation.view');
 
         // Nada quedó aplicado.
         $this->assertDatabaseCount('moderation_actions', 0);
@@ -274,6 +296,7 @@ class ModerationPermissionMatrixTest extends ModerationTestCase
         $administrador = ModerationPermission::byRole()[Admin::ROLE_ADMINISTRADOR];
         $superAdmin = ModerationPermission::byRole()[Admin::ROLE_SUPER_ADMIN];
 
+        // Recepción queda vacío por política; la monotonía se mantiene igual.
         foreach ($recepcion as $p) {
             $this->assertContains($p, $administrativo);
         }

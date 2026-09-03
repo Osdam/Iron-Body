@@ -99,13 +99,84 @@ abstract class TestCase extends BaseTestCase
         return app(\App\Services\Caja\CashShiftService::class)->open($admin, $type);
     }
 
+    /**
+     * Credenciales de una PERSONA con sesión de Super Admin.
+     *
+     * Antes devolvía el token compartido de automatizaciones, y con él las
+     * pruebas escribían por todo el CRM. Eso funcionaba porque 294 endpoints no
+     * comprobaban permisos; ahora que los comprueban, ese token solo lee —que
+     * es lo que siempre dijo su documentación—. Las pruebas que verifican los
+     * LÍMITES del token compartido usan {@see sharedTokenHeaders()}.
+     */
     protected function adminHeaders(array $headers = []): array
+    {
+        $this->testSuperAdmin ??= Admin::create([
+            'name' => 'Super Admin de pruebas',
+            'email' => 'suite-'.uniqid().'@ironbody.test',
+            'password' => 'secret-password',
+            'role' => Admin::ROLE_SUPER_ADMIN,
+            'status' => 'active',
+        ]);
+
+        return array_merge($this->actingAsAdmin($this->testSuperAdmin), $headers);
+    }
+
+    /**
+     * Sesión de un administrador con el rol indicado.
+     *
+     * Es la forma correcta de autenticar una prueba administrativa: con el rol
+     * MÍNIMO que la acción necesita. Usar Super Admin para todo haría pasar la
+     * suite sin comprobar nada de la política, que es justo lo que hay que
+     * comprobar.
+     */
+    protected function adminAs(string $role, array $headers = []): array
+    {
+        $admin = Admin::create([
+            'name' => $role.' de pruebas',
+            'email' => 'rol-'.uniqid().'@ironbody.test',
+            'password' => 'secret-password',
+            'role' => $role,
+            'status' => 'active',
+        ]);
+
+        return array_merge($this->actingAsAdmin($admin), $headers);
+    }
+
+    /**
+     * Sesión con EXACTAMENTE los permisos indicados, ni uno más.
+     *
+     * Para pruebas que quieren fijar que una acción necesita una llave concreta:
+     * se concede solo esa y se comprueba que basta. Si mañana el endpoint pide
+     * algo más, la prueba lo dice.
+     *
+     * @param  list<string>  $permissions
+     */
+    protected function adminWithPermissions(array $permissions, array $headers = []): array
+    {
+        $rol = 'Prueba-'.substr(md5(implode(',', $permissions)), 0, 8);
+        \App\Models\AdminRole::firstOrCreate(['name' => $rol], ['is_system' => false]);
+
+        foreach ($permissions as $p) {
+            \App\Models\RolePermission::updateOrCreate(
+                ['role' => $rol, 'permission' => $p],
+                ['granted' => true],
+            );
+        }
+        app(\App\Support\Access\RolePermissionPolicy::class)->flush();
+
+        return $this->adminAs($rol, $headers);
+    }
+
+    /** El token compartido de automatizaciones: sin persona detrás, solo lee. */
+    protected function sharedTokenHeaders(array $headers = []): array
     {
         $token = config('admin.api_token') ?: 'test-admin-secret';
         config(['admin.api_token' => $token]);
 
-        return array_merge(['Authorization' => 'Bearer ' . $token], $headers);
+        return array_merge(['Authorization' => 'Bearer '.$token], $headers);
     }
+
+    private ?Admin $testSuperAdmin = null;
 
     protected function adminGetJson(string $uri, array $headers = []): TestResponse
     {

@@ -48,8 +48,25 @@ class MarketingAgentActionTest extends TestCase
         MarketingMessage::create(['conversation_id' => $this->conversation->id, 'direction' => 'inbound', 'sender_type' => 'lead', 'body' => $body]);
     }
 
+    /**
+     * Sesión con un rol dado. Si el rol no trae permisos de mercadeo por
+     * defecto —Recepción, por ejemplo— se le conceden explícitamente: estas
+     * pruebas verifican las reglas DEL INBOX, no la política de qué rol entra,
+     * que se comprueba en RolePolicyTest. Ampliar el rol base de recepción
+     * para que pasaran habría sido darle acceso que el CRM nunca le mostró.
+     */
     private function headersFor(string $role, string $status = 'active'): array
     {
+        if (! \App\Support\Access\CrmPermission::allows(new Admin(['role' => $role, 'status' => 'active']), 'marketing.view')) {
+            \App\Models\AdminRole::firstOrCreate(['name' => $role], ['is_system' => false]);
+            foreach (['marketing.view', 'marketing.manage'] as $permiso) {
+                \App\Models\RolePermission::updateOrCreate(
+                    ['role' => $role, 'permission' => $permiso], ['granted' => true],
+                );
+            }
+            app(\App\Support\Access\RolePermissionPolicy::class)->flush();
+        }
+
         $admin = Admin::create(['name' => 'R '.$role, 'email' => 'aa-'.uniqid().'@ironbody.test', 'password' => 'x', 'role' => $role, 'status' => $status]);
 
         return $this->actingAsAdmin($admin);

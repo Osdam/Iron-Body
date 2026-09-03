@@ -20,6 +20,8 @@ class ManualPaymentInvoiceHookTest extends TestCase
         $user = User::factory()->create();
         $plan = Plan::create(['name' => 'Pro', 'price' => 100000, 'duration_days' => 30, 'benefits' => '']);
 
+        // Cobrar en mostrador exige la caja del gimnasio abierta.
+        $this->openCashShift(null, \App\Enums\CashShiftType::GYM);
         $res = $this->adminPostJson('/api/payments', [
             'user_id' => $user->id,
             'plan_id' => $plan->id,
@@ -45,6 +47,7 @@ class ManualPaymentInvoiceHookTest extends TestCase
         $user = User::factory()->create();
         $plan = Plan::create(['name' => 'Pro', 'price' => 100000, 'duration_days' => 30, 'benefits' => '']);
 
+        $this->openCashShift(null, \App\Enums\CashShiftType::GYM);
         $res = $this->adminPostJson('/api/payments', [
             'user_id' => $user->id,
             'plan_id' => $plan->id,

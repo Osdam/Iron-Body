@@ -319,6 +319,14 @@ class ApprovalQueueTest extends TestCase
             'name' => 'Recepción', 'email' => 'rec@ironbody.test',
             'password' => 'x', 'role' => Admin::ROLE_RECEPCION, 'status' => 'active',
         ]);
+        // Recepción no entra en mercadeo por defecto; esta prueba fija las
+        // reglas de la cola de aprobaciones, no quién accede al módulo.
+        \App\Models\AdminRole::firstOrCreate(['name' => $recepcion->role], ['is_system' => true]);
+        \App\Models\RolePermission::updateOrCreate(
+            ['role' => $recepcion->role, 'permission' => 'marketing.view'], ['granted' => true],
+        );
+        app(\App\Support\Access\RolePermissionPolicy::class)->flush();
+
         $headers = $this->actingAsAdmin($recepcion);
         $approval = $this->pedirReembolso();
 

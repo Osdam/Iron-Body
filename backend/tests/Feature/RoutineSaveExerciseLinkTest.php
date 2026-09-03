@@ -28,7 +28,7 @@ class RoutineSaveExerciseLinkTest extends TestCase
     /** @return array<string,string> */
     private function adminAuth(): array
     {
-        return ['Authorization' => 'Bearer ' . self::SECRET];
+        return $this->adminHeaders();
     }
 
     private function catalog(string $name, string $file): Exercise

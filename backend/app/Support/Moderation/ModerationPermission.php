@@ -89,12 +89,20 @@ final class ModerationPermission
      */
     public static function byRole(): array
     {
-        $reception = [self::VIEW];
+        // Recepción NO modera. Su rol base es atender y cobrar; si alguna
+        // recepcionista debe revisar comunidad se le concede explícitamente
+        // desde la pantalla de Roles, como cualquier otro permiso.
+        //
+        // Antes tenía VIEW aquí. Dejarlo habría hecho que este mapa afirmara
+        // algo que la puerta de entrada (CrmPermission) niega, y dos
+        // autoridades que se contradicen son peores que una sola equivocada.
+        $reception = [];
 
-        $administrative = array_merge($reception, [
+        $administrative = [
+            self::VIEW,
             self::REVIEW,
             self::ASSIGN,
-        ]);
+        ];
 
         $administrator = array_merge($administrative, [
             self::HIDE_CONTENT,

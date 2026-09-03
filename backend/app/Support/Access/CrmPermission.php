@@ -39,6 +39,13 @@ use App\Support\Moderation\ModerationPermission;
  */
 final class CrmPermission
 {
+    /**
+     * Rol de entrenador dentro del CRM. No está en Admin::ROLES porque no
+     * existía como cuenta administrativa; se define aquí para poder darle
+     * defaults, y el catálogo `admin_roles` lo materializa.
+     */
+    public const ROLE_ENTRENADOR = 'Entrenador';
+
     // ── Caja / punto de venta ───────────────────────────────────────────────
     //
     // LEGADO. Se conservan como ALIAS de la caja de productos: existen rutas,
@@ -95,27 +102,20 @@ final class CrmPermission
 
     public const INVENTORY_DELETE = 'inventory.delete';
 
-    /** @return list<string> */
+    /**
+     * Catálogo completo. Sale de {@see PermissionCatalog}, que a su vez lo
+     * deriva de las rutas reales: no hay forma de que aparezca aquí un permiso
+     * que no proteja nada.
+     *
+     * @return list<string>
+     */
     public static function all(): array
     {
-        return [
-            self::CAJA_VIEW,
-            self::CAJA_SELL,
-            self::CAJA_MANAGE,
-            self::CASH_PRODUCTS_VIEW,
-            self::CASH_PRODUCTS_OPERATE,
-            self::CASH_PRODUCTS_MANAGE,
-            self::CASH_GYM_VIEW,
-            self::CASH_GYM_OPERATE,
-            self::CASH_GYM_MANAGE,
-            self::ROLES_MANAGE,
-            self::BILLING_VIEW,
-            self::BILLING_MANAGE,
-            self::INVENTORY_VIEW,
-            self::INVENTORY_CREATE,
-            self::INVENTORY_EDIT,
-            self::INVENTORY_DELETE,
-        ];
+        return array_values(array_unique(array_merge(
+            PermissionCatalog::all(),
+            // El vocabulario anterior sigue aceptándose como alias.
+            [self::CAJA_VIEW, self::CAJA_SELL, self::CAJA_MANAGE],
+        )));
     }
 
     /**
@@ -126,47 +126,104 @@ final class CrmPermission
      */
     public static function readOnly(): array
     {
-        return [
-            self::CAJA_VIEW,
-            self::CASH_PRODUCTS_VIEW,
-            self::CASH_GYM_VIEW,
-            self::INVENTORY_VIEW,
-        ];
+        // TODA lectura, ninguna escritura. Es lo máximo que puede obtener una
+        // credencial sin persona detrás: puede consultar para automatizar, pero
+        // nunca cobrar, mover existencias ni sancionar, porque un descuadre sin
+        // responsable no se puede investigar.
+        return array_values(array_filter(
+            PermissionCatalog::all(),
+            fn (string $p) => str_ends_with($p, '.view'),
+        ));
     }
 
     /**
-     * Mapa rol → permisos. Espejo de los perfiles de `AccessControlService`.
+     * Permisos por defecto de cada rol del sistema.
+     *
+     * Estos valores son la BASE; `role_permissions` los ajusta encima desde la
+     * pantalla de Roles. Cambiar aquí solo mueve el punto de partida.
      *
      * @return array<string, list<string>>
      */
     public static function byRole(): array
     {
-        // Recepción atiende el mostrador: cobra y consulta existencias para
-        // saber qué hay. No toca el catálogo ni da de baja mercancía, no
-        // cancela ventas ya registradas y NO emite comprobantes fiscales: una
-        // factura electrónica es un documento ante la DIAN a nombre del cliente.
-        // Recepción cobra en las DOS cajas: es quien está en el mostrador
-        // cuando alguien paga una mensualidad. Lo que no tiene es supervisión
-        // (`manage`): cerrar turnos ajenos y registrar arqueos físicos.
-        $reception = [
-            self::CAJA_VIEW,
-            self::CAJA_SELL,
-            self::CASH_PRODUCTS_VIEW,
-            self::CASH_PRODUCTS_OPERATE,
-            self::CASH_GYM_VIEW,
-            self::CASH_GYM_OPERATE,
-            self::INVENTORY_VIEW,
+        $todo = PermissionCatalog::all();
+
+        /*
+         * ADMINISTRADOR. En este primer despliegue conserva el acceso amplio
+         * que ya tenía de hecho —hasta ahora podía llamar cualquier endpoint
+         * administrativo— menos las tres llaves que son autoridad sobre el
+         * propio sistema. Endurecerlo más de golpe habría convertido un
+         * despliegue de seguridad en una interrupción de servicio; se afina
+         * después, con uso real medido.
+         */
+        $administrador = array_values(array_diff($todo, [
+            'roles.manage',        // repartir permisos es de Super Admin
+            'users.manage',        // crear cuentas del CRM, también
+            'integrations.manage', // conectar/desconectar canales externos
+            'audit.view',          // el registro de quién hizo qué
+        ]));
+
+        /*
+         * RECEPCIÓN. El mostrador: atiende, cobra y consulta. Puede abrir y
+         * cerrar las dos cajas porque es quien está delante cuando alguien paga
+         * —un batido o una mensualidad—, pero no supervisa turnos ajenos ni
+         * registra arqueos físicos.
+         *
+         * Fuera queda todo lo que no necesita para atender: ganancias,
+         * auditoría, roles, usuarios, integraciones, facturación electrónica,
+         * moderación y seguridad de plataforma.
+         */
+        $recepcion = [
+            'members.view', 'members.create',
+            'plans.view',
+            'payments.view', 'payments.create',
+            'cash.products.view', 'cash.products.operate',
+            'cash.gym.view', 'cash.gym.operate',
+            'inventory.view',
+            // Recepción gestiona inscripciones a clases desde el mostrador, así
+            // que necesita verlas. Es lectura: crear y editar horarios no.
+            'classes.view',
+            'support.view',
+            // SIN moderación, ni siquiera lectura. ModerationPermission se la
+            // concedía, pero el rol base de recepción es atención y cobro; si
+            // alguna recepcionista debe revisar comunidad, se le concede
+            // explícitamente desde la pantalla de Roles.
+            // Alias del vocabulario anterior, para no romper nada que aún lo
+            // nombre. Equivale a cash.products.*, no concede nada nuevo.
+            self::CAJA_VIEW, self::CAJA_SELL,
         ];
 
-        // Administrativo no tiene perfil operativo en el CRM (el front tampoco
-        // se lo da). Su alcance hoy es la moderación, que vive en su propio mapa.
-        $administrative = [];
+        /*
+         * ENTRENADOR. Según lo que hace hoy en el CRM: rutinas, ejercicios,
+         * clases y la ficha de los socios que atiende. No cobra, no toca caja
+         * y no administra nada.
+         */
+        $entrenador = [
+            'members.view',
+            'routines.view', 'routines.manage',
+            'classes.view', 'classes.manage',
+            'trainers.view',
+        ];
+
+        /*
+         * ADMINISTRATIVO. Sin perfil operativo: su alcance es la moderación de
+         * comunidad. ModerationPermission le concede revisar y asignar, así que
+         * la puerta exterior tiene que dejarle pasar a esas rutas; qué puede
+         * hacer una vez dentro lo sigue decidiendo aquel mapa, que es más
+         * estricto. Sin esto, activar el enforcement le habría quitado en
+         * silencio el único trabajo que tiene en el CRM.
+         */
+        $administrativo = [
+            'moderation.view',
+            'moderation.manage',
+        ];
 
         return [
             Admin::ROLE_SUPER_ADMIN => self::all(),
-            Admin::ROLE_ADMINISTRADOR => self::all(),
-            Admin::ROLE_ADMINISTRATIVO => $administrative,
-            Admin::ROLE_RECEPCION => $reception,
+            Admin::ROLE_ADMINISTRADOR => $administrador,
+            Admin::ROLE_ADMINISTRATIVO => $administrativo,
+            Admin::ROLE_RECEPCION => $recepcion,
+            self::ROLE_ENTRENADOR => $entrenador,
         ];
     }
 

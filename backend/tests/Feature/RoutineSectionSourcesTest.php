@@ -48,7 +48,9 @@ class RoutineSectionSourcesTest extends TestCase
 
     private function adminAuth(): array
     {
-        return ['Authorization' => 'Bearer ' . self::ADMIN];
+        // El secreto compartido no es una persona y ya no escribe. Estas
+        // pruebas crean rutinas, así que actúan con una sesión real.
+        return $this->adminHeaders();
     }
 
     public function test_crm_routine_appears_in_my_routines_not_in_semi_or_explore(): void

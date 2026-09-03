@@ -101,7 +101,7 @@ class InventoryAuthorizationTest extends TestCase
         ], $headers)
             ->assertStatus(403)
             ->assertJsonPath('code', 'forbidden')
-            ->assertJsonPath('required_permission', 'caja.sell');
+            ->assertJsonPath('required_permission', 'cash.products.operate');
 
         $this->assertSame(10, $product->fresh()->stock, 'el stock no se toca');
         $this->assertSame(0, ProductSale::count(), 'no se crea ninguna venta');
@@ -118,7 +118,7 @@ class InventoryAuthorizationTest extends TestCase
         $this->postJson("/api/admin/caja/sales/{$sale->id}/pay", [],
             $this->actingAsAdmin($this->admin(Admin::ROLE_ADMINISTRATIVO)))
             ->assertStatus(403)
-            ->assertJsonPath('required_permission', 'caja.sell');
+            ->assertJsonPath('required_permission', 'cash.products.operate');
 
         $this->assertSame('pending', $sale->fresh()->status);
         $this->assertSame(10, $product->fresh()->stock);
@@ -133,7 +133,7 @@ class InventoryAuthorizationTest extends TestCase
         $this->postJson("/api/admin/caja/sales/{$sale->id}/cancel", [],
             $this->actingAsAdmin($this->admin(Admin::ROLE_RECEPCION)))
             ->assertStatus(403)
-            ->assertJsonPath('required_permission', 'caja.manage');
+            ->assertJsonPath('required_permission', 'cash.products.manage');
 
         $this->assertSame('pending', $sale->fresh()->status);
     }
@@ -267,7 +267,11 @@ class InventoryAuthorizationTest extends TestCase
         $this->assertFalse(CrmPermission::allows($recepcion, CrmPermission::INVENTORY_EDIT));
         $this->assertFalse(CrmPermission::allows($recepcion, CrmPermission::CAJA_MANAGE));
 
-        $this->assertSame([], CrmPermission::forAdmin($administrativo));
+        // Administrativo ya no está vacío: conserva moderación, que es su
+        // función. Lo que sigue sin tener es caja e inventario.
+        foreach (['inventory.view', 'inventory.edit', 'cash.products.operate'] as $p) {
+            $this->assertNotContains($p, CrmPermission::forAdmin($administrativo));
+        }
 
         // Sin persona detrás: solo lectura.
         $this->assertSame(CrmPermission::readOnly(), CrmPermission::forAdmin(null));

@@ -114,28 +114,20 @@ class RolePermissionController extends Controller
     }
 
     /** Catálogo legible para que el CRM no tenga que inventar las etiquetas. */
+    /**
+     * Catálogo que consume el CRM.
+     *
+     * Sale de {@see PermissionCatalog}, que es la única fuente del vocabulario
+     * y ya trae dominio, etiqueta y ayuda en castellano. Antes esta lista se
+     * escribía a mano aquí y se quedaba corta —los permisos de las dos cajas no
+     * estaban—, así que el cliente los recibía como «Otros» con la clave
+     * técnica de única explicación.
+     *
+     * @return list<array<string,mixed>>
+     */
     private function catalog(): array
     {
-        $labels = [
-            CrmPermission::CAJA_VIEW => ['Caja', 'Ver caja y ventas'],
-            CrmPermission::CAJA_SELL => ['Caja', 'Abrir turno y cobrar'],
-            CrmPermission::CAJA_MANAGE => ['Caja', 'Anular ventas y cierre forzado'],
-            CrmPermission::BILLING_VIEW => ['Facturación', 'Ver comprobantes'],
-            CrmPermission::BILLING_MANAGE => ['Facturación', 'Emitir, anular y cambiar tarifas'],
-            CrmPermission::INVENTORY_VIEW => ['Inventario', 'Ver productos y movimientos'],
-            CrmPermission::INVENTORY_CREATE => ['Inventario', 'Crear productos'],
-            CrmPermission::INVENTORY_EDIT => ['Inventario', 'Editar y mover existencias'],
-            CrmPermission::INVENTORY_DELETE => ['Inventario', 'Archivar productos'],
-        ];
-
-        return array_map(
-            static fn (string $p) => [
-                'key' => $p,
-                'group' => $labels[$p][0] ?? 'Otros',
-                'label' => $labels[$p][1] ?? $p,
-            ],
-            CrmPermission::all(),
-        );
+        return \App\Support\Access\PermissionCatalog::rows();
     }
 
     /** Un cambio de permisos es un hecho de seguridad: queda en la traza. */

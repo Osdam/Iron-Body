@@ -88,7 +88,7 @@ class SubscriptionApiTest extends TestCase
 
     private function adminAuth(): array
     {
-        return ['Authorization' => 'Bearer '.self::ADMIN_SECRET];
+        return $this->adminHeaders();
     }
 
     private function validCardPayload(): array

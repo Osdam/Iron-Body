@@ -191,7 +191,8 @@ class AppealTest extends ModerationTestCase
             ['status' => ModerationAppeal::STATUS_GRANTED],
             $this->asAdmin($this->makeAdmin(Admin::ROLE_RECEPCION)))
             ->assertStatus(403)
-            ->assertJsonPath('required_permission', 'moderation.resolve_appeals');
+            // La puerta exterior deniega antes de llegar al permiso fino.
+            ->assertJsonPath('required_permission', 'moderation.manage');
     }
 
     public function test_la_app_nunca_ve_notas_internas_ni_al_reportante(): void

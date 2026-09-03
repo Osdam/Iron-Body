@@ -45,12 +45,14 @@ class AdminModerationTest extends ModerationTestCase
         ])->assertStatus(403);
     }
 
-    public function test_recepcion_puede_ver_pero_no_sancionar(): void
+    public function test_recepcion_ya_no_alcanza_la_moderacion(): void
     {
+        // Antes veía la cola en solo lectura. La política cambió: el rol base
+        // de recepción es atender y cobrar, y moderar se concede aparte.
         $report = $this->makeReport();
         $headers = $this->asAdmin($this->makeAdmin(Admin::ROLE_RECEPCION));
 
-        $this->getJson('/api/admin/moderation/reports', $headers)->assertOk();
+        $this->getJson('/api/admin/moderation/reports', $headers)->assertStatus(403);
 
         $this->postJson("/api/admin/moderation/reports/{$report->public_id}/decision", [
             'action_type' => 'suspend_social',
@@ -59,7 +61,7 @@ class AdminModerationTest extends ModerationTestCase
         ], $headers)
             ->assertStatus(403)
             ->assertJsonPath('code', 'forbidden')
-            ->assertJsonPath('required_permission', 'moderation.suspend_social');
+            ->assertJsonPath('required_permission', 'moderation.manage');
 
         $this->assertDatabaseCount('moderation_actions', 0);
     }

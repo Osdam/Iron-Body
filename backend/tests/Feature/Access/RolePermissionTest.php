@@ -90,7 +90,11 @@ class RolePermissionTest extends TestCase
             'payment_method' => 'cash', 'paid' => true,
         ], $this->actingAsAdmin($recepcion))
             ->assertStatus(403)
-            ->assertJsonPath('required_permission', 'caja.sell');
+            // El vocabulario cambió: `caja.sell` es ahora un alias de
+            // `cash.products.operate`, y el servidor responde con el nombre
+            // canónico. Lo que se comprueba —que revocar el permiso deniega el
+            // cobro— es exactamente lo mismo.
+            ->assertJsonPath('required_permission', 'cash.products.operate');
     }
 
     // ── CASO 2 · el cambio persiste ─────────────────────────────────────────

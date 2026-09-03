@@ -5,6 +5,7 @@ use App\Http\Middleware\AuthenticateTrainer;
 use App\Http\Middleware\EnsureAdminAuth;
 use App\Http\Middleware\EnsureAdminPermission;
 use App\Http\Middleware\EnsureMemberRegistrationToken;
+use App\Http\Middleware\EnforceAdminAuthorization;
 use App\Http\Middleware\ProtectAdminPaths;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\EnsureTrainerFeature;
@@ -50,6 +51,13 @@ return Application::configure(basePath: dirname(__DIR__))
         // a esas rutas; el resto del tráfico pasa intacto. Las rutas CRM fuera de
         // /admin se blindan con el alias `auth.admin` por ruta (ver api.php).
         $middleware->appendToGroup('api', ProtectAdminPaths::class);
+
+        // Y detrás, la AUTORIZACIÓN: ProtectAdminPaths dice quién entra;
+        // EnforceAdminAuthorization dice qué puede hacer una vez dentro. Va en
+        // el mismo grupo y por la misma razón —cubrir también las rutas
+        // futuras—, resolviendo el permiso con App\Support\Access\AuthorizationMap.
+        // Falla cerrado: una ruta administrativa sin clasificar se deniega.
+        $middleware->appendToGroup('api', EnforceAdminAuthorization::class);
 
         // Cabeceras de seguridad de base en TODAS las respuestas (web + api).
         $middleware->append(SecurityHeaders::class);

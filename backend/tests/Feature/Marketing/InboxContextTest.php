@@ -295,6 +295,18 @@ class InboxContextTest extends TestCase
             'password' => 'x', 'role' => 'recepcion', 'status' => 'active',
         ]);
 
+        // El rol de recepción no entra en mercadeo por defecto; lo que esta
+        // prueba fija es que, TENIENDO acceso al inbox, no se le muestran los
+        // diagnósticos internos. Se le concede el acceso explícitamente para
+        // poder comprobar esa segunda regla.
+        \App\Models\AdminRole::firstOrCreate(['name' => $reception->role], ['is_system' => true]);
+        foreach (['marketing.view'] as $permiso) {
+            \App\Models\RolePermission::updateOrCreate(
+                ['role' => $reception->role, 'permission' => $permiso], ['granted' => true],
+            );
+        }
+        app(\App\Support\Access\RolePermissionPolicy::class)->flush();
+
         $response = $this->getJson(
             "/api/admin/marketing/inbox/conversations/{$this->conversation->id}/context",
             $this->actingAsAdmin($reception),

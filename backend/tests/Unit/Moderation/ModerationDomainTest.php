@@ -182,7 +182,8 @@ class ModerationDomainTest extends TestCase
     {
         $admin = new Admin(['role' => Admin::ROLE_RECEPCION]);
 
-        $this->assertTrue(ModerationPermission::allows($admin, ModerationPermission::VIEW));
+        // Recepción dejó de moderar por decisión de negocio.
+        $this->assertFalse(ModerationPermission::allows($admin, ModerationPermission::VIEW));
         $this->assertFalse(ModerationPermission::allows($admin, ModerationPermission::REVIEW));
         $this->assertFalse(ModerationPermission::allows($admin, ModerationPermission::SUSPEND_SOCIAL));
     }

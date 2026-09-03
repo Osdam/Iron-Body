@@ -35,7 +35,7 @@ class IronCrmAiTest extends TestCase
     /** @return array<string, string> */
     private function authHeaders(): array
     {
-        return ['Authorization' => 'Bearer '.self::SECRET];
+        return $this->adminHeaders();
     }
 
     public function test_chat_sin_token_devuelve_401(): void

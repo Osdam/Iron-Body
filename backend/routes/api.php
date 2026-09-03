@@ -1063,6 +1063,15 @@ Route::post('admin/caja/shift/close', [CashShiftController::class, 'close'])
 Route::post('admin/caja/shifts/{shift}/difference', [CashShiftController::class, 'difference'])
     ->middleware('admin.can:cash.products.view');
 
+// ── Usuarios administrativos del CRM ─────────────────────────────────────────
+// Quién puede entrar y con qué rol. El permiso fino y los invariantes de Super
+// Admin los comprueba el controlador; el mapa central pone la puerta.
+Route::get('admin/users',                       [\App\Http\Controllers\Api\Admin\AdminUserController::class, 'index']);
+Route::post('admin/users',                      [\App\Http\Controllers\Api\Admin\AdminUserController::class, 'store']);
+Route::patch('admin/users/{admin}',             [\App\Http\Controllers\Api\Admin\AdminUserController::class, 'update']);
+Route::post('admin/users/{admin}/status',       [\App\Http\Controllers\Api\Admin\AdminUserController::class, 'setStatus']);
+Route::post('admin/users/{admin}/reset-password', [\App\Http\Controllers\Api\Admin\AdminUserController::class, 'resetPassword']);
+
 // ── Roles del CRM (catálogo) ──────────────────────────────────────────────────
 // Quien administra roles puede concederse permisos: es el privilegio más alto
 // del CRM y no se deriva de ningún otro.

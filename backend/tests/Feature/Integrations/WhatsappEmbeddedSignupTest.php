@@ -141,7 +141,20 @@ class WhatsappEmbeddedSignupTest extends TestCase
             ->assertJsonPath('code', 'integration_requires_admin');
     }
 
-    public function test_reception_can_look_but_not_connect(): void
+    public function test_reception_ya_no_alcanza_las_integraciones(): void
+    {
+        // Cambio de política: conectar y desconectar canales externos es
+        // autoridad de Super Admin, y recepción ya no lo ve ni de lectura.
+        $reception = Admin::create([
+            'name' => 'Recepción', 'email' => 'rec-wa-'.uniqid().'@ironbody.test',
+            'password' => 'x', 'role' => Admin::ROLE_RECEPCION, 'status' => 'active',
+        ]);
+
+        $this->getJson(self::URL, $this->actingAsAdmin($reception))->assertStatus(403);
+        $this->postJson(self::URL.'/start', [], $this->actingAsAdmin($reception))->assertStatus(403);
+    }
+
+    private function test_reception_can_look_but_not_connect_LEGACY(): void
     {
         $reception = Admin::create([
             'name' => 'Recepción', 'email' => 'recepcion-wa@ironbody.test',
@@ -289,9 +302,12 @@ class WhatsappEmbeddedSignupTest extends TestCase
 
     public function test_a_state_from_another_admin_is_refused(): void
     {
+        // Super Admin: conectar integraciones dejó de ser competencia de
+        // Administrador. Lo que fija esta prueba —que un `state` emitido a OTRA
+        // persona no se puede canjear— no depende de qué rol lo emitió.
         $other = Admin::create([
-            'name' => 'Otro', 'email' => 'otro-wa@ironbody.test',
-            'password' => 'x', 'role' => Admin::ROLE_ADMINISTRADOR, 'status' => 'active',
+            'name' => 'Otro', 'email' => 'otro-wa-'.uniqid().'@ironbody.test',
+            'password' => 'x', 'role' => Admin::ROLE_SUPER_ADMIN, 'status' => 'active',
         ]);
         $stolenState = $this->postJson(self::URL.'/start', [], $this->actingAsAdmin($other))
             ->json('data.state');
