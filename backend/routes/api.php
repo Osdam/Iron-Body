@@ -417,7 +417,10 @@ Route::middleware('auth.member')->group(function (): void {
 // Asistencias + catálogo de rostros (CRM web): datos biométricos → solo admin.
 Route::middleware('auth.admin')->group(function (): void {
     Route::get('attendances', [AttendanceController::class, 'index']);
-    Route::post('attendances', [AttendanceController::class, 'store']);
+    Route::post('attendances', [AttendanceController::class, 'store'])
+        // TEMPORAL: registra el cuerpo de los 422 para identificar por qué el
+        // lector facial manda un user_id que no es entero. Retirar al cerrarlo.
+        ->middleware(\App\Http\Middleware\LogAttendanceRejection::class);
     Route::get('attendances/stream', [AttendanceController::class, 'stream']); // SSE tiempo real
     Route::get('attendances/face-references', [AttendanceController::class, 'faceReferences']);
     Route::get('attendances/face-image/{userId}', [AttendanceController::class, 'faceImage'])
