@@ -7,6 +7,7 @@ use App\Exceptions\InsufficientStockException;
 use App\Http\Controllers\Controller;
 use App\Models\InventoryMovement;
 use App\Models\Product;
+use App\Services\Billing\SaleReadiness;
 use App\Models\ProductSaleItem;
 use App\Services\CatalogEvents;
 use App\Services\Inventory\InventoryService;
@@ -50,7 +51,25 @@ class ProductController extends Controller
                 ->orWhere('supplier', 'like', $term));
         }
 
-        return response()->json(['data' => $query->orderBy('name')->get()]);
+        return response()->json(['data' => $this->withSaleState($query->orderBy('name')->get())]);
+    }
+
+    /**
+     * Añade a cada producto si se puede COBRAR y, si no, por qué.
+     *
+     * Va aquí y no en el modelo para no cargar con este cálculo a todos los
+     * demás consumidores —la tienda de la app, por ejemplo—, que tienen otras
+     * reglas de disponibilidad. Quien necesita saber si el mostrador puede
+     * cobrarlo es el CRM, y este es su endpoint.
+     *
+     * @param  \Illuminate\Support\Collection<int, Product>  $items
+     * @return \Illuminate\Support\Collection<int, array<string,mixed>>
+     */
+    private function withSaleState($items)
+    {
+        $readiness = app(SaleReadiness::class);
+
+        return $items->map(fn (Product $p) => array_merge($p->toArray(), $readiness->for($p)));
     }
 
     // GET /api/admin/products/stats
@@ -72,7 +91,9 @@ class ProductController extends Controller
     // GET /api/admin/products/{product}
     public function show(Product $product): JsonResponse
     {
-        return response()->json(['data' => $product]);
+        return response()->json([
+            'data' => array_merge($product->toArray(), app(SaleReadiness::class)->for($product)),
+        ]);
     }
 
     /**
