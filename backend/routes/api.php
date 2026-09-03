@@ -1063,6 +1063,21 @@ Route::post('admin/caja/shift/close', [CashShiftController::class, 'close'])
 Route::post('admin/caja/shifts/{shift}/difference', [CashShiftController::class, 'difference'])
     ->middleware('admin.can:cash.products.view');
 
+// ── Roles del CRM (catálogo) ──────────────────────────────────────────────────
+// Quien administra roles puede concederse permisos: es el privilegio más alto
+// del CRM y no se deriva de ningún otro.
+Route::get('admin/roles',                      [\App\Http\Controllers\Api\Admin\AdminRoleController::class, 'index'])
+    ->middleware('admin.can:roles.manage');
+Route::get('admin/roles/assignable',           [\App\Http\Controllers\Api\Admin\AdminRoleController::class, 'assignable'])
+    ->middleware('admin.can:roles.manage');
+Route::post('admin/roles',                     [\App\Http\Controllers\Api\Admin\AdminRoleController::class, 'store'])
+    ->middleware('admin.can:roles.manage');
+Route::patch('admin/roles/{role}',             [\App\Http\Controllers\Api\Admin\AdminRoleController::class, 'update'])
+    ->middleware('admin.can:roles.manage');
+Route::post('admin/roles/{role}/archive',      [\App\Http\Controllers\Api\Admin\AdminRoleController::class, 'archive'])
+    ->middleware('admin.can:roles.manage');
+Route::post('admin/roles/{role}/restore',      [\App\Http\Controllers\Api\Admin\AdminRoleController::class, 'restore'])
+    ->middleware('admin.can:roles.manage');
 
 Route::get('admin/caja/stats',                  [CajaController::class, 'stats'])
     ->middleware('admin.can:caja.view');

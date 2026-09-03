@@ -3,6 +3,7 @@
 namespace App\Support\Access;
 
 use App\Models\Admin;
+use App\Models\AdminRole;
 use App\Models\RolePermission;
 use Illuminate\Support\Facades\Cache;
 
@@ -38,8 +39,16 @@ class RolePermissionPolicy
             return $defaults;
         }
 
-        $effective = array_fill_keys($defaults, true);
-        foreach ($overrides as $permission => $granted) {
+        // Se resuelve sobre nombres CANÓNICOS: revocar `caja.sell` debe revocar
+        // también `cash.products.operate`, porque son el mismo permiso con dos
+        // nombres. Si no, una revocación en la pantalla de Roles no surtiría
+        // efecto y el CRM mentiría sobre lo que acaba de guardar.
+        $effective = [];
+        foreach ($defaults as $permission) {
+            $effective[CrmPermission::canonical($permission)] = true;
+        }
+        foreach ($overrides as $raw => $granted) {
+            $permission = CrmPermission::canonical($raw);
             if ($granted) {
                 $effective[$permission] = true;
             } else {
@@ -61,7 +70,7 @@ class RolePermissionPolicy
     public function matrix(): array
     {
         $out = [];
-        foreach (Admin::ROLES as $role) {
+        foreach (self::knownRoles() as $role) {
             $defaults = CrmPermission::defaultsFor($role);
             $effective = $this->effectiveFor($role);
 
@@ -104,6 +113,25 @@ class RolePermissionPolicy
         }
 
         $this->flush();
+    }
+
+    /**
+     * Roles para los que hay política. Sale del catálogo `admin_roles`, que
+     * incluye los del sistema y los creados desde el CRM; si la tabla aún no
+     * existe (migración pendiente) se cae a las constantes del código, para que
+     * la autorización nunca dependa de un despliegue a medias.
+     *
+     * @return list<string>
+     */
+    public static function knownRoles(): array
+    {
+        try {
+            $roles = AdminRole::allNames();
+        } catch (\Throwable) {
+            return Admin::ROLES;
+        }
+
+        return $roles !== [] ? $roles : Admin::ROLES;
     }
 
     public function flush(): void

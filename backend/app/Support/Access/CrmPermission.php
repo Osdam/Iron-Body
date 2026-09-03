@@ -65,6 +65,9 @@ final class CrmPermission
 
     public const CASH_GYM_MANAGE = 'cash.gym.manage';
 
+    // ── Administración de roles ─────────────────────────────────────────────
+    public const ROLES_MANAGE = 'roles.manage';
+
     /**
      * Equivalencias legado ↔ nuevo. Conceder cualquiera de los dos lados
      * concede el otro: es lo que permite renombrar el vocabulario sin una
@@ -105,6 +108,7 @@ final class CrmPermission
             self::CASH_GYM_VIEW,
             self::CASH_GYM_OPERATE,
             self::CASH_GYM_MANAGE,
+            self::ROLES_MANAGE,
             self::BILLING_VIEW,
             self::BILLING_MANAGE,
             self::INVENTORY_VIEW,

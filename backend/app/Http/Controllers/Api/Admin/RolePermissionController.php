@@ -37,7 +37,7 @@ class RolePermissionController extends Controller
         }
 
         return response()->json([
-            'roles' => array_values(Admin::ROLES),
+            'roles' => array_values(RolePermissionPolicy::knownRoles()),
             'permissions' => $this->catalog(),
             'matrix' => $this->policy->matrix(),
         ]);
@@ -58,7 +58,7 @@ class RolePermissionController extends Controller
         $data = $request->validate([
             // Vocabulario cerrado en ambos campos: sin esto se podrían insertar
             // roles o permisos inventados que después nadie sabría interpretar.
-            'role' => ['required', Rule::in(Admin::ROLES)],
+            'role' => ['required', Rule::in(RolePermissionPolicy::knownRoles())],
             'permission' => ['required', Rule::in(CrmPermission::all())],
             'granted' => ['required', 'boolean'],
         ]);
