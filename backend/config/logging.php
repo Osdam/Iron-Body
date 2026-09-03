@@ -70,20 +70,6 @@ return [
             'replace_placeholders' => true,
         ],
 
-        /*
-         * Rechazos del lector facial. Canal aparte y TEMPORAL: mezclarlo con
-         * laravel.log enterraría el dato entre el ruido de la aplicación, y son
-         * unas 3.800 líneas al día mientras el cliente siga reintentando.
-         * Se retira junto con LogAttendanceRejection.
-         */
-        'attendance' => [
-            'driver' => 'daily',
-            'path' => storage_path('logs/attendance.log'),
-            'level' => 'debug',
-            'days' => 3,
-            'replace_placeholders' => true,
-        ],
-
         'daily' => [
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),
