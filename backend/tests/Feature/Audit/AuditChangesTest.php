@@ -6,7 +6,9 @@ use App\Models\Admin;
 use App\Models\AuditLog;
 use App\Models\Plan;
 use App\Models\User;
+use App\Services\Audit\AuditTrail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 /**
@@ -201,5 +203,141 @@ class AuditChangesTest extends TestCase
 
         $this->assertSame(0, AuditLog::query()->where('entity', 'plan')->count());
         $this->assertEquals(80000, $plan->fresh()->price);
+    }
+
+    // ── Falsos positivos vistos en producción ───────────────────────────────
+
+    /**
+     * El guardado ocurre MÁS TARDE que la creación, como en la vida real.
+     *
+     * Es la diferencia que escondió el fallo: creando y editando en el mismo
+     * segundo, `updated_at` no llega a cambiar y no aparece en el diff. En
+     * producción el plan llevaba meses creado y salía en todas las trazas.
+     */
+    private function masTarde(): void
+    {
+        Carbon::setTestNow(now()->addMinutes(5));
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
+    }
+
+    public function test_updated_at_nunca_aparece(): void
+    {
+        $plan = $this->plan();
+        $this->masTarde();
+
+        $this->patchJson("/api/plans/{$plan->id}", ['price' => 50000], $this->admin())->assertOk();
+
+        $campos = $this->camposDe('plan');
+        $this->assertNotContains('updated_at', $campos);
+        $this->assertSame(['price'], $campos, 'un cambio de precio es UN cambio');
+    }
+
+    public function test_created_at_nunca_aparece(): void
+    {
+        $plan = $this->plan();
+        $this->masTarde();
+
+        $this->patchJson("/api/plans/{$plan->id}", ['price' => 50000], $this->admin())->assertOk();
+
+        $this->assertNotContains('created_at', $this->camposDe('plan'));
+    }
+
+    public function test_el_mismo_json_en_otro_orden_no_es_un_cambio(): void
+    {
+        // El formulario reenvía `features` en cada guardado, y basta con que el
+        // orden de las claves varíe para que Eloquent lo marque: el cast `array`
+        // compara la serialización, no el contenido.
+        //
+        // Se parte del conjunto COMPLETO de banderas porque el controlador
+        // fusiona lo enviado con `resolvedFeatures()`. Con un conjunto parcial
+        // la fusión añade claves y el cambio sería real, no de orden.
+        $plan = $this->plan();
+        $completo = $plan->resolvedFeatures();
+        $plan->features = $completo;
+        $plan->save();
+        $this->masTarde();
+
+        $this->patchJson("/api/plans/{$plan->id}", [
+            'price' => 50000,
+            'features' => array_reverse($completo, true),
+        ], $this->admin())->assertOk();
+
+        $campos = $this->camposDe('plan');
+        $this->assertNotContains('features', $campos);
+        $this->assertSame(['price'], $campos);
+    }
+
+    public function test_un_cambio_real_dentro_del_json_si_aparece(): void
+    {
+        $plan = $this->plan();
+        $plan->features = ['iron_ia' => true, 'workouts' => true];
+        $plan->save();
+        $this->masTarde();
+
+        $this->patchJson("/api/plans/{$plan->id}", [
+            'features' => ['iron_ia' => false, 'workouts' => true],
+        ], $this->admin())->assertOk();
+
+        $this->assertContains('features', $this->camposDe('plan'));
+    }
+
+    public function test_una_lista_en_otro_orden_si_es_un_cambio(): void
+    {
+        // En una lista el orden ES el dato: mover el primer ejercicio de una
+        // rutina al final cambia la rutina. Solo se normalizan los objetos.
+        $trail = app(AuditTrail::class);
+        $plan = $this->plan();
+        $plan->features = ['orden' => ['a', 'b', 'c']];
+        $plan->save();
+
+        $previo = $plan->getOriginal();
+        $plan->features = ['orden' => ['c', 'b', 'a']];
+        $plan->save();
+
+        $this->assertSame(['features'], array_column($trail->changesOf($plan, $previo), 'field'));
+    }
+
+    public function test_el_precio_sigue_llevando_su_antes_y_despues(): void
+    {
+        $plan = $this->plan(['price' => 80000]);
+        $this->masTarde();
+
+        $this->patchJson("/api/plans/{$plan->id}", ['price' => 50000], $this->admin())->assertOk();
+
+        $cambio = AuditLog::query()->where('entity', 'plan')->where('action', 'update')->sole()->changes[0];
+        $this->assertSame(['field' => 'price', 'from' => '80000', 'to' => '50000'], $cambio);
+    }
+
+    public function test_el_caso_exacto_de_produccion(): void
+    {
+        // Ana cambió el precio de un plan y la traza dijo tres campos:
+        // [price, updated_at, features]. `updated_at` sobraba; `features` no,
+        // porque su columna tenía menos banderas que `resolvedFeatures()` y la
+        // fusión del controlador la completó. Una vez normalizada —como aquí—,
+        // un cambio de precio debe dejar exactamente un campo.
+        $plan = $this->plan(['price' => 0]);
+        $completo = $plan->resolvedFeatures();
+        $plan->features = $completo;
+        $plan->save();
+        $this->masTarde();
+
+        $this->patchJson("/api/plans/{$plan->id}", [
+            'name' => 'Mensual',
+            'price' => 1,
+            'duration_days' => 30,
+            'benefits' => 'Acceso libre',
+            'active' => true,
+            'features' => array_reverse($completo, true),
+        ], $this->admin())->assertOk();
+
+        $this->assertSame(
+            [['field' => 'price', 'from' => '0', 'to' => '1']],
+            AuditLog::query()->where('entity', 'plan')->where('action', 'update')->sole()->changes,
+        );
     }
 }

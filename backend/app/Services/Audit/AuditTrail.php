@@ -105,17 +105,109 @@ class AuditTrail
         $cambios = [];
 
         foreach (array_keys($model->getChanges()) as $campo) {
+            if ($this->esTecnico($model, $campo)) {
+                continue;
+            }
+
+            $antes = $previo[$campo] ?? null;
+            $ahora = $model->getAttribute($campo);
+
+            if ($this->esEquivalente($model, $campo, $antes, $ahora)) {
+                continue;
+            }
+
             $registro = ['field' => $campo];
 
             if (in_array($campo, $conValores, true)) {
-                $registro['from'] = $this->legible($previo[$campo] ?? null);
-                $registro['to'] = $this->legible($model->getAttribute($campo));
+                $registro['from'] = $this->legible($antes);
+                $registro['to'] = $this->legible($ahora);
             }
 
             $cambios[] = $registro;
         }
 
         return $cambios;
+    }
+
+    /**
+     * ¿Es una columna de fontanería y no un cambio de negocio?
+     *
+     * Eloquent toca `updated_at` ANTES de calcular el diff, así que sale como
+     * modificada en cada guardado. Se vio en producción: cambiar el precio de un
+     * plan dejaba `[price, updated_at, features]` donde solo el precio importaba.
+     * Las pruebas no lo detectaron porque creaban y editaban en el mismo
+     * segundo, y entonces la marca de tiempo no llega a cambiar.
+     */
+    private function esTecnico(Model $model, string $campo): bool
+    {
+        return in_array($campo, array_filter([
+            $model->getCreatedAtColumn(),
+            $model->getUpdatedAtColumn(),
+            method_exists($model, 'getDeletedAtColumn') ? $model->getDeletedAtColumn() : null,
+        ]), true);
+    }
+
+    /**
+     * Para columnas JSON, ¿cambió el CONTENIDO o solo su serialización?
+     *
+     * Laravel compara los casts `object` y `collection` decodificando el JSON,
+     * pero el cast `array` no: reenviar las mismas claves en otro orden lo marca
+     * como modificado. También se vio en producción — el formulario de planes
+     * reenviaba `features` y bastaba con que el orden variara.
+     *
+     * Los arrays INDEXADOS no se reordenan: en una lista el orden es el dato, y
+     * mover el primer ejercicio de una rutina al final es un cambio real.
+     */
+    private function esEquivalente(Model $model, string $campo, mixed $antes, mixed $ahora): bool
+    {
+        if (! $model->hasCast($campo, ['array', 'json'])) {
+            return false;
+        }
+
+        return $this->normalizar($this->comoArray($antes)) === $this->normalizar($this->comoArray($ahora));
+    }
+
+    /** @return array<mixed>|null */
+    private function comoArray(mixed $valor): ?array
+    {
+        if (is_array($valor)) {
+            return $valor;
+        }
+
+        if (is_string($valor)) {
+            $decodificado = json_decode($valor, true);
+
+            return is_array($decodificado) ? $decodificado : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * Ordena las claves de los objetos asociativos, dejando las listas intactas.
+     *
+     * @param  array<mixed>|null  $valor
+     * @return array<mixed>|null
+     */
+    private function normalizar(?array $valor): ?array
+    {
+        if ($valor === null) {
+            return null;
+        }
+
+        $esLista = array_is_list($valor);
+
+        foreach ($valor as $k => $v) {
+            if (is_array($v)) {
+                $valor[$k] = $this->normalizar($v);
+            }
+        }
+
+        if (! $esLista) {
+            ksort($valor);
+        }
+
+        return $valor;
     }
 
     /**
