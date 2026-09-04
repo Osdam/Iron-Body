@@ -94,6 +94,7 @@ class GymEquipmentController extends Controller
     {
         $data = $this->validatePayload($request, $equipment->id);
 
+        $previoEquipo = $equipment->getOriginal();
         $equipment->update($data);
         $this->context->flush();
 
@@ -102,7 +103,7 @@ class GymEquipmentController extends Controller
             'module' => 'Equipos', 'entity' => 'equipo',
             'entity_id' => $equipment->id, 'target_name' => $equipment->name,
             'summary' => "Modificó el equipo {$equipment->name}",
-            'changes' => array_map(static fn (string $c) => ['field' => $c], array_keys($request->all())),
+            'changes' => app(AuditTrail::class)->changesOf($equipment, $previoEquipo, ['status', 'name']),
         ]);
 
         return response()->json(['data' => $equipment->fresh()]);

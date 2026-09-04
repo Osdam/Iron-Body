@@ -145,13 +145,20 @@ class PlanController extends Controller
             );
         }
 
+        $previoPlan = $plan->getOriginal();
         $plan->update($data);
 
         app(AuditTrail::class)->record($request, [
             'action' => 'update', 'module' => 'Planes', 'entity' => 'plan',
             'entity_id' => $plan->id, 'target_name' => $plan->name,
             'summary' => "Modificó el plan {$plan->name}",
-            'changes' => array_map(static fn (string $c) => ['field' => $c], array_keys($request->all())),
+            'changes' => app(AuditTrail::class)->changesOf(
+                $plan,
+                $previoPlan,
+                // Un cambio de precio o de vigencia sin el antes y el después
+                // obliga a reconstruirlo a mano. No son datos personales.
+                ['price', 'duration_days', 'active', 'tier'],
+            ),
             'metadata' => ['price' => (string) $plan->price],
         ]);
 
@@ -308,7 +315,10 @@ class PlanController extends Controller
             'action' => 'update', 'module' => 'Planes', 'entity' => 'plan',
             'entity_id' => $plan->id, 'target_name' => $plan->name,
             'summary' => "Cambió las capacidades de IRON IA de {$plan->name}",
-            'changes' => array_map(static fn (string $c) => ['field' => $c], array_keys($columns)),
+            // `updateOrCreate` deja el modelo con su seguimiento hecho, así que
+            // solo salen las capacidades que de verdad cambiaron de valor. Sin
+            // el antes y el después: son banderas, y el nombre ya lo dice todo.
+            'changes' => app(AuditTrail::class)->changesOf($row),
         ]);
 
         // Notifica a los miembros activos del plan (SSE) para refrescar acceso.

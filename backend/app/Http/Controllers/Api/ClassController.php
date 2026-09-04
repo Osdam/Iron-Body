@@ -234,6 +234,7 @@ class ClassController extends Controller
             }
         }
 
+        $previoClase = $myClass->getOriginal();
         $myClass->update($validated);
 
         // Si se (re)asignó a un entrenador, garantízale el rol del portal de clases.
@@ -252,7 +253,11 @@ class ClassController extends Controller
             'module' => 'Clases', 'entity' => 'clase',
             'entity_id' => $myClass->id, 'target_name' => $myClass->name,
             'summary' => "Modificó la clase {$myClass->name}",
-            'changes' => array_map(static fn (string $c) => ['field' => $c], array_keys($request->all())),
+            'changes' => app(AuditTrail::class)->changesOf(
+                $myClass,
+                $previoClase,
+                ['status', 'capacity', 'date_time'],
+            ),
         ]);
 
         return new ClassResource($myClass->loadCount('reservations')->load('trainer:id,full_name'));

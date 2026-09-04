@@ -98,13 +98,14 @@ class RoutineController extends Controller
     {
         $data = $this->validateInput($request, false);
         $routine->fill($this->mapInput($data));
+        $previoRutina = $routine->getOriginal();
         $routine->save();
 
         app(AuditTrail::class)->record($request, [
             'action' => 'update', 'module' => 'Rutinas', 'entity' => 'rutina',
             'entity_id' => $routine->id, 'target_name' => $routine->name,
             'summary' => "Modificó la rutina {$routine->name}",
-            'changes' => array_map(static fn (string $c) => ['field' => $c], array_keys($request->all())),
+            'changes' => app(AuditTrail::class)->changesOf($routine, $previoRutina),
         ]);
 
         // Si la rutina está asignada a un miembro, notifícale la actualización.

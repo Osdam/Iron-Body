@@ -312,6 +312,8 @@ class UserController extends Controller
             }
         }
 
+        // Antes de guardar: al hacerlo Eloquent sincroniza los originales.
+        $previoUser = $user->getOriginal();
         $user->save();
 
         if ($user->appMember) {
@@ -375,7 +377,9 @@ class UserController extends Controller
             'action' => 'update', 'module' => 'Miembros', 'entity' => 'cliente',
             'entity_id' => $user->id, 'target_name' => $user->name,
             'summary' => "Modificó la ficha de {$user->name}",
-            'changes' => array_map(static fn (string $c) => ['field' => $c], array_keys($request->all())),
+            // Solo el NOMBRE del campo: la ficha de un socio es dato personal de
+            // principio a fin, y la traza dice qué se tocó, no qué decía.
+            'changes' => app(AuditTrail::class)->changesOf($user, $previoUser),
         ]);
 
         return response()->json($this->serialize($user));

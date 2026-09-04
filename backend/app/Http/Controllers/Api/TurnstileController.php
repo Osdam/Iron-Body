@@ -52,6 +52,7 @@ class TurnstileController extends Controller
         ]);
 
         $settings = TurnstileSetting::current();
+        $previoTorniquete = $settings->getOriginal();
         $settings->fill($data)->save();
 
         // Configuración del control de acceso físico: quién la cambió importa
@@ -60,7 +61,13 @@ class TurnstileController extends Controller
             'action' => 'settings', 'module' => 'Asistencias', 'entity' => 'torniquete',
             'entity_id' => $settings->id,
             'summary' => 'Cambió la configuración del torniquete',
-            'changes' => array_map(static fn (string $c) => ['field' => $c], array_keys($data)),
+            'changes' => app(AuditTrail::class)->changesOf(
+                $settings,
+                $previoTorniquete,
+                // Solo las banderas de comportamiento. Nada de URLs, tokens ni
+                // credenciales del dispositivo, que también viven aquí.
+                ['enabled', 'fire_on_entry', 'fire_on_exit'],
+            ),
             'metadata' => ['enabled' => (bool) $settings->enabled],
         ]);
 

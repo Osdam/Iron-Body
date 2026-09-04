@@ -4,6 +4,7 @@ namespace App\Services\Audit;
 
 use App\Models\AuditLog;
 use App\Support\Access\AdminActor;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 
 /**
@@ -70,27 +71,75 @@ class AuditTrail
     }
 
     /**
-     * Qué campos cambiaron, en la forma que ya consume el CRM.
+     * Qué campos cambiaron DE VERDAD en un modelo recién guardado.
      *
-     * Solo los que de verdad cambiaron: volcar el objeto entero llenaría la
-     * traza de ruido y escondería el dato que importa. Los valores no se
-     * guardan —pueden ser datos personales— salvo que el llamante los pase
-     * explícitamente.
+     * Se apoya en el seguimiento de Eloquent, no en una comparación propia. La
+     * diferencia no es de estilo: comparar a mano el cuerpo de la petición
+     * contra el estado anterior marca cambios que no existen. Medido sobre este
+     * mismo proyecto —enviar `price: "80000"` sobre un plan que ya vale `80000`,
+     * o `active: 1` sobre uno que ya está activo— una comparación estricta los
+     * daba por modificados; `getChanges()` no. Eloquent conoce los casts y las
+     * equivalencias numéricas, y esto es exactamente lo que ya hacía el
+     * catálogo de productos con `getDirty()`.
      *
-     * @param  array<string, mixed>  $antes
-     * @param  array<string, mixed>  $despues
-     * @return array<int, array<string, string>>
+     * Antes se registraban las CLAVES ENVIADAS: editar el teléfono de un socio
+     * dejaba una traza diciendo que se habían tocado los dieciséis campos del
+     * formulario. Cierto en lo literal e inútil para auditar.
+     *
+     * Debe llamarse DESPUÉS de guardar: hasta entonces `getChanges()` está
+     * vacío. Y `$previo` hay que capturarlo ANTES, porque al guardar Eloquent
+     * sincroniza los valores originales con los nuevos.
+     *
+     * Los valores solo se registran para los campos que el llamante liste en
+     * `$conValores`. El resto deja constancia únicamente del NOMBRE del campo:
+     * la traza no es sitio para el documento, el teléfono ni el correo de un
+     * socio, y la lista blanca obliga a decidirlo caso por caso en vez de
+     * volcarlo todo por comodidad.
+     *
+     * @param  array<string, mixed>  $previo  `$model->getOriginal()` antes de guardar
+     * @param  list<string>  $conValores  campos NO sensibles cuyo antes/después sí aporta
+     * @return list<array<string, mixed>>
      */
-    public function diff(array $antes, array $despues): array
+    public function changesOf(Model $model, array $previo = [], array $conValores = []): array
     {
         $cambios = [];
 
-        foreach ($despues as $campo => $valor) {
-            if (! array_key_exists($campo, $antes) || $antes[$campo] !== $valor) {
-                $cambios[] = ['field' => $campo];
+        foreach (array_keys($model->getChanges()) as $campo) {
+            $registro = ['field' => $campo];
+
+            if (in_array($campo, $conValores, true)) {
+                $registro['from'] = $this->legible($previo[$campo] ?? null);
+                $registro['to'] = $this->legible($model->getAttribute($campo));
             }
+
+            $cambios[] = $registro;
         }
 
         return $cambios;
+    }
+
+    /**
+     * Valor apto para guardar en la traza.
+     *
+     * Se reduce a texto plano: un objeto o un array dentro de `changes` haría
+     * que la vista de auditoría tuviera que adivinar cómo pintarlo, y de paso
+     * abriría la puerta a que se colara una estructura entera con datos que
+     * nadie revisó.
+     */
+    private function legible(mixed $valor): ?string
+    {
+        if ($valor === null) {
+            return null;
+        }
+
+        if (is_bool($valor)) {
+            return $valor ? 'sí' : 'no';
+        }
+
+        if (is_scalar($valor)) {
+            return mb_substr((string) $valor, 0, 120);
+        }
+
+        return '(no representable)';
     }
 }
