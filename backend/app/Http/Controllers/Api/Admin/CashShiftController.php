@@ -6,9 +6,15 @@ use App\Enums\CashShiftStatus;
 use App\Enums\CashShiftType;
 use App\Exceptions\CashShiftException;
 use App\Http\Controllers\Controller;
+use App\Models\Admin;
 use App\Models\CashShift;
 use App\Services\Caja\CashShiftOrchestrator;
 use App\Services\Caja\CashShiftService;
+use App\Services\Audit\AuditTrail;
+use App\Services\Caja\CashShiftPdfService;
+use App\Services\Caja\CashShiftReport;
+use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 use App\Support\Access\AdminActor;
 use App\Support\Access\CrmPermission;
 use Illuminate\Http\JsonResponse;
@@ -143,6 +149,10 @@ class CashShiftController extends Controller
         $type = CashShiftType::from($data['type'] ?? CashShiftType::PRODUCTS->value);
         $types = ($data['also'] ?? false) ? [$type, $type->other()] : [$type];
 
+        if ($rechazo = $this->denegarSiNoOperaNinguna($admin, $types)) {
+            return $rechazo;
+        }
+
         $resultado = $this->orchestrator->open($admin, $types);
 
         return response()->json([
@@ -174,6 +184,10 @@ class CashShiftController extends Controller
         $type = CashShiftType::from($data['type'] ?? CashShiftType::PRODUCTS->value);
         $types = ($data['also'] ?? false) ? [$type, $type->other()] : [$type];
 
+        if ($rechazo = $this->denegarSiNoOperaNinguna($admin, $types)) {
+            return $rechazo;
+        }
+
         $resultado = $this->orchestrator->close(
             $admin,
             $types,
@@ -194,6 +208,91 @@ class CashShiftController extends Controller
      * a propósito: pedir el conteo todos los días convertía una comprobación
      * real en un trámite que se rellena de cualquier manera.
      */
+    /**
+     * GET /api/admin/caja/shifts/{shift} — informe de un turno.
+     *
+     * Sustituye a la captura de pantalla: antes, cerrar la caja y no guardar
+     * una imagen significaba perder el arqueo. Aquí el turno se puede volver a
+     * abrir siempre, con su detalle.
+     *
+     * Basta `view` de SU tipo. Consultar un cierre no es operar una caja, y
+     * exigir `manage` para leer dejaría el informe fuera del alcance de quien
+     * lo necesita a diario.
+     */
+    public function show(Request $request, CashShift $shift): JsonResponse
+    {
+        if ($rechazo = $this->denegarSiNoPuedeVer($request, $shift)) {
+            return $rechazo;
+        }
+
+        return response()->json(app(CashShiftReport::class)->for($shift));
+    }
+
+    /**
+     * GET /api/admin/caja/shifts/{shift}/pdf — el mismo informe, en papel.
+     *
+     * Misma autorización que `show`: si alguien no puede ver el turno en
+     * pantalla, tampoco puede descargarlo. Comprobar solo una de las dos
+     * puertas dejaría la otra abierta cambiando la URL.
+     */
+    public function pdf(Request $request, CashShift $shift): SymfonyResponse
+    {
+        if ($rechazo = $this->denegarSiNoPuedeVer($request, $shift)) {
+            return $rechazo;
+        }
+
+        $servicio = app(CashShiftPdfService::class);
+
+        return response($servicio->render($shift), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$servicio->filename($shift).'"',
+        ]);
+    }
+
+    /**
+     * ¿Puede este actor ver ESTE turno?
+     *
+     * La comprobación es por el tipo del turno pedido, no por el que el cliente
+     * diga: sin esto, quien solo ve Productos leería un cierre del gimnasio
+     * cambiando el id en la URL.
+     */
+    /**
+     * ¿Puede este actor operar ALGUNA de las cajas que pide?
+     *
+     * Si no puede con ninguna, es un 403 y no una operación que devuelve dos
+     * negativas: la ruta ya no lleva permiso fijo, y sin esta guarda quien no
+     * tiene nada recibiría un 207 con todo denegado, que parece un resultado
+     * parcial cuando en realidad no se le permitió intentar nada.
+     *
+     * NO sustituye a la comprobación por caja del orquestador, que sigue siendo
+     * la que autoriza: aquí basta con que UNA sea operable, y las demás se
+     * deniegan después una por una. Esa asimetría es deliberada —abrir las dos
+     * de un clic teniendo permiso solo para una debe abrir la que sí— y es el
+     * comportamiento ya validado en producción.
+     *
+     * @param  CashShiftType[]  $types
+     */
+    private function denegarSiNoOperaNinguna(Admin $admin, array $types): ?JsonResponse
+    {
+        foreach ($types as $type) {
+            if (CrmPermission::allows($admin, $type->operatePermission())) {
+                return null;
+            }
+        }
+
+        return $this->forbidden($types[0]->operatePermission());
+    }
+
+    private function denegarSiNoPuedeVer(Request $request, CashShift $shift): ?JsonResponse
+    {
+        $admin = AdminActor::from($request);
+        if ($admin === null || ! CrmPermission::allows($admin, $shift->type->viewPermission())) {
+            return $this->forbidden($shift->type->viewPermission());
+        }
+
+        return null;
+    }
+
     public function difference(Request $request, CashShift $shift): JsonResponse
     {
         $data = $request->validate([
@@ -210,7 +309,31 @@ class CashShiftController extends Controller
         }
 
         try {
-            $actualizado = $this->shifts->registerDifference($admin, $shift, (float) $data['counted_amount'], $data['reason']);
+            $actualizado = DB::transaction(function () use ($admin, $shift, $data, $request) {
+                $resultado = $this->shifts->registerDifference(
+                    $admin, $shift, (float) $data['counted_amount'], $data['reason'],
+                );
+
+                // Dentro de la MISMA transacción: un arqueo aplicado sin traza
+                // sería un descuadre firmado por nadie.
+                app(AuditTrail::class)->record($request, [
+                    'action' => 'update',
+                    'module' => 'Caja',
+                    'entity' => 'arqueo',
+                    'entity_id' => $resultado->id,
+                    'target_name' => 'Caja '.$resultado->type->label().' · turno #'.$resultado->id,
+                    'summary' => sprintf('Registró el arqueo del turno #%d', $resultado->id),
+                    'metadata' => [
+                        'cash_shift_id' => $resultado->id,
+                        'type' => $resultado->type->value,
+                        'expected_amount' => (string) $resultado->expected_amount,
+                        'counted_amount' => (string) $resultado->counted_amount,
+                        'difference' => (string) $resultado->difference,
+                    ],
+                ]);
+
+                return $resultado;
+            });
         } catch (CashShiftException $e) {
             return response()->json(['ok' => false, 'code' => $e->code_, 'message' => $e->getMessage()], 409);
         }

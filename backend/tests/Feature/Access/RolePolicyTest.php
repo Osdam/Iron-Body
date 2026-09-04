@@ -216,7 +216,13 @@ class RolePolicyTest extends TestCase
                 continue;
             }
             $p = AuthorizationMap::resolve($route);
-            if ($p === null || in_array($p, [AuthorizationMap::PUBLIC, AuthorizationMap::SELF], true)) {
+            // Los centinelas no son permisos: PUBLIC y SELF no exigen ninguno,
+            // y CONTROLLER lo resuelve el controlador con el dato en la mano.
+            if ($p === null || in_array($p, [
+                AuthorizationMap::PUBLIC,
+                AuthorizationMap::SELF,
+                AuthorizationMap::CONTROLLER,
+            ], true)) {
                 continue;
             }
             if (! CrmPermission::allows($super, $p)) {

@@ -1073,17 +1073,30 @@ Route::put('admin/roles/permissions', [RolePermissionController::class, 'update'
 // permiso FINO depende del `type` pedido y de si se marca la operación doble,
 // así que lo comprueba el controlador/orquestador caja por caja; el middleware
 // solo garantiza que quien llama puede ver ALGUNA caja.
-Route::get('admin/caja/shift',        [CashShiftController::class, 'current'])
-    ->middleware('admin.can:cash.products.view');
-Route::get('admin/caja/shifts',       [CashShiftController::class, 'index'])
-    ->middleware('admin.can:cash.products.view');
-Route::post('admin/caja/shift/open',  [CashShiftController::class, 'open'])
-    ->middleware('admin.can:cash.products.view');
-Route::post('admin/caja/shift/close', [CashShiftController::class, 'close'])
-    ->middleware('admin.can:cash.products.view');
+// Estado del turno EN CURSO de la caja pedida. Sin puerta fija: `current()`
+// exige el `view` del tipo solicitado, así que quien solo ve el gimnasio
+// consulta el gimnasio y choca con productos.
+Route::get('admin/caja/shift',        [CashShiftController::class, 'current']);
+// Historial de turnos. SIN puerta previa por permiso fijo: `index()` calcula
+// qué cajas puede ver el actor y devuelve 403 si no puede ver ninguna. Exigir
+// aquí `cash.products.view` bloqueaba a quien solo tuviera `cash.gym.view`
+// antes de que nadie mirase de qué caja se trata.
+Route::get('admin/caja/shifts',       [CashShiftController::class, 'index']);
+// Abrir y cerrar. El permiso es el de OPERAR la caja concreta, y se comprueba
+// una vez por cada caja tocada dentro del orquestador: con `also=true`, quien
+// solo puede con productos abre productos y recibe `forbidden` en gimnasio.
+Route::post('admin/caja/shift/open',  [CashShiftController::class, 'open']);
+Route::post('admin/caja/shift/close', [CashShiftController::class, 'close']);
+// Informe de un turno concreto y su versión en PDF. Tampoco llevan permiso
+// fijo: esta ruta no sabe si el {shift} es de productos o de gimnasio hasta
+// cargarlo, así que quien autoriza es `denegarSiNoPuedeVer()` contra el tipo
+// REAL del turno. Sin ese filtro bastaría cambiar el id en la URL para leer el
+// cierre de la otra caja.
+Route::get('admin/caja/shifts/{shift}',     [CashShiftController::class, 'show']);
+Route::get('admin/caja/shifts/{shift}/pdf', [CashShiftController::class, 'pdf']);
 // Arqueo físico: acción excepcional de supervisión sobre un turno ya cerrado.
-Route::post('admin/caja/shifts/{shift}/difference', [CashShiftController::class, 'difference'])
-    ->middleware('admin.can:cash.products.view');
+// Exige el permiso de SUPERVISIÓN de la caja del turno, no el de verla.
+Route::post('admin/caja/shifts/{shift}/difference', [CashShiftController::class, 'difference']);
 
 // ── Usuarios administrativos del CRM ─────────────────────────────────────────
 // Quién puede entrar y con qué rol. El permiso fino y los invariantes de Super

@@ -60,6 +60,20 @@ class EnforceAdminAuthorization
             return $admin !== null ? $next($request) : $this->deny($request, null, 'sesión de administrador');
         }
 
+        // Permiso que depende de los DATOS, no de la URL: los turnos de caja,
+        // donde `cash.products` y `cash.gym` son permisos distintos y el tipo
+        // no se conoce hasta cargar el turno. Aquí se exige lo mismo que en
+        // cualquier otra ruta —una sesión de administrador— y la comprobación
+        // fina la hace el controlador, que deniega por defecto.
+        //
+        // Esto NO es una puerta abierta: el centinela solo llega hasta aquí si
+        // alguien lo escribió en OVERRIDES para una ruta concreta, y esa ruta
+        // tiene que estar además en CONTROLLER_RESOLVED, que una prueba
+        // compara contra lo que el mapa resuelve de verdad.
+        if ($permiso === AuthorizationMap::CONTROLLER) {
+            return $admin !== null ? $next($request) : $this->deny($request, null, 'sesión de administrador');
+        }
+
         if ($permiso === null) {
             Log::error('auth:admin:unmapped_route', [
                 'route' => AuthorizationMap::routeKey($route),

@@ -161,6 +161,19 @@ class PaymentController extends Controller
         if ($request->filled('user_id')) {
             $query->where('user_id', $request->user_id);
         }
+
+        /*
+         * Cobros de un turno de caja concreto.
+         *
+         * Las ventas de productos ya se podían filtrar así; los cobros del
+         * gimnasio no, y esa asimetría dejaba el detalle de un cierre de
+         * Gimnasio fuera del alcance de la API. Sin filtro el comportamiento no
+         * cambia: siguen saliendo todos, incluidos los de pasarela y los
+         * históricos, que tienen `cash_shift_id` nulo por diseño.
+         */
+        if ($request->filled('cash_shift_id')) {
+            $query->where('cash_shift_id', (int) $request->cash_shift_id);
+        }
     }
 
     /** Marcadores `?` para una lista de estados dentro de un selectRaw. */

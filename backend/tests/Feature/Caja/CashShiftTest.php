@@ -265,18 +265,23 @@ class CashShiftTest extends TestCase
     {
         $this->postJson('/api/admin/caja/shift/open', [],
             $this->actingAsAdmin($this->admin(Admin::ROLE_ADMINISTRATIVO)))
-            // Administrativo no tiene NINGÚN permiso de caja, así que lo frena
-            // el middleware de la ruta antes de llegar al orquestador.
+            // Administrativo no tiene NINGÚN permiso de caja. El 403 lo da
+            // ahora el controlador, no una puerta fija en la ruta, y por eso
+            // nombra el permiso que de verdad hace falta para abrir —`operate`—
+            // en vez de `view`, que era el que la ruta pedía de más.
             ->assertStatus(403)
-            ->assertJsonPath('required_permission', 'cash.products.view');
+            ->assertJsonPath('required_permission', 'cash.products.operate');
 
         $this->assertSame(0, CashShift::count());
     }
 
     public function test_quien_solo_ve_la_caja_no_puede_abrirla(): void
     {
-        // Un rol con `view` pero sin `operate` pasa el middleware de la ruta y
-        // lo detiene el orquestador, que es quien comprueba caja por caja.
+        // Ver una caja no es operarla. Pedir abrir SOLO esa caja sin su
+        // `operate` se rechaza de plano: no hay nada que se pudiera intentar,
+        // así que un 207 con una única negativa sería un resultado parcial
+        // inventado. El 207 sigue vivo para la operación DOBLE, donde una caja
+        // sí se opera y la otra no: {@see DualCashShiftTest}.
         $mirón = $this->admin(Admin::ROLE_ADMINISTRATIVO, 'Mirón');
         \App\Models\RolePermission::create([
             'role' => Admin::ROLE_ADMINISTRATIVO,
@@ -286,10 +291,10 @@ class CashShiftTest extends TestCase
         app(\App\Support\Access\RolePermissionPolicy::class)->flush();
 
         $this->postJson('/api/admin/caja/shift/open', [], $this->actingAsAdmin($mirón))
-            ->assertStatus(207)
-            ->assertJsonPath('ok', false)
-            ->assertJsonPath('results.products.result', 'forbidden');
+            ->assertStatus(403)
+            ->assertJsonPath('required_permission', 'cash.products.operate');
 
+        // Lo que importa no ha cambiado: no se abrió ningún turno.
         $this->assertSame(0, CashShift::count());
     }
 

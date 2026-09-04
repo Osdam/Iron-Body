@@ -40,6 +40,53 @@ final class AuthorizationMap
     public const SELF = '@self';
 
     /**
+     * Ruta cuyo permiso DEPENDE DE LOS DATOS, no de la URL: lo resuelve el
+     * controlador en cuanto sabe sobre qué está operando.
+     *
+     * No es una excepción a la autorización: es autorización que este mapa no
+     * puede expresar. El caso concreto son los turnos de caja. `cash.products`
+     * y `cash.gym` son permisos SEPARADOS, y la ruta `shifts/{shift}` no sabe
+     * de qué caja es el turno hasta cargarlo. Poner aquí un permiso fijo
+     * obligaba a elegir uno de los dos, y eso es justo lo que estaba mal:
+     * exigir `cash.products.view` para todo el módulo bloqueaba a quien solo
+     * tuviera `cash.gym.view` antes de que nadie mirase el tipo del turno.
+     *
+     * Condiciones para usarlo, y son las tres a la vez:
+     *
+     *  1. El middleware exige sesión de administrador igual que en cualquier
+     *     otra ruta: sin ella no se pasa. Esto NO abre nada.
+     *  2. El controlador DEBE denegar explícitamente, y por defecto: un camino
+     *     que no compruebe nada es un agujero, no una ruta permisiva.
+     *  3. La ruta va en la lista blanca de {@see AuthorizationMap::CONTROLLER_RESOLVED},
+     *     que una prueba compara con lo que el mapa resuelve de verdad. Añadir
+     *     una cuarta ruta a este centinela sin declararla rompe CI.
+     *
+     * Los permisos que se comprueban así se declaran en CONTROLLER_ENFORCED
+     * para que el catálogo pueda ofrecerlos.
+     */
+    public const CONTROLLER = '@controller';
+
+    /**
+     * Las ÚNICAS rutas que pueden resolver a {@see AuthorizationMap::CONTROLLER}.
+     *
+     * Es una lista blanca, no documentación: `AuthorizationCoverageTest` la
+     * compara con lo que el mapa resuelve realmente, así que el centinela no
+     * puede extenderse a una ruta nueva sin que alguien lo escriba aquí y
+     * justifique por qué su permiso depende de los datos.
+     *
+     * @var array<string>
+     */
+    public const CONTROLLER_RESOLVED = [
+        'GET api/admin/caja/shift',
+        'POST api/admin/caja/shift/open',
+        'POST api/admin/caja/shift/close',
+        'GET api/admin/caja/shifts',
+        'GET api/admin/caja/shifts/{shift}',
+        'GET api/admin/caja/shifts/{shift}/pdf',
+        'POST api/admin/caja/shifts/{shift}/difference',
+    ];
+
+    /**
      * Permiso por CONTROLADOR. Es el caso normal: un controlador administra un
      * dominio y todas sus acciones exigen lo mismo, con la distinción de
      * lectura/escritura resuelta en {@see resolve()} según el verbo HTTP.
@@ -188,11 +235,26 @@ final class AuthorizationMap
         // Turnos de caja: el tipo (products|gym) llega en el cuerpo o la query,
         // así que el permiso fino lo decide el controlador caja por caja. Aquí
         // se exige poder ver ALGUNA caja; el orquestador hace el resto.
-        'GET api/admin/caja/shift' => 'cash.products.view',
-        'GET api/admin/caja/shifts' => 'cash.products.view',
-        'POST api/admin/caja/shift/open' => 'cash.products.view',
-        'POST api/admin/caja/shift/close' => 'cash.products.view',
-        'POST api/admin/caja/shifts/{shift}/difference' => 'cash.products.view',
+        // Estado del turno y apertura/cierre. El tipo llega en la query o en el
+        // cuerpo, así que tampoco aquí puede la ruta saber de qué caja se
+        // habla. `current()` exige el `view` de ESE tipo; abrir y cerrar exigen
+        // el `operate` de CADA caja tocada, y eso lo aplica el orquestador caja
+        // por caja: marcar `also` no concede nada.
+        'GET api/admin/caja/shift' => self::CONTROLLER,
+        'POST api/admin/caja/shift/open' => self::CONTROLLER,
+        'POST api/admin/caja/shift/close' => self::CONTROLLER,
+
+        // Consulta e informe de turnos: el permiso depende del TIPO de la caja,
+        // y el tipo está en el dato, no en la URL. `cash.products` y `cash.gym`
+        // son permisos separados; fijar uno aquí bloquearía a quien tenga el
+        // otro antes de que nadie mire de qué turno se trata. Lo resuelve
+        // CashShiftController —`denegarSiNoPuedeVer()` para leer, el permiso de
+        // supervisión de esa caja para arquear, y el filtrado por cajas
+        // visibles en el historial—, siempre denegando por defecto.
+        'GET api/admin/caja/shifts' => self::CONTROLLER,
+        'GET api/admin/caja/shifts/{shift}' => self::CONTROLLER,
+        'GET api/admin/caja/shifts/{shift}/pdf' => self::CONTROLLER,
+        'POST api/admin/caja/shifts/{shift}/difference' => self::CONTROLLER,
 
         // Cobro presencial de membresía: es la caja del GIMNASIO, aunque el
         // controlador sea el de pagos.
@@ -406,7 +468,7 @@ final class AuthorizationMap
                 continue;
             }
             $p = self::resolve($route);
-            if ($p !== null && $p !== self::PUBLIC && $p !== self::SELF) {
+            if ($p !== null && ! in_array($p, [self::PUBLIC, self::SELF, self::CONTROLLER], true)) {
                 $out[$p] = true;
             }
         }

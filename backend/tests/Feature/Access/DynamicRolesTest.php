@@ -2,8 +2,10 @@
 
 namespace Tests\Feature\Access;
 
+use App\Enums\CashShiftType;
 use App\Models\Admin;
 use App\Models\AdminRole;
+use App\Models\CashShift;
 use App\Models\RolePermission;
 use App\Support\Access\CrmPermission;
 use App\Support\Access\RolePermissionPolicy;
@@ -100,10 +102,14 @@ class DynamicRolesTest extends TestCase
             ->assertStatus(201)
             ->assertJsonPath('results.gym.result', 'opened');
 
-        // Pero no la de productos: solo puede verla.
+        // Pero no la de productos: solo puede verla. Pedir abrir ÚNICAMENTE esa
+        // caja sin su `operate` se rechaza de plano; el 207 con una negativa
+        // por caja se reserva para la operación doble, donde una sí se opera.
         $this->postJson('/api/admin/caja/shift/open', ['type' => 'products'], $cajero)
-            ->assertStatus(207)
-            ->assertJsonPath('results.products.result', 'forbidden');
+            ->assertStatus(403)
+            ->assertJsonPath('required_permission', 'cash.products.operate');
+
+        $this->assertNull(CashShift::currentOfType(CashShiftType::PRODUCTS));
     }
 
     public function test_renombrar_arrastra_admins_y_permisos(): void
