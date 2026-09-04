@@ -205,6 +205,33 @@ Route::middleware(['trainer.feature:professional_assessments_enabled', 'auth.mem
     Route::post('member/assessments/{uuid}/ack',     [$ma, 'acknowledge']);
 });
 
+// ── Guías nutricionales — portal del entrenador ───────────────────────────────
+// Bandera PROPIA (`trainer_nutrition_guides_enabled`), no la de valoraciones:
+// son funcionalidades hermanas pero independientes. Misma composición de
+// autorización que las valoraciones: flag + auth.trainer + permiso por acción +
+// asignación/propiedad en el controlador. Una guía publicada es inmutable.
+Route::middleware(['trainer.feature:trainer_nutrition_guides_enabled', 'auth.trainer'])->prefix('trainer')->group(function (): void {
+    $ng = \App\Http\Controllers\Api\Trainer\NutritionGuideController::class;
+    Route::get('members/{member}/nutrition-guides',         [$ng, 'index'])->middleware('trainer.can:nutrition_guides.view');
+    // Qué se copiaría de la última valoración, ANTES de copiarlo.
+    Route::get('members/{member}/nutrition-guides/prefill', [$ng, 'prefill'])->middleware('trainer.can:nutrition_guides.create');
+    Route::post('members/{member}/nutrition-guides',        [$ng, 'store'])->middleware('trainer.can:nutrition_guides.create');
+    Route::get('nutrition-guides/{guide}',                  [$ng, 'show'])->middleware('trainer.can:nutrition_guides.view');
+    Route::put('nutrition-guides/{guide}',                  [$ng, 'update'])->middleware('trainer.can:nutrition_guides.update_draft');
+    Route::post('nutrition-guides/{guide}/publish',         [$ng, 'publish'])->middleware('trainer.can:nutrition_guides.publish');
+    Route::post('nutrition-guides/{guide}/amend',           [$ng, 'amend'])->middleware('trainer.can:nutrition_guides.amend');
+    Route::post('nutrition-guides/{guide}/void',            [$ng, 'void'])->middleware('trainer.can:nutrition_guides.amend');
+});
+
+// ── Guías nutricionales — vista de SOLO LECTURA del socio ─────────────────────
+Route::middleware(['trainer.feature:trainer_nutrition_guides_enabled', 'auth.member'])->group(function (): void {
+    $mg = \App\Http\Controllers\Api\MemberNutritionGuideController::class;
+    Route::get('member/nutrition-guide',                 [$mg, 'current']);
+    Route::get('member/nutrition-guides',                [$mg, 'index']);
+    Route::get('member/nutrition-guides/{uuid}',         [$mg, 'show']);
+    Route::post('member/nutrition-guides/{uuid}/ack',    [$mg, 'acknowledge']);
+});
+
 // ── Clases y asistencia — entrenador funcional ────────────────────────────────
 // Feature flag + auth.trainer + permiso por acción + propiedad de la clase
 // (en el controlador). Un entrenador solo gestiona SUS clases.

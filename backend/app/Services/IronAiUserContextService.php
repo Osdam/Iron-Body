@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ClassReservation;
 use App\Models\Member;
 use App\Models\NutritionAiRecommendation;
+use App\Models\NutritionGuide;
 use App\Models\PhysicalEvaluation;
 use App\Models\WorkoutSession;
 use Carbon\CarbonImmutable;
@@ -35,7 +36,7 @@ class IronAiUserContextService
      * Contexto modular del usuario. `$modules` permite pedir solo lo necesario
      * (p. ej. nutrición + progreso para el coach nutricional).
      *
-     * @param  array<int,string>  $modules  profile|membership|workouts|streak|nutrition|progress|evaluation|classes|last_ai_summary|gym_equipment
+     * @param  array<int,string>  $modules  profile|membership|workouts|streak|nutrition|progress|evaluation|classes|last_ai_summary|gym_equipment|trainer_nutrition_guide
      */
     public function build(Member $member, array $modules = []): array
     {
@@ -63,6 +64,11 @@ class IronAiUserContextService
         }
         if ($want('nutrition')) {
             $ctx['nutrition'] = $this->nutritionContext($member);
+        }
+        // La guía del ENTRENADOR. Opt-in: solo la piden los flujos nutricionales,
+        // porque en una consulta sobre rutinas no aporta y sí ocupa contexto.
+        if ($want('trainer_nutrition_guide')) {
+            $ctx['trainer_nutrition_guide'] = $this->trainerNutritionGuide($member);
         }
         if ($want('progress') || $want('evaluation')) {
             $ctx['progress'] = $this->progressContext($member, $want('evaluation'));
@@ -222,6 +228,65 @@ class IronAiUserContextService
                 ->all(),
             'streak_days' => $day['streak']['current'] ?? 0,
             'has_logged_today' => $day['streak']['has_logged_today'] ?? false,
+        ];
+    }
+
+    /**
+     * La guía nutricional vigente escrita por el entrenador.
+     *
+     * Es la ÚNICA que se envía: la última publicada. Ni borradores —trabajo en
+     * curso que el socio todavía no debería estar siguiendo—, ni anuladas, ni el
+     * histórico completo. Mandar todas las versiones al modelo le haría mezclar
+     * la pauta de agosto con la de septiembre y responder con la que le pareciera.
+     *
+     * `source` marca cada dato como escrito por una persona. Es lo que permite
+     * al prompt exigir que la IA no presente lo suyo como indicación del
+     * entrenador: sin esta separación en el propio contexto, la instrucción de
+     * "distinguir" sería una petición de buena voluntad.
+     *
+     * @return array<string, mixed>
+     */
+    private function trainerNutritionGuide(Member $member): array
+    {
+        $guide = NutritionGuide::latestPublishedFor((int) $member->id);
+
+        if ($guide === null) {
+            // Se dice que NO hay, explícitamente. Omitir la clave dejaría al
+            // modelo sin saber si la guía no existe o si nadie se la pasó, y ahí
+            // es donde se inventa una.
+            return [
+                'has_guide' => false,
+                'note' => 'El entrenador todavía no ha publicado una guía nutricional para este usuario.',
+            ];
+        }
+
+        $guide->loadMissing('trainer');
+
+        return [
+            'has_guide' => true,
+            'source' => 'trainer',
+            'guide_id' => $guide->uuid,
+            'version' => $guide->version,
+            'published_at' => optional($guide->published_at)->toIso8601String(),
+            'trainer_name' => $guide->trainer?->full_name,
+            'objective' => $guide->objective,
+            'objective_description' => $guide->objective_description,
+            'training_stage' => $guide->training_stage,
+            // Congeladas al publicar: son las del día en que se escribió la guía.
+            'anthropometrics' => array_filter([
+                'weight_kg' => $guide->weight_kg,
+                'height_cm' => $guide->height_cm,
+                'body_fat_pct' => $guide->body_fat_pct,
+                'muscle_mass_pct' => $guide->muscle_mass_pct,
+                'visceral_fat' => $guide->visceral_fat,
+                'basal_kcal' => $guide->basal_kcal,
+                'age_years' => $guide->age_years,
+            ], fn ($v) => $v !== null),
+            'meals' => $guide->orderedMeals(),
+            'recommendations' => $guide->recommendations,
+            'restrictions' => $guide->restrictions,
+            'supplements' => $guide->supplements,
+            'notes' => $guide->notes,
         ];
     }
 

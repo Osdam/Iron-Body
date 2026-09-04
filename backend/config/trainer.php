@@ -19,6 +19,10 @@ return [
         'trainer_auth_enabled' => filter_var(env('TRAINER_AUTH_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
         'professional_assessments_enabled' => filter_var(env('TRAINER_PROFESSIONAL_ASSESSMENTS_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
         'trainer_classes_enabled' => filter_var(env('TRAINER_CLASSES_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        // Guías nutricionales del entrenador. Bandera PROPIA y no la de
+        // valoraciones: son funcionalidades hermanas pero independientes, y
+        // colgar una de la otra obligaría a apagar las dos para apagar una.
+        'trainer_nutrition_guides_enabled' => filter_var(env('TRAINER_NUTRITION_GUIDES_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
         'workspace_switching_enabled' => filter_var(env('TRAINER_WORKSPACE_SWITCHING_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
     ],
 
@@ -95,6 +99,13 @@ return [
             'assessments.submit',
             'assessments.amend',
             'assessments.view',
+            // La guía nutricional es parte del mismo trabajo profesional que la
+            // valoración: quien valora es quien pauta.
+            'nutrition_guides.view',
+            'nutrition_guides.create',
+            'nutrition_guides.update_draft',
+            'nutrition_guides.publish',
+            'nutrition_guides.amend',
             'routines.assign',
             'trainer.workspace.switch',
         ],
@@ -105,6 +116,11 @@ return [
             'assessments.submit',
             'assessments.amend',
             'assessments.view',
+            'nutrition_guides.view',
+            'nutrition_guides.create',
+            'nutrition_guides.update_draft',
+            'nutrition_guides.publish',
+            'nutrition_guides.amend',
             'classes.view',
             'classes.manage',
             'attendance.create',
