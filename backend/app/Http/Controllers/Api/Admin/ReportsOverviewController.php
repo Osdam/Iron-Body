@@ -32,6 +32,13 @@ class ReportsOverviewController extends Controller
     /** Días de la serie de ingresos (el gráfico muestra el último año). */
     private const SERIES_DAYS = 365;
 
+    /**
+     * Ventana de "por vencer". Siete días es el mismo umbral con el que el
+     * módulo de Asistencia marca un plan como `soon`; usar otro aquí haría que
+     * dos pantallas del CRM dieran cifras distintas para la misma pregunta.
+     */
+    private const EXPIRING_SOON_DAYS = 7;
+
     public function __invoke(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -110,12 +117,24 @@ class ReportsOverviewController extends Controller
 
     private function memberKpis(CarbonImmutable $from, CarbonImmutable $to): array
     {
+        $now = CarbonImmutable::now();
+        $soonLimit = $now->addDays(self::EXPIRING_SOON_DAYS)->endOfDay();
+
+        // `expiring_soon` no dependía de nada: el CRM lo pintaba con un valor de
+        // los datos de ejemplo (14 fijo) porque este endpoint nunca lo mandaba y
+        // el cliente heredaba el mock. Cuenta membresías que caducan dentro de la
+        // ventana y que NO están vencidas ya.
         $row = User::query()->selectRaw(
-            'COUNT(CASE WHEN created_at BETWEEN ? AND ? THEN 1 END) as new_members',
-            [$from, $to]
+            'COUNT(CASE WHEN created_at BETWEEN ? AND ? THEN 1 END) as new_members,'
+            .' COUNT(CASE WHEN membership_end_date IS NOT NULL'
+            .' AND membership_end_date >= ? AND membership_end_date <= ? THEN 1 END) as expiring_soon',
+            [$from, $to, $now, $soonLimit]
         )->first();
 
-        return ['new_members' => (int) ($row->new_members ?? 0)];
+        return [
+            'new_members' => (int) ($row->new_members ?? 0),
+            'expiring_soon' => (int) ($row->expiring_soon ?? 0),
+        ];
     }
 
     /** Conteo de miembros por estado (activos / inactivos / vencidos / pendientes). */

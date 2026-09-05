@@ -119,11 +119,20 @@ Route::middleware('auth.admin')->get('/dashboard', function (Request $request) {
     $puede = fn (string $permiso): bool => $admin !== null
         && \App\Support\Access\CrmPermission::allows($admin, $permiso);
 
+    $estadosPagados = \App\Http\Controllers\Api\PaymentController::PAID_STATUSES;
+
     $cifras = [
         'users' => $puede('members.view') ? User::count() : null,
         'active_plans' => $puede('plans.view') ? Plan::where('active', true)->count() : null,
         'payments' => $puede('payments.view') ? Payment::count() : null,
-        'revenue' => $puede('reports.view') ? (float) Payment::where('status', 'paid')->sum('amount') : null,
+        // Ojo con el vocabulario: esto sumaba solo el literal 'paid', mientras
+        // que Analítica suma PAID_STATUSES (paid/pagado/approved/completed…) sin
+        // distinguir mayúsculas. Eran dos «ingreso total» distintos para el mismo
+        // negocio, y la tarjeta del CRM mostraba el más corto de los dos.
+        'revenue' => $puede('reports.view') ? (float) Payment::query()->whereRaw(
+            'LOWER(status) IN ('.implode(', ', array_fill(0, count($estadosPagados), '?')).')',
+            $estadosPagados
+        )->sum('amount') : null,
         'classes' => $puede('classes.view') ? MyClass::where('status', 'active')->count() : null,
     ];
 
