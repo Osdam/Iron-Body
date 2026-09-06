@@ -60,9 +60,12 @@ class MembershipSubscriptionRefreshService
 
         try {
             Cache::put($throttleKey, 1, now()->addSeconds(self::THROTTLE_TTL));
-            // Reutiliza la reconciliación existente (idempotente; los hooks centrales
-            // promueven/degradan la suscripción una sola vez). Nunca lanza al caller.
-            $this->reconciler->reconcileOne($tx);
+            // `refresh()`, no `reconcileOne()`: esto lo dispara el socio al abrir
+            // su suscripción, así que consulta a Wompi y aplica el estado real,
+            // pero no cuenta como pasada del job ni puede vencer nada. Sigue
+            // siendo idempotente: los hooks centrales promueven o degradan la
+            // suscripción una sola vez. Nunca lanza al caller.
+            $this->reconciler->refresh($tx);
         } catch (\Throwable $e) {
             Log::warning('subscriptions.refresh.reconcile_failed', [
                 'subscription_id' => $sub->id,

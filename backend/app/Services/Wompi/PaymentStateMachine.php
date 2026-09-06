@@ -25,6 +25,18 @@ use InvalidArgumentException;
  *   - approved es definitivo: no se sale de él jamás.
  *   - un estado terminal no regresa a pending/requires_action.
  *   - solo approved activa membresía.
+ *
+ * EXCEPCIÓN DELIBERADA: `expired` no es un hecho de la pasarela, es una
+ * INFERENCIA NUESTRA —«llevamos demasiado tiempo sin noticias»—. Tratarla como
+ * verdad financiera cerraba la puerta al desenlace real: seis transacciones de
+ * producción quedaron selladas `expired` mientras Wompi las daba por PENDING o
+ * DECLINED, y el webhook posterior no pudo moverlas. Si una de ellas hubiera
+ * sido APPROVED, el socio habría pagado sin recibir su membresía.
+ *
+ * Por eso `expired` cede ante un estado terminal CONFIRMADO POR WOMPI (consulta
+ * autenticada o webhook validado). Lo que no hace nunca es volver a un estado en
+ * vuelo: la autoridad sobre el resultado financiero es de la pasarela, no del
+ * reloj de este servidor ni del cliente.
  */
 class PaymentStateMachine
 {
@@ -78,7 +90,11 @@ class PaymentStateMachine
         self::DECLINED => [],
         self::VOIDED => [],
         self::ERROR => [],
-        self::EXPIRED => [],
+        // `expired` es la única salida permitida, y solo hacia otro terminal
+        // confirmado por Wompi (ver resolveNext + cabecera de la clase).
+        self::EXPIRED => [
+            self::APPROVED, self::DECLINED, self::VOIDED, self::ERROR,
+        ],
     ];
 
     /** Mapa estado Wompi → estado interno. */
@@ -134,8 +150,13 @@ class PaymentStateMachine
      * Resuelve el estado siguiente de forma SEGURA: si la transición no está
      * permitida (p. ej. degradar un terminal a pending, o salir de approved), se
      * conserva el estado actual. Devuelve el estado que debe quedar persistido.
+     *
+     * @param  bool  $gatewayConfirmed  El destino viene de Wompi —respuesta a una
+     *                                  consulta autenticada o webhook con firma
+     *                                  validada—, no de una decisión local. Es lo
+     *                                  ÚNICO que permite salir de `expired`.
      */
-    public function resolveNext(string $current, string $target): string
+    public function resolveNext(string $current, string $target, bool $gatewayConfirmed = false): string
     {
         if ($current === $target) {
             return $current;
@@ -144,8 +165,15 @@ class PaymentStateMachine
         if ($current === self::APPROVED) {
             return self::APPROVED;
         }
-        // No degradar un terminal a un estado en vuelo.
+        // No degradar un terminal a un estado en vuelo. Aplica también a
+        // `expired`: que Wompi diga PENDING no reabre lo que ya dimos por
+        // vencido; solo un desenlace lo hace.
         if ($this->isTerminal($current) && $this->isInFlight($target)) {
+            return $current;
+        }
+        // Un `expired` decidido por nosotros no se corrige a sí mismo: hace
+        // falta que Wompi diga qué pasó de verdad.
+        if ($current === self::EXPIRED && ! $gatewayConfirmed) {
             return $current;
         }
 

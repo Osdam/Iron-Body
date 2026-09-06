@@ -233,7 +233,10 @@ class WompiTransactionService
             'raw_response' => $this->safeRaw($wt),
         ];
 
-        return $this->transitionTo($tx, $state, $attrs);
+        // gatewayConfirmed: este estado lo dice WOMPI (respuesta de creación,
+        // consulta autenticada o webhook validado). Es la única vía por la que
+        // un `expired` nuestro puede corregirse al desenlace real.
+        return $this->transitionTo($tx, $state, $attrs, gatewayConfirmed: true);
     }
 
     /**
@@ -241,14 +244,18 @@ class WompiTransactionService
      * máquina de estados (no degrada terminales, approved absorbente), sella las
      * marcas *_at y, SOLO en approved, activa la membresía una vez.
      */
-    public function transitionTo(PaymentTransaction $tx, string $target, array $attrs = []): PaymentTransaction
-    {
-        return DB::transaction(function () use ($tx, $target, $attrs) {
+    public function transitionTo(
+        PaymentTransaction $tx,
+        string $target,
+        array $attrs = [],
+        bool $gatewayConfirmed = false,
+    ): PaymentTransaction {
+        return DB::transaction(function () use ($tx, $target, $attrs, $gatewayConfirmed) {
             /** @var PaymentTransaction $fresh */
             $fresh = PaymentTransaction::lockForUpdate()->find($tx->id);
             $current = (string) $fresh->status;
 
-            $next = $this->sm->resolveNext($current, $target);
+            $next = $this->sm->resolveNext($current, $target, $gatewayConfirmed);
 
             // Persistir datos (NO nulos) aunque el estado no avance (p. ej.
             // guardar wompi_transaction_id en un refresco de pending).

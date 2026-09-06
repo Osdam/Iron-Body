@@ -26,7 +26,9 @@ class WompiStatusReconcileTest extends TestCase
     use RefreshDatabase;
 
     private Plan $plan;
+
     private Member $member;
+
     private User $user;
 
     protected function setUp(): void
@@ -67,6 +69,21 @@ class WompiStatusReconcileTest extends TestCase
         ], $overrides));
     }
 
+    /**
+     * Envejece la fila de verdad.
+     *
+     * `created_at` NO es fillable, así que pasarlo a `create()` se ignora en
+     * silencio: los tests que creían estar probando un pago viejo probaban uno
+     * recién nacido, y por eso pasaban por la rama de `retry_count` —la que
+     * expiraba pagos vivos en producción— sin que nadie lo notara.
+     */
+    private function age(PaymentTransaction $tx, int $hours): PaymentTransaction
+    {
+        $tx->forceFill(['created_at' => now()->subHours($hours)])->save();
+
+        return $tx->fresh();
+    }
+
     private function fakeGet(string $status): void
     {
         Http::fake([
@@ -89,8 +106,12 @@ class WompiStatusReconcileTest extends TestCase
 
         $tx->refresh();
         $this->assertSame(PaymentStateMachine::APPROVED, $tx->status);
-        $this->assertNotNull($tx->last_reconciled_at);
         $this->assertSame(1, Payment::where('reference', $tx->reference)->count());
+
+        // Consultar el estado NO es una pasada del job: no gasta su contador ni
+        // su marca de tiempo. Mezclarlos fue el fallo de producción.
+        $this->assertSame(0, (int) $tx->retry_count);
+        $this->assertNull($tx->last_reconciled_at);
     }
 
     public function test_status_does_not_query_wompi_when_final(): void
@@ -130,13 +151,10 @@ class WompiStatusReconcileTest extends TestCase
     public function test_old_pending_approved_in_wompi_is_not_expired(): void
     {
         $this->fakeGet('APPROVED');
-        // Pago ANTIGUO y con muchos reintentos, pero Wompi lo aprobó.
-        $tx = $this->tx([
-            'created_at' => now()->subHours(3),
-            'retry_count' => 100,
-        ]);
+        // Pago ANTIGUO y con muchas pasadas del job, pero Wompi lo aprobó.
+        $tx = $this->age($this->tx(['retry_count' => 100]), 3);
 
-        $result = WompiReconciliationService::make()->reconcileOne($tx->fresh());
+        $result = WompiReconciliationService::make()->reconcileOne($tx);
 
         $this->assertSame('updated', $result);
         $this->assertSame(PaymentStateMachine::APPROVED, $tx->fresh()->status);
@@ -145,11 +163,67 @@ class WompiStatusReconcileTest extends TestCase
     public function test_old_pending_still_pending_in_wompi_expires(): void
     {
         $this->fakeGet('PENDING');
-        $tx = $this->tx(['created_at' => now()->subHours(3), 'retry_count' => 100]);
+        $tx = $this->age($this->tx(), 3);
 
-        $result = WompiReconciliationService::make()->reconcileOne($tx->fresh());
+        $result = WompiReconciliationService::make()->reconcileOne($tx);
 
         $this->assertSame('expired', $result);
+        $this->assertSame(PaymentStateMachine::EXPIRED, $tx->fresh()->status);
+    }
+
+    /**
+     * EL FALLO DE PRODUCCIÓN, REPRODUCIDO.
+     *
+     * La app consulta el estado cada 2,5 s mientras el socio autoriza en el
+     * portal de su banco. Cuando esa consulta llamaba a `reconcileOne()`, las 24
+     * pasadas que el job habría tardado dos horas en gastar se consumían en 60
+     * segundos y el pago quedaba sellado `expired` estando vivo. Seis
+     * transacciones reales murieron así, dos de ellas con Wompi diciendo PENDING.
+     */
+    public function test_member_polling_does_not_expire_a_live_payment(): void
+    {
+        $this->fakeGet('PENDING');
+        $tx = $this->tx(['method' => 'pse']);
+
+        // 40 consultas: más del doble del antiguo presupuesto de 24.
+        for ($i = 0; $i < 40; $i++) {
+            $this->getJson('/api/payments/wompi/'.$tx->reference.'/status', $this->auth())
+                ->assertOk()
+                ->assertJsonPath('is_final', false);
+        }
+
+        $fresh = $tx->fresh();
+        $this->assertNotSame(PaymentStateMachine::EXPIRED, $fresh->status);
+        $this->assertSame(PaymentStateMachine::PENDING, $fresh->status);
+        $this->assertSame(0, (int) $fresh->retry_count);
+    }
+
+    /**
+     * Y su consecuencia grave: si el pago se hubiera aprobado DESPUÉS de que
+     * nosotros lo diéramos por vencido, el socio habría pagado sin membresía.
+     * `expired` es una inferencia nuestra y cede ante el desenlace real.
+     */
+    public function test_expired_yields_to_a_later_approval_from_wompi(): void
+    {
+        $this->fakeGet('APPROVED');
+        $tx = $this->tx(['status' => PaymentStateMachine::EXPIRED, 'expires_at' => now()]);
+
+        WompiReconciliationService::make()->refresh($tx);
+
+        $fresh = $tx->fresh();
+        $this->assertSame(PaymentStateMachine::APPROVED, $fresh->status);
+        $this->assertNotNull($fresh->approved_at);
+        $this->assertSame(1, Payment::where('reference', $tx->reference)->count());
+    }
+
+    /** Pero un `expired` NO vuelve a estar en vuelo porque Wompi diga PENDING. */
+    public function test_expired_does_not_return_to_in_flight(): void
+    {
+        $this->fakeGet('PENDING');
+        $tx = $this->tx(['status' => PaymentStateMachine::EXPIRED, 'expires_at' => now()]);
+
+        WompiReconciliationService::make()->refresh($tx);
+
         $this->assertSame(PaymentStateMachine::EXPIRED, $tx->fresh()->status);
     }
 

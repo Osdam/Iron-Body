@@ -12,7 +12,7 @@ class PaymentStateMachineTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->sm = new PaymentStateMachine();
+        $this->sm = new PaymentStateMachine;
     }
 
     public function test_only_approved_activates_membership(): void
@@ -99,5 +99,74 @@ class PaymentStateMachineTest extends TestCase
         $this->assertTrue($this->sm->isInFlight(PaymentStateMachine::PENDING));
         $this->assertFalse($this->sm->isTerminal(PaymentStateMachine::REQUIRES_ACTION));
         $this->assertFalse($this->sm->isInFlight(PaymentStateMachine::VOIDED));
+    }
+
+    // ── `expired` es nuestro, el desenlace es de Wompi ──────────────────────
+
+    /**
+     * `expired` no es un hecho de la pasarela: es nuestra conclusión de que
+     * llevábamos demasiado tiempo sin noticias. Cuando Wompi cuenta qué pasó de
+     * verdad, esa conclusión cede. Si no lo hiciera, un APPROVED tardío quedaría
+     * enterrado y el socio habría pagado sin recibir su membresía.
+     */
+    public function test_expired_yields_to_a_gateway_confirmed_outcome(): void
+    {
+        foreach ([
+            PaymentStateMachine::APPROVED,
+            PaymentStateMachine::DECLINED,
+            PaymentStateMachine::VOIDED,
+            PaymentStateMachine::ERROR,
+        ] as $outcome) {
+            $this->assertSame(
+                $outcome,
+                $this->sm->resolveNext(PaymentStateMachine::EXPIRED, $outcome, true),
+                "expired debe ceder ante {$outcome} confirmado por Wompi"
+            );
+        }
+    }
+
+    /** Sin confirmación de la pasarela, `expired` no se mueve solo. */
+    public function test_expired_holds_without_gateway_confirmation(): void
+    {
+        $this->assertSame(
+            PaymentStateMachine::EXPIRED,
+            $this->sm->resolveNext(PaymentStateMachine::EXPIRED, PaymentStateMachine::APPROVED)
+        );
+    }
+
+    /**
+     * Y ni siquiera con confirmación vuelve a estar en vuelo: que Wompi diga
+     * PENDING no reabre lo que ya dimos por vencido, solo un desenlace lo hace.
+     */
+    public function test_expired_never_returns_to_in_flight(): void
+    {
+        foreach ([PaymentStateMachine::PENDING, PaymentStateMachine::REQUIRES_ACTION] as $inFlight) {
+            $this->assertSame(
+                PaymentStateMachine::EXPIRED,
+                $this->sm->resolveNext(PaymentStateMachine::EXPIRED, $inFlight, true),
+                "expired no debe volver a {$inFlight}"
+            );
+        }
+    }
+
+    /** Los demás terminales siguen cerrados, también ante Wompi. */
+    public function test_other_terminals_stay_closed_even_when_gateway_confirmed(): void
+    {
+        $this->assertSame(
+            PaymentStateMachine::APPROVED,
+            $this->sm->resolveNext(PaymentStateMachine::APPROVED, PaymentStateMachine::DECLINED, true)
+        );
+        $this->assertSame(
+            PaymentStateMachine::DECLINED,
+            $this->sm->resolveNext(PaymentStateMachine::DECLINED, PaymentStateMachine::APPROVED, true)
+        );
+        $this->assertSame(
+            PaymentStateMachine::VOIDED,
+            $this->sm->resolveNext(PaymentStateMachine::VOIDED, PaymentStateMachine::APPROVED, true)
+        );
+        $this->assertSame(
+            PaymentStateMachine::ERROR,
+            $this->sm->resolveNext(PaymentStateMachine::ERROR, PaymentStateMachine::APPROVED, true)
+        );
     }
 }

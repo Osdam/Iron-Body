@@ -149,7 +149,12 @@ class WompiPaymentController extends Controller
         // de forma segura (solo referencia/id/clase) y se devuelve el estado local.
         if (! $tx->isWompiFinal() && $tx->wompi_transaction_id) {
             try {
-                WompiReconciliationService::make()->reconcileOne($tx);
+                // `refresh()`, NUNCA `reconcileOne()`: esta es una consulta del
+                // socio, no una pasada del job. Cuando llamaba a reconcileOne, el
+                // polling de la app (cada 2,5 s) gastaba en 60 segundos el
+                // presupuesto de 24 pasadas del job y sellaba `expired` pagos que
+                // seguían vivos en el banco.
+                WompiReconciliationService::make()->refresh($tx);
                 $tx->refresh();
             } catch (Throwable $e) {
                 Log::warning('Wompi status: reconciliación falló (estado local)', [

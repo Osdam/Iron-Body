@@ -15,8 +15,23 @@ use Illuminate\Support\Facades\Log;
  *
  * Política:
  *   - Solo transacciones provider=wompi en estados EN VUELO con id de Wompi.
- *   - Backoff por reintentos (retry_count) y expiración por antigüedad.
- *   - Al superar max_retries o max_pending_minutes → expired (terminal).
+ *   - Expiración por ANTIGÜEDAD (max_pending_minutes) y nada más.
+ *
+ * DOS CAMINOS QUE NO SE MEZCLAN
+ * -----------------------------
+ * `refresh()` responde a una consulta del socio: pregunta a Wompi y aplica el
+ * estado real. No cuenta intentos ni expira nada.
+ *
+ * `reconcileOne()` es el job de fondo: además de refrescar, lleva la cuenta de
+ * sus propias pasadas y aplica la política de vencimiento.
+ *
+ * Confundir ambos costó seis transacciones en producción. El endpoint de estado
+ * llamaba a `reconcileOne()`, y como la app consulta cada 2,5 s, las 24 pasadas
+ * que el job habría tardado DOS HORAS en gastar se consumían en 60 segundos:
+ * PSE y DaviPlata se sellaban `expired` mientras el socio seguía autorizando en
+ * el portal de su banco —dos de ellas con Wompi diciendo aún PENDING—. Un
+ * contador de "cuántas veces han preguntado" nunca dijo nada sobre si un pago
+ * sigue vivo; el único dato que lo dice es cuánto tiempo lleva en vuelo.
  */
 class WompiReconciliationService
 {
@@ -68,25 +83,53 @@ class WompiReconciliationService
     }
 
     /**
-     * Reconcilia UNA transacción. ORDEN CRÍTICO: se consulta Wompi PRIMERO y solo
-     * se expira si Wompi sigue PENDING tras una consulta VÁLIDA y se superó el
-     * límite. Un fallo temporal de Wompi NO expira ni cambia el estado (así no se
-     * marca expired un pago que Wompi ya aprobó). La activación de membresía es
+     * Refresca UNA transacción contra Wompi y aplica el estado real.
+     *
+     * Es el camino de las CONSULTAS: lo usa el endpoint de estado que la app
+     * llama mientras el socio paga. Pregunta, aplica y punto — no cuenta pasadas
+     * ni vence nada, porque que alguien mire cómo va su pago no es información
+     * sobre si el pago sigue vivo.
+     *
+     * Un fallo temporal de Wompi no toca el estado local: se devuelve la fila tal
+     * como está y se reintenta en la siguiente consulta.
+     */
+    public function refresh(PaymentTransaction $tx): PaymentTransaction
+    {
+        if (! $tx->wompi_transaction_id) {
+            return $tx;
+        }
+
+        $res = $this->client->getTransaction($tx->wompi_transaction_id);
+        if (! $res['ok'] || empty($res['data']['id'])) {
+            return $tx;
+        }
+
+        return $this->tx->applyWompiTransaction($tx, $res['data']);
+    }
+
+    /**
+     * Reconcilia UNA transacción desde el JOB de fondo.
+     *
+     * ORDEN CRÍTICO: se consulta Wompi PRIMERO y solo se expira si Wompi sigue en
+     * vuelo tras una consulta VÁLIDA y la transacción ya es demasiado vieja. Un
+     * fallo temporal de Wompi NO expira ni cambia el estado (así no se marca
+     * expired un pago que Wompi ya aprobó). La activación de membresía es
      * idempotente (la garantiza applyWompiTransaction → transitionTo).
      *
      * @return 'updated'|'expired'|'skipped'
      */
     public function reconcileOne(PaymentTransaction $tx): string
     {
-        $maxRetries = (int) ($this->cfg['reconciliation']['max_retries'] ?? 24);
         $maxPendingMin = (int) ($this->cfg['reconciliation']['max_pending_minutes'] ?? 60);
 
         if (! $tx->wompi_transaction_id) {
             return 'skipped';
         }
 
-        // 1) Consultar Wompi PRIMERO (fuente de verdad). Se marca el intento
-        //    (retry_count + last_reconciled_at) aunque la consulta falle.
+        // 1) Consultar Wompi PRIMERO (fuente de verdad). Se marca la pasada del
+        //    job (retry_count + last_reconciled_at) aunque la consulta falle.
+        //    `retry_count` es DIAGNÓSTICO —cuántas veces miró el job—, nunca un
+        //    veredicto sobre el pago: usarlo como tal fue exactamente el fallo.
         $res = $this->client->getTransaction($tx->wompi_transaction_id);
         $tx->forceFill([
             'retry_count' => (int) $tx->retry_count + 1,
@@ -107,10 +150,11 @@ class WompiReconciliationService
             return $updated->status !== $before ? 'updated' : 'skipped';
         }
 
-        // 4) Wompi SIGUE PENDING (consulta válida) → expirar solo si se superó el
-        //    límite de antigüedad o de reintentos.
+        // 4) Wompi SIGUE en vuelo (consulta válida) → expirar solo por ANTIGÜEDAD.
+        //    Un PSE legítimo tarda lo que el socio tarde en su banco; el único
+        //    límite defendible es el reloj, y con holgura.
         $age = $updated->created_at ? Carbon::parse($updated->created_at)->diffInMinutes(now()) : 0;
-        if ($age >= $maxPendingMin || (int) $updated->retry_count >= $maxRetries) {
+        if ($age >= $maxPendingMin) {
             $this->tx->transitionTo($updated, PaymentStateMachine::EXPIRED, [
                 'status_message' => 'El pago expiró sin confirmarse.',
             ]);

@@ -27,7 +27,9 @@ class WompiPaymentFlowTest extends TestCase
     use RefreshDatabase;
 
     private Plan $plan;
+
     private Member $member;
+
     private User $user;
 
     protected function setUp(): void
@@ -35,13 +37,13 @@ class WompiPaymentFlowTest extends TestCase
         parent::setUp();
 
         config()->set('wompi', array_merge((array) config('wompi'), [
-            'env'              => 'sandbox',
-            'api_url'          => 'https://sandbox.wompi.co/v1',
-            'public_key'       => 'pub_test_x',
-            'private_key'      => 'prv_test_x',
+            'env' => 'sandbox',
+            'api_url' => 'https://sandbox.wompi.co/v1',
+            'public_key' => 'pub_test_x',
+            'private_key' => 'prv_test_x',
             'integrity_secret' => 'test_integrity_xyz',
-            'events_secret'    => 'test_events_xyz',
-            'methods'          => ['card' => true, 'pse' => true, 'nequi' => true, 'daviplata' => true],
+            'events_secret' => 'test_events_xyz',
+            'methods' => ['card' => true, 'pse' => true, 'nequi' => true, 'daviplata' => true],
         ]));
 
         $this->plan = Plan::create([
@@ -67,28 +69,29 @@ class WompiPaymentFlowTest extends TestCase
                 'data' => [
                     'presigned_acceptance' => [
                         'acceptance_token' => 'accept_tok_123',
-                        'permalink'        => 'https://wompi.co/terminos',
-                        'type'             => 'END_USER_POLICY',
+                        'permalink' => 'https://wompi.co/terminos',
+                        'type' => 'END_USER_POLICY',
                     ],
                     'presigned_personal_data_auth' => [
                         'acceptance_token' => 'personal_tok_456',
-                        'permalink'        => 'https://wompi.co/datos',
-                        'type'             => 'PERSONAL_DATA_AUTH',
+                        'permalink' => 'https://wompi.co/datos',
+                        'type' => 'PERSONAL_DATA_AUTH',
                     ],
                 ],
             ], 200),
             'sandbox.wompi.co/v1/transactions*' => function ($request) use ($createStatus, $getStatus) {
                 $status = $request->method() === 'POST' ? $createStatus : $getStatus;
+
                 return Http::response([
                     'data' => [
-                        'id'              => 'wompi-tx-001',
-                        'status'          => $status,
-                        'reference'       => $request->method() === 'POST'
+                        'id' => 'wompi-tx-001',
+                        'status' => $status,
+                        'reference' => $request->method() === 'POST'
                             ? (json_decode($request->body(), true)['reference'] ?? 'ref')
                             : 'ref',
                         'amount_in_cents' => 8000000,
-                        'currency'        => 'COP',
-                        'payment_method'  => ['type' => 'NEQUI'],
+                        'currency' => 'COP',
+                        'payment_method' => ['type' => 'NEQUI'],
                     ],
                 ], 200);
             },
@@ -98,11 +101,11 @@ class WompiPaymentFlowTest extends TestCase
     private function payNequi(): PaymentTransaction
     {
         return WompiNequiPaymentService::make()->process([
-            'plan_id'   => $this->plan->id,
+            'plan_id' => $this->plan->id,
             'member_id' => $this->member->id,
-            'user_id'   => $this->user->id,
-            'phone'     => '3215542105',
-            'customer'  => ['email' => 'oscar@example.com', 'name' => 'Oscar Mancipe', 'phone' => '3215542105'],
+            'user_id' => $this->user->id,
+            'phone' => '3215542105',
+            'customer' => ['email' => 'oscar@example.com', 'name' => 'Oscar Mancipe', 'phone' => '3215542105'],
         ], '200.21.179.249', 'phpunit');
     }
 
@@ -110,14 +113,14 @@ class WompiPaymentFlowTest extends TestCase
     {
         $payload = [
             'event' => 'transaction.updated',
-            'data'  => ['transaction' => [
+            'data' => ['transaction' => [
                 'id' => 'wompi-tx-001', 'status' => 'APPROVED',
                 'reference' => $reference, 'amount_in_cents' => $cents, 'currency' => 'COP',
             ]],
             'environment' => 'test',
-            'signature'   => [
+            'signature' => [
                 'properties' => ['transaction.id', 'transaction.status', 'transaction.amount_in_cents'],
-                'checksum'   => '',
+                'checksum' => '',
             ],
             'timestamp' => 1700000000,
         ];
@@ -125,6 +128,7 @@ class WompiPaymentFlowTest extends TestCase
         $checksum = (new WompiSignatureService(['events_secret' => $secret]))
             ->computeWebhookChecksum($payload, $secret);
         $payload['signature']['checksum'] = strtoupper($checksum);
+
         return $payload;
     }
 
@@ -164,6 +168,43 @@ class WompiPaymentFlowTest extends TestCase
         // Webhook DUPLICADO (mismo payload) → idempotente, sin doble activación.
         $r2 = WompiWebhookService::make()->handle($payload, $raw);
         $this->assertSame('duplicate', $r2['status']);
+        $this->assertSame(1, Payment::where('reference', $tx->reference)->count());
+    }
+
+    /**
+     * FASE 25: el webhook y el polling pueden observar el MISMO `APPROVED`.
+     *
+     * Es lo normal, no un caso raro: la app pregunta cada 2,5 s y Wompi avisa por
+     * su cuenta, así que los dos caminos convergen sobre el mismo hecho. Si cada
+     * uno activara por su lado, el socio acabaría con dos pagos y dos membresías
+     * por un solo cobro. La activación cuelga de ENTRAR en approved, una vez.
+     */
+    public function test_polling_and_webhook_observing_the_same_approval_do_not_duplicate(): void
+    {
+        $this->fakeWompi();
+        $tx = $this->payNequi();
+
+        // 1) El polling llega primero: consulta autenticada a Wompi → APPROVED.
+        Http::fake([
+            '*/transactions*' => Http::response(['data' => [
+                'id' => $tx->wompi_transaction_id ?: 'wtx_remote',
+                'status' => 'APPROVED', 'amount_in_cents' => 8000000,
+                'currency' => 'COP', 'payment_method' => ['type' => 'NEQUI'],
+            ]], 200),
+        ]);
+        WompiReconciliationService::make()->refresh($tx->fresh());
+
+        $tx->refresh();
+        $this->assertSame(PaymentStateMachine::APPROVED, $tx->status);
+        $this->assertSame(1, Payment::where('reference', $tx->reference)->count());
+
+        // 2) Y DESPUÉS llega el webhook contando lo mismo.
+        $payload = $this->approvedWebhook($tx->reference);
+        WompiWebhookService::make()->handle($payload, json_encode($payload));
+
+        // Un solo efecto, no dos.
+        $tx->refresh();
+        $this->assertSame(PaymentStateMachine::APPROVED, $tx->status);
         $this->assertSame(1, Payment::where('reference', $tx->reference)->count());
     }
 
