@@ -198,11 +198,42 @@ class WompiDaviplataPaymentService extends AbstractWompiPaymentService
         }
 
         $access = data_get($res, 'data.authorization.access_token');
-        $patch = ['expires_at' => now()->addMinutes($this->ttlMinutes())->timestamp];
-        if (is_string($access) && $access !== '') {
-            $patch['access_token'] = $access; // reemplaza/invalida el anterior
+
+        // SIN TOKEN NO HUBO ENVÍO ÚTIL, aunque la respuesta venga en 2xx.
+        //
+        // `validateOtp` usa este token como bearer, así que sin él no hay forma
+        // de comprobar el código: el flujo queda muerto por construcción. Darlo
+        // por bueno era peor que fallar —la app decía "te enviamos un código"
+        // y el socio esperaba uno que no podía validarse—, y encima escondía el
+        // problema. Se vio con un documento sin cuenta DaviPlata: seis intentos
+        // devolvieron 2xx sin token y ninguno emitió nada.
+        if (! is_string($access) || $access === '') {
+            // A `warning` a propósito: el nivel de log de producción es
+            // `warning`, así que un `info` aquí se descartaría y volveríamos a
+            // quedarnos ciegos justo en el punto que falla. Sin datos
+            // sensibles: ni tokens, ni código, ni documento.
+            Log::warning('wompi.daviplata.send_without_token', [
+                'reference' => $tx->reference,
+                'transaction_id' => $tx->wompi_transaction_id,
+                'stage' => $stage,
+                'http_status' => $res['status'] ?? 0,
+                'response_keys' => is_array($res['data'] ?? null)
+                    ? array_keys($res['data'])
+                    : null,
+            ]);
+
+            return [
+                'ok' => false,
+                'message' => 'No pudimos enviar el código a tu DaviPlata. '
+                    .'Verifica que el documento tenga una cuenta DaviPlata activa '
+                    .'e inténtalo de nuevo.',
+            ];
         }
-        $this->saveOtpMeta($tx, $patch);
+
+        $this->saveOtpMeta($tx, [
+            'expires_at' => now()->addMinutes($this->ttlMinutes())->timestamp,
+            'access_token' => $access, // reemplaza/invalida el anterior
+        ]);
 
         return [
             'ok' => true,
@@ -361,7 +392,13 @@ class WompiDaviplataPaymentService extends AbstractWompiPaymentService
     {
         $meta = $this->otpMeta($tx);
         $u = $urls ?? $this->storedUrls($tx);
-        Log::info('wompi.daviplata', [
+
+        // Un fallo de transporte se registra a `warning` para que sobreviva al
+        // nivel de log de producción; el resto queda en `info` para no llenar
+        // el fichero con el camino feliz. NUNCA se registran tokens, el código
+        // OTP ni el documento: solo si cada pieza estaba presente.
+        $level = ($httpStatus === 0 || $httpStatus >= 400) ? 'warning' : 'info';
+        Log::log($level, 'wompi.daviplata', [
             'reference' => $tx->reference,
             'transaction_id' => $tx->wompi_transaction_id,
             'stage' => $stage,

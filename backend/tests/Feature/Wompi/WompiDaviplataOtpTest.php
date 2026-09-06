@@ -25,10 +25,13 @@ class WompiDaviplataOtpTest extends TestCase
     use RefreshDatabase;
 
     private const SEND = 'https://api.wompi.test/otp/send';
+
     private const VALIDATE = 'https://api.wompi.test/otp/validate';
 
     private Plan $plan;
+
     private Member $member;
+
     private User $user;
 
     protected function setUp(): void
@@ -54,6 +57,7 @@ class WompiDaviplataOtpTest extends TestCase
     private function tx(array $otp = []): PaymentTransaction
     {
         $meta = $otp ? ['otp' => $otp] : null;
+
         return PaymentTransaction::create([
             'uuid' => (string) Str::uuid(), 'reference' => 'IRON-'.Str::random(6),
             'idempotency_key' => (string) Str::uuid(), 'provider' => 'wompi', 'environment' => 'sandbox',
@@ -192,6 +196,76 @@ class WompiDaviplataOtpTest extends TestCase
 
         // La transacción SIGUE viva (pending), no se marca error/expired.
         $this->assertSame(PaymentStateMachine::PENDING, $tx->fresh()->status);
+    }
+
+    /**
+     * UN 2xx SIN TOKEN NO ES UN ENVÍO.
+     *
+     * `validateOtp` usa `access_token` como bearer: sin él no hay forma de
+     * comprobar el código y el flujo queda muerto por construcción. Darlo por
+     * bueno era peor que fallar —la app decía "te enviamos un código" y el
+     * socio esperaba uno que no podía validarse— y encima escondía el
+     * problema. Se vio con un documento sin cuenta DaviPlata: seis intentos
+     * seguidos devolvieron 2xx sin token y ninguno emitió nada.
+     */
+    public function test_send_without_access_token_is_a_failure(): void
+    {
+        Http::fake([self::SEND => Http::response(['data' => ['authorization' => []]], 200)]);
+        $tx = $this->tx([
+            'send_url' => self::SEND, 'validate_url' => self::VALIDATE,
+            'initial_token' => 'tok_initial_123',
+        ]);
+
+        $res = $this->svc()->sendOtp($tx);
+
+        $this->assertFalse($res['ok'], 'sin token no hubo envío útil');
+        $this->assertStringContainsString('cuenta DaviPlata activa', $res['message']);
+
+        // NO se sella una ventana de validez para un código que no existe.
+        $meta = (array) data_get($tx->fresh()->metadata, 'otp', []);
+        $this->assertArrayNotHasKey('access_token', $meta);
+        $this->assertArrayNotHasKey('expires_at', $meta);
+
+        // Y la transacción sigue viva: es reintentable, no un fallo terminal.
+        $this->assertSame(PaymentStateMachine::PENDING, $tx->fresh()->status);
+    }
+
+    /** Un reenvío que no rota el token tampoco cuenta como enviado. */
+    public function test_resend_without_new_token_is_a_failure(): void
+    {
+        Http::fake([self::SEND => Http::response(['data' => []], 200)]);
+        $tx = $this->tx([
+            'send_url' => self::SEND, 'validate_url' => self::VALIDATE,
+            'initial_token' => 'tok_initial_123', 'access_token' => 'viejo_789',
+        ]);
+
+        $res = $this->svc()->resendOtp($tx);
+
+        $this->assertFalse($res['ok']);
+        // El token viejo NO se pisa con nada, pero tampoco se renueva la
+        // ventana: quedarse con el anterior haría fallar la validación sin
+        // explicar por qué.
+        $meta = (array) data_get($tx->fresh()->metadata, 'otp', []);
+        $this->assertSame('viejo_789', $meta['access_token'] ?? null);
+    }
+
+    /** El camino bueno sigue intacto: con token, se guarda y se abre ventana. */
+    public function test_send_with_token_still_works(): void
+    {
+        Http::fake([self::SEND => Http::response(
+            ['data' => ['authorization' => ['access_token' => 'nuevo_abc']]], 200
+        )]);
+        $tx = $this->tx([
+            'send_url' => self::SEND, 'validate_url' => self::VALIDATE,
+            'initial_token' => 'tok_initial_123',
+        ]);
+
+        $res = $this->svc()->sendOtp($tx);
+
+        $this->assertTrue($res['ok']);
+        $meta = (array) data_get($tx->fresh()->metadata, 'otp', []);
+        $this->assertSame('nuevo_abc', $meta['access_token']);
+        $this->assertNotEmpty($meta['expires_at']);
     }
 
     public function test_url_services_unavailable_returns_controlled_preparing(): void
