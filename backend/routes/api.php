@@ -539,6 +539,13 @@ Route::middleware('auth.admin')->group(function (): void {
 });
 // Lectura de planes/precios: PÚBLICA (la app muestra planes en registro/landing).
 Route::apiResource('plans', PlanController::class)->only(['index','show']);
+// ── Política de versión de la app (PÚBLICA) ───────────────────────────────────
+// Sin `auth`: la app tiene que poder preguntar si puede funcionar antes de que
+// nadie inicie sesión, y una versión retirada quizá ya no sepa autenticarse.
+// El cliente solo aporta plataforma y build; el veredicto lo da el servidor.
+Route::get('app/version-policy', [\App\Http\Controllers\Api\AppVersionPolicyController::class, 'show'])
+    ->middleware('throttle:60,1');
+
 Route::get('membership-plans', [MembershipPlanController::class, 'index']);
 Route::get('membership-plans/{plan}', [MembershipPlanController::class, 'show']);
 Route::apiResource('payments', PaymentController::class)->only(['index','show','store','update']);
