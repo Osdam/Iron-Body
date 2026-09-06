@@ -16,10 +16,17 @@ use Illuminate\Validation\Rule;
  * Cuentas administrativas del CRM: quién puede entrar y con qué rol.
  *
  * Usa la arquitectura de autenticación que ya existe —email y contraseña
- * verificados con `Hash` en AdminAuthController— y no inventa una paralela. La
- * contraseña se genera aquí y se entrega UNA sola vez al crear la cuenta, para
- * que quien la recibe la cambie; no se guarda en claro ni se puede volver a
- * consultar.
+ * verificados con `Hash` en AdminAuthController— y no inventa una paralela.
+ *
+ * La contraseña la ELIGE quien crea la cuenta y es definitiva: no caduca ni
+ * obliga a cambiarla al entrar. Antes se llamaba «temporal» y se generaba
+ * siempre, pero no había nada detrás de ese nombre —ni marca de caducidad ni
+ * `must_change_password`—, así que la que salía en pantalla ya era la de
+ * siempre y el aviso de «cámbiala al entrar» no lo respaldaba ningún mecanismo.
+ * Si no se envía ninguna, se genera una fuerte, que es el atajo cómodo.
+ *
+ * En cualquiera de los dos casos se entrega UNA sola vez: se guarda hasheada
+ * (cast `hashed`) y no se puede volver a consultar.
  *
  * INVARIANTES que este controlador protege, y que ninguna pantalla puede saltarse:
  *
@@ -34,6 +41,31 @@ use Illuminate\Validation\Rule;
  */
 class AdminUserController extends Controller
 {
+    /** Longitud mínima de una contraseña elegida a mano. */
+    private const MIN_PASSWORD = 8;
+
+    /** Tope defensivo: bcrypt solo mira los primeros 72 bytes. */
+    private const MAX_PASSWORD = 72;
+
+    /** Longitud de las que genera el sistema cuando no se elige ninguna. */
+    private const GENERATED_LENGTH = 16;
+
+    /**
+     * La que envíe quien crea la cuenta, o una fuerte si no envía ninguna.
+     * Devuelve también si fue generada, para que la pantalla lo diga.
+     *
+     * @return array{0: string, 1: bool}
+     */
+    private function resolvePassword(?string $elegida): array
+    {
+        $limpia = trim((string) $elegida);
+        if ($limpia !== '') {
+            return [$limpia, false];
+        }
+
+        return [Str::password(self::GENERATED_LENGTH, symbols: false), true];
+    }
+
     /** GET /api/admin/users */
     public function index(Request $request): JsonResponse
     {
@@ -49,7 +81,7 @@ class AdminUserController extends Controller
         ]);
     }
 
-    /** POST /api/admin/users  { name, email, role, status? } */
+    /** POST /api/admin/users  { name, email, role, status?, password? } */
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -57,21 +89,20 @@ class AdminUserController extends Controller
             'email' => ['required', 'email', 'max:160', 'unique:admins,email'],
             'role' => ['required', 'string', Rule::in(AdminRole::assignableNames())],
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
+            'password' => ['nullable', 'string', 'min:'.self::MIN_PASSWORD, 'max:'.self::MAX_PASSWORD],
         ]);
 
         if ($bloqueo = $this->denyIfEscalating($request, $data['role'])) {
             return $bloqueo;
         }
 
-        // Contraseña temporal robusta. Se devuelve una vez y no se guarda en
-        // claro: el modelo la castea a `hashed` al asignarla.
-        $temporal = Str::password(16, symbols: false);
+        [$clave, $generada] = $this->resolvePassword($data['password'] ?? null);
 
         $admin = Admin::create([
             'uuid' => (string) Str::uuid(),
             'name' => trim($data['name']),
             'email' => strtolower(trim($data['email'])),
-            'password' => $temporal,
+            'password' => $clave,
             'role' => $data['role'],
             'status' => $data['status'] ?? 'active',
         ]);
@@ -79,9 +110,9 @@ class AdminUserController extends Controller
         return response()->json([
             'ok' => true,
             'data' => $this->present($admin),
-            // Única vez que se ve. La pantalla la muestra para copiarla y
-            // advierte de que no volverá a estar disponible.
-            'temporary_password' => $temporal,
+            // Única vez que se ve en claro: a partir de aquí solo existe hasheada.
+            'password' => $clave,
+            'generated' => $generada,
         ], 201);
     }
 
@@ -164,21 +195,27 @@ class AdminUserController extends Controller
     }
 
     /**
-     * POST /api/admin/users/{admin}/reset-password
+     * POST /api/admin/users/{admin}/reset-password  { password? }
      *
-     * Genera una contraseña temporal nueva. No se puede consultar la anterior
+     * Fija una contraseña nueva y definitiva. No se puede consultar la anterior
      * —está hasheada— así que restablecer es la única vía, y queda a la vista
-     * de quien la ejecuta.
+     * de quien la ejecuta. Mismo criterio que al crear: la que se envíe, o una
+     * generada si no se envía ninguna.
      */
-    public function resetPassword(Admin $admin): JsonResponse
+    public function resetPassword(Request $request, Admin $admin): JsonResponse
     {
-        $temporal = Str::password(16, symbols: false);
-        $admin->update(['password' => $temporal]);
+        $data = $request->validate([
+            'password' => ['nullable', 'string', 'min:'.self::MIN_PASSWORD, 'max:'.self::MAX_PASSWORD],
+        ]);
+
+        [$clave, $generada] = $this->resolvePassword($data['password'] ?? null);
+        $admin->update(['password' => $clave]);
 
         return response()->json([
             'ok' => true,
             'data' => $this->present($admin->fresh()),
-            'temporary_password' => $temporal,
+            'password' => $clave,
+            'generated' => $generada,
         ]);
     }
 

@@ -51,7 +51,7 @@ class AdminUserTest extends TestCase
             'role' => Admin::ROLE_RECEPCION,
         ], $h)->assertStatus(201);
 
-        $temporal = $res->json('temporary_password');
+        $temporal = $res->json('password');
         $this->assertIsString($temporal);
         $this->assertGreaterThanOrEqual(16, strlen($temporal));
 
@@ -73,12 +73,72 @@ class AdminUserTest extends TestCase
             'name' => 'Recepcionista Tarde',
             'email' => 'tarde@ironbody.test',
             'role' => Admin::ROLE_RECEPCION,
-        ], $h)->json('temporary_password');
+        ], $h)->json('password');
 
         // De extremo a extremo: la clave entregada sirve de verdad.
         $this->postJson('/api/admin/auth/login', [
             'email' => 'tarde@ironbody.test',
             'password' => $clave,
+        ])->assertOk();
+    }
+
+    public function test_la_clave_elegida_es_la_definitiva_y_sirve_para_entrar(): void
+    {
+        $h = $this->actingAsAdmin($this->superAdmin());
+
+        $res = $this->postJson('/api/admin/users', [
+            'name' => 'Recepcionista Noche',
+            'email' => 'noche@ironbody.test',
+            'role' => Admin::ROLE_RECEPCION,
+            'password' => 'clave-elegida-2026',
+        ], $h)->assertStatus(201);
+
+        // Se devuelve tal cual y se marca como NO generada.
+        $res->assertJsonPath('password', 'clave-elegida-2026')
+            ->assertJsonPath('generated', false);
+
+        // Es la que queda: entra con ella, y nada la obliga a cambiarse.
+        $this->postJson('/api/admin/auth/login', [
+            'email' => 'noche@ironbody.test',
+            'password' => 'clave-elegida-2026',
+        ])->assertOk();
+    }
+
+    public function test_sin_clave_el_servidor_genera_una_y_lo_dice(): void
+    {
+        $h = $this->actingAsAdmin($this->superAdmin());
+
+        $this->postJson('/api/admin/users', [
+            'name' => 'Sin Clave', 'email' => 'sinclave@ironbody.test', 'role' => Admin::ROLE_RECEPCION,
+        ], $h)->assertStatus(201)->assertJsonPath('generated', true);
+    }
+
+    public function test_no_se_acepta_una_clave_demasiado_corta(): void
+    {
+        $this->postJson('/api/admin/users', [
+            'name' => 'Corta', 'email' => 'corta@ironbody.test',
+            'role' => Admin::ROLE_RECEPCION, 'password' => 'abc123',
+        ], $this->actingAsAdmin($this->superAdmin()))->assertStatus(422);
+
+        $this->assertDatabaseMissing('admins', ['email' => 'corta@ironbody.test']);
+    }
+
+    public function test_restablecer_acepta_una_clave_elegida(): void
+    {
+        $h = $this->actingAsAdmin($this->superAdmin());
+        $this->postJson('/api/admin/users', [
+            'name' => 'Rehecho', 'email' => 'rehecho@ironbody.test', 'role' => Admin::ROLE_RECEPCION,
+        ], $h)->assertStatus(201);
+
+        $creado = Admin::where('email', 'rehecho@ironbody.test')->first();
+        $this->postJson("/api/admin/users/{$creado->id}/reset-password",
+            ['password' => 'la-nueva-de-siempre'], $h)
+            ->assertOk()
+            ->assertJsonPath('password', 'la-nueva-de-siempre')
+            ->assertJsonPath('generated', false);
+
+        $this->postJson('/api/admin/auth/login', [
+            'email' => 'rehecho@ironbody.test', 'password' => 'la-nueva-de-siempre',
         ])->assertOk();
     }
 
@@ -202,7 +262,7 @@ class AdminUserTest extends TestCase
         $h = $this->actingAsAdmin($this->superAdmin());
         $clave = $this->postJson('/api/admin/users', [
             'name' => 'Temporal', 'email' => 'temp@ironbody.test', 'role' => Admin::ROLE_RECEPCION,
-        ], $h)->json('temporary_password');
+        ], $h)->json('password');
 
         $creado = Admin::where('email', 'temp@ironbody.test')->first();
         $this->postJson("/api/admin/users/{$creado->id}/status", ['status' => 'inactive'], $h)->assertOk();
@@ -250,11 +310,11 @@ class AdminUserTest extends TestCase
         $h = $this->actingAsAdmin($this->superAdmin());
         $anterior = $this->postJson('/api/admin/users', [
             'name' => 'Reset', 'email' => 'reset@ironbody.test', 'role' => Admin::ROLE_RECEPCION,
-        ], $h)->json('temporary_password');
+        ], $h)->json('password');
 
         $creado = Admin::where('email', 'reset@ironbody.test')->first();
         $nueva = $this->postJson("/api/admin/users/{$creado->id}/reset-password", [], $h)
-            ->assertOk()->json('temporary_password');
+            ->assertOk()->json('password');
 
         $this->assertNotSame($anterior, $nueva);
         $this->postJson('/api/admin/auth/login', ['email' => 'reset@ironbody.test', 'password' => $anterior])

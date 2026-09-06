@@ -102,6 +102,49 @@ class CrmAggregatesPerformanceTest extends TestCase
         $this->assertSame(1, $response->json('failed_count'));
     }
 
+    /**
+     * El filtro comparaba `status` con un literal exacto, así que un pago
+     * guardado como `anulado` o `Cancelled` lo contaba la tarjeta de fallidos
+     * pero no lo sacaba ningún filtro: el número no se podía auditar.
+     */
+    public function test_el_filtro_de_cancelados_encuentra_las_otras_grafias(): void
+    {
+        $user = $this->makeUser('Cliente Anulado');
+        $this->makePayment($user, ['status' => 'cancelled', 'paid_at' => null]);
+        $this->makePayment($user, ['status' => 'canceled', 'paid_at' => null]);
+        $this->makePayment($user, ['status' => 'anulado', 'paid_at' => null]);
+        $this->makePayment($user, ['status' => 'Cancelled', 'paid_at' => null]);
+        $this->makePayment($user, ['status' => 'paid']);
+
+        $this->getJson('/api/payments?status=cancelled', $this->adminHeaders())
+            ->assertOk()
+            ->assertJsonPath('total', 4);
+    }
+
+    public function test_fallidos_y_cancelados_se_pueden_filtrar_por_separado_y_juntos(): void
+    {
+        $user = $this->makeUser('Cliente Mixto');
+        $this->makePayment($user, ['status' => 'failed', 'paid_at' => null]);
+        $this->makePayment($user, ['status' => 'cancelled', 'paid_at' => null]);
+        $this->makePayment($user, ['status' => 'anulada', 'paid_at' => null]);
+        $this->makePayment($user, ['status' => 'paid']);
+
+        // Un cobro que no cuajó y una anulación deliberada no son lo mismo.
+        $this->getJson('/api/payments?status=failed', $this->adminHeaders())
+            ->assertOk()->assertJsonPath('total', 1);
+        $this->getJson('/api/payments?status=cancelled', $this->adminHeaders())
+            ->assertOk()->assertJsonPath('total', 2);
+
+        // El grupo combinado es exactamente lo que cuenta la tarjeta del CRM.
+        $juntos = $this->getJson('/api/payments?status=failed_or_cancelled', $this->adminHeaders())
+            ->assertOk()->json('total');
+        $tarjeta = $this->getJson('/api/admin/payments/stats', $this->adminHeaders())
+            ->assertOk()->json('failed_count');
+
+        $this->assertSame(3, $juntos);
+        $this->assertSame($tarjeta, $juntos, 'La tarjeta y su filtro deben contar lo mismo');
+    }
+
     public function test_stats_de_pagos_acepta_los_filtros_del_listado(): void
     {
         $user = $this->makeUser('Cliente Filtrado');

@@ -39,6 +39,29 @@ class PaymentController extends Controller
 
     public const FAILED_STATUSES = ['failed', 'cancelled', 'canceled', 'anulado', 'anulada'];
 
+    /**
+     * Qué estados acepta cada valor del filtro de la tabla.
+     *
+     * Existe porque el filtro comparaba `status` con un literal exacto y
+     * sensible a mayúsculas, mientras que las tarjetas de arriba cuentan con
+     * `LOWER(status) IN (…)` sobre varias grafías. Resultado: la tarjeta
+     * «Fallidos / Cancelados» sumaba pagos guardados como `anulado`, `canceled`
+     * o `Cancelled` que NINGÚN filtro de la pantalla podía sacar a la luz, así
+     * que el número no había forma de auditarlo.
+     *
+     * `failed` y `cancelled` van por separado —no son lo mismo: uno es un cobro
+     * que no cuajó y el otro una anulación deliberada— y `failed_or_cancelled`
+     * reproduce exactamente el grupo que cuenta la tarjeta.
+     */
+    private const STATUS_FILTER_GROUPS = [
+        'paid' => self::PAID_STATUSES,
+        'pending' => self::PENDING_STATUSES,
+        'failed' => ['failed'],
+        'cancelled' => ['cancelled', 'canceled', 'anulado', 'anulada'],
+        'failed_or_cancelled' => self::FAILED_STATUSES,
+        'refunded' => ['refunded', 'reembolsado', 'reembolsada'],
+    ];
+
     public function index(Request $request)
     {
         $query = Payment::query()->with(['user:id,name,email', 'plan:id,name', 'electronicInvoice'])->latest();
@@ -144,7 +167,11 @@ class PaymentController extends Controller
     private function applyCrmFilters($query, Request $request): void
     {
         if ($request->filled('status')) {
-            $query->where('status', $request->status);
+            $aceptados = $this->statusFilterValues((string) $request->status);
+            $query->whereRaw(
+                'LOWER(status) IN ('.$this->statusPlaceholders($aceptados).')',
+                $aceptados,
+            );
         }
 
         if ($request->filled('search')) {
@@ -174,6 +201,20 @@ class PaymentController extends Controller
         if ($request->filled('cash_shift_id')) {
             $query->where('cash_shift_id', (int) $request->cash_shift_id);
         }
+    }
+
+    /**
+     * Estados que acepta un valor del filtro. Un valor sin grupo conocido se
+     * compara consigo mismo en minúsculas, que sigue siendo mejor que el
+     * `where` exacto de antes: al menos encuentra `Refunded` y `REFUNDED`.
+     *
+     * @return list<string>
+     */
+    private function statusFilterValues(string $filtro): array
+    {
+        $clave = strtolower(trim($filtro));
+
+        return self::STATUS_FILTER_GROUPS[$clave] ?? [$clave];
     }
 
     /** Marcadores `?` para una lista de estados dentro de un selectRaw. */
