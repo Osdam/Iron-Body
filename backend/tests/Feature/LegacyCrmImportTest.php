@@ -372,6 +372,8 @@ class LegacyCrmImportTest extends TestCase
             'SEMANA', 'Comisión de personalizados', 'ANUALIDAD', 'TOTAL ACCESS ESPECIAL',
             'SEMESTRE', 'Entrada 1 dia', 'INGRESO EMPLEADOS', 'MERRY CRHYSTMAS',
             'EVOLUCION IRONBODY X20', 'PLAN FAMILIAR', 'ACTIVACIÓN FUNCIONAL X15',
+            // Aparecido en el export del 07/09/2026.
+            'TOTAL ACCESS PRO',
         ];
 
         $catalogo = Plan::pluck('name')->all();

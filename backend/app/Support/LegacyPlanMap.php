@@ -31,6 +31,7 @@ final class LegacyPlanMap
      *   SEMANA            45.000 /  7d  ==  Plan Semana   45.000 /  7d
      *   VALERA 2          65.000 / 15   ==  Plan Valera   65.000 / 15d
      *   TOTAL ACCESS XMES180.000 / 30d  ==  Élite        180.000 / 30d
+     *   TOTAL ACCESS PRO 499.000 / 90d  ==  Pro          499.000 / 90d
      *
      * VALERA es la misma valera con la tarifa vieja (55.000): mismo plan, no un
      * plan distinto, así que también apunta a «Plan Valera». El precio real
@@ -45,6 +46,8 @@ final class LegacyPlanMap
         'VALERA' => 'Plan Valera',
         'VALERA 2' => 'Plan Valera',
         'TOTAL ACCESS XMES' => 'Élite',
+        // Apareció en el export del 07/09/2026, ya vendido a un socio.
+        'TOTAL ACCESS PRO' => 'Pro',
     ];
 
     /**

@@ -132,6 +132,42 @@ Los productos de demostración que sembró `ProductSeeder` (`SUP-WHEY-2LB`,
 `ACC-SHAKER`, …) **no se tocan**. Si ya no se venden, se desactivan desde el CRM
 —queda traza— en vez de borrarlos.
 
+## Reimportar con un export más nuevo
+
+Mientras el gimnasio siga operando en el sistema anterior, cada export nuevo se
+sube con los mismos comandos: lo ya cargado se reconoce por `MIGR-<id>` y solo
+entra lo que falta. El `--dry-run` lo dice antes de escribir nada — en el export
+del 07/09/2026, sobre una base que ya tenía el del 31/08:
+
+```
+users_nuevos 38 · users_actualizados 3731 · pagos_nuevos 148 · pagos_ya_estaban 9292
+```
+
+Dos cuadres que conviene comprobar en el ensayo:
+
+- `users_nuevos + users_actualizados` == clientes del export − fichas «repetido»
+- `pagos_nuevos + pagos_ya_estaban` == membresías del export − las de esas fichas
+
+Si `pagos_ya_estaban` sale mucho más bajo de lo esperado, algo pasó con las
+referencias y reimportar duplicaría ingresos: parar y revisar.
+
+**Lo único que hay que mirar a mano es si aparecieron planes nuevos.** El
+comando avisa («Planes del export que NO existen en `plans`»), pero para cuando
+avisa el socio ya entró sin plan resuelto. Para verlo antes:
+
+```bash
+php -r '$fh=fopen($argv[1],"r"); $h=fgetcsv($fh,0,";");
+  $h[0]=trim(preg_replace("/^\xEF\xBB\xBF/","",$h[0]),"\""); $i=array_flip(array_map("trim",$h));
+  $p=[]; while(($c=fgetcsv($fh,0,";"))!==false) if(count($c)>5) $p[$c[$i["Nombre del plan"]]]=1;
+  echo implode("\n",array_keys($p)),"\n";' /tmp/Membresias_Todas.xls
+```
+
+Cualquier nombre que no esté ya en `App\Support\LegacyPlanMap` ni en
+`LegacyPlansSeeder` es nuevo. Si tiene el mismo precio y duración que un plan
+del catálogo, va al mapa como equivalencia; si es promocional o de cortesía, al
+seeder como plan histórico. Así apareció `TOTAL ACCESS PRO` (499.000 / 90 días
+== plan `Pro`) en el export del 07/09/2026.
+
 ## Después de importar
 
 ```bash
