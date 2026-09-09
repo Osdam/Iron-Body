@@ -86,18 +86,59 @@ class CashShiftTotalsService
      * filtro por `cash_shift_id` ya excluye por construcción los pagos de
      * pasarela y los `MIGR-*` históricos, que nunca llevan turno.
      *
+     * Se consulta en DOS partes porque un cobro puede repartirse entre varios
+     * medios (`payment_splits`). Agrupar por `payments.method` a secas metería
+     * los 60.000 de un «20 en efectivo + 40 con tarjeta» en un solo medio; si
+     * ese medio fuese efectivo, el cajón tendría que tener 40.000 que nunca
+     * entraron, y el arqueo saldría descuadrado cada día.
+     *
      * @return array{totals: array<string,string>, count: int}
      */
     private function gymPaymentsByMethod(CashShift $shift): array
     {
-        $filas = DB::table('payments')
+        // 1) Cobros de un solo medio: como siempre.
+        $simples = DB::table('payments')
             ->where('cash_shift_id', $shift->id)
             ->where('status', 'paid')
+            ->whereNotExists(fn ($q) => $q
+                ->select(DB::raw(1))
+                ->from('payment_splits')
+                ->whereColumn('payment_splits.payment_id', 'payments.id'))
             ->groupBy('method')
             ->select('method', DB::raw('SUM(amount) AS suma'), DB::raw('COUNT(*) AS n'))
             ->get();
 
-        return $this->fold($filas, 'method');
+        // 2) Cobros mixtos: cada parte suma a SU medio.
+        $partes = DB::table('payment_splits')
+            ->join('payments', 'payments.id', '=', 'payment_splits.payment_id')
+            ->where('payments.cash_shift_id', $shift->id)
+            ->where('payments.status', 'paid')
+            ->groupBy('payment_splits.method')
+            ->select(
+                'payment_splits.method',
+                DB::raw('SUM(payment_splits.amount) AS suma'),
+                // Cero: las operaciones se cuentan aparte. Sumar aquí contaría
+                // un cobro mixto tantas veces como medios tenga.
+                DB::raw('0 AS n'),
+            )
+            ->get();
+
+        $resultado = $this->fold($simples->concat($partes), 'method');
+        $resultado['count'] = $this->gymOperationsCount($shift);
+
+        return $resultado;
+    }
+
+    /**
+     * Operaciones del turno: cobros, no líneas de desglose. Se cuenta aparte
+     * porque un cobro repartido en tres medios sigue siendo UNA operación.
+     */
+    private function gymOperationsCount(CashShift $shift): int
+    {
+        return DB::table('payments')
+            ->where('cash_shift_id', $shift->id)
+            ->where('status', 'paid')
+            ->count();
     }
 
     /**

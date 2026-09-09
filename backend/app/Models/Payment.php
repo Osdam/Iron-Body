@@ -5,10 +5,12 @@ namespace App\Models;
 use App\Enums\InvoiceType;
 use App\Exceptions\PaymentHasInvoiceException;
 use App\Services\Billing\InvoiceEmail;
+use App\Support\Caja\PaymentMethodKind;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 
@@ -22,6 +24,16 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
 class Payment extends Model
 {
     use HasFactory;
+
+    /**
+     * Valor de `method` cuando el cobro se repartió entre varios medios.
+     *
+     * El detalle vive en `payment_splits`; aquí queda esta marca para que
+     * cualquier consulta que agrupe por `method` —y hay varias— no atribuya el
+     * total a un medio concreto y lo cuente mal. Quien necesite el desglose
+     * real usa {@see amountsByMethod()}.
+     */
+    public const MIXED_METHOD = 'mixed';
 
     protected $fillable = [
         'user_id', 'member_id', 'plan_id', 'amount', 'method', 'reference', 'status', 'paid_at',
@@ -135,6 +147,46 @@ class Payment extends Model
     public function transaction(): BelongsTo
     {
         return $this->belongsTo(PaymentTransaction::class, 'reference', 'reference');
+    }
+
+    /** Partes del cobro cuando se pagó con varios medios. Vacío si fue uno solo. */
+    public function splits(): HasMany
+    {
+        return $this->hasMany(PaymentSplit::class);
+    }
+
+    /** ¿Se repartió entre varios medios? */
+    public function isMixed(): bool
+    {
+        return $this->method === self::MIXED_METHOD;
+    }
+
+    /**
+     * Cuánto entró por cada medio canónico.
+     *
+     * Es LA función que deben usar el arqueo y los reportes en lugar de mirar
+     * `method` a secas: para un cobro normal devuelve el total bajo su único
+     * medio, y para uno mixto lo reparte como se cobró de verdad. Sin esto,
+     * «20.000 en efectivo + 40.000 con tarjeta» sumaba 60.000 al efectivo
+     * esperado y la caja aparecía descuadrada todos los días.
+     *
+     * @return array<string, float> medio canónico => importe
+     */
+    public function amountsByMethod(): array
+    {
+        $splits = $this->relationLoaded('splits') ? $this->splits : $this->splits()->get();
+
+        if ($splits->isEmpty()) {
+            return [PaymentMethodKind::normalize($this->method)->value => (float) $this->amount];
+        }
+
+        $porMedio = [];
+        foreach ($splits as $split) {
+            $clave = $split->kind()->value;
+            $porMedio[$clave] = ($porMedio[$clave] ?? 0) + (float) $split->amount;
+        }
+
+        return $porMedio;
     }
 
     /** Comprobantes electrónicos (factura + posibles notas crédito) de este pago. */
