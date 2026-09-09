@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Enums\CashShiftType;
+use App\Enums\DebtorType;
 use App\Exceptions\CashShiftException;
 use App\Exceptions\ReceivableException;
 use App\Http\Controllers\Controller;
@@ -13,6 +14,7 @@ use App\Models\Receivable;
 use App\Models\ReceivablePayment;
 use App\Services\Billing\Money;
 use App\Services\Audit\FinancialAudit;
+use App\Services\Caja\DebtorDirectory;
 use App\Services\Caja\ReceivableService;
 use App\Services\Payments\PaymentMembershipActivator;
 use App\Support\Access\AdminActor;
@@ -44,6 +46,13 @@ class ReceivableController extends Controller
             'member_id' => ['nullable', 'integer'],
             'status' => ['nullable', Rule::in(Receivable::STATUSES)],
             'type' => ['nullable', Rule::in(CashShiftType::values())],
+            // Las cuatro vistas de Caja, por nombre. Antes el CRM las componía
+            // con `outstanding=true`, y ese `true` viajaba como TEXTO: la regla
+            // `boolean` de Laravel admite 1, 0, "1" y "0" pero no "true", así
+            // que la pestaña Créditos respondía 422 y en pantalla salía «No se
+            // pudo cargar las cuentas por cobrar». Un parámetro con nombre no
+            // se puede escribir mal de esa manera.
+            'scope' => ['nullable', Rule::in(['all', 'credits', 'installments', 'paid'])],
             'outstanding' => ['nullable', 'boolean'],
             'search' => ['nullable', 'string', 'max:120'],
             'from' => ['nullable', 'date'],
@@ -61,6 +70,16 @@ class ReceivableController extends Controller
         if (! empty($filtros['type'])) {
             $q->where('type', $filtros['type']);
         }
+        match ($filtros['scope'] ?? null) {
+            // «Todas» son las que todavía se deben; una cuenta saldada ya no se
+            // cobra y no tiene sitio en un listado de cobro.
+            'all' => $q->outstanding(),
+            'credits' => $q->fromCreditSale(),
+            'installments' => $q->withInstallments(),
+            'paid' => $q->settled(),
+            default => null,
+        };
+
         if ($request->boolean('outstanding')) {
             $q->outstanding();
         }
@@ -82,9 +101,19 @@ class ReceivableController extends Controller
 
         $cuentas = $q->orderByDesc('id')->limit(300)->get();
 
+        // Los deudores se resuelven de una vez, agrupados por tabla: uno a uno
+        // serían 300 consultas para pintar una pantalla.
+        $fichas = app(DebtorDirectory::class)->resolveMany(
+            $cuentas->filter(fn (Receivable $r) => $r->debtor_type !== null && $r->debtor_id !== null)
+                ->map(fn (Receivable $r) => [$r->debtor_type, $r->debtor_id])
+                ->all(),
+        );
+
         return response()->json([
             'ok' => true,
-            'data' => $cuentas->map(fn (Receivable $r) => $r->toCrmArray())->all(),
+            'data' => $cuentas->map(fn (Receivable $r) => $r->toCrmArray(
+                debtor: $fichas[$r->debtor_type?->value.':'.$r->debtor_id] ?? null,
+            ))->all(),
             // El total pendiente de lo consultado, para no obligar al CRM a
             // sumarlo y arriesgarse a que su suma difiera de la del servidor.
             'summary' => [
@@ -95,6 +124,49 @@ class ReceivableController extends Controller
                 ),
             ],
         ]);
+    }
+
+    /**
+     * GET /api/admin/receivables/debtors — a quién se le puede fiar.
+     *
+     * Se busca DENTRO de un tipo, nunca en todos a la vez: quien está en el
+     * mostrador ya sabe si le está fiando a un socio o a la recepcionista, y
+     * mezclarlos es lo que hacía que dos personas con el mismo nombre fueran
+     * indistinguibles.
+     */
+    public function debtors(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'type' => ['required', Rule::in(DebtorType::values())],
+            'search' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'data' => app(DebtorDirectory::class)->search(
+                DebtorType::from($data['type']),
+                $data['search'] ?? '',
+            ),
+        ]);
+    }
+
+    /**
+     * El deudor que viene en la petición, sea en la forma nueva o en la vieja.
+     *
+     * @param  array<string,mixed>  $data
+     * @return array{0: ?DebtorType, 1: int}
+     */
+    private function debtorFrom(array $data): array
+    {
+        if (! empty($data['debtor_type']) && ! empty($data['debtor_id'])) {
+            return [DebtorType::from($data['debtor_type']), (int) $data['debtor_id']];
+        }
+
+        if (! empty($data['member_id'])) {
+            return [DebtorType::MEMBER, (int) $data['member_id']];
+        }
+
+        return [null, 0];
     }
 
     /** GET /api/admin/receivables/{receivable} — estado de cuenta. */
@@ -118,16 +190,31 @@ class ReceivableController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'member_id' => ['required', 'integer', 'exists:members,id'],
+            // `member_id` se sigue admitiendo para no romper a quien ya llama
+            // así; el par debtor_type/debtor_id es la forma general.
+            'member_id' => ['nullable', 'integer', 'exists:members,id'],
+            'debtor_type' => ['nullable', Rule::in(DebtorType::values())],
+            'debtor_id' => ['nullable', 'integer', 'min:1'],
             'type' => ['required', Rule::in(CashShiftType::values())],
             'concept' => ['required', 'string', 'min:3', 'max:160'],
             'total_amount' => ['required', 'numeric', 'min:0.01'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
+        [$debtorType, $debtorId] = $this->debtorFrom($data);
+
+        if ($debtorType === null) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'debtor_required',
+                'message' => 'Hay que decir a quién se le fía.',
+            ], 422);
+        }
+
         try {
             $cuenta = app(ReceivableService::class)->create(
-                member: Member::findOrFail((int) $data['member_id']),
+                debtorType: $debtorType,
+                debtorId: $debtorId,
                 type: CashShiftType::from($data['type']),
                 concept: $data['concept'],
                 total: Money::fromAmount($data['total_amount']),
@@ -270,7 +357,8 @@ class ReceivableController extends Controller
 
         try {
             $cuenta = app(ReceivableService::class)->create(
-                member: $member,
+                debtorType: DebtorType::MEMBER,
+                debtorId: $member->id,
                 type: CashShiftType::GYM,
                 concept: 'Plan '.$plan->name,
                 total: $total,

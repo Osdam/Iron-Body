@@ -1207,6 +1207,10 @@ Route::post('admin/caja/sales/{sale}/cancel',   [CajaController::class, 'cancel'
 // tiene por qué poder crear deuda nueva. Tres llaves, no una.
 Route::get('admin/receivables',                        [ReceivableController::class, 'index'])
     ->middleware('admin.can:receivables.view');
+// ANTES del comodín: si fuera después, «debtors» se leería como el id de una
+// cuenta y la búsqueda devolvería un 404.
+Route::get('admin/receivables/debtors',                [ReceivableController::class, 'debtors'])
+    ->middleware('admin.can:receivables.view');
 Route::get('admin/receivables/{receivable}',           [ReceivableController::class, 'show'])
     ->middleware('admin.can:receivables.view');
 Route::post('admin/receivables',                       [ReceivableController::class, 'store'])

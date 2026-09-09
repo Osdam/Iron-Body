@@ -3,6 +3,7 @@
 namespace App\Services\Caja;
 
 use App\Enums\CashShiftType;
+use App\Enums\DebtorType;
 use App\Exceptions\ReceivableException;
 use App\Models\Admin;
 use App\Models\Member;
@@ -47,8 +48,22 @@ class ReceivableService
      * crédito descuenta sus existencias; un plan activa su membresía). Aquí
      * solo queda constancia de lo que se debe.
      */
+    /**
+     * Abre una cuenta por cobrar.
+     *
+     * `$debtorType` + `$debtorId` son la identidad financiera: sobreviven a que
+     * la persona cambie de nombre y permiten responder «¿quién originó esta
+     * deuda?» meses después sin depender de un texto.
+     *
+     * AQUÍ, Y SOLO AQUÍ, se mantiene la invariante: cuando el deudor es socio,
+     * `member_id` es su id; cuando no lo es, queda vacío. `member_id` sigue
+     * existiendo porque de ella cuelgan el índice, la relación y el filtrado del
+     * entrenador a sus socios; que las dos digan lo mismo se decide en un único
+     * sitio para que no puedan discrepar.
+     */
     public function create(
-        Member $member,
+        DebtorType $debtorType,
+        int $debtorId,
         CashShiftType $type,
         string $concept,
         Money $total,
@@ -60,8 +75,14 @@ class ReceivableService
             throw ReceivableException::invalidTotal();
         }
 
+        if (app(DebtorDirectory::class)->resolve($debtorType, $debtorId) === null) {
+            throw ReceivableException::unknownDebtor($debtorType);
+        }
+
         $receivable = new Receivable([
-            'member_id' => $member->id,
+            'debtor_type' => $debtorType->value,
+            'debtor_id' => $debtorId,
+            'member_id' => $debtorType === DebtorType::MEMBER ? $debtorId : null,
             'type' => $type->value,
             'concept' => trim($concept),
             'total_amount' => $total->toDatabase(),

@@ -16,7 +16,9 @@ use App\Services\Billing\Money;
 use App\Services\Billing\PricingException;
 use App\Services\Billing\PricingService;
 use App\Enums\CashShiftType;
+use App\Enums\DebtorType;
 use App\Services\Caja\CashShiftService;
+use App\Services\Caja\DebtorDirectory;
 use App\Services\Caja\ReceivableService;
 use App\Services\Inventory\InventoryService;
 use App\Services\Audit\FinancialAudit;
@@ -158,6 +160,8 @@ class CajaController extends Controller
             // esto. Basta con uno de los dos.
             'member_id' => ['nullable', 'integer', 'exists:members,id'],
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'debtor_type' => ['nullable', Rule::in(DebtorType::values())],
+            'debtor_id' => ['nullable', 'integer', 'min:1'],
             'payment_method' => [
                 Rule::requiredIf(fn () => ! $request->boolean('credit')),
                 'nullable',
@@ -180,9 +184,9 @@ class CajaController extends Controller
         $deudor = null;
         if ($request->boolean('credit')) {
             $deudor = $this->resolveDebtor($data);
-            if (! $deudor instanceof Member) {
+            if ($deudor === null) {
                 throw ValidationException::withMessages([
-                    'member_id' => ['Elige a quién se le fía: una deuda sin deudor no se puede cobrar.'],
+                    'debtor_id' => ['Elige a quién se le fía: una deuda sin deudor no se puede cobrar.'],
                 ]);
             }
         }
@@ -208,8 +212,8 @@ class CajaController extends Controller
         }
 
         try {
-            $sale = DB::transaction(function () use ($data, $request, $shift) {
-                $venta = $this->buildSale($data, $request, $shift);
+            $sale = DB::transaction(function () use ($data, $request, $shift, $deudor) {
+                $venta = $this->buildSale($data, $request, $shift, $deudor);
 
                 // La traza se escribe AQUÍ, no en una segunda petición del
                 // navegador: si la venta se deshace, la auditoría se deshace
@@ -240,7 +244,8 @@ class CajaController extends Controller
             }
 
             $cuenta = app(ReceivableService::class)->create(
-                member: $deudor,
+                debtorType: $deudor['type'],
+                debtorId: $deudor['id'],
                 type: CashShiftType::PRODUCTS,
                 concept: $this->creditConcept($sale),
                 total: Money::fromAmount($sale->total),
@@ -324,17 +329,41 @@ class CajaController extends Controller
     }
 
     /** El socio al que se le fía, venga su id o el de su cuenta de la app. */
-    private function resolveDebtor(array $data): ?Member
+    /**
+     * A quién se le fía, con su tipo.
+     *
+     * Admite las tres formas en que puede llegar: el par nuevo
+     * (debtor_type + debtor_id), el `member_id` de siempre y el `user_id` que
+     * usaba el buscador anterior. Las dos últimas son siempre socios.
+     *
+     * @param  array<string,mixed>  $data
+     * @return array{type: DebtorType, id: int, name: string}|null
+     */
+    private function resolveDebtor(array $data): ?array
     {
+        $directorio = app(DebtorDirectory::class);
+
+        if (! empty($data['debtor_type']) && ! empty($data['debtor_id'])) {
+            $ficha = $directorio->resolve(
+                DebtorType::from($data['debtor_type']),
+                (int) $data['debtor_id'],
+            );
+
+            return $ficha === null
+                ? null
+                : ['type' => DebtorType::from($ficha['type']), 'id' => $ficha['id'], 'name' => $ficha['name']];
+        }
+
+        $member = null;
         if (! empty($data['member_id'])) {
-            return Member::find((int) $data['member_id']);
+            $member = Member::find((int) $data['member_id']);
+        } elseif (! empty($data['user_id'])) {
+            $member = Member::where('user_id', (int) $data['user_id'])->first();
         }
 
-        if (! empty($data['user_id'])) {
-            return Member::where('user_id', (int) $data['user_id'])->first();
-        }
-
-        return null;
+        return $member === null
+            ? null
+            : ['type' => DebtorType::MEMBER, 'id' => $member->id, 'name' => $member->full_name];
     }
 
     /**
@@ -372,8 +401,15 @@ class CajaController extends Controller
      * @throws PricingException si un producto gravable no tiene tarifa, la
      *                          cantidad es inválida o el descuento es excesivo.
      */
-    private function buildSale(array $data, Request $request, ?CashShift $shift = null): ProductSale
-    {
+    /**
+     * @param  array{type: DebtorType, id: int, name: string}|null  $deudor
+     */
+    private function buildSale(
+        array $data,
+        Request $request,
+        ?CashShift $shift = null,
+        ?array $deudor = null,
+    ): ProductSale {
         $pricing = app(PricingService::class);
         $discount = Money::fromAmount($data['discount'] ?? 0);
 
@@ -407,7 +443,19 @@ class CajaController extends Controller
             'cashier_admin_id' => AdminActor::id($request),
             'cashier_name' => AdminActor::name($request),
             'cash_shift_id' => $shift?->id,
-            'customer_name' => $data['customer_name'] ?? null,
+            // A quién se le vendió. Las ventas a crédito se guardaban sin esto
+            // —member_id y customer_name en null— así que en «Ventas y pedidos»
+            // el CLIENTE salía como «—» aunque la cuenta por cobrar sí supiera
+            // quién debía: la misma obligación se contaba de dos maneras.
+            //
+            // `member_id` solo puede apuntar a un socio, así que para el
+            // personal del gimnasio queda el nombre. La identidad completa
+            // —tipo incluido— vive en la cuenta por cobrar, que es donde se
+            // reclama la deuda.
+            'member_id' => ($deudor !== null && $deudor['type'] === DebtorType::MEMBER)
+                ? $deudor['id']
+                : ($data['member_id'] ?? null),
+            'customer_name' => $data['customer_name'] ?? $deudor['name'] ?? null,
             // Nulo en una venta a crédito: todavía no se ha pagado, así que no
             // hay medio de pago que registrar. Lo traerá el abono.
             'payment_method' => $data['payment_method'] ?? null,

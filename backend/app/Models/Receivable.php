@@ -3,6 +3,9 @@
 namespace App\Models;
 
 use App\Enums\CashShiftType;
+use App\Enums\DebtorType;
+use App\Services\Caja\DebtorDirectory;
+use App\Models\ProductSale;
 use App\Services\Billing\Money;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -39,13 +42,15 @@ class Receivable extends Model
     ];
 
     protected $fillable = [
-        'member_id', 'type', 'concept', 'total_amount', 'status',
+        'member_id', 'debtor_type', 'debtor_id', 'type', 'concept', 'total_amount', 'status',
         'source_type', 'source_id', 'created_by', 'created_by_name',
         'notes', 'cancelled_at',
     ];
 
     protected $casts = [
         'type' => CashShiftType::class,
+        'debtor_type' => DebtorType::class,
+        'debtor_id' => 'integer',
         'total_amount' => 'decimal:2',
         'cancelled_at' => 'datetime',
     ];
@@ -75,6 +80,73 @@ class Receivable extends Model
     public function appliedPayments(): HasMany
     {
         return $this->payments()->where('status', ReceivablePayment::STATUS_APPLIED);
+    }
+
+    // ── Quién debe ──────────────────────────────────────────────────────────
+
+    /**
+     * La ficha del deudor: nombre, documento y de qué tipo es.
+     *
+     * Se resuelve contra la tabla que le corresponde, no contra el nombre que
+     * se copió al crear la deuda. Si la persona cambió de nombre o el CRM lo
+     * escribió mal, aquí sale el actual; y si dejó de existir, sale null en vez
+     * de un nombre que ya no responde por nadie.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function debtor(): ?array
+    {
+        if ($this->debtor_type === null || $this->debtor_id === null) {
+            return null;
+        }
+
+        return app(DebtorDirectory::class)->resolve($this->debtor_type, $this->debtor_id);
+    }
+
+    // ── Las cuatro vistas de Caja ───────────────────────────────────────────
+
+    /**
+     * Lo que todavía se debe. Es «Todas».
+     *
+     * Se filtra por `status`, que es columna real. `paidAmount()` y `balance()`
+     * se derivan de los abonos y NO existen como columnas: filtrarlos en SQL
+     * exigiría una subconsulta por fila, y el estado ya lo resume.
+     */
+    public function scopeOutstanding(Builder $q): Builder
+    {
+        return $q->whereIn('status', [self::STATUS_PENDING, self::STATUS_PARTIALLY_PAID]);
+    }
+
+    /** Deuda viva nacida de una venta a crédito. Es «Créditos». */
+    public function scopeFromCreditSale(Builder $q): Builder
+    {
+        return $q->outstanding()->where('source_type', ProductSale::class);
+    }
+
+    /**
+     * Deuda viva que YA recibió dinero. Es «Abonos».
+     *
+     * No lista abonos sueltos: lista a quién le están pagando a plazos, que es
+     * lo que se busca desde el mostrador. El detalle de la cuenta sí enseña
+     * todos sus abonos.
+     *
+     * Se comprueba que exista al menos un abono APLICADO en vez de fiarse de
+     * `status = partially_paid`: si un abono se anula, el saldo vuelve a estar
+     * entero y la cuenta deja de ser «a plazos», y así las dos cosas no pueden
+     * discrepar.
+     */
+    public function scopeWithInstallments(Builder $q): Builder
+    {
+        return $q->outstanding()->whereHas(
+            'payments',
+            fn (Builder $p) => $p->where('status', ReceivablePayment::STATUS_APPLIED),
+        );
+    }
+
+    /** Deuda liquidada. Es «Pagadas», y es histórico: no vuelve a cobrarse. */
+    public function scopeSettled(Builder $q): Builder
+    {
+        return $q->where('status', self::STATUS_PAID);
     }
 
     // ── El invariante: TOTAL = PAGADO + SALDO ───────────────────────────────
@@ -140,11 +212,6 @@ class Receivable extends Model
 
     // ── Consultas ───────────────────────────────────────────────────────────
 
-    public function scopeOutstanding(Builder $q): Builder
-    {
-        return $q->whereIn('status', [self::STATUS_PENDING, self::STATUS_PARTIALLY_PAID]);
-    }
-
     public function scopeOfType(Builder $q, CashShiftType $type): Builder
     {
         return $q->where('type', $type->value);
@@ -152,11 +219,16 @@ class Receivable extends Model
 
     // ── Presentación ────────────────────────────────────────────────────────
 
-    /** @return array<string,mixed> */
-    public function toCrmArray(bool $withPayments = false): array
+    /**
+     * @param  array<string,mixed>|null  $debtor  La ficha ya resuelta, para no
+     *   consultarla una vez por fila al pintar un listado.
+     * @return array<string,mixed>
+     */
+    public function toCrmArray(bool $withPayments = false, ?array $debtor = null): array
     {
         $pagado = $this->paidAmount();
         $saldo = $this->balance();
+        $deudor = $debtor ?? $this->debtor();
 
         $data = [
             'id' => $this->id,
@@ -164,6 +236,14 @@ class Receivable extends Model
             'member_name' => $this->member?->full_name,
             'member_document' => $this->member?->document_number,
             'is_staff' => (bool) ($this->member?->is_staff),
+            // Quién debe, resuelto contra su tabla. `member_*` se queda para no
+            // romper a nadie, pero solo dice algo cuando el deudor es socio.
+            'debtor_type' => $this->debtor_type?->value,
+            'debtor_type_label' => $this->debtor_type?->label(),
+            'debtor_id' => $this->debtor_id,
+            'debtor_name' => $deudor['name'] ?? $this->member?->full_name,
+            'debtor_document' => $deudor['document'] ?? null,
+            'debtor_contact' => $deudor['contact'] ?? null,
             'type' => $this->type->value,
             'type_label' => $this->type->label(),
             'concept' => $this->concept,

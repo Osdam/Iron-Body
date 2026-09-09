@@ -51,6 +51,20 @@ class ReceivableException extends RuntimeException
         return new self('El abono debe ser mayor que cero.', 'invalid_amount');
     }
 
+    /**
+     * El deudor elegido no existe (o no es de ese tipo).
+     *
+     * Se rechaza en vez de guardar la deuda «a nombre de nadie»: una cuenta por
+     * cobrar sin deudor resoluble es una cuenta que no se puede reclamar.
+     */
+    public static function unknownDebtor(\App\Enums\DebtorType $type): self
+    {
+        return new self(
+            'No encontramos a esa persona en '.$type->label().'.',
+            'unknown_debtor',
+        );
+    }
+
     public static function invalidTotal(): self
     {
         return new self('El total de la cuenta debe ser mayor que cero.', 'invalid_total');

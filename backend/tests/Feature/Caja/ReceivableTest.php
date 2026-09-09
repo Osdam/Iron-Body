@@ -3,6 +3,7 @@
 namespace Tests\Feature\Caja;
 
 use App\Enums\CashShiftType;
+use App\Enums\DebtorType;
 use App\Models\Admin;
 use App\Models\CashShift;
 use App\Models\Member;
@@ -108,7 +109,8 @@ class ReceivableTest extends TestCase
     private function receivable(float $total = 18000, ?Member $quien = null): Receivable
     {
         return app(ReceivableService::class)->create(
-            member: $quien ?? $this->empleado,
+            debtorType: DebtorType::MEMBER,
+            debtorId: ($quien ?? $this->empleado)->id,
             type: CashShiftType::PRODUCTS,
             concept: 'Consumos de cafetería',
             total: Money::fromAmount($total),
@@ -476,7 +478,8 @@ class ReceivableTest extends TestCase
     public function test_un_abono_de_gimnasio_no_toca_la_caja_de_productos(): void
     {
         $cuenta = app(ReceivableService::class)->create(
-            member: $this->empleado,
+            debtorType: DebtorType::MEMBER,
+            debtorId: $this->empleado->id,
             type: CashShiftType::GYM,
             concept: 'Plan a plazos',
             total: Money::fromAmount(140000),
@@ -608,7 +611,7 @@ class ReceivableTest extends TestCase
     // ── Alcance del crédito ─────────────────────────────────────────────────
 
     /** Fiar exige decir a quién: una deuda sin deudor no se puede cobrar. */
-    public function test_un_credito_sin_socio_se_rechaza(): void
+    public function test_un_credito_sin_deudor_se_rechaza(): void
     {
         $agua = $this->product('Agua', 5000);
         $this->openShift(CashShiftType::PRODUCTS);
@@ -618,7 +621,9 @@ class ReceivableTest extends TestCase
             'credit' => true,
         ], $this->headers())
             ->assertStatus(422)
-            ->assertJsonValidationErrors('member_id');
+            // El campo se llama `debtor_id` desde que se puede fiar también al
+            // personal: el deudor ya no es forzosamente un socio.
+            ->assertJsonValidationErrors('debtor_id');
 
         $this->assertSame(0, Receivable::count());
         $this->assertSame(50, $agua->fresh()->stock);
