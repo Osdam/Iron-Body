@@ -4,6 +4,7 @@ namespace Tests\Feature\Caja;
 
 use App\Models\Admin;
 use App\Models\Payment;
+use App\Models\Plan;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -182,6 +183,100 @@ class MixedPaymentTest extends TestCase
         $t = $this->totalesAlCerrar($h);
         $this->assertEqualsWithDelta(50000.0, $t['cash_total'], 0.001);
         $this->assertEqualsWithDelta(50000.0, $t['expected_cash'], 0.001);
+    }
+
+    // ── El cobro tiene que dar el precio del plan ───────────────────────────
+
+    private function plan(float $precio = 70000): Plan
+    {
+        return Plan::create([
+            'name' => 'Mensual',
+            'price' => $precio,
+            'duration_days' => 30,
+            'benefits' => '',
+            'active' => true,
+        ]);
+    }
+
+    /** El caso del enunciado: plan de 70.000 pagado 50 en efectivo y 20 por Nequi. */
+    public function test_el_desglose_puede_sumar_el_precio_del_plan(): void
+    {
+        $h = $this->actingAsAdmin($this->admin());
+        $this->abrirGym($h);
+        $plan = $this->plan(70000);
+
+        $this->postJson('/api/payments', [
+            'user_id' => $this->user()->id,
+            'plan_id' => $plan->id,
+            'amount' => 70000,
+            'status' => 'paid',
+            'splits' => [
+                ['method' => 'cash', 'amount' => 50000],
+                ['method' => 'nequi', 'amount' => 20000],
+            ],
+        ], $h)->assertStatus(201);
+
+        $t = $this->totalesAlCerrar($h);
+        $this->assertEqualsWithDelta(50000.0, $t['cash_total'], 0.001);
+        $this->assertEqualsWithDelta(20000.0, $t['transfer_total'], 0.001);
+        $this->assertEqualsWithDelta(50000.0, $t['expected_cash'], 0.001, 'en el cajón solo los 50.000');
+    }
+
+    public function test_no_se_puede_cobrar_menos_de_lo_que_vale_el_plan(): void
+    {
+        $h = $this->actingAsAdmin($this->admin());
+        $this->abrirGym($h);
+        $plan = $this->plan(70000);
+
+        // El desglose cuadra consigo mismo (40 + 20 = 60), pero el plan vale 70.
+        $this->postJson('/api/payments', [
+            'user_id' => $this->user()->id,
+            'plan_id' => $plan->id,
+            'amount' => 60000,
+            'status' => 'paid',
+            'splits' => [
+                ['method' => 'cash', 'amount' => 40000],
+                ['method' => 'nequi', 'amount' => 20000],
+            ],
+        ], $h)->assertStatus(422)->assertJsonValidationErrors('amount');
+
+        $this->assertDatabaseCount('payments', 0);
+        $this->assertDatabaseCount('payment_splits', 0);
+    }
+
+    public function test_un_importe_distinto_sigue_siendo_posible_si_se_justifica(): void
+    {
+        $h = $this->actingAsAdmin($this->admin());
+        $this->abrirGym($h);
+        $plan = $this->plan(70000);
+
+        // La vía de escape que ya existía: queda auditada, no es un silencio.
+        $this->postJson('/api/payments', [
+            'user_id' => $this->user()->id,
+            'plan_id' => $plan->id,
+            'amount' => 60000,
+            'status' => 'paid',
+            'amount_override' => true,
+            'override_reason' => 'Descuento acordado con el socio por renovación anticipada.',
+            'splits' => [
+                ['method' => 'cash', 'amount' => 40000],
+                ['method' => 'nequi', 'amount' => 20000],
+            ],
+        ], $h)->assertStatus(201);
+    }
+
+    public function test_un_cobro_sin_plan_no_queda_atado_a_ningun_precio(): void
+    {
+        $h = $this->actingAsAdmin($this->admin());
+        $this->abrirGym($h);
+
+        // Una multa, una venta suelta… sin plan no hay precio que comparar.
+        $this->postJson('/api/payments', [
+            'user_id' => $this->user()->id,
+            'amount' => 12345,
+            'method' => 'cash',
+            'status' => 'paid',
+        ], $h)->assertStatus(201);
     }
 
     // ── Reportes ────────────────────────────────────────────────────────────
