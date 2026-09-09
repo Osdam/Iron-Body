@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\Access\CrmPermission;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Support\Str;
@@ -35,6 +36,7 @@ class Admin extends Authenticatable
         'email',
         'password',
         'role',
+        'trainer_id',
         'status',
         'last_login_at',
     ];
@@ -71,6 +73,27 @@ class Admin extends Authenticatable
     public function hasRole(string $role): bool
     {
         return $this->role === $role;
+    }
+
+    /**
+     * Entrenador al que representa esta cuenta, si es una cuenta de entrenador.
+     *
+     * Es el puente que faltaba: `member_trainer_assignments` cuelga de
+     * `trainers.id`, así que sin esto no había forma de saber a qué socios
+     * alcanza un entrenador que entra al CRM.
+     */
+    public function trainer(): BelongsTo
+    {
+        return $this->belongsTo(Trainer::class);
+    }
+
+    /**
+     * ¿Es una cuenta de entrenador vinculada y, por tanto, acotada a los socios
+     * que tiene asignados?
+     */
+    public function isScopedTrainer(): bool
+    {
+        return $this->role === CrmPermission::ROLE_ENTRENADOR;
     }
 
     /**

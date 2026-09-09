@@ -4,6 +4,7 @@ namespace Tests\Feature\Access;
 
 use App\Models\Admin;
 use App\Models\AdminRole;
+use App\Models\Trainer;
 use App\Support\Access\CrmPermission;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -31,6 +32,15 @@ class TrainerRoleTest extends TestCase
     use RefreshDatabase;
 
     private const ROL = CrmPermission::ROLE_ENTRENADOR;
+
+    private function trainer(string $nombre = 'Oscar Entrenador'): Trainer
+    {
+        return Trainer::create([
+            'full_name' => $nombre,
+            'email' => 'coach-'.uniqid().'@ironbody.test',
+            'status' => 'active',
+        ]);
+    }
 
     private function admin(string $rol, string $nombre = 'Persona'): Admin
     {
@@ -95,15 +105,19 @@ class TrainerRoleTest extends TestCase
     {
         $h = $this->actingAsAdmin($this->admin(Admin::ROLE_SUPER_ADMIN, 'Root'));
 
+        $entrenador = $this->trainer();
+
         $this->postJson('/api/admin/users', [
             'name' => 'Oscar Entrenador',
             'email' => 'oscar.coach@ironbody.test',
             'role' => self::ROL,
+            'trainer_id' => $entrenador->id,
         ], $h)->assertStatus(201)->assertJsonPath('data.role', self::ROL);
 
         $creado = Admin::where('email', 'oscar.coach@ironbody.test')->firstOrFail();
         $this->assertSame(self::ROL, $creado->role);
         $this->assertSame('active', $creado->status);
+        $this->assertSame($entrenador->id, $creado->trainer_id);
     }
 
     // ── Permisos efectivos ──────────────────────────────────────────────────

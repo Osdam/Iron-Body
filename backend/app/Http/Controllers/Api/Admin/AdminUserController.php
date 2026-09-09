@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Admin;
 use App\Models\AdminRole;
 use App\Support\Access\AdminActor;
+use App\Support\Access\CrmPermission;
+use App\Support\Access\TrainerMemberScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -90,6 +92,7 @@ class AdminUserController extends Controller
             'role' => ['required', 'string', Rule::in(AdminRole::assignableNames())],
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
             'password' => ['nullable', 'string', 'min:'.self::MIN_PASSWORD, 'max:'.self::MAX_PASSWORD],
+            'trainer_id' => $this->trainerLinkRules($request->input('role')),
         ]);
 
         if ($bloqueo = $this->denyIfEscalating($request, $data['role'])) {
@@ -104,6 +107,7 @@ class AdminUserController extends Controller
             'email' => strtolower(trim($data['email'])),
             'password' => $clave,
             'role' => $data['role'],
+            'trainer_id' => $this->trainerLinkFor($data['role'], $data['trainer_id'] ?? null),
             'status' => $data['status'] ?? 'active',
         ]);
 
@@ -124,6 +128,10 @@ class AdminUserController extends Controller
             'email' => ['sometimes', 'email', 'max:160', Rule::unique('admins', 'email')->ignore($admin->id)],
             'role' => ['sometimes', 'string', Rule::in(AdminRole::assignableNames())],
             'status' => ['sometimes', Rule::in(['active', 'inactive'])],
+            // El rol que va a QUEDAR, no el que se envía: quitarle el rol de
+            // entrenador a una cuenta no puede exigirle un vínculo, y ponérselo
+            // sin enviar `role` —ya lo tenía— sí.
+            'trainer_id' => $this->trainerLinkRules($request->input('role', $admin->role)),
         ]);
 
         $actor = AdminActor::from($request);
@@ -156,6 +164,12 @@ class AdminUserController extends Controller
                 'message' => 'Es el único Super Admin activo. Nombra otro antes de cambiar este.',
             ], 422);
         }
+
+        $rolFinal = $data['role'] ?? $admin->role;
+        $data['trainer_id'] = $this->trainerLinkFor(
+            $rolFinal,
+            array_key_exists('trainer_id', $data) ? $data['trainer_id'] : $admin->trainer_id,
+        );
 
         $admin->fill($data)->save();
 
@@ -270,6 +284,53 @@ class AdminUserController extends Controller
             'last_login_at' => optional($admin->last_login_at)->toIso8601String(),
             'created_at' => optional($admin->created_at)->toIso8601String(),
             'is_last_super_admin' => $this->isLastActiveSuperAdmin($admin),
+            'trainer_id' => $admin->trainer_id,
+            'trainer_name' => $admin->trainer_id ? $admin->trainer?->full_name : null,
         ];
+    }
+
+    /**
+     * Reglas del vínculo con un entrenador, según el rol que va a quedar.
+     *
+     * Una cuenta de entrenador SIN vincular no sabe a qué socios alcanza, y
+     * {@see TrainerMemberScope} —correctamente— no le da ninguno. Sería una
+     * cuenta que entra al CRM y no ve nada, sin explicación. Mejor no dejar
+     * crearla.
+     *
+     * `unique` porque un entrenador tiene UNA cuenta: dos serían dos sesiones
+     * con el mismo alcance y sin forma de saber cuál usó cada quien.
+     *
+     * @return list<mixed>
+     */
+    private function trainerLinkRules(?string $rol): array
+    {
+        if ($rol !== CrmPermission::ROLE_ENTRENADOR) {
+            // Para el resto de roles el campo no significa nada. Se acepta que
+            // llegue —el formulario es el mismo— y se descarta en
+            // `trainerLinkFor()`, en vez de responder un error que obligaría al
+            // CRM a limpiarlo antes de enviar.
+            return ['nullable'];
+        }
+
+        return [
+            'required',
+            'integer',
+            Rule::exists('trainers', 'id'),
+            Rule::unique('admins', 'trainer_id')->ignore(request()->route('admin')),
+        ];
+    }
+
+    /**
+     * El vínculo que se guarda. Solo las cuentas de entrenador lo conservan:
+     * dejarlo puesto tras cambiar de rol crearía una asociación huérfana que
+     * volvería a activarse sola si algún día se le devuelve el rol.
+     */
+    private function trainerLinkFor(string $rol, mixed $trainerId): ?int
+    {
+        if ($rol !== CrmPermission::ROLE_ENTRENADOR) {
+            return null;
+        }
+
+        return $trainerId === null ? null : (int) $trainerId;
     }
 }

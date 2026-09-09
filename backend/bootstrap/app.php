@@ -6,6 +6,7 @@ use App\Http\Middleware\EnsureAdminAuth;
 use App\Http\Middleware\EnsureAdminPermission;
 use App\Http\Middleware\EnsureMemberRegistrationToken;
 use App\Http\Middleware\EnforceAdminAuthorization;
+use App\Http\Middleware\EnforceTrainerMemberScope;
 use App\Http\Middleware\ProtectAdminPaths;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\EnsureTrainerFeature;
@@ -58,6 +59,14 @@ return Application::configure(basePath: dirname(__DIR__))
         // futuras—, resolviendo el permiso con App\Support\Access\AuthorizationMap.
         // Falla cerrado: una ruta administrativa sin clasificar se deniega.
         $middleware->appendToGroup('api', EnforceAdminAuthorization::class);
+
+        // Y por ultimo el ALCANCE: EnforceAdminAuthorization dice si puede hacer
+        // esto; este dice sobre QUIEN. Un entrenador solo llega a los socios que
+        // tiene asignados. Va aqui —y no en cada ruta— porque `SubstituteBindings`
+        // resuelve `{member}` antes de que exista `auth_admin`, y en ese momento
+        // el scope global de App\Support\Access\TrainerMemberScope todavia es
+        // inerte. Inofensivo para el resto de roles.
+        $middleware->appendToGroup('api', EnforceTrainerMemberScope::class);
 
         // Cabeceras de seguridad de base en TODAS las respuestas (web + api).
         $middleware->append(SecurityHeaders::class);

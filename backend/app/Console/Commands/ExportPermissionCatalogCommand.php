@@ -35,6 +35,18 @@ class ExportPermissionCatalogCommand extends Command
 
         $lineas = implode('', array_map(static fn (string $p) => "  '{$p}',\n", $permisos));
 
+        // Y los permisos POR DEFECTO de cada rol. El catálogo de arriba impide
+        // que el CRM se invente un permiso; esto impide que describa mal un rol.
+        // El perfil de Entrenador llegó a listar `equipment.view`, que el
+        // servidor no concede, y a repetir dos permisos tres veces cada uno: la
+        // pantalla de Roles decía que el rol podía algo que no podía.
+        $porRol = '';
+        foreach (CrmPermission::byRole() as $rol => $suyos) {
+            sort($suyos);
+            $items = implode('', array_map(static fn (string $p) => "    '{$p}',\n", $suyos));
+            $porRol .= "  '{$rol}': [\n{$items}  ],\n";
+        }
+
         $contenido = <<<TS
         // Catálogo canónico de permisos del backend.
         //
@@ -47,6 +59,13 @@ class ExportPermissionCatalogCommand extends Command
         // concedido: el enum preguntaba por `plans.edit`.
         export const BACKEND_PERMISSION_CATALOG: readonly string[] = [
         {$lineas}] as const;
+
+        // Permisos por defecto de cada rol, tal y como los define el código del
+        // backend (`CrmPermission::byRole()`). Son la BASE: `role_permissions`
+        // los ajusta encima desde Configuración → Roles, así que esto no es lo
+        // que un rol tiene HOY en un gimnasio concreto, sino de dónde parte.
+        export const BACKEND_ROLE_DEFAULTS: Readonly<Record<string, readonly string[]>> = {
+        {$porRol}} as const;
 
         TS;
 

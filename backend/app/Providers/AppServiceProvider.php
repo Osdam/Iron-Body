@@ -4,6 +4,11 @@ namespace App\Providers;
 
 use App\Models\MarketingLeadAttribution;
 use App\Models\MarketingMessage;
+use App\Models\Member;
+use App\Models\MemberContract;
+use App\Models\MemberRiskLock;
+use App\Models\PhysicalEvaluation;
+use App\Models\User;
 use App\Observers\Marketing\AttributionOfferObserver;
 use App\Observers\Marketing\ConversationPreviewObserver;
 use App\Services\Billing\Factus\FactusClient;
@@ -22,6 +27,7 @@ use App\Services\Marketing\SalesAgentPromptBuilder;
 use App\Services\Marketing\SalesAiConfig;
 use App\Services\Meta\WhatsappIntegrationRegistry;
 use App\Services\Observability\QueueHealthService;
+use App\Support\Access\TrainerMemberScope;
 use App\Services\Wompi\WompiConfigValidator;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Support\Facades\Log;
@@ -147,6 +153,38 @@ class AppServiceProvider extends ServiceProvider
                 // La vigilancia no puede ser el motivo de que algo se rompa.
             }
         });
+
+        $this->scopeTrainersToTheirMembers();
+    }
+
+    /**
+     * Un entrenador solo alcanza a los socios que tiene asignados.
+     *
+     * `members.view` dice si se entra al modulo de socios; no dice a QUIEN. Sin
+     * esto, la cuenta de un entrenador leia la ficha, la nutricion, las
+     * valoraciones y el riesgo de CUALQUIER socio con solo cambiar el numero de
+     * la URL. Ver {@see TrainerMemberScope} para el porque del diseno.
+     *
+     * Se registra aqui, sobre los CINCO modelos que exponen datos de socio en
+     * las 39 rutas del dominio `members`, y no ruta por ruta: una consulta
+     * nueva nace acotada sin que nadie tenga que acordarse.
+     *
+     * Es INERTE salvo que quien opera sea una cuenta de entrenador. Super Admin
+     * y Recepcion no cambian de comportamiento, y fuera de una peticion
+     * administrativa —consola, colas, API del socio— no filtra nada.
+     */
+    private function scopeTrainersToTheirMembers(): void
+    {
+        // El socio, por su propia clave.
+        TrainerMemberScope::guard(Member::class, 'id');
+
+        // Lo que cuelga del socio y se consulta por su cuenta.
+        TrainerMemberScope::guard(PhysicalEvaluation::class, 'member_id');
+        TrainerMemberScope::guard(MemberContract::class, 'member_id');
+        TrainerMemberScope::guard(MemberRiskLock::class, 'member_id');
+
+        // La cuenta de la app del socio: la relacion va al reves.
+        TrainerMemberScope::guardUsersOf(User::class);
     }
 
     /**
