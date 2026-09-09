@@ -19,6 +19,8 @@ use App\Services\Nutrition\Ai\NutritionAiClient;
 use App\Services\Trainer\IntegralPlanGenerationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /**
@@ -144,7 +146,7 @@ class IntegralPlanTest extends TestCase
     private function goodPlan(array $over = []): array
     {
         return array_merge([
-            'status' => 'ok',
+            'status' => NutritionAiClient::STATUS_SUCCESS,
             'model' => 'gpt-4.1-mini',
             'json' => [
                 'nutrition' => [
@@ -247,12 +249,72 @@ class IntegralPlanTest extends TestCase
         $this->assertCount(0, $r->json('data'));
     }
 
+    /**
+     * El plan se genera pasando por el cliente REAL, no por un doble.
+     *
+     * EL FALLO QUE ESTO CIERRA
+     * ------------------------
+     * El servicio daba por buena la respuesta solo si `status` era 'ok'. El
+     * cliente nunca devuelve 'ok': su único valor de éxito es 'success'. Así
+     * que TODA generación se registraba como fallo `upstream` —incluidas las
+     * que OpenAI contestaba perfectamente— y en el móvil salía «Iron IA no pudo
+     * generar el plan».
+     *
+     * Los tests no lo vieron porque el doble devolvía 'ok': encerraban mi
+     * suposición en lugar del contrato del cliente. Aquí se finge la RED, no el
+     * cliente, así que la costura que se rompió queda dentro de la prueba.
+     */
+    public function test_la_generacion_atraviesa_el_cliente_real_de_ia(): void
+    {
+        $this->assessment();
+
+        config()->set('services.openai.enabled', true);
+        config()->set('services.openai.api_key', 'sk-test-no-es-una-credencial');
+
+        Http::fake([
+            '*/v1/chat/completions' => Http::response([
+                'model' => 'gpt-4.1-mini',
+                'usage' => ['total_tokens' => 1200],
+                'choices' => [
+                    ['message' => ['content' => json_encode($this->goodPlan()['json'])]],
+                ],
+            ], 200),
+        ]);
+
+        $this->generate()->assertStatus(201);
+
+        $this->assertSame(1, NutritionGuide::count());
+        $this->assertSame(1, Routine::count());
+        $this->assertDatabaseHas('nutrition_ai_runs', [
+            'mode' => 'integral_plan',
+            'status' => 'ok',
+        ]);
+    }
+
+    /** Y un fallo real de red sigue siendo un fallo, no un plan a medias. */
+    public function test_un_timeout_de_red_no_deja_nada_escrito(): void
+    {
+        $this->assessment();
+
+        config()->set('services.openai.enabled', true);
+        config()->set('services.openai.api_key', 'sk-test-no-es-una-credencial');
+
+        Http::fake([
+            '*/v1/chat/completions' => fn () => throw new ConnectionException('timeout'),
+        ]);
+
+        $this->generate()->assertStatus(422)->assertJsonPath('code', 'ai_upstream_error');
+
+        $this->assertSame(0, NutritionGuide::count());
+        $this->assertSame(0, Routine::count());
+    }
+
     // ── La IA no es la autoridad ────────────────────────────────────────────
 
     public function test_una_respuesta_sin_json_no_deja_nada(): void
     {
         $this->assessment();
-        $this->fakeAi(['status' => 'ok', 'json' => null]);
+        $this->fakeAi(['status' => NutritionAiClient::STATUS_SUCCESS, 'json' => null]);
 
         $this->generate()->assertStatus(422)->assertJsonPath('code', 'ai_invalid_output');
 

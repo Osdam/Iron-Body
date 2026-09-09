@@ -76,7 +76,7 @@ class IntegralPlanGenerationService
 
         $respuesta = $this->ai->complete($modelo, $mensajes, json: true, maxTokens: 3000);
 
-        if (($respuesta['status'] ?? '') !== 'ok') {
+        if (($respuesta['status'] ?? '') !== NutritionAiClient::STATUS_SUCCESS) {
             $this->recordRun($member, $modelo, $hash, 'failed', $respuesta['error_code'] ?? 'upstream');
             throw IntegralPlanException::upstream($respuesta['error_code'] ?? null);
         }

@@ -21,6 +21,18 @@ class NutritionAiClient
      * @param  array<int,array<string,mixed>>  $messages  payload chat-completions
      * @return array{status:string,error_code:?string,content:?string,json:?array,model:?string,usage:?array}
      */
+    /**
+     * El ÚNICO valor de `status` que significa que el modelo respondió.
+     *
+     * Es constante y no un literal suelto porque quien consume esta respuesta
+     * tiene que compararlo, y una cadena escrita a mano en el otro extremo es
+     * exactamente cómo se rompió la generación del plan integral: el servicio
+     * comparaba contra 'ok', el cliente devolvía 'success', y TODA generación
+     * —incluidas las que OpenAI contestaba perfectamente— se registraba como
+     * fallo `upstream`.
+     */
+    public const STATUS_SUCCESS = 'success';
+
     public function complete(string $model, array $messages, bool $json = true, ?int $maxTokens = null): array
     {
         $openai = config('services.openai');
@@ -73,7 +85,7 @@ class NutritionAiClient
             Log::info('nutrition:ai:ok', ['model' => $model, 'latency_ms' => $latency]);
 
             return [
-                'status' => 'success',
+                'status' => self::STATUS_SUCCESS,
                 'error_code' => null,
                 'content' => $content,
                 'json' => $this->decodeJson($content),
