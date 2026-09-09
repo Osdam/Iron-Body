@@ -93,9 +93,30 @@ class WompiPaymentController extends Controller
 
     public function payPse(WompiPsePaymentRequest $request): JsonResponse
     {
+        $v = $request->validated();
+
+        // EN PSE MANDA EL CHECKOUT. Quien autoriza en el banco no tiene por qué
+        // ser el titular del perfil, y PSE valida el documento contra el titular
+        // de la cuenta bancaria: si mandáramos el del perfil, el banco rechaza.
+        //
+        // El documento va también aquí, no solo en `payment_method`. Antes solo
+        // llegaba allí y `customer_data` seguía llevando el del perfil: Wompi
+        // recibía DOS identidades distintas en la misma transacción.
+        //
+        // Se pasa explícito, y solo desde este método, para que ni CARD ni NEQUI
+        // ni DAVIPLATA cambien de comportamiento: los suyos siguen saliendo del
+        // miembro autenticado.
         return $this->runPayment(
             fn (array $data) => WompiPsePaymentService::make()->process($data, $request->ip(), $request->userAgent()),
-            $request
+            $request,
+            customerOverrides: [
+                'email' => $v['customer_email'] ?? null,
+                'phone' => $v['customer_phone'] ?? null,
+                'doc_number' => $v['user_legal_id'] ?? null,
+                'doc_type' => isset($v['user_legal_id_type'])
+                    ? strtoupper(trim((string) $v['user_legal_id_type']))
+                    : null,
+            ],
         );
     }
 
@@ -206,10 +227,13 @@ class WompiPaymentController extends Controller
      * Ejecuta un cobro: resuelve el sujeto desde el miembro autenticado, mezcla
      * idempotencia y delega en el servicio. Cualquier error se sanitiza.
      */
-    private function runPayment(callable $process, Request $request): JsonResponse
-    {
+    private function runPayment(
+        callable $process,
+        Request $request,
+        array $customerOverrides = [],
+    ): JsonResponse {
         try {
-            $data = $this->resolveSubject($request);
+            $data = $this->resolveSubject($request, $customerOverrides);
             $tx = $process($data);
 
             return response()->json($tx->toWompiPublicArray());
@@ -224,7 +248,7 @@ class WompiPaymentController extends Controller
      * Construye el payload de pago con datos del MIEMBRO AUTENTICADO. El plan es
      * obligatorio salvo compras de tienda (purpose=store).
      */
-    private function resolveSubject(Request $request): array
+    private function resolveSubject(Request $request, array $customerOverrides = []): array
     {
         /** @var Member $member */
         $member = $request->attributes->get('auth_member');
@@ -245,6 +269,19 @@ class WompiPaymentController extends Controller
         $data['member_id'] = $member->id;
         $data['user_id'] = $user->id;
         $data['idempotency_key'] = $data['client_request_id'] ?? null;
+        // PRECEDENCIA: perfil como base, y encima lo que el socio haya escrito
+        // en el checkout. Un campo vacío NO pisa el del perfil —por eso el
+        // filtro—, así el fallback sigue siendo explícito y predecible.
+        //
+        // `$customerOverrides` lo pasa cada método a mano y solo con campos que
+        // su FormRequest validó, y va ÚLTIMO: por encima incluso de un bloque
+        // `customer` suelto en el body, que no pasa por reglas de validación.
+        // Lo validado manda sobre lo que simplemente venga escrito.
+        $overrides = array_filter(
+            $customerOverrides,
+            fn ($v) => $v !== null && trim((string) $v) !== ''
+        );
+
         $data['customer'] = array_merge([
             'name' => $member->full_name,
             'email' => $member->email ?: $user->email,
@@ -252,7 +289,7 @@ class WompiPaymentController extends Controller
             'doc_number' => $member->document_number,
             'doc_type' => 'CC',
             'country' => 'CO',
-        ], (array) ($data['customer'] ?? []));
+        ], (array) ($data['customer'] ?? []), $overrides);
 
         return $data;
     }
