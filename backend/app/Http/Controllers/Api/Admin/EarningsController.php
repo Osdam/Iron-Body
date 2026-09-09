@@ -92,9 +92,32 @@ class EarningsController extends Controller
         // ── Desglose por método de pago ───────────────────────────────────────
         $byMethod = [];
         if ($includeGym) {
-            foreach (Payment::whereIn('status', self::GYM_PAID)->whereBetween('paid_at', [$from, $to])
-                ->selectRaw('method, SUM(amount) as amount')->groupBy('method')->get() as $row) {
-                $byMethod[] = ['source' => 'gym', 'method' => $row->method ?: 'otro', 'amount' => (float) $row->amount];
+            // Los cobros de un solo medio se agrupan por su columna; los mixtos
+            // se reparten desde payment_splits, cada parte a su medio. Sin esta
+            // segunda consulta, un cobro repartido aparecería entero bajo
+            // «mixed» y el desglose dejaría de decir por dónde entró el dinero.
+            $simples = Payment::whereIn('status', self::GYM_PAID)
+                ->whereBetween('paid_at', [$from, $to])
+                ->whereDoesntHave('splits')
+                ->selectRaw('method, SUM(amount) as amount')
+                ->groupBy('method')
+                ->get();
+
+            $partes = DB::table('payment_splits')
+                ->join('payments', 'payments.id', '=', 'payment_splits.payment_id')
+                ->whereIn('payments.status', self::GYM_PAID)
+                ->whereBetween('payments.paid_at', [$from, $to])
+                ->groupBy('payment_splits.method')
+                ->selectRaw('payment_splits.method as method, SUM(payment_splits.amount) as amount')
+                ->get();
+
+            $acumulado = [];
+            foreach ($simples->concat($partes) as $row) {
+                $clave = $row->method ?: 'otro';
+                $acumulado[$clave] = ($acumulado[$clave] ?? 0) + (float) $row->amount;
+            }
+            foreach ($acumulado as $metodo => $importe) {
+                $byMethod[] = ['source' => 'gym', 'method' => $metodo, 'amount' => round($importe, 2)];
             }
         }
         if ($includeCafe) {

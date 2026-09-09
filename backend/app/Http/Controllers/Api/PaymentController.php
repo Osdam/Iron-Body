@@ -64,7 +64,7 @@ class PaymentController extends Controller
 
     public function index(Request $request)
     {
-        $query = Payment::query()->with(['user:id,name,email', 'plan:id,name', 'electronicInvoice'])->latest();
+        $query = Payment::query()->with(['user:id,name,email', 'plan:id,name', 'electronicInvoice', 'splits'])->latest();
 
         $this->applyCrmFilters($query, $request);
 
@@ -217,6 +217,79 @@ class PaymentController extends Controller
         return self::STATUS_FILTER_GROUPS[$clave] ?? [$clave];
     }
 
+    /** Máximo de líneas en un cobro mixto. Más que esto no es un cobro, es un lío. */
+    private const MAX_SPLITS = 6;
+
+    /**
+     * Reglas del desglose por medio de pago.
+     *
+     * `min:2` a propósito: una sola línea no es un pago mixto, es un pago
+     * normal, y aceptarla crearía dos formas de representar lo mismo.
+     *
+     * @return array<string, mixed>
+     */
+    private function splitRules(): array
+    {
+        return [
+            'splits' => 'nullable|array|min:2|max:'.self::MAX_SPLITS,
+            'splits.*.method' => 'required|string|max:80',
+            'splits.*.amount' => 'required|numeric|min:0.01',
+            'splits.*.reference' => 'nullable|string|max:120',
+        ];
+    }
+
+    /**
+     * Comprueba que las partes sumen EXACTAMENTE el total del cobro.
+     *
+     * Se compara en centavos enteros, no en float: con `0.1 + 0.2 !== 0.3` un
+     * desglose correcto podría rechazarse, y uno descuadrado por un céntimo
+     * colarse. Ese céntimo acaba apareciendo en el arqueo de caja.
+     *
+     * @param  array<int, array{method: string, amount: mixed}>  $splits
+     *
+     * @throws ValidationException
+     */
+    private function assertSplitsMatchTotal(array $splits, float $total): void
+    {
+        $centavosPartes = 0;
+        foreach ($splits as $parte) {
+            $centavosPartes += (int) round(((float) $parte['amount']) * 100);
+        }
+        $centavosTotal = (int) round($total * 100);
+
+        if ($centavosPartes !== $centavosTotal) {
+            throw ValidationException::withMessages([
+                'splits' => sprintf(
+                    'El desglose suma %s y el cobro es de %s. Tienen que coincidir.',
+                    number_format($centavosPartes / 100, 2, ',', '.'),
+                    number_format($centavosTotal / 100, 2, ',', '.'),
+                ),
+            ]);
+        }
+    }
+
+    /**
+     * Reemplaza el desglose de un cobro. Borra y reinserta en vez de conciliar
+     * fila a fila: son cuatro líneas como mucho y así no puede quedar un resto
+     * de un desglose anterior sumando en los reportes.
+     *
+     * @param  array<int, array{method: string, amount: mixed, reference?: string|null}>  $splits
+     */
+    private function syncSplits(Payment $payment, array $splits): void
+    {
+        $payment->splits()->delete();
+
+        foreach ($splits as $parte) {
+            $payment->splits()->create([
+                'method' => $parte['method'],
+                'amount' => round((float) $parte['amount'], 2),
+                'reference' => $parte['reference'] ?? null,
+            ]);
+        }
+
+        $payment->forceFill(['method' => Payment::MIXED_METHOD])->save();
+    }
+
     /** Marcadores `?` para una lista de estados dentro de un selectRaw. */
     private function statusPlaceholders(array $statuses): string
     {
@@ -229,6 +302,7 @@ class PaymentController extends Controller
             'user:id,name,email',
             'plan:id,name',
             'electronicInvoice',
+            'splits',
         ])->append('invoice_summary')->makeHidden('electronicInvoice');
     }
 
@@ -252,7 +326,13 @@ class PaymentController extends Controller
             // propio pago. Nunca se activa por defecto.
             'request_invoice' => 'nullable|boolean',
             'invoice_email' => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail],
+            ...$this->splitRules(),
         ]);
+
+        // El desglose no es una columna de payments: se guarda aparte, después
+        // de crear el cobro, así que sale del payload antes de Payment::create.
+        $splits = $data['splits'] ?? null;
+        unset($data['splits']);
 
         $invoiceRequest = $this->extractInvoiceRequest($data);
 
@@ -271,6 +351,14 @@ class PaymentController extends Controller
         $override = (bool) ($data['amount_override'] ?? false);
         $reason = $data['override_reason'] ?? null;
         unset($data['amount_override'], $data['override_reason']);
+
+        // Se valida contra el importe YA fijado por applyAuthoritativePricing:
+        // comprobarlo antes dejaría pasar un desglose que cuadra con lo que
+        // pidió el cliente pero no con lo que de verdad se va a cobrar.
+        if ($splits) {
+            $this->assertSplitsMatchTotal($splits, (float) $data['amount']);
+            $data['method'] = Payment::MIXED_METHOD;
+        }
 
         // CAJA DEL GIMNASIO. Este endpoint es el mostrador: lo ejecuta una
         // persona con sesión de administrador y el dinero cambia de manos aquí.
@@ -301,8 +389,11 @@ class PaymentController extends Controller
         // ambas dejaría un cobro sin constancia de quién lo registró, que es
         // justo lo que este trabajo corrige.
         $actor = AdminActor::from($request);
-        $payment = DB::transaction(function () use ($data, $actor, $request) {
+        $payment = DB::transaction(function () use ($data, $splits, $actor, $request) {
             $cobro = Payment::create($data);
+            if ($splits) {
+                $this->syncSplits($cobro, $splits);
+            }
             app(FinancialAudit::class)->paymentCreated($cobro, $actor, $request);
 
             return $cobro;
@@ -330,7 +421,7 @@ class PaymentController extends Controller
             );
         }
 
-        return response()->json($payment->load(['user:id,name,email', 'plan:id,name']), 201);
+        return response()->json($payment->load(['user:id,name,email', 'plan:id,name', 'splits']), 201);
     }
 
     public function update(Request $request, Payment $payment)
@@ -344,7 +435,19 @@ class PaymentController extends Controller
             // El cliente puede pedir la factura al confirmar el pago.
             'request_invoice' => 'nullable|boolean',
             'invoice_email' => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail],
+            ...$this->splitRules(),
         ]);
+
+        $splits = $data['splits'] ?? null;
+        unset($data['splits']);
+
+        if ($splits) {
+            // Contra el importe nuevo si se está cambiando, contra el vigente si
+            // no: validar siempre contra el guardado dejaría pasar un desglose
+            // que ya no cuadra con el total que va a quedar.
+            $this->assertSplitsMatchTotal($splits, (float) ($data['amount'] ?? $payment->amount));
+            $data['method'] = Payment::MIXED_METHOD;
+        }
 
         $invoiceRequest = $this->extractInvoiceRequest($data);
         $wasPaid = $payment->status === 'paid';
@@ -358,8 +461,11 @@ class PaymentController extends Controller
         $estadoPrevio = $payment->status;
 
         $actor = AdminActor::from($request);
-        DB::transaction(function () use ($payment, $data, $estadoPrevio, $actor, $request) {
+        DB::transaction(function () use ($payment, $data, $splits, $estadoPrevio, $actor, $request) {
             $payment->update($data);
+            if ($splits) {
+                $this->syncSplits($payment, $splits);
+            }
             app(FinancialAudit::class)->paymentUpdated($payment, $estadoPrevio, $actor, $request);
         });
 
@@ -376,7 +482,7 @@ class PaymentController extends Controller
             );
         }
 
-        return response()->json($payment->load(['user:id,name,email', 'plan:id,name']));
+        return response()->json($payment->load(['user:id,name,email', 'plan:id,name', 'splits']));
     }
 
     /**
