@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\AppStoreController;
 use App\Http\Controllers\Api\Admin\InventoryController;
 use App\Http\Controllers\Api\Admin\ProductController;
 use App\Http\Controllers\Api\Admin\CajaController;
+use App\Http\Controllers\Api\Admin\ReceivableController;
 use App\Http\Controllers\Api\Admin\CashShiftController;
 use App\Http\Controllers\Api\Admin\RolePermissionController;
 use App\Http\Controllers\Api\Admin\EarningsController;
@@ -1180,6 +1181,24 @@ Route::post('admin/caja/sales/{sale}/deliver',  [CajaController::class, 'deliver
     ->middleware('admin.can:caja.sell');
 Route::post('admin/caja/sales/{sale}/cancel',   [CajaController::class, 'cancel'])
     ->middleware('admin.can:caja.manage');
+
+// ── Cuentas por cobrar: créditos y abonos ────────────────────────────────────
+// Quien consulta saldos no es necesariamente quien cobra, y quien cobra no
+// tiene por qué poder crear deuda nueva. Tres llaves, no una.
+Route::get('admin/receivables',                        [ReceivableController::class, 'index'])
+    ->middleware('admin.can:receivables.view');
+Route::get('admin/receivables/{receivable}',           [ReceivableController::class, 'show'])
+    ->middleware('admin.can:receivables.view');
+Route::post('admin/receivables',                       [ReceivableController::class, 'store'])
+    ->middleware('admin.can:receivables.create');
+Route::post('admin/receivables/plan',                  [ReceivableController::class, 'storePlan'])
+    ->middleware('admin.can:receivables.create');
+Route::post('admin/receivables/{receivable}/payments', [ReceivableController::class, 'pay'])
+    ->middleware('admin.can:receivables.operate');
+// Anular es SUPERVISIÓN, no mostrador: quien se equivoca al cobrar no debería
+// poder deshacerlo sin que lo vea nadie más.
+Route::post('admin/receivables/payments/{payment}/reverse', [ReceivableController::class, 'reversePayment'])
+    ->middleware('admin.can:receivables.manage');
 
 // ── Facturación electrónica (Factus) — API administrativa (Fase 2) ────────────
 // Bajo /api/admin/* → blindado por ProtectAdminPaths (sesión admin o token).

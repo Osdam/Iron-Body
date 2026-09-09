@@ -35,6 +35,15 @@ class CashShiftTotalsService
             ? $this->productSalesByMethod($shift)
             : $this->gymPaymentsByMethod($shift);
 
+        // TERCERA FUENTE: los abonos a cuentas por cobrar. Un crédito no dejó
+        // dinero el día que se entregó el producto; el día que se paga, sí, y
+        // ese efectivo está en el cajón esperando a que el cierre lo explique.
+        //
+        // Se suma DESPUÉS y aparte a propósito: las dos consultas de arriba
+        // —incluida la de cobros repartidos entre varios medios— se quedan
+        // exactamente como estaban.
+        $porMedio = $this->mergeTotals($porMedio, $this->receivablePaymentsByMethod($shift));
+
         $totales = [];
         foreach (PaymentMethodKind::cases() as $medio) {
             $totales[$medio->value] = $porMedio['totals'][$medio->value] ?? '0.00';
@@ -139,6 +148,51 @@ class CashShiftTotalsService
             ->where('cash_shift_id', $shift->id)
             ->where('status', 'paid')
             ->count();
+    }
+
+    /**
+     * Abonos cobrados durante el turno.
+     *
+     * Solo los `applied`: un abono revertido no es dinero en el cajón. Se
+     * filtra por turno igual que las otras fuentes, así que un abono cobrado el
+     * viernes cuenta en el cierre del viernes aunque la deuda naciera el lunes
+     * —que es justamente el punto de un crédito—.
+     *
+     * Sirve para las DOS cajas: el tipo de la cuenta por cobrar decide en qué
+     * turno se cobra, y `cash_shift_id` ya lo refleja.
+     *
+     * @return array{totals: array<string,string>, count: int}
+     */
+    private function receivablePaymentsByMethod(CashShift $shift): array
+    {
+        $filas = DB::table('receivable_payments')
+            ->where('cash_shift_id', $shift->id)
+            ->where('status', 'applied')
+            ->groupBy('method')
+            ->select('method', DB::raw('SUM(amount) AS suma'), DB::raw('COUNT(*) AS n'))
+            ->get();
+
+        return $this->fold($filas, 'method');
+    }
+
+    /**
+     * Une dos desgloses por medio. Se acumula, no se sobrescribe: si el turno
+     * tuvo ventas en efectivo Y abonos en efectivo, el cajón tiene las dos
+     * cosas.
+     *
+     * @param  array{totals: array<string,string>, count: int}  $a
+     * @param  array{totals: array<string,string>, count: int}  $b
+     * @return array{totals: array<string,string>, count: int}
+     */
+    private function mergeTotals(array $a, array $b): array
+    {
+        $totals = $a['totals'];
+
+        foreach ($b['totals'] as $medio => $importe) {
+            $totals[$medio] = $this->sumStrings([$totals[$medio] ?? '0.00', $importe]);
+        }
+
+        return ['totals' => $totals, 'count' => $a['count'] + $b['count']];
     }
 
     /**

@@ -6,6 +6,7 @@ use App\Exceptions\CashShiftException;
 use App\Exceptions\InsufficientStockException;
 use App\Http\Controllers\Controller;
 use App\Models\CashShift;
+use App\Models\Member;
 use App\Models\Product;
 use App\Models\ProductSale;
 use App\Rules\DeliverableInvoiceEmail;
@@ -16,6 +17,7 @@ use App\Services\Billing\PricingException;
 use App\Services\Billing\PricingService;
 use App\Enums\CashShiftType;
 use App\Services\Caja\CashShiftService;
+use App\Services\Caja\ReceivableService;
 use App\Services\Inventory\InventoryService;
 use App\Services\Audit\FinancialAudit;
 use App\Support\Access\AdminActor;
@@ -147,7 +149,20 @@ class CajaController extends Controller
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
             // Cantidad estrictamente positiva y acotada: sin 0 ni negativos.
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:10000'],
-            'payment_method' => ['required', Rule::in(ProductSale::PAYMENT_METHODS)],
+            // A CRÉDITO: el socio se lleva el producto y la deuda queda en una
+            // cuenta por cobrar. Sin medio de pago, porque no se paga ahora.
+            'credit' => ['nullable', 'boolean'],
+            // Se acepta el socio por CUALQUIERA de sus dos identificadores: el
+            // CRM busca personas por `users` en todas sus pantallas, y obligarle
+            // a conocer el `member_id` significaría un buscador nuevo solo para
+            // esto. Basta con uno de los dos.
+            'member_id' => ['nullable', 'integer', 'exists:members,id'],
+            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'payment_method' => [
+                Rule::requiredIf(fn () => ! $request->boolean('credit')),
+                'nullable',
+                Rule::in(ProductSale::PAYMENT_METHODS),
+            ],
             'customer_name' => ['nullable', 'string', 'max:255'],
             'discount' => ['nullable', 'numeric', 'min:0'],
             'paid' => ['nullable', 'boolean'],
@@ -160,6 +175,17 @@ class CajaController extends Controller
         ]);
 
         $this->assertInvoiceRequestIsComplete($data);
+
+        // Fiar exige decir a quién: una deuda sin deudor no se puede cobrar.
+        $deudor = null;
+        if ($request->boolean('credit')) {
+            $deudor = $this->resolveDebtor($data);
+            if (! $deudor instanceof Member) {
+                throw ValidationException::withMessages([
+                    'member_id' => ['Elige a quién se le fía: una deuda sin deudor no se puede cobrar.'],
+                ]);
+            }
+        }
 
         // Existencias ANTES de crear nada: cobrar lo que no hay deja el
         // inventario y la caja contando historias distintas. La comprobación
@@ -200,6 +226,34 @@ class CajaController extends Controller
         // quedar registrada aunque el cobro se confirme después (venta a
         // crédito, entrega diferida) o aunque el encolado falle.
         $this->persistInvoiceRequest($sale, $data);
+
+        // A CRÉDITO: sale el producto, NO entra dinero. El inventario se mueve
+        // una sola vez —aquí— y la deuda queda registrada. El estado `credit`
+        // está fuera del filtro del arqueo, así que el cierre de hoy no cuenta
+        // un peso que nadie ha pagado.
+        if ($request->boolean('credit')) {
+            $sale->load('items');
+            try {
+                $sale->markCredit(AdminActor::from($request));
+            } catch (InsufficientStockException $e) {
+                return $this->insufficientStockResponse($e, $sale);
+            }
+
+            $cuenta = app(ReceivableService::class)->create(
+                member: $deudor,
+                type: CashShiftType::PRODUCTS,
+                concept: $this->creditConcept($sale),
+                total: Money::fromAmount($sale->total),
+                actor: AdminActor::from($request),
+                source: $sale,
+                notes: $data['notes'] ?? null,
+            );
+
+            return response()->json([
+                'data' => $this->serialize($sale->fresh(['items', 'member:id,full_name'])),
+                'receivable' => $cuenta->fresh()->load('member')->toCrmArray(),
+            ], 201);
+        }
 
         // En POS normalmente se cobra al instante → descuenta stock y deja el
         // movimiento de inventario (origen: venta de cafetería).
@@ -269,6 +323,39 @@ class CajaController extends Controller
         return response()->json(['data' => $this->serialize($sale->fresh('items'))]);
     }
 
+    /** El socio al que se le fía, venga su id o el de su cuenta de la app. */
+    private function resolveDebtor(array $data): ?Member
+    {
+        if (! empty($data['member_id'])) {
+            return Member::find((int) $data['member_id']);
+        }
+
+        if (! empty($data['user_id'])) {
+            return Member::where('user_id', (int) $data['user_id'])->first();
+        }
+
+        return null;
+    }
+
+    /**
+     * Concepto legible de la deuda: lo que se llevó, no un número de venta.
+     * Quien consulta el estado de cuenta dos semanas después necesita reconocer
+     * el consumo, no buscar el comprobante.
+     */
+    private function creditConcept(ProductSale $sale): string
+    {
+        $lineas = $sale->items
+            ->map(fn ($i) => trim(($i->quantity > 1 ? $i->quantity.'× ' : '').$i->name))
+            ->filter()
+            ->take(3)
+            ->implode(', ');
+
+        $resto = max(0, $sale->items->count() - 3);
+
+        return trim(($lineas !== '' ? $lineas : 'Consumo').($resto > 0 ? " y {$resto} más" : ''))
+            .' · '.$sale->code;
+    }
+
     /**
      * Arma la venta cotizando CADA línea con PricingService y congelando su
      * snapshot fiscal.
@@ -321,7 +408,9 @@ class CajaController extends Controller
             'cashier_name' => AdminActor::name($request),
             'cash_shift_id' => $shift?->id,
             'customer_name' => $data['customer_name'] ?? null,
-            'payment_method' => $data['payment_method'],
+            // Nulo en una venta a crédito: todavía no se ha pagado, así que no
+            // hay medio de pago que registrar. Lo traerá el abono.
+            'payment_method' => $data['payment_method'] ?? null,
             'discount' => $discount->toDatabase(),
             'notes' => $data['notes'] ?? null,
         ]);

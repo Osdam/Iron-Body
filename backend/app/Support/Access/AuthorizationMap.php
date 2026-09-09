@@ -123,6 +123,11 @@ final class AuthorizationMap
         // cuerpo o en la query: ver OVERRIDES.
         'CajaController' => 'cash.products',
 
+        // Cuentas por cobrar. Dominio propio y no `cash.products`, porque una
+        // cuenta puede ser de cualquiera de las dos cajas y consultarlas no es
+        // lo mismo que operar un turno.
+        'ReceivableController' => 'receivables',
+
         // ── Inventario ──────────────────────────────────────────────────────
         'ProductController' => 'inventory',
         'InventoryController' => 'inventory',
@@ -213,6 +218,12 @@ final class AuthorizationMap
      * @var array<string, string>
      */
     private const OVERRIDES = [
+        // Registrar un abono es COBRAR, no crear deuda: el verbo POST no
+        // distingue las dos cosas y aquí sí importa. Quien está en el mostrador
+        // recibiendo dinero no tiene por qué poder fiar.
+        'POST api/admin/receivables/{receivable}/payments' => 'receivables.operate',
+        'POST api/admin/receivables/payments/{payment}/reverse' => 'receivables.manage',
+
         // Puerta de entrada del CRM: sin ella nadie podría autenticarse nunca.
         'POST api/admin/auth/login' => self::PUBLIC,
 
@@ -343,6 +354,10 @@ final class AuthorizationMap
             'PATCH' => 'inventory.edit',
         ],
         'payments' => ['POST' => 'payments.create', 'DELETE' => 'payments.cancel'],
+        // Las rutas de receivables declaran su permiso una a una (ver
+        // routes/api.php), porque crear deuda y cobrarla son actos distintos y
+        // el verbo POST no los distingue.
+        'receivables' => ['POST' => 'receivables.create'],
     ];
 
     /**

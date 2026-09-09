@@ -180,6 +180,9 @@ final class CrmPermission
             'cash.products.view', 'cash.products.operate',
             'cash.gym.view', 'cash.gym.operate',
             'inventory.view',
+            // Cuentas por cobrar: el mostrador es quien fía y quien cobra el
+            // saldo cuando la persona vuelve. Es exactamente su trabajo.
+            'receivables.view', 'receivables.create', 'receivables.operate',
             // Recepción gestiona inscripciones a clases desde el mostrador, así
             // que necesita verlas. Es lectura: crear y editar horarios no.
             'classes.view',

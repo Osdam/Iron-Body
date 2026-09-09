@@ -25,7 +25,17 @@ class ProductSale extends Model
 {
     public const CHANNELS = ['pos', 'app'];
 
-    public const STATUSES = ['pending', 'paid', 'delivered', 'cancelled'];
+    /**
+     * `credit` es una venta ENTREGADA pero NO cobrada: el socio se llevó el
+     * producto y la deuda quedó en una cuenta por cobrar. Está deliberadamente
+     * fuera de los estados que el arqueo suma
+     * ({@see \App\Services\Caja\CashShiftTotalsService}, que filtra por
+     * `paid` y `delivered`), porque ese día no entró dinero. El dinero llega
+     * después, como abono, y se cuenta en el turno en que se recibe.
+     */
+    public const STATUS_CREDIT = 'credit';
+
+    public const STATUSES = ['pending', 'paid', 'delivered', 'cancelled', self::STATUS_CREDIT];
 
     public const PAYMENT_METHODS = ['cash', 'card', 'online', 'nequi', 'transfer'];
 
@@ -196,6 +206,36 @@ class ProductSale extends Model
         $n = (int) (self::max('id') ?? 0) + 1;
 
         return 'V-'.str_pad((string) $n, 6, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Entrega el producto a crédito: mueve existencias y NO cobra.
+     *
+     * Es el gemelo de {@see markPaid()} para la mitad que sí ocurre hoy. No se
+     * reutiliza aquél porque hace las dos cosas en la misma transacción —sacar
+     * el producto y darlo por cobrado— y aquí solo la primera es cierta: el
+     * agua salió de la nevera, el dinero no ha entrado.
+     *
+     * El inventario se mueve UNA vez, aquí. El abono posterior no vuelve a
+     * tocarlo: pagar una deuda no saca más producto del almacén.
+     */
+    public function markCredit(?Admin $actor = null): void
+    {
+        if (in_array($this->status, ['paid', 'delivered', self::STATUS_CREDIT], true)) {
+            return;
+        }
+
+        DB::transaction(function () use ($actor): void {
+            app(InventoryService::class)->registerSaleExit($this, $actor);
+
+            $this->update([
+                'status' => self::STATUS_CREDIT,
+                // Sigue SIN cobrar: es justo lo que significa un crédito.
+                'payment_status' => 'pending',
+                'paid_at' => null,
+                'delivered_at' => now(),
+            ]);
+        });
     }
 
     /**
