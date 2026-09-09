@@ -220,6 +220,54 @@ class PaymentController extends Controller
     /** Máximo de líneas en un cobro mixto. Más que esto no es un cobro, es un lío. */
     private const MAX_SPLITS = 6;
 
+    /** Holgura al comparar con el precio del plan. Medio peso: redondeos, no descuentos. */
+    private const PLAN_AMOUNT_TOLERANCE = 0.5;
+
+    /**
+     * El cobro de un plan tiene que ser por el precio del plan.
+     *
+     * Existía ya dentro de applyAuthoritativePricing(), pero solo se aplicaba
+     * con `BILLING_PRICING_V2_ENABLED=true`, y está en false: hoy se puede
+     * registrar un pago de 40.000 contra un plan de 70.000 sin que nada
+     * proteste, y el desglose por medios cuadraría con los 40.000 mientras la
+     * membresía se activa igual. Esta comprobación no depende de ese flag
+     * porque no toca los snapshots fiscales, solo el importe.
+     *
+     * La vía de escape es la que ya existe para lo mismo: `amount_override`
+     * con su justificación, que queda auditada. Un importe distinto sigue
+     * siendo posible; lo que deja de ser posible es que ocurra en silencio.
+     *
+     * @param  array<string, mixed>  $data
+     *
+     * @throws ValidationException
+     */
+    private function assertAmountMatchesPlan(array $data): void
+    {
+        if (empty($data['plan_id']) || ($data['amount_override'] ?? false)) {
+            return;
+        }
+
+        $plan = Plan::find($data['plan_id']);
+        if (! $plan || (float) $plan->price <= 0) {
+            return;
+        }
+
+        $precio = round((float) $plan->price, 2);
+        $cobrado = round((float) ($data['amount'] ?? 0), 2);
+
+        if (abs($precio - $cobrado) > self::PLAN_AMOUNT_TOLERANCE) {
+            throw ValidationException::withMessages([
+                'amount' => [sprintf(
+                    'El plan «%s» cuesta %s y el cobro es de %s. Ajusta el importe o justifica '
+                    .'el cambio con amount_override y override_reason.',
+                    $plan->name,
+                    number_format($precio, 0, ',', '.'),
+                    number_format($cobrado, 0, ',', '.'),
+                )],
+            ]);
+        }
+    }
+
     /**
      * Reglas del desglose por medio de pago.
      *
@@ -333,6 +381,8 @@ class PaymentController extends Controller
         // de crear el cobro, así que sale del payload antes de Payment::create.
         $splits = $data['splits'] ?? null;
         unset($data['splits']);
+
+        $this->assertAmountMatchesPlan($data);
 
         $invoiceRequest = $this->extractInvoiceRequest($data);
 
