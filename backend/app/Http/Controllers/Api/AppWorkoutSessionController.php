@@ -2,12 +2,16 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\WorkoutExerciseStatus;
+use App\Enums\WorkoutSkipReason;
+use App\Exceptions\WorkoutSessionException;
 use App\Http\Controllers\Controller;
 use App\Services\PersonalRecordService;
 use App\Services\WorkoutSessionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 
 /**
  * Sesiones de entrenamiento del miembro.
@@ -44,6 +48,13 @@ class AppWorkoutSessionController extends Controller
             'exercises.*.exercise_id' => ['nullable'],
             'exercises.*.name' => ['required_with:exercises', 'string', 'max:255'],
             'exercises.*.order' => ['nullable', 'integer', 'min:0', 'max:200'],
+            // Estado por ejercicio: lo manda la app nueva y es lo que distingue
+            // un contrato del otro. Opcional para no romper a las versiones que
+            // ni siquiera conocen el concepto; el catálogo es cerrado para que
+            // un cliente no pueda inventarse un estado que deje cerrar la
+            // rutina.
+            'exercises.*.status' => ['nullable', 'string', Rule::in(WorkoutExerciseStatus::values())],
+            'exercises.*.skip_reason' => ['nullable', 'string', Rule::in(WorkoutSkipReason::values())],
             'exercises.*.sets' => ['nullable', 'array', 'max:40'],
             'exercises.*.sets.*.set_number' => ['nullable', 'integer', 'min:1', 'max:200'],
             // Flutter ya normaliza y acota, pero el backend valida por su
@@ -57,6 +68,16 @@ class AppWorkoutSessionController extends Controller
 
         try {
             $result = $this->sessions->complete($member, $data);
+        } catch (WorkoutSessionException $e) {
+            // La sesión no se puede dar por terminada: quedan ejercicios sin
+            // completar, o el payload no es coherente. NO es un fallo del
+            // servidor y no se registra como tal —la app tiene que poder
+            // enseñar el motivo y devolver al socio a lo que le falta.
+            return response()->json([
+                'ok' => false,
+                'code' => $e->code_,
+                'message' => $e->getMessage(),
+            ], 422);
         } catch (\Throwable $e) {
             // Un fallo inesperado sigue siendo 500 —no se disfraza de éxito—
             // pero se registra con contexto y se devuelve un mensaje que la app

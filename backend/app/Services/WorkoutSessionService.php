@@ -2,13 +2,18 @@
 
 namespace App\Services;
 
+use App\Enums\WorkoutExerciseStatus;
+use App\Enums\WorkoutSkipReason;
+use App\Exceptions\WorkoutSessionException;
 use App\Models\Exercise;
 use App\Models\Member;
 use App\Models\Routine;
 use App\Models\RoutineCompletion;
 use App\Models\WorkoutSession;
+use App\Models\WorkoutSessionExercise;
 use App\Models\WorkoutSessionSet;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -30,6 +35,30 @@ use Illuminate\Support\Facades\Log;
  * el contexto de IRON IA, las notificaciones y los comandos proactivos. La
  * sesión apunta a ella, de modo que ninguna funcionalidad previa cambia de
  * fuente y ambas vistas quedan trazables entre sí.
+ *
+ * DOS CONTRATOS A LA VEZ
+ * ----------------------
+ * El endpoint acepta dos formas del mismo payload y las distingue por un solo
+ * dato: si algún ejercicio trae `status`, es el contrato NUEVO.
+ *
+ *  - NUEVO: cada ejercicio declara su estado. Se exige que TODOS estén
+ *    `completed` para cerrar la sesión, y se rechaza el envío si no. La regla
+ *    vive aquí y no en Flutter porque el endpoint es alcanzable directamente:
+ *    una app parcheada o una petición a mano no pueden saltársela.
+ *
+ *  - LEGACY (`LEGACY_COMPLETION_POLICY=PERMISSIVE_DERIVED`): las apps 2.0.3 y
+ *    anteriores no saben mandar estado —su pantalla ni siquiera tiene el
+ *    concepto— así que exigírselo las dejaría sin poder registrar un
+ *    entrenamiento hasta que actualicen, y hay versiones instaladas que
+ *    tardarán semanas en hacerlo. Para ellas NO se valida nada nuevo: la sesión
+ *    se guarda como se ha guardado siempre y el estado de cada ejercicio se
+ *    DERIVA de sus series (`completed` si ejecutó al menos una, `pending` si
+ *    no). Esa derivación es una lectura de lo que mandaron, no una suposición
+ *    sobre lo que quisieron decir.
+ *
+ * La compatibilidad legacy se retira cuando la versión nueva esté distribuida,
+ * no antes, y esa retirada es una decisión de producto: aquí no hay ventana de
+ * migración implícita ni fecha de caducidad escondida.
  */
 class WorkoutSessionService
 {
@@ -53,19 +82,58 @@ class WorkoutSessionService
         $clientId = trim((string) $payload['client_session_id']);
 
         // Reentrada: la sesión ya se registró en un intento anterior.
-        $existing = WorkoutSession::query()
-            ->with('sets')
-            ->where('member_id', $member->id)
-            ->where('client_session_id', $clientId)
-            ->first();
+        $existing = $this->findExisting($member, $clientId);
 
         if ($existing !== null) {
             return ['session' => $existing, 'created' => false, 'records' => collect()];
         }
 
+        // Se normaliza y se valida ANTES de abrir la transacción: rechazar una
+        // sesión incompleta no debe costar un rollback, y así la excepción sale
+        // con la base de datos intacta.
+        $exercises = $this->normalizeExercises($payload['exercises'] ?? []);
+        $this->guardCompletable($exercises);
+
         $routine = $this->resolveRoutine($member, $payload['routine_id'] ?? null);
 
-        $result = DB::transaction(function () use ($member, $payload, $clientId, $routine): array {
+        try {
+            $result = $this->persist($member, $payload, $clientId, $routine, $exercises);
+        } catch (QueryException $e) {
+            // Carrera: dos envíos del MISMO `client_session_id` pasaron los dos
+            // el chequeo de reentrada antes de que ninguno insertara. El índice
+            // único hizo su trabajo y no hay sesión duplicada; lo que falta es
+            // no contestarle 500 a un cliente que hizo lo correcto.
+            if (! $this->isReplayCollision($e)) {
+                throw $e;
+            }
+
+            $winner = $this->findExisting($member, $clientId);
+            if ($winner === null) {
+                // La colisión fue de otra cosa que menciona la columna. No se
+                // disfraza de éxito.
+                throw $e;
+            }
+
+            return ['session' => $winner, 'created' => false, 'records' => collect()];
+        }
+
+        return $this->afterCommit($member, $result);
+    }
+
+    /**
+     * Crea la sesión y todo lo que cuelga de ella, o nada.
+     *
+     * @param  list<array<string, mixed>>  $exercises
+     * @return array{session: WorkoutSession, records: \Illuminate\Support\Collection}
+     */
+    private function persist(
+        Member $member,
+        array $payload,
+        string $clientId,
+        ?Routine $routine,
+        array $exercises,
+    ): array {
+        return DB::transaction(function () use ($member, $payload, $clientId, $routine, $exercises): array {
             $completedAt = $this->parseTime($payload['completed_at'] ?? null) ?? CarbonImmutable::now();
             $startedAt = $this->parseTime($payload['started_at'] ?? null);
 
@@ -108,7 +176,8 @@ class WorkoutSessionService
                 'notes' => $payload['notes'] ?? null,
             ]);
 
-            $this->storeSets($session, $payload['exercises'] ?? [], $completedAt);
+            $this->storeExercises($session, $exercises);
+            $this->storeSets($session, $exercises, $completedAt);
             $this->refreshTotals($session);
 
             // Los récords se derivan DENTRO de la transacción: o queda todo
@@ -119,7 +188,16 @@ class WorkoutSessionService
 
             return ['session' => $session, 'records' => $records];
         });
+    }
 
+    /**
+     * Lo que ocurre una vez la sesión ya está a salvo en disco.
+     *
+     * @param  array{session: WorkoutSession, records: \Illuminate\Support\Collection}  $result
+     * @return array{session: WorkoutSession, created: bool, records: \Illuminate\Support\Collection}
+     */
+    private function afterCommit(Member $member, array $result): array
+    {
         /** @var WorkoutSession $session */
         $session = $result['session'];
         /** @var \Illuminate\Support\Collection $records */
@@ -149,6 +227,168 @@ class WorkoutSessionService
         }
 
         return ['session' => $session, 'created' => true, 'records' => $records];
+    }
+
+    /**
+     * La sesión ya registrada para este `client_session_id`, si la hay.
+     *
+     * Protegido y no privado a propósito: es la costura por la que se puede
+     * reproducir la carrera de dos envíos simultáneos, que de otro modo no
+     * habría forma honesta de provocar en un test.
+     */
+    protected function findExisting(Member $member, string $clientSessionId): ?WorkoutSession
+    {
+        return WorkoutSession::query()
+            ->with('sets')
+            ->where('member_id', $member->id)
+            ->where('client_session_id', $clientSessionId)
+            ->first();
+    }
+
+    /**
+     * Deja el payload en una forma única, decidida y validada.
+     *
+     * Aquí se resuelve de una vez la identidad de cada ejercicio (nombre,
+     * clave, id de catálogo y ORDEN) para que las series y la fila de estado
+     * usen exactamente los mismos valores. Antes cada uno lo recalculaba por su
+     * cuenta y bastaba con que una de las dos derivaciones cambiara para que
+     * dejaran de cruzarse.
+     *
+     * El ORDEN es la identidad dentro de la sesión: `exercise_id` puede ser
+     * null y puede repetirse dentro de la misma rutina.
+     *
+     * @param  mixed  $raw
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeExercises(mixed $raw): array
+    {
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        $out = [];
+
+        foreach (array_values($raw) as $index => $exercise) {
+            if (! is_array($exercise)) {
+                continue;
+            }
+
+            $name = trim((string) ($exercise['name'] ?? ''));
+            $key = WorkoutSessionSet::normalizeKey($name);
+
+            $sets = [];
+            foreach (array_values($exercise['sets'] ?? []) as $set) {
+                if (is_array($set)) {
+                    $sets[] = $set;
+                }
+            }
+
+            $out[] = [
+                'name' => $name !== '' ? $name : 'Ejercicio',
+                'key' => $key !== '' ? $key : 'ejercicio',
+                'exercise_id' => $this->resolveExerciseId($exercise['exercise_id'] ?? null, $name),
+                'order' => (int) ($exercise['order'] ?? $index),
+                'sets' => $sets,
+                'status' => $this->parseStatus($exercise['status'] ?? null),
+                'skip_reason' => $this->parseSkipReason($exercise['skip_reason'] ?? null),
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Un estado declarado por el cliente, o null si no declaró ninguno.
+     *
+     * Un valor desconocido NO se degrada a `pending`: se rechaza. Aceptar
+     * basura convirtiéndola en un estado plausible es cómo un cliente roto
+     * acabaría cerrando rutinas a medias sin que nadie se entere.
+     */
+    private function parseStatus(mixed $value): ?WorkoutExerciseStatus
+    {
+        if (blank($value)) {
+            return null;
+        }
+
+        return WorkoutExerciseStatus::tryFrom((string) $value)
+            ?? throw WorkoutSessionException::invalidStatus((string) $value);
+    }
+
+    private function parseSkipReason(mixed $value): ?WorkoutSkipReason
+    {
+        if (blank($value)) {
+            return null;
+        }
+
+        return WorkoutSkipReason::tryFrom((string) $value)
+            ?? throw WorkoutSessionException::invalidSkipReason((string) $value);
+    }
+
+    /**
+     * ¿Puede cerrarse esta sesión?
+     *
+     * REGLA: todos los ejercicios COMPLETED. Ni `pending`, ni `in_progress`, ni
+     * `skipped_temporarily` —que es temporal y por tanto sigue pendiente—. No
+     * se mira ningún índice ni ninguna posición: por dónde iba el socio en la
+     * pantalla no dice nada sobre lo que terminó.
+     *
+     * Todos los ejercicios del payload son requeridos. No existe hoy la noción
+     * de ejercicio opcional: `routine_exercises` no tiene columna que lo
+     * exprese y en producción no hay una sola fila con `sets = 0` (90 filas,
+     * mínimo 3), así que no se inventa una excepción para un caso que el
+     * sistema no puede producir.
+     *
+     * Solo aplica al contrato NUEVO. Ver `LEGACY_COMPLETION_POLICY` arriba.
+     *
+     * @param  list<array<string, mixed>>  $exercises
+     */
+    private function guardCompletable(array $exercises): void
+    {
+        $declared = array_filter($exercises, static fn (array $e) => $e['status'] !== null);
+
+        // Contrato legacy: ni un solo estado declarado. Se guarda como siempre.
+        if ($declared === []) {
+            return;
+        }
+
+        if (count($declared) !== count($exercises)) {
+            throw WorkoutSessionException::mixedContract();
+        }
+
+        // «Al menos un ejercicio» no necesita comprobación propia: el contrato
+        // nuevo se reconoce PORQUE algún ejercicio declara estado, así que una
+        // lista vacía nunca llega hasta aquí —se fue por la rama legacy—. Una
+        // comprobación que no puede fallar solo aparenta rigor.
+        $blocking = array_filter(
+            $exercises,
+            static fn (array $e) => $e['status']->blocksCompletion(),
+        );
+
+        if ($blocking !== []) {
+            throw WorkoutSessionException::incomplete(count($blocking));
+        }
+    }
+
+    /**
+     * ¿Este fallo es la carrera de dos envíos con el mismo `client_session_id`?
+     *
+     * Se comprueba el SQLSTATE y además que la colisión mencione la columna:
+     * capturar cualquier `QueryException` convertiría en «ya estaba guardado»
+     * un fallo real de escritura, y el socio se iría a casa creyendo que su
+     * entrenamiento quedó registrado.
+     *
+     * 23505 es PostgreSQL (producción); 23000 es el genérico de SQLite y MySQL
+     * (tests y entornos locales). Ambos se comportan igual aquí.
+     */
+    private function isReplayCollision(QueryException $e): bool
+    {
+        $sqlState = (string) ($e->errorInfo[0] ?? $e->getCode());
+
+        if ($sqlState !== '23505' && $sqlState !== '23000') {
+            return false;
+        }
+
+        return str_contains($e->getMessage(), 'client_session_id');
     }
 
     /**
@@ -216,27 +456,14 @@ class WorkoutSessionService
      */
     private function storeSets(WorkoutSession $session, array $exercises, CarbonImmutable $completedAt): void
     {
-        foreach (array_values($exercises) as $exIndex => $exercise) {
-            if (! is_array($exercise)) {
-                continue;
-            }
-
-            $name = trim((string) ($exercise['name'] ?? ''));
-            $key = WorkoutSessionSet::normalizeKey($name);
-            $exerciseId = $this->resolveExerciseId($exercise['exercise_id'] ?? null, $name);
-            $order = (int) ($exercise['order'] ?? $exIndex);
-
-            foreach (array_values($exercise['sets'] ?? []) as $setIndex => $set) {
-                if (! is_array($set)) {
-                    continue;
-                }
-
+        foreach ($exercises as $exercise) {
+            foreach (array_values($exercise['sets']) as $setIndex => $set) {
                 WorkoutSessionSet::create([
                     'workout_session_id' => $session->id,
-                    'exercise_id' => $exerciseId,
-                    'exercise_name' => $name !== '' ? $name : 'Ejercicio',
-                    'exercise_key' => $key !== '' ? $key : 'ejercicio',
-                    'exercise_order' => $order,
+                    'exercise_id' => $exercise['exercise_id'],
+                    'exercise_name' => $exercise['name'],
+                    'exercise_key' => $exercise['key'],
+                    'exercise_order' => $exercise['order'],
                     'set_number' => (int) ($set['set_number'] ?? $setIndex + 1),
                     'reps' => isset($set['reps']) ? max(0, (int) $set['reps']) : null,
                     'weight_kg' => isset($set['weight_kg']) ? max(0, (float) $set['weight_kg']) : null,
@@ -246,6 +473,69 @@ class WorkoutSessionService
                 ]);
             }
         }
+    }
+
+    /**
+     * Persiste el estado de cada ejercicio.
+     *
+     * Se guarda TAL CUAL llegó lo que el socio mandó, incluidas las series
+     * prescritas que dejó sin marcar: son el registro de «esto estaba previsto
+     * y no se ejecutó», y no cuentan en ningún total porque volumen, series y
+     * récords ya filtran por `completed`. Descartarlas al guardar no haría el
+     * dato más real, solo lo haría desaparecer.
+     *
+     * `updateOrCreate` por (sesión, orden) y no `create`: si un payload
+     * malformado repitiera posición, la segunda entrada pisa a la primera en
+     * vez de reventar contra el índice único con un 500. Las series ya se
+     * comportaban así frente a un duplicado exacto.
+     *
+     * @param  list<array<string, mixed>>  $exercises
+     */
+    private function storeExercises(WorkoutSession $session, array $exercises): void
+    {
+        foreach ($exercises as $exercise) {
+            WorkoutSessionExercise::updateOrCreate(
+                [
+                    'workout_session_id' => $session->id,
+                    'exercise_order' => $exercise['order'],
+                ],
+                [
+                    'exercise_id' => $exercise['exercise_id'],
+                    'exercise_name' => $exercise['name'],
+                    'exercise_key' => $exercise['key'],
+                    'status' => $status = $exercise['status'] ?? $this->deriveStatus($exercise),
+                    // El motivo solo tiene sentido junto a un salto. Un
+                    // «completado porque la máquina estaba ocupada» es una
+                    // contradicción, y guardarla dejaría el historial diciendo
+                    // dos cosas a la vez.
+                    'skip_reason' => $status === WorkoutExerciseStatus::SKIPPED_TEMPORARILY
+                        ? $exercise['skip_reason']
+                        : null,
+                ],
+            );
+        }
+    }
+
+    /**
+     * Estado de un ejercicio que llegó SIN declararlo (contrato legacy).
+     *
+     * Se lee de sus series, que es el único dato que la app antigua manda: si
+     * ejecutó al menos una, el ejercicio se hizo; si no ejecutó ninguna, quedó
+     * pendiente. No se usa `skipped_temporarily` ni `in_progress` porque el
+     * payload viejo no distingue «lo dejé a medias» de «no lo empecé», y
+     * elegir uno de los dos sería inventar intención.
+     *
+     * @param  array<string, mixed>  $exercise
+     */
+    private function deriveStatus(array $exercise): WorkoutExerciseStatus
+    {
+        foreach ($exercise['sets'] as $set) {
+            if (($set['completed'] ?? false) == true) {
+                return WorkoutExerciseStatus::COMPLETED;
+            }
+        }
+
+        return WorkoutExerciseStatus::PENDING;
     }
 
     private function resolveExerciseId(string|int|null $explicitId, string $name): ?int
@@ -261,7 +551,7 @@ class WorkoutSessionService
         return Exercise::query()->whereRaw('lower(name) = ?', [mb_strtolower($name)])->value('id');
     }
 
-    /** Recalcula y persiste los totales desde las series ya guardadas. */
+    /** Recalcula y persiste los totales desde lo que quedó guardado. */
     private function refreshTotals(WorkoutSession $session): void
     {
         $sets = $session->sets()->get();
@@ -272,7 +562,13 @@ class WorkoutSessionService
             'total_volume_kg' => round((float) $volume, 2),
             // "Series" cuenta las ejecutadas, no las prescritas.
             'total_sets' => $sets->where('completed', true)->count(),
-            'total_exercises' => $sets->pluck('exercise_key')->unique()->count(),
+            // Y "ejercicios" tampoco cuenta ya lo prescrito. Contaba claves
+            // únicas sobre TODAS las series, incluidas las que la app manda
+            // rellenas desde la rutina y el socio nunca marcó: una rutina de
+            // cinco abandonada en el primero se archivaba como cinco
+            // ejercicios entrenados, junto al volumen y las series reales de
+            // uno. El resumen del socio decía una cosa y sus números otra.
+            'total_exercises' => $session->completedExerciseCount(),
         ])->save();
     }
 

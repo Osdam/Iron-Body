@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use App\Enums\WorkoutExerciseStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 /**
  * @property int $id
@@ -52,6 +54,64 @@ class WorkoutSession extends Model
     public function sets(): HasMany
     {
         return $this->hasMany(WorkoutSessionSet::class);
+    }
+
+    public function exercises(): HasMany
+    {
+        return $this->hasMany(WorkoutSessionExercise::class);
+    }
+
+    /**
+     * El estado de cada ejercicio de la sesión, exista o no la fila.
+     *
+     * Las sesiones anteriores a esta tabla no tienen filas de ejercicio y no se
+     * les van a inventar: un backfill escribiría como dato lo que solo es una
+     * suposición sobre entrenamientos que ya nadie puede confirmar. Para ellas
+     * el estado se DERIVA en lectura desde sus series —completado si ejecutó
+     * alguna, pendiente si no— que es exactamente lo que se sabe de ellas.
+     *
+     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     */
+    public function exerciseBreakdown(): Collection
+    {
+        $rows = $this->exercises()->orderBy('exercise_order')->get();
+
+        if ($rows->isNotEmpty()) {
+            return $rows->map(fn (WorkoutSessionExercise $e) => $e->toPublicArray())->values();
+        }
+
+        return $this->sets()->orderBy('exercise_order')->get()
+            ->groupBy('exercise_order')
+            ->map(function (Collection $sets, $order): array {
+                /** @var WorkoutSessionSet $first */
+                $first = $sets->first();
+
+                return [
+                    'exercise_id' => $first->exercise_id,
+                    'name' => $first->exercise_name,
+                    'exercise_key' => $first->exercise_key,
+                    'order' => (int) $order,
+                    'status' => $sets->contains('completed', true)
+                        ? WorkoutExerciseStatus::COMPLETED->value
+                        : WorkoutExerciseStatus::PENDING->value,
+                    'skip_reason' => null,
+                ];
+            })
+            ->values();
+    }
+
+    /**
+     * Cuántos ejercicios se completaron DE VERDAD.
+     *
+     * Es lo que alimenta `total_exercises`. Antes se contaban las claves únicas
+     * de las series, con lo que un ejercicio prescrito y nunca marcado sumaba
+     * igual que uno entrenado.
+     */
+    public function completedExerciseCount(): int
+    {
+        return $this->exerciseBreakdown()
+            ->where('status', WorkoutExerciseStatus::COMPLETED->value)
+            ->count();
     }
 
     /**
