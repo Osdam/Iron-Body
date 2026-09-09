@@ -231,6 +231,26 @@ Route::middleware(['trainer.feature:trainer_nutrition_guides_enabled', 'auth.tra
     Route::post('nutrition-guides/{guide}/publish',         [$ng, 'publish'])->middleware('trainer.can:nutrition_guides.publish');
     Route::post('nutrition-guides/{guide}/amend',           [$ng, 'amend'])->middleware('trainer.can:nutrition_guides.amend');
     Route::post('nutrition-guides/{guide}/void',            [$ng, 'void'])->middleware('trainer.can:nutrition_guides.amend');
+
+    // ── Plan integral: una evaluación, dos borradores ────────────────────────
+    // Generar cuesta dinero por uso, así que tiene su propia llave. Publicar la
+    // rutina reutiliza `routines.assign`, que es lo que significa: ponérsela al
+    // socio. El miembro llega por la RUTA y se comprueba contra sus
+    // asignaciones activas; un member_id en el cuerpo no se mira.
+    Route::post('members/{member}/integral-plan/generate', [\App\Http\Controllers\Api\Trainer\IntegralPlanController::class, 'generate'])
+        ->whereNumber('member')->middleware('trainer.can:plans.generate');
+    Route::post('routines/{routine}/publish', [\App\Http\Controllers\Api\Trainer\IntegralPlanController::class, 'publishRoutine'])
+        ->whereNumber('routine')->middleware('trainer.can:routines.assign');
+
+    // Revisar y corregir el borrador antes de entregarlo. El catálogo es el
+    // MISMO que ve Iron IA: un segundo catálogo dejaría al entrenador eligiendo
+    // ejercicios que el generador nunca propondría, y al revés.
+    Route::get('routines/{routine}', [\App\Http\Controllers\Api\Trainer\IntegralPlanController::class, 'showRoutine'])
+        ->whereNumber('routine')->middleware('trainer.can:routines.assign');
+    Route::put('routines/{routine}/exercises', [\App\Http\Controllers\Api\Trainer\IntegralPlanController::class, 'updateRoutineExercises'])
+        ->whereNumber('routine')->middleware('trainer.can:routines.assign');
+    Route::get('exercises', [\App\Http\Controllers\Api\Trainer\IntegralPlanController::class, 'exercises'])
+        ->middleware('trainer.can:routines.assign');
 });
 
 // ── Guías nutricionales — vista de SOLO LECTURA del socio ─────────────────────

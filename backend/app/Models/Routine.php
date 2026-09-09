@@ -22,6 +22,8 @@ class Routine extends Model
         'assigned_member_id',
         'is_assigned',
         'member_id',
+        'source_assessment_id',
+        'generated_by_ai',
         'created_by_admin',
         'is_template',
         'status',
@@ -38,6 +40,7 @@ class Routine extends Model
         'estimated_minutes' => 'integer',
         'days_per_week' => 'integer',
         'is_assigned' => 'boolean',
+        'generated_by_ai' => 'boolean',
         'created_by_admin' => 'boolean',
         'is_template' => 'boolean',
     ];

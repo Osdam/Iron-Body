@@ -107,6 +107,10 @@ return [
             'nutrition_guides.publish',
             'nutrition_guides.amend',
             'routines.assign',
+            // Generar un plan con Iron IA es su propia llave, y no la de
+            // escribir uno a mano: cuesta dinero por uso. Un gimnasio puede
+            // querer que sus entrenadores pauten sin dejarles generar.
+            'plans.generate',
             'trainer.workspace.switch',
         ],
         TrainerRole::FUNCTIONAL => [
@@ -121,6 +125,10 @@ return [
             'nutrition_guides.update_draft',
             'nutrition_guides.publish',
             'nutrition_guides.amend',
+            // NI `plans.generate` NI `routines.assign`: asignar rutinas es
+            // exclusivo de planta —así lo fija TrainerRolesPermissionsTest— y
+            // generar un plan produce una rutina. Dárselo al rol funcional le
+            // dejaría creando rutinas que no puede entregar.
             'classes.view',
             'classes.manage',
             'attendance.create',

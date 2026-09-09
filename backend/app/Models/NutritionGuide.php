@@ -93,6 +93,7 @@ class NutritionGuide extends Model
         'published_at',
         'acknowledged_at',
         'voided_at',
+        'generated_by_ai',
     ];
 
     protected function casts(): array
