@@ -10,6 +10,7 @@ use App\Http\Resources\ProfessionalAssessmentResource;
 use App\Models\Member;
 use App\Models\NutritionGuide;
 use App\Models\Trainer;
+use App\Services\Trainer\MemberContextAssembler;
 use App\Services\Trainer\NutritionGuideService;
 use App\Services\Trainer\TrainerMemberAccess;
 use Illuminate\Http\JsonResponse;
@@ -64,11 +65,18 @@ class NutritionGuideController extends Controller
         return response()->json([
             'ok' => true,
             'data' => [
+                // Contrato ANTERIOR, intacto. La app publicada lo consume tal
+                // cual y no puede romperse por añadir campos nuevos.
                 'has_assessment' => $assessment !== null,
                 'assessment' => $assessment
                     ? new ProfessionalAssessmentResource($assessment->load('trainer'))
                     : null,
                 'measurements' => $assessment ? $this->guides->measurementsFrom($assessment) : [],
+
+                // Y todo lo demás que Iron Body ya sabe del socio, agrupado por
+                // secciones. El entrenador tecleaba la edad teniendo su fecha
+                // de nacimiento, y el objetivo teniendo su perfil.
+                'context' => app(MemberContextAssembler::class)->for($member),
             ],
         ]);
     }

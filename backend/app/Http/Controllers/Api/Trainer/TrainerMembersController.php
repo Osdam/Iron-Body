@@ -7,6 +7,7 @@ use App\Models\Member;
 use App\Models\MemberTrainerAssignment;
 use App\Models\ProfessionalAssessment;
 use App\Models\Trainer;
+use App\Services\Trainer\MemberContextAssembler;
 use App\Services\Trainer\TrainerMemberAccess;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -105,6 +106,16 @@ class TrainerMembersController extends Controller
                     'weight_kg' => $last->weight_kg,
                     'submitted_at' => optional($last->submitted_at)->toIso8601String(),
                 ] : null,
+
+                // Todo lo que Iron Body ya sabe del socio, agrupado por
+                // secciones. La Valoración Integral parte de aquí en vez de
+                // pedirle al entrenador datos que el sistema ya tiene: la edad
+                // teniendo su fecha de nacimiento, el objetivo teniendo su
+                // perfil, las restricciones teniendo su guía anterior.
+                //
+                // Se añade al final y nada se quita: la app publicada sigue
+                // leyendo los mismos campos que leía.
+                'context' => app(MemberContextAssembler::class)->for($member),
             ],
         ]);
     }
