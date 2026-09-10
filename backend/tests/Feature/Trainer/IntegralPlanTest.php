@@ -331,6 +331,80 @@ class IntegralPlanTest extends TestCase
         $this->assertFalse((bool) $rutina->fresh()->is_assigned);
     }
 
+    /**
+     * Una rutina profesional no es catálogo.
+     *
+     * EL FALLO QUE ESTO CIERRA
+     * ------------------------
+     * «Más rutinas» es lo que el socio se hace por su cuenta, y filtraba solo
+     * por `is_assigned = false`. Eso no distinguía sus rutinas de las que le
+     * preparó su entrenador y todavía no están publicadas —o que ya se
+     * retiraron—: las dos tienen dueño y no están asignadas. Así que un
+     * borrador que el socio no debería ver todavía, y una rutina que acababa de
+     * dejar de ver, aparecían en su catálogo.
+     *
+     * Se recorre el ciclo entero: borrador, publicada y retirada.
+     */
+    public function test_una_rutina_profesional_nunca_es_catalogo(): void
+    {
+        $this->assessment();
+        $this->fakeAi($this->goodPlan());
+        $this->generate()->assertStatus(201);
+        $rutina = Routine::firstOrFail();
+
+        // `RoutineResource` serializa el id como texto.
+        $id = (string) $rutina->id;
+        $mis = fn () => collect(
+            $this->getJson('/api/app/routines/assigned', $this->asMember())->assertOk()->json('data')
+        )->pluck('id')->all();
+        $mas = fn () => collect(
+            $this->getJson('/api/app/routines/custom', $this->asMember())->assertOk()->json('data')
+        )->pluck('id')->all();
+
+        // BORRADOR: no está en ninguno de los dos. El socio no ha de verla
+        // antes de que su entrenador la revise.
+        $this->assertNotContains($id, $mis(), 'borrador en Mis rutinas');
+        $this->assertNotContains($id, $mas(), 'borrador en Más rutinas');
+
+        // PUBLICADA: suya, pero no catálogo.
+        $this->postJson("/api/trainer/routines/{$rutina->id}/publish", [], $this->asTrainer())
+            ->assertOk();
+        $this->assertContains($id, $mis());
+        $this->assertNotContains($id, $mas(), 'publicada en Más rutinas');
+
+        // RETIRADA: fuera de los dos. Retirar no la convierte en pública.
+        $this->postJson("/api/trainer/routines/{$rutina->id}/retire", [], $this->asTrainer())
+            ->assertOk();
+        $this->assertNotContains($id, $mis());
+        $this->assertNotContains($id, $mas(), 'retirada en Más rutinas');
+
+        // Y su origen se conserva en todo el recorrido: el entrenador la sigue
+        // viendo en el seguimiento y sabe de dónde salió.
+        $fresca = $rutina->fresh();
+        $this->assertNotNull($fresca);
+        $this->assertNotNull($fresca->source_assessment_id, 'source_assessment_id');
+        $this->assertTrue((bool) $fresca->generated_by_ai, 'generated_by_ai');
+        $this->assertNotNull($fresca->trainer_id, 'trainer_id');
+    }
+
+    /** Y las que el socio se hace por su cuenta siguen en su sitio. */
+    public function test_la_rutina_que_se_hace_el_socio_sigue_en_mas_rutinas(): void
+    {
+        $suya = Routine::create([
+            'name' => 'Mi pecho y espalda',
+            'member_id' => $this->member->id,
+            'is_assigned' => false,
+        ]);
+
+        $mas = collect(
+            $this->getJson('/api/app/routines/custom', $this->asMember())->assertOk()->json('data')
+        )->pluck('id');
+
+        // Sin entrenador detrás: es catálogo del socio y ahí se queda.
+        $this->assertNull($suya->trainer_id);
+        $this->assertContains((string) $suya->id, $mas->all());
+    }
+
     public function test_un_entrenador_no_retira_la_rutina_de_otro(): void
     {
         $this->assessment();

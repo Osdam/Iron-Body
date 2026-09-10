@@ -272,8 +272,21 @@ class AppRoutineController extends Controller
     {
         $member = $request->attributes->get('auth_member');
 
+        // «Más rutinas» es lo que el SOCIO se hace por su cuenta. Filtrar solo
+        // por `is_assigned = false` no distinguía eso de una rutina que le
+        // preparó su entrenador y que todavía no está publicada —o que ya se
+        // retiró—: ambas tienen dueño y no están asignadas, así que se colaban
+        // en el catálogo. Un borrador que el socio no debería ver todavía, y
+        // una rutina retirada que acababa de dejar de ver, reaparecían aquí.
+        //
+        // Lo que las separa es quién la hizo. Las del socio nunca llevan
+        // entrenador; las profesionales sí, las genere Iron IA o las escriba
+        // él a mano. No se filtra por `generated_by_ai` ni por
+        // `source_assessment_id` porque dejarían fuera la rutina que un
+        // entrenador escribe sin IA, que tampoco es catálogo.
         $routines = Routine::where('member_id', $member->id)
             ->where('is_assigned', false)
+            ->whereNull('trainer_id')
             ->with(['routineExercises.exercise'])
             ->orderByDesc('created_at')
             ->get();
