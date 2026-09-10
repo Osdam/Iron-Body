@@ -21,6 +21,7 @@ class CashShift extends Model
         'status',
         'opened_by', 'opened_by_name', 'opened_at', 'opening_amount', 'opening_notes',
         'closed_by', 'closed_by_name', 'closed_at',
+        'archived_at',
         'sales_total', 'cash_sales_total', 'expected_amount', 'counted_amount',
         'transfer_total', 'card_total', 'wompi_total', 'other_total',
         'operations_count', 'auto_observation', 'opening_policy',
@@ -32,6 +33,7 @@ class CashShift extends Model
         'status' => CashShiftStatus::class,
         'opened_at' => 'datetime',
         'closed_at' => 'datetime',
+        'archived_at' => 'datetime',
         'opening_amount' => 'decimal:2',
         'sales_total' => 'decimal:2',
         'cash_sales_total' => 'decimal:2',
@@ -70,6 +72,27 @@ class CashShift extends Model
     public function scopeOfType(Builder $q, CashShiftType $type): Builder
     {
         return $q->where('type', $type->value);
+    }
+
+    /**
+     * Los turnos del periodo operativo en curso: los que NO están archivados.
+     *
+     * Se aplica a mano, y solo en el historial de Caja. NO es un scope global
+     * a propósito: un turno archivado sigue siendo contabilidad válida y tiene
+     * que poder resolverse por id —para su informe, para una conciliación, para
+     * responder de dónde salió un pago—. Un scope global lo escondería también
+     * de ahí, y el día que alguien buscara el turno 11 no encontraría nada sin
+     * entender por qué.
+     */
+    public function scopeOperationalHistory(Builder $q): Builder
+    {
+        return $q->whereNull('archived_at');
+    }
+
+    /** ¿Quedó fuera del historial operativo? No dice nada sobre su dinero. */
+    public function isArchived(): bool
+    {
+        return $this->archived_at !== null;
     }
 
     /** Turnos abiertos de un tipo. Como máximo hay uno (índice único parcial). */
@@ -121,6 +144,7 @@ class CashShift extends Model
             'closed_by' => $this->closed_by,
             'closed_by_name' => $this->closed_by_name,
             'closed_at' => optional($this->closed_at)->toIso8601String(),
+            'archived_at' => optional($this->archived_at)->toIso8601String(),
             // Congelados al cerrar. En un turno abierto son null y los totales
             // vivos llegan por `withTotals`.
             'gross_total' => $this->sales_total !== null ? (float) $this->sales_total : null,

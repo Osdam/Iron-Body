@@ -81,7 +81,12 @@ class CashShiftController extends Controller
             return $this->forbidden(CashShiftType::PRODUCTS->viewPermission());
         }
 
-        $query = CashShift::query()->orderByDesc('id');
+        // SOLO el historial operativo. Los turnos archivados en el corte de
+        // entrega siguen en la base, con sus totales y con los pagos colgando
+        // de ellos; lo que no hacen es aparecer aquí. Es el único sitio del
+        // proyecto donde se mira `archived_at`: ningún cálculo de dinero puede
+        // depender de ella.
+        $query = CashShift::query()->operationalHistory()->orderByDesc('id');
 
         // Nunca se listan turnos de una caja que el actor no puede ver, aunque
         // pida explícitamente ese `type`.
