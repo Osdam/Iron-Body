@@ -6,6 +6,8 @@ use App\Models\Admin;
 use App\Models\AuditLog;
 use App\Models\Payment;
 use App\Models\ProductSale;
+use App\Models\Receivable;
+use App\Models\ReceivablePayment;
 use Illuminate\Http\Request;
 
 /**
@@ -104,6 +106,98 @@ class FinancialAudit
                 'amount' => (string) $payment->amount,
                 'method' => $payment->method,
                 'status' => $payment->status,
+            ],
+        ]);
+    }
+
+    /**
+     * Nace una cuenta por cobrar: alguien se lleva algo sin pagarlo entero.
+     *
+     * Se llama DENTRO de la transacción que crea la cuenta, igual que el resto:
+     * una deuda sin traza de quién la abrió es exactamente lo que no puede
+     * pasar con dinero ajeno.
+     */
+    public function receivableOpened(Receivable $receivable, ?Admin $actor, Request $request): void
+    {
+        $this->write($actor, $request, [
+            'action' => 'create',
+            'module' => 'Caja',
+            'entity' => 'cuenta por cobrar',
+            'entity_id' => (string) $receivable->id,
+            'target_name' => $receivable->concept,
+            'summary' => "Abrió una deuda de {$receivable->concept}",
+            'metadata' => [
+                'total' => (string) $receivable->total_amount,
+                'cash' => $receivable->type->value,
+                'debtor_type' => $receivable->debtor_type?->value,
+                'debtor_id' => $receivable->debtor_id,
+                'member_id' => $receivable->member_id,
+            ],
+        ]);
+    }
+
+    /**
+     * Un abono acaba de aplicarse.
+     *
+     * El saldo ANTES y DESPUÉS va en la traza a propósito: sin ellos habría que
+     * reconstruirlo sumando el resto de abonos, y eso deja de funcionar en
+     * cuanto uno se revierte.
+     */
+    public function receivablePaid(ReceivablePayment $payment, Receivable $receivable, ?Admin $actor, Request $request): void
+    {
+        $liquidada = (float) $payment->balance_after === 0.0;
+
+        $this->write($actor, $request, [
+            'action' => 'create',
+            'module' => 'Caja',
+            'entity' => 'abono',
+            'entity_id' => (string) $payment->id,
+            'target_name' => $receivable->concept,
+            'summary' => $liquidada
+                ? "Registró el abono que liquida {$receivable->concept}"
+                : "Registró un abono de {$receivable->concept}",
+            'metadata' => [
+                'receivable_id' => $receivable->id,
+                'amount' => (string) $payment->amount,
+                'method' => $payment->method,
+                'cash' => $receivable->type->value,
+                'cash_shift_id' => $payment->cash_shift_id,
+                'balance_before' => (string) $payment->balance_before,
+                'balance_after' => (string) $payment->balance_after,
+                'settled' => $liquidada,
+                'member_id' => $receivable->member_id,
+            ],
+        ]);
+    }
+
+    /**
+     * Un abono se anuló.
+     *
+     * `action` es `status` y no `delete` porque no se borra nada: el abono
+     * sigue ahí, marcado. La traza tiene que decir lo mismo que la tabla.
+     */
+    public function receivableReversed(ReceivablePayment $payment, Receivable $receivable, string $reason, ?Admin $actor, Request $request): void
+    {
+        $this->write($actor, $request, [
+            'action' => 'status',
+            'module' => 'Caja',
+            'entity' => 'abono',
+            'entity_id' => (string) $payment->id,
+            'target_name' => $receivable->concept,
+            'summary' => "Anuló un abono de {$receivable->concept}",
+            'changes' => [[
+                'field' => 'status',
+                'before' => ReceivablePayment::STATUS_APPLIED,
+                'after' => ReceivablePayment::STATUS_REVERSED,
+            ]],
+            'metadata' => [
+                'receivable_id' => $receivable->id,
+                'amount' => (string) $payment->amount,
+                'method' => $payment->method,
+                'cash' => $receivable->type->value,
+                'cash_shift_id' => $payment->cash_shift_id,
+                'reason' => $reason,
+                'member_id' => $receivable->member_id,
             ],
         ]);
     }

@@ -1216,6 +1216,10 @@ Route::get('admin/receivables',                        [ReceivableController::cl
 // cuenta y la búsqueda devolvería un 404.
 Route::get('admin/receivables/debtors',                [ReceivableController::class, 'debtors'])
     ->middleware('admin.can:receivables.view');
+// Estado de cuenta del socio: sus deudas de productos y de membresías con un
+// único total. También ANTES del comodín, por lo mismo que «debtors».
+Route::get('admin/receivables/account/{member}',       [ReceivableController::class, 'account'])
+    ->whereNumber('member')->middleware('admin.can:receivables.view');
 Route::get('admin/receivables/{receivable}',           [ReceivableController::class, 'show'])
     ->middleware('admin.can:receivables.view');
 Route::post('admin/receivables',                       [ReceivableController::class, 'store'])

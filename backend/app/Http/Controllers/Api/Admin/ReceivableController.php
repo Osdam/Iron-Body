@@ -6,6 +6,7 @@ use App\Enums\CashShiftType;
 use App\Enums\DebtorType;
 use App\Exceptions\CashShiftException;
 use App\Exceptions\ReceivableException;
+use App\Exceptions\PlanReplayException;
 use App\Http\Controllers\Controller;
 use App\Models\Member;
 use App\Models\Payment;
@@ -279,6 +280,70 @@ class ReceivableController extends Controller
     }
 
     /**
+     * GET /api/admin/receivables/account/{member} — estado de cuenta del socio.
+     *
+     * UNA PERSONA, DOS CAJAS. El socio ve un único total —lo que debe— pero cada
+     * obligación conserva su caja, porque el dinero de la cafetería y el del
+     * gimnasio se arquean por separado. Sumarlos aquí es una respuesta a «cuánto
+     * debe Alejandro»; mezclarlos al cobrar sería otra cosa, y no ocurre: el
+     * turno lo decide `receivable.type` en el servidor.
+     *
+     * NO CREA OBLIGACIONES NI LAS DUPLICA: lee las que ya existen.
+     *
+     * El resumen se calcula sobre TODAS las deudas vivas y la lista va acotada.
+     * Al revés —resumir lo que cupo en la página— el total dependería de cuánto
+     * se pidiera, que es la peor forma de equivocarse con dinero.
+     */
+    public function account(Request $request, Member $member): JsonResponse
+    {
+        $limite = min(max((int) $request->integer('limit', 100), 1), 200);
+
+        // Resumen: solo deuda VIVA, sin acotar. Son pocas filas por socio.
+        $vivas = Receivable::where('member_id', $member->id)
+            ->outstanding()
+            ->withSum('appliedPayments', 'amount')
+            ->get(['id', 'type', 'total_amount']);
+
+        $saldoDe = static fn (CashShiftType $caja) => $vivas
+            ->filter(fn (Receivable $r) => $r->type === $caja)
+            ->reduce(fn (Money $acc, Receivable $r) => $acc->plus($r->balance()), Money::zero());
+
+        $productos = $saldoDe(CashShiftType::PRODUCTS);
+        $membresias = $saldoDe(CashShiftType::GYM);
+
+        // Historial: incluye las liquidadas y las anuladas. Un estado de cuenta
+        // que solo enseña lo que falta no es un estado de cuenta.
+        $obligaciones = Receivable::where('member_id', $member->id)
+            ->with('member:id,full_name,document_number,is_staff')
+            ->withSum('appliedPayments', 'amount')
+            ->orderByDesc('created_at')->orderByDesc('id')
+            ->limit($limite)
+            ->get();
+
+        return response()->json([
+            'ok' => true,
+            'data' => [
+                'member' => [
+                    'id' => $member->id,
+                    'name' => $member->full_name,
+                    'document' => $member->document_number,
+                    'is_staff' => (bool) $member->is_staff,
+                ],
+                'summary' => [
+                    'products_outstanding' => $productos->toFloat(),
+                    'memberships_outstanding' => $membresias->toFloat(),
+                    'total_outstanding' => $productos->plus($membresias)->toFloat(),
+                    'outstanding_count' => $vivas->count(),
+                ],
+                'obligations' => $obligaciones
+                    ->map(fn (Receivable $r) => $r->toCrmArray())
+                    ->all(),
+                'obligations_truncated' => $obligaciones->count() >= $limite,
+            ],
+        ]);
+    }
+
+    /**
      * POST /api/admin/receivables/plan — vender un plan cobrando solo una parte.
      *
      * POLÍTICA: ACTIVATE_ON_FIRST_PAYMENT. La membresía se activa con el primer
@@ -304,6 +369,15 @@ class ReceivableController extends Controller
             'reference' => ['nullable', 'string', 'max:120'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
+
+        // Camino rápido del reintento: si esta misma petición ya se atendió, se
+        // devuelve aquella operación sin volver a mirar plan, socio ni caja. El
+        // índice único de abajo es el que de verdad lo garantiza; esto solo
+        // evita el trabajo.
+        if (! empty($data['client_request_id'])
+            && $previo = ReceivablePayment::where('client_request_id', $data['client_request_id'])->first()) {
+            return $this->planYaRegistrado($previo);
+        }
 
         $plan = Plan::findOrFail((int) $data['plan_id']);
         $total = Money::fromAmount($plan->price);
@@ -335,46 +409,60 @@ class ReceivableController extends Controller
         }
 
         $actor = AdminActor::from($request);
+        $requestId = $data['client_request_id'] ?? null;
 
-        // El Payment y la cuenta nacen juntos: si una de las dos fallara, un
-        // plan quedaría activado sin deuda registrada, o al revés.
-        $pago = DB::transaction(function () use ($data, $plan, $total, $actor, $request) {
-            $pago = Payment::create([
-                'user_id' => (int) $data['user_id'],
-                'plan_id' => $plan->id,
-                'amount' => $total->toFloat(),
-                'method' => 'receivable',
-                'status' => 'paid',
-                'paid_at' => now(),
-                // SIN turno, a propósito: ver la nota del método.
-                'cash_shift_id' => null,
-            ]);
-
-            app(FinancialAudit::class)->paymentCreated($pago, $actor, $request);
-
-            return $pago;
-        });
-
+        // TODO EN UNA TRANSACCIÓN. Antes el `Payment` se confirmaba solo y la
+        // cuenta se creaba después: bastaba que fallara el segundo paso —o que
+        // no hubiera caja abierta— para dejar un plan cobrado sin deuda que
+        // cobrar. Y con la repetición era peor: el índice único de
+        // `client_request_id` frenaba el abono duplicado, pero el `Payment` y la
+        // cuenta de la segunda petición ya estaban escritos.
         try {
-            $cuenta = app(ReceivableService::class)->create(
-                debtorType: DebtorType::MEMBER,
-                debtorId: $member->id,
-                type: CashShiftType::GYM,
-                concept: 'Plan '.$plan->name,
-                total: $total,
-                actor: $actor,
-                source: $pago,
-                notes: $data['notes'] ?? null,
-            );
+            [$pago, $cuenta, $abono] = DB::transaction(function () use ($data, $plan, $total, $primero, $member, $actor, $request, $requestId) {
+                $pago = Payment::create([
+                    'user_id' => (int) $data['user_id'],
+                    'plan_id' => $plan->id,
+                    'amount' => $total->toFloat(),
+                    'method' => 'receivable',
+                    'status' => 'paid',
+                    'paid_at' => now(),
+                    // SIN turno, a propósito: ver la nota del método.
+                    'cash_shift_id' => null,
+                ]);
 
-            $abono = app(ReceivableService::class)->settle(
-                receivable: $cuenta,
-                amount: $primero,
-                method: $data['method'],
-                actor: $actor,
-                clientRequestId: $data['client_request_id'] ?? null,
-                reference: $data['reference'] ?? null,
-            );
+                app(FinancialAudit::class)->paymentCreated($pago, $actor, $request);
+
+                $cuenta = app(ReceivableService::class)->create(
+                    debtorType: DebtorType::MEMBER,
+                    debtorId: $member->id,
+                    type: CashShiftType::GYM,
+                    concept: 'Plan '.$plan->name,
+                    total: $total,
+                    actor: $actor,
+                    source: $pago,
+                    notes: $data['notes'] ?? null,
+                );
+
+                $abono = app(ReceivableService::class)->settle(
+                    receivable: $cuenta,
+                    amount: $primero,
+                    method: $data['method'],
+                    actor: $actor,
+                    clientRequestId: $requestId,
+                    reference: $data['reference'] ?? null,
+                );
+
+                // `settle()` devuelve el abono YA REGISTRADO cuando la petición
+                // se repite. Si el que vuelve no es de la cuenta que acabamos de
+                // abrir, esta petición es la segunda: se deshace entera.
+                if ($abono->receivable_id !== $cuenta->id) {
+                    throw new PlanReplayException($abono);
+                }
+
+                return [$pago, $cuenta, $abono];
+            });
+        } catch (PlanReplayException $e) {
+            return $this->planYaRegistrado($e->original);
         } catch (ReceivableException $e) {
             return $this->receivableError($e);
         } catch (CashShiftException $e) {
@@ -385,7 +473,9 @@ class ReceivableController extends Controller
         }
 
         // UNA sola vez, aquí. Los abonos siguientes pasan por `pay()`, que no
-        // toca membresías.
+        // toca membresías. Queda FUERA de la transacción a propósito: extender
+        // la membresía notifica al socio, y no se avisa de algo que todavía
+        // podría deshacerse.
         app(PaymentMembershipActivator::class)->extendMembership($pago);
 
         return response()->json([
@@ -394,6 +484,26 @@ class ReceivableController extends Controller
             'payment_id' => $pago->id,
             'first_payment' => $abono->toCrmArray(),
         ], 201);
+    }
+
+    /**
+     * La misma venta a plazos, otra vez: se responde lo de la primera.
+     *
+     * Mismo cuerpo que el alta original y 200 en lugar de 201, porque esta
+     * petición concreta no ha creado nada. El CRM pinta lo mismo en los dos
+     * casos; quien mire los códigos sabrá cuál fue la que contó.
+     */
+    private function planYaRegistrado(ReceivablePayment $original): JsonResponse
+    {
+        $cuenta = $original->receivable()->with('member')->firstOrFail();
+
+        return response()->json([
+            'ok' => true,
+            'replayed' => true,
+            'data' => $cuenta->toCrmArray(withPayments: true),
+            'payment_id' => $cuenta->source_id,
+            'first_payment' => $original->toCrmArray(),
+        ], 200);
     }
 
     /**

@@ -160,6 +160,13 @@ class Receivable extends Model
      */
     public function paidAmount(): Money
     {
+        // Si la consulta ya trajo la suma con `withSum('appliedPayments')`, se
+        // usa esa. Preguntar de nuevo por cada fila convierte un listado de
+        // veinte deudas en veintiuna consultas, y el número sería el mismo.
+        if (array_key_exists('applied_payments_sum_amount', $this->attributes)) {
+            return Money::fromAmount($this->attributes['applied_payments_sum_amount'] ?? 0);
+        }
+
         $suma = $this->appliedPayments()->sum('amount');
 
         return Money::fromAmount($suma);

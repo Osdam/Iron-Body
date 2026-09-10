@@ -3,6 +3,7 @@
 namespace App\Services\Caja;
 
 use App\Enums\CashShiftType;
+use App\Services\Audit\FinancialAudit;
 use App\Enums\DebtorType;
 use App\Exceptions\ReceivableException;
 use App\Models\Admin;
@@ -96,9 +97,16 @@ class ReceivableService
             $receivable->source()->associate($source);
         }
 
-        $receivable->save();
+        // La deuda y su traza se guardan JUNTAS. La auditoría se escribe dentro
+        // de la transacción por la misma razón que en ventas y cobros: si la
+        // traza no se puede escribir, la deuda no se abre.
+        return DB::transaction(function () use ($receivable, $actor) {
+            $receivable->save();
 
-        return $receivable;
+            $this->audit()->receivableOpened($receivable, $actor, request());
+
+            return $receivable;
+        });
     }
 
     /**
@@ -186,6 +194,8 @@ class ReceivableService
                 $fresca->refresh();
                 $fresca->update(['status' => $fresca->statusForBalance()]);
 
+                $this->audit()->receivablePaid($abono, $fresca, $actor, request());
+
                 return $abono;
             });
         } catch (QueryException $e) {
@@ -235,6 +245,8 @@ class ReceivableService
             $cuenta = Receivable::whereKey($fresco->receivable_id)->lockForUpdate()->firstOrFail();
             $cuenta->update(['status' => $cuenta->statusForBalance()]);
 
+            $this->audit()->receivableReversed($fresco, $cuenta, $motivo, $actor, request());
+
             // LA MEMBRESÍA NO SE TOCA, ni siquiera al anular el primer pago que
             // la activó. Anular un abono corrige un ERROR DE CAJA —se tecleó
             // 50.000 donde eran 5.000—, no dice que el socio deba dejar de
@@ -244,6 +256,18 @@ class ReceivableService
             // aparte y tiene su propia pantalla.
             return $fresco;
         });
+    }
+
+    /**
+     * La auditoría financiera, resuelta al vuelo.
+     *
+     * No entra por el constructor porque este servicio se instancia desde sitios
+     * que no tienen petición HTTP —comandos, jobs, tests— y allí `write()` no
+     * escribe nada igualmente: sin actor identificado no hay traza que firmar.
+     */
+    private function audit(): FinancialAudit
+    {
+        return app(FinancialAudit::class);
     }
 
     private function findByRequestId(string $clientRequestId): ?ReceivablePayment

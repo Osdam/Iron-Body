@@ -6,8 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use App\Models\ProductSale;
 use App\Models\ProductSaleItem;
+use App\Models\ReceivablePayment;
+use App\Enums\CashShiftType;
 use App\Support\SseStream;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +31,20 @@ class EarningsController extends Controller
     private const GYM_PAID = ['paid', 'approved'];
 
     private const CAFE_PAID = ['paid', 'delivered'];
+
+    /**
+     * El `Payment` que deja una venta a plazos NO es dinero recibido.
+     *
+     * Nace por el importe COMPLETO del plan para que la membresía exista y el
+     * historial del socio la enseñe, pero de ese plan solo ha entrado la parte
+     * que se pagó. Contarlo aquí haría que el día de la venta esta pantalla
+     * dijera 200.000 mientras en el cajón había 80.000. El dinero de verdad son
+     * los abonos, y esos se suman aparte, cada uno el día que entró.
+     *
+     * Las ventas a crédito de cafetería ya quedaban fuera por su estado
+     * (`credit` no está en CAFE_PAID); lo que faltaba era sumar sus abonos.
+     */
+    private const ACCRUAL_METHOD = 'receivable';
 
     public function index(Request $request): JsonResponse
     {
@@ -56,10 +73,12 @@ class EarningsController extends Controller
         $gymRevenue = 0.0;
         $gymCount = 0;
         if ($includeGym) {
-            $gymRevenue = (float) Payment::whereIn('status', self::GYM_PAID)
-                ->whereBetween('paid_at', [$from, $to])->sum('amount');
-            $gymCount = Payment::whereIn('status', self::GYM_PAID)
-                ->whereBetween('paid_at', [$from, $to])->count();
+            $gymRevenue = (float) $this->cashPayments()
+                ->whereBetween('paid_at', [$from, $to])->sum('amount')
+                + (float) $this->receivedQuery(CashShiftType::GYM, $from, $to)->sum('amount');
+            $gymCount = $this->cashPayments()
+                ->whereBetween('paid_at', [$from, $to])->count()
+                + $this->receivedQuery(CashShiftType::GYM, $from, $to)->count();
         }
 
         $cafeRevenue = 0.0;
@@ -67,9 +86,11 @@ class EarningsController extends Controller
         $cafeProfit = 0.0;
         if ($includeCafe) {
             $cafeRevenue = (float) ProductSale::whereIn('status', self::CAFE_PAID)
-                ->whereBetween('paid_at', [$from, $to])->sum('total');
+                ->whereBetween('paid_at', [$from, $to])->sum('total')
+                + (float) $this->receivedQuery(CashShiftType::PRODUCTS, $from, $to)->sum('amount');
             $cafeCount = ProductSale::whereIn('status', self::CAFE_PAID)
-                ->whereBetween('paid_at', [$from, $to])->count();
+                ->whereBetween('paid_at', [$from, $to])->count()
+                + $this->receivedQuery(CashShiftType::PRODUCTS, $from, $to)->count();
             $cafeProfit = (float) $this->cafeProfitQuery($from, $to)
                 ->selectRaw('SUM((product_sale_items.unit_price - products.cost_price) * product_sale_items.quantity) as profit')
                 ->value('profit');
@@ -96,7 +117,7 @@ class EarningsController extends Controller
             // se reparten desde payment_splits, cada parte a su medio. Sin esta
             // segunda consulta, un cobro repartido aparecería entero bajo
             // «mixed» y el desglose dejaría de decir por dónde entró el dinero.
-            $simples = Payment::whereIn('status', self::GYM_PAID)
+            $simples = $this->cashPayments()
                 ->whereBetween('paid_at', [$from, $to])
                 ->whereDoesntHave('splits')
                 ->selectRaw('method, SUM(amount) as amount')
@@ -106,13 +127,21 @@ class EarningsController extends Controller
             $partes = DB::table('payment_splits')
                 ->join('payments', 'payments.id', '=', 'payment_splits.payment_id')
                 ->whereIn('payments.status', self::GYM_PAID)
+                ->where('payments.method', '<>', self::ACCRUAL_METHOD)
                 ->whereBetween('payments.paid_at', [$from, $to])
                 ->groupBy('payment_splits.method')
                 ->selectRaw('payment_splits.method as method, SUM(payment_splits.amount) as amount')
                 ->get();
 
+            // Los abonos entran por su propio medio: un plan a plazos empezado
+            // en efectivo y terminado por transferencia son dos medios, no uno.
+            $abonos = $this->receivedQuery(CashShiftType::GYM, $from, $to)
+                ->groupBy('method')
+                ->selectRaw('method, SUM(amount) as amount')
+                ->get();
+
             $acumulado = [];
-            foreach ($simples->concat($partes) as $row) {
+            foreach ($simples->concat($partes)->concat($abonos) as $row) {
                 $clave = $row->method ?: 'otro';
                 $acumulado[$clave] = ($acumulado[$clave] ?? 0) + (float) $row->amount;
             }
@@ -124,6 +153,10 @@ class EarningsController extends Controller
             foreach (ProductSale::whereIn('status', self::CAFE_PAID)->whereBetween('paid_at', [$from, $to])
                 ->selectRaw('payment_method, SUM(total) as amount')->groupBy('payment_method')->get() as $row) {
                 $byMethod[] = ['source' => 'cafeteria', 'method' => $row->payment_method ?: 'otro', 'amount' => (float) $row->amount];
+            }
+            foreach ($this->receivedQuery(CashShiftType::PRODUCTS, $from, $to)
+                ->groupBy('method')->selectRaw('method, SUM(amount) as amount')->get() as $row) {
+                $byMethod[] = ['source' => 'cafeteria', 'method' => $row->method ?: 'otro', 'amount' => (float) $row->amount];
             }
         }
 
@@ -153,12 +186,15 @@ class EarningsController extends Controller
      * GET /api/admin/earnings/stream — tiempo real (SSE). Cuando entra un pago
      * del gimnasio o una venta de cafetería (o cambia su estado), los CRM con el
      * módulo abierto recargan el reporte. Firma = conteo + última modificación de
-     * ambas tablas; sin crear notificaciones (no satura la campana).
+     * las TRES tablas de dinero; sin crear notificaciones (no satura la campana).
      */
     public function stream(Request $request): StreamedResponse
     {
+        // Los abonos entran en la firma: sin ellos, cobrar un plazo movía el
+        // dinero del informe y la pantalla abierta seguía enseñando el anterior.
         $signature = static fn (): string => Payment::count().':'.(string) Payment::max('updated_at').'|'.
-            ProductSale::count().':'.(string) ProductSale::max('updated_at');
+            ProductSale::count().':'.(string) ProductSale::max('updated_at').'|'.
+            ReceivablePayment::count().':'.(string) ReceivablePayment::max('updated_at');
 
         $last = null;
 
@@ -181,12 +217,14 @@ class EarningsController extends Controller
     {
         $expr = $this->periodExpr('payments.paid_at', $groupBy);
 
-        return Payment::whereIn('status', self::GYM_PAID)
+        $pagos = $this->cashPayments()
             ->whereBetween('paid_at', [$from, $to])
             ->selectRaw("$expr as period, SUM(amount) as total")
             ->groupBy('period')->orderBy('period')
             ->pluck('total', 'period')
             ->map(fn ($v) => (float) $v)->all();
+
+        return $this->mergePeriods($pagos, $this->receivedSeries(CashShiftType::GYM, $from, $to, $groupBy));
     }
 
     /** Ingresos de cafetería agrupados por periodo → [periodo => total]. */
@@ -194,12 +232,14 @@ class EarningsController extends Controller
     {
         $expr = $this->periodExpr('product_sales.paid_at', $groupBy);
 
-        return ProductSale::whereIn('status', self::CAFE_PAID)
+        $ventas = ProductSale::whereIn('status', self::CAFE_PAID)
             ->whereBetween('paid_at', [$from, $to])
             ->selectRaw("$expr as period, SUM(total) as total")
             ->groupBy('period')->orderBy('period')
             ->pluck('total', 'period')
             ->map(fn ($v) => (float) $v)->all();
+
+        return $this->mergePeriods($ventas, $this->receivedSeries(CashShiftType::PRODUCTS, $from, $to, $groupBy));
     }
 
     /** Utilidad de cafetería (venta − costo) agrupada por periodo. */
@@ -222,6 +262,67 @@ class EarningsController extends Controller
             ->join('products', 'products.id', '=', 'product_sale_items.product_id')
             ->whereIn('product_sales.status', self::CAFE_PAID)
             ->whereBetween('product_sales.paid_at', [$from, $to]);
+    }
+
+    /**
+     * Los pagos de gimnasio que SÍ son dinero.
+     *
+     * Todos menos el apunte contable del plan a plazos. `method` puede ser nulo
+     * en cobros antiguos, y un nulo tiene que seguir contando: comparar con
+     * `<>` a secas los dejaría fuera sin que nadie lo pidiera.
+     */
+    private function cashPayments(): Builder
+    {
+        return Payment::whereIn('status', self::GYM_PAID)
+            ->where(function (Builder $q): void {
+                $q->whereNull('method')->orWhere('method', '<>', self::ACCRUAL_METHOD);
+            });
+    }
+
+    /**
+     * Abonos aplicados de UNA caja, por la fecha en que entró el dinero.
+     *
+     * `created_at` y no la fecha de la deuda: el día que cuenta es el día que se
+     * cobró. Los anulados quedan fuera por su estado, así que revertir un abono
+     * lo saca del informe igual que lo saca del arqueo.
+     */
+    private function receivedQuery(CashShiftType $type, Carbon $from, Carbon $to): Builder
+    {
+        return ReceivablePayment::query()
+            ->where('receivable_payments.status', ReceivablePayment::STATUS_APPLIED)
+            ->whereBetween('receivable_payments.created_at', [$from, $to])
+            ->whereExists(fn ($q) => $q->select(DB::raw(1))->from('receivables')
+                ->whereColumn('receivables.id', 'receivable_payments.receivable_id')
+                ->where('receivables.type', $type->value));
+    }
+
+    /** Abonos de una caja agrupados por periodo → [periodo => total]. */
+    private function receivedSeries(CashShiftType $type, Carbon $from, Carbon $to, string $groupBy): array
+    {
+        $expr = $this->periodExpr('receivable_payments.created_at', $groupBy);
+
+        return $this->receivedQuery($type, $from, $to)
+            ->selectRaw("$expr as period, SUM(amount) as total")
+            ->groupBy('period')->orderBy('period')
+            ->pluck('total', 'period')
+            ->map(fn ($v) => (float) $v)->all();
+    }
+
+    /**
+     * Suma dos mapas [periodo => importe] sin perder los periodos que solo
+     * aparecen en uno: un día puede tener abonos y ninguna venta.
+     *
+     * @param  array<string, float>  $a
+     * @param  array<string, float>  $b
+     * @return array<string, float>
+     */
+    private function mergePeriods(array $a, array $b): array
+    {
+        foreach ($b as $periodo => $importe) {
+            $a[$periodo] = ($a[$periodo] ?? 0) + $importe;
+        }
+
+        return $a;
     }
 
     /**
