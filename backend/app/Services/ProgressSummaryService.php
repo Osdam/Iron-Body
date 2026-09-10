@@ -131,9 +131,19 @@ class ProgressSummaryService
             ->reverse()
             ->values();
 
+        // El DÍA en que ocurrió, en la hora del gimnasio.
+        //
+        // `created_at` se guarda en UTC. Sacarle el día directamente devolvía el
+        // de Greenwich: una valoración tomada el 9 a las 19:05 de Bogotá cae en
+        // el 10 UTC, y en «Ver evolución» aparecía fechada al día siguiente.
+        //
+        // No se puede arreglar en la app: esto ya viaja como fecha suelta
+        // («2026-09-10»), sin hora ni zona, así que el día equivocado va
+        // dentro. Hay que elegirlo bien aquí.
         return $rows->map(fn (PhysicalEvaluation $e) => [
-            'label' => $e->created_at?->locale('es')->isoFormat('D MMM') ?? '',
-            'date' => $e->created_at?->toDateString(),
+            'label' => $e->created_at?->timezone(Member::BUSINESS_TZ)
+                ->locale('es')->isoFormat('D MMM') ?? '',
+            'date' => $e->created_at?->timezone(Member::BUSINESS_TZ)->toDateString(),
             'value' => (float) $e->weight_kg,
         ])->all();
     }

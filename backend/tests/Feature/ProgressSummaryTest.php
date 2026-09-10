@@ -6,6 +6,7 @@ use App\Models\Member;
 use App\Models\PhysicalEvaluation;
 use App\Models\WorkoutSession;
 use App\Models\WorkoutSessionSet;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -137,6 +138,65 @@ class ProgressSummaryTest extends TestCase
         $this->assertNull($data['current_weight_kg']);
         $this->assertNull($data['bmi']);
         $this->assertFalse($data['has_evaluation']);
+    }
+
+    /**
+     * La fecha de una valoración es el día del GIMNASIO, no el de Greenwich.
+     *
+     * EL FALLO QUE ESTO CIERRA
+     * ------------------------
+     * `created_at` se guarda en UTC y se le sacaba el día directamente. Una
+     * valoración tomada el 9 a las 20:07 de Bogotá cae en el 10 UTC, así que
+     * «Ver evolución» la fechaba al día siguiente. Ocurrió de verdad: la última
+     * valoración de producción es `2026-09-10 01:07:06` UTC y salía como 10.
+     *
+     * No se puede arreglar en la app: esto viaja como fecha suelta
+     * («2026-09-10»), sin hora ni zona, así que el día equivocado va dentro.
+     *
+     * Las horas de esta prueba son las que rompen: justo antes y justo después
+     * de la medianoche local. No dependen de la zona de la máquina que las
+     * ejecuta, porque el instante se construye explícitamente en UTC.
+     */
+    public function test_la_fecha_de_una_valoracion_es_la_del_gimnasio(): void
+    {
+        // 9 sep 20:07 en Bogotá  ==  10 sep 01:07 UTC.
+        $e = PhysicalEvaluation::create([
+            'member_id' => $this->member->id,
+            'weight_kg' => 80,
+        ]);
+        // `created_at` no es fillable: se fija aparte, sin tocar timestamps.
+        $e->forceFill(['created_at' => CarbonImmutable::parse('2026-09-10 01:07:06', 'UTC')])
+            ->saveQuietly();
+
+        $puntos = $this->getJson('/api/app/progress/summary', $this->auth())
+            ->assertOk()->json('data.weight_history');
+
+        $this->assertNotEmpty($puntos);
+        $this->assertSame('2026-09-09', end($puntos)['date'], 'el día en que se tomó');
+        $this->assertStringContainsString('9', end($puntos)['label']);
+    }
+
+    public function test_ni_de_madrugada_se_adelanta_ni_se_atrasa(): void
+    {
+        foreach ([
+            // 9 sep 23:30 local  ->  10 sep 04:30 UTC.
+            ['2026-09-10 04:30:00', '2026-09-09'],
+            // 10 sep 00:30 local ->  10 sep 05:30 UTC.
+            ['2026-09-10 05:30:00', '2026-09-10'],
+        ] as [$utc, $esperado]) {
+            PhysicalEvaluation::where('member_id', $this->member->id)->delete();
+            $e = PhysicalEvaluation::create([
+                'member_id' => $this->member->id,
+                'weight_kg' => 80,
+            ]);
+            $e->forceFill(['created_at' => CarbonImmutable::parse($utc, 'UTC')])
+                ->saveQuietly();
+
+            $puntos = $this->getJson('/api/app/progress/summary', $this->auth())
+                ->assertOk()->json('data.weight_history');
+
+            $this->assertSame($esperado, end($puntos)['date'], "para {$utc} UTC");
+        }
     }
 
     public function test_el_peso_y_el_imc_salen_de_la_evaluacion_fisica(): void

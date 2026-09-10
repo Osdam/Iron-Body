@@ -9,6 +9,8 @@ use App\Models\MemberTrainerAssignment;
 use App\Models\NutritionAiRun;
 use App\Models\NutritionGuide;
 use App\Models\ProfessionalAssessment;
+use App\Models\MemberRealtimeEvent;
+use App\Models\TrainerRealtimeEvent;
 use App\Models\Routine;
 use App\Models\RoutineCompletion;
 use App\Models\RoutineExercise;
@@ -281,6 +283,52 @@ class IntegralPlanTest extends TestCase
         $this->assertNotNull(Routine::find($rutina->id));
         $this->assertGreaterThan(0, $rutina->fresh()->routineExercises()->count());
         $this->assertNotNull(RoutineCompletion::find($completion->id));
+    }
+
+    /**
+     * Publicar y retirar AVISAN, y avisan después de escribir.
+     *
+     * El socio tenía que cerrar sesión para ver una rutina nueva: nadie emitía
+     * la señal desde el camino del entrenador, aunque el CRM sí lo hacía.
+     *
+     * El orden importa tanto como el aviso: si se emitiera dentro de la
+     * transacción, la app podría preguntar por REST antes del commit y volver a
+     * pintar exactamente lo que acaba de cambiar. Por eso se comprueba que
+     * cuando el evento existe, el cambio YA está en la base.
+     */
+    public function test_publicar_y_retirar_avisan_al_socio_y_al_entrenador(): void
+    {
+        $this->assessment();
+        $this->fakeAi($this->goodPlan());
+        $this->generate()->assertStatus(201);
+        $rutina = Routine::firstOrFail();
+
+        MemberRealtimeEvent::query()->delete();
+        TrainerRealtimeEvent::query()->delete();
+
+        $this->postJson("/api/trainer/routines/{$rutina->id}/publish", [], $this->asTrainer())
+            ->assertOk();
+
+        // Al socio, para que Mis Rutinas se actualice sin cerrar sesión.
+        $this->assertDatabaseHas('member_realtime_events', [
+            'member_id' => $this->member->id,
+            'type' => 'routine.updated',
+        ]);
+        // Y a su entrenador, para que el seguimiento no enseñe un estado viejo.
+        $this->assertGreaterThan(0, TrainerRealtimeEvent::count());
+
+        // Cuando el aviso existe, el cambio ya está escrito.
+        $this->assertTrue((bool) $rutina->fresh()->is_assigned);
+
+        MemberRealtimeEvent::query()->delete();
+        $this->postJson("/api/trainer/routines/{$rutina->id}/retire", [], $this->asTrainer())
+            ->assertOk();
+
+        $this->assertDatabaseHas('member_realtime_events', [
+            'member_id' => $this->member->id,
+            'type' => 'routine.updated',
+        ]);
+        $this->assertFalse((bool) $rutina->fresh()->is_assigned);
     }
 
     public function test_un_entrenador_no_retira_la_rutina_de_otro(): void

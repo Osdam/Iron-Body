@@ -13,6 +13,8 @@ use App\Models\Trainer;
 use App\Services\Trainer\MemberContextAssembler;
 use App\Services\Trainer\NutritionGuideService;
 use App\Services\Trainer\TrainerMemberAccess;
+use App\Services\RealtimeEvents;
+use App\Services\Trainer\TrainerRealtimeEvents;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -136,6 +138,16 @@ class NutritionGuideController extends Controller
         } catch (NutritionGuideException $e) {
             return $this->error($e);
         }
+
+        // Ya está escrita: ahora se avisa. Al socio, para que Nutrición deje de
+        // enseñarle la anterior sin cerrar sesión; y a su entrenador, para que
+        // el seguimiento no diga «borrador» de algo ya publicado.
+        RealtimeEvents::nutrition($publicada->member_id);
+        TrainerRealtimeEvents::forMember(
+            $publicada->member_id,
+            TrainerRealtimeEvents::ASSESSMENT,
+            ['nutrition'],
+        );
 
         return response()->json([
             'ok' => true,

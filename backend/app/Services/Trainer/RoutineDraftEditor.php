@@ -5,6 +5,7 @@ namespace App\Services\Trainer;
 use App\Exceptions\IntegralPlanException;
 use App\Models\Member;
 use App\Models\Routine;
+use App\Services\RealtimeEvents;
 use App\Models\RoutineExercise;
 use App\Models\Trainer;
 use App\Services\Exercises\ExerciseCatalogResolver;
@@ -60,7 +61,7 @@ class RoutineDraftEditor
             );
         }
 
-        return DB::transaction(function () use ($routine, $limpios) {
+        $actualizada = DB::transaction(function () use ($routine, $limpios) {
             $conservadas = [];
 
             foreach ($limpios as $orden => $e) {
@@ -104,6 +105,19 @@ class RoutineDraftEditor
 
             return $routine->fresh('routineExercises');
         });
+
+        // Solo si el socio la está viendo: un borrador que nadie tiene todavía
+        // no le cambia nada, y avisar de él sería ruido.
+        if ((bool) $actualizada->is_assigned) {
+            RealtimeEvents::routine($actualizada->member_id);
+        }
+        TrainerRealtimeEvents::forMember(
+            $actualizada->member_id,
+            TrainerRealtimeEvents::ASSESSMENT,
+            ['routines'],
+        );
+
+        return $actualizada;
     }
 
     // ── Validación ──────────────────────────────────────────────────────────

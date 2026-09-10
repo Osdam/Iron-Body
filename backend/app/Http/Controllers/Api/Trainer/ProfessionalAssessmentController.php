@@ -12,6 +12,8 @@ use App\Models\ProfessionalAssessment;
 use App\Models\Trainer;
 use App\Services\Trainer\ProfessionalAssessmentService;
 use App\Services\Trainer\TrainerMemberAccess;
+use App\Services\RealtimeEvents;
+use App\Services\Trainer\TrainerRealtimeEvents;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -94,6 +96,13 @@ class ProfessionalAssessmentController extends Controller
         } catch (AssessmentException $e) {
             return $this->error($e);
         }
+
+        // Una valoración nueva cambia el peso, las medidas y la evolución. Se
+        // avisa DESPUÉS de guardarla: al socio para su progreso, y al propio
+        // entrenador para que «Última valoración» y el seguimiento se pongan al
+        // día sin salir de la pantalla.
+        RealtimeEvents::assessment($submitted->member_id);
+        TrainerRealtimeEvents::assessmentForMember($submitted->member_id);
 
         return response()->json([
             'ok' => true,

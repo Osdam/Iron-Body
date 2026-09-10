@@ -33,6 +33,8 @@ class RealtimeEvents
 
     public const APP_STATE = 'app_state.updated';
 
+    public const ASSESSMENT = 'assessment.updated';
+
     public const ROUTINE = 'routine.updated';
 
     public const CLASS_EVENT = 'class.updated';
@@ -115,6 +117,12 @@ class RealtimeEvents
     }
 
     /** El entrenador asignó/editó una rutina del miembro (CRM). */
+    /** Una valoración nueva cambia su progreso y sus datos corporales. */
+    public static function assessment(?int $memberId): void
+    {
+        self::emit($memberId, self::ASSESSMENT, ['assessments', 'progress']);
+    }
+
     public static function routine(?int $memberId): void
     {
         self::emit($memberId, self::ROUTINE, ['routines']);

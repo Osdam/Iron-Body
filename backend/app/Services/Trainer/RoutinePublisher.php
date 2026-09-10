@@ -4,6 +4,7 @@ namespace App\Services\Trainer;
 
 use App\Exceptions\IntegralPlanException;
 use App\Models\Member;
+use App\Services\RealtimeEvents;
 use App\Models\MemberRoutineAssignment;
 use App\Models\Routine;
 use App\Models\Trainer;
@@ -60,7 +61,7 @@ class RoutinePublisher
             );
         }
 
-        return DB::transaction(function () use ($routine) {
+        $retirada = DB::transaction(function () use ($routine) {
             $routine->update([
                 'is_assigned' => false,
                 'status' => 'Retirada',
@@ -71,6 +72,13 @@ class RoutinePublisher
 
             return $routine->fresh();
         });
+
+        // DESPUÉS del commit, nunca antes: si se avisara dentro, la app podría
+        // consultar una base que todavía no tiene el cambio y volver a pintar
+        // la rutina que acaba de desaparecer.
+        $this->notifyRoutineChanged($routine->member_id);
+
+        return $retirada;
     }
 
     public function publish(Routine $routine, Trainer $trainer): Routine
@@ -109,7 +117,7 @@ class RoutinePublisher
             );
         }
 
-        return DB::transaction(function () use ($routine, $member) {
+        $publicada = DB::transaction(function () use ($routine, $member) {
             $routine->update([
                 'is_assigned' => true,
                 'assigned_member_id' => $member->getKey(),
@@ -127,5 +135,23 @@ class RoutinePublisher
 
             return $routine->fresh();
         });
+
+        $this->notifyRoutineChanged($member->getKey());
+
+        return $publicada;
+    }
+
+    /**
+     * Avisa a quien esté mirando: al socio, para que Mis Rutinas se actualice
+     * sin cerrar sesión; y a su entrenador, para que el seguimiento no enseñe
+     * un estado viejo.
+     *
+     * Es una notificación, no el dato: cada lado vuelve a preguntar por REST.
+     * Si el aviso se pierde, la pantalla se actualiza igual al volver a ella.
+     */
+    private function notifyRoutineChanged(?int $memberId): void
+    {
+        RealtimeEvents::routine($memberId);
+        TrainerRealtimeEvents::forMember($memberId, TrainerRealtimeEvents::ASSESSMENT, ['routines']);
     }
 }
