@@ -30,6 +30,49 @@ class RoutinePublisher
     /**
      * @throws IntegralPlanException
      */
+    /**
+     * Retira la rutina del socio SIN destruir nada.
+     *
+     * Es el gemelo de {@see publish()} y hace exactamente lo contrario de lo
+     * que aquél escribió: el socio deja de verla en Mis Rutinas, y el
+     * entrenador la sigue viendo en el seguimiento.
+     *
+     * NO borra la rutina, ni sus ejercicios, ni los entrenamientos que el socio
+     * ya hizo con ella. Un histórico no deja de haber ocurrido porque el plan
+     * cambie: `workout_sessions` y `routine_completions` apuntan a esta rutina y
+     * son lo que el socio ve en su progreso.
+     */
+    public function retire(Routine $routine, Trainer $trainer): Routine
+    {
+        $member = Member::find($routine->member_id);
+
+        if ($member instanceof Member && ! $this->access->canAccess($trainer, $member)) {
+            throw new IntegralPlanException(
+                'Este socio ya no está asignado a ti.',
+                'assignment_inactive',
+            );
+        }
+
+        if ((int) $routine->trainer_id !== (int) $trainer->getKey()) {
+            throw new IntegralPlanException(
+                'Esta rutina la creó otro entrenador.',
+                'routine_not_owned',
+            );
+        }
+
+        return DB::transaction(function () use ($routine) {
+            $routine->update([
+                'is_assigned' => false,
+                'status' => 'Retirada',
+            ]);
+
+            // Solo la ASIGNACIÓN se va: es la fila que decide si el socio la ve.
+            MemberRoutineAssignment::where('routine_id', $routine->getKey())->delete();
+
+            return $routine->fresh();
+        });
+    }
+
     public function publish(Routine $routine, Trainer $trainer): Routine
     {
         $member = Member::find($routine->member_id);

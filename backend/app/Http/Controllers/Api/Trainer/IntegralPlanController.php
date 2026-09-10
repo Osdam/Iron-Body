@@ -70,6 +70,48 @@ class IntegralPlanController extends Controller
      * A partir de aquí el socio la ve en Entrenar → Mis Rutinas. No hay
      * categoría nueva: es el mismo sitio donde ya mira.
      */
+    /**
+     * GET /trainer/members/{member}/routines — las rutinas del socio.
+     *
+     * Lo que el entrenador necesita para hacerse cargo: cuáles hay, cuál está
+     * activa y cuál nació de Iron IA. Incluye las RETIRADAS a propósito: el
+     * socio no las ve, pero forman parte de su historia y por eso el
+     * seguimiento sí las enseña.
+     */
+    public function memberRoutines(Request $request, Member $member): JsonResponse
+    {
+        $trainer = $this->trainer($request);
+        $this->assertCanAccess($trainer, $member);
+
+        $rutinas = Routine::query()
+            ->where('member_id', $member->getKey())
+            ->orderByDesc('id')
+            ->limit(50)
+            ->get();
+
+        return response()->json([
+            'ok' => true,
+            'data' => $rutinas->map(fn (Routine $r) => $this->routinePayload($r))->all(),
+        ]);
+    }
+
+    /** POST /trainer/routines/{routine}/retire — el socio deja de verla. */
+    public function retireRoutine(Request $request, Routine $routine): JsonResponse
+    {
+        $trainer = $this->trainer($request);
+
+        try {
+            $retirada = app(RoutinePublisher::class)->retire($routine, $trainer);
+        } catch (IntegralPlanException $e) {
+            return $this->planError($e, 422);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'data' => $this->routinePayload($retirada),
+        ]);
+    }
+
     public function publishRoutine(Request $request, Routine $routine): JsonResponse
     {
         $trainer = $this->trainer($request);

@@ -10,6 +10,7 @@ use App\Models\NutritionAiRun;
 use App\Models\NutritionGuide;
 use App\Models\ProfessionalAssessment;
 use App\Models\Routine;
+use App\Models\RoutineCompletion;
 use App\Models\RoutineExercise;
 use App\Models\Trainer;
 use App\Models\TrainerRole;
@@ -235,6 +236,67 @@ class IntegralPlanTest extends TestCase
     }
 
     /** EL BORRADOR NO SE VE. Nada llega al socio sin que alguien lo publique. */
+    /**
+     * Retirar una rutina la quita del socio SIN destruir lo que ya entrenó.
+     *
+     * Es lo contrario de publicar, no de crear. El socio deja de verla en Mis
+     * Rutinas; el entrenador la sigue viendo en el seguimiento, y los
+     * entrenamientos que el socio ya hizo con ella siguen ahí: un histórico no
+     * deja de haber ocurrido porque el plan cambie.
+     */
+    public function test_retirar_una_rutina_la_saca_del_socio_y_conserva_el_historico(): void
+    {
+        $this->assessment();
+        $this->fakeAi($this->goodPlan());
+        $this->generate()->assertStatus(201);
+
+        $rutina = Routine::firstOrFail();
+        $this->postJson("/api/trainer/routines/{$rutina->id}/publish", [], $this->asTrainer())
+            ->assertOk();
+
+        // El socio la ve y entrena con ella.
+        $this->assertCount(
+            1,
+            $this->getJson('/api/app/routines/assigned', $this->asMember())->assertOk()->json('data'),
+        );
+        $completion = RoutineCompletion::create([
+            'member_id' => $this->member->id,
+            'routine_id' => $rutina->id,
+            'completed_at' => now(),
+            'source' => 'app',
+        ]);
+
+        $this->postJson("/api/trainer/routines/{$rutina->id}/retire", [], $this->asTrainer())
+            ->assertOk();
+
+        // Deja de verla.
+        $this->assertCount(
+            0,
+            $this->getJson('/api/app/routines/assigned', $this->asMember())->assertOk()->json('data'),
+        );
+        $this->assertFalse((bool) $rutina->fresh()->is_assigned);
+        $this->assertSame(0, MemberRoutineAssignment::count());
+
+        // Pero nada se destruyó.
+        $this->assertNotNull(Routine::find($rutina->id));
+        $this->assertGreaterThan(0, $rutina->fresh()->routineExercises()->count());
+        $this->assertNotNull(RoutineCompletion::find($completion->id));
+    }
+
+    public function test_un_entrenador_no_retira_la_rutina_de_otro(): void
+    {
+        $this->assessment();
+        $this->fakeAi($this->goodPlan());
+        $this->generate()->assertStatus(201);
+
+        $rutina = Routine::firstOrFail();
+        $rutina->update(['trainer_id' => 99999]);
+
+        $this->postJson("/api/trainer/routines/{$rutina->id}/retire", [], $this->asTrainer())
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'routine_not_owned');
+    }
+
     public function test_la_rutina_en_borrador_no_aparece_en_mis_rutinas(): void
     {
         $this->assessment();
