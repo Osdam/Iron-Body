@@ -108,7 +108,12 @@ class IntegralPlanGenerationService
                 (int) ($contexto['sources']['assessment_id'] ?? 0) ?: null,
             );
 
-            return ['guide' => $guia->fresh(), 'routine' => $rutina->fresh('routineExercises'), 'run' => $run];
+            return [
+                'guide' => $guia->fresh(),
+                'routine' => $rutina->fresh('routineExercises'),
+                'run' => $run,
+                'analysis' => $plan['analysis'] ?? null,
+            ];
         });
     }
 
@@ -210,6 +215,13 @@ class IntegralPlanGenerationService
         Devuelves EXCLUSIVAMENTE un objeto JSON con esta forma:
 
         {
+          "analysis": {
+            "profile": "una frase: objetivo, nivel y disponibilidad",
+            "priorities": ["prioridad corta", "otra"],
+            "approach": "enfoque recomendado, 2-3 frases",
+            "limitations": "limitaciones relevantes, o cadena vacía si no hay",
+            "strategy": "estrategia general de entrenamiento y alimentación"
+          },
           "nutrition": {
             "objective": "texto corto",
             "objective_description": "texto",
@@ -245,6 +257,11 @@ class IntegralPlanGenerationService
         6. Escribe en español de Colombia, claro y sin tecnicismos innecesarios.
         7. No des consejo médico ni diagnostiques. Si algo excede lo que un
            entrenador puede indicar, dilo en `notes` y no lo prescribas.
+        8. En `analysis` razonas sobre lo que te dieron; NO inventas datos del
+           socio. Si no conoces su peso, su grasa corporal, sus medidas, sus
+           alergias o sus lesiones, NO te los imagines: di que no constan. Una
+           recomendación es tuya; una medición es del socio y solo existe si
+           alguien la tomó.
 
         Todo lo que escribas lo va a revisar y corregir un profesional antes de
         que lo vea nadie más.

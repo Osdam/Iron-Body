@@ -54,6 +54,11 @@ class IntegralPlanController extends Controller
                     'meals_count' => is_array($plan['guide']->meals) ? count($plan['guide']->meals) : 0,
                 ],
                 'routine' => $this->routinePayload($plan['routine']),
+                // La síntesis que el entrenador lee antes de entrar al detalle.
+                // Vive en la corrida de IA (`nutrition_ai_runs.response_json`),
+                // que ya la guarda: no hace falta una columna nueva para un
+                // texto que solo acompaña a esta respuesta.
+                'analysis' => $plan['analysis'] ?? null,
                 'source_assessment_id' => $plan['guide']->source_assessment_id,
             ],
         ], 201);

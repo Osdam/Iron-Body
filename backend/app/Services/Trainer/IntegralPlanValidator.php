@@ -61,6 +61,11 @@ class IntegralPlanValidator
         }
 
         return [
+            // El análisis es lo que el entrenador lee de un vistazo antes de
+            // revisar el detalle. NO se exige: un modelo que devuelva un plan
+            // correcto sin síntesis sigue siendo un plan correcto, y tumbar la
+            // generación entera por un texto de cortesía sería absurdo.
+            'analysis' => $this->analysis($raw['analysis'] ?? null),
             'nutrition' => $this->nutrition($nutrition),
             'routine' => $this->routine($routine),
         ];
@@ -72,6 +77,40 @@ class IntegralPlanValidator
      * @param  array<string,mixed>  $in
      * @return array<string,mixed>
      */
+    /**
+     * La síntesis profesional, acotada.
+     *
+     * Se limita el tamaño por la misma razón que todo lo demás: lo que llega
+     * del modelo es una propuesta, no un dato de confianza, y un texto sin
+     * tope acabaría siendo un muro que nadie lee. Si no viene, no pasa nada.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function analysis(mixed $in): ?array
+    {
+        if (! is_array($in)) {
+            return null;
+        }
+
+        $prioridades = [];
+        foreach (array_slice((array) ($in['priorities'] ?? []), 0, 5) as $p) {
+            $texto = $this->str($p, 160);
+            if ($texto !== null) {
+                $prioridades[] = $texto;
+            }
+        }
+
+        $out = array_filter([
+            'profile' => $this->str($in['profile'] ?? null, 300),
+            'priorities' => $prioridades ?: null,
+            'approach' => $this->str($in['approach'] ?? null, 800),
+            'limitations' => $this->str($in['limitations'] ?? null, 600),
+            'strategy' => $this->str($in['strategy'] ?? null, 800),
+        ], static fn ($v) => $v !== null);
+
+        return $out === [] ? null : $out;
+    }
+
     private function nutrition(array $in): array
     {
         $objetivo = $this->str($in['objective'] ?? null, 160);
