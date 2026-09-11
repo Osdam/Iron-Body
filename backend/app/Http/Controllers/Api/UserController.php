@@ -10,9 +10,11 @@ use App\Models\User;
 use App\Services\Audit\AuditTrail;
 use App\Services\NotificationService;
 use Carbon\Carbon;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class UserController extends Controller
 {
@@ -132,13 +134,24 @@ class UserController extends Controller
 
         // El documento es la llave de acceso del miembro (único en members).
         if ($document === null) {
-            return response()->json(['message' => 'El documento no es válido.'], 422);
+            throw self::duplicado('document', 'El documento no es válido.');
         }
         if (Member::where('document_number', $document)->exists()
             || User::where('document', $document)->exists()) {
-            return response()->json([
-                'message' => 'Ya existe un miembro registrado con ese documento.',
-            ], 422);
+            throw self::duplicado('document', 'Ya existe un miembro registrado con ese documento.');
+        }
+
+        // EL CORREO TAMBIÉN ES ÚNICO, y esto faltaba. La base lo impone con
+        // `users_email_unique`, pero nadie lo comprobaba antes de insertar: el
+        // choque salía como QueryException sin capturar y recepción leía
+        // «Server Error» sin saber qué corregir. Pasó en producción con un
+        // correo que ya pertenecía a otro socio.
+        //
+        // Solo se comprueba cuando el usuario escribe uno: si lo deja vacío, más
+        // abajo se genera un `@ironbody.local` que no puede chocar con nadie.
+        if (filled($validated['email'] ?? null)
+            && User::where('email', $validated['email'])->exists()) {
+            throw self::duplicado('email', 'Este correo ya está registrado.');
         }
 
         // Edad / menor de edad: SIEMPRE se calcula en el servidor, nunca se
@@ -180,41 +193,17 @@ class UserController extends Controller
             'guardianDocument.required' => 'El documento del acudiente es obligatorio para menores de edad.',
         ]);
 
-        $user = DB::transaction(function () use ($validated, $guardian, $document, $isMinor): User {
-            $user = User::create([
-                'name' => $validated['fullName'],
-                'email' => $validated['email'] ?? 'user-'.time().'-'.mt_rand(1000, 9999).'@ironbody.local',
-                'password' => bcrypt('default-password'),
-                'document' => $document,
-                'phone' => $validated['phone'],
-                'birth_date' => $validated['birthDate'] ?? null,
-                'gender' => $validated['gender'] ?? null,
-                'address' => $validated['address'] ?? null,
-                'emergency_contact' => $validated['emergencyContact'] ?? null,
-                'notes' => $validated['notes'] ?? null,
-                'status' => 'active',
-                // plan / membresía NO se fijan al crear: se otorgan con pagos.
-            ]);
+        // LA COMPROBACIÓN PREVIA NO BASTA. Entre el `exists()` y el `INSERT` cabe
+        // otra petición: dos altas simultáneas del mismo correo pasan las dos el
+        // filtro y una choca contra el índice único. La base es la que garantiza
+        // la unicidad; esto solo traduce ese choque a un 422 con sentido en vez
+        // de un 500.
+        try {
+            $user = $this->crear($validated, $guardian, $document, $isMinor);
+        } catch (QueryException $e) {
+            throw self::deLaBaseDeDatos($e);
+        }
 
-            // Member vinculado para que la app reconozca al miembro por documento.
-            $member = Member::create([
-                'user_id' => $user->id,
-                'full_name' => $validated['fullName'],
-                'email' => $validated['email'] ?? null,
-                'document_number' => $document,
-                'phone' => $validated['phone'],
-                'gender' => $validated['gender'] ?? null,
-                'birth_date' => $validated['birthDate'] ?? null,
-                'is_minor' => $isMinor,
-                'status' => Member::STATUS_ACTIVE,
-            ]);
-
-            // Acudiente: igual que en la app, se guarda si es menor o si se
-            // diligenció el nombre del responsable.
-            $this->syncGuardian($member, $guardian);
-
-            return $user;
-        });
 
         // Auditoría: miembro creado desde el CRM (ADITIVO).
         app(NotificationService::class)
@@ -480,6 +469,97 @@ class UserController extends Controller
      *
      * @param  array<string,mixed>  $guardian  campos camelCase del CRM.
      */
+    /**
+     * Escribe el alta. TODO o NADA.
+     *
+     * El `User`, el `Member` y el acudiente nacen en la misma transacción: si
+     * el correo o el documento chocan contra su índice único, no queda un
+     * usuario sin ficha de socio ni una ficha sin usuario.
+     *
+     * @param  array<string, mixed>  $validated
+     * @param  array<string, mixed>  $guardian
+     */
+    private function crear(array $validated, array $guardian, string $document, bool $isMinor): User
+    {
+        return DB::transaction(function () use ($validated, $guardian, $document, $isMinor): User {
+            $user = User::create([
+                'name' => $validated['fullName'],
+                'email' => $validated['email'] ?? 'user-'.time().'-'.mt_rand(1000, 9999).'@ironbody.local',
+                'password' => bcrypt('default-password'),
+                'document' => $document,
+                'phone' => $validated['phone'],
+                'birth_date' => $validated['birthDate'] ?? null,
+                'gender' => $validated['gender'] ?? null,
+                'address' => $validated['address'] ?? null,
+                'emergency_contact' => $validated['emergencyContact'] ?? null,
+                'notes' => $validated['notes'] ?? null,
+                'status' => 'active',
+                // plan / membresía NO se fijan al crear: se otorgan con pagos.
+            ]);
+
+            // Member vinculado para que la app reconozca al miembro por documento.
+            $member = Member::create([
+                'user_id' => $user->id,
+                'full_name' => $validated['fullName'],
+                'email' => $validated['email'] ?? null,
+                'document_number' => $document,
+                'phone' => $validated['phone'],
+                'gender' => $validated['gender'] ?? null,
+                'birth_date' => $validated['birthDate'] ?? null,
+                'is_minor' => $isMinor,
+                'status' => Member::STATUS_ACTIVE,
+            ]);
+
+            // Acudiente: igual que en la app, se guarda si es menor o si se
+            // diligenció el nombre del responsable.
+            $this->syncGuardian($member, $guardian);
+
+            return $user;
+        });
+    }
+
+    /** Un 422 con `message` y `errors`, que es lo que el CRM sabe pintar. */
+    private static function duplicado(string $campo, string $mensaje): ValidationException
+    {
+        return ValidationException::withMessages([$campo => [$mensaje]]);
+    }
+
+    /**
+     * Traduce una violación de unicidad a un 422 con el campo culpable.
+     *
+     * SOLO se traducen las restricciones que conocemos por su nombre. Convertir
+     * cualquier QueryException en «correo duplicado» escondería el siguiente
+     * fallo de base de datos detrás de un mensaje tranquilizador y falso, que es
+     * peor que el 500 que estamos quitando.
+     */
+    private static function deLaBaseDeDatos(QueryException $e): \Throwable
+    {
+        // PostgreSQL dice 23505 y nombra el índice; SQLite —el motor de los
+        // tests— dice 23000 y nombra la columna. Se aceptan los dos para que la
+        // prueba cubra el mismo camino que corre en producción.
+        $sqlState = (string) ($e->errorInfo[0] ?? $e->getCode());
+        if ($sqlState !== '23505' && $sqlState !== '23000') {
+            return $e;
+        }
+
+        $mensaje = $e->getMessage();
+        $mencionado = static fn (string ...$claves): bool => array_reduce(
+            $claves,
+            static fn (bool $lleva, string $clave) => $lleva || str_contains($mensaje, $clave),
+            false,
+        );
+
+        return match (true) {
+            $mencionado('users_email_unique', 'users.email')
+                => self::duplicado('email', 'Este correo ya está registrado.'),
+            $mencionado('users_document_unique', 'members_document_number_unique', 'users.document', 'members.document_number')
+                => self::duplicado('document', 'Ya existe un miembro registrado con ese documento.'),
+            // Cualquier otra cosa sale como lo que es. Disfrazar un fallo real
+            // de «dato duplicado» es peor que el 500 que estamos quitando.
+            default => $e,
+        };
+    }
+
     private function syncGuardian(Member $member, array $guardian): void
     {
         $name = trim((string) ($guardian['guardianFullName'] ?? ''));
