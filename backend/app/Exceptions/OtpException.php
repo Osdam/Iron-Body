@@ -2,6 +2,7 @@
 
 namespace App\Exceptions;
 
+use Illuminate\Http\JsonResponse;
 use RuntimeException;
 
 /**
@@ -17,5 +18,20 @@ class OtpException extends RuntimeException
         public readonly array $extra = [],
     ) {
         parent::__construct($message);
+    }
+
+    /**
+     * Se renderiza sola con la MISMA forma que arman los controladores que la
+     * capturan a mano. Hace falta porque la política de coste puede cortar un
+     * envío desde dentro de `startChallenge()`, y los controladores que lo
+     * llaman (el login entre ellos) no la esperaban: sin esto, un 429 legítimo
+     * saldría como un 500.
+     */
+    public function render(): JsonResponse
+    {
+        return response()->json(
+            array_merge(['ok' => false, 'message' => $this->getMessage()], $this->extra),
+            $this->status,
+        );
     }
 }

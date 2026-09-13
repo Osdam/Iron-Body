@@ -6,8 +6,10 @@ use App\Exceptions\OtpException;
 use App\Models\Member;
 use App\Models\MemberAuthChallenge;
 use App\Models\MemberSecurityEvent;
+use App\Services\Otp\OtpPolicy;
 use App\Services\Sms\SmsSenderFactory;
 use App\Services\Sms\TwilioVerifyService;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -34,7 +36,14 @@ class OtpService
      * Crea un reto y envía el código. Devuelve el reto, el código en claro (sólo
      * para exponerlo en dev) y si el envío fue aceptado por el proveedor.
      *
-     * @return array{challenge: MemberAuthChallenge, code: string, sent: bool}
+     * Pasa por {@see OtpPolicy}: si ya hay un código vivo para este mismo
+     * teléfono y propósito NO se vuelve a llamar a Twilio, y el inicio queda
+     * protegido por un candado atómico para que diez peticiones simultáneas no
+     * se conviertan en diez SMS.
+     *
+     * @return array{challenge: MemberAuthChallenge, code: string, sent: bool, reused: bool}
+     *
+     * @throws OtpException 429 si se alcanzó un límite · 503 si el techo de gasto cortó
      */
     public function startChallenge(
         Member $member,
@@ -42,6 +51,77 @@ class OtpService
         string $purpose = MemberAuthChallenge::PURPOSE_LOGIN,
         ?string $destinationOverride = null,
         ?string $riskTier = null,
+    ): array {
+        // Para cambio de número el OTP va al teléfono NUEVO; en el resto, al del
+        // titular ya registrado.
+        $phone = $destinationOverride !== null
+            ? trim($destinationOverride)
+            : $this->resolvePhone($member);
+        $ip = $context['ip_address'] ?? null;
+        $policy = $this->policy();
+
+        $policy->event('otp.requested', $this->trazas($member, $purpose, $phone, $ip));
+
+        // Primer intento de reuso ANTES de pedir el candado: el caso normal no
+        // paga ni siquiera la espera.
+        if ($vivo = $this->retoReutilizable($member, $purpose, $phone)) {
+            return $this->reutilizar($vivo, $member, $purpose, $phone, $ip);
+        }
+
+        $lock = $policy->lock($purpose, $phone);
+        $adquirido = false;
+        try {
+            $lock->block($policy->lockWaitSeconds());
+            $adquirido = true;
+        } catch (LockTimeoutException) {
+            // Otro proceso está hablando con Twilio por este mismo número.
+        }
+
+        try {
+            // Segunda comprobación: el ganador del candado pudo crear el reto
+            // mientras esperábamos. Esto es lo que convierte la ráfaga en 1 SMS.
+            if ($vivo = $this->retoReutilizable($member, $purpose, $phone)) {
+                return $this->reutilizar($vivo, $member, $purpose, $phone, $ip);
+            }
+
+            if (! $adquirido) {
+                $policy->event('otp.rate_limited', $this->trazas($member, $purpose, $phone, $ip) + [
+                    'decision' => 'start_in_progress',
+                ]);
+
+                throw new OtpException(
+                    'Ya estamos enviando tu código. Espera unos segundos.',
+                    429,
+                    ['code' => 'in_progress', 'retry_after' => 10],
+                );
+            }
+
+            $policy->assertStartAllowed(
+                OtpPolicy::SCOPE_MEMBER, $member->id, $purpose, $phone, $ip,
+                $this->segundosDesdeElUltimoEnvioSinUsar($member, $purpose, $phone),
+            );
+
+            return $this->emitir($member, $context, $purpose, $phone, $riskTier, $ip);
+        } finally {
+            if ($adquirido) {
+                $lock->release();
+            }
+        }
+    }
+
+    /**
+     * Crea el reto y dispara el envío. Sólo se llega aquí con el candado en la
+     * mano y con la política ya conforme.
+     *
+     * @return array{challenge: MemberAuthChallenge, code: string, sent: bool, reused: bool}
+     */
+    private function emitir(
+        Member $member,
+        array $context,
+        string $purpose,
+        ?string $phone,
+        ?string $riskTier,
+        ?string $ip,
     ): array {
         // Un solo reto vivo por miembro y propósito: vence los pendientes del
         // MISMO propósito (no interfiere con un eventual reto de login activo).
@@ -51,11 +131,6 @@ class OtpService
             ->where('status', MemberAuthChallenge::STATUS_PENDING)
             ->update(['status' => MemberAuthChallenge::STATUS_EXPIRED]);
 
-        // Para cambio de número el OTP va al teléfono NUEVO; en el resto, al del
-        // titular ya registrado.
-        $phone = $destinationOverride !== null
-            ? trim($destinationOverride)
-            : $this->resolvePhone($member);
         $code = $this->generateCode();
 
         $challenge = MemberAuthChallenge::create([
@@ -75,11 +150,7 @@ class OtpService
             'expires_at' => now()->addSeconds($this->ttl()),
         ]);
 
-        // Twilio Verify: Twilio genera/envía/valida el código (no usamos el
-        // nuestro). En el resto de modos enviamos nuestro código generado.
-        $sent = $this->usesTwilioVerify()
-            ? app(TwilioVerifyService::class)->start($phone)
-            : $this->dispatch($phone, $code);
+        $sent = $this->enviar(OtpPolicy::SCOPE_MEMBER, $member->id, $purpose, $phone, $code, $ip, $challenge->uuid);
 
         $this->security->record($member, MemberSecurityEvent::TYPE_OTP_SENT, $context, [
             'challenge' => $challenge->uuid,
@@ -90,7 +161,7 @@ class OtpService
 
         $this->flagSuspicious($member, $context);
 
-        return ['challenge' => $challenge, 'code' => $code, 'sent' => $sent];
+        return ['challenge' => $challenge, 'code' => $code, 'sent' => $sent, 'reused' => false];
     }
 
     /**
@@ -267,6 +338,16 @@ class OtpService
             : Hash::check($code, $challenge->code_hash);
 
         if (! $accepted) {
+            $this->policy()->event('otp.invalid', [
+                'scope' => OtpPolicy::SCOPE_MEMBER,
+                'subject_id' => $challenge->member_id,
+                'member_id' => $challenge->member_id,
+                'purpose' => $challenge->purpose,
+                'challenge' => $challenge->uuid,
+                'phone_hash' => $this->policy()->phoneHash($challenge->destination),
+                'decision' => 'wrong_code',
+            ]);
+
             $challenge->increment('attempts');
             $remaining = max($this->maxAttempts() - $challenge->attempts, 0);
 
@@ -300,6 +381,22 @@ class OtpService
             'status' => MemberAuthChallenge::STATUS_VERIFIED,
             'consumed_at' => now(),
         ]);
+
+        // El código se gastó: la verificación deja de estar viva y no puede
+        // reutilizarse para ahorrar el siguiente envío.
+        $policy = $this->policy();
+        $policy->forgetLive(OtpPolicy::SCOPE_MEMBER, $challenge->member_id, $challenge->purpose);
+        // Twilio sólo cobra las verificaciones que se completan: ésta es una.
+        $policy->registerVerification();
+        $policy->event('otp.verified', [
+            'scope' => OtpPolicy::SCOPE_MEMBER,
+            'subject_id' => $challenge->member_id,
+            'member_id' => $challenge->member_id,
+            'purpose' => $challenge->purpose,
+            'challenge' => $challenge->uuid,
+            'phone_hash' => $policy->phoneHash($challenge->destination),
+            'decision' => 'approved',
+        ]);
     }
 
     /**
@@ -332,19 +429,48 @@ class OtpService
 
         $code = $this->generateCode();
         $phone = $challenge->destination ?: ($challenge->member ? $this->resolvePhone($challenge->member) : null);
+        $ip = $context['ip_address'] ?? null;
+        $policy = $this->policy();
 
-        $challenge->update([
-            'code_hash' => Hash::make($code),
-            'destination' => $phone,
-            'last_sent_at' => now(),
-            'resend_count' => $challenge->resend_count + 1,
-            'expires_at' => now()->addSeconds($this->ttl()),
-            'attempts' => 0,
-        ]);
+        // El reenvío explícito también cuesta dinero: pasa por el interruptor, el
+        // techo de gasto y los mismos cupos por teléfono y cuenta. Su propio
+        // enfriamiento ya se comprobó arriba, así que aquí no se vuelve a exigir.
+        $policy->assertStartAllowed(
+            OtpPolicy::SCOPE_MEMBER, $challenge->member_id, $challenge->purpose, $phone, $ip,
+        );
 
-        $sent = $this->usesTwilioVerify()
-            ? app(TwilioVerifyService::class)->start($phone)
-            : $this->dispatch($phone, $code);
+        $lock = $policy->lock($challenge->purpose, $phone);
+        $adquirido = false;
+        try {
+            $lock->block($policy->lockWaitSeconds());
+            $adquirido = true;
+        } catch (LockTimeoutException) {
+            throw new OtpException(
+                'Ya estamos enviando tu código. Espera unos segundos.',
+                429,
+                ['code' => 'in_progress', 'retry_after' => 10],
+            );
+        }
+
+        try {
+            $challenge->update([
+                'code_hash' => Hash::make($code),
+                'destination' => $phone,
+                'last_sent_at' => now(),
+                'resend_count' => $challenge->resend_count + 1,
+                'expires_at' => now()->addSeconds($this->ttl()),
+                'attempts' => 0,
+            ]);
+
+            $sent = $this->enviar(
+                OtpPolicy::SCOPE_MEMBER, $challenge->member_id, $challenge->purpose,
+                $phone, $code, $ip, $challenge->uuid,
+            );
+        } finally {
+            if ($adquirido) {
+                $lock->release();
+            }
+        }
 
         if ($challenge->member) {
             $this->security->record($challenge->member, MemberSecurityEvent::TYPE_OTP_RESENT, $context, [
@@ -353,7 +479,7 @@ class OtpService
             ]);
         }
 
-        return ['challenge' => $challenge, 'code' => $code, 'sent' => $sent];
+        return ['challenge' => $challenge, 'code' => $code, 'sent' => $sent, 'reused' => false];
     }
 
     /** ¿Se puede generar OTP para este miembro? (necesita teléfono). */
@@ -379,6 +505,179 @@ class OtpService
         $phone = $phone ? trim((string) $phone) : null;
 
         return $phone === '' ? null : $phone;
+    }
+
+    // ── Política de coste ────────────────────────────────────────────────────
+
+    private function policy(): OtpPolicy
+    {
+        return app(OtpPolicy::class);
+    }
+
+    /** Campos comunes de traza. Nunca llevan el código ni el teléfono en claro. */
+    private function trazas(Member $member, string $purpose, ?string $phone, ?string $ip): array
+    {
+        $p = $this->policy();
+
+        return [
+            'scope' => OtpPolicy::SCOPE_MEMBER,
+            'subject_id' => $member->id,
+            'member_id' => $member->id,
+            'purpose' => $purpose,
+            'phone_hash' => $p->phoneHash($phone),
+            'ip_hash' => $p->ipHash($ip),
+        ];
+    }
+
+    /**
+     * El reto cuyo SMS salió de verdad y sigue vigente para ESTE miembro, ESTE
+     * propósito y ESTE destino, si lo hay.
+     *
+     * Va atado al miembro a propósito: si dos socios compartieran número, uno no
+     * puede montarse en la verificación viva del otro. Cuesta algún SMS de más en
+     * un caso rarísimo y cierra un agujero de identidad, que no se negocia.
+     */
+    private function retoReutilizable(Member $member, string $purpose, ?string $phone): ?MemberAuthChallenge
+    {
+        if ($phone === null || $phone === '') {
+            return null;
+        }
+
+        $uuid = $this->policy()->liveChallengeUuid(OtpPolicy::SCOPE_MEMBER, $member->id, $purpose);
+        if ($uuid === null) {
+            return null;
+        }
+
+        $challenge = MemberAuthChallenge::query()
+            ->where('uuid', $uuid)
+            ->where('member_id', $member->id)
+            ->where('purpose', $purpose)
+            ->where('status', MemberAuthChallenge::STATUS_PENDING)
+            ->first();
+
+        if (! $challenge || $challenge->isExpired()) {
+            $this->policy()->forgetLive(OtpPolicy::SCOPE_MEMBER, $member->id, $purpose);
+
+            return null;
+        }
+
+        // El destino tiene que ser el mismo: en un cambio de número, pedir el
+        // código para el teléfono B no puede devolver el reto que salió hacia A.
+        if (! $this->mismoNumero($challenge->destination, $phone)) {
+            return null;
+        }
+
+        return $challenge;
+    }
+
+    /**
+     * @return array{challenge: MemberAuthChallenge, code: string, sent: bool, reused: bool}
+     */
+    private function reutilizar(
+        MemberAuthChallenge $challenge,
+        Member $member,
+        string $purpose,
+        ?string $phone,
+        ?string $ip,
+    ): array {
+        $this->policy()->event('otp.reused', $this->trazas($member, $purpose, $phone, $ip) + [
+            'challenge' => $challenge->uuid,
+            'decision' => 'reuse_active_verification',
+        ]);
+
+        // `sent` en true porque hay un código camino del teléfono: mostrar el
+        // aviso de "no pudimos confirmar el envío" aquí sería mentir. El código
+        // NO se devuelve: sigue siendo de Twilio y aquí nunca se conoció.
+        return ['challenge' => $challenge, 'code' => '', 'sent' => true, 'reused' => true];
+    }
+
+    /**
+     * Segundos desde el último envío al MISMO destino que no llegó a usarse.
+     *
+     * Devuelve null —y por tanto no hay enfriamiento— en dos casos deliberados:
+     *   · el último reto se verificó: volver a entrar tras un login correcto es
+     *     legítimo y no se castiga;
+     *   · el destino es otro: quien se equivocó tecleando su número nuevo debe
+     *     poder corregirlo sin esperar un minuto. Ese envío no es insistencia
+     *     sobre un código vivo, es una intención distinta, y los cupos por
+     *     teléfono siguen cubriéndolo.
+     */
+    private function segundosDesdeElUltimoEnvioSinUsar(Member $member, string $purpose, ?string $phone): ?int
+    {
+        $ultimo = MemberAuthChallenge::query()
+            ->where('member_id', $member->id)
+            ->where('purpose', $purpose)
+            ->where('channel', 'sms')
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $ultimo
+            || $ultimo->status === MemberAuthChallenge::STATUS_VERIFIED
+            || ! $ultimo->last_sent_at instanceof Carbon
+            || ! $this->mismoNumero($ultimo->destination, $phone)) {
+            return null;
+        }
+
+        return (int) abs($ultimo->last_sent_at->diffInSeconds(now()));
+    }
+
+    /**
+     * Único punto del motor de socios que habla con el proveedor. Contabiliza
+     * cupo y gasto estimado SIEMPRE que la petición llegó a salir: ante un
+     * timeout no sabemos si Twilio ya mandó el SMS, y para un techo de gasto
+     * equivocarse por arriba es la única equivocación segura.
+     */
+    private function enviar(
+        string $scope,
+        int|string $subjectId,
+        string $purpose,
+        ?string $phone,
+        string $code,
+        ?string $ip,
+        string $challengeUuid,
+    ): bool {
+        $policy = $this->policy();
+
+        if ($phone === null || $phone === '') {
+            $policy->event('otp.provider_failed', [
+                'scope' => $scope, 'subject_id' => $subjectId, 'purpose' => $purpose,
+                'challenge' => $challengeUuid, 'decision' => 'no_phone',
+            ]);
+
+            return false;
+        }
+
+        $policy->registerProviderCall($scope, $subjectId, $phone, $ip);
+
+        $sent = $this->usesTwilioVerify()
+            ? app(TwilioVerifyService::class)->start($phone, $policy->phoneHash($phone))
+            : $this->dispatch($phone, $code);
+
+        $policy->event($sent ? 'otp.provider_called' : 'otp.provider_failed', [
+            'scope' => $scope,
+            'subject_id' => $subjectId,
+            'purpose' => $purpose,
+            'phone_hash' => $policy->phoneHash($phone),
+            'ip_hash' => $policy->ipHash($ip),
+            'challenge' => $challengeUuid,
+            'decision' => $sent ? 'sent' : 'provider_rejected',
+        ]);
+
+        if ($sent) {
+            // La marca de "verificación viva" SÓLO se pone si el proveedor
+            // aceptó: así nunca se reutiliza un reto cuyo SMS no existe.
+            $policy->markLive($scope, $subjectId, $purpose, $challengeUuid, $this->ttl());
+        }
+
+        return $sent;
+    }
+
+    /** ¿Dos teléfonos son el mismo número, ignorando formato? */
+    private function mismoNumero(?string $a, ?string $b): bool
+    {
+        $limpia = static fn (?string $v) => ltrim(preg_replace('/[^\d]/', '', (string) $v) ?? '', '0');
+
+        return $limpia($a) !== '' && $limpia($a) === $limpia($b);
     }
 
     // ── Internos ─────────────────────────────────────────────────────────────

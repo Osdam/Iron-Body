@@ -27,19 +27,37 @@ class TwilioVerifyService
             && filled(config('otp.twilio.verify_service_sid'));
     }
 
-    /** Dispara el envío del código por SMS. Devuelve true si Twilio aceptó. */
-    public function start(?string $phone): bool
+    /**
+     * Dispara el envío del código por SMS. Devuelve true si Twilio aceptó.
+     *
+     * [$rateLimitKey] alimenta los Service Rate Limits del propio Twilio, que
+     * son una segunda barrera independiente de la nuestra. Se envía SIEMPRE un
+     * valor derivado (hash), nunca el teléfono en claro: ese valor queda
+     * almacenado en Twilio y no tiene por qué ser un dato personal.
+     *
+     * Sólo viaja si `otp.twilio.rate_limit_unique_name` está configurado, porque
+     * referenciar un límite que no existe en el servicio hace que Twilio
+     * rechace la petición entera. Se activa después de crearlo allí.
+     */
+    public function start(?string $phone, ?string $rateLimitKey = null): bool
     {
         $to = $this->toE164($phone);
         if ($to === null) {
             return false;
         }
 
+        $payload = ['To' => $to, 'Channel' => 'sms'];
+
+        $limite = (string) config('otp.twilio.rate_limit_unique_name', '');
+        if ($limite !== '' && $rateLimitKey !== null && $rateLimitKey !== '') {
+            $payload['RateLimits'] = json_encode([$limite => $rateLimitKey]);
+        }
+
         try {
             $resp = Http::asForm()
                 ->withBasicAuth($this->sid(), $this->token())
                 ->timeout(15)
-                ->post($this->endpoint('Verifications'), ['To' => $to, 'Channel' => 'sms']);
+                ->post($this->endpoint('Verifications'), $payload);
 
             if (! $resp->successful()) {
                 Log::warning('TwilioVerify: start no exitoso', [

@@ -144,6 +144,9 @@ return [
         'base'              => env('TWILIO_BASE', 'https://api.twilio.com'),
         'verify_service_sid'=> env('TWILIO_VERIFY_SERVICE_SID'),
         'verify_base'       => env('TWILIO_VERIFY_BASE', 'https://verify.twilio.com'),
+        // unique_name del Service Rate Limit creado en Twilio. Vacío = no se
+        // envía la llave (referenciar uno inexistente rompe el envío entero).
+        'rate_limit_unique_name' => env('TWILIO_VERIFY_RATE_LIMIT_NAME', ''),
     ],
 
     // Prefijo de país por defecto para normalizar a E.164 (Colombia = 57).
@@ -154,6 +157,86 @@ return [
         'token'    => env('LABSMOBILE_TOKEN'),
         'sender'   => env('LABSMOBILE_SENDER', 'IronBody'),
         'base'     => env('LABSMOBILE_BASE', 'https://api.labsmobile.com'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Emisor SMS heredado (Programmable Messaging) — CERRADO por defecto
+    |--------------------------------------------------------------------------
+    | Con Verify activo este camino no se alcanza nunca. Se deja explícitamente
+    | fail-closed para que rellenar TWILIO_FROM en el futuro NO reviva por
+    | accidente un segundo camino facturable. Un solo emisor: Twilio Verify.
+    */
+    'legacy_sms_sender_enabled' => filter_var(env('OTP_ALLOW_LEGACY_SMS_SENDER', false), FILTER_VALIDATE_BOOLEAN),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Interruptor de emisión (kill switch)
+    |--------------------------------------------------------------------------
+    | En false NINGUNA operación que envíe un SMS nuevo (start/resend) llega al
+    | proveedor. NO afecta a la comprobación de códigos ya enviados ni a las
+    | sesiones vivas: un usuario con un código en la mano sigue pudiendo entrar.
+    */
+    'send_enabled' => filter_var(env('TWILIO_SEND_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Política de coste — límites propios antes de tocar al proveedor
+    |--------------------------------------------------------------------------
+    | Calibrados contra el tráfico real auditado del 1 al 12 de septiembre de
+    | 2026: el 89 % de los socios pide 2 códigos o menos en un día y el máximo
+    | observado fueron 11. El teléfono es la llave FUERTE; la IP es señal
+    | secundaria y va holgada a propósito, porque una sola IP (la recepción del
+    | gimnasio) da servicio a 24 socios legítimos.
+    */
+    'policy' => [
+        // Mínimo entre dos envíos al mismo sujeto y propósito. Sólo aplica si el
+        // reto anterior NO se verificó: volver a entrar tras un login correcto
+        // es legítimo y no se penaliza. Queda subsumido por el reuso mientras
+        // el código siga vivo (ttl = 300 s > 60 s).
+        'start_cooldown' => (int) env('OTP_START_COOLDOWN', 60),
+
+        'phone' => [
+            'window'       => (int) env('OTP_PHONE_WINDOW', 900),
+            'window_limit' => (int) env('OTP_PHONE_WINDOW_LIMIT', 3),
+            'daily_limit'  => (int) env('OTP_PHONE_DAILY_LIMIT', 8),
+        ],
+        'account' => [
+            'window'       => (int) env('OTP_ACCOUNT_WINDOW', 900),
+            'window_limit' => (int) env('OTP_ACCOUNT_WINDOW_LIMIT', 4),
+            'daily_limit'  => (int) env('OTP_ACCOUNT_DAILY_LIMIT', 10),
+        ],
+        'ip' => [
+            'window'       => (int) env('OTP_IP_WINDOW', 900),
+            'window_limit' => (int) env('OTP_IP_WINDOW_LIMIT', 40),
+            'daily_limit'  => (int) env('OTP_IP_DAILY_LIMIT', 200),
+        ],
+
+        // Candado atómico alrededor del inicio de verificación. El TTL supera el
+        // timeout del cliente Twilio (15 s) para que un worker caído lo suelte.
+        'lock_seconds' => (int) env('OTP_START_LOCK_SECONDS', 20),
+        'lock_wait'    => (int) env('OTP_START_LOCK_WAIT', 8),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Techo financiero propio (circuit breaker)
+    |--------------------------------------------------------------------------
+    | Los precios son ESTIMACIONES para decidir en caliente, no contabilidad: la
+    | cifra real siempre es la de los Usage Records de Twilio. Valores tomados de
+    | la factura auditada: 0,0592 USD por SMS en Colombia y 0,05 USD por
+    | verificación completada.
+    |
+    | El gasto real del peor día auditado fue 9,99 USD (3 de septiembre) ANTES de
+    | las protecciones; ese mismo día con reuso y login adaptativo queda en unos
+    | 5,6 USD. De ahí los umbrales: el blando avisa por encima de un pico
+    | legítimo y el duro sólo salta ante una fuga real.
+    */
+    'cost' => [
+        'sms_start'    => (float) env('TWILIO_COST_SMS_START', 0.0592),
+        'verification' => (float) env('TWILIO_COST_VERIFICATION', 0.05),
+        'daily_soft'   => (float) env('TWILIO_DAILY_SOFT_LIMIT_USD', 6.0),
+        'daily_hard'   => (float) env('TWILIO_DAILY_HARD_LIMIT_USD', 12.0),
     ],
 
 ];

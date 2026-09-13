@@ -5,8 +5,10 @@ namespace App\Services\Trainer;
 use App\Exceptions\OtpException;
 use App\Models\Trainer;
 use App\Models\TrainerAuthChallenge;
+use App\Services\Otp\OtpPolicy;
 use App\Services\Sms\SmsSenderFactory;
 use App\Services\Sms\TwilioVerifyService;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 
@@ -55,36 +57,84 @@ class TrainerOtpService
         array $context,
         string $purpose = TrainerAuthChallenge::PURPOSE_LOGIN,
     ): array {
-        TrainerAuthChallenge::query()
-            ->where('trainer_id', $trainer->id)
-            ->where('purpose', $purpose)
-            ->where('status', TrainerAuthChallenge::STATUS_PENDING)
-            ->update(['status' => TrainerAuthChallenge::STATUS_EXPIRED]);
-
         $phone = $this->resolvePhone($trainer);
-        $code = $this->generateCode();
+        $ip = $context['ip_address'] ?? null;
+        $policy = $this->policy();
 
-        $challenge = TrainerAuthChallenge::create([
-            'trainer_id' => $trainer->id,
-            'purpose' => $purpose,
-            'code_hash' => Hash::make($code),
-            'channel' => 'sms',
-            'destination' => $phone,
-            'device_id' => $context['device_id'] ?? null,
-            'device_name' => $context['device_name'] ?? null,
-            'platform' => $context['platform'] ?? null,
-            'ip_address' => $context['ip_address'] ?? null,
-            'user_agent' => isset($context['user_agent']) ? mb_substr((string) $context['user_agent'], 0, 500) : null,
-            'status' => TrainerAuthChallenge::STATUS_PENDING,
-            'last_sent_at' => now(),
-            'expires_at' => now()->addSeconds($this->ttl()),
+        $policy->event('otp.requested', [
+            'scope' => OtpPolicy::SCOPE_TRAINER, 'subject_id' => $trainer->id, 'purpose' => $purpose,
+            'phone_hash' => $policy->phoneHash($phone), 'ip_hash' => $policy->ipHash($ip),
         ]);
 
-        $sent = $this->usesTwilioVerify()
-            ? app(TwilioVerifyService::class)->start($phone)
-            : $this->dispatch($phone, $code);
+        if ($vivo = $this->retoReutilizable($trainer, $purpose, $phone)) {
+            $policy->event('otp.reused', [
+                'scope' => OtpPolicy::SCOPE_TRAINER, 'subject_id' => $trainer->id, 'purpose' => $purpose,
+                'phone_hash' => $policy->phoneHash($phone), 'challenge' => $vivo->uuid,
+                'decision' => 'reuse_active_verification',
+            ]);
 
-        return ['challenge' => $challenge, 'code' => $code, 'sent' => $sent];
+            return ['challenge' => $vivo, 'code' => '', 'sent' => true, 'reused' => true];
+        }
+
+        $lock = $policy->lock($purpose, $phone);
+        $adquirido = false;
+        try {
+            $lock->block($policy->lockWaitSeconds());
+            $adquirido = true;
+        } catch (LockTimeoutException) {
+            // Otro proceso ya está pidiéndole el código a Twilio.
+        }
+
+        try {
+            if ($vivo = $this->retoReutilizable($trainer, $purpose, $phone)) {
+                return ['challenge' => $vivo, 'code' => '', 'sent' => true, 'reused' => true];
+            }
+
+            if (! $adquirido) {
+                throw new OtpException(
+                    'Ya estamos enviando tu código. Espera unos segundos.',
+                    429,
+                    ['code' => 'in_progress', 'retry_after' => 10],
+                );
+            }
+
+            $policy->assertStartAllowed(
+                OtpPolicy::SCOPE_TRAINER, $trainer->id, $purpose, $phone, $ip,
+                $this->segundosDesdeElUltimoEnvioSinUsar($trainer, $purpose, $phone),
+            );
+
+            TrainerAuthChallenge::query()
+                ->where('trainer_id', $trainer->id)
+                ->where('purpose', $purpose)
+                ->where('status', TrainerAuthChallenge::STATUS_PENDING)
+                ->update(['status' => TrainerAuthChallenge::STATUS_EXPIRED]);
+
+            $code = $this->generateCode();
+
+            $challenge = TrainerAuthChallenge::create([
+                'trainer_id' => $trainer->id,
+                'purpose' => $purpose,
+                'code_hash' => Hash::make($code),
+                'channel' => 'sms',
+                'destination' => $phone,
+                'device_id' => $context['device_id'] ?? null,
+                'device_name' => $context['device_name'] ?? null,
+                'platform' => $context['platform'] ?? null,
+                'ip_address' => $context['ip_address'] ?? null,
+                'user_agent' => isset($context['user_agent']) ? mb_substr((string) $context['user_agent'], 0, 500) : null,
+                'status' => TrainerAuthChallenge::STATUS_PENDING,
+                'last_sent_at' => now(),
+                'expires_at' => now()->addSeconds($this->ttl()),
+            ]);
+
+            $sent = $this->enviar($trainer->id, $purpose, $phone, $code, $ip, $challenge->uuid);
+
+            return ['challenge' => $challenge, 'code' => $code, 'sent' => $sent, 'reused' => false];
+        } finally {
+            if ($adquirido) {
+                $lock->release();
+            }
+        }
     }
 
     /**
@@ -139,20 +189,41 @@ class TrainerOtpService
 
         $code = $this->generateCode();
         $phone = $challenge->destination;
+        $policy = $this->policy();
 
-        $challenge->update([
-            'code_hash' => Hash::make($code),
-            'last_sent_at' => now(),
-            'resend_count' => $challenge->resend_count + 1,
-            'expires_at' => now()->addSeconds($this->ttl()),
-            'attempts' => 0,
-        ]);
+        // El reenvío también gasta: interruptor, techo de gasto y cupos.
+        $policy->assertStartAllowed(
+            OtpPolicy::SCOPE_TRAINER, $challenge->trainer_id, $challenge->purpose, $phone,
+        );
 
-        $sent = $this->usesTwilioVerify()
-            ? app(TwilioVerifyService::class)->start($phone)
-            : $this->dispatch($phone, $code);
+        $lock = $policy->lock($challenge->purpose, $phone);
+        try {
+            $lock->block($policy->lockWaitSeconds());
+        } catch (LockTimeoutException) {
+            throw new OtpException(
+                'Ya estamos enviando tu código. Espera unos segundos.',
+                429,
+                ['code' => 'in_progress', 'retry_after' => 10],
+            );
+        }
 
-        return ['challenge' => $challenge, 'code' => $code, 'sent' => $sent];
+        try {
+            $challenge->update([
+                'code_hash' => Hash::make($code),
+                'last_sent_at' => now(),
+                'resend_count' => $challenge->resend_count + 1,
+                'expires_at' => now()->addSeconds($this->ttl()),
+                'attempts' => 0,
+            ]);
+
+            $sent = $this->enviar(
+                $challenge->trainer_id, $challenge->purpose, $phone, $code, null, $challenge->uuid,
+            );
+        } finally {
+            $lock->release();
+        }
+
+        return ['challenge' => $challenge, 'code' => $code, 'sent' => $sent, 'reused' => false];
     }
 
     /**
@@ -179,6 +250,14 @@ class TrainerOtpService
             : Hash::check($code, $challenge->code_hash);
 
         if (! $accepted) {
+            $this->policy()->event('otp.invalid', [
+                'scope' => OtpPolicy::SCOPE_TRAINER,
+                'subject_id' => $challenge->trainer_id,
+                'purpose' => $challenge->purpose,
+                'challenge' => $challenge->uuid,
+                'decision' => 'wrong_code',
+            ]);
+
             $challenge->increment('attempts');
             $remaining = max($this->maxAttempts() - $challenge->attempts, 0);
 
@@ -198,6 +277,122 @@ class TrainerOtpService
             'status' => TrainerAuthChallenge::STATUS_VERIFIED,
             'consumed_at' => now(),
         ]);
+
+        $policy = $this->policy();
+        $policy->forgetLive(OtpPolicy::SCOPE_TRAINER, $challenge->trainer_id, $challenge->purpose);
+        $policy->registerVerification();
+        $policy->event('otp.verified', [
+            'scope' => OtpPolicy::SCOPE_TRAINER,
+            'subject_id' => $challenge->trainer_id,
+            'purpose' => $challenge->purpose,
+            'challenge' => $challenge->uuid,
+            'phone_hash' => $policy->phoneHash($challenge->destination),
+            'decision' => 'approved',
+        ]);
+    }
+
+    // ── Política de coste (la MISMA que la de socios) ─────────────────────────
+
+    private function policy(): OtpPolicy
+    {
+        return app(OtpPolicy::class);
+    }
+
+    /** Reto cuyo SMS salió de verdad y sigue vigente para este entrenador. */
+    private function retoReutilizable(Trainer $trainer, string $purpose, ?string $phone): ?TrainerAuthChallenge
+    {
+        if ($phone === null || $phone === '') {
+            return null;
+        }
+
+        $uuid = $this->policy()->liveChallengeUuid(OtpPolicy::SCOPE_TRAINER, $trainer->id, $purpose);
+        if ($uuid === null) {
+            return null;
+        }
+
+        $challenge = TrainerAuthChallenge::query()
+            ->where('uuid', $uuid)
+            ->where('trainer_id', $trainer->id)
+            ->where('purpose', $purpose)
+            ->where('status', TrainerAuthChallenge::STATUS_PENDING)
+            ->first();
+
+        if (! $challenge || $challenge->isExpired()) {
+            $this->policy()->forgetLive(OtpPolicy::SCOPE_TRAINER, $trainer->id, $purpose);
+
+            return null;
+        }
+
+        return $challenge;
+    }
+
+    /** Segundos desde el último envío que no terminó en verificación. */
+    private function segundosDesdeElUltimoEnvioSinUsar(Trainer $trainer, string $purpose, ?string $phone): ?int
+    {
+        $ultimo = TrainerAuthChallenge::query()
+            ->where('trainer_id', $trainer->id)
+            ->where('purpose', $purpose)
+            ->where('channel', 'sms')
+            ->orderByDesc('id')
+            ->first();
+
+        $mismo = static function (?string $a, ?string $b): bool {
+            $limpia = static fn (?string $v) => ltrim(preg_replace('/[^\d]/', '', (string) $v) ?? '', '0');
+
+            return $limpia($a) !== '' && $limpia($a) === $limpia($b);
+        };
+
+        if (! $ultimo
+            || $ultimo->status === TrainerAuthChallenge::STATUS_VERIFIED
+            || ! $ultimo->last_sent_at instanceof Carbon
+            || ! $mismo($ultimo->destination, $phone)) {
+            return null;
+        }
+
+        return (int) abs($ultimo->last_sent_at->diffInSeconds(now()));
+    }
+
+    /** Único punto del motor profesional que habla con el proveedor. */
+    private function enviar(
+        int|string $trainerId,
+        string $purpose,
+        ?string $phone,
+        string $code,
+        ?string $ip,
+        string $challengeUuid,
+    ): bool {
+        $policy = $this->policy();
+
+        if ($phone === null || $phone === '') {
+            $policy->event('otp.provider_failed', [
+                'scope' => OtpPolicy::SCOPE_TRAINER, 'subject_id' => $trainerId,
+                'purpose' => $purpose, 'challenge' => $challengeUuid, 'decision' => 'no_phone',
+            ]);
+
+            return false;
+        }
+
+        $policy->registerProviderCall(OtpPolicy::SCOPE_TRAINER, $trainerId, $phone, $ip);
+
+        $sent = $this->usesTwilioVerify()
+            ? app(TwilioVerifyService::class)->start($phone, $policy->phoneHash($phone))
+            : $this->dispatch($phone, $code);
+
+        $policy->event($sent ? 'otp.provider_called' : 'otp.provider_failed', [
+            'scope' => OtpPolicy::SCOPE_TRAINER,
+            'subject_id' => $trainerId,
+            'purpose' => $purpose,
+            'phone_hash' => $policy->phoneHash($phone),
+            'ip_hash' => $policy->ipHash($ip),
+            'challenge' => $challengeUuid,
+            'decision' => $sent ? 'sent' : 'provider_rejected',
+        ]);
+
+        if ($sent) {
+            $policy->markLive(OtpPolicy::SCOPE_TRAINER, $trainerId, $purpose, $challengeUuid, $this->ttl());
+        }
+
+        return $sent;
     }
 
     // ── Internos (reusan config/otp.php) ─────────────────────────────────────
