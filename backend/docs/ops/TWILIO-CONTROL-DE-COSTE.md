@@ -120,6 +120,25 @@ biometría, si falla o si el ticket caduca (`login_screen.dart:247`).
 **Revertir**: `SECURITY_ADAPTIVE_LOGIN=false` + `config:cache`. Las otras
 protecciones siguen en pie: esta bandera se apaga sola, sin desmontar nada más.
 
+### 2.6 Avisos de gasto de Twilio (Usage Triggers)
+
+Los triggers de Twilio **avisan**, no frenan: para cuando saltan, el dinero ya se
+gastó. Quien frena es el techo de 2.2.
+
+Llegan a `POST /api/webhooks/twilio/usage-trigger`, que es público porque lo
+llama Twilio y se defiende de dos formas:
+
+- **firma** `X-Twilio-Signature` verificada contra el Auth Token — sin token
+  configurado rechaza, que es lo correcto: nadie debe poder inventarse una
+  alerta de gasto;
+- **idempotencia** por `IdempotencyToken`, porque Twilio reintenta y una alerta
+  repetida sólo añadiría ruido.
+
+```bash
+grep 'twilio.usage_trigger.alerta'        storage/logs/laravel.log
+grep 'twilio.usage_trigger.firma_invalida' storage/logs/laravel.log   # alguien probando
+```
+
 ---
 
 ## 3. Qué mirar cuando algo va mal

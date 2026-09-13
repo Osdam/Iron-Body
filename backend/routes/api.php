@@ -538,6 +538,12 @@ Route::post('webhooks/meta', [\App\Http\Controllers\Api\WebhookMetaController::c
 // registrar en el dashboard Wompi (config('wompi.webhook_url')).
 Route::post('webhooks/wompi', [WompiWebhookController::class, 'handle'])
     ->middleware('throttle:120,1');
+// Aviso de gasto de Twilio (Usage Trigger). Público porque lo llama Twilio; la
+// autenticidad se valida por la firma X-Twilio-Signature y el aviso se
+// deduplica por IdempotencyToken. Sólo registra: quien frena el gasto es el
+// techo propio de OtpCostGuard, no esto.
+Route::post('webhooks/twilio/usage-trigger', [\App\Http\Controllers\Api\TwilioUsageTriggerController::class, 'handle'])
+    ->middleware('throttle:60,1');
 // Apertura directa del torniquete (hardware) — solo administración.
 Route::middleware('auth.admin')->group(function (): void {
     // ZKTeco Eco — apertura directa (SDK standalone, TCP 4370).
