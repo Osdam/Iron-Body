@@ -4,7 +4,8 @@ Qué hacer cuando el gasto en SMS se dispara, qué palancas existen y cómo se
 revierte cada una. Nada aquí es aspiracional: todo lo que se afirma se midió
 contra producción o está cubierto por `tests/Feature/Otp/TwilioCostControlTest.php`.
 
-Origen: auditoría del 12 de septiembre de 2026. Base: `4f86904`.
+Origen: auditoría del 12 de septiembre de 2026. Implantado el 13 de septiembre
+sobre `4f86904` (commits `a00e7ae`, `8b0dfc0`, `4ccf8c2`, `4709adb`).
 
 ---
 
@@ -139,6 +140,57 @@ grep 'twilio.usage_trigger.alerta'        storage/logs/laravel.log
 grep 'twilio.usage_trigger.firma_invalida' storage/logs/laravel.log   # alguien probando
 ```
 
+Configurados (13/09/2026), en escalera con el techo propio:
+
+| Umbral | Quién | Qué hace |
+|---|---|---|
+| 4 USD/día | Twilio · trigger | avisa |
+| 6 USD/día | nuestro techo blando | avisa en el log, una vez al día |
+| 8 USD/día | Twilio · trigger | avisa |
+| **12 USD/día** | **nuestro techo duro** | **corta envíos nuevos** |
+| 90 / 140 USD mes | Twilio · triggers | avisan |
+
+### 2.7 Protecciones del lado del proveedor
+
+**Service Rate Limits de Verify** — `unique_name` `phone_hash`, buckets 5/15 min y
+12/24 h. Van **a propósito más holgados** que los nuestros (3/15 min, 8/24 h): no
+son un duplicado, son la red por si nuestra cache fallara. El backend manda en
+cada verificación un hash del teléfono, nunca el número: ese valor queda
+almacenado en Twilio y no debe ser un dato personal.
+
+Si alguien borra ese rate limit en la consola, Twilio responde 400 y el backend
+**reintenta una vez sin la llave** (`TwilioVerifyService::start()`), de modo que
+un refuerzo caído no puede tumbar el login de todos. Ese 400 no factura nada, así
+que el reintento no duplica ningún SMS.
+
+**Voz (Programmable Voice · Dialing Permissions)** — 217 de 218 países cerrados;
+sólo queda Colombia abierta. La cuenta no ha hecho **ni una sola llamada** en su
+historia (0 llamadas, 0 USD), y el fraude de tarificación por voz es un fenómeno
+internacional: cerrar fuera da toda la protección. Colombia se deja abierta
+porque es donde Ironbody opera y porque la estructura de llamadas comerciales
+(`MarketingCall`, hoy inerte) apunta ahí. Para cerrarla también:
+
+```
+POST https://voice.twilio.com/v1/DialingPermissions/BulkCountryUpdates
+UpdateRequest=[{"iso_code":"CO","low_risk_numbers_enabled":false,
+                "high_risk_special_numbers_enabled":false,
+                "high_risk_tollfraud_numbers_enabled":false}]
+```
+
+**Verify Geo Permissions y Fraud Guard — SOLO CONSOLA.** No existe endpoint REST:
+`verify.twilio.com/v2/GeoPermissions`, `.../Services/{sid}/GeoPermissions` y
+`messaging.twilio.com/v1/GeoPermissions` devuelven **404**. Hay que entrar a
+`console.twilio.com` → Verify → Settings:
+
+- *Geo Permissions*: dejar **solo Colombia (+57)** habilitada para SMS y
+  deshabilitar el canal de voz. Dato para decidir sin dudar: de 562 intentos
+  auditados, **562 fueron a Colombia** y **562 fueron por SMS** — cero voz, cero
+  internacional.
+- *Fraud Guard*: confirmar que está **activo**. No endurecerlo sin datos.
+
+Programmable Messaging Geo Permissions **no se toca**: la auditoría confirmó 0
+uso de ese producto (`Messages.json` devuelve 0 mensajes).
+
 ---
 
 ## 3. Qué mirar cuando algo va mal
@@ -178,7 +230,29 @@ con eso y quitarlas devolvería el problema de coste.
 
 ---
 
-## 5. Lo que NO se hizo, y por qué
+## 5. Rollback
+
+Ninguna palanca necesita despliegue: todas viven en el `.env` de producción y se
+aplican con `php artisan config:cache`. Van de menos a más drástica y **son
+independientes**: apagar una no desmonta las demás.
+
+| Síntoma | Palanca | Efecto |
+|---|---|---|
+| Caen los logins completados tras activar el adaptativo | `SECURITY_ADAPTIVE_LOGIN=false` | vuelve el OTP en cada entrada; el resto de protecciones sigue |
+| Twilio rechaza envíos por el rate limit remoto | `TWILIO_VERIFY_RATE_LIMIT_NAME=` (vacío) | deja de enviarse la llave; el backend ya se autoprotege ante un 400 |
+| Socios legítimos bloqueados por cupo | subir `OTP_PHONE_WINDOW_LIMIT` / `OTP_PHONE_DAILY_LIMIT` | más margen por teléfono |
+| El techo corta tráfico legítimo | subir `TWILIO_DAILY_HARD_LIMIT_USD` | más margen de gasto |
+| Fuga de gasto en curso | `TWILIO_SEND_ENABLED=false` | corta todo envío nuevo; quien ya tiene su código sigue entrando |
+
+Instantáneas del `.env` previas a cada cambio, en `/root/.env.pre-*` del servidor.
+
+Revertir el **código** entero (no debería hacer falta, porque cada protección se
+apaga por configuración) sería volver a `4f86904`, el commit anterior a esta
+implantación.
+
+---
+
+## 6. Lo que NO se hizo, y por qué
 
 - **Enumeración de cédulas.** `members/login` responde 404 «Documento no
   encontrado» y eso permite comprobar si una cédula existe. No se corrigió
