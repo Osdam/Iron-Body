@@ -54,10 +54,21 @@ class TwilioVerifyService
         }
 
         try {
-            $resp = Http::asForm()
-                ->withBasicAuth($this->sid(), $this->token())
-                ->timeout(15)
-                ->post($this->endpoint('Verifications'), $payload);
+            $resp = $this->postVerification($payload);
+
+            // Red de seguridad: la llave de rate limit depende de que exista en
+            // el servicio de Twilio, que es configuración REMOTA. Si alguien la
+            // borra allí, Twilio devuelve 400 y se caería el login de todo el
+            // mundo por algo que sólo era un refuerzo. Ante ese 400 concreto se
+            // reintenta UNA vez sin la llave: el 400 significa que no se envió
+            // nada y no se facturó nada, así que no duplica ningún SMS.
+            if (! $resp->successful() && $resp->status() === 400 && isset($payload['RateLimits'])) {
+                Log::warning('TwilioVerify: rate limit remoto rechazado, se reintenta sin él', [
+                    'twilio_code' => $resp->json('code'),
+                ]);
+                unset($payload['RateLimits']);
+                $resp = $this->postVerification($payload);
+            }
 
             if (! $resp->successful()) {
                 Log::warning('TwilioVerify: start no exitoso', [
@@ -74,6 +85,14 @@ class TwilioVerifyService
 
             return false;
         }
+    }
+
+    private function postVerification(array $payload): \Illuminate\Http\Client\Response
+    {
+        return Http::asForm()
+            ->withBasicAuth($this->sid(), $this->token())
+            ->timeout(15)
+            ->post($this->endpoint('Verifications'), $payload);
     }
 
     /** Valida el código contra Twilio. true solo si Twilio responde `approved`. */

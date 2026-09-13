@@ -53,6 +53,12 @@ class TwilioCostControlTest extends TestCase
 
     private bool $conexionCaida = false;
 
+    /** Twilio rechaza SÓLO cuando el envío lleva la llave de rate limit. */
+    private bool $rechazaConLlave = false;
+
+    /** Código HTTP forzado para el envío (p. ej. un 429 del proveedor). */
+    private ?int $estadoEnvioForzado = null;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -83,6 +89,17 @@ class TwilioCostControlTest extends TestCase
 
             if (str_ends_with($request->url(), '/Verifications')) {
                 $this->envios++;
+
+                if ($this->estadoEnvioForzado !== null) {
+                    return Http::response(
+                        ['code' => 60203, 'message' => 'Max send attempts reached'],
+                        $this->estadoEnvioForzado,
+                    );
+                }
+
+                if ($this->rechazaConLlave && isset($request['RateLimits'])) {
+                    return Http::response(['code' => 60600, 'message' => 'Invalid rate limit'], 400);
+                }
 
                 return $this->aceptaEnvios
                     ? Http::response(['status' => 'pending'], 201)
@@ -746,6 +763,31 @@ class TwilioCostControlTest extends TestCase
                 && ! str_contains((string) $limites['phone_hash'], '3008880070')
                 && $limites['phone_hash'] === app(OtpPolicy::class)->phoneHash('3008880070');
         });
+    }
+
+    public function test_si_twilio_rechaza_la_llave_del_limite_el_login_no_se_cae(): void
+    {
+        // La llave depende de configuración REMOTA: si alguien borra el rate
+        // limit en la consola de Twilio, el refuerzo no puede tumbar el login.
+        config(['otp.twilio.rate_limit_unique_name' => 'phone_hash']);
+        // El primero, con llave, lo rechaza Twilio; el segundo, sin ella, pasa.
+        $this->rechazaConLlave = true;
+
+        $res = app(\App\Services\Sms\TwilioVerifyService::class)->start('3001234567', 'hash-cualquiera');
+
+        $this->assertTrue($res, 'El socio debe poder entrar aunque el refuerzo remoto falle.');
+        $this->assertSame(2, $this->envios, 'Un solo reintento, y sólo tras un 400 que no factura nada.');
+    }
+
+    public function test_un_rechazo_que_no_es_de_rate_limit_no_se_reintenta(): void
+    {
+        config(['otp.twilio.rate_limit_unique_name' => 'phone_hash']);
+        $this->estadoEnvioForzado = 429;
+
+        $res = app(\App\Services\Sms\TwilioVerifyService::class)->start('3001234567', 'hash-cualquiera');
+
+        $this->assertFalse($res);
+        $this->assertSame(1, $this->envios, 'Un 429 del proveedor no se reintenta: sería insistir y gastar.');
     }
 
     // ── Prueba económica (Fase 22) ───────────────────────────────────────────
