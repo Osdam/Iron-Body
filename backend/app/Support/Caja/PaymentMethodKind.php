@@ -74,6 +74,29 @@ enum PaymentMethodKind: string
     }
 
     /**
+     * Grafías de origen que {@see normalize()} reconoce como este medio.
+     *
+     * Existe para poder FILTRAR por medio en SQL, donde no se puede llamar a
+     * normalize(). Vive pegado a normalize() a propósito: si se añade una grafía
+     * allí y no aquí, el filtro dejaría fuera esos cobros sin avisar, y
+     * PaymentMethodKindTest comprueba que las dos listas coinciden.
+     *
+     * OTHER devuelve vacío: es «todo lo demás» y no se puede enumerar.
+     *
+     * @return list<string>
+     */
+    public function aliases(): array
+    {
+        return match ($this) {
+            self::CASH => ['cash', 'efectivo'],
+            self::TRANSFER => ['transfer', 'transferencia', 'nequi', 'daviplata', 'pse'],
+            self::CARD => ['card', 'datafono', 'datáfono', 'tarjeta'],
+            self::WOMPI => ['wompi', 'online', 'epayco'],
+            self::OTHER => [],
+        };
+    }
+
+    /**
      * Medios que un empleado puede seleccionar al cobrar en mostrador.
      *
      * `manual` queda deliberadamente fuera: un cobro operativo nuevo no puede

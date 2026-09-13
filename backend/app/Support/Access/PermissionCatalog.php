@@ -69,6 +69,7 @@ final class PermissionCatalog
         'operate' => 'Operar',
         'manage' => 'Administrar',
         'use' => 'Usar',
+        'export' => 'Exportar',
     ];
 
     /**
@@ -87,6 +88,8 @@ final class PermissionCatalog
         'receivables.manage' => 'Anular un abono mal registrado. El original no se borra.',
         'members.archive' => 'Retirar la ficha de un socio. No borra su historial.',
         'payments.cancel' => 'Anular un pago ya registrado.',
+        'members.export' => 'Descargar socios en Excel o CSV, con datos personales si se eligen. Queda auditado.',
+        'payments.export' => 'Descargar cobros en Excel o CSV. Queda auditado.',
         'earnings.view' => 'Ver cuánto factura el negocio.',
         'audit.view' => 'Consultar el registro de acciones. Nadie puede escribirlo ni borrarlo.',
         'roles.manage' => 'Crear roles y repartir permisos. Es el permiso más alto del CRM.',
