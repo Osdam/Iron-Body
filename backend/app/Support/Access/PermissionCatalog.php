@@ -27,6 +27,7 @@ final class PermissionCatalog
     private const DOMAINS = [
         'members' => ['label' => 'Miembros', 'icon' => 'group', 'hint' => 'Fichas de socios, membresías y contratos'],
         'payments' => ['label' => 'Pagos', 'icon' => 'payments', 'hint' => 'Cobros de membresías y suscripciones'],
+        'exports' => ['label' => 'Exportaciones', 'icon' => 'file_export', 'hint' => 'Descargar datos a Excel o CSV. Cada descarga queda auditada'],
         'cash.products' => ['label' => 'Caja de productos', 'icon' => 'storefront', 'hint' => 'Mostrador y venta de productos'],
         'cash.gym' => ['label' => 'Caja del gimnasio', 'icon' => 'fitness_center', 'hint' => 'Turno de caja de membresías'],
         'receivables' => ['label' => 'Cuentas por cobrar', 'icon' => 'request_quote', 'hint' => 'Saldos pendientes, créditos y abonos'],
@@ -73,6 +74,36 @@ final class PermissionCatalog
     ];
 
     /**
+     * Permisos que se MUESTRAN bajo otro dominio que el de su clave.
+     *
+     * `members.export` pertenece por clave a Miembros —protege datos de socios—,
+     * pero en la matriz se buscaba como lo que es para quien reparte permisos:
+     * un módulo propio, «Exportaciones». Metido al final de Miembros y de Pagos
+     * no lo encontraba nadie.
+     *
+     * Solo cambia DÓNDE se pinta. La clave, lo que exige la ruta y lo que ya
+     * está concedido o revocado no se tocan: renombrar un permiso desplegado
+     * obligaría a migrar lo guardado en role_permissions.
+     *
+     * @var array<string, string>
+     */
+    private const DISPLAY_DOMAIN = [
+        'members.export' => 'exports',
+        'payments.export' => 'exports',
+    ];
+
+    /**
+     * Etiqueta por clave, cuando la de la acción no basta. Dentro del grupo
+     * «Exportaciones» las dos serían «Exportar»; lo que las distingue es QUÉ.
+     *
+     * @var array<string, string>
+     */
+    private const LABELS = [
+        'members.export' => 'Miembros',
+        'payments.export' => 'Pagos',
+    ];
+
+    /**
      * Aclaración para las acciones cuyo alcance no es obvio por el nombre.
      *
      * @var array<string, string>
@@ -88,8 +119,8 @@ final class PermissionCatalog
         'receivables.manage' => 'Anular un abono mal registrado. El original no se borra.',
         'members.archive' => 'Retirar la ficha de un socio. No borra su historial.',
         'payments.cancel' => 'Anular un pago ya registrado.',
-        'members.export' => 'Descargar socios en Excel o CSV, con datos personales si se eligen. Queda auditado.',
-        'payments.export' => 'Descargar cobros en Excel o CSV. Queda auditado.',
+        'members.export' => 'Descargar socios con su membresía en Excel o CSV, incluidos documento y teléfono si se eligen. Queda auditado.',
+        'payments.export' => 'Descargar cobros con su desglose por medio de pago en Excel o CSV. Queda auditado.',
         'earnings.view' => 'Ver cuánto factura el negocio.',
         'audit.view' => 'Consultar el registro de acciones. Nadie puede escribirlo ni borrarlo.',
         'roles.manage' => 'Crear roles y repartir permisos. Es el permiso más alto del CRM.',
@@ -121,6 +152,7 @@ final class PermissionCatalog
 
         foreach ($reales as $clave) {
             [$dominio, $accion] = self::split($clave);
+            $dominio = self::DISPLAY_DOMAIN[$clave] ?? $dominio;
             $porDominio[$dominio][] = ['key' => $clave, 'action' => $accion];
         }
 
@@ -134,7 +166,7 @@ final class PermissionCatalog
                     'domain_icon' => $meta['icon'],
                     'domain_hint' => $meta['hint'],
                     'action' => $p['action'],
-                    'label' => self::ACTIONS[$p['action']] ?? $p['action'],
+                    'label' => self::LABELS[$p['key']] ?? self::ACTIONS[$p['action']] ?? $p['action'],
                     'help' => self::HELP[$p['key']] ?? null,
                 ];
             }
@@ -153,7 +185,7 @@ final class PermissionCatalog
                     'domain_icon' => 'help',
                     'domain_hint' => 'Dominio sin describir en PermissionCatalog',
                     'action' => $p['action'],
-                    'label' => self::ACTIONS[$p['action']] ?? $p['action'],
+                    'label' => self::LABELS[$p['key']] ?? self::ACTIONS[$p['action']] ?? $p['action'],
                     'help' => null,
                 ];
             }

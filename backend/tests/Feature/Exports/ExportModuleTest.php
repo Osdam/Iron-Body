@@ -310,6 +310,23 @@ class ExportModuleTest extends TestCase
         $this->assertMatchesRegularExpression('/<c r="D2" s="2"><v>20<\/v><\/c>/', $hoja);
     }
 
+    public function test_los_permisos_de_exportar_salen_como_seccion_propia_en_roles(): void
+    {
+        // Metidos al final de Miembros y de Pagos no los encontraba nadie en la
+        // matriz de Configuración → Usuarios y roles.
+        $filas = collect(\App\Support\Access\PermissionCatalog::rows())->keyBy('key');
+
+        foreach (['members.export' => 'Miembros', 'payments.export' => 'Pagos'] as $clave => $etiqueta) {
+            $this->assertSame('exports', $filas[$clave]['domain'], "{$clave} fuera de Exportaciones");
+            $this->assertSame('Exportaciones', $filas[$clave]['domain_label']);
+            $this->assertSame($etiqueta, $filas[$clave]['label']);
+        }
+
+        // Y la clave NO cambia: lo que exige la ruta sigue siendo lo mismo.
+        $this->assertSame('members', $filas['members.view']['domain']);
+        $this->assertContains('members.export', \App\Support\Access\PermissionCatalog::all());
+    }
+
     public function test_cada_alias_de_medio_normaliza_a_su_medio(): void
     {
         // El filtro SQL usa aliases(); el arqueo usa normalize(). Si divergen,
