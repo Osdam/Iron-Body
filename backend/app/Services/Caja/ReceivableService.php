@@ -12,6 +12,7 @@ use App\Models\Receivable;
 use App\Models\ReceivablePayment;
 use App\Services\Billing\Money;
 use App\Support\Caja\PaymentMethodKind;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -71,6 +72,7 @@ class ReceivableService
         ?Admin $actor = null,
         ?Model $source = null,
         ?string $notes = null,
+        ?CarbonInterface $dueAt = null,
     ): Receivable {
         if (! $total->isPositive()) {
             throw ReceivableException::invalidTotal();
@@ -88,6 +90,9 @@ class ReceivableService
             'concept' => trim($concept),
             'total_amount' => $total->toDatabase(),
             'status' => Receivable::STATUS_PENDING,
+            // Sin fecha no hay vencimiento y por tanto no hay bloqueo: quien
+            // no pacta plazo no crea un moroso por descuido.
+            'due_at' => $dueAt?->toDateString(),
             'created_by' => $actor?->id,
             'created_by_name' => $actor?->name,
             'notes' => $notes,

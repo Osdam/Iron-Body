@@ -7,6 +7,7 @@ use App\Enums\DebtorType;
 use App\Services\Caja\DebtorDirectory;
 use App\Models\ProductSale;
 use App\Services\Billing\Money;
+use Illuminate\Support\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -43,7 +44,7 @@ class Receivable extends Model
 
     protected $fillable = [
         'member_id', 'debtor_type', 'debtor_id', 'type', 'concept', 'total_amount', 'status',
-        'source_type', 'source_id', 'created_by', 'created_by_name',
+        'due_at', 'source_type', 'source_id', 'created_by', 'created_by_name',
         'notes', 'cancelled_at',
     ];
 
@@ -52,6 +53,7 @@ class Receivable extends Model
         'debtor_type' => DebtorType::class,
         'debtor_id' => 'integer',
         'total_amount' => 'decimal:2',
+        'due_at' => 'date',
         'cancelled_at' => 'datetime',
     ];
 
@@ -147,6 +149,69 @@ class Receivable extends Model
     public function scopeSettled(Builder $q): Builder
     {
         return $q->where('status', self::STATUS_PAID);
+    }
+
+    // ── Vencimiento ─────────────────────────────────────────────────────────
+
+    /**
+     * Deuda viva cuyo plazo ya pasó.
+     *
+     * Se apoya en `outstanding()` —es decir, en `status`— y no en el saldo,
+     * porque el saldo es derivado y filtrarlo en SQL costaría una subconsulta
+     * por fila. No es un atajo: el servicio recalcula `status` dentro de la
+     * MISMA transacción que mueve el dinero, así que decir `pending` o
+     * `partially_paid` es decir «queda saldo».
+     *
+     * `due_at IS NULL` queda fuera por construcción: sin plazo pactado no hay
+     * nada que vencer, y eso es lo que protege a las deudas antiguas.
+     */
+    public function scopeOverdue(Builder $q, ?Carbon $today = null): Builder
+    {
+        return $q->outstanding()
+            ->whereNotNull('due_at')
+            ->whereDate('due_at', '<', ($today ?? self::businessToday())->toDateString());
+    }
+
+    /** Hoy, en la zona del gimnasio. La fecha del servidor no es fuente de verdad. */
+    public static function businessToday(): Carbon
+    {
+        return Carbon::now(config('caja.timezone', Member::BUSINESS_TZ))->startOfDay();
+    }
+
+    /**
+     * ¿Está vencida AHORA?
+     *
+     * El día pactado se respeta entero: con `due_at` = hoy todavía no ha
+     * vencido. Alguien que paga la tarde del día límite cumplió.
+     *
+     * SE COMPARAN FECHAS DE CALENDARIO, NO INSTANTES. `due_at` se castea a
+     * medianoche UTC y el día del negocio empieza a medianoche en Bogotá, que
+     * son las 05:00 UTC: comparar los dos momentos daba por vencida una deuda
+     * el mismo día en que se había pactado pagarla. Lo que se pacta es un día,
+     * y así es como hay que compararlo.
+     */
+    public function isOverdue(?Carbon $today = null): bool
+    {
+        if ($this->due_at === null || $this->isCancelled() || $this->balance()->isZero()) {
+            return false;
+        }
+
+        return $this->due_at->toDateString() < ($today ?? self::businessToday())->toDateString();
+    }
+
+    /** Días completos transcurridos desde el vencimiento. 0 si no está vencida. */
+    public function daysOverdue(?Carbon $today = null): int
+    {
+        if (! $this->isOverdue($today)) {
+            return 0;
+        }
+
+        $hoy = ($today ?? self::businessToday());
+
+        // Ambas a medianoche y en la MISMA zona, por el mismo motivo de arriba:
+        // si no, la diferencia sale con cinco horas de sesgo.
+        return (int) Carbon::parse($this->due_at->toDateString())
+            ->diffInDays(Carbon::parse($hoy->toDateString()));
     }
 
     // ── El invariante: TOTAL = PAGADO + SALDO ───────────────────────────────
@@ -259,6 +324,11 @@ class Receivable extends Model
             'balance' => $saldo->toFloat(),
             'status' => $this->status,
             'status_label' => self::statusLabel($this->status),
+            // El vencimiento viaja junto al saldo que ya se calculó arriba: no
+            // se vuelve a consultar nada para saber si está vencida.
+            'due_date' => optional($this->due_at)->toDateString(),
+            'overdue' => $this->isOverdue(),
+            'days_overdue' => $this->daysOverdue(),
             'source_type' => $this->source_type ? class_basename($this->source_type) : null,
             'source_id' => $this->source_id,
             'created_by_name' => $this->created_by_name,

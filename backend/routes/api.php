@@ -208,7 +208,7 @@ Route::middleware(['trainer.feature:professional_assessments_enabled', 'auth.tra
 });
 
 // ── Valoraciones profesionales — vista de SOLO LECTURA del miembro ────────────
-Route::middleware(['trainer.feature:professional_assessments_enabled', 'auth.member'])->group(function (): void {
+Route::middleware(['trainer.feature:professional_assessments_enabled', 'auth.member', 'membership.benefits'])->group(function (): void {
     $ma = \App\Http\Controllers\Api\MemberAssessmentController::class;
     Route::get('member/assessments',                 [$ma, 'index']);
     Route::get('member/assessments/{uuid}',          [$ma, 'show']);
@@ -259,7 +259,7 @@ Route::middleware(['trainer.feature:trainer_nutrition_guides_enabled', 'auth.tra
 });
 
 // ── Guías nutricionales — vista de SOLO LECTURA del socio ─────────────────────
-Route::middleware(['trainer.feature:trainer_nutrition_guides_enabled', 'auth.member'])->group(function (): void {
+Route::middleware(['trainer.feature:trainer_nutrition_guides_enabled', 'auth.member', 'membership.benefits'])->group(function (): void {
     $mg = \App\Http\Controllers\Api\MemberNutritionGuideController::class;
     Route::get('member/nutrition-guide',                 [$mg, 'current']);
     Route::get('member/nutrition-guides',                [$mg, 'index']);
@@ -413,7 +413,7 @@ Route::middleware('auth.admin')->prefix('admin/subscriptions')->group(function (
 // Módulo NUEVO (tablas nutrition_foods/entries/...) independiente del nutricional
 // previo (app/nutrition/*). Flutter NUNCA llama a proveedores externos; todo pasa
 // por el backend, que cachea y calcula los macros finales. Rate-limit por método.
-Route::middleware('auth.member')->prefix('nutrition')->group(function (): void {
+Route::middleware(['auth.member', 'membership.benefits'])->prefix('nutrition')->group(function (): void {
     $food = \App\Http\Controllers\Api\Nutrition\NutritionFoodController::class;
     $entry = \App\Http\Controllers\Api\Nutrition\NutritionEntryController::class;
     $summary = \App\Http\Controllers\Api\Nutrition\NutritionSummaryController::class;
@@ -471,19 +471,24 @@ Route::middleware('auth.member')->prefix('nutrition')->group(function (): void {
 Route::middleware('auth.member')->group(function (): void {
     Route::get('iron-ai/access', [IronAiController::class, 'access']);
     Route::get('iron-ai/quota', [IronAiController::class, 'quota']);
-    Route::post('iron-ai/chat', [IronAiController::class, 'chat']);
-    Route::get('iron-ai/recommendations', [IronAiController::class, 'recommendations']);
+    Route::post('iron-ai/chat', [IronAiController::class, 'chat'])
+        ->middleware('membership.benefits');
+    Route::get('iron-ai/recommendations', [IronAiController::class, 'recommendations'])
+        ->middleware('membership.benefits');
 
     // ── IRON IA multimodal — voz (transcripción) e imagen (visión) ───────────
     // Multipart. Consumen cuota IA (kind=audio|image) y dependen del plan: si la
     // función está bloqueada o se agotó la cuota, NO se llama a OpenAI.
-    Route::post('iron-ai/audio-chat', [IronAiMediaController::class, 'audioChat']);
-    Route::post('iron-ai/image-chat', [IronAiMediaController::class, 'imageChat']);
+    Route::post('iron-ai/audio-chat', [IronAiMediaController::class, 'audioChat'])
+        ->middleware('membership.benefits');
+    Route::post('iron-ai/image-chat', [IronAiMediaController::class, 'imageChat'])
+        ->middleware('membership.benefits');
 
     // ── IRON IA — conversación de voz EN VIVO (OpenAI Realtime / WebRTC) ──────
     // session: acuña token efímero (gated por plan; consume cuota realtime).
     // transcript: persiste turnos (no llama a OpenAI ni consume cuota de chat).
-    Route::post('iron-ai/realtime/session', [IronAiRealtimeController::class, 'session']);
+    Route::post('iron-ai/realtime/session', [IronAiRealtimeController::class, 'session'])
+        ->middleware('membership.benefits');
     Route::post('iron-ai/realtime/transcript', [IronAiRealtimeController::class, 'transcript']);
 
     // ── IRON IA — centro de conversaciones (CRUD; no consume OpenAI/cuota) ────
@@ -655,12 +660,18 @@ Route::middleware('auth.member')->group(function (): void {
 
     // ── Story Live / transmisiones en vivo (Bloque 5) ─────────────────────────
     // 'active' antes de {live}; {live} solo numérico (route-model binding).
-    Route::get('member/live/active',            [\App\Http\Controllers\Api\LiveController::class, 'active']);
-    Route::post('member/live/create',           [\App\Http\Controllers\Api\LiveController::class, 'create']);
-    Route::get('member/live/{live}',            [\App\Http\Controllers\Api\LiveController::class, 'show'])->whereNumber('live');
-    Route::post('member/live/{live}/start',     [\App\Http\Controllers\Api\LiveController::class, 'start'])->whereNumber('live');
-    Route::post('member/live/{live}/end',       [\App\Http\Controllers\Api\LiveController::class, 'end'])->whereNumber('live');
-    Route::post('member/live/{live}/join-token',[\App\Http\Controllers\Api\LiveController::class, 'joinToken'])->whereNumber('live');
+    Route::get('member/live/active',            [\App\Http\Controllers\Api\LiveController::class, 'active'])
+        ->middleware('membership.benefits');
+    Route::post('member/live/create',           [\App\Http\Controllers\Api\LiveController::class, 'create'])
+        ->middleware('membership.benefits');
+    Route::get('member/live/{live}',            [\App\Http\Controllers\Api\LiveController::class, 'show'])->whereNumber('live')
+        ->middleware('membership.benefits');
+    Route::post('member/live/{live}/start',     [\App\Http\Controllers\Api\LiveController::class, 'start'])->whereNumber('live')
+        ->middleware('membership.benefits');
+    Route::post('member/live/{live}/end',       [\App\Http\Controllers\Api\LiveController::class, 'end'])->whereNumber('live')
+        ->middleware('membership.benefits');
+    Route::post('member/live/{live}/join-token',[\App\Http\Controllers\Api\LiveController::class, 'joinToken'])->whereNumber('live')
+        ->middleware('membership.benefits');
 
     // ── Perfil editable + foto (subida a Firebase por el cliente, aquí se
     // guarda la URL/ruta tras validar ownership).
@@ -712,41 +723,62 @@ Route::middleware('auth.member')->group(function (): void {
     // "Organizar mi semana": planificación y reserva semanal en lote. DEBEN ir
     // antes de las rutas con {myClass} para que "weekly" no se enlace como clase.
     Route::get('app/classes/weekly', [AppClassController::class, 'weeklyPlan']);
-    Route::post('app/classes/weekly/reserve', [AppClassController::class, 'reserveWeek']);
-    Route::post('app/classes/{myClass}/reserve', [AppClassController::class, 'reserve']);
-    Route::delete('app/classes/{myClass}/reserve', [AppClassController::class, 'cancel']);
-    Route::post('app/classes/{myClass}/check-in', [AppClassController::class, 'checkIn']);
+    Route::post('app/classes/weekly/reserve', [AppClassController::class, 'reserveWeek'])
+        ->middleware('membership.benefits');
+    Route::post('app/classes/{myClass}/reserve', [AppClassController::class, 'reserve'])
+        ->middleware('membership.benefits');
+    Route::delete('app/classes/{myClass}/reserve', [AppClassController::class, 'cancel'])
+        ->middleware('membership.benefits');
+    Route::post('app/classes/{myClass}/check-in', [AppClassController::class, 'checkIn'])
+        ->middleware('membership.benefits');
     // Rutas alias en /classes para compatibilidad con la app móvil
-    Route::post('classes/{myClass}/reserve', [ClassController::class, 'reserve']);
-    Route::post('classes/{myClass}/cancel',  [ClassController::class, 'cancel']);
-    Route::post('classes/{myClass}/check-in', [ClassController::class, 'checkIn']);
+    Route::post('classes/{myClass}/reserve', [ClassController::class, 'reserve'])
+        ->middleware('membership.benefits');
+    Route::post('classes/{myClass}/cancel',  [ClassController::class, 'cancel'])
+        ->middleware('membership.benefits');
+    Route::post('classes/{myClass}/check-in', [ClassController::class, 'checkIn'])
+        ->middleware('membership.benefits');
     // Entrenador asignado al miembro autenticado (antes de trainers/{trainer}).
     Route::get('trainers/mine', [MemberTrainerController::class, 'mine']);
     // Calificación de entrenadores
     Route::post('trainers/{trainer}/rate', [TrainerController::class, 'rate']);
     // Rutinas para miembros
     // "Entrenamiento de hoy" del Home (rutina asignada del día, sin mock).
-    Route::get('member/training/today',           [AppRoutineController::class, 'today']);
-    Route::get('app/routines/assigned',           [AppRoutineController::class, 'assigned']);
-    Route::get('app/routines/custom',             [AppRoutineController::class, 'custom']);
+    Route::get('member/training/today',           [AppRoutineController::class, 'today'])
+        ->middleware('membership.benefits');
+    Route::get('app/routines/assigned',           [AppRoutineController::class, 'assigned'])
+        ->middleware('membership.benefits');
+    Route::get('app/routines/custom',             [AppRoutineController::class, 'custom'])
+        ->middleware('membership.benefits');
     // Catálogo de plantillas pre-hechas que el miembro explora y adopta.
-    Route::get('app/routines/templates',          [AppRoutineController::class, 'templates']);
-    Route::post('app/routines/templates/{routine}/adopt', [AppRoutineController::class, 'adopt']);
-    Route::post('app/routines',                   [AppRoutineController::class, 'store']);
-    Route::post('app/routines/{routine}/complete',[AppRoutineController::class, 'complete']);
+    Route::get('app/routines/templates',          [AppRoutineController::class, 'templates'])
+        ->middleware('membership.benefits');
+    Route::post('app/routines/templates/{routine}/adopt', [AppRoutineController::class, 'adopt'])
+        ->middleware('membership.benefits');
+    Route::post('app/routines',                   [AppRoutineController::class, 'store'])
+        ->middleware('membership.benefits');
+    Route::post('app/routines/{routine}/complete',[AppRoutineController::class, 'complete'])
+        ->middleware('membership.benefits');
     // Sesión de entrenamiento REALMENTE ejecutada (duración, series, cargas).
     // Idempotente por `client_session_id`: un reintento devuelve la sesión ya
     // registrada en vez de duplicarla. Sustituye a /complete para la app.
-    Route::post('app/workout-sessions',            [AppWorkoutSessionController::class, 'store']);
-    Route::get('app/workout-sessions/{clientSessionId}', [AppWorkoutSessionController::class, 'show']);
+    Route::post('app/workout-sessions',            [AppWorkoutSessionController::class, 'store'])
+        ->middleware('membership.benefits');
+    Route::get('app/workout-sessions/{clientSessionId}', [AppWorkoutSessionController::class, 'show'])
+        ->middleware('membership.benefits');
     // Ocultar/restaurar una rutina semi-personalizada SOLO para este miembro
     // (no borra la rutina global). Ver MemberHiddenRoutine.
-    Route::post('app/routines/{routine}/hide',    [AppRoutineController::class, 'hide']);
-    Route::post('app/routines/{routine}/unhide',  [AppRoutineController::class, 'unhide']);
+    Route::post('app/routines/{routine}/hide',    [AppRoutineController::class, 'hide'])
+        ->middleware('membership.benefits');
+    Route::post('app/routines/{routine}/unhide',  [AppRoutineController::class, 'unhide'])
+        ->middleware('membership.benefits');
     // Resumen nutricional diario (sincroniza desde la app → push al cumplir meta)
-    Route::post('app/nutrition/day',              [AppNutritionController::class, 'store']);
-    Route::delete('app/routines/{routine}',       [AppRoutineController::class, 'destroy']);
-    Route::post('app/routines/{routine}/delete',  [AppRoutineController::class, 'destroy']);
+    Route::post('app/nutrition/day',              [AppNutritionController::class, 'store'])
+        ->middleware('membership.benefits');
+    Route::delete('app/routines/{routine}',       [AppRoutineController::class, 'destroy'])
+        ->middleware('membership.benefits');
+    Route::post('app/routines/{routine}/delete',  [AppRoutineController::class, 'destroy'])
+        ->middleware('membership.benefits');
     // ── Tienda (app) — lee el catálogo `products` (visible_in_app) del CRM ────
     // El checkout crea un pedido en product_sales (channel=app) que gestiona la
     // Caja del CRM. Ver AppStoreController y docs/STORE_CAJA_MODULE.md.
@@ -771,16 +803,25 @@ Route::middleware('auth.member')->group(function (): void {
     // signInWithCustomToken y habilitar uploads seguros a Firebase Storage.
     Route::post('app/firebase/custom-token', [FirebaseAuthController::class, 'customToken']);
 
-    Route::get('app/stories',              [StoriesController::class, 'indexAsMember']);
-    Route::post('app/stories',             [StoriesController::class, 'storeAsMember']);
+    Route::get('app/stories',              [StoriesController::class, 'indexAsMember'])
+        ->middleware('membership.benefits');
+    Route::post('app/stories',             [StoriesController::class, 'storeAsMember'])
+        ->middleware('membership.benefits');
     // Story cuyo media ya se subió a Firebase Storage (metadata-only).
-    Route::post('app/stories/firebase',    [StoriesController::class, 'storeAsMemberFirebase']);
-    Route::post('app/stories/{id}/view',   [StoriesController::class, 'recordView']);
-    Route::get('app/stories/{id}/viewers', [StoriesController::class, 'listViewers']);
-    Route::post('app/stories/{id}/react',     [StoriesController::class, 'react']);
-    Route::delete('app/stories/{id}/react',   [StoriesController::class, 'unreact']);
-    Route::get('app/stories/{id}/reactions',  [StoriesController::class, 'listReactions']);
-    Route::delete('app/stories/{id}',      [StoriesController::class, 'destroyAsMember']);
+    Route::post('app/stories/firebase',    [StoriesController::class, 'storeAsMemberFirebase'])
+        ->middleware('membership.benefits');
+    Route::post('app/stories/{id}/view',   [StoriesController::class, 'recordView'])
+        ->middleware('membership.benefits');
+    Route::get('app/stories/{id}/viewers', [StoriesController::class, 'listViewers'])
+        ->middleware('membership.benefits');
+    Route::post('app/stories/{id}/react',     [StoriesController::class, 'react'])
+        ->middleware('membership.benefits');
+    Route::delete('app/stories/{id}/react',   [StoriesController::class, 'unreact'])
+        ->middleware('membership.benefits');
+    Route::get('app/stories/{id}/reactions',  [StoriesController::class, 'listReactions'])
+        ->middleware('membership.benefits');
+    Route::delete('app/stories/{id}',      [StoriesController::class, 'destroyAsMember'])
+        ->middleware('membership.benefits');
 
     // ── Moderación de comunidad (UGC): reportes, bloqueos, sanciones ─────────
     // El actor SIEMPRE sale del bearer (`auth_member`); ningún endpoint acepta
@@ -811,28 +852,43 @@ Route::middleware('auth.member')->group(function (): void {
         ->middleware('throttle:20,60');
 
     // ── Racha semanal "Esta semana" ────────────────────────────────────────
-    Route::post('app/weekly-streak/touch', [WeeklyStreakController::class, 'touch']);
-    Route::get('app/weekly-streak',        [WeeklyStreakController::class, 'show']);
+    Route::post('app/weekly-streak/touch', [WeeklyStreakController::class, 'touch'])
+        ->middleware('membership.benefits');
+    Route::get('app/weekly-streak',        [WeeklyStreakController::class, 'show'])
+        ->middleware('membership.benefits');
 
     // ── Nutrición ───────────────────────────────────────────────────────────
-    Route::get('app/nutrition/today',  [NutritionController::class, 'today']);
-    Route::get('app/nutrition/day',    [NutritionController::class, 'day']);
-    Route::get('app/nutrition/goals',  [NutritionController::class, 'getGoals']);
-    Route::post('app/nutrition/goals', [NutritionController::class, 'saveGoals']);
-    Route::get('app/nutrition/history',[NutritionController::class, 'history']);
-    Route::get('app/nutrition/foods',  [NutritionController::class, 'foods']);
-    Route::post('app/nutrition/foods', [NutritionController::class, 'createFood']);
-    Route::post('app/nutrition/meals/{mealType}/items', [NutritionController::class, 'addItem']);
+    Route::get('app/nutrition/today',  [NutritionController::class, 'today'])
+        ->middleware('membership.benefits');
+    Route::get('app/nutrition/day',    [NutritionController::class, 'day'])
+        ->middleware('membership.benefits');
+    Route::get('app/nutrition/goals',  [NutritionController::class, 'getGoals'])
+        ->middleware('membership.benefits');
+    Route::post('app/nutrition/goals', [NutritionController::class, 'saveGoals'])
+        ->middleware('membership.benefits');
+    Route::get('app/nutrition/history',[NutritionController::class, 'history'])
+        ->middleware('membership.benefits');
+    Route::get('app/nutrition/foods',  [NutritionController::class, 'foods'])
+        ->middleware('membership.benefits');
+    Route::post('app/nutrition/foods', [NutritionController::class, 'createFood'])
+        ->middleware('membership.benefits');
+    Route::post('app/nutrition/meals/{mealType}/items', [NutritionController::class, 'addItem'])
+        ->middleware('membership.benefits');
     Route::delete('app/nutrition/meals/items/{id}',     [NutritionController::class, 'deleteItem'])
-        ->where('id', '[0-9]+');
+        ->where('id', '[0-9]+')
+        ->middleware('membership.benefits');
     // IRON IA coach nutricional (OpenAI desde Laravel).
-    Route::post('app/nutrition/ai/recommendation', [NutritionController::class, 'aiRecommendation']);
-    Route::get('app/nutrition/ai/last',            [NutritionController::class, 'aiLast']);
+    Route::post('app/nutrition/ai/recommendation', [NutritionController::class, 'aiRecommendation'])
+        ->middleware('membership.benefits');
+    Route::get('app/nutrition/ai/last',            [NutritionController::class, 'aiLast'])
+        ->middleware('membership.benefits');
 
     // IRON IA — contexto seguro del usuario (debug/uso interno).
-    Route::get('app/iron-ai/context-summary', [IronAiContextController::class, 'summary']);
+    Route::get('app/iron-ai/context-summary', [IronAiContextController::class, 'summary'])
+        ->middleware('membership.benefits');
     // IRON IA Coach contextual (plan del día, OpenAI desde Laravel).
-    Route::post('app/iron-ai/coach', [IronAiContextController::class, 'coach']);
+    Route::post('app/iron-ai/coach', [IronAiContextController::class, 'coach'])
+        ->middleware('membership.benefits');
 
     // ── Centro de notificaciones del coach (app_notifications) ────────────────
     Route::get('app/notifications',                 [AppNotificationController::class, 'index']);
@@ -854,16 +910,22 @@ Route::middleware('auth.member')->group(function (): void {
         ->where('id', '[0-9]+');
 
     // ── Progreso ────────────────────────────────────────────────────────────
-    Route::get('app/progress/summary',     [ProgressController::class, 'summary']);
+    Route::get('app/progress/summary',     [ProgressController::class, 'summary'])
+        ->middleware('membership.benefits');
     // Historial de volumen semanal navegable (?week_start=YYYY-MM-DD).
-    Route::get('app/progress/weekly',      [ProgressController::class, 'weekly']);
+    Route::get('app/progress/weekly',      [ProgressController::class, 'weekly'])
+        ->middleware('membership.benefits');
 
     // ── Evaluación física (rutas estáticas ANTES de {id}) ───────────────────
-    Route::get('app/physical-evaluations/latest', [PhysicalEvaluationController::class, 'latest']);
-    Route::get('app/physical-evaluations',        [PhysicalEvaluationController::class, 'index']);
-    Route::post('app/physical-evaluations',       [PhysicalEvaluationController::class, 'store']);
+    Route::get('app/physical-evaluations/latest', [PhysicalEvaluationController::class, 'latest'])
+        ->middleware('membership.benefits');
+    Route::get('app/physical-evaluations',        [PhysicalEvaluationController::class, 'index'])
+        ->middleware('membership.benefits');
+    Route::post('app/physical-evaluations',       [PhysicalEvaluationController::class, 'store'])
+        ->middleware('membership.benefits');
     Route::get('app/physical-evaluations/{id}',   [PhysicalEvaluationController::class, 'show'])
-        ->where('id', '[0-9]+');
+        ->where('id', '[0-9]+')
+        ->middleware('membership.benefits');
 });
 
 // ── Contratos firmados (CRM admin — patrón del resto del CRM) ──────────────

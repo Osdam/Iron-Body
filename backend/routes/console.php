@@ -69,6 +69,12 @@ Schedule::command('classes:renew')
 // Todos idempotentes por día/semana → no duplican si corren varias veces.
 // (También existe `ironbody:emit-automation-events` para correr todo junto.)
 
+// Mora de cuentas por cobrar. NO bloquea a nadie —el bloqueo se calcula al
+// leer—: solo detecta la transición para alertar y refrescar. A primera hora,
+// para que recepción llegue con la lista del día ya hecha.
+Schedule::command('ironbody:detect-overdue-receivables')
+    ->dailyAt('06:00')->withoutOverlapping()->onOneServer();
+
 Schedule::command('ironbody:detect-membership-expiring')
     ->dailyAt('09:00')->withoutOverlapping()->onOneServer();
 

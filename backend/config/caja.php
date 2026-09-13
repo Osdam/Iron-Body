@@ -36,4 +36,24 @@ return [
     */
     'opening_policy' => 'zero',
 
+    /*
+    |--------------------------------------------------------------------------
+    | Plazo por defecto para saldar una obligación
+    |--------------------------------------------------------------------------
+    |
+    | Días que se conceden desde que nace la deuda, cuando quien la crea no pacta
+    | una fecha concreta. El mostrador SIEMPRE puede poner otra: este número solo
+    | evita que una deuda nazca sin plazo por olvido.
+    |
+    | 15 días, y no es un número al azar: es medio mes, el término comercial
+    | corriente aquí, y sobre todo cabe dentro del mes que paga la membresía. Un
+    | plazo más largo dejaría la deuda viva más tiempo que el plan que financió,
+    | y entonces el socio estaría renovando mientras aún debe el anterior.
+    |
+    | Poner 0 desactiva el default: sin fecha explícita, la deuda nace sin plazo
+    | y por tanto nunca vence sola.
+    |
+    */
+    'default_payment_term_days' => (int) env('CAJA_DEFAULT_PAYMENT_TERM_DAYS', 15),
+
 ];

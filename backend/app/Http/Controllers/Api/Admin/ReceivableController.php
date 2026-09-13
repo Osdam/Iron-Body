@@ -16,12 +16,15 @@ use App\Models\ReceivablePayment;
 use App\Services\Billing\Money;
 use App\Services\Audit\FinancialAudit;
 use App\Services\Caja\DebtorDirectory;
+use App\Services\Caja\MembershipFinancialStanding;
 use App\Services\Caja\ReceivableService;
 use App\Services\Payments\PaymentMembershipActivator;
 use App\Support\Access\AdminActor;
 use App\Support\Caja\PaymentMethodKind;
+use Carbon\CarbonInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
@@ -199,6 +202,10 @@ class ReceivableController extends Controller
             'type' => ['required', Rule::in(CashShiftType::values())],
             'concept' => ['required', 'string', 'min:3', 'max:160'],
             'total_amount' => ['required', 'numeric', 'min:0.01'],
+            // Fecha límite para saldar. Opcional: sin ella la deuda no vence y
+            // nunca bloquea. `after_or_equal:today` porque pactar un plazo ya
+            // pasado sería crear un moroso de nacimiento.
+            'due_at' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:today'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -221,6 +228,7 @@ class ReceivableController extends Controller
                 total: Money::fromAmount($data['total_amount']),
                 actor: AdminActor::from($request),
                 notes: $data['notes'] ?? null,
+                dueAt: $this->plazoPactado($data['due_at'] ?? null, derivarPorDefecto: false),
             );
         } catch (ReceivableException $e) {
             return $this->receivableError($e);
@@ -246,6 +254,9 @@ class ReceivableController extends Controller
             'method' => ['required', Rule::in(PaymentMethodKind::selectableAtCounter())],
             'client_request_id' => ['nullable', 'string', 'max:100'],
             'reference' => ['nullable', 'string', 'max:120'],
+            // Fecha límite del saldo. Si no viene, se deriva del plazo
+            // configurado en config/caja.php; el mostrador siempre manda.
+            'due_at' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:today'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -294,6 +305,29 @@ class ReceivableController extends Controller
      * Al revés —resumir lo que cupo en la página— el total dependería de cuánto
      * se pidiera, que es la peor forma de equivocarse con dinero.
      */
+    /**
+     * La fecha límite que se va a grabar.
+     *
+     * Si el mostrador la pactó, manda esa. Si no y procede derivarla, sale del
+     * plazo configurado en `config/caja.php` — nunca de un número escrito a
+     * mano aquí, que es como se acaba teniendo tres plazos distintos según el
+     * endpoint por el que entre la deuda.
+     */
+    private function plazoPactado(?string $pactada, bool $derivarPorDefecto): ?CarbonInterface
+    {
+        if ($pactada !== null && $pactada !== '') {
+            return Carbon::parse($pactada, config('caja.timezone', Member::BUSINESS_TZ))->startOfDay();
+        }
+
+        $dias = (int) config('caja.default_payment_term_days', 0);
+
+        if (! $derivarPorDefecto || $dias <= 0) {
+            return null;
+        }
+
+        return Receivable::businessToday()->addDays($dias);
+    }
+
     public function account(Request $request, Member $member): JsonResponse
     {
         $limite = min(max((int) $request->integer('limit', 100), 1), 200);
@@ -335,6 +369,9 @@ class ReceivableController extends Controller
                     'total_outstanding' => $productos->plus($membresias)->toFloat(),
                     'outstanding_count' => $vivas->count(),
                 ],
+                // Por qué está retenido y desde cuándo: es lo que recepción
+                // necesita para cobrar, no solo para negar el paso.
+                'financial_standing' => app(MembershipFinancialStanding::class)->summary($member),
                 'obligations' => $obligaciones
                     ->map(fn (Receivable $r) => $r->toCrmArray())
                     ->all(),
@@ -367,6 +404,9 @@ class ReceivableController extends Controller
             'method' => ['required', Rule::in(PaymentMethodKind::selectableAtCounter())],
             'client_request_id' => ['nullable', 'string', 'max:100'],
             'reference' => ['nullable', 'string', 'max:120'],
+            // Fecha límite del saldo. Si no viene, se deriva del plazo
+            // configurado en config/caja.php; el mostrador siempre manda.
+            'due_at' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:today'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -418,7 +458,9 @@ class ReceivableController extends Controller
         // `client_request_id` frenaba el abono duplicado, pero el `Payment` y la
         // cuenta de la segunda petición ya estaban escritos.
         try {
-            [$pago, $cuenta, $abono] = DB::transaction(function () use ($data, $plan, $total, $primero, $member, $actor, $request, $requestId) {
+            $vence = $this->plazoPactado($data['due_at'] ?? null, derivarPorDefecto: true);
+
+            [$pago, $cuenta, $abono] = DB::transaction(function () use ($data, $plan, $total, $primero, $member, $actor, $request, $requestId, $vence) {
                 $pago = Payment::create([
                     'user_id' => (int) $data['user_id'],
                     'plan_id' => $plan->id,
@@ -441,6 +483,7 @@ class ReceivableController extends Controller
                     actor: $actor,
                     source: $pago,
                     notes: $data['notes'] ?? null,
+                    dueAt: $vence,
                 );
 
                 $abono = app(ReceivableService::class)->settle(

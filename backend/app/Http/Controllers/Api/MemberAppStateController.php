@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Member;
 use App\Models\Payment;
 use App\Models\Routine;
+use App\Services\Caja\MembershipFinancialStanding;
 use App\Services\DeviceSessionService;
 use App\Services\LiveKitService;
 use App\Services\MembershipService;
@@ -29,7 +30,8 @@ class MemberAppStateController extends Controller
         WeeklyStreakService $streakService,
         DeviceSessionService $sessions,
         MembershipService $memberships,
-        LiveKitService $live
+        LiveKitService $live,
+        MembershipFinancialStanding $standing
     ): JsonResponse {
         /** @var Member $member */
         $member = $request->attributes->get('auth_member');
@@ -46,12 +48,23 @@ class MemberAppStateController extends Controller
         // ── Pago: último estado normalizado (informativo) ──────────────────
         $lastPayment = Payment::where('member_id', $member->id)->latest('id')->first();
 
+        // ── RETENCIÓN FINANCIERA ────────────────────────────────────────────
+        // Dimensión DISTINTA de la vigencia: un socio puede tener su membresía
+        // perfectamente viva y aun así estar retenido por una deuda de gimnasio
+        // vencida. No se cancela nada ni se mueve ninguna fecha; se levanta
+        // pagando, y en cuanto el saldo llega a cero esto vuelve a ser `good`
+        // en la siguiente lectura, sin esperar a ningún proceso.
+        $financial = $standing->summary($member);
+
         // ── REGLA CENTRAL DE ACCESO: el Home solo se desbloquea con MEMBRESÍA
         // ACTIVA y vigente. NO se usan member.status=ACTIVE ni "tuvo algún pago
         // aprobado": ninguno expira y dejarían entrar a usuarios sin membresía
         // vigente. El único desbloqueo válido es pago aprobado por webhook →
         // MembershipService extiende la membresía → isActive()=true. ────────
-        $canAccessHome = $membershipActive;
+        // Y, desde el vencimiento de abonos, además hace falta estar al día:
+        // como todas las `can_use_*` cuelgan de esto, la retención apaga los
+        // beneficios de una sola vez en vez de repetir la condición doce veces.
+        $canAccessHome = $membershipActive && ! $financial['overdue'];
 
         // ── Features resueltas por plan (gating de IA/entrenamiento) ────────
         $features = $member->resolvedFeatures();
@@ -98,6 +111,11 @@ class MemberAppStateController extends Controller
                 'is_staff' => (bool) $member->is_staff,
             ],
             'membership' => $membershipSnapshot,
+            // Estado financiero, aparte de la membresía a propósito: son dos
+            // cosas distintas y confundirlas es lo que lleva a "cancelar" a
+            // alguien que solo debe dinero. La app 2.0.4 lo ignora sin
+            // romperse; una versión futura podrá explicar el motivo real.
+            'financial' => $financial,
             'payment' => [
                 'last_status' => $lastPayment ? Payment::normalizeStatus($lastPayment->status) : 'none',
                 'last_payment_id' => $lastPayment?->id,

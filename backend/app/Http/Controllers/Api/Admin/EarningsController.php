@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use App\Models\ProductSale;
 use App\Models\ProductSaleItem;
+use App\Models\Receivable;
 use App\Models\ReceivablePayment;
 use App\Enums\CashShiftType;
 use App\Support\SseStream;
@@ -192,9 +193,15 @@ class EarningsController extends Controller
     {
         // Los abonos entran en la firma: sin ellos, cobrar un plazo movía el
         // dinero del informe y la pantalla abierta seguía enseñando el anterior.
+        //
+        // Y las cuentas también, porque hay cambios que el CRM debe ver y que no
+        // mueven un peso: pactar o corregir una fecha límite no crea ningún
+        // abono, así que sin esta parte la pantalla seguiría diciendo "al día"
+        // sobre una deuda que acaba de vencer.
         $signature = static fn (): string => Payment::count().':'.(string) Payment::max('updated_at').'|'.
             ProductSale::count().':'.(string) ProductSale::max('updated_at').'|'.
-            ReceivablePayment::count().':'.(string) ReceivablePayment::max('updated_at');
+            ReceivablePayment::count().':'.(string) ReceivablePayment::max('updated_at').'|'.
+            Receivable::count().':'.(string) Receivable::max('updated_at');
 
         $last = null;
 

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\AuthenticateMember;
+use App\Http\Middleware\EnsureMembershipBenefitsAvailable;
 use App\Http\Middleware\AuthenticateTrainer;
 use App\Http\Middleware\EnsureAdminAuth;
 use App\Http\Middleware\EnsureAdminPermission;
@@ -37,6 +38,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'member.registration.token' => EnsureMemberRegistrationToken::class,
             'auth.member'               => AuthenticateMember::class,
+            'membership.benefits'       => EnsureMembershipBenefitsAvailable::class,
             'auth.trainer'              => AuthenticateTrainer::class,
             'auth.admin'                => EnsureAdminAuth::class,
             'admin.can'                 => EnsureAdminPermission::class,
