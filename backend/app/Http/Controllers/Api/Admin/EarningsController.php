@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\CashShift;
 use App\Models\Payment;
 use App\Models\ProductSale;
 use App\Models\ProductSaleItem;
 use App\Models\Receivable;
 use App\Services\Caja\CashReceipts;
 use App\Models\ReceivablePayment;
+use App\Enums\CashShiftStatus;
 use App\Enums\CashShiftType;
 use App\Support\SseStream;
 use Carbon\Carbon;
@@ -197,17 +199,7 @@ class EarningsController extends Controller
      */
     public function stream(Request $request): StreamedResponse
     {
-        // Los abonos entran en la firma: sin ellos, cobrar un plazo movía el
-        // dinero del informe y la pantalla abierta seguía enseñando el anterior.
-        //
-        // Y las cuentas también, porque hay cambios que el CRM debe ver y que no
-        // mueven un peso: pactar o corregir una fecha límite no crea ningún
-        // abono, así que sin esta parte la pantalla seguiría diciendo "al día"
-        // sobre una deuda que acaba de vencer.
-        $signature = static fn (): string => Payment::count().':'.(string) Payment::max('updated_at').'|'.
-            ProductSale::count().':'.(string) ProductSale::max('updated_at').'|'.
-            ReceivablePayment::count().':'.(string) ReceivablePayment::max('updated_at').'|'.
-            Receivable::count().':'.(string) Receivable::max('updated_at');
+        $signature = static fn (): string => self::financialSignature();
 
         $last = null;
 
@@ -223,6 +215,78 @@ class EarningsController extends Controller
                 SseStream::emit('earnings', ['sig' => $now]);
             }
         }, 25, 2000);
+    }
+
+    /**
+     * La huella del dinero: cambia cuando cambia algo que el CRM debe ver.
+     *
+     * Las CINCO tablas, y cada una por un motivo distinto:
+     *
+     *   · `Payment` y `ProductSale` — el dinero de siempre.
+     *   · `ReceivablePayment` — los abonos. Sin ellos, cobrar un plazo movía el
+     *     dinero del informe y la pantalla abierta seguía enseñando el anterior.
+     *   · `Receivable` — hay cambios que se deben ver y que no mueven un peso:
+     *     pactar o corregir una fecha límite no crea ningún abono, y sin esto la
+     *     pantalla seguiría diciendo «al día» sobre una deuda que acaba de
+     *     vencer. También anular una deuda, que no cobra nada y cambia todo.
+     *   · `CashShift` — abrir o cerrar caja tampoco mueve un peso, pero cambia
+     *     lo que la pantalla puede hacer y el arqueo que enseña. Sin esto, quien
+     *     tiene Caja abierta en otra pestaña sigue viéndola cerrada después de
+     *     que un compañero la abra.
+     *
+     * Conteo Y última modificación: solo el conteo no vería un cambio de estado
+     * —un pago que pasa a anulado— y solo la fecha no vería un borrado.
+     *
+     * Es pública para poder probarla: comprobar que la firma se mueve es la
+     * única forma de saber que una pantalla abierta se va a enterar.
+     */
+    public static function financialSignature(): string
+    {
+        // Conteo y fecha NO BASTAN. `updated_at` se guarda al segundo, así que
+        // dos escrituras dentro del mismo segundo dan la misma firma y el
+        // cambio se pierde PARA SIEMPRE: la pantalla no se entera en el
+        // siguiente latido ni en ninguno. Pasa justo en la secuencia más
+        // normal —cobrar y corregir el importe seguido— y el fallo es mudo.
+        //
+        // Por eso entra también el CONTENIDO que la pantalla debe ver. Un
+        // cambio de estado o de importe mueve la firma aunque el reloj no se
+        // haya movido.
+        $abonos = ReceivablePayment::query()
+            ->selectRaw('COUNT(*) AS n, MAX(updated_at) AS t')
+            ->selectRaw('COALESCE(SUM(CASE WHEN status = ? THEN amount ELSE 0 END), 0) AS aplicado',
+                [ReceivablePayment::STATUS_APPLIED])
+            ->first();
+
+        $deudas = Receivable::query()
+            ->selectRaw('COUNT(*) AS n, MAX(updated_at) AS t, COALESCE(SUM(total_amount), 0) AS total')
+            ->selectRaw('COUNT(due_at) AS con_plazo')
+            ->selectRaw('COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS anuladas',
+                [Receivable::STATUS_CANCELLED])
+            ->selectRaw('COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS pagadas',
+                [Receivable::STATUS_PAID])
+            // Cuántas están vencidas HOY: mover un plazo no cambia ningún
+            // importe, pero sí lo que la pantalla tiene que decir del socio.
+            ->selectRaw('COALESCE(SUM(CASE WHEN due_at < ? AND status IN (?, ?) THEN 1 ELSE 0 END), 0) AS vencidas', [
+                Receivable::businessToday()->toDateString(),
+                Receivable::STATUS_PENDING,
+                Receivable::STATUS_PARTIALLY_PAID,
+            ])
+            ->first();
+
+        // Los turnos, por lo mismo: cerrar caja no cambia el número de filas
+        // ni crea dinero, pero cambia lo que la pantalla puede hacer.
+        $turnos = CashShift::query()
+            ->selectRaw('COUNT(*) AS n, MAX(updated_at) AS t')
+            ->selectRaw('COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS abiertos',
+                [CashShiftStatus::OPEN->value])
+            ->first();
+
+        return Payment::count().':'.(string) Payment::max('updated_at').'|'.
+            ProductSale::count().':'.(string) ProductSale::max('updated_at').'|'.
+            $abonos->n.':'.(string) $abonos->t.':'.$abonos->aplicado.'|'.
+            $deudas->n.':'.(string) $deudas->t.':'.$deudas->total.':'.$deudas->con_plazo
+                .':'.$deudas->anuladas.':'.$deudas->pagadas.':'.$deudas->vencidas.'|'.
+            $turnos->n.':'.(string) $turnos->t.':'.$turnos->abiertos;
     }
 
     /** Ingresos del gimnasio agrupados por periodo → [periodo => total]. */
