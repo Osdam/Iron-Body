@@ -55,6 +55,25 @@ class ReceivableDueNotifier
      */
     public const RESOLUTION_PAID = 'paid';
 
+    /** La deuda se anuló: ya no hay nada que cobrar, pero nadie pagó. */
+    public const RESOLUTION_CANCELLED = 'cancelled';
+
+    /** Se pactó un plazo nuevo: sigue debiéndose, pero hoy ya no está vencida. */
+    public const RESOLUTION_RESCHEDULED = 'rescheduled';
+
+    /**
+     * Los cierres que puso el sistema y que el sistema puede deshacer solo.
+     *
+     * Ninguno de los tres es una decisión de «esto ya no hace falta seguirlo»:
+     * los tres describen un hecho —se pagó, se anuló, se aplazó— que puede
+     * dejar de ser cierto. El cierre a mano no está aquí a propósito.
+     */
+    public const SYSTEM_RESOLUTIONS = [
+        self::RESOLUTION_PAID,
+        self::RESOLUTION_CANCELLED,
+        self::RESOLUTION_RESCHEDULED,
+    ];
+
     public function notify(Receivable $cuenta, string $transicion, Carbon $hoy, string $llave): void
     {
         try {
@@ -144,7 +163,7 @@ class ReceivableDueNotifier
      * bandeja en un contador. Si alguien ya la cerró a mano, no se reabre: esa
      * decisión se respeta.
      */
-    private function alertarAdministracion(Receivable $cuenta, Carbon $hoy): void
+    public function alertarAdministracion(Receivable $cuenta, Carbon $hoy): void
     {
         $huella = 'receivable_overdue:'.$cuenta->id;
         $saldo = $cuenta->balance();
@@ -162,7 +181,7 @@ class ReceivableDueNotifier
             // anula la deuda vuelve a existir de verdad, y callarla dejaría una
             // mora real sin que nadie se entere.
             $laCerroElSistema = ! $existente->isOpen()
-                && $existente->resolution === self::RESOLUTION_PAID;
+                && in_array($existente->resolution, self::SYSTEM_RESOLUTIONS, true);
 
             if (! $existente->isOpen() && ! $laCerroElSistema) {
                 return;
@@ -200,16 +219,26 @@ class ReceivableDueNotifier
         ]);
     }
 
-    /** La deuda se saldó: la alerta deja de tener sentido. */
-    private function cerrarAlerta(Receivable $cuenta): void
-    {
+    /**
+     * La alerta deja de tener sentido: se cierra diciendo POR QUÉ.
+     *
+     * El motivo no es decorativo. `alertarAdministracion()` lo lee para decidir
+     * si puede reabrirla cuando el problema vuelva, y meterlo todo bajo «pagada»
+     * haría que una deuda anulada figurase como cobrada en la bandeja de quien
+     * revisa la mora del mes.
+     */
+    public function cerrarAlerta(
+        Receivable $cuenta,
+        string $resolucion = self::RESOLUTION_PAID,
+        string $nota = 'La cuenta quedó saldada.',
+    ): void {
         CommercialAlert::where('fingerprint', 'receivable_overdue:'.$cuenta->id)
             ->where('status', CommercialAlert::STATUS_OPEN)
             ->update([
                 'status' => CommercialAlert::STATUS_RESOLVED,
                 'resolved_at' => now(),
-                'resolution' => self::RESOLUTION_PAID,
-                'resolution_note' => 'La cuenta quedó saldada.',
+                'resolution' => $resolucion,
+                'resolution_note' => $nota,
             ]);
     }
 

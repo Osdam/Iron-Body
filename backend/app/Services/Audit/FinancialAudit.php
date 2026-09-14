@@ -203,6 +203,122 @@ class FinancialAudit
     }
 
     /**
+     * Una deuda se anuló.
+     *
+     * `action` es `status`, nunca `delete`: la fila no se borra y sus abonos
+     * siguen aplicados. La traza guarda el SALDO que se dejó de exigir —no el
+     * total— porque es la cifra que alguien tendrá que justificar: anular una
+     * deuda de 80.000 con 60.000 ya cobrados perdona 20.000, no 80.000.
+     *
+     * `$estadoPrevio` llega por parámetro y no de `getOriginal()`: para cuando
+     * se audita, el guardado ya sincronizó el original y preguntarle devolvería
+     * `cancelled` en los dos lados del cambio.
+     */
+    public function receivableCancelled(
+        Receivable $receivable,
+        string $estadoPrevio,
+        string $reason,
+        ?Admin $actor,
+        Request $request,
+    ): void {
+        $this->write($actor, $request, [
+            'action' => 'status',
+            'module' => 'Caja',
+            'entity' => 'cuenta por cobrar',
+            'entity_id' => (string) $receivable->id,
+            'target_name' => $receivable->concept,
+            'summary' => "Anuló la deuda de {$receivable->concept}",
+            'changes' => [[
+                'field' => 'status',
+                'before' => $estadoPrevio,
+                'after' => Receivable::STATUS_CANCELLED,
+            ]],
+            'metadata' => [
+                'total' => (string) $receivable->total_amount,
+                'paid' => (string) $receivable->paidAmount()->toFloat(),
+                'forgiven' => (string) $receivable->balance()->toFloat(),
+                'cash' => $receivable->type->value,
+                'due_at' => optional($receivable->due_at)->toDateString(),
+                'reason' => $reason,
+                'member_id' => $receivable->member_id,
+            ],
+        ]);
+    }
+
+    /**
+     * Una deuda anulada volvió a estar viva.
+     *
+     * El estado al que vuelve NO se elige: lo recalcula el saldo. Va en la traza
+     * porque reabrir una deuda con plazo vencido vuelve a retener al socio en el
+     * acto, y quien revise el caso después necesita ver que eso fue una
+     * consecuencia de esta operación y no un fallo del detector.
+     */
+    public function receivableReopened(Receivable $receivable, string $reason, ?Admin $actor, Request $request): void
+    {
+        $this->write($actor, $request, [
+            'action' => 'status',
+            'module' => 'Caja',
+            'entity' => 'cuenta por cobrar',
+            'entity_id' => (string) $receivable->id,
+            'target_name' => $receivable->concept,
+            'summary' => "Reabrió la deuda de {$receivable->concept}",
+            'changes' => [[
+                'field' => 'status',
+                'before' => Receivable::STATUS_CANCELLED,
+                'after' => $receivable->status,
+            ]],
+            'metadata' => [
+                'total' => (string) $receivable->total_amount,
+                'balance' => (string) $receivable->balance()->toFloat(),
+                'cash' => $receivable->type->value,
+                'due_at' => optional($receivable->due_at)->toDateString(),
+                'overdue' => $receivable->isOverdue(),
+                'reason' => $reason,
+                'member_id' => $receivable->member_id,
+            ],
+        ]);
+    }
+
+    /**
+     * Se movió —o se quitó— el plazo de una deuda.
+     *
+     * Las dos fechas van como `changes` y no como metadatos sueltos: mover un
+     * vencimiento es lo que levanta o impone una retención, y para revisarlo
+     * después hace falta ver el salto, no solo dónde acabó.
+     */
+    public function receivableDueDateChanged(
+        Receivable $receivable,
+        ?string $antes,
+        ?string $despues,
+        string $reason,
+        ?Admin $actor,
+        Request $request,
+    ): void {
+        $this->write($actor, $request, [
+            'action' => 'update',
+            'module' => 'Caja',
+            'entity' => 'cuenta por cobrar',
+            'entity_id' => (string) $receivable->id,
+            'target_name' => $receivable->concept,
+            'summary' => $despues === null
+                ? "Quitó el plazo de {$receivable->concept}"
+                : "Cambió el plazo de {$receivable->concept} al {$despues}",
+            'changes' => [[
+                'field' => 'due_at',
+                'before' => $antes,
+                'after' => $despues,
+            ]],
+            'metadata' => [
+                'balance' => (string) $receivable->balance()->toFloat(),
+                'cash' => $receivable->type->value,
+                'overdue' => $receivable->isOverdue(),
+                'reason' => $reason,
+                'member_id' => $receivable->member_id,
+            ],
+        ]);
+    }
+
+    /**
      * Escribe la fila.
      *
      * A diferencia del resto de auditorías del proyecto esto NO va envuelto en

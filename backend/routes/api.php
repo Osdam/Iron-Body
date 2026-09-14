@@ -1312,6 +1312,19 @@ Route::post('admin/receivables/{receivable}/payments', [ReceivableController::cl
 Route::post('admin/receivables/payments/{payment}/reverse', [ReceivableController::class, 'reversePayment'])
     ->middleware('admin.can:receivables.manage');
 
+// Correcciones administrativas sobre la deuda. Tres llaves distintas porque son
+// tres decisiones de distinto peso: pactar un plazo nuevo lo hace quien atiende;
+// decidir que una deuda deja de cobrarse, o dejarla sin fecha —que es levantar
+// la retención sin que se note—, no.
+Route::post('admin/receivables/{receivable}/cancel',   [ReceivableController::class, 'cancel'])
+    ->whereNumber('receivable')->middleware('admin.can:receivables.manage');
+Route::post('admin/receivables/{receivable}/reopen',   [ReceivableController::class, 'reopen'])
+    ->whereNumber('receivable')->middleware('admin.can:receivables.manage');
+Route::patch('admin/receivables/{receivable}/due-date', [ReceivableController::class, 'changeDueDate'])
+    ->whereNumber('receivable')->middleware('admin.can:receivables.operate');
+Route::delete('admin/receivables/{receivable}/due-date', [ReceivableController::class, 'removeDueDate'])
+    ->whereNumber('receivable')->middleware('admin.can:receivables.manage');
+
 // ── Facturación electrónica (Factus) — API administrativa (Fase 2) ────────────
 // Bajo /api/admin/* → blindado por ProtectAdminPaths (sesión admin o token).
 // Las rutas LITERALES (stats/config/manual-emit) van ANTES del wildcard

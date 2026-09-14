@@ -3,13 +3,13 @@
 namespace App\Services\Caja;
 
 use App\Enums\CashShiftType;
-use App\Services\Audit\FinancialAudit;
 use App\Enums\DebtorType;
 use App\Exceptions\ReceivableException;
 use App\Models\Admin;
 use App\Models\Member;
 use App\Models\Receivable;
 use App\Models\ReceivablePayment;
+use App\Services\Audit\FinancialAudit;
 use App\Services\Billing\Money;
 use App\Support\Caja\PaymentMethodKind;
 use Carbon\CarbonInterface;
@@ -260,6 +260,159 @@ class ReceivableService
             // silencio. Si de verdad hay que darlo de baja, eso es una decisión
             // aparte y tiene su propia pantalla.
             return $fresco;
+        });
+    }
+
+
+    /**
+     * Anula una obligación: deja de ser exigible.
+     *
+     * ANULAR NO ES REVERSAR DINERO. Los abonos que ya entraron siguen entrando:
+     * el dinero se recibió de verdad, está en un arqueo firmado y borrarlo
+     * descuadraría un cierre que alguien ya contó. Lo que deja de exigirse es el
+     * SALDO. Si además hay que devolver dinero, eso es el flujo de reverso, y es
+     * una decisión aparte que alguien tiene que tomar explícitamente.
+     *
+     * Tampoco es devolver el producto —el inventario tiene su propio flujo— ni
+     * cancelar la membresía —anular una deuda no dice que el socio nunca entrenó—.
+     *
+     * Una obligación PAGADA no se anula: ya es historia financiera cerrada. Para
+     * corregirla hay que revertir sus abonos primero; si entonces vuelve a quedar
+     * abierta, se podrá anular.
+     *
+     * Idempotente: anular dos veces devuelve la misma cuenta sin volver a
+     * auditar ni volver a avisar.
+     */
+    public function cancel(Receivable $receivable, string $reason, ?Admin $actor = null): Receivable
+    {
+        $motivo = trim($reason);
+        if ($motivo === '') {
+            throw ReceivableException::cancellationReasonRequired();
+        }
+
+        return DB::transaction(function () use ($receivable, $motivo, $actor) {
+            $fresca = Receivable::whereKey($receivable->id)->lockForUpdate()->firstOrFail();
+
+            // Doble clic: ya está anulada y no se vuelve a hacer nada.
+            if ($fresca->isCancelled()) {
+                return $fresca;
+            }
+
+            // El bloqueo es lo que hace segura la carrera con un abono: si el
+            // cobro entró primero y saldó la cuenta, aquí ya la vemos pagada y
+            // se rechaza en vez de anular una deuda que acaban de pagar.
+            if ($fresca->balance()->isZero()) {
+                throw ReceivableException::alreadyPaid();
+            }
+
+            $estadoPrevio = $fresca->status;
+
+            $fresca->update([
+                'status' => Receivable::STATUS_CANCELLED,
+                'cancelled_at' => now(),
+                'cancelled_by' => $actor?->id,
+                'cancellation_reason' => $motivo,
+            ]);
+
+            $this->audit()->receivableCancelled($fresca, $estadoPrevio, $motivo, $actor, request());
+
+            return $fresca;
+        });
+    }
+
+    /**
+     * Devuelve una obligación anulada a la vida.
+     *
+     * Existe porque anular es una decisión humana y las decisiones humanas se
+     * toman mal a veces. El estado NO se elige: se recalcula desde el saldo con
+     * `statusForBalance()`, igual que después de cada abono, así que una cuenta
+     * con la mitad pagada vuelve a `partially_paid` y no a `pending`.
+     *
+     * CUIDADO: si su plazo ya pasó, reabrir vuelve a retener al socio en el
+     * acto. Quien lo haga tiene que saberlo antes, y por eso el CRM lo avisa.
+     */
+    public function reopen(Receivable $receivable, string $reason, ?Admin $actor = null): Receivable
+    {
+        $motivo = trim($reason);
+        if ($motivo === '') {
+            throw ReceivableException::reopenReasonRequired();
+        }
+
+        return DB::transaction(function () use ($receivable, $motivo, $actor) {
+            $fresca = Receivable::whereKey($receivable->id)->lockForUpdate()->firstOrFail();
+
+            if (! $fresca->isCancelled()) {
+                return $fresca;
+            }
+
+            // El estado se saca de `cancelled` ANTES de recalcularlo: mientras
+            // siga ahí, `statusForBalance()` mira `isCancelled()` y devuelve
+            // `cancelled` otra vez, así que la cuenta no se movería de sitio.
+            // `pending` es solo el punto de partida —lo que quede lo decide el
+            // saldo en la línea siguiente, no esta asignación—.
+            $fresca->forceFill([
+                'status' => Receivable::STATUS_PENDING,
+                'cancelled_at' => null,
+                'cancelled_by' => null,
+                'cancellation_reason' => null,
+            ]);
+            $fresca->status = $fresca->statusForBalance();
+            $fresca->save();
+
+            $this->audit()->receivableReopened($fresca, $motivo, $actor, request());
+
+            return $fresca;
+        });
+    }
+
+    /**
+     * Cambia —o quita— la fecha límite de una obligación viva.
+     *
+     * Sirve para lo que de verdad pasa en el mostrador: se acuerda un plazo
+     * nuevo con alguien que no pudo pagar. Si la deuda estaba vencida, mover la
+     * fecha al futuro levanta la retención en la siguiente lectura, sin esperar
+     * a ningún proceso, porque la mora se deriva del saldo y de esta fecha.
+     *
+     * Quitar la fecha (`null`) NO perdona nada: la deuda sigue existiendo y
+     * sigue teniendo saldo. Solo deja de tener vencimiento, que es lo que hace
+     * falta mientras un caso está en revisión o se negocia un acuerdo especial.
+     *
+     * Una cuenta anulada o pagada no admite plazo: no hay nada que vencer.
+     */
+    public function changeDueDate(
+        Receivable $receivable,
+        ?CarbonInterface $dueAt,
+        string $reason,
+        ?Admin $actor = null,
+    ): Receivable {
+        $motivo = trim($reason);
+        if ($motivo === '') {
+            throw ReceivableException::dueDateReasonRequired();
+        }
+
+        return DB::transaction(function () use ($receivable, $dueAt, $motivo, $actor) {
+            $fresca = Receivable::whereKey($receivable->id)->lockForUpdate()->firstOrFail();
+
+            if ($fresca->isCancelled()) {
+                throw ReceivableException::cancelled();
+            }
+
+            if ($fresca->balance()->isZero()) {
+                throw ReceivableException::alreadyPaid();
+            }
+
+            $anterior = optional($fresca->due_at)->toDateString();
+            $nueva = $dueAt?->toDateString();
+
+            if ($anterior === $nueva) {
+                return $fresca;
+            }
+
+            $fresca->update(['due_at' => $nueva]);
+
+            $this->audit()->receivableDueDateChanged($fresca, $anterior, $nueva, $motivo, $actor, request());
+
+            return $fresca;
         });
     }
 

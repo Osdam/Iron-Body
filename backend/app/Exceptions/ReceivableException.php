@@ -46,6 +46,39 @@ class ReceivableException extends RuntimeException
         return new self('Esta cuenta está anulada y no admite abonos.', 'receivable_cancelled');
     }
 
+    /** Una obligación pagada ya es historia cerrada: no se anula, se revierte. */
+    public static function alreadyPaid(): self
+    {
+        return new self(
+            'Esta obligación ya está pagada. Para corregirla, revierte primero sus abonos.',
+            'receivable_already_paid',
+        );
+    }
+
+    public static function cancellationReasonRequired(): self
+    {
+        return new self(
+            'Di por qué se anula: dentro de un mes nadie recordará el motivo.',
+            'cancellation_reason_required',
+        );
+    }
+
+    public static function reopenReasonRequired(): self
+    {
+        return new self(
+            'Di por qué se reabre: alguien decidió anularla y hay que poder explicar el cambio.',
+            'reopen_reason_required',
+        );
+    }
+
+    public static function dueDateReasonRequired(): self
+    {
+        return new self(
+            'Di por qué cambia el plazo: es lo que se le prometió a la persona.',
+            'due_date_reason_required',
+        );
+    }
+
     public static function invalidAmount(): self
     {
         return new self('El abono debe ser mayor que cero.', 'invalid_amount');

@@ -224,6 +224,14 @@ final class AuthorizationMap
         'POST api/admin/receivables/{receivable}/payments' => 'receivables.operate',
         'POST api/admin/receivables/payments/{payment}/reverse' => 'receivables.manage',
 
+        // Correcciones administrativas. Pactar otro plazo es mostrador; decidir
+        // que una deuda deja de cobrarse —o dejarla sin fecha, que levanta la
+        // retención sin que se note— es supervisión.
+        'POST api/admin/receivables/{receivable}/cancel' => 'receivables.manage',
+        'POST api/admin/receivables/{receivable}/reopen' => 'receivables.manage',
+        'PATCH api/admin/receivables/{receivable}/due-date' => 'receivables.operate',
+        'DELETE api/admin/receivables/{receivable}/due-date' => 'receivables.manage',
+
         // Puerta de entrada del CRM: sin ella nadie podría autenticarse nunca.
         'POST api/admin/auth/login' => self::PUBLIC,
 

@@ -45,7 +45,7 @@ class Receivable extends Model
     protected $fillable = [
         'member_id', 'debtor_type', 'debtor_id', 'type', 'concept', 'total_amount', 'status',
         'due_at', 'source_type', 'source_id', 'created_by', 'created_by_name',
-        'notes', 'cancelled_at',
+        'notes', 'cancelled_at', 'cancelled_by', 'cancellation_reason',
     ];
 
     protected $casts = [
@@ -65,6 +65,11 @@ class Receivable extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(Admin::class, 'created_by');
+    }
+
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(Admin::class, 'cancelled_by');
     }
 
     /** La venta o el cobro que originó la deuda, si lo hubo. */
@@ -149,6 +154,18 @@ class Receivable extends Model
     public function scopeSettled(Builder $q): Builder
     {
         return $q->where('status', self::STATUS_PAID);
+    }
+
+    /**
+     * Las anuladas. Es «Anuladas».
+     *
+     * Tiene pestaña propia y no se mezcla con el resto a propósito: son deudas
+     * que alguien decidió no cobrar, y revisarlas de vez en cuando es la única
+     * forma de que anular no se vuelva la salida fácil para cuadrar una caja.
+     */
+    public function scopeCancelled(Builder $q): Builder
+    {
+        return $q->where('status', self::STATUS_CANCELLED);
     }
 
     // ── Vencimiento ─────────────────────────────────────────────────────────
@@ -334,7 +351,23 @@ class Receivable extends Model
             'created_by_name' => $this->created_by_name,
             'notes' => $this->notes,
             'created_at' => optional($this->created_at)->toIso8601String(),
+            'cancelled' => $this->isCancelled(),
             'cancelled_at' => optional($this->cancelled_at)->toIso8601String(),
+            // El nombre sale de la relación solo si alguien ya la cargó. En un
+            // listado de 300 filas preguntarlo aquí sería una consulta por
+            // fila; quien necesite el nombre hace `with('cancelledBy')`.
+            'cancelled_by_name' => $this->relationLoaded('cancelledBy')
+                ? $this->cancelledBy?->name
+                : null,
+            'cancellation_reason' => $this->cancellation_reason,
+            // Qué admite esta cuenta POR SU ESTADO. No dice nada de permisos:
+            // el CRM los cruza con `admin.can`, y el servidor vuelve a decidir
+            // las dos cosas por su cuenta. Viaja calculado para que el CRM no
+            // reimplemente estas reglas y acabe ofreciendo un botón que la API
+            // rechaza.
+            'can_cancel' => ! $this->isCancelled() && $saldo->isPositive(),
+            'can_reopen' => $this->isCancelled(),
+            'can_edit_due_date' => ! $this->isCancelled() && $saldo->isPositive(),
         ];
 
         if ($withPayments) {

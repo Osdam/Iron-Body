@@ -17,8 +17,10 @@ use App\Services\Billing\Money;
 use App\Services\Audit\FinancialAudit;
 use App\Services\Caja\DebtorDirectory;
 use App\Services\Caja\MembershipFinancialStanding;
+use App\Services\Caja\ReceivableDueNotifier;
 use App\Services\Caja\ReceivableService;
 use App\Services\Payments\PaymentMembershipActivator;
+use App\Services\RealtimeEvents;
 use App\Support\Access\AdminActor;
 use App\Support\Caja\PaymentMethodKind;
 use App\Support\Caja\PaymentTerm;
@@ -57,14 +59,18 @@ class ReceivableController extends Controller
             // que la pestaña Créditos respondía 422 y en pantalla salía «No se
             // pudo cargar las cuentas por cobrar». Un parámetro con nombre no
             // se puede escribir mal de esa manera.
-            'scope' => ['nullable', Rule::in(['all', 'credits', 'installments', 'paid'])],
+            'scope' => ['nullable', Rule::in(['all', 'credits', 'installments', 'paid', 'cancelled'])],
             'outstanding' => ['nullable', 'boolean'],
             'search' => ['nullable', 'string', 'max:120'],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date'],
         ]);
 
-        $q = Receivable::query()->with('member:id,full_name,document_number,is_staff');
+        // `cancelledBy` se carga aquí y no fila a fila: el listado tiene que
+        // poder decir quién anuló cada deuda sin pagar una consulta por fila.
+        $q = Receivable::query()
+            ->with('member:id,full_name,document_number,is_staff')
+            ->with('cancelledBy:id,name');
 
         if (! empty($filtros['member_id'])) {
             $q->where('member_id', (int) $filtros['member_id']);
@@ -82,6 +88,7 @@ class ReceivableController extends Controller
             'credits' => $q->fromCreditSale(),
             'installments' => $q->withInstallments(),
             'paid' => $q->settled(),
+            'cancelled' => $q->cancelled(),
             default => null,
         };
 
@@ -177,7 +184,7 @@ class ReceivableController extends Controller
     /** GET /api/admin/receivables/{receivable} — estado de cuenta. */
     public function show(Receivable $receivable): JsonResponse
     {
-        $receivable->load('member:id,full_name,document_number,is_staff');
+        $receivable->load('member:id,full_name,document_number,is_staff', 'cancelledBy:id,name');
 
         return response()->json([
             'ok' => true,
@@ -557,6 +564,195 @@ class ReceivableController extends Controller
             'ok' => true,
             'data' => $abono->fresh()->toCrmArray(),
             'receivable' => $abono->receivable()->first()?->load('member')->toCrmArray(),
+        ]);
+    }
+
+    /**
+     * POST /api/admin/receivables/{receivable}/cancel — anular una deuda.
+     *
+     * ANULAR NO ES NINGUNA DE ESTAS TRES COSAS, y la confusión es cara:
+     *
+     *   · No devuelve dinero. Los abonos cobrados siguen cobrados y siguen en
+     *     el arqueo del turno donde entraron. Para devolverlos está el reverso,
+     *     que es otra decisión y otro permiso.
+     *   · No devuelve el producto. El inventario tiene su propio flujo.
+     *   · No cancela la membresía. Que la deuda se perdone no dice que el socio
+     *     dejara de entrenar.
+     *
+     * Lo único que deja de existir es la EXIGENCIA del saldo. Por eso exige
+     * `receivables.manage` y no `receivables.operate`: quien cobra en el
+     * mostrador no decide qué deudas dejan de cobrarse.
+     */
+    public function cancel(Request $request, Receivable $receivable): JsonResponse
+    {
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'min:10', 'max:500'],
+        ]);
+
+        $reteniaAntes = $this->retieneAlSocio($receivable);
+
+        try {
+            $cuenta = app(ReceivableService::class)
+                ->cancel($receivable, $data['reason'], AdminActor::from($request));
+        } catch (ReceivableException $e) {
+            return $this->receivableError($e);
+        }
+
+        // La alerta de mora se cierra DICIENDO que fue por anulación: dejarla
+        // abierta pondría a alguien a perseguir un cobro que ya no se exige, y
+        // cerrarla como «pagada» diría que entró un dinero que no entró.
+        app(ReceivableDueNotifier::class)->cerrarAlerta(
+            $cuenta,
+            ReceivableDueNotifier::RESOLUTION_CANCELLED,
+            'La deuda se anuló: '.$data['reason'],
+        );
+
+        return $this->respondWithReceivable($cuenta, $reteniaAntes);
+    }
+
+    /**
+     * POST /api/admin/receivables/{receivable}/reopen — deshacer una anulación.
+     *
+     * Anular es una decisión humana, y las decisiones humanas se toman mal a
+     * veces. El estado al que vuelve NO se elige: lo recalcula el saldo.
+     *
+     * Si su plazo ya pasó, reabrir vuelve a retener al socio en el acto y a
+     * levantar la alerta de administración. Esa alerta se reabre AQUÍ y no se
+     * deja al detector nocturno: su llave de idempotencia lleva la fecha y la
+     * generación del saldo, que al reabrir son las mismas de antes, así que la
+     * mora no volvería a emitirse y el problema se quedaría sin dueño.
+     */
+    public function reopen(Request $request, Receivable $receivable): JsonResponse
+    {
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'min:10', 'max:500'],
+        ]);
+
+        $reteniaAntes = $this->retieneAlSocio($receivable);
+
+        try {
+            $cuenta = app(ReceivableService::class)
+                ->reopen($receivable, $data['reason'], AdminActor::from($request));
+        } catch (ReceivableException $e) {
+            return $this->receivableError($e);
+        }
+
+        if ($cuenta->isOverdue()) {
+            app(ReceivableDueNotifier::class)->alertarAdministracion($cuenta, Receivable::businessToday());
+        }
+
+        return $this->respondWithReceivable($cuenta, $reteniaAntes);
+    }
+
+    /**
+     * PATCH /api/admin/receivables/{receivable}/due-date — pactar otro plazo.
+     *
+     * Es la operación del mostrador: alguien no pudo pagar y se acuerda una
+     * fecha nueva. Basta `receivables.operate` porque no perdona nada —la deuda
+     * sigue entera— y es exactamente la conversación que tiene quien atiende.
+     *
+     * Se admite mover el plazo al PASADO. Suena raro y es deliberado: sirve
+     * para corregir una fecha mal tecleada, y quien lo haga verá que la deuda
+     * queda vencida en el acto, que es el resultado correcto.
+     */
+    public function changeDueDate(Request $request, Receivable $receivable): JsonResponse
+    {
+        $data = $request->validate([
+            'due_at' => ['required', 'date_format:Y-m-d'],
+            'reason' => ['required', 'string', 'min:10', 'max:500'],
+        ]);
+
+        return $this->applyDueDate(
+            $receivable,
+            Carbon::parse($data['due_at'])->startOfDay(),
+            $data['reason'],
+            $request,
+        );
+    }
+
+    /**
+     * DELETE /api/admin/receivables/{receivable}/due-date — dejarla sin plazo.
+     *
+     * QUITAR EL PLAZO NO PERDONA NADA: la deuda sigue existiendo y sigue
+     * teniendo saldo. Lo que deja de tener es fecha, y por tanto deja de estar
+     * vencida y deja de retener. Sirve mientras un caso está en revisión o se
+     * negocia un acuerdo especial.
+     *
+     * Justo por eso exige `receivables.manage` y no `operate`: es la forma
+     * silenciosa de levantar una retención, y no puede quedar al alcance de
+     * quien solo cobra.
+     */
+    public function removeDueDate(Request $request, Receivable $receivable): JsonResponse
+    {
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'min:10', 'max:500'],
+        ]);
+
+        return $this->applyDueDate($receivable, null, $data['reason'], $request);
+    }
+
+    /** El tronco común de cambiar y quitar el plazo. */
+    private function applyDueDate(
+        Receivable $receivable,
+        ?CarbonInterface $dueAt,
+        string $reason,
+        Request $request,
+    ): JsonResponse {
+        $reteniaAntes = $this->retieneAlSocio($receivable);
+
+        try {
+            $cuenta = app(ReceivableService::class)
+                ->changeDueDate($receivable, $dueAt, $reason, AdminActor::from($request));
+        } catch (ReceivableException $e) {
+            return $this->receivableError($e);
+        }
+
+        // Si dejó de estar vencida, la alerta abierta describe un problema que
+        // ya no existe. Se cierra como APLAZADA —no como pagada— para que
+        // vuelva a abrirse sola si el plazo nuevo también se pasa.
+        if (! $cuenta->isOverdue()) {
+            app(ReceivableDueNotifier::class)->cerrarAlerta(
+                $cuenta,
+                ReceivableDueNotifier::RESOLUTION_RESCHEDULED,
+                $dueAt === null
+                    ? 'Se le quitó el plazo: '.$reason
+                    : 'Se pactó un plazo nuevo al '.$dueAt->toDateString().': '.$reason,
+            );
+        }
+
+        return $this->respondWithReceivable($cuenta, $reteniaAntes);
+    }
+
+    /**
+     * ¿Esta deuda está reteniendo a su socio AHORA MISMO?
+     *
+     * Se pregunta por el SOCIO y no por la deuda: tener otra obligación vencida
+     * deja la retención puesta igual, y avisar a la app de un cambio que no
+     * ocurrió la haría mostrar «al día» a quien no lo está.
+     */
+    private function retieneAlSocio(Receivable $receivable): bool
+    {
+        return $receivable->member_id !== null
+            && app(MembershipFinancialStanding::class)->isOverdue($receivable->member);
+    }
+
+    /**
+     * Respuesta común de las correcciones administrativas.
+     *
+     * Empuja el refresco de la app SOLO si la retención cambió de verdad. Una
+     * corrección administrativa la hace una persona y no hay riesgo de despertar
+     * a todos los móviles, pero un `app_state` que no corresponde a ningún
+     * cambio enseña a la app a recargar por nada.
+     */
+    private function respondWithReceivable(Receivable $cuenta, bool $reteniaAntes): JsonResponse
+    {
+        if ($cuenta->member_id !== null && $this->retieneAlSocio($cuenta) !== $reteniaAntes) {
+            RealtimeEvents::emit($cuenta->member_id, RealtimeEvents::APP_STATE, ['membership', 'financial']);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'data' => $cuenta->fresh()->load('member', 'cancelledBy:id,name')->toCrmArray(),
         ]);
     }
 
