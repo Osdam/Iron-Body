@@ -567,6 +567,17 @@ Route::middleware('auth.admin')->group(function (): void {
     Route::get('admin/payments/stats', [PaymentController::class, 'crmStats']);
     Route::get('admin/payments/latest-per-member', [PaymentController::class, 'latestPerMember']);
     Route::get('admin/reports/overview', ReportsOverviewController::class);
+
+    // Módulo de exportación. Una ruta por conjunto, con la clave fija, para que
+    // AuthorizationMap les asigne su permiso por ruta: con un comodín
+    // {dataset} el permiso dependería del valor y el mapa no podría resolverlo.
+    // El throttle es barandilla: una exportación recorre la tabla entera.
+    Route::get('admin/exports', [\App\Http\Controllers\Api\Admin\ExportController::class, 'index']);
+    Route::get('admin/exports/members', [\App\Http\Controllers\Api\Admin\ExportController::class, 'download'])
+        ->defaults('dataset', 'members')->middleware('throttle:20,1');
+    Route::get('admin/exports/payments', [\App\Http\Controllers\Api\Admin\ExportController::class, 'download'])
+        ->defaults('dataset', 'payments')->middleware('throttle:20,1');
+
     Route::get('plans/features', [PlanController::class, 'allFeatures']);
     Route::put('plans/{plan}/features', [PlanController::class, 'updateFeatures']);
     // IRON IA — capacidades detalladas por plan (CRM ↔ membership_ai_capabilities).

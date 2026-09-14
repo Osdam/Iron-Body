@@ -283,6 +283,14 @@ final class AuthorizationMap
         'GET api/dashboard' => self::SELF,
         'GET api/reports/stats' => 'reports.view',
         'GET api/admin/reports/overview' => 'reports.view',
+
+        // Exportación. «Exportar» es un permiso propio y no «ver»: mirar la
+        // lista de socios y llevarse a todos en un fichero con documento y
+        // teléfono son actos distintos. El catálogo solo exige sesión porque
+        // devuelve únicamente lo que ESA sesión puede descargar.
+        'GET api/admin/exports' => self::SELF,
+        'GET api/admin/exports/members' => 'members.export',
+        'GET api/admin/exports/payments' => 'payments.export',
         // Cotizar es un cálculo fiscal previo a cobrar: pertenece a facturación.
         'POST api/admin/billing/quote' => 'billing.view',
 

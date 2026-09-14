@@ -5,6 +5,8 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Http\Controllers\Api\PaymentController;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -78,5 +80,30 @@ class User extends Authenticatable
     public function appMember(): HasOne
     {
         return $this->hasOne(Member::class);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    /**
+     * Último cobro que de verdad entró (pagado), no el último registrado.
+     *
+     * Un pago pendiente o anulado posterior no puede pasar por «último pago»:
+     * en una exportación de socios haría creer que alguien pagó ayer cuando lo
+     * que hizo fue dejar un cobro sin completar.
+     */
+    public function lastPaidPayment(): HasOne
+    {
+        $pagados = PaymentController::PAID_STATUSES;
+
+        return $this->hasOne(Payment::class)->ofMany(
+            ['id' => 'max'],
+            fn ($q) => $q->whereRaw(
+                'LOWER(payments.status) IN ('.implode(', ', array_fill(0, count($pagados), '?')).')',
+                $pagados,
+            ),
+        );
     }
 }

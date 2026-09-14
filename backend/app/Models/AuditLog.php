@@ -14,7 +14,7 @@ class AuditLog extends Model
     public const UPDATED_AT = null; // append-only
 
     /** Acciones canónicas (espejo del front: AuditAction). */
-    public const ACTIONS = ['create', 'update', 'delete', 'status', 'assign', 'settings'];
+    public const ACTIONS = ['create', 'update', 'delete', 'status', 'assign', 'settings', 'export'];
 
     protected $fillable = [
         'action',
