@@ -29,6 +29,7 @@ use App\Support\Caja\PaymentMethodKind;
 use App\Support\Caja\PaymentTerm;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -220,6 +221,24 @@ class ReceivableController extends Controller
         };
     }
 
+    /**
+     * La misma consulta, preparada para CONTAR en vez de para listar.
+     *
+     * Hay que vaciar la lista de columnas antes de pedir los agregados: sin
+     * eso, el `select('receivables.*')` del listado se queda y la consulta
+     * acaba siendo `SELECT receivables.*, COUNT(*) …`. SQLite lo tolera y
+     * PostgreSQL —que es lo que corre en producción— lo rechaza con «column
+     * receivables.id must appear in the GROUP BY clause». Es un 500 que la
+     * suite local no puede ver, y por eso hay una prueba que mira el SQL.
+     *
+     * `toBase()` además evita hidratar modelos y arrastrar los `with()` del
+     * listado: para contar no hace falta traerse a nadie.
+     */
+    private function agregado(Builder $q): QueryBuilder
+    {
+        return $q->toBase()->reorder()->select([]);
+    }
+
     /** El saldo, en SQL: total menos lo aplicado. */
     private function saldoSql(): string
     {
@@ -237,8 +256,7 @@ class ReceivableController extends Controller
      */
     private function summary(array $filtros, Request $request, ?string $scope): array
     {
-        $fila = $this->scoped($this->filtered($filtros, $request), $scope)
-            ->reorder()
+        $fila = $this->agregado($this->scoped($this->filtered($filtros, $request), $scope))
             ->selectRaw('COUNT(*) AS filas')
             ->selectRaw('COALESCE(SUM(CASE WHEN receivables.status IN (?, ?) THEN '
                 .$this->saldoSql().' ELSE 0 END), 0) AS pendiente',
@@ -265,8 +283,7 @@ class ReceivableController extends Controller
         $abiertas = '(receivables.status IN (\''.Receivable::STATUS_PENDING
             .'\', \''.Receivable::STATUS_PARTIALLY_PAID.'\'))';
 
-        $fila = $this->filtered($filtros, $request)
-            ->reorder()
+        $fila = $this->agregado($this->filtered($filtros, $request))
             ->selectRaw('COUNT(*) AS todas')
             ->selectRaw("SUM(CASE WHEN {$abiertas} AND ".$this->saldoSql().' > 0 THEN 1 ELSE 0 END) AS saldos')
             ->selectRaw("SUM(CASE WHEN {$abiertas} AND COALESCE(ap.abonos, 0) > 0 THEN 1 ELSE 0 END) AS abonos")

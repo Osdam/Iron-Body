@@ -511,7 +511,44 @@ class ReceivablePaginationTest extends TestCase
         $this->assertNotNull($socio->id);
     }
 
-    public function test_21_una_cuenta_sin_abonos_sigue_diciendo_cero_pagado(): void
+    public function test_21_los_agregados_no_arrastran_las_columnas_del_listado(): void
+    {
+        // ESTO TUMBÓ PRODUCCIÓN. `summary()` y `tabCounts()` reutilizan la
+        // consulta del listado, que ya trae `select('receivables.*')`, y
+        // `selectRaw` AÑADE en vez de reemplazar: la consulta salía como
+        // `SELECT receivables.*, COUNT(*) …`.
+        //
+        // SQLite lo tolera y devuelve algo; PostgreSQL lo rechaza con «column
+        // receivables.id must appear in the GROUP BY clause» y el listado entero
+        // responde 500. La suite corre en SQLite, así que el fallo no se ve
+        // ejecutando: hay que mirar el SQL que se genera.
+        $socio = $this->socio();
+        $this->deuda($socio, 50000, 10000);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $this->pagina()->assertOk();
+        $consultas = array_column(DB::getQueryLog(), 'query');
+        DB::disableQueryLog();
+
+        // Se buscan por los alias de los propios agregados —`filas` es el del
+        // resumen y `todas` el de los contadores—, no por «tiene un COUNT»: la
+        // consulta del listado lleva uno dentro de su subconsulta de abonos y
+        // se colaría.
+        $agregados = array_filter(
+            $consultas,
+            fn (string $q) => str_contains($q, 'AS filas') || str_contains($q, 'AS todas'),
+        );
+        $this->assertCount(2, $agregados, 'Deben ser dos: el resumen y los contadores.');
+
+        foreach ($agregados as $q) {
+            $this->assertStringNotContainsString('"receivables".*', $q,
+                'Un agregado no puede llevar también las columnas de la fila: '.
+                'PostgreSQL lo rechaza y el listado responde 500.');
+        }
+    }
+
+    public function test_22_una_cuenta_sin_abonos_sigue_diciendo_cero_pagado(): void
     {
         // El `LEFT JOIN` agregado deja `applied_payments_sum_amount` en NULL
         // para quien no tiene abonos; si eso no se normaliza a cero, el saldo
@@ -525,7 +562,7 @@ class ReceivablePaginationTest extends TestCase
         $this->assertEqualsWithDelta(40000, $fila['balance'], 0.01);
     }
 
-    public function test_22_el_abono_revertido_no_cuenta_como_pagado(): void
+    public function test_23_el_abono_revertido_no_cuenta_como_pagado(): void
     {
         $socio = $this->socio();
         $cuenta = $this->deuda($socio, 80000, 30000);
