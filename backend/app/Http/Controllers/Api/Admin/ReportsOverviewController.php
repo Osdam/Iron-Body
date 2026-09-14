@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Controller;
 use App\Models\Payment;
+use App\Services\Caja\CashReceipts;
 use App\Models\Plan;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -84,7 +85,12 @@ class ReportsOverviewController extends Controller
         $pending = PaymentController::PENDING_STATUSES;
         $date = $this->paymentDateExpr();
 
-        $row = Payment::query()->selectRaw(
+        // `cashPayments()` y no `Payment::query()`: vender un plan a plazos crea
+        // un pago por el importe COMPLETO con `method = 'receivable'`, que es el
+        // CONTRATO y no dinero recibido. Sumarlo hacía que el panel reconociera
+        // los 80.000 de un plan en cuanto entraban los primeros 40.000 —y que
+        // los abonos siguientes no sumaran nada, porque llegan por otra tabla—.
+        $row = app(CashReceipts::class)->cashPayments()->selectRaw(
             'COALESCE(SUM(CASE WHEN LOWER(status) IN ('.$this->placeholders($paid).') THEN amount ELSE 0 END), 0) as total_revenue,'
             .' COALESCE(SUM(CASE WHEN LOWER(status) IN ('.$this->placeholders($paid).')'
             .' AND '.$date.' BETWEEN ? AND ? THEN amount ELSE 0 END), 0) as period_revenue,'
@@ -92,9 +98,17 @@ class ReportsOverviewController extends Controller
             array_merge($paid, $paid, [$from, $to], $pending)
         )->first();
 
+        // Y el dinero que sí entró por abonos, que es lo que reemplaza a aquel
+        // devengo. Las dos cajas: el panel resume el negocio entero.
+        $abonos = app(CashReceipts::class)->appliedInstallments();
+        $historico = (float) (clone $abonos)->sum('receivable_payments.amount');
+        $periodo = (float) $abonos
+            ->whereBetween('receivable_payments.created_at', [$from, $to])
+            ->sum('receivable_payments.amount');
+
         return [
-            'total_revenue' => round((float) ($row->total_revenue ?? 0), 2),
-            'period_revenue' => round((float) ($row->period_revenue ?? 0), 2),
+            'total_revenue' => round((float) ($row->total_revenue ?? 0) + $historico, 2),
+            'period_revenue' => round((float) ($row->period_revenue ?? 0) + $periodo, 2),
             'pending_payments' => (int) ($row->pending_payments ?? 0),
         ];
     }
@@ -189,17 +203,30 @@ class ReportsOverviewController extends Controller
         $paid = PaymentController::PAID_STATUSES;
         $date = $this->paymentDateExpr();
 
-        $rows = Payment::query()
+        $recibos = app(CashReceipts::class);
+
+        $rows = $recibos->cashPayments()
             ->selectRaw("DATE({$date}) as day, COALESCE(SUM(amount), 0) as revenue")
             ->whereRaw('LOWER(status) IN ('.$this->placeholders($paid).')', $paid)
             ->whereRaw("{$date} BETWEEN ? AND ?", [$start, $end])
             ->groupByRaw("DATE({$date})")
             ->pluck('revenue', 'day');
 
+        // Los abonos, por el día en que entraron. Sin esto la serie bajaba el
+        // día que alguien terminaba de pagar su plan, que es justo cuando entró
+        // el último dinero.
+        $abonos = $recibos->appliedInstallments()
+            ->whereBetween('receivable_payments.created_at', [$start, $end])
+            ->selectRaw('DATE(receivable_payments.created_at) as day, COALESCE(SUM(receivable_payments.amount), 0) as revenue')
+            ->groupByRaw('DATE(receivable_payments.created_at)')
+            ->pluck('revenue', 'day');
+
         $series = [];
         for ($day = $start; $day->lessThanOrEqualTo($end); $day = $day->addDay()) {
             $key = $day->toDateString();
-            $series[] = ['date' => $key, 'revenue' => (int) round((float) ($rows[$key] ?? 0))];
+            $series[] = ['date' => $key, 'revenue' => (int) round(
+                (float) ($rows[$key] ?? 0) + (float) ($abonos[$key] ?? 0),
+            )];
         }
 
         return $series;

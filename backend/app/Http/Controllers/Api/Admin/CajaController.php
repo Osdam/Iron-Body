@@ -88,7 +88,13 @@ class CajaController extends Controller
             $query->where('status', $filters['status']);
         }
         if ($request->boolean('today')) {
-            $query->whereDate('created_at', now()->toDateString());
+            // El día del GIMNASIO, igual que en `stats()`. Con `whereDate` sobre
+            // una columna en UTC, «hoy» cambiaba a las siete de la tarde: la
+            // tarjeta de arriba seguía contando el día del negocio y la lista de
+            // abajo ya había pasado al siguiente. Dos respuestas distintas a la
+            // misma pregunta, en la misma pantalla.
+            [$desde, $hasta] = app(CashReceipts::class)->businessDay();
+            $query->whereBetween('created_at', [$desde, $hasta]);
         }
         if (isset($filters['from'])) {
             $query->whereDate('created_at', '>=', $filters['from']);
