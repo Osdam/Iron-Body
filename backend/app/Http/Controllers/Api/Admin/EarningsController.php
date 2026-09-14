@@ -237,10 +237,21 @@ class EarningsController extends Controller
      * Conteo Y última modificación: solo el conteo no vería un cambio de estado
      * —un pago que pasa a anulado— y solo la fecha no vería un borrado.
      *
+     * SALE HASHEADA. El cliente solo compara si cambió; no lee su contenido.
+     * Devolverla en claro pondría sumas y recuentos de dinero en un canal que
+     * abre cualquiera que vea una pantalla financiera —recepción incluida—, y
+     * no hace falta: una huella opaca cumple exactamente la misma función.
+     *
      * Es pública para poder probarla: comprobar que la firma se mueve es la
      * única forma de saber que una pantalla abierta se va a enterar.
      */
     public static function financialSignature(): string
+    {
+        return hash('xxh128', self::financialState());
+    }
+
+    /** El estado que resume la firma. Privado: lleva cifras de verdad. */
+    private static function financialState(): string
     {
         // Conteo y fecha NO BASTAN. `updated_at` se guarda al segundo, así que
         // dos escrituras dentro del mismo segundo dan la misma firma y el

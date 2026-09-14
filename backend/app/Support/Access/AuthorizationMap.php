@@ -232,6 +232,28 @@ final class AuthorizationMap
         'PATCH api/admin/receivables/{receivable}/due-date' => 'receivables.operate',
         'DELETE api/admin/receivables/{receivable}/due-date' => 'receivables.manage',
 
+        /*
+         * EL CANAL FINANCIERO EN TIEMPO REAL. No entrega dinero: entrega una
+         * huella opaca que solo sirve para decir «algo cambió, vuelve a
+         * preguntar». Quien lo abre ya está viendo una pantalla de dinero.
+         *
+         * Vivía bajo el dominio `earnings` y por tanto exigía `earnings.view`,
+         * que recepción NO tiene. El navegador recibía 403, `EventSource`
+         * reintentaba en silencio para siempre y la pantalla se quedaba sin
+         * tiempo real sin que apareciera un solo error: 902 rechazos seguidos
+         * a una misma recepcionista antes de que nadie lo notara.
+         *
+         * Basta CUALQUIERA de estos: son los permisos de las pantallas que
+         * escuchan el canal. Sin ninguno no hay nada que refrescar.
+         */
+        'GET api/admin/earnings/stream' => [
+            'earnings.view',
+            'receivables.view',
+            'payments.view',
+            'cash.gym.view',
+            'cash.products.view',
+        ],
+
         // Puerta de entrada del CRM: sin ella nadie podría autenticarse nunca.
         'POST api/admin/auth/login' => self::PUBLIC,
 
@@ -416,7 +438,16 @@ final class AuthorizationMap
      * Devuelve null si la ruta NO se sabe clasificar: el middleware lo trata
      * como denegación y el test de cobertura lo convierte en un fallo de CI.
      */
-    public static function resolve(Route $route): ?string
+    /**
+     * El permiso que exige una ruta.
+     *
+     * Puede devolver una LISTA cuando la ruta la pueden abrir varios perfiles
+     * por motivos distintos: entonces basta con tener UNO. Ver el canal
+     * financiero en OVERRIDES, que es el único caso hoy.
+     *
+     * @return string|list<string>|null
+     */
+    public static function resolve(Route $route): string|array|null
     {
         $clave = self::routeKey($route);
         if (isset(self::OVERRIDES[$clave])) {
@@ -498,9 +529,13 @@ final class AuthorizationMap
             if (! self::isAdministrative($route)) {
                 continue;
             }
-            $p = self::resolve($route);
-            if ($p !== null && ! in_array($p, [self::PUBLIC, self::SELF, self::CONTROLLER], true)) {
-                $out[$p] = true;
+            // Una ruta puede resolver a VARIOS permisos («cualquiera de
+            // estos»): todos cuentan como referenciados, porque todos abren
+            // esa puerta y ninguno debe desaparecer del catálogo.
+            foreach ((array) self::resolve($route) as $p) {
+                if ($p !== null && ! in_array($p, [self::PUBLIC, self::SELF, self::CONTROLLER], true)) {
+                    $out[$p] = true;
+                }
             }
         }
         foreach (self::CONTROLLER_ENFORCED as $p) {

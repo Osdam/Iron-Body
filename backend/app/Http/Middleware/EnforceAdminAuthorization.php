@@ -84,6 +84,18 @@ class EnforceAdminAuthorization
             return $this->deny($request, null, 'ruta sin clasificar');
         }
 
+        // Una LISTA significa «cualquiera de estos»: la ruta la abren varios
+        // perfiles por motivos distintos. Hoy solo el canal financiero.
+        if (is_array($permiso)) {
+            foreach ($permiso as $candidato) {
+                if (CrmPermission::allows($admin, $candidato)) {
+                    return $next($request);
+                }
+            }
+
+            return $this->deny($request, implode(' | ', $permiso));
+        }
+
         if (CrmPermission::allows($admin, $permiso)) {
             return $next($request);
         }

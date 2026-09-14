@@ -77,8 +77,12 @@ class AuthorizationCoverageTest extends TestCase
             ], true)) {
                 continue;
             }
-            if (! in_array($p, $catalogo, true)) {
-                $huerfanos[$p] = AuthorizationMap::routeKey($route);
+            // Una ruta puede exigir CUALQUIERA de varios permisos; todos
+            // tienen que existir en el catálogo, o habría uno inconcedible.
+            foreach ((array) $p as $candidato) {
+                if (! in_array($candidato, $catalogo, true)) {
+                    $huerfanos[$candidato] = AuthorizationMap::routeKey($route);
+                }
             }
         }
 

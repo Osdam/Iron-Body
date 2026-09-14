@@ -225,8 +225,12 @@ class RolePolicyTest extends TestCase
             ], true)) {
                 continue;
             }
-            if (! CrmPermission::allows($super, $p)) {
-                $denegadas[] = AuthorizationMap::routeKey($route).' → '.$p;
+            // Con una lista basta tener UNO; Super Admin los tiene todos, así
+            // que si falla cualquiera es que el permiso no existe de verdad.
+            foreach ((array) $p as $candidato) {
+                if (! CrmPermission::allows($super, $candidato)) {
+                    $denegadas[] = AuthorizationMap::routeKey($route).' → '.$candidato;
+                }
             }
         }
 
