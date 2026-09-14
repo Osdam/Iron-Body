@@ -3,6 +3,7 @@
 namespace App\Services\Exports;
 
 use App\Models\Payment;
+use App\Support\Members\MembershipFilter;
 use App\Models\Plan;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -21,14 +22,15 @@ use Illuminate\Database\Eloquent\Model;
 class MembersExport extends ExportDataset
 {
     /**
-     * Días para considerar una membresía «por vencer». Es el mismo umbral que
-     * usan Asistencia y Analítica; con otro, dos pantallas darían cifras
-     * distintas para la misma pregunta.
+     * Días para considerar una membresía «por vencer». Se toma de
+     * MembershipFilter para que la columna «Situación» diga lo mismo que el
+     * filtro con el que se pidió el fichero: con dos umbrales, una exportación
+     * de «vencen en 7 días» podría traer filas marcadas como «Activa».
      */
-    public const EXPIRING_SOON_DAYS = 7;
+    public const EXPIRING_SOON_DAYS = MembershipFilter::EXPIRING_SOON_DAYS;
 
     /** Zona horaria del negocio: «vence hoy» es hoy en Neiva, no en UTC. */
-    private const TZ = 'America/Bogota';
+    private const TZ = MembershipFilter::TZ;
 
     public function key(): string
     {
@@ -111,13 +113,9 @@ class MembersExport extends ExportDataset
                 'key' => 'membership',
                 'label' => 'Situación de la membresía',
                 'type' => 'select',
-                'options' => [
-                    ['value' => 'all', 'label' => 'Todas'],
-                    ['value' => 'active', 'label' => 'Activas'],
-                    ['value' => 'expiring', 'label' => 'Por vencer ('.self::EXPIRING_SOON_DAYS.' días)'],
-                    ['value' => 'expired', 'label' => 'Vencidas'],
-                    ['value' => 'none', 'label' => 'Sin membresía'],
-                ],
+                // Mismas opciones que el listado de Miembros: el mismo nombre
+                // tiene que significar lo mismo en las dos pantallas.
+                'options' => MembershipFilter::options(),
             ],
             [
                 'key' => 'account_status',
@@ -127,6 +125,7 @@ class MembersExport extends ExportDataset
                     ['value' => 'all', 'label' => 'Todas'],
                     ['value' => 'active', 'label' => 'Activas'],
                     ['value' => 'inactive', 'label' => 'Inactivas'],
+                    ['value' => 'pending', 'label' => 'Pendientes'],
                 ],
             ],
             [
@@ -138,6 +137,12 @@ class MembersExport extends ExportDataset
                     ...$planes->map(fn (string $n) => ['value' => $n, 'label' => $n])->all(),
                 ],
             ],
+            // Control fino cuando los atajos de arriba no bastan: «las que
+            // vencen entre el 1 y el 15», «los inscritos el mes pasado».
+            ['key' => 'end_from', 'label' => 'Vence desde', 'type' => 'date'],
+            ['key' => 'end_to', 'label' => 'Vence hasta', 'type' => 'date'],
+            ['key' => 'created_from', 'label' => 'Inscrito desde', 'type' => 'date'],
+            ['key' => 'created_to', 'label' => 'Inscrito hasta', 'type' => 'date'],
             ['key' => 'search', 'label' => 'Buscar nombre, documento o correo', 'type' => 'text'],
         ];
     }
@@ -145,37 +150,44 @@ class MembersExport extends ExportDataset
     public function filterRules(): array
     {
         return [
-            'membership' => 'nullable|in:all,active,expiring,expired,none',
-            'account_status' => 'nullable|in:all,active,inactive',
+            'membership' => 'nullable|in:'.implode(',', MembershipFilter::allowedValues()),
+            'account_status' => 'nullable|in:all,active,inactive,pending',
             'plan' => 'nullable|string|max:120',
+            'end_from' => 'nullable|date',
+            'end_to' => 'nullable|date|after_or_equal:end_from',
+            'created_from' => 'nullable|date',
+            'created_to' => 'nullable|date|after_or_equal:created_from',
             'search' => 'nullable|string|max:120',
         ];
     }
 
     public function query(array $filters): Builder
     {
-        $hoy = $this->today();
-        $limite = $hoy->addDays(self::EXPIRING_SOON_DAYS);
-
         $q = User::query()
             ->with(['lastPaidPayment.splits'])
             ->orderBy('id');
 
-        match ($filters['membership'] ?? 'all') {
-            'expired' => $q->whereNotNull('membership_end_date')
-                ->where('membership_end_date', '<', $hoy->toDateString()),
-            'expiring' => $q->whereBetween('membership_end_date', [$hoy->toDateString(), $limite->toDateString()]),
-            'active' => $q->where('membership_end_date', '>', $limite->toDateString()),
-            'none' => $q->whereNull('membership_end_date'),
-            default => null,
-        };
+        MembershipFilter::apply($q, (string) ($filters['membership'] ?? 'all'));
 
-        $estado = "LOWER(COALESCE(NULLIF(status, ''), 'active'))";
-        match ($filters['account_status'] ?? 'all') {
-            'active' => $q->whereRaw("{$estado} IN ('active', 'activo', 'activa')"),
-            'inactive' => $q->whereRaw("{$estado} IN ('inactive', 'inactivo', 'inactiva')"),
-            default => null,
-        };
+        $cuenta = (string) ($filters['account_status'] ?? 'all');
+        if ($cuenta !== 'all' && $cuenta !== '') {
+            MembershipFilter::apply($q, $cuenta);
+        }
+
+        // Rangos explícitos. Se suman a lo anterior en vez de sustituirlo:
+        // «vencidas» + «vence desde el 1» es una pregunta legítima.
+        if (filled($filters['end_from'] ?? null)) {
+            $q->where('membership_end_date', '>=', $filters['end_from']);
+        }
+        if (filled($filters['end_to'] ?? null)) {
+            $q->where('membership_end_date', '<=', $filters['end_to']);
+        }
+        if (filled($filters['created_from'] ?? null)) {
+            $q->whereDate('created_at', '>=', $filters['created_from']);
+        }
+        if (filled($filters['created_to'] ?? null)) {
+            $q->whereDate('created_at', '<=', $filters['created_to']);
+        }
 
         if (filled($filters['plan'] ?? null)) {
             $q->where('plan', $filters['plan']);

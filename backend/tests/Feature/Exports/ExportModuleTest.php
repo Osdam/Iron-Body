@@ -9,6 +9,7 @@ use App\Models\PaymentSplit;
 use App\Models\Plan;
 use App\Models\User;
 use App\Support\Caja\PaymentMethodKind;
+use App\Support\Members\MembershipFilter;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
@@ -186,6 +187,71 @@ class ExportModuleTest extends TestCase
         $this->assertSame('Activa', $filas['Activa']['Situación']);
         $this->assertSame('Sin membresía', $filas['Nada']['Situación']);
         $this->assertSame('', $filas['Nada']['Días restantes']);
+    }
+
+    public function test_se_pueden_exportar_los_que_estan_cerca_de_vencer(): void
+    {
+        $hoy = $this->hoy();
+        $this->socio(['name' => 'EnTresDias', 'membership_end_date' => $hoy->addDays(3)->toDateString()]);
+        $this->socio(['name' => 'EnVeinteDias', 'membership_end_date' => $hoy->addDays(20)->toDateString()]);
+        $this->socio(['name' => 'EnCienDias', 'membership_end_date' => $hoy->addDays(100)->toDateString()]);
+        $this->socio(['name' => 'YaVencida', 'membership_end_date' => $hoy->subDay()->toDateString()]);
+
+        $h = $this->actingAsAdmin($this->admin());
+
+        $semana = $this->csv($this->exportar($h, 'members', [
+            'format' => 'csv', 'columns' => ['name'], 'membership' => 'expiring_7',
+        ]));
+        $this->assertSame(['EnTresDias'], array_column($semana, 'Nombre'));
+
+        $mes = $this->csv($this->exportar($h, 'members', [
+            'format' => 'csv', 'columns' => ['name'], 'membership' => 'expiring_30',
+        ]));
+        $this->assertEqualsCanonicalizing(['EnTresDias', 'EnVeinteDias'], array_column($mes, 'Nombre'));
+    }
+
+    public function test_se_pueden_exportar_las_vencidas_hace_poco_para_recuperarlas(): void
+    {
+        $hoy = $this->hoy();
+        $this->socio(['name' => 'VencioAyer', 'membership_end_date' => $hoy->subDay()->toDateString()]);
+        $this->socio(['name' => 'VencioHaceUnAno', 'membership_end_date' => $hoy->subDays(365)->toDateString()]);
+
+        $filas = $this->csv($this->exportar($this->actingAsAdmin($this->admin()), 'members', [
+            'format' => 'csv', 'columns' => ['name'], 'membership' => 'expired_recent',
+        ]));
+
+        $this->assertSame(['VencioAyer'], array_column($filas, 'Nombre'));
+    }
+
+    public function test_el_rango_de_vencimiento_permite_acotar_a_mano(): void
+    {
+        $hoy = $this->hoy();
+        $this->socio(['name' => 'Dentro', 'membership_end_date' => $hoy->addDays(10)->toDateString()]);
+        $this->socio(['name' => 'Fuera', 'membership_end_date' => $hoy->addDays(40)->toDateString()]);
+
+        $filas = $this->csv($this->exportar($this->actingAsAdmin($this->admin()), 'members', [
+            'format' => 'csv',
+            'columns' => ['name'],
+            'end_from' => $hoy->toDateString(),
+            'end_to' => $hoy->addDays(15)->toDateString(),
+        ]));
+
+        $this->assertSame(['Dentro'], array_column($filas, 'Nombre'));
+    }
+
+    public function test_la_situacion_usa_el_mismo_umbral_que_el_filtro(): void
+    {
+        // Si los dos umbrales divergieran, una exportación de «vencen en 7
+        // días» podría traer filas marcadas como «Activa».
+        $hoy = $this->hoy();
+        $this->socio(['name' => 'Justo', 'membership_end_date' => $hoy->addDays(MembershipFilter::EXPIRING_SOON_DAYS)->toDateString()]);
+
+        $filas = $this->csv($this->exportar($this->actingAsAdmin($this->admin()), 'members', [
+            'format' => 'csv', 'columns' => ['name', 'membership_state'],
+            'membership' => 'expiring_'.MembershipFilter::EXPIRING_SOON_DAYS,
+        ]));
+
+        $this->assertSame('Por vencer', $filas[0]['Situación']);
     }
 
     public function test_el_filtro_de_vencidas_trae_solo_vencidas(): void

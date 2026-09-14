@@ -11,6 +11,7 @@ use App\Services\Audit\AuditTrail;
 use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Database\QueryException;
+use App\Support\Members\MembershipFilter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -33,7 +34,12 @@ class UserController extends Controller
         $query = User::query();
 
         if ($request->filled('status') && Schema::hasColumn('users', 'status')) {
-            $query->where('status', $request->input('status'));
+            // Antes: where('status', ?) exacto contra la columna. «Vencidos» no
+            // devolvía casi nada —un socio caducado conserva status 'active' y
+            // lo que cambió es la fecha— e «Inactivos» se saltaba las filas
+            // importadas que traen «inactivo» en español. MembershipFilter es la
+            // misma definición que usan Analítica y las exportaciones.
+            MembershipFilter::apply($query, (string) $request->input('status'));
         }
 
         // Búsqueda server-side sobre los campos que el CRM muestra en la tabla.
