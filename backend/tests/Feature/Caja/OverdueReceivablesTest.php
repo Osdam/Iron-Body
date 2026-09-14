@@ -52,7 +52,7 @@ class OverdueReceivablesTest extends TestCase
             'status' => 'active',
         ]);
 
-        config(['caja.default_payment_term_days' => 15]);
+        config(['caja.payment_terms.gym' => 15, 'caja.payment_terms.products' => 8]);
     }
 
     // ── Utilería ────────────────────────────────────────────────────────────
@@ -688,7 +688,7 @@ class OverdueReceivablesTest extends TestCase
 
     public function test_32_sin_fecha_el_plan_a_plazos_toma_el_plazo_configurado(): void
     {
-        config(['caja.default_payment_term_days' => 15]);
+        config(['caja.payment_terms.gym' => 15]);
         $socio = $this->socio();
         $plan = Plan::create(['name' => 'Premium', 'price' => 200000, 'duration_days' => 30, 'active' => true]);
         $this->turno();
@@ -706,7 +706,7 @@ class OverdueReceivablesTest extends TestCase
 
     public function test_32b_con_el_plazo_en_cero_la_deuda_nace_sin_vencimiento(): void
     {
-        config(['caja.default_payment_term_days' => 0]);
+        config(['caja.payment_terms.gym' => 0]);
         $socio = $this->socio();
         $plan = Plan::create(['name' => 'Premium', 'price' => 200000, 'duration_days' => 30, 'active' => true]);
         $this->turno();

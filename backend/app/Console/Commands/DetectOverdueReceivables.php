@@ -6,13 +6,15 @@ use App\Enums\CashShiftType;
 use App\Models\Receivable;
 use App\Models\ReceivablePayment;
 use App\Services\AutomationEventService;
+use App\Services\Caja\ReceivableDueNotifier as Notifier;
 use App\Services\RealtimeEvents;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Detecta que una obligación CRUZÓ el vencimiento, o que dejó de estar vencida.
+ * Recorre el CICLO de vencimiento de las cuentas por cobrar: avisa un día antes,
+ * el día mismo, cuando se pasa el plazo y cuando por fin se salda.
  *
  * ESTO NO BLOQUEA A NADIE. El bloqueo se calcula al leer, en
  * {@see \App\Services\Caja\MembershipFinancialStanding}, y por eso pagar
@@ -36,22 +38,56 @@ class DetectOverdueReceivables extends Command
         {--days=30 : Ventana hacia atrás para buscar cuentas ya saldadas que avisar}
         {--dry-run : Solo informa; no emite ningún evento}';
 
-    protected $description = 'Detecta transiciones de mora en cuentas por cobrar (gimnasio y productos).';
+    protected $description = 'Ciclo de vencimiento de cuentas por cobrar: vence mañana, vence hoy, vencida y saldada (gimnasio y productos).';
 
     public function handle(AutomationEventService $events): int
     {
         $hoy = Receivable::businessToday();
         $seco = (bool) $this->option('dry-run');
 
+        // «Vence mañana» y «vence hoy» son recordatorios: buscan por fecha
+        // exacta, no por rango, porque cada uno se dice UNA vez y en su día.
+        $proximas = $this->emitirPorFecha($events, $hoy->copy()->addDay(), Notifier::DUE_SOON, $hoy, $seco);
+        $deHoy = $this->emitirPorFecha($events, $hoy, Notifier::DUE_TODAY, $hoy, $seco);
         $vencidas = $this->emitirVencidas($events, $hoy, $seco);
         $saldadas = $this->emitirSaldadas($events, $hoy, $seco, max((int) $this->option('days'), 1));
 
         $this->info(sprintf(
-            'Mora al %s → transiciones a vencida: %d · a saldada: %d%s',
-            $hoy->toDateString(), $vencidas, $saldadas, $seco ? ' (simulacro)' : '',
+            'Ciclo al %s → vence mañana: %d · vence hoy: %d · vencida: %d · saldada: %d%s',
+            $hoy->toDateString(), $proximas, $deHoy, $vencidas, $saldadas, $seco ? ' (simulacro)' : '',
         ));
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Cuentas vivas cuyo plazo cae EXACTAMENTE en esa fecha.
+     *
+     * Sirve para los dos recordatorios. Por fecha exacta y no por rango: «vence
+     * mañana» dicho dos días seguidos deja de ser un recordatorio y pasa a ser
+     * ruido, y quien lo recibe aprende a ignorarlo.
+     */
+    private function emitirPorFecha(
+        AutomationEventService $events,
+        Carbon $fecha,
+        string $transicion,
+        Carbon $hoy,
+        bool $seco,
+    ): int {
+        $emitidas = 0;
+
+        Receivable::query()
+            ->outstanding()
+            ->whereDate('due_at', $fecha->toDateString())
+            ->chunkById(200, function ($cuentas) use ($events, $transicion, $hoy, $seco, &$emitidas): void {
+                foreach ($cuentas as $cuenta) {
+                    if ($this->emitirTransicion($events, $cuenta, $transicion, $hoy, $seco)) {
+                        $emitidas++;
+                    }
+                }
+            });
+
+        return $emitidas;
     }
 
     /** Cuentas que hoy están vencidas y todavía deben. */
@@ -63,7 +99,7 @@ class DetectOverdueReceivables extends Command
             ->overdue($hoy)
             ->chunkById(200, function ($cuentas) use ($events, $hoy, $seco, &$emitidas): void {
                 foreach ($cuentas as $cuenta) {
-                    if ($this->emitirTransicion($events, $cuenta, 'overdue', $hoy, $seco)) {
+                    if ($this->emitirTransicion($events, $cuenta, Notifier::OVERDUE, $hoy, $seco)) {
                         $emitidas++;
                     }
                 }
@@ -94,7 +130,7 @@ class DetectOverdueReceivables extends Command
                     if (! $this->huboMora($cuenta)) {
                         continue;
                     }
-                    if ($this->emitirTransicion($events, $cuenta, 'cleared', $hoy, $seco)) {
+                    if ($this->emitirTransicion($events, $cuenta, Notifier::CLEARED, $hoy, $seco)) {
                         $emitidas++;
                     }
                 }
@@ -124,8 +160,19 @@ class DetectOverdueReceivables extends Command
                 return false;
             }
 
-            $vencida = $fresca->isOverdue($hoy);
-            $procede = $transicion === 'overdue' ? $vencida : ($fresca->balance()->isZero() && ! $fresca->isCancelled());
+            // Se revalida CONTRA EL DINERO, no contra lo que trajo la consulta:
+            // entre una cosa y otra puede haber entrado el pago por caja, y
+            // recordarle el plazo a quien acaba de pagar es peor que no avisar.
+            $saldo = $fresca->balance();
+            $vive = $saldo->isPositive() && ! $fresca->isCancelled();
+
+            $procede = match ($transicion) {
+                Notifier::DUE_SOON => $vive && $this->venceEl($fresca, $hoy->copy()->addDay()),
+                Notifier::DUE_TODAY => $vive && $this->venceEl($fresca, $hoy),
+                Notifier::OVERDUE => $fresca->isOverdue($hoy),
+                default => $saldo->isZero() && ! $fresca->isCancelled(),
+            };
+
             if (! $procede) {
                 return false;
             }
@@ -149,10 +196,18 @@ class DetectOverdueReceivables extends Command
                 'days_overdue' => $fresca->daysOverdue($hoy),
             ], $llave)->wasRecentlyCreated;
 
-            // Solo se empuja el refresco de la app cuando la transición es
-            // nueva; si no, cada corrida despertaría a todos los móviles.
-            if ($esNueva && $fresca->type === CashShiftType::GYM && $fresca->member_id !== null) {
-                RealtimeEvents::emit($fresca->member_id, RealtimeEvents::APP_STATE, ['membership', 'financial']);
+            if ($esNueva) {
+                // Avisar a quien debe y, si venció, a quien tiene que cobrarlo.
+                // La idempotencia ya la garantiza la llave de arriba: aquí no se
+                // vuelve a comprobar nada, porque dos mecanismos de deduplicación
+                // acaban contradiciéndose.
+                app(Notifier::class)->notify($fresca, $transicion, $hoy, $llave);
+
+                // Y se empuja el refresco de la app solo en la transición nueva;
+                // si no, cada corrida despertaría a todos los móviles.
+                if ($fresca->type === CashShiftType::GYM && $fresca->member_id !== null) {
+                    RealtimeEvents::emit($fresca->member_id, RealtimeEvents::APP_STATE, ['membership', 'financial']);
+                }
             }
 
             return $esNueva;
@@ -163,9 +218,16 @@ class DetectOverdueReceivables extends Command
     private function huboMora(Receivable $cuenta): bool
     {
         return DB::table('automation_events')
-            ->where('event_type', $this->nombreEvento($cuenta, 'overdue'))
-            ->where('idempotency_key', 'like', $this->prefijoLlave($cuenta, 'overdue').'%')
+            ->where('event_type', $this->nombreEvento($cuenta, Notifier::OVERDUE))
+            ->where('idempotency_key', 'like', $this->prefijoLlave($cuenta, Notifier::OVERDUE).'%')
             ->exists();
+    }
+
+    /** ¿El plazo de esta cuenta cae exactamente en esa fecha? */
+    private function venceEl(Receivable $cuenta, Carbon $fecha): bool
+    {
+        return $cuenta->due_at !== null
+            && $cuenta->due_at->toDateString() === $fecha->toDateString();
     }
 
     private function nombreEvento(Receivable $cuenta, string $transicion): string
@@ -196,9 +258,12 @@ class DetectOverdueReceivables extends Command
         $gen = $this->generacion($cuenta);
         $llave = $this->prefijoLlave($cuenta, $transicion);
 
-        return $transicion === 'overdue'
-            ? $llave.optional($cuenta->due_at)->toDateString().':'.$gen
-            : $llave.$gen;
+        // Los recordatorios y la mora llevan la fecha pactada: cambiarla es
+        // otro plazo, y merece su propio aviso. El cierre no la lleva, porque
+        // saldar es saldar, venga de la fecha que venga.
+        return $transicion === Notifier::CLEARED
+            ? $llave.$gen
+            : $llave.optional($cuenta->due_at)->toDateString().':'.$gen;
     }
 
     private function generacion(Receivable $cuenta): string

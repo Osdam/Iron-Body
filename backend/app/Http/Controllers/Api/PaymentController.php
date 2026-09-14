@@ -10,6 +10,7 @@ use App\Services\Caja\CashShiftService;
 use App\Support\Caja\PaymentOrigin;
 use App\Models\AuditLog;
 use App\Models\Payment;
+use App\Services\Caja\CashReceipts;
 use App\Services\Audit\FinancialAudit;
 use App\Support\Access\AdminActor;
 use App\Models\Plan;
@@ -85,7 +86,14 @@ class PaymentController extends Controller
      */
     public function crmStats(Request $request)
     {
-        $query = Payment::query();
+        // BASE DE CAJA. El asiento de devengo de un plan a plazos queda fuera:
+        // es el contrato por el importe completo, no dinero en el cajón.
+        // Contarlo hacía que «Total recaudado» marcara los 80.000 de un plan en
+        // cuanto entraban los primeros 40.000 — y que el abono final no sumara
+        // nada, porque ese dinero llega por otra tabla. Ver {@see CashReceipts}.
+        $recibos = app(CashReceipts::class);
+
+        $query = $recibos->cashPayments();
         $this->applyCrmFilters($query, $request);
 
         $sumWhen = fn (array $statuses) => 'COALESCE(SUM(CASE WHEN LOWER(status) IN ('
@@ -110,15 +118,66 @@ class PaymentController extends Controller
             )
         )->first();
 
+        // Y los abonos SÍ entran: es el dinero de los planes a plazos y de los
+        // créditos de cafetería, que de otro modo no aparecería en ninguna de
+        // estas cifras. Cada abono es un cobro confirmado, así que cuenta como
+        // operación además de como importe.
+        $abonos = $recibos->appliedInstallments();
+        $this->applyInstallmentFilters($abonos, $request);
+        $cobrado = (float) $abonos->sum('receivable_payments.amount');
+        $cobros = (int) $abonos->count();
+
         return response()->json([
+            // Los contadores de arriba describen la TABLA de pagos, que es lo
+            // que la pantalla lista; los importes describen el dinero.
             'total_count' => (int) ($row->total_count ?? 0),
-            'total_amount' => round((float) ($row->total_amount ?? 0), 2),
-            'paid_amount' => round((float) ($row->paid_amount ?? 0), 2),
-            'paid_count' => (int) ($row->paid_count ?? 0),
+            'total_amount' => round((float) ($row->total_amount ?? 0) + $cobrado, 2),
+            'paid_amount' => round((float) ($row->paid_amount ?? 0) + $cobrado, 2),
+            'paid_count' => (int) ($row->paid_count ?? 0) + $cobros,
             'pending_amount' => round((float) ($row->pending_amount ?? 0), 2),
             'pending_count' => (int) ($row->pending_count ?? 0),
             'failed_count' => (int) ($row->failed_count ?? 0),
         ]);
+    }
+
+    /**
+     * Traslada a los abonos los filtros de la pantalla que tienen sentido en
+     * ellos.
+     *
+     * `status` NO se traslada: un abono aplicado siempre es dinero cobrado, y
+     * los estados de la pasarela (pendiente, fallido) no existen en su mundo.
+     * Filtrar por «pendientes» debe devolver pagos pendientes, no abonos.
+     */
+    private function applyInstallmentFilters($query, Request $request): void
+    {
+        if ($request->filled('status')) {
+            $aceptados = $this->statusFilterValues((string) $request->status);
+            // Si el filtro no incluye ningún estado de cobrado, los abonos no
+            // pintan nada aquí.
+            if (! array_intersect($aceptados, self::PAID_STATUSES)) {
+                $query->whereRaw('1 = 0');
+
+                return;
+            }
+        }
+
+        if ($request->filled('cash_shift_id')) {
+            $query->where('receivable_payments.cash_shift_id', (int) $request->cash_shift_id);
+        }
+
+        if ($request->filled('user_id')) {
+            $query->whereHas('receivable.member', fn ($m) => $m->where('user_id', (int) $request->user_id));
+        }
+
+        if ($request->filled('search')) {
+            $operator = $this->likeOperator($query->getConnection()->getDriverName());
+            $like = $this->likeTerm((string) $request->search);
+            $query->where(function ($q) use ($operator, $like) {
+                $q->where('receivable_payments.reference', $operator, $like)
+                    ->orWhereHas('receivable', fn ($r) => $r->where('concept', $operator, $like))
+                    ->orWhereHas('receivable.member', fn ($m) => $m->where('full_name', $operator, $like));
+            });
+        }
     }
 
     /**

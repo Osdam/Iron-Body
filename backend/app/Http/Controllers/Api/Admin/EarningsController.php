@@ -7,6 +7,7 @@ use App\Models\Payment;
 use App\Models\ProductSale;
 use App\Models\ProductSaleItem;
 use App\Models\Receivable;
+use App\Services\Caja\CashReceipts;
 use App\Models\ReceivablePayment;
 use App\Enums\CashShiftType;
 use App\Support\SseStream;
@@ -45,7 +46,12 @@ class EarningsController extends Controller
      * Las ventas a crédito de cafetería ya quedaban fuera por su estado
      * (`credit` no está en CAFE_PAID); lo que faltaba era sumar sus abonos.
      */
-    private const ACCRUAL_METHOD = 'receivable';
+    /**
+     * El asiento de devengo del plan a plazos. La definición vive en
+     * {@see CashReceipts}: tres informes contestaban a esto por su cuenta y uno
+     * de ellos contestaba mal.
+     */
+    private const ACCRUAL_METHOD = CashReceipts::ACCRUAL_METHOD;
 
     public function index(Request $request): JsonResponse
     {

@@ -56,4 +56,29 @@ return [
     */
     'default_payment_term_days' => (int) env('CAJA_DEFAULT_PAYMENT_TERM_DAYS', 15),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Plazo por caja
+    |--------------------------------------------------------------------------
+    |
+    | Fiar un plan de gimnasio y fiar un batido no son la misma operación
+    | comercial, así que no comparten plazo.
+    |
+    |   gym (15 días): el crédito recae sobre un servicio que se consume durante
+    |   todo el mes. Si el plazo lo desborda, el socio acaba renovando mientras
+    |   todavía debe el plan anterior.
+    |
+    |   products (8 días): importes pequeños y frecuentes. Ocho días es "el mismo
+    |   día de la semana que viene", que es como se pacta de verdad en el
+    |   mostrador, con un día de margen.
+    |
+    | 0 en cualquiera de los dos = sin plazo por defecto en esa caja: la deuda
+    | nace sin vencimiento y por tanto nunca vence sola.
+    |
+    */
+    'payment_terms' => [
+        'gym'      => (int) env('CAJA_GYM_DEFAULT_PAYMENT_TERM_DAYS', 15),
+        'products' => (int) env('CAJA_PRODUCTS_DEFAULT_PAYMENT_TERM_DAYS', 8),
+    ],
+
 ];

@@ -9,6 +9,7 @@ use App\Models\CashShift;
 use App\Models\Member;
 use App\Models\Product;
 use App\Models\ProductSale;
+use App\Models\Receivable;
 use App\Rules\DeliverableInvoiceEmail;
 use App\Services\Billing\InvoiceEmail;
 use App\Services\Billing\InvoicingService;
@@ -19,10 +20,12 @@ use App\Enums\CashShiftType;
 use App\Enums\DebtorType;
 use App\Services\Caja\CashShiftService;
 use App\Services\Caja\DebtorDirectory;
+use App\Services\Caja\CashReceipts;
 use App\Services\Caja\ReceivableService;
 use App\Services\Inventory\InventoryService;
 use App\Services\Audit\FinancialAudit;
 use App\Support\Access\AdminActor;
+use App\Support\Caja\PaymentTerm;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -122,11 +125,28 @@ class CajaController extends Controller
     // GET /api/admin/caja/stats
     public function stats(): JsonResponse
     {
-        $today = ProductSale::whereDate('created_at', now()->toDateString());
+        // El día del GIMNASIO, no el de UTC: con `whereDate` sobre una columna
+        // en UTC, «Ingresos hoy» cambiaba de día a las siete de la tarde y lo
+        // cobrado en la última franja aparecía como del día siguiente.
+        $recibos = app(CashReceipts::class);
+        [$desde, $hasta] = $recibos->businessDay();
+        $today = ProductSale::whereBetween('created_at', [$desde, $hasta]);
+
+        // Ingresos de hoy = lo que se cobró hoy, venga de donde venga.
+        //
+        // Una venta a crédito no suma el día que se entrega el producto: el
+        // dinero no entró. Suma el día que el cliente abona, y ese cobro vive
+        // en `receivable_payments`, no en `product_sales`. Sin esta segunda
+        // parte, toda la cobranza de cafetería era invisible en el KPI: el
+        // crédito no contaba al venderse —correcto— y tampoco al cobrarse.
+        $abonos = (float) $recibos
+            ->appliedInstallments(CashShiftType::PRODUCTS)
+            ->whereBetween('receivable_payments.created_at', [$desde, $hasta])
+            ->sum('receivable_payments.amount');
 
         return response()->json([
             'sales_today' => (clone $today)->where('status', '!=', 'cancelled')->count(),
-            'revenue_today' => (float) (clone $today)->whereIn('status', ['paid', 'delivered'])->sum('total'),
+            'revenue_today' => (float) (clone $today)->whereIn('status', ['paid', 'delivered'])->sum('total') + $abonos,
             'pending_app' => ProductSale::app()->where('status', 'pending')->count(),
             'to_deliver' => ProductSale::where('status', 'paid')->count(),
         ]);
@@ -154,6 +174,10 @@ class CajaController extends Controller
             // A CRÉDITO: el socio se lleva el producto y la deuda queda en una
             // cuenta por cobrar. Sin medio de pago, porque no se paga ahora.
             'credit' => ['nullable', 'boolean'],
+            // Fecha límite del crédito. Opcional: si no viene se deriva del
+            // plazo de la caja de productos. Sin fecha la deuda no vence nunca,
+            // y una deuda que no vence no avisa y no se cobra.
+            'due_at' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:today'],
             // Se acepta el socio por CUALQUIERA de sus dos identificadores: el
             // CRM busca personas por `users` en todas sus pantallas, y obligarle
             // a conocer el `member_id` significaría un buscador nuevo solo para
@@ -252,6 +276,7 @@ class CajaController extends Controller
                 actor: AdminActor::from($request),
                 source: $sale,
                 notes: $data['notes'] ?? null,
+                dueAt: PaymentTerm::resolve($data['due_at'] ?? null, CashShiftType::PRODUCTS),
             );
 
             return response()->json([

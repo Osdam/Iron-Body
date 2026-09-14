@@ -109,6 +109,12 @@ class CashShiftTotalsService
         $simples = DB::table('payments')
             ->where('cash_shift_id', $shift->id)
             ->where('status', 'paid')
+            // El asiento de devengo de un plan a plazos nunca lleva turno, así
+            // que hoy ya quedaba fuera por construcción. Se dice en voz alta
+            // porque depender de eso es depender de un accidente: el día que
+            // alguien le ponga turno, este arqueo contaría el plan entero Y sus
+            // abonos. Ver {@see CashReceipts}.
+            ->whereRaw('(method IS NULL OR LOWER(method) <> ?)', [CashReceipts::ACCRUAL_METHOD])
             ->whereNotExists(fn ($q) => $q
                 ->select(DB::raw(1))
                 ->from('payment_splits')
@@ -122,6 +128,7 @@ class CashShiftTotalsService
             ->join('payments', 'payments.id', '=', 'payment_splits.payment_id')
             ->where('payments.cash_shift_id', $shift->id)
             ->where('payments.status', 'paid')
+            ->whereRaw('(payments.method IS NULL OR LOWER(payments.method) <> ?)', [CashReceipts::ACCRUAL_METHOD])
             ->groupBy('payment_splits.method')
             ->select(
                 'payment_splits.method',
@@ -147,6 +154,7 @@ class CashShiftTotalsService
         return DB::table('payments')
             ->where('cash_shift_id', $shift->id)
             ->where('status', 'paid')
+            ->whereRaw('(method IS NULL OR LOWER(method) <> ?)', [CashReceipts::ACCRUAL_METHOD])
             ->count();
     }
 

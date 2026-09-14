@@ -21,6 +21,7 @@ use App\Services\Caja\ReceivableService;
 use App\Services\Payments\PaymentMembershipActivator;
 use App\Support\Access\AdminActor;
 use App\Support\Caja\PaymentMethodKind;
+use App\Support\Caja\PaymentTerm;
 use Carbon\CarbonInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -228,7 +229,7 @@ class ReceivableController extends Controller
                 total: Money::fromAmount($data['total_amount']),
                 actor: AdminActor::from($request),
                 notes: $data['notes'] ?? null,
-                dueAt: $this->plazoPactado($data['due_at'] ?? null, derivarPorDefecto: false),
+                dueAt: PaymentTerm::resolve($data['due_at'] ?? null, CashShiftType::from($data['type']), derivarPorDefecto: false),
             );
         } catch (ReceivableException $e) {
             return $this->receivableError($e);
@@ -305,29 +306,6 @@ class ReceivableController extends Controller
      * Al revés —resumir lo que cupo en la página— el total dependería de cuánto
      * se pidiera, que es la peor forma de equivocarse con dinero.
      */
-    /**
-     * La fecha límite que se va a grabar.
-     *
-     * Si el mostrador la pactó, manda esa. Si no y procede derivarla, sale del
-     * plazo configurado en `config/caja.php` — nunca de un número escrito a
-     * mano aquí, que es como se acaba teniendo tres plazos distintos según el
-     * endpoint por el que entre la deuda.
-     */
-    private function plazoPactado(?string $pactada, bool $derivarPorDefecto): ?CarbonInterface
-    {
-        if ($pactada !== null && $pactada !== '') {
-            return Carbon::parse($pactada, config('caja.timezone', Member::BUSINESS_TZ))->startOfDay();
-        }
-
-        $dias = (int) config('caja.default_payment_term_days', 0);
-
-        if (! $derivarPorDefecto || $dias <= 0) {
-            return null;
-        }
-
-        return Receivable::businessToday()->addDays($dias);
-    }
-
     public function account(Request $request, Member $member): JsonResponse
     {
         $limite = min(max((int) $request->integer('limit', 100), 1), 200);
@@ -458,7 +436,7 @@ class ReceivableController extends Controller
         // `client_request_id` frenaba el abono duplicado, pero el `Payment` y la
         // cuenta de la segunda petición ya estaban escritos.
         try {
-            $vence = $this->plazoPactado($data['due_at'] ?? null, derivarPorDefecto: true);
+            $vence = PaymentTerm::resolve($data['due_at'] ?? null, CashShiftType::GYM);
 
             [$pago, $cuenta, $abono] = DB::transaction(function () use ($data, $plan, $total, $primero, $member, $actor, $request, $requestId, $vence) {
                 $pago = Payment::create([
