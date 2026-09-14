@@ -301,7 +301,7 @@ class DebtorAndTabsTest extends TestCase
 
     // ── 10-14. Las cuatro pestañas ────────────────────────────────────────
 
-    public function test_la_matriz_completa_de_las_cuatro_pestanas(): void
+    public function test_la_matriz_completa_de_las_pestanas(): void
     {
         $this->openShift(CashShiftType::PRODUCTS);
         $socio = $this->member('Alejandro Casas', '1034778400');
@@ -311,27 +311,33 @@ class DebtorAndTabsTest extends TestCase
 
         // CASO 1 — crédito recién abierto: total 3.000, pagado 0.
         $this->assertContains($cuenta->id, $ids($this->pestana('all')), 'TODAS');
+        $this->assertContains($cuenta->id, $ids($this->pestana('outstanding')), 'SALDOS');
         $this->assertContains($cuenta->id, $ids($this->pestana('credits')), 'CRÉDITOS');
         $this->assertNotContains($cuenta->id, $ids($this->pestana('installments')), 'ABONOS');
         $this->assertNotContains($cuenta->id, $ids($this->pestana('paid')), 'PAGADAS');
 
-        // CASO 2 — tras un abono de 1.000: quedan 2.000.
+        // CASO 2 — tras un abono de 1.000 quedan 2.000. SALDOS y ABONOS se
+        // solapan a propósito: la deuda sigue viva —hay 2.000 que cobrar— y
+        // además ya recibió dinero. Son dos preguntas, no dos montones.
         $this->postJson("/api/admin/receivables/{$cuenta->id}/payments", [
             'amount' => 1000, 'method' => 'cash',
         ], $this->headers())->assertStatus(201);
 
         $this->assertContains($cuenta->id, $ids($this->pestana('all')), 'TODAS');
+        $this->assertContains($cuenta->id, $ids($this->pestana('outstanding')), 'SALDOS');
         $this->assertContains($cuenta->id, $ids($this->pestana('credits')), 'CRÉDITOS');
         $this->assertContains($cuenta->id, $ids($this->pestana('installments')), 'ABONOS');
         $this->assertNotContains($cuenta->id, $ids($this->pestana('paid')), 'PAGADAS');
 
-        // CASO 3 — liquidada: sale de todo lo pendiente y queda en el histórico.
+        // CASO 3 — liquidada: sale de lo que hay que cobrar y queda en el
+        // histórico. «Todas» SÍ la conserva: es el libro, no la lista de cobro.
         $this->postJson("/api/admin/receivables/{$cuenta->id}/payments", [
             'amount' => 2000, 'method' => 'cash',
         ], $this->headers())->assertStatus(201);
 
         $this->assertSame(Receivable::STATUS_PAID, $cuenta->fresh()->status);
-        $this->assertNotContains($cuenta->id, $ids($this->pestana('all')), 'TODAS');
+        $this->assertContains($cuenta->id, $ids($this->pestana('all')), 'TODAS');
+        $this->assertNotContains($cuenta->id, $ids($this->pestana('outstanding')), 'SALDOS');
         $this->assertNotContains($cuenta->id, $ids($this->pestana('credits')), 'CRÉDITOS');
         $this->assertNotContains($cuenta->id, $ids($this->pestana('installments')), 'ABONOS');
         $this->assertContains($cuenta->id, $ids($this->pestana('paid')), 'PAGADAS');

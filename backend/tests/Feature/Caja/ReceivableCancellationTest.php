@@ -782,9 +782,11 @@ class ReceivableCancellationTest extends TestCase
         $r = $this->getJson('/api/admin/receivables?scope=cancelled', $this->admin())->assertOk();
         $this->assertSame([$anulada->id], array_column($r->json('data'), 'id'));
 
-        // Y desaparece de las que hay que cobrar.
-        $r = $this->getJson('/api/admin/receivables?scope=all', $this->admin())->assertOk();
+        // Y desaparece de las que hay que cobrar —aunque «Todas» la conserve,
+        // porque esa pestaña es el libro y no la lista de cobro—.
+        $r = $this->getJson('/api/admin/receivables?scope=outstanding', $this->admin())->assertOk();
         $this->assertSame([$viva->id], array_column($r->json('data'), 'id'));
+        $this->assertSame(1, $r->json('tabs.cancelled'), 'la pestaña Anuladas cuenta una');
     }
 
     public function test_36_el_listado_dice_quien_anulo_sin_una_consulta_por_fila(): void

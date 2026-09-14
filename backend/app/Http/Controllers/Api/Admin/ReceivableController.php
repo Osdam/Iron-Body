@@ -7,14 +7,17 @@ use App\Enums\DebtorType;
 use App\Exceptions\CashShiftException;
 use App\Exceptions\ReceivableException;
 use App\Exceptions\PlanReplayException;
+use App\Http\Controllers\Concerns\ResolvesPagination;
 use App\Http\Controllers\Controller;
 use App\Models\Member;
 use App\Models\Payment;
 use App\Models\Plan;
+use App\Models\ProductSale;
 use App\Models\Receivable;
 use App\Models\ReceivablePayment;
 use App\Services\Billing\Money;
 use App\Services\Audit\FinancialAudit;
+use App\Services\Caja\CashReceipts;
 use App\Services\Caja\DebtorDirectory;
 use App\Services\Caja\MembershipFinancialStanding;
 use App\Services\Caja\ReceivableDueNotifier;
@@ -25,6 +28,7 @@ use App\Support\Access\AdminActor;
 use App\Support\Caja\PaymentMethodKind;
 use App\Support\Caja\PaymentTerm;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -46,75 +50,62 @@ use Illuminate\Validation\Rule;
  */
 class ReceivableController extends Controller
 {
-    /** GET /api/admin/receivables */
+    use ResolvesPagination;
+
+    /** Las pestañas de Caja. `credits` se conserva por compatibilidad. */
+    private const SCOPES = ['all', 'outstanding', 'credits', 'installments', 'paid', 'cancelled'];
+
+    private const DEFAULT_PER_PAGE = 25;
+
+    private const MAX_PER_PAGE = 100;
+
+    /**
+     * GET /api/admin/receivables — el listado, paginado en el servidor.
+     *
+     * Antes devolvía `limit(300)` sin paginar y el CRM filtraba lo que le
+     * llegaba. Eso tenía dos problemas que crecen con el gimnasio: el navegador
+     * se descargaba trescientas filas para enseñar veinticinco, y —peor— a
+     * partir de la fila 301 la lista MENTÍA en silencio, porque el total
+     * pendiente se sumaba sobre lo que había cabido.
+     *
+     * Aquí la página son 25 filas y los agregados se calculan en SQL sobre el
+     * universo filtrado completo, no sobre la página. Un contador que depende de
+     * cuántas filas pidió el navegador no es un contador.
+     */
     public function index(Request $request): JsonResponse
     {
         $filtros = $request->validate([
             'member_id' => ['nullable', 'integer'],
             'status' => ['nullable', Rule::in(Receivable::STATUSES)],
             'type' => ['nullable', Rule::in(CashShiftType::values())],
-            // Las cuatro vistas de Caja, por nombre. Antes el CRM las componía
-            // con `outstanding=true`, y ese `true` viajaba como TEXTO: la regla
+            // Las pestañas de Caja, por nombre. Antes el CRM las componía con
+            // `outstanding=true`, y ese `true` viajaba como TEXTO: la regla
             // `boolean` de Laravel admite 1, 0, "1" y "0" pero no "true", así
             // que la pestaña Créditos respondía 422 y en pantalla salía «No se
             // pudo cargar las cuentas por cobrar». Un parámetro con nombre no
             // se puede escribir mal de esa manera.
-            'scope' => ['nullable', Rule::in(['all', 'credits', 'installments', 'paid', 'cancelled'])],
+            'scope' => ['nullable', Rule::in(self::SCOPES)],
             'outstanding' => ['nullable', 'boolean'],
             'search' => ['nullable', 'string', 'max:120'],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:'.self::MAX_PER_PAGE],
         ]);
 
-        // `cancelledBy` se carga aquí y no fila a fila: el listado tiene que
-        // poder decir quién anuló cada deuda sin pagar una consulta por fila.
-        $q = Receivable::query()
-            ->with('member:id,full_name,document_number,is_staff')
-            ->with('cancelledBy:id,name');
+        $pagina = $this->scoped($this->filtered($filtros, $request), $filtros['scope'] ?? null)
+            // Orden ESTABLE, y por eso desempatado por id: ordenar solo por
+            // fecha hace que dos filas del mismo segundo puedan intercambiarse
+            // entre consultas, y entonces una misma deuda sale en la página 2 y
+            // en la 3 mientras otra no sale en ninguna.
+            ->orderByDesc('receivables.created_at')
+            ->orderByDesc('receivables.id')
+            ->paginate($this->resolvePerPage($request, self::DEFAULT_PER_PAGE, self::MAX_PER_PAGE));
 
-        if (! empty($filtros['member_id'])) {
-            $q->where('member_id', (int) $filtros['member_id']);
-        }
-        if (! empty($filtros['status'])) {
-            $q->where('status', $filtros['status']);
-        }
-        if (! empty($filtros['type'])) {
-            $q->where('type', $filtros['type']);
-        }
-        match ($filtros['scope'] ?? null) {
-            // «Todas» son las que todavía se deben; una cuenta saldada ya no se
-            // cobra y no tiene sitio en un listado de cobro.
-            'all' => $q->outstanding(),
-            'credits' => $q->fromCreditSale(),
-            'installments' => $q->withInstallments(),
-            'paid' => $q->settled(),
-            'cancelled' => $q->cancelled(),
-            default => null,
-        };
-
-        if ($request->boolean('outstanding')) {
-            $q->outstanding();
-        }
-        if (! empty($filtros['from'])) {
-            $q->whereDate('created_at', '>=', $filtros['from']);
-        }
-        if (! empty($filtros['to'])) {
-            $q->whereDate('created_at', '<=', $filtros['to']);
-        }
-        if (! empty($filtros['search'])) {
-            $texto = trim($filtros['search']);
-            $q->where(function ($sub) use ($texto): void {
-                $sub->where('concept', 'like', "%{$texto}%")
-                    ->orWhereHas('member', fn ($m) => $m
-                        ->where('full_name', 'like', "%{$texto}%")
-                        ->orWhere('document_number', 'like', "%{$texto}%"));
-            });
-        }
-
-        $cuentas = $q->orderByDesc('id')->limit(300)->get();
+        $cuentas = $pagina->getCollection();
 
         // Los deudores se resuelven de una vez, agrupados por tabla: uno a uno
-        // serían 300 consultas para pintar una pantalla.
+        // serían veinticinco consultas para pintar una pantalla.
         $fichas = app(DebtorDirectory::class)->resolveMany(
             $cuentas->filter(fn (Receivable $r) => $r->debtor_type !== null && $r->debtor_id !== null)
                 ->map(fn (Receivable $r) => [$r->debtor_type, $r->debtor_id])
@@ -126,16 +117,170 @@ class ReceivableController extends Controller
             'data' => $cuentas->map(fn (Receivable $r) => $r->toCrmArray(
                 debtor: $fichas[$r->debtor_type?->value.':'.$r->debtor_id] ?? null,
             ))->all(),
-            // El total pendiente de lo consultado, para no obligar al CRM a
-            // sumarlo y arriesgarse a que su suma difiera de la del servidor.
-            'summary' => [
-                'count' => $cuentas->count(),
-                'outstanding_total' => round(
-                    $cuentas->reduce(fn ($acc, Receivable $r) => $acc + $r->balance()->toFloat(), 0.0),
-                    2,
-                ),
+            'meta' => [
+                'current_page' => $pagina->currentPage(),
+                'per_page' => $pagina->perPage(),
+                'last_page' => $pagina->lastPage(),
+                'total' => $pagina->total(),
+                'from' => $pagina->firstItem(),
+                'to' => $pagina->lastItem(),
             ],
+            // El total pendiente del UNIVERSO filtrado, no de la página: es la
+            // respuesta a «cuánto me deben», y esa cifra no puede depender de en
+            // qué página esté mirando quien pregunta.
+            'summary' => $this->summary($filtros, $request, $filtros['scope'] ?? null),
+            // Y los contadores de las pestañas, en una sola consulta agregada.
+            'tabs' => $this->tabCounts($filtros, $request),
         ]);
+    }
+
+    /**
+     * La consulta base con los filtros, SIN pestaña.
+     *
+     * Lo abonado entra por un `join` agregado y no por `withSum`: así el saldo
+     * es una expresión SQL que se puede filtrar y sumar en la misma consulta
+     * —`withSum` la deja fuera del WHERE— y de paso cae en el atributo que
+     * `paidAmount()` ya sabe leer, así que pintar la página no dispara una
+     * consulta por fila.
+     */
+    private function filtered(array $filtros, Request $request): Builder
+    {
+        $abonos = DB::table('receivable_payments')
+            ->selectRaw('receivable_id, SUM(amount) AS aplicado, COUNT(*) AS abonos')
+            ->where('status', ReceivablePayment::STATUS_APPLIED)
+            ->groupBy('receivable_id');
+
+        $q = Receivable::query()
+            ->leftJoinSub($abonos, 'ap', 'ap.receivable_id', '=', 'receivables.id')
+            ->select('receivables.*')
+            ->selectRaw('COALESCE(ap.aplicado, 0) AS applied_payments_sum_amount')
+            ->with('member:id,full_name,document_number,is_staff')
+            ->with('cancelledBy:id,name');
+
+        if (! empty($filtros['member_id'])) {
+            $q->where('receivables.member_id', (int) $filtros['member_id']);
+        }
+        if (! empty($filtros['status'])) {
+            $q->where('receivables.status', $filtros['status']);
+        }
+        if (! empty($filtros['type'])) {
+            $q->where('receivables.type', $filtros['type']);
+        }
+        if ($request->boolean('outstanding')) {
+            $q->outstanding();
+        }
+        // Los extremos se convierten al RANGO UTC del día del negocio. Con
+        // `whereDate` sobre una columna en UTC, una deuda abierta a las ocho de
+        // la noche se guarda con fecha del día siguiente y desaparecía del
+        // filtro del día en que de verdad ocurrió.
+        $recibos = app(CashReceipts::class);
+        if (! empty($filtros['from'])) {
+            $q->where('receivables.created_at', '>=', $recibos->businessDay(Carbon::parse($filtros['from']))[0]);
+        }
+        if (! empty($filtros['to'])) {
+            $q->where('receivables.created_at', '<=', $recibos->businessDay(Carbon::parse($filtros['to']))[1]);
+        }
+        if (! empty($filtros['search'])) {
+            $texto = trim($filtros['search']);
+            $q->where(function (Builder $sub) use ($texto): void {
+                $sub->where('receivables.concept', 'like', "%{$texto}%")
+                    ->orWhere('receivables.created_by_name', 'like', "%{$texto}%")
+                    ->orWhereHas('member', fn ($m) => $m
+                        ->where('full_name', 'like', "%{$texto}%")
+                        ->orWhere('document_number', 'like', "%{$texto}%"));
+            });
+        }
+
+        return $q;
+    }
+
+    /**
+     * La pestaña, aplicada en SQL.
+     *
+     * SALDOS y ABONOS SE SOLAPAN A PROPÓSITO, y esto es lo que estaba mal: un
+     * plan de 80.000 con 70.000 abonados salía en «Abonos» y no en «Saldos»,
+     * así que quien preguntaba «¿quién me debe?» no veía los 10.000 que
+     * faltaban. Son dos preguntas distintas sobre las mismas filas —«¿quién
+     * todavía me debe?» y «¿qué cuentas abiertas ya recibieron pagos?»— y
+     * forzarlas a ser conjuntos disjuntos es lo que escondía la deuda.
+     */
+    private function scoped(Builder $q, ?string $scope): Builder
+    {
+        return match ($scope) {
+            // Toda obligación ABIERTA con saldo, haya recibido abonos o no.
+            'outstanding' => $q->outstanding()->whereRaw($this->saldoSql().' > 0'),
+            // Abiertas que YA recibieron al menos un abono aplicado.
+            'installments' => $q->outstanding()->whereRaw('COALESCE(ap.abonos, 0) > 0'),
+            'credits' => $q->outstanding()->where('receivables.source_type', ProductSale::class),
+            'paid' => $q->where('receivables.status', Receivable::STATUS_PAID),
+            'cancelled' => $q->where('receivables.status', Receivable::STATUS_CANCELLED),
+            // «Todas» es TODO el historial del contexto, incluidas las saldadas
+            // y las anuladas: es el libro, no la lista de cobro.
+            default => $q,
+        };
+    }
+
+    /** El saldo, en SQL: total menos lo aplicado. */
+    private function saldoSql(): string
+    {
+        return '(receivables.total_amount - COALESCE(ap.aplicado, 0))';
+    }
+
+    /**
+     * Los agregados del universo filtrado.
+     *
+     * El pendiente suma SOLO las abiertas: una deuda anulada conserva su saldo
+     * en la fila —no se reescribe el total— pero ya no se exige, y contarla
+     * diría que hay dinero por recuperar que nadie va a reclamar.
+     *
+     * @return array{count:int, outstanding_total:float}
+     */
+    private function summary(array $filtros, Request $request, ?string $scope): array
+    {
+        $fila = $this->scoped($this->filtered($filtros, $request), $scope)
+            ->reorder()
+            ->selectRaw('COUNT(*) AS filas')
+            ->selectRaw('COALESCE(SUM(CASE WHEN receivables.status IN (?, ?) THEN '
+                .$this->saldoSql().' ELSE 0 END), 0) AS pendiente',
+                [Receivable::STATUS_PENDING, Receivable::STATUS_PARTIALLY_PAID])
+            ->first();
+
+        return [
+            'count' => (int) ($fila->filas ?? 0),
+            'outstanding_total' => round((float) ($fila->pendiente ?? 0), 2),
+        ];
+    }
+
+    /**
+     * Cuántas filas tiene cada pestaña, en UNA consulta.
+     *
+     * Se cuenta en SQL y no sobre arrays descargados: contar en el navegador
+     * obliga a traerse las filas para no enseñarlas, que es exactamente lo que
+     * esta pantalla dejó de hacer.
+     *
+     * @return array<string,int>
+     */
+    private function tabCounts(array $filtros, Request $request): array
+    {
+        $abiertas = '(receivables.status IN (\''.Receivable::STATUS_PENDING
+            .'\', \''.Receivable::STATUS_PARTIALLY_PAID.'\'))';
+
+        $fila = $this->filtered($filtros, $request)
+            ->reorder()
+            ->selectRaw('COUNT(*) AS todas')
+            ->selectRaw("SUM(CASE WHEN {$abiertas} AND ".$this->saldoSql().' > 0 THEN 1 ELSE 0 END) AS saldos')
+            ->selectRaw("SUM(CASE WHEN {$abiertas} AND COALESCE(ap.abonos, 0) > 0 THEN 1 ELSE 0 END) AS abonos")
+            ->selectRaw('SUM(CASE WHEN receivables.status = ? THEN 1 ELSE 0 END) AS pagadas', [Receivable::STATUS_PAID])
+            ->selectRaw('SUM(CASE WHEN receivables.status = ? THEN 1 ELSE 0 END) AS anuladas', [Receivable::STATUS_CANCELLED])
+            ->first();
+
+        return [
+            'all' => (int) ($fila->todas ?? 0),
+            'outstanding' => (int) ($fila->saldos ?? 0),
+            'installments' => (int) ($fila->abonos ?? 0),
+            'paid' => (int) ($fila->pagadas ?? 0),
+            'cancelled' => (int) ($fila->anuladas ?? 0),
+        ];
     }
 
     /**
