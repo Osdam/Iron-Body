@@ -6,6 +6,7 @@ use App\Models\Member;
 use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\User;
+use App\Support\Caja\PaymentOrigin;
 use App\Support\LegacyPlanMap;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -377,6 +378,14 @@ class ImportLegacyCrmCommand extends Command
             : ($this->fecha($m['comprada'] ?? null)
                 ?? $this->fecha($m['inicio'] ?? null)
                 ?? now());
+        // Historia, no operación: ni caja ni responsable. Pero sí el periodo
+        // exacto de ESA membresía, que es lo que el perfil del socio enseña.
+        $pago->origin = PaymentOrigin::LEGACY->value;
+        if ($estado === 'paid') {
+            $pago->period_start = $this->fecha($m['inicio'] ?? null)?->toDateString();
+            $pago->period_end = $this->fecha($m['fin'] ?? null)?->toDateString();
+            $pago->starts_on = $pago->period_start;
+        }
         $pago->save();
 
         $this->pagosExistentes[$referencia] = true;

@@ -313,6 +313,10 @@ final class AuthorizationMap
         'GET api/dashboard' => self::SELF,
         'GET api/reports/stats' => 'reports.view',
         'GET api/admin/reports/overview' => 'reports.view',
+        'GET api/admin/reports/payment-channels' => 'reports.view',
+        // El historial de pagos del perfil es información de PAGOS, aunque se
+        // mire desde la ficha del socio: quien no ve pagos no lo ve aquí.
+        'GET api/admin/users/{user}/payment-history' => 'payments.view',
 
         // Exportación. «Exportar» es un permiso propio y no «ver»: mirar la
         // lista de socios y llevarse a todos en un fichero con documento y

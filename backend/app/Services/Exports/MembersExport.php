@@ -231,9 +231,17 @@ class MembersExport extends ExportDataset
         return match (true) {
             $dias === null => 'Sin membresía',
             $dias < 0 => 'Vencida',
+            $this->startsLater($u) => 'Programada',
             $dias <= self::EXPIRING_SOON_DAYS => 'Por vencer',
             default => 'Activa',
         };
+    }
+
+    /** Pagada pero con inicio en el futuro. */
+    private function startsLater(User $u): bool
+    {
+        return $u->membership_start_date !== null
+            && CarbonImmutable::parse($u->membership_start_date, self::TZ)->startOfDay()->greaterThan($this->today());
     }
 
     private function accountStatusLabel(?string $status): string

@@ -567,6 +567,12 @@ Route::middleware('auth.admin')->group(function (): void {
     Route::get('admin/payments/stats', [PaymentController::class, 'crmStats']);
     Route::get('admin/payments/latest-per-member', [PaymentController::class, 'latestPerMember']);
     Route::get('admin/reports/overview', ReportsOverviewController::class);
+    // Quién pagó por la app y quién en el gimnasio, y quién del equipo cobró.
+    Route::get('admin/reports/payment-channels', \App\Http\Controllers\Api\Admin\ReportsPaymentChannelsController::class);
+    // Historia de pagos del socio para su perfil: periodos, canal, caja y
+    // quién cobró cada uno.
+    Route::get('admin/users/{user}/payment-history', \App\Http\Controllers\Api\Admin\MemberPaymentHistoryController::class)
+        ->whereNumber('user');
 
     // Módulo de exportación. Una ruta por conjunto, con la clave fija, para que
     // AuthorizationMap les asigne su permiso por ruta: con un comodín

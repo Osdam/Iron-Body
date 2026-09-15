@@ -22,10 +22,12 @@ use App\Services\Caja\DebtorDirectory;
 use App\Services\Caja\MembershipFinancialStanding;
 use App\Services\Caja\ReceivableDueNotifier;
 use App\Services\Caja\ReceivableService;
+use App\Services\Payments\MembershipPeriod;
 use App\Services\Payments\PaymentMembershipActivator;
 use App\Services\RealtimeEvents;
 use App\Support\Access\AdminActor;
 use App\Support\Caja\PaymentMethodKind;
+use App\Support\Caja\PaymentOrigin;
 use App\Support\Caja\PaymentTerm;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -35,6 +37,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Cuentas por cobrar: quién debe, cuánto, y el registro de sus abonos.
@@ -555,7 +558,14 @@ class ReceivableController extends Controller
             // configurado en config/caja.php; el mostrador siempre manda.
             'due_at' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:today'],
             'notes' => ['nullable', 'string', 'max:1000'],
+            // Inicio de la membresía, igual que en el cobro completo: se paga
+            // hoy la primera parte y se puede empezar otro día.
+            'starts_on' => ['nullable', 'date_format:Y-m-d'],
         ]);
+
+        if ($error = MembershipPeriod::startError($data['starts_on'] ?? null)) {
+            throw ValidationException::withMessages(['starts_on' => [$error]]);
+        }
 
         // Camino rápido del reintento: si esta misma petición ya se atendió, se
         // devuelve aquella operación sin volver a mirar plan, socio ni caja. El
@@ -615,8 +625,13 @@ class ReceivableController extends Controller
                     'method' => 'receivable',
                     'status' => 'paid',
                     'paid_at' => now(),
+                    'starts_on' => $data['starts_on'] ?? null,
                     // SIN turno, a propósito: ver la nota del método.
                     'cash_shift_id' => null,
+                    // Pero sí del mostrador, y con quien lo vendió: la venta
+                    // es del gimnasio aunque el dinero llegue en abonos.
+                    'origin' => PaymentOrigin::COUNTER->value,
+                    ...Payment::registrarAttributes($actor),
                 ]);
 
                 app(FinancialAudit::class)->paymentCreated($pago, $actor, $request);

@@ -22,7 +22,7 @@ use App\Services\Billing\Money;
 use App\Services\Billing\PriceQuote;
 use App\Services\Billing\PricingException;
 use App\Services\Billing\PricingService;
-use Carbon\Carbon;
+use App\Services\Payments\MembershipPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -423,6 +423,9 @@ class PaymentController extends Controller
             'reference' => 'nullable|string|max:120',
             'status' => 'nullable|string|in:pending,paid,failed,refunded,cancelled',
             'paid_at' => 'nullable|date',
+            // Desde cuándo empieza la membresía que compra este pago. Aparte de
+            // la fecha del cobro: pagar hoy y empezar el lunes son dos datos.
+            'starts_on' => 'nullable|date_format:Y-m-d',
             // Sobrescritura deliberada del total cotizado. Exige justificación y
             // queda auditada; sin ella, el importe del plan es el que manda.
             'amount_override' => 'nullable|boolean',
@@ -442,6 +445,7 @@ class PaymentController extends Controller
         unset($data['splits']);
 
         $this->assertAmountMatchesPlan($data);
+        $this->assertStartsOn($data);
 
         $invoiceRequest = $this->extractInvoiceRequest($data);
 
@@ -481,6 +485,20 @@ class PaymentController extends Controller
         // turno ajeno o a ninguno.
         unset($data['cash_shift_id']);
         $origen = PaymentOrigin::forCrmRequest(AdminActor::from($request));
+        $data['origin'] = $origen->value;
+
+        // EL COBRO ES DE HOY. En el mostrador el dinero cambia de manos ahora y
+        // entra en la caja abierta ahora, así que su fecha no se elige: antes
+        // se podía fechar la semana siguiente para «que empiece el lunes», y el
+        // ingreso salía en los reportes el lunes aunque estuviera en el cajón
+        // de hoy. El inicio de la membresía va en `starts_on`.
+        //
+        // La automatización (token compartido) conserva la fecha que envía: la
+        // usan integraciones que registran cobros ya ocurridos.
+        if ($origen === PaymentOrigin::COUNTER) {
+            $data['paid_at'] = ($data['status'] ?? 'pending') === 'paid' ? now() : null;
+        }
+
         if ($origen->requiresOpenGymShift()) {
             try {
                 $data['cash_shift_id'] = app(CashShiftService::class)
@@ -498,6 +516,7 @@ class PaymentController extends Controller
         // ambas dejaría un cobro sin constancia de quién lo registró, que es
         // justo lo que este trabajo corrige.
         $actor = AdminActor::from($request);
+        $data = array_merge($data, Payment::registrarAttributes($actor));
         $payment = DB::transaction(function () use ($data, $splits, $actor, $request) {
             $cobro = Payment::create($data);
             if ($splits) {
@@ -519,7 +538,7 @@ class PaymentController extends Controller
         }
 
         if ($payment->status === 'paid') {
-            $this->applyMembershipExtension($payment);
+            app(MembershipPeriod::class)->apply($payment);
             // Facturación electrónica (best-effort, idempotente). Inerte si
             // FACTUS_ENABLED=false. Nunca rompe el registro del pago.
             // `force` sólo si el cliente la pidió: la solicitud expresa manda
@@ -530,7 +549,7 @@ class PaymentController extends Controller
             );
         }
 
-        return response()->json($payment->load(['user:id,name,email', 'plan:id,name', 'splits']), 201);
+        return response()->json($payment->fresh()->load(['user:id,name,email', 'plan:id,name', 'splits']), 201);
     }
 
     public function update(Request $request, Payment $payment)
@@ -538,6 +557,7 @@ class PaymentController extends Controller
         $data = $request->validate([
             'status' => 'nullable|string|in:pending,paid,failed,refunded,cancelled',
             'paid_at' => 'nullable|date',
+            'starts_on' => 'nullable|date_format:Y-m-d',
             'method' => 'nullable|string|max:80',
             'reference' => 'nullable|string|max:120',
             'amount' => 'nullable|numeric|min:0',
@@ -561,6 +581,17 @@ class PaymentController extends Controller
         $invoiceRequest = $this->extractInvoiceRequest($data);
         $wasPaid = $payment->status === 'paid';
 
+        // El inicio solo se puede elegir mientras el pago no ha activado nada:
+        // cambiarlo después movería una membresía que ya está corriendo sin
+        // recalcular el periodo, y el perfil contaría otra historia.
+        if (array_key_exists('starts_on', $data)) {
+            if ($wasPaid) {
+                unset($data['starts_on']);
+            } else {
+                $this->assertStartsOn($data, $payment);
+            }
+        }
+
         if (isset($data['status']) && $data['status'] === 'paid' && empty($data['paid_at'])) {
             $data['paid_at'] = now();
         }
@@ -583,7 +614,7 @@ class PaymentController extends Controller
         }
 
         if (! $wasPaid && $payment->status === 'paid') {
-            $this->applyMembershipExtension($payment);
+            app(MembershipPeriod::class)->apply($payment);
             // Facturación electrónica al confirmar (correcciones / histórico).
             app(InvoicingService::class)->enqueueForPayment(
                 $payment,
@@ -591,7 +622,29 @@ class PaymentController extends Controller
             );
         }
 
-        return response()->json($payment->load(['user:id,name,email', 'plan:id,name', 'splits']));
+        return response()->json($payment->fresh()->load(['user:id,name,email', 'plan:id,name', 'splits']));
+    }
+
+    /**
+     * El inicio pedido tiene sentido solo con plan, y dentro de la ventana que
+     * fija MembershipPeriod. Sin plan se descarta: un pago libre no compra
+     * membresía y guardar una fecha de inicio ahí sería ruido.
+     *
+     * @param  array<string,mixed>  $data
+     */
+    private function assertStartsOn(array &$data, ?Payment $existente = null): void
+    {
+        $conPlan = ! empty($data['plan_id']) || (bool) $existente?->plan_id;
+
+        if (empty($data['starts_on']) || ! $conPlan) {
+            unset($data['starts_on']);
+
+            return;
+        }
+
+        if ($error = MembershipPeriod::startError($data['starts_on'])) {
+            throw ValidationException::withMessages(['starts_on' => [$error]]);
+        }
     }
 
     /**
@@ -720,41 +773,5 @@ class PaymentController extends Controller
             // La auditoría es best-effort: no debe tumbar el registro del pago.
             Log::warning('No se pudo auditar la sobrescritura de importe', ['error' => $e->getMessage()]);
         }
-    }
-
-    private function applyMembershipExtension(Payment $payment): void
-    {
-        if (! $payment->plan_id) {
-            return;
-        }
-
-        /** @var User|null $user */
-        $user = User::find($payment->user_id);
-        /** @var Plan|null $plan */
-        $plan = Plan::find($payment->plan_id);
-
-        if (! $user || ! $plan || (int) $plan->duration_days <= 0) {
-            return;
-        }
-
-        $paidDate = $payment->paid_at
-            ? Carbon::parse($payment->paid_at)->startOfDay()
-            : Carbon::today();
-        $currentEnd = $user->membership_end_date
-            ? Carbon::parse($user->membership_end_date)->startOfDay()
-            : null;
-
-        $baseDate = $currentEnd && $currentEnd->greaterThan($paidDate)
-            ? $currentEnd
-            : $paidDate;
-
-        if (! $currentEnd || $currentEnd->lessThan($paidDate) || ! $user->membership_start_date) {
-            $user->membership_start_date = $paidDate->toDateString();
-        }
-
-        $user->membership_end_date = $baseDate->copy()->addDays((int) $plan->duration_days)->toDateString();
-        $user->plan = $plan->name;
-        $user->status = 'active';
-        $user->save();
     }
 }

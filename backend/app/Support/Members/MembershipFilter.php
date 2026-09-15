@@ -96,6 +96,13 @@ final class MembershipFilter
 
             'none' => $query->whereNull('users.membership_end_date'),
 
+            // Pagadas pero todavía sin empezar: pagó hoy para iniciar el lunes.
+            // Cuentan también como «activas» —la membresía es suya y no está
+            // vencida—, pero Asistencia no las deja entrar hasta ese día.
+            'scheduled' => $query
+                ->whereNotNull('users.membership_start_date')
+                ->where('users.membership_start_date', '>', $hoy),
+
             default => self::applyExpiringOrRaw($query, $filtro, $hoy),
         };
     }
@@ -164,6 +171,7 @@ final class MembershipFilter
         return [
             ['value' => 'all', 'label' => 'Todas'],
             ['value' => 'active', 'label' => 'Activas'],
+            ['value' => 'scheduled', 'label' => 'Programadas (inician después)'],
             ['value' => 'expiring_7', 'label' => 'Vencen en 7 días'],
             ['value' => 'expiring_15', 'label' => 'Vencen en 15 días'],
             ['value' => 'expiring_30', 'label' => 'Vencen en 30 días'],
@@ -177,7 +185,7 @@ final class MembershipFilter
     public static function allowedValues(): array
     {
         return [
-            'all', 'active', 'inactive', 'pending', 'expired', 'expired_recent', 'none',
+            'all', 'active', 'scheduled', 'inactive', 'pending', 'expired', 'expired_recent', 'none',
             'expiring', 'expiring_7', 'expiring_15', 'expiring_30', 'expiring_60', 'expiring_90',
         ];
     }

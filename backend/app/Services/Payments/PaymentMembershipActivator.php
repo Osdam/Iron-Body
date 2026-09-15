@@ -10,7 +10,7 @@ use App\Models\User;
 use App\Services\Billing\InvoiceEmail;
 use App\Services\Billing\InvoicingService;
 use App\Services\NotificationService;
-use Carbon\Carbon;
+use App\Support\Caja\PaymentOrigin;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -66,6 +66,8 @@ class PaymentMembershipActivator
                     // que alguien hubiera abierto el turno, y ensuciaría un
                     // arqueo de billetes con dinero que nunca pasó por el cajón.
                     'cash_shift_id' => null,
+                    // Pagó por la app. Lo que Analítica separa del gimnasio.
+                    'origin' => PaymentOrigin::GATEWAY->value,
                 ], self::snapshotFromTransaction($tx))
             );
             if ($payment->wasRecentlyCreated && $tx->plan_id) {
@@ -173,30 +175,15 @@ class PaymentMembershipActivator
         ];
     }
 
-    /** Extiende (o inicia) la membresía del usuario según el plan pagado. */
+    /**
+     * Extiende (o inicia) la membresía del usuario según el plan pagado.
+     *
+     * La regla vive en MembershipPeriod, compartida con el mostrador: antes
+     * estaba copiada aquí y en PaymentController, y dos copias de cómo se
+     * calcula una fecha de vencimiento acaban diciendo cosas distintas.
+     */
     public function extendMembership(Payment $payment): void
     {
-        $user = User::find($payment->user_id);
-        $plan = $payment->plan_id ? Plan::find($payment->plan_id) : null;
-        if (! $user || ! $plan || (int) $plan->duration_days <= 0) {
-            return;
-        }
-        $paidDate = $payment->paid_at
-            ? Carbon::parse($payment->paid_at)->startOfDay()
-            : Carbon::today();
-        $currentEnd = $user->membership_end_date
-            ? Carbon::parse($user->membership_end_date)->startOfDay()
-            : null;
-        $baseDate = $currentEnd && $currentEnd->greaterThan($paidDate)
-            ? $currentEnd
-            : $paidDate;
-        if (! $currentEnd || $currentEnd->lessThan($paidDate) || ! $user->membership_start_date) {
-            $user->membership_start_date = $paidDate->toDateString();
-        }
-        $user->membership_end_date = $baseDate->copy()
-            ->addDays((int) $plan->duration_days)->toDateString();
-        $user->plan = $plan->name;
-        $user->status = 'active';
-        $user->save();
+        app(MembershipPeriod::class)->apply($payment);
     }
 }

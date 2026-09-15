@@ -6,6 +6,7 @@ use App\Enums\InvoiceType;
 use App\Exceptions\PaymentHasInvoiceException;
 use App\Services\Billing\InvoiceEmail;
 use App\Support\Caja\PaymentMethodKind;
+use App\Support\Caja\PaymentOrigin;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -50,6 +51,11 @@ class Payment extends Model
         // económico— y no sólo en la transacción de pasarela, porque un pago en
         // efectivo no crea transacción y aun así puede requerir factura.
         'invoice_requested', 'invoice_email', 'invoice_requested_at',
+        // Membresía: el inicio que se pidió y el periodo que el pago cubrió de
+        // verdad. Los fija el SERVIDOR (MembershipPeriod), no el cliente.
+        'starts_on', 'period_start', 'period_end',
+        // Por dónde entró (PaymentOrigin) y quién lo registró, congelado.
+        'origin', 'registered_by', 'registered_by_name', 'registered_by_role',
     ];
 
     protected $casts = [
@@ -58,6 +64,9 @@ class Payment extends Model
         'priced_at' => 'datetime',
         'invoice_requested' => 'boolean',
         'invoice_requested_at' => 'datetime',
+        'starts_on' => 'date:Y-m-d',
+        'period_start' => 'date:Y-m-d',
+        'period_end' => 'date:Y-m-d',
     ];
 
     /**
@@ -147,6 +156,51 @@ class Payment extends Model
     public function transaction(): BelongsTo
     {
         return $this->belongsTo(PaymentTransaction::class, 'reference', 'reference');
+    }
+
+    /** Quién lo registró en el CRM. Null en pasarela, migración y automatización. */
+    public function registeredBy(): BelongsTo
+    {
+        return $this->belongsTo(Admin::class, 'registered_by');
+    }
+
+    /** Turno de la caja del gimnasio en el que entró el dinero. */
+    public function cashShift(): BelongsTo
+    {
+        return $this->belongsTo(CashShift::class);
+    }
+
+    public function originEnum(): ?PaymentOrigin
+    {
+        return PaymentOrigin::fromStored($this->origin);
+    }
+
+    /** gym | app | legacy | automation | unknown. Ver PaymentOrigin::channel(). */
+    public function channel(): string
+    {
+        return $this->originEnum()?->channel() ?? 'unknown';
+    }
+
+    /**
+     * Congela en el pago quién lo registró y con qué rol.
+     *
+     * Instantánea y no solo el id: el informe de hace seis meses tiene que
+     * seguir diciendo «Recepción» aunque hoy esa cuenta tenga otro rol o no
+     * exista. Sin persona (token de automatizaciones) no se escribe nada.
+     *
+     * @return array<string, mixed>
+     */
+    public static function registrarAttributes(?Admin $actor): array
+    {
+        if ($actor === null) {
+            return [];
+        }
+
+        return [
+            'registered_by' => $actor->id,
+            'registered_by_name' => $actor->name,
+            'registered_by_role' => $actor->role,
+        ];
     }
 
     /** Partes del cobro cuando se pagó con varios medios. Vacío si fue uno solo. */

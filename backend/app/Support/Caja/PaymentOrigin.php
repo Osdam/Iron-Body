@@ -54,6 +54,46 @@ enum PaymentOrigin: string
     }
 
     /**
+     * Por dónde pagó el socio, dicho como lo diría el negocio.
+     *
+     * Es la pregunta de Analítica —«¿quién pagó por la app y quién en el
+     * gimnasio?»—, y no coincide del todo con el origen técnico: para el
+     * gimnasio da igual que el cobro lo registrara el mostrador; lo que cuenta
+     * es que el dinero entró por la caja.
+     */
+    public function channel(): string
+    {
+        return match ($this) {
+            self::COUNTER => 'gym',
+            self::GATEWAY => 'app',
+            self::LEGACY => 'legacy',
+            self::AUTOMATION => 'automation',
+        };
+    }
+
+    public function channelLabel(): string
+    {
+        return self::channelLabelFor($this->channel());
+    }
+
+    public static function channelLabelFor(string $channel): string
+    {
+        return match ($channel) {
+            'gym' => 'Gimnasio (caja)',
+            'app' => 'App',
+            'legacy' => 'Sistema anterior',
+            'automation' => 'Automatización',
+            default => 'Sin clasificar',
+        };
+    }
+
+    /** Lectura tolerante de la columna `payments.origin`. */
+    public static function fromStored(?string $value): ?self
+    {
+        return $value === null ? null : self::tryFrom(strtolower(trim($value)));
+    }
+
+    /**
      * Origen de una petición al endpoint de cobro del CRM.
      *
      * El mismo endpoint lo usan dos cosas distintas: una PERSONA con sesión de

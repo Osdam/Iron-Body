@@ -5,6 +5,7 @@ namespace App\Services\Exports;
 use App\Http\Controllers\Api\PaymentController;
 use App\Models\Payment;
 use App\Support\Caja\PaymentMethodKind;
+use App\Support\Caja\PaymentOrigin;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -100,6 +101,13 @@ class PaymentsExport extends ExportDataset
             // ── Plan y caja ────────────────────────────────────────────────
             new ExportColumn('plan', 'Plan', 'Plan y caja', fn (Payment $p) => $p->plan?->name),
             new ExportColumn('cash_shift', 'Turno de caja', 'Plan y caja', fn (Payment $p) => $p->cash_shift_id, $numero, default: false),
+            new ExportColumn('channel', 'Canal', 'Plan y caja', fn (Payment $p) => PaymentOrigin::channelLabelFor($p->channel())),
+            new ExportColumn('registered_by', 'Registró', 'Plan y caja', fn (Payment $p) => $p->registered_by_name),
+            new ExportColumn('registered_by_role', 'Rol de quien registró', 'Plan y caja', fn (Payment $p) => $p->registered_by_role, default: false),
+
+            // ── Periodo de membresía que cubrió ────────────────────────────
+            new ExportColumn('period_start', 'Membresía desde', 'Membresía', fn (Payment $p) => $p->period_start?->toDateString(), $fecha, default: false),
+            new ExportColumn('period_end', 'Membresía hasta', 'Membresía', fn (Payment $p) => $p->period_end?->toDateString(), $fecha, default: false),
         ];
 
         // ── Importe por medio ───────────────────────────────────────────────
@@ -147,6 +155,17 @@ class PaymentsExport extends ExportDataset
                     ['value' => Payment::MIXED_METHOD, 'label' => 'Solo mixtos'],
                 ],
             ],
+            [
+                'key' => 'channel',
+                'label' => 'Canal',
+                'type' => 'select',
+                'options' => [
+                    ['value' => 'all', 'label' => 'Todos'],
+                    ['value' => 'gym', 'label' => 'Gimnasio (caja)'],
+                    ['value' => 'app', 'label' => 'App'],
+                    ['value' => 'legacy', 'label' => 'Sistema anterior'],
+                ],
+            ],
         ];
     }
 
@@ -157,6 +176,7 @@ class PaymentsExport extends ExportDataset
             'to' => 'nullable|date|after_or_equal:from',
             'status' => 'nullable|in:all,'.implode(',', array_keys(self::STATUS_GROUPS)),
             'method' => 'nullable|in:all,cash,transfer,card,wompi,'.Payment::MIXED_METHOD,
+            'channel' => 'nullable|in:all,gym,app,legacy',
         ];
     }
 
@@ -190,6 +210,12 @@ class PaymentsExport extends ExportDataset
                 ->whereRaw('LOWER(payments.method) IN ('.$this->marks($alias).')', $alias)
                 ->orWhereHas('splits', fn (Builder $s) => $s
                     ->whereRaw('LOWER(payment_splits.method) IN ('.$this->marks($alias).')', $alias)));
+        }
+
+        $canal = $filters['channel'] ?? 'all';
+        $origen = collect(PaymentOrigin::cases())->first(fn (PaymentOrigin $o) => $o->channel() === $canal);
+        if ($canal !== 'all' && $origen) {
+            $q->where('payments.origin', $origen->value);
         }
 
         return $q;
