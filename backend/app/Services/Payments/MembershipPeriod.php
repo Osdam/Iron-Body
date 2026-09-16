@@ -2,11 +2,14 @@
 
 namespace App\Services\Payments;
 
+use App\Http\Controllers\Api\PaymentController;
 use App\Models\Member;
 use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Qué periodo de membresía compra un pago, y cómo queda la del socio.
@@ -29,6 +32,9 @@ use Carbon\CarbonImmutable;
  *   3. Si la vigente ya habrá terminado ese día (o no hay), el periodo empieza
  *      el día pedido. Eso incluye dejar un hueco sin cobertura cuando se pide
  *      a propósito empezar después de vencer.
+ *   4. Se devuelve lo que se dio. Si el cobro deja de estarlo (anulado,
+ *      devuelto), sus días salen de la membresía y los periodos que se le
+ *      encadenaron detrás se recalculan — ver `revert()`.
  *
  * El periodo que resulta se congela en el pago (`period_start`/`period_end`):
  * `users` solo guarda el periodo actual y lo sobrescribe, así que sin esto el
@@ -140,6 +146,152 @@ class MembershipPeriod
             'end' => $fin->toDateString(),
             'chained' => $encadena,
         ];
+    }
+
+    /**
+     * Deshace el periodo que un pago le dio a la membresía, al dejar de estar
+     * cobrado (anulado, devuelto, revertido a pendiente).
+     *
+     * POR QUÉ EXISTE. `apply()` era de ida y no de vuelta: anular un cobro le
+     * cambiaba el estado en `payments` y nada más, así que los días que había
+     * sumado seguían en `users.membership_end_date` para siempre. En producción
+     * eso le dio 60 días de un plan de 30 a un socio: se le cobró, se anuló el
+     * cobro, se volvió a cobrar, y el segundo periodo se ENCADENÓ al final del
+     * primero —que ya no existía— en vez de empezar el día que pagó.
+     *
+     * CÓMO SE DEVUELVE. El pago congeló el periodo que compró
+     * (`period_start`/`period_end`), así que se sabe exactamente cuánto puso.
+     * Si es el último, la membresía vuelve a terminar donde él empezó. Si
+     * después se encadenaron otros, esos periodos se RECALCULAN corriéndolos
+     * hacia atrás con las mismas reglas de `apply()` —incluida la 1: ninguno
+     * puede empezar antes del día en que se pagó—, y la membresía termina donde
+     * acabe el último. Sin eso, devolver los días le quitaría al socio días que
+     * sí pagó.
+     *
+     * CUÁNDO NO TOCA NADA. Si la cadena de periodos no cuadra con la fecha que
+     * hoy tiene el socio (importaciones del sistema anterior, ajustes manuales,
+     * pagos viejos sin periodo congelado), se deja igual y se registra: mover a
+     * ciegas la fecha de vencimiento de alguien que está entrenando es peor que
+     * dejar el caso para revisión.
+     *
+     * @return array{end: string, previous_end: string, days: int}|null  null si no hubo nada que devolver
+     */
+    public function revert(Payment $payment): ?array
+    {
+        if (! $payment->plan_id || ! $payment->period_start || ! $payment->period_end) {
+            return null; // nunca activó membresía (o es anterior al periodo congelado)
+        }
+
+        /** @var User|null $user */
+        $user = User::find($payment->user_id);
+        if (! $user || ! $user->membership_end_date) {
+            return null;
+        }
+
+        $inicio = $this->day($payment->period_start->format('Y-m-d'));
+        $fin = $this->day($payment->period_end->format('Y-m-d'));
+        $finActual = $this->day($user->membership_end_date);
+
+        if ($fin->lessThanOrEqualTo($inicio) || $finActual->lessThanOrEqualTo($inicio)) {
+            return null; // periodo vacío, o la membresía ya no lo incluye
+        }
+
+        // Los periodos cobrados que vinieron DESPUÉS de este. Se recalculan en
+        // orden: cada uno arranca donde termine el anterior de la cadena.
+        $posteriores = $this->chainAfter($payment, $fin);
+
+        // La cadena tiene que explicar la fecha de hoy. Si no llega hasta ella,
+        // el vencimiento vigente lo puso otra cosa y no es nuestro para moverlo.
+        $cierre = $posteriores->reduce(
+            fn (CarbonImmutable $cursor, Payment $p) => $this->day($p->period_end->format('Y-m-d')),
+            $fin
+        );
+        if (! $cierre->equalTo($finActual)) {
+            Log::warning('Anulación de pago: la cadena de periodos no explica el vencimiento vigente; se deja intacto', [
+                'payment_id' => $payment->id,
+                'user_id' => $user->id,
+                'period' => [$inicio->toDateString(), $fin->toDateString()],
+                'membership_end_date' => $finActual->toDateString(),
+                'chain_end' => $cierre->toDateString(),
+            ]);
+
+            return null;
+        }
+
+        $cursor = $inicio;
+        foreach ($posteriores as $posterior) {
+            $cursor = $this->reflow($posterior, $cursor);
+        }
+
+        $user->membership_end_date = $cursor->toDateString();
+        // El socio se queda sin cobertura: el plan deja de ser suyo, pero la
+        // ficha NO se toca más — anular un cobro no borra a nadie.
+        if ($cursor->lessThanOrEqualTo($this->day($user->membership_start_date ?: $inicio->toDateString()))) {
+            $user->membership_start_date = $cursor->toDateString();
+        }
+        $user->save();
+
+        $payment->forceFill(['period_start' => null, 'period_end' => null])->save();
+
+        return [
+            'end' => $cursor->toDateString(),
+            'previous_end' => $finActual->toDateString(),
+            'days' => (int) $cursor->diffInDays($finActual),
+        ];
+    }
+
+    /**
+     * Pagos COBRADOS del mismo socio cuyo periodo empieza en o después del fin
+     * del que se anula, en orden. Son los candidatos a correrse hacia atrás.
+     *
+     * @return Collection<int, Payment>
+     */
+    private function chainAfter(Payment $payment, CarbonImmutable $fin): Collection
+    {
+        return Payment::query()
+            ->where('user_id', $payment->user_id)
+            ->whereKeyNot($payment->getKey())
+            ->whereNotNull('plan_id')
+            ->whereNotNull('period_start')
+            ->whereNotNull('period_end')
+            ->whereRaw('LOWER(status) IN ('.implode(',', array_fill(0, count(PaymentController::PAID_STATUSES), '?')).')',
+                PaymentController::PAID_STATUSES)
+            ->whereDate('period_start', '>=', $fin->toDateString())
+            ->orderBy('period_start')
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
+     * Recoloca un periodo ya cobrado detrás de `$cursor`, conservando los días
+     * que se vendieron, y devuelve su nuevo fin.
+     */
+    private function reflow(Payment $payment, CarbonImmutable $cursor): CarbonImmutable
+    {
+        $dias = (int) $this->day($payment->period_start->format('Y-m-d'))
+            ->diffInDays($this->day($payment->period_end->format('Y-m-d')));
+
+        $cobro = $this->paidDay($payment);
+        $pedido = $payment->starts_on
+            ? $this->day($payment->starts_on->format('Y-m-d'))
+            : $cobro;
+        // Regla 1, otra vez: ningún periodo empieza antes de haberse pagado.
+        $inicio = $pedido->lessThan($cobro) ? $cobro : $pedido;
+        $base = $cursor->greaterThan($inicio) ? $cursor : $inicio;
+        $fin = $base->addDays($dias);
+
+        $payment->forceFill([
+            'period_start' => $base->toDateString(),
+            'period_end' => $fin->toDateString(),
+        ])->save();
+
+        return $fin;
+    }
+
+    /** Un día del calendario del negocio, sin hora. */
+    private function day(string $fecha): CarbonImmutable
+    {
+        return CarbonImmutable::parse($fecha, self::TZ)->startOfDay();
     }
 
     /** Día del negocio en que entró el dinero. */

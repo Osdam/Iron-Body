@@ -622,6 +622,28 @@ class PaymentController extends Controller
             );
         }
 
+        // ANULAR UN COBRO LE DEVUELVE LOS DÍAS. Sin esto, anular sólo cambiaba
+        // el estado del pago: los días que había sumado seguían en la membresía,
+        // y el siguiente cobro se encadenaba al final de un periodo que ya no
+        // existía. Así un plan de 30 días acabó marcando 55 en la app.
+        //
+        // Best-effort a propósito: si la devolución no cuadra (ver
+        // MembershipPeriod::revert) se registra y el pago queda anulado igual.
+        // Que un cobro no se pueda anular por una fecha sería peor.
+        if ($wasPaid && $payment->status !== 'paid') {
+            try {
+                $devuelto = app(MembershipPeriod::class)->revert($payment);
+                if ($devuelto) {
+                    $this->auditMembershipReverted($payment, $devuelto, $request);
+                }
+            } catch (Throwable $e) {
+                Log::warning('No se pudo devolver el periodo de un cobro anulado', [
+                    'payment_id' => $payment->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
         return response()->json($payment->fresh()->load(['user:id,name,email', 'plan:id,name', 'splits']));
     }
 
@@ -742,6 +764,44 @@ class PaymentController extends Controller
         }
 
         return array_merge($data, $quote->toSnapshot(), ['amount' => $quoted]);
+    }
+
+    /**
+     * Deja rastro de los días de membresía que se le quitaron al socio al
+     * anular su cobro. Es un cambio de acceso, no sólo de contabilidad: sin
+     * esta línea, mañana nadie sabe por qué al socio se le adelantó el
+     * vencimiento.
+     *
+     * @param  array{end: string, previous_end: string, days: int}  $devuelto
+     */
+    private function auditMembershipReverted(Payment $payment, array $devuelto, Request $request): void
+    {
+        Log::info('Membresía recortada al anular un cobro', [
+            'payment_id' => $payment->id,
+            'user_id' => $payment->user_id,
+        ] + $devuelto);
+
+        try {
+            AuditLog::create(array_filter([
+                'action' => 'update',
+                'module' => 'payments',
+                'entity' => 'membership',
+                'entity_id' => (string) $payment->user_id,
+                'target_name' => $payment->reference,
+                'actor_id' => AdminActor::id($request),
+                'actor_name' => AdminActor::name($request),
+                'summary' => 'Se devolvieron '.$devuelto['days'].' días de membresía al anular el cobro #'.$payment->id,
+                'metadata' => [
+                    'payment_id' => $payment->id,
+                    'status' => $payment->status,
+                    'membership_end_before' => $devuelto['previous_end'],
+                    'membership_end_after' => $devuelto['end'],
+                ],
+                'ip_address' => $request->ip(),
+            ], static fn ($v) => $v !== null));
+        } catch (Throwable $e) {
+            Log::warning('No se pudo auditar la devolución de días', ['error' => $e->getMessage()]);
+        }
     }
 
     /** Deja rastro auditable de una sobrescritura manual del total. */
