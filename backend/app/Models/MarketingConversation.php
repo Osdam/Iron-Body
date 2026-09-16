@@ -14,6 +14,8 @@ class MarketingConversation extends Model
         // Memoria comercial (aditivo).
         'summary', 'detected_objective', 'lead_score', 'lead_stage',
         'primary_intent', 'last_intent',
+        // Máquina comercial (ULTRON v1). Conviven con lead_stage, no lo sustituyen.
+        'commercial_phase', 'main_barrier', 'recommended_plan_id',
         // Operación del Inbox CRM (Fase 2A, aditivo).
         'assigned_to_admin_id', 'assigned_at', 'assigned_by',
         'unread_count', 'last_read_at',

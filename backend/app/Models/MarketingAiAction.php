@@ -10,6 +10,8 @@ class MarketingAiAction extends Model
     protected $fillable = [
         'lead_id', 'conversation_id', 'action_type', 'reason',
         'confidence', 'status', 'metadata',
+        // Procedencia e idempotencia (ULTRON v1). idempotency_key es UNIQUE en BD.
+        'source_type', 'source_event_id', 'idempotency_key',
     ];
 
     protected $casts = [
