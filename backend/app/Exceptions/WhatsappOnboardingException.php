@@ -101,6 +101,45 @@ class WhatsappOnboardingException extends RuntimeException
     }
 
     /**
+     * La coexistencia terminó, pero no se pudo averiguar qué número quedó.
+     *
+     * `FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING` solo entrega `waba_id`, así que
+     * el identificador del número se busca en Graph. Si esa búsqueda no da
+     * nada, se para: guardar la conexión sin saber sobre qué número opera es
+     * peor que no guardarla, porque el canal la daría por buena.
+     */
+    public static function phoneNumberNotResolvable(string $wabaId): self
+    {
+        return new self(
+            'La cuenta '.$wabaId.' se autorizó, pero Meta no devolvió todavía ningún número asociado. '
+            .'En la coexistencia el número tarda unos minutos en aparecer. '
+            .'Espera y vuelve a pulsar Conectar; no hace falta repetir nada en Meta.',
+            'phone_number_not_resolvable',
+            422,
+        );
+    }
+
+    /**
+     * La cuenta tiene varios números y el evento no dice cuál es el suyo.
+     *
+     * El payload de coexistencia solo trae `waba_id`, así que el número se
+     * busca en Graph. Si esa búsqueda devuelve más de uno no hay forma honesta
+     * de saber cuál participó en este onboarding: Meta no documenta orden en
+     * ese array, y elegir el primero sería decidir a ciegas sobre qué número
+     * va a operar el canal. Se para y se pide que lo resuelva una persona.
+     */
+    public static function phoneNumberAmbiguous(string $wabaId, int $cuantos): self
+    {
+        return new self(
+            'La cuenta '.$wabaId.' tiene '.$cuantos.' números y Meta no indica cuál corresponde a esta conexión. '
+            .'No se elige ninguno para no conectar el equivocado. '
+            .'Deja un solo número en esa cuenta, o conéctalo desde una cuenta que tenga uno solo.',
+            'phone_number_ambiguous',
+            422,
+        );
+    }
+
+    /**
      * No se pudo comprobar QUÉ número es, así que se rechaza.
      *
      * Antes esto se resolvía al revés: si Graph no contestaba, la comprobación

@@ -180,7 +180,14 @@ class WhatsappIntegrationController extends Controller
             'code' => ['required', 'string', 'min:10', 'max:1000'],
             'state' => ['required', 'string', 'max:200'],
             'waba_id' => ['required', 'string', 'max:64', 'regex:/^[0-9]+$/'],
-            'phone_number_id' => ['required', 'string', 'max:64', 'regex:/^[0-9]+$/'],
+            /*
+             * OPCIONAL a propósito. La coexistencia termina con
+             * `FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING`, cuyo payload oficial
+             * solo trae `waba_id`: el número ya estaba registrado en la app
+             * WhatsApp Business y Meta no lo repite. Cuando falta, el servicio
+             * lo resuelve contra Graph con el token del canje; nunca se inventa.
+             */
+            'phone_number_id' => ['nullable', 'string', 'max:64', 'regex:/^[0-9]+$/'],
             'business_id' => ['nullable', 'string', 'max:64', 'regex:/^[0-9]+$/'],
             'mode' => ['nullable', 'string', 'in:production,review'],
         ], [

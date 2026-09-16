@@ -252,12 +252,20 @@ class WhatsappEmbeddedSignupService
         }
 
         $wabaId = (string) $payload['waba_id'];
-        $phoneNumberId = (string) $payload['phone_number_id'];
 
-        $existing = WhatsappBusinessIntegration::query()
-            ->where('waba_id', $wabaId)
-            ->where('phone_number_id', $phoneNumberId)
-            ->first();
+        /*
+         * El número puede NO venir, y no es un error.
+         *
+         * La coexistencia termina con `FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING`,
+         * cuyo payload oficial lleva un único campo: `waba_id`. Meta no entrega
+         * el identificador del número porque en ese flujo el número ya estaba
+         * registrado —vive en la app WhatsApp Business— y no se acaba de dar de
+         * alta. Se resuelve más abajo, contra Graph y con el token recién
+         * obtenido, en vez de exigírselo al navegador.
+         */
+        $phoneNumberId = (string) ($payload['phone_number_id'] ?? '');
+
+        $existing = $this->findExistingPair($wabaId, $phoneNumberId);
 
         /*
          * Conflicto de propósito. Se comprueba ANTES de canjear —y no después,
@@ -286,6 +294,32 @@ class WhatsappEmbeddedSignupService
             $this->recordFailure($existing, $wabaId, $phoneNumberId, $payload, $admin, $e, $purpose);
 
             throw $e;
+        }
+
+        /*
+         * Coexistencia: Meta no dio el número, así que se le pregunta.
+         *
+         * Se hace AQUÍ y no antes porque hace falta el token del canje. Y se
+         * resuelve contra la WABA que el propio Meta acaba de autorizar, no
+         * contra nada que haya elegido el navegador: el identificador sale de
+         * Graph o no sale, nunca se inventa ni se rellena con el del `.env`.
+         */
+        if ($phoneNumberId === '') {
+            $phoneNumberId = $this->resolvePhoneNumberIdFromWaba($token['access_token'], $wabaId);
+
+            /*
+             * Las dos garantías que se comprobaron con el payload hay que
+             * rehacerlas ahora, porque el número que las tiene que pasar es
+             * este, no el que llegó (que no llegó). Sin esto, la coexistencia
+             * sería una puerta trasera para los activos protegidos y para los
+             * pares que ya pertenecen al otro propósito.
+             */
+            $this->assertReviewAssetsAllowed($purpose, $wabaId, $phoneNumberId);
+
+            $existing = $this->findExistingPair($wabaId, $phoneNumberId);
+            if ($existing !== null && (string) $existing->purpose !== $purpose) {
+                throw WhatsappOnboardingException::purposeConflict((string) $existing->purpose, $purpose);
+            }
         }
 
         /*
@@ -335,6 +369,105 @@ class WhatsappEmbeddedSignupService
         ]);
 
         return $integration->refresh();
+    }
+
+    /**
+     * La fila de ese par, o null. Sin número solo se puede buscar por cuenta.
+     */
+    private function findExistingPair(string $wabaId, string $phoneNumberId): ?WhatsappBusinessIntegration
+    {
+        $query = WhatsappBusinessIntegration::query()->where('waba_id', $wabaId);
+
+        if ($phoneNumberId !== '') {
+            $query->where('phone_number_id', $phoneNumberId);
+        }
+
+        return $query->first();
+    }
+
+    /**
+     * Pregunta a Graph qué número cuelga de esa WABA.
+     *
+     * Solo para el caso en que Meta no lo entregó, que es el final normal de la
+     * coexistencia. Usa `whatsapp_business_management`, el permiso que ya está
+     * aprobado, sobre la WABA que el propio diálogo acaba de autorizar.
+     *
+     * Falla CERRADO, igual que la barrera del número: si Graph no contesta, si
+     * la cuenta no tiene números todavía, o si devuelve algo ininteligible, se
+     * para. Rellenar el hueco con una suposición —o peor, con el número del
+     * `.env`— sería exactamente el error que el resto del módulo existe para
+     * impedir.
+     *
+     * @throws WhatsappOnboardingException
+     */
+    private function resolvePhoneNumberIdFromWaba(string $accessToken, string $wabaId): string
+    {
+        try {
+            $response = Http::timeout($this->auth->timeout())
+                ->withToken($accessToken)
+                ->get($this->auth->graphUrl($wabaId.'/phone_numbers'), [
+                    'fields' => 'id,display_phone_number,verified_name,platform_type',
+                ]);
+        } catch (Throwable $e) {
+            ChannelLog::warning('whatsapp.onboarding.phone_lookup_transport_error', [
+                'waba_id' => $wabaId,
+                'error_class' => class_basename($e),
+            ]);
+
+            throw WhatsappOnboardingException::phoneNumberNotResolvable($wabaId);
+        }
+
+        $numeros = $response->successful() ? array_values((array) $response->json('data', [])) : [];
+
+        /*
+         * DOS O MÁS: se para.
+         *
+         * Antes se cogía `data[0]`. Meta no documenta que ese array venga
+         * ordenado por nada, y menos por "el número que acaba de participar en
+         * este onboarding": ese dato sencillamente no viaja en el payload de
+         * coexistencia. Coger el primero era elegir a ciegas sobre qué número
+         * va a operar el canal del negocio, y acertar por orden de llegada no
+         * es acertar.
+         *
+         * Tampoco se desambigua por `display_phone_number`: para comparar haría
+         * falta saber cuál esperábamos, y si lo supiéramos no estaríamos
+         * preguntando. Sin una señal oficial en el evento, la única respuesta
+         * honesta es no elegir.
+         */
+        if (count($numeros) > 1) {
+            ChannelLog::warning('whatsapp.onboarding.phone_lookup_ambiguous', [
+                'waba_id' => $wabaId,
+                'numeros_en_la_cuenta' => count($numeros),
+                // Los identificadores, para poder resolverlo a mano. Nunca el token.
+                'phone_number_ids' => array_values(array_filter(array_map(
+                    static fn (array $n): string => (string) ($n['id'] ?? ''),
+                    $numeros,
+                ))),
+            ]);
+
+            throw WhatsappOnboardingException::phoneNumberAmbiguous($wabaId, count($numeros));
+        }
+
+        $unico = (string) ($numeros[0]['id'] ?? '');
+
+        if ($unico === '') {
+            ChannelLog::warning('whatsapp.onboarding.phone_lookup_empty', [
+                'waba_id' => $wabaId,
+                'http_status' => $response->status(),
+                'error_code' => $response->json('error.code'),
+                'numeros' => count($numeros),
+            ]);
+
+            throw WhatsappOnboardingException::phoneNumberNotResolvable($wabaId);
+        }
+
+        ChannelLog::info('whatsapp.onboarding.phone_resolved_from_waba', [
+            'waba_id' => $wabaId,
+            'phone_number_id' => $unico,
+            'numeros_en_la_cuenta' => 1,
+        ]);
+
+        return $unico;
     }
 
     /**
@@ -778,6 +911,24 @@ class WhatsappEmbeddedSignupService
                 'last_error_code' => $e->errorCode,
                 'last_error_message' => $e->getMessage(),
             ])->save();
+
+            return;
+        }
+
+        /*
+         * Sin número no se crea fila. En coexistencia el canje puede fallar
+         * antes de que se sepa qué número es, y una fila con `phone_number_id`
+         * vacío no identifica nada: colisionaría con el índice único del par al
+         * segundo intento sobre la misma cuenta, y ensuciaría el histórico que
+         * esta tabla existe para conservar. El error queda en el log.
+         */
+        if ($phoneNumberId === '') {
+            ChannelLog::warning('whatsapp.onboarding.failure_not_recorded', [
+                'reason' => 'sin phone_number_id',
+                'waba_id' => $wabaId,
+                'purpose' => $purpose,
+                'error_code' => $e->errorCode,
+            ]);
 
             return;
         }
