@@ -97,6 +97,65 @@ final class SalesAgentDecisionSchema
         'tienes una lesion', 'tienes una lesión', 'no es nada grave',
     ];
 
+    /**
+     * Cualquier cosa que se parezca a un precio: `$120`, «cop», «pesos», el
+     * patrón de miles `120.000` o un número de cuatro cifras o más.
+     *
+     * Estaba escrito a mano dentro de {@see SalesAgentDecisionValidator}. Vive
+     * aquí porque ya hay un segundo sitio que necesita la misma pregunta —el
+     * guard de salida— y dos copias de una expresión regular son dos reglas que
+     * el día que cambie una se separan sin que nadie lo note.
+     */
+    public const PRICE_PATTERN = '/(\$\s?\d)|(\bcop\b)|(\bpesos\b)|(\d{1,3}[.,]\d{3})|(\d{4,})/i';
+
+    /** Minúsculas y sin tildes, para comparar señales contra texto real. */
+    public static function normalize(string $s): string
+    {
+        $lower = mb_strtolower($s);
+
+        return strtr($lower, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ñ' => 'n']);
+    }
+
+    /** ¿El texto contiene algo que un cliente leería como un precio? */
+    public static function containsPrice(string $text): bool
+    {
+        return preg_match(self::PRICE_PATTERN, $text) === 1;
+    }
+
+    /**
+     * Primera señal de acción PROHIBIDA presente en el texto, o null.
+     *
+     * Devuelve la señal y no un booleano porque quien bloquea tiene que poder
+     * decir cuál fue: «bloqueado» sin el motivo obliga a reproducir el caso
+     * para entenderlo.
+     */
+    public static function forbiddenSignalIn(string $text): ?string
+    {
+        return self::firstSignalIn($text, self::FORBIDDEN_SIGNALS);
+    }
+
+    /** Primera promesa/diagnóstico prohibido presente en el texto, o null. */
+    public static function unsafeSignalIn(string $text): ?string
+    {
+        return self::firstSignalIn($text, self::UNSAFE_REPLY_SIGNALS);
+    }
+
+    /**
+     * @param  string[]  $signals
+     */
+    private static function firstSignalIn(string $text, array $signals): ?string
+    {
+        $needle = self::normalize($text);
+
+        foreach ($signals as $signal) {
+            if (str_contains($needle, self::normalize($signal))) {
+                return $signal;
+            }
+        }
+
+        return null;
+    }
+
     /** @return string[] claves obligatorias del contrato de decisión. */
     public static function requiredKeys(): array
     {

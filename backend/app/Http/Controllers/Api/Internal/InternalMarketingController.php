@@ -11,6 +11,7 @@ use App\Models\MarketingMessage;
 use App\Models\Plan;
 use App\Services\Marketing\MarketingAiDoctorService;
 use App\Services\Marketing\MarketingMessageDispatcher;
+use App\Services\Marketing\OutboundContentGuard;
 use App\Services\Marketing\SalesAgentOrchestratorService;
 use App\Services\Marketing\SalesGuardrailException;
 use App\Services\Marketing\SalesPaymentGuardrailService;
@@ -157,8 +158,14 @@ class InternalMarketingController extends Controller
      * do_not_contact y exige teléfono para WhatsApp. Con META deshabilitado/sin
      * credenciales → dry_run (registra el mensaje pero NO lo entrega). Nunca 500
      * por falta de configuración Meta. No activa membresías.
+     *
+     * El cuerpo lo escribe una automatización, así que el autor queda fijado en
+     * `ai` —no se acepta del request— y el texto pasa por
+     * {@see OutboundContentGuard} antes de registrarse: un precio inventado,
+     * una promesa prohibida o un intento de acción vetada se rechazan con 422 y
+     * no llegan a crear mensaje ni a tocar Meta.
      */
-    public function sendMessage(Request $request): JsonResponse
+    public function sendMessage(Request $request, OutboundContentGuard $guard): JsonResponse
     {
         $data = $request->validate([
             'marketing_lead_id' => 'required_without:conversation_id|integer|exists:marketing_leads,id',
@@ -169,19 +176,91 @@ class InternalMarketingController extends Controller
             'payment_url' => 'nullable|url|max:2048',
         ]);
 
+        /*
+         * `X-Idempotency-Key` se acepta y se valida, pero TODAVÍA NO deduplica.
+         *
+         * Se valida ahora para fijar el formato antes de que haya llamadores, y
+         * la respuesta dice explícitamente `deduplicated: false`: un endpoint
+         * que acepta una clave de idempotencia y la ignora en silencio es peor
+         * que uno que no la acepta, porque invita a reintentar creyendo que
+         * está protegido y entrega el mensaje dos veces.
+         *
+         * PENDIENTE (fase M2, /ai/commit): índice UNIQUE sobre
+         * marketing_ai_actions.idempotency_key y respuesta 409 con el
+         * ai_action_id original. No se implementa aquí porque la unicidad tiene
+         * que vivir en la fila de la decisión, no en este endpoint.
+         */
+        $idempotencyKey = $this->idempotencyKey($request);
+
         $lead = $this->resolveLeadForSend($data);
         if ($lead === null) {
             return response()->json(['ok' => false, 'reason' => 'lead_not_found', 'sent' => false, 'safe_to_send' => false], 404);
+        }
+
+        /*
+         * Este endpoint es la puerta de las automatizaciones: el cuerpo lo
+         * escribe una máquina que NO es Laravel. El autor se fija aquí y no se
+         * acepta del request —fingirse humano saltaría el filtro— y el texto
+         * pasa por el guard antes de existir como mensaje.
+         */
+        $senderType = MarketingMessage::SENDER_AI;
+
+        try {
+            $guard->assertSafe($data['body'], $senderType, [
+                'endpoint' => 'internal.marketing.send_message',
+                'lead_id' => $lead->id,
+            ]);
+        } catch (SalesGuardrailException $e) {
+            return response()->json([
+                'ok' => false,
+                'code' => $e->errorCode,
+                'message' => $e->getMessage(),
+                'escalate' => $e->escalate,
+                'sent' => false,
+                'safe_to_send' => false,
+                'dry_run' => false,
+                'message_id' => null,
+                'provider_message_id' => null,
+            ], $e->httpStatus);
         }
 
         $channel = $data['channel'] ?? 'whatsapp';
         $result = $this->dispatcher->dispatchWhatsapp($lead, $channel, $data['body'], array_filter([
             'kind' => isset($data['payment_url']) ? 'payment_link' : 'text',
             'payment_transaction_id' => $data['payment_transaction_id'] ?? null,
-        ], fn ($v) => $v !== null));
+            'idempotency_key' => $idempotencyKey,
+        ], fn ($v) => $v !== null), $senderType);
 
         // Eco del cuerpo preparado (útil para n8n; sin secretos).
-        return response()->json(array_merge($result, ['body' => $data['body']]));
+        return response()->json(array_merge($result, [
+            'body' => $data['body'],
+            'sender_type' => $senderType,
+            'idempotency' => [
+                'key' => $idempotencyKey,
+                // Honestidad explícita: hoy NO se deduplica. Ver el bloque de arriba.
+                'deduplicated' => false,
+            ],
+        ]));
+    }
+
+    /**
+     * Clave de idempotencia del llamante, si la manda y tiene forma razonable.
+     *
+     * El dominio cubre las dos fuentes previstas sin abrir la puerta a texto
+     * arbitrario: el `wamid.…` de Meta y el `followup:{id}:{intento}` propio.
+     * Una clave con forma inválida se descarta en vez de rechazar el envío:
+     * hoy no decide nada, así que tumbar un mensaje por ella sería un daño sin
+     * contrapartida.
+     */
+    private function idempotencyKey(Request $request): ?string
+    {
+        $raw = trim((string) $request->header('X-Idempotency-Key', ''));
+
+        if ($raw === '' || mb_strlen($raw) > 160) {
+            return null;
+        }
+
+        return preg_match('/^[A-Za-z0-9._:-]+$/', $raw) === 1 ? $raw : null;
     }
 
     /**

@@ -43,14 +43,8 @@ class SalesAgentDecisionValidator
 
         // 4) Intentos PROHIBIDOS (activar membresía / aprobar pago / facturación)
         //    en cualquier parte de la salida → bloquear + escalar.
-        $blob = $this->normalize(json_encode($raw, JSON_UNESCAPED_UNICODE) ?: '');
-        $forbiddenAction = false;
-        foreach (SalesAgentDecisionSchema::FORBIDDEN_SIGNALS as $signal) {
-            if (str_contains($blob, $this->normalize($signal))) {
-                $forbiddenAction = true;
-                break;
-            }
-        }
+        $blob = json_encode($raw, JSON_UNESCAPED_UNICODE) ?: '';
+        $forbiddenAction = SalesAgentDecisionSchema::forbiddenSignalIn($blob) !== null;
         if ($forbiddenAction) {
             $flags[] = 'forbidden_action';
         }
@@ -61,20 +55,16 @@ class SalesAgentDecisionValidator
         if ($reply !== null && $reply !== '') {
             // Precio en el texto → se CORRIGE (se elimina; el precio real solo va
             // en el mensaje del link, tomado de Plan::price).
-            if (preg_match('/(\$\s?\d)|(\bcop\b)|(\bpesos\b)|(\d{1,3}[.,]\d{3})|(\d{4,})/i', $reply)) {
+            if (SalesAgentDecisionSchema::containsPrice($reply)) {
                 $reply = null;
                 $flags[] = 'price_in_reply';
             }
         }
         if ($reply !== null && $reply !== '') {
-            $needle = $this->normalize($reply);
-            foreach (SalesAgentDecisionSchema::UNSAFE_REPLY_SIGNALS as $bad) {
-                if (str_contains($needle, $this->normalize($bad))) {
-                    $unsafeClaim = true;
-                    $reply = null;
-                    $flags[] = 'unsafe_claim';
-                    break;
-                }
+            if (SalesAgentDecisionSchema::unsafeSignalIn($reply) !== null) {
+                $unsafeClaim = true;
+                $reply = null;
+                $flags[] = 'unsafe_claim';
             }
         }
 
@@ -108,12 +98,5 @@ class SalesAgentDecisionValidator
             'escalation_reason' => $reason,
             'risk_flags' => array_values(array_unique($flags)),
         ];
-    }
-
-    private function normalize(string $s): string
-    {
-        $lower = mb_strtolower($s);
-
-        return strtr($lower, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ñ' => 'n']);
     }
 }
