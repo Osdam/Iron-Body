@@ -78,7 +78,11 @@ class WhatsappReviewIsolationTest extends TestCase
     {
         Http::fake([
             'graph.facebook.com/v21.0/oauth/access_token*' => Http::response(['access_token' => 'EAA-TOKEN']),
-            'graph.facebook.com/v21.0/debug_token*' => Http::response(['data' => ['scopes' => ['business_management']]]),
+            // Lo que Meta concede hoy. Son los dos permisos que la aplicación
+            // pide y usa; `business_management` se retiró y ya no aparece.
+            'graph.facebook.com/v21.0/debug_token*' => Http::response([
+                'data' => ['scopes' => ['whatsapp_business_management', 'whatsapp_business_messaging']],
+            ]),
             '*/subscribed_apps*' => Http::response(['success' => true]),
             '*' => Http::response(['id' => '1', 'display_phone_number' => $display, 'name' => 'Demo']),
         ]);

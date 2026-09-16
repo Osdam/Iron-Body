@@ -2,7 +2,7 @@
 
 Cómo funciona la pantalla `Configuración → Integraciones → WhatsApp Business`,
 qué falta para que el flujo se complete de extremo a extremo, y cómo grabar la
-evidencia que pide Meta en la revisión de `business_management`.
+evidencia que pide Meta en la App Review.
 
 > Los tokens y el App Secret viven SOLO en el `.env` del servidor o cifrados en
 > la base de datos. Nunca en Angular, nunca en Flutter, nunca en este documento.
@@ -66,52 +66,49 @@ clic no reintenta un canje ya gastado.
 
 ---
 
-## 2. Lo que FALTA para que el flujo se complete
+## 2. La app, la configuración y los permisos
 
-**Una configuración de Facebook Login for Business (`config_id`).** Se crea a
-mano en el panel de Meta; no se puede generar desde código.
+**Estado a 2026-09-16.** La configuración de Facebook Login for Business ya
+existe; esta sección describe cuál es, no cómo crearla.
 
-Verificado contra Graph API el 2026-08-03 y sin cambios desde entonces:
-
-| Comprobación | Resultado |
+| Qué | Valor |
 |---|---|
-| `GET /906146885861728/business_login_configs` | *Unknown path components* — no existe ninguna |
-| App `906146885861728` | `app_type: 0`, sin permisos aprobados por App Review |
-| WABA `1355229980038956` | `APPROVED` / `ACTIVE`, propiedad `SELF` |
-| Business | `verification_status: not_verified` |
+| App de Embedded Signup | **`1747474522949342`** — `META_EMBEDDED_SIGNUP_APP_ID` |
+| Configuración (`config_id`) | **`1643115916774956`** — `META_EMBEDDED_SIGNUP_CONFIG_ID` |
+| Tipo de inicio de sesión | *WhatsApp Embedded Signup* |
+| Token que produce | *System User Access Token*, sin caducidad declarada |
+| Permisos solicitados | `whatsapp_business_management`, `whatsapp_business_messaging` |
 
-### Cómo crearla
+> **La app del canal es OTRA.** `META_APP_ID` sigue apuntando a la app histórica
+> `906146885861728`, dueña del webhook y de su firma. Los dos secretos viven
+> separados a propósito: canjear un código de una app firmando con el secreto de
+> la otra falla siempre, y falla al final del recorrido. Ver la cabecera de
+> `config/meta.php`.
 
-1. Meta for Developers → App `906146885861728`.
-2. Productos → **WhatsApp** → *Embedded Signup* (o *Inicio de sesión con
-   Facebook para empresas* → **Configuraciones**).
-3. Crear una configuración con:
-   - **Tipo de inicio de sesión:** *WhatsApp Embedded Signup*.
-   - **Permisos:** `whatsapp_business_management`, `whatsapp_business_messaging`,
-     `business_management`.
-   - **Token:** código de autorización de un solo uso (*authorization code*), no
-     token de acceso — el canje lo hace el backend.
-4. Copiar el **ID de la configuración**.
+### Por qué NO se pide `business_management`
 
-Y en el servidor, `/var/www/api/backend/.env`:
+Se pidió, se rechazó en App Review, y se retiró el 2026-09-16 (commit
+`1141bd2`). El motivo no fue el rechazo, sino que **no hacía falta**:
 
-```
-META_APP_ID=906146885861728
-META_APP_SECRET=<el App Secret real de esa app>
-META_EMBEDDED_SIGNUP_CONFIG_ID=<el ID copiado>
-```
+- Meta lo documenta como **opcional**: *«only needed if you need to
+  programmatically access your business portfolio (this is rarely needed, since
+  you can access your portfolio using Meta Business Suite)»*.
+- **Ninguna** llamada Graph de este backend toca un nodo Business. Se estaba
+  pidiendo un permiso que la aplicación nunca usó — y un permiso sin uso real no
+  se puede demostrar honestamente en una revisión.
+- No lo exigen Cloud API, ni Embedded Signup, ni Marketing Messages API. Solo
+  hace falta para compartir línea de crédito como Solution Partner.
 
-Después: `php artisan config:clear && php artisan config:cache`.
-
-> Mientras falte cualquiera de las tres, la pantalla NO ofrece el botón: dice
-> qué falta **por nombre de variable**. Un botón que abre una ventana de Meta que
-> falla convierte un arreglo de dos minutos en una tarde de depuración.
+`whatsapp_business_management` cubre WABA, números, plantillas y analíticas;
+`whatsapp_business_messaging` cubre enviar y recibir. Con esos dos está todo.
 
 ### ¿Hace falta la App Review aprobada para grabar la evidencia?
 
-No. En **modo desarrollo**, los administradores, desarrolladores y probadores de
-la app pueden recorrer el flujo completo con permisos aún sin aprobar. Eso es
-exactamente lo que Meta espera ver en el vídeo.
+No. Los usuarios **con rol en la app** —administrador, desarrollador o
+probador— pueden recorrer el flujo con **Standard Access**, que Meta aprueba
+automáticamente a las apps de negocios. Eso vale tanto en modo desarrollo como
+en modo activo: *«permissions with Standard Access can only be requested from
+role users»*.
 
 ---
 
@@ -125,7 +122,8 @@ cortes.
 
 - [ ] `META_EMBEDDED_SIGNUP_CONFIG_ID` definido y `config:cache` hecho.
 - [ ] La cuenta de Meta con la que se graba figura como administrador,
-      desarrollador o probador de la app `906146885861728`.
+      desarrollador o probador de la app **`1747474522949342`** — la del
+      Embedded Signup, no la del canal.
 - [ ] Sesión iniciada en el CRM con un usuario **Super Admin** o
       **Administrador** (los demás roles ven la pantalla pero no el botón, a
       propósito).
@@ -176,7 +174,7 @@ Códigos de error estables que devuelve el callback:
 
 | `code` | HTTP | Significa |
 |---|---|---|
-| `meta_app_not_configured` | 503 | Falta `META_APP_ID`, `META_APP_SECRET` o el `config_id` |
+| `meta_app_not_configured` | 503 | Falta `META_EMBEDDED_SIGNUP_APP_ID`, `META_EMBEDDED_SIGNUP_CONFIG_ID` o `META_EMBEDDED_SIGNUP_APP_SECRET` |
 | `invalid_signup_state` | 422 | El `state` caducó, ya se usó, o es de otra sesión |
 | `code_exchange_failed` | 502 | Meta rechazó el código (caducado, ya usado, permiso retirado) |
 | `whatsapp_not_connected` | 404 | No hay conexión que desconectar o refrescar |

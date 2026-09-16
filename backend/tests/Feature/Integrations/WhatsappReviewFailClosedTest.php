@@ -96,7 +96,9 @@ class WhatsappReviewFailClosedTest extends TestCase
 
             if (str_contains($url, 'debug_token')) {
                 return Http::response([
-                    'data' => ['scopes' => ['whatsapp_business_management', 'business_management']],
+                    // Lo que Meta concede hoy: los dos permisos que la
+                    // aplicación pide y usa, sin `business_management`.
+                    'data' => ['scopes' => ['whatsapp_business_management', 'whatsapp_business_messaging']],
                 ]);
             }
 
