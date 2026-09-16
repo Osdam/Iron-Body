@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\Admin\SupervisionController;
 use App\Http\Controllers\Api\Admin\WhatsappIntegrationController;
 use App\Http\Controllers\Api\Internal\InternalMarketingController;
 use App\Http\Controllers\Api\Internal\InternalMarketingKnowledgeController;
+use App\Http\Controllers\Api\Internal\UltronController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -49,6 +50,17 @@ Route::middleware(['automation.internal', 'throttle:120,1'])
 
         // Readiness del cerebro IA (driver/OpenAI/responder efectivo) sin secretos.
         Route::get('ai/doctor', [InternalMarketingController::class, 'aiDoctor']);
+
+        /*
+         * ULTRON — las dos únicas puertas del asesor orquestado desde n8n.
+         *
+         * `decide` lee y no escribe; `commit` es el único camino por el que una
+         * propuesta de n8n puede llegar a ejecutarse y a salir por WhatsApp.
+         * Deliberadamente NO se le da a n8n autoridad sobre `payment-links` ni
+         * `payment-links/send`: si algún día ULTRON tiene que cobrar, será
+         * pidiendo la herramienta por `commit` y decidiéndolo Laravel.
+         */
+        Route::post('ai/decide', [UltronController::class, 'decide']);
 
         // Base de conocimiento comercial (Fase 3.5). Solo interno (HMAC).
         Route::get('knowledge/doctor', [InternalMarketingKnowledgeController::class, 'doctor']);
