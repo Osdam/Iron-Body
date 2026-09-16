@@ -270,6 +270,14 @@ class WhatsappEmbeddedSignupService
             throw WhatsappOnboardingException::purposeConflict((string) $existing->purpose, $purpose);
         }
 
+        /*
+         * Activos protegidos, por identificador y sin tocar la red. Va aquí y no
+         * después del canje por el mismo motivo que el conflicto de propósito:
+         * el código sirve una sola vez, y rechazar después obligaría a repetir
+         * el diálogo de Meta entero por algo que ya se sabía antes de empezar.
+         */
+        $this->assertReviewAssetsAllowed($purpose, $wabaId, $phoneNumberId);
+
         try {
             $token = $this->exchangeCode((string) $payload['code']);
         } catch (WhatsappOnboardingException $e) {
@@ -286,7 +294,7 @@ class WhatsappEmbeddedSignupService
          * Es el último punto en el que una demostración puede pararse sin haber
          * dejado rastro.
          */
-        $this->assertNumberAllowedFor($purpose, $token['access_token'], $phoneNumberId);
+        $this->assertReviewNumberVerified($purpose, $token['access_token'], $phoneNumberId);
 
         $integration = WhatsappBusinessIntegration::updateOrCreate(
             ['waba_id' => $wabaId, 'phone_number_id' => $phoneNumberId],
@@ -330,42 +338,127 @@ class WhatsappEmbeddedSignupService
     }
 
     /**
-     * Barrera del número protegido.
+     * Primera barrera: activos protegidos, por identificador y sin red.
      *
-     * Solo se aplica al modo DEMOSTRACIÓN, y esa distinción es deliberada: el
-     * número del gimnasio es precisamente el que la coexistencia productiva
-     * debe acabar conectando —esa es toda la razón de existir de este módulo—,
-     * así que bloquearlo también ahí rompería el objetivo final. Lo que no
-     * puede pasar es que aparezca en una demostración, donde el onboarding
-     * estándar sí lo registraría en Cloud API y se lo quitaría al personal.
+     * Cubre la cuenta (WABA) y el identificador del número. Es la única que no
+     * depende de que Meta conteste, y por eso va antes del canje: un intento
+     * contra el canal del negocio se para sin gastar la autorización.
+     *
+     * Solo se aplica al modo DEMOSTRACIÓN, y esa distinción es deliberada: la
+     * cuenta y el número del gimnasio son precisamente los que la coexistencia
+     * productiva debe acabar conectando —esa es toda la razón de existir de
+     * este módulo—, así que bloquearlos también ahí rompería el objetivo final.
+     * Lo que no puede pasar es que aparezcan en una demostración, donde el
+     * onboarding estándar sí los registraría en Cloud API y se los quitaría al
+     * personal.
      *
      * @throws WhatsappOnboardingException
      */
-    private function assertNumberAllowedFor(string $purpose, string $accessToken, string $phoneNumberId): void
+    private function assertReviewAssetsAllowed(string $purpose, string $wabaId, string $phoneNumberId): void
     {
         if ($purpose !== WhatsappBusinessIntegration::PURPOSE_REVIEW) {
             return;
         }
 
-        $protegidos = array_filter((array) config('meta.protected_numbers', []));
-        if ($protegidos === []) {
+        /*
+         * La cuenta que opera el canal. Primero porque es la barrera más
+         * barata y la más importante: sin ella, todo lo demás depende de que
+         * Meta conteste.
+         */
+        if ($wabaId !== '' && in_array($wabaId, $this->reviewProtectedWabaIds(), true)) {
+            ChannelLog::warning('whatsapp.onboarding.protected_waba_refused', [
+                'purpose' => $purpose,
+                'waba_id' => $wabaId,
+            ]);
+
+            throw WhatsappOnboardingException::protectedWaba($wabaId);
+        }
+
+        if ($phoneNumberId !== '' && in_array($phoneNumberId, $this->reviewProtectedPhoneNumberIds(), true)) {
+            ChannelLog::warning('whatsapp.onboarding.protected_phone_id_refused', [
+                'purpose' => $purpose,
+                'phone_number_id' => $phoneNumberId,
+            ]);
+
+            throw WhatsappOnboardingException::protectedNumber($phoneNumberId);
+        }
+    }
+
+    /**
+     * Segunda barrera: qué número es REALMENTE, según Meta. Falla CERRADO.
+     *
+     * Sin `phone_number_id` no hay nada que comprobar y se deja pasar: es el
+     * caso legítimo de un onboarding que autoriza la cuenta sin número, y
+     * rechazarlo ahí cerraría un flujo válido. La ausencia del dato no es
+     * sospechosa; lo sospechoso es tenerlo y no poder resolverlo.
+     *
+     * @throws WhatsappOnboardingException
+     */
+    private function assertReviewNumberVerified(string $purpose, string $accessToken, string $phoneNumberId): void
+    {
+        if ($purpose !== WhatsappBusinessIntegration::PURPOSE_REVIEW) {
             return;
         }
 
-        // Comprobación barata primero: el identificador del número productivo
-        // no necesita preguntarle nada a la red.
-        $productivo = (string) config('meta.whatsapp_phone_number_id');
-        if ($productivo !== '' && hash_equals($productivo, $phoneNumberId)) {
-            throw WhatsappOnboardingException::protectedNumber($productivo);
+        if ($phoneNumberId === '') {
+            return;
         }
 
         $telefono = $this->fetchPhoneNumber($accessToken, $phoneNumberId);
         $mostrado = (string) ($telefono['display_phone_number'] ?? '');
         $digitos = preg_replace('/\D+/', '', $mostrado) ?? '';
 
-        if ($digitos !== '' && in_array($digitos, $protegidos, true)) {
+        /*
+         * Aquí estaba el fallo que este parche corrige. Antes, un Graph que no
+         * contestaba dejaba `$digitos` vacío, la comparación no encontraba nada
+         * y el número entraba. Timeout, 4xx, 5xx, respuesta vacía, permiso
+         * insuficiente o un campo que no viene acaban todos en lo mismo: NO SE
+         * PUDO COMPROBAR. Y no poder comprobarlo no es permiso para seguir.
+         */
+        if ($digitos === '') {
+            ChannelLog::warning('whatsapp.onboarding.number_unverifiable', [
+                'purpose' => $purpose,
+                'phone_number_id' => $phoneNumberId,
+                'graph_respondio' => $telefono !== [],
+            ]);
+
+            throw WhatsappOnboardingException::protectedNumberUnverifiable($phoneNumberId);
+        }
+
+        if (in_array($digitos, $this->reviewProtectedNumbers(), true)) {
+            ChannelLog::warning('whatsapp.onboarding.protected_number_refused', [
+                'purpose' => $purpose,
+                'phone_number_id' => $phoneNumberId,
+            ]);
+
             throw WhatsappOnboardingException::protectedNumber($mostrado);
         }
+    }
+
+    /** @return array<int,string> */
+    private function reviewProtectedWabaIds(): array
+    {
+        return array_filter((array) config('meta.embedded_signup.review.protected_waba_ids', []));
+    }
+
+    /** @return array<int,string> */
+    private function reviewProtectedPhoneNumberIds(): array
+    {
+        return array_filter((array) config('meta.embedded_signup.review.protected_phone_number_ids', []));
+    }
+
+    /**
+     * Teléfonos protegidos del modo demostración. Cae a la lista general para
+     * que una instalación que solo declaró `WHATSAPP_PROTECTED_NUMBERS` siga
+     * protegida sin tener que declarar nada más.
+     *
+     * @return array<int,string>
+     */
+    private function reviewProtectedNumbers(): array
+    {
+        $propios = array_filter((array) config('meta.embedded_signup.review.protected_numbers', []));
+
+        return $propios !== [] ? $propios : array_filter((array) config('meta.protected_numbers', []));
     }
 
     /**
@@ -568,6 +661,26 @@ class WhatsappEmbeddedSignupService
      */
     public function subscribeApp(WhatsappBusinessIntegration $integration): bool
     {
+        /*
+         * Una DEMOSTRACIÓN no suscribe nada, nunca.
+         *
+         * Suscribir es la única escritura que hace este servicio contra Meta, y
+         * hacerla desde una demostración tendría dos efectos igual de malos:
+         * modificaría una cuenta ajena al canal, y abriría la puerta a que sus
+         * eventos entraran por el mismo webhook que los reales.
+         *
+         * La guarda vive AQUÍ y no en quien llama, a propósito: así la garantía
+         * es estructural y no depende de que cada nueva llamada se acuerde.
+         */
+        if ($integration->isReview()) {
+            ChannelLog::info('whatsapp.onboarding.subscribe_app_skipped', [
+                'integration_id' => $integration->id,
+                'reason' => 'review',
+            ]);
+
+            return false;
+        }
+
         if (! (bool) config('meta.embedded_signup.subscribe_app', true)) {
             return false;
         }

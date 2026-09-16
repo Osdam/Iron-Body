@@ -24,6 +24,57 @@
 $embeddedSignupAppId = env('META_EMBEDDED_SIGNUP_APP_ID', env('META_APP_ID'));
 $embeddedSignupAppSecret = env('META_EMBEDDED_SIGNUP_APP_SECRET');
 
+/**
+ * Lista separada por comas -> array de valores limpios.
+ *
+ * Se usa para las listas de activos protegidos, que se declaran como texto en
+ * el `.env` y se comparan como identificadores exactos.
+ *
+ * @return array<int,string>
+ */
+$listaDeIds = static function (?string $crudo): array {
+    return array_values(array_filter(array_map('trim', explode(',', (string) $crudo))));
+};
+
+/**
+ * Igual, pero dejando SOLO los digitos: +57 314 345 5483 y 573143455483 son el
+ * mismo telefono escrito de dos maneras, y Meta devuelve el primero.
+ *
+ * @return array<int,string>
+ */
+$listaDeTelefonos = static function (?string $crudo): array {
+    return array_values(array_filter(array_map(
+        static fn (string $n): string => preg_replace('/\D+/', '', $n) ?? '',
+        explode(',', (string) $crudo),
+    )));
+};
+
+/**
+ * Variable de entorno, con respaldo REAL cuando esta declarada pero vacia.
+ *
+ * `env('X', $default)` solo aplica el default cuando la clave NO existe. Una
+ * clave declarada vacia -`X=`, que es como estan en `.env.example`- devuelve
+ * cadena vacia y el default no llega a usarse nunca.
+ *
+ * Para una lista de activos protegidos eso no es un matiz: convierte la barrera
+ * en decorativa sin que nadie lo note, porque el fichero de entorno "parece"
+ * correcto. Aqui una variable vacia significa "no me pronuncio", no "desactiva
+ * la proteccion".
+ */
+$envConRespaldo = static function (string $clave, string $respaldo): string {
+    $valor = (string) env($clave, '');
+
+    return trim($valor) !== '' ? $valor : $respaldo;
+};
+
+/*
+ * Telefonos protegidos, resueltos UNA vez porque los leen dos sitios: la lista
+ * general y la barrera especifica del modo demostracion.
+ */
+$telefonosProtegidos = $listaDeTelefonos(
+    $envConRespaldo('WHATSAPP_PROTECTED_NUMBERS', (string) env('WHATSAPP_DISPLAY_PHONE', '')),
+);
+
 if ((string) $embeddedSignupAppSecret === ''
     && (string) $embeddedSignupAppId === (string) env('META_APP_ID')) {
     $embeddedSignupAppSecret = env('META_APP_SECRET');
@@ -179,6 +230,64 @@ return [
                 env('META_EMBEDDED_SIGNUP_REVIEW_ENABLED', false),
                 FILTER_VALIDATE_BOOLEAN,
             ),
+
+            /*
+            |------------------------------------------------------------------
+            | Activos que una DEMOSTRACION no puede tocar jamas
+            |------------------------------------------------------------------
+            | Estas listas rigen SOLO cuando purpose=review. En coexistencia
+            | productiva el numero y la WABA del gimnasio son el objetivo
+            | legitimo -esa es toda la razon de ser del modulo-, asi que
+            | bloquearlos ahi romperia el proposito.
+            |
+            | Los valores por defecto NO estan vacios a proposito. Una lista
+            | vacia convierte la barrera en decorativa, y el `.env` del servidor
+            | no declara ninguna de estas variables: si el unico sitio donde
+            | viviera el dato fuera el entorno, la proteccion no existiria hasta
+            | que alguien se acordara de rellenarlo. El default es el valor real
+            | y esta escrito aqui, a la vista, no escondido en un servicio.
+            |
+            | Y se leen con $envConRespaldo, no con env() a secas: una variable
+            | DECLARADA VACIA no puede apagar una barrera de seguridad por
+            | descuido. Para cambiar la lista hay que escribir otra lista.
+            */
+
+            /*
+             * WABA productiva. Es la barrera de primer nivel y la unica que no
+             * necesita preguntarle nada a la red: se comprueba ANTES de canjear
+             * el codigo, asi que un intento contra ella no llega a gastar nada.
+             */
+            'protected_waba_ids' => $listaDeIds($envConRespaldo(
+                'META_EMBEDDED_SIGNUP_REVIEW_PROTECTED_WABA_IDS',
+                '1381789767207733',
+            )),
+
+            /*
+             * Identificadores de numero protegidos, comparados tal cual.
+             *
+             * Vacio por defecto y a proposito: hoy NO conocemos el
+             * phone_number_id real del numero productivo bajo la WABA nueva.
+             * META_WHATSAPP_PHONE_NUMBER_ID contiene 1221649421024405, un ID
+             * borrado el 2026-06-30 que Graph ya no resuelve, y por eso dejo de
+             * usarse como fuente autoritativa: comparar contra el no protegia
+             * nada y daba apariencia de proteccion.
+             *
+             * Mientras esta lista este vacia, quien protege es la barrera de
+             * abajo, que resuelve el numero real contra Graph y falla CERRADO.
+             */
+            'protected_phone_number_ids' => $listaDeIds($envConRespaldo(
+                'META_EMBEDDED_SIGNUP_REVIEW_PROTECTED_PHONE_NUMBER_IDS',
+                '',
+            )),
+
+            /*
+             * Telefonos protegidos, por digitos. Hereda la lista general salvo
+             * que se declare una propia para el modo demostracion.
+             */
+            'protected_numbers' => $listaDeTelefonos($envConRespaldo(
+                'META_EMBEDDED_SIGNUP_REVIEW_PROTECTED_NUMBERS',
+                implode(',', $telefonosProtegidos),
+            )),
         ],
     ],
 
@@ -195,10 +304,7 @@ return [
     | ocurre dentro del diálogo de Meta y esto actúa después. Pero convierte un
     | descuido en un mensaje de error en vez de en una conexión que nadie quería.
     */
-    'protected_numbers' => array_values(array_filter(array_map(
-        // Se comparan solo los dígitos: +57 314 345 5483 y 573143455483 son el
-        // mismo teléfono escrito de dos maneras.
-        static fn (string $n): string => preg_replace('/\D+/', '', $n) ?? '',
-        explode(',', (string) env('WHATSAPP_PROTECTED_NUMBERS', (string) env('WHATSAPP_DISPLAY_PHONE', ''))),
-    ))),
+    // Se comparan solo los dígitos: +57 314 345 5483 y 573143455483 son el
+    // mismo teléfono escrito de dos maneras (ver $listaDeTelefonos arriba).
+    'protected_numbers' => $telefonosProtegidos,
 ];

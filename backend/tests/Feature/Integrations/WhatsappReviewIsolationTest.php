@@ -56,6 +56,13 @@ class WhatsappReviewIsolationTest extends TestCase
         config()->set('meta.embedded_signup.config_id', '1643115916774956');
         config()->set('meta.embedded_signup.review.enabled', true);
         config()->set('meta.protected_numbers', ['573143455483']);
+        /*
+         * El identificador protegido se declara AQUÍ, en su propia lista. Antes
+         * se deducía de META_WHATSAPP_PHONE_NUMBER_ID, que en el servidor real
+         * contiene un ID borrado y por tanto no protegía nada.
+         */
+        config()->set('meta.embedded_signup.review.protected_phone_number_ids', [self::PROD_PHONE]);
+        config()->set('meta.embedded_signup.review.protected_waba_ids', []);
         config()->set('marketing.ai.driver', 'fake');
 
         Http::preventStrayRequests();

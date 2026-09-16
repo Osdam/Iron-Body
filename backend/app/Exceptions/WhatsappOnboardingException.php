@@ -83,6 +83,43 @@ class WhatsappOnboardingException extends RuntimeException
     }
 
     /**
+     * La demostración eligió la cuenta de WhatsApp que opera el negocio.
+     *
+     * Es la barrera de primer nivel y la única que no depende de la red: se
+     * comprueba antes de canjear el código, así que un intento contra la WABA
+     * productiva ni siquiera llega a gastar la autorización.
+     */
+    public static function protectedWaba(string $wabaId): self
+    {
+        return new self(
+            'La cuenta de WhatsApp '.$wabaId.' está protegida y no puede usarse en una demostración. '
+            .'Es la que opera el canal del negocio. '
+            .'Vuelve a intentarlo eligiendo una cuenta de prueba.',
+            'protected_waba',
+            422,
+        );
+    }
+
+    /**
+     * No se pudo comprobar QUÉ número es, así que se rechaza.
+     *
+     * Antes esto se resolvía al revés: si Graph no contestaba, la comprobación
+     * se saltaba y el número entraba. Una barrera que se abre justo cuando falla
+     * la red es peor que no tenerla, porque induce a confiar en ella. Si no se
+     * puede demostrar que un número es seguro, no lo es.
+     */
+    public static function protectedNumberUnverifiable(string $phoneNumberId): self
+    {
+        return new self(
+            'No se pudo comprobar con Meta a qué teléfono corresponde el identificador '.$phoneNumberId.'. '
+            .'La demostración se detiene: sin esa comprobación no hay forma de saber si es el número del negocio. '
+            .'Reintenta en unos minutos.',
+            'protected_number_unverifiable',
+            422,
+        );
+    }
+
+    /**
      * Ese WABA + número ya existe con OTRO propósito.
      *
      * Se rechaza en vez de reescribirlo. Si una demostración pudiera adoptar el
