@@ -101,6 +101,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->guardWompiConfig();
         $this->guardFactusConfig();
+        $this->guardUltronConfig();
 
         // La previsualizacion de la lista se mantiene desde la TABLA de
         // mensajes, no desde cada servicio que envia. Los mensajes nacen por
@@ -193,6 +194,43 @@ class AppServiceProvider extends ServiceProvider
      * cuando Wompi aún no está configurado (placeholders vacíos en dev). Un
      * MISMATCH real (llave del ambiente equivocado) sí aborta: es lo correcto.
      */
+    /**
+     * Dos cerebros no pueden decidir sobre la misma persona.
+     *
+     * `auto_analyze` enciende el cerebro LOCAL sobre los mensajes entrantes;
+     * `ultron.enabled` manda esos mismos mensajes a n8n para que decida allí.
+     * Con los dos encendidos, quien escriba recibe dos respuestas, se escriben
+     * dos decisiones y la memoria de la conversación queda a merced de cuál
+     * termine antes. El cerrojo de conversación no salva de esto: protege de
+     * dos ejecuciones simultáneas, no de dos agentes con criterios distintos.
+     *
+     * Se comprueba al arrancar y no al primer mensaje, porque el primer mensaje
+     * ya sería el daño. En producción es fatal; fuera, advertencia, para no
+     * bloquear a quien esté probando en local.
+     */
+    private function guardUltronConfig(): void
+    {
+        if ($this->app->runningUnitTests()) {
+            return;
+        }
+
+        if (! (bool) config('marketing.ultron.enabled', false)) {
+            return;
+        }
+
+        if ((bool) config('marketing.inbound.auto_analyze', true)) {
+            $mensaje = 'Configuración inválida: MARKETING_ULTRON_ENABLED y '
+                .'MARKETING_INBOUND_AUTO_ANALYZE no pueden estar activos a la vez '
+                .'(dos cerebros decidirían sobre la misma conversación).';
+
+            if (app()->environment('production')) {
+                throw new \RuntimeException($mensaje);
+            }
+
+            Log::warning($mensaje);
+        }
+    }
+
     private function guardWompiConfig(): void
     {
         if ($this->app->runningUnitTests()) {

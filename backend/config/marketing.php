@@ -34,6 +34,11 @@ return [
     'ultron' => [
         'enabled' => filter_var(env('MARKETING_ULTRON_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
         'payment_links_enabled' => filter_var(env('MARKETING_ULTRON_PAYMENT_LINKS_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        // Webhook del workflow en n8n. Se firma con `automation.webhook_secret`,
+        // el mismo secreto compartido que ya usa el puente de bienestar: dos
+        // esquemas de firma distintos serían dos formas de equivocarse.
+        'webhook_url' => env('MARKETING_ULTRON_WEBHOOK_URL'),
+        'timeout' => (int) env('MARKETING_ULTRON_TIMEOUT', 10),
     ],
 
     // Seguimientos automáticos (marketing:dispatch-followups).

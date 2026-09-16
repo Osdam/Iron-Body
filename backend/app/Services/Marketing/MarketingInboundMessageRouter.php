@@ -9,6 +9,7 @@ use App\Models\MarketingConversation;
 use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
 use App\Models\MarketingMessageAttachment;
+use App\Services\Marketing\Ultron\UltronEventEmitter;
 use App\Services\Meta\MetaMediaService;
 use App\Services\Observability\ChannelLog;
 use Illuminate\Support\Facades\Context;
@@ -29,7 +30,10 @@ use Illuminate\Support\Facades\Context;
  */
 class MarketingInboundMessageRouter
 {
-    public function __construct(private readonly SalesAgentOrchestratorService $orchestrator) {}
+    public function __construct(
+        private readonly SalesAgentOrchestratorService $orchestrator,
+        private readonly UltronEventEmitter $ultron = new UltronEventEmitter,
+    ) {}
 
     /**
      * Punto de entrada desde el webhook. Decide, según lo que llegó, si esto es
@@ -68,6 +72,30 @@ class MarketingInboundMessageRouter
 
         if (! in_array($type, $analyzable, true) && ! $hasReadableText) {
             return $this->escalate($lead, $conversation, $message, $type, 'needs_human_review');
+        }
+
+        /*
+         * ULTRON se entera aquí, y no dentro de `analyze()`.
+         *
+         * El sitio importa: ya pasaron la persistencia, la deduplicación y las
+         * barreras de tipo, pero todavía no se ha decidido si el cerebro LOCAL
+         * mira este mensaje. Son dos preguntas distintas y tienen dos
+         * interruptores distintos —`ultron.enabled` y `auto_analyze`—, que
+         * además son mutuamente excluyentes: dos agentes decidiendo sobre la
+         * misma persona son dos respuestas para la misma pregunta.
+         *
+         * Best-effort de verdad: el mensaje ya está guardado y visible en el
+         * Inbox. Que ULTRON no se entere es molesto; que se pierda el mensaje
+         * sería perder al cliente, así que esto no puede tumbar el enrutado.
+         */
+        try {
+            $this->ultron->emit($conversation, $message, $parsed);
+        } catch (\Throwable $e) {
+            ChannelLog::warning('ultron.event.emit_failed', [
+                'conversation_id' => $conversation->id,
+                'message_id' => $message->id,
+                'error_class' => class_basename($e),
+            ]);
         }
 
         return $this->analyze($lead, $conversation, $message);
