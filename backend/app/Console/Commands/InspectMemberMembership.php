@@ -2,7 +2,9 @@
 
 namespace App\Console\Commands;
 
+use App\Models\AuditLog;
 use App\Models\Payment;
+use App\Models\Plan;
 use App\Models\User;
 use App\Services\Payments\MembershipPeriod;
 use Carbon\CarbonImmutable;
@@ -57,9 +59,7 @@ class InspectMemberMembership extends Command
             $this->line('  le quedan       : '.$dias.' días');
         }
 
-        $pagos = Payment::where('user_id', $user->id)
-            ->orderBy('id')
-            ->get(['id', 'status', 'plan_id', 'amount', 'origin', 'paid_at', 'starts_on', 'period_start', 'period_end', 'reference']);
+        $pagos = Payment::where('user_id', $user->id)->orderBy('id')->get();
 
         $this->newLine();
         $this->line('<options=bold>PAGOS</> ('.$pagos->count().')');
@@ -71,7 +71,7 @@ class InspectMemberMembership extends Command
         }
 
         $this->table(
-            ['#', 'estado', 'plan', 'paid_at (crudo)', 'paid_at (Neiva)', 'día que contó', 'starts_on', 'periodo'],
+            ['#', 'estado', 'plan', 'paid_at (crudo)', 'día que contó', 'starts_on', 'periodo'],
             $pagos->map(fn (Payment $p) => [
                 $p->id,
                 $p->status,
@@ -79,7 +79,6 @@ class InspectMemberMembership extends Command
                 // Crudo: lo que hay en la columna, sin interpretar. Una hora
                 // 00:00:00 aquí delata un cobro guardado como fecha suelta.
                 $p->getRawOriginal('paid_at') ?: '—',
-                $p->paid_at ? $p->paid_at->copy()->setTimezone(MembershipPeriod::TZ)->format('Y-m-d H:i') : '—',
                 $p->paid_at
                     ? $p->paid_at->copy()->setTimezone(MembershipPeriod::TZ)->toDateString()
                     : $hoy->toDateString().' (sin fecha: se usa hoy)',
@@ -90,8 +89,57 @@ class InspectMemberMembership extends Command
             ])->all()
         );
 
-        $this->line('Un pago NO cobrado que todavía tiene periodo es uno que sumó días y nunca los devolvió:');
-        $this->line('lo corrige <options=bold>php artisan memberships:repair-cancelled --user='.$user->id.' --apply</>');
+        // De dónde salió cada fila. Un pago sin periodo pero con membresía
+        // extendida no lo escribió MembershipPeriod: el origen dice quién fue.
+        $this->newLine();
+        $this->line('<options=bold>ORIGEN DE CADA PAGO</>');
+        $this->table(
+            ['#', 'referencia', 'origin', 'método', 'registrado por', 'creado', 'modificado'],
+            $pagos->map(fn (Payment $p) => [
+                $p->id,
+                $p->reference ?: '—',
+                $p->origin ?: '—',
+                $p->method ?: '—',
+                $p->registered_by_name ?: '—',
+                (string) $p->created_at,
+                (string) $p->updated_at,
+            ])->all()
+        );
+
+        // El catálogo. Si el plan dura otra cosa de la que se cree, la cuenta
+        // nunca estuvo mal: estaba bien hecha sobre un número equivocado.
+        $planes = Plan::whereIn('id', $pagos->pluck('plan_id')->filter()->unique())->get();
+        if ($planes->isNotEmpty()) {
+            $this->newLine();
+            $this->line('<options=bold>PLANES QUE PAGÓ</>');
+            $this->table(
+                ['id', 'nombre', 'duration_days', 'precio', 'activo'],
+                $planes->map(fn (Plan $p) => [
+                    $p->id, $p->name, $p->duration_days, $p->price, $p->active ? 'sí' : 'no',
+                ])->all()
+            );
+        }
+
+        $trazas = AuditLog::query()
+            ->where(fn ($q) => $q->where('entity', 'membership')->where('entity_id', (string) $user->id))
+            ->orWhere(fn ($q) => $q->where('entity', 'payment')->whereIn('entity_id', $pagos->pluck('id')->map(fn ($i) => (string) $i)))
+            ->orderBy('id')
+            ->get(['id', 'created_at', 'action', 'entity', 'entity_id', 'actor_name', 'summary']);
+
+        $this->newLine();
+        $this->line('<options=bold>RASTRO DE AUDITORÍA</> ('.$trazas->count().')');
+        if ($trazas->isEmpty()) {
+            $this->line('  — sin trazas');
+        } else {
+            $this->table(
+                ['cuándo', 'acción', 'sobre', 'quién', 'qué'],
+                $trazas->map(fn (AuditLog $a) => [
+                    (string) $a->created_at, $a->action, $a->entity.' '.$a->entity_id,
+                    $a->actor_name ?: '—', $a->summary,
+                ])->all()
+            );
+        }
+
         $this->newLine();
 
         return self::SUCCESS;
