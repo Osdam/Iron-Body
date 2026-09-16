@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\AuditLog;
 use App\Models\User;
 use App\Services\Payments\MembershipRebuilder;
+use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -96,6 +97,7 @@ class RebuildMembershipsFromPayments extends Command
                 ($user->membership_start_date ?: '—').' → '.($user->membership_end_date ?: '—'),
                 ($previo['start'] ?: '—').' → '.($previo['end'] ?: '—'),
                 $previo['applied'].' pago(s)',
+                $this->warning($user, $previo),
             ];
 
             if ($aplicar) {
@@ -114,7 +116,7 @@ class RebuildMembershipsFromPayments extends Command
             return self::SUCCESS;
         }
 
-        $this->table(['#', 'socio', 'tiene', 'le corresponde', 'según'], $filas);
+        $this->table(['#', 'socio', 'tiene', 'le corresponde', 'según', 'ojo'], $filas);
         $this->newLine();
         $this->line($aplicar
             ? "Corregidos: {$corregidos}. Sin reconstruir: {$omitidos}."
@@ -122,6 +124,39 @@ class RebuildMembershipsFromPayments extends Command
         $this->newLine();
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Avisa cuando corregir la fecha le cierra la puerta a alguien que HOY
+     * entra al gimnasio. Pasa cuando el cobro que sobrevive está fechado a
+     * futuro: la cuenta es correcta, pero el socio se queda fuera hasta ese
+     * día y alguien tiene que decidirlo a sabiendas, no descubrirlo en la
+     * recepción.
+     *
+     * @param  array{start: ?string, end: ?string, applied: int, skipped: ?string}  $previo
+     */
+    private function warning(User $user, array $previo): string
+    {
+        $hoy = MembershipRebuilder::today();
+        $entraHoy = $user->membership_end_date !== null
+            && CarbonImmutable::parse($user->membership_end_date, MembershipRebuilder::TZ)->gte($hoy);
+
+        if (! $entraHoy) {
+            return '';
+        }
+
+        if ($previo['end'] === null) {
+            return 'QUEDA SIN ACCESO';
+        }
+        if (CarbonImmutable::parse($previo['end'], MembershipRebuilder::TZ)->lt($hoy)) {
+            return 'QUEDA VENCIDO HOY';
+        }
+        if ($previo['start'] !== null
+            && CarbonImmutable::parse($previo['start'], MembershipRebuilder::TZ)->gt($hoy)) {
+            return 'NO ENTRA HASTA '.$previo['start'];
+        }
+
+        return '';
     }
 
     /** @param array<string, mixed> $hecho */

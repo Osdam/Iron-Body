@@ -39,6 +39,12 @@ class MembershipRebuilder
 {
     public const TZ = MembershipPeriod::TZ;
 
+    /** Hoy en la zona del negocio. Una sola definición de «hoy» para todos. */
+    public static function today(): CarbonImmutable
+    {
+        return MembershipPeriod::today();
+    }
+
     /**
      * Qué membresía le corresponde al socio según sus pagos vigentes.
      *
@@ -151,6 +157,18 @@ class MembershipRebuilder
      */
     private function refusal(User $user, Collection $pagos): ?string
     {
+        // SIN NINGÚN PAGO DE PLAN NO HAY NADA QUE REHACER, y esto no es un
+        // detalle: el gimnasio otorga vigencias por fuera de la caja —demos de
+        // tester, cortesías del personal, cuentas de revisión, accesos de un
+        // año o de cinco— y ninguna nace de un pago. Reconstruirlas «desde los
+        // pagos» daría cero días y les quitaría el acceso a gente que lo tiene
+        // concedido a propósito. Se distingue de «compró y se le anuló todo»
+        // mirando si existe algún pago con plan en CUALQUIER estado.
+        $comproAlgunaVez = Payment::where('user_id', $user->id)->whereNotNull('plan_id')->exists();
+        if (! $comproAlgunaVez) {
+            return 'no tiene ningún pago de plan: su vigencia se otorgó por fuera de la caja (demo, cortesía, importación)';
+        }
+
         // Migrados: la vigencia la copió el importador TAL CUAL del sistema
         // anterior, no la compró ningún pago de Iron Body.
         $migrados = Payment::where('user_id', $user->id)->where('reference', 'like', 'MIGR-%')->exists();

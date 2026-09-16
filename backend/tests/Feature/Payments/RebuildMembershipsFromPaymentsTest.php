@@ -6,6 +6,7 @@ use App\Models\AuditLog;
 use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\User;
+use App\Services\Payments\MembershipRebuilder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -148,6 +149,38 @@ class RebuildMembershipsFromPaymentsTest extends TestCase
         $this->assertSame('2027-03-01', $u->refresh()->membership_end_date);
     }
 
+    /**
+     * El caso de Maria Fernanda Ocampo (#7659): el cobro que sobrevive está
+     * fechado a futuro, así que la cuenta correcta la deja SIN acceso hasta
+     * ese día. Es una decisión de mostrador, no un detalle: tiene que verse.
+     */
+    public function test_avisa_cuando_la_correccion_deja_al_socio_fuera(): void
+    {
+        $plan = $this->plan();
+        $hoy = MembershipRebuilder::today();
+        $u = User::create([
+            'name' => 'Fechada a futuro', 'email' => 'futuro-'.uniqid().'@example.com',
+            'password' => 'secret', 'status' => 'active', 'plan' => 'Élite',
+            'membership_start_date' => $hoy->subDay()->toDateString(),
+            'membership_end_date' => $hoy->addDays(59)->toDateString(),
+        ]);
+        Payment::create([
+            'user_id' => $u->id, 'plan_id' => $plan->id, 'amount' => 180000,
+            'method' => 'transfer', 'status' => 'cancelled',
+            'paid_at' => $hoy->subDay()->format('Y-m-d').' 00:00:00', 'origin' => 'counter',
+        ]);
+        $arranca = $hoy->addDays(5);
+        Payment::create([
+            'user_id' => $u->id, 'plan_id' => $plan->id, 'amount' => 180000,
+            'method' => 'transfer', 'status' => 'paid',
+            'paid_at' => $arranca->format('Y-m-d').' 00:00:00', 'origin' => 'counter',
+        ]);
+
+        $this->artisan("memberships:rebuild --user={$u->id}")
+            ->expectsOutputToContain('NO ENTRA HASTA '.$arranca->toDateString())
+            ->assertSuccessful();
+    }
+
     public function test_deja_rastro_de_lo_que_cambio(): void
     {
         $u = $this->elizabet($this->plan());
@@ -160,6 +193,27 @@ class RebuildMembershipsFromPaymentsTest extends TestCase
         $this->assertSame('2026-10-14', $traza->metadata['end']);
     }
 
+    /**
+     * El gimnasio regala vigencias: demos de tester, cortesías del personal,
+     * cuentas de revisión. No nacen de un pago, así que «reconstruirlas desde
+     * los pagos» daría cero días y les cerraría la puerta. Se dejan en paz.
+     */
+    public function test_no_le_quita_el_acceso_a_quien_nunca_pago(): void
+    {
+        $u = User::create([
+            'name' => 'Tester con demo', 'email' => 'demo-'.uniqid().'@example.com',
+            'password' => 'secret', 'status' => 'active', 'plan' => 'Élite',
+            'membership_start_date' => '2026-08-08', 'membership_end_date' => '2031-07-19',
+        ]);
+
+        $this->artisan("memberships:rebuild --user={$u->id} --apply")->assertSuccessful();
+
+        $u->refresh();
+        $this->assertSame('2031-07-19', $u->membership_end_date);
+        $this->assertSame('Élite', $u->plan);
+    }
+
+    /** Un pago pendiente tampoco es una compra cobrada, pero sí prueba que compró. */
     public function test_si_se_anulan_todos_los_pagos_la_vigencia_desaparece(): void
     {
         $u = $this->elizabet($this->plan());
