@@ -61,6 +61,7 @@ Route::middleware(['automation.internal', 'throttle:120,1'])
          * pidiendo la herramienta por `commit` y decidiéndolo Laravel.
          */
         Route::post('ai/decide', [UltronController::class, 'decide']);
+        Route::post('ai/commit', [UltronController::class, 'commit']);
 
         // Base de conocimiento comercial (Fase 3.5). Solo interno (HMAC).
         Route::get('knowledge/doctor', [InternalMarketingKnowledgeController::class, 'doctor']);
