@@ -317,6 +317,34 @@ class WhatsappReviewIsolationTest extends TestCase
         $this->assertNull($rev['feature_type']);
     }
 
+    /**
+     * Los permisos que se le piden a Meta, fijados por su nombre.
+     *
+     * `business_management` estuvo en esta lista y se retiró: Meta lo documenta
+     * como opcional —solo sirve para acceder al Business Portfolio por API o
+     * para compartir línea de crédito como Solution Partner— y ninguna llamada
+     * Graph de este backend toca un nodo Business. Pedir un permiso que la
+     * aplicación no usa obliga a una App Review que no se puede superar
+     * demostrando algo real.
+     *
+     * La prueba fija la lista EXACTA, no "que contenga": añadir un permiso de
+     * más es precisamente el error que se quiere impedir, y una aserción de
+     * contención no lo vería.
+     */
+    public function test_start_asks_only_for_the_two_whatsapp_permissions(): void
+    {
+        $esperado = ['whatsapp_business_management', 'whatsapp_business_messaging'];
+
+        foreach (['production', 'review'] as $modo) {
+            $scopes = $this->postJson(self::URL.'/start', ['mode' => $modo], $this->headers)
+                ->assertOk()
+                ->json('data.scopes');
+
+            $this->assertSame($esperado, $scopes, "scopes inesperados en modo {$modo}");
+            $this->assertNotContains('business_management', $scopes, "modo {$modo} sigue pidiendo business_management");
+        }
+    }
+
     // ── 8. El webhook de la demostración no toca nada productivo ──────────────
 
     public function test_a_review_webhook_creates_no_production_side_effects(): void

@@ -166,8 +166,20 @@ return [
 
         /*
          * Permisos que se piden. `whatsapp_business_management` administra la
-         * cuenta (WABA, números, plantillas), `whatsapp_business_messaging`
-         * envía y recibe, y `business_management` es el que está en revisión.
+         * cuenta (WABA, números, plantillas y todas las analíticas), y
+         * `whatsapp_business_messaging` envía y recibe. Con esos dos está
+         * cubierto todo lo que hace esta aplicación.
+         *
+         * `business_management` estuvo aquí y se retiró. Meta lo clasifica como
+         * OPCIONAL: «only needed if you need to programmatically access your
+         * business portfolio (this is rarely needed, since you can access your
+         * portfolio using Meta Business Suite)». Ninguna de las llamadas Graph
+         * de este backend toca un nodo Business, así que pedirlo era pedir un
+         * permiso que la aplicación no usa —y que por tanto no se puede
+         * demostrar honestamente en una App Review—. Tampoco lo exigen Cloud
+         * API, Embedded Signup ni Marketing Messages API; solo hace falta para
+         * compartir línea de crédito como Solution Partner, que no es el caso.
+         *
          * Meta puede conceder menos de lo pedido: lo concedido de verdad se
          * guarda en la fila de la integración, no se da por hecho.
          */
@@ -175,7 +187,7 @@ return [
             'trim',
             explode(',', (string) env(
                 'META_EMBEDDED_SIGNUP_SCOPES',
-                'whatsapp_business_management,whatsapp_business_messaging,business_management',
+                'whatsapp_business_management,whatsapp_business_messaging',
             )),
         ))),
 
