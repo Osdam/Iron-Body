@@ -34,6 +34,10 @@ class PricingReplyTest extends TestCase
             'env' => 'production', 'public_key' => 'pub_prod', 'integrity_secret' => 'int_prod',
             'checkout' => ['base_url' => 'https://checkout.wompi.co/p/'],
         ]));
+        // Que la pasarela pueda cobrar ya no basta: hace falta además el permiso
+        // explícito para que lo ofrezca una máquina. Estas pruebas son sobre el
+        // camino con link habilitado, así que se enciende aquí.
+        config()->set('marketing.ultron.payment_links_enabled', true);
 
         $this->plan = Plan::create([
             'name' => 'Plan Mensual', 'price' => 80000, 'duration_days' => 30, 'active' => true,

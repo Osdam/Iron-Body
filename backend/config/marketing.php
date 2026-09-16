@@ -20,6 +20,22 @@ return [
     // contacta a Meta ni activa nada), salvo que se decida lo contrario abajo.
     'agent_enabled' => filter_var(env('MARKETING_AGENT_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
 
+    /*
+    | ULTRON — el asesor comercial orquestado desde n8n.
+    |
+    | `payment_links_enabled` responde a una pregunta DISTINTA de la que
+    | responde Wompi. Wompi dice si técnicamente se puede cobrar; esto dice si
+    | el negocio autoriza a que una máquina lo ofrezca sola. Eran lo mismo
+    | mientras Wompi estuvo en sandbox, y al pasar a producción el agente habría
+    | empezado a repartir links de pago sin que nadie tomara esa decisión.
+    |
+    | Arranca en false a propósito: la capacidad técnica no es un permiso.
+    */
+    'ultron' => [
+        'enabled' => filter_var(env('MARKETING_ULTRON_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'payment_links_enabled' => filter_var(env('MARKETING_ULTRON_PAYMENT_LINKS_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+    ],
+
     // Seguimientos automáticos (marketing:dispatch-followups).
     'followups' => [
         // Si false, el comando recorre y registra, pero NO envía mensajes ni

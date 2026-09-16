@@ -78,8 +78,10 @@ class SalesAgentTest extends TestCase
 
     public function test_payment_link_request_flags_generate_link(): void
     {
-        // Wompi productivo: la intención de pago sí marca la generación de link.
+        // Wompi productivo Y permiso de link automático: la intención de pago sí
+        // marca la generación de link. Sin el permiso, ni con Wompi listo.
         config()->set('wompi.env', 'production');
+        config()->set('marketing.ultron.payment_links_enabled', true);
 
         $this->analyze(['body' => 'No quiero pagar por la app, mándame link de pago'])
             ->assertOk()
@@ -104,9 +106,11 @@ class SalesAgentTest extends TestCase
     public function test_auto_execute_true_payment_link_runs_in_dry_run(): void
     {
         Http::fake();
-        // Wompi PRODUCTIVO: el agente puede preparar el link (dry_run porque META
-        // está off). En sandbox el link se bloquea (ver test del gate de pago).
+        // Wompi PRODUCTIVO + permiso de link automático: el agente puede preparar
+        // el link (dry_run porque META está off). En sandbox el link se bloquea
+        // (ver test del gate de pago), y sin permiso también (ver PaymentAuthority).
         config()->set('wompi.env', 'production');
+        config()->set('marketing.ultron.payment_links_enabled', true);
 
         $res = $this->analyze([
             'body' => 'link de pago por favor', 'plan_id' => $this->plan->id, 'auto_execute' => true,

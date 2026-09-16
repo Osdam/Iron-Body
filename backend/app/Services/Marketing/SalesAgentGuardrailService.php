@@ -18,9 +18,18 @@ use App\Models\MarketingLead;
  *     (los textos curados ya lo respetan; aquí se fuerza el escalado).
  *   - No activar membresías ni marcar pagos: la decisión jamás expone esas
  *     acciones; la activación es exclusiva del webhook Wompi aprobado.
+ *   - Sin permiso efectivo de link automático, `payment_link_send` se cae de la
+ *     decisión. El permiso NO se calcula aquí: lo responde
+ *     {@see SalesPaymentReadinessService::canGenerateAutomaticLink()}, que es la
+ *     única autoridad y combina «la pasarela puede cobrar» con «el negocio
+ *     autoriza a que lo ofrezca una máquina».
  */
 class SalesAgentGuardrailService
 {
+    public function __construct(
+        private readonly SalesPaymentReadinessService $paymentReadiness = new SalesPaymentReadinessService,
+    ) {}
+
     /** Aplica los guardrails a la decisión ya ensamblada y la devuelve saneada. */
     public function apply(array $decision, MarketingLead $lead): array
     {
@@ -81,6 +90,41 @@ class SalesAgentGuardrailService
         ));
         if (($decision['recommended_action'] ?? null) === SalesIntents::ACTION_ESCALATE_HUMAN) {
             $decision['recommended_action'] = SalesIntents::ACTION_REPLY;
+        }
+
+        /*
+         * Link de pago automático: si no hay permiso efectivo, la herramienta se
+         * cae de la decisión aquí, no más adelante.
+         *
+         * `analyze()` ya no la pide cuando no procede, así que esto solo actúa
+         * sobre una decisión que la trae de fuera —un modelo que la cuela en
+         * `tools_requested`, un caller que arma la suya—. Importa porque la
+         * decisión se PERSISTE: dejar la herramienta dentro y confiar en que
+         * alguien la frene al ejecutar deja en `marketing_ai_actions` un
+         * registro que dice que el agente pidió generar un link cuando no podía.
+         * El ejecutor vuelve a comprobarlo de todas formas; esto es para que lo
+         * que se guarda sea verdad.
+         *
+         * La condición NO se calcula aquí: se pregunta a la única autoridad,
+         * {@see SalesPaymentReadinessService::canGenerateAutomaticLink()}.
+         */
+        if (! $this->paymentReadiness->canGenerateAutomaticLink()) {
+            $tools = (array) ($decision['tools_requested'] ?? []);
+            $pedia = in_array(SalesIntents::TOOL_PAYMENT_LINK_SEND, $tools, true);
+
+            if ($pedia) {
+                $decision['tools_requested'] = array_values(array_filter(
+                    $tools,
+                    fn ($t) => $t !== SalesIntents::TOOL_PAYMENT_LINK_SEND,
+                ));
+                $decision['risk_flags'] = $this->withFlag($decision, 'payment_link_not_allowed');
+            }
+
+            $decision['should_generate_payment_link'] = false;
+
+            if (($decision['recommended_action'] ?? null) === SalesIntents::ACTION_GENERATE_PAYMENT_LINK) {
+                $decision['recommended_action'] = SalesIntents::ACTION_REPLY;
+            }
         }
         // should_escalate ya NO apaga la IA; queda informativo y en false.
         $decision['should_escalate'] = false;

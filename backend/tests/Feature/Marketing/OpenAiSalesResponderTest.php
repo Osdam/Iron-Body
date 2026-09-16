@@ -215,9 +215,11 @@ class OpenAiSalesResponderTest extends TestCase
 
     public function test_payment_link_auto_execute_uses_dry_run_with_openai(): void
     {
-        // Wompi PRODUCTIVO: el agente sí puede preparar el link (en dry_run porque
-        // META está off). Con sandbox, el link queda bloqueado (otro test).
+        // Wompi PRODUCTIVO + permiso de link automático: el agente sí puede
+        // preparar el link (en dry_run porque META está off). Con sandbox queda
+        // bloqueado (otro test), y sin permiso también (ver PaymentAuthorityTest).
         config()->set('wompi.env', 'production');
+        config()->set('marketing.ultron.payment_links_enabled', true);
         $this->enableOpenAi();
         $this->fakeOpenAi([
             'intent' => SalesIntents::PAYMENT_LINK_REQUEST, 'confidence' => 0.95,

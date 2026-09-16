@@ -229,8 +229,10 @@ class SalesAgentScenariosTest extends TestCase
 
     public function test_quiero_pagar_el_mensual_productive_flags_link(): void
     {
-        // Wompi productivo: sí se ofrece/genera link.
+        // Wompi productivo Y permiso de link automático: sí se ofrece/genera.
+        // Hacen falta los dos; la capacidad técnica sola ya no autoriza nada.
         config()->set('wompi.env', 'production');
+        config()->set('marketing.ultron.payment_links_enabled', true);
 
         $this->analyze(['body' => 'quiero pagar el mensual'])
             ->assertOk()
@@ -415,9 +417,11 @@ class SalesAgentScenariosTest extends TestCase
     public function test_production_wompi_prepares_link_without_activating_membership(): void
     {
         Http::fake();
-        // Wompi PRODUCTIVO + META off → link preparado en dry_run (no entregado),
-        // nunca activa membresía ni marca pago aprobado.
+        // Wompi PRODUCTIVO + permiso de link automático + META off → link
+        // preparado en dry_run (no entregado), nunca activa membresía ni marca
+        // pago aprobado.
         config()->set('wompi.env', 'production');
+        config()->set('marketing.ultron.payment_links_enabled', true);
 
         $res = $this->analyze([
             'body' => 'link de pago por favor', 'plan_id' => $this->plan->id, 'auto_execute' => true,

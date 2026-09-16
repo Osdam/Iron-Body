@@ -31,13 +31,27 @@ class SalesPaymentReadinessService
     }
 
     /**
-     * ¿Puede el agente generar/ofrecer un link de pago AUTOMÁTICO? Solo si Wompi
-     * es productivo. En sandbox/sin configurar devuelve false: NUNCA se ofrece ni
-     * se menciona un link; un asesor comparte el medio de pago.
+     * ¿Puede el AGENTE generar u ofrecer un link de pago por su cuenta?
+     *
+     * Son dos preguntas, y confundirlas fue el problema. `isProductionReady()`
+     * dice si Wompi puede cobrar de verdad; el flag dice si el negocio autoriza
+     * a que lo ofrezca una máquina sin que intervenga nadie. Mientras Wompi
+     * estuvo en sandbox las dos respuestas coincidían en «no» y la diferencia
+     * daba igual; el día que Wompi pasó a producción, el agente habría empezado
+     * a repartir links de pago él solo porque técnicamente podía.
+     *
+     * Capacidad técnica Y permiso. Las dos, o no hay link.
+     *
+     * Este es el ÚNICO punto donde se calcula esa combinación. Quien necesite
+     * saber si el agente puede ofrecer un link pregunta aquí; repetir la
+     * fórmula en otra clase es garantizar que un día se cambie una y no la otra.
+     * No afecta a los flujos que opera una persona: un administrador que genera
+     * un link desde el CRM tiene sus propios permisos y no pasa por aquí.
      */
     public function canGenerateAutomaticLink(): bool
     {
-        return $this->isProductionReady();
+        return $this->isProductionReady()
+            && (bool) config('marketing.ultron.payment_links_enabled', false);
     }
 
     /** ¿Hay configuración de Web Checkout (independiente del ambiente)? */

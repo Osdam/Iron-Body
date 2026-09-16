@@ -428,10 +428,22 @@ class SalesAgentOrchestratorService
             return ['tool' => SalesIntents::TOOL_PAYMENT_LINK_SEND, 'status' => 'skipped', 'reason' => 'missing_plan_id'];
         }
 
-        // Gate de producción: nunca generar ni entregar un link no productivo
-        // (sandbox/sin configurar). En su lugar, un asesor comparte el medio de
-        // pago. Regla incondicional: aplica incluso en dry_run.
-        if (! $this->paymentReadiness->isProductionReady()) {
+        /*
+         * Gate de pago automático. Pregunta por la capacidad EFECTIVA, no solo
+         * por si Wompi es productivo: hacen falta las dos cosas, que Wompi pueda
+         * cobrar y que el negocio haya autorizado a la máquina a ofrecerlo.
+         *
+         * Va aquí además de en `analyze()` —que ya no pide la herramienta cuando
+         * no procede— porque este método también se alcanza ejecutando una
+         * decisión construida fuera: un modelo que cuela `payment_link_send` en
+         * `tools_requested`, o un caller que llame a `execute()` con su propia
+         * lista. Una barrera que solo existe donde se decide es una barrera que
+         * se salta quien no pasa por ahí.
+         *
+         * Incondicional: aplica incluso en dry_run. En su lugar, un asesor
+         * comparte el medio de pago.
+         */
+        if (! $this->paymentReadiness->canGenerateAutomaticLink()) {
             $body = $this->replies->paymentPendingReply();
             $send = $this->dispatcher->dispatchWhatsapp($lead, $conversation->channel, $body, [
                 'kind' => 'payment_pending',
@@ -440,7 +452,12 @@ class SalesAgentOrchestratorService
             return [
                 'tool' => SalesIntents::TOOL_PAYMENT_LINK_SEND,
                 'status' => 'deferred_to_human',
-                'reason' => 'wompi_not_production',
+                // Los dos motivos se distinguen a propósito: «Wompi no está
+                // productivo» manda a revisar la pasarela, y buscar allí un
+                // problema que no existe cuesta una tarde.
+                'reason' => $this->paymentReadiness->isProductionReady()
+                    ? 'automatic_links_disabled'
+                    : 'wompi_not_production',
                 'payment_state' => $this->paymentReadiness->state(),
                 'sent' => $send['sent'],
                 'dry_run' => $send['dry_run'],
