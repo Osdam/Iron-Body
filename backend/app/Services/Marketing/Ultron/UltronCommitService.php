@@ -4,9 +4,11 @@ namespace App\Services\Marketing\Ultron;
 
 use App\Models\MarketingAiAction;
 use App\Models\MarketingConversation;
+use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
 use App\Models\Plan;
 use App\Services\Marketing\CommercialPhaseMachine;
+use App\Services\Marketing\HumanHandoffAuthority;
 use App\Services\Marketing\MarketingKnowledgeBaseService;
 use App\Services\Marketing\MarketingMessageDispatcher;
 use App\Services\Marketing\OutboundContentGuard;
@@ -15,6 +17,7 @@ use App\Services\Marketing\SalesAgentDecisionValidator;
 use App\Services\Marketing\SalesAgentGuardrailService;
 use App\Services\Marketing\SalesConversationMemoryService;
 use App\Services\Marketing\SalesConversationReplyService;
+use App\Services\Marketing\SalesGuardrailException;
 use App\Services\Marketing\SalesIntents;
 use App\Services\Observability\ChannelLog;
 use Illuminate\Database\QueryException;
@@ -67,6 +70,7 @@ class UltronCommitService
         private readonly SalesAgentDecisionValidator $validator,
         private readonly SalesAgentGuardrailService $guardrail,
         private readonly OutboundContentGuard $contentGuard,
+        private readonly HumanHandoffAuthority $handoff,
         private readonly SalesConversationMemoryService $memory,
         private readonly SalesConversationReplyService $replies,
         private readonly MarketingMessageDispatcher $dispatcher,
@@ -145,7 +149,7 @@ class UltronCommitService
 
         // 6) Transiciones legales recalculadas con los hechos de ahora.
         $currentPhase = $this->decide->currentPhase($conversation);
-        $phaseContext = $this->decide->phaseContext($conversation);
+        $phaseContext = $this->decide->phaseContext($conversation, $message);
         $allowedTransitions = $this->phases->allowedTransitions($currentPhase, $phaseContext);
 
         // 7) ¿El token decidió sobre este mismo mundo?
@@ -183,7 +187,40 @@ class UltronCommitService
         }
 
         $nextState = (string) ($proposal['next_state'] ?? $currentPhase);
-        if (! $this->phases->canTransition($currentPhase, $nextState, $phaseContext)) {
+
+        /*
+         * 8.bis) CERROJO DE DERIVACIÓN. La última barrera, y la que sigue en pie
+         * aunque Strategist, Composer, Critic y el propio n8n se equivoquen a la
+         * vez: se ejecuta ANTES de cualquier efecto —sin mensaje, sin acción,
+         * sin `needs_staff_review`, sin `human_takeover`— y no delega en nada
+         * que haya viajado desde el workflow salvo como propuesta a verificar.
+         *
+         * Va ANTES de la legalidad de la transición a propósito. El menú que
+         * firmó el token se calculó con los hechos de Laravel; el veredicto de
+         * aquí puede sumar uno más (la persona lo pidió y el motivo lo
+         * corrobora), y ese hecho extra sólo entra en la comprobación de
+         * legalidad, nunca en el fingerprint: si lo tocara, toda derivación
+         * legítima moriría como `stale_decision`.
+         */
+        $handoffDecision = $this->autorizarHandoff($conversation, $message, $proposal);
+        $handoffPropuesto = $nextState === CommercialPhaseMachine::HUMAN_HANDOFF
+            || (bool) ($proposal['human_handoff_requested'] ?? false);
+
+        if ($handoffPropuesto && ! $handoffDecision['allowed']) {
+            throw UltronCommitException::make(
+                'unauthorized_handoff',
+                'Derivar a una persona no está autorizado en esta conversación. Resuelve tú.',
+                422,
+                ['handoff_refusal' => $handoffDecision['refusal'], 'proposed_state' => $nextState],
+            );
+        }
+
+        $handoffAutorizado = $handoffPropuesto && $handoffDecision['allowed'];
+
+        $contextoLegalidad = $phaseContext;
+        $contextoLegalidad['needs_human'] = ($phaseContext['needs_human'] ?? false) || $handoffAutorizado;
+
+        if (! $this->phases->canTransition($currentPhase, $nextState, $contextoLegalidad)) {
             throw UltronCommitException::make(
                 'illegal_transition',
                 'Esa transición de fase no está permitida desde donde está la conversación.',
@@ -215,8 +252,8 @@ class UltronCommitService
             $this->contentGuard->assertSafe($draft, MarketingMessage::SENDER_AI, [
                 'endpoint' => 'internal.marketing.ai.commit',
                 'conversation_id' => (int) $conversation->id,
-            ]);
-        } catch (\App\Services\Marketing\SalesGuardrailException $e) {
+            ], $handoffAutorizado);
+        } catch (SalesGuardrailException $e) {
             throw UltronCommitException::make($e->errorCode, $e->getMessage(), 422);
         }
 
@@ -671,7 +708,7 @@ class UltronCommitService
 
         $lead->forceFill([
             'do_not_contact' => true,
-            'consent_status' => \App\Models\MarketingLead::CONSENT_DENIED,
+            'consent_status' => MarketingLead::CONSENT_DENIED,
             'consent_source' => $conversation->channel,
             'consent_at' => now(),
         ])->save();
@@ -744,5 +781,49 @@ class UltronCommitService
             'provider_message_id' => null,
             'reply_final' => null,
         ], $extra);
+    }
+
+    /**
+     * ¿Está autorizada la derivación a una persona, y por qué?
+     *
+     * El orden importa. Primero los hechos que ya decidió Laravel, porque en
+     * esos casos el motivo NO lo pone el modelo: la conversación ya la lleva
+     * alguien, o el router de entrada marcó el lead. Solo si Laravel no ha
+     * dicho nada se examina la propuesta del modelo, y entonces tiene que
+     * pasar la allowlist y —si el motivo es «me lo pidió»— corroborarse contra
+     * el texto que la persona escribió de verdad.
+     *
+     * @param  array<string,mixed>  $proposal
+     * @return array{allowed:bool, reason:?string, evidence:?string, refusal:?string}
+     */
+    private function autorizarHandoff(
+        MarketingConversation $conversation,
+        MarketingMessage $message,
+        array $proposal,
+    ): array {
+        if ((bool) $conversation->human_takeover) {
+            return [
+                'allowed' => true,
+                'reason' => HumanHandoffAuthority::POLICY_REQUIRED_ESCALATION,
+                'evidence' => 'human_takeover',
+                'refusal' => null,
+            ];
+        }
+
+        $lead = $conversation->lead;
+
+        if ($lead !== null && (string) $lead->status === MarketingLead::STATUS_NEEDS_HUMAN) {
+            return [
+                'allowed' => true,
+                'reason' => HumanHandoffAuthority::POLICY_REQUIRED_ESCALATION,
+                'evidence' => 'lead_status_needs_human',
+                'refusal' => null,
+            ];
+        }
+
+        return $this->handoff->decideProposal(
+            is_string($proposal['human_handoff_reason'] ?? null) ? $proposal['human_handoff_reason'] : null,
+            (string) $message->body,
+        );
     }
 }

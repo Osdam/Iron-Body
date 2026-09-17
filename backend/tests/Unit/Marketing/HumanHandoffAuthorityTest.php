@@ -169,4 +169,43 @@ class HumanHandoffAuthorityTest extends TestCase
 
         $this->assertTrue($d['allowed'], 'La negación era sobre el plan, no sobre hablar con alguien.');
     }
+
+    // ── Lo que el MODELO puede proponer ───────────────────────────────────────
+
+    /**
+     * Los motivos «del sistema» los afirma el backend cuando los sabe. De boca
+     * del modelo son un cheque en blanco, y por eso no se aceptan por esa vía.
+     */
+    public function test_the_model_cannot_claim_a_backend_reason(): void
+    {
+        foreach ([
+            HumanHandoffAuthority::UNRESOLVABLE_PAYMENT_INCIDENT,
+            HumanHandoffAuthority::UNRESOLVABLE_ACCOUNT_OPERATION,
+            HumanHandoffAuthority::FORMAL_COMPLAINT_REQUIRING_HUMAN,
+            HumanHandoffAuthority::POLICY_REQUIRED_ESCALATION,
+            HumanHandoffAuthority::CRITICAL_CAPABILITY_NOT_AVAILABLE,
+        ] as $motivo) {
+            $d = $this->autoridad->decideProposal($motivo, 'quiero hablar con una persona');
+            $this->assertFalse($d['allowed'], "El modelo no puede proponer {$motivo}");
+            $this->assertSame('handoff_reason_not_proposable_by_model', $d['refusal']);
+        }
+    }
+
+    /** El único motivo proponible sigue exigiendo el texto que lo respalda. */
+    public function test_the_model_may_propose_an_explicit_request_only_with_proof(): void
+    {
+        $si = $this->autoridad->decideProposal(HumanHandoffAuthority::EXPLICIT_HUMAN_REQUEST, 'quiero hablar con una persona');
+        $no = $this->autoridad->decideProposal(HumanHandoffAuthority::EXPLICIT_HUMAN_REQUEST, 'quiero pagar');
+
+        $this->assertTrue($si['allowed']);
+        $this->assertSame('hablar con una persona', $si['evidence']);
+        $this->assertFalse($no['allowed']);
+        $this->assertSame('handoff_not_corroborated', $no['refusal']);
+    }
+
+    public function test_a_proposal_without_a_reason_is_refused(): void
+    {
+        $this->assertSame('handoff_reason_missing', $this->autoridad->decideProposal(null, 'quiero hablar con una persona')['refusal']);
+        $this->assertSame('handoff_reason_missing', $this->autoridad->decideProposal('  ', 'quiero hablar con una persona')['refusal']);
+    }
 }

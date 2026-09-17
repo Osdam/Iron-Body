@@ -42,6 +42,9 @@ class OutboundHandoffGuardTest extends TestCase
             ['¿Quieres que te conecte con alguien del equipo para detalles y formas de pago?'],
             ['Te comunico con un asesor ahora mismo.'],
             ['Ya pasé tu caso al equipo para que lo revisen.'],
+            // Las dos que las fixtures de arranque daban por buenas.
+            ['Tienes razón y lo siento. Ya le paso tu caso a alguien del equipo.'],
+            ['Claro, ya le aviso a alguien del equipo para que te escriba.'],
             ['En un momento te atenderán para todo lo que necesites.'],
             ['Alguien del equipo te escribirá enseguida.'],
             ['Un asesor te contactará para ayudarte.'],
@@ -78,6 +81,11 @@ class OutboundHandoffGuardTest extends TestCase
             ['Soy un asistente automático del equipo de Iron Body.'],
             ['Claro, el Plan Mensual tiene acceso ilimitado al gimnasio y zona de pesas.'],
             ['¿Cuál es tu objetivo principal para ayudarte mejor?'],
+            // Mismos verbos, ningún traspaso.
+            ['Te aviso que el equipo confirma el medio de pago al final.'],
+            ['Paso a contarte los planes que tenemos.'],
+            ['Le digo a mi compañera que revise tu factura y te cuento.'],
+            ['Gracias por contármelo. Prefiero que lo vea alguien del equipo antes de recomendarte nada.'],
         ];
     }
 

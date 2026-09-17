@@ -8,6 +8,7 @@ use App\Models\MarketingConversation;
 use App\Models\MarketingMessage;
 use App\Services\IronGuard\IncidentRecorder;
 use App\Services\Marketing\CommercialPhaseMachine;
+use App\Services\Marketing\HumanHandoffAuthority;
 use App\Services\Marketing\SalesAgentDecisionSchema;
 use App\Services\Marketing\Ultron\UltronCommitException;
 use App\Services\Marketing\Ultron\UltronCommitService;
@@ -140,6 +141,16 @@ class UltronController extends Controller
             'proposal.main_barrier' => ['nullable', 'string', Rule::in(CommercialPhaseMachine::BARRIERS)],
             'proposal.next_best_action' => ['nullable', 'string', 'max:60'],
             'proposal.confidence' => ['nullable', 'numeric', 'min:0', 'max:1'],
+            /*
+             * Campos de DERIVACIÓN. Son una PROPUESTA, nunca una orden: el
+             * motivo tiene que estar en la allowlist para llegar siquiera al
+             * servicio, y allí se corrobora contra el mensaje real antes de
+             * producir un solo efecto. La evidencia la cita el modelo; la que
+             * vale es la que extrae el backend del texto entrante.
+             */
+            'proposal.human_handoff_requested' => ['nullable', 'boolean'],
+            'proposal.human_handoff_reason' => ['nullable', 'string', Rule::in(HumanHandoffAuthority::ALLOWED_REASONS)],
+            'proposal.human_handoff_evidence' => ['nullable', 'string', 'max:300'],
             'proposal.tools_requested' => ['nullable', 'array', 'max:4'],
             'proposal.tools_requested.*' => ['string', Rule::in(UltronDecideService::V1_ALLOWED_TOOLS)],
 

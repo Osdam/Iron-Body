@@ -174,17 +174,44 @@ class CommercialPhaseMachineTest extends TestCase
         }
     }
 
-    public function test_human_handoff_is_reachable_from_everywhere(): void
+    /**
+     * Derivar NO es una salida global. Lo fue, y por eso el menú de cada turno
+     * ofrecía «pásalo a una persona» como opción permanente y el modelo la
+     * tomaba para pagar, para inscribirse y para preguntar por entrenadores.
+     */
+    public function test_human_handoff_is_not_reachable_without_laravel_saying_so(): void
+    {
+        foreach (P::PHASES as $fase) {
+            if (in_array($fase, P::TERMINAL, true) || $fase === P::HUMAN_HANDOFF) {
+                continue;
+            }
+            $this->assertFalse(
+                $this->m->canTransition($fase, P::HUMAN_HANDOFF),
+                "Desde {$fase} NO se puede derivar sin needs_human",
+            );
+            $this->assertNotContains(P::HUMAN_HANDOFF, $this->m->allowedTransitions($fase));
+        }
+    }
+
+    /** Y con el hecho puesto por Laravel, sí, desde cualquier fase viva. */
+    public function test_human_handoff_is_reachable_from_everywhere_when_laravel_authorises_it(): void
     {
         foreach (P::PHASES as $fase) {
             if (in_array($fase, P::TERMINAL, true)) {
                 continue;
             }
             $this->assertTrue(
-                $this->m->canTransition($fase, P::HUMAN_HANDOFF),
-                "Desde {$fase} se tiene que poder pedir un humano",
+                $this->m->canTransition($fase, P::HUMAN_HANDOFF, ['needs_human' => true]),
+                "Desde {$fase} se tiene que poder derivar cuando Laravel lo autoriza",
             );
         }
+    }
+
+    /** Quien ya está derivado no se queda sin transición legal si el hecho se apaga. */
+    public function test_a_conversation_already_handed_off_may_stay_there(): void
+    {
+        $this->assertTrue($this->m->canTransition(P::HUMAN_HANDOFF, P::HUMAN_HANDOFF));
+        $this->assertContains(P::HUMAN_HANDOFF, $this->m->allowedTransitions(P::HUMAN_HANDOFF));
     }
 
     public function test_do_not_contact_in_context_closes_every_other_door(): void

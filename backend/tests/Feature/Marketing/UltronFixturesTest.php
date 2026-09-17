@@ -9,10 +9,12 @@ use App\Models\MarketingMessage;
 use App\Models\PaymentTransaction;
 use App\Models\Plan;
 use App\Services\Marketing\CommercialPhaseMachine as P;
+use App\Services\Marketing\HumanHandoffAuthority;
 use App\Services\Marketing\OutboundContentGuard;
 use App\Services\Marketing\SalesIntents;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
@@ -79,14 +81,14 @@ class UltronFixturesTest extends TestCase
         ]);
     }
 
-    private function decide(MarketingMessage $m): \Illuminate\Testing\TestResponse
+    private function decide(MarketingMessage $m): TestResponse
     {
         return $this->postJson('/api/internal/marketing/ai/decide', [
             'conversation_id' => $this->conversation->id, 'message_id' => $m->id,
         ], $this->h());
     }
 
-    private function commit(MarketingMessage $m, array $proposal, array $critic = [], ?string $token = null): \Illuminate\Testing\TestResponse
+    private function commit(MarketingMessage $m, array $proposal, array $critic = [], ?string $token = null): TestResponse
     {
         $token ??= $this->decide($m)->json('decide_token');
 
@@ -235,21 +237,43 @@ class UltronFixturesTest extends TestCase
 
     // ── 9-11 · seguridad y consentimiento ─────────────────────────────────────
 
+    /**
+     * Una lesión pide OJOS humanos, no que la conversación se rompa: el agente
+     * no diagnostica, avisa al equipo (`staff_review_pending`) y sigue siendo
+     * quien contesta. Derivar la fase es otra cosa y no está autorizada aquí.
+     */
     public function test_fixture_09_lesion_escala(): void
     {
         Http::fake();
         $m = $this->inbound('Tengo una lesion en la rodilla', 'w.09');
 
-        $this->commit($m, ['next_state' => P::HUMAN_HANDOFF, 'intent' => SalesIntents::MEDICAL_RISK_ESCALATION,
+        $this->commit($m, ['next_state' => P::NEW_LEAD, 'intent' => SalesIntents::MEDICAL_RISK_ESCALATION,
             'strategy_goal' => 'escalate', 'next_best_action' => 'escalate_human',
             'tools_requested' => [SalesIntents::TOOL_STAFF_REVIEW],
             'reply_draft' => 'Gracias por contarmelo. Prefiero que lo vea alguien del equipo antes de recomendarte nada.'])
             ->assertOk();
 
         $c = $this->conversation->fresh();
-        $this->assertSame(P::HUMAN_HANDOFF, $c->commercial_phase);
+        $this->assertNotSame(P::HUMAN_HANDOFF, $c->commercial_phase);
         $this->assertTrue((bool) $c->staff_review_pending);
-        $this->assertSame(SalesIntents::LEAD_STAGE_NEEDS_HUMAN, $c->lead_stage);
+        $this->assertFalse((bool) $c->human_takeover);
+    }
+
+    /** La misma lesión con el modelo empeñado en derivar: no pasa, y no deja rastro. */
+    public function test_fixture_09b_lesion_no_autoriza_derivar(): void
+    {
+        Http::fake();
+        $m = $this->inbound('Tengo una lesion en la rodilla', 'w.09b');
+
+        $this->commit($m, ['next_state' => P::HUMAN_HANDOFF, 'intent' => SalesIntents::MEDICAL_RISK_ESCALATION,
+            'tools_requested' => [SalesIntents::TOOL_STAFF_REVIEW],
+            'reply_draft' => 'Gracias por contarmelo. Prefiero que lo vea alguien del equipo antes de recomendarte nada.'])
+            ->assertStatus(422)->assertJsonPath('code', 'unauthorized_handoff');
+
+        $c = $this->conversation->fresh();
+        $this->assertNotSame(P::HUMAN_HANDOFF, $c->commercial_phase);
+        $this->assertFalse((bool) $c->staff_review_pending);
+        $this->assertSame(0, MarketingMessage::where('direction', MarketingMessage::DIRECTION_OUTBOUND)->count());
     }
 
     public function test_fixture_10_quiere_humano(): void
@@ -257,10 +281,18 @@ class UltronFixturesTest extends TestCase
         Http::fake();
         $m = $this->inbound('Quiero hablar con una persona', 'w.10');
 
+        // El menú de decide ya lo ofrece: Laravel leyó la petición en el texto.
+        $this->assertContains(P::HUMAN_HANDOFF, $this->decide($m)->json('allowed_transitions'));
+
         $this->commit($m, ['next_state' => P::HUMAN_HANDOFF, 'intent' => SalesIntents::HUMAN_REQUEST,
+            'human_handoff_requested' => true,
+            'human_handoff_reason' => HumanHandoffAuthority::EXPLICIT_HUMAN_REQUEST,
+            'human_handoff_evidence' => 'hablar con una persona',
             'tools_requested' => [SalesIntents::TOOL_STAFF_REVIEW],
             'reply_draft' => 'Claro, ya le aviso a alguien del equipo para que te escriba.'])
             ->assertOk();
+
+        $this->assertSame(P::HUMAN_HANDOFF, $this->conversation->fresh()->commercial_phase);
 
         $this->assertTrue((bool) $this->conversation->fresh()->staff_review_pending);
         // La IA NO se apaga sola: eso solo lo hace una persona desde el CRM.
@@ -282,17 +314,38 @@ class UltronFixturesTest extends TestCase
         $this->assertSame(0, MarketingMessage::where('direction', 'outbound')->count());
     }
 
+    /**
+     * Una queja se atiende, no se traspasa. El equipo se entera por
+     * `staff_review_pending`; la persona recibe una respuesta, no una promesa
+     * de que «alguien» le escribirá.
+     */
     public function test_fixture_12_usuario_molesto(): void
     {
         Http::fake();
         $m = $this->inbound('Esto es una porqueria, llevo dos dias esperando respuesta', 'w.12');
 
-        $this->commit($m, ['next_state' => P::HUMAN_HANDOFF, 'intent' => SalesIntents::COMPLAINT,
+        $this->commit($m, ['next_state' => P::NEW_LEAD, 'intent' => SalesIntents::COMPLAINT,
             'strategy_goal' => 'recover_satisfaction', 'tools_requested' => [SalesIntents::TOOL_STAFF_REVIEW],
-            'reply_draft' => 'Tienes razon y lo siento. Ya le paso tu caso a alguien del equipo.'])
+            'reply_draft' => 'Tienes razon y lo siento. Cuentame que necesitabas y lo resolvemos ahora mismo.'])
             ->assertOk();
 
-        $this->assertTrue((bool) $this->conversation->fresh()->staff_review_pending);
+        $c = $this->conversation->fresh();
+        $this->assertTrue((bool) $c->staff_review_pending);
+        $this->assertNotSame(P::HUMAN_HANDOFF, $c->commercial_phase);
+    }
+
+    /** La frase original de esta fixture era una promesa de traspaso: hoy no sale. */
+    public function test_fixture_12b_queja_sin_promesa_de_traspaso(): void
+    {
+        Http::fake();
+        $m = $this->inbound('Esto es una porqueria, llevo dos dias esperando respuesta', 'w.12b');
+
+        $this->commit($m, ['next_state' => P::NEW_LEAD, 'intent' => SalesIntents::COMPLAINT,
+            'tools_requested' => [SalesIntents::TOOL_STAFF_REVIEW],
+            'reply_draft' => 'Tienes razon y lo siento. Ya le paso tu caso a alguien del equipo.'])
+            ->assertStatus(422)->assertJsonPath('code', OutboundContentGuard::CODE_UNAUTHORIZED_HANDOFF);
+
+        $this->assertSame(0, MarketingMessage::where('direction', MarketingMessage::DIRECTION_OUTBOUND)->count());
     }
 
     // ── 13-14 · lo que no existe no se inventa ────────────────────────────────

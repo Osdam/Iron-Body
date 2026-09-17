@@ -63,6 +63,18 @@ final class HumanHandoffAuthority
     public const NEEDS_CORROBORATION = [self::EXPLICIT_HUMAN_REQUEST];
 
     /**
+     * Motivos que el MODELO puede proponer. Sólo uno.
+     *
+     * Es la otra cara de la misma frase: si los demás motivos «los conoce el
+     * backend», entonces el backend los afirma cuando los sabe —una persona al
+     * mando, un lead marcado por el router— y el modelo no los afirma nunca.
+     * Aceptarlos de su boca era un cheque en blanco: bastaba escribir
+     * `policy_required_escalation` en un turno cualquiera para derivar sin
+     * que nadie contrastara nada.
+     */
+    public const MODEL_PROPOSABLE = [self::EXPLICIT_HUMAN_REQUEST];
+
+    /**
      * Pedir hablar con una persona, dicho como se dice de verdad por WhatsApp.
      *
      * Van sin tildes a propósito: el texto se normaliza antes de comparar,
@@ -124,6 +136,31 @@ final class HumanHandoffAuthority
         }
 
         return ['allowed' => true, 'reason' => $motivo, 'evidence' => $prueba, 'refusal' => null];
+    }
+
+    /**
+     * Lo mismo, pero para un motivo que PROPONE el modelo.
+     *
+     * La diferencia con {@see decide()} es quién habla. Aquella responde a
+     * hechos que ya afirmó Laravel; ésta a una etiqueta que llegó desde n8n,
+     * y por eso sólo admite los motivos que el backend puede comprobar por su
+     * cuenta leyendo el mensaje.
+     *
+     * @return array{allowed:bool, reason:?string, evidence:?string, refusal:?string}
+     */
+    public function decideProposal(?string $motivoPropuesto, ?string $mensajeEntrante): array
+    {
+        $motivo = is_string($motivoPropuesto) ? trim(strtolower($motivoPropuesto)) : '';
+
+        if ($motivo === '') {
+            return $this->no('handoff_reason_missing');
+        }
+
+        if (! in_array($motivo, self::MODEL_PROPOSABLE, true)) {
+            return $this->no('handoff_reason_not_proposable_by_model');
+        }
+
+        return $this->decide($motivo, $mensajeEntrante);
     }
 
     /**

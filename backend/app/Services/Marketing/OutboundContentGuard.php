@@ -87,7 +87,8 @@ class OutboundContentGuard
         '/\bquieres?\s+que\s+te\s+(pase|conecte|comunique|contacte)\s+con\b/u',
         '/\ben\s+un\s+momento\s+te\s+(atender|contactar|escribir|llamar)/u',
         '/\b(alguien|una\s+persona|un\s+asesor|el\s+equipo|recepcion)\s+(del\s+equipo\s+)?(te|le)\s+(atendera|contactara|escribira|llamara|explicara|ayudara|dira)/u',
-        '/\bpas(o|e|amos|aremos|are)\s+tu\s+(caso|consulta|mensaje|solicitud)\s+al\s+(equipo|area)\b/u',
+        '/\bpas(o|e|amos|aremos|are)\s+tu\s+(caso|consulta|mensaje|solicitud)\s+a\s*(l|\s+alguien|\s+una\s+persona|\s+un\s+asesor)\b/u',
+        '/\b(aviso|avisare|avisamos|digo|dire|escribo)\s+a\s+(alguien|una\s+persona|un\s+asesor|el\s+equipo)\b[^.!?]{0,40}\bpara\s+que\s+te\s+(escriba|llame|contacte|atienda|explique|ayude)\b/u',
         '/\bte\s+(atendera|contactara|escribira|llamara)\s+(alguien|una\s+persona|un\s+asesor)/u',
     ];
 
@@ -155,9 +156,9 @@ class OutboundContentGuard
      *
      * @throws SalesGuardrailException cuando el texto de máquina no puede salir.
      */
-    public function assertSafe(string $body, string $senderType, array $context = []): void
+    public function assertSafe(string $body, string $senderType, array $context = [], bool $handoffAllowed = false): void
     {
-        $result = $this->inspect($body, $senderType);
+        $result = $this->inspect($body, $senderType, $handoffAllowed);
 
         if ($result['safe']) {
             return;

@@ -3,8 +3,10 @@
 namespace App\Services\Marketing\Ultron;
 
 use App\Models\MarketingConversation;
+use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
 use App\Services\Marketing\CommercialPhaseMachine;
+use App\Services\Marketing\HumanHandoffAuthority;
 use App\Services\Marketing\MarketingKnowledgeBaseService;
 use App\Services\Marketing\SalesAgentOrchestratorService;
 use App\Services\Marketing\SalesIntents;
@@ -50,6 +52,7 @@ class UltronDecideService
         private readonly MarketingKnowledgeBaseService $knowledge,
         private readonly SalesPaymentReadinessService $paymentReadiness,
         private readonly UltronDecideToken $tokens,
+        private readonly HumanHandoffAuthority $handoff = new HumanHandoffAuthority,
     ) {}
 
     /**
@@ -123,7 +126,7 @@ class UltronDecideService
      *
      * @return array<string,mixed>
      */
-    public function phaseContext(MarketingConversation $conversation): array
+    public function phaseContext(MarketingConversation $conversation, ?MarketingMessage $message = null): array
     {
         $lead = $conversation->lead;
 
@@ -131,7 +134,40 @@ class UltronDecideService
             'do_not_contact' => $lead !== null && ! $lead->canReplyReactively(),
             'human_takeover' => (bool) $conversation->human_takeover,
             'can_offer_link' => $this->paymentReadiness->canGenerateAutomaticLink(),
+            'needs_human' => $this->needsHuman($conversation, $message),
         ];
+    }
+
+    /**
+     * ¿Está autorizada HOY la derivación a una persona en esta conversación?
+     *
+     * Son HECHOS de Laravel, nunca la etiqueta del modelo:
+     *
+     *   1. Ya hay una persona al mando (`human_takeover`).
+     *   2. Laravel marcó el lead como `needs_human` — lo hace el router de
+     *      entrada ante queja, lesión, incidente de pago o regla de política.
+     *   3. La persona PIDIÓ un humano en el mensaje de este turno, corroborado
+     *      contra el texto real por {@see HumanHandoffAuthority}.
+     *
+     * Se calcula sobre `(conversación, mensaje)`, los mismos dos objetos que
+     * tienen decide y commit. No puede depender de la propuesta: el token de
+     * decide firma la lista de transiciones y commit la recalcula, así que si
+     * el resultado variase entre los dos extremos toda decisión legítima
+     * moriría como `stale_decision`.
+     */
+    private function needsHuman(MarketingConversation $conversation, ?MarketingMessage $message): bool
+    {
+        if ((bool) $conversation->human_takeover) {
+            return true;
+        }
+
+        $lead = $conversation->lead;
+        if ($lead !== null && (string) $lead->status === MarketingLead::STATUS_NEEDS_HUMAN) {
+            return true;
+        }
+
+        return $message !== null
+            && $this->handoff->peticionDeHumanoEn((string) $message->body) !== null;
     }
 
     /**
@@ -154,7 +190,7 @@ class UltronDecideService
         ]);
 
         $phase = $this->currentPhase($conversation);
-        $transitions = $this->phases->allowedTransitions($phase, $this->phaseContext($conversation));
+        $transitions = $this->phases->allowedTransitions($phase, $this->phaseContext($conversation, $message));
         // El MENÚ del que ULTRON puede elegir, no un filtrado de lo que Laravel
         // ya propuso: lo que la decisión base pidiera viaja aparte, dentro de
         // `decision`. Mezclar las dos cosas haría que el techo dependiera de la

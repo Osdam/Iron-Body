@@ -89,12 +89,17 @@ final class CommercialPhaseMachine
     /**
      * Alcanzables desde cualquier fase no terminal.
      *
-     * Las decide la persona, no el embudo: pedir que no le escriban, pedir un
-     * humano, o cerrarse en banda. Ninguna depende de por dónde iba la venta.
+     * Las decide la persona, no el embudo: pedir que no le escriban o cerrarse
+     * en banda. Ninguna depende de por dónde iba la venta.
+     *
+     * HUMAN_HANDOFF NO está aquí. Estuvo, y eso lo hacía alcanzable en todos y
+     * cada uno de los turnos: el menú que ve el modelo ofrecía «derivar» como
+     * salida permanente, y el modelo la tomaba. Ahora es alcanzable solo cuando
+     * `needs_human` lo dice, que es lo que este archivo llevaba prometiendo en
+     * su propia documentación sin cumplirlo.
      */
     private const ALWAYS_REACHABLE = [
         self::DO_NOT_CONTACT,
-        self::HUMAN_HANDOFF,
         self::LOST,
     ];
 
@@ -258,7 +263,9 @@ final class CommercialPhaseMachine
      *
      *   do_not_contact  el lead pidió que no le escriban → única salida.
      *   human_takeover  la lleva una persona → no se avanza la venta sola.
-     *   needs_human     una regla pide ojos humanos → HUMAN_HANDOFF disponible.
+     *   needs_human     Laravel autorizó la derivación → HUMAN_HANDOFF es un
+     *                   destino legal. Sin ese hecho NO lo es: es la única
+     *                   fase que el modelo no puede alcanzar por su cuenta.
      *   can_offer_link  sin permiso de link automático, PAYMENT_HANDOFF no es
      *                   un destino válido: no hay nada que entregar.
      *
@@ -287,6 +294,12 @@ final class CommercialPhaseMachine
             [$current],                       // quedarse es siempre legal
             self::TRANSITIONS[$current] ?? [],
             self::ALWAYS_REACHABLE,
+            /*
+             * Derivar a una persona no es una fase del embudo: es una excepción
+             * que autoriza Laravel. Sin `needs_human` no es un destino, y el
+             * menú que recibe el modelo no la menciona siquiera.
+             */
+            ($context['needs_human'] ?? false) === true ? [self::HUMAN_HANDOFF] : [],
         );
 
         /*
