@@ -75,6 +75,7 @@ class UltronCommitService
         private readonly ReferenceResolver $references,
         private readonly NoveltyGuard $novelty,
         private readonly CustomerIntelligenceService $customers,
+        private readonly ComposerStyleGuard $style,
         private readonly SalesConversationMemoryService $memory,
         private readonly SalesConversationReplyService $replies,
         private readonly MarketingMessageDispatcher $dispatcher,
@@ -299,6 +300,33 @@ class UltronCommitService
         $replyFinal = $this->placeholders->resolve($sanitized['reply'], $plan);
 
         /*
+         * 10.pre) TONO. La persona debe sentir que la ayudan, no que la empujan.
+         * Urgencia y escasez inventadas, culpa, vergüenza corporal y testimonios
+         * que nadie verificó NO salen: es contenido, como un precio inventado, y
+         * se rechaza antes de cualquier efecto. El folleto, las viñetas, las
+         * muletillas y la longitud se anotan para medirlos; el Critic los juzga.
+         */
+        $planesVendibles = $this->memoryService->sellablePlansForMemory();
+        $estilo = $this->style->inspect(
+            $replyFinal,
+            $planesVendibles,
+            $this->style->askedForAllPlans((string) $message->body),
+            $this->style->askedForDetail((string) $message->body),
+        );
+        if ($estilo['hard'] !== []) {
+            ChannelLog::warning('outbound.style.blocked', [
+                'endpoint' => 'internal.marketing.ai.commit', 'conversation_id' => (int) $conversation->id,
+                'code' => ComposerStyleGuard::CODE_PRESSURE, 'signals' => $estilo['hard'], 'body_length' => mb_strlen($replyFinal),
+            ]);
+            throw UltronCommitException::make(
+                ComposerStyleGuard::CODE_PRESSURE,
+                'La respuesta presiona a la persona: urgencia o escasez inventadas, culpa o testimonios sin fuente.',
+                422,
+                ['signals' => $estilo['hard']],
+            );
+        }
+
+        /*
          * 10.bis) NOVEDAD DURA. Una respuesta casi idéntica a una que ya salió
          * no vuelve a salir: así se mandó seis veces el mismo precio a la misma
          * persona. Se compara el texto FINAL (con el precio ya puesto) contra
@@ -327,7 +355,7 @@ class UltronCommitService
         $resolution = $this->references->resolve(
             (string) $message->body,
             $memoriaPrevia,
-            $this->memoryService->sellablePlansForMemory(),
+            $planesVendibles,
         );
 
         /*
@@ -401,10 +429,14 @@ class UltronCommitService
         if (StrategyContract::asksDiscoveryToReadyBuyer($replyFinal, $hints)) {
             $decision['risk_flags'] = array_values(array_unique(array_merge((array) ($decision['risk_flags'] ?? []), ['discovery_question_to_ready_buyer'])));
         }
+        if ($estilo['soft'] !== []) {
+            $decision['risk_flags'] = array_values(array_unique(array_merge((array) ($decision['risk_flags'] ?? []), array_map(fn ($s) => 'style:'.$s, $estilo['soft']))));
+        }
 
         $action = $this->persist($conversation, $message, $payload, $decision, $nextState, $plan, [
             'source' => 'external_draft',
             'strategy' => StrategyContract::fromProposal($proposal) ?: null,
+            'plans_mentioned' => $estilo['plans_mentioned'],
             'strategy_hints' => ['hot_lead_fast_path' => $hints['hot_lead_fast_path'], 'lifecycle_mode' => $hints['lifecycle_mode']],
             'price_enriched' => $plan !== null && $replyFinal !== $sanitized['reply'],
             'reference_resolution' => $resolution['type'],

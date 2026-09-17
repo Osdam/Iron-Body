@@ -1,0 +1,135 @@
+<?php
+
+namespace Tests\Unit\Marketing;
+
+use App\Services\Marketing\Ultron\ComposerStyleGuard;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
+
+class ComposerStyleGuardTest extends TestCase
+{
+    private const PLANS = [['id' => 2, 'name' => 'Plan Semana'], ['id' => 4, 'name' => 'Plan Mensual'], ['id' => 5, 'name' => 'Trimestre'], ['id' => 6, 'name' => 'Semestre'], ['id' => 7, 'name' => 'Anualidad'], ['id' => 8, 'name' => 'Élite']];
+
+    private ComposerStyleGuard $g;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->g = new ComposerStyleGuard;
+    }
+
+    public static function presion(): array
+    {
+        return [
+            ['Quedan los últimos cupos del mes, ¡aprovecha ya!', 'fake_urgency'],
+            ['Este precio es solo por hoy.', 'fake_urgency'],
+            ['El precio sube la próxima semana, decide ahora.', 'fake_urgency'],
+            ['Sin excusas: todo está en la mente.', 'guilt_or_body_shaming'],
+            ['A tu edad ya deberías estar entrenando.', 'guilt_or_body_shaming'],
+            ['Si de verdad quisieras cambiar, ya habrías empezado.', 'guilt_or_body_shaming'],
+            ['El 90% de nuestros clientes bajan 5 kilos el primer mes.', 'invented_testimonial'],
+            ['Miles de personas ya lo lograron con nosotros.', 'invented_testimonial'],
+            // Los que la revisión independiente encontró pasando.
+            ['¿No te da vergüenza seguir así?', 'guilt_or_body_shaming'],
+            ['Nuestros clientes dicen que bajan 10 kilos en un mes.', 'invented_testimonial'],
+            ['María, una clienta nuestra, bajó 12 kilos en dos meses.', 'invented_testimonial'],
+            ['9 de cada 10 clientes renuevan porque ven resultados.', 'invented_testimonial'],
+            ['La mayoría de nuestros socios bajan 8 kilos.', 'invented_testimonial'],
+            ['Es ahora o nunca.', 'fake_urgency'],
+            ['No te quedes sin tu cupo.', 'fake_urgency'],
+            ['Quedan pocos cupos, decide ya.', 'fake_urgency'],
+            ['Estás gordo y lo sabes.', 'guilt_or_body_shaming'],
+        ];
+    }
+
+    #[DataProvider('presion')]
+    public function test_pressure_never_goes_out(string $texto, string $code): void
+    {
+        $r = $this->g->inspect($texto, self::PLANS);
+
+        $this->assertContains($code, $r['hard'], "«{$texto}»");
+    }
+
+    public static function consultivo(): array
+    {
+        return [
+            ['Para empezar vienes con tu documento, te hacen la valoración inicial y el equipo confirma el medio de pago. ¿Qué día te queda bien pasar?'],
+            ['Te entiendo: empezar da un poco de nervios. El primer día alguien del equipo técnico te acompaña en la valoración.'],
+            ['El Plan Mensual te da acceso ilimitado y asesoría semi personalizada. Si quieres comparar con el Trimestre, te cuento.'],
+            ['La verdad es que hoy el gimnasio está lleno a las 6 pm; a las 9 am está más tranquilo.'],
+            ['Cuando decidas, me dices y te explico los pasos. Sin prisa.'],
+            // Hechos que la revisión independiente vio bloqueados: vencimiento, cupos reales, promo real, horario, pago, salud, reencuadres.
+            ['Tu plan termina mañana; si renuevas antes sigues sin pausa.'],
+            ['Hoy es el último día de tu membresía.'],
+            ['En los últimos días ha venido más gente por la mañana.'],
+            ['Tu membresía se acaba hoy, pero puedes renovar cualquier día.'],
+            ['Te recomiendo venir a las 5:30, antes de que se llene.'],
+            ['Quedan solo 2 cupos en spinning de las 6 am; la de las 7 tiene más espacio.'],
+            ['Te quedan pocos días de plan: vence el viernes.'],
+            ['Sí, aprovecha ahora que está tranquilo; a las 6 pm se llena.'],
+            ['Hoy es festivo, atendemos solo hasta el mediodía.'],
+            ['La promo de septiembre va solo hasta el 30; después el valor vuelve al normal.'],
+            ['Ya deberías haber recibido el link de pago; si no, te lo reenvío.'],
+            ['A tu edad el trabajo de fuerza es muy recomendable, con supervisión.'],
+            ['No es cuestión de voluntad, es de tener un plan.'],
+            ['No todo está en la mente: el cuerpo necesita descanso.'],
+            ['Aquí nadie te va a juzgar por tu cuerpo; empezamos donde estés.'],
+            ['Me gusta esa actitud: nada de excusas, pero tampoco de castigos.'],
+        ];
+    }
+
+    #[DataProvider('consultivo')]
+    public function test_helpful_language_is_not_pressure(string $texto): void
+    {
+        $r = $this->g->inspect($texto, self::PLANS);
+
+        $this->assertSame([], $r['hard'], "«{$texto}»");
+    }
+
+    public function test_dumping_the_catalogue_is_flagged_unless_asked(): void
+    {
+        $folleto = 'Tenemos Plan Semana, Plan Mensual, Trimestre, Semestre, Anualidad y Élite. ¿Cuál te interesa?';
+
+        $this->assertContains('plan_dump', $this->g->inspect($folleto, self::PLANS)['soft']);
+        $this->assertSame(6, $this->g->inspect($folleto, self::PLANS)['plans_mentioned']);
+        $this->assertNotContains('plan_dump', $this->g->inspect($folleto, self::PLANS, askedForAll: true)['soft']);
+        $this->assertNotContains('plan_dump', $this->g->inspect('El Plan Mensual o el Trimestre; depende de cuánto tiempo quieras comprometerte.', self::PLANS)['soft']);
+        $this->assertTrue($this->g->askedForAllPlans('qué planes tienen?'));
+        $this->assertFalse($this->g->askedForAllPlans('cuánto vale el mensual?'));
+    }
+
+    /** Lo ambiguo se anota para el Critic, no se corta. */
+    public function test_ambiguous_urgency_and_body_references_are_flags_not_blocks(): void
+    {
+        $r = $this->g->inspect('Tu plan termina mañana; a tu edad conviene no parar.', self::PLANS);
+        $this->assertSame([], $r['hard']);
+        $this->assertContains('urgency_wording', $r['soft']);
+        $this->assertContains('age_or_body_reference', $r['soft']);
+    }
+
+    /** Emoji por grafema; viñetas reales de WhatsApp; planes sólo cuando se nombran como planes. */
+    public function test_graphemes_bullets_and_plan_names_are_counted_the_way_people_read_them(): void
+    {
+        $this->assertNotContains('emoji_excess', $this->g->inspect('Vamos 💪🏽🔥', self::PLANS)['soft'], 'dos emoji, uno con tono de piel');
+        $this->assertContains('emoji_excess', $this->g->inspect('Mira ⭐⭐⭐⭐⭐', self::PLANS)['soft']);
+        $this->assertContains('emoji_excess', $this->g->inspect('Somos de Neiva 🇨🇴🇨🇴🇨🇴🇨🇴🇨🇴', self::PLANS)['soft']);
+        $this->assertContains('bullet_abuse', $this->g->inspect("Incluye:\n— acceso\n— clases\n— valoración\n— asesoría\n— casilleros", self::PLANS)['soft']);
+        $this->assertContains('bullet_abuse', $this->g->inspect("Incluye:\n✅ acceso\n✅ clases\n✅ valoración\n✅ asesoría\n✅ casilleros", self::PLANS)['soft']);
+        $this->assertSame(0, $this->g->inspect('esta semana no puedo, mejor el otro semestre', self::PLANS)['plans_mentioned']);
+        $this->assertSame(2, $this->g->inspect('El Plan Mensual o el Trimestre; depende de ti.', self::PLANS)['plans_mentioned']);
+        $this->assertTrue($this->g->askedForAllPlans('quiero info de los planes'));
+        $this->assertFalse($this->g->askedForDetail('el plan completo'), '«completo» solo no pide detalle');
+    }
+
+    public function test_bot_phrases_bullets_emoji_and_brochure_length_are_flagged(): void
+    {
+        $this->assertContains('bot_phrase', $this->g->inspect('Listo. ¿Hay algo más en lo que pueda ayudarte?', self::PLANS)['soft']);
+        $this->assertContains('bot_phrase', $this->g->inspect('No dudes en consultarme.', self::PLANS)['soft']);
+        $this->assertContains('bullet_abuse', $this->g->inspect("Incluye:\n- a\n- b\n- c\n- d\n- e", self::PLANS)['soft']);
+        $this->assertContains('emoji_excess', $this->g->inspect('Vamos 💪🔥🙌 con toda', self::PLANS)['soft']);
+        $largo = str_repeat('El plan incluye acceso al gimnasio y clases. ', 25);
+        $this->assertContains('brochure_length', $this->g->inspect($largo, self::PLANS)['soft']);
+        $this->assertNotContains('brochure_length', $this->g->inspect($largo, self::PLANS, askedForDetail: true)['soft']);
+        $this->assertTrue($this->g->askedForDetail('explícame bien todo lo que incluye'));
+    }
+}

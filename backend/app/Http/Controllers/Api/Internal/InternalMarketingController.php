@@ -15,6 +15,7 @@ use App\Services\Marketing\OutboundContentGuard;
 use App\Services\Marketing\SalesAgentOrchestratorService;
 use App\Services\Marketing\SalesGuardrailException;
 use App\Services\Marketing\SalesPaymentGuardrailService;
+use App\Services\Marketing\Ultron\ComposerStyleGuard;
 use App\Services\Marketing\WompiPaymentLinkService;
 use App\Services\Meta\MetaDoctorService;
 use Illuminate\Http\JsonResponse;
@@ -210,6 +211,15 @@ class InternalMarketingController extends Controller
                 'endpoint' => 'internal.marketing.send_message',
                 'lead_id' => $lead->id,
             ]);
+            // Mismo criterio de tono que /ai/commit: las DOS puertas por las que
+            // entra texto de máquina comparten filtro y código de error.
+            $estilo = app(ComposerStyleGuard::class)->inspect(
+                $data['body'],
+                Plan::query()->sellable()->get(['id', 'name'])->map(fn (Plan $p) => ['id' => (int) $p->id, 'name' => (string) $p->name])->all(),
+            );
+            if ($estilo['hard'] !== []) {
+                throw SalesGuardrailException::make(ComposerStyleGuard::CODE_PRESSURE, 'La respuesta presiona a la persona: urgencia o escasez inventadas, culpa o testimonios sin fuente.', escalate: true);
+            }
         } catch (SalesGuardrailException $e) {
             return response()->json([
                 'ok' => false,
