@@ -45,6 +45,12 @@ class OutboundHandoffGuardTest extends TestCase
             // Las dos que las fixtures de arranque daban por buenas.
             ['Tienes razón y lo siento. Ya le paso tu caso a alguien del equipo.'],
             ['Claro, ya le aviso a alguien del equipo para que te escriba.'],
+            // Las cuatro que el reviewer independiente encontró fuera de la alternancia.
+            ['Ya paso tu caso a una asesora del equipo.'],
+            ['Paso tu caso a la coordinadora.'],
+            ['Le aviso a recepción para que te escriba.'],
+            ['Le digo a mi compañera para que te contacte.'],
+            ['Te escribirá una entrenadora para coordinar.'],
             ['En un momento te atenderán para todo lo que necesites.'],
             ['Alguien del equipo te escribirá enseguida.'],
             ['Un asesor te contactará para ayudarte.'],
@@ -86,6 +92,9 @@ class OutboundHandoffGuardTest extends TestCase
             ['Paso a contarte los planes que tenemos.'],
             ['Le digo a mi compañera que revise tu factura y te cuento.'],
             ['Gracias por contármelo. Prefiero que lo vea alguien del equipo antes de recomendarte nada.'],
+            // Mismo verbo, ningún humano: «al sistema» no es «al equipo».
+            ['Paso tu caso al sistema de reservas y queda agendado.'],
+            ['Tenemos un entrenador de planta en cada turno y una entrenadora para el grupo de la mañana.'],
         ];
     }
 

@@ -10,6 +10,7 @@ use App\Models\Plan;
 use App\Services\Marketing\CommercialPhaseMachine as P;
 use App\Services\Marketing\HumanHandoffAuthority;
 use App\Services\Marketing\OutboundContentGuard;
+use App\Services\Marketing\SalesConversationReplyService;
 use App\Services\Marketing\SalesIntents;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -253,6 +254,72 @@ class UltronHandoffHardGuardTest extends TestCase
         $this->assertSame(P::HUMAN_HANDOFF, $c->commercial_phase);
         $this->assertTrue((bool) $c->staff_review_pending);
         $this->assertSame(1, MarketingMessage::where('direction', MarketingMessage::DIRECTION_OUTBOUND)->count());
+    }
+
+    /**
+     * Hallazgo del reviewer: la persona lo pidió, el menú lo ofreció, y el
+     * modelo propuso derivar pero OLVIDÓ el motivo. Laravel corrobora por sí
+     * mismo: la petición está en el texto, así que se deriva igual. Lo
+     * contrario sería castigar con silencio a quien pidió hablar con alguien.
+     */
+    public function test_a_real_request_is_honoured_even_if_the_model_forgets_the_reason(): void
+    {
+        $m = $this->inbound('Quiero hablar con una persona, por favor', 'g.10b');
+
+        $this->commit($m, ['next_state' => P::HUMAN_HANDOFF, 'intent' => SalesIntents::HUMAN_REQUEST,
+            'tools_requested' => [SalesIntents::TOOL_STAFF_REVIEW],
+            'reply_draft' => 'Claro. Ya le aviso a alguien del equipo para que te escriba.'])
+            ->assertOk();
+
+        $c = $this->conversation->fresh();
+        $this->assertSame(P::HUMAN_HANDOFF, $c->commercial_phase);
+        $this->assertTrue((bool) $c->staff_review_pending);
+        $this->assertSame(1, MarketingMessage::where('direction', MarketingMessage::DIRECTION_OUTBOUND)->count());
+    }
+
+    /** Y al revés: el motivo del modelo no concede lo que el texto no concede. */
+    public function test_the_model_reason_never_grants_more_than_the_text_does(): void
+    {
+        $m = $this->inbound('quiero pagar ya', 'g.10c');
+
+        $this->commit($m, ['next_state' => P::HUMAN_HANDOFF, 'intent' => SalesIntents::HUMAN_REQUEST,
+            'human_handoff_requested' => true,
+            'human_handoff_reason' => HumanHandoffAuthority::EXPLICIT_HUMAN_REQUEST,
+            'human_handoff_evidence' => 'quiero hablar con una persona',
+            'reply_draft' => 'Te comunico con un asesor ahora mismo.'])
+            ->assertStatus(422)->assertJsonPath('code', 'unauthorized_handoff');
+
+        $this->assertNoSideEffects();
+    }
+
+    /**
+     * El camino del critic fallido envía texto curado de Laravel sin pasar por
+     * el guard. Si ese texto ofreciera un traspaso, tampoco sale: revisión y
+     * silencio, nunca «te paso con alguien» en un turno normal.
+     */
+    public function test_a_curated_fallback_that_offers_a_transfer_is_not_sent(): void
+    {
+        $this->mock(SalesConversationReplyService::class, function ($mock) {
+            $mock->shouldReceive('replyFor')->andReturn('Claro, te paso con alguien del equipo.');
+            $mock->shouldIgnoreMissing();
+        });
+
+        $m = $this->inbound('quiero inscribirme', 'g.13');
+        $token = $this->decide($m)->json('decide_token');
+
+        $r = $this->postJson('/api/internal/marketing/ai/commit', [
+            'source_type' => 'inbound_message', 'source_event_id' => $m->id, 'idempotency_key' => $m->meta_message_id,
+            'conversation_id' => $this->conversation->id, 'decide_token' => $token,
+            'proposal' => ['strategy_goal' => 'close', 'next_state' => P::RECOMMENDATION, 'intent' => SalesIntents::GENERAL_INFO,
+                'reply_draft' => 'borrador rechazado por el critic', 'recommended_plan_id' => null, 'main_barrier' => null,
+                'next_best_action' => 'explain_steps', 'confidence' => 0.8, 'tools_requested' => []],
+            'critic' => ['verdict' => 'fail', 'attempt' => 2, 'score' => 0.2, 'notes' => 'robotico'],
+        ], $this->h())->assertOk();
+
+        $this->assertSame('NO_REPLY_AND_HANDOFF', $r->json('fallback_mode'));
+        $this->assertSame(0, MarketingMessage::where('direction', MarketingMessage::DIRECTION_OUTBOUND)->count());
+        $this->assertTrue((bool) $this->conversation->fresh()->staff_review_pending);
+        $this->assertFalse((bool) $this->conversation->fresh()->human_takeover);
     }
 
     /** Si Laravel ya marcó el lead, el modelo no tiene que justificar nada. */

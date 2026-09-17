@@ -433,6 +433,22 @@ class UltronCommitService
             ? null
             : $this->replies->replyFor($intent, ['lead' => $lead, 'channel' => $conversation->channel]);
 
+        /*
+         * El texto curado es de Laravel y se confía en él, pero confiar no es
+         * no mirar: es la única salida de máquina que no pasaba por el guard,
+         * y por ahí salieron dos ofertas de traspaso. Si un texto futuro
+         * vuelve a ofrecerlo, no sale: se marca revisión y se calla.
+         */
+        if ($curado !== null) {
+            $inspeccion = $this->contentGuard->inspect($curado, MarketingMessage::SENDER_AI, false);
+            if (! $inspeccion['safe']) {
+                ChannelLog::warning('ultron.commit.curated_reply_blocked', [
+                    'conversation_id' => $conversation->id, 'intent' => $intent, 'code' => $inspeccion['code'],
+                ]);
+                $curado = null;
+            }
+        }
+
         $modo = $curado !== null && trim($curado) !== '' ? 'SAFE_CURATED_REPLY' : 'NO_REPLY_AND_HANDOFF';
         $reason = $modo === 'SAFE_CURATED_REPLY' ? 'critic_failed' : 'critic_failed_no_safe_reply';
 
@@ -817,6 +833,26 @@ class UltronCommitService
                 'allowed' => true,
                 'reason' => HumanHandoffAuthority::POLICY_REQUIRED_ESCALATION,
                 'evidence' => 'lead_status_needs_human',
+                'refusal' => null,
+            ];
+        }
+
+        /*
+         * Tercer hecho de Laravel: la persona lo pidió en ESTE mensaje, y el
+         * backend lo lee por sí mismo. Es la misma corroboración con la que
+         * decide abrió el menú; si el cerrojo no la aceptara aquí, un modelo
+         * que olvide el motivo convertiría una petición legítima en un 422 y
+         * en silencio para quien pidió hablar con alguien. El motivo que
+         * viaje desde n8n queda como propuesta: nunca concede lo que el texto
+         * no concede ya.
+         */
+        $prueba = $this->handoff->peticionDeHumanoEn((string) $message->body);
+
+        if ($prueba !== null) {
+            return [
+                'allowed' => true,
+                'reason' => HumanHandoffAuthority::EXPLICIT_HUMAN_REQUEST,
+                'evidence' => $prueba,
                 'refusal' => null,
             ];
         }

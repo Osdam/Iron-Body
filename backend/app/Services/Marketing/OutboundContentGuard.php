@@ -80,16 +80,24 @@ class OutboundContentGuard
      * HumanHandoffAuthority sobre la propuesta. Esto mira el texto por si algo
      * se coló.
      */
+    /**
+     * «Una persona del equipo», en todas las formas en que el modelo la nombra
+     * al intentar traspasar. Un solo sitio: cuando el guard dejó pasar «una
+     * asesora» y «la coordinadora» fue porque cada patrón tenía su propia
+     * lista y ninguna estaba completa.
+     */
+    private const PERSONA = '(alguien|una\s+persona|un(a)?\s+asesor(a)?|el\s+equipo|recepcion|mi\s+compan(er)?[oa]|(el|la)\s+coordinador(a)?|un(a)?\s+entrenador(a)?)';
+
     private const OFRECE_TRASPASO = [
         '/\bte\s+(conecto|comunico|paso|transfiero|derivo)\b/u',
         '/\bte\s+(voy\s+a\s+)?(pasar|conectar|comunicar)\s+con\b/u',
         '/\b(le|los?|las?)\s+(paso|conecto|comunico)\s+con\b/u',
         '/\bquieres?\s+que\s+te\s+(pase|conecte|comunique|contacte)\s+con\b/u',
         '/\ben\s+un\s+momento\s+te\s+(atender|contactar|escribir|llamar)/u',
-        '/\b(alguien|una\s+persona|un\s+asesor|el\s+equipo|recepcion)\s+(del\s+equipo\s+)?(te|le)\s+(atendera|contactara|escribira|llamara|explicara|ayudara|dira)/u',
-        '/\bpas(o|e|amos|aremos|are)\s+tu\s+(caso|consulta|mensaje|solicitud)\s+a\s*(l|\s+alguien|\s+una\s+persona|\s+un\s+asesor)\b/u',
-        '/\b(aviso|avisare|avisamos|digo|dire|escribo)\s+a\s+(alguien|una\s+persona|un\s+asesor|el\s+equipo)\b[^.!?]{0,40}\bpara\s+que\s+te\s+(escriba|llame|contacte|atienda|explique|ayude)\b/u',
-        '/\bte\s+(atendera|contactara|escribira|llamara)\s+(alguien|una\s+persona|un\s+asesor)/u',
+        '/\b'.self::PERSONA.'\s+(del\s+equipo\s+)?(te|le)\s+(atendera|contactara|escribira|llamara|explicara|ayudara|dira)/u',
+        '/\bpas(o|e|amos|aremos|are)\s+tu\s+(caso|consulta|mensaje|solicitud)\s+(al\s+(equipo|area)|a\s+'.self::PERSONA.')\b/u',
+        '/\b(aviso|avisare|avisamos|digo|dire|escribo)\s+a\s+'.self::PERSONA.'\b[^.!?]{0,40}\bpara\s+que\s+te\s+(escriba|llame|contacte|atienda|explique|ayude)\b/u',
+        '/\bte\s+(atendera|contactara|escribira|llamara)\s+'.self::PERSONA.'/u',
     ];
 
     /**

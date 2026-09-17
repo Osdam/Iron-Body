@@ -254,7 +254,7 @@ class UltronFixturesTest extends TestCase
             ->assertOk();
 
         $c = $this->conversation->fresh();
-        $this->assertNotSame(P::HUMAN_HANDOFF, $c->commercial_phase);
+        $this->assertSame(P::NEW_LEAD, $c->commercial_phase);
         $this->assertTrue((bool) $c->staff_review_pending);
         $this->assertFalse((bool) $c->human_takeover);
     }

@@ -14,6 +14,7 @@ use App\Services\Marketing\Ultron\UltronDecideService;
 use App\Services\Marketing\Ultron\UltronDecideToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
@@ -78,7 +79,7 @@ class UltronDecideTest extends TestCase
         ]);
     }
 
-    private function decide(?int $messageId = null, ?int $conversationId = null): \Illuminate\Testing\TestResponse
+    private function decide(?int $messageId = null, ?int $conversationId = null): TestResponse
     {
         return $this->postJson('/api/internal/marketing/ai/decide', [
             'conversation_id' => $conversationId ?? $this->conversation->id,
@@ -372,7 +373,7 @@ class UltronDecideTest extends TestCase
         $conv = $this->conversation->fresh();
 
         $fase = $servicio->currentPhase($conv);
-        $transiciones = app(P::class)->allowedTransitions($fase, $servicio->phaseContext($conv));
+        $transiciones = app(P::class)->allowedTransitions($fase, $servicio->phaseContext($conv, $m));
         $kv = $res->json('knowledge_version');
 
         $this->assertTrue($tokens->verify($token, $conv->id, $m->id, $fase, $transiciones, $kv)['valid']);
