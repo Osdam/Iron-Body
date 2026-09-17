@@ -199,6 +199,19 @@ class UltronDecideService
                 'recent_messages' => $this->recentMessages($conversation),
                 'knowledge_base' => $this->knowledge->groupedForPrompt(),
                 'active_plans' => $this->plansWithoutPrice(),
+                /*
+                 * Cuál cotizar cuando la pregunta es genérica («¿cuánto vale?»).
+                 *
+                 * Sin esto ULTRON tiene que ADIVINARLO, y adivinar mal no es un
+                 * detalle: hay cuatro planes activos de 30 días, así que la
+                 * elección no se deduce de `active_plans`. El id sale de la
+                 * misma regla de negocio que ya usa el cerebro local
+                 * (`defaultMonthlyPlan`), para que no existan dos respuestas
+                 * distintas a «cuánto vale» según quién conteste.
+                 *
+                 * Va el id, nunca el precio: ULTRON sigue sin ver una cifra.
+                 */
+                'default_plan_id' => $this->knowledge->defaultMonthlyPlan()?->id,
                 'flags' => [
                     'can_offer_link' => $this->paymentReadiness->canGenerateAutomaticLink(),
                     'payment_readiness' => $this->paymentReadiness->state(),

@@ -183,6 +183,50 @@ class UltronDecideTest extends TestCase
         $this->assertStringNotContainsString('80000', json_encode($planes));
     }
 
+    /**
+     * Cuál cotizar cuando la pregunta no nombra ningún plan.
+     *
+     * Sin este dato ULTRON tiene que adivinar entre los planes activos, y en
+     * producción hay varios de treinta días: adivinar produciría una respuesta
+     * distinta a «cuánto vale» según el día. El id viene de la misma regla de
+     * negocio que usa el cerebro local, para que ambos coticen lo mismo.
+     */
+    public function test_decide_says_which_plan_to_quote_by_default(): void
+    {
+        $m = $this->inbound('cuánto vale?');
+
+        $r = $this->decide($m->id)->assertOk();
+
+        $this->assertSame($this->plan->id, $r->json('context.default_plan_id'));
+        // Y debe ser uno de los que ULTRON tiene permitido proponer.
+        $this->assertContains(
+            $r->json('context.default_plan_id'),
+            array_column($r->json('context.active_plans'), 'id'),
+        );
+    }
+
+    /** Un plan desactivado deja de ser el que se cotiza por defecto. */
+    public function test_the_default_plan_is_never_an_inactive_one(): void
+    {
+        $vigente = Plan::create([
+            'name' => 'Mensual Nuevo', 'price' => 90000, 'duration_days' => 30, 'active' => true,
+        ]);
+        $this->plan->update(['active' => false]);
+
+        $r = $this->decide($this->inbound('precio?')->id)->assertOk();
+
+        $this->assertSame($vigente->id, $r->json('context.default_plan_id'));
+    }
+
+    /** Y sigue sin filtrarse una sola cifra por esta vía. */
+    public function test_the_default_plan_does_not_leak_its_price(): void
+    {
+        $raw = $this->decide($this->inbound('cuánto cuesta?')->id)->assertOk()->getContent();
+
+        $this->assertStringNotContainsString('80000', $raw);
+        $this->assertStringNotContainsString('"price"', $raw);
+    }
+
     // ── Tools de la v1 ────────────────────────────────────────────────────────
 
     public function test_v1_tools_exclude_payments_and_followups(): void
