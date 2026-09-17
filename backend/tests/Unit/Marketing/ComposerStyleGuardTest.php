@@ -132,4 +132,30 @@ class ComposerStyleGuardTest extends TestCase
         $this->assertNotContains('brochure_length', $this->g->inspect($largo, self::PLANS, askedForDetail: true)['soft']);
         $this->assertTrue($this->g->askedForDetail('explícame bien todo lo que incluye'));
     }
+
+    /**
+     * El PCRE de producción (10.39, 2021) no conoce \p{Extended_Pictographic} ni \p{Emoji}:
+     * la regex no compila, preg_match_all avisa y Laravel convierte el aviso en ErrorException
+     * en cada commit. La suite local (PCRE 10.47) no puede verlo, así que se fija aquí.
+     */
+    public function test_the_guard_only_uses_unicode_properties_the_production_pcre_compiles(): void
+    {
+        // Solo los literales de cadena (ahí viven las regex); los comentarios pueden nombrar la propiedad.
+        $literales = array_map(
+            static fn (array $tok): string => $tok[1],
+            array_filter(token_get_all((string) file_get_contents((new \ReflectionClass(ComposerStyleGuard::class))->getFileName())), static fn ($tok): bool => is_array($tok) && $tok[0] === T_CONSTANT_ENCAPSED_STRING),
+        );
+        preg_match_all('/\\\\[pP]\{([A-Za-z_&]+)\}/', implode("\n", $literales), $m);
+        $generales = ['L', 'Lu', 'Ll', 'M', 'N', 'Nd', 'P', 'S', 'So', 'Sm', 'Sc', 'Sk', 'Z'];
+
+        $this->assertSame([], array_values(array_diff(array_unique($m[1]), $generales)), 'solo categorías generales Unicode: las propiedades de emoji no existen en PCRE 10.39');
+    }
+
+    public function test_emoji_graphemes_are_counted_by_code_point_ranges(): void
+    {
+        $this->assertNotContains('emoji_excess', $this->g->inspect('Vamos 👨‍👩‍👧 ❤️‍🔥', self::PLANS)['soft'], 'dos secuencias ZWJ cuentan dos');
+        $this->assertContains('emoji_excess', $this->g->inspect('Vamos 👨‍👩‍👧 ❤️‍🔥 🏳️‍🌈', self::PLANS)['soft'], 'tres secuencias ZWJ cuentan tres');
+        $this->assertNotContains('emoji_excess', $this->g->inspect('Marca ©, registro ® y ™ no son emoji', self::PLANS)['soft'], '©®™ son prosa, no emoji');
+        $this->assertContains('emoji_excess', $this->g->inspect('Listo ✅ ➡ ⭐', self::PLANS)['soft'], 'símbolos del BMP con presentación emoji cuentan');
+    }
 }
