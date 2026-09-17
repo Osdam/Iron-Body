@@ -56,8 +56,8 @@ class SalesConversationReplyService
 
             SalesIntents::LOCATION_QUESTION => 'Estamos en '.self::ADDRESS.'. ¿Vas a ir por primera vez?',
 
-            SalesIntents::SCHEDULE_QUESTION => 'No quiero darte un horario incorrecto. Te paso con alguien del equipo para '
-                .'confirmarlo bien.',
+            SalesIntents::SCHEDULE_QUESTION => 'No quiero darte un horario incorrecto: eso lo confirma una persona del equipo. '
+                .'Mientras tanto te ayudo con planes o ubicación si quieres.',
 
             SalesIntents::GENERAL_INFO => 'Con gusto te cuento. El mensual te sirve para entrenar constante, y según tu '
                 .'objetivo miramos lo que mejor te sirva. ¿Quieres entrenar por salud, bajar grasa '
@@ -69,8 +69,12 @@ class SalesConversationReplyService
             SalesIntents::NOT_INTERESTED => 'Listo, tranquilo. No hay problema. Si después te animas o solo quieres resolver '
                 .'dudas, aquí te ayudamos.',
 
-            SalesIntents::BOT_QUESTION => 'Soy el asistente de Iron Body y te puedo ayudar con información inicial. Si '
-                .'prefieres, también te paso con una persona del equipo.',
+            // Sin ofrecer traspaso: la persona puede pedirlo, la máquina no lo
+            // propone. Esta respuesta sale por el camino del critic fallido,
+            // que no pasa por el guard de salida, así que el texto tiene que
+            // ser correcto por sí mismo.
+            SalesIntents::BOT_QUESTION => 'Soy el asistente automático de Iron Body y te puedo ayudar con información '
+                .'inicial. Si prefieres hablar con una persona del equipo, solo dímelo.',
 
             SalesIntents::HUMAN_REQUEST => 'Claro, dejo marcada tu solicitud para que alguien del equipo la revise. Igual sigo '
                 .'por aquí si quieres que te ayude con precios, ubicación o planes.',

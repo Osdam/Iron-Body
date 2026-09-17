@@ -21,6 +21,7 @@ class SalesAgentPersonaTest extends TestCase
     use RefreshDatabase;
 
     private MarketingLead $lead;
+
     private const SECRET = 'test-internal-secret';
 
     protected function setUp(): void
@@ -51,8 +52,8 @@ class SalesAgentPersonaTest extends TestCase
         ], ['Authorization' => 'Bearer '.self::SECRET])->assertOk();
 
         return [
-            'intent'   => $res->json('decision.intent'),
-            'reply'    => (string) $res->json('decision.reply'),
+            'intent' => $res->json('decision.intent'),
+            'reply' => (string) $res->json('decision.reply'),
             'decision' => $res->json('decision'),
         ];
     }
@@ -188,12 +189,17 @@ class SalesAgentPersonaTest extends TestCase
         $this->assertNoLinkNoLie($r['reply']);
     }
 
+    /**
+     * Transparente y disponible, sin OFRECER el traspaso: la persona puede
+     * pedirlo, la máquina no lo propone como salida.
+     */
     public function test_bot_question_is_transparent_and_offers_human(): void
     {
         $r = $this->reply('eres un bot?');
         $this->assertSame(SalesIntents::BOT_QUESTION, $r['intent']);
-        $this->assertStringContainsStringIgnoringCase('asistente de Iron Body', $r['reply']);
+        $this->assertStringContainsStringIgnoringCase('asistente automático de Iron Body', $r['reply']);
         $this->assertStringContainsStringIgnoringCase('persona', $r['reply']);
+        $this->assertStringNotContainsStringIgnoringCase('te paso', $r['reply']);
         // Transparencia NO escala por sí sola.
         $this->assertFalse($r['decision']['needs_staff_review']);
     }
