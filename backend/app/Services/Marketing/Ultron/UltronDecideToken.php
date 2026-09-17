@@ -35,6 +35,7 @@ final class UltronDecideToken
         string $commercialPhase,
         array $allowedTransitions,
         string $knowledgeVersion,
+        array $extra = [],
     ): array {
         $issuedAt = now();
         $expiresAt = $issuedAt->copy()->addSeconds(self::TTL_SECONDS);
@@ -49,6 +50,14 @@ final class UltronDecideToken
             'k' => $knowledgeVersion,
             'i' => $issuedAt->getTimestamp(),
             'e' => $expiresAt->getTimestamp(),
+            /*
+             * Carga firmada, no verificada: lo que decide le dijo al estratega
+             * (las pistas) viaja aquí para que commit lo lea tal cual salió y no
+             * lo recalcule con datos que ahora gobierna el modelo. Va bajo la
+             * misma firma que el resto, así que no se puede alterar; y no entra
+             * en las comprobaciones de «cambió el mundo», que son lo de arriba.
+             */
+            'x' => $extra === [] ? null : $extra,
         ];
 
         $body = $this->encode($payload);
@@ -119,7 +128,7 @@ final class UltronDecideToken
             return $this->fail('decide_token_knowledge_changed');
         }
 
-        return ['valid' => true, 'reason' => null];
+        return ['valid' => true, 'reason' => null, 'extra' => is_array($payload['x'] ?? null) ? $payload['x'] : []];
     }
 
     /** @param string[] $transitions */

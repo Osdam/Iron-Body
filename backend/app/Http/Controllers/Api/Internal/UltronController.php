@@ -10,6 +10,7 @@ use App\Services\IronGuard\IncidentRecorder;
 use App\Services\Marketing\CommercialPhaseMachine;
 use App\Services\Marketing\HumanHandoffAuthority;
 use App\Services\Marketing\SalesAgentDecisionSchema;
+use App\Services\Marketing\Ultron\StrategyContract;
 use App\Services\Marketing\Ultron\UltronCommitException;
 use App\Services\Marketing\Ultron\UltronCommitService;
 use App\Services\Marketing\Ultron\UltronDecideService;
@@ -148,6 +149,26 @@ class UltronController extends Controller
              * producir un solo efecto. La evidencia la cita el modelo; la que
              * vale es la que extrae el backend del texto entrante.
              */
+            /*
+             * Contrato del Strategist Omega: PROPUESTAS de estrategia con enums
+             * cerrados. Cualquier campo de autoridad de negocio (precio, URL,
+             * estado de pago, vendibilidad) no está aquí y por tanto muere como
+             * `unexpected_fields` antes de llegar al servicio.
+             */
+            'proposal.conversation_goal' => ['nullable', 'string', Rule::in(StrategyContract::CONVERSATION_GOALS)],
+            'proposal.information_needed' => ['nullable', 'array', 'max:6', function (string $attr, mixed $v, \Closure $fail): void {
+                if (is_array($v) && ! array_is_list($v)) {
+                    $fail('information_needed debe ser una lista, no un objeto.');
+                }
+            }],
+            'proposal.information_needed.*' => ['string', Rule::in(StrategyContract::ASKABLE)],
+            'proposal.question_needed' => ['nullable', 'boolean'],
+            'proposal.response_goal' => ['nullable', 'string', 'max:160'],
+            'proposal.buying_signal' => ['nullable', 'string', Rule::in(StrategyContract::BUYING_SIGNALS)],
+            'proposal.closing_opportunity' => ['nullable', 'boolean'],
+            'proposal.payment_opportunity' => ['nullable', 'boolean'],
+            'proposal.app_support_opportunity' => ['nullable', 'boolean'],
+            'proposal.recommendation_goal' => ['nullable', 'string', Rule::in(StrategyContract::RECOMMENDATION_GOALS)],
             'proposal.human_handoff_requested' => ['nullable', 'boolean'],
             'proposal.human_handoff_reason' => ['nullable', 'string', Rule::in(HumanHandoffAuthority::ALLOWED_REASONS)],
             'proposal.human_handoff_evidence' => ['nullable', 'string', 'max:300'],

@@ -388,8 +388,24 @@ class UltronCommitService
         }
 
         // 12) Persistir. La fase solo avanza cuando el commit se acepta.
+        /*
+         * Economía de preguntas, observable: a quien ya quiere pagar no se le
+         * pregunta el objetivo. El Critic lo rechaza; aquí queda constancia
+         * cuando aun así llega, para medirlo en el laboratorio.
+         */
+        // Las pistas que decide EMITIÓ, leídas del token firmado: el modelo no
+        // puede apagar su propia bandera declarando otro intent.
+        $hints = is_array($token['extra']['hints'] ?? null)
+            ? array_merge(StrategyContract::hints($perfil, $resolution, $this->decide->canOfferLink(), (string) $sanitized['intent']), $token['extra']['hints'])
+            : StrategyContract::hints($perfil, $resolution, $this->decide->canOfferLink(), (string) $sanitized['intent']);
+        if (StrategyContract::asksDiscoveryToReadyBuyer($replyFinal, $hints)) {
+            $decision['risk_flags'] = array_values(array_unique(array_merge((array) ($decision['risk_flags'] ?? []), ['discovery_question_to_ready_buyer'])));
+        }
+
         $action = $this->persist($conversation, $message, $payload, $decision, $nextState, $plan, [
             'source' => 'external_draft',
+            'strategy' => StrategyContract::fromProposal($proposal) ?: null,
+            'strategy_hints' => ['hot_lead_fast_path' => $hints['hot_lead_fast_path'], 'lifecycle_mode' => $hints['lifecycle_mode']],
             'price_enriched' => $plan !== null && $replyFinal !== $sanitized['reply'],
             'reference_resolution' => $resolution['type'],
             'lead_temperature' => $perfil['lead_temperature'],

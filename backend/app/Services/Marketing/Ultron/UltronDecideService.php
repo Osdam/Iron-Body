@@ -131,6 +131,11 @@ class UltronDecideService
      *
      * @return array<string,mixed>
      */
+    public function canOfferLink(): bool
+    {
+        return $this->paymentReadiness->canGenerateAutomaticLink();
+    }
+
     public function phaseContext(MarketingConversation $conversation, MarketingMessage $message): array
     {
         $lead = $conversation->lead;
@@ -213,6 +218,8 @@ class UltronDecideService
         $resolved = $this->references->resolve((string) $message->body, $memory, $plansForMemory);
         $novelty = $this->novelty->guidance($memory, $plansForMemory, $resolved);
         $customer = $this->customers->profile($conversation, $message, $memory, $resolved, (string) ($decision['intent'] ?? SalesIntents::UNKNOWN));
+        $canOfferLink = $this->paymentReadiness->canGenerateAutomaticLink();
+        $strategyHints = StrategyContract::hints($customer, $resolved, $canOfferLink, (string) ($decision['intent'] ?? SalesIntents::UNKNOWN));
         // El MENÚ del que ULTRON puede elegir, no un filtrado de lo que Laravel
         // ya propuso: lo que la decisión base pidiera viaja aparte, dentro de
         // `decision`. Mezclar las dos cosas haría que el techo dependiera de la
@@ -226,6 +233,7 @@ class UltronDecideService
             $phase,
             $transitions,
             $knowledgeVersion,
+            ['hints' => ['hot_lead_fast_path' => $strategyHints['hot_lead_fast_path'], 'lifecycle_mode' => $strategyHints['lifecycle_mode']]],
         );
 
         return [
@@ -264,6 +272,12 @@ class UltronDecideService
                  * por hechos. A quien ya pagó no se le vende lo mismo.
                  */
                 'customer' => $customer,
+                /*
+                 * Lo que el estratega no tiene que adivinar: si la persona ya
+                 * quiere pagar (nada de descubrimiento), en qué modo está la
+                 * relación, si ya hay con qué recomendar y qué se puede preguntar.
+                 */
+                'strategy_hints' => $strategyHints,
                 'recent_messages' => $this->recentMessages($conversation),
                 'knowledge_base' => $this->knowledge->groupedForPrompt(),
                 'active_plans' => $this->plansWithoutPrice(),
