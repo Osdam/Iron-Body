@@ -56,6 +56,7 @@ class UltronDecideService
         private readonly ConversationMemoryService $memoryService,
         private readonly ReferenceResolver $references,
         private readonly NoveltyGuard $novelty,
+        private readonly CustomerIntelligenceService $customers,
         private readonly HumanHandoffAuthority $handoff = new HumanHandoffAuthority,
     ) {}
 
@@ -211,6 +212,7 @@ class UltronDecideService
         $plansForMemory = $this->memoryService->sellablePlansForMemory();
         $resolved = $this->references->resolve((string) $message->body, $memory, $plansForMemory);
         $novelty = $this->novelty->guidance($memory, $plansForMemory, $resolved);
+        $customer = $this->customers->profile($conversation, $message, $memory, $resolved, (string) ($decision['intent'] ?? SalesIntents::UNKNOWN));
         // El MENÚ del que ULTRON puede elegir, no un filtrado de lo que Laravel
         // ya propuso: lo que la decisión base pidiera viaja aparte, dentro de
         // `decision`. Mezclar las dos cosas haría que el techo dependiera de la
@@ -255,6 +257,13 @@ class UltronDecideService
                 ],
                 'resolved_reference' => $resolved,
                 'novelty' => $novelty,
+                /*
+                 * Quién es la persona, con honestidad: KNOWN (hechos del CRM),
+                 * INFERRED (lo que sugiere la conversación) y UNKNOWN (lo que
+                 * se puede preguntar). Temperatura por señales, ciclo de vida
+                 * por hechos. A quien ya pagó no se le vende lo mismo.
+                 */
+                'customer' => $customer,
                 'recent_messages' => $this->recentMessages($conversation),
                 'knowledge_base' => $this->knowledge->groupedForPrompt(),
                 'active_plans' => $this->plansWithoutPrice(),

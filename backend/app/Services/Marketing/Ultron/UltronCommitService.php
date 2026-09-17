@@ -74,6 +74,7 @@ class UltronCommitService
         private readonly ConversationMemoryService $memoryService,
         private readonly ReferenceResolver $references,
         private readonly NoveltyGuard $novelty,
+        private readonly CustomerIntelligenceService $customers,
         private readonly SalesConversationMemoryService $memory,
         private readonly SalesConversationReplyService $replies,
         private readonly MarketingMessageDispatcher $dispatcher,
@@ -329,6 +330,25 @@ class UltronCommitService
             $this->memoryService->sellablePlansForMemory(),
         );
 
+        /*
+         * 10.ter) A QUIEN YA PAGÓ NO SE LE COTIZA LO MISMO. Anclado al efecto
+         * (el plan que este turno cotiza o compromete), no a la etiqueta de
+         * fase que elija el modelo, y sólo cuando se sabe seguro que es el plan
+         * que ya tiene. No es una excepción: como la novedad, el texto no sale,
+         * la fase no avanza y las herramientas del turno se ejecutan igual.
+         */
+        $perfil = $this->customers->profile($conversation, $message, $memoriaPrevia, $resolution, (string) $sanitized['intent']);
+        $revende = $this->customers->isResell($perfil, $plan?->id);
+        if ($revende) {
+            ChannelLog::warning('ultron.commit.resell_blocked', [
+                'conversation_id' => $conversation->id,
+                'customer_lifecycle' => $perfil['customer_lifecycle'],
+                'current_plan_id' => $perfil['known']['current_plan_id'] ?? $perfil['known']['paid_plan_id'] ?? null,
+                'quoted_plan_id' => $plan?->id,
+            ]);
+            $nextState = $currentPhase;
+        }
+
         // 11) Guardrails sobre la decisión ya ensamblada.
         $decision = $this->guardrail->apply([
             'ok' => true,
@@ -359,12 +379,21 @@ class UltronCommitService
             $decision['recommended_action'] = 'repeated_reply';
             $decision['risk_flags'] = array_values(array_unique(array_merge((array) ($decision['risk_flags'] ?? []), ['repeated_reply'])));
         }
+        if ($revende) {
+            $decision['safe_to_send'] = false;
+            $decision['should_send_message'] = false;
+            $decision['should_generate_payment_link'] = false;
+            $decision['recommended_action'] = 'resell_blocked';
+            $decision['risk_flags'] = array_values(array_unique(array_merge((array) ($decision['risk_flags'] ?? []), ['resell_blocked'])));
+        }
 
         // 12) Persistir. La fase solo avanza cuando el commit se acepta.
         $action = $this->persist($conversation, $message, $payload, $decision, $nextState, $plan, [
             'source' => 'external_draft',
             'price_enriched' => $plan !== null && $replyFinal !== $sanitized['reply'],
             'reference_resolution' => $resolution['type'],
+            'lead_temperature' => $perfil['lead_temperature'],
+            'customer_lifecycle' => $perfil['customer_lifecycle'],
             'novelty_max_similarity' => $previas === [] ? null
                 : round(max(array_map(fn ($b) => $this->novelty->similarity($replyFinal, $b), $previas)), 2),
         ]);
