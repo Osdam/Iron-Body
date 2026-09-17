@@ -44,11 +44,49 @@ class MetaLeadService
         return $lead;
     }
 
+    /**
+     * La conversación a la que pertenece este mensaje entrante.
+     *
+     * Antes esto era un `firstOrCreate(['lead_id', 'channel'])`, y ahí había un
+     * fallo real: esa pareja NO es única —un lead puede arrastrar varias
+     * conversaciones del mismo canal— así que `first()` sin `ORDER BY` devolvía
+     * la que el motor encontrase primero. En PostgreSQL ese orden es el físico,
+     * y cambia cuando se actualiza una fila: bastó un `UPDATE` sobre una de las
+     * dos conversaciones de un lead para que sus mensajes empezaran a caer en
+     * la otra. Dos mensajes seguidos de la misma persona terminaban en hilos
+     * distintos, y el CRM mostraba la conversación incompleta.
+     *
+     * El orden de aquí es el contrato, y es explícito:
+     *
+     *   1. una conversación ABIERTA gana siempre a una cerrada;
+     *   2. entre varias, la que habló más recientemente;
+     *   3. y si empatan, el id mayor, que no empata nunca.
+     *
+     * Las tres cláusulas son deterministas y portables: el resultado no depende
+     * de cómo la base guarde las filas ni de cuándo se actualizó una.
+     */
     public function ensureConversation(MarketingLead $lead, string $channel): MarketingConversation
     {
-        return MarketingConversation::firstOrCreate(
-            ['lead_id' => $lead->id, 'channel' => $channel],
-            ['status' => 'open', 'ai_enabled' => true, 'human_takeover' => false, 'last_message_at' => now()],
-        );
+        $existente = MarketingConversation::query()
+            ->where('lead_id', $lead->id)
+            ->where('channel', $channel)
+            ->orderByRaw("CASE WHEN status = 'open' THEN 0 ELSE 1 END")
+            ->orderByRaw('CASE WHEN last_message_at IS NULL THEN 1 ELSE 0 END')
+            ->orderByDesc('last_message_at')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($existente !== null) {
+            return $existente;
+        }
+
+        return MarketingConversation::create([
+            'lead_id' => $lead->id,
+            'channel' => $channel,
+            'status' => 'open',
+            'ai_enabled' => true,
+            'human_takeover' => false,
+            'last_message_at' => now(),
+        ]);
     }
 }
