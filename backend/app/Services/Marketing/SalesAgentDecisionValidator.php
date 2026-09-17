@@ -12,11 +12,19 @@ namespace App\Services\Marketing;
  */
 class SalesAgentDecisionValidator
 {
+    public function __construct(
+        private readonly HumanHandoffAuthority $handoff = new HumanHandoffAuthority,
+    ) {}
+
     /**
      * @param  array  $raw  decisión cruda devuelta por el modelo (json).
+     * @param  ?string  $inboundBody  lo que la persona escribió DE VERDAD en este
+     *                                turno. Sin esto, «quiere hablar con alguien»
+     *                                es una afirmación del modelo que nadie puede
+     *                                contrastar.
      * @return array{intent:string, confidence:float, extracted_fields:array, missing_fields:array, reply:?string, force_escalate:bool, escalation_reason:?string, risk_flags:array}
      */
-    public function sanitize(array $raw): array
+    public function sanitize(array $raw, ?string $inboundBody = null): array
     {
         $flags = [];
 
@@ -68,8 +76,28 @@ class SalesAgentDecisionValidator
             }
         }
 
-        // 6) Escalado forzado: intención sensible, intento prohibido o claim inseguro.
-        $forceEscalate = in_array($intent, SalesIntents::ESCALATION_INTENTS, true)
+        /*
+         * 6) Escalado forzado: intención sensible, intento prohibido o claim inseguro.
+         *
+         * Con una excepción que costó una conversación entera: pedir hablar con
+         * una persona es la ÚNICA de estas intenciones que afirma algo sobre lo
+         * que el cliente dijo, y por tanto la única que se puede desmentir
+         * leyéndolo. Antes bastaba con que el modelo escribiera la etiqueta; así
+         * se escaló un «si por favor» y, peor, un «no quiero alguien del equipo».
+         *
+         * Las demás (riesgo médico, fraude, queja, factura) describen la
+         * naturaleza del asunto, no una petición, y siguen escalando solas.
+         */
+        $escalationIntents = SalesIntents::ESCALATION_INTENTS;
+
+        if ($intent === SalesIntents::HUMAN_REQUEST && $inboundBody !== null) {
+            if ($this->handoff->peticionDeHumanoEn($inboundBody) === null) {
+                $escalationIntents = array_values(array_diff($escalationIntents, [SalesIntents::HUMAN_REQUEST]));
+                $flags[] = 'human_request_not_corroborated';
+            }
+        }
+
+        $forceEscalate = in_array($intent, $escalationIntents, true)
             || $forbiddenAction || $unsafeClaim;
 
         $reason = null;
@@ -77,7 +105,7 @@ class SalesAgentDecisionValidator
             $reason = 'forbidden_action_attempt';
         } elseif ($unsafeClaim) {
             $reason = 'unsafe_claim';
-        } elseif (in_array($intent, SalesIntents::ESCALATION_INTENTS, true)) {
+        } elseif (in_array($intent, $escalationIntents, true)) {
             $reason = match ($intent) {
                 SalesIntents::MEDICAL_RISK_ESCALATION => 'medical_case',
                 SalesIntents::FRAUD_OR_PAYMENT_CLAIM => 'payment_or_fraud_claim',

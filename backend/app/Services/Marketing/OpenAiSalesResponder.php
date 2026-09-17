@@ -43,7 +43,7 @@ class OpenAiSalesResponder implements AiSalesResponderInterface
                     $conversation instanceof MarketingConversation ? $conversation : null),
             );
 
-            $decision = $this->validator->sanitize($raw);
+            $decision = $this->validator->sanitize($raw, $body);
             $decision['responder'] = 'openai';
 
             return $decision;

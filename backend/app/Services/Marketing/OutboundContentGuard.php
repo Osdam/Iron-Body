@@ -48,6 +48,9 @@ class OutboundContentGuard
 
     public const CODE_INVENTED_PRICE = 'machine_reply_invented_price';
 
+    /** Ofrece pasar la conversación a una persona sin que nadie lo haya autorizado. */
+    public const CODE_UNAUTHORIZED_HANDOFF = 'machine_reply_unauthorized_handoff';
+
     /** ¿Este autor está sujeto al filtro? */
     public function appliesTo(string $senderType): bool
     {
@@ -64,7 +67,36 @@ class OutboundContentGuard
      *
      * @return array{safe:bool, code:?string, signal:?string, risk_flag:?string}
      */
-    public function inspect(string $body, string $senderType): array
+    /**
+     * Ofrecer pasar a una persona, dicho como se dice.
+     *
+     * Deliberadamente estrecho: son fórmulas de TRASPASO, no menciones a seres
+     * humanos. «Tenemos cuatro entrenadores» o «te acompaña un entrenador de
+     * planta» son información del gimnasio y deben poder decirse; lo que no
+     * puede salir sin permiso es la frase que termina la conversación y la
+     * pasa a otro.
+     *
+     * Esto es la segunda barrera, no la primera: quien autoriza es
+     * HumanHandoffAuthority sobre la propuesta. Esto mira el texto por si algo
+     * se coló.
+     */
+    private const OFRECE_TRASPASO = [
+        '/\bte\s+(conecto|comunico|paso|transfiero|derivo)\b/u',
+        '/\bte\s+(voy\s+a\s+)?(pasar|conectar|comunicar)\s+con\b/u',
+        '/\b(le|los?|las?)\s+(paso|conecto|comunico)\s+con\b/u',
+        '/\bquieres?\s+que\s+te\s+(pase|conecte|comunique|contacte)\s+con\b/u',
+        '/\ben\s+un\s+momento\s+te\s+(atender|contactar|escribir|llamar)/u',
+        '/\b(alguien|una\s+persona|un\s+asesor|el\s+equipo|recepcion)\s+(del\s+equipo\s+)?(te|le)\s+(atendera|contactara|escribira|llamara|explicara|ayudara|dira)/u',
+        '/\bpas(o|e|amos|aremos|are)\s+tu\s+(caso|consulta|mensaje|solicitud)\s+al\s+(equipo|area)\b/u',
+        '/\bte\s+(atendera|contactara|escribira|llamara)\s+(alguien|una\s+persona|un\s+asesor)/u',
+    ];
+
+    /**
+     * @param  bool  $handoffAllowed  ¿autorizó el backend pasar a una persona?
+     *                                Por defecto NO: el permiso se concede, no
+     *                                se presume.
+     */
+    public function inspect(string $body, string $senderType, bool $handoffAllowed = false): array
     {
         $ok = ['safe' => true, 'code' => null, 'signal' => null, 'risk_flag' => null];
 
@@ -74,6 +106,15 @@ class OutboundContentGuard
 
         if (trim($body) === '') {
             return $ok; // un envío vacío lo rechaza la validación del endpoint.
+        }
+
+        if (! $handoffAllowed && ($signal = $this->handoffOfferIn($body)) !== null) {
+            return [
+                'safe' => false,
+                'code' => self::CODE_UNAUTHORIZED_HANDOFF,
+                'signal' => $signal,
+                'risk_flag' => self::CODE_UNAUTHORIZED_HANDOFF,
+            ];
         }
 
         if ($signal = SalesAgentDecisionSchema::forbiddenSignalIn($body)) {
@@ -152,9 +193,25 @@ class OutboundContentGuard
                 .'(activar membresía, aprobar pago o tocar facturación). No se envía. Esas acciones las resuelve una persona.',
             self::CODE_UNSAFE_CLAIM => 'El mensaje automático promete resultados o da un diagnóstico. No se envía. '
                 .'Reformúlalo sin garantías ni valoraciones clínicas.',
+            self::CODE_UNAUTHORIZED_HANDOFF => 'El mensaje automático ofrece pasar la conversación a una persona '
+                .'sin que el backend lo haya autorizado. No se envía.',
             self::CODE_INVENTED_PRICE => 'El mensaje automático incluye una cifra que parece un precio. No se envía. '
                 .'Los precios los pone el backend desde el plan activo: manda el texto sin la cifra.',
             default => 'El mensaje automático no cumple las reglas de contenido y no se envía.',
         };
+    }
+
+    /** El fragmento donde el texto ofrece pasar a una persona, o null. */
+    public function handoffOfferIn(string $body): ?string
+    {
+        $t = SalesAgentDecisionSchema::normalize($body);
+
+        foreach (self::OFRECE_TRASPASO as $patron) {
+            if (preg_match($patron, $t, $m) === 1) {
+                return trim($m[0]);
+            }
+        }
+
+        return null;
     }
 }

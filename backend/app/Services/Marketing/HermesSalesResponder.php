@@ -77,7 +77,7 @@ class HermesSalesResponder implements AiSalesResponderInterface
                 ),
             );
 
-            $decision = $this->validator->sanitize($raw);
+            $decision = $this->validator->sanitize($raw, $body);
             $decision['responder'] = 'hermes';
 
             $this->breaker->recordSuccess();

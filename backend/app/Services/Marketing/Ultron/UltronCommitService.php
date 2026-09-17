@@ -220,6 +220,14 @@ class UltronCommitService
             throw UltronCommitException::make($e->errorCode, $e->getMessage(), 422);
         }
 
+        /*
+         * El segundo argumento es el mensaje que la persona escribió de verdad.
+         *
+         * Sin él, «este turno pide un humano» es una afirmación que llega desde
+         * n8n y que nadie puede contrastar: así se escaló un «si por favor» y un
+         * «no quiero alguien del equipo». Con él, la etiqueta del modelo es una
+         * propuesta y el texto es la prueba.
+         */
         $sanitized = $this->validator->sanitize([
             'intent' => $proposal['intent'] ?? SalesIntents::UNKNOWN,
             'confidence' => $proposal['confidence'] ?? 0.5,
@@ -227,7 +235,7 @@ class UltronCommitService
             'tools_requested' => (array) ($proposal['tools_requested'] ?? []),
             'extracted_fields' => [],
             'missing_fields' => [],
-        ]);
+        ], (string) $message->body);
 
         if ($sanitized['reply'] === null) {
             // El validador tiró el texto: precio inventado, promesa prohibida o
