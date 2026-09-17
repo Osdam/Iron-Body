@@ -255,12 +255,23 @@ class UltronDecideService
     private function plansWithoutPrice(): array
     {
         return array_map(
-            fn (array $p) => [
+            fn (array $p) => array_filter([
                 'id' => $p['id'],
                 'name' => $p['name'],
                 'duration_days' => $p['duration_days'],
                 'benefits' => $p['benefits'],
-            ],
+                // Lo que permite distinguir un plan de otro. Sin esto los
+                // beneficios son idénticos dentro de cada gama y no hay con qué
+                // recomendar: ULTRON acababa cotizando siempre el mismo.
+                'tier' => $p['tier'] ?? null,
+                'is_recommended' => $p['is_recommended'] ?? null,
+                'badge' => $p['badge'] ?? null,
+                'access_classes' => $p['access_classes'] ?? null,
+                'restrictions' => $p['restrictions'] ?? null,
+                // Rebaja REAL tomada de la fila, no una promoción inventada.
+                // Va sin cifra: sólo dice que existe, y Laravel pone el número.
+                'has_discount' => ! empty($p['original_price']),
+            ], fn ($v) => $v !== null && $v !== []),
             $this->knowledge->activePlans(),
         );
     }

@@ -548,13 +548,13 @@ class SalesAgentOrchestratorService
     private function resolvePricingPlan(array $context, string $body): ?Plan
     {
         $plan = $context['plan'] ?? null;
-        if ($plan instanceof Plan && (bool) $plan->active) {
+        if ($plan instanceof Plan && $plan->isSellable()) {
             return $plan;
         }
 
         $needle = $this->normalizeText($body);
         if ($needle !== '') {
-            $matches = Plan::where('active', true)->get()->filter(function (Plan $p) use ($needle) {
+            $matches = Plan::sellable()->get()->filter(function (Plan $p) use ($needle) {
                 $name = $this->normalizeText((string) $p->name);
 
                 return strlen($name) >= 4 && str_contains($needle, $name);

@@ -26,6 +26,7 @@ class Plan extends Model
         'access_locations',
         'restrictions',
         'active',
+        'sellable',
         'features',
         // Facturación electrónica (aditivo).
         'tax_rate_id',
@@ -42,6 +43,7 @@ class Plan extends Model
         'is_recommended' => 'boolean',
         'access_classes' => 'boolean',
         'active' => 'boolean',
+        'sellable' => 'boolean',
         'sort_order' => 'integer',
         'features' => 'array',
         'price_includes_tax' => 'boolean',
@@ -140,5 +142,40 @@ class Plan extends Model
             fn (mixed $benefit): string => trim((string) $benefit),
             $benefits
         )));
+    }
+
+    /**
+     * Qué puede cotizarse, recomendarse y cobrarse a alguien de fuera.
+     *
+     * Es UNA sola definición a propósito. Antes cada sitio comercial repetía
+     * `where('active', true)` y con eso alcanzaba a planes que nadie quiere
+     * vender: un plan contable de precio 0 y uno de 1 peso estaban a la vista
+     * del asesor, y habrían acabado en un WhatsApp real o en un cobro.
+     *
+     * Las cuatro condiciones dicen cosas distintas:
+     *  - `active`: el sistema lo usa (informes, app del socio, punto de venta);
+     *  - `sellable`: el negocio quiere venderlo;
+     *  - precio > 0: si no se puede cobrar, no es una oferta;
+     *  - duración > 0: si no da acceso durante un tiempo, tampoco.
+     *
+     * Las dos últimas son la red por si alguien reactiva un plan interno sin
+     * darse cuenta: la bandera puede equivocarse, pero un plan de precio cero
+     * sigue sin ser vendible.
+     */
+    public function scopeSellable($query)
+    {
+        return $query->where('active', true)
+            ->where('sellable', true)
+            ->where('price', '>', 0)
+            ->where('duration_days', '>', 0);
+    }
+
+    /** La misma regla, para un plan ya cargado. */
+    public function isSellable(): bool
+    {
+        return (bool) $this->active
+            && (bool) $this->sellable
+            && (float) $this->price > 0
+            && (int) $this->duration_days > 0;
     }
 }

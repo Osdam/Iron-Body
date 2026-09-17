@@ -53,20 +53,27 @@ class SalesPaymentGuardrailService
             }
         }
 
-        // 3) Plan activo.
-        if (! (bool) $plan->active) {
-            throw SalesGuardrailException::make(
-                'plan_inactive',
-                'El plan seleccionado no está activo.',
-            );
-        }
+        /*
+         * 3) ¿Se le puede vender esto a alguien?
+         *
+         * Una sola pregunta, contestada por la regla de dominio (Plan::isSellable),
+         * no por condiciones repetidas aquí. Antes se comprobaban `active` y
+         * precio > 0 por separado, y entre las dos se colaba lo que de verdad
+         * importaba: un plan interno con precio simbólico —uno de 1 peso, dos
+         * días— pasaba ambas y habría generado un cobro real.
+         *
+         * El motivo se desglosa sólo para el diagnóstico; quien decide es
+         * isSellable().
+         */
+        if (! $plan->isSellable()) {
+            [$code, $message] = match (true) {
+                ! (bool) $plan->active => ['plan_inactive', 'El plan seleccionado no está activo.'],
+                (float) $plan->price <= 0 => ['plan_price_invalid', 'El plan no tiene un precio válido para cobrar.'],
+                (int) $plan->duration_days <= 0 => ['plan_duration_invalid', 'El plan no tiene una duración válida.'],
+                default => ['plan_not_sellable', 'Ese plan no está a la venta.'],
+            };
 
-        // 4) Precio válido (> 0).
-        if ((float) $plan->price <= 0) {
-            throw SalesGuardrailException::make(
-                'plan_price_invalid',
-                'El plan no tiene un precio válido para cobrar.',
-            );
+            throw SalesGuardrailException::make($code, $message);
         }
     }
 

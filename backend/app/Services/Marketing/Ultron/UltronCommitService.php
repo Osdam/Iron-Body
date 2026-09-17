@@ -529,6 +529,22 @@ class UltronCommitService
             ]);
         }
 
+        /*
+         * Último cerrojo antes de que una cifra salga hacia una persona.
+         *
+         * El catálogo que ve ULTRON ya está filtrado, pero esto no depende de
+         * ese filtro a propósito: aquí llega un id que mandó un modelo, y la
+         * pregunta «¿se le puede vender esto a alguien?» tiene que contestarla
+         * Laravel mirando la fila, no confiando en quién la eligió. Sin esto,
+         * proponer el plan contable de precio 0 bastaría para que el gimnasio
+         * cotizara «$0» por WhatsApp.
+         */
+        if (! $plan->isSellable()) {
+            throw UltronCommitException::make('plan_not_sellable', 'Ese plan no está a la venta.', 422, [
+                'recommended_plan_id' => (int) $plan->id,
+            ]);
+        }
+
         return $plan;
     }
 

@@ -64,20 +64,32 @@ class MarketingKnowledgeBaseService
     /** Planes activos REALES (id/name/price/duration/benefits). Fuente de precio. */
     public function activePlans(): array
     {
-        return Plan::where('active', true)
-            ->orderBy('sort_order')->get(['id', 'name', 'price', 'duration_days', 'benefits'])
+        return Plan::sellable()
+            ->orderBy('sort_order')
+            ->get(['id', 'name', 'price', 'duration_days', 'benefits', 'tier',
+                'original_price', 'is_recommended', 'badge', 'access_classes', 'restrictions'])
             ->map(fn (Plan $p) => [
                 'id' => $p->id,
                 'name' => $p->name,
                 'price' => (float) $p->price,
                 'duration_days' => $p->duration_days,
                 'benefits' => $p->benefitsArray(),
+                'tier' => $p->tier,
+                // Sólo si hay rebaja de verdad: un descuento inventado es la
+                // clase de urgencia falsa que este sistema no puede permitirse.
+                'original_price' => $p->original_price !== null && (float) $p->original_price > (float) $p->price
+                    ? (float) $p->original_price
+                    : null,
+                'is_recommended' => (bool) $p->is_recommended,
+                'badge' => $p->badge,
+                'access_classes' => (bool) $p->access_classes,
+                'restrictions' => $p->restrictions,
             ])->all();
     }
 
     public function activePlansCount(): int
     {
-        return Plan::where('active', true)->count();
+        return Plan::sellable()->count();
     }
 
     /**
@@ -87,7 +99,7 @@ class MarketingKnowledgeBaseService
      */
     public function defaultMonthlyPlan(): ?Plan
     {
-        $monthly = Plan::where('active', true)
+        $monthly = Plan::sellable()
             ->where(function ($q) {
                 $q->whereBetween('duration_days', [28, 31])
                     ->orWhere('name', 'like', '%ensual%'); // mensual / Mensualidad
@@ -95,7 +107,7 @@ class MarketingKnowledgeBaseService
             ->orderBy('sort_order')
             ->first();
 
-        return $monthly ?? Plan::where('active', true)->orderBy('sort_order')->first();
+        return $monthly ?? Plan::sellable()->orderBy('sort_order')->first();
     }
 
     /**

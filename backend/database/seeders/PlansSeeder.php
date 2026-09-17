@@ -23,7 +23,6 @@ class PlansSeeder extends Seeder
         'Zona de pesas y maquinaria',
         'Asesoría semi personalizada con entrenador de planta',
         'Seguimiento en ejecución de ejercicios',
-        'Acceso a clases de rumba dos veces por semana',
         'Valoración inicial',
         // App
         'Acceso básico completo a la app',
@@ -42,7 +41,6 @@ class PlansSeeder extends Seeder
         'Acceso al gimnasio durante la vigencia del plan',
         'Rutinas personalizadas',
         'Seguimiento cada dos meses',
-        'Acceso a clases de rumba dos veces por semana',
         // App
         'Acceso avanzado a la app',
         'Rutinas personalizadas en la app',
