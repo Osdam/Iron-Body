@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\AuditLog;
+use App\Models\Member;
 use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\User;
@@ -34,10 +35,14 @@ class InspectMemberMembership extends Command
     {
         $clave = (string) $this->argument('socio');
 
-        $user = User::query()
-            ->when(ctype_digit($clave), fn ($q) => $q->where('id', (int) $clave))
-            ->when(! ctype_digit($clave), fn ($q) => $q->where('email', $clave)->orWhere('document', $clave))
-            ->first();
+        // Una cédula también es solo dígitos: probar primero el id y, si no
+        // existe, buscarla como documento. Antes un número se tomaba siempre
+        // por id y ninguna cédula aparecía.
+        $user = (ctype_digit($clave) ? User::find((int) $clave) : null)
+            ?? User::query()
+                ->where('document', Member::normalizeDocumentNumber($clave))
+                ->orWhere('email', $clave)
+                ->first();
 
         if (! $user) {
             $this->error("No hay ningún socio con «{$clave}».");
@@ -122,7 +127,8 @@ class InspectMemberMembership extends Command
 
         $trazas = AuditLog::query()
             ->where(fn ($q) => $q->where('entity', 'membership')->where('entity_id', (string) $user->id))
-            ->orWhere(fn ($q) => $q->where('entity', 'payment')->whereIn('entity_id', $pagos->pluck('id')->map(fn ($i) => (string) $i)))
+            // FinancialAudit registra los cobros como `pago`; otras trazas usan `payment`.
+            ->orWhere(fn ($q) => $q->whereIn('entity', ['payment', 'pago'])->whereIn('entity_id', $pagos->pluck('id')->map(fn ($i) => (string) $i)))
             ->orderBy('id')
             ->get(['id', 'created_at', 'action', 'entity', 'entity_id', 'actor_name', 'summary']);
 

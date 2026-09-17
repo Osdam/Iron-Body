@@ -18,7 +18,7 @@ class InspectMemberMembershipTest extends TestCase
         $plan = Plan::create(['name' => 'Élite', 'price' => 180000, 'duration_days' => 30, 'active' => true]);
         $u = User::create([
             'name' => 'Socia', 'email' => 'inspect@example.com', 'password' => 'secret',
-            'status' => 'active', 'plan' => 'Élite',
+            'status' => 'active', 'plan' => 'Élite', 'document' => '42122926',
             'membership_start_date' => '2026-09-12', 'membership_end_date' => '2026-11-11',
         ]);
         Payment::create([
@@ -33,6 +33,10 @@ class InspectMemberMembershipTest extends TestCase
 
         $this->artisan('memberships:inspect '.$u->id)->assertSuccessful();
         $this->artisan('memberships:inspect inspect@example.com')->assertSuccessful();
+        // Una cédula es solo dígitos, igual que un id: tiene que encontrarse.
+        $this->artisan('memberships:inspect 42122926')
+            ->expectsOutputToContain('Socia')
+            ->assertSuccessful();
         $this->artisan('memberships:inspect nadie@example.com')->assertFailed();
 
         $this->assertSame('2026-11-11', $u->refresh()->membership_end_date);
