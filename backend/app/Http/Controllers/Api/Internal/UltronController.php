@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api\Internal;
 
 use App\Http\Controllers\Controller;
+use App\Models\Incident;
 use App\Models\MarketingConversation;
 use App\Models\MarketingMessage;
+use App\Services\IronGuard\IncidentRecorder;
 use App\Services\Marketing\CommercialPhaseMachine;
 use App\Services\Marketing\SalesAgentDecisionSchema;
 use App\Services\Marketing\Ultron\UltronCommitException;
@@ -32,6 +34,27 @@ use Illuminate\Validation\Rule;
  */
 class UltronController extends Controller
 {
+    /** Fuente en IRON GUARD. Da su propio carril en el panel. */
+    private const INCIDENT_SOURCE = 'ultron';
+
+    /**
+     * Las etapas del workflow, en el orden en que ocurren.
+     *
+     * Se corresponden una a una con los nodos de `Iron Body - ULTRON -
+     * Commercial Advisor`; el Error Handler traduce el nombre del nodo que
+     * murió a uno de estos.
+     *
+     * `unknown` existe a propósito: si aparece un nodo que esta lista no
+     * contempla, el parte debe entrar igual. Un sistema de alarmas que se
+     * niega a registrar lo que no esperaba deja de avisar justo cuando pasa
+     * algo nuevo.
+     */
+    private const INCIDENT_STAGES = [
+        'webhook', 'normalize', 'decide', 'strategist', 'validate_strategy',
+        'composer', 'critic', 'composer_retry', 'critic_retry',
+        'prepare_commit', 'commit', 'respond', 'unknown',
+    ];
+
     public function __construct(
         private readonly UltronDecideService $decide,
     ) {}
@@ -154,6 +177,97 @@ class UltronController extends Controller
                 'detail' => $e->detail ?: null,
             ], fn ($v) => $v !== null), $e->status);
         }
+    }
+
+    /**
+     * POST /api/internal/marketing/ai/ultron/incidents
+     *
+     * Por dónde avisa el workflow de que algo se le rompió.
+     *
+     * Existe porque un workflow que falla en silencio es peor que uno que se
+     * cae con estruendo: si el Strategist se queda sin cuota o `/ai/commit`
+     * rechaza sistemáticamente lo que propone, sin esto nadie se entera hasta
+     * que un prospecto se queja de que nunca le contestaron.
+     *
+     * NO inventa observabilidad nueva: alimenta el mismo IRON GUARD que ya
+     * agrupa las averías del canal por CLASE. Cien ejecuciones muertas en la
+     * misma etapa por el mismo motivo son un incidente con cien ocurrencias,
+     * no cien alarmas.
+     *
+     * El contrato es deliberadamente pobre. No se acepta el mensaje del
+     * cliente, ni cabeceras, ni trazas: un parte de avería que arrastra el
+     * texto de la conversación convierte el panel en un segundo sitio donde
+     * vive la PII, y esta vez uno que se mira en pantalla compartida.
+     */
+    public function incident(Request $request, IncidentRecorder $incidents): JsonResponse
+    {
+        $data = $request->validate([
+            'workflow_execution_id' => ['required', 'string', 'max:64', 'regex:/^[A-Za-z0-9_.:-]+$/'],
+            'stage' => ['required', 'string', Rule::in(self::INCIDENT_STAGES)],
+            /*
+             * `error_code` acaba dentro del `kind` y del título que se lee en
+             * el panel. Que sea un CÓDIGO y no prosa libre no es cosmética:
+             * es lo que impide que un workflow mal escrito publique ahí el
+             * mensaje del cliente.
+             */
+            'error_code' => ['required', 'string', 'max:64', 'regex:/^[A-Za-z0-9_.:-]+$/'],
+            'retryable' => ['required', 'boolean'],
+            // Nullable y no `sometimes`: un nodo Set de n8n emite siempre todas
+            // las claves, y las que no aplican llegan en null.
+            'occurred_at' => ['nullable', 'date'],
+            'conversation_id' => ['nullable', 'integer', 'min:1'],
+            'source_event_id' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        /*
+         * La regla `boolean` acepta "1" y "0" además del booleano, y
+         * `validated()` devuelve el valor TAL CUAL llegó. Se normaliza aquí
+         * para que en la evidencia quede `false` y no la cadena "0": esa
+         * evidencia se lee en el panel y en JSON no significan lo mismo.
+         */
+        $reintentable = $request->boolean('retryable');
+
+        if ($sobran = $this->unexpectedKeys($request->all(), $data)) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'unexpected_fields',
+                'message' => 'El parte de avería trae campos que no están en el contrato.',
+                'fields' => $sobran,
+            ], 422);
+        }
+
+        $incidente = $incidents->record([
+            'source' => self::INCIDENT_SOURCE,
+            // La clase: etapa + código. Nunca la ejecución concreta, o cada
+            // fallo abriría su propia alarma y el panel se volvería ilegible.
+            'kind' => self::INCIDENT_SOURCE.'.'.$data['stage'].'.'.$data['error_code'],
+            'title' => 'ULTRON falló en '.$data['stage'].' ('.$data['error_code'].')',
+            // Lo que no se puede reintentar exige a alguien despierto; lo que
+            // sí, normalmente se arregla solo en el siguiente intento.
+            'severity' => $reintentable ? Incident::SEVERITY_MEDIUM : Incident::SEVERITY_HIGH,
+            'evidence' => [
+                'stage' => $data['stage'],
+                'error_code' => $data['error_code'],
+                'retryable' => $reintentable,
+                'occurred_at' => $data['occurred_at'] ?? now()->toIso8601String(),
+            ],
+            // Hilos por los que tirar al investigar: la ejecución de n8n y, si
+            // venían, los ids internos. Ids, no contenido.
+            'correlation_ids' => array_values(array_filter([
+                'n8n:'.$data['workflow_execution_id'],
+                ($data['conversation_id'] ?? null) !== null ? 'conversation:'.$data['conversation_id'] : null,
+                ($data['source_event_id'] ?? null) !== null ? 'message:'.$data['source_event_id'] : null,
+            ])),
+            'affected_conversations' => ($data['conversation_id'] ?? null) !== null ? 1 : 0,
+            'affected_messages' => ($data['source_event_id'] ?? null) !== null ? 1 : 0,
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'incident_id' => (int) $incidente->id,
+            'occurrences' => (int) $incidente->occurrences,
+            'severity' => (string) $incidente->severity,
+        ]);
     }
 
     /**

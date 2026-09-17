@@ -62,6 +62,8 @@ Route::middleware(['automation.internal', 'throttle:120,1'])
          */
         Route::post('ai/decide', [UltronController::class, 'decide']);
         Route::post('ai/commit', [UltronController::class, 'commit']);
+        // Por donde el workflow avisa de una averia. Alimenta IRON GUARD.
+        Route::post('ai/ultron/incidents', [UltronController::class, 'incident']);
 
         // Base de conocimiento comercial (Fase 3.5). Solo interno (HMAC).
         Route::get('knowledge/doctor', [InternalMarketingKnowledgeController::class, 'doctor']);
