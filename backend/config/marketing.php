@@ -39,6 +39,22 @@ return [
         // esquemas de firma distintos serían dos formas de equivocarse.
         'webhook_url' => env('MARKETING_ULTRON_WEBHOOK_URL'),
         'timeout' => (int) env('MARKETING_ULTRON_TIMEOUT', 10),
+        /*
+         * Durante el canario, ULTRON atiende UNA conversación y nada más.
+         *
+         * Encender `enabled` es un permiso demasiado ancho para una primera
+         * prueba en vivo: valdría para cualquier prospecto que escriba en ese
+         * momento, y una primera salida a producción no debería depender de
+         * que nadie más escriba. Con un id aquí, el resto de conversaciones
+         * siguen su curso normal sin que ULTRON se entere.
+         *
+         * `null` (lo normal) significa sin restricción: es una palanca de
+         * transición, no parte del diseño.
+         */
+        'canary_conversation_id' => ($canario = env('MARKETING_ULTRON_CANARY_CONVERSATION_ID')) === null
+            || trim((string) $canario) === ''
+                ? null
+                : (int) $canario,
     ],
 
     // Seguimientos automáticos (marketing:dispatch-followups).

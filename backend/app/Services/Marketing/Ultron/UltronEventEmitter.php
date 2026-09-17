@@ -41,6 +41,22 @@ class UltronEventEmitter
             return 'ultron_disabled';
         }
 
+        /*
+         * Cerrojo del canario: una conversación, no «las que haya».
+         *
+         * Va aquí, pegado al interruptor, porque es de la misma clase: una
+         * decisión de operación que se toma antes de mirar nada del mensaje.
+         * Y va ANTES de crear el evento, no después, para que una conversación
+         * ajena no deje ni rastro en la cola.
+         *
+         * No sustituye a ninguna barrera: si la conversación ES la del
+         * canario, debajo siguen mandando el opt-out, el takeover y ai_enabled.
+         */
+        $canario = config('marketing.ultron.canary_conversation_id');
+        if ($canario !== null && (int) $canario !== (int) $conversation->id) {
+            return 'not_canary_conversation';
+        }
+
         $lead = $conversation->lead;
 
         if ($lead === null) {
