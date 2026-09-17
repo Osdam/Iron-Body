@@ -12,7 +12,8 @@ class MarketingConversation extends Model
         'lead_id', 'channel', 'status', 'last_message_at', 'human_takeover',
         'human_takeover_source', 'ai_enabled',
         // Memoria comercial (aditivo).
-        'summary', 'detected_objective', 'lead_score', 'lead_stage',
+        'summary',
+        'memory', 'detected_objective', 'lead_score', 'lead_stage',
         'primary_intent', 'last_intent',
         // Máquina comercial (ULTRON v1). Conviven con lead_stage, no lo sustituyen.
         'commercial_phase', 'main_barrier', 'recommended_plan_id',
@@ -27,6 +28,7 @@ class MarketingConversation extends Model
     ];
 
     protected $casts = [
+        'memory' => 'array',
         'last_message_at' => 'datetime',
         'human_takeover' => 'boolean',
         'ai_enabled' => 'boolean',

@@ -53,6 +53,9 @@ class UltronDecideService
         private readonly MarketingKnowledgeBaseService $knowledge,
         private readonly SalesPaymentReadinessService $paymentReadiness,
         private readonly UltronDecideToken $tokens,
+        private readonly ConversationMemoryService $memoryService,
+        private readonly ReferenceResolver $references,
+        private readonly NoveltyGuard $novelty,
         private readonly HumanHandoffAuthority $handoff = new HumanHandoffAuthority,
     ) {}
 
@@ -195,6 +198,19 @@ class UltronDecideService
 
         $phase = $this->currentPhase($conversation);
         $transitions = $this->phases->allowedTransitions($phase, $this->phaseContext($conversation, $message));
+
+        /*
+         * MEMORIA ESTRUCTURADA Y REFERENTE. Tres hechos que Laravel calcula y
+         * el modelo recibe resueltos: qué se entregó ya (para no repetirlo), a
+         * qué se refiere este mensaje («sí por favor» = la oferta de la última
+         * frase del agente) y qué queda por contar. Sin esto el modelo tenía
+         * que adivinar el referente en diez mensajes crudos, y adivinó
+         * «traspaso» donde la persona había dicho «sí, explícame cómo empezar».
+         */
+        $memory = $this->memoryService->load($conversation);
+        $plansForMemory = $this->memoryService->sellablePlansForMemory();
+        $resolved = $this->references->resolve((string) $message->body, $memory, $plansForMemory);
+        $novelty = $this->novelty->guidance($memory, $plansForMemory, $resolved);
         // El MENÚ del que ULTRON puede elegir, no un filtrado de lo que Laravel
         // ya propuso: lo que la decisión base pidiera viaja aparte, dentro de
         // `decision`. Mezclar las dos cosas haría que el techo dependiera de la
@@ -235,7 +251,10 @@ class UltronDecideService
                     'lead_stage' => $conversation->lead_stage,
                     'commercial_phase' => $phase,
                     'main_barrier' => $conversation->main_barrier,
+                    'structured' => $memory->toArray(),
                 ],
+                'resolved_reference' => $resolved,
+                'novelty' => $novelty,
                 'recent_messages' => $this->recentMessages($conversation),
                 'knowledge_base' => $this->knowledge->groupedForPrompt(),
                 'active_plans' => $this->plansWithoutPrice(),

@@ -71,6 +71,9 @@ class UltronCommitService
         private readonly SalesAgentGuardrailService $guardrail,
         private readonly OutboundContentGuard $contentGuard,
         private readonly HumanHandoffAuthority $handoff,
+        private readonly ConversationMemoryService $memoryService,
+        private readonly ReferenceResolver $references,
+        private readonly NoveltyGuard $novelty,
         private readonly SalesConversationMemoryService $memory,
         private readonly SalesConversationReplyService $replies,
         private readonly MarketingMessageDispatcher $dispatcher,
@@ -294,6 +297,38 @@ class UltronCommitService
         $plan = $this->resolvePlan($proposal['recommended_plan_id'] ?? null, $sanitized['reply']);
         $replyFinal = $this->placeholders->resolve($sanitized['reply'], $plan);
 
+        /*
+         * 10.bis) NOVEDAD DURA. Una respuesta casi idéntica a una que ya salió
+         * no vuelve a salir: así se mandó seis veces el mismo precio a la misma
+         * persona. Se compara el texto FINAL (con el precio ya puesto) contra
+         * las últimas salidas de máquina, antes de cualquier efecto. La
+         * novedad fina —«cuéntame más» que repite beneficios— la juzga el
+         * Critic con `novelty.must_not_repeat`; esto es la red de abajo.
+         */
+        $previas = $this->previousMachineReplies($conversation);
+        $duplicadoDe = $this->novelty->isExplicitRepeatRequest((string) $message->body)
+            ? null // «me repites la dirección?»: repetir es exactamente lo que pidió.
+            : $this->novelty->nearDuplicateOf($replyFinal, $previas);
+        $respuestaRepetida = $duplicadoDe !== null;
+        if ($respuestaRepetida) {
+            // No es una excepción: las herramientas del turno (el opt-out de
+            // quien pide que no le escriban) se ejecutan igual. Sólo el TEXTO no
+            // sale, y la fase no avanza sobre una respuesta que no se envió.
+            ChannelLog::warning('ultron.commit.repeated_reply', [
+                'conversation_id' => $conversation->id,
+                'similarity' => round($this->novelty->similarity($replyFinal, $previas[$duplicadoDe]), 2),
+            ]);
+            $nextState = $currentPhase;
+        }
+
+        // El referente se resuelve sobre la memoria de ANTES de este turno.
+        $memoriaPrevia = $this->memoryService->load($conversation);
+        $resolution = $this->references->resolve(
+            (string) $message->body,
+            $memoriaPrevia,
+            $this->memoryService->sellablePlansForMemory(),
+        );
+
         // 11) Guardrails sobre la decisión ya ensamblada.
         $decision = $this->guardrail->apply([
             'ok' => true,
@@ -318,10 +353,20 @@ class UltronCommitService
             'responder' => 'ultron',
         ], $lead);
 
+        if ($respuestaRepetida) {
+            $decision['safe_to_send'] = false;
+            $decision['should_send_message'] = false;
+            $decision['recommended_action'] = 'repeated_reply';
+            $decision['risk_flags'] = array_values(array_unique(array_merge((array) ($decision['risk_flags'] ?? []), ['repeated_reply'])));
+        }
+
         // 12) Persistir. La fase solo avanza cuando el commit se acepta.
         $action = $this->persist($conversation, $message, $payload, $decision, $nextState, $plan, [
             'source' => 'external_draft',
             'price_enriched' => $plan !== null && $replyFinal !== $sanitized['reply'],
+            'reference_resolution' => $resolution['type'],
+            'novelty_max_similarity' => $previas === [] ? null
+                : round(max(array_map(fn ($b) => $this->novelty->similarity($replyFinal, $b), $previas)), 2),
         ]);
 
         $this->applyPhase($conversation, $nextState, $proposal, $plan);
@@ -339,6 +384,7 @@ class UltronCommitService
 
         if (! ($decision['safe_to_send'] ?? false)) {
             $action->forceFill(['status' => 'skipped'])->save();
+            $this->memoryService->recordSilentTurn($conversation->fresh(), $message, $resolution);
 
             ChannelLog::info('ultron.commit.no_reply', [
                 'ai_action_id' => $action->id,
@@ -370,6 +416,14 @@ class UltronCommitService
 
         $outcome = $send['sent'] ? 'sent' : ($send['dry_run'] ? 'dry_run' : 'failed');
         $this->finalise($action, $outcome, $send);
+
+        // 15) La memoria registra lo que SALIÓ, con el plan y el precio reales.
+        if ($outcome !== 'failed') {
+            $this->memoryService->recordSentTurn(
+                $conversation->fresh(), $message, $replyFinal, $plan,
+                (string) $sanitized['intent'], $resolution, $send['message_id'] ?? null,
+            );
+        }
 
         ChannelLog::info('ultron.commit.done', [
             'ai_action_id' => $action->id,
@@ -449,6 +503,13 @@ class UltronCommitService
             }
         }
 
+        // Y el texto curado tampoco se repite palabra por palabra: dos fallos del
+        // critic con la misma intención no pueden mandar dos veces la misma frase.
+        if ($curado !== null && $this->novelty->nearDuplicateOf($curado, $this->previousMachineReplies($conversation)) !== null) {
+            ChannelLog::warning('ultron.commit.curated_reply_repeated', ['conversation_id' => $conversation->id, 'intent' => $intent]);
+            $curado = null;
+        }
+
         $modo = $curado !== null && trim($curado) !== '' ? 'SAFE_CURATED_REPLY' : 'NO_REPLY_AND_HANDOFF';
         $reason = $modo === 'SAFE_CURATED_REPLY' ? 'critic_failed' : 'critic_failed_no_safe_reply';
 
@@ -486,8 +547,15 @@ class UltronCommitService
             'staff_review_reason' => $reason,
         ])->save();
 
+        $resolution = $this->references->resolve(
+            (string) $message->body,
+            $this->memoryService->load($conversation),
+            $this->memoryService->sellablePlansForMemory(),
+        );
+
         if ($modo === 'NO_REPLY_AND_HANDOFF') {
             $action->forceFill(['status' => 'skipped'])->save();
+            $this->memoryService->recordSilentTurn($conversation->fresh(), $message, $resolution);
 
             ChannelLog::info('ultron.commit.critic_failed', [
                 'ai_action_id' => $action->id, 'mode' => $modo, 'conversation_id' => $conversation->id,
@@ -515,6 +583,12 @@ class UltronCommitService
 
         $outcome = $send['sent'] || $send['dry_run'] ? 'curated_fallback' : 'failed';
         $this->finalise($action, $outcome, $send);
+
+        if ($outcome !== 'failed') {
+            $this->memoryService->recordSentTurn(
+                $conversation->fresh(), $message, (string) $curado, null, $intent, $resolution, $send['message_id'] ?? null,
+            );
+        }
 
         ChannelLog::info('ultron.commit.critic_failed', [
             'ai_action_id' => $action->id, 'mode' => $modo,
@@ -861,5 +935,23 @@ class UltronCommitService
             is_string($proposal['human_handoff_reason'] ?? null) ? $proposal['human_handoff_reason'] : null,
             (string) $message->body,
         );
+    }
+
+    /**
+     * Las últimas respuestas de máquina de esta conversación, más reciente
+     * primero. Tres bastan: una repetición se nota contra el turno anterior.
+     *
+     * @return string[]
+     */
+    private function previousMachineReplies(MarketingConversation $conversation): array
+    {
+        return $conversation->messages()
+            ->where('direction', MarketingMessage::DIRECTION_OUTBOUND)
+            ->where('sender_type', MarketingMessage::SENDER_AI)
+            // Ventana: repetir la dirección a quien vuelve semanas después no es repetirse.
+            ->where('created_at', '>=', now()->subHours(24))
+            ->latest('id')->limit(3)->pluck('body')
+            ->filter(fn ($b) => is_string($b) && trim($b) !== '')
+            ->values()->all();
     }
 }
