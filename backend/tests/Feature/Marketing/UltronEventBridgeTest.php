@@ -284,4 +284,104 @@ class UltronEventBridgeTest extends TestCase
         $fila = json_encode(MarketingAutomationEvent::sole()->toArray());
         $this->assertStringNotContainsString('n8n-shared-secret', (string) $fila);
     }
+
+    // ── Cerrojo del canario: una conversación y nada más ──────────────────────
+
+    /**
+     * Sin id de canario (lo normal), ULTRON atiende como siempre.
+     */
+    public function test_without_a_canary_id_nothing_changes(): void
+    {
+        config()->set('marketing.ultron.canary_conversation_id', null);
+
+        $this->incoming($this->text('hola', 'wamid.SINCANARIO'))->assertOk();
+
+        $this->assertSame(1, MarketingAutomationEvent::count());
+    }
+
+    /** La conversación señalada sí llega a ULTRON. */
+    public function test_the_canary_conversation_is_the_one_that_gets_through(): void
+    {
+        config()->set('marketing.ultron.canary_conversation_id', $this->conversation->id);
+
+        $this->incoming($this->text('hola', 'wamid.CANARIO'))->assertOk();
+
+        $this->assertSame(1, MarketingAutomationEvent::count());
+        $this->assertSame($this->conversation->id, MarketingAutomationEvent::sole()->conversation_id);
+    }
+
+    /**
+     * Y cualquier otra NO, que es lo único que hace útil al cerrojo.
+     *
+     * El mensaje se guarda igual y sigue visible en el Inbox: lo que no ocurre
+     * es que ULTRON se entere. Perder el mensaje sería perder al cliente.
+     */
+    public function test_any_other_conversation_is_left_out(): void
+    {
+        config()->set('marketing.ultron.canary_conversation_id', $this->conversation->id + 999);
+
+        $this->incoming($this->text('hola', 'wamid.AJENA'))->assertOk();
+
+        $this->assertSame(0, MarketingAutomationEvent::count());
+        $this->assertSame(1, MarketingMessage::where('conversation_id', $this->conversation->id)
+            ->where('direction', MarketingMessage::DIRECTION_INBOUND)->count());
+    }
+
+    /** El interruptor general sigue mandando sobre el cerrojo. */
+    public function test_the_master_switch_still_wins_over_the_canary(): void
+    {
+        config()->set('marketing.ultron.enabled', false);
+        config()->set('marketing.ultron.canary_conversation_id', $this->conversation->id);
+
+        $this->incoming($this->text('hola', 'wamid.APAGADO'))->assertOk();
+
+        $this->assertSame(0, MarketingAutomationEvent::count());
+    }
+
+    /**
+     * Ser la conversación del canario no compra ningún privilegio.
+     *
+     * Estas tres son las barreras que protegen a la persona, y el cerrojo se
+     * añadió por encima de ellas, no en su lugar.
+     */
+    public function test_being_the_canary_does_not_override_the_opt_out(): void
+    {
+        config()->set('marketing.ultron.canary_conversation_id', $this->conversation->id);
+        $this->lead->update(['do_not_contact' => true]);
+
+        $this->incoming($this->text('hola', 'wamid.DNC'))->assertOk();
+
+        $this->assertSame(0, MarketingAutomationEvent::count());
+    }
+
+    public function test_being_the_canary_does_not_override_a_manual_takeover(): void
+    {
+        config()->set('marketing.ultron.canary_conversation_id', $this->conversation->id);
+        $this->conversation->update(['human_takeover' => true, 'human_takeover_source' => 'manual']);
+
+        $this->incoming($this->text('hola', 'wamid.TAKEOVER'))->assertOk();
+
+        $this->assertSame(0, MarketingAutomationEvent::count());
+    }
+
+    public function test_being_the_canary_does_not_override_ai_disabled(): void
+    {
+        config()->set('marketing.ultron.canary_conversation_id', $this->conversation->id);
+        $this->conversation->update(['ai_enabled' => false]);
+
+        $this->incoming($this->text('hola', 'wamid.IAOFF'))->assertOk();
+
+        $this->assertSame(0, MarketingAutomationEvent::count());
+    }
+
+    /** Y el duplicado se sigue deduplicando dentro del canario. */
+    public function test_a_duplicate_inside_the_canary_is_still_one_event(): void
+    {
+        config()->set('marketing.ultron.canary_conversation_id', $this->conversation->id);
+
+        $this->incoming($this->text('hola', 'wamid.DUPCANARIO'))->assertOk();
+        $this->incoming($this->text('hola', 'wamid.DUPCANARIO'))->assertOk();
+
+        $this->assertSame(1, MarketingAutomationEvent::count());
+    }
 }
