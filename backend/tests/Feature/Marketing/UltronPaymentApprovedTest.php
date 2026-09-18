@@ -3,9 +3,11 @@
 namespace Tests\Feature\Marketing;
 
 use App\Models\MarketingConversation;
+use App\Models\MarketingConversationNote;
 use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
 use App\Models\Member;
+use App\Models\MembershipSubscription;
 use App\Models\Payment;
 use App\Models\PaymentTransaction;
 use App\Models\Plan;
@@ -18,6 +20,8 @@ use App\Services\Wompi\WompiTransactionService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Testing\TestResponse;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -26,8 +30,13 @@ use Tests\TestCase;
  * WON, la memoria lo sabe, y Laravel manda el mensaje de inicio. Si la persona
  * ya es socia con usuario, la membresía se activa de verdad; si no lo es, nadie
  * inventa una ficha: se le explica cómo registrarse en la app y una persona lo
- * mira. Al registrarse con el mismo número, el pago aprobado se reclama y la
- * membresía se activa. Un pago rechazado o vencido no arranca nada.
+ * mira.
+ *
+ * Registrarse en la app con el mismo número NO reclama el pago: el backend no
+ * puede atestiguar que quien se registra posee ese teléfono (no hay OTP en el
+ * registro), así que el número es una PISTA, no una prueba. El registro deja el
+ * caso propuesto —alerta interna con los ids y aviso al lead por WhatsApp— y el
+ * enlace lo decide una persona. Un pago rechazado o vencido no arranca nada.
  */
 class UltronPaymentApprovedTest extends TestCase
 {
@@ -77,6 +86,34 @@ class UltronPaymentApprovedTest extends TestCase
         return MarketingMessage::where('conversation_id', $this->conversation->id)->where('direction', MarketingMessage::DIRECTION_OUTBOUND)->where('sender_type', MarketingMessage::SENDER_AI)->orderBy('id')->get();
     }
 
+    /** Alguien se registra en la app (endpoint real, con su validación real). */
+    private function registerInApp(array $override = []): TestResponse
+    {
+        return $this->postJson('/api/members/register', array_merge([
+            'full_name' => 'Nuevo Socio',
+            'email' => 'nuevo@x.co',
+            'document_number' => '87654321',
+            'phone' => '3150536026',
+            'gender' => 'Masculino',
+        ], $override));
+    }
+
+    /** Los avisos de reclamo que salieron por WhatsApp (dry_run en la suite). */
+    private function claimNotices(): Collection
+    {
+        return MarketingMessage::where('conversation_id', $this->conversation->id)
+            ->where('direction', MarketingMessage::DIRECTION_OUTBOUND)
+            ->orderBy('id')
+            ->get()
+            ->filter(fn (MarketingMessage $m): bool => ($m->metadata['kind'] ?? null) === 'claim_notice')
+            ->values();
+    }
+
+    private function notes(): Collection
+    {
+        return MarketingConversationNote::where('conversation_id', $this->conversation->id)->orderBy('id')->get();
+    }
+
     public function test_an_approved_payment_converts_the_lead_and_starts_onboarding_by_whatsapp(): void
     {
         $tx = $this->link();
@@ -107,6 +144,22 @@ class UltronPaymentApprovedTest extends TestCase
         $this->assertStringContainsString('regístrate', mb_strtolower($this->onboarding()->first()->body), 'se le explica cómo activar su acceso');
     }
 
+    /**
+     * El mensaje de inicio no puede prometer lo que el backend no hace: el
+     * registro NO enlaza el pago solo. Promete lo que sí ocurre: el equipo lo
+     * enlaza y avisa.
+     */
+    public function test_the_onboarding_message_does_not_promise_an_automatic_link(): void
+    {
+        $tx = $this->link();
+        $this->wompiSays($tx, 'APPROVED');
+
+        $body = mb_strtolower($this->onboarding()->first()->body);
+        $this->assertStringContainsString('el equipo enlaza tu pago', $body);
+        $this->assertStringContainsString('te avisa cuando tu membresía quede activa', $body);
+        $this->assertStringNotContainsString('tu pago queda enlazado', $body, 'ya no se promete el enlace automático');
+    }
+
     public function test_an_existing_member_with_a_user_gets_the_membership_activated_for_real(): void
     {
         $user = User::create(['name' => 'Socia', 'email' => 'socia@x.co', 'password' => bcrypt('x')]);
@@ -122,34 +175,167 @@ class UltronPaymentApprovedTest extends TestCase
         $this->assertStringContainsString('activ', mb_strtolower($this->onboarding()->first()->body));
     }
 
-    public function test_registering_in_the_app_with_the_same_phone_claims_the_approved_payment(): void
+    /**
+     * ALTO-1: registrarse con el número de quien pagó NO se lleva la membresía.
+     * El número coincide, así que el caso se PROPONE (alerta interna con los
+     * ids y aviso al lead), pero la transacción sigue sin dueño y no hay
+     * membresía activada.
+     */
+    public function test_registering_with_the_same_phone_never_takes_the_payment_it_only_proposes_it(): void
     {
         $tx = $this->link();
         $this->wompiSays($tx, 'APPROVED');
-        $this->assertNull($tx->fresh()->member_id);
 
-        $user = User::create(['name' => 'Nuevo', 'email' => 'nuevo@x.co', 'password' => bcrypt('x')]);
-        $member = Member::create(['full_name' => 'Nuevo Socio', 'document_number' => '87654321', 'phone' => '3150536026', 'email' => 'nuevo@x.co', 'status' => Member::STATUS_PENDING_REGISTRATION, 'user_id' => $user->id]);
+        $this->registerInApp()->assertCreated();
 
-        $claimed = app(ApprovedPaymentClaimer::class)->claimFor($member);
+        $member = Member::where('document_number', '87654321')->firstOrFail();
+        $tx = $tx->fresh();
+        $this->assertNull($tx->member_id, 'el pago NO se enlaza a quien se registra');
+        $this->assertNull($tx->user_id);
+        $this->assertNull($this->lead->fresh()->member_id, 'el lead tampoco se enlaza a esa ficha');
+        $this->assertSame(0, Payment::count(), 'ninguna membresía se activa sin que una persona lo apruebe');
+        $this->assertSame(0, MembershipSubscription::count());
+        $this->assertNull($member->user->fresh()->membership_end_date);
 
-        $this->assertSame(1, $claimed);
-        $this->assertSame($member->id, (int) $tx->fresh()->member_id);
-        $this->assertSame($user->id, (int) $tx->fresh()->user_id);
-        $this->assertTrue(Payment::where('reference', $tx->reference)->exists(), 'ahora sí hay pago contable y membresía');
-        $this->assertNotNull($user->fresh()->membership_end_date);
-        $this->assertSame($member->id, (int) $this->lead->fresh()->member_id, 'el lead queda enlazado a su ficha');
-        $this->assertSame(0, app(ApprovedPaymentClaimer::class)->claimFor($member), 'reclamar dos veces no cobra dos veces');
+        $c = $this->conversation->fresh();
+        $this->assertTrue((bool) $c->staff_review_pending);
+        $this->assertSame('payment_claim_candidate', $c->staff_review_reason);
+
+        $note = $this->notes()->last();
+        $this->assertNotNull($note, 'la alerta lleva los ids para que el equipo pueda verificarlo');
+        $this->assertSame(
+            '[payment_claim_candidate] '.json_encode(['member_id' => $member->id, 'transaction_ids' => [$tx->id], 'matched_by' => 'phone']),
+            $note->body
+        );
+
+        $notices = $this->claimNotices();
+        $this->assertCount(1, $notices, 'un solo aviso al lead');
+        $this->assertSame(ApprovedPaymentClaimer::NOTICE, $notices->first()->body);
+        $this->assertSame('system', $notices->first()->metadata['origin'] ?? null);
     }
 
-    public function test_another_phone_never_claims_someone_elses_payment(): void
+    /** Un segundo registro con el mismo número dentro de 24 h no vuelve a avisar. */
+    public function test_a_second_matching_registration_within_a_day_does_not_send_a_second_notice(): void
     {
         $tx = $this->link();
         $this->wompiSays($tx, 'APPROVED');
-        $user = User::create(['name' => 'Otra', 'email' => 'otra@x.co', 'password' => bcrypt('x')]);
-        $member = Member::create(['full_name' => 'Otra Persona', 'document_number' => '11112222', 'phone' => '3009998877', 'email' => 'otra@x.co', 'status' => Member::STATUS_PENDING_REGISTRATION, 'user_id' => $user->id]);
 
-        $this->assertSame(0, app(ApprovedPaymentClaimer::class)->claimFor($member));
+        $this->registerInApp()->assertCreated();
+        $this->registerInApp(['document_number' => '11223344', 'email' => 'otro@x.co', 'full_name' => 'Otro Nuevo'])->assertCreated();
+
+        $this->assertCount(1, $this->claimNotices(), 'máximo un aviso por lead cada 24 h');
+        $this->assertCount(2, $this->notes(), 'dos socios DISTINTOS reclamando el mismo número: el equipo debe ver a los dos');
+        $this->assertNull($tx->fresh()->member_id);
+    }
+
+    /** El registro no tiene throttle: el mismo socio repitiendo la llamada no apila notas ni avisos. */
+    public function test_the_same_member_repeating_the_registration_does_not_pile_up_alerts(): void
+    {
+        $tx = $this->link();
+        $this->wompiSays($tx, 'APPROVED');
+
+        $this->registerInApp()->assertCreated();
+        $this->registerInApp()->assertOk()->assertJsonPath('status', 'resumed');
+        $this->registerInApp()->assertOk()->assertJsonPath('status', 'resumed');
+
+        $this->assertCount(1, $this->claimNotices(), 'un aviso');
+        $this->assertCount(1, $this->notes(), 'una sola alerta interna para el mismo socio dentro de 24 h');
+        $this->assertNull($tx->fresh()->member_id);
+
+        $this->travel(25)->hours();
+        $this->registerInApp()->assertOk();
+        $this->assertCount(2, $this->notes(), 'pasadas 24 h, un nuevo intento vuelve a alertar');
+    }
+
+    public function test_another_phone_is_not_even_a_candidate(): void
+    {
+        $tx = $this->link();
+        $this->wompiSays($tx, 'APPROVED');
+
+        $this->registerInApp(['phone' => '3009998877'])->assertCreated();
+
+        $this->assertNull($tx->fresh()->member_id);
+        $this->assertCount(0, $this->claimNotices());
+        $this->assertCount(0, $this->notes());
+        $this->assertSame('paid_without_member', $this->conversation->fresh()->staff_review_reason, 'nadie tocó la alerta del pago sin socio');
+    }
+
+    /** Retomar un registro incompleto es el mismo camino: también propone. */
+    public function test_resuming_an_incomplete_registration_also_proposes_the_claim(): void
+    {
+        $tx = $this->link();
+        $this->wompiSays($tx, 'APPROVED');
+
+        $existing = Member::create(['full_name' => 'Nuevo Socio', 'document_number' => '87654321', 'phone' => '3150536026', 'status' => Member::STATUS_PENDING_REGISTRATION]);
+
+        $this->registerInApp()->assertOk()->assertJsonPath('status', 'resumed')->assertJsonPath('member_id', $existing->id);
+
+        $this->assertNull($tx->fresh()->member_id);
+        $this->assertSame('payment_claim_candidate', $this->conversation->fresh()->staff_review_reason);
+        $this->assertCount(1, $this->claimNotices());
+    }
+
+    /** Un pago de hace más de 90 días ya no es candidato de un registro nuevo. */
+    public function test_an_old_approved_payment_is_out_of_the_claim_window(): void
+    {
+        $tx = $this->link();
+        $this->wompiSays($tx, 'APPROVED');
+        PaymentTransaction::query()->whereKey($tx->id)->update(['created_at' => now()->subDays(100)]);
+
+        $this->registerInApp()->assertCreated();
+
+        $this->assertCount(0, $this->claimNotices());
+        $this->assertCount(0, $this->notes());
+        $this->assertSame('paid_without_member', $this->conversation->fresh()->staff_review_reason);
+    }
+
+    /**
+     * El tope de candidatos acota los pagos QUE COINCIDEN con este número, no
+     * el barrido de la tabla. Los pagos sin socio se acumulan —desde que el
+     * enlace lo decide una persona, se quedan ahí hasta que alguien los mire—,
+     * así que si el tope se aplicara antes de mirar el teléfono, cualquier
+     * pago posterior de otra persona taparía al de quien se registra ahora y
+     * el equipo no se enteraría nunca.
+     */
+    public function test_other_peoples_orphan_payments_do_not_hide_the_matching_one(): void
+    {
+        $tx = $this->link();
+        $this->wompiSays($tx, 'APPROVED');
+
+        // Otras seis personas pagan por WhatsApp sin tener ficha, después.
+        foreach (range(1, 6) as $i) {
+            $otro = MarketingLead::create(['channel' => 'whatsapp', 'source' => 'inbound', 'phone' => '30011122'.$i.'0', 'meta_user_id' => '5730011122'.$i.'0', 'name' => 'Otro '.$i, 'status' => MarketingLead::STATUS_HOT]);
+            MarketingConversation::create(['lead_id' => $otro->id, 'channel' => 'whatsapp', 'status' => 'open', 'ai_enabled' => true, 'human_takeover' => false, 'commercial_phase' => P::CLOSING]);
+            WompiPaymentLinkService::make()->generateForLead($otro, $this->plan, ['channel' => 'whatsapp']);
+            $this->wompiSays(PaymentTransaction::query()->where('idempotency_key', 'like', 'mkt-lead-'.$otro->id.'-plan-%')->firstOrFail(), 'APPROVED');
+        }
+
+        $this->registerInApp()->assertCreated();
+
+        $member = Member::where('document_number', '87654321')->firstOrFail();
+        $this->assertSame('payment_claim_candidate', $this->conversation->fresh()->staff_review_reason);
+        $this->assertCount(1, $this->claimNotices());
+        $this->assertSame(
+            '[payment_claim_candidate] '.json_encode(['member_id' => $member->id, 'transaction_ids' => [$tx->id], 'matched_by' => 'phone']),
+            $this->notes()->last()->body,
+            'la alerta apunta al pago de ESTE número, no a los de los demás'
+        );
+        $this->assertNull($tx->fresh()->member_id);
+    }
+
+    /** Proponer es accesorio: si se cae, el alta se completa igual. */
+    public function test_a_broken_proposer_never_breaks_the_registration(): void
+    {
+        $tx = $this->link();
+        $this->wompiSays($tx, 'APPROVED');
+
+        // Inyección de fallo (no un doble de comportamiento): resolver el
+        // proponente revienta y el registro tiene que responder 201 igual.
+        $this->app->bind(ApprovedPaymentClaimer::class, fn () => throw new RuntimeException('proponente caído'));
+
+        $this->registerInApp()->assertCreated();
+
+        $this->assertTrue(Member::where('document_number', '87654321')->exists(), 'el socio quedó creado');
         $this->assertNull($tx->fresh()->member_id);
     }
 

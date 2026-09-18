@@ -9,11 +9,11 @@ use App\Http\Requests\StoreMemberBiometricRequest;
 use App\Http\Requests\StoreMemberIdentityRequest;
 use App\Http\Requests\StoreMemberLegalConsentRequest;
 use App\Http\Requests\StoreMemberSignatureRequest;
+use App\Jobs\Marketing\ProposePaymentClaim;
 use App\Models\Member;
 use App\Models\MemberBiometric;
 use App\Models\Plan;
 use App\Models\User;
-use App\Services\Marketing\ApprovedPaymentClaimer;
 use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -106,7 +106,12 @@ class MemberRegistrationController extends Controller
             $biometricStatus = $validated['biometric_status'] ?? null;
             unset($validated['biometric_status']);
 
-            $response = DB::transaction(function () use ($validated, $biometricStatus): JsonResponse {
+            // Quién se acaba de dar de alta (o de reanudar). Se anota dentro de
+            // la transacción y se usa DESPUÉS del commit: ver
+            // proposeApprovedPaymentClaim().
+            $claimant = null;
+
+            $response = DB::transaction(function () use ($validated, $biometricStatus, &$claimant): JsonResponse {
                 // (1) ¿Ya hay un miembro con este documento?
                 $member = Member::query()
                     ->where('document_number', $validated['document_number'])
@@ -137,7 +142,15 @@ class MemberRegistrationController extends Controller
                         'member_id' => $member->id,
                     ]);
 
-                    return $this->resumeRegistration($member, $validated, $biometricStatus, $user);
+                    $resumed = $this->resumeRegistration($member, $validated, $biometricStatus, $user);
+                    // Reanudar es un alta que continúa: también propone. Salvo
+                    // cuando resumeRegistration rechaza (409 por documento
+                    // ajeno): ahí no hay registro que proponer.
+                    if ($resumed->getStatusCode() < 300) {
+                        $claimant = $member;
+                    }
+
+                    return $resumed;
                 }
 
                 // (4) Miembro nuevo.
@@ -161,9 +174,7 @@ class MemberRegistrationController extends Controller
                 }
                 $member->user_id = $user->id;
                 $member->save();
-
-                // Si pagó por WhatsApp antes de tener cuenta, su pago aprobado se enlaza aquí y la membresía se activa.
-                app(ApprovedPaymentClaimer::class)->claimFor($member);
+                $claimant = $member;
 
                 // Aviso operativo al CRM de nuevo registro (ADITIVO; idempotente).
                 app(NotificationService::class)->notifyNewMemberRegistered($member);
@@ -175,6 +186,9 @@ class MemberRegistrationController extends Controller
                     'registration_status' => Member::STATUS_PENDING_REGISTRATION,
                 ]), 201);
             });
+
+            // Ya hay commit: solo ahora puede salir nada hacia fuera.
+            $this->proposeApprovedPaymentClaim($claimant);
 
             return $response;
         } catch (UniqueConstraintViolationException $e) {
@@ -189,6 +203,38 @@ class MemberRegistrationController extends Controller
             ], 409);
         } catch (Throwable $e) {
             return $this->serverError($e, 'member:register');
+        }
+    }
+
+    /**
+     * Si alguien pagó por WhatsApp antes de tener cuenta, su pago aprobado se
+     * PROPONE al equipo cuando aparece un registro con ese mismo número. No se
+     * enlaza ni se activa membresía: este endpoint no verifica el teléfono —no
+     * hay OTP, el token es compartido y `members.phone` no es único—, así que
+     * el número es una pista, no una prueba de quién pagó. Decide una persona.
+     *
+     * Se llama FUERA de la transacción a propósito: sus efectos salen del
+     * proceso (aviso por WhatsApp, notificaciones) y las colas de este proyecto
+     * despachan sin esperar al commit (`after_commit => false`), así que dentro
+     * de la transacción se anunciaba un alta que aún podía deshacerse.
+     *
+     * Nunca lanza: proponer es accesorio; registrarse no puede fallar por esto.
+     */
+    private function proposeApprovedPaymentClaim(?Member $member): void
+    {
+        if ($member === null) {
+            return;
+        }
+
+        try {
+            // En cola: la propuesta acaba en una salida por WhatsApp hacia Meta
+            // y no puede alargar la respuesta que espera la app.
+            ProposePaymentClaim::dispatch((int) $member->id);
+        } catch (Throwable $e) {
+            Log::warning('member:register:payment-claim-proposal-failed', [
+                'member_id' => $member->id,
+                'exception' => class_basename($e),
+            ]);
         }
     }
 

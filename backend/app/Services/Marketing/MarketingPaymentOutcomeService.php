@@ -22,8 +22,9 @@ use Throwable;
  *    pago está aprobado; Laravel manda el mensaje de inicio. La membresía la
  *    activa {@see PaymentMembershipActivator} —solo si
  *    la persona ya tiene usuario—; si no lo tiene, NADIE inventa una ficha: se
- *    le explica cómo registrarse en la app (el registro reclama el pago, ver
- *    {@see ApprovedPaymentClaimer}) y una persona lo revisa.
+ *    le explica cómo registrarse en la app —registrarse solo PROPONE el
+ *    enlace, nunca lo hace: {@see ApprovedPaymentClaimer}— y una persona
+ *    lo revisa.
  *  - DECLINED / VOIDED / ERROR / EXPIRED: la memoria lo sabe y nada más; el
  *    siguiente turno del asesor lo maneja con `context.payment`.
  *
@@ -84,10 +85,10 @@ final class MarketingPaymentOutcomeService
 
         $hasUser = $lead->member?->user_id !== null;
         if ($conversation !== null) {
-            $conversation->forceFill(array_merge(
-                ['commercial_phase' => CommercialPhaseMachine::WON],
-                $hasUser ? [] : ['staff_review_pending' => true, 'staff_review_reason' => self::REVIEW_PAID_WITHOUT_MEMBER],
-            ))->save();
+            $conversation->forceFill(['commercial_phase' => CommercialPhaseMachine::WON])->save();
+            if (! $hasUser) {
+                self::flagStaffReview($conversation, self::REVIEW_PAID_WITHOUT_MEMBER);
+            }
         }
 
         $plan = $tx->plan_id ? Plan::find($tx->plan_id) : null;
@@ -107,6 +108,32 @@ final class MarketingPaymentOutcomeService
     }
 
     /**
+     * Alerta interna para el equipo sobre una conversación. Marca la revisión
+     * y, cuando hay ids que verificar, los deja en una NOTA interna —que no
+     * sale a WhatsApp—: la conversación solo guarda el motivo, que es una
+     * columna, no un sitio donde quepa un detalle.
+     *
+     * Pública y estática porque el reclamo que propone el registro
+     * ({@see ApprovedPaymentClaimer}) levanta exactamente esta misma alerta:
+     * dos copias de esta escritura se separarían el día que una cambie.
+     *
+     * @param  array<string,mixed>  $data  ids implicados; vacío = sin nota.
+     */
+    public static function flagStaffReview(MarketingConversation $conversation, string $reason, array $data = []): void
+    {
+        $conversation->forceFill([
+            'staff_review_pending' => true,
+            'staff_review_reason' => $reason,
+        ])->save();
+
+        if ($data === []) {
+            return;
+        }
+
+        app(MarketingConversationNoteService::class)->add($conversation, "[{$reason}] ".json_encode($data), null);
+    }
+
+    /**
      * El mensaje lo escribe Laravel: nombre del plan, siguiente paso real y los
      * enlaces oficiales de la app. Sin cifras, sin URL de pago.
      */
@@ -122,8 +149,8 @@ final class MarketingPaymentOutcomeService
         }
 
         return "¡Listo{$nombre}! Tu pago del {$planName} quedó confirmado. Para activar tu acceso, descarga la app Iron Body Workout "
-            .'y regístrate con este mismo número y tu documento: al registrarte, tu pago queda enlazado y tu membresía activa. '
-            .'El equipo también lo tiene en su lista por si algo no cuadra. '.MobileAppLinks::asLine();
+            .'y regístrate en la app con tu documento: el equipo enlaza tu pago a tu cuenta y te avisa cuando tu membresía quede activa. '
+            .'El equipo ya lo tiene en su lista. '.MobileAppLinks::asLine();
     }
 
     private function conversationFor(PaymentTransaction $tx, ?MarketingLead $lead): ?MarketingConversation
