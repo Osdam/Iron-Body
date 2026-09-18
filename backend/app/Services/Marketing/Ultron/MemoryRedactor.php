@@ -15,7 +15,7 @@ final class MemoryRedactor
     public const MAX = 160;
 
     /** Texto escrito por la persona: sin datos que la identifiquen. */
-    public static function lead(?string $text): ?string
+    public static function lead(?string $text, int $max = self::MAX): ?string
     {
         if ($text === null) {
             return null;
@@ -29,11 +29,11 @@ final class MemoryRedactor
         $t = preg_replace('/\b\d(?:[\s.\-]?\d){6,}\b/u', '[numero]', $t) ?? $t;
         $t = preg_replace('/\b\d{1,3}(?:[.,]\d{3}){2,}\b/u', '[numero]', $t) ?? $t;
 
-        return mb_substr($t, 0, self::MAX);
+        return mb_substr($t, 0, $max);
     }
 
     /** Texto escrito por la máquina: sin cifras de precio. */
-    public static function agent(?string $text): ?string
+    public static function agent(?string $text, int $max = self::MAX): ?string
     {
         if ($text === null) {
             return null;
@@ -46,7 +46,7 @@ final class MemoryRedactor
         $t = preg_replace('/\b\d{1,3}(?:[.,]\d{3})+\b(\s?(cop|pesos))?/iu', '[precio]', $t) ?? $t;
         $t = preg_replace('/\b\d{4,}\s?(cop|pesos)\b/iu', '[precio]', $t) ?? $t;
 
-        return mb_substr($t, 0, self::MAX);
+        return mb_substr($t, 0, $max);
     }
 
     /** @return array{source:string, text:string}|null */
