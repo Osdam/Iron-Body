@@ -72,6 +72,7 @@ class UltronDecideService
         private readonly GymFactsProvider $gym,
         private readonly PaymentStatusProvider $payments,
         private readonly MobileAppCatalog $appCatalog,
+        private readonly MembershipFactsProvider $membership,
         private readonly HumanHandoffAuthority $handoff = new HumanHandoffAuthority,
     ) {}
 
@@ -235,7 +236,8 @@ class UltronDecideService
         $customer = $this->customers->profile($conversation, $message, $memory, $resolved, (string) ($decision['intent'] ?? SalesIntents::UNKNOWN));
         $payment = $this->payments->forLead($conversation->lead, (string) $message->body);
         $canOfferLink = $this->paymentReadiness->canGenerateAutomaticLink();
-        $strategyHints = StrategyContract::hints($customer, $resolved, $canOfferLink, (string) ($decision['intent'] ?? SalesIntents::UNKNOWN), $payment);
+        $membershipFacts = $this->membership->forPrompt($conversation->lead);
+        $strategyHints = StrategyContract::hints($customer, $resolved, $canOfferLink, (string) ($decision['intent'] ?? SalesIntents::UNKNOWN), $payment, $membershipFacts);
         // El MENÚ del que ULTRON puede elegir, no un filtrado de lo que Laravel
         // ya propuso: lo que la decisión base pidiera viaja aparte, dentro de
         // `decision`. Mezclar las dos cosas haría que el techo dependiera de la
@@ -317,6 +319,13 @@ class UltronDecideService
                  * modelo). account.has_account es hecho del CRM.
                  */
                 'app' => $this->appCatalog->forPrompt((bool) data_get($customer, 'known.has_app_account', false)),
+                /*
+                 * La membresía de quien escribe, como hecho del CRM y solo con
+                 * identidad (lead.member_id): estado, plan, fecha de fin, días,
+                 * asistencia y cobro automático; sin datos personales. Lo que el
+                 * asistente no resuelve solo va en team_only (staff_review).
+                 */
+                'membership' => $membershipFacts,
                 /*
                  * Cuál cotizar cuando la pregunta es genérica («¿cuánto vale?»).
                  *

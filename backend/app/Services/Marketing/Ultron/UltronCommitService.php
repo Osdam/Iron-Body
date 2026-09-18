@@ -96,6 +96,8 @@ class UltronCommitService
         private readonly MarketingMessageDispatcher $dispatcher,
         private readonly MarketingKnowledgeBaseService $knowledge,
         private readonly SalesPaymentGuardrailService $paymentGuardrail,
+        private readonly MembershipFactsProvider $membershipFacts,
+        private readonly MembershipFactGuard $membershipGuard,
     ) {}
 
     /**
@@ -277,6 +279,20 @@ class UltronCommitService
             }
             if (OutboundContentGuard::containsUrl((string) ($proposal['reply_draft'] ?? ''))) {
                 throw SalesGuardrailException::make(OutboundContentGuard::CODE_URL_IN_REPLY, 'El borrador contiene una URL; los enlaces los envía el CRM en su propio mensaje.', escalate: true);
+            }
+            // La membresía se afirma con los hechos del CRM o no se afirma: una
+            // fecha de fin, unos días restantes o un estado que contradigan
+            // `context.membership` (o que se afirmen sin socio identificado) no
+            // salen. Los marcadores no llevan fechas, así que el borrador vale.
+            $contradiccion = $this->membershipGuard->contradiction(
+                (string) ($proposal['reply_draft'] ?? ''),
+                $this->membershipFacts->forPrompt($conversation->lead),
+            );
+            if ($contradiccion !== null) {
+                ChannelLog::warning('ultron.commit.membership_fact_rejected', [
+                    'conversation_id' => (int) $conversation->id, 'reason' => $contradiccion['reason'],
+                ]);
+                throw SalesGuardrailException::make(MembershipFactGuard::CODE, 'El borrador afirma una fecha, unos días o un estado de membresía que el CRM no respalda ('.$contradiccion['reason'].').', escalate: true);
             }
             $this->contentGuard->assertSafe($draft, MarketingMessage::SENDER_AI, [
                 'endpoint' => 'internal.marketing.ai.commit',

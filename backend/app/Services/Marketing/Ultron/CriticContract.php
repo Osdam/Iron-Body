@@ -19,6 +19,7 @@ final class CriticContract
         'next_step', 'question_discipline', 'repetition', 'phase_alignment', 'reference_resolution',
         'novelty', 'customer_fit', 'progressive_disclosure', 'factuality', 'tool_consistency',
         'memory_consistency', 'payment_safety', 'url_safety', 'app_factuality', 'handoff_leak',
+        'membership_factuality',
     ];
 
     /** Fallos duros: con cualquiera de estos el veredicto es fail y hay reintento. */
@@ -26,6 +27,7 @@ final class CriticContract
         'invented_price', 'invented_plan', 'non_sellable_plan', 'invented_class', 'invented_payment_status',
         'invented_url', 'unauthorized_handoff', 'request_card_data', 'contradiction', 'major_reference_failure',
         'low_novelty', 'customer_misfit', 'pressure', 'progressive_disclosure', 'identity_lie',
+        'invented_membership_fact',
     ];
 
     public const MAX_ISSUES = 8;

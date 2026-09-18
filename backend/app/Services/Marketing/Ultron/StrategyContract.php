@@ -43,7 +43,7 @@ final class StrategyContract
      * @param  array<string,mixed>  $resolved
      * @return array<string,mixed>
      */
-    public static function hints(array $customer, array $resolved, bool $canOfferLink, ?string $baseIntent = null, array $payment = []): array
+    public static function hints(array $customer, array $resolved, bool $canOfferLink, ?string $baseIntent = null, array $payment = [], array $membership = []): array
     {
         $temperature = $customer['lead_temperature'] ?? CustomerIntelligenceService::COLD;
         $lifecycle = $customer['customer_lifecycle'] ?? CustomerIntelligenceService::PROSPECT;
@@ -104,6 +104,12 @@ final class StrategyContract
             'question_budget' => $questionBudget,
             'payment_possible' => $canOfferLink,
             'do_not_sell' => $esCliente && ! $renewal,
+            // Renovar es la única venta a un cliente: solo en ventana, solo con un
+            // plan que hoy se vende (context.membership.renewal.plan_id) y solo
+            // con link si el motor de pagos lo permite. Sin plan vendible, la
+            // estrategia recomienda desde active_plans; el equipo cobra.
+            'renewal_plan_id' => $renewal ? ($membership['renewal']['plan_id'] ?? null) : null,
+            'renewal_possible' => $renewal && $canOfferLink && ($membership['renewal']['plan_id'] ?? null) !== null,
         ];
     }
 
