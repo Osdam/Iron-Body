@@ -44,6 +44,9 @@ class OutboundContentGuard
 
     public const CODE_FORBIDDEN_ACTION = 'machine_reply_forbidden_action';
 
+    /** El borrador del modelo trae una URL: los enlaces los pone Laravel en su propio mensaje. */
+    public const CODE_URL_IN_REPLY = 'machine_reply_url';
+
     public const CODE_UNSAFE_CLAIM = 'machine_reply_unsafe_claim';
 
     public const CODE_INVENTED_PRICE = 'machine_reply_invented_price';
@@ -248,5 +251,15 @@ class OutboundContentGuard
         }
 
         return null;
+    }
+
+    /**
+     * ¿Hay una URL, un dominio o «www» en el texto? Los links (pago, app) los pone
+     * Laravel en un mensaje propio; una URL escrita por el modelo es, en el mejor
+     * de los casos, una inventada.
+     */
+    public static function containsUrl(string $body): bool
+    {
+        return preg_match('~(https?://|www\.|\b[a-z0-9-]+\.(com|co|net|org|io|app|cloud|me|ly|link|page|site)(/|\b))~iu', $body) === 1;
     }
 }

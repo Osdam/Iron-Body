@@ -13,6 +13,7 @@ use App\Services\Marketing\OutboundContentGuard;
 use App\Services\Marketing\SalesIntents;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
@@ -113,7 +114,7 @@ class UltronCommitTest extends TestCase
         ], $overrides);
     }
 
-    private function commit(array $payload): \Illuminate\Testing\TestResponse
+    private function commit(array $payload): TestResponse
     {
         return $this->postJson('/api/internal/marketing/ai/commit', $payload, $this->headers());
     }
@@ -227,16 +228,24 @@ class UltronCommitTest extends TestCase
 
     // ── Herramientas ──────────────────────────────────────────────────────────
 
+    /**
+     * Lo que no está en el vocabulario es un error de forma (422). `payment_link_send`
+     * SÍ está desde el PUNTO 7: sin permiso vigente no se rechaza el turno, se
+     * descarta la herramienta (tools_rejected) y no se genera nada.
+     */
     public function test_a_forbidden_tool_is_rejected_by_validation(): void
     {
         $m = $this->inbound();
 
-        foreach (['payment_link_send', 'schedule_followup', 'human_takeover'] as $prohibida) {
-            $this->commit($this->payload($m, ['proposal' => ['tools_requested' => [$prohibida]]]))
+        foreach (['schedule_followup', 'human_takeover'] as $desconocida) {
+            $this->commit($this->payload($m, ['proposal' => ['tools_requested' => [$desconocida]]]))
                 ->assertStatus(422)
                 ->assertJsonValidationErrors('proposal.tools_requested.0');
         }
 
+        $r = $this->commit($this->payload($m, ['proposal' => ['tools_requested' => ['payment_link_send']]]))->assertOk();
+        $this->assertContains('payment_link_send', $r->json('applied.tools_rejected'), 'sin permiso, la herramienta se descarta, no el turno');
+        $this->assertNotContains('payment_link_send', $r->json('applied.tools_executed'));
         $this->assertSame(0, PaymentTransaction::count());
     }
 
@@ -628,19 +637,26 @@ class UltronCommitTest extends TestCase
         $this->assertDatabaseCount('payments', 0);
     }
 
-    /** Ni siquiera con el permiso encendido: la herramienta no existe en la v1. */
-    public function test_payment_handoff_is_unreachable_even_with_the_flag_on(): void
+    /**
+     * La bandera del negocio sola no basta: sin Wompi configurado (claves, checkout)
+     * el link no es posible, la herramienta se descarta y no se genera nada. El
+     * camino positivo, con Wompi productivo, vive en UltronPaymentLinkTest.
+     */
+    public function test_the_business_flag_alone_does_not_make_a_link_possible(): void
     {
         Http::fake();
         config()->set('marketing.ultron.payment_links_enabled', true);
         config()->set('wompi.env', 'production');
+        config()->set('wompi.public_key', null);
+        config()->set('wompi.integrity_secret', null);
 
         $m = $this->inbound('quiero pagar');
 
-        $this->commit($this->payload($m, [
+        $r = $this->commit($this->payload($m, [
             'proposal' => ['tools_requested' => ['payment_link_send']],
-        ]))->assertStatus(422)->assertJsonValidationErrors('proposal.tools_requested.0');
+        ]))->assertOk();
 
+        $this->assertContains('payment_link_send', $r->json('applied.tools_rejected'));
         $this->assertSame(0, PaymentTransaction::count());
     }
 }

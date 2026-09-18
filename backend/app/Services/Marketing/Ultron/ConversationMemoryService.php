@@ -248,4 +248,17 @@ final class ConversationMemoryService
 
         return str_contains($normalizedReply, $b);
     }
+
+    /**
+     * El motor de pagos deja constancia del link vivo: referencia, plan, vigencia y
+     * cuándo salió. Nunca la URL: esa vive en la transacción.
+     *
+     * @param  array<string,mixed>  $context
+     */
+    public function recordPaymentLink(MarketingConversation $conversation, array $context): void
+    {
+        $data = ConversationMemory::fromArray(is_array($conversation->memory) ? $conversation->memory : null)->toArray();
+        $data['payment_context'] = array_filter($context, fn ($v) => $v !== null) + ['updated_at' => now()->toIso8601String()];
+        $conversation->forceFill(['memory' => ConversationMemory::fromArray($data)->toArray()])->save();
+    }
 }

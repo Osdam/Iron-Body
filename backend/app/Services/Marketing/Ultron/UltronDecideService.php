@@ -34,17 +34,25 @@ use App\Services\Marketing\SalesPaymentReadinessService;
 class UltronDecideService
 {
     /**
-     * Herramientas que ULTRON puede pedir en la v1.
-     *
-     * `payment_link_send` no está: los links automáticos están apagados.
-     * `schedule_followup` tampoco: la v1 es reactiva y programar un seguimiento
-     * que nadie va a despachar solo llena una tabla de intenciones muertas —hay
-     * 18 de esas esperando desde junio—.
-     * `human_takeover` no está y no estará: la IA no se apaga sola.
+     * Herramientas siempre permitidas en v1 (no dependen de ninguna configuración).
+     * El menú real de cada turno lo da {@see allowedTools()}: `payment_link_send`
+     * entra solo cuando Wompi está productivo Y el negocio autorizó el link automático.
      */
     public const V1_ALLOWED_TOOLS = [
         SalesIntents::TOOL_STAFF_REVIEW,
         SalesIntents::TOOL_MARK_DNC,
+    ];
+
+    /**
+     * Todo lo que el modelo puede NOMBRAR como herramienta (vocabulario del
+     * endpoint). Pedir una que hoy no está permitida no es un error de forma:
+     * commit la descarta y lo anota en tools_rejected. El PERMISO lo da
+     * {@see allowedTools()}, turno a turno.
+     */
+    public const TOOL_VOCABULARY = [
+        SalesIntents::TOOL_STAFF_REVIEW,
+        SalesIntents::TOOL_MARK_DNC,
+        SalesIntents::TOOL_PAYMENT_LINK_SEND,
     ];
 
     public function __construct(
@@ -225,7 +233,7 @@ class UltronDecideService
         // ya propuso: lo que la decisión base pidiera viaja aparte, dentro de
         // `decision`. Mezclar las dos cosas haría que el techo dependiera de la
         // propuesta, que es justo al revés de como debe funcionar un techo.
-        $tools = self::V1_ALLOWED_TOOLS;
+        $tools = $this->allowedTools();
         $knowledgeVersion = $this->knowledge->version();
 
         $token = $this->tokens->issue(
@@ -365,5 +373,18 @@ class UltronDecideService
             ], fn ($v) => $v !== null && $v !== []),
             $this->knowledge->activePlans(),
         );
+    }
+
+    /**
+     * El menú de herramientas de este turno. `payment_link_send` solo entra cuando
+     * Wompi está productivo Y el negocio autorizó el link automático
+     * ({@see SalesPaymentReadinessService::canGenerateAutomaticLink()}): el modelo
+     * no puede pedir lo que el sistema no puede cumplir.
+     *
+     * @return string[]
+     */
+    public function allowedTools(): array
+    {
+        return array_values(array_merge(self::V1_ALLOWED_TOOLS, $this->canOfferLink() ? [SalesIntents::TOOL_PAYMENT_LINK_SEND] : []));
     }
 }

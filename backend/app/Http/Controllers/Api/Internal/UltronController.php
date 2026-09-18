@@ -174,7 +174,7 @@ class UltronController extends Controller
             'proposal.human_handoff_reason' => ['nullable', 'string', Rule::in(HumanHandoffAuthority::ALLOWED_REASONS)],
             'proposal.human_handoff_evidence' => ['nullable', 'string', 'max:300'],
             'proposal.tools_requested' => ['nullable', 'array', 'max:4'],
-            'proposal.tools_requested.*' => ['string', Rule::in(UltronDecideService::V1_ALLOWED_TOOLS)],
+            'proposal.tools_requested.*' => ['string', Rule::in(UltronDecideService::TOOL_VOCABULARY)],
 
             'critic' => ['nullable', 'array'],
             'critic.verdict' => ['nullable', 'string', Rule::in(['pass', 'fail'])],

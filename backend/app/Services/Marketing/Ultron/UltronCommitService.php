@@ -19,6 +19,8 @@ use App\Services\Marketing\SalesConversationMemoryService;
 use App\Services\Marketing\SalesConversationReplyService;
 use App\Services\Marketing\SalesGuardrailException;
 use App\Services\Marketing\SalesIntents;
+use App\Services\Marketing\SalesPaymentGuardrailService;
+use App\Services\Marketing\WompiPaymentLinkService;
 use App\Services\Observability\ChannelLog;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Cache;
@@ -80,6 +82,7 @@ class UltronCommitService
         private readonly SalesConversationReplyService $replies,
         private readonly MarketingMessageDispatcher $dispatcher,
         private readonly MarketingKnowledgeBaseService $knowledge,
+        private readonly SalesPaymentGuardrailService $paymentGuardrail,
     ) {}
 
     /**
@@ -254,6 +257,11 @@ class UltronCommitService
          * distinguir en vez de un «rechazado» genérico.
          */
         try {
+            // El modelo no escribe URLs: los links (pago, app) los pone Laravel en su
+            // propio mensaje. Una URL en el borrador es, como mínimo, inventada.
+            if (OutboundContentGuard::containsUrl((string) ($proposal['reply_draft'] ?? ''))) {
+                throw SalesGuardrailException::make(OutboundContentGuard::CODE_URL_IN_REPLY, 'El borrador contiene una URL; los enlaces los envía el CRM en su propio mensaje.', escalate: true);
+            }
             $this->contentGuard->assertSafe($draft, MarketingMessage::SENDER_AI, [
                 'endpoint' => 'internal.marketing.ai.commit',
                 'conversation_id' => (int) $conversation->id,
@@ -496,6 +504,15 @@ class UltronCommitService
         $outcome = $send['sent'] ? 'sent' : ($send['dry_run'] ? 'dry_run' : 'failed');
         $this->finalise($action, $outcome, $send);
 
+        // 14.bis) El link de pago, si el modelo lo pidió y Laravel lo permite: se
+        // genera con el precio del catálogo y sale como mensaje propio DESPUÉS de
+        // la respuesta, para que la persona lea primero el texto y luego el link.
+        $pago = $this->execPaymentLink($conversation, $message, $decision, $plan, $outcome);
+        if ($pago !== null) {
+            $executed[] = $pago;
+            $this->annotatePayment($action, $pago);
+        }
+
         // 15) La memoria registra lo que SALIÓ, con el plan y el precio reales.
         if ($outcome !== 'failed') {
             $this->memoryService->recordSentTurn(
@@ -700,7 +717,7 @@ class UltronCommitService
      */
     private function allowedTools(array $requested): array
     {
-        return array_values(array_intersect($requested, UltronDecideService::V1_ALLOWED_TOOLS));
+        return array_values(array_intersect($requested, $this->decide->allowedTools()));
     }
 
     /**
@@ -881,6 +898,82 @@ class UltronCommitService
         ])->save();
 
         return ['tool' => SalesIntents::TOOL_MARK_DNC, 'status' => 'executed', 'do_not_contact' => true];
+    }
+
+    /**
+     * GENERATE_PAYMENT_LINK. El modelo solo PIDE; aquí se decide todo lo demás:
+     * permiso vigente (Wompi productivo + autorización del negocio), guardrail
+     * (do_not_contact, plan vendible, ningún monto del cliente), idempotencia por
+     * (lead, plan) y «ya pagó» —los resuelve WompiPaymentLinkService—, y el
+     * texto del mensaje con el precio del catálogo. Se ejecuta después de enviar
+     * la respuesta; si la respuesta no salió, el link tampoco.
+     *
+     * @return array<string,mixed>|null null cuando no se pidió
+     */
+    private function execPaymentLink(MarketingConversation $conversation, MarketingMessage $message, array $decision, ?Plan $plan, string $outcome): ?array
+    {
+        $tool = SalesIntents::TOOL_PAYMENT_LINK_SEND;
+        if (! in_array($tool, (array) ($decision['tools_requested'] ?? []), true)) {
+            return null;
+        }
+        if ($outcome === 'failed') {
+            return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'reply_not_sent'];
+        }
+        // Doble cerrojo: el menú ya lo filtró, pero la barrera vive donde se ejecuta.
+        if (! $this->decide->canOfferLink()) {
+            return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'automatic_links_disabled'];
+        }
+        $lead = $conversation->lead;
+        if ($lead === null || $plan === null) {
+            return ['tool' => $tool, 'status' => 'skipped', 'reason' => $plan === null ? 'no_plan_to_charge' : 'no_lead'];
+        }
+        try {
+            $this->paymentGuardrail->assertCanGeneratePaymentLink($lead, $plan, []);
+        } catch (SalesGuardrailException $e) {
+            return ['tool' => $tool, 'status' => 'skipped', 'reason' => $e->errorCode];
+        }
+
+        $link = WompiPaymentLinkService::make()->generateForLead($lead, $plan, [
+            'channel' => $conversation->channel, 'conversation_id' => $conversation->id, 'message_id' => $message->id,
+        ]);
+        if (($link['configured'] ?? false) === false) {
+            return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'wompi_checkout_not_configured'];
+        }
+        if (($link['already_paid'] ?? false) === true) {
+            return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'already_paid', 'reference' => $link['reference'] ?? null];
+        }
+        if (empty($link['payment_url'])) {
+            return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'link_not_safe_to_send'];
+        }
+
+        $body = $this->replies->paymentLinkMessage($plan, (float) $link['amount'], (string) $link['payment_url']);
+        $send = $this->dispatcher->dispatchWhatsapp($lead, $conversation->channel, $body, [
+            'kind' => 'payment_link', 'origin' => 'ultron', 'reference' => $link['reference'] ?? null,
+        ], MarketingMessage::SENDER_AI);
+        $this->memoryService->recordPaymentLink($conversation->fresh(), [
+            'reference' => $link['reference'] ?? null, 'plan_id' => (int) $plan->id, 'expires_at' => $link['expires_at'] ?? null,
+            'status' => 'pending', 'link_sent_at' => now()->toIso8601String(), 'message_id' => $send['message_id'] ?? null,
+        ]);
+        ChannelLog::info('ultron.payment_link.sent', [
+            'conversation_id' => $conversation->id, 'plan_id' => (int) $plan->id, 'reference' => $link['reference'] ?? null,
+            'sent' => $send['sent'], 'dry_run' => $send['dry_run'],
+        ]);
+
+        return ['tool' => $tool, 'status' => 'executed', 'reference' => $link['reference'] ?? null, 'expires_at' => $link['expires_at'] ?? null, 'sent' => $send['sent'], 'dry_run' => $send['dry_run'], 'message_id' => $send['message_id'] ?? null];
+    }
+
+    /** La acción ya está persistida cuando sale el link: se anota encima, sin URL. */
+    private function annotatePayment(MarketingAiAction $action, array $pago): void
+    {
+        $meta = is_array($action->metadata) ? $action->metadata : [];
+        if (($pago['status'] ?? null) === 'executed') {
+            $meta['tools_executed'] = array_values(array_unique(array_merge((array) ($meta['tools_executed'] ?? []), [$pago['tool']])));
+        }
+        $meta['payment_link'] = array_filter([
+            'status' => $pago['status'] ?? null, 'reason' => $pago['reason'] ?? null, 'reference' => $pago['reference'] ?? null,
+            'expires_at' => $pago['expires_at'] ?? null, 'message_id' => $pago['message_id'] ?? null,
+        ], fn ($v) => $v !== null);
+        $action->forceFill(['metadata' => $meta])->save();
     }
 
     private function finalise(MarketingAiAction $action, string $outcome, array $send): void

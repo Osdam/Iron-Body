@@ -417,13 +417,14 @@ class UltronFixturesTest extends TestCase
         $this->assertSame(P::CLOSING, $this->conversation->fresh()->commercial_phase);
     }
 
-    public function test_fixture_18_tool_prohibido(): void
+    /** Desde el PUNTO 7 la herramienta existe; sin permiso se descarta (no 422) y no se genera nada. */
+    public function test_fixture_18_tool_sin_permiso_se_descarta(): void
     {
         Http::fake();
         $m = $this->inbound('quiero pagar', 'w.18');
 
-        $this->commit($m, ['tools_requested' => ['payment_link_send']])
-            ->assertStatus(422)->assertJsonValidationErrors('proposal.tools_requested.0');
+        $r = $this->commit($m, ['tools_requested' => ['payment_link_send']])->assertOk();
+        $this->assertContains('payment_link_send', $r->json('applied.tools_rejected'));
         $this->assertSame(0, PaymentTransaction::count());
     }
 
