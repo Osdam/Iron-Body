@@ -54,6 +54,11 @@ class OutboundInformationDeliveryTest extends TestCase
             'comunico coma' => ['Te comunico, el horario es de 5am a 10pm.'],
             'whatsapp de la sede' => ['Te paso el WhatsApp de la sede.'],
             'acompana un entrenador' => ['Te acompaña un entrenador de planta en tu primera sesión.'],
+            // Locuciones de relleno y anuncios de información futura (revisor, ciclo 3).
+            'de una vez' => ['Te paso de una vez el link de pago.'],
+            'ahora mismo' => ['Te paso ahora mismo el link de pago.'],
+            'apenas confirme' => ['Te comunico apenas confirme el pago.'],
+            'en cuanto' => ['Te comunico en cuanto quede activa la membresía.'],
         ];
     }
 
@@ -90,6 +95,19 @@ class OutboundInformationDeliveryTest extends TestCase
             'comunico que contacta' => ['Te comunico que en un momento te contacta una asesora.'],
             'comunico que va a llamar' => ['Te comunico que una persona del equipo te va a llamar.'],
             'perifrastico suelto' => ['Una asesora te va a llamar en un momento.'],
+            // El contacto de una PERSONA es traspaso aunque la palabra sea «número» (revisor, ciclo 3).
+            'numero de carlos' => ['Te paso el número de Carlos.'],
+            'celular de valentina' => ['Te paso el celular de Valentina, ella te ayuda.'],
+            'contacto de ana' => ['Te paso el contacto de Ana.'],
+            'numero nutricionista' => ['Te paso el número de la nutricionista.'],
+            'contacto instructor' => ['Te paso el contacto del instructor de spinning.'],
+            'whatsapp del profe' => ['Te paso el WhatsApp del profe.'],
+            'numero de la duena' => ['Te paso el número de la dueña del gimnasio.'],
+            'numero recepcionista' => ['Te paso el número de la recepcionista.'],
+            'comunico que carlos escribe' => ['Te comunico que Carlos te escribe en un momento.'],
+            'comunico que coordinadora escribe' => ['Te comunico que la coordinadora te escribe hoy.'],
+            'le paso tu numero' => ['Le paso tu número a la coordinadora.'],
+            'recepcion para que te atiendan' => ['Te paso el número de recepción para que te atiendan.'],
         ];
     }
 
