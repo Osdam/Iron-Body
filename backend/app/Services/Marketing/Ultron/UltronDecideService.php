@@ -67,6 +67,7 @@ class UltronDecideService
         private readonly NoveltyGuard $novelty,
         private readonly CustomerIntelligenceService $customers,
         private readonly GymFactsProvider $gym,
+        private readonly PaymentStatusProvider $payments,
         private readonly HumanHandoffAuthority $handoff = new HumanHandoffAuthority,
     ) {}
 
@@ -228,8 +229,9 @@ class UltronDecideService
         $resolved = $this->references->resolve((string) $message->body, $memory, $plansForMemory);
         $novelty = $this->novelty->guidance($memory, $plansForMemory, $resolved);
         $customer = $this->customers->profile($conversation, $message, $memory, $resolved, (string) ($decision['intent'] ?? SalesIntents::UNKNOWN));
+        $payment = $this->payments->forLead($conversation->lead, (string) $message->body);
         $canOfferLink = $this->paymentReadiness->canGenerateAutomaticLink();
-        $strategyHints = StrategyContract::hints($customer, $resolved, $canOfferLink, (string) ($decision['intent'] ?? SalesIntents::UNKNOWN));
+        $strategyHints = StrategyContract::hints($customer, $resolved, $canOfferLink, (string) ($decision['intent'] ?? SalesIntents::UNKNOWN), $payment);
         // El MENÚ del que ULTRON puede elegir, no un filtrado de lo que Laravel
         // ya propuso: lo que la decisión base pidiera viaja aparte, dentro de
         // `decision`. Mezclar las dos cosas haría que el techo dependiera de la
@@ -282,6 +284,12 @@ class UltronDecideService
                  * por hechos. A quien ya pagó no se le vende lo mismo.
                  */
                 'customer' => $customer,
+                /*
+                 * El pago, como hecho del CRM: none | pending | approved | declined |
+                 * expired, si la persona dice que pagó y si se consultó a Wompi en
+                 * vivo. Nunca la URL ni la referencia.
+                 */
+                'payment' => $payment,
                 /*
                  * Lo que el estratega no tiene que adivinar: si la persona ya
                  * quiere pagar (nada de descubrimiento), en qué modo está la

@@ -262,6 +262,9 @@ class UltronCommitService
         try {
             // El modelo no escribe URLs: los links (pago, app) los pone Laravel en su
             // propio mensaje. Una URL en el borrador es, como mínimo, inventada.
+            if (OutboundContentGuard::containsCardDataRequest((string) ($proposal['reply_draft'] ?? ''))) {
+                throw SalesGuardrailException::make(OutboundContentGuard::CODE_CARD_DATA_REQUEST, 'El borrador pide datos de tarjeta o claves; el cobro lo hace Wompi en su checkout, nunca el chat.', escalate: true);
+            }
             if (OutboundContentGuard::containsUrl((string) ($proposal['reply_draft'] ?? ''))) {
                 throw SalesGuardrailException::make(OutboundContentGuard::CODE_URL_IN_REPLY, 'El borrador contiene una URL; los enlaces los envía el CRM en su propio mensaje.', escalate: true);
             }

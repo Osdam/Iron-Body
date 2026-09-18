@@ -47,6 +47,9 @@ class OutboundContentGuard
     /** El borrador del modelo trae una URL: los enlaces los pone Laravel en su propio mensaje. */
     public const CODE_URL_IN_REPLY = 'machine_reply_url';
 
+    /** El borrador pide datos de tarjeta, claves u OTP: nunca, bajo ningún pretexto. */
+    public const CODE_CARD_DATA_REQUEST = 'machine_reply_card_data';
+
     public const CODE_UNSAFE_CLAIM = 'machine_reply_unsafe_claim';
 
     public const CODE_INVENTED_PRICE = 'machine_reply_invented_price';
@@ -272,5 +275,17 @@ class OutboundContentGuard
         $body = preg_replace(['~\s*[\(\[]\s*\.\s*[\)\]]\s*~u', '~\s+punto\s+~iu', '~\s+barra\s+~iu'], ['.', '.', '/'], $body) ?? $body;
 
         return preg_match('~(https?://|www\.|\b[a-z0-9-]+\.(com|co|net|org|io|app|cloud|me|ly|link|page|site)(/|\b))~iu', $body) === 1;
+    }
+
+    /**
+     * ¿Pide datos de pago sensibles? Número de tarjeta, vencimiento, CVV, PIN, claves
+     * de banco o billetera, OTP. El cobro lo hace Wompi en su checkout; el CRM
+     * jamás recoge esos datos por chat.
+     */
+    public static function containsCardDataRequest(string $body): bool
+    {
+        $t = SalesAgentDecisionSchema::normalize($body);
+
+        return preg_match('~\b(numero|numeros|digitos|datos)\s+de\s+(tu|la|su|una)\s+tarjeta|\bcvv\b|\bcvc\b|codigo\s+de\s+seguridad|fecha\s+de\s+(vencimiento|expiracion)|\bpin\b\s+(de|del)|clave\s+(de|del)\s+(banco|nequi|daviplata|tarjeta|cajero|tu cuenta)|\botp\b|codigo\s+(que\s+te\s+llego|de\s+verificacion\s+del\s+banco)~u', $t) === 1;
     }
 }

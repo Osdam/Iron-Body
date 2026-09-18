@@ -43,7 +43,7 @@ final class StrategyContract
      * @param  array<string,mixed>  $resolved
      * @return array<string,mixed>
      */
-    public static function hints(array $customer, array $resolved, bool $canOfferLink, ?string $baseIntent = null): array
+    public static function hints(array $customer, array $resolved, bool $canOfferLink, ?string $baseIntent = null, array $payment = []): array
     {
         $temperature = $customer['lead_temperature'] ?? CustomerIntelligenceService::COLD;
         $lifecycle = $customer['customer_lifecycle'] ?? CustomerIntelligenceService::PROSPECT;
@@ -69,7 +69,7 @@ final class StrategyContract
         $hotPath = $fastPathKind === 'buy';
 
         $mode = match (true) {
-            $lifecycle === CustomerIntelligenceService::PAYMENT_PENDING => 'payment_pending',
+            $lifecycle === CustomerIntelligenceService::PAYMENT_PENDING, ($payment['state'] ?? null) === 'pending' => 'payment_pending',
             $hotPath => 'closing', // cierre primero: también para renovar y para el exsocio que vuelve decidido
             $lifecycle === CustomerIntelligenceService::LAPSED => 'winback',
             $lifecycle === CustomerIntelligenceService::ACTIVE_MEMBER => 'support',
