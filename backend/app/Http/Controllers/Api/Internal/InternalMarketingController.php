@@ -572,7 +572,7 @@ class InternalMarketingController extends Controller
             : [];
 
         // Planes reales (evita que la IA invente precios).
-        $plans = Plan::where('active', true)->get(['id', 'name', 'price', 'duration_days'])
+        $plans = Plan::query()->sellable()->get(['id', 'name', 'price', 'duration_days'])
             ->map(fn (Plan $p) => [
                 'id' => $p->id,
                 'name' => $p->name,

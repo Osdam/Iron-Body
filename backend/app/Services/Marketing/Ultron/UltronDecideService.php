@@ -57,6 +57,7 @@ class UltronDecideService
         private readonly ReferenceResolver $references,
         private readonly NoveltyGuard $novelty,
         private readonly CustomerIntelligenceService $customers,
+        private readonly GymFactsProvider $gym,
         private readonly HumanHandoffAuthority $handoff = new HumanHandoffAuthority,
     ) {}
 
@@ -281,6 +282,14 @@ class UltronDecideService
                 'recent_messages' => $this->recentMessages($conversation),
                 'knowledge_base' => $this->knowledge->groupedForPrompt(),
                 'active_plans' => $this->plansWithoutPrice(),
+                /*
+                 * Hechos del gimnasio que el modelo puede afirmar: clases con día y
+                 * hora, cuántos entrenadores y de qué (nunca quiénes), y horario de
+                 * apertura solo si existe. Lo que el CRM no tiene va como
+                 * SOURCE_NOT_AVAILABLE, para que se diga «lo confirma una persona»
+                 * en vez de inventarse. Los cupos no se afirman.
+                 */
+                'gym' => $this->gym->forPrompt(),
                 /*
                  * Cuál cotizar cuando la pregunta es genérica («¿cuánto vale?»).
                  *

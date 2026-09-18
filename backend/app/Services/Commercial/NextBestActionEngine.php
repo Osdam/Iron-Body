@@ -798,7 +798,7 @@ class NextBestActionEngine
         // proceso se reiniciara. Ofrecer un plan que ya no existe es
         // exactamente lo que el agente tiene prohibido.
         $cache = $this->planCache ??= Plan::query()
-            ->where('active', true)
+            ->sellable()
             ->orderBy('duration_days')
             ->get(['id', 'name', 'price', 'duration_days']);
 

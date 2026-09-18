@@ -64,8 +64,9 @@ class ListPlansTool extends BaseTool
 
     public function execute(array $arguments, ToolContext $context): ToolResult
     {
+        // Plan::sellable() es la única autoridad sobre qué se vende: estar activo no basta.
         $query = Plan::query()
-            ->where('active', true)
+            ->sellable()
             ->orderBy('duration_days');
 
         if (isset($arguments['max_duration_days'])) {
@@ -79,7 +80,7 @@ class ListPlansTool extends BaseTool
             // que va a consultar a que se saque un precio de la manga.
             return ToolResult::failed(
                 'no_active_plans',
-                'No hay planes activos en el catálogo. No ofrezcas precios; deriva a una persona.',
+                'No hay planes vendibles en el catálogo. No ofrezcas precios; deriva a una persona.',
             );
         }
 

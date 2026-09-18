@@ -88,8 +88,34 @@ class OutboundContentGuard
      */
     private const PERSONA = '(alguien|una\s+persona|un(a)?\s+asesor(a)?|el\s+equipo|recepcion|mi\s+compan(er)?[oa]|(el|la)\s+coordinador(a)?|un(a)?\s+entrenador(a)?)';
 
+    /** Objetos que se PASAN como información, no como persona. Lista blanca a propósito. */
+    private const INFORMACION = '(links?|enlaces?|urls?|datos?|informacion|info|direccion|ubicacion|mapa|horarios?|precios?|valor|detalles?|lista|resumen|pasos?|beneficios?|planes?|opciones?|comparativa|catalogo|fotos?|videos?|documentos?|formatos?|requisitos|pdfs?|instrucciones|whatsapp|numero|celular|telefono|contacto)';
+
+    /** Lo que puede ir entre «te paso» y el objeto sin cambiar el sentido: artículos, adverbios, cuantificadores. */
+    private const RELLENO = '(el|la|los|las|un|una|unos|unas|este|esta|estos|estas|ese|esa|mi|tu|nuestro|nuestra|otro|otra|ya|ahora|ahorita|aqui|aca|enseguida|rapido|rapidito|tambien|mas|toda|todo|todos|todas|dos|tres|un\s+par\s+de|por\s+aca|por\s+aqui|de\s+una|de\s+inmediato|entonces|mejor|primero|luego|igual)';
+
+    /** Personas del gimnasio por su rol (sin recepción ni sede, que son lugares). */
+    private const ROL = '(asesor(a|es|as)?|coordinador(a|es|as)?|entrenador(a|es|as)?|encargad[oa]s?|compan(er)?[oa]s?|equipo|alguien|persona)';
+
     private const OFRECE_TRASPASO = [
-        '/\bte\s+(conecto|comunico|paso|transfiero|derivo)\b/u',
+        '/\bte\s+(conecto|transfiero|derivo)\b/u',
+        // «Te paso» y «te comunico» tienen dos sentidos: pasar a la PERSONA con
+        // alguien (traspaso) o pasarle INFORMACION («te paso el link», «te comunico
+        // que abrimos a las 5»). Se bloquea SALVO que lo que sigue sea, sin duda,
+        // información: «que…» o un objeto de INFORMACION (con o sin artículo). Lo
+        // desconocido se bloquea: un objeto nuevo da un falso positivo ruidoso y
+        // corregible; un traspaso que se cuela («te paso a Carlos», «te paso al
+        // entrenador», «te paso su número») llega al cliente en silencio.
+        '/\bte\s+(paso|comunico)\b(?!\s*[:,]?\s*(?:'.self::RELLENO.'\s+){0,4}(?:que\b|'.self::INFORMACION.'\b))/u',
+        // Señuelos: una palabra de la lista blanca cuyo objeto real es una persona
+        // («te paso los datos de la asesora»), y el futuro perifrástico o presente
+        // de traspaso («te va a llamar», «te contacta una asesora», «para que lo
+        // llames»). Recepción y la sede son lugares, no personas: su número es dato.
+        '/\b(datos?|informacion|info|contacto|numero|whatsapp|celular|telefono|cel)\s+(de|del)\s+((la|el|un|una|mi|nuestro|nuestra|otro|otra)\s+)?'.self::ROL.'\b/u',
+        '/\b(te|le)\s+(va|van)\s+a\s+(llamar|contactar|escribir|marcar)\b/u',
+        '/\b(te|le)\s+(contacta|contactan|llama|llaman|escribe|escriben|marca|marcan)\s+((una?|el|la|otra?)\s+)?'.self::ROL.'\b/u',
+        '/\bpara\s+que\s+(lo|la|le|los|las)\s+(llames|contactes|escribas|busques|ubiques)\b/u',
+        '/\bpara\s+que\s+te\s+(atiendan?|llamen?|contacten?|escriban?)\b/u',
         '/\bte\s+(voy\s+a\s+)?(pasar|conectar|comunicar)\s+con\b/u',
         '/\b(le|los?|las?)\s+(paso|conecto|comunico)\s+con\b/u',
         '/\bquieres?\s+que\s+te\s+(pase|conecte|comunique|contacte)\s+con\b/u',
