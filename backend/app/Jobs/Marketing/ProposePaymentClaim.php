@@ -26,7 +26,14 @@ class ProposePaymentClaim implements ShouldQueue
 
     public int $tries = 1;
 
-    public function __construct(public readonly int $memberId) {}
+    public function __construct(public readonly int $memberId)
+    {
+        // Carril comercial: prioridad baja y SLO de minutos. La propuesta es
+        // accesoria y no puede competir con el mensaje de ningún cliente; y
+        // sin carril acabaría en `default`, una cola sin worker.
+        $lane = (array) config('queue.lanes.commercial');
+        $this->onQueue($lane['queue'] ?? 'commercial');
+    }
 
     public function handle(ApprovedPaymentClaimer $claimer): void
     {
