@@ -13,6 +13,12 @@ use Tests\TestCase;
  * INFORMACIÓN (un link, un dato, la dirección). Antes de esto el guard
  * bloqueaba «te paso el link»; con Wompi y los links de la app eso sería
  * silenciar justo la respuesta correcta.
+ *
+ * Residuos conocidos tras cinco ciclos de revisión adversarial (documentados, no
+ * cubiertos por el guard): un nombre propio tras una apertura («te paso si
+ * prefieres a Carlos») pasa —lo juzga el Critic con `unauthorized_handoff`, que
+ * decide el flujo desde el PUNTO 5—; y «te paso el horario de las clases con el
+ * equipo de la mañana» bloquea (falso positivo: falla cerrado, no envía nada malo).
  */
 class OutboundInformationDeliveryTest extends TestCase
 {
@@ -119,6 +125,10 @@ class OutboundInformationDeliveryTest extends TestCase
             'cuando quieras con un asesor' => ['Te paso cuando quieras con un asesor.'],
             'comunico si prefieres con' => ['Te comunico si prefieres con el coordinador.'],
             'valentina te busca' => ['Te comunico que Valentina te busca mañana.'],
+            // Con «a», «al», «donde» o «para» tras la apertura (revisor, ciclo 5).
+            'si quieres a la coordinadora' => ['Te paso si quieres a la coordinadora.'],
+            'cuando quieras al entrenador' => ['Te paso cuando quieras al entrenador.'],
+            'si quieres donde recepcion' => ['Te paso si quieres donde recepción.'],
         ];
     }
 

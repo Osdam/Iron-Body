@@ -112,7 +112,7 @@ class OutboundContentGuard
         '/\bte\s+(paso|comunico)\b(?!\s*[:,]?\s*(?:'.self::RELLENO.'\s+){0,4}(?:(?:que|cuando|apenas|en\s+cuanto|tan\s+pronto|si)\b|'.self::INFORMACION.'\b))/u',
         // La apertura («que», «si», «cuando»…) no franquea la frase: si más adelante
         // aparece «con» + una persona, es un traspaso («te paso si quieres con la coordinadora»).
-        '/\bte\s+(paso|comunico)\b[^.!?]{0,40}\bcon\s+((el|la|un|una|mi|nuestro|nuestra)\s+)?(?:'.self::PERSONA.'|'.self::ROL.')\b/u',
+        '/\bte\s+(paso|comunico)\b[^.!?]{0,40}\b(con|a|al|donde|para)\s+((el|la|un|una|mi|nuestro|nuestra)\s+)?(?:'.self::PERSONA.'|'.self::ROL.')\b/u',
         // Señuelos: una palabra de la lista blanca cuyo objeto real es una persona
         // («te paso los datos de la asesora»), y el futuro perifrástico o presente
         // de traspaso («te va a llamar», «te contacta una asesora», «para que lo
