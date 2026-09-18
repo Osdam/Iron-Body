@@ -10,6 +10,7 @@ use App\Models\PaymentTransaction;
 use App\Models\Plan;
 use App\Services\Marketing\CommercialPhaseMachine as P;
 use App\Services\Marketing\OutboundContentGuard;
+use App\Services\Marketing\SalesConversationReplyService;
 use App\Services\Marketing\SalesIntents;
 use App\Services\Wompi\PaymentStateMachine;
 use Illuminate\Database\Eloquent\Collection;
@@ -184,5 +185,56 @@ class UltronPaymentLinkTest extends TestCase
 
         $r->assertStatus(422)->assertJsonPath('code', OutboundContentGuard::CODE_URL_IN_REPLY);
         $this->assertSame(0, MarketingMessage::where('direction', MarketingMessage::DIRECTION_OUTBOUND)->count(), 'una URL escrita por el modelo no sale nunca');
+    }
+
+    /** Revisor: la URL del link no puede volver al modelo por recent_messages (ni al historial de n8n). */
+    public function test_the_live_url_never_returns_to_the_model_in_recent_messages(): void
+    {
+        $this->commitLink($this->inbound('dale, mándame el link', 'w.12'))->assertOk();
+
+        $recent = json_encode($this->decide($this->inbound('listo', 'w.13'))->assertOk()->json('context.recent_messages'));
+        $this->assertStringNotContainsString('checkout.wompi.co', $recent);
+        $this->assertStringContainsString('[link de pago enviado]', $recent);
+    }
+
+    /** Revisor: la respuesta a n8n y la metadata deben decir lo mismo: una vez, y solo si se ejecutó. */
+    public function test_tools_executed_in_the_response_matches_what_really_ran(): void
+    {
+        $r = $this->commitLink($this->inbound('dale, mándame el link', 'w.14'))->assertOk();
+
+        $this->assertSame(1, array_count_values($r->json('applied.tools_executed'))[SalesIntents::TOOL_PAYMENT_LINK_SEND] ?? 0, 'una sola vez');
+        $this->assertSame($r->json('applied.tools_executed'), MarketingAiAction::latest('id')->first()->metadata['tools_executed']);
+    }
+
+    /** Revisor: si el motor de pago revienta, el turno ya enviado no se rompe y queda constancia. */
+    public function test_a_payment_engine_error_never_breaks_a_turn_that_already_went_out(): void
+    {
+        // Proxy sobre la instancia REAL (conserva su constructor): solo el mensaje del link revienta.
+        $real = app(SalesConversationReplyService::class);
+        $proxy = \Mockery::mock($real)->makePartial();
+        $proxy->shouldReceive('paymentLinkMessage')->andThrow(new \RuntimeException('boom'));
+        $this->app->instance(SalesConversationReplyService::class, $proxy);
+
+        $r = $this->commitLink($this->inbound('dale, mándame el link', 'w.15'))->assertOk();
+
+        $this->assertNotContains(SalesIntents::TOOL_PAYMENT_LINK_SEND, $r->json('applied.tools_executed'));
+        $meta = MarketingAiAction::latest('id')->first()->metadata;
+        $this->assertSame('failed', $meta['payment_link']['status'] ?? null);
+        $this->assertSame('payment_engine_error', $meta['payment_link']['reason'] ?? null);
+        $this->assertCount(0, $this->linkMessages());
+        $this->assertNotNull($this->conversation->fresh()->memory, 'la memoria del turno se escribió igual');
+    }
+
+    /** Revisor: dos links vivos para planes distintos serían dos cobros posibles; el segundo no se genera y lo mira una persona. */
+    public function test_a_second_plan_never_gets_a_second_live_link(): void
+    {
+        $this->commitLink($this->inbound('dale, mándame el link', 'w.16'))->assertOk();
+        $trimestral = Plan::create(['name' => 'Plan Trimestral', 'price' => 200000, 'duration_days' => 90, 'active' => true, 'benefits' => json_encode(['Acceso'])]);
+
+        $this->commitLink($this->inbound('mejor el trimestral, mándame ese link', 'w.17'), ['recommended_plan_id' => $trimestral->id, 'reply_draft' => 'Claro, te paso el link del {{PLAN_NAME}}.'])->assertOk();
+
+        $this->assertSame(1, PaymentTransaction::count(), 'ningún segundo link mientras el primero siga vivo');
+        $this->assertSame('another_link_in_flight', MarketingAiAction::latest('id')->first()->metadata['payment_link']['reason'] ?? null);
+        $this->assertTrue((bool) $this->conversation->fresh()->staff_review_pending, 'lo resuelve una persona');
     }
 }

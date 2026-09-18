@@ -6,6 +6,7 @@ use App\Models\MarketingAiAction;
 use App\Models\MarketingConversation;
 use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
+use App\Models\PaymentTransaction;
 use App\Models\Plan;
 use App\Services\Marketing\CommercialPhaseMachine;
 use App\Services\Marketing\HumanHandoffAuthority;
@@ -22,9 +23,11 @@ use App\Services\Marketing\SalesIntents;
 use App\Services\Marketing\SalesPaymentGuardrailService;
 use App\Services\Marketing\WompiPaymentLinkService;
 use App\Services\Observability\ChannelLog;
+use App\Services\Wompi\PaymentStateMachine as SM;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Context;
+use Throwable;
 
 /**
  * La única puerta por la que una propuesta de ULTRON llega a ejecutarse.
@@ -488,8 +491,13 @@ class UltronCommitService
                 'provider_message_id' => null,
                 'commercial_phase' => ['from' => $currentPhase, 'to' => $nextState],
                 'reply_final' => null,
-                'applied' => ['tools_executed' => array_values(array_map(fn ($e) => $e['tool'], $executed))],
+                'applied' => ['tools_executed' => $this->executedTools($executed)],
             ];
+            $rechazadas = array_values(array_diff((array) ($proposal['tools_requested'] ?? []), (array) $decision['tools_requested']));
+            if ($rechazadas !== []) {
+                // Una petición sin permiso no tumba el turno, pero tampoco pasa en silencio.
+                ChannelLog::warning('ultron.commit.tools_rejected', ['conversation_id' => $conversation->id, 'tools' => $rechazadas]);
+            }
         }
 
         // 14) Envío por el camino de siempre.
@@ -543,7 +551,7 @@ class UltronCommitService
                 'resolved_at_commit' => true,
             ],
             'applied' => [
-                'tools_executed' => array_values(array_map(fn ($e) => $e['tool'], $executed)),
+                'tools_executed' => $this->executedTools($executed),
                 'tools_rejected' => array_values(array_diff(
                     (array) ($proposal['tools_requested'] ?? []),
                     (array) $decision['tools_requested'],
@@ -866,12 +874,14 @@ class UltronCommitService
             $executed[] = match ($tool) {
                 SalesIntents::TOOL_STAFF_REVIEW => $this->execStaffReview($conversation, $decision),
                 SalesIntents::TOOL_MARK_DNC => $this->execMarkDnc($conversation),
-                // Inalcanzable: la lista ya se filtró contra V1_ALLOWED_TOOLS.
-                default => ['tool' => $tool, 'status' => 'skipped', 'reason' => 'not_available_in_v1'],
+                // El link de pago corre DESPUÉS de enviar la respuesta (execPaymentLink).
+                SalesIntents::TOOL_PAYMENT_LINK_SEND => null,
+                // Inalcanzable: la lista ya se filtró contra el menú del turno.
+                default => ['tool' => $tool, 'status' => 'skipped', 'reason' => 'not_available'],
             };
         }
 
-        return $executed;
+        return array_values(array_filter($executed));
     }
 
     private function execStaffReview(MarketingConversation $conversation, array $decision): array
@@ -903,10 +913,11 @@ class UltronCommitService
     /**
      * GENERATE_PAYMENT_LINK. El modelo solo PIDE; aquí se decide todo lo demás:
      * permiso vigente (Wompi productivo + autorización del negocio), guardrail
-     * (do_not_contact, plan vendible, ningún monto del cliente), idempotencia por
-     * (lead, plan) y «ya pagó» —los resuelve WompiPaymentLinkService—, y el
-     * texto del mensaje con el precio del catálogo. Se ejecuta después de enviar
-     * la respuesta; si la respuesta no salió, el link tampoco.
+     * (do_not_contact, plan vendible, ningún monto del cliente), un solo link vivo
+     * por lead, idempotencia por (lead, plan) y «ya pagó» —los resuelve
+     * WompiPaymentLinkService—, y el texto del mensaje con el precio del catálogo.
+     * Se ejecuta después de enviar la respuesta; si la respuesta no salió, el link
+     * tampoco. Y NUNCA lanza: un fallo aquí no puede romper un turno que ya salió.
      *
      * @return array<string,mixed>|null null cuando no se pidió
      */
@@ -927,39 +938,66 @@ class UltronCommitService
         if ($lead === null || $plan === null) {
             return ['tool' => $tool, 'status' => 'skipped', 'reason' => $plan === null ? 'no_plan_to_charge' : 'no_lead'];
         }
+
         try {
             $this->paymentGuardrail->assertCanGeneratePaymentLink($lead, $plan, []);
+
+            // Dos links vivos para planes distintos serían dos cobros posibles, y el
+            // checkout de Wompi no se puede anular desde aquí: el segundo no se
+            // genera y lo resuelve una persona.
+            $otro = PaymentTransaction::query()
+                ->where('idempotency_key', 'like', 'mkt-lead-'.$lead->id.'-plan-%')
+                ->where('plan_id', '!=', $plan->id)
+                ->whereIn('status', SM::IN_FLIGHT)
+                ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+                ->orderByDesc('id')
+                ->first();
+            if ($otro !== null) {
+                $conversation->forceFill(['staff_review_pending' => true, 'staff_review_reason' => 'payment_link_plan_change'])->save();
+
+                return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'another_link_in_flight', 'other_plan_id' => (int) $otro->plan_id];
+            }
+
+            $link = WompiPaymentLinkService::make()->generateForLead($lead, $plan, [
+                'channel' => $conversation->channel, 'conversation_id' => $conversation->id, 'message_id' => $message->id,
+            ]);
+            if (($link['configured'] ?? false) === false) {
+                return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'wompi_checkout_not_configured'];
+            }
+            if (($link['already_paid'] ?? false) === true) {
+                return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'already_paid', 'reference' => $link['reference'] ?? null];
+            }
+            if (empty($link['payment_url'])) {
+                return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'link_not_safe_to_send'];
+            }
+
+            $body = $this->replies->paymentLinkMessage($plan, (float) $link['amount'], (string) $link['payment_url']);
+            $send = $this->dispatcher->dispatchWhatsapp($lead, $conversation->channel, $body, [
+                'kind' => 'payment_link', 'origin' => 'ultron', 'reference' => $link['reference'] ?? null,
+            ], MarketingMessage::SENDER_AI);
+            $this->memoryService->recordPaymentLink($conversation->fresh(), [
+                'reference' => $link['reference'] ?? null, 'plan_id' => (int) $plan->id, 'expires_at' => $link['expires_at'] ?? null,
+                'status' => 'pending', 'link_sent_at' => now()->toIso8601String(), 'message_id' => $send['message_id'] ?? null,
+            ]);
+            ChannelLog::info('ultron.payment_link.sent', [
+                'conversation_id' => $conversation->id, 'plan_id' => (int) $plan->id, 'reference' => $link['reference'] ?? null,
+                'sent' => $send['sent'], 'dry_run' => $send['dry_run'],
+            ]);
+
+            return ['tool' => $tool, 'status' => 'executed', 'reference' => $link['reference'] ?? null, 'expires_at' => $link['expires_at'] ?? null, 'sent' => $send['sent'], 'dry_run' => $send['dry_run'], 'message_id' => $send['message_id'] ?? null];
         } catch (SalesGuardrailException $e) {
             return ['tool' => $tool, 'status' => 'skipped', 'reason' => $e->errorCode];
-        }
+        } catch (Throwable $e) {
+            ChannelLog::error('ultron.payment_link.failed', ['conversation_id' => $conversation->id, 'plan_id' => (int) $plan->id, 'error' => mb_substr($e->getMessage(), 0, 200)]);
 
-        $link = WompiPaymentLinkService::make()->generateForLead($lead, $plan, [
-            'channel' => $conversation->channel, 'conversation_id' => $conversation->id, 'message_id' => $message->id,
-        ]);
-        if (($link['configured'] ?? false) === false) {
-            return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'wompi_checkout_not_configured'];
+            return ['tool' => $tool, 'status' => 'failed', 'reason' => 'payment_engine_error'];
         }
-        if (($link['already_paid'] ?? false) === true) {
-            return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'already_paid', 'reference' => $link['reference'] ?? null];
-        }
-        if (empty($link['payment_url'])) {
-            return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'link_not_safe_to_send'];
-        }
+    }
 
-        $body = $this->replies->paymentLinkMessage($plan, (float) $link['amount'], (string) $link['payment_url']);
-        $send = $this->dispatcher->dispatchWhatsapp($lead, $conversation->channel, $body, [
-            'kind' => 'payment_link', 'origin' => 'ultron', 'reference' => $link['reference'] ?? null,
-        ], MarketingMessage::SENDER_AI);
-        $this->memoryService->recordPaymentLink($conversation->fresh(), [
-            'reference' => $link['reference'] ?? null, 'plan_id' => (int) $plan->id, 'expires_at' => $link['expires_at'] ?? null,
-            'status' => 'pending', 'link_sent_at' => now()->toIso8601String(), 'message_id' => $send['message_id'] ?? null,
-        ]);
-        ChannelLog::info('ultron.payment_link.sent', [
-            'conversation_id' => $conversation->id, 'plan_id' => (int) $plan->id, 'reference' => $link['reference'] ?? null,
-            'sent' => $send['sent'], 'dry_run' => $send['dry_run'],
-        ]);
-
-        return ['tool' => $tool, 'status' => 'executed', 'reference' => $link['reference'] ?? null, 'expires_at' => $link['expires_at'] ?? null, 'sent' => $send['sent'], 'dry_run' => $send['dry_run'], 'message_id' => $send['message_id'] ?? null];
+    /** Solo lo que de verdad corrió: la respuesta a n8n y la metadata dicen lo mismo. */
+    private function executedTools(array $executed): array
+    {
+        return array_values(array_map(fn ($e) => $e['tool'], array_filter($executed, fn ($e) => in_array($e['status'] ?? null, ['executed', 'created'], true))));
     }
 
     /** La acción ya está persistida cuando sale el link: se anota encima, sin URL. */

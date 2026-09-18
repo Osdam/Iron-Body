@@ -9,6 +9,7 @@ use App\Services\Commercial\Tools\Commercial\EscalateToHumanTool;
 use App\Services\Marketing\CommercialPhaseMachine;
 use App\Services\Marketing\HumanHandoffAuthority;
 use App\Services\Marketing\MarketingKnowledgeBaseService;
+use App\Services\Marketing\OutboundContentGuard;
 use App\Services\Marketing\SalesAgentOrchestratorService;
 use App\Services\Marketing\SalesIntents;
 use App\Services\Marketing\SalesPaymentReadinessService;
@@ -338,7 +339,9 @@ class UltronDecideService
             ->latest('id')->limit(10)->get()
             ->map(fn (MarketingMessage $m) => [
                 'role' => $m->sender_type,
-                'body' => $m->body,
+                // Un mensaje de máquina con URL (el link de pago) no vuelve al modelo
+                // ni al historial de n8n: la URL es pagable por quien la tenga.
+                'body' => $this->redactedBody($m),
                 'at' => optional($m->created_at)->toIso8601String(),
             ])->reverse()->values()->all();
     }
@@ -386,5 +389,14 @@ class UltronDecideService
     public function allowedTools(): array
     {
         return array_values(array_merge(self::V1_ALLOWED_TOOLS, $this->canOfferLink() ? [SalesIntents::TOOL_PAYMENT_LINK_SEND] : []));
+    }
+
+    private function redactedBody(MarketingMessage $m): ?string
+    {
+        if ($m->sender_type === MarketingMessage::SENDER_LEAD || ! OutboundContentGuard::containsUrl((string) $m->body)) {
+            return $m->body;
+        }
+
+        return data_get($m->metadata, 'kind') === 'payment_link' ? '[link de pago enviado]' : '[enlace enviado por el CRM]';
     }
 }

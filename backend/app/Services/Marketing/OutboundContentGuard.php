@@ -260,6 +260,9 @@ class OutboundContentGuard
      */
     public static function containsUrl(string $body): bool
     {
+        // Disfraces habituales: «checkout(.)wompi(.)co», «[.]», «punto», «barra».
+        $body = preg_replace(['~\s*[\(\[]\s*\.\s*[\)\]]\s*~u', '~\s+punto\s+~iu', '~\s+barra\s+~iu'], ['.', '.', '/'], $body) ?? $body;
+
         return preg_match('~(https?://|www\.|\b[a-z0-9-]+\.(com|co|net|org|io|app|cloud|me|ly|link|page|site)(/|\b))~iu', $body) === 1;
     }
 }
