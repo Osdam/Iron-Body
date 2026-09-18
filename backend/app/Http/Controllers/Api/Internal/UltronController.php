@@ -10,6 +10,7 @@ use App\Services\IronGuard\IncidentRecorder;
 use App\Services\Marketing\CommercialPhaseMachine;
 use App\Services\Marketing\HumanHandoffAuthority;
 use App\Services\Marketing\SalesAgentDecisionSchema;
+use App\Services\Marketing\Ultron\CriticContract;
 use App\Services\Marketing\Ultron\StrategyContract;
 use App\Services\Marketing\Ultron\UltronCommitException;
 use App\Services\Marketing\Ultron\UltronCommitService;
@@ -179,7 +180,15 @@ class UltronController extends Controller
             'critic.verdict' => ['nullable', 'string', Rule::in(['pass', 'fail'])],
             'critic.attempt' => ['nullable', 'integer', 'min:1', 'max:2'],
             'critic.score' => ['nullable', 'numeric', 'min:0', 'max:1'],
-            'critic.notes' => ['nullable', 'string', 'max:500'],
+            'critic.notes' => ['nullable', 'string', 'max:'.CriticContract::MAX_NOTES],
+            // Vocabulario cerrado del Critic, para poder medirlo (PUNTO 5).
+            'critic.issues' => ['nullable', 'array', 'max:'.CriticContract::MAX_ISSUES, function (string $attr, mixed $v, \Closure $fail): void {
+                if (is_array($v) && ! array_is_list($v)) {
+                    $fail('issues debe ser una lista.');
+                }
+            }],
+            'critic.issues.*' => ['string', Rule::in(CriticContract::DIMENSIONS)],
+            'critic.hard_fail' => ['nullable', 'string', Rule::in(CriticContract::HARD_FAILS)],
         ]);
 
         /*

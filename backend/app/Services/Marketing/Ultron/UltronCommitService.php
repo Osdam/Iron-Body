@@ -177,7 +177,7 @@ class UltronCommitService
         }
 
         // ── Camino del critic fallido ─────────────────────────────────────────
-        if (($critic['verdict'] ?? 'pass') === 'fail') {
+        if (CriticContract::isFail($critic)) {
             return $this->handleCriticFailure($conversation, $message, $payload, $currentPhase);
         }
 
@@ -435,6 +435,8 @@ class UltronCommitService
 
         $action = $this->persist($conversation, $message, $payload, $decision, $nextState, $plan, [
             'source' => 'external_draft',
+            // El veredicto se audita también cuando aprueba; si no vino, no se inventa.
+            'critic' => CriticContract::judged($critic) ? CriticContract::forMetadata($critic) : null,
             'strategy' => StrategyContract::fromProposal($proposal) ?: null,
             'plans_mentioned' => $estilo['plans_mentioned'],
             'strategy_hints' => ['hot_lead_fast_path' => $hints['hot_lead_fast_path'], 'lifecycle_mode' => $hints['lifecycle_mode']],
@@ -608,11 +610,9 @@ class UltronCommitService
             $currentPhase,
             null,
             [
-                'critic' => [
-                    'verdict' => 'fail',
-                    'attempt' => (int) ($payload['critic']['attempt'] ?? 2),
-                    'score' => $payload['critic']['score'] ?? null,
-                ],
+                // Un fail solo llega aquí tras el segundo Critic: si no dice el intento
+                // (ausente o null, que es como n8n manda lo que no aplica), fue el 2.
+                'critic' => CriticContract::forMetadata(array_replace(['attempt' => 2], array_filter((array) ($payload['critic'] ?? []), fn ($v) => $v !== null))),
                 'fallback_mode' => $modo,
                 // Evidencia de lo que se descartó, para poder revisarlo. No sale.
                 'discarded_draft' => mb_substr((string) ($proposal['reply_draft'] ?? ''), 0, 500),
