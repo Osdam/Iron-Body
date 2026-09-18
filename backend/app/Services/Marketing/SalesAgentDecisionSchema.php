@@ -79,6 +79,37 @@ final class SalesAgentDecisionSchema
     ];
 
     /**
+     * De las permitidas, las que SOLO ejecuta ULTRON.
+     *
+     * `ALLOWED_TOOLS` es el vocabulario del VALIDADOR, y lo reutilizan los dos
+     * flujos: el legado (Hermes/OpenAI) y ULTRON. Pero ejecutarlas no las
+     * ejecutan los dos. `app_links_send` entró aquí con el motor de la app y,
+     * de paso, se coló en el prompt del flujo legado —{@see SalesAgentPromptBuilder}
+     * lista esta constante—, donde `SalesAgentOrchestratorService::execute()`
+     * la manda a `unknown_tool`: el modelo la pedía y no pasaba nada.
+     *
+     * Un prompt no anuncia herramientas que su flujo no ejecuta. Quitarlas del
+     * VALIDADOR, en cambio, rompería ULTRON, que lo reutiliza tal cual: por eso
+     * son dos listas y no una.
+     *
+     * `payment_link_send` NO está aquí: el flujo legado sí la ejecuta
+     * (`SalesAgentOrchestratorService::execPaymentLink()`).
+     */
+    public const ULTRON_ONLY_TOOLS = [
+        SalesIntents::TOOL_APP_LINKS_SEND,
+    ];
+
+    /**
+     * Las que puede nombrar el prompt del flujo legado: las que ese flujo ejecuta.
+     *
+     * @return string[]
+     */
+    public static function legacyPromptTools(): array
+    {
+        return array_values(array_diff(self::ALLOWED_TOOLS, self::ULTRON_ONLY_TOOLS));
+    }
+
+    /**
      * Señales de intentos PROHIBIDOS (activar membresía, aprobar pago, tocar
      * facturación, prometer resultados, diagnosticar). Si aparecen en la salida
      * del modelo → se bloquea y se escala. Sin acentos, en minúscula.

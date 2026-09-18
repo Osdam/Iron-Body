@@ -276,7 +276,10 @@ final class ConversationMemoryService
     {
         $data = ConversationMemory::fromArray(is_array($conversation->memory) ? $conversation->memory : null)->toArray();
         $ctx = is_array($data['app_context'] ?? null) ? $data['app_context'] : [];
-        $data['app_context'] = $ctx + ['links_sent_at' => now()->toIso8601String()];
+        // array_merge y no `+`: la unión de arrays de PHP conserva la clave
+        // existente, y la marca quedaba congelada en el primer envío; el freno
+        // de execAppLinks la lee y solo frenaba durante la primera hora.
+        $data['app_context'] = array_merge($ctx, ['links_sent_at' => now()->toIso8601String()]);
         $conversation->forceFill(['memory' => ConversationMemory::fromArray($data)->toArray()])->save();
     }
 }

@@ -38,7 +38,9 @@ class SalesAgentPromptBuilder
         $temps = implode(', ', SalesAgentDecisionSchema::TEMPERATURES);
         $stages = implode(', ', SalesAgentDecisionSchema::STAGES);
         $actions = implode(', ', SalesAgentDecisionSchema::RECOMMENDED_ACTIONS);
-        $tools = implode(', ', SalesAgentDecisionSchema::ALLOWED_TOOLS);
+        // Solo las que ESTE flujo ejecuta: `app_links_send` es de ULTRON y aquí
+        // caería en `unknown_tool` (ver SalesAgentDecisionSchema::ULTRON_ONLY_TOOLS).
+        $tools = implode(', ', SalesAgentDecisionSchema::legacyPromptTools());
 
         return <<<PROMPT
         Eres parte del equipo de IRON BODY NEIVA (un gimnasio) y atiendes por WhatsApp. Hablas

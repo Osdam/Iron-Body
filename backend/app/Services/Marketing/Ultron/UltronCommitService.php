@@ -25,6 +25,7 @@ use App\Services\Marketing\SalesPaymentGuardrailService;
 use App\Services\Marketing\WompiPaymentLinkService;
 use App\Services\Observability\ChannelLog;
 use App\Services\Wompi\PaymentStateMachine as SM;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Context;
@@ -67,6 +68,14 @@ class UltronCommitService
     private const LOCK_WAIT_SECONDS = 10;
 
     private const LOCK_TTL_SECONDS = 60;
+
+    /**
+     * Cuánto tiene que pasar para volver a mandar los enlaces de la app a la
+     * MISMA conversación. La memoria ya anotaba `app_context.links_sent_at`,
+     * pero nadie la leía: el modelo podía pedir `app_links_send` en cada turno
+     * y Laravel despachaba tres URLs en cada turno.
+     */
+    public const APP_LINKS_RESEND_MINUTES = 60;
 
     public function __construct(
         private readonly UltronDecideService $decide,
@@ -1018,6 +1027,10 @@ class UltronCommitService
      * mensaje de Laravel después de la respuesta; la memoria lo anota para no
      * volver a anunciarlos como novedad. Nunca lanza.
      *
+     * Esa anotación es también el FRENO: dentro de
+     * {@see self::APP_LINKS_RESEND_MINUTES} minutos la herramienta responde
+     * `skipped/already_sent` y no despacha nada.
+     *
      * @return array<string,mixed>|null null cuando no se pidió
      */
     private function execAppLinks(MarketingConversation $conversation, array $decision, string $outcome): ?array
@@ -1034,10 +1047,35 @@ class UltronCommitService
             return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'no_lead'];
         }
 
+        // Dentro de la ventana no se despacha nada: el cliente tiene los tres
+        // enlaces unas líneas más arriba, en este mismo chat. Pasada, volver a
+        // pedirlos es legítimo («se me borró, reenvíamelo») y salen otra vez.
+        $marca = data_get($conversation->memory, 'app_context.links_sent_at');
+        if (is_string($marca) && trim($marca) !== '') {
+            try {
+                $ultimo = CarbonImmutable::parse($marca);
+            } catch (Throwable) {
+                // Una marca ilegible no puede callar los enlaces para siempre:
+                // se trata como si no existiera y el próximo envío la reescribe.
+                $ultimo = null;
+            }
+            if ($ultimo !== null && $ultimo->greaterThan(now()->subMinutes(self::APP_LINKS_RESEND_MINUTES))) {
+                return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'already_sent', 'sent_at' => $marca];
+            }
+        }
+
         try {
             $send = $this->dispatcher->dispatchWhatsapp($lead, $conversation->channel, MobileAppCatalog::linksMessage(), [
                 'kind' => 'app_links', 'origin' => 'ultron',
             ], MarketingMessage::SENDER_AI);
+
+            // El freno cuenta desde que HUBO mensaje (entregado, en cola o en
+            // dry_run). Si el despachador lo bloqueó (do_not_contact, canal no
+            // soportado, lead sin teléfono) no se marca nada: no hay enlaces que
+            // espaciar, y marcarlo callaría la herramienta una hora por nada.
+            if (! ($send['safe_to_send'] ?? false)) {
+                return ['tool' => $tool, 'status' => 'skipped', 'reason' => (string) ($send['reason'] ?? 'not_sent')];
+            }
             $this->memoryService->recordAppLinksSent($conversation->fresh());
 
             return ['tool' => $tool, 'status' => 'executed', 'sent' => $send['sent'], 'dry_run' => $send['dry_run'], 'message_id' => $send['message_id'] ?? null];

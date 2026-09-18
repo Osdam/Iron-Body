@@ -4,19 +4,40 @@ namespace App\Services\Marketing;
 
 /**
  * Lo que la app Iron Body Workout hace de verdad, escrito desde su código
- * (repo Flutter, rama fix/ios-tflite-symbols, 2026-09-17): pantallas en
- * lib/features/*, endpoints que consume y textos de sus propias pantallas. Que
- * exista una carpeta no bastó: cada entrada se comprobó en la pantalla o el
- * endpoint. El modelo solo puede afirmar lo que está aquí; lo que no está, no
- * existe para él. Sin cifras, sin promesas, sin URLs: los enlaces viajan en
+ * (repo Flutter, rama fix/ios-tflite-symbols): pantallas en lib/features/*,
+ * endpoints que consume y textos de sus propias pantallas. Que exista una
+ * carpeta no bastó: cada entrada se comprobó en la pantalla o el endpoint. El
+ * modelo solo puede afirmar lo que está aquí; lo que no está, no existe para
+ * él. Sin cifras, sin promesas, sin URLs: los enlaces viajan en
  * {@see MobileAppLinks} y los envía Laravel.
+ *
+ * Dos entradas decían lo que la app NO hace, y el modelo las repetía como
+ * verdad del gimnasio:
+ *
+ *  - ACCESO. Decía «con el documento o el teléfono». La pantalla de login tiene
+ *    un único campo, «Número de documento» (login_screen.dart:438), bajo el
+ *    subtítulo «Accede con tu documento o biometría» (:425); el backend solo
+ *    valida `document_number` (LoginMemberRequest::rules()). Entrar por
+ *    teléfono nunca existió. La biometría sí —el botón reusa la
+ *    sesión viva del dispositivo contra `POST members/biometric-unlock`— y no
+ *    estaba escrita. El rostro es un TERCER factor tras el SMS y solo si la
+ *    cuenta tiene referencia facial (otp_verification_screen.dart:122-133).
+ *  - REGISTRO. Decía «nombre, documento, correo y teléfono; el teléfono se
+ *    confirma con el código SMS». El flujo real son seis pasos
+ *    (register_screen.dart:40-46) e incluye la foto del documento por ambas
+ *    caras con OCR y validación de edad; la verificación facial es OPCIONAL
+ *    (:106, :1571-1585). En el registro NO hay SMS: no aparece ni en la
+ *    pantalla ni en sus servicios.
+ *
+ * Y lo que se prometía del pago hecho por WhatsApp —«queda enlazado al
+ * registrarte»— dejó de ser automático: lo enlaza el equipo tras verificarlo.
  */
 final class MobileAppCatalog
 {
     /** @var array<int, array{key:string,title:string,what:string}> */
     public const FEATURES = [
-        ['key' => 'otp_login', 'title' => 'Acceso', 'what' => 'Se entra con el número de documento o el teléfono y un código de 6 dígitos que llega por SMS. No hay contraseña que recordar.'],
-        ['key' => 'registration', 'title' => 'Registro', 'what' => 'Nombre, documento, correo y teléfono; el teléfono se confirma con el código SMS. Quien pagó por WhatsApp con ese mismo número queda enlazado a su membresía al registrarse.'],
+        ['key' => 'otp_login', 'title' => 'Acceso', 'what' => 'Se entra con el número de documento: llega un código de 6 dígitos por SMS y, si la cuenta tiene rostro registrado, la app pide además la verificación facial. Quien ya entró en ese mismo dispositivo vuelve a entrar con la biometría, sin código. No hay contraseña.'],
+        ['key' => 'registration', 'title' => 'Registro', 'what' => 'Crear la cuenta son seis pasos dentro de la app: datos personales (documento, nombre, correo y teléfono), preferencias de entreno, foto del documento por las dos caras —la app la lee y valida la edad—, contrato y autorización, firma, y verificación facial, que es opcional. Si pagaste por WhatsApp, el equipo enlaza ese pago a tu cuenta después de verificarlo y te avisa.'],
         ['key' => 'membership_and_renewal', 'title' => 'Membresía', 'what' => 'Ver el plan activo, su vencimiento y su estado (activa, por vencer, vencida), renovarlo, y activar o cancelar la renovación automática con tarjeta.'],
         ['key' => 'wompi_payments', 'title' => 'Pagos', 'what' => 'Pagar o renovar la membresía desde la app con Wompi (Nequi, PSE, tarjeta, Daviplata) y ver el comprobante en PDF.'],
         ['key' => 'class_reservations', 'title' => 'Clases', 'what' => 'Planificador semanal de clases grupales: reservar y cancelar cupo y registrar la asistencia (check-in).'],
@@ -29,15 +50,15 @@ final class MobileAppCatalog
         ['key' => 'community', 'title' => 'Comunidad', 'what' => 'Historias y reels del gimnasio, eventos y transmisiones en vivo.'],
         ['key' => 'digital_contract', 'title' => 'Contrato digital', 'what' => 'Firma del contrato de membresía desde la app.'],
         ['key' => 'support', 'title' => 'Soporte', 'what' => 'Reportar un problema o pedir ayuda desde la app.'],
-        ['key' => 'security', 'title' => 'Seguridad', 'what' => 'Cambio de número, recuperación segura del acceso y cierre de sesión en otros dispositivos.'],
+        ['key' => 'security', 'title' => 'Seguridad', 'what' => 'Cambio de número, recuperación segura del acceso, cierre de sesión en otros dispositivos y acceso biométrico: se activa al iniciar sesión con el documento y se puede volver a registrar el rostro desde la app.'],
     ];
 
     /** @var array<string,string> */
     public const HELP = [
-        'login' => 'Para entrar: abre la app, escribe tu documento o tu teléfono y luego el código de 6 dígitos que te llega por SMS. Si no llega, revisa que el número sea el que registraste.',
-        'register' => 'Para registrarte: descarga la app, elige Registrarme, ingresa nombre, documento, correo y teléfono, y confirma el código SMS. Si ya pagaste por WhatsApp con este mismo número, tu membresía queda enlazada al terminar.',
+        'login' => 'Para entrar: abre la app, escribe tu número de documento y luego el código de 6 dígitos que te llega por SMS; si tu cuenta tiene rostro registrado, la app pide también la verificación facial. Si ya entraste antes en ese dispositivo, puedes entrar con la biometría. Si el código no llega, revisa que el número registrado siga siendo el tuyo.',
+        'register' => 'Para registrarte: descarga la app, toca CREAR CUENTA y sigue los pasos: datos personales (documento, nombre, correo y teléfono), preferencias de entreno, la foto de tu documento por las dos caras —la app la lee y valida tu edad—, el contrato con tu firma y, al final, la verificación facial, que es opcional. Si pagaste por WhatsApp, el equipo enlaza ese pago a tu cuenta después de verificarlo y te avisa.',
         'recovery' => 'Si cambiaste de número o no te llega el código, en la app está la recuperación segura del acceso; si tampoco funciona, el equipo lo revisa.',
-        'membership_not_visible' => 'Si tu membresía no aparece en la app, suele ser porque el documento o el teléfono del registro no coinciden con los del pago; el equipo lo verifica.',
+        'membership_not_visible' => 'Si tu membresía no aparece en la app, suele ser porque el documento del registro no coincide con el del pago. Si pagaste por WhatsApp, el equipo enlaza ese pago a tu cuenta después de verificarlo y te avisa; si pagaste desde la app, el equipo lo revisa.',
     ];
 
     /** @return array{links:array{android:string,ios:string,web:string},features:array<int,array{key:string,title:string,what:string}>,help:array<string,string>,account:array{has_account:bool}} */
