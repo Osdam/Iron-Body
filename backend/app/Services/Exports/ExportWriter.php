@@ -58,30 +58,57 @@ class ExportWriter
     }
 
     /**
+     * @param  Builder|iterable<mixed>  $source  consulta a recorrer, o filas ya calculadas
      * @param  list<ExportColumn>  $columns
+     * @param  list<string>  $meta  líneas de cabecera (título, periodo, filtros) sobre la tabla
      */
-    public function download(Builder $query, array $columns, string $format, string $filename): StreamedResponse|BinaryFileResponse
+    public function download(Builder|iterable $source, array $columns, string $format, string $filename, array $meta = []): StreamedResponse|BinaryFileResponse
     {
         return match ($format) {
-            self::FORMAT_XLSX => $this->xlsx($query, $columns, $filename.'.xlsx'),
-            self::FORMAT_CSV => $this->csv($query, $columns, $filename.'.csv'),
+            self::FORMAT_XLSX => $this->xlsx($source, $columns, $filename.'.xlsx', $meta),
+            self::FORMAT_CSV => $this->csv($source, $columns, $filename.'.csv', $meta),
             default => throw new RuntimeException("Formato de exportación no soportado: {$format}"),
         };
+    }
+
+    /**
+     * Las filas a escribir, venga el dataset de una consulta o ya resuelto.
+     *
+     * `lazyById` nunca carga la tabla entera en memoria; los informes, en
+     * cambio, entregan un puñado de filas ya agregadas y se recorren tal cual.
+     *
+     * @param  Builder|iterable<mixed>  $source
+     */
+    private function rows(Builder|iterable $source): iterable
+    {
+        return $source instanceof Builder ? $source->lazyById(500) : $source;
     }
 
     // ── CSV ──────────────────────────────────────────────────────────────────
 
     /** @param  list<ExportColumn>  $columns */
-    private function csv(Builder $query, array $columns, string $filename): StreamedResponse
+    private function csv(Builder|iterable $source, array $columns, string $filename, array $meta = []): StreamedResponse
     {
-        return response()->streamDownload(function () use ($query, $columns) {
+        return response()->streamDownload(function () use ($source, $columns, $meta) {
             $out = fopen('php://output', 'wb');
 
             // BOM: sin él Excel abre el UTF-8 como Latin-1 y «Pérez» sale «PÃ©rez».
             fwrite($out, "\xEF\xBB\xBF");
+
+            // Cabecera del informe —qué es, de qué periodo y cuándo se generó—
+            // separada de la tabla por una línea en blanco: un fichero de datos
+            // sin contexto acaba discutido en una reunión sin poder decir de
+            // qué fechas era.
+            foreach ($meta as $linea) {
+                fputcsv($out, [$linea], ',', '"', '');
+            }
+            if ($meta !== []) {
+                fputcsv($out, [''], ',', '"', '');
+            }
+
             fputcsv($out, array_map(fn (ExportColumn $c) => $c->label, $columns), ',', '"', '');
 
-            foreach ($query->lazyById(500) as $fila) {
+            foreach ($this->rows($source) as $fila) {
                 $valores = [];
                 foreach ($columns as $col) {
                     $valores[] = $this->csvCell($col, $col->resolve($fila));
@@ -126,13 +153,13 @@ class ExportWriter
     // ── XLSX ─────────────────────────────────────────────────────────────────
 
     /** @param  list<ExportColumn>  $columns */
-    private function xlsx(Builder $query, array $columns, string $filename): BinaryFileResponse
+    private function xlsx(Builder|iterable $source, array $columns, string $filename, array $meta = []): BinaryFileResponse
     {
         $hoja = tempnam(sys_get_temp_dir(), 'ib-sheet-');
         $zip = tempnam(sys_get_temp_dir(), 'ib-xlsx-');
 
         try {
-            $filas = $this->writeSheet($hoja, $query, $columns);
+            $filas = $this->writeSheet($hoja, $source, $columns, $meta);
             $this->packXlsx($zip, $hoja, $columns, $filas);
         } finally {
             @unlink($hoja);
@@ -150,16 +177,18 @@ class ExportWriter
      *
      * @param  list<ExportColumn>  $columns
      */
-    private function writeSheet(string $ruta, Builder $query, array $columns): int
+    private function writeSheet(string $ruta, Builder|iterable $source, array $columns, array $meta = []): int
     {
         $f = fopen($ruta, 'wb');
         $ultimaCol = $this->columnLetter(count($columns));
+        // La tabla empieza debajo de la cabecera del informe, si la hay.
+        $filaEncabezado = count($meta) + ($meta === [] ? 0 : 1) + 1;
 
         fwrite($f, '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             .'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
             .'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
             // Encabezado congelado: al bajar por mil filas sigue viéndose qué es cada columna.
-            .'<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
+            .'<sheetViews><sheetView workbookViewId="0"><pane ySplit="'.$filaEncabezado.'" topLeftCell="A'.($filaEncabezado + 1).'" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
             .'<cols>');
         foreach ($columns as $i => $col) {
             $ancho = max(12, min(45, mb_strlen($col->label) + 4));
@@ -168,15 +197,26 @@ class ExportWriter
         }
         fwrite($f, '</cols><sheetData>');
 
-        // Encabezado en negrita (estilo 1).
-        fwrite($f, '<row r="1">');
+        // Cabecera del informe: título, periodo y filtros aplicados.
+        $r = 0;
+        foreach ($meta as $linea) {
+            $r++;
+            fwrite($f, "<row r=\"{$r}\">".$this->textCell('A'.$r, $linea, 1).'</row>');
+        }
+        if ($meta !== []) {
+            $r++; // línea en blanco entre la cabecera y la tabla
+        }
+
+        // Encabezado de columnas en negrita (estilo 1).
+        $r++;
+        fwrite($f, "<row r=\"{$r}\">");
         foreach ($columns as $i => $col) {
-            fwrite($f, $this->textCell($this->columnLetter($i + 1).'1', $col->label, 1));
+            fwrite($f, $this->textCell($this->columnLetter($i + 1).$r, $col->label, 1));
         }
         fwrite($f, '</row>');
 
-        $r = 1;
-        foreach ($query->lazyById(500) as $fila) {
+        $inicioTabla = $r;
+        foreach ($this->rows($source) as $fila) {
             $r++;
             fwrite($f, "<row r=\"{$r}\">");
             foreach ($columns as $i => $col) {
@@ -186,13 +226,13 @@ class ExportWriter
         }
 
         fwrite($f, '</sheetData>');
-        if ($r > 1) {
-            fwrite($f, "<autoFilter ref=\"A1:{$ultimaCol}{$r}\"/>");
+        if ($r > $inicioTabla) {
+            fwrite($f, "<autoFilter ref=\"A{$inicioTabla}:{$ultimaCol}{$r}\"/>");
         }
         fwrite($f, '</worksheet>');
         fclose($f);
 
-        return $r - 1;
+        return $r - $inicioTabla;
     }
 
     private function cell(string $ref, ExportColumn $col, mixed $valor): string

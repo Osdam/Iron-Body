@@ -81,8 +81,11 @@ class CashReceipts
      */
     public function cashPayments(): Builder
     {
+        // Columnas CUALIFICADAS: esta consulta se usa como base de informes que
+        // la unen con `payment_splits`, que también tiene `method`, y sin el
+        // prefijo la base de datos no sabe a cuál de las dos se refiere.
         return Payment::query()->where(function (Builder $q): void {
-            $q->whereNull('method')->orWhereRaw('LOWER(method) <> ?', [self::ACCRUAL_METHOD]);
+            $q->whereNull('payments.method')->orWhereRaw('LOWER(payments.method) <> ?', [self::ACCRUAL_METHOD]);
         });
     }
 

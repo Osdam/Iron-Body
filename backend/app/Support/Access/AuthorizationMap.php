@@ -314,6 +314,36 @@ final class AuthorizationMap
         'GET api/reports/stats' => 'reports.view',
         'GET api/admin/reports/overview' => 'reports.view',
         'GET api/admin/reports/payment-channels' => 'reports.view',
+
+        // ── Centro de informes ──────────────────────────────────────────────
+        // Todo el panel exige `reports.view`, que es el permiso del dinero:
+        // recepción no lo tiene, y por eso no ve cuánto factura el gimnasio.
+        'GET api/admin/reports/summary' => 'reports.view',
+        'GET api/admin/reports/options' => 'reports.view',
+        'GET api/admin/reports/money' => 'reports.view',
+        'GET api/admin/reports/money/transactions' => 'reports.view',
+        'GET api/admin/reports/memberships' => 'reports.view',
+        'GET api/admin/reports/memberships/expiring' => 'reports.view',
+        'GET api/admin/reports/memberships/expired' => 'reports.view',
+        'GET api/admin/reports/members' => 'reports.view',
+        'GET api/admin/reports/members/lapsed' => 'reports.view',
+        'GET api/admin/reports/members/search' => 'reports.view',
+        'GET api/admin/reports/sales' => 'reports.view',
+        'GET api/admin/reports/sales/rows' => 'reports.view',
+        'GET api/admin/reports/staff' => 'reports.view',
+        'GET api/admin/reports/staff/profile' => 'reports.view',
+        'GET api/admin/reports/staff/timeline' => 'reports.view',
+        // La actividad del sistema NO: eso es auditoría, el permiso más alto
+        // del CRM, y ni el rol Administrador lo tiene por defecto.
+        'GET api/admin/reports/activity' => 'audit.view',
+        // El catálogo de descargas solo dice qué formatos existen.
+        'GET api/admin/reports/exports' => self::SELF,
+        'GET api/admin/reports/exports/transactions' => 'reports.view',
+        'GET api/admin/reports/exports/sales' => 'reports.view',
+        'GET api/admin/reports/exports/expiring' => 'reports.view',
+        'GET api/admin/reports/exports/expired' => 'reports.view',
+        'GET api/admin/reports/exports/staff' => 'reports.view',
+        'GET api/admin/reports/exports/activity' => 'audit.view',
         // El historial de pagos del perfil es información de PAGOS, aunque se
         // mire desde la ficha del socio: quien no ve pagos no lo ve aquí.
         'GET api/admin/users/{user}/payment-history' => 'payments.view',

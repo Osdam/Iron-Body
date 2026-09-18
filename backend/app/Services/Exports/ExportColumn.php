@@ -3,7 +3,6 @@
 namespace App\Services\Exports;
 
 use Closure;
-use Illuminate\Database\Eloquent\Model;
 
 /**
  * Una columna exportable: su clave estable, cómo se llama en el fichero y de
@@ -22,7 +21,7 @@ final class ExportColumn
     public const TYPE_DATE = 'date';
 
     /**
-     * @param  Closure(Model): (string|int|float|bool|null)  $value
+     * @param  Closure(mixed): (string|int|float|bool|null)  $value
      */
     public function __construct(
         public readonly string $key,
@@ -39,7 +38,14 @@ final class ExportColumn
         public readonly bool $personal = false,
     ) {}
 
-    public function resolve(Model $row): string|int|float|bool|null
+    /**
+     * El valor de esta columna para una fila.
+     *
+     * La fila es `mixed` y no `Model` porque los informes exportan agregados
+     * —un array por línea— y no filas de una tabla. El cierre de cada columna
+     * declara qué espera recibir.
+     */
+    public function resolve(mixed $row): string|int|float|bool|null
     {
         return ($this->value)($row);
     }

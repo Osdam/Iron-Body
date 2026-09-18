@@ -557,6 +557,51 @@ Route::middleware('auth.admin')->group(function (): void {
     Route::post('turnstile/serial/open', [TurnstileController::class, 'openSerial']);
 });
 
+
+// ── CENTRO DE INFORMES ───────────────────────────────────────────────────────
+// Un endpoint por sección, y cada uno resuelve SUS agregados: abrir la pestaña
+// de Miembros no debe pagar el coste de calcular el rendimiento del equipo. El
+// periodo y los filtros viajan igual en todos (ver ReportsController).
+Route::middleware('auth.admin')->prefix('admin/reports')->group(function (): void {
+    $reportes = 'App\\Http\\Controllers\\Api\\Admin\\Reports\\';
+
+    Route::get('summary', $reportes.'SummaryController');
+    // Opciones de los desplegables: tablas pequeñas, sin agregados.
+    Route::get('options', $reportes.'OptionsController');
+
+    Route::get('money', [$reportes.'MoneyController', 'index']);
+    Route::get('money/transactions', [$reportes.'MoneyController', 'transactions']);
+
+    Route::get('memberships', [$reportes.'MembershipsController', 'index']);
+    Route::get('memberships/expiring', [$reportes.'MembershipsController', 'expiring']);
+    Route::get('memberships/expired', [$reportes.'MembershipsController', 'expired']);
+
+    Route::get('members', [$reportes.'MembersController', 'index']);
+    Route::get('members/lapsed', [$reportes.'MembersController', 'lapsed']);
+    Route::get('members/search', [$reportes.'MembersController', 'search']);
+
+    Route::get('sales', [$reportes.'SalesController', 'index']);
+    Route::get('sales/rows', [$reportes.'SalesController', 'rows']);
+
+    Route::get('staff', [$reportes.'StaffController', 'index']);
+    Route::get('staff/profile', [$reportes.'StaffController', 'profile']);
+    Route::get('staff/timeline', [$reportes.'StaffController', 'timeline']);
+
+    // La actividad del sistema exige `audit.view`, que es otro permiso: ver
+    // cuánto entró y ver quién anuló un cobro no son la misma autorización.
+    Route::get('activity', $reportes.'ActivityController');
+
+    // Descargas. Una ruta por informe y con la clave FIJA, igual que el módulo
+    // de exportación: con un comodín {dataset} el permiso dependería del valor
+    // y AuthorizationMap no podría resolverlo antes de entrar al controlador.
+    Route::get('exports', [$reportes.'ExportController', 'index']);
+    foreach (['transactions', 'sales', 'expiring', 'expired', 'staff', 'activity'] as $informe) {
+        Route::get('exports/'.$informe, [$reportes.'ExportController', 'download'])
+            ->defaults('dataset', $informe)
+            ->middleware('throttle:30,1');
+    }
+});
+
 // Configuración de planes y su CRUD de escritura: solo administración. Las
 // rutas estáticas (plans/features, ai-capabilities) se registran ANTES del
 // apiResource para que no las capture el comodín {plan}.
