@@ -59,6 +59,12 @@ class OutboundInformationDeliveryTest extends TestCase
             'ahora mismo' => ['Te paso ahora mismo el link de pago.'],
             'apenas confirme' => ['Te comunico apenas confirme el pago.'],
             'en cuanto' => ['Te comunico en cuanto quede activa la membresía.'],
+            // Atender es lo que hace un gimnasio; los avisos del sistema no son personas (revisor, ciclo 4).
+            'entrenador te atiende' => ['Un entrenador te atiende en la zona de pesas.'],
+            'equipo te atiende' => ['El equipo te atiende de lunes a sábado.'],
+            'numero de contacto del gimnasio' => ['Te paso el número de contacto del gimnasio.'],
+            'numero de nuestra sede' => ['Te paso el número de nuestra sede.'],
+            'la app te escribe' => ['Cuando se confirme el pago, la app te escribe enseguida.'],
         ];
     }
 
@@ -108,6 +114,11 @@ class OutboundInformationDeliveryTest extends TestCase
             'comunico que coordinadora escribe' => ['Te comunico que la coordinadora te escribe hoy.'],
             'le paso tu numero' => ['Le paso tu número a la coordinadora.'],
             'recepcion para que te atiendan' => ['Te paso el número de recepción para que te atiendan.'],
+            // Una apertura de información no franquea la frase entera (revisor, ciclo 4).
+            'si quieres con la coordinadora' => ['Te paso si quieres con la coordinadora.'],
+            'cuando quieras con un asesor' => ['Te paso cuando quieras con un asesor.'],
+            'comunico si prefieres con' => ['Te comunico si prefieres con el coordinador.'],
+            'valentina te busca' => ['Te comunico que Valentina te busca mañana.'],
         ];
     }
 

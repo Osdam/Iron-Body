@@ -92,7 +92,7 @@ class OutboundContentGuard
     private const PERSONA = '(alguien|una\s+persona|un(a)?\s+asesor(a)?|el\s+equipo|recepcion|mi\s+compan(er)?[oa]|(el|la)\s+coordinador(a)?|un(a)?\s+entrenador(a)?)';
 
     /** Objetos que se PASAN como información, no como persona. Lista blanca a propósito. */
-    private const INFORMACION = '(links?|enlaces?|urls?|datos?|informacion|info|direccion|ubicacion|mapa|horarios?|precios?|valor|detalles?|lista|resumen|pasos?|beneficios?|planes?|opciones?|comparativa|catalogo|fotos?|videos?|documentos?|formatos?|requisitos|pdfs?|instrucciones|(numeros?|whatsapp|celular|telefono|contacto)\s+(de|del)\s+(la\s+|el\s+)?(sede|recepcion|gimnasio|gym|iron\s+body))';
+    private const INFORMACION = '(links?|enlaces?|urls?|datos?|informacion|info|direccion|ubicacion|mapa|horarios?|precios?|valor|detalles?|lista|resumen|pasos?|beneficios?|planes?|opciones?|comparativa|catalogo|fotos?|videos?|documentos?|formatos?|requisitos|pdfs?|instrucciones|(numeros?|whatsapp|celular|telefono|contacto)(\s+de\s+contacto)?\s+(de|del)\s+((la|el|nuestra|nuestro|mi|su)\s+)?(sede|recepcion|gimnasio|gym|iron\s+body))';
 
     /** Lo que puede ir entre «te paso» y el objeto sin cambiar el sentido: artículos, adverbios, cuantificadores. */
     private const RELLENO = '(el|la|los|las|un|una|unos|unas|este|esta|estos|estas|ese|esa|mi|tu|nuestro|nuestra|otro|otra|ya|ahora|ahorita|aqui|aca|enseguida|rapido|rapidito|tambien|mas|toda|todo|todos|todas|dos|tres|un\s+par\s+de|por\s+aca|por\s+aqui|de\s+una\s+vez|de\s+una|de\s+inmediato|ahora\s+mismo|ya\s+mismo|apenas|entonces|mejor|primero|luego|igual)';
@@ -110,6 +110,9 @@ class OutboundContentGuard
         // corregible; un traspaso que se cuela («te paso a Carlos», «te paso al
         // entrenador», «te paso su número») llega al cliente en silencio.
         '/\bte\s+(paso|comunico)\b(?!\s*[:,]?\s*(?:'.self::RELLENO.'\s+){0,4}(?:(?:que|cuando|apenas|en\s+cuanto|tan\s+pronto|si)\b|'.self::INFORMACION.'\b))/u',
+        // La apertura («que», «si», «cuando»…) no franquea la frase: si más adelante
+        // aparece «con» + una persona, es un traspaso («te paso si quieres con la coordinadora»).
+        '/\bte\s+(paso|comunico)\b[^.!?]{0,40}\bcon\s+((el|la|un|una|mi|nuestro|nuestra)\s+)?(?:'.self::PERSONA.'|'.self::ROL.')\b/u',
         // Señuelos: una palabra de la lista blanca cuyo objeto real es una persona
         // («te paso los datos de la asesora»), y el futuro perifrástico o presente
         // de traspaso («te va a llamar», «te contacta una asesora», «para que lo
@@ -121,8 +124,8 @@ class OutboundContentGuard
         '/\bpara\s+que\s+te\s+(atiendan?|llamen?|contacten?|escriban?)\b/u',
         // Sujeto antepuesto («la coordinadora te escribe hoy») y marcador temporal con
         // nombre propio («Carlos te escribe en un momento»); y entregar TU número a alguien.
-        '/\b'.self::ROL.'\s+(te|le)\s+(contacta|llama|escribe|marca|atiende|atendera|contactara|escribira|llamara)\b/u',
-        '/\b(te|le)\s+(escribe|llama|contacta|marca)\s+(en\s+un\s+(momento|rato|ratico)|hoy|mas\s+tarde|ahora|ahorita|enseguida|en\s+breve|luego|manana|esta\s+tarde|en\s+la\s+tarde)\b/u',
+        '/\b'.self::ROL.'\s+(te|le)\s+(contacta|llama|escribe|marca|busca|contactara|escribira|llamara|buscara)\b/u',
+        '/(?<!\bapp\s)(?<!\baplicacion\s)(?<!\bsistema\s)(?<!\bcrm\s)(?<!\bplataforma\s)(?<!\bbot\s)(?<!\basistente\s)\b(te|le)\s+(escribe|llama|contacta|marca|busca)\s+(en\s+un\s+(momento|rato|ratico)|hoy|mas\s+tarde|ahora|ahorita|enseguida|en\s+breve|luego|manana|esta\s+tarde|en\s+la\s+tarde)\b/u',
         '/\b(le|les)\s+(paso|doy|mando|envio|dejo)\s+tu\s+(numero|contacto|celular|whatsapp|telefono|datos)\b/u',
         '/\bte\s+(voy\s+a\s+)?(pasar|conectar|comunicar)\s+con\b/u',
         '/\b(le|los?|las?)\s+(paso|conecto|comunico)\s+con\b/u',
