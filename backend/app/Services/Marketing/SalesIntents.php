@@ -130,6 +130,9 @@ final class SalesIntents
     // ── Herramientas que la decisión puede solicitar (auto_execute seguro) ────
     public const TOOL_PAYMENT_LINK_SEND = 'payment_link_send';
 
+    /** Laravel envía los enlaces oficiales de la app en un mensaje propio. Sin dinero en juego: siempre disponible. */
+    public const TOOL_APP_LINKS_SEND = 'app_links_send';
+
     public const TOOL_SCHEDULE_FOLLOWUP = 'schedule_followup';
 
     // staff_review crea una alerta interna SIN tocar ai_enabled/human_takeover.

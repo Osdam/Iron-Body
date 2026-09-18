@@ -71,6 +71,7 @@ final class SalesAgentDecisionSchema
      */
     public const ALLOWED_TOOLS = [
         SalesIntents::TOOL_PAYMENT_LINK_SEND,
+        SalesIntents::TOOL_APP_LINKS_SEND,
         SalesIntents::TOOL_SCHEDULE_FOLLOWUP,
         SalesIntents::TOOL_STAFF_REVIEW,
         SalesIntents::TOOL_MARK_DNC,

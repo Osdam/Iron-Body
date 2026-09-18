@@ -389,7 +389,8 @@ class UltronFixturesTest extends TestCase
         $raw = $d->getContent();
         $this->assertStringNotContainsString(self::SECRET, $raw);
         $this->assertStringNotContainsString('"phone"', $raw);
-        $this->assertSame([SalesIntents::TOOL_STAFF_REVIEW, SalesIntents::TOOL_MARK_DNC], $d->json('allowed_tools'));
+        // Desde el PUNTO 10 los enlaces de la app son una herramienta siempre disponible (no hay dinero en juego).
+        $this->assertSame([SalesIntents::TOOL_STAFF_REVIEW, SalesIntents::TOOL_MARK_DNC, SalesIntents::TOOL_APP_LINKS_SEND], $d->json('allowed_tools'));
 
         // Y un intento de colar una acción prohibida en el texto se bloquea.
         $this->commit($m, ['reply_draft' => 'Listo, voy a activar membresia y te doy acceso.'])

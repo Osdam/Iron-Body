@@ -12,6 +12,7 @@ use App\Services\Marketing\CommercialPhaseMachine;
 use App\Services\Marketing\HumanHandoffAuthority;
 use App\Services\Marketing\MarketingKnowledgeBaseService;
 use App\Services\Marketing\MarketingMessageDispatcher;
+use App\Services\Marketing\MobileAppCatalog;
 use App\Services\Marketing\OutboundContentGuard;
 use App\Services\Marketing\SalesAgentDecisionSchema;
 use App\Services\Marketing\SalesAgentDecisionValidator;
@@ -525,6 +526,14 @@ class UltronCommitService
             $this->annotatePayment($action, $pago);
         }
 
+        // 14.ter) Los enlaces de la app, si el modelo los pidió: los escribe Laravel,
+        // como mensaje propio después de la respuesta. No hay dinero ni permiso que negociar.
+        $enlaces = $this->execAppLinks($conversation, $decision, $outcome);
+        if ($enlaces !== null) {
+            $executed[] = $enlaces;
+            $this->annotateExecuted($action, $enlaces);
+        }
+
         // 15) La memoria registra lo que SALIÓ, con el plan y el precio reales.
         if ($outcome !== 'failed') {
             $this->memoryService->recordSentTurn(
@@ -1002,6 +1011,52 @@ class UltronCommitService
     private function executedTools(array $executed): array
     {
         return array_values(array_map(fn ($e) => $e['tool'], array_filter($executed, fn ($e) => in_array($e['status'] ?? null, ['executed', 'created'], true))));
+    }
+
+    /**
+     * SEND_APP_LINKS. Los enlaces oficiales de la app (MobileAppLinks) salen en un
+     * mensaje de Laravel después de la respuesta; la memoria lo anota para no
+     * volver a anunciarlos como novedad. Nunca lanza.
+     *
+     * @return array<string,mixed>|null null cuando no se pidió
+     */
+    private function execAppLinks(MarketingConversation $conversation, array $decision, string $outcome): ?array
+    {
+        $tool = SalesIntents::TOOL_APP_LINKS_SEND;
+        if (! in_array($tool, (array) ($decision['tools_requested'] ?? []), true)) {
+            return null;
+        }
+        if ($outcome === 'failed') {
+            return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'reply_not_sent'];
+        }
+        $lead = $conversation->lead;
+        if ($lead === null) {
+            return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'no_lead'];
+        }
+
+        try {
+            $send = $this->dispatcher->dispatchWhatsapp($lead, $conversation->channel, MobileAppCatalog::linksMessage(), [
+                'kind' => 'app_links', 'origin' => 'ultron',
+            ], MarketingMessage::SENDER_AI);
+            $this->memoryService->recordAppLinksSent($conversation->fresh());
+
+            return ['tool' => $tool, 'status' => 'executed', 'sent' => $send['sent'], 'dry_run' => $send['dry_run'], 'message_id' => $send['message_id'] ?? null];
+        } catch (Throwable $e) {
+            ChannelLog::error('ultron.app_links.failed', ['conversation_id' => $conversation->id, 'exception' => class_basename($e)]);
+
+            return ['tool' => $tool, 'status' => 'failed', 'reason' => 'app_links_error'];
+        }
+    }
+
+    /** Una herramienta que corrió después de persistir la acción se anota encima. */
+    private function annotateExecuted(MarketingAiAction $action, array $resultado): void
+    {
+        if (($resultado['status'] ?? null) !== 'executed') {
+            return;
+        }
+        $meta = is_array($action->metadata) ? $action->metadata : [];
+        $meta['tools_executed'] = array_values(array_unique(array_merge((array) ($meta['tools_executed'] ?? []), [$resultado['tool']])));
+        $action->forceFill(['metadata' => $meta])->save();
     }
 
     /** La acción ya está persistida cuando sale el link: se anota encima, sin URL. */

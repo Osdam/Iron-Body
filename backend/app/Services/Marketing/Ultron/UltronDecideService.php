@@ -9,6 +9,7 @@ use App\Services\Commercial\Tools\Commercial\EscalateToHumanTool;
 use App\Services\Marketing\CommercialPhaseMachine;
 use App\Services\Marketing\HumanHandoffAuthority;
 use App\Services\Marketing\MarketingKnowledgeBaseService;
+use App\Services\Marketing\MobileAppCatalog;
 use App\Services\Marketing\OutboundContentGuard;
 use App\Services\Marketing\SalesAgentOrchestratorService;
 use App\Services\Marketing\SalesIntents;
@@ -42,6 +43,7 @@ class UltronDecideService
     public const V1_ALLOWED_TOOLS = [
         SalesIntents::TOOL_STAFF_REVIEW,
         SalesIntents::TOOL_MARK_DNC,
+        SalesIntents::TOOL_APP_LINKS_SEND,
     ];
 
     /**
@@ -53,6 +55,7 @@ class UltronDecideService
     public const TOOL_VOCABULARY = [
         SalesIntents::TOOL_STAFF_REVIEW,
         SalesIntents::TOOL_MARK_DNC,
+        SalesIntents::TOOL_APP_LINKS_SEND,
         SalesIntents::TOOL_PAYMENT_LINK_SEND,
     ];
 
@@ -68,6 +71,7 @@ class UltronDecideService
         private readonly CustomerIntelligenceService $customers,
         private readonly GymFactsProvider $gym,
         private readonly PaymentStatusProvider $payments,
+        private readonly MobileAppCatalog $appCatalog,
         private readonly HumanHandoffAuthority $handoff = new HumanHandoffAuthority,
     ) {}
 
@@ -307,6 +311,12 @@ class UltronDecideService
                  * en vez de inventarse. Los cupos no se afirman.
                  */
                 'gym' => $this->gym->forPrompt(),
+                /*
+                 * La app, desde su código: qué hace de verdad, cómo se entra y se
+                 * registra uno, y los enlaces oficiales (que envía Laravel, nunca el
+                 * modelo). account.has_account es hecho del CRM.
+                 */
+                'app' => $this->appCatalog->forPrompt((bool) data_get($customer, 'known.has_app_account', false)),
                 /*
                  * Cuál cotizar cuando la pregunta es genérica («¿cuánto vale?»).
                  *

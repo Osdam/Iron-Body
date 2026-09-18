@@ -270,4 +270,13 @@ final class ConversationMemoryService
         $data['payment_context'] = array_filter($ctx + ['reference' => $reference], fn ($v) => $v !== null) + ['status' => $outcome, $outcome.'_at' => now()->toIso8601String(), 'updated_at' => now()->toIso8601String()];
         $conversation->forceFill(['memory' => ConversationMemory::fromArray($data)->toArray()])->save();
     }
+
+    /** Los enlaces de la app ya se enviaron: el siguiente turno no los vuelve a anunciar como novedad. */
+    public function recordAppLinksSent(MarketingConversation $conversation): void
+    {
+        $data = ConversationMemory::fromArray(is_array($conversation->memory) ? $conversation->memory : null)->toArray();
+        $ctx = is_array($data['app_context'] ?? null) ? $data['app_context'] : [];
+        $data['app_context'] = $ctx + ['links_sent_at' => now()->toIso8601String()];
+        $conversation->forceFill(['memory' => ConversationMemory::fromArray($data)->toArray()])->save();
+    }
 }
