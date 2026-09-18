@@ -27,6 +27,12 @@ class MarketingLead extends Model
 
     public const STATUS_NEEDS_HUMAN = 'needs_human';
 
+    /** Todos los estados del lead, en un solo sitio. */
+    public const STATUSES = [
+        self::STATUS_NEW, self::STATUS_INTERESTED, self::STATUS_HOT, self::STATUS_WARM, self::STATUS_COLD,
+        self::STATUS_UNQUALIFIED, self::STATUS_DISCARDED, self::STATUS_CONVERTED, self::STATUS_NEEDS_HUMAN,
+    ];
+
     // Estado del consentimiento de contacto comercial.
     public const CONSENT_GRANTED = 'granted';
 

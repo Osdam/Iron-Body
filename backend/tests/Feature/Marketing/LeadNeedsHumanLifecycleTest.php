@@ -86,8 +86,10 @@ class LeadNeedsHumanLifecycleTest extends TestCase
     public function test_a_lead_stuck_in_needs_human_without_history_is_released_to_interested(): void
     {
         $this->lead->forceFill(['status' => MarketingLead::STATUS_NEEDS_HUMAN])->save();
+        $svc = app(MarketingManualTakeoverService::class);
+        $svc->takeover($this->conversation, 1, 'customer_asked');
 
-        app(MarketingManualTakeoverService::class)->release($this->conversation->fresh(), 1);
+        $svc->release($this->conversation->fresh(), 1);
 
         $this->assertSame(MarketingLead::STATUS_INTERESTED, $this->lead->fresh()->status);
     }
@@ -117,5 +119,46 @@ class LeadNeedsHumanLifecycleTest extends TestCase
         $svc->release($this->conversation->fresh(), 1);
         $this->assertFalse((bool) $this->conversation->fresh()->human_takeover);
         $this->assertSame(MarketingLead::STATUS_INTERESTED, $this->lead->fresh()->status);
+    }
+
+    /** Hallazgo del revisor: liberar una conversación que nunca estuvo en manos de una persona no borra una marca puesta a mano. */
+    public function test_releasing_a_conversation_that_was_never_in_human_hands_keeps_a_manual_mark(): void
+    {
+        $this->lead->forceFill(['status' => MarketingLead::STATUS_NEEDS_HUMAN])->save();
+        $this->assertFalse((bool) $this->conversation->human_takeover);
+
+        app(MarketingManualTakeoverService::class)->release($this->conversation->fresh(), 1);
+
+        $this->assertSame(MarketingLead::STATUS_NEEDS_HUMAN, $this->lead->fresh()->status, 'la petición la cierra quien la tenía, no cualquier release');
+    }
+
+    /** Hallazgo del revisor: el recuerdo se consume; un escalado de hace meses no decide el estado de hoy. */
+    public function test_the_remembered_status_is_consumed_and_never_restored_twice(): void
+    {
+        $this->lead->forceFill(['status' => MarketingLead::STATUS_HOT])->save();
+        $svc = app(MarketingManualTakeoverService::class);
+        $this->escalate();
+        $svc->release($this->conversation->fresh(), 1);
+        $this->assertSame(MarketingLead::STATUS_HOT, $this->lead->fresh()->status);
+        $this->assertArrayNotHasKey('status_before_human', $this->lead->fresh()->metadata ?? [], 'consumido');
+
+        // Meses después: se enfría, alguien lo marca a mano y toma el control.
+        $this->lead->forceFill(['status' => MarketingLead::STATUS_COLD])->save();
+        $this->lead->forceFill(['status' => MarketingLead::STATUS_NEEDS_HUMAN])->save();
+        $svc->takeover($this->conversation->fresh(), 1, 'conflict');
+        $svc->release($this->conversation->fresh(), 1);
+
+        $this->assertSame(MarketingLead::STATUS_INTERESTED, $this->lead->fresh()->status, 'sin recuerdo válido cae al fallback, nunca al «hot» caducado');
+    }
+
+    /** Hallazgo del revisor: si otra conversación del mismo lead sigue en manos de una persona, la petición sigue abierta. */
+    public function test_another_conversation_still_in_human_hands_keeps_the_request_open(): void
+    {
+        $this->escalate();
+        MarketingConversation::create(['lead_id' => $this->lead->id, 'channel' => 'instagram', 'status' => 'open', 'ai_enabled' => false, 'human_takeover' => true]);
+
+        app(MarketingManualTakeoverService::class)->release($this->conversation->fresh(), 1);
+
+        $this->assertSame(MarketingLead::STATUS_NEEDS_HUMAN, $this->lead->fresh()->status);
     }
 }

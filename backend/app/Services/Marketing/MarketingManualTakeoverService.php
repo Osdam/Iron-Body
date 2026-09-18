@@ -5,6 +5,7 @@ namespace App\Services\Marketing;
 use App\Models\MarketingAiAction;
 use App\Models\MarketingConversation;
 use App\Models\MarketingLead;
+use Illuminate\Support\Facades\DB;
 
 /**
  * ÚNICO punto de escritura del takeover manual desde el CRM. Centraliza la
@@ -75,15 +76,23 @@ class MarketingManualTakeoverService
     public function release(MarketingConversation $conversation, ?int $adminId): MarketingConversation
     {
         $handover = $this->handoverSummary($conversation);
+        // Solo cierra la petición de humano la conversación que de verdad la tenía:
+        // liberar una que nunca estuvo en manos de una persona no debe borrar un
+        // needs_human puesto a mano desde el CRM.
+        $estabaEnManosDeUnaPersona = (bool) $conversation->human_takeover;
 
-        $conversation->forceFill([
-            'human_takeover' => false,
-            'human_takeover_source' => null,
-            'ai_enabled' => true,
-            'summary' => $handover,
-        ])->save();
+        DB::transaction(function () use ($conversation, $handover, $estabaEnManosDeUnaPersona): void {
+            $conversation->forceFill([
+                'human_takeover' => false,
+                'human_takeover_source' => null,
+                'ai_enabled' => true,
+                'summary' => $handover,
+            ])->save();
 
-        $this->closeNeedsHuman($conversation);
+            if ($estabaEnManosDeUnaPersona) {
+                $this->closeNeedsHuman($conversation);
+            }
+        });
 
         MarketingAiAction::create([
             'lead_id' => $conversation->lead_id,
@@ -112,16 +121,21 @@ class MarketingManualTakeoverService
         if ($lead === null || (string) $lead->status !== MarketingLead::STATUS_NEEDS_HUMAN) {
             return;
         }
+        // Si otra conversación del mismo lead sigue en manos de una persona, la petición sigue viva.
+        if (MarketingConversation::query()->where('lead_id', $lead->id)->whereKeyNot($conversation->id)->where('human_takeover', true)->exists()) {
+            return;
+        }
 
-        $antes = $lead->metadata['status_before_human'] ?? null;
-        $conocidos = [
-            MarketingLead::STATUS_NEW, MarketingLead::STATUS_INTERESTED, MarketingLead::STATUS_HOT, MarketingLead::STATUS_WARM,
-            MarketingLead::STATUS_COLD, MarketingLead::STATUS_UNQUALIFIED, MarketingLead::STATUS_DISCARDED, MarketingLead::STATUS_CONVERTED,
-        ];
+        // El recuerdo se consume al usarlo: un escalado de hace meses no decide el estado de hoy.
+        $meta = (array) ($lead->metadata ?? []);
+        $antes = $meta['status_before_human'] ?? null;
+        unset($meta['status_before_human']);
+        $meta['needs_human_released_at'] = now()->toIso8601String();
+        $restaurables = array_diff(MarketingLead::STATUSES, [MarketingLead::STATUS_NEEDS_HUMAN]);
 
         $lead->forceFill([
-            'status' => in_array($antes, $conocidos, true) ? $antes : MarketingLead::STATUS_INTERESTED,
-            'metadata' => array_merge((array) ($lead->metadata ?? []), ['needs_human_released_at' => now()->toIso8601String()]),
+            'status' => in_array($antes, $restaurables, true) ? $antes : MarketingLead::STATUS_INTERESTED,
+            'metadata' => $meta,
         ])->save();
     }
 
