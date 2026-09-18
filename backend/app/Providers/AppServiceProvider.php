@@ -7,10 +7,12 @@ use App\Models\MarketingMessage;
 use App\Models\Member;
 use App\Models\MemberContract;
 use App\Models\MemberRiskLock;
+use App\Models\PaymentTransaction;
 use App\Models\PhysicalEvaluation;
 use App\Models\User;
 use App\Observers\Marketing\AttributionOfferObserver;
 use App\Observers\Marketing\ConversationPreviewObserver;
+use App\Observers\Marketing\MarketingPaymentOutcomeObserver;
 use App\Services\Billing\Factus\FactusClient;
 use App\Services\Billing\Factus\FactusConfigValidator;
 use App\Services\Billing\Factus\FactusTokenManager;
@@ -27,8 +29,8 @@ use App\Services\Marketing\SalesAgentPromptBuilder;
 use App\Services\Marketing\SalesAiConfig;
 use App\Services\Meta\WhatsappIntegrationRegistry;
 use App\Services\Observability\QueueHealthService;
-use App\Support\Access\TrainerMemberScope;
 use App\Services\Wompi\WompiConfigValidator;
+use App\Support\Access\TrainerMemberScope;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
@@ -99,6 +101,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Del pago al inicio: siempre armado, no depende de commercial.events_enabled.
+        PaymentTransaction::observe(MarketingPaymentOutcomeObserver::class);
+
         $this->guardWompiConfig();
         $this->guardFactusConfig();
         $this->guardUltronConfig();

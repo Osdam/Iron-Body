@@ -261,4 +261,13 @@ final class ConversationMemoryService
         $data['payment_context'] = array_filter($context, fn ($v) => $v !== null) + ['updated_at' => now()->toIso8601String()];
         $conversation->forceFill(['memory' => ConversationMemory::fromArray($data)->toArray()])->save();
     }
+
+    /** El pago cambió de estado (aprobado, rechazado, vencido): la memoria lo sabe antes del siguiente turno. */
+    public function recordPaymentOutcome(MarketingConversation $conversation, string $outcome, string $reference): void
+    {
+        $data = ConversationMemory::fromArray(is_array($conversation->memory) ? $conversation->memory : null)->toArray();
+        $ctx = is_array($data['payment_context'] ?? null) ? $data['payment_context'] : [];
+        $data['payment_context'] = array_filter($ctx + ['reference' => $reference], fn ($v) => $v !== null) + ['status' => $outcome, $outcome.'_at' => now()->toIso8601String(), 'updated_at' => now()->toIso8601String()];
+        $conversation->forceFill(['memory' => ConversationMemory::fromArray($data)->toArray()])->save();
+    }
 }

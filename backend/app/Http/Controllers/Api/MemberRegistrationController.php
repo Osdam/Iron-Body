@@ -13,6 +13,7 @@ use App\Models\Member;
 use App\Models\MemberBiometric;
 use App\Models\Plan;
 use App\Models\User;
+use App\Services\Marketing\ApprovedPaymentClaimer;
 use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -160,6 +161,9 @@ class MemberRegistrationController extends Controller
                 }
                 $member->user_id = $user->id;
                 $member->save();
+
+                // Si pagó por WhatsApp antes de tener cuenta, su pago aprobado se enlaza aquí y la membresía se activa.
+                app(ApprovedPaymentClaimer::class)->claimFor($member);
 
                 // Aviso operativo al CRM de nuevo registro (ADITIVO; idempotente).
                 app(NotificationService::class)->notifyNewMemberRegistered($member);
