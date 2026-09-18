@@ -3,6 +3,7 @@
 namespace App\Services\Commercial\Tools\Commercial;
 
 use App\Models\CommercialOpportunity;
+use App\Models\MarketingLead;
 use App\Services\Commercial\CommercialVocabulary as V;
 use App\Services\Commercial\Tools\BaseTool;
 use App\Services\Commercial\Tools\ToolContext;
@@ -99,7 +100,7 @@ class EscalateToHumanTool extends BaseTool
             return ToolResult::skipped('La conversación ya estaba en manos de una persona.');
         }
 
-        DB::transaction(function () use ($conversation, $lead, $reason, $summary): void {
+        DB::transaction(function () use ($conversation, $lead, $reason): void {
             $conversation->forceFill([
                 'human_takeover' => true,
                 'human_takeover_source' => 'agent_escalation',
@@ -112,10 +113,15 @@ class EscalateToHumanTool extends BaseTool
             ])->save();
 
             if ($lead !== null) {
+                $antes = (string) $lead->status;
                 $lead->forceFill([
-                    'status' => \App\Models\MarketingLead::STATUS_NEEDS_HUMAN,
+                    'status' => MarketingLead::STATUS_NEEDS_HUMAN,
                     'last_human_takeover_at' => now(),
                     'human_takeover_reason' => $reason,
+                    // Para poder volver: cuando la conversación se devuelve a la IA,
+                    // release() restaura este estado. Si ya estaba en needs_human se
+                    // conserva el recuerdo anterior.
+                    'metadata' => array_merge((array) ($lead->metadata ?? []), $antes === MarketingLead::STATUS_NEEDS_HUMAN ? [] : ['status_before_human' => $antes]),
                 ])->save();
             }
 

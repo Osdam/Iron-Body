@@ -4,6 +4,7 @@ namespace App\Services\Marketing;
 
 use App\Models\MarketingAiAction;
 use App\Models\MarketingConversation;
+use App\Models\MarketingLead;
 
 /**
  * ÚNICO punto de escritura del takeover manual desde el CRM. Centraliza la
@@ -82,6 +83,8 @@ class MarketingManualTakeoverService
             'summary' => $handover,
         ])->save();
 
+        $this->closeNeedsHuman($conversation);
+
         MarketingAiAction::create([
             'lead_id' => $conversation->lead_id,
             'conversation_id' => $conversation->id,
@@ -92,6 +95,34 @@ class MarketingManualTakeoverService
         ]);
 
         return $conversation;
+    }
+
+    /**
+     * Devolver la conversación a la IA cierra también la petición de humano del
+     * lead. `lead.status = needs_human` es lo que decide y commit leen como
+     * «derivar está autorizado»: si se quedara puesto, la puerta seguiría abierta
+     * para siempre, sin que nadie lo hubiera pedido (en producción había dos leads
+     * así, uno desde junio). Se restaura lo que era antes del escalado; sin ese
+     * recuerdo, queda como interesado. La historia (`last_human_takeover_at`,
+     * `human_takeover_reason`) se conserva: se sigue viendo que pasó por una persona.
+     */
+    private function closeNeedsHuman(MarketingConversation $conversation): void
+    {
+        $lead = $conversation->lead;
+        if ($lead === null || (string) $lead->status !== MarketingLead::STATUS_NEEDS_HUMAN) {
+            return;
+        }
+
+        $antes = $lead->metadata['status_before_human'] ?? null;
+        $conocidos = [
+            MarketingLead::STATUS_NEW, MarketingLead::STATUS_INTERESTED, MarketingLead::STATUS_HOT, MarketingLead::STATUS_WARM,
+            MarketingLead::STATUS_COLD, MarketingLead::STATUS_UNQUALIFIED, MarketingLead::STATUS_DISCARDED, MarketingLead::STATUS_CONVERTED,
+        ];
+
+        $lead->forceFill([
+            'status' => in_array($antes, $conocidos, true) ? $antes : MarketingLead::STATUS_INTERESTED,
+            'metadata' => array_merge((array) ($lead->metadata ?? []), ['needs_human_released_at' => now()->toIso8601String()]),
+        ])->save();
     }
 
     /**
