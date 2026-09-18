@@ -472,6 +472,12 @@ class UltronCommitService
         // contrario de lo que pidió.
         $executed = $this->runTools($conversation, $decision);
 
+        $rechazadas = array_values(array_diff((array) ($proposal['tools_requested'] ?? []), (array) $decision['tools_requested']));
+        if ($rechazadas !== []) {
+            // Una petición sin permiso no tumba el turno, pero tampoco pasa en silencio.
+            ChannelLog::warning('ultron.commit.tools_rejected', ['conversation_id' => $conversation->id, 'tools' => $rechazadas]);
+        }
+
         if (! ($decision['safe_to_send'] ?? false)) {
             $action->forceFill(['status' => 'skipped'])->save();
             $this->memoryService->recordSilentTurn($conversation->fresh(), $message, $resolution);
@@ -493,11 +499,6 @@ class UltronCommitService
                 'reply_final' => null,
                 'applied' => ['tools_executed' => $this->executedTools($executed)],
             ];
-            $rechazadas = array_values(array_diff((array) ($proposal['tools_requested'] ?? []), (array) $decision['tools_requested']));
-            if ($rechazadas !== []) {
-                // Una petición sin permiso no tumba el turno, pero tampoco pasa en silencio.
-                ChannelLog::warning('ultron.commit.tools_rejected', ['conversation_id' => $conversation->id, 'tools' => $rechazadas]);
-            }
         }
 
         // 14) Envío por el camino de siempre.
@@ -988,7 +989,7 @@ class UltronCommitService
         } catch (SalesGuardrailException $e) {
             return ['tool' => $tool, 'status' => 'skipped', 'reason' => $e->errorCode];
         } catch (Throwable $e) {
-            ChannelLog::error('ultron.payment_link.failed', ['conversation_id' => $conversation->id, 'plan_id' => (int) $plan->id, 'error' => mb_substr($e->getMessage(), 0, 200)]);
+            ChannelLog::error('ultron.payment_link.failed', ['conversation_id' => $conversation->id, 'plan_id' => (int) $plan->id, 'exception' => class_basename($e)]);
 
             return ['tool' => $tool, 'status' => 'failed', 'reason' => 'payment_engine_error'];
         }

@@ -296,7 +296,7 @@ final class GymFactsProvider
     /** Un hecho que se degrada a «no disponible» deja rastro: si no, nadie se entera. */
     private function aviso(string $fuente, Throwable $e): void
     {
-        ChannelLog::warning('ultron.gym_facts.unavailable', ['source' => $fuente, 'error' => mb_substr($e->getMessage(), 0, 160)]);
+        ChannelLog::warning('ultron.gym_facts.unavailable', ['source' => $fuente, 'exception' => class_basename($e)]);
     }
 
     /** Día en español y minúsculas venga como venga (monday, Lunes, miércoles, sabado). */

@@ -16,6 +16,7 @@ use App\Services\Wompi\PaymentStateMachine;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -236,5 +237,18 @@ class UltronPaymentLinkTest extends TestCase
         $this->assertSame(1, PaymentTransaction::count(), 'ningún segundo link mientras el primero siga vivo');
         $this->assertSame('another_link_in_flight', MarketingAiAction::latest('id')->first()->metadata['payment_link']['reason'] ?? null);
         $this->assertTrue((bool) $this->conversation->fresh()->staff_review_pending, 'lo resuelve una persona');
+    }
+
+    /** Revisor: una petición sin permiso no tumba el turno, pero tampoco pasa en silencio. */
+    public function test_a_rejected_tool_request_is_logged(): void
+    {
+        config()->set('marketing.ultron.payment_links_enabled', false);
+        $spy = Log::spy();
+        Log::shouldReceive('channel')->andReturn($spy);
+        Log::shouldReceive('getFacadeRoot')->andReturn($spy);
+
+        $this->commitLink($this->inbound('mándame el link', 'w.18'), ['reply_draft' => 'Claro, dime qué plan te interesa y lo cerramos.'])->assertOk();
+
+        $spy->shouldHaveReceived('warning')->withArgs(fn (string $event) => $event === 'ultron.commit.tools_rejected')->once();
     }
 }
