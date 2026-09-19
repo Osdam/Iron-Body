@@ -54,6 +54,9 @@ class OutboundContentGuard
 
     public const CODE_INVENTED_PRICE = 'machine_reply_invented_price';
 
+    /** El borrador promete una rebaja, una promoción o algo gratis que nadie declaró. */
+    public const CODE_INVENTED_DISCOUNT = 'machine_reply_invented_discount';
+
     /** Ofrece pasar la conversación a una persona sin que nadie lo haya autorizado. */
     public const CODE_UNAUTHORIZED_HANDOFF = 'machine_reply_unauthorized_handoff';
 
@@ -157,6 +160,25 @@ class OutboundContentGuard
             return $ok; // un envío vacío lo rechaza la validación del endpoint.
         }
 
+        /*
+         * Pedir datos de pago va lo primero porque es lo único de esta lista que
+         * le cuesta dinero a la persona, y porque una petición así no mejora con
+         * contexto: el cobro vive en el checkout de Wompi, nunca en el chat.
+         *
+         * Vive AQUÍ, y no solo en el commit de ULTRON, porque `inspect()` es el
+         * filtro que comparten las dos puertas por las que sale texto de máquina
+         * —`send-message` y el commit— y además el que revisa las respuestas
+         * CURADAS, que es la salida que ya se coló una vez por no mirarse.
+         */
+        if (self::containsCardDataRequest($body)) {
+            return [
+                'safe' => false,
+                'code' => self::CODE_CARD_DATA_REQUEST,
+                'signal' => null, // la señal sería el propio texto: no va al log.
+                'risk_flag' => 'card_data_request',
+            ];
+        }
+
         if (! $handoffAllowed && ($signal = $this->handoffOfferIn($body)) !== null) {
             return [
                 'safe' => false,
@@ -193,6 +215,35 @@ class OutboundContentGuard
                 // del mensaje en el log. Basta con saber qué regla saltó.
                 'signal' => null,
                 'risk_flag' => 'price_in_reply',
+            ];
+        }
+
+        /*
+         * Una rebaja la declara el negocio, no el modelo. Va justo después del
+         * precio porque es la misma decisión vista por el otro lado: el
+         * catálogo dice cuánto vale algo, y decir «te lo dejo a mitad de
+         * precio» es fijar un precio distinto sin que nadie lo autorice.
+         */
+        if (preg_match(SalesAgentDecisionSchema::DISCOUNT_PATTERN, $body) === 1) {
+            return [
+                'safe' => false,
+                'code' => self::CODE_INVENTED_DISCOUNT,
+                'signal' => null,
+                'risk_flag' => 'discount_in_reply',
+            ];
+        }
+
+        /*
+         * Los enlaces los pone Laravel en su propio mensaje, que sale por el
+         * despachador sin pasar por aquí. Una URL en un texto de máquina que SÍ
+         * pasa por este filtro es, como mínimo, un enlace que nadie verificó.
+         */
+        if (self::containsUrl($body)) {
+            return [
+                'safe' => false,
+                'code' => self::CODE_URL_IN_REPLY,
+                'signal' => null,
+                'risk_flag' => 'url_in_reply',
             ];
         }
 
@@ -278,14 +329,251 @@ class OutboundContentGuard
     }
 
     /**
-     * ¿Pide datos de pago sensibles? Número de tarjeta, vencimiento, CVV, PIN, claves
-     * de banco o billetera, OTP. El cobro lo hace Wompi en su checkout; el CRM
-     * jamás recoge esos datos por chat.
+     * Fin de frase. La frase es la UNIDAD de análisis, y no es un detalle.
+     *
+     * «Pedir» y «afirmar» solo se distinguen dentro de una misma oración: son
+     * la misma oración con el verbo cambiado. Si el veredicto se diera sobre el
+     * mensaje entero bastaría con saludar hablando del torniquete para pedir la
+     * tarjeta en el punto siguiente, y al revés: una petición en el primer
+     * renglón condenaría el aviso legítimo del segundo.
+     */
+    private const FIN_DE_FRASE = '~[.!?;\r\n]+~u';
+
+    /**
+     * CREDENCIAL: lo que no se le pide a una persona por este canal. Nunca.
+     *
+     * Nombrar cualquiera de estos términos NO bloquea —el gimnasio tiene que
+     * poder decir cuándo vence un plan o cuántos dígitos tiene una cédula—: lo
+     * que bloquea es pedirlo, y eso lo decide {@see self::PETICION}.
+     *
+     * «Numero» y «datos» NO están aquí a propósito: son demasiado corrientes
+     * para valer por sí solos («tu número de cédula», «los datos de la sede») y
+     * en toda petición real vienen pegados a un término que sí está («el número
+     * de tu TARJETA», «los datos de tu TARJETA»).
+     *
+     * Sin propiedades Unicode a propósito: solo \b, \s, \d, clases explícitas y
+     * lookarounds. El PCRE de producción (10.39) no compila `\p{...}` y el de
+     * desarrollo (10.47) sí; una regex que solo falla en el servidor es una
+     * regla que no existe.
+     */
+    private const CREDENCIAL = '~\btarjetas?\b'
+        .'|\b(?:cvv|cvc|otp)\b'
+        .'|\bpin(?:es)?\b'
+        .'|\bclaves?\b|\bcontrasenas?\b'
+        .'|\bcodigos?\s+de\s+(?:seguridad|verificacion|confirmacion)\b'
+        .'|\bcodigos?\s+(?:dinamico|sms|otp|del\s+banco)\b'
+        .'|\bcodigos?\s+que\s+(?:te\s+|le\s+)?llego\b'
+        .'|\bdigitos?\b'
+        .'|\bnumeracion\b'
+        .'|\bfecha\s+de\s+(?:vencimiento|expiracion)\b'
+        .'|\bvencimiento\b|\bexpiracion\b'
+        .'|\btokens?\b'
+        .'~u';
+
+    /**
+     * PETICIÓN dirigida a la persona, en las formas en que se pide de verdad.
+     *
+     * Las tres primeras familias son las del enunciado; la cuarta y la quinta
+     * son las dos formas colombianas normales que el ciclo anterior no vio: la
+     * pregunta SIN signo de apertura («Me lees la tarjeta por favor») y el «me
+     * + verbo en presente» («me confirmas», «me pasas»), que en WhatsApp casi
+     * nunca llevan «¿».
+     */
+    private const PETICION = [
+        // (1) Imperativo con el clítico pegado: no admite otra lectura.
+        '~\b(?:dime|dimelo|dinos|digame|diganme|dame|danos|deme|denme|demelo|mandame|mandanos|mandeme|enviame|enviame|envienos|envieme|pasame|pasanos|paseme|escribeme|escribenos|escribame|dictame|dicteme|regalame|regaleme|confirmame|confirmanos|confirmeme|comparteme|compartame|facilitame|faciliteme|digitame|digiteme|indicame|indiqueme|traeme|traenos|traigame|muestrame|muestreme|repiteme|repitame|deletreame|anotame|adjuntame|reenviame)\b~u',
+
+        // (2) «Me / nos + verbo en segunda persona»: la pregunta de aquí, lleve
+        //     o no signos de interrogación.
+        '~\b(?:me|nos)\s+(?:confirmas|das|dictas|lees|pasas|mandas|envias|escribes|dices|compartes|indicas|regalas|digitas|facilitas|muestras|repites|deletreas|anotas|adjuntas|reenvias|traes)\b~u',
+
+        // (3) Cortesía y perífrasis: «¿me puedes dar…?», «tienes que darme…».
+        '~\b(?:puedes|podrias|puede|podria|podrian|pudieras|regalarias)\s+(?:dar|darme|darnos|pasar|pasarme|decir|decirme|mandar|mandarme|enviar|enviarme|compartir|compartirme|confirmar|confirmarme|dictar|dictarme|leer|leerme|escribir|escribirme|digitar|indicar|indicarme|facilitar|regalar|regalarme|mostrar|mostrarme|repetir|repetirme|deletrear|adjuntar|reenviar|traer|traerme)\b~u',
+        '~\b(?:darme|darnos|pasarme|pasarnos|decirme|decirnos|mandarme|mandarnos|enviarme|enviarnos|compartirme|confirmarme|dictarme|leerme|escribirme|indicarme|facilitarme|regalarme|digitarme|mostrarme|repetirme|deletrearme|anotarme|adjuntarme|reenviarme|traerme|traernos)\b~u',
+
+        // (4) Subjuntivo de segunda persona tras «que»: «necesito que me digas»,
+        //     «falta que me mandes».
+        '~\bque\s+(?:me|nos)\s+(?:digas|des|pases|mandes|envies|escribas|confirmes|dictes|leas|compartas|indiques|facilites|regales|digites|muestres|repitas|deletrees|anotes|adjuntes|reenvies|traigas)\b~u',
+
+        // (5) Verbo de NECESIDAD en primera persona. Quien necesita es el
+        //     asistente, y lo que necesita se lo pide a la persona. En segunda
+        //     («necesitas tu documento») es información, no petición: por eso la
+        //     lista es de formas de primera persona, no del lema «necesitar».
+        '~\b(?:necesito|necesitamos|requiero|requerimos|preciso)\b~u',
+        '~\b(?:me|nos)\s+hace\s+falta\b|\bhace\s+falta\s+que\s+(?:me|nos)\b~u',
+
+        // (6) Pregunta de identidad: «¿cuál es…?», «¿cuáles son…?».
+        '~\bcual(?:es)?\s+(?:es|son|seria|serian|fue|sera)\b~u',
+
+        // (7) Imperativo DESNUDO, y solo al principio de la frase. En español el
+        //     imperativo de tú coincide con la tercera persona del presente, así
+        //     que «trae» al principio es una orden y «lo DA recepción» a mitad de
+        //     frase no lo es. Restringirlo a la posición inicial es lo que
+        //     permite cubrir «trae el número de tu tarjeta» sin bloquear «el
+        //     código de seguridad de la puerta lo da recepción».
+        '~^(?:(?:y|ya|ahora|ahorita|entonces|bueno|listo|porfa|por\s+favor|hola|ok|ah)\s+|[,\s]+)*'
+            .'(?:trae|traiga|manda|mande|envia|envie|escribe|escriba|dicta|dicte|confirma|confirme|comparte|comparta'
+            .'|digita|digite|indica|indique|pasa|pase|regala|regale|adjunta|adjunte|reenvia|reenvie|anota|anote'
+            .'|deletrea|deletree|muestra|muestre|repite|repita|di|diga)\b~u',
+    ];
+
+    /**
+     * EXCEPCIÓN ESTRECHA: los objetos FÍSICOS de la sede, que sí se piden.
+     *
+     * Va atada al SINTAGMA —«tarjeta de acceso», «pin del torniquete», «código
+     * de la puerta», «clave del casillero»— y no a que la frase mencione el
+     * gimnasio en algún sitio. Esa fue exactamente la puerta por la que se coló
+     * «los datos de tu tarjeta de membresía para cobrarte»: bastaba una palabra
+     * de gimnasio suelta para franquear la frase entera.
+     *
+     * Por eso «tarjeta de acceso» está y «tarjeta de socio», «de ingreso» y «de
+     * membresía» no: la primera es una pieza de plástico del torniquete, las
+     * otras tres son maneras de decir «tarjeta» sin que lo parezca.
+     */
+    private const OBJETO_FISICO_DEL_GIMNASIO = '~\btarjeta\s+de\s+acceso\b'
+        .'|\bpin(?:es)?\s+(?:del|de|para\s+el|para\s+la|en\s+el|en\s+la)\s+(?:el\s+|la\s+)?(?:torniquete|torniquetes|molinete|molinetes|puerta|puertas|casillero|casilleros|locker|lockers)\b'
+        .'|\bclaves?\s+(?:del|de|para\s+el|para\s+la)\s+(?:el\s+|la\s+)?(?:casillero|casilleros|locker|lockers|torniquete|torniquetes|puerta|puertas)\b'
+        .'|\bcodigos?(?:\s+de\s+seguridad)?\s+(?:del|de|para)\s+(?:la\s+|el\s+)?(?:puerta|puertas|entrada|torniquete|torniquetes|casillero|casilleros|locker|lockers)\b'
+        .'|\b(?:digitos|numero|numeros)\s+(?:del|de)\s+(?:la\s+|el\s+)?(?:puerta|torniquete|casillero|locker)\b'
+        .'~u';
+
+    /**
+     * Verbo de COBRO: con él en la frase, ninguna excepción vale.
+     *
+     * Un torniquete no cobra. «Tráeme tu tarjeta de acceso para activarla» es
+     * recepción; «tráeme tu tarjeta de acceso para cobrarte» es otra cosa con
+     * el mismo sintagma delante.
+     *
+     * Es el cobro HECHO POR NOSOTROS, no la palabra «pagar» en cualquier
+     * posición: «cuando vengas a pagar la mensualidad, trae tu tarjeta de
+     * acceso» es una frase legítima de gimnasio y el sujeto que paga es la
+     * persona, no el asistente.
+     */
+    private const VERBO_DE_COBRO = '~\bcobrar(?:te|le|lo|la|nos|se)?\b|\bcobros?\b|\bcobrando\b'
+        .'|\bdebitar(?:te|le|lo)?\b|\bdescontar(?:te|le|lo)?\b'
+        .'|\bprocesar(?:lo|la|te|le)?\b'
+        .'|\b(?:registrar|tomar|recibir|aplicar|hacer|realizar|generar|adelantar)(?:te|le|lo|la)?\s+(?:el\s+|tu\s+|su\s+|la\s+)?(?:pago|cobro|transaccion)\b'
+        .'|\bpara\s+(?:el\s+|tu\s+|su\s+)?(?:pago|cobro)\b'
+        .'~u';
+
+    /**
+     * ¿El texto le PIDE a la persona una credencial? Eso es lo que se bloquea.
+     *
+     * EL CRITERIO, Y POR QUÉ ES ESTE. Después del punto 11 el asistente ya tiene
+     * todos los hechos de la membresía —fecha de fin, días restantes, estado,
+     * plan— en `context.membership`, servidos por el CRM; y no cobra nunca por
+     * el chat, porque el cobro vive en el checkout de Wompi. De ahí se sigue
+     * algo que cierra el problema de raíz: el asistente NO NECESITA pedirle a
+     * nadie un número, un código, una clave, una fecha ni una tarjeta. Jamás.
+     * Si una respuesta lo pide, o es cosecha de datos o es una respuesta que
+     * igualmente no debería salir. En los dos casos se para aquí.
+     *
+     * Por eso se mira la POLARIDAD y no el vocabulario. Los dos intentos
+     * anteriores fallaron por lo mismo: una lista blanca de palabras no puede
+     * separar «la fecha de vencimiento de tu membresía es el 30» de «dime la
+     * fecha de vencimiento de tu plan». Comparten todo el léxico y son cosas
+     * opuestas; lo único que las distingue es que una AFIRMA y la otra PIDE.
+     *
+     * De ahí la forma, que es la inversa de la de antes:
+     *
+     *  (a) Se trabaja POR FRASE, que es donde pedir y afirmar se distinguen.
+     *  (b) Bloquea si en la MISMA frase hay una credencial y una petición
+     *      dirigida a la persona.
+     *  (c) Deja pasar las afirmaciones aunque usen ese mismo vocabulario: el
+     *      gimnasio tiene que poder decir cuándo vence un plan, qué es el PIN
+     *      del torniquete o cuántos dígitos tiene un documento.
+     *  (d) Excepción estrecha para PEDIR objetos físicos de la sede, atada al
+     *      sintagma y no al hecho de que la frase nombre el gimnasio.
+     *  (e) Con un verbo de cobro en la frase, ninguna excepción vale.
+     *
+     * La excepción se resuelve POR OCURRENCIA y no por frase, y esa es la
+     * pieza que desarma el fallo del ciclo 1. Allí la lista blanca BORRABA el
+     * tramo del gimnasio antes de buscar, así que «necesito el pin de acceso de
+     * tu tarjeta» se quedaba sin «pin de acceso» y salía limpio: la excepción
+     * desarmaba la petición que la contenía. Aquí no se borra nada; cada
+     * mención de credencial se mira por separado y basta con que UNA quede
+     * fuera de todo sintagma exento para bloquear. En esa frase «tarjeta» queda
+     * fuera, y con eso sobra.
      */
     public static function containsCardDataRequest(string $body): bool
     {
-        $t = SalesAgentDecisionSchema::normalize($body);
+        // Mismo normalizado que el resto del guard: minúsculas y sin tildes.
+        $texto = SalesAgentDecisionSchema::normalize($body);
 
-        return preg_match('~\b(numero|numeros|digitos|datos)\s+de\s+(tu|la|su|una)\s+tarjeta|\bcvv\b|\bcvc\b|codigo\s+de\s+seguridad|fecha\s+de\s+(vencimiento|expiracion)|\bpin\b\s+(de|del)|clave\s+(de|del)\s+(banco|nequi|daviplata|tarjeta|cajero|tu cuenta)|\botp\b|codigo\s+(que\s+te\s+llego|de\s+verificacion\s+del\s+banco)~u', $t) === 1;
+        foreach (preg_split(self::FIN_DE_FRASE, $texto) ?: [] as $frase) {
+            $frase = trim($frase);
+
+            if ($frase === '' || ! self::pideALaPersona($frase)) {
+                continue;
+            }
+
+            if (self::credencialSinCoartada($frase)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** ¿La frase le pide algo a la persona, en vez de contarle algo? */
+    private static function pideALaPersona(string $frase): bool
+    {
+        foreach (self::PETICION as $patron) {
+            if (preg_match($patron, $frase) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * ¿Queda en la frase alguna credencial que el gimnasio no justifique?
+     *
+     * Se comparan POSICIONES, no presencias: una credencial solo está excusada
+     * si cae DENTRO de un sintagma de objeto físico de la sede. «Pin de acceso
+     * de tu tarjeta» tiene dos menciones y ningún sintagma exento que las
+     * cubra; «los datos de tu tarjeta de acceso» tiene una, y cae dentro.
+     */
+    private static function credencialSinCoartada(string $frase): bool
+    {
+        if (preg_match_all(self::CREDENCIAL, $frase, $hallazgos, PREG_OFFSET_CAPTURE) < 1) {
+            return false;
+        }
+
+        $exentos = preg_match(self::VERBO_DE_COBRO, $frase) === 1
+            ? []                        // (e) si la frase cobra, no hay coartada.
+            : self::tramosDelGimnasio($frase);
+
+        foreach ($hallazgos[0] as [$termino, $inicio]) {
+            $fin = $inicio + strlen($termino);
+
+            foreach ($exentos as [$desde, $hasta]) {
+                if ($inicio >= $desde && $fin <= $hasta) {
+                    continue 2;         // esta mención la explica el gimnasio.
+                }
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Tramos [inicio, fin) del texto ocupados por un objeto físico de la sede.
+     *
+     * @return list<array{0:int,1:int}>
+     */
+    private static function tramosDelGimnasio(string $frase): array
+    {
+        if (preg_match_all(self::OBJETO_FISICO_DEL_GIMNASIO, $frase, $hallazgos, PREG_OFFSET_CAPTURE) < 1) {
+            return [];
+        }
+
+        return array_map(
+            static fn (array $h): array => [(int) $h[1], (int) $h[1] + strlen((string) $h[0])],
+            $hallazgos[0],
+        );
     }
 }

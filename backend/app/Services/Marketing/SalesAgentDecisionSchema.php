@@ -138,7 +138,28 @@ final class SalesAgentDecisionSchema
      * guard de salida— y dos copias de una expresión regular son dos reglas que
      * el día que cambie una se separan sin que nadie lo note.
      */
-    public const PRICE_PATTERN = '/(\$\s?\d)|(\bcop\b)|(\bpesos\b)|(\d{1,3}[.,]\d{3})|(\d{4,})/i';
+    public const PRICE_PATTERN = '/(\$\s?\d)|(\bcop\b)|(\bpesos\b)|([\dO]{1,3}[.,][\dO]{3}(?=[^\dO]|$))|(\d{1,3}\s\d{3}\b)|(\d{4,})|(\b\d{1,3}\s*(mil|k)\b)|(\b'.self::NUMERAL.'(\s+y\s+'.self::NUMERAL.')?\s+(mil|millon|millones)\b)|([\x{FF10}-\x{FF19}])/iu';
+
+    /**
+     * Números escritos con letras, hasta donde llega un precio de gimnasio.
+     *
+     * No pretende cubrir el español entero: cubre lo que alguien escribe cuando
+     * dice un precio en Neiva («ochenta mil», «ciento veinte mil», «dos
+     * millones»). Va pegado a «mil» o «millones» a propósito: «mil gracias» y
+     * «más de mil socios» no son precios, y bloquearlos sería romper una
+     * conversación normal para proteger una regla.
+     */
+    private const NUMERAL = '(un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|dieci\w{4,6}|veinte|veinti\w{4,6}|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa|cien|ciento|doscientos|trescientos|cuatrocientos|quinientos|seiscientos|setecientos|ochocientos|novecientos)';
+
+    /**
+     * Una rebaja que el gimnasio no ha declarado.
+     *
+     * El laboratorio de tortura encontró que un descuento inventado no era
+     * dinero para ningún guard: «te hago un descuento del 20%» salía íntegro y
+     * comprometía al negocio con una rebaja que nadie autorizó. El precio lo
+     * pone Laravel desde el catálogo; las promociones también, o no existen.
+     */
+    public const DISCOUNT_PATTERN = '/(\bdescuento\b)|(\brebaja\b)|(\bpromocion\b)|(\bmitad\s+de\s+(precio|valor)\b)|(\bla\s+mitad\s+del\s+(precio|valor|plan)\b)|(\b\d{1,2}\s?%\s*(de\s+)?(descuento|menos|off)\b)|(\bte\s+lo\s+dejo\s+en\b)|(\bprecio\s+especial\b)|(\bgratis\b)|(\bsin\s+costo\b)|(\b2\s*x\s*1\b)/iu';
 
     /** Minúsculas y sin tildes, para comparar señales contra texto real. */
     public static function normalize(string $s): string
