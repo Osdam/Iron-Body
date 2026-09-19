@@ -69,6 +69,21 @@ final class MembershipFactGuard
     private const VENCIDA = '~\b(?:tu|su)\s+'.self::NOMBRE.'\s+(?:esta|ya esta|ya|se|quedo)\s+(?:vencid[ao]|expirad[ao]|inactiv[ao]|caducad[ao]|expiro|vencio|termino)\b~u';
 
     /**
+     * «quedas activo», «tu acceso queda habilitado», «ya puedes entrar».
+     *
+     * Decirle a alguien que ya puede entrar es afirmar que su membresía está
+     * viva, aunque la frase no nombre el plan. Llegó aquí desde el laboratorio
+     * de tortura, donde salía con la caja vacía pegado a un «ya recibimos tu
+     * pago»: el pago lo para {@see PaymentFactGuard}, y la activación, que es
+     * otro hecho y de otro dueño, la para esto.
+     */
+    private const ACTIVACION = [
+        '~\b(?:ya\s+)?(?:quedas|quedaste|estas|ya\s+estas)\s+(?:activ[oa]|inscrit[oa]|matriculad[oa]|habilitad[oa])\b~u',
+        '~\b(?:tu\s+)?(?:acceso|entrada|ingreso)\b[^.!?]{0,20}\b(?:queda|quedo|esta|ya\s+esta)\s+(?:activ[oa]|habilitad[oa]|list[oa])\b~u',
+        '~\bya\s+puedes\s+(?:entrar|ingresar|venir|usar)\b~u',
+    ];
+
+    /**
      * @param  array<string,mixed>  $membership  Lo que devuelve MembershipFactsProvider::forPrompt
      * @return ?array{code:string, reason:string, detail:string}
      */
@@ -104,6 +119,14 @@ final class MembershipFactGuard
 
         if (preg_match(self::VENCIDA, $texto) === 1 && $status !== MembershipFactsProvider::STATUS_EXPIRED) {
             return $this->hallazgo(self::REASON_STATUS_MISMATCH, 'reply says the membership is expired, CRM status is '.$status);
+        }
+
+        if (! $vigente) {
+            foreach (self::ACTIVACION as $regex) {
+                if (preg_match($regex, $texto) === 1) {
+                    return $this->hallazgo(self::REASON_STATUS_MISMATCH, 'reply says the person is already active, CRM status is '.$status);
+                }
+            }
         }
 
         return null;

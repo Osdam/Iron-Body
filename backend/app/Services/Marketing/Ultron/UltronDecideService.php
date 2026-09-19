@@ -11,6 +11,7 @@ use App\Services\Marketing\HumanHandoffAuthority;
 use App\Services\Marketing\MarketingKnowledgeBaseService;
 use App\Services\Marketing\MobileAppCatalog;
 use App\Services\Marketing\OutboundContentGuard;
+use App\Services\Marketing\SalesAgentDecisionSchema;
 use App\Services\Marketing\SalesAgentOrchestratorService;
 use App\Services\Marketing\SalesIntents;
 use App\Services\Marketing\SalesPaymentReadinessService;
@@ -251,7 +252,13 @@ class UltronDecideService
             $phase,
             $transitions,
             $knowledgeVersion,
-            ['hints' => ['hot_lead_fast_path' => $strategyHints['hot_lead_fast_path'], 'lifecycle_mode' => $strategyHints['lifecycle_mode']]],
+            // Lo que commit no puede recalcular sin volver a salir a la red (el
+            // estado del pago) o sin fiarse de la etiqueta del modelo (las
+            // pistas) viaja aquí, firmado: es el mundo que decide vio.
+            ['hints' => [
+                'hot_lead_fast_path' => $strategyHints['hot_lead_fast_path'],
+                'lifecycle_mode' => $strategyHints['lifecycle_mode'],
+            ], 'payment_state' => (string) ($payment['state'] ?? 'none')],
         );
 
         return [
@@ -418,12 +425,80 @@ class UltronDecideService
         return array_values(array_merge(self::V1_ALLOWED_TOOLS, $this->canOfferLink() ? [SalesIntents::TOOL_PAYMENT_LINK_SEND] : []));
     }
 
+    /**
+     * Lo que el modelo ve donde había una cifra.
+     *
+     * Deliberadamente NO es el marcador que Laravel sustituye
+     * ({@see UltronDraftPlaceholders::PRICE}). Reutilizarlo parecía elegante
+     * —el modelo lee lo mismo que puede escribir— y era un arma: «esto parece
+     * un precio» es una heurística, así que un año, un teléfono o un NIT del
+     * historial se convertirían en el precio REAL del plan en cuanto el modelo
+     * copiara la frase. Un marcador que nadie resuelve no puede fabricar una
+     * cifra: en el peor caso el texto queda raro, y eso se ve.
+     */
+    private const PRICE_MARK = '[precio]';
+
+    /**
+     * Un mensaje del historial tal y como PUEDE verlo el modelo.
+     *
+     * Lo que dice la PERSONA va intacto: «tengo 50.000» es el dato con el que se
+     * la entiende, y sin él no hay forma de responderle. Lo que escribió la
+     * MÁQUINA pierde dos cosas:
+     *
+     *  - la URL (el link de pago es pagable por quien lo tenga), y
+     *  - la CIFRA, que es la que cierra la puerta de atrás: el precio entra en el
+     *    mensaje DESPUÉS de validar ({@see UltronDraftPlaceholders}), sale por
+     *    WhatsApp, queda guardado y volvía al modelo en el turno siguiente. Un
+     *    modelo que lee su propia cifra la repite, y su propio guard de salida
+     *    la rechaza (`machine_reply_invented_price`): la persona se quedaba sin
+     *    respuesta ese turno por un número que le dimos nosotros.
+     */
     private function redactedBody(MarketingMessage $m): ?string
     {
-        if ($m->sender_type === MarketingMessage::SENDER_LEAD || ! OutboundContentGuard::containsUrl((string) $m->body)) {
+        if ($m->sender_type === MarketingMessage::SENDER_LEAD) {
             return $m->body;
         }
 
-        return data_get($m->metadata, 'kind') === 'payment_link' ? '[link de pago enviado]' : '[enlace enviado por el CRM]';
+        if (OutboundContentGuard::containsUrl((string) $m->body)) {
+            return data_get($m->metadata, 'kind') === 'payment_link' ? '[link de pago enviado]' : '[enlace enviado por el CRM]';
+        }
+
+        return $this->withoutPrices($m->body);
+    }
+
+    /**
+     * El texto sin cifras de precio, todavía legible.
+     *
+     * «Esto parece un precio» se pregunta con la definición que YA existe
+     * ({@see SalesAgentDecisionSchema::PRICE_PATTERN}, la misma del validador y
+     * del guard de salida). Dos regex distintas para la misma pregunta son dos
+     * reglas que se separan el día que cambie una, y la que se quedara corta
+     * sería precisamente la fuga.
+     */
+    private function withoutPrices(?string $body): ?string
+    {
+        if ($body === null || ! SalesAgentDecisionSchema::containsPrice($body)) {
+            return $body;
+        }
+
+        $masked = preg_replace(SalesAgentDecisionSchema::PRICE_PATTERN, self::PRICE_MARK, $body);
+
+        if ($masked === null) {
+            // Fail-closed: si la sustitución falla no se devuelve el original,
+            // que es justo el texto con la cifra dentro.
+            return '[mensaje del CRM]';
+        }
+
+        /*
+         * El patrón detecta, no delimita: sobre «$80.000 COP» acierta tres veces
+         * («$8», «0.000», «COP») y dejaría el marcador tartamudeando. El caso que
+         * importa de verdad es el formato que el CRM genera para los planes de
+         * siete cifras —«$1.770.000 COP», {@see formatCop()}—, donde los grupos de
+         * miles quedan separados por el punto: sin juntar también por ahí, el
+         * modelo leía «[precio].[precio]» y podía copiarlo tal cual.
+         */
+        $mark = preg_quote(self::PRICE_MARK, '/');
+
+        return preg_replace('/'.$mark.'(?:[\s.,]*'.$mark.'|[.,]\d{3})+/', self::PRICE_MARK, $masked) ?? '[mensaje del CRM]';
     }
 }

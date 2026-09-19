@@ -98,6 +98,7 @@ class UltronCommitService
         private readonly SalesPaymentGuardrailService $paymentGuardrail,
         private readonly MembershipFactsProvider $membershipFacts,
         private readonly MembershipFactGuard $membershipGuard,
+        private readonly PaymentFactGuard $paymentGuard,
     ) {}
 
     /**
@@ -279,6 +280,23 @@ class UltronCommitService
             }
             if (OutboundContentGuard::containsUrl((string) ($proposal['reply_draft'] ?? ''))) {
                 throw SalesGuardrailException::make(OutboundContentGuard::CODE_URL_IN_REPLY, 'El borrador contiene una URL; los enlaces los envía el CRM en su propio mensaje.', escalate: true);
+            }
+            /*
+             * Quién dice que un pago entró: Wompi, y el CRM lo escribe. El
+             * estado viaja firmado en el token, que es el mundo que vio decide;
+             * recalcularlo aquí significaría salir otra vez a la pasarela desde
+             * el camino de escritura, y ese es justo el error que el PUNTO 8
+             * vino a deshacer.
+             */
+            $pagoFalso = $this->paymentGuard->contradiction(
+                (string) ($proposal['reply_draft'] ?? ''),
+                (string) ($token['extra']['payment_state'] ?? 'none'),
+            );
+            if ($pagoFalso !== null) {
+                ChannelLog::warning('ultron.commit.payment_fact_rejected', [
+                    'conversation_id' => (int) $conversation->id, 'reason' => $pagoFalso['reason'],
+                ]);
+                throw SalesGuardrailException::make(PaymentFactGuard::CODE, 'El borrador afirma un pago o una activación que el CRM no respalda ('.$pagoFalso['reason'].').', escalate: true);
             }
             // La membresía se afirma con los hechos del CRM o no se afirma: una
             // fecha de fin, unos días restantes o un estado que contradigan
