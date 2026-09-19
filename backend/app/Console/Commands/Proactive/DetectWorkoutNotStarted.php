@@ -10,7 +10,8 @@ use App\Models\RoutineCompletion;
 /**
  * workout.not_started_today — el miembro tiene una rutina asignada cuyo día
  * incluye hoy, pero aún no ha iniciado/completado nada hoy. Incentiva ANTES de
- * que pierda el día. Si la rutina no define días (`days` vacío) se asume que
+ * que pierda el día. Si la rutina no define días (`days` vacío) o los define sin
+ * día de la semana (programa por días ordinales: {name:"Día 1"}) se asume que
  * cualquier día es válido (degradación segura). Sin rutina asignada → no aplica.
  */
 class DetectWorkoutNotStarted extends BaseProactiveDetectorCommand
@@ -71,14 +72,58 @@ class DetectWorkoutNotStarted extends BaseProactiveDetectorCommand
             if (empty($days) || ! is_array($days)) {
                 return true; // sin calendario definido → válido cualquier día
             }
+
+            // ¿Esta rutina declara días de la semana en algún elemento? Si no
+            // (programa por días ordinales: {name:"Día 1"}), no hay calendario
+            // que comparar y aplica la misma degradación segura que `days` vacío.
+            $hasWeekdayCalendar = false;
             foreach ($days as $d) {
-                $token = mb_strtolower(trim((string) $d));
-                if (in_array($token, $todayTokens, true)) {
+                $weekday = $this->weekdayOf($d);
+                if ($weekday === null) {
+                    continue;
+                }
+                $hasWeekdayCalendar = true;
+                if (in_array(mb_strtolower(trim($weekday)), $todayTokens, true)) {
                     return true;
                 }
+            }
+
+            if (! $hasWeekdayCalendar) {
+                return true; // rutina sin calendario semanal → cualquier día
             }
         }
 
         return false;
+    }
+
+    /**
+     * Día de la semana declarado por un elemento de `days`, o null si ese
+     * elemento no codifica ninguno.
+     *
+     * Formas reales en producción:
+     *   - escalar heredado: "lunes"                       → el propio valor
+     *   - objeto con día:   {day:"Lunes", title:…}        → el valor de `day`
+     *   - objeto ordinal:   {name:"Día 1", order:1, …}    → null (sin día)
+     *
+     * Nunca castea un array a string: ese cast era la causa del
+     * `ErrorException: Array to string conversion` que mataba el comando.
+     */
+    private function weekdayOf(mixed $day): ?string
+    {
+        if (is_scalar($day)) {
+            return (string) $day;
+        }
+
+        if (! is_array($day)) {
+            return null;
+        }
+
+        foreach (['day', 'weekday', 'dia', 'día'] as $key) {
+            if (isset($day[$key]) && is_scalar($day[$key])) {
+                return (string) $day[$key];
+            }
+        }
+
+        return null;
     }
 }
