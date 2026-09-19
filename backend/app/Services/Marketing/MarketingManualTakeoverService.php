@@ -36,6 +36,46 @@ class MarketingManualTakeoverService
         'other' => 'Otro',
     ];
 
+    /**
+     * El ciclo de vida de la atención humana, con nombre.
+     *
+     * Hasta ahora vivía repartido en dos booleanos y un estado del lead, y eso
+     * produjo el fallo que nadie veía: un lead escalado en junio seguía
+     * autorizando la derivación en septiembre, porque la única salida de
+     * `needs_human` era liberar un takeover que en ese lead nunca existió.
+     *
+     *   HUMAN_REQUIRED  — alguien pidió una persona (el lead está en
+     *                     `needs_human`) y nadie ha tomado la conversación.
+     *   HUMAN_ACTIVE    — hay una persona al mando AHORA. Manda sobre todo lo
+     *                     demás mientras dure.
+     *   RELEASED_TO_AI  — ni lo uno ni lo otro: la atiende el agente.
+     */
+    public const HUMAN_REQUIRED = 'HUMAN_REQUIRED';
+
+    public const HUMAN_ACTIVE = 'HUMAN_ACTIVE';
+
+    public const RELEASED_TO_AI = 'RELEASED_TO_AI';
+
+    /**
+     * En cuál de los tres estados está esta conversación.
+     *
+     * Se mira el takeover PRIMERO porque una persona al mando gana a cualquier
+     * otra consideración, que es justo lo que significa tomar una conversación.
+     */
+    public function controlState(MarketingConversation $conversation): string
+    {
+        if ($conversation->human_takeover) {
+            return self::HUMAN_ACTIVE;
+        }
+
+        $lead = $conversation->lead;
+        if ($lead !== null && (string) $lead->status === MarketingLead::STATUS_NEEDS_HUMAN) {
+            return self::HUMAN_REQUIRED;
+        }
+
+        return self::RELEASED_TO_AI;
+    }
+
     /** Pausa la IA por acción manual de un asesor/administrador. */
     public function takeover(MarketingConversation $conversation, ?int $adminId, ?string $reason = null): MarketingConversation
     {
@@ -101,6 +141,59 @@ class MarketingManualTakeoverService
             'reason' => 'Devuelta a la IA con resumen del traspaso.',
             'status' => 'executed',
             'metadata' => ['source' => 'manual', 'admin_id' => $adminId, 'handover' => true],
+        ]);
+
+        return $conversation;
+    }
+
+    /**
+     * Devuelve el lead al control autónomo, haya habido takeover o no.
+     *
+     * Es la transición que faltaba, y su ausencia es lo que dejó dos leads
+     * atascados desde junio: `release()` solo cierra la petición de humano si la
+     * conversación ESTUVO en manos de una persona, a propósito, para no borrar
+     * sin querer un `needs_human` puesto a mano. Pero entonces un lead escalado
+     * por el agente y nunca atendido no tenía salida: seguía autorizando la
+     * derivación en todos los turnos futuros.
+     *
+     * Esto es explícito: quien lo pide sabe lo que hace, queda registrado con su
+     * nombre y su motivo, y por eso puede hacer lo que `release()` no hace.
+     *
+     * Lo que NO hace: no toca el consentimiento. Un lead que pidió que no le
+     * escriban sigue sin recibir nada, porque esa puerta es otra y se comprueba
+     * antes (`canReplyReactively()`).
+     */
+    public function releaseToAi(MarketingConversation $conversation, ?int $adminId, string $reason): MarketingConversation
+    {
+        $estado = $this->controlState($conversation);
+
+        DB::transaction(function () use ($conversation): void {
+            if ($conversation->human_takeover) {
+                $conversation->forceFill([
+                    'human_takeover' => false,
+                    'human_takeover_source' => null,
+                    'ai_enabled' => true,
+                    'summary' => $this->handoverSummary($conversation),
+                ])->save();
+            } elseif (! $conversation->ai_enabled) {
+                $conversation->forceFill(['ai_enabled' => true])->save();
+            }
+
+            $this->closeNeedsHuman($conversation);
+        });
+
+        MarketingAiAction::create([
+            'lead_id' => $conversation->lead_id,
+            'conversation_id' => $conversation->id,
+            'action_type' => 'release_to_ai',
+            'reason' => $reason,
+            'status' => 'executed',
+            'metadata' => [
+                'source' => 'manual',
+                'admin_id' => $adminId,
+                'from_state' => $estado,
+                'to_state' => self::RELEASED_TO_AI,
+            ],
         ]);
 
         return $conversation;

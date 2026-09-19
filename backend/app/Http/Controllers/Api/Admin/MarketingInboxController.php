@@ -312,6 +312,42 @@ class MarketingInboxController extends Controller
         return response()->json(['ok' => true, 'human_takeover' => false, 'ai_enabled' => true]);
     }
 
+    // ── 5.bis Devolver al control autónomo ───────────────────────────────────────
+
+    /**
+     * Cierra la petición de humano y devuelve el lead al agente.
+     *
+     * Distinto de `release`: aquel reactiva la IA en una conversación que una
+     * persona había tomado. Este resuelve el caso que no tenía salida —el lead
+     * que el agente escaló y que nadie llegó a atender—, y por eso pide un
+     * motivo: es una decisión, no un botón de limpieza.
+     */
+    public function releaseToAi(Request $request, int $id, MarketingManualTakeoverService $takeover): JsonResponse
+    {
+        if ($r = $this->guard($request, MarketingInboxAuthorizationService::CAP_RELEASE)) {
+            return $r;
+        }
+
+        $data = $request->validate(['reason' => ['required', 'string', 'min:3', 'max:500']]);
+
+        $conversation = $this->findConversation($id);
+        if (! $conversation) {
+            return $this->notFound();
+        }
+
+        $antes = $takeover->controlState($conversation);
+        $takeover->releaseToAi($conversation, $this->adminId($request), $data['reason']);
+
+        return response()->json([
+            'ok' => true,
+            'from_state' => $antes,
+            'to_state' => MarketingManualTakeoverService::RELEASED_TO_AI,
+            'human_takeover' => false,
+            'ai_enabled' => true,
+            'lead_status' => $conversation->lead?->fresh()?->status,
+        ]);
+    }
+
     // ── 6. Asignar asesor ────────────────────────────────────────────────────────
     public function assign(Request $request, int $id, MarketingConversationAssignmentService $assignment): JsonResponse
     {

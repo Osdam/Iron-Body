@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Marketing;
 
+use App\Models\MarketingAiAction;
 use App\Models\MarketingConversation;
 use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
@@ -160,5 +161,127 @@ class LeadNeedsHumanLifecycleTest extends TestCase
         app(MarketingManualTakeoverService::class)->release($this->conversation->fresh(), 1);
 
         $this->assertSame(MarketingLead::STATUS_NEEDS_HUMAN, $this->lead->fresh()->status);
+    }
+
+    // ── El ciclo de vida, con nombre ─────────────────────────────────────────
+
+    public function test_the_three_states_of_human_control_are_told_apart(): void
+    {
+        $svc = app(MarketingManualTakeoverService::class);
+
+        $this->assertSame(MarketingManualTakeoverService::RELEASED_TO_AI, $svc->controlState($this->conversation->fresh()));
+
+        $this->lead->forceFill(['status' => MarketingLead::STATUS_NEEDS_HUMAN])->save();
+        $this->assertSame(MarketingManualTakeoverService::HUMAN_REQUIRED, $svc->controlState($this->conversation->fresh()));
+
+        $svc->takeover($this->conversation->fresh(), 1, 'customer_asked');
+        $this->assertSame(
+            MarketingManualTakeoverService::HUMAN_ACTIVE,
+            $svc->controlState($this->conversation->fresh()),
+            'una persona al mando gana a cualquier otra consideración',
+        );
+    }
+
+    /**
+     * LA REGRESIÓN QUE MOTIVA TODO ESTO.
+     *
+     * Un lead que el agente escaló y que NADIE llegó a atender se quedaba en
+     * `needs_human` para siempre, porque la única salida era liberar un takeover
+     * que en ese lead nunca existió. Consecuencia: la derivación quedaba
+     * autorizada en TODOS los turnos futuros, meses después, sin que nadie la
+     * hubiera pedido. En producción había dos leads así desde junio.
+     */
+    public function test_an_old_escalation_nobody_attended_does_not_authorise_every_future_turn(): void
+    {
+        // Escalado hace meses, sin que nadie tomara la conversación.
+        $this->lead->forceFill(['status' => MarketingLead::STATUS_NEEDS_HUMAN])->save();
+        $this->conversation->forceFill(['human_takeover' => false, 'human_takeover_source' => null, 'ai_enabled' => true])->save();
+
+        $this->assertContains(
+            P::HUMAN_HANDOFF,
+            $this->allowedTransitions('hola', 'wamid.rc1.1'),
+            'antes del release oficial, la puerta sigue abierta',
+        );
+
+        app(MarketingManualTakeoverService::class)->releaseToAi(
+            $this->conversation->fresh(),
+            1,
+            'Canario: escalado de junio que nadie atendió.',
+        );
+
+        $this->assertSame(MarketingLead::STATUS_INTERESTED, $this->lead->fresh()->status);
+        $this->assertNotContains(
+            P::HUMAN_HANDOFF,
+            $this->allowedTransitions('sigo interesado', 'wamid.rc1.2'),
+            'después del release oficial, un handoff histórico ya no autoriza nada',
+        );
+        $this->assertNotContains(P::HUMAN_HANDOFF, $this->allowedTransitions('y otra cosa', 'wamid.rc1.3'));
+    }
+
+    public function test_the_official_release_is_audited_with_its_actor_and_reason(): void
+    {
+        $this->lead->forceFill(['status' => MarketingLead::STATUS_NEEDS_HUMAN])->save();
+
+        app(MarketingManualTakeoverService::class)->releaseToAi($this->conversation->fresh(), 7, 'Motivo que queda escrito.');
+
+        $accion = MarketingAiAction::where('action_type', 'release_to_ai')->latest('id')->first();
+        $this->assertNotNull($accion, 'la transición deja rastro');
+        $this->assertSame('executed', $accion->status);
+        $this->assertSame('Motivo que queda escrito.', $accion->reason);
+        $this->assertSame(7, $accion->metadata['admin_id'] ?? null);
+        $this->assertSame(MarketingManualTakeoverService::HUMAN_REQUIRED, $accion->metadata['from_state'] ?? null);
+        $this->assertSame(MarketingManualTakeoverService::RELEASED_TO_AI, $accion->metadata['to_state'] ?? null);
+    }
+
+    public function test_the_official_release_also_ends_an_active_takeover(): void
+    {
+        $this->escalate();
+        $this->assertTrue((bool) $this->conversation->fresh()->human_takeover);
+
+        app(MarketingManualTakeoverService::class)->releaseToAi($this->conversation->fresh(), 1, 'Se cierra el caso.');
+
+        $c = $this->conversation->fresh();
+        $this->assertFalse((bool) $c->human_takeover);
+        $this->assertTrue((bool) $c->ai_enabled);
+        $this->assertSame(MarketingLead::STATUS_INTERESTED, $this->lead->fresh()->status);
+    }
+
+    /**
+     * Devolver el lead al agente NO devuelve a quien pidió que no le escriban.
+     *
+     * Es el caso real del otro lead atascado: retiró el consentimiento, así que
+     * la puerta que lo mantiene en silencio es otra y se comprueba antes.
+     */
+    public function test_releasing_to_ai_never_overrides_a_withdrawn_consent(): void
+    {
+        $this->lead->forceFill([
+            'status' => MarketingLead::STATUS_NEEDS_HUMAN,
+            'consent_status' => MarketingLead::CONSENT_DENIED,
+        ])->save();
+
+        app(MarketingManualTakeoverService::class)->releaseToAi($this->conversation->fresh(), 1, 'Consentimiento retirado.');
+
+        $lead = $this->lead->fresh();
+        $this->assertSame(MarketingLead::CONSENT_DENIED, $lead->consent_status, 'el consentimiento no se toca');
+        $this->assertFalse($lead->canReplyReactively(), 'y sigue sin poder recibir nada');
+    }
+
+    /** Otra conversación del mismo lead en manos de una persona mantiene la petición viva. */
+    public function test_the_official_release_respects_a_sibling_conversation_in_human_hands(): void
+    {
+        $this->lead->forceFill(['status' => MarketingLead::STATUS_NEEDS_HUMAN])->save();
+        $otra = MarketingConversation::create([
+            'lead_id' => $this->lead->id, 'channel' => 'whatsapp', 'status' => 'open',
+            'ai_enabled' => false, 'human_takeover' => true, 'human_takeover_source' => 'manual',
+        ]);
+
+        app(MarketingManualTakeoverService::class)->releaseToAi($this->conversation->fresh(), 1, 'Libero solo esta.');
+
+        $this->assertSame(
+            MarketingLead::STATUS_NEEDS_HUMAN,
+            $this->lead->fresh()->status,
+            'mientras alguien siga al mando en otro hilo, la petición sigue viva',
+        );
+        $this->assertTrue((bool) $otra->fresh()->human_takeover);
     }
 }

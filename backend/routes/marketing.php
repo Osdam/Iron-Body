@@ -135,6 +135,10 @@ Route::middleware('throttle:120,1')
 
         Route::post('conversations/{id}/takeover', [MarketingInboxController::class, 'takeover']);
         Route::post('conversations/{id}/release', [MarketingInboxController::class, 'release']);
+        // Cierra la petición de humano y devuelve el lead al agente, haya habido
+        // takeover o no. Es la salida que faltaba para un lead escalado y nunca
+        // atendido, que si no seguía autorizando la derivación para siempre.
+        Route::post('conversations/{id}/release-to-ai', [MarketingInboxController::class, 'releaseToAi']);
         Route::post('conversations/{id}/assign', [MarketingInboxController::class, 'assign']);
         Route::post('conversations/{id}/notes', [MarketingInboxController::class, 'addNote']);
         Route::post('conversations/{id}/tags', [MarketingInboxController::class, 'tags']);
