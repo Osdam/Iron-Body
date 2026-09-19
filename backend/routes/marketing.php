@@ -2,11 +2,12 @@
 
 use App\Http\Controllers\Api\Admin\IronGuardController;
 use App\Http\Controllers\Api\Admin\MarketingAgentActionController;
-use App\Http\Controllers\Api\Admin\MarketingAppointmentController;
 use App\Http\Controllers\Api\Admin\MarketingAnalyticsController;
+use App\Http\Controllers\Api\Admin\MarketingAppointmentController;
 use App\Http\Controllers\Api\Admin\MarketingAttachmentController;
 use App\Http\Controllers\Api\Admin\MarketingController;
 use App\Http\Controllers\Api\Admin\MarketingInboxController;
+use App\Http\Controllers\Api\Admin\MarketingPaymentClaimController;
 use App\Http\Controllers\Api\Admin\SupervisionController;
 use App\Http\Controllers\Api\Admin\WhatsappIntegrationController;
 use App\Http\Controllers\Api\Internal\InternalMarketingController;
@@ -56,9 +57,19 @@ Route::middleware(['automation.internal', 'throttle:120,1'])
          *
          * `decide` lee y no escribe; `commit` es el único camino por el que una
          * propuesta de n8n puede llegar a ejecutarse y a salir por WhatsApp.
-         * Deliberadamente NO se le da a n8n autoridad sobre `payment-links` ni
-         * `payment-links/send`: si algún día ULTRON tiene que cobrar, será
-         * pidiendo la herramienta por `commit` y decidiéndolo Laravel.
+         * ULTRON no cobra por su cuenta: pide la herramienta por `commit` y el
+         * permiso lo decide Laravel (`SalesPaymentReadinessService`), que exige
+         * Wompi productivo Y la bandera del negocio.
+         *
+         * OJO, y esto antes se afirmaba al revés: el WORKFLOW de ULTRON solo usa
+         * estas dos puertas, pero el SECRETO no distingue puertas. Quien tenga
+         * `automation.internal_secret` puede llamar también a `payment-links` y
+         * a `payment-links/send` de aquí arriba, que son anteriores (Fase 1.5),
+         * están probadas, y NO consultan la bandera del negocio: solo los
+         * guardrails de pago. Apagar `MARKETING_ULTRON_PAYMENT_LINKS_ENABLED`
+         * detiene la herramienta de ULTRON, no esta superficie.
+         * {@see \Tests\Feature\Marketing\InternalSecretAuthoritySurfaceTest},
+         * que fija esa asimetría para que nadie vuelva a darla por cerrada.
          */
         Route::post('ai/decide', [UltronController::class, 'decide']);
         Route::post('ai/commit', [UltronController::class, 'commit']);
@@ -67,8 +78,8 @@ Route::middleware(['automation.internal', 'throttle:120,1'])
 
         // Base de conocimiento comercial (Fase 3.5). Solo interno (HMAC).
         Route::get('knowledge/doctor', [InternalMarketingKnowledgeController::class, 'doctor']);
-        Route::get('knowledge',        [InternalMarketingKnowledgeController::class, 'index']);
-        Route::post('knowledge',       [InternalMarketingKnowledgeController::class, 'upsert']);
+        Route::get('knowledge', [InternalMarketingKnowledgeController::class, 'index']);
+        Route::post('knowledge', [InternalMarketingKnowledgeController::class, 'upsert']);
     });
 
 // ── Agente comercial — endpoint admin (CRM): generar link desde el panel ──────
@@ -92,11 +103,11 @@ Route::post('admin/marketing/leads/{lead}/payment-link', [MarketingController::c
 Route::middleware('throttle:30,1')
     ->prefix('admin/integrations/whatsapp')
     ->group(function (): void {
-        Route::get('/',            [WhatsappIntegrationController::class, 'status']);
-        Route::post('start',       [WhatsappIntegrationController::class, 'start']);
-        Route::post('callback',    [WhatsappIntegrationController::class, 'callback']);
-        Route::post('disconnect',  [WhatsappIntegrationController::class, 'disconnect']);
-        Route::post('refresh',     [WhatsappIntegrationController::class, 'refresh']);
+        Route::get('/', [WhatsappIntegrationController::class, 'status']);
+        Route::post('start', [WhatsappIntegrationController::class, 'start']);
+        Route::post('callback', [WhatsappIntegrationController::class, 'callback']);
+        Route::post('disconnect', [WhatsappIntegrationController::class, 'disconnect']);
+        Route::post('refresh', [WhatsappIntegrationController::class, 'refresh']);
     });
 
 // ── Inbox CRM de WhatsApp (Fase 2A) ───────────────────────────────────────────
@@ -107,28 +118,39 @@ Route::middleware('throttle:120,1')
     ->prefix('admin/marketing/inbox')
     ->where(['id' => '[0-9]+'])
     ->group(function (): void {
-        Route::get('conversations',                      [MarketingInboxController::class, 'index']);
-        Route::get('metrics',                            [MarketingInboxController::class, 'metrics']);
-        Route::get('capabilities',                       [MarketingInboxController::class, 'capabilities']);
+        Route::get('conversations', [MarketingInboxController::class, 'index']);
+        Route::get('metrics', [MarketingInboxController::class, 'metrics']);
+        Route::get('capabilities', [MarketingInboxController::class, 'capabilities']);
         // Catalogo de etiquetas para autocompletar y filtrar en el inbox.
-        Route::get('tags',                               [MarketingInboxController::class, 'tagCatalog']);
-        Route::get('conversations/{id}',                 [MarketingInboxController::class, 'show']);
+        Route::get('tags', [MarketingInboxController::class, 'tagCatalog']);
+        Route::get('conversations/{id}', [MarketingInboxController::class, 'show']);
         // Panel derecho del Inbox V2: contexto agregado y de SOLO LECTURA.
-        Route::get('conversations/{id}/context',         [MarketingInboxController::class, 'context']);
+        Route::get('conversations/{id}/context', [MarketingInboxController::class, 'context']);
         // Historial paginado por cursor (hacia atras).
-        Route::get('conversations/{id}/messages',        [MarketingInboxController::class, 'messages']);
+        Route::get('conversations/{id}/messages', [MarketingInboxController::class, 'messages']);
 
         // Envío manual (throttle más estricto para frenar spam de salida).
         Route::post('conversations/{id}/messages', [MarketingInboxController::class, 'sendMessage'])
             ->middleware('throttle:30,1');
 
-        Route::post('conversations/{id}/takeover',            [MarketingInboxController::class, 'takeover']);
-        Route::post('conversations/{id}/release',             [MarketingInboxController::class, 'release']);
-        Route::post('conversations/{id}/assign',              [MarketingInboxController::class, 'assign']);
-        Route::post('conversations/{id}/notes',               [MarketingInboxController::class, 'addNote']);
-        Route::post('conversations/{id}/tags',                [MarketingInboxController::class, 'tags']);
-        Route::patch('conversations/{id}/status',             [MarketingInboxController::class, 'status']);
+        Route::post('conversations/{id}/takeover', [MarketingInboxController::class, 'takeover']);
+        Route::post('conversations/{id}/release', [MarketingInboxController::class, 'release']);
+        Route::post('conversations/{id}/assign', [MarketingInboxController::class, 'assign']);
+        Route::post('conversations/{id}/notes', [MarketingInboxController::class, 'addNote']);
+        Route::post('conversations/{id}/tags', [MarketingInboxController::class, 'tags']);
+        Route::patch('conversations/{id}/status', [MarketingInboxController::class, 'status']);
         Route::post('conversations/{id}/staff-review/resolve', [MarketingInboxController::class, 'resolveStaffReview']);
+
+        // Cierre de la revisión 'payment_claim_candidate': un pago aprobado del
+        // link de WhatsApp que se quedó sin socio y que alguien del equipo
+        // enlaza (o descarta) a mano. Viven DENTRO de este grupo, y no en un
+        // prefijo propio, porque son exactamente la misma decisión que
+        // staff-review/resolve y deben exigir la misma sesión, el mismo
+        // blindaje de /api/admin/* y la misma capacidad del Inbox.
+        Route::post('payment-claims/{transaction}/accept', [MarketingPaymentClaimController::class, 'accept'])
+            ->whereNumber('transaction');
+        Route::post('payment-claims/{transaction}/reject', [MarketingPaymentClaimController::class, 'reject'])
+            ->whereNumber('transaction');
 
         // Citas de la conversación (panel "Citas del lead" del Inbox).
         Route::get('conversations/{id}/appointments', [MarketingAppointmentController::class, 'forConversation']);
@@ -157,13 +179,13 @@ Route::middleware('throttle:120,1')
 Route::middleware('throttle:60,1')
     ->prefix('admin/marketing/analytics')
     ->group(function (): void {
-        Route::get('summary',                [MarketingAnalyticsController::class, 'summary']);
-        Route::get('funnel',                 [MarketingAnalyticsController::class, 'funnel']);
-        Route::get('quality',                [MarketingAnalyticsController::class, 'quality']);
-        Route::get('insights',               [MarketingAnalyticsController::class, 'insights']);
-        Route::get('campaigns/{campaign}',   [MarketingAnalyticsController::class, 'campaign'])
+        Route::get('summary', [MarketingAnalyticsController::class, 'summary']);
+        Route::get('funnel', [MarketingAnalyticsController::class, 'funnel']);
+        Route::get('quality', [MarketingAnalyticsController::class, 'quality']);
+        Route::get('insights', [MarketingAnalyticsController::class, 'insights']);
+        Route::get('campaigns/{campaign}', [MarketingAnalyticsController::class, 'campaign'])
             ->where('campaign', '.*');
-        Route::get('breakdown/{dimension}',  [MarketingAnalyticsController::class, 'breakdown']);
+        Route::get('breakdown/{dimension}', [MarketingAnalyticsController::class, 'breakdown']);
     });
 
 // ── Centro de supervision del agente (Fase E) ─────────────────────────────────
@@ -175,13 +197,13 @@ Route::middleware('throttle:120,1')
     ->prefix('admin/marketing/supervision')
     ->where(['id' => '[0-9]+'])
     ->group(function (): void {
-        Route::get('state',          [SupervisionController::class, 'state']);
-        Route::get('capabilities',   [SupervisionController::class, 'capabilities']);
-        Route::get('activity',       [SupervisionController::class, 'activity']);
-        Route::get('decisions',      [SupervisionController::class, 'decisions']);
-        Route::get('opportunities',  [SupervisionController::class, 'opportunities']);
-        Route::get('revenue',        [SupervisionController::class, 'revenue']);
-        Route::get('approvals',      [SupervisionController::class, 'approvals']);
+        Route::get('state', [SupervisionController::class, 'state']);
+        Route::get('capabilities', [SupervisionController::class, 'capabilities']);
+        Route::get('activity', [SupervisionController::class, 'activity']);
+        Route::get('decisions', [SupervisionController::class, 'decisions']);
+        Route::get('opportunities', [SupervisionController::class, 'opportunities']);
+        Route::get('revenue', [SupervisionController::class, 'revenue']);
+        Route::get('approvals', [SupervisionController::class, 'approvals']);
 
         // La unica escritura de la fase, y la mas delicada. Throttle propio:
         // pulsar aprobar en bucle no puede convertirse en una via para forzar
@@ -193,7 +215,7 @@ Route::middleware('throttle:120,1')
         // averias tecnicas y exigen vision completa; las alertas comerciales son
         // personas esperando y las ve cualquiera que atienda.
         Route::get('incidents', [SupervisionController::class, 'incidents']);
-        Route::get('alerts',    [SupervisionController::class, 'alerts']);
+        Route::get('alerts', [SupervisionController::class, 'alerts']);
         Route::post('alerts/{id}/decide', [SupervisionController::class, 'decideAlert'])
             ->middleware('throttle:30,1');
     });
@@ -215,14 +237,14 @@ Route::middleware('throttle:120,1')
     ->prefix('admin/marketing/agent-actions')
     ->where(['id' => '[0-9]+'])
     ->group(function (): void {
-        Route::get('/',              [MarketingAgentActionController::class, 'index']);
-        Route::get('capabilities',   [MarketingAgentActionController::class, 'capabilities']);
-        Route::post('recommend',     [MarketingAgentActionController::class, 'recommend']);
-        Route::get('{id}',           [MarketingAgentActionController::class, 'show']);
-        Route::post('{id}/approve',  [MarketingAgentActionController::class, 'approve']);
-        Route::post('{id}/reject',   [MarketingAgentActionController::class, 'reject']);
-        Route::post('{id}/execute',  [MarketingAgentActionController::class, 'execute']);
-        Route::post('{id}/cancel',   [MarketingAgentActionController::class, 'cancel']);
+        Route::get('/', [MarketingAgentActionController::class, 'index']);
+        Route::get('capabilities', [MarketingAgentActionController::class, 'capabilities']);
+        Route::post('recommend', [MarketingAgentActionController::class, 'recommend']);
+        Route::get('{id}', [MarketingAgentActionController::class, 'show']);
+        Route::post('{id}/approve', [MarketingAgentActionController::class, 'approve']);
+        Route::post('{id}/reject', [MarketingAgentActionController::class, 'reject']);
+        Route::post('{id}/execute', [MarketingAgentActionController::class, 'execute']);
+        Route::post('{id}/cancel', [MarketingAgentActionController::class, 'cancel']);
     });
 
 // ── Agenda comercial / citas para leads (Fase 4B) ─────────────────────────────
@@ -232,13 +254,13 @@ Route::middleware('throttle:120,1')
     ->prefix('admin/marketing/appointments')
     ->where(['id' => '[0-9]+'])
     ->group(function (): void {
-        Route::get('/',               [MarketingAppointmentController::class, 'index']);
-        Route::post('/',              [MarketingAppointmentController::class, 'store']);
-        Route::get('capabilities',    [MarketingAppointmentController::class, 'capabilities']);
-        Route::get('{id}',            [MarketingAppointmentController::class, 'show']);
-        Route::patch('{id}',          [MarketingAppointmentController::class, 'update']);
-        Route::post('{id}/complete',  [MarketingAppointmentController::class, 'complete']);
-        Route::post('{id}/cancel',    [MarketingAppointmentController::class, 'cancel']);
+        Route::get('/', [MarketingAppointmentController::class, 'index']);
+        Route::post('/', [MarketingAppointmentController::class, 'store']);
+        Route::get('capabilities', [MarketingAppointmentController::class, 'capabilities']);
+        Route::get('{id}', [MarketingAppointmentController::class, 'show']);
+        Route::patch('{id}', [MarketingAppointmentController::class, 'update']);
+        Route::post('{id}/complete', [MarketingAppointmentController::class, 'complete']);
+        Route::post('{id}/cancel', [MarketingAppointmentController::class, 'cancel']);
         Route::post('{id}/reschedule', [MarketingAppointmentController::class, 'reschedule']);
     });
 
@@ -251,9 +273,9 @@ Route::middleware('throttle:120,1')
     ->prefix('admin/iron-guard')
     ->where(['id' => '[0-9]+'])
     ->group(function (): void {
-        Route::get('overview',        [IronGuardController::class, 'overview']);
-        Route::get('incidents',       [IronGuardController::class, 'index']);
-        Route::get('incidents/{id}',  [IronGuardController::class, 'show']);
+        Route::get('overview', [IronGuardController::class, 'overview']);
+        Route::get('incidents', [IronGuardController::class, 'index']);
+        Route::get('incidents/{id}', [IronGuardController::class, 'show']);
         Route::patch('incidents/{id}/status', [IronGuardController::class, 'updateStatus']);
 
         // Acciones que tocan el sistema: throttle más estricto.

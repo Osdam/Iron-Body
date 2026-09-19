@@ -2,6 +2,7 @@
 
 namespace App\Support\Access;
 
+use App\Http\Middleware\ProtectAdminPaths;
 use Illuminate\Routing\Route;
 
 /**
@@ -160,6 +161,11 @@ final class AuthorizationMap
         'MarketingAppointmentController' => 'marketing',
         'MarketingAnalyticsController' => 'marketing',
         'MarketingAttachmentController' => 'marketing',
+        // Aceptar o descartar el reclamo de un pago huérfano del CRM. Mismo
+        // dominio que el Inbox a propósito: es el cierre de una revisión del
+        // Inbox, no un módulo aparte. La capacidad fina (CAP_RESOLVE_REVIEW)
+        // la comprueba además el propio controlador.
+        'MarketingPaymentClaimController' => 'marketing',
         'SupervisionController' => 'marketing',
 
         // ── Soporte ─────────────────────────────────────────────────────────
@@ -218,6 +224,21 @@ final class AuthorizationMap
      * @var array<string, string>
      */
     private const OVERRIDES = [
+        /*
+         * Aceptar un reclamo de pago CREA un cobro y encola una factura
+         * electrónica ante la DIAN. Vive en el Inbox porque es el cierre de una
+         * revisión del Inbox, pero el dominio de mercadeo no es una llave de
+         * dinero: una revisión de seguridad demostró que un rol con solo
+         * `marketing.manage` acuñaba membresía y factura. Se exige la llave de
+         * quien cobra, y la capacidad del Inbox la sigue comprobando el propio
+         * controlador: dos puertas, no una.
+         *
+         * DESCARTAR el reclamo no mueve dinero ni emite nada, así que se queda
+         * con el permiso del Inbox: pedir la llave de caja para decir «este pago
+         * no es de esta persona» dejaría la alerta sin quien la cierre.
+         */
+        'POST api/admin/marketing/inbox/payment-claims/{transaction}/accept' => 'payments.create',
+
         // Registrar un abono es COBRAR, no crear deuda: el verbo POST no
         // distingue las dos cosas y aquí sí importa. Quien está en el mostrador
         // recibiendo dinero no tiene por qué poder fiar.
@@ -515,7 +536,7 @@ final class AuthorizationMap
      * ¿Esta ruta pertenece al universo que hay que autorizar?
      *
      * Es EXACTAMENTE el mismo universo que exige credencial administrativa en
-     * {@see \App\Http\Middleware\ProtectAdminPaths}, más las rutas del CRM
+     * {@see ProtectAdminPaths}, más las rutas del CRM
      * que se blindan por alias. Definirlo aparte habría dejado que las dos
      * definiciones se separaran con el tiempo, y el hueco entre ambas es
      * precisamente donde vive una ruta sin proteger.
