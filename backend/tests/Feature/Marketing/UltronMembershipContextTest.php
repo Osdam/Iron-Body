@@ -148,7 +148,10 @@ class UltronMembershipContextTest extends TestCase
         $this->assertSame(C::LAPSED, $d->json('context.customer.customer_lifecycle'));
         $this->assertSame('winback', $d->json('context.strategy_hints.lifecycle_mode'));
         $this->assertSame(M::STATUS_EXPIRED, $d->json('context.membership.status'));
-        $this->assertEqualsWithDelta(12, $d->json('context.membership.days_since_expiry'), 1);
+        // Ver MembershipFactsProviderTest: el día del gimnasio termina a las
+        // 23:59 de Neiva, y el conteo lo refleja.
+        $this->assertGreaterThanOrEqual(10, $d->json('context.membership.days_since_expiry'));
+        $this->assertLessThanOrEqual(12, $d->json('context.membership.days_since_expiry'));
         $this->assertSame($this->plan->id, $d->json('context.membership.renewal.plan_id'));
     }
 

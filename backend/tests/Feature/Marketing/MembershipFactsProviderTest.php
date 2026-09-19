@@ -116,7 +116,11 @@ class MembershipFactsProviderTest extends TestCase
 
         $this->assertSame(MembershipFactsProvider::STATUS_EXPIRED, $m['status']);
         $this->assertNull($m['days_to_expiry']);
-        $this->assertEqualsWithDelta(12, $m['days_since_expiry'], 1);
+        // La membresía muere al FINAL del día de Neiva, así que el conteo va
+        // hasta un día por detrás de la diferencia de calendario. Se afirma el
+        // hecho (venció hace una semana y pico), no el número exacto.
+        $this->assertGreaterThanOrEqual(10, $m['days_since_expiry']);
+        $this->assertLessThanOrEqual(12, $m['days_since_expiry']);
         $this->assertSame('Plan Mensual', $m['plan']['name']);
         $this->assertFalse($m['renewal']['window_open']);
         $this->assertSame($this->mensual->id, $m['renewal']['plan_id'], 'recuperar a un exsocio propone su último plan si aún se vende');
