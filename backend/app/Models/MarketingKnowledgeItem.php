@@ -285,7 +285,15 @@ class MarketingKnowledgeItem extends Model
     public function scopeApprovedFromUntrustedOrigin(Builder $query): Builder
     {
         return $query->where('review_status', self::REVIEW_APPROVED)
-            ->whereNotIn('origin', self::TRUSTED_ORIGINS)
+            /*
+             * El nulo va explícito. `NOT IN` con `origin = NULL` no da
+             * verdadero en SQL: da NULL, así que una fila sin procedencia no
+             * la contaba nadie mientras el prompt sí la servía. La columna es
+             * NOT NULL desde la migración `2026_09_19_060000`, y esto es el
+             * cinturón además de los tirantes: un dump viejo restaurado no
+             * puede volverse invisible para el único contador que lo vigila.
+             */
+            ->where(fn (Builder $q) => $q->whereNull('origin')->orWhereNotIn('origin', self::TRUSTED_ORIGINS))
             ->whereNull('reviewed_at');
     }
 

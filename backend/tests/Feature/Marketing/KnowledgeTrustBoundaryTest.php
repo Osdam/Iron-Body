@@ -14,6 +14,7 @@ use App\Services\Marketing\SalesIntents;
 use Database\Seeders\MarketingKnowledgeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -577,6 +578,43 @@ class KnowledgeTrustBoundaryTest extends TestCase
         // Y la segunda vez ya no hace falta: dice quién respondió y se calla.
         Artisan::call('marketing:knowledge-review', ['key' => 'location.heredada', '--by' => 'Otra persona']);
         $this->assertStringContainsString('Ya lo revisó Alejandro', Artisan::output());
+    }
+
+    /**
+     * El caso que el instrumento de medida no podía ver.
+     *
+     * Una fila escrita SIN pasar por el modelo —un `insert` crudo, una
+     * migración ajena, o el caso realista: restaurar un dump anterior a la
+     * frontera— no tiene procedencia. `NOT IN` con nulo no da verdadero en SQL,
+     * así que el contador que existe para vigilarla no la contaba, mientras el
+     * prompt sí la servía. Ahora la columna es NOT NULL con `unknown` por
+     * defecto y el scope cubre el nulo igualmente.
+     */
+    public function test_una_fila_escrita_por_fuera_del_modelo_no_se_vuelve_invisible(): void
+    {
+        DB::table('marketing_knowledge_items')->insert([
+            'category' => 'faq',
+            'key' => 'faq.dump.restaurado',
+            'title' => 'Vino de un respaldo',
+            'content' => 'Contenido sin procedencia.',
+            'priority' => 100,
+            'is_active' => true,
+            'review_status' => MarketingKnowledgeItem::REVIEW_APPROVED,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $fila = MarketingKnowledgeItem::where('key', 'faq.dump.restaurado')->firstOrFail();
+
+        // La base la marca como lo que es: procedencia desconocida.
+        $this->assertSame(MarketingKnowledgeItem::ORIGIN_UNKNOWN, $fila->origin);
+        $this->assertFalse($fila->isTrustedOrigin());
+
+        // Y el contador que existe para verla, la ve.
+        $this->assertSame(1, app(MarketingKnowledgeBaseService::class)->summary()['approved_from_untrusted_origin']);
+        $this->assertTrue(
+            MarketingKnowledgeItem::query()->approvedFromUntrustedOrigin()->where('key', 'faq.dump.restaurado')->exists(),
+        );
     }
 
     public function test_la_consola_no_aprueba_sin_decir_quien(): void
