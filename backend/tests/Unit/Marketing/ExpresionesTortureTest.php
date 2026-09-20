@@ -116,6 +116,12 @@ class ExpresionesTortureTest extends TestCase
         'me contesta alguien' => 'ídem: sin «persona» o «asesor» no es una petición',
         'hay asesor nutricional' => 'pregunta por un SERVICIO, no por hablar con alguien',
         'hay recepcionista los domingos' => 'pregunta por horario de un servicio',
+        // La familia de los prefijos: pedir un SERVICIO no es pedir a quien lo da.
+        'quiero la asesoria nutricional' => 'asesoria es un servicio; asesora es una persona',
+        'quiero asesoria nutricional' => 'idem, sin articulo',
+        'necesito asesoria' => 'idem',
+        'prefiero la asesoria personalizada' => 'idem',
+        'necesito atencion personalizada' => 'en un gimnasio puede ser un entrenador personal',
     ];
 
     /** Las formas inequívocas de pedir una persona. */
@@ -413,6 +419,9 @@ class ExpresionesTortureTest extends TestCase
             ['me atiende la recepcionista'],
             ['pasame con la asesora'],
             ['quiero hablar con la asesora'],
+            ['quiero la asesora'],
+            ['hablar con la recepcionista'],
+            ['me pasa con el encargado'],
         ];
     }
 

@@ -100,14 +100,21 @@ final class HumanHandoffAuthority
      * atiende», «atencion personalizada» (en un gimnasio puede ser un
      * entrenador personal) y «que me expliquen en persona» (puede ser venir).
      */
+    /*
+     * OJO con los finales de palabra. Sin `\b`, «asesor» casa el principio de
+     * «asesoria» y «persona» el de «personalizada»: pedir un SERVICIO acababa
+     * abriendo un traspaso. Los stems que sí son deliberados —«encargad»,
+     * «duen»— se cierran con su terminación explícita, no quitándoles el
+     * limite.
+     */
     private const PIDE_HUMANO = [
-        '/\bhablar\s+con\s+(un[ao]?\s+|el\s+|la\s+)?(persona|asesor|humano|agente|alguien|recepcion|encargad|duen)/u',
-        '/\b(pasame|pasarme|paseme|pasenme|pasar)\s+(con|a)\s+((un[ao]?|el|la)\s+)?(persona|asesor[ao]?|humano|agente|alguien|recepcion)/u',
+        '/\bhablar\s+con\s+(un[ao]?\s+|el\s+|la\s+)?(persona[sl]?|asesor[ao]?|humano[as]?|agente[s]?|alguien|recepcion(ista)?|encargad[oa]s?|duen[oa]s?)\b/u',
+        '/\b(pasame|pasarme|paseme|pasenme|pasar)\s+(con|a)\s+((un[ao]?|el|la)\s+)?(persona[sl]?|asesor[ao]?|humano[as]?|agente[s]?|alguien|recepcion(ista)?)\b/u',
         // «me pasa un asesor», «me pasas con alguien»: la misma petición en tercera persona.
-        '/\bme\s+pasa(s|n)?\s+(con\s+)?(un[ao]?\s+|el\s+|la\s+)?(persona|asesor|humano|agente|alguien|recepcion|encargad)/u',
+        '/\bme\s+pasa(s|n)?\s+(con\s+)?(un[ao]?\s+|el\s+|la\s+)?(persona[sl]?|asesor[ao]?|humano[as]?|agente[s]?|alguien|recepcion(ista)?|encargad[oa]s?)\b/u',
         '/\b(comunicame|comunicarme|comuniqueme)\s+con\b/u',
         '/\bme\s+comunica(s|n)?\s+con\b/u',
-        '/\bque\s+me\s+(atienda|contacte|llame|escriba)\s+(un[ao]?\s+)?(persona|asesor|humano|agente|alguien)/u',
+        '/\bque\s+me\s+(atienda|contacte|llame|escriba)\s+((un[ao]?|el|la)\s+)?(persona[sl]?|asesor[ao]?|humano[as]?|agente[s]?|alguien)\b/u',
         /*
          * «me atiende una persona», «me puede contestar un asesor».
          *
@@ -117,9 +124,9 @@ final class HumanHandoffAuthority
          * Con `persona`, `asesor`, `humano` o `agente` la petición es
          * inequívoca, y `alguien real` la recoge el patrón de abajo.
          */
-        '/\bme\s+(atiend[ae]|contest[ae])\s+((un[ao]?|el|la)\s+)?(persona|asesor[ao]?|humano|agente|recepcionista|encargad[oa])/u',
-        '/\bme\s+puede[ns]?\s+(atender|contestar)\s+((un[ao]?|el|la)\s+)?(persona|asesor[ao]?|humano|agente|recepcionista|encargad[oa])/u',
-        '/\b(quiero|necesito|deseo|prefiero)\s+(hablar\s+con\s+)?((un[ao]?|el|la)\s+)?(asesor[ao]?|humano|persona real|alguien\s+del\s+equipo|agente)/u',
+        '/\bme\s+(atiend[ae]|contest[ae])\s+((un[ao]?|el|la)\s+)?(persona[sl]?|asesor[ao]?|humano[as]?|agente[s]?|recepcionista|encargad[oa]s?)\b/u',
+        '/\bme\s+puede[ns]?\s+(atender|contestar)\s+((un[ao]?|el|la)\s+)?(persona[sl]?|asesor[ao]?|humano[as]?|agente[s]?|recepcionista|encargad[oa]s?)\b/u',
+        '/\b(quiero|necesito|deseo|prefiero)\s+(hablar\s+con\s+)?((un[ao]?|el|la)\s+)?(asesor[ao]?|humano[as]?|persona real|alguien\s+del\s+equipo|agente[s]?)\b/u',
         // Pedir que llamen es pedir una persona: nadie espera que llame un bot.
         '/\b(puede[ns]?|podria[ns]?)\s+llamarme\b/u',
         '/\bme\s+puede[ns]?\s+llamar\b/u',
