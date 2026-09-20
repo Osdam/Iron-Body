@@ -204,4 +204,57 @@ class PaymentFactGuardTest extends TestCase
             $this->guard->contradiction('Ya recibimos tu pago, cuando vengas te damos el carnet.', PaymentFactGuard::APPROVED),
         );
     }
+
+    // ── La misma mentira, con las cláusulas al revés ─────────────────────────
+
+    /**
+     * LA PUERTA DE ATRÁS DEL ARREGLO ANTERIOR.
+     *
+     * Juzgar sólo lo que va DELANTE de la conjunción cerró el agujero de la
+     * coordinada, y abrió el simétrico: lo que va DETRÁS no lo miraba nadie.
+     * «Cuando vengas te damos el carnet, tu pago fue confirmado» es exactamente
+     * la misma mentira con las cláusulas cambiadas de orden.
+     *
+     * La regla no es de posición, es de GOBIERNO: una afirmación sólo es
+     * hipotética si cuelga de la conjunción —pegada a ella, sin coma de por
+     * medio—. Y «mientras tanto» no es una subordinada, es un conector de
+     * discurso: no gobierna nada.
+     */
+    public static function afirmacionesEnLaCola(): array
+    {
+        return [
+            'mientras tanto con coma' => ['Mientras tanto, tu pago quedo registrado.'],
+            'mientras tanto sin coma' => ['Mientras tanto tu pago quedo registrado.'],
+            'cuando delante, afirma detrás' => ['Cuando vengas te damos el carnet, tu pago fue confirmado.'],
+            'en cuanto delante' => ['En cuanto llegues pregunta por recepcion, pago confirmado.'],
+            'apenas delante' => ['Apenas abras la app veras tu plan, recibimos tu pago.'],
+            'apenas delante sin coma' => ['Apenas abras la app veras tu plan recibimos tu pago.'],
+            'una vez que delante' => ['Una vez que entres al gimnasio preguntas por mi, tu pago esta confirmado.'],
+        ];
+    }
+
+    #[DataProvider('afirmacionesEnLaCola')]
+    public function test_a_claim_that_does_not_hang_from_the_conjunction_is_still_a_claim(string $texto): void
+    {
+        $r = $this->guard->contradiction($texto, 'none');
+
+        $this->assertNotNull($r, 'la conjunción de delante no vuelve hipotético lo que viene detrás');
+        $this->assertSame(PaymentFactGuard::REASON_CLAIMS_PAID, $r['reason']);
+    }
+
+    /**
+     * Y una afirmación no cruza una cláusula.
+     *
+     * Sin acotar las ventanas de los patrones, «debes hacer el pago de forma
+     * manual; una vez confirmado el pago…» casaba de «el pago» de la PRIMERA
+     * cláusula a «confirmado» de la SEGUNDA: el guard veía una afirmación que
+     * nadie escribió y mataba el turno honrado del canario.
+     */
+    public function test_a_claim_does_not_span_two_clauses(): void
+    {
+        $this->assertNull($this->guard->contradiction(
+            'Debes hacer el pago de forma manual; una vez confirmado el pago, se activa tu membresia.',
+            'none',
+        ));
+    }
 }

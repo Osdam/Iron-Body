@@ -47,11 +47,19 @@ final class PaymentFactGuard
     /** Verbos de «entró el dinero», en las formas en que se dicen de verdad. */
     private const ENTRO = '(recibimos|recibi|recibido|llego|entro|ingreso|acreditado|acredito|registramos|registrado|confirmado|confirmamos|aprobado|aprobamos)';
 
-    /** Afirmaciones de que el pago está hecho. */
+    /**
+     * Afirmaciones de que el pago está hecho.
+     *
+     * Las ventanas excluyen la coma y el punto y coma a propósito: una
+     * afirmación no cruza una cláusula. Sin eso, «debes hacer el pago de forma
+     * manual; una vez confirmado el pago…» casaba de «el pago» (de la primera
+     * cláusula) a «confirmado» (de la segunda) y el guard veía una afirmación
+     * que nadie había escrito.
+     */
     private const AFIRMA_PAGADO = [
-        '~\b(ya\s+)?(?:te\s+)?'.self::ENTRO.'\b[^.!?]{0,20}\b(tu|el|su)\s+pago\b~u',
-        '~\b(tu|el|su)\s+pago\b[^.!?]{0,25}\b(ya\s+)?(esta|quedo|fue|esa)?\s*'.self::ENTRO.'\b~u',
-        '~\b(tu|el|su)\s+(transferencia|consignacion|giro|abono)\b[^.!?]{0,25}\b'.self::ENTRO.'\b~u',
+        '~\b(ya\s+)?(?:te\s+)?'.self::ENTRO.'\b[^.!?,;]{0,20}\b(tu|el|su)\s+pago\b~u',
+        '~\b(tu|el|su)\s+pago\b[^.!?,;]{0,25}\b(ya\s+)?(esta|quedo|fue|esa)?\s*'.self::ENTRO.'\b~u',
+        '~\b(tu|el|su)\s+(transferencia|consignacion|giro|abono)\b[^.!?,;]{0,25}\b'.self::ENTRO.'\b~u',
         '~\bpago\s+(confirmado|aprobado|recibido|acreditado|exitoso)\b~u',
     ];
 
@@ -63,13 +71,23 @@ final class PaymentFactGuard
      * propósito: normalizado, el «sí» de afirmar y el «si» de condicionar son
      * la misma palabra, y «sí, ya recibimos tu pago» no puede colarse por ahí.
      */
-    private const SUBORDINA = '~\b(cuando|una vez|en cuanto|apenas|tan pronto|luego que|despues de que|luego de que|mientras|hasta que|si\s+(el|la|los|las|se|lo|le|tu|su))\b~u';
+    private const SUBORDINA = '~\b(cuando|una vez|en cuanto|apenas|tan pronto|luego que|despues de que|luego de que|mientras(?!\s+tanto)|hasta que|si\s+(el|la|los|las|se|lo|le|tu|su))\b~u';
+
+    /**
+     * Cuánto texto puede haber entre la conjunción y la afirmación que gobierna.
+     *
+     * Las subordinadas legítimas pegan las dos cosas: «una vez confirmado el
+     * pago», «apenas el pago quede confirmado», «cuando se confirme el pago».
+     * Estirarlo permitiría que la conjunción gobernara una oración entera que
+     * viene después y que no tiene nada de hipotética.
+     */
+    private const ALCANCE_SUBORDINADA = 16;
 
     /** Pedir una captura o un comprobante como prueba. Nunca vale, con pago o sin él. */
     private const PIDE_COMPROBANTE = [
-        '~\b(captura|pantallazo|screenshot|foto|imagen|soporte|comprobante|recibo|voucher)\b[^.!?]{0,40}\b(del?\s+)?(pago|transferencia|consignacion|comprobante|deposito)\b~u',
-        '~\b(mandame|mandeme|envia|enviame|pasame|adjunta|sube|comparte|muestra|muestrame)\b[^.!?]{0,25}\b(captura|pantallazo|screenshot|soporte|comprobante|recibo|voucher)\b~u',
-        '~\bcon\s+(el|la)\s+(soporte|captura|comprobante|recibo)\b[^.!?]{0,30}\b(basta|alcanza|es\s+suficiente|sirve|vale)\b~u',
+        '~\b(captura|pantallazo|screenshot|foto|imagen|soporte|comprobante|recibo|voucher)\b[^.!?,;]{0,40}\b(del?\s+)?(pago|transferencia|consignacion|comprobante|deposito)\b~u',
+        '~\b(mandame|mandeme|envia|enviame|pasame|adjunta|sube|comparte|muestra|muestrame)\b[^.!?,;]{0,25}\b(captura|pantallazo|screenshot|soporte|comprobante|recibo|voucher)\b~u',
+        '~\bcon\s+(el|la)\s+(soporte|captura|comprobante|recibo)\b[^.!?,;]{0,30}\b(basta|alcanza|es\s+suficiente|sirve|vale)\b~u',
     ];
 
     /**
@@ -106,7 +124,7 @@ final class PaymentFactGuard
              * subordinada temporal, sí, pero lo que afirma va delante y es una
              * mentira sobre el dinero de alguien.
              */
-            if (! $aprobado && $this->casa($this->antesDeLaSubordinada($frase), self::AFIRMA_PAGADO)) {
+            if (! $aprobado && $this->afirmaSinGobierno($frase)) {
                 return $this->hallazgo(self::REASON_CLAIMS_PAID, 'reply says the payment arrived, CRM state is '.$paymentState);
             }
 
@@ -175,20 +193,55 @@ final class PaymentFactGuard
     }
 
     /**
-     * La frase hasta donde empieza la subordinada, o entera si no hay ninguna.
+     * ¿Hay en la frase una afirmación de pago que NO gobierne una subordinada?
      *
-     * Es el arreglo del agujero que encontró la revisión: la exención
-     * condicional valía para toda la frase y la frase sólo se partía por
-     * `.!?\n`, así que bastaba una coordinada —«…, cuando vengas…»— para
-     * desactivar el guard sobre lo que iba delante.
+     * Es el arreglo de la segunda versión del mismo agujero. La primera fue
+     * eximir la frase entera: bastaba rematar con «…, cuando vengas…» para
+     * desactivar el guard sobre lo que iba delante. La corrección de aquello
+     * —juzgar sólo lo que va DELANTE de la conjunción— dejó la puerta de atrás:
+     * lo que va DETRÁS no lo miraba nadie, y «Cuando vengas te damos el carnet,
+     * tu pago fue confirmado» es exactamente la misma mentira con las cláusulas
+     * al revés.
+     *
+     * La regla correcta no es de posición, es de GOBIERNO: una afirmación sólo
+     * es hipotética si cuelga de la conjunción, y para colgar de ella tiene que
+     * estar pegada a ella —sin una coma de por medio, que abre cláusula nueva, y
+     * a pocos caracteres—. «Una vez confirmado el pago» cuelga; «…, tu pago fue
+     * confirmado» es una oración independiente que afirma.
      */
-    private function antesDeLaSubordinada(string $frase): string
+    private function afirmaSinGobierno(string $frase): bool
     {
-        if (preg_match(self::SUBORDINA, $frase, $m, PREG_OFFSET_CAPTURE) !== 1) {
-            return $frase;
+        foreach (self::AFIRMA_PAGADO as $patron) {
+            if (preg_match($patron, $frase, $m, PREG_OFFSET_CAPTURE) !== 1) {
+                continue;
+            }
+
+            if (! $this->gobernada($frase, (int) $m[0][1])) {
+                return true;
+            }
         }
 
-        return substr($frase, 0, (int) $m[0][1]);
+        return false;
+    }
+
+    /** ¿La afirmación que empieza en $pos cuelga de una conjunción subordinante? */
+    private function gobernada(string $frase, int $pos): bool
+    {
+        $antes = substr($frase, 0, $pos);
+
+        if (preg_match_all(self::SUBORDINA, $antes, $mm, PREG_OFFSET_CAPTURE) < 1) {
+            return false;
+        }
+
+        $ultima = end($mm[0]);
+        $finConjuncion = (int) $ultima[1] + strlen((string) $ultima[0]);
+        $entre = substr($frase, $finConjuncion, $pos - $finConjuncion);
+
+        // Una coma abre cláusula nueva: lo que viene después ya no cuelga de la
+        // conjunción, por muy cerca que esté.
+        return ! str_contains($entre, ',')
+            && ! str_contains($entre, ';')
+            && mb_strlen($entre) <= self::ALCANCE_SUBORDINADA;
     }
 
     /** ¿La frase dice que el dinero YA entró? Ninguna conjunción lo vuelve hipotético. */
