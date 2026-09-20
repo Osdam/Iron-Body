@@ -80,14 +80,46 @@ final class HumanHandoffAuthority
      * Van sin tildes a propósito: el texto se normaliza antes de comparar,
      * porque nadie acentúa escribiendo desde el móvil.
      */
+    /**
+     * Cómo pide la gente una persona, de verdad.
+     *
+     * Estas expresiones se midieron contra las 400 del banco de expresiones
+     * (`tests/fixtures/expresiones_ultron.php`): de las veinte formas de pedir
+     * un humano, la lista original reconocía CINCO. Las quince restantes
+     * acababan en `unauthorized_handoff`, que es un 422 y —hasta que existió la
+     * rendición— un silencio para quien justamente estaba pidiendo hablar con
+     * alguien.
+     *
+     * La lista sigue siendo conservadora a propósito, porque los dos errores no
+     * cuestan lo mismo: no reconocer una petición deja a alguien sin su persona
+     * (malo, y recuperable en el siguiente mensaje); reconocer una que no
+     * existe hace que la máquina ofrezca un traspaso que nadie pidió, que es el
+     * fallo que ya se corrigió una vez con «sí por favor». Por eso quedan FUERA
+     * a sabiendas las formas ambiguas: «hay alguien ahi?» (puede ser «¿estás
+     * ahí?»), «esto es un bot?» (es transparencia, no traspaso), «quien me
+     * atiende», «atencion personalizada» (en un gimnasio puede ser un
+     * entrenador personal) y «que me expliquen en persona» (puede ser venir).
+     */
     private const PIDE_HUMANO = [
-        '/\bhablar\s+con\s+(un[ao]?\s+)?(persona|asesor|humano|agente|alguien|recepcion|encargad)/u',
-        '/\b(pasame|pasarme|pasame|paseme|pasenme|pasar)\s+(con|a)\s+(un[ao]?\s+)?(persona|asesor|humano|agente|alguien|recepcion)/u',
+        '/\bhablar\s+con\s+(un[ao]?\s+|el\s+|la\s+)?(persona|asesor|humano|agente|alguien|recepcion|encargad|duen)/u',
+        '/\b(pasame|pasarme|paseme|pasenme|pasar)\s+(con|a)\s+(un[ao]?\s+)?(persona|asesor|humano|agente|alguien|recepcion)/u',
+        // «me pasa un asesor», «me pasas con alguien»: la misma petición en tercera persona.
+        '/\bme\s+pasa(s|n)?\s+(con\s+)?(un[ao]?\s+|el\s+|la\s+)?(persona|asesor|humano|agente|alguien|recepcion|encargad)/u',
         '/\b(comunicame|comunicarme|comuniqueme)\s+con\b/u',
+        '/\bme\s+comunica(s|n)?\s+con\b/u',
         '/\bque\s+me\s+(atienda|contacte|llame|escriba)\s+(un[ao]?\s+)?(persona|asesor|humano|agente|alguien)/u',
+        // «me atiende una persona», «me puede contestar alguien».
+        '/\bme\s+(atiend[ae]|contest[ae])\s+(un[ao]?\s+)?(persona|asesor|humano|agente|alguien)/u',
+        '/\bme\s+puede[ns]?\s+(atender|contestar)\s+(un[ao]?\s+)?(persona|asesor|humano|agente|alguien)/u',
         '/\b(quiero|necesito|deseo|prefiero)\s+(hablar\s+con\s+)?(un[ao]?\s+)?(asesor|humano|persona real|alguien\s+del\s+equipo|agente)/u',
-        '/\batencion\s+(humana|personalizada\s+de\s+una\s+persona)/u',
-        '/\bcon\s+(un[ao]?\s+)?(persona|humano)\s+real\b/u',
+        // Pedir que llamen es pedir una persona: nadie espera que llame un bot.
+        '/\b(puede[ns]?|podria[ns]?)\s+llamarme\b/u',
+        '/\bme\s+puede[ns]?\s+llamar\b/u',
+        '/\b(quiero|necesito)\s+que\s+me\s+llamen\b/u',
+        // «hay asesor disponible», «hay algún encargado».
+        '/\bhay\s+(algun[ao]?\s+)?(asesor|agente|encargad|recepcionista)\b/u',
+        '/\batencion\s+humana\b/u',
+        '/\b(persona|humano|alguien)\s+real\b/u',
     ];
 
     /**
