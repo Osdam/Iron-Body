@@ -5,8 +5,8 @@ catorce puntos. **Este documento no certifica que ULTRON esté listo para
 atender tráfico general.** Certifica que el sistema aguanta lo que se le pidió
 aguantar, dice con qué evidencia, y dice también dónde no llega.
 
-- **Fecha:** 2026-09-19
-- **Backend en producción:** `aa82f66`
+- **Fecha:** 2026-09-19 (release candidate cerrada el mismo día)
+- **Backend en producción:** `3462cb6`
 - **Workflow n8n activo:** `Iron Body - ULTRON - Commercial Advisor`
   (`YspRwsXnqt33NouP`), versión `7d8477e9-44f9-4862-a023-2becb4f91ed6`
 - **Banderas en producción:** ULTRON apagado · enlaces de pago apagados ·
@@ -99,31 +99,45 @@ Se dice antes que el veredicto, porque es lo que más importa.
 
 ---
 
-## 4. Lo que necesita una decisión tuya
+## 4. Las cinco decisiones que estaban abiertas, y cómo quedaron
 
-Ninguna de estas cinco la he tomado yo. Las cinco están documentadas donde
-corresponde.
+Las cinco se cerraron en la release candidate, con tu instrucción. Se dejan
+escritas con lo que eran, porque un documento que borra el problema que resolvió
+no deja aprender nada.
 
-1. **El canario está bloqueado por el estado de un lead.** La conversación 19
-   pertenece al lead 3, que sigue en `needs_human`, así que **derivar a una
-   persona estaría autorizado en el primer turno**, que es justo lo que este
-   cierre vino a arreglar. Tres salidas en el runbook, §4; la más limpia es
-   mover el canario a otra conversación. No he tocado ninguna fila.
-2. **El secreto interno acuña enlaces de pago reales.** `payment-links` y
-   `payment-links/send` no consultan la bandera del negocio, y en producción
-   Wompi está productivo con llaves reales. Apagar
-   `MARKETING_ULTRON_PAYMENT_LINKS_ENABLED` detiene la herramienta de ULTRON,
-   **no esa superficie**. Es una capacidad deliberada de la Fase 1.5 con once
-   pruebas propias, así que cerrarla es decisión de negocio. Fijado por
-   `InternalSecretAuthoritySurfaceTest`.
-3. **`payments.reference` no tiene índice único**, así que la idempotencia del
-   activador de membresías es SELECT-luego-INSERT sin red en el esquema. Exige
-   deduplicar primero y migrar sobre la base productiva.
-4. **La base de conocimiento es un canal de inyección persistente.** Quien tenga
-   el secreto interno escribe lo que el modelo lee como «hechos del gimnasio».
-   Hoy no hay una segunda firma ni revisión humana sobre esa escritura.
-5. **Los dos leads atascados** (2 y 3) en `needs_human` son anteriores al
-   arreglo del ciclo de vida, así que nada los devolverá solo.
+1. **El canario estaba bloqueado por el estado de un lead.** La conversación 19
+   pertenece al lead 3, que seguía en `needs_human`, así que derivar a una
+   persona habría estado autorizado en el primer turno.
+   **RESUELTO por el mecanismo del dominio, no a mano sobre la base:**
+   `MarketingManualTakeoverService::releaseToAi()` devolvió las conversaciones 19
+   (lead 3) y 1 (lead 2) al control autónomo, con su fila de auditoría
+   (`release_to_ai`, `from_state=HUMAN_REQUIRED`, `to_state=RELEASED_TO_AI`) y su
+   motivo. El canario sigue fijado en la 19.
+2. **El secreto interno acuñaba enlaces de pago reales.** **CERRADO (RC-2):** el
+   permiso se exige en el embudo `WompiPaymentLinkService::generateForLead()`,
+   por el que pasan los cinco caminos que pueden acuñar. La bandera es absoluta y
+   no tiene excepción humana. Comprobado en el servidor: con la bandera apagada,
+   origen automático y panel humano verificado reciben `payment_links_disabled` y
+   no se crea ninguna fila de cobro. Fijado por `PaymentLinkHardGateTest`.
+3. **`payments.reference` no tenía índice único.** **CERRADO (RC-3):** índice
+   único PARCIAL sobre `origin='gateway'`, decidido tras auditar producción en
+   solo lectura —9 688 filas, un único grupo duplicado que son 154 cobros de
+   mostrador distintos reutilizando un comprobante, y **cero** duplicados de
+   pasarela—. Un único sobre toda la columna habría fallado al aplicarse y habría
+   roto el mostrador.
+4. **La base de conocimiento era un canal de inyección persistente.**
+   **CERRADO (RC-4):** lo que escribe la máquina anónima nace en borrador y no
+   llega al prompt sin aprobación, no puede reescribir un hecho ya aprobado, y
+   cada escritura deja procedencia y hora. Lo que ya existía sigue publicado —18
+   ítems activos tras desplegar— y **dos filas** quedan contadas en
+   `knowledge/doctor` como `approved_from_untrusted_origin`: entraron por el
+   secreto compartido y nadie las ha mirado nunca. **Eso sí sigue siendo tuyo:**
+   mirarlas una por una.
+5. **Los dos leads atascados** (2 y 3). **RESUELTOS**, y no eran el mismo caso:
+   el 3 es el canario y el 2 es un lead de prueba (`manual_phone_test`) cuya
+   persona pidió que no le escribieran, así que su consentimiento sigue
+   `denied` y devolverlo al control autónomo **no reabre el contacto** —lo fija
+   `LeadNeedsHumanLifecycleTest`—.
 
 ---
 
@@ -146,9 +160,13 @@ corresponde.
 
 ## 6. GO / NO-GO
 
-**Para el canario: GO, con la precondición 1 resuelta.** El sistema hace lo que
-promete frente a una propuesta hostil, y el aborto es una línea que no necesita
-despliegue. Los criterios turno a turno están en el runbook §8.
+**Para el canario: GO.** La precondición 1 está resuelta y verificada en el
+servidor. El sistema hace lo que promete frente a una propuesta hostil, y el
+aborto es una línea que no necesita despliegue. Los criterios turno a turno están
+en el runbook §8, y el acta se saca con
+`php artisan ultron:canary-report 19 --since=<inicio del canario>`: sin esa
+ventana el acta arrastra los cuarenta turnos del asesor anterior que viven en la
+misma conversación.
 
 **Para tráfico general: NO-GO.** Faltan las dos cosas que solo da el canario:
 personas reales leyendo lo que escribe el modelo, y alguien del equipo firmando
