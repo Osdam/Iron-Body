@@ -178,14 +178,22 @@ class SalesAgentPersonaTest extends TestCase
         $this->assertStringContainsStringIgnoringCase('tranquilo', $r['reply']);
     }
 
-    public function test_high_intent_pay_escalates_to_human_no_sandbox_link(): void
+    /**
+     * Sin link automático NO hay trámite manual que ofrecer: hay dos caminos
+     * por los que la persona paga sola. Decir «el equipo confirma el medio»
+     * convertía una bandera apagada en una política de negocio falsa y dejaba
+     * a alguien esperando un mensaje que no iba a llegar.
+     */
+    public function test_high_intent_pay_names_the_real_payment_paths_and_no_link(): void
     {
         $r = $this->reply('quiero pagar');
         $this->assertTrue($r['decision']['needs_staff_review']);
         $this->assertFalse($r['decision']['should_generate_payment_link']);
         $this->assertSame(SalesIntents::ACTION_REPLY, $r['decision']['recommended_action']);
-        // La IA no se apaga: deja la solicitud marcada para el equipo y sigue.
-        $this->assertStringContainsStringIgnoringCase('equipo', $r['reply']);
+
+        $this->assertStringContainsStringIgnoringCase('app Iron Body Workout', $r['reply']);
+        $this->assertStringContainsStringIgnoringCase('gimnasio', $r['reply']);
+        $this->assertStringNotContainsStringIgnoringCase('equipo confirma', $r['reply']);
         $this->assertNoLinkNoLie($r['reply']);
     }
 

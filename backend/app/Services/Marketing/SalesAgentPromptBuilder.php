@@ -92,10 +92,14 @@ class SalesAgentPromptBuilder
 
         PAGO: flags.can_offer_link te dice si AHORA MISMO puedes ofrecer un link de pago. Es lo
         único que decide; no supongas nada sobre el estado del cobro por tu cuenta.
-        - Si es false: NUNCA menciones ni ofrezcas un "link" de pago. Pero querer pagar o
-          inscribirse es trabajo TUYO, no motivo para derivar: explica los pasos para
-          empezar y di que el equipo confirma el medio de pago al final. No prometas que
-          alguien le va a escribir ni le pases con nadie. No expliques por qué no hay link.
+        - Si es false: NUNCA menciones ni ofrezcas un "link" de pago, y NO digas que el pago
+          se revisa a mano ni que alguien del equipo confirma el medio: eso no existe y deja
+          a la persona esperando un mensaje que no llega. Lo que SÍ existe, y es lo que hay
+          que decir, son los dos caminos por los que la persona paga sola: desde la app Iron
+          Body Workout (crea la cuenta con su documento y paga con Nequi, PSE, tarjeta o
+          Daviplata) o en el gimnasio cuando venga. Querer pagar es trabajo TUYO, no motivo
+          para derivar. No prometas que alguien le va a escribir ni le pases con nadie. No
+          expliques por qué no hay link.
         - Si es true: ofrécelo SOLO cuando haya intención de pago clara. Nunca antes.
         En los dos casos el precio sale de active_plans. flags.payment_readiness es diagnóstico
         interno: no lo menciones al cliente.

@@ -56,6 +56,24 @@ class MarketingKnowledgeSeeder extends Seeder
             ['key' => 'payment.wompi', 'category' => 'payment_policy', 'priority' => 10,
              'title' => 'Pagos',
              'content' => 'Los pagos por link se procesan por Wompi. La membresía solo queda registrada cuando Wompi confirma el pago en el sistema.'],
+            /*
+             * LOS DOS CAMINOS DE PAGO QUE EXISTEN DE VERDAD, declarados como
+             * dato para que el asistente pueda decirlos sin inventar.
+             *
+             * Los dos están en el código: el de la app son las rutas
+             * `payments/wompi/{card,pse,nequi,daviplata}` bajo `auth.member`,
+             * que NO dependen de la bandera del canario; el del mostrador es
+             * `PaymentOrigin::COUNTER`, que exige turno de caja abierto.
+             *
+             * Lo que está apagado —el link de pago por WhatsApp— es una
+             * capacidad del canario, no una política del negocio. Confundir las
+             * dos cosas es lo que hacía que el asistente dijera que «el equipo
+             * confirma el medio de pago»: un proceso que no existe y que deja a
+             * la persona esperando.
+             */
+            ['key' => 'payment.how', 'category' => 'payment_policy', 'priority' => 15,
+             'title' => 'Cómo se paga',
+             'content' => 'La persona paga por sí misma de dos formas: (1) desde la app Iron Body Workout, creando su cuenta con el número de documento y pagando con Nequi, PSE, tarjeta o Daviplata; (2) en el gimnasio, al venir. Nadie del equipo «confirma el medio de pago» por WhatsApp: no es un trámite manual. Cuando el envío automático de links de pago por WhatsApp está desactivado, eso no cambia nada de lo anterior.'],
             ['key' => 'payment.no_proof', 'category' => 'payment_policy', 'priority' => 20,
              'title' => 'Comprobantes',
              'content' => 'No se aceptan capturas, mensajes ni promesas como confirmación de pago. Si el usuario dice que ya pagó pero no aparece confirmado, se escala a una persona del equipo.'],
@@ -130,9 +148,16 @@ class MarketingKnowledgeSeeder extends Seeder
             ['key' => 'gym.includes', 'category' => 'gym_info', 'priority' => 50,
              'title' => 'Qué incluye',
              'content' => 'Lo que incluye cada plan (clases, acceso, beneficios) sale de los planes activos del sistema (active_plans). El asesor no inventa beneficios que no estén ahí.'],
+            /*
+             * Decía «pago seguro (link Wompi cuando esté disponible)», y ése era
+             * el único «cómo empezar» que veía el modelo: encadenaba pagar con
+             * un link que hoy no existe, y de ahí salía la frase de que alguien
+             * del equipo confirmaría el medio. Los dos caminos de pago que sí
+             * puede recorrer una persona hoy están abajo, en `payment.how`.
+             */
             ['key' => 'gym.how_to_start', 'category' => 'gym_info', 'priority' => 60,
              'title' => 'Cómo empezar',
-             'content' => 'Para empezar: se define el objetivo, se elige un plan activo y se realiza el pago seguro (link Wompi cuando esté disponible); la membresía queda activa al confirmarse el pago en el sistema.'],
+             'content' => 'Para empezar: se define el objetivo, se elige un plan activo y se paga. La membresía queda activa cuando el pago queda confirmado en el sistema.'],
         ];
     }
 }

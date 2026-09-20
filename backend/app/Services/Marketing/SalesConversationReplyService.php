@@ -118,15 +118,34 @@ class SalesConversationReplyService
     }
 
     /**
-     * Mensaje para cuando hay intención de pago: como Wompi aún no es productivo,
-     * NO se envía link; un asesor comparte el medio de pago. Cierra con una sola
-     * pregunta suave.
+     * Mensaje para cuando hay intención de pago.
+     *
+     * Decía que el equipo confirmaría el medio correcto, y eso convertía una
+     * BANDERA APAGADA en una política de negocio falsa. Son dos cosas distintas
+     * y hay que separarlas:
+     *
+     *  - Lo que está apagado es el LINK DE PAGO AUTOMÁTICO por WhatsApp
+     *    (`marketing.ultron.payment_links_enabled`). Es una capacidad del
+     *    canario, reversible con una variable de entorno.
+     *  - Lo que NO existe es un proceso manual en el que alguien del equipo
+     *    «confirma el medio». Nunca existió. Pagar es algo que la persona hace
+     *    sola: desde la app, con Wompi, o en el mostrador cuando viene.
+     *
+     * Decir lo primero como si fuera lo segundo deja a alguien esperando un
+     * mensaje que no va a llegar, y ése es el peor daño que puede hacer un
+     * asistente comercial. Aquí se dicen los DOS caminos que sí existen y
+     * ninguno de los dos promete a nadie.
+     *
+     * Qué NO dice, a propósito: no afirma que el pago quede confirmado ni que
+     * la membresía quede activa —ese hecho es del CRM, no de esta frase—, no
+     * pide datos de tarjeta y no escribe URLs (los enlaces los pone Laravel por
+     * el marcador `{{APP_LINKS}}` o por su herramienta).
      */
     public function paymentPendingReply(): string
     {
-        return 'Perfecto. Todavía no tengo habilitado el pago automático por aquí, así que te dejo '
-            .'la solicitud lista para que el equipo confirme el medio correcto. Mientras tanto, '
-            .'¿quieres que lo dejemos para el plan mensual?';
+        return 'El pago lo haces tú mismo desde la app Iron Body Workout: creas tu cuenta con tu '
+            .'documento y ahí pagas con Nequi, PSE, tarjeta o Daviplata. También puedes pagar en '
+            .'el gimnasio cuando vengas. ¿Quieres que te pase la app para descargarla?';
     }
 
     /**

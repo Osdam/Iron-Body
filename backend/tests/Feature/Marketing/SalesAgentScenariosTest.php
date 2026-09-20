@@ -206,7 +206,9 @@ class SalesAgentScenariosTest extends TestCase
     public function test_quiero_pagar_el_mensual_in_sandbox_escalates_to_human(): void
     {
         // Wompi NO productivo (sandbox): aunque el intent sea de pago, NO se genera
-        // link; se ESCALA a un humano que comparte el medio de pago.
+        // link. Se marca revisión del equipo Y se le dice a la persona cómo
+        // paga ella misma: la app o el mostrador. El link apagado es una
+        // capacidad del canario, no un trámite manual del negocio.
         $res = $this->analyze(['body' => 'quiero pagar el mensual', 'auto_execute' => false])
             ->assertOk()
             ->assertJsonPath('decision.intent', SalesIntents::PAYMENT_LINK_REQUEST)
@@ -221,9 +223,12 @@ class SalesAgentScenariosTest extends TestCase
             SalesIntents::TOOL_PAYMENT_LINK_SEND,
             $res->json('decision.tools_requested'),
         );
-        // Reply = la IA deja la solicitud marcada para el equipo, sin link.
+        // Reply = los dos caminos por los que la persona paga sola, sin link y
+        // sin inventar un trámite manual que no existe.
         $reply = $res->json('decision.reply');
-        $this->assertStringContainsStringIgnoringCase('equipo', (string) $reply);
+        $this->assertStringContainsStringIgnoringCase('app Iron Body Workout', (string) $reply);
+        $this->assertStringContainsStringIgnoringCase('gimnasio', (string) $reply);
+        $this->assertStringNotContainsStringIgnoringCase('equipo confirma', (string) $reply);
         $this->assertStringNotContainsStringIgnoringCase('link', (string) $reply);
     }
 
@@ -401,12 +406,13 @@ class SalesAgentScenariosTest extends TestCase
         $this->assertNotContains(SalesIntents::TOOL_PAYMENT_LINK_SEND, $res->json('decision.tools_requested'));
         $this->assertNull(collect($res->json('executed'))->firstWhere('tool', SalesIntents::TOOL_PAYMENT_LINK_SEND));
 
-        // El reply deja la solicitud marcada para el equipo, sin mencionar link,
-        // y la IA NO se apaga (no queda needs_human).
+        // El reply nombra los caminos de pago reales, sin link, sin URL y sin
+        // prometer a nadie; y la IA NO se apaga (no queda needs_human).
         $reply = $res->json('decision.reply');
         $this->assertStringNotContainsString('http', (string) $reply);
         $this->assertStringNotContainsStringIgnoringCase('link', (string) $reply);
-        $this->assertStringContainsStringIgnoringCase('equipo', (string) $reply);
+        $this->assertStringContainsStringIgnoringCase('app Iron Body Workout', (string) $reply);
+        $this->assertStringNotContainsStringIgnoringCase('equipo confirma', (string) $reply);
         $this->assertNotSame(MarketingLead::STATUS_NEEDS_HUMAN, $this->lead->fresh()->status);
 
         // No se generó ninguna transacción de pago (no se entregó link sandbox).
