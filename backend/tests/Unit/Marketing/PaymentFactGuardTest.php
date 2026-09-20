@@ -147,4 +147,61 @@ class PaymentFactGuardTest extends TestCase
         yield 'si sin coma' => ['Si ya recibimos tu pago, quedas activo.'];
         yield 'si claro' => ['Si claro, tu pago fue confirmado.'];
     }
+
+    // ── La coordinada que desarmaba el guard ─────────────────────────────────
+
+    /**
+     * EL AGUJERO QUE ENCONTRÓ LA REVISIÓN.
+     *
+     * La exención condicional valía para la frase ENTERA, y la frase sólo se
+     * partía por `.!?\n`. Así que bastaba rematar con una coordinada temporal
+     * para que el guard dejara pasar lo que iba delante: una afirmación de que
+     * el dinero entró, o la enseñanza de que una captura vale como prueba.
+     */
+    public static function coordinadasQueDesarmaban(): array
+    {
+        return [
+            'afirma y luego condiciona' => ['Ya recibimos tu pago, cuando vengas te damos el carnet.', PaymentFactGuard::REASON_CLAIMS_PAID],
+            'afirma en pasiva' => ['Tu pago fue confirmado, cuando quieras pasas por recepcion.', PaymentFactGuard::REASON_CLAIMS_PAID],
+            'sin coma, con y' => ['Ya recibimos tu pago y cuando vengas te damos el carnet.', PaymentFactGuard::REASON_CLAIMS_PAID],
+            'condiciona y luego afirma' => ['Cuando vengas te explico, ya recibimos tu pago.', PaymentFactGuard::REASON_CLAIMS_PAID],
+            'captura con cuando detrás' => ['Mandame la captura del pago cuando puedas.', PaymentFactGuard::REASON_ACCEPTS_RECEIPT],
+            'comprobante con apenas delante' => ['Apenas me envies el comprobante del pago te activo el plan.', PaymentFactGuard::REASON_ACCEPTS_RECEIPT],
+        ];
+    }
+
+    #[DataProvider('coordinadasQueDesarmaban')]
+    public function test_a_subordinate_clause_does_not_disarm_what_comes_before_it(string $texto, string $motivo): void
+    {
+        $r = $this->guard->contradiction($texto, 'none');
+
+        $this->assertNotNull($r, 'una subordinada no puede eximir la afirmación entera');
+        $this->assertSame($motivo, $r['reason']);
+    }
+
+    /** Y lo legítimo sigue pasando: la subordinada sola habla del futuro. */
+    public static function condicionalesLegitimas(): array
+    {
+        return [
+            'el turno perdido del canario' => ['Debes hacer el pago de forma manual; una vez confirmado el pago, se activa tu membresia.'],
+            'protasis y apodosis' => ['Cuando se confirme el pago, tu membresia queda activa.'],
+            'si con sujeto' => ['Si el pago se confirma hoy, entrenas manana mismo.'],
+            'apenas en futuro' => ['Apenas el pago quede confirmado en el sistema te aviso.'],
+            'la copia de pago real' => ['El pago lo haces tu mismo desde la app Iron Body Workout.'],
+        ];
+    }
+
+    #[DataProvider('condicionalesLegitimas')]
+    public function test_a_real_conditional_still_goes_through(string $texto): void
+    {
+        $this->assertNull($this->guard->contradiction($texto, 'none'), 'esto describe el proceso, no inventa un pago');
+    }
+
+    /** Con el pago aprobado de verdad, afirmarlo es decir la verdad. */
+    public function test_with_the_payment_approved_the_claim_is_true(): void
+    {
+        $this->assertNull(
+            $this->guard->contradiction('Ya recibimos tu pago, cuando vengas te damos el carnet.', PaymentFactGuard::APPROVED),
+        );
+    }
 }

@@ -55,6 +55,16 @@ final class PaymentFactGuard
         '~\bpago\s+(confirmado|aprobado|recibido|acreditado|exitoso)\b~u',
     ];
 
+    /**
+     * Las conjunciones que abren una subordinada de tiempo o de condición.
+     *
+     * Clase CERRADA del español: no es una lista de contextos inocentes que
+     * nunca termina, es la gramática. El «si» va con su sujeto pegado a
+     * propósito: normalizado, el «sí» de afirmar y el «si» de condicionar son
+     * la misma palabra, y «sí, ya recibimos tu pago» no puede colarse por ahí.
+     */
+    private const SUBORDINA = '~\b(cuando|una vez|en cuanto|apenas|tan pronto|luego que|despues de que|luego de que|mientras|hasta que|si\s+(el|la|los|las|se|lo|le|tu|su))\b~u';
+
     /** Pedir una captura o un comprobante como prueba. Nunca vale, con pago o sin él. */
     private const PIDE_COMPROBANTE = [
         '~\b(captura|pantallazo|screenshot|foto|imagen|soporte|comprobante|recibo|voucher)\b[^.!?]{0,40}\b(del?\s+)?(pago|transferencia|consignacion|comprobante|deposito)\b~u',
@@ -77,19 +87,39 @@ final class PaymentFactGuard
                 continue;
             }
 
-            // Y una frase CONDICIONAL tampoco afirma nada: habla de lo que
-            // pasará. «Una vez confirmado el pago, se activa tu membresía»
-            // describe el proceso; «ya recibimos tu pago» lo inventa.
-            if ($this->condicional($frase)) {
-                continue;
-            }
-
+            /*
+             * El comprobante NO se exime nunca por condicional. Pedir una
+             * captura está mal con pago y sin él, y «mándame la captura del
+             * pago cuando puedas» es exactamente igual de malo que sin el
+             * «cuando»: enseña que una imagen vale como prueba.
+             */
             if ($this->casa($frase, self::PIDE_COMPROBANTE)) {
                 return $this->hallazgo(self::REASON_ACCEPTS_RECEIPT, 'reply accepts a receipt as proof of payment');
             }
 
-            if (! $aprobado && $this->casa($frase, self::AFIRMA_PAGADO)) {
+            /*
+             * Y la afirmación de pago se juzga sobre lo que hay ANTES de la
+             * subordinada, no sobre la frase entera.
+             *
+             * Eximir la frase completa abría el agujero por el que cabía todo:
+             * «Ya recibimos tu pago, cuando vengas te damos el carnet» tiene una
+             * subordinada temporal, sí, pero lo que afirma va delante y es una
+             * mentira sobre el dinero de alguien.
+             */
+            if (! $aprobado && $this->casa($this->antesDeLaSubordinada($frase), self::AFIRMA_PAGADO)) {
                 return $this->hallazgo(self::REASON_CLAIMS_PAID, 'reply says the payment arrived, CRM state is '.$paymentState);
+            }
+
+            /*
+             * Dentro de la subordinada sólo se perdona el futuro. «Ya», «acabamos
+             * de» o «hace un momento» dicen que el dinero YA entró, y eso no lo
+             * vuelve hipotético ninguna conjunción: «cuando vengas te explico, ya
+             * recibimos tu pago» sigue siendo una afirmación.
+             */
+            if (! $aprobado
+                && $this->yaOcurrido($frase)
+                && $this->casa($frase, self::AFIRMA_PAGADO)) {
+                return $this->hallazgo(self::REASON_CLAIMS_PAID, 'reply says the payment already arrived, CRM state is '.$paymentState);
             }
         }
 
@@ -141,8 +171,30 @@ final class PaymentFactGuard
          * recibimos tu pago» no puede colarse por esta puerta. Ante la duda,
          * esto falla hacia BLOQUEAR, que es el lado correcto cuando hay dinero.
          */
-        return preg_match('~\b(cuando|una vez|en cuanto|apenas|tan pronto|luego que|despues de que|luego de que|mientras|hasta que)\b~u', $frase) === 1
-            || preg_match('~\bsi\s+(el|la|los|las|se|lo|le|tu|su)\b~u', $frase) === 1;
+        return preg_match(self::SUBORDINA, $frase) === 1;
+    }
+
+    /**
+     * La frase hasta donde empieza la subordinada, o entera si no hay ninguna.
+     *
+     * Es el arreglo del agujero que encontró la revisión: la exención
+     * condicional valía para toda la frase y la frase sólo se partía por
+     * `.!?\n`, así que bastaba una coordinada —«…, cuando vengas…»— para
+     * desactivar el guard sobre lo que iba delante.
+     */
+    private function antesDeLaSubordinada(string $frase): string
+    {
+        if (preg_match(self::SUBORDINA, $frase, $m, PREG_OFFSET_CAPTURE) !== 1) {
+            return $frase;
+        }
+
+        return substr($frase, 0, (int) $m[0][1]);
+    }
+
+    /** ¿La frase dice que el dinero YA entró? Ninguna conjunción lo vuelve hipotético. */
+    private function yaOcurrido(string $frase): bool
+    {
+        return preg_match('~\b(ya|acabamos\s+de|acaba\s+de|hace\s+un\s+(momento|rato)|recien)\b~u', $frase) === 1;
     }
 
     /** @param  list<string>  $patrones */
