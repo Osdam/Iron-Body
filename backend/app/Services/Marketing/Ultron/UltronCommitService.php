@@ -99,6 +99,7 @@ class UltronCommitService
         private readonly MembershipFactsProvider $membershipFacts,
         private readonly MembershipFactGuard $membershipGuard,
         private readonly PaymentFactGuard $paymentGuard,
+        private readonly UltronAbortLatch $abortLatch = new UltronAbortLatch,
     ) {}
 
     /**
@@ -182,6 +183,30 @@ class UltronCommitService
             throw UltronCommitException::make(
                 'ultron_disabled',
                 'ULTRON está apagado: aquí no se ejecuta nada.',
+                403,
+            );
+        }
+
+        /*
+         * EL FRENO DE EMERGENCIA, TAMBIÉN AQUÍ.
+         *
+         * El emisor ya no crea eventos con el freno puesto, pero los que ya
+         * estaban en vuelo sí llegan aquí: n8n tarda veinte segundos en pensar,
+         * y en esos veinte segundos el vigía puede haber parado el canario. Sin
+         * esta puerta, parar significaría «parar dentro de un rato».
+         *
+         * Se lanza en vez de registrar un turno bloqueado por la misma razón
+         * que el canario: una ejecución que llega con el sistema parado no
+         * merece una fila en el historial de nadie, merece un no.
+         */
+        if ($this->abortLatch->engaged()) {
+            ChannelLog::warning('ultron.commit.ultron_aborted', [
+                'conversation_id' => (int) $conversation->id,
+            ]);
+
+            throw UltronCommitException::make(
+                'ultron_aborted',
+                'ULTRON está parado por el freno de emergencia: aquí no se ejecuta nada.',
                 403,
             );
         }

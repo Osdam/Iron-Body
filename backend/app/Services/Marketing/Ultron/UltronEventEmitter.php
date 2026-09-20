@@ -25,6 +25,10 @@ use Illuminate\Support\Facades\Context;
  */
 class UltronEventEmitter
 {
+    public function __construct(
+        private readonly UltronAbortLatch $latch = new UltronAbortLatch,
+    ) {}
+
     /**
      * Motivo por el que este mensaje no se le cuenta a ULTRON, o null.
      *
@@ -39,6 +43,18 @@ class UltronEventEmitter
     ): ?string {
         if (! (bool) config('marketing.ultron.enabled', false)) {
             return 'ultron_disabled';
+        }
+
+        /*
+         * El freno de emergencia, pegado al interruptor porque es de su misma
+         * clase: una decisión de operación, tomada antes de mirar el mensaje.
+         *
+         * Se comprueba aquí y otra vez en el commit. Aquí evita que nazcan
+         * eventos mientras el canario está parado; allí evita que un commit
+         * rezagado —o una llamada con el secreto— mande un WhatsApp después.
+         */
+        if ($this->latch->engaged()) {
+            return 'ultron_aborted';
         }
 
         /*

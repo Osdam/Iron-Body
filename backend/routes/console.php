@@ -307,3 +307,18 @@ Schedule::command('commercial:evaluate-pending')
 Schedule::call(function (): void {
     app(\App\Services\Commercial\CommercialAlertService::class)->evaluate();
 })->everyFifteenMinutes()->name('commercial-alerts')->withoutOverlapping();
+
+// ── ULTRON: el vigía de los turnos mudos ─────────────────────────────────────
+// Un silencio no deja fila que revisar: de eso se trata. La única forma de
+// encontrarlo es cruzar los eventos atendibles con los desenlaces, y eso no lo
+// hacía nadie. En el canario físico dos personas preguntaron y no recibieron
+// nada, y se descubrió leyendo el chat a mano.
+//
+// Cada cinco minutos con diez de gracia: un turno tarda ~25 s de punta a punta,
+// así que diez minutos es margen de sobra para no acusar a un turno en vuelo.
+// Si el huérfano está en la conversación del canario, ACCIONA EL FRENO y ULTRON
+// se para solo; soltarlo es siempre un acto humano (`ultron:abort --release`).
+Schedule::command('ultron:turn-watchdog')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->onOneServer();
