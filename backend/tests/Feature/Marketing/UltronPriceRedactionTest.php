@@ -5,6 +5,7 @@ namespace Tests\Feature\Marketing;
 use App\Models\MarketingConversation;
 use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
+use App\Services\Marketing\OutboundContentGuard;
 use App\Models\Plan;
 use App\Services\Marketing\CommercialPhaseMachine as P;
 use App\Services\Marketing\SalesAgentDecisionSchema;
@@ -214,7 +215,16 @@ class UltronPriceRedactionTest extends TestCase
         ];
     }
 
-    /** URL y cifra en el mismo mensaje: las dos quedan tapadas, y el link sigue anunciándose como tal. */
+    /**
+     * URL y cifra en el mismo mensaje: las dos quedan tapadas.
+     *
+     * Las dos URLs se tapan distinto y a propósito. El LINK DE PAGO es pagable
+     * por quien lo tenga: desaparece el mensaje entero, incluida la frase que
+     * lo anunciaba. Los ENLACES DE LA APP viajan dentro de la respuesta desde
+     * que dejaron de salir aparte, así que taparla entera le borraría al modelo
+     * lo que acaba de decir —y un modelo que no recuerda su último mensaje se
+     * repite—: se tapan sólo las URLs y la prosa sigue ahí.
+     */
     public function test_a_machine_message_with_a_url_and_a_price_hides_both(): void
     {
         $this->machine('Te dejo el link: https://checkout.wompi.co/l/abc123 para pagar los $80.000 COP.', ['kind' => 'payment_link']);
@@ -226,7 +236,17 @@ class UltronPriceRedactionTest extends TestCase
         $this->assertStringNotContainsString('play.google.com', $historial);
         $this->assertStringNotContainsString(self::FIGURE, $historial, 'y la cifra tampoco, aunque viaje junto a la URL');
         $this->assertStringContainsString('[link de pago enviado]', $historial);
-        $this->assertStringContainsString('[enlace enviado por el CRM]', $historial);
+        $this->assertStringContainsString('[enlace]', $historial, 'el enlace de la app se tapa');
+        $this->assertStringContainsString('Descarga la app en', $historial, 'pero la prosa del modelo se conserva');
+    }
+
+    /** Y si la limpieza no deja el texto limpio, se cae al texto opaco de siempre. */
+    public function test_a_body_whose_urls_cannot_be_cleaned_falls_back_to_the_opaque_text(): void
+    {
+        $this->assertNull(
+            OutboundContentGuard::withoutUrls('mira esto: web (.) ironbodyneiva (.) cloud', '[enlace]'),
+            'un disfraz que sobrevive a la limpieza tiene que fallar cerrado',
+        );
     }
 
     /** Lo que dice la PERSONA sobre su dinero es dato, no fuga: se le entrega intacto al modelo. */

@@ -488,7 +488,22 @@ class UltronDecideService
         }
 
         if (OutboundContentGuard::containsUrl((string) $m->body)) {
-            return data_get($m->metadata, 'kind') === 'payment_link' ? '[link de pago enviado]' : '[enlace enviado por el CRM]';
+            // El link de pago es pagable por quien lo tenga: el mensaje entero
+            // desaparece, incluida la frase que lo anunciaba.
+            if (data_get($m->metadata, 'kind') === 'payment_link') {
+                return '[link de pago enviado]';
+            }
+
+            /*
+             * Los enlaces de la app viajan DENTRO de la respuesta desde que
+             * dejaron de salir en un mensaje aparte. Taparla entera le borraría
+             * al modelo lo que acaba de decir —y un modelo que no recuerda su
+             * último mensaje se repite—, así que se tapan sólo las URLs. Si la
+             * limpieza no queda convincente, se cae al texto opaco de siempre.
+             */
+            $limpio = OutboundContentGuard::withoutUrls((string) $m->body);
+
+            return $limpio === null ? '[enlace enviado por el CRM]' : $this->withoutPrices($limpio);
         }
 
         return $this->withoutPrices($m->body);

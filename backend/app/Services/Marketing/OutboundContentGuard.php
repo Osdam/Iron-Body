@@ -385,9 +385,10 @@ class OutboundContentGuard
     }
 
     /**
-     * ¿Hay una URL, un dominio o «www» en el texto? Los links (pago, app) los pone
-     * Laravel en un mensaje propio; una URL escrita por el modelo es, en el mejor
-     * de los casos, una inventada.
+     * ¿Hay una URL, un dominio o «www» en el texto? Las URLs las escribe Laravel
+     * —en su propio mensaje o sustituyendo el marcador {{APP_LINKS}} dentro del
+     * borrador—; una URL escrita por el modelo es, en el mejor de los casos, una
+     * inventada.
      */
     public static function containsUrl(string $body): bool
     {
@@ -395,6 +396,38 @@ class OutboundContentGuard
         $body = preg_replace(['~\s*[\(\[]\s*\.\s*[\)\]]\s*~u', '~\s+punto\s+~iu', '~\s+barra\s+~iu'], ['.', '.', '/'], $body) ?? $body;
 
         return preg_match('~(https?://|www\.|\b[a-z0-9-]+\.(com|co|net|org|io|app|cloud|me|ly|link|page|site)(/|\b))~iu', $body) === 1;
+    }
+
+    /**
+     * El mismo texto con las URLs tapadas, pero LEGIBLE.
+     *
+     * Hace falta desde que los enlaces de la app viajan dentro de la respuesta:
+     * antes, un saliente con URL era un mensaje de Laravel entero y se le
+     * enseñaba al modelo como «[enlace enviado por el CRM]». Ahora ese mismo
+     * mensaje lleva TAMBIÉN la prosa que escribió el modelo, y taparlo entero
+     * le borraría de la memoria lo que acaba de decir: se repetiría.
+     *
+     * Se tapa token a token con la MISMA definición de URL que usa el guard, y
+     * se devuelve null si después de tapar todavía queda algo que parezca una
+     * URL. Fail-closed: quien llama se queda entonces con el texto opaco, que
+     * es peor de leer pero no filtra un enlace.
+     */
+    public static function withoutUrls(string $body, string $marca = '[enlace]'): ?string
+    {
+        $limpio = preg_replace_callback(
+            '~\S+~u',
+            fn (array $m) => self::containsUrl($m[0]) ? $marca : $m[0],
+            $body,
+        );
+
+        if ($limpio === null || self::containsUrl($limpio)) {
+            return null;
+        }
+
+        // «[enlace] · [enlace] · [enlace]» no aporta nada: se dice una vez.
+        $q = preg_quote($marca, '~');
+
+        return preg_replace('~'.$q.'(?:\s*[·,;|-]?\s*'.$q.')+~u', $marca, $limpio) ?? $limpio;
     }
 
     /**
