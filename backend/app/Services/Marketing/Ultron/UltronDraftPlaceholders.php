@@ -39,7 +39,22 @@ final class UltronDraftPlaceholders
 
     public const DURATION = 'PLAN_DURATION';
 
-    public const ALLOWED = [self::PRICE, self::NAME, self::DURATION];
+    /**
+     * Los enlaces oficiales de la app, por el mismo mecanismo y por la misma
+     * razón: el modelo NUNCA escribe una URL, pero la respuesta sí tiene que
+     * poder llevarlas.
+     *
+     * Antes salían en un mensaje aparte que despachaba Laravel después de la
+     * respuesta, y la persona recibía dos globos seguidos: uno diciendo «te
+     * paso los enlaces» y otro con los enlaces. Con el marcador es UN mensaje,
+     * y las URLs las sigue escribiendo Laravel.
+     */
+    public const APP_LINKS = 'APP_LINKS';
+
+    /** Los que exigen un plan resuelto para poder sustituirse. */
+    private const PLAN_MARKERS = [self::PRICE, self::NAME, self::DURATION];
+
+    public const ALLOWED = [self::PRICE, self::NAME, self::DURATION, self::APP_LINKS];
 
     /** Cualquier `{{ algo }}` del texto, con o sin espacios. */
     private const PATTERN = '/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/';
@@ -70,10 +85,40 @@ final class UltronDraftPlaceholders
         return array_values(array_diff($this->found($draft), self::ALLOWED));
     }
 
-    /** ¿El texto pide que se cotice un plan? */
+    /**
+     * ¿El texto pide que se cotice un plan?
+     *
+     * Mira SOLO los marcadores de plan, no toda la lista blanca. Si mirara
+     * `ALLOWED`, una pregunta sobre la app sin plan ninguno —«¿cómo descargo la
+     * app?»— moriría con `plan_required_for_placeholder`, que es un 422 y, por
+     * tanto, un turno mudo.
+     */
     public function needsPlan(string $draft): bool
     {
-        return array_intersect($this->found($draft), self::ALLOWED) !== [];
+        return array_intersect($this->found($draft), self::PLAN_MARKERS) !== [];
+    }
+
+    /** ¿El borrador pide los enlaces de la app en su propio texto? */
+    public function wantsAppLinks(string $draft): bool
+    {
+        return in_array(self::APP_LINKS, $this->found($draft), true);
+    }
+
+    /**
+     * Pone los enlaces oficiales donde el modelo dejó el marcador.
+     *
+     * Se llama DESPUÉS de todos los guards, igual que el precio: el borrador se
+     * valida sin URL —y por eso `containsUrl()` sigue siendo absoluto— y Laravel
+     * escribe la URL al final. Si no hay marcador, el texto se devuelve tal cual
+     * y el que decide qué hacer es quien llama.
+     */
+    public function resolveAppLinks(string $draft, string $reemplazo): string
+    {
+        return (string) preg_replace_callback(
+            self::PATTERN,
+            fn (array $m) => $m[1] === self::APP_LINKS ? $reemplazo : $m[0],
+            $draft,
+        );
     }
 
     /**

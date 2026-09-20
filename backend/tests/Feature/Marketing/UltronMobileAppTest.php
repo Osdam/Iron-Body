@@ -130,13 +130,21 @@ class UltronMobileAppTest extends TestCase
 
         $r = $this->commit($m)->assertOk();
 
-        $links = MarketingMessage::where('conversation_id', $this->conversation->id)->where('direction', MarketingMessage::DIRECTION_OUTBOUND)->where('body', 'like', '%apps.apple.com%')->get();
-        $this->assertCount(1, $links, 'los enlaces salen en un mensaje propio de Laravel');
-        $this->assertStringContainsString(MobileAppLinks::ANDROID, $links->first()->body);
-        $this->assertStringContainsString(MobileAppLinks::WEB, $links->first()->body);
-        $reply = MarketingMessage::where('conversation_id', $this->conversation->id)->where('direction', MarketingMessage::DIRECTION_OUTBOUND)->where('body', 'like', 'Claro, te paso los enlaces%')->first();
-        $this->assertNotNull($reply);
-        $this->assertLessThan($links->first()->id, $reply->id, 'primero la respuesta, después los enlaces');
+        /*
+         * UN SOLO MENSAJE, y las URLs las sigue escribiendo Laravel.
+         *
+         * Antes eran dos globos seguidos —la prosa y, detrás, los enlaces— y en
+         * el canario físico eso se leyó como que el asistente se repetía.
+         */
+        $salientes = MarketingMessage::where('conversation_id', $this->conversation->id)
+            ->where('direction', MarketingMessage::DIRECTION_OUTBOUND)->get();
+        $this->assertCount(1, $salientes, 'la respuesta y los enlaces son el mismo mensaje');
+
+        $cuerpo = (string) $salientes->first()->body;
+        $this->assertStringStartsWith('Claro, te paso los enlaces', $cuerpo, 'primero la prosa del modelo');
+        foreach ([MobileAppLinks::ANDROID, MobileAppLinks::IOS, MobileAppLinks::WEB] as $url) {
+            $this->assertStringContainsString($url, $cuerpo);
+        }
         $this->assertContains('app_links_send', $r->json('applied.tools_executed'));
         $this->assertContains('app_links_send', MarketingAiAction::latest('id')->first()->metadata['tools_executed']);
         $this->assertNotNull($this->conversation->fresh()->memory['app_context']['links_sent_at'] ?? null, 'la memoria sabe que ya se enviaron');
@@ -245,14 +253,14 @@ class UltronMobileAppTest extends TestCase
         $r = $this->commit($this->inbound('y para iPhone?', 'a.6'), ['reply_draft' => 'Claro, también está para iPhone.'])->assertOk();
 
         $this->assertNotContains('app_links_send', $r->json('applied.tools_executed'), 'los enlaces salieron hace un minuto');
-        $this->assertSame(1, $this->linkMessages(), 'un solo mensaje de enlaces en la conversación');
+        $this->assertSame(1, $this->linkMessages(), 'los enlaces siguen habiendo salido una sola vez');
         $this->assertSame($primera, $this->conversation->fresh()->memory['app_context']['links_sent_at'], 'la marca de la memoria no se reescribe');
 
-        $freno = (new ReflectionMethod(UltronCommitService::class, 'execAppLinks'))->invoke(
+        $freno = (new ReflectionMethod(UltronCommitService::class, 'appLinksDecision'))->invoke(
             app(UltronCommitService::class),
             $this->conversation->fresh(),
             ['tools_requested' => [SalesIntents::TOOL_APP_LINKS_SEND]],
-            'sent',
+            'da igual el borrador: la herramienta ya va pedida',
         );
         $this->assertSame(
             ['tool' => SalesIntents::TOOL_APP_LINKS_SEND, 'status' => 'skipped', 'reason' => 'already_sent', 'sent_at' => $primera],
@@ -313,5 +321,64 @@ class UltronMobileAppTest extends TestCase
         $this->assertStringNotContainsString(SalesIntents::TOOL_APP_LINKS_SEND, $prompt, 'Hermes no ejecuta app_links_send.');
         $this->assertStringContainsString(SalesIntents::TOOL_PAYMENT_LINK_SEND, $prompt, 'payment_link_send sí la ejecuta el flujo legado: sigue anunciada.');
         $this->assertContains(SalesIntents::TOOL_APP_LINKS_SEND, SalesAgentDecisionSchema::ALLOWED_TOOLS, 'el validador que reutiliza ULTRON no cambia.');
+    }
+
+    // ── El marcador ───────────────────────────────────────────────────────────
+
+    /**
+     * El modelo puede decir DÓNDE van los enlaces sin escribir ni una URL.
+     *
+     * Es el mismo mecanismo del precio y por la misma razón: el borrador se
+     * valida sin URL —`containsUrl()` sigue siendo absoluto— y Laravel escribe
+     * la URL después. Y sirve de red: aunque la estrategia olvide pedir la
+     * herramienta, el marcador basta, porque un desajuste entre lo que escribe
+     * el modelo y lo que espera el backend es justo lo que deja turnos mudos.
+     */
+    public function test_the_marker_puts_the_links_where_the_model_wants_them(): void
+    {
+        $r = $this->commit($this->inbound('pásame la app', 'a.10'), [
+            'reply_draft' => 'Claro, aquí la tienes: {{APP_LINKS}} — te registras con tu documento.',
+            'tools_requested' => [],
+        ])->assertOk();
+
+        $salientes = MarketingMessage::where('conversation_id', $this->conversation->id)
+            ->where('direction', MarketingMessage::DIRECTION_OUTBOUND)->get();
+        $this->assertCount(1, $salientes);
+
+        $cuerpo = (string) $salientes->first()->body;
+        $this->assertStringContainsString('Claro, aquí la tienes: Android: ', $cuerpo, 'los enlaces van donde estaba el marcador');
+        $this->assertStringContainsString('— te registras con tu documento.', $cuerpo, 'y el texto sigue después');
+        $this->assertStringNotContainsString('{{', $cuerpo, 'ningún marcador llega a la persona');
+        $this->assertContains('app_links_send', (array) $r->json('applied.tools_executed'));
+    }
+
+    /** Con el freno puesto el marcador no se queda escrito: se sustituye por la verdad. */
+    public function test_within_the_window_the_marker_becomes_an_honest_sentence(): void
+    {
+        $this->commit($this->inbound('mándame la app', 'a.11'))->assertOk();
+        $this->assertSame(1, $this->linkMessages());
+
+        $r = $this->commit($this->inbound('y para iPhone?', 'a.12'), [
+            'reply_draft' => 'También está para iPhone: {{APP_LINKS}}',
+            'tools_requested' => [],
+        ])->assertOk();
+
+        $cuerpo = (string) MarketingMessage::where('conversation_id', $this->conversation->id)
+            ->where('direction', MarketingMessage::DIRECTION_OUTBOUND)->latest('id')->first()->body;
+
+        $this->assertStringNotContainsString('{{', $cuerpo);
+        $this->assertStringNotContainsString(MobileAppLinks::IOS, $cuerpo, 'no se repiten un minuto después');
+        $this->assertStringContainsString(MobileAppCatalog::LINKS_ALREADY_SENT, $cuerpo);
+        $this->assertSame(1, $this->linkMessages());
+        $this->assertNotContains('app_links_send', (array) $r->json('applied.tools_executed'));
+    }
+
+    /** Un marcador que no existe sigue sin pasar: la lista blanca no se ha abierto. */
+    public function test_an_invented_marker_is_still_refused(): void
+    {
+        $this->commit($this->inbound('pásame la app', 'a.13'), [
+            'reply_draft' => 'Aquí la tienes: {{APP_STORE_URL}}',
+            'tools_requested' => [],
+        ])->assertStatus(422)->assertJsonPath('code', 'unknown_placeholder');
     }
 }

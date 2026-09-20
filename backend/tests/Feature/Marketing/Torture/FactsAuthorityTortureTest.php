@@ -7,6 +7,7 @@ use App\Models\MyClass;
 use App\Models\Trainer;
 use App\Services\Marketing\CommercialPhaseMachine as P;
 use App\Services\Marketing\MobileAppCatalog;
+use App\Services\Marketing\MobileAppLinks;
 use App\Services\Marketing\OutboundContentGuard;
 use App\Services\Marketing\SalesIntents;
 use App\Services\Marketing\Ultron\ComposerStyleGuard;
@@ -191,7 +192,7 @@ class FactsAuthorityTortureTest extends TortureCase
         ];
     }
 
-    /** Los enlaces oficiales los pone el CRM, palabra por palabra, en su propio mensaje. */
+    /** Los enlaces oficiales los pone el CRM, palabra por palabra, DENTRO de la respuesta. */
     public function test_the_app_links_are_written_by_the_crm_and_not_by_the_model(): void
     {
         $r = $this->commit($this->inbound('¿cómo descargo la app?'), [
@@ -200,8 +201,13 @@ class FactsAuthorityTortureTest extends TortureCase
         ])->assertOk();
 
         $this->assertSame([SalesIntents::TOOL_APP_LINKS_SEND], $r->json('applied.tools_executed'));
-        $this->assertSame(2, $this->outbound()->count(), 'la respuesta y, aparte, el mensaje de enlaces');
-        $this->assertSame(MobileAppCatalog::linksMessage(), $this->lastOutboundBody());
+        $this->assertSame(1, $this->outbound()->count(), 'un solo mensaje: la prosa del modelo con los enlaces de Laravel');
+
+        $cuerpo = $this->lastOutboundBody();
+        $this->assertStringStartsWith('Claro, te mando los enlaces oficiales', $cuerpo);
+        foreach ([MobileAppLinks::ANDROID, MobileAppLinks::IOS, MobileAppLinks::WEB] as $url) {
+            $this->assertStringContainsString($url, $cuerpo, 'la URL la escribe Laravel, literal');
+        }
     }
 
     /** Pedir los enlaces dos veces en la misma propuesta no manda dos mensajes. */
@@ -213,7 +219,7 @@ class FactsAuthorityTortureTest extends TortureCase
         ])->assertOk();
 
         $this->assertSame(1, $this->appLinkMessages(), 'una petición repetida no es un segundo envío');
-        $this->assertSame(2, $this->outbound()->count());
+        $this->assertSame(1, $this->outbound()->count());
     }
 
     /** Dentro de la hora, los enlaces ya están unas líneas más arriba en el mismo chat. */
@@ -231,7 +237,7 @@ class FactsAuthorityTortureTest extends TortureCase
 
         $this->assertSame([], $r->json('applied.tools_executed'), 'el freno de reenvío muerde dentro de la hora');
         $this->assertSame(1, $this->appLinkMessages());
-        $this->assertSame(3, $this->outbound()->count(), 'la respuesta del segundo turno sí sale; los enlaces no');
+        $this->assertSame(2, $this->outbound()->count(), 'la respuesta del segundo turno sí sale; los enlaces no se repiten');
     }
 
     /** Pasada la ventana, «se me borró» es legítimo y los enlaces vuelven a salir. */

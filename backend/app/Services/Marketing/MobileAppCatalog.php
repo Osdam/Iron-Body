@@ -77,4 +77,22 @@ final class MobileAppCatalog
     {
         return 'Aquí tienes la app Iron Body Workout para descargarla y registrarte: '.MobileAppLinks::asLine();
     }
+
+    /**
+     * Los enlaces para ir DENTRO de la respuesta, donde el modelo puso el
+     * marcador `{{APP_LINKS}}`. Un solo mensaje, no dos.
+     */
+    public static function linksInline(): string
+    {
+        return MobileAppLinks::asLine();
+    }
+
+    /**
+     * Con qué se sustituye el marcador cuando los enlaces acaban de salir.
+     *
+     * Hace falta una frase y no una cadena vacía: el borrador ya anunció «te
+     * paso los enlaces», y dejarlo sin nada convertiría la respuesta en una
+     * promesa incumplida dentro del mismo mensaje.
+     */
+    public const LINKS_ALREADY_SENT = 'te los dejé aquí mismo en el chat hace un rato';
 }

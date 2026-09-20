@@ -655,6 +655,30 @@ class UltronCommitService
             ];
         }
 
+        /*
+         * 13.bis) LOS ENLACES DE LA APP, DENTRO DE LA RESPUESTA.
+         *
+         * Salían como mensaje propio detrás de la respuesta, así que la persona
+         * recibía dos globos seguidos: «te paso los enlaces para descargarla» y,
+         * a continuación, los enlaces. Eso se leyó en el canario físico como lo
+         * que parece —el asistente repitiéndose—, y no era un fallo: estaba
+         * escrito así en los dos prompts y en el backend.
+         *
+         * Ahora es UN mensaje. El modelo sigue sin poder escribir una URL: deja
+         * el marcador `{{APP_LINKS}}` —o ni eso, y entonces las pega Laravel al
+         * final— y la sustitución ocurre aquí, después de todos los guards, por
+         * el mismo orden que ya gobierna al precio.
+         */
+        $enlaces = $this->appLinksDecision($conversation, $decision, $replyFinal);
+
+        if ($enlaces !== null && $enlaces['status'] === 'executed') {
+            $replyFinal = $this->conEnlaces($replyFinal, MobileAppCatalog::linksInline());
+        } elseif ($enlaces !== null) {
+            // No se despachan (ya salieron hace poco, o no hay a quién): el
+            // marcador no puede quedarse escrito en el mensaje del cliente.
+            $replyFinal = $this->placeholders->resolveAppLinks($replyFinal, MobileAppCatalog::LINKS_ALREADY_SENT);
+        }
+
         // 14) Envío por el camino de siempre.
         // La conversación va explícita: la respuesta pertenece al hilo del
         // turno, no al primero que encuentre el despachador.
@@ -679,10 +703,22 @@ class UltronCommitService
             $this->annotatePayment($action, $pago);
         }
 
-        // 14.ter) Los enlaces de la app, si el modelo los pidió: los escribe Laravel,
-        // como mensaje propio después de la respuesta. No hay dinero ni permiso que negociar.
-        $enlaces = $this->execAppLinks($conversation, $decision, $outcome);
+        // 14.ter) Los enlaces viajaron DENTRO de la respuesta; aquí sólo queda
+        // anotar qué pasó y espaciar el próximo envío. La marca se escribe sólo
+        // si el mensaje llegó a existir: si el despachador lo bloqueó, no hay
+        // enlaces que espaciar y marcarlo los callaría una hora por nada.
         if ($enlaces !== null) {
+            if ($enlaces['status'] === 'executed') {
+                if ($outcome === 'failed') {
+                    $enlaces = ['tool' => $enlaces['tool'], 'status' => 'skipped', 'reason' => 'reply_not_sent'];
+                } else {
+                    $this->memoryService->recordAppLinksSent($conversation->fresh());
+                    $enlaces['sent'] = $send['sent'];
+                    $enlaces['dry_run'] = $send['dry_run'];
+                    $enlaces['message_id'] = $send['message_id'] ?? null;
+                }
+            }
+
             $executed[] = $enlaces;
             $this->annotateExecuted($action, $enlaces);
         }
@@ -1272,23 +1308,36 @@ class UltronCommitService
      *
      * @return array<string,mixed>|null null cuando no se pidió
      */
-    private function execAppLinks(MarketingConversation $conversation, array $decision, string $outcome): ?array
+    /**
+     * ¿Llevan enlaces de la app este turno? Sin efectos: sólo el veredicto.
+     *
+     * Se calcula ANTES del envío porque el texto tiene que salir ya con ellos.
+     * Lo que antes decidía un despacho aparte ahora decide una sustitución.
+     *
+     * Se considera pedido también cuando el BORRADOR trae `{{APP_LINKS}}` sin
+     * que la estrategia pidiera la herramienta. El marcador es inerte —no puede
+     * producir una URL por sí mismo— y tratarlo como petición evita repetir el
+     * patrón que dejó mudo al mensaje 915: un desajuste entre lo que escribió el
+     * modelo y lo que esperaba el backend que acaba en 422 y en silencio.
+     *
+     * @return array{tool:string,status:string,reason?:string,sent_at?:string}|null
+     */
+    private function appLinksDecision(MarketingConversation $conversation, array $decision, string $draft): ?array
     {
         $tool = SalesIntents::TOOL_APP_LINKS_SEND;
-        if (! in_array($tool, (array) ($decision['tools_requested'] ?? []), true)) {
+        $pedida = in_array($tool, (array) ($decision['tools_requested'] ?? []), true);
+
+        if (! $pedida && ! $this->placeholders->wantsAppLinks($draft)) {
             return null;
         }
-        if ($outcome === 'failed') {
-            return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'reply_not_sent'];
-        }
-        $lead = $conversation->lead;
-        if ($lead === null) {
+
+        if ($conversation->lead === null) {
             return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'no_lead'];
         }
 
-        // Dentro de la ventana no se despacha nada: el cliente tiene los tres
-        // enlaces unas líneas más arriba, en este mismo chat. Pasada, volver a
-        // pedirlos es legítimo («se me borró, reenvíamelo») y salen otra vez.
+        // Dentro de la ventana no se repiten: el cliente tiene los tres enlaces
+        // unas líneas más arriba, en este mismo chat. Pasada, volver a pedirlos
+        // es legítimo («se me borró, reenvíamelo») y salen otra vez.
         $marca = data_get($conversation->memory, 'app_context.links_sent_at');
         if (is_string($marca) && trim($marca) !== '') {
             try {
@@ -1303,26 +1352,23 @@ class UltronCommitService
             }
         }
 
-        try {
-            $send = $this->dispatcher->dispatchWhatsapp($lead, $conversation->channel, MobileAppCatalog::linksMessage(), [
-                'kind' => 'app_links', 'origin' => 'ultron',
-            ], MarketingMessage::SENDER_AI, conversation: $conversation);
+        return ['tool' => $tool, 'status' => 'executed'];
+    }
 
-            // El freno cuenta desde que HUBO mensaje (entregado, en cola o en
-            // dry_run). Si el despachador lo bloqueó (do_not_contact, canal no
-            // soportado, lead sin teléfono) no se marca nada: no hay enlaces que
-            // espaciar, y marcarlo callaría la herramienta una hora por nada.
-            if (! ($send['safe_to_send'] ?? false)) {
-                return ['tool' => $tool, 'status' => 'skipped', 'reason' => (string) ($send['reason'] ?? 'not_sent')];
-            }
-            $this->memoryService->recordAppLinksSent($conversation->fresh());
-
-            return ['tool' => $tool, 'status' => 'executed', 'sent' => $send['sent'], 'dry_run' => $send['dry_run'], 'message_id' => $send['message_id'] ?? null];
-        } catch (Throwable $e) {
-            ChannelLog::error('ultron.app_links.failed', ['conversation_id' => $conversation->id, 'exception' => class_basename($e)]);
-
-            return ['tool' => $tool, 'status' => 'failed', 'reason' => 'app_links_error'];
+    /**
+     * El texto final con los enlaces puestos.
+     *
+     * Con marcador van donde el modelo los quiso; sin marcador van al final,
+     * separados, porque el borrador ya los anunció en prosa y el contrato con
+     * los dos prompts dice que los escribe Laravel.
+     */
+    private function conEnlaces(string $reply, string $enlaces): string
+    {
+        if ($this->placeholders->wantsAppLinks($reply)) {
+            return $this->placeholders->resolveAppLinks($reply, $enlaces);
         }
+
+        return rtrim($reply)."\n\n".$enlaces;
     }
 
     /** Una herramienta que corrió después de persistir la acción se anota encima. */
