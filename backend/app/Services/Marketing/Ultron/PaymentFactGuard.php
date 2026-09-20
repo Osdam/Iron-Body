@@ -77,6 +77,13 @@ final class PaymentFactGuard
                 continue;
             }
 
+            // Y una frase CONDICIONAL tampoco afirma nada: habla de lo que
+            // pasará. «Una vez confirmado el pago, se activa tu membresía»
+            // describe el proceso; «ya recibimos tu pago» lo inventa.
+            if ($this->condicional($frase)) {
+                continue;
+            }
+
             if ($this->casa($frase, self::PIDE_COMPROBANTE)) {
                 return $this->hallazgo(self::REASON_ACCEPTS_RECEIPT, 'reply accepts a receipt as proof of payment');
             }
@@ -109,6 +116,33 @@ final class PaymentFactGuard
     private function negada(string $frase): bool
     {
         return preg_match('~\b(no|aun no|todavia no|sin)\b~u', $frase) === 1;
+    }
+
+    /**
+     * ¿La frase habla del FUTURO en vez de afirmar un hecho?
+     *
+     * Es la salida simétrica a la negación, y la puso un turno perdido: el
+     * canario físico escribió «debes hacer el pago de forma manual; una vez
+     * confirmado el pago, se activa tu membresía» —que describe el proceso con
+     * honestidad— y este guard lo leyó como «el pago llegó». El turno murió con
+     * un 422 y la persona no recibió nada.
+     *
+     * Las conjunciones subordinantes de tiempo y condición son una clase
+     * CERRADA del español, así que esto no es una lista de contextos inocentes
+     * que nunca termina: es la gramática. Lo que afirma que el dinero entró
+     * —«ya recibimos tu pago», «tu pago fue confirmado»— sigue bloqueado,
+     * porque ahí no hay subordinación ninguna.
+     */
+    private function condicional(string $frase): bool
+    {
+        /*
+         * «si» va con su sujeto pegado a propósito: normalizado, el «sí» de
+         * afirmar y el «si» de condicionar son la misma palabra, y «sí, ya
+         * recibimos tu pago» no puede colarse por esta puerta. Ante la duda,
+         * esto falla hacia BLOQUEAR, que es el lado correcto cuando hay dinero.
+         */
+        return preg_match('~\b(cuando|una vez|en cuanto|apenas|tan pronto|luego que|despues de que|luego de que|mientras|hasta que)\b~u', $frase) === 1
+            || preg_match('~\bsi\s+(el|la|los|las|se|lo|le|tu|su)\b~u', $frase) === 1;
     }
 
     /** @param  list<string>  $patrones */

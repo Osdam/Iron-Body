@@ -84,6 +84,19 @@ class PaymentFactGuardTest extends TestCase
         yield 'habla de otra cosa' => ['Las clases grupales son de lunes a viernes por la manana.'];
         yield 'pregunta util' => ['Quieres que te explique como funciona el plan mensual?'];
         yield 'recibo del gimnasio' => ['Tu referencia de pago son los ultimos digitos del recibo.'];
+
+        /*
+         * Condicionales: describen el proceso, no afirman que el dinero entró.
+         * Los puso un turno perdido del canario físico — el borrador decía «una
+         * vez confirmado el pago, se activa tu membresía», este guard lo leyó
+         * como «el pago llegó», el commit devolvió 422 y la persona se quedó
+         * esperando en silencio.
+         */
+        yield 'una vez' => ['Una vez confirmado el pago, se activa tu membresia.'];
+        yield 'cuando' => ['Cuando se confirme el pago activamos tu membresia.'];
+        yield 'apenas' => ['Apenas recibamos el pago te aviso por aqui.'];
+        yield 'si condicional' => ['Si el pago se confirma hoy, quedas activo hoy mismo.'];
+        yield 'despues de que' => ['Despues de que el pago se confirme, te llega el acceso.'];
     }
 
     #[DataProvider('honestidad')]
@@ -111,5 +124,27 @@ class PaymentFactGuardTest extends TestCase
         $this->assertSame('No error', preg_last_error_msg());
         $codigo = file_get_contents(__DIR__.'/../../../app/Services/Marketing/Ultron/PaymentFactGuard.php');
         $this->assertDoesNotMatchRegularExpression('~\\\\p\{~', (string) $codigo, 'produccion corre PCRE 10.39: sin propiedades Unicode');
+    }
+
+    /**
+     * La trampa que me metí yo al añadir la salida condicional: normalizado,
+     * el «sí» de afirmar y el «si» de condicionar son la misma palabra. Una
+     * afirmación de que el dinero entró sigue bloqueada, la anteceda lo que la
+     * anteceda.
+     */
+    #[DataProvider('afirmacionesConSi')]
+    public function test_a_yes_in_front_does_not_turn_a_lie_into_a_condition(string $draft): void
+    {
+        $this->assertNotNull(
+            (new PaymentFactGuard)->contradiction($draft, 'none'),
+            $draft,
+        );
+    }
+
+    public static function afirmacionesConSi(): iterable
+    {
+        yield 'si con coma' => ['Si, ya recibimos tu pago.'];
+        yield 'si sin coma' => ['Si ya recibimos tu pago, quedas activo.'];
+        yield 'si claro' => ['Si claro, tu pago fue confirmado.'];
     }
 }
