@@ -192,6 +192,28 @@ class UltronCanaryReportTest extends TestCase
         $this->assertStringContainsString('Plan Mensual Premium', $salida);
     }
 
+    /**
+     * El borde que encontró la revisión: si el retirado se nombra DOS veces y
+     * la primera cae dentro de uno vendible más largo, la segunda —limpia— se
+     * perdía, porque al solapar se abandonaba el nombre entero en vez de esa
+     * aparición.
+     */
+    public function test_a_second_clean_mention_survives_when_the_first_one_overlaps(): void
+    {
+        Plan::create(['name' => 'Plan Mensual Premium', 'price' => 150000, 'duration_days' => 30, 'active' => true, 'sellable' => true]);
+        Plan::create(['name' => 'Premium Corporativo', 'price' => 300000, 'duration_days' => 30, 'active' => true, 'sellable' => false]);
+
+        $this->turno(
+            'qué planes hay?',
+            'Tenemos el Plan Mensual Premium Corporativo; y el Premium Corporativo va aparte.',
+        );
+
+        [$codigo, $salida] = $this->correr();
+
+        $this->assertSame(1, $codigo);
+        $this->assertStringContainsString('Premium Corporativo', $salida);
+    }
+
     /** Y nombrar el vendible sigue sin contar, aunque el retirado lo contenga. */
     public function test_naming_the_sellable_one_is_clean_even_when_a_withdrawn_name_contains_it(): void
     {

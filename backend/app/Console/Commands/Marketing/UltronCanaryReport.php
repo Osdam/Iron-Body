@@ -168,11 +168,25 @@ class UltronCanaryReport extends Command
             }
             foreach ($m[0] as [$hallado, $desde]) {
                 $hasta = $desde + strlen((string) $hallado);
+
+                /*
+                 * Se descarta LA APARICIÓN solapada, no el nombre entero. Con
+                 * `continue 2` —que es lo que había— un plan retirado nombrado
+                 * dos veces se perdía si la primera vez caía dentro de uno
+                 * vendible más largo: «...Plan Mensual Premium Corporativo; y
+                 * el Premium Corporativo va aparte» no contaba nada.
+                 */
+                $solapa = false;
                 foreach ($ocupado as [$a, $b]) {
                     if ($desde < $b && $hasta > $a) {
-                        continue 2;
+                        $solapa = true;
+                        break;
                     }
                 }
+                if ($solapa) {
+                    continue;
+                }
+
                 $ocupado[] = [$desde, $hasta];
                 if ($candidato['retirado']) {
                     $encontrados[] = $candidato['nombre'];
