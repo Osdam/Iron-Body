@@ -65,9 +65,17 @@ class MarketingKnowledgeItem extends Model
     /** Carga masiva desde un fichero o un tercero. */
     public const ORIGIN_IMPORT = 'import';
 
+    /**
+     * Nadie dijo de dónde viene. NO es confiable, y ese es el punto: una
+     * escritura que no declara su procedencia es indistinguible del camino que
+     * alguien añada mañana sin acordarse de esta frontera.
+     */
+    public const ORIGIN_UNKNOWN = 'unknown';
+
     public const ORIGINS = [
         self::ORIGIN_SEEDER, self::ORIGIN_SERVER, self::ORIGIN_HUMAN_PANEL,
         self::ORIGIN_LEGACY, self::ORIGIN_INTERNAL_API, self::ORIGIN_IMPORT,
+        self::ORIGIN_UNKNOWN,
     ];
 
     /**
@@ -147,8 +155,14 @@ class MarketingKnowledgeItem extends Model
 
     /**
      * Origen efectivo. Si nadie lo declara se deduce de `source` (la columna
-     * que ya existía). Un valor desconocido NO se inventa confiable: se trata
-     * como escritura de máquina.
+     * que ya existía), y solo para los valores que esa columna ya usaba.
+     *
+     * LA CONFIANZA SE DECLARA, NO SE DEDUCE. Antes, un `source` desconocido
+     * —o ausente— caía en `server`, que es confiable, así que cualquier camino
+     * de escritura nuevo publicaba directo al prompt sin que nadie lo aprobara:
+     * exactamente lo contrario de lo que promete el encabezado de esta clase.
+     * Ahora cae en `unknown`, que no lo es. El código del servidor que quiera
+     * publicar sin revisión lo dice con `origin`, y decirlo cuesta una línea.
      */
     public static function normalizeOrigin(?string $origin, ?string $source = null): string
     {
@@ -162,7 +176,8 @@ class MarketingKnowledgeItem extends Model
         return match ($source) {
             'seeder' => self::ORIGIN_SEEDER,
             'api' => self::ORIGIN_INTERNAL_API,
-            default => self::ORIGIN_SERVER,
+            'import' => self::ORIGIN_IMPORT,
+            default => self::ORIGIN_UNKNOWN,
         };
     }
 

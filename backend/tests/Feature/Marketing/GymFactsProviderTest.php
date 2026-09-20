@@ -80,21 +80,21 @@ class GymFactsProviderTest extends TestCase
 
     public function test_opening_hours_are_source_not_available_until_the_knowledge_base_has_them(): void
     {
-        MarketingKnowledgeItem::create(['category' => 'location', 'key' => 'sede', 'title' => 'Sede principal', 'content' => 'Cl. 24 Sur #33-53, Neiva', 'is_active' => true, 'priority' => 1]);
+        MarketingKnowledgeItem::create(['category' => 'location', 'key' => 'sede', 'title' => 'Sede principal', 'content' => 'Cl. 24 Sur #33-53, Neiva', 'is_active' => true, 'priority' => 1, 'origin' => MarketingKnowledgeItem::ORIGIN_SERVER]);
 
         $this->assertSame(GymFactsProvider::SOURCE_NOT_AVAILABLE, $this->g->openingHours());
         $this->assertSame(['Sede principal: Cl. 24 Sur #33-53, Neiva'], $this->g->businessInfo()['location']);
 
-        MarketingKnowledgeItem::create(['category' => 'schedule', 'key' => 'horario', 'title' => 'Horario', 'content' => 'Lunes a viernes 5am a 10pm', 'is_active' => true, 'priority' => 1]);
+        MarketingKnowledgeItem::create(['category' => 'schedule', 'key' => 'horario', 'title' => 'Horario', 'content' => 'Lunes a viernes 5am a 10pm', 'is_active' => true, 'priority' => 1, 'origin' => MarketingKnowledgeItem::ORIGIN_SERVER]);
         // Los hechos se leen una vez por instancia (una petición = una instancia): otra petición, otra lectura.
         $this->assertSame(['Horario: Lunes a viernes 5am a 10pm'], app(GymFactsProvider::class)->openingHours());
     }
 
     public function test_search_returns_knowledge_entries_not_answers(): void
     {
-        MarketingKnowledgeItem::create(['category' => 'faq', 'key' => 'lesion', 'title' => 'Mencionan una lesión', 'content' => 'No diagnosticar; marcar revisión del equipo.', 'is_active' => true, 'priority' => 2]);
-        MarketingKnowledgeItem::create(['category' => 'payment_policy', 'key' => 'pagos', 'title' => 'Pagos', 'content' => 'El equipo confirma el medio de pago al final.', 'is_active' => true, 'priority' => 1]);
-        MarketingKnowledgeItem::create(['category' => 'faq', 'key' => 'off', 'title' => 'Inactiva', 'content' => 'pagos pagos pagos', 'is_active' => false, 'priority' => 1]);
+        MarketingKnowledgeItem::create(['category' => 'faq', 'key' => 'lesion', 'title' => 'Mencionan una lesión', 'content' => 'No diagnosticar; marcar revisión del equipo.', 'is_active' => true, 'priority' => 2, 'origin' => MarketingKnowledgeItem::ORIGIN_SERVER]);
+        MarketingKnowledgeItem::create(['category' => 'payment_policy', 'key' => 'pagos', 'title' => 'Pagos', 'content' => 'El equipo confirma el medio de pago al final.', 'is_active' => true, 'priority' => 1, 'origin' => MarketingKnowledgeItem::ORIGIN_SERVER]);
+        MarketingKnowledgeItem::create(['category' => 'faq', 'key' => 'off', 'title' => 'Inactiva', 'content' => 'pagos pagos pagos', 'is_active' => false, 'priority' => 1, 'origin' => MarketingKnowledgeItem::ORIGIN_SERVER]);
 
         $r = $this->g->search('cómo son los pagos?');
 
@@ -106,9 +106,9 @@ class GymFactsProviderTest extends TestCase
     /** Hallazgo del revisor: la vigencia (valid_from / valid_until) manda igual que en el resto del sistema. */
     public function test_expired_or_future_knowledge_is_not_a_fact(): void
     {
-        MarketingKnowledgeItem::create(['category' => 'schedule', 'key' => 'vacaciones', 'title' => 'Horario de vacaciones', 'content' => '8am a 2pm', 'is_active' => true, 'valid_until' => now()->subDay()]);
-        MarketingKnowledgeItem::create(['category' => 'schedule', 'key' => 'futuro', 'title' => 'Horario nuevo', 'content' => '5am a 11pm', 'is_active' => true, 'valid_from' => now()->addWeek()]);
-        MarketingKnowledgeItem::create(['category' => 'location', 'key' => 'sede_vieja', 'title' => 'Sede anterior', 'content' => 'Cra 5 #10-20', 'is_active' => true, 'valid_until' => now()->subMonth()]);
+        MarketingKnowledgeItem::create(['category' => 'schedule', 'key' => 'vacaciones', 'title' => 'Horario de vacaciones', 'content' => '8am a 2pm', 'is_active' => true, 'valid_until' => now()->subDay(), 'origin' => MarketingKnowledgeItem::ORIGIN_SERVER]);
+        MarketingKnowledgeItem::create(['category' => 'schedule', 'key' => 'futuro', 'title' => 'Horario nuevo', 'content' => '5am a 11pm', 'is_active' => true, 'valid_from' => now()->addWeek(), 'origin' => MarketingKnowledgeItem::ORIGIN_SERVER]);
+        MarketingKnowledgeItem::create(['category' => 'location', 'key' => 'sede_vieja', 'title' => 'Sede anterior', 'content' => 'Cra 5 #10-20', 'is_active' => true, 'valid_until' => now()->subMonth(), 'origin' => MarketingKnowledgeItem::ORIGIN_SERVER]);
 
         $this->assertSame(GymFactsProvider::SOURCE_NOT_AVAILABLE, $this->g->openingHours(), 'un horario caducado o aún no vigente no es el horario');
         $this->assertArrayNotHasKey('location', $this->g->businessInfo());

@@ -25,6 +25,11 @@ class MarketingKnowledgeSeeder extends Seeder
                     'priority'  => $item['priority'] ?? 100,
                     'is_active' => $item['is_active'] ?? true,
                     'source'    => 'seeder',
+                    // Declarado, no deducido: este contenido viene del
+                    // repositorio y lo revisó una persona en git, así que
+                    // publica sin pasar por aprobación. Que lo diga aquí lo
+                    // hace inmune a que cambie la tabla de deducción.
+                    'origin'    => MarketingKnowledgeItem::ORIGIN_SEEDER,
                 ],
             );
         }

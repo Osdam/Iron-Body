@@ -366,11 +366,58 @@ class KnowledgeTrustBoundaryTest extends TestCase
     public function test_un_item_escrito_por_codigo_desplegado_sigue_publicando_sin_aprobacion(): void
     {
         // El seeder, una migración o un comando de consola son código que ya
-        // pasó por despliegue: no son la máquina anónima de la red.
-        MarketingKnowledgeItem::create(['category' => 'faq', 'key' => 'faq.codigo', 'content' => 'CONTENIDO_DE_CODIGO']);
+        // pasó por despliegue: no son la máquina anónima de la red. Pero lo
+        // DICEN; ver el caso siguiente para por qué no basta con serlo.
+        MarketingKnowledgeItem::create([
+            'category' => 'faq', 'key' => 'faq.codigo', 'content' => 'CONTENIDO_DE_CODIGO',
+            'origin' => MarketingKnowledgeItem::ORIGIN_SERVER,
+        ]);
 
         $grouped = app(MarketingKnowledgeBaseService::class)->groupedForPrompt();
         $this->assertStringContainsString('CONTENIDO_DE_CODIGO', (string) json_encode($grouped));
+    }
+
+    /**
+     * La confianza se declara, no se deduce.
+     *
+     * Una escritura que no dice de dónde viene es indistinguible del camino que
+     * alguien añada mañana sin acordarse de esta frontera —que es justo el caso
+     * que esta clase promete cubrir—, así que no publica. Antes caía en
+     * `server`, que es confiable, y llegaba al prompt sin que nadie la mirara.
+     */
+    public function test_una_escritura_que_no_declara_su_procedencia_no_publica(): void
+    {
+        $sinDeclarar = MarketingKnowledgeItem::create([
+            'category' => 'faq', 'key' => 'faq.sin.declarar', 'content' => 'CONTENIDO_SIN_PROCEDENCIA',
+        ]);
+        $conSourceDesconocido = MarketingKnowledgeItem::create([
+            'category' => 'faq', 'key' => 'faq.source.raro', 'content' => 'CONTENIDO_DE_SOURCE_RARO',
+            'source' => 'n8n-import',
+        ]);
+
+        foreach ([$sinDeclarar, $conSourceDesconocido] as $item) {
+            $this->assertSame(MarketingKnowledgeItem::ORIGIN_UNKNOWN, $item->fresh()->origin);
+            $this->assertSame(MarketingKnowledgeItem::REVIEW_PENDING, $item->fresh()->review_status);
+        }
+
+        $prompt = (string) json_encode(app(MarketingKnowledgeBaseService::class)->groupedForPrompt());
+        $this->assertStringNotContainsString('CONTENIDO_SIN_PROCEDENCIA', $prompt);
+        $this->assertStringNotContainsString('CONTENIDO_DE_SOURCE_RARO', $prompt);
+
+        // Y el doctor las cuenta como lo que son: pendientes de que alguien mire.
+        $this->assertSame(2, app(MarketingKnowledgeBaseService::class)->summary()['pending_review_items']);
+    }
+
+    /** Una carga masiva tampoco es autoridad, y ahora es alcanzable por deducción. */
+    public function test_una_importacion_masiva_tampoco_publica_sola(): void
+    {
+        $item = MarketingKnowledgeItem::create([
+            'category' => 'faq', 'key' => 'faq.importada', 'content' => 'CONTENIDO_IMPORTADO',
+            'source' => 'import',
+        ]);
+
+        $this->assertSame(MarketingKnowledgeItem::ORIGIN_IMPORT, $item->fresh()->origin);
+        $this->assertSame(MarketingKnowledgeItem::REVIEW_PENDING, $item->fresh()->review_status);
     }
 
     public function test_el_panel_humano_identificado_publica_sin_pasar_por_aprobacion(): void
@@ -419,9 +466,21 @@ class KnowledgeTrustBoundaryTest extends TestCase
             'category' => 'faq', 'key' => 'faq.pendiente', 'content' => 'Espera revisión.',
         ])->assertOk();
 
-        // Un ítem que entró por la máquina anónima ANTES de existir la frontera.
+        /*
+         * Un ítem que entró por la máquina anónima ANTES de existir la
+         * frontera: publicado, de origen sin autoridad y sin que nadie lo haya
+         * mirado nunca. Se escribe con los tres campos a la vista —en vez de
+         * apoyarse en lo que el hook dedujera— porque es el estado exacto que
+         * la migración dejó en producción, y es lo que el doctor tiene que
+         * saber contar.
+         */
         $viejo = MarketingKnowledgeItem::create(['category' => 'faq', 'key' => 'faq.vieja', 'content' => 'Entró antes.']);
-        $viejo->forceFill(['origin' => MarketingKnowledgeItem::ORIGIN_INTERNAL_API])->saveQuietly();
+        $viejo->forceFill([
+            'origin' => MarketingKnowledgeItem::ORIGIN_INTERNAL_API,
+            'review_status' => MarketingKnowledgeItem::REVIEW_APPROVED,
+            'reviewed_by' => null,
+            'reviewed_at' => null,
+        ])->saveQuietly();
 
         $data = $this->getJson('/api/internal/marketing/knowledge/doctor', $this->h())->assertOk()->json('data');
 

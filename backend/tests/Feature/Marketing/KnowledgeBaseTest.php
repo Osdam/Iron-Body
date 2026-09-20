@@ -107,10 +107,10 @@ class KnowledgeBaseTest extends TestCase
 
     public function test_prompt_builder_excludes_inactive_and_expired(): void
     {
-        MarketingKnowledgeItem::create(['category' => 'faq', 'key' => 'k.active', 'content' => 'CONTENIDO_ACTIVO', 'is_active' => true]);
-        MarketingKnowledgeItem::create(['category' => 'faq', 'key' => 'k.inactive', 'content' => 'CONTENIDO_INACTIVO', 'is_active' => false]);
-        MarketingKnowledgeItem::create(['category' => 'faq', 'key' => 'k.expired', 'content' => 'CONTENIDO_VENCIDO', 'is_active' => true, 'valid_until' => now()->subDay()]);
-        MarketingKnowledgeItem::create(['category' => 'faq', 'key' => 'k.future', 'content' => 'CONTENIDO_FUTURO', 'is_active' => true, 'valid_from' => now()->addDay()]);
+        MarketingKnowledgeItem::create(['category' => 'faq', 'key' => 'k.active', 'content' => 'CONTENIDO_ACTIVO', 'is_active' => true, 'origin' => MarketingKnowledgeItem::ORIGIN_SERVER]);
+        MarketingKnowledgeItem::create(['category' => 'faq', 'key' => 'k.inactive', 'content' => 'CONTENIDO_INACTIVO', 'is_active' => false, 'origin' => MarketingKnowledgeItem::ORIGIN_SERVER]);
+        MarketingKnowledgeItem::create(['category' => 'faq', 'key' => 'k.expired', 'content' => 'CONTENIDO_VENCIDO', 'is_active' => true, 'valid_until' => now()->subDay(), 'origin' => MarketingKnowledgeItem::ORIGIN_SERVER]);
+        MarketingKnowledgeItem::create(['category' => 'faq', 'key' => 'k.future', 'content' => 'CONTENIDO_FUTURO', 'is_active' => true, 'valid_from' => now()->addDay(), 'origin' => MarketingKnowledgeItem::ORIGIN_SERVER]);
 
         $prompt = app(SalesAgentPromptBuilder::class)->userPrompt($this->lead(), 'hola');
 
