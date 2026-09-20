@@ -243,6 +243,37 @@ persona. Los otros cinco solo valen cuando los afirma el CRM:
 | `critical_capability_not_available` | Solo Laravel |
 
 
+### 2.6 El control humano tiene tres estados, y una salida oficial
+
+Derivar no era un estado: era una marca, `lead.status = needs_human`, que escribía la
+escalada del motor y que solo se borraba al soltar un traspaso. Un lead que el motor
+escaló y que **nadie atendió nunca** se quedaba ahí para siempre, y como decide y commit
+leen esa marca como «derivar está autorizado», el traspaso quedaba autorizado en TODOS
+los turnos futuros, meses después, sin que nadie lo hubiera pedido. En producción había
+dos leads así desde junio, y uno era el dueño de la conversación del canario.
+
+Los tres estados los distingue un único sitio,
+`MarketingManualTakeoverService::controlState()`:
+
+| Estado | Qué significa | Cómo se sale |
+|---|---|---|
+| `HUMAN_REQUIRED` | Alguien pidió una persona y **nadie la ha tomado** | Que una persona la tome (`takeover`) o la devolución oficial |
+| `HUMAN_ACTIVE` | Una persona **tiene la conversación en la mano** (`human_takeover`) | Solo la devolución oficial |
+| `RELEASED_TO_AI` | El asistente responde | — |
+
+**Mientras `HUMAN_ACTIVE` esté activo, la autoridad es de la persona, entera.** El
+asistente no escribe aunque el motor crea que debería.
+
+La salida oficial es `releaseToAi()`, expuesta como
+`POST /api/admin/marketing/conversations/{id}/release-to-ai` (capacidad `CAP_RELEASE`,
+motivo obligatorio). Deja una fila `release_to_ai` en `marketing_ai_actions` con
+`from_state`, `to_state`, el actor y el motivo, y **no reabre el contacto**: un
+consentimiento retirado sigue mandando, lo fija
+`LeadNeedsHumanLifecycleTest::test_releasing_to_ai_never_overrides_a_withdrawn_consent()`.
+Si otra conversación del mismo lead sigue en manos de una persona, la marca del lead
+**no** se cierra.
+
+
 ## 3. Dos puertas, un filtro
 
 Por el backend sale texto de máquina por **dos puertas**, y desde este cierre comparten
