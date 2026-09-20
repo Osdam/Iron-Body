@@ -986,6 +986,52 @@ class UltronCommitService
             ? $causa['flag'].'_no_safe_reply'
             : ($motivoSensible ?? $causa['flag']);
 
+        /*
+         * EL OPT-OUT NO SE PIERDE POR RENDIRSE.
+         *
+         * El paso 13 de {@see execute()} corre las herramientas ANTES de mirar
+         * si hay algo que enviar, y su comentario dice exactamente por qué:
+         * «para que el opt-out no se pierda». Este camino era el único donde
+         * ese razonamiento no se aplicaba, porque la rendición no ejecutaba
+         * NINGUNA herramienta. Resultado medido: quien escribía «no me escriban
+         * más» en un turno que se rendía quedaba marcado para el equipo y con
+         * `do_not_contact` en false. La máquina conservaba el derecho a
+         * escribirle a alguien que acababa de pedir que no le escribieran,
+         * hasta que una persona procesara la marca a mano.
+         *
+         * Corre SÓLO esta herramienta, y no por prudencia: las demás no tienen
+         * sentido aquí. El link de pago cuelga de una respuesta que no salió,
+         * los enlaces de la app van dentro de un texto que se descartó, y la
+         * revisión del equipo ya la decidió la regla de arriba. Lo que se
+         * ejecuta es lo que la PERSONA pidió, no lo que el modelo propuso.
+         *
+         * La condición es la misma que aplica {@see SalesAgentGuardrailService}
+         * en el camino normal —la intención `do_not_contact_request` basta— más
+         * la petición explícita, que allí también se honra. No se inventa una
+         * regla nueva para este camino: se aplica la que ya existía y que aquí
+         * faltaba.
+         */
+        $pideOptOut = $intent === SalesIntents::DO_NOT_CONTACT_REQUEST
+            || in_array(SalesIntents::TOOL_MARK_DNC, (array) ($proposal['tools_requested'] ?? []), true);
+
+        $ejecutables = $pideOptOut ? [SalesIntents::TOOL_MARK_DNC] : [];
+
+        /*
+         * Y lo que se pidió y AQUÍ no se corre, se anota igual.
+         *
+         * Antes la fila decía `tools_requested: []` siempre, así que una
+         * petición de enlaces de la app en un turno que se rendía desaparecía
+         * del expediente entera: ni pedida, ni ejecutada, ni descartada. No
+         * ejecutarla es correcto —el texto donde iban los enlaces se descartó—,
+         * pero borrar que se pidió no lo es. Quien audite el turno tiene que
+         * poder ver la diferencia entre «no se pidió» y «se pidió y este camino
+         * no la corre».
+         */
+        $descartadas = array_values(array_diff(
+            (array) ($proposal['tools_requested'] ?? []),
+            $ejecutables,
+        ));
+
         $action = $this->persist(
             $conversation,
             $message,
@@ -995,7 +1041,9 @@ class UltronCommitService
                 'confidence' => (float) ($proposal['confidence'] ?? 0.0),
                 'recommended_action' => SalesIntents::ACTION_REPLY,
                 'risk_flags' => [$causa['flag']],
-                'tools_requested' => [],
+                // La fila dice lo que de verdad se va a ejecutar aquí. Decía
+                // siempre `[]`, y eso era falso en cuanto hubo una herramienta.
+                'tools_requested' => $ejecutables,
                 'needs_staff_review' => $necesitaPersona,
                 'staff_review_reason' => $reason,
             ],
@@ -1003,11 +1051,12 @@ class UltronCommitService
             // que la conversación no ha progresado.
             $currentPhase,
             null,
-            array_merge([
+            array_merge(array_filter([
                 'fallback_mode' => $modo,
                 // Evidencia de lo que se descartó, para poder revisarlo. No sale.
                 'discarded_draft' => mb_substr((string) ($proposal['reply_draft'] ?? ''), 0, 500),
-            ], $causa['metadata']),
+                'tools_not_run_on_fallback' => $descartadas ?: null,
+            ], fn ($v) => $v !== null), $causa['metadata']),
         );
 
         if ($necesitaPersona) {
@@ -1015,6 +1064,34 @@ class UltronCommitService
                 'staff_review_pending' => true,
                 'staff_review_reason' => $reason,
             ])->save();
+        }
+
+        /*
+         * Y ahora sí, el opt-out. Va DESPUÉS de `persist()` —igual que en el
+         * camino normal— para que la acción exista y pueda anotar el efecto:
+         * una fila que causa un efecto durable y no lo cuenta es un expediente
+         * que miente sobre sí mismo, y eso ya se corrigió una vez aquí.
+         *
+         * No repite nada: el turno entero está protegido por la clave de
+         * idempotencia, que se comprueba dos veces —antes del cerrojo y dentro—
+         * y tiene un UNIQUE detrás, así que un reintento del mismo turno muere
+         * en 409 sin volver a pasar por aquí.
+         */
+        if ($pideOptOut) {
+            $optOut = $this->execMarkDnc($conversation);
+            $meta = is_array($action->metadata) ? $action->metadata : [];
+            $meta['tools_executed'] = $this->executedTools([$optOut]);
+            $meta['mark_do_not_contact'] = array_filter([
+                'status' => $optOut['status'] ?? null,
+                'reason' => $optOut['reason'] ?? null,
+            ], fn ($v) => $v !== null);
+            $action->forceFill(['metadata' => $meta])->save();
+
+            ChannelLog::info('ultron.commit.opt_out_on_fallback', [
+                'conversation_id' => (int) $conversation->id,
+                'ai_action_id' => (int) $action->id,
+                'status' => $optOut['status'] ?? null,
+            ]);
         }
 
         $resolution = $this->references->resolve(
@@ -1333,6 +1410,16 @@ class UltronCommitService
     private function execMarkDnc(MarketingConversation $conversation): array
     {
         $lead = $conversation->lead;
+
+        /*
+         * Sin lead no hay a quién marcar, y reventar aquí sería peor que no
+         * marcar: esta herramienta corre en la rendición, donde el turno ya
+         * viene de un fallo. Hasta ahora nadie la llamaba desde un camino que
+         * pudiera traer una conversación huérfana; ahora sí.
+         */
+        if ($lead === null) {
+            return ['tool' => SalesIntents::TOOL_MARK_DNC, 'status' => 'skipped', 'reason' => 'no_lead'];
+        }
 
         $lead->forceFill([
             'do_not_contact' => true,

@@ -196,6 +196,150 @@ class UltronZeroSilentTurnsTest extends TestCase
         $this->assertNotSame('', trim($salida));
     }
 
+    /**
+     * Rendirse no puede perder lo que la persona PIDIÓ.
+     *
+     * El paso 13 de `execute()` corre las herramientas antes de mirar si hay
+     * respuesta, y su comentario dice por qué: «para que el opt-out no se
+     * pierda». La rendición era el único camino donde ese razonamiento no se
+     * aplicaba —no ejecutaba ninguna herramienta—, así que quien pedía que no
+     * le escribieran quedaba marcado para el equipo y con `do_not_contact` en
+     * false: la máquina conservaba el derecho a escribirle hasta que una
+     * persona procesara la marca a mano.
+     */
+    public function test_the_opt_out_survives_a_surrender(): void
+    {
+        $lead = $this->conversation->lead;
+        $this->assertFalse((bool) $lead->do_not_contact, 'punto de partida');
+
+        $m = $this->inbound('no me escriban mas por favor');
+        $this->commit($this->payload($m, [
+            'proposal' => [
+                'intent' => SalesIntents::DO_NOT_CONTACT_REQUEST,
+                'next_state' => P::DO_NOT_CONTACT,
+                'reply_draft' => self::BORRADOR_ENVENENADO,
+                'tools_requested' => [SalesIntents::TOOL_MARK_DNC],
+            ],
+            'recovery' => ['reason' => 'machine_reply_payment_fact', 'attempt' => 2],
+        ]))->assertOk()->assertJsonPath('fallback_mode', 'NO_REPLY_AND_HANDOFF');
+
+        // Lo que la persona pidió, ocurrido.
+        $lead->refresh();
+        $this->assertTrue((bool) $lead->do_not_contact);
+        $this->assertFalse($lead->canReplyReactively(), 'y el sistema deja de poder escribirle');
+
+        // Y a nadie se le contesta: a esa intención no se le responde a propósito.
+        $this->assertSame(0, $this->salientes()->count());
+
+        // El expediente lo cuenta, que es lo que permite auditarlo después.
+        $accion = MarketingAiAction::latest('id')->first();
+        $this->assertSame([SalesIntents::TOOL_MARK_DNC], $accion->metadata['tools_executed'] ?? null);
+        $this->assertSame(['status' => 'executed'], $accion->metadata['mark_do_not_contact'] ?? null);
+        $this->assertSame([SalesIntents::TOOL_MARK_DNC], $accion->metadata['tools_requested'] ?? null);
+    }
+
+    /**
+     * Y por el otro camino que comparte `safeFallback`: el critic que tumba el
+     * borrador. Es el que demostró la revisión, y es el más probable: un turno
+     * de opt-out con un borrador que ofrece traspaso cae en el guard.
+     */
+    public function test_the_opt_out_survives_a_critic_failure(): void
+    {
+        $m = $this->inbound('no me escriban mas');
+        $this->commit($this->payload($m, [
+            'proposal' => [
+                'intent' => SalesIntents::DO_NOT_CONTACT_REQUEST,
+                'next_state' => P::DO_NOT_CONTACT,
+                'reply_draft' => 'Un borrador que el critic tumbo.',
+                'tools_requested' => [SalesIntents::TOOL_MARK_DNC],
+            ],
+            'critic' => ['verdict' => 'fail', 'attempt' => 2],
+        ]))->assertOk()->assertJsonPath('fallback_mode', 'NO_REPLY_AND_HANDOFF');
+
+        $this->assertTrue((bool) $this->conversation->lead->fresh()->do_not_contact);
+        $this->assertSame(0, $this->salientes()->count());
+    }
+
+    /**
+     * Lo que se pidió y este camino no corre, queda anotado.
+     *
+     * No ejecutar los enlaces de la app en una rendición es correcto: el texto
+     * donde iban se descartó. Borrar que se pidieron, no. Antes la fila decía
+     * `tools_requested: []` siempre, así que la petición desaparecía entera y
+     * quien auditara el turno no podía distinguir «no se pidió» de «se pidió y
+     * este camino no la corre».
+     */
+    public function test_a_tool_the_fallback_does_not_run_is_still_recorded(): void
+    {
+        $m = $this->inbound('me pasas la app?');
+        $this->commit($this->payload($m, [
+            'proposal' => [
+                'intent' => SalesIntents::GENERAL_INFO,
+                'reply_draft' => self::BORRADOR_ENVENENADO,
+                'tools_requested' => [SalesIntents::TOOL_APP_LINKS_SEND],
+            ],
+            'recovery' => ['reason' => 'machine_reply_payment_fact', 'attempt' => 2],
+        ]))->assertOk();
+
+        $meta = MarketingAiAction::latest('id')->first()->metadata;
+        $this->assertSame([], $meta['tools_requested'], 'aquí no corre ninguna');
+        $this->assertSame([SalesIntents::TOOL_APP_LINKS_SEND], $meta['tools_not_run_on_fallback'] ?? null);
+        $this->assertArrayNotHasKey('tools_executed', $meta, 'y no se ejecutó nada');
+    }
+
+    /** Sin herramientas pedidas, la clave no ensucia la fila. */
+    public function test_nothing_requested_leaves_no_trace(): void
+    {
+        $m = $this->inbound('cuanto vale?');
+        $this->commit($this->payload($m, [
+            'proposal' => ['intent' => SalesIntents::PRICING_QUESTION, 'reply_draft' => self::BORRADOR_ENVENENADO],
+            'recovery' => ['reason' => 'machine_reply_payment_fact', 'attempt' => 2],
+        ]))->assertOk();
+
+        $this->assertArrayNotHasKey('tools_not_run_on_fallback', MarketingAiAction::latest('id')->first()->metadata);
+    }
+
+    /** La intención basta: es la misma regla que aplica el guardrail en el camino normal. */
+    public function test_the_intent_alone_is_enough_to_keep_the_opt_out(): void
+    {
+        $m = $this->inbound('ya no quiero que me escriban');
+        $this->commit($this->payload($m, [
+            'proposal' => [
+                'intent' => SalesIntents::DO_NOT_CONTACT_REQUEST,
+                'next_state' => P::DO_NOT_CONTACT,
+                'reply_draft' => self::BORRADOR_ENVENENADO,
+                'tools_requested' => [],
+            ],
+            'recovery' => ['reason' => 'machine_reply_payment_fact', 'attempt' => 2],
+        ]))->assertOk();
+
+        $this->assertTrue((bool) $this->conversation->lead->fresh()->do_not_contact);
+    }
+
+    /**
+     * Y una rendición normal no toca el consentimiento de nadie.
+     *
+     * Es la otra mitad: la herramienta corre porque la persona la pidió, no
+     * porque el turno se haya rendido. Marcar a alguien por equivocación le
+     * cierra la puerta para siempre.
+     */
+    public function test_an_ordinary_surrender_does_not_touch_the_consent(): void
+    {
+        $m = $this->inbound('cuanto vale?');
+        $this->commit($this->payload($m, [
+            'proposal' => ['intent' => SalesIntents::PRICING_QUESTION, 'reply_draft' => self::BORRADOR_ENVENENADO],
+            'recovery' => ['reason' => 'machine_reply_payment_fact', 'attempt' => 2],
+        ]))->assertOk();
+
+        $lead = $this->conversation->lead->fresh();
+        $this->assertFalse((bool) $lead->do_not_contact);
+        $this->assertTrue($lead->canReplyReactively());
+
+        $accion = MarketingAiAction::latest('id')->first();
+        $this->assertArrayNotHasKey('mark_do_not_contact', $accion->metadata);
+        $this->assertSame([], $accion->metadata['tools_requested'] ?? null);
+    }
+
     /** El turno rendido se audita como lo que es, no como un critic que falló. */
     public function test_the_surrender_is_audited_with_its_reason(): void
     {
