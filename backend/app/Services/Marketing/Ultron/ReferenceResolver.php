@@ -44,6 +44,25 @@ final class ReferenceResolver
 
     public const NONE = 'none';
 
+    /**
+     * Nombres de plan que además son palabras del calendario.
+     *
+     * Aquí está la causa de tres arreglos fallidos seguidos: el catálogo vende
+     * «Semana», «Mensual», «Trimestre», «Semestre» y «Anualidad», que son
+     * también cómo se dice el tiempo en español. Los dos primeros intentos
+     * enumeraron los contextos donde la palabra es inocente («a la», «por la»,
+     * «toda la»…) y los dos cayeron con el siguiente: los contextos son
+     * infinitos. El tercero miró la posición del artículo y cayó con «la semana
+     * pasada no pude», donde el periodo es el sujeto.
+     *
+     * Esta lista es de otra clase: enumera las PALABRAS ambiguas, y el
+     * calendario es cerrado. Un plan que se llame así sólo se elige cuando el
+     * texto nombra el producto —«plan semana»—, cuando el mensaje ES el nombre,
+     * o cuando un verbo de elección lo precede. Los nombres que no chocan con
+     * el idioma («Élite», «Pro», «Valera») conservan las formas sueltas.
+     */
+    private const NOMBRE_DE_CALENDARIO = '/^(dia|diario|diaria|semana|semanal|quincena|quincenal|mes|mensual|bimestre|bimestral|trimestre|trimestral|cuatrimestre|cuatrimestral|semestre|semestral|ano|anio|anual|anualidad)$/u';
+
     /** Cuántos caracteres hacia atrás se mira para ver si algo está negado. */
     private const VENTANA_NEGACION = 32;
 
@@ -158,6 +177,21 @@ final class ReferenceResolver
      * @param  array<int, array{id:int, name:string}>  $sellablePlans
      */
     /**
+     * ¿La frase cuenta un RITMO? «3 dias a la semana», «toda la semana».
+     *
+     * Sólo se usa para los nombres ambiguos y sólo en las ramas de precio,
+     * envío e información, donde el nombre puede ir en mitad de la oración. No
+     * pretende cubrir todos los contextos de tiempo —eso ya se intentó dos
+     * veces y no funciona—: cubre la forma en que se dice una frecuencia,
+     * que es numeral (o cuantificador) pegado a una unidad de tiempo.
+     */
+    private function pareceFrecuencia(string $t): bool
+    {
+        return preg_match('/\b(\d+|un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|todos?|todas?)\s+(los|las)?\s*(dias?|veces|vez|semanas?|meses|mes)\b/u', $t) === 1
+            || preg_match('/\b(todos?|todas?|cada|durante)\s+(el|la|los|las)\b/u', $t) === 1;
+    }
+
+    /**
      * El plan que la frase NOMBRA, si de verdad lo nombra.
      *
      * @param  bool  $permisivo  cuando la frase YA está clasificada como «precio
@@ -179,47 +213,45 @@ final class ReferenceResolver
                 continue;
             }
             $q = preg_quote($core, '/');
+            $ambiguo = preg_match(self::NOMBRE_DE_CALENDARIO, $core) === 1;
+
             /*
-             * ELEGIR ES UN ACTO, Y UN ARTÍCULO NO LO ES.
-             *
-             * Varios planes se llaman como un trozo de calendario —«Semana»,
-             * «Mensual», «Trimestre», «Semestre», «Anualidad»—, así que la
-             * palabra aparece a todas horas sin comprar nada. Dos intentos
-             * fallaron por lo mismo: el primero prohibía preposiciones («a la»,
-             * «por la») y cayó con «en la»; el segundo prohibía contextos de
-             * tiempo y cayó con «todos los dias de la semana». Las dos veces la
-             * regla era una LISTA, y la lista siempre tiene un hueco más.
-             *
-             * Lo que decide no es qué palabra va delante: es dónde está el
-             * artículo. En una elección el artículo ABRE la frase o la cláusula
-             * —«el mensual me sirve», «con el mensual voy»—; en una frase de
-             * tiempo el artículo es objeto de una preposición y nunca abre nada
-             * —«entreno EN la semana», «los 7 dias DE la semana»—. Eso no es
-             * una lista: es la estructura.
-             *
-             * Formas que cuentan:
-             *   1. el mensaje ES el nombre              → «semana»
+             * Cuatro formas valen para cualquier plan, porque son actos de
+             * elección y no apariciones de la palabra:
+             *   1. el mensaje ES el nombre                → «semana»
              *   2. el mensaje ES (sí +) artículo + nombre → «si el mensual»
-             *   3. el nombre va con la palabra «plan»   → «el plan semana»
-             *   4. un verbo de elección lo precede      → «me quedo con la semana»
-             *   5. el artículo abre frase o cláusula    → «el mensual me sirve»
+             *   3. el nombre va con la palabra «plan»     → «el plan semana»
+             *   4. un verbo de elección lo precede        → «me quedo con la semana»
              *
-             * Y una sexta sólo en modo permisivo: el nombre en mitad de la
-             * oración, cuando la frase ya se clasificó como precio, envío o más
-             * información, porque entonces hablar del plan es el asunto.
+             * Para un nombre que NO choca con el calendario se añaden las
+             * formas sueltas: el artículo que abre la cláusula y, cuando la
+             * frase ya se clasificó como precio, envío o más información, el
+             * nombre en cualquier posición («¿cuánto sale el élite?»).
+             *
+             * Para uno ambiguo, sólo una más y con dos condiciones: el nombre
+             * al FINAL de una frase de precio/envío/info que no hable de
+             * frecuencia. Así «precio del trimestral» sigue resolviendo y
+             * «cuánto cuesta entrenar 3 días a la semana» —que es el fallo del
+             * canario entrando por la otra puerta— no.
              */
             $eleccion = '(quiero|prefiero|me quedo con|me quedo|dame|deme|voy con|me interesa|me gusta|elijo|escojo|llevo|compro)';
             $articulo = '(el|la|los|las|del|de la|con el|con la|si el|si la|el de)';
+            $cortesia = '(\s+(por favor|porfa|gracias|dale|pues|entonces|mejor))*[.!?]*';
 
             $formas = [
                 '^'.$q.'$',
                 '^(si|claro|dale|listo|ok|vale|bueno)?\s*(el|la|los|las)\s+(plan\s+)?'.$q.'$',
                 '\bplan\s+'.$q.'\b',
                 '\b'.$eleccion.'\s+(el|la|los|las)?\s*(plan\s+)?'.$q.'\b',
-                '(^|,\s*)'.$articulo.'\s+(plan\s+)?'.$q.'\b',
             ];
-            if ($permisivo) {
-                $formas[] = '\b'.$articulo.'\s+(plan\s+)?'.$q.'\b';
+
+            if (! $ambiguo) {
+                $formas[] = '(^|,\s*)'.$articulo.'\s+(plan\s+)?'.$q.'\b';
+                if ($permisivo) {
+                    $formas[] = '\b'.$articulo.'\s+(plan\s+)?'.$q.'\b';
+                }
+            } elseif ($permisivo && ! $this->pareceFrecuencia($t)) {
+                $formas[] = '\b'.$articulo.'\s+(plan\s+)?'.$q.$cortesia.'$';
             }
 
             $rx = '/('.implode(')|(', $formas).')/u';

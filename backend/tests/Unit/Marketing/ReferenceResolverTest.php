@@ -379,47 +379,117 @@ class ReferenceResolverTest extends TestCase
     }
 
     /**
-     * El otro lado de la misma regla, y el que nadie había fijado: una
-     * referencia a mitad de frase, sin verbo de elección, SÍ elige cuando el
-     * artículo abre la frase. Al cerrar la clase por segunda vez esto se perdió
-     * en silencio durante un commit; queda escrito para que nadie lo
-     * reintroduzca ni lo vuelva a quitar sin darse cuenta.
+     * EL PRECIO DE LA AMBIGÜEDAD, ESCRITO.
+     *
+     * Un plan que se llama como el calendario pierde las formas sueltas: «el
+     * mensual me sirve» ya NO elige. Es una pérdida de recall deliberada, y
+     * está aquí para que nadie la «arregle» sin leer por qué: la alternativa
+     * —dejar que un artículo suelto elija— hizo que «la semana pasada no pude»
+     * y «¿cuánto cuesta entrenar 3 días a la semana?» cotizaran el Plan Semana.
+     * Entre perder una referencia y cobrar el plan equivocado, se pierde la
+     * referencia; la clase entera falla hacia NONE por diseño.
+     *
+     * Quien quiera elegirlo tiene tres formas que siguen funcionando: decir el
+     * nombre solo, decirlo con la palabra «plan», o un verbo de elección.
      */
-    #[DataProvider('referenciasQueAbrenLaFrase')]
-    public function test_an_opening_article_still_chooses(string $texto, int $plan): void
+    #[DataProvider('referenciasSueltasDeNombreAmbiguo')]
+    public function test_a_calendar_named_plan_is_not_chosen_by_a_loose_article(string $texto): void
     {
         $r = $this->r->resolve($texto, ConversationMemory::empty(), self::PLANES_DE_CALENDARIO);
+
+        $this->assertSame(R::NONE, $r['type'], $texto);
+        $this->assertNull($r['plan_id']);
+    }
+
+    public static function referenciasSueltasDeNombreAmbiguo(): array
+    {
+        return [
+            ['el mensual me sirve'],
+            ['la anualidad me parece bien'],
+            ['el trimestre esta bien'],
+            ['el semestre me conviene'],
+            ['con el mensual voy'],
+            // Y las que costaron el arreglo anterior: el periodo como SUJETO.
+            ['la semana pasada no pude'],
+            ['la semana que viene empiezo'],
+            ['el semestre pasado me lesione'],
+        ];
+    }
+
+    /** El nombre que NO choca con el idioma conserva las formas sueltas. */
+    #[DataProvider('referenciasSueltasDeNombreDistintivo')]
+    public function test_a_distinctive_name_is_still_chosen_loosely(string $texto, int $plan): void
+    {
+        $planes = array_merge(self::PLANES_DE_CALENDARIO, [['id' => 22, 'name' => 'Élite', 'benefits' => []]]);
+        $r = $this->r->resolve($texto, ConversationMemory::empty(), $planes);
 
         $this->assertSame(R::CHOOSE_PLAN, $r['type'], $texto);
         $this->assertSame($plan, $r['plan_id']);
     }
 
-    public static function referenciasQueAbrenLaFrase(): array
+    public static function referenciasSueltasDeNombreDistintivo(): array
     {
         return [
-            ['el mensual me sirve', 20],
-            ['la anualidad me parece bien', 27],
-            ['el trimestre esta bien', 26],
-            ['el semestre me conviene', 25],
-            ['con el mensual voy', 20],
+            ['el élite me sirve', 22],
+            ['con el élite voy', 22],
+            ['el elite esta bien', 22],
         ];
     }
 
     /**
-     * Y la frontera exacta entre las dos cosas, en una sola prueba: la MISMA
-     * palabra, el mismo plan, y lo único que cambia es si el artículo abre la
-     * frase o es objeto de una preposición.
+     * La pregunta más frecuente de una venta de gimnasio, que es justo donde el
+     * fallo del canario volvió a entrar por la otra puerta: preguntar el precio
+     * de entrenar N días a la semana NO es preguntar por el Plan Semana.
      */
-    public function test_the_line_is_whether_the_article_opens_the_clause(): void
+    #[DataProvider('preciosDeUnaFrecuencia')]
+    public function test_asking_the_price_of_a_frequency_is_not_asking_for_the_weekly_plan(string $texto): void
     {
+        $r = $this->r->resolve($texto, ConversationMemory::empty(), self::PLANES_DE_CALENDARIO);
+
+        $this->assertNotSame(23, $r['plan_id'], $texto.' no cotiza el Plan Semana');
+    }
+
+    public static function preciosDeUnaFrecuencia(): array
+    {
+        return [
+            ['cuanto cuesta entrenar 3 dias a la semana'],
+            ['cuanto vale ir 5 dias a la semana'],
+            ['y cuanto por ir 4 dias a la semana'],
+            ['a cuanto sale entrenar 6 dias a la semana'],
+            ['cuanto cuesta si voy toda la semana'],
+            ['cuentame mas de entrenar 3 dias a la semana'],
+            ['mandame info de ir 3 dias a la semana'],
+        ];
+    }
+
+    /** Y preguntar el precio de un plan ambiguo, sin frecuencia, sí resuelve. */
+    public function test_asking_the_price_of_a_calendar_plan_still_resolves(): void
+    {
+        $planes = [['id' => 24, 'name' => 'Plan Trimestral', 'benefits' => []], ['id' => 20, 'name' => 'Plan Mensual', 'benefits' => []]];
+
+        $this->assertSame(24, $this->r->resolve('precio del trimestral', ConversationMemory::empty(), $planes)['plan_id']);
+        $this->assertSame(20, $this->r->resolve('cuanto vale el mensual', ConversationMemory::empty(), $planes)['plan_id']);
+    }
+
+    /**
+     * La frontera, en una sola prueba: la misma frase, el mismo sitio, y lo
+     * único que cambia es si el nombre del plan choca con el calendario.
+     */
+    public function test_the_line_is_whether_the_name_collides_with_the_calendar(): void
+    {
+        $planes = [['id' => 23, 'name' => 'Plan Semana', 'benefits' => []], ['id' => 22, 'name' => 'Élite', 'benefits' => []]];
         $m = ConversationMemory::empty();
 
-        $elige = $this->r->resolve('la semana me sirve', $m, self::PLANES_DE_CALENDARIO);
-        $this->assertSame(R::CHOOSE_PLAN, $elige['type'], 'abre la frase: elige');
-        $this->assertSame(23, $elige['plan_id']);
+        $ambiguo = $this->r->resolve('la semana me sirve', $m, $planes);
+        $this->assertSame(R::NONE, $ambiguo['type'], 'nombre de calendario: no elige por un artículo suelto');
 
-        $noElige = $this->r->resolve('entreno en la semana', $m, self::PLANES_DE_CALENDARIO);
-        $this->assertSame(R::NONE, $noElige['type'], 'objeto de preposición: no elige');
-        $this->assertNull($noElige['plan_id']);
+        $distintivo = $this->r->resolve('el élite me sirve', $m, $planes);
+        $this->assertSame(R::CHOOSE_PLAN, $distintivo['type'], 'nombre propio: sí elige');
+        $this->assertSame(22, $distintivo['plan_id']);
+
+        // Y el ambiguo se elige diciéndolo de las formas que no dejan duda.
+        foreach (['semana', 'quiero el plan semana', 'me quedo con la semana'] as $texto) {
+            $this->assertSame(23, $this->r->resolve($texto, $m, $planes)['plan_id'], $texto);
+        }
     }
 }
