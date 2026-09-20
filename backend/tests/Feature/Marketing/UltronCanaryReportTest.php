@@ -106,6 +106,25 @@ class UltronCanaryReportTest extends TestCase
         $this->assertStringContainsString('CANARIO NO PASA', $salida);
     }
 
+    /**
+     * El escenario F del canario: la persona PIDE hablar con alguien y Laravel
+     * lo autoriza. Ofrecerlo entonces es lo correcto, y contarlo dejaría al
+     * canario sin poder probar nunca el único motivo que el modelo propone.
+     */
+    public function test_a_handoff_the_person_asked_for_is_not_a_finding(): void
+    {
+        $this->turno('necesito hablar con una persona', 'Claro, te conecto con alguien del equipo.', [
+            'handoff_authorized' => true,
+        ]);
+
+        [$codigo, $salida] = $this->correr();
+
+        $this->assertSame(0, $codigo);
+        $this->assertStringContainsString('CANARIO SIN HALLAZGOS MECANICOS', $salida);
+        // Y queda a la vista de quien lee: no se ha escondido, se ha clasificado.
+        $this->assertStringContainsString('traspasos_autorizados            : 1', $salida);
+    }
+
     public function test_a_plan_that_is_not_sold_fails_the_canary(): void
     {
         $this->turno('qué opciones hay?', 'Te recomiendo el Convenio Interno, que es el que más se lleva.');

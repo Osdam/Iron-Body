@@ -493,6 +493,14 @@ class UltronCommitService
 
         $action = $this->persist($conversation, $message, $payload, $decision, $nextState, $plan, [
             'source' => 'external_draft',
+            /*
+             * Si la derivación de este turno la AUTORIZÓ Laravel. Se guarda
+             * porque, sin ella, leer la conversación después no distingue el
+             * traspaso que pidió la persona del que se ofreció solo, y el acta
+             * del canario —donde ese contador tiene que ser cero— tendría que
+             * adivinarlo. Cuando no hay derivación, no se escribe.
+             */
+            'handoff_authorized' => $handoffAutorizado ?: null,
             // El veredicto se audita también cuando aprueba; si no vino, no se inventa.
             'critic' => CriticContract::judged($critic) ? CriticContract::forMetadata($critic) : null,
             'strategy' => StrategyContract::fromProposal($proposal) ?: null,

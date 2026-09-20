@@ -161,6 +161,9 @@ class UltronCanaryReport extends Command
                 'riesgos' => $meta['risk_flags'] ?? [],
                 'novedad' => $meta['novelty_max_similarity'] ?? null,
                 'revision_humana' => $meta['needs_staff_review'] ?? false,
+                // Si la persona PIDIÓ hablar con alguien y Laravel lo autorizó,
+                // ofrecerlo es lo correcto, no un hallazgo.
+                'traspaso_autorizado' => (bool) ($meta['handoff_authorized'] ?? false),
                 'salientes' => $salientes->map(fn (MarketingMessage $m) => [
                     'id' => (int) $m->id,
                     'tipo' => data_get($m->metadata, 'kind', 'text'),
@@ -233,7 +236,13 @@ class UltronCanaryReport extends Command
                 $texto = $s['texto'];
                 $ref = 'turno '.$t['turno'].' · mensaje '.$s['id'];
 
-                if ($guard->handoffOfferIn($texto) !== null) {
+                /*
+                 * Un traspaso que SALIÓ sin que Laravel lo autorizara. Con la
+                 * autorización, ofrecerlo es exactamente lo que toca —la
+                 * persona lo pidió— y contarlo dejaría el canario sin poder
+                 * probar nunca el único motivo que el modelo puede proponer.
+                 */
+                if (! $t['traspaso_autorizado'] && $guard->handoffOfferIn($texto) !== null) {
                     $mecanicos['traspasos_no_autorizados'][] = $ref;
                 }
 
@@ -313,6 +322,7 @@ class UltronCanaryReport extends Command
                 'similitud_maxima_con_respuestas_previas' => array_values(array_filter(array_map(fn ($t) => $t['novedad'] === null ? null : ['turno' => $t['turno'], 'similitud' => $t['novedad']], $turnos))),
                 'referentes_resueltos' => array_values(array_map(fn ($t) => ['turno' => $t['turno'], 'referente' => $t['referente']], $turnos)),
                 'turnos_con_revision_humana' => array_values(array_filter(array_map(fn ($t) => $t['revision_humana'] ? $t['turno'] : null, $turnos))),
+                'traspasos_autorizados' => array_values(array_filter(array_map(fn ($t) => $t['traspaso_autorizado'] ? $t['turno'] : null, $turnos))),
                 'turnos_bloqueados' => array_values(array_filter(array_map(fn ($t) => $t['blocked_reason'] === null ? null : ['turno' => $t['turno'], 'motivo' => $t['blocked_reason']], $turnos))),
             ],
         ];
@@ -363,6 +373,7 @@ class UltronCanaryReport extends Command
         $this->line('  referentes_resueltos             : '.implode(', ', array_map(fn ($r) => $r['turno'].'='.($r['referente'] ?? '-'), $h['referentes_resueltos'])));
         $this->line('  similitud_con_respuestas_previas : '.(count($h['similitud_maxima_con_respuestas_previas']) === 0 ? 'sin dato' : implode(', ', array_map(fn ($r) => $r['turno'].'='.$r['similitud'], $h['similitud_maxima_con_respuestas_previas']))));
         $this->line('  turnos_con_revision_humana       : '.($h['turnos_con_revision_humana'] === [] ? 'ninguno' : implode(', ', $h['turnos_con_revision_humana'])));
+        $this->line('  traspasos_autorizados            : '.($h['traspasos_autorizados'] === [] ? 'ninguno' : implode(', ', $h['traspasos_autorizados'])).' (los pidió la persona)');
         $this->line('  turnos_bloqueados                : '.($h['turnos_bloqueados'] === [] ? 'ninguno' : implode(', ', array_map(fn ($r) => $r['turno'].'='.$r['motivo'], $h['turnos_bloqueados']))));
         $this->newLine();
 
