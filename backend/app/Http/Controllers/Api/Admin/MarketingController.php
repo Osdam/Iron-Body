@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Admin;
 use App\Models\MarketingAiAction;
 use App\Models\MarketingAttribution;
 use App\Models\MarketingCampaign;
@@ -234,8 +235,22 @@ class MarketingController extends Controller
         $leadModel = MarketingLead::findOrFail($lead);
         $plan = Plan::findOrFail($data['plan_id']);
 
+        /*
+         * Quién lo pide. Esta ruta la abre una PERSONA con sesión del CRM, y
+         * decirlo cambia dos cosas y ninguna es el permiso: el mensaje de la
+         * negativa (para que no mande a revisar la pasarela cuando lo que falta
+         * es la autorización del negocio) y la traza de quién intentó acuñar.
+         * El id sale de la sesión que ya resolvió el middleware, nunca del
+         * cuerpo de la petición: un `origin` que se pudiera mandar por JSON
+         * sería una cadena de texto haciendo de permiso.
+         */
+        $autoridad = [
+            'origin' => SalesPaymentGuardrailService::ORIGIN_HUMAN_PANEL,
+            'admin_id' => ($admin = $request->attributes->get('auth_admin')) instanceof Admin ? $admin->id : null,
+        ];
+
         try {
-            $guardrail->assertCanGeneratePaymentLink($leadModel, $plan, $request->all());
+            $guardrail->assertCanGeneratePaymentLink($leadModel, $plan, $request->all(), $autoridad);
         } catch (SalesGuardrailException $e) {
             return response()->json([
                 'ok' => false,
@@ -249,7 +264,24 @@ class MarketingController extends Controller
             'channel' => $leadModel->channel,
             'wants_invoice' => (bool) ($data['wants_invoice'] ?? false),
             'invoice_email' => $data['invoice_email'] ?? null,
+            'origin' => $autoridad['origin'],
+            'authorized_by' => $autoridad['admin_id'],
         ]);
+
+        /*
+         * El embudo dijo que no. Normalmente lo habría dicho ya el guardrail de
+         * arriba; esto cubre que un día deniegue por algo que este controlador
+         * no preguntó, y evita lo peor: un 200 con `payment_url: null` que en
+         * el panel se lee como éxito.
+         */
+        if (($result['authorized'] ?? true) === false) {
+            return response()->json([
+                'ok' => false,
+                'code' => $result['error'] ?? 'payment_links_disabled',
+                'message' => $result['message'] ?? 'No se puede generar un enlace de pago ahora mismo.',
+                'escalate' => (bool) ($result['escalate'] ?? true),
+            ], (int) ($result['http_status'] ?? 403));
+        }
 
         if (($result['configured'] ?? false) === false) {
             return response()->json([

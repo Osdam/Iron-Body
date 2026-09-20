@@ -293,6 +293,14 @@ class PaymentLinkHardGateTest extends TestCase
 
         $r->assertStatus(403)->assertJsonPath('code', 'payment_links_disabled');
         $this->assertNothingMinted('admin/payment-link con sesión real de persona');
+
+        /*
+         * Y se le dice a la persona lo que pasa de verdad. La negativa genérica
+         * mandaría a revisar la pasarela, que está bien, y el rato perdido ahí
+         * es la diferencia entre una bandera y un misterio. El origen humano se
+         * distingue para el mensaje y para la traza; el permiso es el mismo.
+         */
+        $this->assertStringContainsString('tampoco se generan a mano', (string) $r->json('message'));
     }
 
     /** Y con la bandera encendida, esa misma persona sí puede. */
