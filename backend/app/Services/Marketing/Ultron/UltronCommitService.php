@@ -1309,6 +1309,21 @@ class UltronCommitService
      * @return array<string,mixed>|null null cuando no se pidió
      */
     /**
+     * El saliente tal y como se JUZGÓ, sin lo que Laravel le añadió después.
+     *
+     * La línea de enlaces es literal —la escribe `MobileAppCatalog`—, así que
+     * se quita por igualdad exacta; lo que quede con pinta de URL se tapa con
+     * la definición del guard. Sin esto, la novedad compara prosa contra
+     * prosa+enlaces y el parecido se hunde por debajo del umbral.
+     */
+    private function comoSeComparo(string $body): string
+    {
+        $sinEnlaces = trim(str_replace(MobileAppCatalog::linksInline(), '', $body));
+
+        return OutboundContentGuard::withoutUrls($sinEnlaces) ?? $sinEnlaces;
+    }
+
+    /**
      * ¿Llevan enlaces de la app este turno? Sin efectos: sólo el veredicto.
      *
      * Se calcula ANTES del envío porque el texto tiene que salir ya con ellos.
@@ -1542,6 +1557,15 @@ class UltronCommitService
             ->where('created_at', '>=', now()->subHours(24))
             ->latest('id')->limit(3)->pluck('body')
             ->filter(fn ($b) => is_string($b) && trim($b) !== '')
+            /*
+             * Sin los enlaces, porque el borrador con el que se comparan tampoco
+             * los lleva todavía: la sustitución de {{APP_LINKS}} ocurre después
+             * de la novedad. Comparar prosa contra prosa+URLs hundía el parecido
+             * —192 caracteres de enlace bajan un Jaccard de 1.000 a 0.519, por
+             * debajo del umbral de 0.85— y desactivaba la red que impide mandar
+             * dos veces el mismo párrafo. Se comprobó de punta a punta.
+             */
+            ->map(fn (string $b) => $this->comoSeComparo($b))
             ->values()->all();
     }
 }

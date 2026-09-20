@@ -381,4 +381,32 @@ class UltronMobileAppTest extends TestCase
             'tools_requested' => [],
         ])->assertStatus(422)->assertJsonPath('code', 'unknown_placeholder');
     }
+
+    /**
+     * LA RED DE LA NOVEDAD SIGUE ENCENDIDA CON LOS ENLACES DENTRO.
+     *
+     * Lo encontró la revisión: la novedad dura compara el borrador —que
+     * todavía NO lleva los enlaces, porque se sustituyen después— contra lo
+     * que quedó guardado, que sí los lleva. 192 caracteres de URL bajan el
+     * parecido de 1.000 a 0.519, por debajo del umbral, y el mismo párrafo
+     * podía salir dos veces. Con los enlaces fuera de la comparación, el
+     * segundo turno vuelve a bloquearse.
+     */
+    public function test_the_same_paragraph_does_not_go_out_twice_because_of_the_links(): void
+    {
+        $mismo = 'Claro, te paso los enlaces para descargarla y registrarte con tu documento.';
+
+        $this->commit($this->inbound('pásame la app', 'a.14'), ['reply_draft' => $mismo])->assertOk();
+
+        $r = $this->commit($this->inbound('y para registrarme?', 'a.15'), ['reply_draft' => $mismo])->assertOk();
+
+        $this->assertSame('no_reply', $r->json('outcome'), 'repetir el mismo párrafo no sale');
+        $this->assertSame('repeated_reply', $r->json('blocked_reason'));
+        $this->assertSame(
+            1,
+            MarketingMessage::where('conversation_id', $this->conversation->id)
+                ->where('direction', MarketingMessage::DIRECTION_OUTBOUND)->count(),
+            'un solo saliente en toda la conversación',
+        );
+    }
 }
