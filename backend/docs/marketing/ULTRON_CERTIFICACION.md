@@ -155,13 +155,18 @@ prueba, porque arreglarlas ahora sería abrir un refactor con el canario abierto
   resuelve, así que no gobierna la conversación real. Para el canario da igual
   —es el propietario probando su propio número—, pero antes del tráfico general
   el consentimiento tiene que ser del TELÉFONO, no de la fila.
-- **`/ai/commit` exige el canario, pero no el interruptor maestro.** Desde
-  `33db7bc` un commit para una conversación distinta de la del canario se
-  rechaza con 403 y sin efectos. Lo que no comprueba es
-  `marketing.ultron.enabled`: el día que el canario se quite (id a `null` = sin
-  restricción), esa puerta vuelve a aceptar cualquier conversación mientras
-  alguien tenga el secreto. Añadirlo hoy obligaría a tocar decenas de pruebas
-  que ejercitan el commit con el interruptor apagado.
+- **El orquestador legado no tiene prueba de que archive donde debe.** Sus tres
+  despachos pasan ya la conversación (`e00932e`), pero ningún test lo fija: el
+  caso que falta es `POST internal/marketing/analyze-message` con el
+  `conversation_id` de una conversación CERRADA y `auto_execute: true`,
+  asertando que el saliente cae en ESA y no en la abierta. El arreglo está bien
+  hecho; lo que no hay es nada que impida deshacerlo en silencio mañana.
+
+- ~~**`/ai/commit` exige el canario, pero no el interruptor maestro.**~~
+  **CERRADO en `1c43eda`**: la puerta comprueba las dos cosas, independientes y
+  antes de cualquier efecto. Se verificó en producción en el peor caso —canario
+  alineado y ULTRON apagado—: `ultron_disabled`, sin mensaje, sin acción y sin
+  cambio de fase.
 
 
 
