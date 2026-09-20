@@ -418,4 +418,63 @@ class PaymentFactGuardTest extends TestCase
     {
         $this->assertNull($this->guard->contradiction('El registro de tu pago aparece pendiente.', 'none'));
     }
+
+    // ── La frase que este guard existe para dejar pasar ──────────────────────
+
+    /**
+     * «Todavía no me llegó tu pago» es LA frase honesta del sistema: la que se
+     * le dice a alguien que escribe «ya te transferí» cuando el CRM no ve nada.
+     *
+     * La ronda anterior la rompió. Al dar a la negación los mismos frenos que a
+     * la subordinada, cualquier negación en pasado de indicativo dejó de eximir,
+     * y todas éstas —que son la honestidad— empezaron a morir con 422. No era
+     * silencio, porque la rendición contesta con el texto curado, pero cambiaba
+     * la respuesta natural por una enlatada y dejaba revisión humana pendiente
+     * en cada turno.
+     *
+     * Lo que separa la honestidad de la cortesía que miente no es el tiempo
+     * verbal —las dos van en pasado— sino dónde está el «no»: pegado al verbo
+     * que niega, o con un predicado entero por medio.
+     */
+    public static function negacionesHonestasEnPasado(): array
+    {
+        return [
+            ['Todavia no llego tu pago.'],
+            ['Aun no entro tu pago.'],
+            ['Todavia no recibimos tu pago.'],
+            ['No recibimos tu pago aun.'],
+            ['Todavia no se registro tu pago.'],
+            ['El banco todavia no aprobo tu pago.'],
+            ['No se acredito tu pago todavia.'],
+            ['Tu pago no llego todavia.'],
+            ['Tu pago aun no entro al sistema.'],
+        ];
+    }
+
+    #[DataProvider('negacionesHonestasEnPasado')]
+    public function test_the_honest_sentence_this_guard_exists_for_gets_through(string $texto): void
+    {
+        $this->assertNull(
+            $this->guard->contradiction($texto, 'none'),
+            'decir con honestidad que el pago no ha llegado es lo que el sistema tiene que poder decir',
+        );
+    }
+
+    /** Y la cortesía que afirma sigue bloqueada, con el «no» lejos del verbo. */
+    public function test_courtesy_with_the_negation_far_from_the_verb_still_blocks(): void
+    {
+        foreach ([
+            'No te preocupes que ya recibimos tu pago.',
+            'No te preocupes tu pago fue confirmado.',
+            'Tranquilo no te preocupes que tu pago quedo registrado.',
+        ] as $texto) {
+            $this->assertNotNull($this->guard->contradiction($texto, 'none'), $texto);
+        }
+    }
+
+    /** Un tercero que aprueba el pago sin negación ninguna: sigue afirmando. */
+    public function test_a_third_party_approving_the_payment_is_still_a_claim(): void
+    {
+        $this->assertNotNull($this->guard->contradiction('El banco aprobo tu pago esta manana.', 'none'));
+    }
 }

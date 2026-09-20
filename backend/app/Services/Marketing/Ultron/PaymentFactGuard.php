@@ -94,6 +94,17 @@ final class PaymentFactGuard
      */
     private const ALCANCE_SUBORDINADA = 16;
 
+    /**
+     * Cuánto puede haber entre el «no» y el verbo que niega para considerarlo
+     * PEGADO.
+     *
+     * Seis caracteres: lo que cabe en un pronombre o un artículo —«no se
+     * acreditó», «no llegó», «no recibimos»—. Un predicado entero por medio
+     * («no te preocupes que…») mide el triple, y ésa es exactamente la
+     * diferencia entre negar el pago y negar otra cosa mientras se afirma.
+     */
+    private const ALCANCE_NEGACION_PEGADA = 6;
+
     /** Pedir una captura o un comprobante como prueba. Nunca vale, con pago o sin él. */
     private const PIDE_COMPROBANTE = [
         '~\b(captura|pantallazo|screenshot|foto|imagen|soporte|comprobante|recibo|voucher)\b[^.!?;]{0,40}\b(del?\s+)?(pago|transferencia|consignacion|comprobante|deposito)\b~u',
@@ -163,19 +174,29 @@ final class PaymentFactGuard
             $pos = (int) $m[0][1];
 
             /*
-             * «todavía no me aparece tu pago confirmado»: eso es la honestidad
-             * que el sistema quiere poder decir.
+             * «todavía no me llegó tu pago»: eso es la honestidad que el
+             * sistema existe para poder decir, y es la frase más importante de
+             * todo este guard.
              *
-             * Con los mismos dos frenos que la subordinada, y por el mismo
-             * motivo: sin límite de distancia, un «no» que niega OTRA cosa
-             * seguía eximiendo mientras no hubiera coma. «No te preocupes que
-             * ya recibimos tu pago» pasaba. El «ya» y el pasado de indicativo
-             * dicen que el dinero entró, y ninguna negación de otra cosa lo
-             * vuelve falso.
+             * Lo que distingue esa honestidad de la cortesía que miente no es
+             * el tiempo verbal —las dos van en pasado— sino DÓNDE está el «no».
+             * La negación se pega al verbo que niega: «no llegó», «no se
+             * acreditó». La cortesía mete un predicado entero por medio: «no te
+             * preocupes QUE ya recibimos tu pago». Por eso el pasado de
+             * indicativo sólo cancela la exención cuando la negación NO está
+             * pegada, y una negación dentro del propio tramo que casó («tu pago
+             * no llegó todavía») siempre cuenta.
+             *
+             * El «ya» sigue mandando sobre todo lo demás: dice que el dinero
+             * entró, lo acompañe la negación que lo acompañe.
              */
-            if ($this->niegaLaNegacion($frase, $pos)
+            $dentroDelTramo = preg_match(self::NIEGA, $texto) === 1;
+            $niega = $dentroDelTramo || $this->niegaLaNegacion($frase, $pos);
+            $pegadaAlVerbo = $dentroDelTramo || $this->gobierna(self::NIEGA, $frase, $pos, self::ALCANCE_NEGACION_PEGADA);
+
+            if ($niega
                 && ! $this->yaOcurrido($frase)
-                && ! $this->enPasadoIndicativo($texto)) {
+                && (! $this->enPasadoIndicativo($texto) || $pegadaAlVerbo)) {
                 continue;
             }
 
