@@ -122,6 +122,23 @@ class ExpresionesTortureTest extends TestCase
         'necesito asesoria' => 'idem',
         'prefiero la asesoria personalizada' => 'idem',
         'necesito atencion personalizada' => 'en un gimnasio puede ser un entrenador personal',
+        /*
+         * «personal» es el EQUIPO cuando la frase pregunta por el servicio.
+         * Donde el verbo ya dice la intención —«hablar con el personal»— sí
+         * cuenta, y eso se prueba aparte.
+         */
+        'me atiende personal capacitado' => 'pregunta por el equipo, no pide hablar con nadie',
+        'me puede atender el personal' => 'idem',
+        'que me atienda el personal' => 'idem',
+        /*
+         * Las que SÍ escalaban por el prefijo de «persona» y dejaron de
+         * hacerlo. Se listan las de verdad: «necesito atencion personalizada»
+         * nunca escaló —ahí «personalizada» va detrás de «atención» y ningún
+         * patrón llega— y darla por demostrativa habría sido acusar por
+         * parecido de cadena.
+         */
+        'me pueden atender personalizadamente' => 'el prefijo de persona casaba el adverbio',
+        'me atiende personalizada' => 'idem, con el adjetivo suelto',
     ];
 
     /** Las formas inequívocas de pedir una persona. */
@@ -422,6 +439,9 @@ class ExpresionesTortureTest extends TestCase
             ['quiero la asesora'],
             ['hablar con la recepcionista'],
             ['me pasa con el encargado'],
+            // «personal» donde el verbo ya dice la intención: eso es la plantilla.
+            ['hablar con el personal'],
+            ['pasame con el personal'],
         ];
     }
 
