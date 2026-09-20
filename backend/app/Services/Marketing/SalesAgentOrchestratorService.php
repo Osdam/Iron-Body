@@ -299,7 +299,9 @@ class SalesAgentOrchestratorService
             return null;
         }
 
-        $send = $this->dispatcher->dispatchWhatsapp($lead, $conversation->channel, (string) $reply, ['kind' => 'reply']);
+        // La conversación, explícita: la tiene el método y el saliente pertenece
+        // a ella, no al primer hilo que encuentre el despachador.
+        $send = $this->dispatcher->dispatchWhatsapp($lead, $conversation->channel, (string) $reply, ['kind' => 'reply'], conversation: $conversation);
 
         $created = $send['message_id'] !== null;
         $status = ($send['sent'] || $send['dry_run'])
@@ -447,7 +449,7 @@ class SalesAgentOrchestratorService
             $body = $this->replies->paymentPendingReply();
             $send = $this->dispatcher->dispatchWhatsapp($lead, $conversation->channel, $body, [
                 'kind' => 'payment_pending',
-            ]);
+            ], conversation: $conversation);
 
             return [
                 'tool' => SalesIntents::TOOL_PAYMENT_LINK_SEND,
@@ -487,7 +489,7 @@ class SalesAgentOrchestratorService
         $send = $this->dispatcher->dispatchWhatsapp($lead, $conversation->channel, $body, [
             'kind' => 'payment_link',
             'reference' => $link['reference'] ?? null,
-        ]);
+        ], conversation: $conversation);
 
         return array_merge(['tool' => SalesIntents::TOOL_PAYMENT_LINK_SEND, 'status' => 'executed'], [
             'payment_url' => $link['payment_url'],

@@ -151,4 +151,41 @@ class OutboundLandsInItsConversationTest extends TestCase
         $this->assertSame($this->actual->id, (int) ($send['conversation_id'] ?? 0));
         $this->assertSame(0, MarketingMessage::where('conversation_id', $this->vieja->id)->count());
     }
+
+    /**
+     * Las otras dos puertas que la revisión encontró abiertas: el orquestador
+     * legado y `send-message`. Las dos conocen la conversación —una la recibe
+     * tipada, la otra la nombra quien llama— y las dos la tiraban, así que
+     * mandaban al hilo que eligiera el respaldo.
+     */
+    public function test_send_message_files_the_reply_in_the_conversation_it_was_told(): void
+    {
+        $r = $this->postJson('/api/internal/marketing/send-message', [
+            'conversation_id' => $this->actual->id,
+            'body' => 'Mensaje dirigido a un hilo concreto',
+        ], $this->h())->assertOk();
+
+        $this->assertSame($this->actual->id, (int) $r->json('conversation_id'));
+
+        $saliente = MarketingMessage::where('direction', MarketingMessage::DIRECTION_OUTBOUND)->sole();
+        $this->assertSame($this->actual->id, (int) $saliente->conversation_id);
+        $this->assertSame(0, MarketingMessage::where('conversation_id', $this->vieja->id)->count());
+    }
+
+    /**
+     * Y la conversación CERRADA, si es la que se nombra, también manda: quien
+     * la nombra sabe lo que hace, y el respaldo —que prefiere la abierta— no
+     * puede corregirle la puntería.
+     */
+    public function test_naming_the_closed_conversation_is_honoured(): void
+    {
+        $r = $this->postJson('/api/internal/marketing/send-message', [
+            'conversation_id' => $this->vieja->id,
+            'body' => 'Mensaje al hilo viejo, a propósito',
+        ], $this->h())->assertOk();
+
+        $this->assertSame($this->vieja->id, (int) $r->json('conversation_id'));
+        $this->assertSame(1, MarketingMessage::where('conversation_id', $this->vieja->id)->count());
+        $this->assertSame(0, MarketingMessage::where('conversation_id', $this->actual->id)->where('direction', 'outbound')->count());
+    }
 }

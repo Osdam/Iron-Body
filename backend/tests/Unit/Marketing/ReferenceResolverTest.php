@@ -24,6 +24,15 @@ class ReferenceResolverTest extends TestCase
         ['id' => 23, 'name' => 'Plan Semana', 'benefits' => []],
     ];
 
+    /** El catálogo real: varios planes se llaman como un trozo de calendario. */
+    private const PLANES_DE_CALENDARIO = [
+        ['id' => 20, 'name' => 'Plan Mensual', 'benefits' => []],
+        ['id' => 23, 'name' => 'Plan Semana', 'benefits' => []],
+        ['id' => 25, 'name' => 'Semestre', 'benefits' => []],
+        ['id' => 26, 'name' => 'Trimestre', 'benefits' => []],
+        ['id' => 27, 'name' => 'Anualidad', 'benefits' => []],
+    ];
+
     private R $r;
 
     protected function setUp(): void
@@ -267,7 +276,7 @@ class ReferenceResolverTest extends TestCase
     #[DataProvider('frecuencias')]
     public function test_a_frequency_never_chooses_a_plan(string $texto): void
     {
-        $r = $this->r->resolve($texto, ConversationMemory::empty(), self::PLANES_CON_SEMANA);
+        $r = $this->r->resolve($texto, ConversationMemory::empty(), self::PLANES_DE_CALENDARIO);
 
         $this->assertSame(R::NONE, $r['type'], $texto.' no elige ningún plan');
         $this->assertNull($r['plan_id']);
@@ -276,12 +285,63 @@ class ReferenceResolverTest extends TestCase
     public static function frecuencias(): array
     {
         return [
+            // Las que encontró el canario y las que encontró la revisión al
+            // cambiar una sola preposición: por eso la regla dejó de enumerar
+            // preposiciones y pasó a exigir un acto de elección.
             ['6 dias a la semana'],
+            ['6 dias en la semana'],
             ['6 veces a la semana'],
+            ['3 veces en la semana'],
             ['entreno 5 dias por semana'],
+            ['entreno toda la semana'],
+            ['entreno durante la semana'],
+            ['los 7 dias de la semana'],
+            ['solo la semana puedo'],
             ['vengo cada semana'],
             ['esta semana no puedo'],
             ['voy 3 veces al mes'],
+        ];
+    }
+
+    /**
+     * El mismo defecto que ya existía con los otros nombres de calendario, y
+     * que nadie había mirado: preguntar por la duración no es comprarla.
+     */
+    #[DataProvider('preguntasPorUnPlazo')]
+    public function test_asking_about_a_period_is_not_choosing_it(string $texto): void
+    {
+        $r = $this->r->resolve($texto, ConversationMemory::empty(), self::PLANES_DE_CALENDARIO);
+
+        $this->assertNotSame(R::CHOOSE_PLAN, $r['type'], $texto.' no elige plan');
+    }
+
+    public static function preguntasPorUnPlazo(): array
+    {
+        return [
+            ['cuanto dura el semestre'],
+            ['cuanto tiempo dura el trimestre'],
+            ['en el semestre pasado entrene'],
+            ['el otro trimestre estuve'],
+        ];
+    }
+
+    /** Y los nombres de calendario siguen eligiéndose cuando se eligen. */
+    #[DataProvider('eleccionesDeCalendario')]
+    public function test_calendar_named_plans_are_still_chosen(string $texto, int $plan): void
+    {
+        $r = $this->r->resolve($texto, ConversationMemory::empty(), self::PLANES_DE_CALENDARIO);
+
+        $this->assertSame(R::CHOOSE_PLAN, $r['type'], $texto);
+        $this->assertSame($plan, $r['plan_id']);
+    }
+
+    public static function eleccionesDeCalendario(): array
+    {
+        return [
+            ['me interesa el semestre', 25],
+            ['voy con la anualidad', 27],
+            ['dame el trimestre', 26],
+            ['el semestre', 25],
         ];
     }
 

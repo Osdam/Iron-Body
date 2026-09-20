@@ -193,7 +193,7 @@ class InternalMarketingController extends Controller
          */
         $idempotencyKey = $this->idempotencyKey($request);
 
-        $lead = $this->resolveLeadForSend($data);
+        [$lead, $conversationPedida] = $this->resolveLeadForSend($data);
         if ($lead === null) {
             return response()->json(['ok' => false, 'reason' => 'lead_not_found', 'sent' => false, 'safe_to_send' => false], 404);
         }
@@ -235,11 +235,13 @@ class InternalMarketingController extends Controller
         }
 
         $channel = $data['channel'] ?? 'whatsapp';
+        // Si quien llama nombró la conversación, es esa. Sólo cuando no la
+        // nombra decide el despachador, y entonces elige la viva.
         $result = $this->dispatcher->dispatchWhatsapp($lead, $channel, $data['body'], array_filter([
             'kind' => isset($data['payment_url']) ? 'payment_link' : 'text',
             'payment_transaction_id' => $data['payment_transaction_id'] ?? null,
             'idempotency_key' => $idempotencyKey,
-        ], fn ($v) => $v !== null), $senderType);
+        ], fn ($v) => $v !== null), $senderType, conversation: $conversationPedida);
 
         // Eco del cuerpo preparado (útil para n8n; sin secretos).
         return response()->json(array_merge($result, [
@@ -384,19 +386,36 @@ class InternalMarketingController extends Controller
         ]));
     }
 
-    /** Resuelve el lead por marketing_lead_id o, retrocompat, por conversation_id. */
-    private function resolveLeadForSend(array $data): ?MarketingLead
+    /**
+     * Resuelve el lead por marketing_lead_id o, retrocompat, por conversation_id.
+     *
+     * Devuelve TAMBIÉN la conversación cuando quien llama la nombró. Antes se
+     * cargaba, se le sacaba el `lead_id` y se tiraba el objeto, así que n8n
+     * podía decir «la conversación 19» y el mensaje acababa archivado en otra:
+     * el despachador la resolvía por su cuenta. Nombrarla y no usarla es peor
+     * que no pedirla.
+     *
+     * @return array{0: ?MarketingLead, 1: ?MarketingConversation}
+     */
+    private function resolveLeadForSend(array $data): array
     {
-        if (! empty($data['marketing_lead_id'])) {
-            return MarketingLead::find($data['marketing_lead_id']);
-        }
         if (! empty($data['conversation_id'])) {
             $conversation = MarketingConversation::find($data['conversation_id']);
+            if ($conversation === null) {
+                return [null, null];
+            }
+            $lead = ! empty($data['marketing_lead_id'])
+                ? MarketingLead::find($data['marketing_lead_id'])
+                : MarketingLead::find($conversation->lead_id);
 
-            return $conversation ? MarketingLead::find($conversation->lead_id) : null;
+            return [$lead, $lead !== null && (int) $conversation->lead_id === (int) $lead->id ? $conversation : null];
         }
 
-        return null;
+        if (! empty($data['marketing_lead_id'])) {
+            return [MarketingLead::find($data['marketing_lead_id']), null];
+        }
+
+        return [null, null];
     }
 
     /** Mensaje humano corto con el link (precio REAL; nunca inventado). */
