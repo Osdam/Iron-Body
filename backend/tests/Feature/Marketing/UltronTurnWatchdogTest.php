@@ -524,4 +524,30 @@ class UltronTurnWatchdogTest extends TestCase
         $this->assertSame(1, $this->vigia(), 'falla, pero termina');
         $this->assertSame(1, Incident::count(), 'y el incidente queda abierto, que es lo que hace mirar');
     }
+
+    /**
+     * Una rendición vieja no se vuelve a contar en cada pasada.
+     *
+     * Con la ventana larga, la misma rendición sumaba una ocurrencia cada cinco
+     * minutos —setenta y dos en seis horas por un solo turno—, y un incidente
+     * que se infla solo deja de medir nada.
+     */
+    public function test_an_old_surrender_is_not_counted_again_on_every_pass(): void
+    {
+        $m = $this->entrante('cuanto vale?');
+        $this->evento($m);
+        $accion = $this->desenlace($m);
+        $accion->forceFill([
+            'metadata' => array_merge((array) $accion->metadata, [
+                'recovery' => ['reason' => 'machine_reply_payment_fact', 'attempt' => 2],
+            ]),
+        ])->save();
+        // La rendición fue hace dos horas; la ventana corta ya no la alcanza.
+        $accion->forceFill(['created_at' => now()->subHours(2)])->save();
+        $this->saliente();
+
+        $this->vigia();
+
+        $this->assertSame(0, Incident::where('kind', 'ultron.turn.recovered')->count());
+    }
 }

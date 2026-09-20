@@ -106,6 +106,18 @@ class ExpresionesTortureTest extends TestCase
         'quien me atiende' => 'puede ser quién entrena, quién recibe o quién contesta',
     ];
 
+    /**
+     * Formas que NO están en el banco y que también se decidieron a mano, cada
+     * una con su porqué. Se prueban igual: una decisión sin prueba se deshace
+     * sola en el siguiente refactor.
+     */
+    private const DECIDIDAS_FUERA_DEL_BANCO = [
+        'me atiende alguien' => 'pregunta lo mismo que «hay alguien ahí», que ya se excluyó',
+        'me contesta alguien' => 'ídem: sin «persona» o «asesor» no es una petición',
+        'hay asesor nutricional' => 'pregunta por un SERVICIO, no por hablar con alguien',
+        'hay recepcionista los domingos' => 'pregunta por horario de un servicio',
+    ];
+
     /** Las formas inequívocas de pedir una persona. */
     public static function pideHumano(): iterable
     {
@@ -368,5 +380,43 @@ class ExpresionesTortureTest extends TestCase
     {
         $this->assertNotNull($this->handoff->peticionDeHumanoEn('hay asesor disponible'));
         $this->assertNotNull($this->handoff->peticionDeHumanoEn('hay algun encargado disponible'));
+    }
+
+    /** @return iterable<string,array{string,string}> */
+    public static function decididasFueraDelBanco(): iterable
+    {
+        foreach (self::DECIDIDAS_FUERA_DEL_BANCO as $frase => $porque) {
+            yield $frase => [$frase, $porque];
+        }
+    }
+
+    #[DataProvider('decididasFueraDelBanco')]
+    public function test_a_form_decided_by_hand_stays_decided(string $frase, string $porque): void
+    {
+        $this->assertNull(
+            $this->handoff->peticionDeHumanoEn($frase),
+            "se escala «{$frase}» y no debería: {$porque}",
+        );
+    }
+
+    /** Y las que sí piden a alguien, en femenino y con artículo, siguen contando. */
+    public static function peticionesConArticuloYGenero(): array
+    {
+        return [
+            ['hay una asesora disponible'],
+            ['hay la recepcionista disponible'],
+            ['hay un agente disponible'],
+            ['me puede contestar un asesor'],
+            ['me atiende una asesora'],
+        ];
+    }
+
+    #[DataProvider('peticionesConArticuloYGenero')]
+    public function test_asking_for_a_person_works_in_feminine_too(string $frase): void
+    {
+        $this->assertNotNull(
+            $this->handoff->peticionDeHumanoEn($frase),
+            'media plantilla del gimnasio es femenina: el patrón no puede ignorarla',
+        );
     }
 }

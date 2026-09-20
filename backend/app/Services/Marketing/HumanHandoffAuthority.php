@@ -108,9 +108,17 @@ final class HumanHandoffAuthority
         '/\b(comunicame|comunicarme|comuniqueme)\s+con\b/u',
         '/\bme\s+comunica(s|n)?\s+con\b/u',
         '/\bque\s+me\s+(atienda|contacte|llame|escriba)\s+(un[ao]?\s+)?(persona|asesor|humano|agente|alguien)/u',
-        // «me atiende una persona», «me puede contestar alguien».
-        '/\bme\s+(atiend[ae]|contest[ae])\s+(un[ao]?\s+)?(persona|asesor|humano|agente|alguien)/u',
-        '/\bme\s+puede[ns]?\s+(atender|contestar)\s+(un[ao]?\s+)?(persona|asesor|humano|agente|alguien)/u',
+        /*
+         * «me atiende una persona», «me puede contestar un asesor».
+         *
+         * Sin `alguien` a secas, y es coherente con lo que ya se decidió para
+         * «hay alguien ahi?»: «¿me atiende alguien?» pregunta lo mismo que
+         * «¿hay alguien?», y reconocerlo abriría un traspaso que nadie pidió.
+         * Con `persona`, `asesor`, `humano` o `agente` la petición es
+         * inequívoca, y `alguien real` la recoge el patrón de abajo.
+         */
+        '/\bme\s+(atiend[ae]|contest[ae])\s+(un[ao]?\s+)?(persona|asesor[ao]?|humano|agente)/u',
+        '/\bme\s+puede[ns]?\s+(atender|contestar)\s+(un[ao]?\s+)?(persona|asesor[ao]?|humano|agente)/u',
         '/\b(quiero|necesito|deseo|prefiero)\s+(hablar\s+con\s+)?(un[ao]?\s+)?(asesor|humano|persona real|alguien\s+del\s+equipo|agente)/u',
         // Pedir que llamen es pedir una persona: nadie espera que llame un bot.
         '/\b(puede[ns]?|podria[ns]?)\s+llamarme\b/u',
@@ -123,7 +131,7 @@ final class HumanHandoffAuthority
          * nadie pidió. Y `encargad` llevaba un `\b` detrás que no case nunca
          * con «encargado»: el patrón estaba muerto.
          */
-        '/\bhay\s+(algun[ao]?\s+)?(asesor|agente|encargad[oa]?|recepcionista)\s+(disponible|ahora|ahi|en\s+linea|libre)\b/u',
+        '/\bhay\s+((algun[ao]?|un[ao]?|el|la)\s+)?(asesor[ao]?|agente|encargad[oa]?|recepcionista)\s+(disponible|ahora|ahi|en\s+linea|libre)\b/u',
         '/\batencion\s+humana\b/u',
         '/\b(persona|humano|alguien)\s+real\b/u',
     ];

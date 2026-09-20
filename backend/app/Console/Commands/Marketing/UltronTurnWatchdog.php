@@ -75,7 +75,16 @@ class UltronTurnWatchdog extends Command
         $ventana = now()->subMinutes(max($gracia + 1, (int) $this->option('window')));
 
         $huerfanos = $this->huerfanos($corte, $ventana);
-        $rendiciones = $this->rendiciones($ventana);
+
+        /*
+         * Las rendiciones se miran en una ventana CORTA, no en la de seis
+         * horas. Con la larga, la misma rendición se volvía a contar en cada
+         * pasada —setenta y dos ocurrencias en seis horas por un solo turno— y
+         * un incidente que se infla solo deja de medir nada. Con el doble de la
+         * gracia, cada una se cuenta dos o tres veces y el número sigue
+         * pareciéndose a la realidad.
+         */
+        $rendiciones = $this->rendiciones(now()->subMinutes(max(20, $gracia * 2)));
 
         if ($this->option('json')) {
             $this->line((string) json_encode([
