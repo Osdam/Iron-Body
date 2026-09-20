@@ -242,6 +242,61 @@ class UltronCanaryReportTest extends TestCase
         $this->assertStringContainsString('No entiendo esa fecha', Artisan::output());
     }
 
+    /**
+     * Lo que encontró la revisión independiente: bastaba una cifra del catálogo
+     * para dar por bueno el mensaje entero, así que la rebaja inventada viajaba
+     * escondida detrás del precio correcto. Un precio legítimo no blanquea a
+     * los demás.
+     */
+    public function test_a_real_price_does_not_whitewash_an_invented_one_beside_it(): void
+    {
+        $this->turno('cuánto vale?', 'El Plan Mensual está en $80.000 COP, pero te lo dejo en 65.000.');
+
+        [$codigo, $salida] = $this->correr();
+
+        $this->assertSame(1, $codigo);
+        $this->assertStringContainsString('precios_que_no_son_del_catalogo', $salida);
+        // Y se dice CUÁL, para que quien lo lea no tenga que reproducir el caso.
+        $this->assertStringContainsString('65.000', $salida);
+    }
+
+    /** Lo mismo con los enlaces: el oficial no limpia al que va al lado. */
+    public function test_an_official_link_does_not_whitewash_an_unofficial_one_beside_it(): void
+    {
+        $this->turno('mándame la app', 'Android: https://play.google.com/store/apps/details?id=com.ironbodyneiva.workout y el instructivo en https://apps-gratis.example/ironbody');
+
+        [$codigo, $salida] = $this->correr();
+
+        $this->assertSame(1, $codigo);
+        $this->assertStringContainsString('enlaces_no_oficiales', $salida);
+        $this->assertStringContainsString('apps-gratis.example', $salida);
+    }
+
+    /** Un dominio suelto sin protocolo también es un enlace que Laravel no escribió. */
+    public function test_a_bare_domain_still_counts_as_a_link(): void
+    {
+        $this->turno('dónde me inscribo?', 'Entra a ironbody-promos.com y listo.');
+
+        [$codigo, $salida] = $this->correr();
+
+        $this->assertSame(1, $codigo);
+        $this->assertStringContainsString('enlaces_no_oficiales', $salida);
+    }
+
+    /**
+     * El reverso, que es el que protege al canario de sí mismo: un año junto al
+     * precio correcto no es una cifra inventada.
+     */
+    public function test_a_year_beside_the_catalogue_price_is_not_a_finding(): void
+    {
+        $this->turno('desde cuándo están?', 'Abrimos desde 2016 y el Plan Mensual está en $80.000 COP.');
+
+        [$codigo, $salida] = $this->correr();
+
+        $this->assertSame(0, $codigo);
+        $this->assertStringContainsString('CANARIO SIN HALLAZGOS MECANICOS', $salida);
+    }
+
     public function test_a_link_that_is_not_official_fails_the_canary(): void
     {
         $this->turno('mándame la app', 'Descárgala en https://apps-gratis.example/ironbody');

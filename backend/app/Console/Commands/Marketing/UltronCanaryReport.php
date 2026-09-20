@@ -100,6 +100,79 @@ class UltronCanaryReport extends Command
     }
 
     /**
+     * Las cifras del texto que parecen dinero, normalizadas a número entero.
+     *
+     * Solo lo que un cliente leería como un importe: cuatro dígitos o más, o
+     * con separador de miles. Los años (1900–2100) se dejan fuera a propósito:
+     * «abrimos desde 2020» no es un precio, y un contador que debe ser cero no
+     * puede gritar por una frase correcta. Un plan de 2 000 pesos no existe.
+     *
+     * @return list<int>
+     */
+    private function cifrasDelTexto(string $texto): array
+    {
+        preg_match_all('/\d{1,3}(?:[.,\s]\d{3})+|\d{4,}/u', $texto, $m);
+
+        $out = [];
+        foreach ($m[0] as $crudo) {
+            $n = (int) preg_replace('/\D+/', '', $crudo);
+            if ($n >= 1900 && $n <= 2100) {
+                continue;
+            }
+            $out[] = $n;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Las cifras del texto que el catálogo no respalda, tal cual se escribieron.
+     *
+     * @param  list<string>  $precios  precios del catálogo ya formateados
+     * @return list<string>
+     */
+    private function cifrasQueNoSonDelCatalogo(string $texto, array $precios): array
+    {
+        $delCatalogo = array_map(fn (string $p) => (int) preg_replace('/\D+/', '', $p), $precios);
+
+        $fuera = [];
+        foreach ($this->cifrasDelTexto($texto) as $n) {
+            if (! in_array($n, $delCatalogo, true)) {
+                $fuera[] = number_format($n, 0, ',', '.');
+            }
+        }
+
+        return array_values(array_unique($fuera));
+    }
+
+    /**
+     * Los enlaces que se pueden aislar del texto.
+     *
+     * @return list<string>
+     */
+    private function enlacesDelTexto(string $texto): array
+    {
+        preg_match_all('~(?:https?://|www\.)\S+~iu', $texto, $m);
+
+        return array_values(array_map(fn (string $u) => rtrim($u, '.,;:)»"\''), $m[0]));
+    }
+
+    /** @param  list<string>  $oficiales */
+    private function esEnlaceOficial(string $url, array $oficiales): bool
+    {
+        if (str_contains($url, 'checkout.wompi.co')) {
+            return true;
+        }
+        foreach ($oficiales as $oficial) {
+            if (str_contains($url, (string) $oficial)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * El nombre como PALABRA, no como trozo: «mensual» no puede casar dentro de
      * «mensualidad». Sin propiedades Unicode a propósito: el PCRE de producción
      * (10.39) no compila algunas que el local sí, y esto se ejecuta allí.
@@ -276,27 +349,41 @@ class UltronCanaryReport extends Command
                  */
                 $sinEnlaces = preg_replace('~https?://\S+~u', ' ', $texto) ?? $texto;
                 if (SalesAgentDecisionSchema::containsPrice($sinEnlaces)) {
-                    $delCatalogo = false;
-                    foreach ($precios as $p) {
-                        if (str_contains($sinEnlaces, (string) $p)) {
-                            $delCatalogo = true;
-                        }
-                    }
-                    if (! $delCatalogo) {
-                        $mecanicos['precios_que_no_son_del_catalogo'][] = $ref;
+                    $inventadas = $this->cifrasQueNoSonDelCatalogo($sinEnlaces, $precios);
+                    $ninguna = $this->cifrasDelTexto($sinEnlaces) === [];
+
+                    /*
+                     * Antes bastaba con que el mensaje trajera UNA cifra del
+                     * catálogo para dar por bueno el mensaje entero, así que
+                     * «el Plan Mensual está en $80.000, pero te lo dejo en
+                     * 65.000» no contaba nada. Un precio legítimo no blanquea
+                     * a los demás: se mira cifra por cifra.
+                     */
+                    if ($inventadas !== []) {
+                        $mecanicos['precios_que_no_son_del_catalogo'][] = $ref.' ('.implode(', ', $inventadas).')';
+                    } elseif ($ninguna) {
+                        // Suena a dinero y no hay ni una cifra que comprobar:
+                        // «te lo dejo en ochenta mil», «80k». Se cuenta, y lo
+                        // lee una persona.
+                        $mecanicos['precios_que_no_son_del_catalogo'][] = $ref.' (dicho con palabras)';
                     }
                 }
 
-                if (OutboundContentGuard::containsUrl($texto)) {
-                    $conocido = str_contains($texto, 'checkout.wompi.co');
-                    foreach ($enlacesOficiales as $enlace) {
-                        if (str_contains($texto, (string) $enlace)) {
-                            $conocido = true;
-                        }
+                /*
+                 * Igual con los enlaces: uno oficial no limpia al que va a su
+                 * lado. Se comprueba enlace por enlace, y lo que el guard ve
+                 * como URL pero no se puede aislar —un dominio suelto, un
+                 * «checkout(.)wompi(.)co»— cuenta, porque los enlaces los
+                 * escribe Laravel y no el modelo.
+                 */
+                $sueltos = $this->enlacesDelTexto($texto);
+                foreach ($sueltos as $url) {
+                    if (! $this->esEnlaceOficial($url, $enlacesOficiales)) {
+                        $mecanicos['enlaces_no_oficiales'][] = $ref.' ('.mb_substr($url, 0, 60).')';
                     }
-                    if (! $conocido) {
-                        $mecanicos['enlaces_no_oficiales'][] = $ref;
-                    }
+                }
+                if ($sueltos === [] && OutboundContentGuard::containsUrl($texto)) {
+                    $mecanicos['enlaces_no_oficiales'][] = $ref.' (enlace disfrazado o dominio suelto)';
                 }
 
                 // El teléfono de la persona no tiene por qué volver escrito en
