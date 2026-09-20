@@ -60,6 +60,7 @@ class KnowledgeTrustBoundaryTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config()->set('marketing.ultron.enabled', true);
 
         config()->set('automation.internal_secret', self::SECRET);
         config()->set('meta.enabled', false);

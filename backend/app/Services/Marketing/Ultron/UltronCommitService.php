@@ -161,6 +161,32 @@ class UltronCommitService
         Context::add('conversation_id', $conversation->id);
 
         /*
+         * EL INTERRUPTOR MAESTRO, AQUÍ TAMBIÉN.
+         *
+         * El emisor ya no crea eventos con ULTRON apagado, y el job que los
+         * envía a n8n lo vuelve a comprobar. Pero esta puerta no lo miraba, así
+         * que «apagar ULTRON» dependía de que nadie llamara al commit: un
+         * commit rezagado, un reintento de n8n o una ejecución a mano seguían
+         * mandando un WhatsApp de verdad después de haber apagado.
+         *
+         * Se comprobó en el canario físico: al abortar hubo que neutralizar
+         * ADEMÁS el id del canario para estar seguro de que no saliera nada.
+         * Un interruptor que necesita un segundo interruptor no es un
+         * interruptor. Ahora sí lo es, y las dos barreras son independientes.
+         */
+        if (! (bool) config('marketing.ultron.enabled', false)) {
+            ChannelLog::warning('ultron.commit.ultron_disabled', [
+                'conversation_id' => (int) $conversation->id,
+            ]);
+
+            throw UltronCommitException::make(
+                'ultron_disabled',
+                'ULTRON está apagado: aquí no se ejecuta nada.',
+                403,
+            );
+        }
+
+        /*
          * EL CERROJO DEL CANARIO, TAMBIÉN EN LA PUERTA DE SALIDA.
          *
          * `UltronEventEmitter` ya impide que nazca un evento de una

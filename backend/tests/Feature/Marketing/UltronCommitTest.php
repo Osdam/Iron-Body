@@ -42,6 +42,7 @@ class UltronCommitTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config()->set('marketing.ultron.enabled', true);
 
         config()->set('automation.internal_secret', self::SECRET);
         config()->set('meta.enabled', false);
@@ -150,6 +151,66 @@ class UltronCommitTest extends TestCase
         $this->assertSame(MarketingMessage::SENDER_AI, $out->sender_type);
         $this->assertSame('ultron', $out->metadata['origin']);
         Http::assertNothingSent();
+    }
+
+    /**
+     * EL INTERRUPTOR MAESTRO ES AUTORIDAD, NO UNA SUGERENCIA.
+     *
+     * Con ULTRON apagado no se ejecuta nada aquí, aunque la conversación sea la
+     * del canario y la propuesta sea impecable. Antes esta puerta no lo miraba,
+     * así que «apagar ULTRON» dependía de que nadie llamara: al abortar el
+     * canario físico hubo que neutralizar además el id del canario para estar
+     * seguro de que no saliera un commit rezagado. Un interruptor que necesita
+     * un segundo interruptor no es un interruptor.
+     */
+    public function test_with_ultron_off_nothing_is_executed_even_for_the_canary(): void
+    {
+        Http::fake();
+        $m = $this->inbound();
+        $payload = $this->payload($m);   // el token se pide con ULTRON encendido
+
+        config()->set('marketing.ultron.enabled', false);
+        config()->set('marketing.ultron.canary_conversation_id', $this->conversation->id);
+
+        $this->commit($payload)
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'ultron_disabled');
+
+        $this->assertSame(0, MarketingMessage::where('direction', 'outbound')->count(), 'ni un mensaje');
+        $this->assertSame(0, MarketingAiAction::count(), 'ni una acción comercial');
+        // La fase no se mueve: sigue como estaba antes del commit (sin fijar).
+        $this->assertNull($this->conversation->fresh()->commercial_phase, 'ni un cambio de fase');
+        Http::assertNothingSent();
+    }
+
+    /**
+     * Las dos barreras son INDEPENDIENTES: apagar el canario no apaga ULTRON y
+     * apagar ULTRON no depende del canario. Con las dos en su sitio, el commit
+     * pasa y queda sujeto al resto de guards.
+     */
+    public function test_the_two_locks_are_independent(): void
+    {
+        Http::fake();
+
+        // 1. ULTRON apagado con el canario SIN restricción → bloquea igual.
+        $m1 = $this->inbound('hola', 'wamid.L1');
+        $p1 = $this->payload($m1);
+        config()->set('marketing.ultron.enabled', false);
+        config()->set('marketing.ultron.canary_conversation_id', null);
+        $this->commit($p1)->assertStatus(403)->assertJsonPath('code', 'ultron_disabled');
+
+        // 2. ULTRON encendido y conversación distinta del canario → bloquea.
+        config()->set('marketing.ultron.enabled', true);
+        config()->set('marketing.ultron.canary_conversation_id', $this->conversation->id + 500);
+        $this->commit($p1)->assertStatus(403)->assertJsonPath('code', 'not_canary_conversation');
+
+        $this->assertSame(0, MarketingMessage::where('direction', 'outbound')->count());
+
+        // 3. Las dos alineadas → se ejecuta.
+        config()->set('marketing.ultron.canary_conversation_id', $this->conversation->id);
+        $this->commit($p1)->assertOk()->assertJsonPath('ok', true);
+
+        $this->assertSame(1, MarketingMessage::where('direction', 'outbound')->count());
     }
 
     /**

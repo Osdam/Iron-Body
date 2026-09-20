@@ -59,6 +59,13 @@ abstract class TortureCase extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        /*
+         * ULTRON, encendido. Estas pruebas describen un mundo en el que ULTRON
+         * atiende; desde que `/ai/commit` exige el interruptor maestro, dejarlo
+         * apagado no probaría el turno, probaría el apagado —y eso tiene su
+         * propia prueba.
+         */
+        config()->set('marketing.ultron.enabled', true);
 
         config()->set('automation.internal_secret', self::SECRET);
         config()->set('meta.enabled', false);
