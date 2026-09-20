@@ -102,7 +102,7 @@ final class HumanHandoffAuthority
      */
     private const PIDE_HUMANO = [
         '/\bhablar\s+con\s+(un[ao]?\s+|el\s+|la\s+)?(persona|asesor|humano|agente|alguien|recepcion|encargad|duen)/u',
-        '/\b(pasame|pasarme|paseme|pasenme|pasar)\s+(con|a)\s+(un[ao]?\s+)?(persona|asesor|humano|agente|alguien|recepcion)/u',
+        '/\b(pasame|pasarme|paseme|pasenme|pasar)\s+(con|a)\s+((un[ao]?|el|la)\s+)?(persona|asesor[ao]?|humano|agente|alguien|recepcion)/u',
         // «me pasa un asesor», «me pasas con alguien»: la misma petición en tercera persona.
         '/\bme\s+pasa(s|n)?\s+(con\s+)?(un[ao]?\s+|el\s+|la\s+)?(persona|asesor|humano|agente|alguien|recepcion|encargad)/u',
         '/\b(comunicame|comunicarme|comuniqueme)\s+con\b/u',
@@ -117,9 +117,9 @@ final class HumanHandoffAuthority
          * Con `persona`, `asesor`, `humano` o `agente` la petición es
          * inequívoca, y `alguien real` la recoge el patrón de abajo.
          */
-        '/\bme\s+(atiend[ae]|contest[ae])\s+(un[ao]?\s+)?(persona|asesor[ao]?|humano|agente)/u',
-        '/\bme\s+puede[ns]?\s+(atender|contestar)\s+(un[ao]?\s+)?(persona|asesor[ao]?|humano|agente)/u',
-        '/\b(quiero|necesito|deseo|prefiero)\s+(hablar\s+con\s+)?(un[ao]?\s+)?(asesor|humano|persona real|alguien\s+del\s+equipo|agente)/u',
+        '/\bme\s+(atiend[ae]|contest[ae])\s+((un[ao]?|el|la)\s+)?(persona|asesor[ao]?|humano|agente|recepcionista|encargad[oa])/u',
+        '/\bme\s+puede[ns]?\s+(atender|contestar)\s+((un[ao]?|el|la)\s+)?(persona|asesor[ao]?|humano|agente|recepcionista|encargad[oa])/u',
+        '/\b(quiero|necesito|deseo|prefiero)\s+(hablar\s+con\s+)?((un[ao]?|el|la)\s+)?(asesor[ao]?|humano|persona real|alguien\s+del\s+equipo|agente)/u',
         // Pedir que llamen es pedir una persona: nadie espera que llame un bot.
         '/\b(puede[ns]?|podria[ns]?)\s+llamarme\b/u',
         '/\bme\s+puede[ns]?\s+llamar\b/u',

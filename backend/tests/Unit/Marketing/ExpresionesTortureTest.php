@@ -408,6 +408,11 @@ class ExpresionesTortureTest extends TestCase
             ['hay un agente disponible'],
             ['me puede contestar un asesor'],
             ['me atiende una asesora'],
+            // Artículo determinado, en los cuatro patrones que lo admitían a medias.
+            ['me puede contestar la asesora'],
+            ['me atiende la recepcionista'],
+            ['pasame con la asesora'],
+            ['quiero hablar con la asesora'],
         ];
     }
 
