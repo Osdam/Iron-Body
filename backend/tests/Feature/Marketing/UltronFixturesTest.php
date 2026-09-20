@@ -15,6 +15,7 @@ use App\Services\Marketing\SalesIntents;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
+use Tests\Support\UltronTurnEvents;
 use Tests\TestCase;
 
 /**
@@ -32,6 +33,7 @@ use Tests\TestCase;
 class UltronFixturesTest extends TestCase
 {
     use RefreshDatabase;
+    use UltronTurnEvents;
 
     private const SECRET = 'test-internal-secret';
 
@@ -453,6 +455,8 @@ class UltronFixturesTest extends TestCase
 
         $b = $this->inbound('quiero informacion', 'w.20b');
         $c = $this->inbound('cuanto vale?', 'w.20c');
+        $this->abreTurno($b);
+        $this->abreTurno($c);
 
         $this->decide($a)->assertOk()->assertJsonPath('superseded', true)->assertJsonPath('superseded_by', $c->id);
         $this->decide($b)->assertOk()->assertJsonPath('superseded', true);

@@ -14,6 +14,7 @@ use App\Services\Marketing\SalesIntents;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
+use Tests\Support\UltronTurnEvents;
 use Tests\TestCase;
 
 /**
@@ -30,6 +31,7 @@ use Tests\TestCase;
 class UltronCommitTest extends TestCase
 {
     use RefreshDatabase;
+    use UltronTurnEvents;
 
     private const SECRET = 'test-internal-secret';
 
@@ -549,6 +551,7 @@ class UltronCommitTest extends TestCase
         $payload = $this->payload($primero);
 
         $segundo = $this->inbound('cuánto vale?', 'wamid.B');
+        $this->abreTurno($segundo);   // el relevo tiene turno propio
 
         $this->commit($payload)->assertOk()
             ->assertJsonPath('outcome', 'blocked')

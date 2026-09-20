@@ -14,6 +14,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
+use Tests\Support\UltronTurnEvents;
 use Tests\TestCase;
 
 /**
@@ -37,6 +38,7 @@ use Tests\TestCase;
 abstract class TortureCase extends TestCase
 {
     use RefreshDatabase;
+    use UltronTurnEvents;
 
     protected const SECRET = 'test-internal-secret';
 

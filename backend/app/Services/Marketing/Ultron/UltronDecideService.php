@@ -2,6 +2,7 @@
 
 namespace App\Services\Marketing\Ultron;
 
+use App\Models\MarketingAutomationEvent;
 use App\Models\MarketingConversation;
 use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
@@ -124,6 +125,22 @@ class UltronDecideService
      * contestarían a preguntas que ella misma ya superó.
      *
      * Gana el último. Los anteriores se descartan sin ruido.
+     *
+     * PERO sólo puede ceder el turno a quien va a tener turno propio. Ésa es la
+     * condición que faltaba y que producía silencio absoluto: una nota de voz,
+     * una foto sin pie, un sticker o una reacción 👍 crean fila INBOUND/LEAD en
+     * `MetaConversationService::recordInbound()`, y el enrutador las aparta
+     * ANTES de `UltronEventEmitter::emit()`. Contando esas filas, la pregunta
+     * anterior se descartaba «porque llegó algo más nuevo» y lo más nuevo no lo
+     * iba a contestar nadie: cero respuestas a una persona que sí preguntó.
+     *
+     * El criterio no se reimplementa: el que manda es el evento. Existe fila en
+     * `marketing_automation_events` ⇔ Laravel consideró ese mensaje atendible y
+     * lo mandó a ULTRON. Si no la hay, ese mensaje no es un relevo, es ruido del
+     * inbox. Tampoco releva un evento `failed` (n8n no llegó a recibirlo tras
+     * sus tres reintentos) ni uno `skipped`: prometen un turno que no habrá.
+     * Y en el empate —el evento del mensaje nuevo todavía no existe— se falla
+     * del lado de contestar, que es el lado seguro.
      */
     public function supersededBy(MarketingConversation $conversation, MarketingMessage $message): ?int
     {
@@ -131,9 +148,18 @@ class UltronDecideService
             ->where('conversation_id', $conversation->id)
             ->where('direction', MarketingMessage::DIRECTION_INBOUND)
             ->where('sender_type', MarketingMessage::SENDER_LEAD)
+            ->where('id', '>', (int) $message->id)
+            ->whereExists(fn ($q) => $q->selectRaw('1')
+                ->from('marketing_automation_events')
+                ->whereColumn('marketing_automation_events.message_id', 'marketing_messages.id')
+                ->whereIn('marketing_automation_events.status', [
+                    MarketingAutomationEvent::STATUS_PENDING,
+                    MarketingAutomationEvent::STATUS_SENT,
+                ])
+            )
             ->max('id');
 
-        return ($ultimo !== null && (int) $ultimo > (int) $message->id) ? (int) $ultimo : null;
+        return $ultimo !== null ? (int) $ultimo : null;
     }
 
     /** Fase actual de la conversación, normalizada. */

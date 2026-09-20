@@ -309,6 +309,7 @@ class ProtocolAuthorityTortureTest extends TortureCase
         $viejo = $this->inbound('hola');
         $this->commit($viejo, ['reply_draft' => 'Respuesta al primer mensaje.'])->assertOk();
         $nuevo = $this->inbound('perdon, mejor dime los horarios');
+        $this->abreTurno($nuevo);
 
         $r = $this->commit($nuevo, ['reply_draft' => 'Respuesta pensada para el mensaje anterior.'], [], [
             'source_event_id' => $viejo->id, 'idempotency_key' => 'k-cruzada',

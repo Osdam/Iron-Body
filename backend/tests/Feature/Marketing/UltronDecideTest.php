@@ -15,6 +15,7 @@ use App\Services\Marketing\Ultron\UltronDecideToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
+use Tests\Support\UltronTurnEvents;
 use Tests\TestCase;
 
 /**
@@ -31,6 +32,7 @@ use Tests\TestCase;
 class UltronDecideTest extends TestCase
 {
     use RefreshDatabase;
+    use UltronTurnEvents;
 
     private const SECRET = 'test-internal-secret';
 
@@ -316,6 +318,10 @@ class UltronDecideTest extends TestCase
         $hola = $this->inbound('hola');
         $info = $this->inbound('quiero información');
         $precio = $this->inbound('cuánto vale?');
+
+        // Los tres abren turno: son texto legible. Sólo así hay relevo.
+        $this->abreTurno($info);
+        $this->abreTurno($precio);
 
         $this->decide($hola->id)->assertOk()
             ->assertJsonPath('superseded', true)

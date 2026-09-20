@@ -105,6 +105,7 @@ class TortureHarnessTest extends TortureCase
     {
         $viejo = $this->inbound('primero');
         $nuevo = $this->inbound('perdón, mejor esto otro');
+        $this->abreTurno($nuevo);
 
         $d = $this->decide($viejo)->assertOk();
 
