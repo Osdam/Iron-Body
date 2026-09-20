@@ -334,4 +334,39 @@ class ExpresionesTortureTest extends TestCase
             ->recommend([20], '2026-09-20T10:00:00Z')
             ->agentAsked('¿Quieres que te explique cómo empezar?', 'explain_how_to_start', 20, '2026-09-20T10:00:00Z', 1);
     }
+
+    /**
+     * Preguntar por un SERVICIO no es pedir una persona.
+     *
+     * Los trajo la revisión, y son de los caros: el patrón de «hay asesor»
+     * escalaba «¿hay asesor nutricional?» y «¿hay recepcionista los domingos?»,
+     * que preguntan qué ofrece el gimnasio. Ahora exige una palabra de
+     * disponibilidad, que es lo que distingue pedir a alguien de preguntar por
+     * algo.
+     */
+    public static function preguntasPorServicio(): array
+    {
+        return [
+            ['hay asesor nutricional?'],
+            ['hay recepcionista los domingos?'],
+            ['hay entrenador disponible para principiantes?'],
+            ['tienen asesor de nutricion?'],
+        ];
+    }
+
+    #[DataProvider('preguntasPorServicio')]
+    public function test_asking_about_a_service_is_not_asking_for_a_person(string $frase): void
+    {
+        $this->assertNull(
+            $this->handoff->peticionDeHumanoEn($frase),
+            'esto pregunta por lo que ofrece el gimnasio, no por hablar con alguien',
+        );
+    }
+
+    /** Y pedir a alguien disponible sí lo es. */
+    public function test_asking_for_an_available_advisor_still_counts(): void
+    {
+        $this->assertNotNull($this->handoff->peticionDeHumanoEn('hay asesor disponible'));
+        $this->assertNotNull($this->handoff->peticionDeHumanoEn('hay algun encargado disponible'));
+    }
 }

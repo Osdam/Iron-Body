@@ -116,8 +116,14 @@ final class HumanHandoffAuthority
         '/\b(puede[ns]?|podria[ns]?)\s+llamarme\b/u',
         '/\bme\s+puede[ns]?\s+llamar\b/u',
         '/\b(quiero|necesito)\s+que\s+me\s+llamen\b/u',
-        // «hay asesor disponible», «hay algún encargado».
-        '/\bhay\s+(algun[ao]?\s+)?(asesor|agente|encargad|recepcionista)\b/u',
+        /*
+         * «hay asesor disponible». Exige la palabra de DISPONIBILIDAD, y no por
+         * gusto: sin ella, «¿hay asesor nutricional?» o «¿hay recepcionista los
+         * domingos?» —que preguntan por un SERVICIO— abrían un traspaso que
+         * nadie pidió. Y `encargad` llevaba un `\b` detrás que no case nunca
+         * con «encargado»: el patrón estaba muerto.
+         */
+        '/\bhay\s+(algun[ao]?\s+)?(asesor|agente|encargad[oa]?|recepcionista)\s+(disponible|ahora|ahi|en\s+linea|libre)\b/u',
         '/\batencion\s+humana\b/u',
         '/\b(persona|humano|alguien)\s+real\b/u',
     ];
