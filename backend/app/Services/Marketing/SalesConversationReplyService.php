@@ -56,8 +56,18 @@ class SalesConversationReplyService
 
             SalesIntents::LOCATION_QUESTION => 'Estamos en '.self::ADDRESS.'. ¿Vas a ir por primera vez?',
 
-            SalesIntents::SCHEDULE_QUESTION => 'No quiero darte un horario incorrecto: eso lo confirma una persona del equipo. '
-                .'Mientras tanto te ayudo con planes o ubicación si quieres.',
+            /*
+             * Ni se inventa el horario ni se promete una persona que nadie ha
+             * autorizado. Decía «eso lo confirma una persona del equipo», y en
+             * WhatsApp eso se lee como «espera, que te escriben»: no escribe
+             * nadie, porque derivar exige que lo pida la persona.
+             *
+             * Lo honesto es decir que ese dato no está confirmado y ofrecer lo
+             * que sí existe: las clases, que llevan día y hora reales.
+             */
+            SalesIntents::SCHEDULE_QUESTION => 'No tengo un horario general confirmado en mi información, y prefiero no darte '
+                .'uno equivocado. Si quieres, pregúntame por una clase en concreto y te digo el día y la hora que tengo '
+                .'registrados; también te ayudo con planes o ubicación.',
 
             SalesIntents::GENERAL_INFO => 'Con gusto te cuento. El mensual te sirve para entrenar constante, y según tu '
                 .'objetivo miramos lo que mejor te sirva. ¿Quieres entrenar por salud, bajar grasa '

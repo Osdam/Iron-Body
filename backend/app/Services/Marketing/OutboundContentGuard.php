@@ -60,6 +60,23 @@ class OutboundContentGuard
     /** Ofrece pasar la conversación a una persona sin que nadie lo haya autorizado. */
     public const CODE_UNAUTHORIZED_HANDOFF = 'machine_reply_unauthorized_handoff';
 
+    /**
+     * Prometer que una persona dirá el HORARIO que el CRM no tiene.
+     *
+     * Es primo del traspaso, pero no es el mismo: aquí no se pasa la
+     * conversación a nadie, se aplaza un dato. Aun así promete atención humana
+     * que nadie ha autorizado, y en una conversación de WhatsApp eso se lee
+     * como «espera, que te escriben» — y no escribe nadie.
+     *
+     * Va acotado al horario a propósito: es el hecho que hoy falta de verdad
+     * (`gym.opening_hours = SOURCE_NOT_AVAILABLE`), y acotarlo deja fuera los
+     * aplazamientos que SÍ son correctos, como que el equipo confirme el medio
+     * de pago o revise una gestión de membresía. Lo demás lo juzga el Critic,
+     * que sí tiene el contexto del turno y cuyo rechazo es un reintento y no un
+     * turno perdido.
+     */
+    public const CODE_SCHEDULE_DEFERRAL = 'machine_reply_schedule_deferral';
+
     /** ¿Este autor está sujeto al filtro? */
     public function appliesTo(string $senderType): bool
     {
@@ -143,6 +160,43 @@ class OutboundContentGuard
         '/\bte\s+(atendera|contactara|escribira|llamara)\s+'.self::PERSONA.'/u',
     ];
 
+    /** El hecho que hoy no existe y que no se puede aplazar en una persona. */
+    private const HORARIO = '(horarios?|hora\s+de\s+apertura|horas\s+de\s+apertura|apertura|dias?\s+de\s+apertura)';
+
+    /**
+     * Aplazar el HORARIO en una persona, en los dos órdenes en que se dice.
+     *
+     * «El equipo te confirma el horario» y «el horario lo confirma una persona»
+     * son la misma promesa con el sujeto cambiado de sitio, así que van las dos
+     * formas. El verbo tiene que ser de DECIR —confirmar, informar, indicar—:
+     * «el horario lo pone la administración» no promete que nadie te escriba.
+     */
+    private const APLAZA_EL_HORARIO = [
+        '/\b'.self::PERSONA.'\b[^.!?]{0,40}\b(confirma|confirman|confirmara|confirmaran|dice|dicen|dira|diran|informa|informan|informara|indica|indican|indicara|da|dan|dara|daran)\b[^.!?]{0,40}\b'.self::HORARIO.'\b/u',
+        '/\b'.self::HORARIO.'\b[^.!?]{0,40}\b(lo|la|los|las|te\s+lo|te\s+la)\s+(confirma|confirman|confirmara|confirmaran|dice|dicen|dira|diran|informa|informan|informara|indica|indican|indicara|da|dan|dara|daran)\b[^.!?]{0,30}\b'.self::PERSONA.'\b/u',
+        '/\b'.self::HORARIO.'\b[^.!?]{0,40}\b(lo|la|los|las)\s+(confirma|confirman|confirmara|dice|dicen|dira|informa|informara|indica|indicara)\b(?![^.!?]{0,30}\b(app|aplicacion|sistema|crm|plataforma)\b)/u',
+    ];
+
+    /**
+     * ¿El borrador aplaza el horario en una persona? Devuelve la frase, o null.
+     *
+     * Público porque el acta del canario cuenta esto igual que cuenta las
+     * ofertas de traspaso: si aparece en un turno donde nadie pidió una
+     * persona, es un hallazgo.
+     */
+    public function scheduleDeferralIn(string $body): ?string
+    {
+        $t = SalesAgentDecisionSchema::normalize($body);
+
+        foreach (self::APLAZA_EL_HORARIO as $patron) {
+            if (preg_match($patron, $t, $m) === 1) {
+                return trim($m[0]);
+            }
+        }
+
+        return null;
+    }
+
     /**
      * @param  bool  $handoffAllowed  ¿autorizó el backend pasar a una persona?
      *                                Por defecto NO: el permiso se concede, no
@@ -185,6 +239,21 @@ class OutboundContentGuard
                 'code' => self::CODE_UNAUTHORIZED_HANDOFF,
                 'signal' => $signal,
                 'risk_flag' => self::CODE_UNAUTHORIZED_HANDOFF,
+            ];
+        }
+
+        /*
+         * El horario que no existe no se aplaza en una persona. Va justo detrás
+         * del traspaso porque es la misma promesa vista de lado, y con el mismo
+         * permiso: si la persona PIDIÓ hablar con alguien, decir que el equipo
+         * le confirma el horario es exactamente lo que toca.
+         */
+        if (! $handoffAllowed && ($signal = $this->scheduleDeferralIn($body)) !== null) {
+            return [
+                'safe' => false,
+                'code' => self::CODE_SCHEDULE_DEFERRAL,
+                'signal' => $signal,
+                'risk_flag' => self::CODE_SCHEDULE_DEFERRAL,
             ];
         }
 

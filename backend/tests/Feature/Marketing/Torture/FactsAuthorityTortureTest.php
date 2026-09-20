@@ -114,6 +114,7 @@ class FactsAuthorityTortureTest extends TortureCase
             'clase que promete resultados' => ['Con la clase de spinning bajas cinco kilos, resultados asegurados.', OutboundContentGuard::CODE_UNSAFE_CLAIM],
             'clase suelta con factura' => ['Te puedo emitir factura de la clase suelta ahora mismo, sin problema.', OutboundContentGuard::CODE_FORBIDDEN_ACTION],
             'sede inventada con numero de cuatro cifras' => ['Tenemos otra sede en la calle 1200, cerca del parque.', OutboundContentGuard::CODE_INVENTED_PRICE],
+            'horario aplazado en una persona que nadie pidio' => ['El horario de apertura te lo confirma el equipo, no quiero darte un dato errado.', OutboundContentGuard::CODE_SCHEDULE_DEFERRAL],
         ];
     }
 
@@ -138,7 +139,13 @@ class FactsAuthorityTortureTest extends TortureCase
         return [
             'la clase real con su dia y su hora' => ['Tenemos IRON POWERFLOW los lunes a las 06:00, es grupal y dura una hora.'],
             'cuantos entrenadores hay, sin nombres' => ['En el equipo hay dos entrenadores activos, de musculación y funcional.'],
-            'el horario de apertura se confirma, no se inventa' => ['El horario de apertura te lo confirma el equipo, no quiero darte un dato errado.'],
+            /*
+             * Decía «el horario de apertura te lo confirma el equipo», y eso
+             * pasó a estar prohibido: sin horario, el asesor dice que no lo
+             * tiene y sigue con lo que sí existe. Prometer una persona que
+             * nadie pidió es otra forma de comprometer al gimnasio.
+             */
+            'el horario que no existe se dice que no existe' => ['No tengo un horario general confirmado en mi información, y prefiero no darte uno equivocado.'],
             'los cupos no se afirman' => ['Los cupos de la clase no los veo desde aquí, se confirman en la sede.'],
         ];
     }

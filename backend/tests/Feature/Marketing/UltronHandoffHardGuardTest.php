@@ -225,6 +225,49 @@ class UltronHandoffHardGuardTest extends TestCase
         $this->assertNoSideEffects();
     }
 
+    /**
+     * El horario que el CRM no tiene no se aplaza en una persona.
+     *
+     * No es un traspaso —nadie pasa la conversación—, pero promete atención
+     * humana que nadie pidió, y en WhatsApp eso se lee como «espera, que te
+     * escriben». Es la regla que el dueño puso por escrito antes del canario.
+     */
+    public function test_deferring_the_schedule_to_a_person_is_stopped_too(): void
+    {
+        $m = $this->inbound('a qué horas abren?', 'g.07b');
+
+        $this->commit($m, ['next_state' => P::RECOMMENDATION,
+            'reply_draft' => 'No quiero darte un horario incorrecto: eso lo confirma una persona del equipo.'])
+            ->assertStatus(422)
+            ->assertJsonPath('code', OutboundContentGuard::CODE_SCHEDULE_DEFERRAL);
+
+        $this->assertNoSideEffects();
+    }
+
+    /** Decir que no lo tiene, y seguir ayudando, sí sale. */
+    public function test_saying_the_schedule_is_not_confirmed_does_go_out(): void
+    {
+        $m = $this->inbound('a qué horas abren?', 'g.07c');
+
+        $this->commit($m, ['next_state' => P::RECOMMENDATION,
+            'reply_draft' => 'No tengo un horario general confirmado en mi información, y prefiero no darte uno '
+                .'equivocado. Si quieres, pregúntame por una clase en concreto.'])
+            ->assertOk();
+    }
+
+    /**
+     * Y el aplazamiento que SÍ es correcto no se toca: que el equipo confirme
+     * el medio de pago es la única respuesta honesta con los enlaces apagados.
+     */
+    public function test_deferring_how_to_pay_to_the_team_is_not_blocked(): void
+    {
+        $m = $this->inbound('cómo pago?', 'g.07d');
+
+        $this->commit($m, ['next_state' => P::RECOMMENDATION,
+            'reply_draft' => 'El medio de pago lo confirma el equipo al final; yo te ayudo con el plan que te sirva.'])
+            ->assertOk();
+    }
+
     /** El menú de decide no ofrece derivar en un turno comercial. */
     public function test_decide_does_not_offer_handoff_on_an_ordinary_turn(): void
     {

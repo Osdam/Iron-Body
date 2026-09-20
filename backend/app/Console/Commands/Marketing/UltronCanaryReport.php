@@ -370,6 +370,7 @@ class UltronCanaryReport extends Command
         $telefono = preg_replace('/\D+/', '', (string) ($conversation->lead?->phone ?? ''));
         $mecanicos = [
             'traspasos_no_autorizados' => [],
+            'horarios_aplazados_en_una_persona' => [],
             'planes_no_vendibles' => [],
             'precios_que_no_son_del_catalogo' => [],
             'enlaces_no_oficiales' => [],
@@ -389,6 +390,17 @@ class UltronCanaryReport extends Command
                  */
                 if (! $t['traspaso_autorizado'] && $guard->handoffOfferIn($texto) !== null) {
                     $mecanicos['traspasos_no_autorizados'][] = $ref;
+                }
+
+                /*
+                 * Aplazar el horario en una persona cuenta aparte. No es un
+                 * traspaso —nadie pasa la conversación— pero promete atención
+                 * humana que nadie pidió, y el dueño lo puso por escrito como
+                 * condición del canario: sin horario confirmado se dice que no
+                 * se tiene, no que lo dirá alguien.
+                 */
+                if (! $t['traspaso_autorizado'] && ($aplaza = $guard->scheduleDeferralIn($texto)) !== null) {
+                    $mecanicos['horarios_aplazados_en_una_persona'][] = $ref.' ('.mb_substr($aplaza, 0, 50).')';
                 }
 
                 /*

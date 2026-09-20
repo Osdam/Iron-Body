@@ -23,7 +23,9 @@ use Throwable;
  * - Nunca lleva nombre, documento, teléfono ni correo: fechas, días, plan y
  *   estado. El precio de renovar sale del catálogo con el marcador de siempre.
  * - Lo que el CRM no tiene va como SOURCE_NOT_AVAILABLE, para que se diga
- *   «lo confirma una persona» en lugar de inventarse.
+ *   que el dato no está confirmado, en lugar de inventarse. Aplazarlo en una
+ *   persona es una promesa aparte, y esa la gobierna la autorización de
+ *   traspaso.
  * - Lo que el asistente NO resuelve solo (pausar, cancelar el cobro automático,
  *   devoluciones, factura, cambio de plan a mitad de periodo) se declara en
  *   `team_only`: la estrategia lo pide con `staff_review`, nunca lo promete.

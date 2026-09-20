@@ -100,6 +100,7 @@ Todos viajan como `{"ok": false, "code": ...}`. La excepción es
 | `unknown_placeholder` | Un marcador que Laravel no sabe sustituir. Los legales son `UltronDraftPlaceholders::ALLOWED` = `PLAN_PRICE`, `PLAN_NAME`, `PLAN_DURATION` |
 | `machine_reply_card_data` | El borrador pide tarjeta, CVV, PIN, clave de banco u OTP. El cobro vive en el checkout de Wompi, **nunca** en el chat. Es lo primero que mira `inspect()`: es lo único de la lista que le cuesta dinero a la persona |
 | `machine_reply_unauthorized_handoff` | El **texto** ofrece pasar a una persona sin permiso, aunque el campo no lo pidiera. Segunda barrera, por si algo se coló |
+| `machine_reply_schedule_deferral` | El texto APLAZA el horario en una persona («el equipo te confirma el horario», «eso lo confirma una persona») sin que nadie haya pedido hablar con alguien. No es un traspaso —la conversación no cambia de manos— pero promete atención humana que nadie autorizó, y en WhatsApp se lee como «espera, que te escriben». Va acotado al HORARIO, que es el hecho que hoy falta de verdad: aplazar en el equipo el medio de pago o una gestión de membresía sigue siendo correcto, y eso lo juzga el Critic, que tiene el contexto del turno |
 | `machine_reply_forbidden_action` | El texto dice que va a activar una membresía, aprobar un pago o tocar facturación |
 | `machine_reply_unsafe_claim` | Promesa de resultados o diagnóstico clínico |
 | `machine_reply_invented_price` | Una cifra escrita por el modelo. **Este es el código real del precio inventado**, no `draft_rejected` (§2.3). Cuenta como cifra lo que un colombiano lee como dinero: «80.000», «80 mil», «ochenta mil», «80k», «80 000», dígitos de ancho completo y la O por cero |
@@ -457,6 +458,23 @@ donde los dos casos que documentaban el agujero documentan hoy su cierre.
 
 **Encender la bandera devuelve el cobro por todos esos caminos**: es una línea del
 entorno, y esa decisión sigue siendo del dueño del producto.
+
+### 6.1.b El horario no existe, y no se puede aplazar en nadie
+
+`gym.opening_hours` vale `SOURCE_NOT_AVAILABLE` en producción: el único ítem de
+horario de la base de conocimiento era un marcador sin horas, y se **rechazó**
+en la revisión previa al canario. Mientras siga así, la respuesta honesta es
+decir que el dato no está confirmado y seguir con lo que sí existe —las clases
+llevan día y hora reales en `gym.classes`—.
+
+Lo que NO vale es aplazarlo en una persona. El modelo lo hacía porque se lo
+decían las dos capas: el prompt del Composer («di que ese dato lo confirma una
+persona del equipo») y el propio backend, cuyo texto para
+`SalesIntents::SCHEDULE_QUESTION` empezaba por ahí. Las dos se corrigieron, y
+`machine_reply_schedule_deferral` lo frena si el modelo insiste.
+
+**Con la derivación autorizada la regla no aplica**: si la persona pidió hablar
+con alguien, que el equipo le confirme el horario es exactamente lo que toca.
 
 ### 6.2 El cerebro legado sí ve precios
 

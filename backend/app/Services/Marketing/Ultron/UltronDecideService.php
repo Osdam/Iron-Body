@@ -316,8 +316,10 @@ class UltronDecideService
                  * Hechos del gimnasio que el modelo puede afirmar: clases con día y
                  * hora, cuántos entrenadores y de qué (nunca quiénes), y horario de
                  * apertura solo si existe. Lo que el CRM no tiene va como
-                 * SOURCE_NOT_AVAILABLE, para que se diga «lo confirma una persona»
-                 * en vez de inventarse. Los cupos no se afirman.
+                 * SOURCE_NOT_AVAILABLE, para que se diga que el dato no está
+                 * confirmado —no que lo confirmará alguien: prometer una persona
+                 * que nadie autorizó es otra forma de mentir— y se siga con lo
+                 * que sí existe. Los cupos no se afirman.
                  */
                 'gym' => $this->gym->forPrompt(),
                 /*

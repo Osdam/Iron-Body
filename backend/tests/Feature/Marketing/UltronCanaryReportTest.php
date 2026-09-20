@@ -125,6 +125,49 @@ class UltronCanaryReportTest extends TestCase
         $this->assertStringContainsString('traspasos_autorizados            : 1', $salida);
     }
 
+    /**
+     * La regla que puso el dueño para el canario: sin horario confirmado se
+     * dice que no se tiene, no que lo dirá alguien. Prometer una persona que
+     * nadie pidió se lee en WhatsApp como «espera, que te escriben», y no
+     * escribe nadie.
+     */
+    public function test_deferring_the_schedule_to_a_person_fails_the_canary(): void
+    {
+        $this->turno('a qué horas abren?', 'No quiero darte un horario incorrecto: eso lo confirma una persona del equipo.');
+
+        [$codigo, $salida] = $this->correr();
+
+        $this->assertSame(1, $codigo);
+        $this->assertStringContainsString('horarios_aplazados_en_una_persona', $salida);
+    }
+
+    /** Decir que no lo tiene y ofrecer lo que sí existe está limpio. */
+    public function test_saying_the_schedule_is_not_confirmed_is_not_a_finding(): void
+    {
+        $this->turno(
+            'a qué horas abren?',
+            'No tengo un horario general confirmado en mi información, y prefiero no darte uno equivocado. '
+                .'Si quieres, pregúntame por una clase en concreto.',
+        );
+
+        [$codigo, $salida] = $this->correr();
+
+        $this->assertSame(0, $codigo);
+        $this->assertStringContainsString('CANARIO SIN HALLAZGOS MECANICOS', $salida);
+    }
+
+    /** Y si la persona PIDIÓ hablar con alguien, aplazar en el equipo es correcto. */
+    public function test_deferring_the_schedule_is_fine_once_the_person_asked_for_a_human(): void
+    {
+        $this->turno('necesito hablar con una persona', 'Claro. El equipo te confirma el horario cuando te escriba.', [
+            'handoff_authorized' => true,
+        ]);
+
+        [$codigo, $salida] = $this->correr();
+
+        $this->assertSame(0, $codigo);
+    }
+
     public function test_a_plan_that_is_not_sold_fails_the_canary(): void
     {
         $this->turno('qué opciones hay?', 'Te recomiendo el Convenio Interno, que es el que más se lleva.');
