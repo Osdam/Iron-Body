@@ -155,6 +155,37 @@ class UltronCanaryReportTest extends TestCase
     }
 
     /**
+     * El caso de producción: una fila retirada llamada «Mensual» conviviendo
+     * con el «Plan Mensual» que sí se vende. Decir «el mensual» no distingue a
+     * cuál se refiere, así que no se cuenta —y el acta lo dice, para que nadie
+     * crea que ese nombre está vigilado—.
+     */
+    public function test_a_withdrawn_plan_named_like_a_sellable_one_is_not_watched_and_the_record_says_so(): void
+    {
+        Plan::create(['name' => 'Mensual', 'price' => 1, 'duration_days' => 30, 'active' => true, 'sellable' => false]);
+
+        $this->turno('cuánto vale?', 'El mensual está en $80.000 COP e incluye acceso al gimnasio.');
+
+        [$codigo, $salida] = $this->correr();
+
+        $this->assertSame(0, $codigo);
+        $this->assertStringContainsString('no se vigilan por ambiguos', $salida);
+        $this->assertStringContainsString('Mensual', $salida);
+    }
+
+    /** Y el que sí se distingue se sigue contando, que es para lo que está. */
+    public function test_a_withdrawn_plan_with_its_own_name_is_still_counted(): void
+    {
+        $this->turno('qué opciones hay?', 'Te sale mejor el Convenio Interno.');
+
+        [$codigo, $salida] = $this->correr();
+
+        $this->assertSame(1, $codigo);
+        $this->assertStringContainsString('planes_no_vendibles', $salida);
+        $this->assertStringNotContainsString('no se vigilan por ambiguos', $salida);
+    }
+
+    /**
      * La conversación del canario existe desde antes. Sin ventana, el acta
      * cuenta como hallazgo lo que dijo el asesor anterior hace tres meses.
      */

@@ -100,6 +100,16 @@ class UltronCanaryReport extends Command
     }
 
     /**
+     * El nombre como PALABRA, no como trozo: «mensual» no puede casar dentro de
+     * «mensualidad». Sin propiedades Unicode a propósito: el PCRE de producción
+     * (10.39) no compila algunas que el local sí, y esto se ejecuta allí.
+     */
+    private function comoPalabra(string $nombre): string
+    {
+        return '/(?<![a-z0-9áéíóúüñ])'.preg_quote($nombre, '/').'(?![a-z0-9áéíóúüñ])/iu';
+    }
+
+    /**
      * Un turno es un entrante de la persona y todo lo que vino detrás.
      *
      * @return list<array<string,mixed>>
@@ -178,7 +188,34 @@ class UltronCanaryReport extends Command
     private function revisar(array $turnos, Collection $vendibles, MarketingConversation $conversation): array
     {
         $guard = app(OutboundContentGuard::class);
-        $noVendibles = Plan::query()->whereNotIn('id', $vendibles->pluck('id'))->pluck('name')->all();
+        /*
+         * Los planes que no se venden, por NOMBRE. Y un nombre no sirve si es
+         * ambiguo: en producción hay una fila inactiva llamada «mensual» junto
+         * al «Plan Mensual» que sí se vende, así que cualquier respuesta
+         * correcta que dijera «mensual» habría contado como ofrecer un plan
+         * retirado. Cuando el nombre del retirado aparece dentro del nombre de
+         * uno vendible, la mención no distingue a cuál se refiere y no se
+         * cuenta: el acta lo dice en voz alta para que nadie crea que ese
+         * nombre está vigilado.
+         */
+        $todosNoVendibles = Plan::query()->whereNotIn('id', $vendibles->pluck('id'))->pluck('name')->all();
+        $ambiguos = [];
+        $noVendibles = [];
+        foreach ($todosNoVendibles as $nombre) {
+            $nombre = trim((string) $nombre);
+            if ($nombre === '') {
+                continue;
+            }
+            $dentroDeUnoVendible = $vendibles->contains(
+                fn (Plan $v) => preg_match($this->comoPalabra($nombre), (string) $v->name) === 1
+            );
+            if ($dentroDeUnoVendible) {
+                $ambiguos[] = $nombre;
+
+                continue;
+            }
+            $noVendibles[] = $nombre;
+        }
         $precios = $vendibles->map(fn (Plan $p) => number_format((float) $p->price, 0, ',', '.'))->all();
         $enlacesOficiales = [MobileAppLinks::ANDROID, MobileAppLinks::IOS, MobileAppLinks::WEB];
 
@@ -214,11 +251,7 @@ class UltronCanaryReport extends Command
                     $sinVendibles = str_ireplace((string) $vendible->name, ' ', $sinVendibles);
                 }
                 foreach ($noVendibles as $nombre) {
-                    if ($nombre === '') {
-                        continue;
-                    }
-                    $patron = '/(?<![a-z0-9áéíóúüñ])'.preg_quote((string) $nombre, '/').'(?![a-z0-9áéíóúüñ])/iu';
-                    if (preg_match($patron, $sinVendibles) === 1) {
+                    if (preg_match($this->comoPalabra($nombre), $sinVendibles) === 1) {
                         $mecanicos['planes_no_vendibles'][] = $ref.' ('.$nombre.')';
                     }
                 }
@@ -274,6 +307,7 @@ class UltronCanaryReport extends Command
         return [
             'mecanicos' => $mecanicos,
             'mecanicos_total' => $total,
+            'nombres_ambiguos' => $ambiguos,
             'para_criterio_humano' => [
                 'veredictos_del_critic' => array_values(array_filter(array_map(fn ($t) => $t['critic'] === null ? null : ['turno' => $t['turno'], 'critic' => $t['critic']], $turnos))),
                 'similitud_maxima_con_respuestas_previas' => array_values(array_filter(array_map(fn ($t) => $t['novedad'] === null ? null : ['turno' => $t['turno'], 'similitud' => $t['novedad']], $turnos))),
@@ -313,6 +347,10 @@ class UltronCanaryReport extends Command
         foreach ($hallazgos['mecanicos'] as $clave => $casos) {
             $n = count($casos);
             $this->line(sprintf('  %-34s %d%s', $clave, $n, $n > 0 ? '  → '.implode(', ', $casos) : ''));
+        }
+        if ($hallazgos['nombres_ambiguos'] !== []) {
+            $this->line('  (no se vigilan por ambiguos, su nombre está dentro de uno vendible: '
+                .implode(', ', $hallazgos['nombres_ambiguos']).')');
         }
         $this->newLine();
 
