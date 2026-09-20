@@ -257,4 +257,94 @@ class PaymentFactGuardTest extends TestCase
             'none',
         ));
     }
+
+    // ── La tercera puerta: la negación que no niega nada ─────────────────────
+
+    /**
+     * «No te preocupes» es frase de catálogo de cualquier modelo comercial, y
+     * bastaba con que apareciera para eximir la frase entera. Era la misma
+     * forma del agujero que ya se cerró dos veces —mirar la frase y no la
+     * afirmación— pero en la salida de al lado, y la más probable de las tres.
+     *
+     * La negación en español gobierna su cláusula: tiene que ir DELANTE de lo
+     * que niega y sin una coma en medio.
+     */
+    public static function negacionesQueNoNiegan(): array
+    {
+        return [
+            'no te preocupes detrás' => ['Ya recibimos tu pago, no te preocupes.', PaymentFactGuard::REASON_CLAIMS_PAID],
+            'no hay problema detrás' => ['Tu pago fue confirmado, no hay problema.', PaymentFactGuard::REASON_CLAIMS_PAID],
+            'coordinada con no' => ['Ya recibimos tu pago y no debes nada.', PaymentFactGuard::REASON_CLAIMS_PAID],
+            'captura con no detrás' => ['Mandame la captura del pago, no hay problema.', PaymentFactGuard::REASON_ACCEPTS_RECEIPT],
+        ];
+    }
+
+    #[DataProvider('negacionesQueNoNiegan')]
+    public function test_a_negation_that_does_not_govern_the_claim_does_not_excuse_it(string $texto, string $motivo): void
+    {
+        $r = $this->guard->contradiction($texto, 'none');
+
+        $this->assertNotNull($r, 'un «no» detrás no desmiente lo que ya se afirmó');
+        $this->assertSame($motivo, $r['reason']);
+    }
+
+    /** Y la honestidad, que es lo que el sistema quiere poder decir, sigue pasando. */
+    public static function negacionesDeVerdad(): array
+    {
+        return [
+            ['Todavia no me aparece tu pago confirmado.'],
+            ['Aun no hemos recibido tu pago.'],
+            ['No me aparece tu pago, todavia no lo veo confirmado.'],
+            ['No hace falta que me mandes la captura del pago.'],
+            ['Hasta que no llegue tu pago no puedo activarte el plan.'],
+        ];
+    }
+
+    #[DataProvider('negacionesDeVerdad')]
+    public function test_an_honest_negation_still_goes_through(string $texto): void
+    {
+        $this->assertNull($this->guard->contradiction($texto, 'none'));
+    }
+
+    // ── El inciso entre comas no parte la afirmación ─────────────────────────
+
+    /**
+     * Excluir la coma de las ventanas de los patrones —para que una afirmación
+     * no cruzara dos cláusulas— dejó pasar la misma mentira con una aclaración
+     * en medio. El punto y coma basta para lo que motivó aquello.
+     */
+    public static function afirmacionesConInciso(): array
+    {
+        return [
+            ['Ya recibimos, efectivamente, tu pago.'],
+            ['Tu pago, como te decia, ya fue confirmado.'],
+            ['Tu pago, el de ayer, quedo registrado.'],
+            ['Tu transferencia, la de Nequi, entro bien.'],
+        ];
+    }
+
+    #[DataProvider('afirmacionesConInciso')]
+    public function test_an_aside_between_commas_does_not_split_the_claim(string $texto): void
+    {
+        $this->assertNotNull($this->guard->contradiction($texto, 'none'));
+    }
+
+    // ── Colgar de la conjunción no basta si el verbo va en pasado ────────────
+
+    public static function subordinadasEnPasado(): array
+    {
+        return [
+            ['Cuando tu pago fue confirmado te enviamos el carnet.'],
+            ['Cuando tu pago quedo registrado ayer te llego el correo.'],
+        ];
+    }
+
+    #[DataProvider('subordinadasEnPasado')]
+    public function test_hanging_from_a_conjunction_in_past_indicative_is_still_a_claim(string $texto): void
+    {
+        $this->assertNotNull(
+            $this->guard->contradiction($texto, 'none'),
+            'el pasado de indicativo afirma, cuelgue de donde cuelgue',
+        );
+    }
 }

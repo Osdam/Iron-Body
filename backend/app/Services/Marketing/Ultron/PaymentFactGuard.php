@@ -50,16 +50,20 @@ final class PaymentFactGuard
     /**
      * Afirmaciones de que el pago está hecho.
      *
-     * Las ventanas excluyen la coma y el punto y coma a propósito: una
-     * afirmación no cruza una cláusula. Sin eso, «debes hacer el pago de forma
-     * manual; una vez confirmado el pago…» casaba de «el pago» (de la primera
-     * cláusula) a «confirmado» (de la segunda) y el guard veía una afirmación
-     * que nadie había escrito.
+     * Las ventanas excluyen el punto y coma: una afirmación no cruza de una
+     * oración a otra. Sin eso, «debes hacer el pago de forma manual; una vez
+     * confirmado el pago…» casaba de «el pago» (de la primera) a «confirmado»
+     * (de la segunda) y el guard veía una afirmación que nadie escribió.
+     *
+     * La COMA sí se admite dentro, y es deliberado: un inciso no parte la
+     * afirmación. «Ya recibimos, efectivamente, tu pago» y «Tu pago, el de
+     * ayer, quedó registrado» son exactamente la misma mentira con una aclaración
+     * en medio, y excluir la coma las dejaba pasar.
      */
     private const AFIRMA_PAGADO = [
-        '~\b(ya\s+)?(?:te\s+)?'.self::ENTRO.'\b[^.!?,;]{0,20}\b(tu|el|su)\s+pago\b~u',
-        '~\b(tu|el|su)\s+pago\b[^.!?,;]{0,25}\b(ya\s+)?(esta|quedo|fue|esa)?\s*'.self::ENTRO.'\b~u',
-        '~\b(tu|el|su)\s+(transferencia|consignacion|giro|abono)\b[^.!?,;]{0,25}\b'.self::ENTRO.'\b~u',
+        '~\b(ya\s+)?(?:te\s+)?'.self::ENTRO.'\b[^.!?;]{0,20}\b(tu|el|su)\s+pago\b~u',
+        '~\b(tu|el|su)\s+pago\b[^.!?;]{0,25}\b(ya\s+)?(esta|quedo|fue|esa)?\s*'.self::ENTRO.'\b~u',
+        '~\b(tu|el|su)\s+(transferencia|consignacion|giro|abono)\b[^.!?;]{0,25}\b'.self::ENTRO.'\b~u',
         '~\bpago\s+(confirmado|aprobado|recibido|acreditado|exitoso)\b~u',
     ];
 
@@ -85,9 +89,9 @@ final class PaymentFactGuard
 
     /** Pedir una captura o un comprobante como prueba. Nunca vale, con pago o sin él. */
     private const PIDE_COMPROBANTE = [
-        '~\b(captura|pantallazo|screenshot|foto|imagen|soporte|comprobante|recibo|voucher)\b[^.!?,;]{0,40}\b(del?\s+)?(pago|transferencia|consignacion|comprobante|deposito)\b~u',
-        '~\b(mandame|mandeme|envia|enviame|pasame|adjunta|sube|comparte|muestra|muestrame)\b[^.!?,;]{0,25}\b(captura|pantallazo|screenshot|soporte|comprobante|recibo|voucher)\b~u',
-        '~\bcon\s+(el|la)\s+(soporte|captura|comprobante|recibo)\b[^.!?,;]{0,30}\b(basta|alcanza|es\s+suficiente|sirve|vale)\b~u',
+        '~\b(captura|pantallazo|screenshot|foto|imagen|soporte|comprobante|recibo|voucher)\b[^.!?;]{0,40}\b(del?\s+)?(pago|transferencia|consignacion|comprobante|deposito)\b~u',
+        '~\b(mandame|mandeme|envia|enviame|pasame|adjunta|sube|comparte|muestra|muestrame)\b[^.!?;]{0,25}\b(captura|pantallazo|screenshot|soporte|comprobante|recibo|voucher)\b~u',
+        '~\bcon\s+(el|la)\s+(soporte|captura|comprobante|recibo)\b[^.!?;]{0,30}\b(basta|alcanza|es\s+suficiente|sirve|vale)\b~u',
     ];
 
     /**
@@ -99,49 +103,81 @@ final class PaymentFactGuard
         $aprobado = $paymentState === self::APPROVED;
 
         foreach ($this->frases($reply) as $frase) {
-            // Una frase negada dice lo contrario y es justo lo que queremos que
-            // el asistente pueda decir: «todavía NO me aparece confirmado».
-            if ($this->negada($frase)) {
-                continue;
-            }
-
             /*
-             * El comprobante NO se exime nunca por condicional. Pedir una
-             * captura está mal con pago y sin él, y «mándame la captura del
-             * pago cuando puedas» es exactamente igual de malo que sin el
-             * «cuando»: enseña que una imagen vale como prueba.
+             * Pedir un comprobante está mal con pago y sin él, así que aquí no
+             * exime ninguna condicional: «mándame la captura del pago cuando
+             * puedas» enseña lo mismo que sin el «cuando». Sólo se perdona si
+             * la NEGACIÓN gobierna la petición («no hace falta que me mandes la
+             * captura»).
              */
-            if ($this->casa($frase, self::PIDE_COMPROBANTE)) {
+            if ($this->pideComprobante($frase)) {
                 return $this->hallazgo(self::REASON_ACCEPTS_RECEIPT, 'reply accepts a receipt as proof of payment');
             }
 
-            /*
-             * Y la afirmación de pago se juzga sobre lo que hay ANTES de la
-             * subordinada, no sobre la frase entera.
-             *
-             * Eximir la frase completa abría el agujero por el que cabía todo:
-             * «Ya recibimos tu pago, cuando vengas te damos el carnet» tiene una
-             * subordinada temporal, sí, pero lo que afirma va delante y es una
-             * mentira sobre el dinero de alguien.
-             */
-            if (! $aprobado && $this->afirmaSinGobierno($frase)) {
+            if (! $aprobado && $this->afirmaPago($frase)) {
                 return $this->hallazgo(self::REASON_CLAIMS_PAID, 'reply says the payment arrived, CRM state is '.$paymentState);
-            }
-
-            /*
-             * Dentro de la subordinada sólo se perdona el futuro. «Ya», «acabamos
-             * de» o «hace un momento» dicen que el dinero YA entró, y eso no lo
-             * vuelve hipotético ninguna conjunción: «cuando vengas te explico, ya
-             * recibimos tu pago» sigue siendo una afirmación.
-             */
-            if (! $aprobado
-                && $this->yaOcurrido($frase)
-                && $this->casa($frase, self::AFIRMA_PAGADO)) {
-                return $this->hallazgo(self::REASON_CLAIMS_PAID, 'reply says the payment already arrived, CRM state is '.$paymentState);
             }
         }
 
         return null;
+    }
+
+    /** ¿Pide un comprobante, sin que una negación lo desmienta? */
+    private function pideComprobante(string $frase): bool
+    {
+        foreach (self::PIDE_COMPROBANTE as $patron) {
+            if (preg_match($patron, $frase, $m, PREG_OFFSET_CAPTURE) !== 1) {
+                continue;
+            }
+
+            if (! $this->niegaLaNegacion($frase, (int) $m[0][1])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * ¿Afirma que el dinero entró?
+     *
+     * Tres exenciones, y las tres tienen que GOBERNAR la afirmación concreta,
+     * no aparecer en cualquier sitio de la frase. Esa diferencia es todo el
+     * guard: mirar la frase entera fue el agujero tres veces seguidas.
+     */
+    private function afirmaPago(string $frase): bool
+    {
+        foreach (self::AFIRMA_PAGADO as $patron) {
+            if (preg_match($patron, $frase, $m, PREG_OFFSET_CAPTURE) !== 1) {
+                continue;
+            }
+
+            $texto = (string) $m[0][0];
+            $pos = (int) $m[0][1];
+
+            // «todavía no me aparece tu pago confirmado»: eso es la honestidad
+            // que el sistema quiere poder decir.
+            if ($this->niegaLaNegacion($frase, $pos)) {
+                continue;
+            }
+
+            /*
+             * «una vez confirmado el pago, se activa tu membresía» describe el
+             * proceso. Pero colgar de la conjunción no basta: en pasado de
+             * indicativo se sigue afirmando («cuando tu pago fue confirmado…»),
+             * y un «ya» en la frase dice que el dinero entró, lo diga donde lo
+             * diga.
+             */
+            if ($this->gobierna(self::SUBORDINA, $frase, $pos, self::ALCANCE_SUBORDINADA)
+                && ! $this->yaOcurrido($frase)
+                && ! $this->enPasadoIndicativo($texto)) {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
     }
 
     /** @return list<string> */
@@ -154,112 +190,73 @@ final class PaymentFactGuard
     }
 
     /**
-     * ¿La frase niega?
+     * ¿Hay una negación que gobierne lo que empieza en $pos?
      *
-     * Basta con que aparezca una negación: en español la negación va delante
-     * del verbo, y estas frases son cortas. Preferimos dejar pasar una frase
-     * negada rara antes que bloquear la honestidad («no me aparece», «aún no
-     * está confirmado»), que es justo lo que el sistema quiere que diga.
+     * TERCERA versión del mismo agujero, y la más probable de las tres: bastaba
+     * que apareciera un «no» en cualquier parte de la frase para eximirla
+     * entera, y «no te preocupes» es frase de catálogo de cualquier modelo
+     * comercial. «Ya recibimos tu pago, no te preocupes» pasaba.
+     *
+     * La negación en español gobierna su cláusula, así que tiene que ir DELANTE
+     * de lo que niega y sin una coma en medio —la coma abre cláusula nueva—.
+     * Sin límite de distancia, al contrario que la subordinada: «no hace falta
+     * que me mandes la captura del pago» niega desde el principio de una
+     * cláusula larga y sigue siendo honesto.
      */
-    private function negada(string $frase): bool
+    private function niegaLaNegacion(string $frase, int $pos): bool
     {
-        return preg_match('~\b(no|aun no|todavia no|sin)\b~u', $frase) === 1;
+        return $this->gobierna(self::NIEGA, $frase, $pos, PHP_INT_MAX);
     }
+
+    /** Las negaciones que valen. En español van delante del verbo. */
+    private const NIEGA = '~\b(no|aun no|todavia no|sin)\b~u';
 
     /**
-     * ¿La frase habla del FUTURO en vez de afirmar un hecho?
+     * ¿La frase dice que el dinero YA entró?
      *
-     * Es la salida simétrica a la negación, y la puso un turno perdido: el
-     * canario físico escribió «debes hacer el pago de forma manual; una vez
-     * confirmado el pago, se activa tu membresía» —que describe el proceso con
-     * honestidad— y este guard lo leyó como «el pago llegó». El turno murió con
-     * un 422 y la persona no recibió nada.
-     *
-     * Las conjunciones subordinantes de tiempo y condición son una clase
-     * CERRADA del español, así que esto no es una lista de contextos inocentes
-     * que nunca termina: es la gramática. Lo que afirma que el dinero entró
-     * —«ya recibimos tu pago», «tu pago fue confirmado»— sigue bloqueado,
-     * porque ahí no hay subordinación ninguna.
+     * «Ya», «acabamos de», «hace un momento»: ninguna conjunción vuelve
+     * hipotético el pasado, así que estas marcas anulan la exención de la
+     * subordinada aunque la afirmación cuelgue de ella.
      */
-    private function condicional(string $frase): bool
-    {
-        /*
-         * «si» va con su sujeto pegado a propósito: normalizado, el «sí» de
-         * afirmar y el «si» de condicionar son la misma palabra, y «sí, ya
-         * recibimos tu pago» no puede colarse por esta puerta. Ante la duda,
-         * esto falla hacia BLOQUEAR, que es el lado correcto cuando hay dinero.
-         */
-        return preg_match(self::SUBORDINA, $frase) === 1;
-    }
-
-    /**
-     * ¿Hay en la frase una afirmación de pago que NO gobierne una subordinada?
-     *
-     * Es el arreglo de la segunda versión del mismo agujero. La primera fue
-     * eximir la frase entera: bastaba rematar con «…, cuando vengas…» para
-     * desactivar el guard sobre lo que iba delante. La corrección de aquello
-     * —juzgar sólo lo que va DELANTE de la conjunción— dejó la puerta de atrás:
-     * lo que va DETRÁS no lo miraba nadie, y «Cuando vengas te damos el carnet,
-     * tu pago fue confirmado» es exactamente la misma mentira con las cláusulas
-     * al revés.
-     *
-     * La regla correcta no es de posición, es de GOBIERNO: una afirmación sólo
-     * es hipotética si cuelga de la conjunción, y para colgar de ella tiene que
-     * estar pegada a ella —sin una coma de por medio, que abre cláusula nueva, y
-     * a pocos caracteres—. «Una vez confirmado el pago» cuelga; «…, tu pago fue
-     * confirmado» es una oración independiente que afirma.
-     */
-    private function afirmaSinGobierno(string $frase): bool
-    {
-        foreach (self::AFIRMA_PAGADO as $patron) {
-            if (preg_match($patron, $frase, $m, PREG_OFFSET_CAPTURE) !== 1) {
-                continue;
-            }
-
-            if (! $this->gobernada($frase, (int) $m[0][1])) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /** ¿La afirmación que empieza en $pos cuelga de una conjunción subordinante? */
-    private function gobernada(string $frase, int $pos): bool
-    {
-        $antes = substr($frase, 0, $pos);
-
-        if (preg_match_all(self::SUBORDINA, $antes, $mm, PREG_OFFSET_CAPTURE) < 1) {
-            return false;
-        }
-
-        $ultima = end($mm[0]);
-        $finConjuncion = (int) $ultima[1] + strlen((string) $ultima[0]);
-        $entre = substr($frase, $finConjuncion, $pos - $finConjuncion);
-
-        // Una coma abre cláusula nueva: lo que viene después ya no cuelga de la
-        // conjunción, por muy cerca que esté.
-        return ! str_contains($entre, ',')
-            && ! str_contains($entre, ';')
-            && mb_strlen($entre) <= self::ALCANCE_SUBORDINADA;
-    }
-
-    /** ¿La frase dice que el dinero YA entró? Ninguna conjunción lo vuelve hipotético. */
     private function yaOcurrido(string $frase): bool
     {
         return preg_match('~\b(ya|acabamos\s+de|acaba\s+de|hace\s+un\s+(momento|rato)|recien)\b~u', $frase) === 1;
     }
 
-    /** @param  list<string>  $patrones */
-    private function casa(string $frase, array $patrones): bool
+    /**
+     * Formas de pasado de INDICATIVO: dicen que ya ocurrió, y eso no lo vuelve
+     * hipotético ninguna conjunción. Lista cerrada a propósito; los participios
+     * («confirmado», «recibido») quedan fuera porque son justo los que forman
+     * las condicionales legítimas: «una vez confirmado el pago».
+     */
+    private function enPasadoIndicativo(string $texto): bool
     {
-        foreach ($patrones as $patron) {
-            if (preg_match($patron, $frase) === 1) {
-                return true;
-            }
+        return preg_match('~\b(fue|fueron|quedo|quedaron|entro|entraron|llego|llegaron|ingreso|acredito|recibimos|recibi|confirmamos|aprobamos|registramos)\b~u', $texto) === 1;
+    }
+
+    /**
+     * ¿Alguna marca de $patron gobierna lo que empieza en $pos?
+     *
+     * Gobernar es ir DELANTE, en la misma cláusula (sin coma ni punto y coma de
+     * por medio) y dentro del alcance. Es la única pregunta que hace falta para
+     * las dos exenciones del guard, y hacérsela por afirmación —en vez de por
+     * frase— es lo que cierra las tres puertas.
+     */
+    private function gobierna(string $patron, string $frase, int $pos, int $alcance): bool
+    {
+        $antes = substr($frase, 0, $pos);
+
+        if (preg_match_all($patron, $antes, $mm, PREG_OFFSET_CAPTURE) < 1) {
+            return false;
         }
 
-        return false;
+        $ultima = end($mm[0]);
+        $desde = (int) $ultima[1] + strlen((string) $ultima[0]);
+        $entre = substr($frase, $desde, $pos - $desde);
+
+        return ! str_contains($entre, ',')
+            && ! str_contains($entre, ';')
+            && mb_strlen($entre) <= $alcance;
     }
 
     /** @return array{code:string, reason:string, detail:string} */
