@@ -90,6 +90,69 @@ class GymFactsProviderTest extends TestCase
         $this->assertSame(['Horario: Lunes a viernes 5am a 10pm'], app(GymFactsProvider::class)->openingHours());
     }
 
+    /**
+     * EL HORARIO DE APERTURA NO ES EL HORARIO DE CLASES.
+     *
+     * Son dos preguntas distintas con dos fuentes distintas, y confundirlas es
+     * la forma barata de mentir: contestar «hasta las 8 de la noche» porque esa
+     * es la última clase, cuando el gimnasio cierra a las diez —o al revés—.
+     * `opening_hours` sale de la base de conocimiento (categoría `schedule`) y
+     * `classes` de la tabla de clases; ninguna de las dos se deduce de la otra,
+     * y esta prueba existe para que sigan sin deducirse.
+     */
+    public function test_opening_hours_and_class_schedule_are_different_facts(): void
+    {
+        MarketingKnowledgeItem::create([
+            'category' => 'schedule', 'key' => 'schedule.apertura', 'title' => 'Horario general',
+            'content' => 'Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sábados, domingos y festivos de 8:00 a. m. a 2:00 p. m.',
+            'is_active' => true, 'priority' => 1, 'origin' => MarketingKnowledgeItem::ORIGIN_SERVER,
+        ]);
+        MyClass::create([
+            'name' => 'IRON STRENGTH', 'type' => 'grupal', 'day_of_week' => 'monday',
+            'start_time' => '19:00:00', 'end_time' => '20:00:00', 'status' => 'active', 'max_capacity' => 20,
+        ]);
+
+        $g = app(GymFactsProvider::class);
+        $horario = $g->openingHours();
+        $clases = $g->classes();
+
+        // 1. El horario general es el del gimnasio, no el de la última clase.
+        $this->assertIsArray($horario);
+        $this->assertStringContainsString('10:00 p. m.', implode(' ', $horario));
+        $this->assertStringNotContainsString('IRON STRENGTH', implode(' ', $horario), 'una clase no es el horario de apertura');
+        $this->assertStringNotContainsString('19:00', implode(' ', $horario));
+
+        // 2. La clase es la clase: su hora no se toca ni se mezcla.
+        $this->assertSame(['IRON STRENGTH'], array_column($clases, 'name'));
+        $this->assertSame(['19:00'], array_column($clases, 'start_time'));
+        $this->assertSame(['lunes'], array_column($clases, 'day'));
+
+        // 3. Y viajan por claves distintas del contexto, que es lo que impide
+        //    que el modelo responda una con la otra.
+        $prompt = $g->forPrompt();
+        $this->assertSame($horario, $prompt['opening_hours']);
+        $this->assertSame($clases, $prompt['classes']);
+        $this->assertStringNotContainsString('a. m.', json_encode($prompt['classes'], JSON_UNESCAPED_UNICODE));
+    }
+
+    /**
+     * Y el reverso, que es el que de verdad muerde: sin ítem de horario, tener
+     * clases NO da un horario de apertura. El gimnasio no «abre a las 6» porque
+     * haya una clase a las 6.
+     */
+    public function test_having_classes_does_not_invent_opening_hours(): void
+    {
+        MyClass::create([
+            'name' => 'IRON POWERFLOW', 'type' => 'grupal', 'day_of_week' => 'monday',
+            'start_time' => '06:00:00', 'end_time' => '07:00:00', 'status' => 'active', 'max_capacity' => 20,
+        ]);
+
+        $g = app(GymFactsProvider::class);
+
+        $this->assertNotSame([], $g->classes(), 'la clase existe');
+        $this->assertSame(GymFactsProvider::SOURCE_NOT_AVAILABLE, $g->openingHours(), 'y aun así el horario de apertura no existe');
+    }
+
     public function test_search_returns_knowledge_entries_not_answers(): void
     {
         MarketingKnowledgeItem::create(['category' => 'faq', 'key' => 'lesion', 'title' => 'Mencionan una lesión', 'content' => 'No diagnosticar; marcar revisión del equipo.', 'is_active' => true, 'priority' => 2, 'origin' => MarketingKnowledgeItem::ORIGIN_SERVER]);

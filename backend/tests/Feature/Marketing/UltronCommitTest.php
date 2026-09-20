@@ -152,6 +152,44 @@ class UltronCommitTest extends TestCase
         Http::assertNothingSent();
     }
 
+    /**
+     * El cerrojo del canario, en la puerta de SALIDA.
+     *
+     * Que no nazca un evento de otra conversación es el camino normal, pero no
+     * el único: quien tenga el secreto —o ejecute el workflow a mano, o pinche
+     * datos en n8n— puede llamar al commit con cualquier `conversation_id`, y
+     * de aquí sale un WhatsApp de verdad. Con el canario puesto, esa llamada se
+     * queda sin ejecutar y sin dejar rastro en la conversación ajena.
+     */
+    public function test_with_the_canary_set_a_commit_for_another_conversation_is_refused(): void
+    {
+        Http::fake();
+        $m = $this->inbound();
+
+        config()->set('marketing.ultron.canary_conversation_id', $this->conversation->id + 1000);
+
+        $this->commit($this->payload($m))
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'not_canary_conversation');
+
+        $this->assertSame(0, MarketingMessage::where('direction', 'outbound')->count(), 'no sale ni un mensaje');
+        $this->assertSame(0, MarketingAiAction::count(), 'ni queda una fila en el historial de esa conversación');
+        Http::assertNothingSent();
+    }
+
+    /** Y la conversación del canario sí ejecuta, que es de lo que se trata. */
+    public function test_with_the_canary_set_to_this_conversation_the_commit_runs(): void
+    {
+        Http::fake();
+        $m = $this->inbound();
+
+        config()->set('marketing.ultron.canary_conversation_id', $this->conversation->id);
+
+        $this->commit($this->payload($m))->assertOk()->assertJsonPath('ok', true);
+
+        $this->assertSame(1, MarketingMessage::where('direction', 'outbound')->count());
+    }
+
     public function test_requires_the_internal_bearer(): void
     {
         $m = $this->inbound();

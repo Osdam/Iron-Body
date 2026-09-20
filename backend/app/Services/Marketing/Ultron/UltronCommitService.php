@@ -160,6 +160,37 @@ class UltronCommitService
         $lead = $conversation->lead;
         Context::add('conversation_id', $conversation->id);
 
+        /*
+         * EL CERROJO DEL CANARIO, TAMBIÉN EN LA PUERTA DE SALIDA.
+         *
+         * `UltronEventEmitter` ya impide que nazca un evento de una
+         * conversación que no es la del canario, y ese es el camino normal: sin
+         * evento, n8n no se entera. Pero el camino normal no es el único: quien
+         * tenga el secreto —o una ejecución manual del workflow, o un pin de
+         * datos— puede llamar aquí con cualquier `conversation_id`, y de aquí
+         * sale un WhatsApp de verdad.
+         *
+         * Así que el mismo hecho se comprueba en los dos extremos. Se LANZA en
+         * vez de registrar un turno bloqueado: una llamada a una conversación
+         * ajena no merece una fila en su historial, merece un no.
+         *
+         * `null` en la bandera significa SIN RESTRICCIÓN, igual que en el
+         * emisor: el canario se acota poniendo el id, no quitándolo.
+         */
+        $canario = config('marketing.ultron.canary_conversation_id');
+        if ($canario !== null && (int) $canario !== (int) $conversation->id) {
+            ChannelLog::warning('ultron.commit.not_canary_conversation', [
+                'conversation_id' => (int) $conversation->id,
+                'canary_conversation_id' => (int) $canario,
+            ]);
+
+            throw UltronCommitException::make(
+                'not_canary_conversation',
+                'El canario está acotado a otra conversación: aquí no se ejecuta nada.',
+                403,
+            );
+        }
+
         // 4) Los hechos duros ganan a cualquier propuesta.
         if ($reason = $this->decide->ineligibleReason($conversation, $message)) {
             return $this->blocked($conversation, $message, $payload, $reason);
