@@ -62,14 +62,26 @@ class MarketingKnowledgeReview extends Command
             return self::SUCCESS;
         }
 
-        if ($item->isPublishable()) {
-            $this->info('Ya estaba aprobado; no se toca nada.');
+        /*
+         * Aprobar algo que ya está publicado no es un no-op: es el gesto que
+         * necesita la deuda heredada. La migración de RC-4 dejó aprobadas las
+         * filas que ya existían —incluidas las que entró la máquina anónima—
+         * SIN que nadie las mirara, y `knowledge/doctor` las cuenta en
+         * `approved_from_untrusted_origin` justamente para que alguien lo haga.
+         * Esa cuenta baja cuando una persona firma, y firmar es esto.
+         */
+        if ($item->isPublishable() && $item->reviewed_at !== null) {
+            $this->info('Ya lo revisó '.$item->reviewed_by.' el '.$item->reviewed_at->toDateString().'; no se toca nada.');
 
             return self::SUCCESS;
         }
 
+        $yaPublicado = $item->isPublishable();
         $item->approve($quien);
-        $this->info('APROBADO por '.$quien.'. A partir del próximo turno, el asesor lo puede afirmar.');
+
+        $this->info($yaPublicado
+            ? 'CONFIRMADO por '.$quien.'. Ya estaba publicado; ahora consta quién responde por él.'
+            : 'APROBADO por '.$quien.'. A partir del próximo turno, el asesor lo puede afirmar.');
 
         return self::SUCCESS;
     }

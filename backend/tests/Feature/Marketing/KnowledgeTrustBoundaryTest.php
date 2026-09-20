@@ -544,6 +544,41 @@ class KnowledgeTrustBoundaryTest extends TestCase
         $this->assertTrue($item->reachesPrompt());
     }
 
+    /**
+     * La deuda heredada: filas que la migración dejó publicadas sin que nadie
+     * las mirara. Confirmarlas es el gesto que baja
+     * `approved_from_untrusted_origin`, que es la comprobación previa al
+     * canario; si aprobar un ítem ya aprobado no hiciera nada, esa cuenta no
+     * habría manera de bajarla salvo improvisando.
+     */
+    public function test_confirmar_un_item_heredado_baja_la_cuenta_del_doctor(): void
+    {
+        $viejo = MarketingKnowledgeItem::create([
+            'category' => 'location', 'key' => 'location.heredada', 'content' => 'Entró antes de la frontera.',
+        ]);
+        $viejo->forceFill([
+            'origin' => MarketingKnowledgeItem::ORIGIN_INTERNAL_API,
+            'review_status' => MarketingKnowledgeItem::REVIEW_APPROVED,
+            'reviewed_by' => null,
+            'reviewed_at' => null,
+        ])->saveQuietly();
+
+        $this->assertSame(1, app(MarketingKnowledgeBaseService::class)->summary()['approved_from_untrusted_origin']);
+
+        $codigo = Artisan::call('marketing:knowledge-review', [
+            'key' => 'location.heredada', '--by' => 'Alejandro',
+        ]);
+
+        $this->assertSame(0, $codigo);
+        $this->assertStringContainsString('CONFIRMADO', Artisan::output());
+        $this->assertSame(0, app(MarketingKnowledgeBaseService::class)->summary()['approved_from_untrusted_origin']);
+        $this->assertTrue($viejo->fresh()->reachesPrompt(), 'confirmar no lo saca del prompt');
+
+        // Y la segunda vez ya no hace falta: dice quién respondió y se calla.
+        Artisan::call('marketing:knowledge-review', ['key' => 'location.heredada', '--by' => 'Otra persona']);
+        $this->assertStringContainsString('Ya lo revisó Alejandro', Artisan::output());
+    }
+
     public function test_la_consola_no_aprueba_sin_decir_quien(): void
     {
         $this->escribePorLaPuertaNoConfiable([
