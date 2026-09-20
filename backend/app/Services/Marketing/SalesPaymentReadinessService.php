@@ -43,10 +43,14 @@ class SalesPaymentReadinessService
      * Capacidad técnica Y permiso. Las dos, o no hay link.
      *
      * Este es el ÚNICO punto donde se calcula esa combinación. Quien necesite
-     * saber si el agente puede ofrecer un link pregunta aquí; repetir la
-     * fórmula en otra clase es garantizar que un día se cambie una y no la otra.
-     * No afecta a los flujos que opera una persona: un administrador que genera
-     * un link desde el CRM tiene sus propios permisos y no pasa por aquí.
+     * saber si se puede acuñar un cobro pregunta aquí; repetir la fórmula en
+     * otra clase es garantizar que un día se cambie una y no la otra.
+     *
+     * Desde RC-2 esto gobierna TAMBIÉN al administrador que genera un link desde
+     * el CRM. Antes no —tenía sus propios permisos y no pasaba por aquí—, y esa
+     * excepción convertía la bandera en una preferencia: con ella apagada el
+     * dinero seguía teniendo caminos abiertos. La persona se distingue para la
+     * TRAZA (quién lo pidió), no para el permiso.
      */
     public function canGenerateAutomaticLink(): bool
     {

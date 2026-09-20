@@ -58,9 +58,13 @@ class UltronPaymentApprovedTest extends TestCase
         config()->set('wompi.integrity_secret', 'integrity_test_secret');
         config()->set('wompi.events_secret', 'events_test_secret');
         config()->set('wompi.checkout.base_url', 'https://checkout.wompi.co/p/');
+        // El enlace del que parte cada caso es un FIXTURE, y desde RC-2 acuñarlo
+        // exige que el negocio lo autorice. Lo que se prueba aquí es lo que pasa
+        // DESPUÉS de que el pago se apruebe, no si se podía cobrar.
+        config()->set('marketing.ultron.payment_links_enabled', true);
         Http::fake();
 
-        $this->plan = Plan::create(['name' => 'Plan Mensual', 'price' => 80000, 'duration_days' => 30, 'active' => true, 'benefits' => json_encode(['Acceso ilimitado'])]);
+        $this->plan = Plan::create(['name' => 'Plan Mensual', 'price' => 80000, 'duration_days' => 30, 'active' => true, 'sellable' => true, 'benefits' => json_encode(['Acceso ilimitado'])]);
         $this->lead = MarketingLead::create(['channel' => 'whatsapp', 'source' => 'inbound', 'phone' => '3150536026', 'meta_user_id' => '573150536026', 'name' => 'Prospecto', 'status' => MarketingLead::STATUS_HOT]);
         $this->conversation = MarketingConversation::create(['lead_id' => $this->lead->id, 'channel' => 'whatsapp', 'status' => 'open', 'ai_enabled' => true, 'human_takeover' => false, 'commercial_phase' => P::CLOSING]);
     }

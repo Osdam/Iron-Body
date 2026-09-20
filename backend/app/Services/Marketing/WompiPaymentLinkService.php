@@ -5,6 +5,7 @@ namespace App\Services\Marketing;
 use App\Models\MarketingLead;
 use App\Models\PaymentTransaction;
 use App\Models\Plan;
+use App\Services\Observability\ChannelLog;
 use App\Services\Wompi\PaymentStateMachine;
 use App\Services\Wompi\WompiSignatureService;
 use App\Services\Wompi\WompiTransactionService;
@@ -14,6 +15,15 @@ use Illuminate\Support\Str;
 /**
  * Genera un LINK DE PAGO Wompi (Web Checkout hosteado) reutilizable para enviar
  * por WhatsApp/Meta cuando un lead no quiere pagar desde la app.
+ *
+ * ESTE ES EL EMBUDO. Todos los caminos que pueden acuñar un cobro —los dos
+ * endpoints internos firmados con el secreto de automatización, el panel del
+ * CRM, la herramienta de ULTRON, el orquestador legado y la herramienta del
+ * subsistema Commercial— terminan en {@see self::generateForLead()}, y ninguno
+ * en ningún otro sitio. Por eso el permiso se exige AQUÍ y no en cada llamador:
+ * el agujero que esto cierra existía precisamente porque la comprobación estaba
+ * repetida en unos caminos y ausente en otros. La regla vive en
+ * {@see SalesPaymentGuardrailService}; este método la invoca por todos.
  *
  * Diseño SEGURO y ADITIVO:
  *   - Reutiliza WompiTransactionService::createOrReuse para CREAR (monto
@@ -38,6 +48,7 @@ class WompiPaymentLinkService
         private readonly WompiTransactionService $tx,
         private readonly WompiSignatureService $signature,
         private readonly array $cfg,
+        private readonly ?SalesPaymentGuardrailService $guardrail = null,
     ) {}
 
     public static function make(): self
@@ -46,6 +57,7 @@ class WompiPaymentLinkService
             WompiTransactionService::make(),
             WompiSignatureService::fromConfig(),
             (array) config('wompi'),
+            app(SalesPaymentGuardrailService::class),
         );
     }
 
@@ -75,9 +87,16 @@ class WompiPaymentLinkService
     /**
      * Genera (o reutiliza) el link de pago para un lead + plan.
      *
+     * El permiso se comprueba ANTES de tocar la base de datos: un rechazo no deja
+     * fila de cobro, ni reutiliza una en vuelo, ni refresca una URL existente.
+     * Nunca lanza —un fallo aquí no puede romper un turno de conversación que ya
+     * salió—: devuelve `authorized=false` con el código y el estado HTTP que el
+     * llamador debe responder.
+     *
      * @param  array  $options  {
      *                          conversation_id?: int|null, message_id?: int|null, channel?: string|null,
-     *                          wants_invoice?: bool, invoice_email?: string|null
+     *                          wants_invoice?: bool, invoice_email?: string|null,
+     *                          origin?: string, authorized_by?: int|null
      *                          }
      * @return array resultado seguro (sin secretos) para el caller / n8n.
      */
@@ -94,6 +113,11 @@ class WompiPaymentLinkService
             ];
         }
 
+        // EL CERROJO. Antes de crear, reutilizar o devolver nada.
+        if ($denial = $this->denyIfNotAuthorized($lead, $plan, $options)) {
+            return $denial;
+        }
+
         $currency = strtoupper((string) ($this->cfg['currency'] ?? 'COP'));
         $prefix = $this->dedupKeyPrefix($lead, $plan);
 
@@ -102,6 +126,7 @@ class WompiPaymentLinkService
         if ($approved !== null) {
             return [
                 'configured' => true,
+                'authorized' => true,
                 'already_paid' => true,
                 'payment_url' => null,
                 'reference' => $approved->reference,
@@ -149,6 +174,7 @@ class WompiPaymentLinkService
 
         return [
             'configured' => true,
+            'authorized' => true,
             'already_paid' => false,
             'payment_url' => $url,
             'reference' => $transaction->reference,
@@ -158,6 +184,56 @@ class WompiPaymentLinkService
             'transaction_id' => $transaction->provider_ref ?: (string) $transaction->id,
             'status' => $transaction->status,
         ];
+    }
+
+    /**
+     * Aplica la regla central de autoridad y, si deniega, devuelve el resultado
+     * controlado que verá el llamador. `null` significa «adelante».
+     *
+     * Quién lo pide sale de `$options`, que construye el llamador en código:
+     * ningún controlador vuelca aquí el payload de la petición, así que
+     * `origin` no es un campo que se pueda mandar desde fuera. El origen humano
+     * exige además el id del administrador que la sesión real ya resolvió.
+     *
+     * La denegación se registra una sola vez, aquí, con lead y plan por id y
+     * sin un dato personal: el nombre y el teléfono no hacen falta para saber
+     * que alguien intentó acuñar un cobro sin permiso.
+     *
+     * @return array|null resultado de rechazo, o null si puede continuar.
+     */
+    private function denyIfNotAuthorized(MarketingLead $lead, Plan $plan, array $options): ?array
+    {
+        $origin = (string) ($options['origin'] ?? SalesPaymentGuardrailService::ORIGIN_AUTOMATIC);
+        $adminId = $options['authorized_by'] ?? null;
+        $guardrail = $this->guardrail ?? app(SalesPaymentGuardrailService::class);
+
+        try {
+            $guardrail->assertCanGeneratePaymentLink($lead, $plan, [], [
+                'origin' => $origin,
+                'admin_id' => $adminId,
+            ]);
+        } catch (SalesGuardrailException $e) {
+            ChannelLog::warning('marketing.payment_link.denied', [
+                'lead_id' => $lead->id,
+                'plan_id' => $plan->id,
+                'origin' => $origin,
+                'admin_id' => $adminId,
+                'reason' => $e->errorCode,
+            ]);
+
+            return [
+                'configured' => true,
+                'authorized' => false,
+                'already_paid' => false,
+                'error' => $e->errorCode,
+                'message' => $e->getMessage(),
+                'escalate' => $e->escalate,
+                'http_status' => $e->httpStatus,
+                'payment_url' => null,
+            ];
+        }
+
+        return null;
     }
 
     /**

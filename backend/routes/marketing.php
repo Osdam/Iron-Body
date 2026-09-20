@@ -61,15 +61,20 @@ Route::middleware(['automation.internal', 'throttle:120,1'])
          * permiso lo decide Laravel (`SalesPaymentReadinessService`), que exige
          * Wompi productivo Y la bandera del negocio.
          *
-         * OJO, y esto antes se afirmaba al revés: el WORKFLOW de ULTRON solo usa
-         * estas dos puertas, pero el SECRETO no distingue puertas. Quien tenga
-         * `automation.internal_secret` puede llamar también a `payment-links` y
-         * a `payment-links/send` de aquí arriba, que son anteriores (Fase 1.5),
-         * están probadas, y NO consultan la bandera del negocio: solo los
-         * guardrails de pago. Apagar `MARKETING_ULTRON_PAYMENT_LINKS_ENABLED`
-         * detiene la herramienta de ULTRON, no esta superficie.
-         * {@see \Tests\Feature\Marketing\InternalSecretAuthoritySurfaceTest},
-         * que fija esa asimetría para que nadie vuelva a darla por cerrada.
+         * OJO: el WORKFLOW de ULTRON solo usa estas dos puertas, pero el SECRETO
+         * no distingue puertas. Quien tenga `automation.internal_secret` puede
+         * llamar también a `payment-links` y a `payment-links/send` de aquí
+         * arriba, que son anteriores (Fase 1.5). Durante un tiempo eso significó
+         * acuñar un cobro real con la bandera del negocio apagada, porque esos
+         * dos no la consultaban.
+         *
+         * Ya no: el permiso se exige en el EMBUDO
+         * ({@see \App\Services\Marketing\WompiPaymentLinkService::generateForLead()}),
+         * por el que pasan todos los caminos que pueden acuñar, así que apagar
+         * `MARKETING_ULTRON_PAYMENT_LINKS_ENABLED` detiene el dinero POR
+         * COMPLETO, no solo la herramienta de ULTRON. Lo fijan
+         * {@see \Tests\Feature\Marketing\PaymentLinkHardGateTest} y
+         * {@see \Tests\Feature\Marketing\InternalSecretAuthoritySurfaceTest}.
          */
         Route::post('ai/decide', [UltronController::class, 'decide']);
         Route::post('ai/commit', [UltronController::class, 'commit']);

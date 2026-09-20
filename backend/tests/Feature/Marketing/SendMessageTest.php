@@ -30,18 +30,29 @@ class SendMessageTest extends TestCase
     {
         parent::setUp();
 
+        /*
+         * El entorno en el que un enlace ES un enlace: pasarela en producción y
+         * el negocio autorizando el cobro. Desde el cierre de la puerta de pagos
+         * (RC-2) esas dos condiciones se comprueban en el embudo
+         * ({@see \App\Services\Marketing\WompiPaymentLinkService::generateForLead()}),
+         * así que un fixture en sandbox y con la bandera apagada ya no acuña
+         * nada: no es que el caso haya cambiado, es que ahora hay que declarar
+         * en qué mundo ocurre. Las llaves siguen siendo de prueba y no se llama
+         * a Wompi.
+         */
         config()->set('wompi', array_merge((array) config('wompi'), [
-            'env' => 'sandbox', 'currency' => 'COP',
+            'env' => 'production', 'currency' => 'COP',
             'public_key' => 'pub_test_link', 'integrity_secret' => 'test_integrity_link',
             'events_secret' => 'test_events_link', 'redirect_url' => 'https://app.ironbody.test/return',
             'checkout' => ['base_url' => 'https://checkout.wompi.co/p/', 'redirect_url' => null, 'expiration_minutes' => 1440],
         ]));
 
+        config()->set('marketing.ultron.payment_links_enabled', true);
         config()->set('automation.internal_secret', self::INTERNAL_SECRET);
         // META deshabilitado por defecto en los tests (modo seguro).
         config()->set('meta.enabled', false);
 
-        $this->plan = Plan::create(['name' => 'Mensual', 'price' => 80000, 'duration_days' => 30, 'active' => true]);
+        $this->plan = Plan::create(['name' => 'Mensual', 'price' => 80000, 'duration_days' => 30, 'active' => true, 'sellable' => true]);
         $this->lead = MarketingLead::create([
             'channel' => 'whatsapp', 'source' => 'inbound', 'phone' => '3215542105',
             'name' => 'Lead Demo', 'status' => MarketingLead::STATUS_INTERESTED,

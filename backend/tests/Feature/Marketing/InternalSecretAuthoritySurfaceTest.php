@@ -25,12 +25,17 @@ use Tests\TestCase;
  * negocio (`MARKETING_ULTRON_PAYMENT_LINKS_ENABLED`), solo los guardrails de
  * pago.
  *
- * Este archivo no juzga si eso está bien: lo FIJA. La asimetría estaba escrita
- * al revés en un comentario de `routes/marketing.php` —decía que a n8n no se le
- * daba esa autoridad—, y una garantía que solo vive en un comentario es la que
- * se descubre el día malo. Si alguien decide cerrarla, estos tests se ponen
- * rojos y obligan a actualizar la decisión en los tres sitios: el código, el
- * comentario y la matriz de autoridad.
+ * Así era hasta RC-2, y este archivo lo fijó para que la decisión de cerrarlo
+ * fuera del dueño y no de una prueba. El dueño decidió cerrarlo: la bandera
+ * manda ahora sobre TODOS los caminos, y los dos casos de abajo —que antes
+ * documentaban el agujero— documentan su cierre. La asimetría estaba escrita al
+ * revés en un comentario de `routes/marketing.php`, y una garantía que solo
+ * vive en un comentario es la que se descubre el día malo.
+ *
+ * Lo que el secreto SIGUE abriendo, y conviene tener escrito: toda la superficie
+ * `internal/marketing/*` con una sola llave compartida, incluida la base de
+ * conocimiento —acotada en RC-4 a PROPONER borradores, nunca a publicar— y la
+ * puerta por la que entra texto de máquina hacia el cliente.
  *
  * Lo que sí se comprueba aquí como garantía real: el camino de ULTRON respeta
  * la bandera, y el guard de salida tapa lo que el modelo no puede decir.
@@ -109,37 +114,40 @@ class InternalSecretAuthoritySurfaceTest extends TestCase
         $this->assertFalse($d->json('context.flags.can_offer_link'));
     }
 
-    // ── Lo que la bandera NO gobierna, y conviene tener escrito ──────────────
+    // ── Lo que la bandera TAMPOCO deja pasar desde RC-2 ──────────────────────
 
     /**
-     * Con la bandera apagada, el secreto interno todavía puede acuñar un enlace
-     * de pago real. No es un descubrimiento agradable, pero es el estado del
-     * sistema y la decisión de cerrarlo es del dueño, no de una prueba.
+     * Lo que este caso afirmaba: con la bandera apagada, el secreto interno
+     * todavía acuñaba un enlace de pago REAL —y en producción Wompi está
+     * productivo con llaves de verdad—. Ya no: apagar la bandera apaga el
+     * dinero por todos los caminos, y el rechazo no deja fila de cobro.
      */
-    public function test_the_internal_secret_still_mints_a_real_payment_link_with_the_flag_off(): void
+    public function test_the_internal_secret_no_longer_mints_a_real_payment_link_with_the_flag_off(): void
     {
         $r = $this->postJson('/api/internal/marketing/payment-links', [
             'marketing_lead_id' => $this->lead->id, 'plan_id' => $this->plan->id,
         ], $this->h());
 
-        $r->assertOk();
-        $this->assertStringContainsString('checkout.wompi.co/p/', (string) $r->json('payment_url'));
-        $this->assertSame(1, PaymentTransaction::count(), 'la fila de cobro existe de verdad');
-        $this->assertFalse(app(SalesPaymentReadinessService::class)->canGenerateAutomaticLink(), 'y la bandera seguía apagada');
+        $r->assertStatus(403)->assertJsonPath('code', 'payment_links_disabled');
+        $this->assertNull($r->json('payment_url'));
+        $this->assertSame(0, PaymentTransaction::count(), 'no se acuñó ninguna fila de cobro');
+        $this->assertFalse(app(SalesPaymentReadinessService::class)->canGenerateAutomaticLink(), 'la bandera es la que manda');
     }
 
     /** Lo mismo, pero además dejando el mensaje preparado para la persona. */
-    public function test_the_internal_secret_also_sends_it_with_the_flag_off(): void
+    /** Y la variante que además lo entregaba por WhatsApp tampoco prepara nada. */
+    public function test_the_internal_secret_does_not_even_prepare_the_message_with_the_flag_off(): void
     {
         $r = $this->postJson('/api/internal/marketing/payment-links/send', [
             'marketing_lead_id' => $this->lead->id, 'plan_id' => $this->plan->id,
         ], $this->h());
 
-        $r->assertOk();
-        $this->assertTrue((bool) $r->json('dry_run'), 'con Meta apagado queda preparado, no entregado');
-        $enviados = MarketingMessage::where('direction', MarketingMessage::DIRECTION_OUTBOUND)->get();
-        $this->assertCount(1, $enviados);
-        $this->assertStringContainsString('checkout.wompi.co', (string) $enviados->first()->body);
+        $r->assertStatus(403)
+            ->assertJsonPath('code', 'payment_links_disabled')
+            ->assertJsonPath('sent', false);
+
+        $this->assertSame(0, MarketingMessage::where('direction', MarketingMessage::DIRECTION_OUTBOUND)->count());
+        $this->assertSame(0, PaymentTransaction::count());
     }
 
     /** El secreto es uno solo: no hay un permiso por puerta. */

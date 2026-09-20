@@ -56,7 +56,7 @@ class PaymentAuthorityTest extends TestCase
             'checkout' => ['base_url' => 'https://checkout.wompi.co/p/', 'redirect_url' => null, 'expiration_minutes' => 1440],
         ]));
 
-        $this->plan = Plan::create(['name' => 'Mensual', 'price' => 80000, 'duration_days' => 30, 'active' => true]);
+        $this->plan = Plan::create(['name' => 'Mensual', 'price' => 80000, 'duration_days' => 30, 'active' => true, 'sellable' => true]);
         $this->lead = MarketingLead::create([
             'channel' => 'whatsapp', 'source' => 'inbound', 'phone' => '3150536026',
             'name' => 'Lead Demo', 'status' => MarketingLead::STATUS_NEW,
@@ -326,9 +326,21 @@ class PaymentAuthorityTest extends TestCase
      * su propio guardrail (`SalesPaymentGuardrailService`) y no consulta la
      * autoridad del agente: con el permiso apagado sigue funcionando igual.
      */
-    public function test_h_human_payment_link_flow_is_untouched(): void
+    /**
+     * Este caso afirmaba lo contrario —«el permiso del agente no gobierna este
+     * camino»— y por eso la bandera apagada no era una bandera: bastaba con
+     * llamar a la ruta interna directamente. No era un flujo humano: el secreto
+     * de automatización identifica una MÁQUINA, la comparta quien la comparta.
+     *
+     * Desde RC-2 la bandera manda sobre todos los orígenes, así que lo que se
+     * fija aquí es que este camino tampoco acuña: 403, sin fila de cobro y sin
+     * membresía. Encender la bandera lo devuelve, y eso lo cubre
+     * {@see PaymentLinkHardGateTest}.
+     */
+    public function test_h_the_direct_internal_route_is_no_exception_to_the_flag(): void
     {
         Http::fake();
+        Http::preventStrayRequests();
         config()->set('wompi.env', 'production');
         config()->set('marketing.ultron.payment_links_enabled', false);
 
@@ -336,12 +348,11 @@ class PaymentAuthorityTest extends TestCase
             'marketing_lead_id' => $this->lead->id,
             'plan_id' => $this->plan->id,
         ], ['Authorization' => 'Bearer '.self::SECRET])
-            ->assertOk()
-            ->assertJsonPath('ok', true);
+            ->assertStatus(403)
+            ->assertJsonPath('ok', false)
+            ->assertJsonPath('code', 'payment_links_disabled');
 
-        // El link se generó: el permiso del agente no gobierna este camino.
-        $this->assertDatabaseHas('payment_transactions', ['provider' => 'wompi', 'method' => 'web_checkout']);
-        // Y generar un link NUNCA activa una membresía.
+        $this->assertDatabaseCount('payment_transactions', 0);
         $this->assertDatabaseCount('payments', 0);
     }
 }

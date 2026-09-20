@@ -278,6 +278,13 @@ class InternalMarketingController extends Controller
      * genera/reutiliza el link de pago y lo envía por WhatsApp en un mensaje
      * humano corto. Con META deshabilitado devuelve el mensaje PREPARADO y
      * dry_run=true. Nunca activa membresía ni marca pago aprobado.
+     *
+     * Quien llama aquí es una MÁQUINA: el secreto de automatización no es una
+     * persona, aunque lo teclee una. Por eso el origen es el automático y la
+     * bandera del negocio lo gobierna igual que a ULTRON —hasta este cierre no
+     * lo hacía, y este endpoint acuñaba cobros reales con la bandera apagada—.
+     * El permiso lo decide {@see SalesPaymentGuardrailService}; aquí solo se
+     * traduce el «no» a un 403 con su código.
      */
     public function paymentLinksSend(
         Request $request,
@@ -313,6 +320,20 @@ class InternalMarketingController extends Controller
             'wants_invoice' => (bool) ($data['wants_invoice'] ?? false),
             'invoice_email' => $data['invoice_email'] ?? null,
         ]);
+
+        // Sin autoridad para acuñar el cobro → 403 y nada enviado. El guardrail
+        // de arriba ya lo habría cazado; esto cubre el caso de que el embudo
+        // deniegue por algo que el controlador no preguntó, en vez de responder
+        // un 200 con `payment_url: null` que parecería un éxito.
+        if (($link['authorized'] ?? true) === false) {
+            return response()->json([
+                'ok' => false,
+                'code' => $link['error'] ?? 'payment_links_disabled',
+                'message' => $link['message'] ?? 'No se puede generar un enlace de pago ahora mismo.',
+                'escalate' => (bool) ($link['escalate'] ?? true),
+                'sent' => false,
+            ], (int) ($link['http_status'] ?? 403));
+        }
 
         // Falta config Wompi Web Checkout → 503 controlado (no 500, sin enviar).
         if (($link['configured'] ?? false) === false) {
@@ -451,6 +472,12 @@ class InternalMarketingController extends Controller
      * SEGURO: el monto es autoritativo del backend (Plan::price); el cliente/n8n
      * NUNCA lo envía. Generar el link NO activa membresía: la activación sigue
      * siendo exclusiva del webhook Wompi aprobado. Respeta do_not_contact.
+     *
+     * Y respeta la bandera del negocio, que es lo que faltaba: este endpoint es
+     * anterior a ULTRON y solo consultaba los guardrails de venta, así que el
+     * secreto interno podía acuñar un cobro real con
+     * `MARKETING_ULTRON_PAYMENT_LINKS_ENABLED=false`. Ahora pasa por la misma
+     * autoridad central que todos los demás caminos.
      */
     public function paymentLinks(
         Request $request,
@@ -487,6 +514,17 @@ class InternalMarketingController extends Controller
             'wants_invoice' => (bool) ($data['wants_invoice'] ?? false),
             'invoice_email' => $data['invoice_email'] ?? null,
         ]);
+
+        // Sin autoridad para acuñar el cobro → 403 distinguible, sin traza de
+        // «link generado» (no se generó nada) y sin datos creados.
+        if (($result['authorized'] ?? true) === false) {
+            return response()->json([
+                'ok' => false,
+                'code' => $result['error'] ?? 'payment_links_disabled',
+                'message' => $result['message'] ?? 'No se puede generar un enlace de pago ahora mismo.',
+                'escalate' => (bool) ($result['escalate'] ?? true),
+            ], (int) ($result['http_status'] ?? 403));
+        }
 
         // Falta configuración Wompi Web Checkout → 503 controlado, sin link falso.
         if (($result['configured'] ?? false) === false) {

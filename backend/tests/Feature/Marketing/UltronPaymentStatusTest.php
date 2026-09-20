@@ -61,7 +61,7 @@ class UltronPaymentStatusTest extends TestCase
         // Sin catch-all aquí: un stub «*» registrado antes respondería vacío a Wompi
         // y la consulta en vivo no vería nada. Cada test registra lo que necesita.
 
-        $this->plan = Plan::create(['name' => 'Plan Mensual', 'price' => 80000, 'duration_days' => 30, 'active' => true, 'benefits' => json_encode(['Acceso ilimitado'])]);
+        $this->plan = Plan::create(['name' => 'Plan Mensual', 'price' => 80000, 'duration_days' => 30, 'active' => true, 'sellable' => true, 'benefits' => json_encode(['Acceso ilimitado'])]);
         $this->lead = MarketingLead::create(['channel' => 'whatsapp', 'source' => 'inbound', 'phone' => '3150536026', 'meta_user_id' => '573150536026', 'name' => 'Prospecto', 'status' => MarketingLead::STATUS_HOT]);
         $this->conversation = MarketingConversation::create(['lead_id' => $this->lead->id, 'channel' => 'whatsapp', 'status' => 'open', 'ai_enabled' => true, 'human_takeover' => false, 'commercial_phase' => P::CLOSING]);
     }
@@ -301,7 +301,7 @@ class UltronPaymentStatusTest extends TestCase
         $pagado = $this->linkPendiente();
         $pagado->forceFill(['status' => PaymentStateMachine::APPROVED])->save();
 
-        $otroPlan = Plan::create(['name' => 'Plan Trimestral', 'price' => 210000, 'duration_days' => 90, 'active' => true]);
+        $otroPlan = Plan::create(['name' => 'Plan Trimestral', 'price' => 210000, 'duration_days' => 90, 'active' => true, 'sellable' => true]);
         $this->linkPendiente($otroPlan)->forceFill(['status' => PaymentStateMachine::EXPIRED])->save();
 
         $p = $this->decide($this->inbound('y ahora qué sigue?', 'ps.10'))->json('context.payment');
@@ -319,7 +319,7 @@ class UltronPaymentStatusTest extends TestCase
     {
         $this->linkPendiente()->forceFill(['status' => PaymentStateMachine::APPROVED])->save();
 
-        $otroPlan = Plan::create(['name' => 'Plan Semestral', 'price' => 400000, 'duration_days' => 180, 'active' => true]);
+        $otroPlan = Plan::create(['name' => 'Plan Semestral', 'price' => 400000, 'duration_days' => 180, 'active' => true, 'sellable' => true]);
         $this->linkPendiente($otroPlan);
 
         $p = $this->decide($this->inbound('me pasas el link otra vez?', 'ps.11'))->json('context.payment');
@@ -341,7 +341,7 @@ class UltronPaymentStatusTest extends TestCase
         $abandonada = $this->linkPendiente();                       // plan A: pedida y nunca pagada.
         $comoEstaba = (string) $abandonada->status;
 
-        $planB = Plan::create(['name' => 'Plan Semestral', 'price' => 400000, 'duration_days' => 180, 'active' => true]);
+        $planB = Plan::create(['name' => 'Plan Semestral', 'price' => 400000, 'duration_days' => 180, 'active' => true, 'sellable' => true]);
         $this->linkPendiente($planB)->forceFill(['status' => PaymentStateMachine::APPROVED])->save();
 
         $p = $this->decide($this->inbound('y ahora qué sigue?', 'ps.12'))->json('context.payment');
@@ -361,7 +361,7 @@ class UltronPaymentStatusTest extends TestCase
     {
         $this->linkPendiente();                                     // plan A en vuelo, sin pagar.
 
-        $planB = Plan::create(['name' => 'Plan Semestral', 'price' => 400000, 'duration_days' => 180, 'active' => true]);
+        $planB = Plan::create(['name' => 'Plan Semestral', 'price' => 400000, 'duration_days' => 180, 'active' => true, 'sellable' => true]);
         $this->linkPendiente($planB)->forceFill(['status' => PaymentStateMachine::APPROVED])->save();
 
         Http::preventStrayRequests();
@@ -388,7 +388,7 @@ class UltronPaymentStatusTest extends TestCase
     {
         $this->linkPendiente()->forceFill(['status' => PaymentStateMachine::APPROVED])->save();
 
-        $planB = Plan::create(['name' => 'Plan Semestral', 'price' => 400000, 'duration_days' => 180, 'active' => true]);
+        $planB = Plan::create(['name' => 'Plan Semestral', 'price' => 400000, 'duration_days' => 180, 'active' => true, 'sellable' => true]);
         $this->linkPendiente($planB);                               // intento nuevo, sin pagar.
 
         Http::preventStrayRequests();
