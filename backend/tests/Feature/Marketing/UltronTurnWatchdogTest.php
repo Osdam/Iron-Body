@@ -463,4 +463,65 @@ class UltronTurnWatchdogTest extends TestCase
         $this->assertSame(0, Incident::count());
         $this->assertSame(0, UltronAbort::open()->count());
     }
+
+    // ── 7 · Un atasco de cola no es un turno mudo ────────────────────────────
+
+    /**
+     * EL FALSO POSITIVO QUE CONVERTÍA UN RETRASO EN SILENCIO.
+     *
+     * Lo encontró la revisión: el vigía corta por `event.created_at`, no por el
+     * intento de entrega. En un despliegue se reinician los doce workers; si un
+     * job tarda más que la gracia, el evento sigue `pending` —no ha salido de
+     * la cola— y el vigía lo leía como mudo, paraba el canario, y al volver el
+     * worker el commit moría con `ultron_aborted`. El retraso se volvía
+     * silencio de verdad, y encima había que soltar el freno a mano.
+     *
+     * Ahora abre incidente (se ve) pero NO frena: el freno lo accionan sólo los
+     * que llegaron a n8n o murieron intentándolo.
+     */
+    public function test_an_event_stuck_in_the_queue_opens_an_incident_but_does_not_stop_the_canary(): void
+    {
+        config()->set('marketing.ultron.canary_conversation_id', $this->conversation->id);
+
+        $m = $this->entrante('me interesa');
+        $this->evento($m, MarketingAutomationEvent::STATUS_PENDING);
+
+        $this->assertSame(1, $this->vigia(), 'se ve');
+
+        $incidente = Incident::first();
+        $this->assertNotNull($incidente);
+        $this->assertSame(1, $incidente->evidence['pending'], 'y se distingue lo atascado de lo mudo');
+
+        $this->assertSame(0, UltronAbort::open()->count(), 'pero no para el canario por un atasco de cola');
+    }
+
+    /** El que SÍ llegó a n8n y se quedó mudo sigue parando el canario. */
+    public function test_an_event_that_reached_n8n_still_stops_the_canary(): void
+    {
+        config()->set('marketing.ultron.canary_conversation_id', $this->conversation->id);
+
+        $this->evento($this->entrante('me interesa'), MarketingAutomationEvent::STATUS_SENT);
+
+        $this->vigia();
+
+        $this->assertSame(1, UltronAbort::open()->count());
+    }
+
+    /** Y si el freno no se puede accionar, el vigía no se cae: el incidente ya avisa. */
+    public function test_the_watchdog_survives_a_brake_that_cannot_be_engaged(): void
+    {
+        config()->set('marketing.ultron.canary_conversation_id', $this->conversation->id);
+        $this->evento($this->entrante('me interesa'), MarketingAutomationEvent::STATUS_SENT);
+
+        $this->app->bind(UltronAbortLatch::class, fn () => new class extends UltronAbortLatch
+        {
+            public function engage(string $reason, string $by, array $evidence = []): UltronAbort
+            {
+                throw new \RuntimeException('la tabla no existe');
+            }
+        });
+
+        $this->assertSame(1, $this->vigia(), 'falla, pero termina');
+        $this->assertSame(1, Incident::count(), 'y el incidente queda abierto, que es lo que hace mirar');
+    }
 }

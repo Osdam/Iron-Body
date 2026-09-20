@@ -320,5 +320,8 @@ Schedule::call(function (): void {
 // se para solo; soltarlo es siempre un acto humano (`ultron:abort --release`).
 Schedule::command('ultron:turn-watchdog')
     ->everyFiveMinutes()
-    ->withoutOverlapping()
+    // Diez minutos de cerrojo, no las 24 h por defecto: una corrida que muera a
+    // mitad no puede dejar al vigía callado un día entero contra una ventana de
+    // seis horas, que es exactamente el hueco en el que no vería nada.
+    ->withoutOverlapping(10)
     ->onOneServer();

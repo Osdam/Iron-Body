@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands\Marketing;
 
-use App\Models\MarketingAiAction;
 use App\Models\Incident;
+use App\Models\MarketingAiAction;
 use App\Models\MarketingAutomationEvent;
 use App\Models\MarketingConversation;
 use App\Models\MarketingMessage;
@@ -15,6 +15,7 @@ use App\Services\Marketing\Ultron\UltronSource;
 use App\Services\Observability\ChannelLog;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
+use Throwable;
 
 /**
  * EL VIGÍA DE LOS TURNOS. Busca a quien preguntó y no recibió nada.
@@ -130,6 +131,7 @@ class UltronTurnWatchdog extends Command
             'evidence' => [
                 'grace_minutes' => $gracia,
                 'orphans' => $huerfanos->count(),
+                'pending' => $huerfanos->where('event_status', MarketingAutomationEvent::STATUS_PENDING)->count(),
                 // Ids, nunca el texto de la conversación.
                 'message_ids' => $huerfanos->pluck('message_id')->take(20)->values()->all(),
                 'conversation_ids' => $huerfanos->pluck('conversation_id')->unique()->values()->all(),
@@ -149,25 +151,57 @@ class UltronTurnWatchdog extends Command
 
         // ── El freno ──────────────────────────────────────────────────────────
         $canario = config('marketing.ultron.canary_conversation_id');
-        $enCanario = $canario !== null && $huerfanos->contains(
+
+        /*
+         * QUÉ MERECE EL FRENO, Y QUÉ NO.
+         *
+         * Un evento `pending` pasado de gracia no es un turno mudo: es un
+         * evento que todavía no ha salido de la cola. Ocurre en cada despliegue
+         * —se reinician los doce workers— y parar el canario por eso convierte
+         * un retraso en un silencio de verdad: cuando el worker vuelve, el
+         * commit muere con `ultron_aborted` y ya no contesta nadie.
+         *
+         * Así que el freno lo accionan sólo los que SÍ llegaron a n8n (`sent`)
+         * o los que murieron intentándolo (`failed`). El `pending` atascado
+         * abre incidente igual: se ve, pero no para nada.
+         */
+        $frenables = $huerfanos->filter(
             fn (array $h) => (int) $h['conversation_id'] === (int) $canario
+                && $h['event_status'] !== MarketingAutomationEvent::STATUS_PENDING
         );
 
-        if ($enCanario && ! $this->option('no-abort')) {
-            $abort = $latch->engage(
-                UltronAbort::REASON_ORPHANED_TURN,
-                'ultron:turn-watchdog',
-                [
-                    'incident_id' => (int) $incidente->id,
-                    'conversation_id' => (int) $canario,
-                    'message_ids' => $huerfanos
-                        ->filter(fn (array $h) => (int) $h['conversation_id'] === (int) $canario)
-                        ->pluck('message_id')->take(20)->values()->all(),
-                ],
-            );
+        if ($canario !== null && $frenables->isNotEmpty() && ! $this->option('no-abort')) {
+            try {
+                $abort = $latch->engage(
+                    UltronAbort::REASON_ORPHANED_TURN,
+                    'ultron:turn-watchdog',
+                    [
+                        'incident_id' => (int) $incidente->id,
+                        'conversation_id' => (int) $canario,
+                        'message_ids' => $frenables->pluck('message_id')->take(20)->values()->all(),
+                    ],
+                );
 
-            $this->error('CANARIO PARADO. Freno '.$abort->id.' accionado: un turno del canario se quedó mudo.');
-            $this->line('  Se suelta a mano, cuando se entienda el fallo:  php artisan ultron:abort --release --by="<nombre>"');
+                $this->error('CANARIO PARADO. Freno '.$abort->id.' accionado: un turno del canario se quedó mudo.');
+                $this->line('  Se suelta a mano, cuando se entienda el fallo:  php artisan ultron:abort --release --by="<nombre>"');
+            } catch (Throwable $e) {
+                /*
+                 * Si el freno no se puede accionar —la tabla no existe todavía
+                 * porque el código salió antes que la migración—, el vigía NO
+                 * puede caerse: el incidente ya está abierto y eso es lo que
+                 * hace que alguien mire. Reventar aquí cambiaría «CANARIO
+                 * PARADO» por un error del scheduler que nadie lee.
+                 */
+                ChannelLog::error('ultron.abort.engage_failed', [
+                    'error_class' => class_basename($e),
+                    'incident_id' => (int) $incidente->id,
+                ]);
+
+                $this->error('NO SE PUDO ACCIONAR EL FRENO ('.class_basename($e).'). ULTRON SIGUE EN MARCHA con un turno mudo.');
+                $this->line('  Párralo a mano:  php artisan ultron:abort --engage --by="<nombre>"');
+            }
+        } elseif ($canario !== null && $frenables->isEmpty() && $huerfanos->isNotEmpty()) {
+            $this->warn('Ningún huérfano frenable: los que hay siguen en la cola (pending). Mira el estado de los workers antes de suponer un mudo.');
         }
 
         return self::FAILURE;
