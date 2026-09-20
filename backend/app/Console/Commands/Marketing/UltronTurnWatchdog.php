@@ -256,7 +256,10 @@ class UltronTurnWatchdog extends Command
         return MarketingMessage::query()
             ->where('conversation_id', (int) $e->conversation_id)
             ->where('direction', MarketingMessage::DIRECTION_OUTBOUND)
-            ->where('sender_type', MarketingMessage::SENDER_AI)
+            // Cualquier saliente, de la máquina o de una persona. Si un asesor
+            // contestó a mano desde el Inbox —que es lo normal durante un
+            // canario— esa persona NO se quedó sin respuesta, y acusarlo de
+            // silencio pararía el canario por haberlo atendido bien.
             ->where('id', '>', (int) $e->message_id)
             ->exists();
     }

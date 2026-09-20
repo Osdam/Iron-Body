@@ -98,12 +98,12 @@ class UltronTurnWatchdogTest extends TestCase
         ]);
     }
 
-    private function saliente(): MarketingMessage
+    private function saliente(string $quien = MarketingMessage::SENDER_AI): MarketingMessage
     {
         return MarketingMessage::create([
             'conversation_id' => $this->conversation->id,
             'direction' => MarketingMessage::DIRECTION_OUTBOUND,
-            'sender_type' => MarketingMessage::SENDER_AI,
+            'sender_type' => $quien,
             'body' => 'respuesta', 'status' => 'dry_run',
         ]);
     }
@@ -443,5 +443,24 @@ class UltronTurnWatchdogTest extends TestCase
 
         $this->assertSame(1, $this->vigia(['--window' => 60 * 48, '--no-abort' => true]));
         $this->assertSame(1, Incident::count());
+    }
+
+    /**
+     * Y si contestó una PERSONA desde el Inbox, tampoco hubo silencio.
+     *
+     * Durante un canario es lo normal: el dueño ve el chat y escribe él. Contar
+     * eso como turno mudo pararía el canario por haberlo atendido bien.
+     */
+    public function test_a_human_reply_from_the_inbox_also_counts_as_answered(): void
+    {
+        config()->set('marketing.ultron.canary_conversation_id', $this->conversation->id);
+
+        $m = $this->entrante('cuanto vale?');
+        $this->evento($m);
+        $this->saliente(MarketingMessage::SENDER_HUMAN);
+
+        $this->assertSame(0, $this->vigia());
+        $this->assertSame(0, Incident::count());
+        $this->assertSame(0, UltronAbort::open()->count());
     }
 }
