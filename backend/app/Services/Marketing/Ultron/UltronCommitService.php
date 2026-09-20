@@ -626,6 +626,26 @@ class UltronCommitService
         // contrario de lo que pidió.
         $executed = $this->runTools($conversation, $decision);
 
+        /*
+         * Lo que corrió, EN LA FILA. `executedTools()` promete en su docblock
+         * que «la respuesta a n8n y la metadata dicen lo mismo», y para
+         * `staff_review` y `mark_do_not_contact` no lo decían: las dos se
+         * ejecutan aquí y sólo se anotaban las dos que corren después del envío
+         * (los enlaces y el link de pago). Resultado medido en el canario: la
+         * conversación quedó marcada para revisión humana y la acción que la
+         * marcó no lo contaba. Quien auditara la fila veía una revisión
+         * pendiente sin ninguna acción que la explicara.
+         *
+         * Va antes del corte por `safe_to_send` a propósito: ese camino también
+         * devuelve `applied.tools_executed`, y ahí es donde corre el opt-out de
+         * quien pidió que no le escriban.
+         */
+        if ($executed !== []) {
+            $meta = is_array($action->metadata) ? $action->metadata : [];
+            $meta['tools_executed'] = $this->executedTools($executed);
+            $action->forceFill(['metadata' => $meta])->save();
+        }
+
         $rechazadas = array_values(array_diff((array) ($proposal['tools_requested'] ?? []), (array) $decision['tools_requested']));
         if ($rechazadas !== []) {
             // Una petición sin permiso no tumba el turno, pero tampoco pasa en silencio.

@@ -360,6 +360,22 @@ class UltronCommitTest extends TestCase
         ]))->assertOk()->assertJsonPath('applied.tools_executed.0', SalesIntents::TOOL_STAFF_REVIEW);
 
         $this->assertTrue((bool) $this->conversation->fresh()->staff_review_pending);
+
+        /*
+         * Y la FILA lo cuenta igual que la respuesta.
+         *
+         * No lo contaba: `staff_review` y `mark_do_not_contact` corren antes
+         * del envío y sólo se anotaban las herramientas que corren después.
+         * Se vio en el canario físico —la conversación quedó marcada para
+         * revisión humana y la acción que la marcó decía `tools_executed`
+         * vacío—, y una acción que no cuenta el efecto durable que causó es un
+         * expediente que miente sobre sí mismo.
+         */
+        $this->assertSame(
+            [SalesIntents::TOOL_STAFF_REVIEW],
+            MarketingAiAction::latest('id')->first()->metadata['tools_executed'] ?? null,
+            'la respuesta a n8n y la metadata tienen que decir lo mismo',
+        );
     }
 
     public function test_mark_do_not_contact_is_honoured(): void
@@ -379,6 +395,12 @@ class UltronCommitTest extends TestCase
             ->assertJsonPath('applied.tools_executed.0', SalesIntents::TOOL_MARK_DNC);
 
         $this->assertTrue((bool) $this->lead->fresh()->do_not_contact);
+        // El opt-out también queda en la fila, y no sólo en la respuesta: es el
+        // efecto más durable que puede tener un turno.
+        $this->assertSame(
+            [SalesIntents::TOOL_MARK_DNC],
+            MarketingAiAction::latest('id')->first()->metadata['tools_executed'] ?? null,
+        );
         $this->assertSame(MarketingLead::CONSENT_DENIED, $this->lead->fresh()->consent_status);
         $this->assertSame(P::DO_NOT_CONTACT, $this->conversation->fresh()->commercial_phase);
         $this->assertSame(0, MarketingMessage::where('direction', 'outbound')->count());
