@@ -39,6 +39,20 @@ class MetaMessagingService
         133016,   // recurso temporalmente bloqueado
     ];
 
+    /**
+     * Cuánto se espera a Graph para una señal de cortesía.
+     *
+     * Muy por debajo de los 20 s del resto, y es deliberado: esta llamada es la
+     * ÚNICA petición HTTP saliente que ocurre dentro del cerrojo de ingesta de
+     * la conversación, y quien espera ese cerrojo es el siguiente mensaje de la
+     * misma persona. Un Graph lento no puede convertir un «escribiendo…» en un
+     * retraso de la RESPUESTA, que es lo que la persona espera de verdad.
+     *
+     * Cuatro segundos son de sobra para una señal que sólo tiene sentido si
+     * llega antes que el mensaje: el turno entero mide siete.
+     */
+    private const PRESENCE_TIMEOUT_SECONDS = 4;
+
     public function __construct(private readonly MetaAuthService $auth) {}
 
     /**
@@ -163,7 +177,7 @@ class MetaMessagingService
             'status' => 'read',
             'message_id' => $inboundWamid,
             'typing_indicator' => ['type' => 'text'],
-        ], 'read_typing');
+        ], 'read_typing', self::PRESENCE_TIMEOUT_SECONDS);
     }
 
     /**
@@ -173,7 +187,7 @@ class MetaMessagingService
      * @param  array<string,mixed>  $payload
      * @return array{ok:bool,message_id:?string,http_status:?int,error_code:?int,error_title:?string,error_message:?string,retryable:bool,reason:?string}
      */
-    private function send(array $payload, string $kind): array
+    private function send(array $payload, string $kind, ?int $timeout = null): array
     {
         $base = [
             'ok' => false, 'message_id' => null, 'http_status' => null,
@@ -196,7 +210,7 @@ class MetaMessagingService
 
         try {
             $response = Http::withToken((string) $this->auth->accessToken())
-                ->timeout($this->auth->timeout())
+                ->timeout($timeout ?? $this->auth->timeout())
                 ->asJson()
                 ->post($this->auth->graphUrl("{$phoneNumberId}/messages"), $payload);
         } catch (Throwable $e) {

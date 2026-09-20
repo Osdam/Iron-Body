@@ -176,9 +176,22 @@ class UltronEventEmitter
          * modelo piensa, que es justo para lo que sirve. Y es mejor-esfuerzo:
          * {@see TurnPresence} no lanza nunca.
          */
-        $this->presence->announce($message);
-
         SendUltronEventToN8n::dispatch($event->id);
+
+        /*
+         * Después de encolar, no antes: encolar es instantáneo y hablar con
+         * Graph no lo es. Así el modelo empieza a pensar aunque Meta tarde, y
+         * la señal —que es cortesía— nunca retrasa la respuesta, que es lo que
+         * la persona espera de verdad.
+         *
+         * Aun así esta llamada ocurre DENTRO del cerrojo de la conversación que
+         * tomó la ingesta del webhook, y quien espera ese cerrojo es el
+         * siguiente mensaje de la misma persona. Por eso va con un timeout
+         * propio y corto ({@see MetaMessagingService::PRESENCE_TIMEOUT_SECONDS});
+         * con el de 20 s del resto, un Graph lento retenía el cerrojo lo
+         * suficiente para que el segundo mensaje agotara su espera.
+         */
+        $this->presence->announce($message);
 
         ChannelLog::info('ultron.event.queued', [
             'event_id' => $event->id,

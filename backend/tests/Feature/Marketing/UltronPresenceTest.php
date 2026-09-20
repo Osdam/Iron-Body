@@ -334,4 +334,41 @@ class UltronPresenceTest extends TestCase
 
         $this->assertStringNotContainsString('Bearer', json_encode($m->fresh()->metadata) ?: '');
     }
+
+    // ── La señal no puede retrasar la respuesta ─────────────────────────────
+
+    /**
+     * ES LA ÚNICA PETICIÓN HTTP SALIENTE DENTRO DEL CERROJO DE INGESTA.
+     *
+     * `emit()` corre dentro del cerrojo de la conversación que toma el webhook,
+     * y quien espera ese cerrojo es el SIGUIENTE mensaje de la misma persona.
+     * Con el timeout general de Meta (20 s) contra la espera del cerrojo (10 s),
+     * un Graph lento retenía el cerrojo lo suficiente para que el segundo
+     * mensaje agotara su espera y la respuesta del primero saliera tarde.
+     *
+     * Dos frenos: un timeout propio y corto, y la señal DESPUÉS de encolar el
+     * trabajo del modelo, que es instantáneo.
+     */
+    public function test_the_signal_waits_far_less_than_the_rest_of_meta(): void
+    {
+        $general = (int) config('meta.timeout', 20);
+        $propio = (new \ReflectionClass(\App\Services\Meta\MetaMessagingService::class))
+            ->getConstant('PRESENCE_TIMEOUT_SECONDS');
+
+        $this->assertIsInt($propio);
+        $this->assertLessThan($general, $propio, 'una cortesía no puede esperar lo que espera un envío');
+        $this->assertLessThan(10, $propio, 'ni acercarse a la espera del cerrojo de la conversación');
+    }
+
+    /** Y el trabajo del modelo se encola ANTES de hablar con Graph. */
+    public function test_the_model_is_queued_before_talking_to_graph(): void
+    {
+        $src = (string) file_get_contents(app_path('Services/Marketing/Ultron/UltronEventEmitter.php'));
+
+        $this->assertLessThan(
+            strpos($src, 'presence->announce'),
+            strpos($src, 'SendUltronEventToN8n::dispatch'),
+            'encolar es instantáneo; hablar con Meta no, y la respuesta vale más que la señal',
+        );
+    }
 }
