@@ -22,6 +22,7 @@ use App\Services\Marketing\SalesConversationReplyService;
 use App\Services\Marketing\SalesGuardrailException;
 use App\Services\Marketing\SalesIntents;
 use App\Services\Marketing\SalesPaymentGuardrailService;
+use App\Services\Marketing\StaffReviewAuthority;
 use App\Services\Marketing\WompiPaymentLinkService;
 use App\Services\Observability\ChannelLog;
 use App\Services\Wompi\PaymentStateMachine as SM;
@@ -100,6 +101,7 @@ class UltronCommitService
         private readonly MembershipFactGuard $membershipGuard,
         private readonly PaymentFactGuard $paymentGuard,
         private readonly UltronAbortLatch $abortLatch = new UltronAbortLatch,
+        private readonly StaffReviewAuthority $staffReview = new StaffReviewAuthority,
     ) {}
 
     /**
@@ -548,6 +550,14 @@ class UltronCommitService
             'should_escalate' => false,
             'needs_staff_review' => (bool) $sanitized['force_escalate'],
             'staff_review_reason' => $sanitized['escalation_reason'],
+            /*
+             * Lo que el MODELO dice que justifica la revisión, sin mezclarlo
+             * con lo que afirma el backend. Viajan en claves distintas porque
+             * no valen lo mismo: uno es un hecho calculado aquí, el otro una
+             * etiqueta que llegó desde n8n. Quien decide es
+             * {@see StaffReviewAuthority}.
+             */
+            'staff_review_proposed_reason' => $proposal['staff_review_reason'] ?? null,
             'escalation_reason' => $sanitized['escalation_reason'],
             'risk_flags' => $sanitized['risk_flags'],
             'extracted_fields' => [],
@@ -643,6 +653,28 @@ class UltronCommitService
         if ($executed !== []) {
             $meta = is_array($action->metadata) ? $action->metadata : [];
             $meta['tools_executed'] = $this->executedTools($executed);
+
+            /*
+             * Y lo que se PIDIÓ y no se concedió, también.
+             *
+             * `tools_executed` filtra por `executed|created`, así que una
+             * revisión rechazada por falta de causa no aparecía por ningún
+             * lado: ni ahí, ni en `tools_rejected` —que compara pedidas contra
+             * PERMITIDAS, y `staff_review` está siempre permitida—. Vivía sólo
+             * en el log, y un log no es el expediente del turno. Se anota con
+             * la misma forma que `payment_link`: qué se decidió, por qué, y
+             * quién puso la causa.
+             */
+            foreach ($executed as $resultado) {
+                if (($resultado['tool'] ?? null) === SalesIntents::TOOL_STAFF_REVIEW) {
+                    $meta['staff_review'] = array_filter([
+                        'status' => $resultado['status'] ?? null,
+                        'reason' => $resultado['reason'] ?? null,
+                        'source' => $resultado['source'] ?? null,
+                    ], fn ($v) => $v !== null);
+                }
+            }
+
             $action->forceFill(['metadata' => $meta])->save();
         }
 
@@ -909,7 +941,50 @@ class UltronCommitService
         }
 
         $modo = $curado !== null && trim($curado) !== '' ? 'SAFE_CURATED_REPLY' : 'NO_REPLY_AND_HANDOFF';
-        $reason = $modo === 'SAFE_CURATED_REPLY' ? $causa['flag'] : $causa['flag'].'_no_safe_reply';
+
+        /*
+         * Qué hace falta una persona AQUÍ, y qué no.
+         *
+         * Antes, cualquier rendición marcaba la conversación, y eso llenaba la
+         * bandeja de turnos bien resueltos. Ahora la bandera sigue a dos cosas,
+         * y las dos hacen falta:
+         *
+         *   LA RAMA. `NO_REPLY_AND_HANDOFF` significa que no salió nada:
+         *   alguien preguntó y se quedó sin contestar. Eso lo coge una persona
+         *   siempre. Con `SAFE_CURATED_REPLY` salió un texto de Laravel, así
+         *   que por sí sola la rendición no pide a nadie: el borrador que el
+         *   critic tumbó NUNCA se envió, no hay nada que reparar.
+         *
+         *   LA CAUSA. Y aquí está lo que casi se me escapa, porque el
+         *   razonamiento de arriba es cierto para un turno normal y FALSO para
+         *   una intención sensible: el texto curado de esas cinco dice, con
+         *   esas palabras, «lo dejo marcado para revisión del equipo». Si la
+         *   bandera no se levanta, Laravel acaba de prometer en primera persona
+         *   algo que no va a pasar, y quien escribió una queja se queda
+         *   esperando a alguien que nunca fue avisado. Es el mismo fallo que
+         *   este sistema lleva meses persiguiendo —dejar a una persona
+         *   esperando—, sólo que escrito por nosotros.
+         *
+         * La regla, entonces, es literal: SI EL TEXTO QUE SALE PROMETE LA
+         * MARCA, LA MARCA SE PONE. Y quien elige el texto es el mismo `$intent`
+         * que se consulta aquí, así que las dos decisiones no pueden separarse.
+         *
+         * Que no se levante en el resto de los casos no pierde el fallo: quedan
+         * el warning en el log, la fila con sus `risk_flags`, el borrador
+         * descartado como evidencia y `fallback_mode`, que es lo que lee el
+         * informe del canario.
+         */
+        $motivoSensible = StaffReviewAuthority::motivoDeIntencion($intent);
+        $necesitaPersona = $modo === 'NO_REPLY_AND_HANDOFF' || $motivoSensible !== null;
+
+        /*
+         * El motivo dice por qué hace falta alguien, y eso depende de la rama:
+         * si nadie contestó, el hecho urgente es ése; si salió el texto curado
+         * de una queja, el hecho es la queja.
+         */
+        $reason = $modo === 'NO_REPLY_AND_HANDOFF'
+            ? $causa['flag'].'_no_safe_reply'
+            : ($motivoSensible ?? $causa['flag']);
 
         $action = $this->persist(
             $conversation,
@@ -921,7 +996,7 @@ class UltronCommitService
                 'recommended_action' => SalesIntents::ACTION_REPLY,
                 'risk_flags' => [$causa['flag']],
                 'tools_requested' => [],
-                'needs_staff_review' => true,
+                'needs_staff_review' => $necesitaPersona,
                 'staff_review_reason' => $reason,
             ],
             // La fase NO avanza: el critic dijo que la respuesta no servía, así
@@ -935,10 +1010,12 @@ class UltronCommitService
             ], $causa['metadata']),
         );
 
-        $conversation->forceFill([
-            'staff_review_pending' => true,
-            'staff_review_reason' => $reason,
-        ])->save();
+        if ($necesitaPersona) {
+            $conversation->forceFill([
+                'staff_review_pending' => true,
+                'staff_review_reason' => $reason,
+            ])->save();
+        }
 
         $resolution = $this->references->resolve(
             (string) $message->body,
@@ -1201,16 +1278,56 @@ class UltronCommitService
         return array_values(array_filter($executed));
     }
 
+    /**
+     * Pedir revisión no es obtenerla.
+     *
+     * Antes sí lo era: bastaba con que el modelo pusiera `staff_review` en
+     * `tools_requested` para marcar la conversación, con el motivo genérico
+     * `staff_review` porque no había ninguno. Medido en el canario: un turno
+     * limpio —pregunta normal, respuesta correcta, sin queja ni lesión ni
+     * petición de humano— dejó la bandera levantada. Quien abriera la bandeja
+     * veía un aviso que no describía nada.
+     *
+     * Ahora la causa la decide {@see StaffReviewAuthority}: o la afirma el
+     * backend, o es la única que el modelo puede proponer (una operación que
+     * el asistente no ejecuta jamás). Lo que se rechaza NO se pierde: queda en
+     * el log y en `metadata.staff_review` de la fila, con su motivo. Que eso
+     * fuera verdad hubo que arreglarlo: la primera versión de este docblock lo
+     * prometía y la fila no lo guardaba en ninguna parte.
+     */
     private function execStaffReview(MarketingConversation $conversation, array $decision): array
     {
-        $reason = $decision['staff_review_reason'] ?? 'staff_review';
+        $veredicto = $this->staffReview->decide(
+            (bool) ($decision['needs_staff_review'] ?? false),
+            $decision['staff_review_reason'] ?? null,
+            $decision['staff_review_proposed_reason'] ?? null,
+        );
+
+        if (! $veredicto['allowed']) {
+            ChannelLog::info('ultron.commit.staff_review_not_warranted', [
+                'conversation_id' => (int) $conversation->id,
+                'refusal' => $veredicto['refusal'],
+                'proposed_reason' => $decision['staff_review_proposed_reason'] ?? null,
+            ]);
+
+            return [
+                'tool' => SalesIntents::TOOL_STAFF_REVIEW,
+                'status' => 'skipped',
+                'reason' => $veredicto['refusal'],
+            ];
+        }
 
         $conversation->forceFill([
             'staff_review_pending' => true,
-            'staff_review_reason' => $reason,
+            'staff_review_reason' => $veredicto['reason'],
         ])->save();
 
-        return ['tool' => SalesIntents::TOOL_STAFF_REVIEW, 'status' => 'created', 'reason' => $reason];
+        return [
+            'tool' => SalesIntents::TOOL_STAFF_REVIEW,
+            'status' => 'created',
+            'reason' => $veredicto['reason'],
+            'source' => $veredicto['source'],
+        ];
     }
 
     private function execMarkDnc(MarketingConversation $conversation): array

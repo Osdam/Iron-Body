@@ -10,6 +10,7 @@ use App\Services\IronGuard\IncidentRecorder;
 use App\Services\Marketing\CommercialPhaseMachine;
 use App\Services\Marketing\HumanHandoffAuthority;
 use App\Services\Marketing\SalesAgentDecisionSchema;
+use App\Services\Marketing\StaffReviewAuthority;
 use App\Services\Marketing\Ultron\CriticContract;
 use App\Services\Marketing\Ultron\StrategyContract;
 use App\Services\Marketing\Ultron\UltronCommitException;
@@ -175,6 +176,15 @@ class UltronController extends Controller
             'proposal.human_handoff_evidence' => ['nullable', 'string', 'max:300'],
             'proposal.tools_requested' => ['nullable', 'array', 'max:4'],
             'proposal.tools_requested.*' => ['string', Rule::in(UltronDecideService::TOOL_VOCABULARY)],
+            /*
+             * POR QUÉ pide `staff_review`. Misma forma que la derivación y por
+             * el mismo motivo: pedir la herramienta no basta, hay que decir la
+             * causa, y la causa está en una allowlist de uno. Lo que el backend
+             * ya sabe por su cuenta —queja, lesión, reclamo de pago, petición
+             * de humano— no se declara aquí: lo afirma el backend leyendo el
+             * mensaje, y marcaría la conversación aunque este campo no viniera.
+             */
+            'proposal.staff_review_reason' => ['nullable', 'string', Rule::in(StaffReviewAuthority::MODEL_PROPOSABLE)],
 
             'critic' => ['nullable', 'array'],
             'critic.verdict' => ['nullable', 'string', Rule::in(['pass', 'fail'])],

@@ -13,6 +13,7 @@ use App\Services\Marketing\SalesIntents;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\UltronTurnEvents;
 use Tests\TestCase;
 
@@ -215,9 +216,15 @@ class UltronZeroSilentTurnsTest extends TestCase
         $this->assertArrayNotHasKey('critic', $accion->metadata,
             'no se inventa un veredicto del Critic que nadie emitió');
 
+        /*
+         * La rendición se AUDITA siempre —eso es lo que mide este test, y
+         * sigue arriba entero—, pero sólo se marca para el equipo cuando la
+         * persona se queda sin respuesta. Aquí salió el texto curado, así que
+         * no hace falta nadie: la evidencia de lo que pasó está en la fila.
+         */
         $conv = $this->conversation->fresh();
-        $this->assertTrue((bool) $conv->staff_review_pending);
-        $this->assertSame('commit_rejected', $conv->staff_review_reason);
+        $this->assertFalse((bool) $conv->staff_review_pending);
+        $this->assertNull($conv->staff_review_reason);
         $this->assertNotSame(P::GOAL_DISCOVERY, $conv->commercial_phase, 'la fase no avanza sobre una rendición');
     }
 
@@ -333,7 +340,7 @@ class UltronZeroSilentTurnsTest extends TestCase
         yield 'ubicación' => ['', 'location'];
     }
 
-    #[\PHPUnit\Framework\Attributes\DataProvider('noAccionables')]
+    #[DataProvider('noAccionables')]
     public function test_no_inbound_without_a_turn_of_its_own_supersedes(string $cuerpo, string $tipo): void
     {
         $pregunta = $this->inbound('cuánto vale el mensual?', 'wamid.Q2');

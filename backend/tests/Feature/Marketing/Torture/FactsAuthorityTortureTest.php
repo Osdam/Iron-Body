@@ -6,10 +6,10 @@ use App\Models\MarketingAiAction;
 use App\Models\MyClass;
 use App\Models\Trainer;
 use App\Services\Marketing\CommercialPhaseMachine as P;
-use App\Services\Marketing\MobileAppCatalog;
 use App\Services\Marketing\MobileAppLinks;
 use App\Services\Marketing\OutboundContentGuard;
 use App\Services\Marketing\SalesIntents;
+use App\Services\Marketing\StaffReviewAuthority;
 use App\Services\Marketing\Ultron\ComposerStyleGuard;
 use App\Services\Marketing\Ultron\GymFactsProvider;
 use App\Services\Marketing\Ultron\MembershipFactGuard;
@@ -403,9 +403,14 @@ class FactsAuthorityTortureTest extends TortureCase
         $texto = 'Tenemos entrenamiento funcional y musculación, y el equipo te arma la rutina.';
         $this->commit($this->inbound('¿qué tienen?'), ['reply_draft' => $texto])->assertOk();
 
+        // Con su motivo: desde que existe StaffReviewAuthority, pedir la
+        // herramienta sin causa no la concede. Lo que aquí se mide es que el
+        // silencio del texto repetido no se lleva por delante el resto del
+        // turno, y para eso la herramienta tiene que llegar completa.
         $r = $this->commit($this->inbound('¿y qué más hay?'), [
             'reply_draft' => $texto,
             'tools_requested' => [SalesIntents::TOOL_STAFF_REVIEW],
+            'staff_review_reason' => StaffReviewAuthority::TEAM_ONLY_OPERATION,
         ])->assertOk();
 
         $this->assertSame('repeated_reply', $r->json('blocked_reason'));

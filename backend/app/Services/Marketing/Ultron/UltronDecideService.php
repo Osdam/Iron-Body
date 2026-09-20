@@ -16,6 +16,7 @@ use App\Services\Marketing\SalesAgentDecisionSchema;
 use App\Services\Marketing\SalesAgentOrchestratorService;
 use App\Services\Marketing\SalesIntents;
 use App\Services\Marketing\SalesPaymentReadinessService;
+use App\Services\Marketing\StaffReviewAuthority;
 
 /**
  * Lo que ULTRON necesita saber para proponer una respuesta, y nada más.
@@ -383,6 +384,14 @@ class UltronDecideService
             'commercial_phase' => $phase,
             'allowed_transitions' => $transitions,
             'allowed_tools' => $tools,
+            /*
+             * Los motivos que el modelo puede alegar para pedir `staff_review`.
+             * Va aquí, junto al menú de herramientas, y no sólo en el prompt,
+             * por la misma razón que `allowed_tools`: un prompt se reescribe y
+             * se olvida, un contrato que viaja en cada turno no. La lista es de
+             * uno a propósito; lo demás lo afirma el backend.
+             */
+            'allowed_staff_review_reasons' => StaffReviewAuthority::MODEL_PROPOSABLE,
             'knowledge_version' => $knowledgeVersion,
             'decide_token' => $token['token'],
             'expires_at' => $token['expires_at'],

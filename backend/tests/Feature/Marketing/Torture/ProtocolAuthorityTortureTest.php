@@ -8,6 +8,7 @@ use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
 use App\Services\Marketing\CommercialPhaseMachine as P;
 use App\Services\Marketing\SalesIntents;
+use App\Services\Marketing\StaffReviewAuthority;
 use Illuminate\Support\Facades\Cache;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -144,7 +145,12 @@ class ProtocolAuthorityTortureTest extends TortureCase
     {
         $m = $this->inbound('hola, quiero informacion');
 
-        $r = $this->commit($m, ['tools_requested' => ['primera' => SalesIntents::TOOL_STAFF_REVIEW, 'segunda' => SalesIntents::TOOL_PAYMENT_LINK_SEND]]);
+        $r = $this->commit($m, [
+            'tools_requested' => ['primera' => SalesIntents::TOOL_STAFF_REVIEW, 'segunda' => SalesIntents::TOOL_PAYMENT_LINK_SEND],
+            // La causa va aparte de la forma: lo que se mide es que mandar la
+            // lista como objeto no amplía el menú, no si hay motivo.
+            'staff_review_reason' => StaffReviewAuthority::TEAM_ONLY_OPERATION,
+        ]);
 
         $r->assertOk();
         // `payment_link_send` cae porque el motor de pagos está apagado: el
@@ -524,7 +530,13 @@ class ProtocolAuthorityTortureTest extends TortureCase
         $this->assertSame(1, $this->outbound()->count());
         $this->assertStringNotContainsString('no puede salir jamas', $this->lastOutboundBody(),
             'El borrador que el Critic tumbó no sale ni disfrazado.');
-        $this->assertTrue((bool) $this->conversation->fresh()->staff_review_pending, 'Y queda para una persona.');
+        /*
+         * Y NO queda para una persona: salió el texto curado, así que quien
+         * preguntó tiene respuesta. El hard_fail se juzga arriba —el camino
+         * fue el del fallo y el borrador no salió—; marcar la conversación es
+         * otra decisión, y depende de si alguien se quedó sin contestar.
+         */
+        $this->assertFalse((bool) $this->conversation->fresh()->staff_review_pending);
         $this->assertSame('fail', MarketingAiAction::latest('id')->first()->metadata['critic']['verdict']);
     }
 

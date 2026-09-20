@@ -11,9 +11,11 @@ use App\Models\Plan;
 use App\Services\Marketing\CommercialPhaseMachine as P;
 use App\Services\Marketing\OutboundContentGuard;
 use App\Services\Marketing\SalesIntents;
+use App\Services\Marketing\StaffReviewAuthority;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\UltronTurnEvents;
 use Tests\TestCase;
 
@@ -355,8 +357,20 @@ class UltronCommitTest extends TestCase
         Http::fake();
         $m = $this->inbound();
 
+        /*
+         * Con CAUSA. Pedir la herramienta ya no basta: desde que existe
+         * {@see StaffReviewAuthority}, `staff_review` necesita un motivo, y el
+         * único que el modelo puede alegar por su cuenta es una operación que
+         * el asistente no ejecuta nunca. Lo que este test mide sigue siendo lo
+         * de siempre —que la herramienta permitida corre y queda anotada—, sólo
+         * que ahora la petición viene completa. Sin motivo se descarta, y eso
+         * lo fija {@see test_staff_review_without_a_cause_is_not_granted()}.
+         */
         $this->commit($this->payload($m, [
-            'proposal' => ['tools_requested' => [SalesIntents::TOOL_STAFF_REVIEW]],
+            'proposal' => [
+                'tools_requested' => [SalesIntents::TOOL_STAFF_REVIEW],
+                'staff_review_reason' => StaffReviewAuthority::TEAM_ONLY_OPERATION,
+            ],
         ]))->assertOk()->assertJsonPath('applied.tools_executed.0', SalesIntents::TOOL_STAFF_REVIEW);
 
         $this->assertTrue((bool) $this->conversation->fresh()->staff_review_pending);
@@ -371,11 +385,165 @@ class UltronCommitTest extends TestCase
          * vacío—, y una acción que no cuenta el efecto durable que causó es un
          * expediente que miente sobre sí mismo.
          */
+        $accion = MarketingAiAction::latest('id')->first();
         $this->assertSame(
             [SalesIntents::TOOL_STAFF_REVIEW],
-            MarketingAiAction::latest('id')->first()->metadata['tools_executed'] ?? null,
+            $accion->metadata['tools_executed'] ?? null,
             'la respuesta a n8n y la metadata tienen que decir lo mismo',
         );
+
+        // Y con quién puso la causa, que es lo que distingue una marca que
+        // afirmó el backend de una que alegó el modelo.
+        $this->assertSame([
+            'status' => 'created',
+            'reason' => StaffReviewAuthority::TEAM_ONLY_OPERATION,
+            'source' => 'model',
+        ], $accion->metadata['staff_review'] ?? null);
+    }
+
+    /**
+     * Un turno LIMPIO no deja la conversación marcada.
+     *
+     * Éste es el fallo que lo motivó, medido en el canario físico: una
+     * pregunta normal, contestada bien, sin queja, sin lesión y sin nadie
+     * pidiendo una persona, dejó `staff_review_pending` en true porque el
+     * modelo escribió la herramienta en `tools_requested`. La bandeja pasó a
+     * tener un aviso que no describía nada, y una bandeja así deja de leerse.
+     *
+     * Pedir sigue siendo gratis y no rompe el turno: la respuesta sale igual.
+     * Lo que no ocurre es el efecto durable.
+     */
+    public function test_staff_review_without_a_cause_is_not_granted(): void
+    {
+        Http::fake();
+        $m = $this->inbound('cuanto cuesta la mensualidad?');
+
+        $r = $this->commit($this->payload($m, [
+            'proposal' => [
+                'intent' => SalesIntents::PRICING_QUESTION,
+                'tools_requested' => [SalesIntents::TOOL_STAFF_REVIEW],
+            ],
+        ]))->assertOk();
+
+        $this->assertFalse((bool) $this->conversation->fresh()->staff_review_pending, 'un turno limpio no se marca');
+        $this->assertNull($this->conversation->fresh()->staff_review_reason);
+
+        $this->assertNotContains(SalesIntents::TOOL_STAFF_REVIEW, (array) $r->json('applied.tools_executed'));
+        $this->assertNotNull($r->json('reply_final'), 'y el turno se contesta igual');
+
+        /*
+         * Ni se ejecutó ni se perdió: la FILA cuenta que se pidió y por qué no
+         * se concedió.
+         *
+         * `tools_executed` filtra los rechazos y `tools_rejected` sólo mira
+         * permisos, así que sin esto el rechazo vivía únicamente en el log. Un
+         * expediente que no cuenta lo que se decidió sobre él es el mismo
+         * fallo que ya se corrigió una vez con `tools_executed`.
+         */
+        $meta = MarketingAiAction::latest('id')->first()->metadata;
+        $this->assertSame([
+            'status' => 'skipped',
+            'reason' => 'staff_review_reason_missing',
+        ], $meta['staff_review'] ?? null);
+    }
+
+    /**
+     * Si el texto que sale PROMETE la marca, la marca se pone.
+     *
+     * Éste es el agujero que abrió la primera versión de este cambio, y lo
+     * encontró la revisión, no la suite. El razonamiento «el borrador
+     * rechazado nunca se envió, así que no hay nada que reparar» es cierto
+     * para un turno normal y falso para estas cinco intenciones: su texto
+     * curado dice, con esas palabras, «lo dejo marcado para revisión del
+     * equipo». Sin la bandera, Laravel prometía en primera persona algo que no
+     * iba a ocurrir, y quien escribía una queja se quedaba esperando a alguien
+     * a quien nunca se avisó.
+     *
+     * @param  string  $intent  la intención sensible
+     * @param  string  $texto  lo que la persona escribe de verdad
+     */
+    #[DataProvider('intencionesQuePrometenLaMarca')]
+    public function test_a_surrender_on_a_sensitive_intent_still_marks_it(string $intent, string $texto, string $motivo): void
+    {
+        Http::fake();
+        $m = $this->inbound($texto);
+
+        $this->commit($this->payload($m, [
+            'proposal' => ['intent' => $intent, 'reply_draft' => 'Borrador que el critic tumbó.'],
+            'critic' => ['verdict' => 'fail', 'attempt' => 2],
+        ]))->assertOk();
+
+        $c = $this->conversation->fresh();
+        $this->assertTrue((bool) $c->staff_review_pending, $intent.' tiene que quedar marcada');
+
+        /*
+         * Y con SU motivo, no con el del critic: lo que el equipo tiene que
+         * atender es la queja o la lesión, no que un borrador fuera malo.
+         * Cuando no sale texto, el hecho urgente es que nadie contestó, y
+         * entonces el motivo lo dice.
+         */
+        $this->assertContains($c->staff_review_reason, [$motivo, 'critic_failed_no_safe_reply'], $intent);
+
+        $salida = MarketingMessage::where('direction', 'outbound')->latest('id')->first();
+        if ($salida !== null) {
+            $this->assertSame($motivo, $c->staff_review_reason,
+                'si salió texto, el motivo es el de la intención que lo eligió');
+            $this->assertStringNotContainsString('tumbó', (string) $salida->body);
+        }
+    }
+
+    public static function intencionesQuePrometenLaMarca(): array
+    {
+        return [
+            'queja' => [SalesIntents::COMPLAINT, 'esto es un desastre, quiero poner una queja', 'complaint'],
+            'lesion' => [SalesIntents::MEDICAL_RISK_ESCALATION, 'tengo una lesion en la rodilla', 'medical_case'],
+            'reclamo de pago' => [SalesIntents::FRAUD_OR_PAYMENT_CLAIM, 'me cobraron dos veces', 'payment_or_fraud_claim'],
+            'factura' => [SalesIntents::INVOICE_REQUEST, 'necesito la factura del mes', 'invoice_request'],
+            'pide humano' => [SalesIntents::HUMAN_REQUEST, 'quiero hablar con una persona', 'human_requested'],
+        ];
+    }
+
+    /** La tabla de motivos cubre exactamente las intenciones sensibles, ni una más ni una menos. */
+    public function test_the_reason_table_matches_the_sensitive_intents(): void
+    {
+        $this->assertSame(
+            SalesIntents::STAFF_REVIEW_INTENTS,
+            array_keys(StaffReviewAuthority::POR_INTENCION),
+        );
+    }
+
+    /** El motivo que el modelo alega tiene que estar en la lista, o el contrato lo rechaza. */
+    public function test_an_invented_staff_review_reason_does_not_reach_the_service(): void
+    {
+        $m = $this->inbound();
+
+        $this->commit($this->payload($m, [
+            'proposal' => [
+                'tools_requested' => [SalesIntents::TOOL_STAFF_REVIEW],
+                'staff_review_reason' => 'policy_required_escalation',
+            ],
+        ]))->assertStatus(422)->assertJsonValidationErrors('proposal.staff_review_reason');
+    }
+
+    /**
+     * Lo que SÍ marca, y no lo decide el modelo.
+     *
+     * Una queja la afirma el backend leyendo el mensaje, así que la bandera se
+     * levanta aunque `tools_requested` venga vacío: quien manda aquí es la
+     * causa, no la petición.
+     */
+    public function test_a_complaint_marks_the_conversation_without_the_model_asking(): void
+    {
+        Http::fake();
+        $m = $this->inbound('esto es un desastre, quiero poner una queja formal');
+
+        $this->commit($this->payload($m, [
+            'proposal' => ['intent' => SalesIntents::COMPLAINT, 'tools_requested' => []],
+        ]))->assertOk();
+
+        $c = $this->conversation->fresh();
+        $this->assertTrue((bool) $c->staff_review_pending);
+        $this->assertSame('complaint', $c->staff_review_reason);
     }
 
     public function test_mark_do_not_contact_is_honoured(): void
@@ -648,7 +816,18 @@ class UltronCommitTest extends TestCase
 
         // La fase NO avanza a RECOMMENDATION: el critic dijo que no servía.
         $this->assertSame(P::DISCOVERY, $this->conversation->fresh()->commercial_phase);
-        $this->assertTrue((bool) $this->conversation->fresh()->staff_review_pending);
+
+        /*
+         * Y la bandera sigue a la RAMA y a la CAUSA, no al fallo del critic.
+         *
+         * Aquí no hay ninguna de las dos: un saludo con texto curado no deja a
+         * nadie sin respuesta ni promete revisión. Se fija la rama concreta a
+         * propósito —y no `$modo === ...` comparado consigo mismo—, porque un
+         * test que deduce lo esperado de lo observado sigue verde aunque el
+         * caso cambie de rama sin que nadie lo decida.
+         */
+        $res->assertJsonPath('fallback_mode', 'SAFE_CURATED_REPLY');
+        $this->assertFalse((bool) $this->conversation->fresh()->staff_review_pending);
     }
 
     public function test_critic_failure_with_a_curated_reply_sends_the_safe_text(): void
@@ -669,7 +848,26 @@ class UltronCommitTest extends TestCase
 
         $this->assertNotNull($res->json('reply_final'));
         $this->assertStringNotContainsString('rechazado por el critic', (string) $res->json('reply_final'));
-        $this->assertSame('critic_failed', $this->conversation->fresh()->staff_review_reason);
+
+        /*
+         * La persona tiene respuesta, así que NO hace falta una persona.
+         *
+         * Hasta este cambio se marcaba igual, y era ruido: el borrador
+         * rechazado nunca se envió —no hay nada que reparar— y quien abriera
+         * la bandeja encontraba una conversación bien contestada esperando
+         * atención que no necesitaba.
+         *
+         * Lo que no se pierde es la evidencia: el modo del respaldo y el
+         * borrador descartado siguen en la fila, que es de donde los lee el
+         * informe del canario.
+         */
+        $c = $this->conversation->fresh();
+        $this->assertFalse((bool) $c->staff_review_pending);
+        $this->assertNull($c->staff_review_reason);
+
+        $meta = MarketingAiAction::latest('id')->first()->metadata;
+        $this->assertSame('SAFE_CURATED_REPLY', $meta['fallback_mode'] ?? null);
+        $this->assertStringContainsString('rechazado por el critic', (string) ($meta['discarded_draft'] ?? ''));
     }
 
     public function test_critic_failure_without_a_safe_reply_answers_nothing(): void

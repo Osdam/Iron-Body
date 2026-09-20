@@ -235,7 +235,19 @@ class UltronFixturesTest extends TestCase
             ->assertOk();
 
         $this->assertSame(0, PaymentTransaction::count());
-        $this->assertTrue((bool) $this->conversation->fresh()->staff_review_pending);
+
+        /*
+         * Y preguntar cómo se paga TAMPOCO marca la conversación.
+         *
+         * Este fixture afirmaba lo contrario, y afirmaba mal: «¿cómo pago?» es
+         * la pregunta más normal que hay en un gimnasio. Lo que no puede pasar
+         * es que se genere un cobro —eso sigue asegurado arriba—, no que
+         * alguien tenga que mirarlo a mano. Pedir `staff_review` sin causa ya
+         * no la concede.
+         */
+        $this->assertFalse((bool) $this->conversation->fresh()->staff_review_pending, 'una pregunta de pago normal no necesita a nadie');
+        // Y no por haberse caído el turno: la persona recibió su respuesta.
+        $this->assertSame(1, MarketingMessage::where('direction', 'outbound')->count());
     }
 
     // ── 9-11 · seguridad y consentimiento ─────────────────────────────────────
@@ -541,9 +553,18 @@ class UltronFixturesTest extends TestCase
 
         $this->assertContains($r->json('outcome'), ['curated_fallback', 'handoff']);
         $this->assertNotSame('Un texto robotico que el critic tumbo dos veces.', $r->json('reply_final'));
-        // La fase NO avanza y queda marcado para el equipo.
+        // La fase NO avanza: el critic dijo que el borrador no servía.
         $this->assertSame(P::DISCOVERY, $this->conversation->fresh()->commercial_phase);
-        $this->assertSame('critic_failed', $this->conversation->fresh()->staff_review_reason);
+
+        /*
+         * Marcar para el equipo depende de si la persona se quedó sin
+         * respuesta, no de que el critic fallara. Aquí «me da pena empezar»
+         * tiene texto curado, así que sale respuesta y no hace falta nadie.
+         */
+        $c = $this->conversation->fresh();
+        $this->assertSame('SAFE_CURATED_REPLY', $r->json('fallback_mode'));
+        $this->assertFalse((bool) $c->staff_review_pending);
+        $this->assertNull($c->staff_review_reason);
     }
 
     // ── Cierre transversal ────────────────────────────────────────────────────

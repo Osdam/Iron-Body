@@ -122,7 +122,17 @@ class UltronCriticContractTest extends TestCase
         $this->assertSame('invented_class', $action->metadata['critic']['hard_fail']);
         $this->assertNotNull($action->metadata['fallback_mode'] ?? null, 'tomó el camino del critic fallido');
         $this->assertFalse(MarketingMessage::where('direction', MarketingMessage::DIRECTION_OUTBOUND)->where('body', $draft)->exists(), 'el borrador con la clase inventada no se envía');
-        $this->assertTrue((bool) $this->conversation->fresh()->staff_review_pending);
+
+        /*
+         * Lo que este test mide es que el `hard_fail` MANDA sobre el veredicto,
+         * y eso ya está dicho arriba: el camino fue el del fallo y la clase
+         * inventada no salió. La marca para el equipo es otra decisión —depende
+         * de si alguien se quedó sin contestar o de si el texto que sale
+         * promete la marca— y aquí no se da ninguna de las dos. Se fija la
+         * rama concreta en vez de deducirla de lo observado.
+         */
+        $this->assertSame('SAFE_CURATED_REPLY', $action->metadata['fallback_mode']);
+        $this->assertFalse((bool) $this->conversation->fresh()->staff_review_pending);
     }
 
     public function test_critic_notes_keep_up_to_500_characters_and_still_get_redacted(): void
