@@ -2,6 +2,7 @@
 
 namespace App\Services\Marketing;
 
+use App\Models\MarketingConversation;
 use App\Models\MarketingLead;
 use App\Models\Plan;
 
@@ -116,8 +117,55 @@ class SalesPaymentGuardrailService
             throw SalesGuardrailException::make($code, $message);
         }
 
-        // 4) ¿Quién lo pide, y tiene autoridad para acuñar un cobro?
+        // 4) La conversación que se alega tiene que ser de ESTE lead.
+        $this->assertConversationBelongsToLead($lead, $authority);
+
+        // 5) ¿Quién lo pide, y tiene autoridad para acuñar un cobro?
         $this->assertAuthorityToMint($authority);
+    }
+
+    /**
+     * El id de conversación que decide el canario tiene que ser de este lead.
+     *
+     * Sin esto, el canario es un NÚMERO, y un número se escribe. Un llamador
+     * que pueda nombrar la conversación del canario acuñaría un cobro real
+     * para cualquier otra persona: el cerrojo comprobaría que el id coincide
+     * —coincide— y nadie miraría de quién es.
+     *
+     * Hoy ningún camino lo permite, pero por accidente, no por diseño: el
+     * endpoint interno vuelca `conversation_id` del CUERPO en las opciones del
+     * generador (`InternalMarketingController:531`) y sólo se salva porque su
+     * pre-chequeo llama al guardrail sin la autoridad y deniega antes. Su
+     * controlador hermano del panel sí la pasa. El día que alguien armonice los
+     * dos —una tarea natural, que además parece una mejora— ese campo del
+     * cuerpo se convierte en la llave.
+     *
+     * La pertenencia es el invariante que hace segura toda la superficie, y no
+     * depende de quién llame ni de qué se olvide de pasar. Va aquí, donde el
+     * lead y la autoridad están juntos, y no en cada controlador.
+     *
+     * @param  array{conversation_id?:int|string|null}  $authority
+     *
+     * @throws SalesGuardrailException
+     */
+    private function assertConversationBelongsToLead(MarketingLead $lead, array $authority): void
+    {
+        $id = $authority['conversation_id'] ?? null;
+        if (! is_numeric($id) || (int) $id <= 0) {
+            // Sin id no hay nada que comprobar aquí; de eso responde el canario.
+            return;
+        }
+
+        $duena = MarketingConversation::query()->whereKey((int) $id)->value('lead_id');
+
+        if ($duena === null || (int) $duena !== (int) $lead->id) {
+            throw SalesGuardrailException::make(
+                'payment_conversation_mismatch',
+                'Esa conversación no es de este lead: no se acuña un cobro con la conversación de otra persona.',
+                escalate: true,
+                httpStatus: 403,
+            );
+        }
     }
 
     /**
@@ -150,7 +198,30 @@ class SalesPaymentGuardrailService
             return;
         }
 
-        if ($this->readiness->canGenerateAutomaticLink()) {
+        /*
+         * EL CERROJO DEL CANARIO, y está aquí a propósito.
+         *
+         * Éste es el único punto por el que pasa TODO el que quiere acuñar un
+         * cobro: el commit de ULTRON, el panel, un comando, una prueba. Poner
+         * el permiso sólo donde se ofrece la herramienta habría dejado el
+         * generador abierto a cualquiera que lo llamara directamente, y un
+         * cerrojo que se puede rodear no es un cerrojo.
+         *
+         * Corre ANTES de que exista nada: sin referencia, sin fila de
+         * transacción, sin URL. Una llamada fuera del canario se va con las
+         * manos vacías y sin haber tocado la base de datos.
+         *
+         * `conversation_id` viaja en `$authority`, que lo construye el
+         * llamador EN CÓDIGO —igual que `origin` y `admin_id`—; ningún
+         * controlador vuelca aquí el cuerpo de una petición, así que no es un
+         * campo que se pueda mandar desde fuera.
+         */
+        $conversacion = $authority['conversation_id'] ?? null;
+        $veredicto = $this->readiness->canaryVerdict(
+            is_numeric($conversacion) ? (int) $conversacion : null,
+        );
+
+        if ($veredicto['allowed'] && $this->readiness->isProductionReady()) {
             return;
         }
 
@@ -158,6 +229,14 @@ class SalesPaymentGuardrailService
 
         [$code, $message] = match (true) {
             ! $this->readiness->isProductionReady() => ['wompi_not_production', 'La pasarela de pago no está en producción: no se entrega un enlace de prueba como si fuera real.'],
+            /*
+             * El motivo distingue «apagado» de «no eres el canario», y no es
+             * cosmética: durante el canario lo primero es el estado normal del
+             * sistema y lo segundo es alguien llamando a una puerta que no le
+             * toca. Leerlos igual en el log habría escondido el segundo.
+             */
+            $veredicto['via'] === PaymentCanaryAuthority::OUTSIDE_CANARY => ['payment_outside_canary', 'El cobro automático está abierto sólo para la conversación del canario.'],
+            $veredicto['via'] === PaymentCanaryAuthority::NO_CONVERSATION => ['payment_conversation_required', 'No se acuña un cobro sin saber para qué conversación es.'],
             $humano => ['payment_links_disabled', 'La generación de enlaces de pago está desactivada por el negocio. Mientras lo esté, tampoco se generan a mano desde el panel.'],
             default => ['payment_links_disabled', 'La generación de enlaces de pago está desactivada por el negocio.'],
         };

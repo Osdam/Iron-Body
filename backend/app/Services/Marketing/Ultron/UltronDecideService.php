@@ -175,9 +175,17 @@ class UltronDecideService
      *
      * @return array<string,mixed>
      */
-    public function canOfferLink(): bool
+    /**
+     * ¿Se le puede ofrecer el cobro automático a ESTA conversación?
+     *
+     * Lleva el id porque el permiso ya no es global: mientras la bandera del
+     * negocio esté apagada, la única puerta es el canario, y el canario es una
+     * conversación concreta. Sin id se responde con la bandera global, que
+     * estando apagada significa «no»: falla cerrado.
+     */
+    public function canOfferLink(?int $conversationId = null): bool
     {
-        return $this->paymentReadiness->canGenerateAutomaticLink();
+        return $this->paymentReadiness->canGenerateForConversation($conversationId);
     }
 
     public function phaseContext(MarketingConversation $conversation, MarketingMessage $message): array
@@ -187,7 +195,7 @@ class UltronDecideService
         return [
             'do_not_contact' => $lead !== null && ! $lead->canReplyReactively(),
             'human_takeover' => (bool) $conversation->human_takeover,
-            'can_offer_link' => $this->paymentReadiness->canGenerateAutomaticLink(),
+            'can_offer_link' => $this->canOfferLink((int) $conversation->id),
             'needs_human' => $this->needsHuman($conversation, $message),
         ];
     }
@@ -263,14 +271,14 @@ class UltronDecideService
         $novelty = $this->novelty->guidance($memory, $plansForMemory, $resolved);
         $customer = $this->customers->profile($conversation, $message, $memory, $resolved, (string) ($decision['intent'] ?? SalesIntents::UNKNOWN));
         $payment = $this->payments->forLead($conversation->lead, (string) $message->body);
-        $canOfferLink = $this->paymentReadiness->canGenerateAutomaticLink();
+        $canOfferLink = $this->canOfferLink((int) $conversation->id);
         $membershipFacts = $this->membership->forPrompt($conversation->lead);
         $strategyHints = StrategyContract::hints($customer, $resolved, $canOfferLink, (string) ($decision['intent'] ?? SalesIntents::UNKNOWN), $payment, $membershipFacts);
         // El MENÚ del que ULTRON puede elegir, no un filtrado de lo que Laravel
         // ya propuso: lo que la decisión base pidiera viaja aparte, dentro de
         // `decision`. Mezclar las dos cosas haría que el techo dependiera de la
         // propuesta, que es justo al revés de como debe funcionar un techo.
-        $tools = $this->allowedTools();
+        $tools = $this->allowedTools((int) $conversation->id);
         $knowledgeVersion = $this->knowledge->version();
 
         $token = $this->tokens->issue(
@@ -457,9 +465,9 @@ class UltronDecideService
      *
      * @return string[]
      */
-    public function allowedTools(): array
+    public function allowedTools(?int $conversationId = null): array
     {
-        return array_values(array_merge(self::V1_ALLOWED_TOOLS, $this->canOfferLink() ? [SalesIntents::TOOL_PAYMENT_LINK_SEND] : []));
+        return array_values(array_merge(self::V1_ALLOWED_TOOLS, $this->canOfferLink($conversationId) ? [SalesIntents::TOOL_PAYMENT_LINK_SEND] : []));
     }
 
     /**

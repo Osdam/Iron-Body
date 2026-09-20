@@ -34,6 +34,19 @@ return [
     'ultron' => [
         'enabled' => filter_var(env('MARKETING_ULTRON_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
         'payment_links_enabled' => filter_var(env('MARKETING_ULTRON_PAYMENT_LINKS_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        /*
+         * EL CANARIO DEL COBRO. Una sola conversación, por id.
+         *
+         * Existe porque encender `payment_links_enabled` para ver un cobro real
+         * habría abierto el checkout a TODO el tráfico, y eso no es un canario:
+         * es el despliegue entero con otro nombre. Aquí el permiso se acota a
+         * una conversación concreta y nombrada.
+         *
+         * Vacío o 0 significa que no hay canario. No es un booleano a propósito:
+         * un booleano no puede decir PARA QUIÉN, y ese es justo el dato que
+         * faltaba.
+         */
+        'payment_canary_conversation_id' => (int) env('MARKETING_ULTRON_PAYMENT_CANARY_CONVERSATION_ID', 0),
         // Webhook del workflow en n8n. Se firma con `automation.webhook_secret`,
         // el mismo secreto compartido que ya usa el puente de bienestar: dos
         // esquemas de firma distintos serían dos formas de equivocarse.
@@ -78,14 +91,14 @@ return [
         // Si false, el comando recorre y registra, pero NO envía mensajes ni
         // programa llamadas reales (preparado para fases siguientes).
         // Hoy, además, el envío real depende de agent_enabled + META_ENABLED.
-        'dispatch_enabled'   => filter_var(env('MARKETING_FOLLOWUPS_DISPATCH', false), FILTER_VALIDATE_BOOLEAN),
+        'dispatch_enabled' => filter_var(env('MARKETING_FOLLOWUPS_DISPATCH', false), FILTER_VALIDATE_BOOLEAN),
         // Agendar el comando en el scheduler. INERTE por defecto: se activa por
         // env sin tocar código (igual que el patrón proactive_coach).
-        'scheduler_enabled'  => filter_var(env('MARKETING_FOLLOWUPS_SCHEDULER', false), FILTER_VALIDATE_BOOLEAN),
+        'scheduler_enabled' => filter_var(env('MARKETING_FOLLOWUPS_SCHEDULER', false), FILTER_VALIDATE_BOOLEAN),
         // Cada cuántos minutos corre (5–10 recomendado).
-        'scheduler_minutes'  => (int) env('MARKETING_FOLLOWUPS_MINUTES', 10),
+        'scheduler_minutes' => (int) env('MARKETING_FOLLOWUPS_MINUTES', 10),
         // Máximo de seguimientos vencidos a procesar por corrida (anti-avalancha).
-        'batch_limit'        => (int) env('MARKETING_FOLLOWUPS_BATCH', 100),
+        'batch_limit' => (int) env('MARKETING_FOLLOWUPS_BATCH', 100),
     ],
 
     // Link de pago por WhatsApp/Meta (Fase 1). El monto es SIEMPRE autoritativo
@@ -108,12 +121,12 @@ return [
     'inbound' => [
         // Permite el procesamiento de entrantes; si false, el webhook solo
         // registra (no analiza). Derivado/independiente de META_ENABLED.
-        'meta_enabled'  => filter_var(env('MARKETING_INBOUND_META_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+        'meta_enabled' => filter_var(env('MARKETING_INBOUND_META_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
         // ¿Enrutar el texto entrante al cerebro (analyze)?
-        'auto_analyze'  => filter_var(env('MARKETING_INBOUND_AUTO_ANALYZE', true), FILTER_VALIDATE_BOOLEAN),
+        'auto_analyze' => filter_var(env('MARKETING_INBOUND_AUTO_ANALYZE', true), FILTER_VALIDATE_BOOLEAN),
         // ¿Ejecutar herramientas (link/followup/takeover) de forma automática?
         // Falso por defecto; además requiere marketing.agent_enabled=true.
-        'auto_execute'  => filter_var(env('MARKETING_INBOUND_AUTO_EXECUTE', false), FILTER_VALIDATE_BOOLEAN),
+        'auto_execute' => filter_var(env('MARKETING_INBOUND_AUTO_EXECUTE', false), FILTER_VALIDATE_BOOLEAN),
         // Guardar el evento crudo de Meta en metadata (debug). Off por defecto.
         'store_raw_payload' => filter_var(env('MARKETING_INBOUND_STORE_RAW_PAYLOAD', false), FILTER_VALIDATE_BOOLEAN),
         // ¿El agente piensa EN LÍNEA, dentro de la misma ejecución que guardó
@@ -271,7 +284,7 @@ return [
         // fake (reglas locales) | openai (requiere config segura + OPENAI_API_KEY).
         // MARKETING_SALES_AI_DRIVER es el nombre canónico; se conserva el alias
         // MARKETING_AI_DRIVER por retrocompatibilidad con la Fase 2.
-        'driver'  => env('MARKETING_SALES_AI_DRIVER', env('MARKETING_AI_DRIVER', 'fake')),
+        'driver' => env('MARKETING_SALES_AI_DRIVER', env('MARKETING_AI_DRIVER', 'fake')),
         // Interruptor del cerebro; con false el orquestador devuelve unknown.
         'enabled' => filter_var(env('MARKETING_AI_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
 
@@ -279,8 +292,8 @@ return [
         // marketing_followups; nada se envía solo si los flags de envío están off.
         'followup_delays' => [
             'very_hot' => (int) env('MARKETING_AI_FOLLOWUP_VERY_HOT', 60),
-            'hot'      => (int) env('MARKETING_AI_FOLLOWUP_HOT', 120),
-            'warm'     => (int) env('MARKETING_AI_FOLLOWUP_WARM', 360),
+            'hot' => (int) env('MARKETING_AI_FOLLOWUP_HOT', 120),
+            'warm' => (int) env('MARKETING_AI_FOLLOWUP_WARM', 360),
         ],
 
         // Cerebro OpenAI (Fase 3). INERTE por defecto: aunque driver=openai, solo
@@ -296,14 +309,14 @@ return [
         // se salta Laravel. Su salida pasa por SalesAgentDecisionValidator y por
         // los guardrails igual que la de OpenAI.
         'hermes' => [
-            'enabled'     => filter_var(env('MARKETING_HERMES_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+            'enabled' => filter_var(env('MARKETING_HERMES_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
             // Loopback SIEMPRE: Hermes escucha en 127.0.0.1 del propio servidor
             // y no debe ser accesible desde fuera. Si algún día esto apunta a un
             // host remoto, es que algo se hizo mal.
-            'base_url'    => rtrim((string) env('MARKETING_HERMES_BASE_URL', ''), '/'),
-            'api_key'     => env('MARKETING_HERMES_API_KEY'),
-            'model'       => env('MARKETING_HERMES_MODEL', 'gpt-4.1'),
-            'timeout'     => (int) env('MARKETING_HERMES_TIMEOUT', 15),
+            'base_url' => rtrim((string) env('MARKETING_HERMES_BASE_URL', ''), '/'),
+            'api_key' => env('MARKETING_HERMES_API_KEY'),
+            'model' => env('MARKETING_HERMES_MODEL', 'gpt-4.1'),
+            'timeout' => (int) env('MARKETING_HERMES_TIMEOUT', 15),
             // Cero reintentos a propósito: si Hermes tarda, se cae a OpenAI en
             // lugar de hacer esperar al prospecto de WhatsApp.
             'max_retries' => (int) env('MARKETING_HERMES_MAX_RETRIES', 0),
@@ -315,8 +328,8 @@ return [
             // escribiendo son quince esperas inútiles y quince workers ocupados.
             'circuit_breaker' => [
                 'failure_threshold' => (int) env('MARKETING_HERMES_CB_THRESHOLD', 3),
-                'window_seconds'    => (int) env('MARKETING_HERMES_CB_WINDOW', 120),
-                'cooldown_seconds'  => (int) env('MARKETING_HERMES_CB_COOLDOWN', 60),
+                'window_seconds' => (int) env('MARKETING_HERMES_CB_WINDOW', 120),
+                'cooldown_seconds' => (int) env('MARKETING_HERMES_CB_COOLDOWN', 60),
             ],
 
             // Techo de gasto. MEDIDO en el servidor: Hermes antepone su propio
@@ -334,18 +347,18 @@ return [
         ],
 
         'openai' => [
-            'enabled'           => filter_var(env('MARKETING_OPENAI_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+            'enabled' => filter_var(env('MARKETING_OPENAI_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
             // Modelo; por defecto reusa el de IRON IA (services.openai.model).
-            'model'             => env('MARKETING_OPENAI_MODEL', env('OPENAI_MODEL', 'gpt-4.1-mini')),
-            'timeout'           => (int) env('MARKETING_OPENAI_TIMEOUT', 20),
-            'max_retries'       => (int) env('MARKETING_OPENAI_MAX_RETRIES', 1),
-            'temperature'       => (float) env('MARKETING_OPENAI_TEMPERATURE', 0.2),
+            'model' => env('MARKETING_OPENAI_MODEL', env('OPENAI_MODEL', 'gpt-4.1-mini')),
+            'timeout' => (int) env('MARKETING_OPENAI_TIMEOUT', 20),
+            'max_retries' => (int) env('MARKETING_OPENAI_MAX_RETRIES', 1),
+            'temperature' => (float) env('MARKETING_OPENAI_TEMPERATURE', 0.2),
             'max_output_tokens' => (int) env('MARKETING_OPENAI_MAX_OUTPUT_TOKENS', 1200),
             // Por seguridad/privacidad, NO se loguean prompts por defecto.
-            'log_prompts'       => filter_var(env('MARKETING_OPENAI_LOG_PROMPTS', false), FILTER_VALIDATE_BOOLEAN),
+            'log_prompts' => filter_var(env('MARKETING_OPENAI_LOG_PROMPTS', false), FILTER_VALIDATE_BOOLEAN),
             // true → ante error/JSON inválido se devuelve una decisión SEGURA
             // (unknown). false → cae al responder determinista (fake).
-            'fail_closed'       => filter_var(env('MARKETING_OPENAI_FAIL_CLOSED', true), FILTER_VALIDATE_BOOLEAN),
+            'fail_closed' => filter_var(env('MARKETING_OPENAI_FAIL_CLOSED', true), FILTER_VALIDATE_BOOLEAN),
         ],
     ],
 ];

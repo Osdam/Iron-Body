@@ -211,6 +211,9 @@ class WompiPaymentLinkService
             $guardrail->assertCanGeneratePaymentLink($lead, $plan, [], [
                 'origin' => $origin,
                 'admin_id' => $adminId,
+                // Para QUIÉN es este cobro. Lo mira el cerrojo del canario, y
+                // si no viene, no se acuña nada: falla cerrado.
+                'conversation_id' => $options['conversation_id'] ?? null,
             ]);
         } catch (SalesGuardrailException $e) {
             ChannelLog::warning('marketing.payment_link.denied', [

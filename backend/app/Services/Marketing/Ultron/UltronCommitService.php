@@ -564,7 +564,7 @@ class UltronCommitService
             'extracted_fields' => [],
             'missing_fields' => [],
             'recommended_action' => SalesIntents::ACTION_REPLY,
-            'tools_requested' => $this->allowedTools((array) ($proposal['tools_requested'] ?? [])),
+            'tools_requested' => $this->allowedTools((array) ($proposal['tools_requested'] ?? []), (int) $conversation->id),
             'safe_to_send' => false,
             'responder' => 'ultron',
         ], $lead);
@@ -670,8 +670,8 @@ class UltronCommitService
         // Las pistas que decide EMITIÓ, leídas del token firmado: el modelo no
         // puede apagar su propia bandera declarando otro intent.
         $hints = is_array($token['extra']['hints'] ?? null)
-            ? array_merge(StrategyContract::hints($perfil, $resolution, $this->decide->canOfferLink(), (string) $sanitized['intent']), $token['extra']['hints'])
-            : StrategyContract::hints($perfil, $resolution, $this->decide->canOfferLink(), (string) $sanitized['intent']);
+            ? array_merge(StrategyContract::hints($perfil, $resolution, $this->decide->canOfferLink((int) $conversation->id), (string) $sanitized['intent']), $token['extra']['hints'])
+            : StrategyContract::hints($perfil, $resolution, $this->decide->canOfferLink((int) $conversation->id), (string) $sanitized['intent']);
         if (StrategyContract::asksDiscoveryToReadyBuyer($replyFinal, $hints)) {
             $decision['risk_flags'] = array_values(array_unique(array_merge((array) ($decision['risk_flags'] ?? []), ['discovery_question_to_ready_buyer'])));
         }
@@ -1273,9 +1273,9 @@ class UltronCommitService
      * @param  string[]  $requested
      * @return string[]
      */
-    private function allowedTools(array $requested): array
+    private function allowedTools(array $requested, ?int $conversationId = null): array
     {
-        return array_values(array_intersect($requested, $this->decide->allowedTools()));
+        return array_values(array_intersect($requested, $this->decide->allowedTools($conversationId)));
     }
 
     /**
@@ -1531,7 +1531,7 @@ class UltronCommitService
             return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'reply_not_sent'];
         }
         // Doble cerrojo: el menú ya lo filtró, pero la barrera vive donde se ejecuta.
-        if (! $this->decide->canOfferLink()) {
+        if (! $this->decide->canOfferLink((int) $conversation->id)) {
             return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'automatic_links_disabled'];
         }
         $lead = $conversation->lead;
@@ -1540,7 +1540,11 @@ class UltronCommitService
         }
 
         try {
-            $this->paymentGuardrail->assertCanGeneratePaymentLink($lead, $plan, []);
+            // La misma autoridad y el mismo dato: esta llamada directa no se
+            // salta el canario por llegar desde dentro.
+            $this->paymentGuardrail->assertCanGeneratePaymentLink($lead, $plan, [], [
+                'conversation_id' => (int) $conversation->id,
+            ]);
 
             // Dos links vivos para planes distintos serían dos cobros posibles, y el
             // checkout de Wompi no se puede anular desde aquí: el segundo no se

@@ -18,6 +18,10 @@ namespace App\Services\Marketing;
  */
 class SalesPaymentReadinessService
 {
+    public function __construct(
+        private readonly PaymentCanaryAuthority $canary = new PaymentCanaryAuthority,
+    ) {}
+
     public const STATE_PRODUCTION_READY = 'production_ready';
 
     public const STATE_SANDBOX_PENDING = 'sandbox_pending';
@@ -56,6 +60,41 @@ class SalesPaymentReadinessService
     {
         return $this->isProductionReady()
             && (bool) config('marketing.ultron.payment_links_enabled', false);
+    }
+
+    /**
+     * Lo mismo, pero sabiendo PARA QUIÉN.
+     *
+     * `canGenerateAutomaticLink()` contesta «¿está abierto el grifo?», y esa
+     * sigue siendo la pregunta correcta para los caminos que no saben de qué
+     * conversación hablan —el panel viejo, el doctor—. Ésta contesta la que
+     * hacía falta para un canario: «¿está abierto PARA ÉSTA?».
+     *
+     * Sin conversación devuelve lo mismo que la global, ni más ni menos: un
+     * llamador que no dice para quién no hereda el permiso del canario.
+     * {@see PaymentCanaryAuthority}.
+     */
+    public function canGenerateForConversation(?int $conversationId): bool
+    {
+        if (! $this->isProductionReady()) {
+            return false;
+        }
+
+        return $this->canary->decide(
+            (bool) config('marketing.ultron.payment_links_enabled', false),
+            (int) config('marketing.ultron.payment_canary_conversation_id', 0),
+            $conversationId,
+        )['allowed'];
+    }
+
+    /** El motivo de la decisión, para el diagnóstico y para el log. */
+    public function canaryVerdict(?int $conversationId): array
+    {
+        return $this->canary->decide(
+            (bool) config('marketing.ultron.payment_links_enabled', false),
+            (int) config('marketing.ultron.payment_canary_conversation_id', 0),
+            $conversationId,
+        );
     }
 
     /** ¿Hay configuración de Web Checkout (independiente del ambiente)? */
