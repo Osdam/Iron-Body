@@ -139,6 +139,34 @@ class MetaMessagingService
     }
 
     /**
+     * Leído Y «escribiendo…», en UNA sola petición.
+     *
+     * Cloud API acepta el indicador de escritura dentro del mismo cuerpo que
+     * marca el mensaje como leído, así que dos llamadas serían una redundante:
+     * la misma cuota, el doble de latencia antes de que la persona vea algo, y
+     * dos sitios donde fallar. El `message_id` es el wamid REAL del entrante
+     * —lo único que Meta reconoce— y nunca un id nuestro.
+     *
+     * El indicador se apaga solo cuando sale el mensaje, o a los ~25 segundos.
+     * Los turnos del canario miden entre 7 y 9 segundos de punta a punta, así
+     * que una sola señal cubre el turno entero y no hace falta renovarla.
+     *
+     * Devuelve el resultado COMPLETO, no un booleano: quien llama tiene que
+     * poder anotar por qué falló sin volver a preguntar.
+     *
+     * @return array{ok:bool,message_id:?string,http_status:?int,error_code:?int,error_title:?string,error_message:?string,retryable:bool,reason:?string}
+     */
+    public function markReadAndShowTyping(string $inboundWamid): array
+    {
+        return $this->send([
+            'messaging_product' => 'whatsapp',
+            'status' => 'read',
+            'message_id' => $inboundWamid,
+            'typing_indicator' => ['type' => 'text'],
+        ], 'read_typing');
+    }
+
+    /**
      * Llamada real a Graph. Nunca lanza y nunca loguea el token ni el cuerpo
      * del mensaje.
      *

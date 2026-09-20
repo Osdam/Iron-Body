@@ -27,6 +27,7 @@ class UltronEventEmitter
 {
     public function __construct(
         private readonly UltronAbortLatch $latch = new UltronAbortLatch,
+        private readonly TurnPresence $presence = new TurnPresence,
     ) {}
 
     /**
@@ -161,6 +162,21 @@ class UltronEventEmitter
 
             return null;
         }
+
+        /*
+         * AQUÍ, Y NO ANTES: el visto y el «escribiendo…».
+         *
+         * Ya pasaron todas las puertas —interruptor, freno, canario, opt-out,
+         * takeover, IA del hilo, forma del mensaje— y el evento ya está escrito
+         * sin chocar con una reentrega de Meta. Enseñar «escribiendo…» antes de
+         * eso sería prometer una respuesta a alguien a quien ULTRON no va a
+         * contestar, y una promesa incumplida es peor que ninguna señal.
+         *
+         * Va antes de despachar el job para que la persona vea algo mientras el
+         * modelo piensa, que es justo para lo que sirve. Y es mejor-esfuerzo:
+         * {@see TurnPresence} no lanza nunca.
+         */
+        $this->presence->announce($message);
 
         SendUltronEventToN8n::dispatch($event->id);
 
