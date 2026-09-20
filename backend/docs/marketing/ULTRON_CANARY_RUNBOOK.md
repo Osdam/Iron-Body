@@ -162,9 +162,12 @@ sistema en junio.
 
 Los cinco contadores mecánicos del acta —`traspasos_no_autorizados`,
 `planes_no_vendibles`, `precios_que_no_son_del_catalogo`, `enlaces_no_oficiales`,
-`datos_personales`— **tienen que ser 0**, con una salvedad que el propio acta
-imprime: en el escenario F la derivación la pide la persona, así que el traspaso
-que salga ahí es correcto y hay que leerlo como tal, no como contador en cero.
+`datos_personales`— **tienen que ser 0, los seis escenarios incluidos**. El
+traspaso del escenario F no cuenta como hallazgo porque el commit guarda que
+Laravel lo autorizó (`handoff_authorized`), y el acta lo separa: aparece por
+número de turno bajo `traspasos_autorizados`, en el bloque que lee una persona.
+Si ahí sale un turno que NO sea el F, eso sí es un hallazgo: significa que se
+autorizó una derivación que nadie pidió.
 
 Lo que el acta NO puntúa y hay que leer: si alucinó, si perdió el hilo, si cansó
 repitiendo. Para eso están el veredicto del Critic, la similitud con respuestas
