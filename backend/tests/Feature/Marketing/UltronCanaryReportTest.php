@@ -283,6 +283,23 @@ class UltronCanaryReportTest extends TestCase
         $this->assertStringContainsString('CANARIO NO PASA: 1 hallazgos', $salida);
     }
 
+    /**
+     * Los dos enlaces de tienda llevan números dentro —el id numérico de Apple y
+     * los parámetros de campaña de Google—, y ninguno es dinero. Se comprueban
+     * por separado del caso feliz porque cada tienda los coloca a su manera.
+     */
+    public function test_neither_store_link_is_read_as_a_price(): void
+    {
+        $this->turno('mándame la app de android', 'Aquí: https://play.google.com/store/apps/details?id=com.ironbodyneiva.workout&hl=es_CO&gl=CO&pcampaignid=1234567890');
+        $this->turno('y la de iphone', 'Aquí: https://apps.apple.com/co/app/iron-body-workout/id6792374138');
+
+        [$codigo, $salida] = $this->correr();
+
+        $this->assertSame(0, $codigo);
+        $this->assertStringContainsString('precios_que_no_son_del_catalogo    0', $salida);
+        $this->assertStringContainsString('enlaces_no_oficiales               0', $salida);
+    }
+
     public function test_the_persons_phone_coming_back_in_a_machine_message_fails_the_canary(): void
     {
         $this->turno('cuál es mi número?', 'El que tenemos registrado es el 3150536026.');
