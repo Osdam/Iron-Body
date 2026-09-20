@@ -44,8 +44,15 @@ final class PaymentFactGuard
     /** El único estado en el que el dinero está de verdad. */
     public const APPROVED = 'approved';
 
-    /** Verbos de «entró el dinero», en las formas en que se dicen de verdad. */
-    private const ENTRO = '(recibimos|recibi|recibido|llego|entro|ingreso|acreditado|acredito|registramos|registrado|confirmado|confirmamos|aprobado|aprobamos)';
+    /**
+     * Verbos de «entró el dinero», en las formas en que se dicen de verdad.
+     *
+     * La tercera persona del singular faltaba —«tu pago se recibió ayer» pasaba—
+     * y se añade con cuidado: `se registro` va con el pronombre pegado porque
+     * «registro» a secas es también un sustantivo, y «el registro de tu pago
+     * está pendiente» es una frase honesta que no se puede bloquear.
+     */
+    private const ENTRO = '(recibimos|recibi|recibio|recibido|llego|entro|ingreso|acreditado|acredito|registramos|se\s+registro|registrado|confirmado|confirmamos|aprobado|aprobamos|aprobo)';
 
     /**
      * Afirmaciones de que el pago está hecho.
@@ -155,9 +162,20 @@ final class PaymentFactGuard
             $texto = (string) $m[0][0];
             $pos = (int) $m[0][1];
 
-            // «todavía no me aparece tu pago confirmado»: eso es la honestidad
-            // que el sistema quiere poder decir.
-            if ($this->niegaLaNegacion($frase, $pos)) {
+            /*
+             * «todavía no me aparece tu pago confirmado»: eso es la honestidad
+             * que el sistema quiere poder decir.
+             *
+             * Con los mismos dos frenos que la subordinada, y por el mismo
+             * motivo: sin límite de distancia, un «no» que niega OTRA cosa
+             * seguía eximiendo mientras no hubiera coma. «No te preocupes que
+             * ya recibimos tu pago» pasaba. El «ya» y el pasado de indicativo
+             * dicen que el dinero entró, y ninguna negación de otra cosa lo
+             * vuelve falso.
+             */
+            if ($this->niegaLaNegacion($frase, $pos)
+                && ! $this->yaOcurrido($frase)
+                && ! $this->enPasadoIndicativo($texto)) {
                 continue;
             }
 
@@ -231,7 +249,7 @@ final class PaymentFactGuard
      */
     private function enPasadoIndicativo(string $texto): bool
     {
-        return preg_match('~\b(fue|fueron|quedo|quedaron|entro|entraron|llego|llegaron|ingreso|acredito|recibimos|recibi|confirmamos|aprobamos|registramos)\b~u', $texto) === 1;
+        return preg_match('~\b(fue|fueron|quedo|quedaron|entro|entraron|llego|llegaron|ingreso|acredito|recibimos|recibi|recibio|confirmamos|aprobamos|aprobo|registramos|se\s+registro)\b~u', $texto) === 1;
     }
 
     /**

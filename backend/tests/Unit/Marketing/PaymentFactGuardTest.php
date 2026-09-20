@@ -347,4 +347,75 @@ class PaymentFactGuardTest extends TestCase
             'el pasado de indicativo afirma, cuelgue de donde cuelgue',
         );
     }
+
+    // ── La negación que niega otra cosa, sin coma ────────────────────────────
+
+    /**
+     * Sin límite de distancia, un «no» que niega OTRA cosa seguía eximiendo
+     * mientras no hubiera coma de por medio. «No te preocupes que ya recibimos
+     * tu pago» es la forma sin puntuar de la misma mentira.
+     *
+     * Se cierra con los dos frenos que ya tenía la subordinada: el «ya» y el
+     * pasado de indicativo dicen que el dinero entró, y negar otra cosa no lo
+     * vuelve falso.
+     */
+    public static function negacionesQueNieganOtraCosa(): array
+    {
+        return [
+            ['No te preocupes que ya recibimos tu pago.'],
+            ['No te preocupes tu pago fue confirmado.'],
+            ['No hay problema con tu pago ya entro.'],
+            ['Tranquilo no te preocupes que tu pago quedo registrado.'],
+        ];
+    }
+
+    #[DataProvider('negacionesQueNieganOtraCosa')]
+    public function test_a_negation_of_something_else_does_not_excuse_the_claim(string $texto): void
+    {
+        $this->assertNotNull($this->guard->contradiction($texto, 'none'));
+    }
+
+    /** Y la honestidad que SÍ niega el hecho de pago sigue pasando. */
+    public static function negacionesDelHechoDePago(): array
+    {
+        return [
+            ['No aceptamos capturas del pago como confirmacion.'],
+            ['Sin el pago confirmado no puedo activarte el plan.'],
+            ['Todavia no me aparece tu pago confirmado.'],
+            ['No hace falta que me mandes la captura del pago.'],
+        ];
+    }
+
+    #[DataProvider('negacionesDelHechoDePago')]
+    public function test_a_negation_of_the_payment_itself_still_goes_through(string $texto): void
+    {
+        $this->assertNull($this->guard->contradiction($texto, 'none'));
+    }
+
+    // ── Tercera persona del singular ─────────────────────────────────────────
+
+    /** A la lista de verbos le faltaba la forma más natural de contarlo. */
+    public static function terceraPersona(): array
+    {
+        return [
+            ['Tu pago se recibio ayer sin problema.'],
+            ['Tu pago se registro correctamente.'],
+            ['El pago se aprobo esta manana.'],
+        ];
+    }
+
+    #[DataProvider('terceraPersona')]
+    public function test_the_third_person_singular_also_claims(string $texto): void
+    {
+        $this->assertNotNull($this->guard->contradiction($texto, 'none'));
+    }
+
+    /**
+     * Y «registro» sigue pudiendo ser un sustantivo: por eso entra con el
+     * pronombre pegado («se registro») y no a secas.
+     */
+    public function test_the_noun_registro_is_not_a_claim(): void
+    {
+        $this->assertNull($this->guard->contradiction('El registro de tu pago aparece pendiente.', 'none'));
+    }
 }
