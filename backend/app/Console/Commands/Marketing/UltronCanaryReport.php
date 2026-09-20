@@ -9,8 +9,10 @@ use App\Models\Plan;
 use App\Services\Marketing\MobileAppLinks;
 use App\Services\Marketing\OutboundContentGuard;
 use App\Services\Marketing\SalesAgentDecisionSchema;
+use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
+use Throwable;
 
 /**
  * El acta del canario, turno a turno.
@@ -34,7 +36,7 @@ use Illuminate\Support\Collection;
  */
 class UltronCanaryReport extends Command
 {
-    protected $signature = 'ultron:canary-report {conversation : id de la conversación del canario} {--turns=40 : cuántos turnos como máximo} {--json : salida en JSON para archivar}';
+    protected $signature = 'ultron:canary-report {conversation : id de la conversación del canario} {--turns=40 : cuántos turnos como máximo} {--since= : cuenta solo desde esta fecha/hora (ISO), para no arrastrar el histórico} {--json : salida en JSON para archivar}';
 
     protected $description = 'Acta turno a turno del canario de ULTRON: qué entró, qué decidió, qué salió y qué no cuadra.';
 
@@ -47,13 +49,33 @@ class UltronCanaryReport extends Command
             return self::FAILURE;
         }
 
+        /*
+         * La ventana. La conversación del canario existe desde antes —la 19
+         * arrastra cuarenta turnos del asesor anterior—, así que sin esto el
+         * acta cuenta como hallazgos del canario lo que dijo otro sistema en
+         * junio. Los contadores tienen que hablar SOLO de lo que pasó a partir
+         * de que el canario empezó.
+         */
+        $desde = null;
+        if (($crudo = (string) $this->option('since')) !== '') {
+            try {
+                $desde = Carbon::parse($crudo);
+            } catch (Throwable) {
+                $this->error('No entiendo esa fecha: --since='.$crudo);
+
+                return self::FAILURE;
+            }
+        }
+
         $mensajes = MarketingMessage::query()
             ->where('conversation_id', $conversation->id)
+            ->when($desde, fn ($q) => $q->where('created_at', '>=', $desde))
             ->orderBy('id')
             ->get(['id', 'direction', 'sender_type', 'body', 'metadata', 'created_at']);
 
         $acciones = MarketingAiAction::query()
             ->where('conversation_id', $conversation->id)
+            ->when($desde, fn ($q) => $q->where('created_at', '>=', $desde))
             ->orderBy('id')
             ->get(['id', 'action_type', 'status', 'source_type', 'source_event_id', 'metadata', 'created_at']);
 
@@ -64,6 +86,7 @@ class UltronCanaryReport extends Command
         if ($this->option('json')) {
             $this->line((string) json_encode([
                 'conversation_id' => $conversation->id,
+                'since' => $desde?->toIso8601String(),
                 'turns' => $turnos,
                 'findings' => $hallazgos,
             ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
@@ -71,7 +94,7 @@ class UltronCanaryReport extends Command
             return $hallazgos['mecanicos_total'] === 0 ? self::SUCCESS : self::FAILURE;
         }
 
-        $this->imprimir($conversation, $turnos, $hallazgos);
+        $this->imprimir($conversation, $turnos, $hallazgos, $desde);
 
         return $hallazgos['mecanicos_total'] === 0 ? self::SUCCESS : self::FAILURE;
     }
@@ -177,8 +200,25 @@ class UltronCanaryReport extends Command
                     $mecanicos['traspasos_no_autorizados'][] = $ref;
                 }
 
+                /*
+                 * Un plan que no se vende, NOMBRADO. Dos cautelas, y las dos
+                 * las encontró el acta de la conversación 19 contándose a sí
+                 * misma: si un plan interno se llama «Mensual» y el vendible
+                 * «Plan Mensual», decir el bueno mencionaba al malo; y sin
+                 * bordes, «mensual» dentro de «mensualidad» también contaba.
+                 * Un contador que grita por una respuesta correcta aborta el
+                 * canario por nada, que es la peor forma de fallar.
+                 */
+                $sinVendibles = $texto;
+                foreach ($vendibles as $vendible) {
+                    $sinVendibles = str_ireplace((string) $vendible->name, ' ', $sinVendibles);
+                }
                 foreach ($noVendibles as $nombre) {
-                    if ($nombre !== '' && stripos($texto, (string) $nombre) !== false) {
+                    if ($nombre === '') {
+                        continue;
+                    }
+                    $patron = '/(?<![a-z0-9áéíóúüñ])'.preg_quote((string) $nombre, '/').'(?![a-z0-9áéíóúüñ])/iu';
+                    if (preg_match($patron, $sinVendibles) === 1) {
                         $mecanicos['planes_no_vendibles'][] = $ref.' ('.$nombre.')';
                     }
                 }
@@ -245,9 +285,10 @@ class UltronCanaryReport extends Command
     }
 
     /** @param  list<array<string,mixed>>  $turnos */
-    private function imprimir(MarketingConversation $conversation, array $turnos, array $hallazgos): void
+    private function imprimir(MarketingConversation $conversation, array $turnos, array $hallazgos, ?Carbon $desde = null): void
     {
-        $this->info('ACTA DEL CANARIO — conversación '.$conversation->id.' · '.count($turnos).' turnos');
+        $this->info('ACTA DEL CANARIO — conversación '.$conversation->id.' · '.count($turnos).' turnos'
+            .($desde !== null ? ' · desde '.$desde->toDateTimeString() : ' · TODO el histórico'));
         $this->newLine();
 
         foreach ($turnos as $t) {

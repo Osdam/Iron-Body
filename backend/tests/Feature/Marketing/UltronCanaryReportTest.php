@@ -136,6 +136,62 @@ class UltronCanaryReportTest extends TestCase
         $this->assertStringContainsString('CANARIO SIN HALLAZGOS MECANICOS', $salida);
     }
 
+    /**
+     * El plan interno se llama «Convenio Interno» y el vendible «Plan Mensual».
+     * Cuando el interno se llama como una PARTE del vendible, nombrar el bueno
+     * no puede contar como nombrar el malo: un contador que grita por una
+     * respuesta correcta aborta el canario por nada.
+     */
+    public function test_naming_the_sellable_plan_does_not_count_as_naming_the_internal_one(): void
+    {
+        Plan::create(['name' => 'Mensual', 'price' => 1, 'duration_days' => 30, 'active' => true, 'sellable' => false]);
+
+        $this->turno('cuánto vale?', 'El Plan Mensual está en $80.000 COP y la mensualidad se renueva sola.');
+
+        [$codigo, $salida] = $this->correr();
+
+        $this->assertSame(0, $codigo);
+        $this->assertStringContainsString('CANARIO SIN HALLAZGOS MECANICOS', $salida);
+    }
+
+    /**
+     * La conversación del canario existe desde antes. Sin ventana, el acta
+     * cuenta como hallazgo lo que dijo el asesor anterior hace tres meses.
+     */
+    public function test_the_window_leaves_the_old_history_out_of_the_count(): void
+    {
+        $this->travelTo(now()->subMonths(3), function (): void {
+            $this->turno('qué opciones hay?', 'Te recomiendo el Convenio Interno, que es el que más se lleva.');
+        });
+        $this->turno('hola', 'Claro, te cuento con gusto.');
+
+        $codigo = Artisan::call('ultron:canary-report', [
+            'conversation' => $this->conversation->id,
+            '--since' => now()->subDay()->toIso8601String(),
+        ]);
+        $salida = Artisan::output();
+
+        $this->assertSame(0, $codigo);
+        $this->assertStringContainsString('1 turnos', $salida);
+        $this->assertStringContainsString('CANARIO SIN HALLAZGOS MECANICOS', $salida);
+
+        // Y sin ventana, el histórico sigue contando: no se ha tapado nada.
+        [$codigoTodo, $salidaTodo] = $this->correr();
+        $this->assertSame(1, $codigoTodo);
+        $this->assertStringContainsString('planes_no_vendibles', $salidaTodo);
+    }
+
+    public function test_an_unreadable_date_is_refused_instead_of_counting_everything(): void
+    {
+        $codigo = Artisan::call('ultron:canary-report', [
+            'conversation' => $this->conversation->id,
+            '--since' => 'el martes pasado por la tarde',
+        ]);
+
+        $this->assertSame(1, $codigo);
+        $this->assertStringContainsString('No entiendo esa fecha', Artisan::output());
+    }
+
     public function test_a_link_that_is_not_official_fails_the_canary(): void
     {
         $this->turno('mándame la app', 'Descárgala en https://apps-gratis.example/ironbody');
