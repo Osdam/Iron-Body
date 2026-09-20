@@ -31,3 +31,6 @@ Thumbs.db
 # Export/CSV de migracion de socios: datos personales reales, NUNCA al repo.
 /storage/*.csv
 /storage/migracion/
+
+# Resultados de la suite: rastro local del fallo intermitente, no se versiona.
+/storage/test-results

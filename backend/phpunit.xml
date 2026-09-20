@@ -12,6 +12,23 @@
             <directory>tests/Feature</directory>
         </testsuite>
     </testsuites>
+    <!--
+        RASTRO DE LA SUITE. Todo el que corre la suite deja el resultado en un
+        fichero, sin pedirlo y sin acordarse.
+
+        Existe por un fallo intermitente que apareció UNA vez en diecinueve
+        corridas y cuyo nombre se perdió, porque aquella corrida estaba
+        canalizada por `tail -3`: se supo que dos tests habían fallado y nunca
+        cuáles. Un rojo que no deja nombre enseña a relanzar en vez de mirar, y
+        la garantía de «cero regresiones» descansa sobre esta suite.
+
+        `bin/suite` archiva cada corrida con su fecha y compara contra la línea
+        base; esto es la red para quien llame a phpunit a pelo.
+    -->
+    <logging>
+        <junit outputFile="storage/test-results/junit.xml"/>
+    </logging>
+
     <source>
         <include>
             <directory>app</directory>

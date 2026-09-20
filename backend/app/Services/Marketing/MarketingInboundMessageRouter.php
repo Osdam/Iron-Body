@@ -33,6 +33,7 @@ class MarketingInboundMessageRouter
     public function __construct(
         private readonly SalesAgentOrchestratorService $orchestrator,
         private readonly UltronEventEmitter $ultron = new UltronEventEmitter,
+        private readonly MarketingConsentService $consent = new MarketingConsentService,
     ) {}
 
     /**
@@ -72,6 +73,46 @@ class MarketingInboundMessageRouter
 
         if (! in_array($type, $analyzable, true) && ! $hasReadableText) {
             return $this->escalate($lead, $conversation, $message, $type, 'needs_human_review');
+        }
+
+        /*
+         * ¿La persona acaba de retirar su opt-out? Esto va ANTES del emisor.
+         *
+         * El sitio lo decide todo, y la primera versión lo tenía mal: estaba
+         * dentro de `analyze()`, que corre DESPUÉS de `emit()`. El emisor
+         * comprueba `canReplyReactively()`, así que en ese instante la persona
+         * seguía marcada, el evento no nacía y el turno en el que alguien
+         * decía «ya pueden escribirme» se quedaba sin respuesta. Un turno mudo
+         * justo en el mensaje que reabre la puerta es el peor sitio posible
+         * para tener uno.
+         *
+         * Aquí, el emisor y el cerebro local ven los dos el estado ya
+         * reabierto, y el corte por opt-out de `analyze()` sigue intacto dos
+         * pasos más allá para todo lo que no sea una petición explícita.
+         *
+         * La detección es deliberadamente estrecha —un verbo de intención
+         * pegado a la acción de escribir, sin negación delante ni restricción
+         * detrás— y la decide {@see ConsentAuthority}. No se deduce de que la
+         * persona escriba, ni de que pregunte por un plan: sólo de que lo pida.
+         */
+        if ($lead->do_not_contact) {
+            $reapertura = $this->consent->reopen(
+                $lead,
+                ConsentAuthority::SOURCE_LEAD_RECONSENT,
+                'La persona pidió por WhatsApp que volvieran a escribirle.',
+                null,
+                (string) $message->body,
+                (int) $message->id,
+            );
+
+            if ($reapertura['status'] === 'reopened') {
+                ChannelLog::warning('marketing.consent.reopened_by_lead', [
+                    'marketing_lead_id' => (int) $lead->id,
+                    'conversation_id' => (int) $conversation->id,
+                    'consent_event_id' => $reapertura['event_id'],
+                ]);
+                $lead->refresh();
+            }
         }
 
         /*

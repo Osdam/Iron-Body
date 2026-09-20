@@ -512,6 +512,101 @@ class UltronCommitTest extends TestCase
         );
     }
 
+    // ── El invariante de la promesa ───────────────────────────────────────────
+
+    /**
+     * Prometer una acción futura cuesta el turno, siempre.
+     *
+     * No hay nada que contrastar: `should_schedule_followup` está fijado a
+     * false y no existe programador de seguimientos, así que «te escribo
+     * mañana» es falso el día que se escribe y el día que se lee. Muere en un
+     * 422 ANTES de persistir —igual que `draft_rejected`— así que no deja fila
+     * que deshacer, y n8n pide la rendición: la persona recibe el texto
+     * curado, que sí dice la verdad.
+     */
+    public function test_a_promise_of_a_future_action_costs_the_turn(): void
+    {
+        Http::fake();
+        $m = $this->inbound('hay cupo el sabado?');
+
+        $this->commit($this->payload($m, [
+            'proposal' => ['reply_draft' => 'Todavia no tengo el dato. Te escribo manana apenas lo confirme.'],
+        ]))->assertStatus(422)->assertJsonPath('code', 'unsupported_future_action_promise');
+
+        $this->assertSame(0, MarketingMessage::where('direction', 'outbound')->count(), 'no sale nada');
+        $this->assertNull(MarketingAiAction::latest('id')->first(), 'y no queda fila que deshacer');
+    }
+
+    /** Y la capacidad que no existe no necesita decir cuándo para ser falsa. */
+    public function test_promising_to_book_something_costs_the_turn(): void
+    {
+        Http::fake();
+        $m = $this->inbound('quiero la valoracion');
+
+        $this->commit($this->payload($m, [
+            'proposal' => ['reply_draft' => 'Listo, te agendo la valoracion.'],
+        ]))->assertStatus(422)->assertJsonPath('code', 'unsupported_future_action_promise');
+    }
+
+    /**
+     * Afirmar la marca sin que el turno marque, también.
+     *
+     * Es el hueco que abrió el cerrojo de `staff_review`: la frase la podía
+     * escribir el modelo igual que el texto curado, y desde que hay causa que
+     * comprobar dejó de ser verdad por defecto.
+     */
+    public function test_claiming_the_mark_without_the_mark_costs_the_turn(): void
+    {
+        Http::fake();
+        $m = $this->inbound('cuanto cuesta la mensualidad?');
+
+        $this->commit($this->payload($m, [
+            'proposal' => [
+                'intent' => SalesIntents::PRICING_QUESTION,
+                'reply_draft' => 'El plan cuesta {{PLAN_PRICE}}. Lo dejo marcado para revision del equipo.',
+                'recommended_plan_id' => $this->plan->id,
+            ],
+        ]))->assertStatus(422)->assertJsonPath('code', 'promised_effect_without_authority');
+
+        $this->assertSame(0, MarketingMessage::where('direction', 'outbound')->count());
+    }
+
+    /** Pero si el turno SÍ marca, la frase es verdad y el mensaje sale. */
+    public function test_claiming_the_mark_is_fine_when_the_turn_really_marks(): void
+    {
+        Http::fake();
+        $m = $this->inbound('esto es un desastre, quiero poner una queja formal');
+
+        $r = $this->commit($this->payload($m, [
+            'proposal' => [
+                'intent' => SalesIntents::COMPLAINT,
+                'reply_draft' => 'Lamento lo que pasó. Lo dejo marcado para revision del equipo.',
+            ],
+        ]))->assertOk();
+
+        $this->assertNotNull($r->json('reply_final'));
+        $this->assertTrue((bool) $this->conversation->fresh()->staff_review_pending);
+    }
+
+    /**
+     * Y una frase honesta sobre lo que NO se puede hacer no cuesta nada.
+     *
+     * Es el lado que más importa proteger: decir la verdad sobre los límites
+     * es exactamente lo que queremos que haga, y tumbarlo sería premiar la
+     * mentira.
+     */
+    public function test_being_honest_about_the_limits_does_not_cost_the_turn(): void
+    {
+        Http::fake();
+        $m = $this->inbound('me avisas cuando haya cupo?');
+
+        $r = $this->commit($this->payload($m, [
+            'proposal' => ['reply_draft' => 'No manejo avisos automaticos, pero aqui me tienes cuando quieras preguntar.'],
+        ]))->assertOk();
+
+        $this->assertNotNull($r->json('reply_final'));
+    }
+
     /** El motivo que el modelo alega tiene que estar en la lista, o el contrato lo rechaza. */
     public function test_an_invented_staff_review_reason_does_not_reach_the_service(): void
     {

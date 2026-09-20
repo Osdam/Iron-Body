@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+#
+# Corre la suite dejando rastro, y compara contra la línea base.
+#
+# Existe por un fallo intermitente que apareció UNA vez en diecinueve corridas
+# y cuyo nombre se perdió: aquella corrida iba canalizada por `tail -3`, así
+# que se supo que dos tests habían fallado y nunca cuáles. Un rojo sin nombre
+# enseña a relanzar en vez de mirar.
+#
+#   bin/suite                      # suite completa contra la línea base
+#   bin/suite tests/Feature/X.php  # un subconjunto, también archivado
+#
+# Variables:
+#   BASELINE   fichero con los nombres tolerados (por defecto tests/baseline-failures.txt)
+#   MEM        memory_limit de PHP (por defecto 2G; con 128M la suite no cabe)
+set -uo pipefail
+
+cd "$(dirname "$0")/.."
+
+BASELINE="${BASELINE:-tests/baseline-failures.txt}"
+MEM="${MEM:-2G}"
+DIR=storage/test-results
+SELLO="$(date -u +%Y%m%dT%H%M%SZ)"
+XML="$DIR/junit-$SELLO.xml"
+LOG="$DIR/suite-$SELLO.txt"
+
+mkdir -p "$DIR"
+
+php -d memory_limit="$MEM" ./vendor/bin/phpunit --log-junit "$XML" "$@" 2>&1 | tee "$LOG"
+ESTADO=${PIPESTATUS[0]}
+
+echo
+echo "── rastro ───────────────────────────────────────────────"
+echo "  xml: $XML"
+echo "  log: $LOG"
+
+php -r '
+$xml = $argv[1]; $base = $argv[2];
+if (! is_file($xml)) { fwrite(STDERR, "  sin XML: la corrida murió antes de escribirlo\n"); exit(2); }
+$doc = new SimpleXMLElement(file_get_contents($xml));
+$malos = [];
+foreach ($doc->xpath("//testcase[failure or error]") as $tc) {
+    $malos[(string) $tc["class"]."::".(string) $tc["name"]] = true;
+}
+$malos = array_keys($malos);
+sort($malos);
+if (! $malos) { echo "  sin fallos\n"; exit(0); }
+
+// El nombre SIEMPRE se imprime, haya o no línea base: es el motivo de todo esto.
+echo "  fallos (".count($malos)."):\n";
+foreach ($malos as $n) { echo "    · $n\n"; }
+
+if (! is_file($base)) { echo "\n  (sin línea base en $base: no se compara)\n"; exit(1); }
+$tolerados = array_filter(array_map("trim", file($base)));
+$nuevos = array_values(array_diff($malos, $tolerados));
+echo "\n  línea base: ".count($tolerados)." tolerados\n";
+if (! $nuevos) { echo "  REGRESIONES: 0\n"; exit(0); }
+echo "  REGRESIONES: ".count($nuevos)."\n";
+foreach ($nuevos as $n) { echo "    + $n\n"; }
+exit(1);
+' "$XML" "$BASELINE"
+COMPARACION=$?
+
+# Verde sólo si la suite pasó Y no hay nombres fuera de la línea base.
+if [ "$ESTADO" -eq 0 ] || [ "$COMPARACION" -eq 0 ]; then exit 0; fi
+exit 1

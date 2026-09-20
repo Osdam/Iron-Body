@@ -102,6 +102,7 @@ class UltronCommitService
         private readonly PaymentFactGuard $paymentGuard,
         private readonly UltronAbortLatch $abortLatch = new UltronAbortLatch,
         private readonly StaffReviewAuthority $staffReview = new StaffReviewAuthority,
+        private readonly PromiseAuthority $promises = new PromiseAuthority,
     ) {}
 
     /**
@@ -580,6 +581,84 @@ class UltronCommitService
             $decision['should_generate_payment_link'] = false;
             $decision['recommended_action'] = 'resell_blocked';
             $decision['risk_flags'] = array_values(array_unique(array_merge((array) ($decision['risk_flags'] ?? []), ['resell_blocked'])));
+        }
+
+        /*
+         * 11.bis) EL INVARIANTE DE LA PROMESA. Si el texto dice que algo pasa,
+         * tiene que pasar.
+         *
+         * Va AQUÍ, entre el guardrail y `persist()`, y el sitio no es
+         * cosmético. Antes, en `assertSafe()` (línea ~416), todavía no se sabe
+         * si el backend tiene causa: `sanitize()` corre después. Aquí ya son
+         * definitivos `needs_staff_review`, el motivo propuesto y el
+         * `tools_requested` con la inyección del guardrail, y
+         * {@see StaffReviewAuthority::decide()} es una función pura, así que
+         * preguntarle no tiene efectos. Y va antes de `persist()` a propósito:
+         * un 422 aquí no deja fila que deshacer, igual que `draft_rejected`.
+         *
+         * Dos familias y dos tratos, porque no son el mismo problema:
+         *
+         *  - ACCIÓN FUTURA («te escribo mañana», «te guardo el cupo»): no hay
+         *    nada que contrastar. `should_schedule_followup` está fijado a
+         *    false y no existe programador de seguimientos, así que la frase es
+         *    falsa siempre. Muere aquí.
+         *  - EFECTO DURABLE («lo dejo marcado», «lo escalo»): puede ser verdad.
+         *    Se comprueba contra la autoridad Y contra el menú del turno,
+         *    porque la autoridad decide si PUEDE marcarse y la herramienta
+         *    decide si SE VA a marcar; las dos tienen que darse.
+         *
+         * Lo que sale por aquí no es un turno mudo: es un 422 antes de escribir
+         * nada, que es exactamente de lo que cuelga la rendición de n8n. La
+         * persona recibe el texto curado, que sí dice la verdad.
+         */
+        $promesa = $this->promises->detectar($replyFinal);
+
+        if ($promesa['kind'] === PromiseAuthority::ACCION_FUTURA) {
+            ChannelLog::warning('ultron.commit.unsupported_future_promise', [
+                'conversation_id' => (int) $conversation->id,
+                'message_id' => (int) $message->id,
+                'quote' => $promesa['quote'],
+            ]);
+
+            throw UltronCommitException::make(
+                PromiseAuthority::ACCION_FUTURA,
+                'El borrador promete una acción futura que el sistema no puede cumplir.',
+                422,
+                ['quote' => $promesa['quote']],
+            );
+        }
+
+        if ($promesa['kind'] === PromiseAuthority::EFECTO_DURABLE) {
+            $marcaAutorizada = $this->staffReview->decide(
+                (bool) ($decision['needs_staff_review'] ?? false),
+                $decision['staff_review_reason'] ?? null,
+                $decision['staff_review_proposed_reason'] ?? null,
+            )['allowed'];
+
+            // Poder marcarse no es marcarse: la herramienta tiene que estar en
+            // el menú del turno, o el efecto no ocurre aunque haya causa.
+            $marcaEnElTurno = in_array(
+                SalesIntents::TOOL_STAFF_REVIEW,
+                (array) ($decision['tools_requested'] ?? []),
+                true,
+            );
+
+            if (! ($marcaAutorizada && $marcaEnElTurno)) {
+                ChannelLog::warning('ultron.commit.promised_effect_without_authority', [
+                    'conversation_id' => (int) $conversation->id,
+                    'message_id' => (int) $message->id,
+                    'quote' => $promesa['quote'],
+                    'authorised' => $marcaAutorizada,
+                    'tool_in_turn' => $marcaEnElTurno,
+                ]);
+
+                throw UltronCommitException::make(
+                    'promised_effect_without_authority',
+                    'El borrador afirma un efecto que este turno no produce.',
+                    422,
+                    ['quote' => $promesa['quote']],
+                );
+            }
         }
 
         // 12) Persistir. La fase solo avanza cuando el commit se acepta.
