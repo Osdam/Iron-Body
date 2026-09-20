@@ -111,18 +111,76 @@ class UltronCanaryReport extends Command
      */
     private function cifrasDelTexto(string $texto): array
     {
-        preg_match_all('/\d{1,3}(?:[.,\s]\d{3})+|\d{4,}/u', $texto, $m);
+        preg_match_all('/(\d{1,3}(?:[.,\s]\d{3})+)|(\d{4,})/u', $texto, $m, PREG_SET_ORDER);
 
         $out = [];
-        foreach ($m[0] as $crudo) {
-            $n = (int) preg_replace('/\D+/', '', $crudo);
-            if ($n >= 1900 && $n <= 2100) {
+        foreach ($m as $trozo) {
+            $conSeparador = ($trozo[1] ?? '') !== '';
+            $n = (int) preg_replace('/\D+/', '', $trozo[0]);
+
+            /*
+             * Un año se escribe «2016», no «2.016». Saltar el rango entero
+             * dejaba fuera a «te lo dejo en 2.050 pesos», que sí es dinero
+             * inventado; mirar el separador distingue las dos cosas sin tener
+             * que adivinar la intención.
+             */
+            if (! $conSeparador && $n >= 1900 && $n <= 2100) {
                 continue;
             }
             $out[] = $n;
         }
 
         return $out;
+    }
+
+    /**
+     * Los planes RETIRADOS que el texto nombra de verdad.
+     *
+     * Se recorren todos los nombres del catálogo —vendibles y retirados— de más
+     * largo a más corto sobre el texto original: el primero que ocupa un tramo
+     * se lo queda, así que «Plan Mensual Premium» gana a «Plan Mensual» y no al
+     * revés. Un nombre retirado que aparece dentro del de uno vendible es
+     * ambiguo y no se vigila.
+     *
+     * @param  Collection<int, Plan>  $vendibles
+     * @param  list<string>  $noVendibles
+     * @return list<string>
+     */
+    private function planesRetiradosMencionados(string $texto, Collection $vendibles, array $noVendibles): array
+    {
+        $nombres = [];
+        foreach ($vendibles as $v) {
+            $nombres[] = ['nombre' => (string) $v->name, 'retirado' => false];
+        }
+        foreach ($noVendibles as $n) {
+            $nombres[] = ['nombre' => (string) $n, 'retirado' => true];
+        }
+        usort($nombres, fn (array $a, array $b) => mb_strlen($b['nombre']) <=> mb_strlen($a['nombre']));
+
+        $ocupado = [];
+        $encontrados = [];
+        foreach ($nombres as $candidato) {
+            if ($candidato['nombre'] === '') {
+                continue;
+            }
+            if (preg_match_all($this->comoPalabra($candidato['nombre']), $texto, $m, PREG_OFFSET_CAPTURE) === 0) {
+                continue;
+            }
+            foreach ($m[0] as [$hallado, $desde]) {
+                $hasta = $desde + strlen((string) $hallado);
+                foreach ($ocupado as [$a, $b]) {
+                    if ($desde < $b && $hasta > $a) {
+                        continue 2;
+                    }
+                }
+                $ocupado[] = [$desde, $hasta];
+                if ($candidato['retirado']) {
+                    $encontrados[] = $candidato['nombre'];
+                }
+            }
+        }
+
+        return array_values(array_unique($encontrados));
     }
 
     /**
@@ -320,22 +378,21 @@ class UltronCanaryReport extends Command
                 }
 
                 /*
-                 * Un plan que no se vende, NOMBRADO. Dos cautelas, y las dos
-                 * las encontró el acta de la conversación 19 contándose a sí
-                 * misma: si un plan interno se llama «Mensual» y el vendible
-                 * «Plan Mensual», decir el bueno mencionaba al malo; y sin
-                 * bordes, «mensual» dentro de «mensualidad» también contaba.
-                 * Un contador que grita por una respuesta correcta aborta el
-                 * canario por nada, que es la peor forma de fallar.
+                 * Un plan que no se vende, NOMBRADO.
+                 *
+                 * Se resuelve sobre el texto ORIGINAL, de nombre más largo a
+                 * más corto, marcando lo ya consumido. Vaciar antes el texto de
+                 * los nombres vendibles —que es lo que hacía— escondía al
+                 * retirado que CONTIENE a uno vendible: con «Plan Mensual» a la
+                 * venta, «Plan Mensual Premium» desaparecía del contador.
+                 *
+                 * Y los nombres ambiguos siguen fuera: si el retirado se llama
+                 * «mensual» y el vendible «Plan Mensual», decir «el mensual» no
+                 * distingue a cuál se refiere, y un contador que grita por una
+                 * respuesta correcta aborta el canario por nada.
                  */
-                $sinVendibles = $texto;
-                foreach ($vendibles as $vendible) {
-                    $sinVendibles = str_ireplace((string) $vendible->name, ' ', $sinVendibles);
-                }
-                foreach ($noVendibles as $nombre) {
-                    if (preg_match($this->comoPalabra($nombre), $sinVendibles) === 1) {
-                        $mecanicos['planes_no_vendibles'][] = $ref.' ('.$nombre.')';
-                    }
+                foreach ($this->planesRetiradosMencionados($texto, $vendibles, $noVendibles) as $nombre) {
+                    $mecanicos['planes_no_vendibles'][] = $ref.' ('.$nombre.')';
                 }
 
                 /*

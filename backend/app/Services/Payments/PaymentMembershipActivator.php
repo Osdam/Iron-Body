@@ -47,10 +47,21 @@ class PaymentMembershipActivator
                 return; // sin usuario al que asociar (app con usuario mock)
             }
 
-            // Idempotencia dura: una sola fila legada por referencia → la
-            // membresía se extiende UNA vez aunque el webhook reintente.
+            /*
+             * Idempotencia dura: una sola fila legada por referencia → la
+             * membresía se extiende UNA vez aunque el webhook reintente.
+             *
+             * La búsqueda va acotada al ORIGEN, igual que el índice único que
+             * la respalda (`UNIQUE(reference) WHERE origin='gateway'`). Sin ese
+             * acote, las dos garantías se definían sobre claves distintas: un
+             * cobro de MOSTRADOR con una referencia de formato parecido habría
+             * devuelto su fila, `wasRecentlyCreated` habría sido false y la
+             * membresía no se habría extendido —el socio paga por la app y no
+             * pasa nada, en silencio, porque aquí ni siquiera hay excepción que
+             * registrar—.
+             */
             $payment = Payment::firstOrCreate(
-                ['reference' => $tx->reference],
+                ['reference' => $tx->reference, 'origin' => PaymentOrigin::GATEWAY->value],
                 array_merge([
                     'user_id' => $tx->user_id,
                     'member_id' => $tx->member_id,

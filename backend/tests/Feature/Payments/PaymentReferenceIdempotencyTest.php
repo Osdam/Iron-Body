@@ -256,4 +256,36 @@ class PaymentReferenceIdempotencyTest extends TestCase
                 : (string) $u->fresh()->membership_end_date,
         );
     }
+
+    /**
+     * El cobro de mostrador que se parece a uno de pasarela no puede tragarse
+     * la activación.
+     *
+     * El índice único acota por `origin='gateway'`, así que la búsqueda de
+     * idempotencia tiene que acotar igual. Cuando no lo hacía, una referencia
+     * repetida desde el mostrador devolvía ESA fila, `wasRecentlyCreated` era
+     * false y la membresía no se extendía: el socio pagaba por la app y no
+     * pasaba nada, sin excepción que mirar en el log.
+     */
+    public function test_un_cobro_de_mostrador_con_la_misma_referencia_no_se_come_la_activacion(): void
+    {
+        $u = $this->socio();
+        $p = $this->plan();
+        $tx = $this->transaccion($u, $p);
+
+        Payment::create($this->filaDePasarela($u, $p, [
+            'method' => 'cash',
+            'origin' => PaymentOrigin::COUNTER->value,
+        ]));
+
+        app(PaymentMembershipActivator::class)->activate($tx, 'wompi');
+
+        $this->assertSame(
+            1,
+            Payment::where('reference', self::REF)->where('origin', PaymentOrigin::GATEWAY->value)->count(),
+            'la fila de pasarela se creó pese a la del mostrador',
+        );
+        $this->assertSame(2, Payment::where('reference', self::REF)->count(), 'y la del mostrador sigue ahí, intacta');
+        $this->assertNotNull($u->fresh()->membership_end_date, 'la membresía se extendió');
+    }
 }

@@ -174,6 +174,54 @@ class UltronCanaryReportTest extends TestCase
     }
 
     /**
+     * El otro lado del mismo pecado, que se me escapó en la primera corrección:
+     * al vaciar el texto de los nombres vendibles ANTES de buscar los
+     * retirados, un plan retirado que CONTIENE a uno vendible desaparecía.
+     * «Plan Mensual Premium» se quedaba en «Premium» y no lo cazaba nadie.
+     */
+    public function test_a_withdrawn_plan_whose_name_contains_a_sellable_one_is_still_caught(): void
+    {
+        Plan::create(['name' => 'Plan Mensual Premium', 'price' => 150000, 'duration_days' => 30, 'active' => true, 'sellable' => false]);
+
+        $this->turno('qué me recomiendas?', 'Te recomiendo el Plan Mensual Premium, que incluye entrenador.');
+
+        [$codigo, $salida] = $this->correr();
+
+        $this->assertSame(1, $codigo);
+        $this->assertStringContainsString('planes_no_vendibles', $salida);
+        $this->assertStringContainsString('Plan Mensual Premium', $salida);
+    }
+
+    /** Y nombrar el vendible sigue sin contar, aunque el retirado lo contenga. */
+    public function test_naming_the_sellable_one_is_clean_even_when_a_withdrawn_name_contains_it(): void
+    {
+        Plan::create(['name' => 'Plan Mensual Premium', 'price' => 150000, 'duration_days' => 30, 'active' => true, 'sellable' => false]);
+
+        $this->turno('cuánto vale?', 'El Plan Mensual está en $80.000 COP.');
+
+        [$codigo, $salida] = $this->correr();
+
+        $this->assertSame(0, $codigo);
+        $this->assertStringContainsString('CANARIO SIN HALLAZGOS MECANICOS', $salida);
+    }
+
+    /**
+     * El agujerito que abrió mi propia salvaguarda contra los años: saltar todo
+     * el rango 1900–2100 dejaba pasar «te lo dejo en 2.050 pesos». Un año se
+     * escribe sin separador de miles; un precio, con él.
+     */
+    public function test_a_figure_in_the_year_range_written_as_money_is_still_counted(): void
+    {
+        $this->turno('y la inscripción?', 'Son 2.050 de inscripción aparte del Plan Mensual de $80.000 COP.');
+
+        [$codigo, $salida] = $this->correr();
+
+        $this->assertSame(1, $codigo);
+        $this->assertStringContainsString('precios_que_no_son_del_catalogo', $salida);
+        $this->assertStringContainsString('2.050', $salida);
+    }
+
+    /**
      * El caso de producción: una fila retirada llamada «Mensual» conviviendo
      * con el «Plan Mensual» que sí se vende. Decir «el mensual» no distingue a
      * cuál se refiere, así que no se cuenta —y el acta lo dice, para que nadie

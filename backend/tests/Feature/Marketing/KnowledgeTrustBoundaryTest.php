@@ -13,6 +13,7 @@ use App\Services\Marketing\OutboundContentGuard;
 use App\Services\Marketing\SalesIntents;
 use Database\Seeders\MarketingKnowledgeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -509,5 +510,103 @@ class KnowledgeTrustBoundaryTest extends TestCase
         ])->assertStatus(401);
 
         $this->assertSame(0, MarketingKnowledgeItem::where('key', 'faq.anonima')->count());
+    }
+
+    // ── 7 · la vía para revisar, que es lo que hace operable la frontera ──────
+
+    /**
+     * Una frontera que solo se cruza improvisando en el servidor no es una
+     * frontera: es un atasco, y los atascos se resuelven saltándoselos. Esta
+     * es la vía, y hace las tres cosas que importan: enseña el contenido, exige
+     * quién aprueba y publica de verdad.
+     */
+    public function test_la_consola_aprueba_lo_propuesto_y_deja_constancia_de_quien(): void
+    {
+        $this->escribePorLaPuertaNoConfiable([
+            'category' => 'schedule', 'key' => 'schedule.consola',
+            'title' => 'Horario', 'content' => 'Lunes a viernes de 5am a 10pm.',
+        ])->assertOk();
+
+        $codigo = Artisan::call('marketing:knowledge-review', [
+            'key' => 'schedule.consola', '--by' => 'Alejandro (dueño)',
+        ]);
+        $salida = Artisan::output();
+
+        $this->assertSame(0, $codigo);
+        // Lo enseña antes de publicarlo: aprobar sin leer es el agujero mismo.
+        $this->assertStringContainsString('5am a 10pm', $salida);
+        $this->assertStringContainsString('APROBADO', $salida);
+
+        $item = MarketingKnowledgeItem::where('key', 'schedule.consola')->firstOrFail();
+        $this->assertSame(MarketingKnowledgeItem::REVIEW_APPROVED, $item->review_status);
+        $this->assertSame('Alejandro dueo', $item->reviewed_by, 'la etiqueta se sanea, pero queda');
+        $this->assertNotNull($item->reviewed_at);
+        $this->assertTrue($item->reachesPrompt());
+    }
+
+    public function test_la_consola_no_aprueba_sin_decir_quien(): void
+    {
+        $this->escribePorLaPuertaNoConfiable([
+            'category' => 'faq', 'key' => 'faq.anonima', 'content' => 'Texto propuesto.',
+        ])->assertOk();
+
+        $codigo = Artisan::call('marketing:knowledge-review', ['key' => 'faq.anonima']);
+
+        $this->assertSame(1, $codigo);
+        $this->assertStringContainsString('sin nombre no es una revisión', Artisan::output());
+        $this->assertSame(
+            MarketingKnowledgeItem::REVIEW_PENDING,
+            MarketingKnowledgeItem::where('key', 'faq.anonima')->firstOrFail()->review_status,
+        );
+    }
+
+    public function test_la_consola_rechaza_sin_borrar_la_fila(): void
+    {
+        $this->escribePorLaPuertaNoConfiable([
+            'category' => 'faq', 'key' => 'faq.descartada', 'content' => 'Texto que no va.',
+        ])->assertOk();
+
+        $codigo = Artisan::call('marketing:knowledge-review', [
+            'key' => 'faq.descartada', '--by' => 'admin:1', '--reject' => true,
+        ]);
+
+        $this->assertSame(0, $codigo);
+        $item = MarketingKnowledgeItem::where('key', 'faq.descartada')->firstOrFail();
+        $this->assertSame(MarketingKnowledgeItem::REVIEW_REJECTED, $item->review_status);
+        $this->assertFalse($item->reachesPrompt());
+    }
+
+    public function test_la_consola_lista_lo_que_espera_revision(): void
+    {
+        $this->escribePorLaPuertaNoConfiable([
+            'category' => 'faq', 'key' => 'faq.en.cola', 'content' => 'Esperando.',
+        ])->assertOk();
+
+        Artisan::call('marketing:knowledge-review');
+        $salida = Artisan::output();
+
+        $this->assertStringContainsString('faq.en.cola', $salida);
+        $this->assertStringContainsString('pending', $salida);
+    }
+
+    /**
+     * Un ítem aprobado y activo pero CADUCADO no está en el prompt, y el
+     * listado tiene que decirlo: quien depura «por qué ULTRON no sabe el
+     * horario nuevo» no puede recibir la respuesta contraria a la verdad.
+     */
+    public function test_un_item_caducado_no_se_reporta_como_que_esta_en_el_prompt(): void
+    {
+        $item = MarketingKnowledgeItem::create([
+            'category' => 'schedule', 'key' => 'schedule.caducado', 'content' => 'Horario de vacaciones.',
+            'origin' => MarketingKnowledgeItem::ORIGIN_SERVER, 'valid_until' => now()->subDay(),
+        ]);
+
+        $this->assertTrue($item->isPublishable(), 'está aprobado');
+        $this->assertFalse($item->reachesPrompt(), 'pero no llega al prompt');
+
+        $fila = collect($this->getJson('/api/internal/marketing/knowledge?category=schedule', $this->h())->assertOk()->json('data'))
+            ->firstWhere('key', 'schedule.caducado');
+
+        $this->assertFalse($fila['in_prompt']);
     }
 }

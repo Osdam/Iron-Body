@@ -208,6 +208,25 @@ class MarketingKnowledgeItem extends Model
         return $this->review_status === self::REVIEW_APPROVED;
     }
 
+    /**
+     * ¿Está AHORA MISMO en el prompt?
+     *
+     * Aprobado no basta: {@see scopeActiveNow} pide además estar activo y
+     * dentro de su vigencia. Responder solo por la aprobación hacía que un
+     * horario caducado ayer se reportara como vigente, y quien depura «por qué
+     * ULTRON no sabe el horario nuevo» recibía la respuesta contraria a la
+     * verdad. La regla vive en un sitio y se contesta desde él.
+     */
+    public function reachesPrompt(): bool
+    {
+        $ahora = now();
+
+        return (bool) $this->is_active
+            && $this->isPublishable()
+            && ($this->valid_from === null || $this->valid_from->lessThanOrEqualTo($ahora))
+            && ($this->valid_until === null || $this->valid_until->greaterThanOrEqualTo($ahora));
+    }
+
     /** Alguien con autoridad da por bueno el texto. Deja constancia. */
     public function approve(string $by): self
     {

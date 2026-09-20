@@ -92,7 +92,9 @@ class InternalMarketingKnowledgeController extends Controller
                 // pendiente» es imposible desde fuera del servidor.
                 'origin' => $i->origin,
                 'review_status' => $i->review_status,
-                'in_prompt' => (bool) $i->is_active && $i->isPublishable(),
+                // Aprobado NO basta: cuenta también la vigencia, igual que el
+                // scope que alimenta el prompt.
+                'in_prompt' => $i->reachesPrompt(),
                 'submitted_by' => $i->submitted_by,
                 'submitted_at' => optional($i->submitted_at)->toIso8601String(),
                 'reviewed_by' => $i->reviewed_by,
