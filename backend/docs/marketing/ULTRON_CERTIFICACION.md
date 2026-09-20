@@ -143,6 +143,28 @@ no deja aprender nada.
 
 ## 5. Residuos conocidos, no bloqueantes
 
+### Deuda anotada antes del tráfico general
+
+Dos cosas que el canario físico dejó a la vista y que NO se arreglan durante la
+prueba, porque arreglarlas ahora sería abrir un refactor con el canario abierto:
+
+- **Semántica del consentimiento con leads duplicados.** El mismo teléfono tiene
+  dos filas de lead: la viva (con `meta_user_id` igual al wa_id, que es por donde
+  resuelve el webhook) y una histórica de `manual_phone_test` con
+  `consent_status = denied`. El opt-out vive en la fila que WhatsApp **no**
+  resuelve, así que no gobierna la conversación real. Para el canario da igual
+  —es el propietario probando su propio número—, pero antes del tráfico general
+  el consentimiento tiene que ser del TELÉFONO, no de la fila.
+- **`/ai/commit` exige el canario, pero no el interruptor maestro.** Desde
+  `33db7bc` un commit para una conversación distinta de la del canario se
+  rechaza con 403 y sin efectos. Lo que no comprueba es
+  `marketing.ultron.enabled`: el día que el canario se quite (id a `null` = sin
+  restricción), esa puerta vuelve a aceptar cualquier conversación mientras
+  alguien tenga el secreto. Añadirlo hoy obligaría a tocar decenas de pruebas
+  que ejercitan el commit con el interruptor apagado.
+
+
+
 - La ventana de «ya entrenó hoy» del detector proactivo compara hora de Neiva
   contra marcas en UTC, así que abre cinco horas antes de tiempo. Síntoma: un
   aviso perdido, nunca un fallo.
