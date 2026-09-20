@@ -101,11 +101,11 @@ final class ReferenceResolver
 
         // Precio ANTES que elegir plan: «cuánto vale el mensual» pregunta, no compra.
         if (($ev = $this->matchNotNegated(self::PRECIO, $t)) !== null) {
-            return $out(self::PRICE_OF_PENDING, $this->planIn($t, $memory, $sellablePlans) ?? $pendiente, null, $ev);
+            return $out(self::PRICE_OF_PENDING, $this->planIn($t, $memory, $sellablePlans, permisivo: true) ?? $pendiente, null, $ev);
         }
 
         if (($ev = $this->matchNotNegated(self::MANDAMELO, $t)) !== null) {
-            return $out(self::SEND_IT, $this->planIn($t, $memory, $sellablePlans) ?? $pendiente, null, $ev);
+            return $out(self::SEND_IT, $this->planIn($t, $memory, $sellablePlans, permisivo: true) ?? $pendiente, null, $ev);
         }
 
         if (($ev = $this->matchNotNegated(self::COMO_EMPIEZO, $t)) !== null) {
@@ -113,7 +113,7 @@ final class ReferenceResolver
         }
 
         if (($ev = $this->matchNotNegated(self::MAS_INFO, $t)) !== null) {
-            return $out(self::MORE_INFO, $this->planIn($t, $memory, $sellablePlans) ?? $pendiente, null, $ev);
+            return $out(self::MORE_INFO, $this->planIn($t, $memory, $sellablePlans, permisivo: true) ?? $pendiente, null, $ev);
         }
 
         // Un plan nombrado y NEGADO es un rechazo, no una elección.
@@ -158,18 +158,14 @@ final class ReferenceResolver
      * @param  array<int, array{id:int, name:string}>  $sellablePlans
      */
     /**
-     * ¿La frase habla de tiempo —ritmo, duración, un periodo pasado— en vez de
-     * elegir? Es lo que separa «6 dias a la semana» de «me quedo con la
-     * semana», y «cuanto dura el semestre» de «me interesa el semestre».
+     * El plan que la frase NOMBRA, si de verdad lo nombra.
+     *
+     * @param  bool  $permisivo  cuando la frase YA está clasificada como «precio
+     *                           de», «mándame» o «cuéntame más», el nombre puede
+     *                           ir en mitad de la oración: ahí «el élite» de
+     *                           «¿cuánto sale el élite?» es el plan, sin duda.
      */
-    private function hablaDeTiempo(string $t): bool
-    {
-        return preg_match('/\b(\d+|un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|todos?|todas?)\s+(dias?|veces|vez|semanas?|meses|mes)\b/u', $t) === 1
-            || preg_match('/\b(toda|todo|durante|cada)\s+(el|la|los|las)\b/u', $t) === 1
-            || preg_match('/\b(dura|duracion|cuanto tiempo|pasad[oa]|proxim[oa]|anterior|entrene|estuve)\b/u', $t) === 1;
-    }
-
-    private function planIn(string $t, ConversationMemory $memory, array $sellablePlans, bool $negated = false): ?int
+    private function planIn(string $t, ConversationMemory $memory, array $sellablePlans, bool $negated = false, bool $permisivo = false): ?int
     {
         $sellableIds = array_map('intval', array_column($sellablePlans, 'id'));
 
@@ -184,42 +180,46 @@ final class ReferenceResolver
             }
             $q = preg_quote($core, '/');
             /*
-             * ELEGIR ES UN ACTO, NO UNA APARICIÓN.
+             * ELEGIR ES UN ACTO, Y UN ARTÍCULO NO LO ES.
              *
              * Varios planes se llaman como un trozo de calendario —«Semana»,
              * «Mensual», «Trimestre», «Semestre», «Anualidad»—, así que la
-             * palabra sale a cada rato en frases que no compran nada: «6 dias a
-             * la semana», «6 dias EN la semana», «entreno toda la semana»,
-             * «cuanto dura el semestre», «en el semestre pasado».
+             * palabra aparece a todas horas sin comprar nada. Dos intentos
+             * fallaron por lo mismo: el primero prohibía preposiciones («a la»,
+             * «por la») y cayó con «en la»; el segundo prohibía contextos de
+             * tiempo y cayó con «todos los dias de la semana». Las dos veces la
+             * regla era una LISTA, y la lista siempre tiene un hueco más.
              *
-             * El primer intento tapó tres preposiciones y la revisión lo tumbó
-             * cambiando «a» por «en»: enumerar formas de superficie no cierra
-             * una clase. Lo que decide es el CONTEXTO de la frase.
+             * Lo que decide no es qué palabra va delante: es dónde está el
+             * artículo. En una elección el artículo ABRE la frase o la cláusula
+             * —«el mensual me sirve», «con el mensual voy»—; en una frase de
+             * tiempo el artículo es objeto de una preposición y nunca abre nada
+             * —«entreno EN la semana», «los 7 dias DE la semana»—. Eso no es
+             * una lista: es la estructura.
              *
-             * Cuatro formas valen siempre, porque son actos de elección:
-             *   1. el mensaje ES el nombre            → «semana»
-             *   2. el nombre va con la palabra plan   → «el plan semana»
-             *   3. el mensaje ES artículo + nombre    → «el mensual»
-             *   4. un verbo de elección lo precede    → «me quedo con la semana»
+             * Formas que cuentan:
+             *   1. el mensaje ES el nombre              → «semana»
+             *   2. el mensaje ES (sí +) artículo + nombre → «si el mensual»
+             *   3. el nombre va con la palabra «plan»   → «el plan semana»
+             *   4. un verbo de elección lo precede      → «me quedo con la semana»
+             *   5. el artículo abre frase o cláusula    → «el mensual me sirve»
              *
-             * Y una quinta —artículo + nombre AL FINAL de la frase— vale sólo
-             * si la frase no habla de tiempo: así siguen resolviéndose «si el
-             * Mensual» y «cuánto sale el élite», que son referencias de verdad,
-             * mientras «6 dias a la semana» y «cuanto dura el semestre» no
-             * eligen nada. Lo demás falla hacia NONE, que es la regla de esta
-             * clase: un referente inventado viaja al modelo como hecho.
+             * Y una sexta sólo en modo permisivo: el nombre en mitad de la
+             * oración, cuando la frase ya se clasificó como precio, envío o más
+             * información, porque entonces hablar del plan es el asunto.
              */
             $eleccion = '(quiero|prefiero|me quedo con|me quedo|dame|deme|voy con|me interesa|me gusta|elijo|escojo|llevo|compro)';
-            $cortesia = '(\s+(por favor|porfa|gracias|dale|pues|entonces|mejor))*[.!?]?';
+            $articulo = '(el|la|los|las|del|de la|con el|con la|si el|si la|el de)';
 
             $formas = [
                 '^'.$q.'$',
-                '^(el|la|los|las)\s+(plan\s+)?'.$q.'$',
+                '^(si|claro|dale|listo|ok|vale|bueno)?\s*(el|la|los|las)\s+(plan\s+)?'.$q.'$',
                 '\bplan\s+'.$q.'\b',
                 '\b'.$eleccion.'\s+(el|la|los|las)?\s*(plan\s+)?'.$q.'\b',
+                '(^|,\s*)'.$articulo.'\s+(plan\s+)?'.$q.'\b',
             ];
-            if (! $this->hablaDeTiempo($t)) {
-                $formas[] = '\b(el|la|del|de la|con el|con la|si el|si la|el de)\s+(plan\s+)?'.$q.$cortesia.'$';
+            if ($permisivo) {
+                $formas[] = '\b'.$articulo.'\s+(plan\s+)?'.$q.'\b';
             }
 
             $rx = '/('.implode(')|(', $formas).')/u';

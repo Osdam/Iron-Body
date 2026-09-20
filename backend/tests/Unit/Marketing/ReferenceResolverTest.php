@@ -290,6 +290,18 @@ class ReferenceResolverTest extends TestCase
             // preposiciones y pasó a exigir un acto de elección.
             ['6 dias a la semana'],
             ['6 dias en la semana'],
+            // Las que encontró la revisión cuando la regla todavía era una
+            // lista de contextos: sin numeral y sin «toda», seguía eligiendo.
+            ['entreno en la semana'],
+            ['vengo en la semana'],
+            ['estoy libre en la semana'],
+            ['disponible en la semana'],
+            ['solo puedo en la semana'],
+            ['me organizo en la semana'],
+            ['voy al gym en la semana'],
+            ['todos los dias de la semana'],
+            ['descanso el domingo de la semana'],
+            ['trabajo toda la semana'],
             ['6 veces a la semana'],
             ['3 veces en la semana'],
             ['entreno 5 dias por semana'],
@@ -364,5 +376,50 @@ class ReferenceResolverTest extends TestCase
             ['quiero el mensual', 20],
             ['el plan mensual', 20],
         ];
+    }
+
+    /**
+     * El otro lado de la misma regla, y el que nadie había fijado: una
+     * referencia a mitad de frase, sin verbo de elección, SÍ elige cuando el
+     * artículo abre la frase. Al cerrar la clase por segunda vez esto se perdió
+     * en silencio durante un commit; queda escrito para que nadie lo
+     * reintroduzca ni lo vuelva a quitar sin darse cuenta.
+     */
+    #[DataProvider('referenciasQueAbrenLaFrase')]
+    public function test_an_opening_article_still_chooses(string $texto, int $plan): void
+    {
+        $r = $this->r->resolve($texto, ConversationMemory::empty(), self::PLANES_DE_CALENDARIO);
+
+        $this->assertSame(R::CHOOSE_PLAN, $r['type'], $texto);
+        $this->assertSame($plan, $r['plan_id']);
+    }
+
+    public static function referenciasQueAbrenLaFrase(): array
+    {
+        return [
+            ['el mensual me sirve', 20],
+            ['la anualidad me parece bien', 27],
+            ['el trimestre esta bien', 26],
+            ['el semestre me conviene', 25],
+            ['con el mensual voy', 20],
+        ];
+    }
+
+    /**
+     * Y la frontera exacta entre las dos cosas, en una sola prueba: la MISMA
+     * palabra, el mismo plan, y lo único que cambia es si el artículo abre la
+     * frase o es objeto de una preposición.
+     */
+    public function test_the_line_is_whether_the_article_opens_the_clause(): void
+    {
+        $m = ConversationMemory::empty();
+
+        $elige = $this->r->resolve('la semana me sirve', $m, self::PLANES_DE_CALENDARIO);
+        $this->assertSame(R::CHOOSE_PLAN, $elige['type'], 'abre la frase: elige');
+        $this->assertSame(23, $elige['plan_id']);
+
+        $noElige = $this->r->resolve('entreno en la semana', $m, self::PLANES_DE_CALENDARIO);
+        $this->assertSame(R::NONE, $noElige['type'], 'objeto de preposición: no elige');
+        $this->assertNull($noElige['plan_id']);
     }
 }
