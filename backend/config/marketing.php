@@ -38,7 +38,23 @@ return [
         // el mismo secreto compartido que ya usa el puente de bienestar: dos
         // esquemas de firma distintos serían dos formas de equivocarse.
         'webhook_url' => env('MARKETING_ULTRON_WEBHOOK_URL'),
-        'timeout' => (int) env('MARKETING_ULTRON_TIMEOUT', 10),
+        /*
+         * El webhook de n8n responde al FINAL del pipeline —Strategist,
+         * Composer, Critic y el commit—, así que este timeout tiene que cubrir
+         * el turno entero, no la latencia de red.
+         *
+         * Estaba en 10 s y los turnos reales miden entre 7 y 13, así que uno
+         * normal se marcaba `failed` y se reintentaba: otra ejecución completa,
+         * cuatro llamadas más al modelo, y un commit que acaba en 409
+         * `already_committed`. Se vio en el primer turno físico con visto y
+         * «escribiendo…»: respuesta entregada a los 10 s, job fallido a los
+         * 10,1 y reintento a los 38.
+         *
+         * 45 s cubre el peor camino medido (el del segundo Critic) con margen.
+         * Un n8n de verdad caído tarda ahora 45 s en declararse fallido, que es
+         * irrelevante al lado de los diez minutos de gracia del vigía.
+         */
+        'timeout' => (int) env('MARKETING_ULTRON_TIMEOUT', 45),
         /*
          * Durante el canario, ULTRON atiende UNA conversación y nada más.
          *

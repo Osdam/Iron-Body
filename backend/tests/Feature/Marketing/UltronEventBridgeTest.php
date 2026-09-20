@@ -384,4 +384,25 @@ class UltronEventBridgeTest extends TestCase
 
         $this->assertSame(1, MarketingAutomationEvent::count());
     }
+
+    /**
+     * EL TIMEOUT TIENE QUE CUBRIR EL TURNO, NO LA RED.
+     *
+     * El webhook de n8n contesta al FINAL del pipeline —Strategist, Composer,
+     * Critic y el commit—, así que esperar diez segundos era declarar fallido
+     * un turno normal: en el primer turno físico con visto y «escribiendo…» la
+     * respuesta salió a los 10 s, el job se marcó fallido a los 10,1 y
+     * reintentó a los 38, ejecutando el pipeline entero otra vez. Cuatro
+     * llamadas más al modelo para acabar en 409 `already_committed`.
+     */
+    public function test_the_webhook_timeout_covers_a_whole_turn(): void
+    {
+        $timeout = (int) config('marketing.ultron.timeout');
+
+        $this->assertGreaterThanOrEqual(
+            30,
+            $timeout,
+            'un turno real mide entre 7 y 13 s: por debajo de 30 se reintenta lo que ya funcionó',
+        );
+    }
 }
