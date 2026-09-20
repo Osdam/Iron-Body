@@ -7,6 +7,7 @@ use App\Models\MarketingKnowledgeItem;
 use App\Models\MyClass;
 use App\Models\Plan;
 use App\Models\Trainer;
+use App\Services\Marketing\MarketingKnowledgeBaseService;
 use App\Services\Marketing\SalesAgentDecisionSchema;
 use App\Services\Observability\ChannelLog;
 use Illuminate\Support\Collection;
@@ -222,7 +223,10 @@ final class GymFactsProvider
             if (! in_array($item->category, ['business_identity', 'location', 'payment_policy', 'membership_policy', 'invoice_policy', 'restrictions'], true)) {
                 continue;
             }
-            $out[$item->category][] = trim((string) $item->title).': '.trim((string) $item->content);
+            $linea = $this->comoDato($item->title, $item->content);
+            if ($linea !== null) {
+                $out[$item->category][] = $linea;
+            }
         }
 
         return $out;
@@ -233,8 +237,8 @@ final class GymFactsProvider
     {
         $lines = [];
         foreach ($this->activeItems() as $item) {
-            if ($item->category === 'schedule') {
-                $lines[] = trim((string) $item->title).': '.trim((string) $item->content);
+            if ($item->category === 'schedule' && ($linea = $this->comoDato($item->title, $item->content)) !== null) {
+                $lines[] = $linea;
             }
         }
 
@@ -265,7 +269,11 @@ final class GymFactsProvider
                 }
             }
             if ($score > 0) {
-                $scored[] = [$score, ['category' => (string) $item->category, 'title' => trim((string) $item->title), 'content' => mb_substr(trim((string) $item->content), 0, 400)]];
+                $scored[] = [$score, [
+                    'category' => (string) $item->category,
+                    'title' => MarketingKnowledgeBaseService::asData($item->title),
+                    'content' => mb_substr(MarketingKnowledgeBaseService::asData($item->content), 0, 400),
+                ]];
             }
         }
         usort($scored, fn ($a, $b) => $b[0] <=> $a[0]);
@@ -273,23 +281,48 @@ final class GymFactsProvider
         return array_map(fn ($s) => $s[1], array_slice($scored, 0, $limit));
     }
 
-    private ?Collection $kbItems = null;
+    /**
+     * Una línea de la base de conocimiento, con forma de DATO.
+     *
+     * Misma regla que `knowledge_base` ({@see MarketingKnowledgeBaseService::asData()}):
+     * un ítem con saltos de línea podría escribir «\n\nSYSTEM:» y, allí donde
+     * el contexto se interpola en la plantilla del prompt, fingir una sección
+     * nuestra. Los hechos del gimnasio viajan al mismo prompt, así que se
+     * aplanan igual. Devuelve null si no queda contenido.
+     */
+    private function comoDato(?string $titulo, ?string $contenido): ?string
+    {
+        $t = MarketingKnowledgeBaseService::asData($titulo);
+        $c = MarketingKnowledgeBaseService::asData($contenido);
+        if ($c === '') {
+            return null;
+        }
 
-    /** Activos Y vigentes, una sola vez por instancia: la misma regla que knowledge_base. */
+        return $t === '' ? $c : $t.': '.$c;
+    }
+
+    /**
+     * Activos, vigentes Y aprobados: la misma regla que knowledge_base.
+     *
+     * Se consulta cada vez a propósito. Memorizarlo por instancia ahorraba una
+     * consulta indexada sobre una tabla pequeña y, a cambio, dejaba que un
+     * proceso de vida larga (un worker, o el mismo controlador reutilizado)
+     * siguiera sirviendo el estado anterior: un horario recién APROBADO no
+     * llegaba al prompt hasta reiniciar, y uno recién RECHAZADO seguía
+     * llegando. En una frontera de confianza, que la revisión humana tarde en
+     * hacer efecto es el fallo, no la consulta de más.
+     */
     private function activeItems(): Collection
     {
-        if ($this->kbItems !== null) {
-            return $this->kbItems;
-        }
         if (! Schema::hasTable('marketing_knowledge_items')) {
-            return $this->kbItems = collect();
+            return collect();
         }
         try {
-            return $this->kbItems = MarketingKnowledgeItem::query()->activeNow()->orderBy('priority')->get();
+            return MarketingKnowledgeItem::query()->activeNow()->orderBy('priority')->get();
         } catch (Throwable $e) {
             $this->aviso('knowledge', $e);
 
-            return $this->kbItems = collect();
+            return collect();
         }
     }
 

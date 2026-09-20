@@ -8,9 +8,17 @@ use Illuminate\Support\Collection;
 
 /**
  * Acceso a la base de conocimiento comercial (Fase 3.5). Entrega SOLO contenido
- * activo y vigente, ordenado por prioridad, y los planes activos REALES (fuente
- * de precio). Pensado para alimentar el prompt de OpenAI sin inventar datos.
- * No devuelve secretos: es información comercial pública.
+ * activo, vigente y APROBADO, ordenado por prioridad, y los planes activos
+ * REALES (fuente de precio). Pensado para alimentar el prompt de OpenAI sin
+ * inventar datos. No devuelve secretos: es información comercial pública.
+ *
+ * RC-4 — este servicio es el lado de LECTURA de la frontera de confianza. Quién
+ * puede publicar lo decide {@see MarketingKnowledgeItem}; aquí sólo se lee lo ya
+ * aprobado (`scopeActiveNow`) y se entrega con forma de DATO, nunca de
+ * instrucción: cada ítem viaja en UNA línea, sin saltos ni caracteres de
+ * control, para que no pueda fabricar aguas abajo una sección de prompt que
+ * parezca nuestra. La defensa de verdad es la aprobación; esto es lo que impide
+ * que un texto aprobado a la ligera se disfrace de encabezado del sistema.
  */
 class MarketingKnowledgeBaseService
 {
@@ -45,6 +53,10 @@ class MarketingKnowledgeBaseService
      * Conocimiento compacto agrupado por categoría para el prompt:
      * category => [ "Título: contenido", ... ] (solo categorías con datos).
      *
+     * La forma NO cambia: `context.knowledge_base` es contrato con n8n y con el
+     * cerebro local. Lo que cambia es que cada línea es UNA línea (ver
+     * {@see asData()}) y que sólo entra lo aprobado.
+     *
      * @return array<string, array<int, string>>
      */
     public function groupedForPrompt(): array
@@ -54,11 +66,36 @@ class MarketingKnowledgeBaseService
             if (! in_array($item->category, self::PROMPT_CATEGORIES, true)) {
                 continue;
             }
-            $line = $item->title ? trim($item->title).': '.trim($item->content) : trim($item->content);
-            $grouped[$item->category][] = $line;
+            $title = self::asData($item->title);
+            $content = self::asData($item->content);
+            if ($content === '') {
+                continue;
+            }
+            $grouped[$item->category][] = $title === '' ? $content : $title.': '.$content;
         }
 
         return $grouped;
+    }
+
+    /**
+     * Texto de la base de conocimiento convertido en dato plano.
+     *
+     * Un ítem con saltos de línea puede escribir «\n\nSYSTEM:» y, allí donde el
+     * contexto se interpola en una plantilla de prompt (el workflow de n8n lo
+     * hace), pasar por una sección nuestra. Aplanarlo no le quita significado:
+     * le quita la capacidad de fingir estructura. No se censura nada por regex
+     * —eso sería adivinar—, sólo se normaliza el espacio y se sacan los
+     * caracteres de control.
+     */
+    public static function asData(?string $text): string
+    {
+        if ($text === null) {
+            return '';
+        }
+        $clean = preg_replace('/[\x00-\x1F\x7F]+/', ' ', $text) ?? $text;
+        $clean = preg_replace('/\s+/u', ' ', $clean) ?? $clean;
+
+        return trim($clean);
     }
 
     /** Planes activos REALES (id/name/price/duration/benefits). Fuente de precio. */
@@ -139,6 +176,17 @@ class MarketingKnowledgeBaseService
             'missing_recommended' => $missing,
             'active_plans_count' => $this->activePlansCount(),
             'prompt_receives_knowledge' => $this->activeItemsCount() > 0,
+            // Propuesto por una vía sin autoridad y esperando a que alguien lo
+            // mire. Mientras esté aquí NO está en el prompt.
+            'pending_review_items' => MarketingKnowledgeItem::query()->pendingReview()->count(),
+            /*
+             * La deuda heredada: filas que hoy se presentan como hechos del
+             * gimnasio y entraron por el secreto compartido antes de que esta
+             * frontera existiera, sin que nadie las revisara nunca. Si esto no
+             * es 0, hay que mirarlas una por una: `GET knowledge?review_status=
+             * approved&origin=internal_api`.
+             */
+            'approved_from_untrusted_origin' => MarketingKnowledgeItem::query()->approvedFromUntrustedOrigin()->count(),
             'version' => $this->version(),
         ];
     }
