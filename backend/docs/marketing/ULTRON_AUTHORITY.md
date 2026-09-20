@@ -21,7 +21,9 @@ El sistema entero descansa en una frase: **Laravel es autoridad; n8n y el modelo
 proponen.** Esa frase está escrita en comentarios por todo el repositorio, y **ya se
 demostró una vez que un comentario afirmaba una garantía que el código no daba**: el
 comentario de `routes/marketing.php` decía que a n8n no se le daba autoridad sobre los
-enlaces de pago, y el secreto interno sí se la da (§6.1).
+enlaces de pago, y el secreto interno sí se la daba. Esa asimetría se cerró en RC-2
+(§6.1), y se cerró porque estaba ESCRITA: un test la sostenía en rojo hasta que alguien
+decidiera.
 
 Por eso este documento **no repite la frase: la demuestra con el código, y dice con la
 misma claridad dónde no se sostiene**. La sección más importante es la §6, LÍMITES.
@@ -360,7 +362,7 @@ hay puesto hoy. El estado verificado del servidor vive en
 | Clave de config | Variable de entorno | Default **en el código** | Qué gobierna |
 |---|---|---|---|
 | `marketing.ultron.enabled` | `MARKETING_ULTRON_ENABLED` | `false` | El interruptor. Apagado, `UltronEventEmitter` cierra la puerta 1 y no se crea ningún evento |
-| `marketing.ultron.payment_links_enabled` | `MARKETING_ULTRON_PAYMENT_LINKS_ENABLED` | `false` | El **permiso del negocio** para que una máquina ofrezca un enlace sola. Es una pregunta distinta de la que responde Wompi: capacidad técnica **y** permiso, o no hay link |
+| `marketing.ultron.payment_links_enabled` | `MARKETING_ULTRON_PAYMENT_LINKS_ENABLED` | `false` | El **permiso del negocio** para acuñar un cobro. Es una pregunta distinta de la que responde Wompi: capacidad técnica **y** permiso, o no hay link. Desde RC-2 gobierna **todos** los caminos —también el panel humano y los endpoints internos—, no solo la herramienta de ULTRON (§6.1) |
 | `marketing.ultron.canary_conversation_id` | `MARKETING_ULTRON_CANARY_CONVERSATION_ID` | `null` (sin restricción) | Con un id, ULTRON atiende **esa** conversación y ninguna otra (`not_canary_conversation`). Palanca de transición, no parte del diseño |
 | `marketing.ultron.webhook_url` | `MARKETING_ULTRON_WEBHOOK_URL` | `null` | Adónde se despacha el evento. Se firma con `automation.webhook_secret` |
 | `marketing.ultron.timeout` | `MARKETING_ULTRON_TIMEOUT` | `10` (s) | Timeout hacia n8n |
@@ -387,31 +389,43 @@ hay puesto hoy. El estado verificado del servidor vive en
 Esta es la sección que hace útil al resto. Todo lo de aquí está **verificado**; no son
 sospechas.
 
-### 6.1 El secreto interno abre más puertas que las dos de ULTRON
+### 6.1 El secreto interno abre más puertas que las dos de ULTRON (y ya no acuña dinero)
 
 El diseño se cuenta así: «n8n solo tiene dos puertas, `ai/decide` y `ai/commit`». **Eso
 es cierto del WORKFLOW; no lo es del SECRETO.** `automation.internal_secret` abre **todo**
-el grupo `internal/marketing/*`, donde viven desde la Fase 1.5 dos endpoints que generan
-y envían enlaces de pago reales:
+el grupo `internal/marketing/*`, y ahí viven desde la Fase 1.5 dos endpoints de enlaces
+de pago:
 
 - `POST /api/internal/marketing/payment-links`
 - `POST /api/internal/marketing/payment-links/send`
 
-**Ninguno de los dos consulta `marketing.ultron.payment_links_enabled`**: solo los
-guardrails de pago. Es decir: **apagar esa bandera detiene la herramienta de ULTRON, no
-esta superficie.** Quien tenga el secreto puede acuñar un cobro real con la bandera
-apagada.
+**Hasta RC-2 ninguno de los dos consultaba `marketing.ultron.payment_links_enabled`**:
+apagar la bandera detenía la herramienta de ULTRON, no esta superficie, y quien tuviera
+el secreto acuñaba un cobro real con la bandera apagada. En producción eso no era
+teórico: Wompi está productivo con llaves reales.
 
-Está fijado —no reescrito aquí— por
+**Cerrado.** El permiso se comprueba ahora en el EMBUDO —
+`WompiPaymentLinkService::generateForLead()`—, por el que pasan los cinco caminos que
+pueden acuñar: los dos endpoints internos, el panel del CRM, la herramienta de ULTRON,
+el orquestador legado y la herramienta del subsistema Commercial. La regla vive en
+`SalesPaymentGuardrailService::assertCanGeneratePaymentLink()` y es absoluta: con la
+bandera apagada **no hay camino** que cree, reutilice o refresque un enlace, tampoco una
+sesión real de administrador. Un rechazo no deja fila de cobro.
+
+Lo que el secreto SIGUE abriendo, y hay que seguir teniendo escrito: el resto de
+`internal/marketing/*` con una sola llave compartida, incluida la base de conocimiento
+—acotada en RC-4 a PROPONER borradores que no llegan al prompt sin aprobación— y la
+puerta por la que entra texto de máquina hacia el cliente (§6.3).
+
+Fijado por
+[`tests/Feature/Marketing/PaymentLinkHardGateTest.php`](../../tests/Feature/Marketing/PaymentLinkHardGateTest.php)
+—los cinco caminos, el embudo, el enlace ya acuñado y el reverso con la bandera
+encendida— y por
 [`tests/Feature/Marketing/InternalSecretAuthoritySurfaceTest.php`](../../tests/Feature/Marketing/InternalSecretAuthoritySurfaceTest.php),
-en particular
-`test_the_internal_secret_still_mints_a_real_payment_link_with_the_flag_off()` y
-`test_the_internal_secret_also_sends_it_with_the_flag_off()`. **Si alguien decide cerrar
-la asimetría, esos tests se ponen rojos y obligan a actualizar los tres sitios: el
-código, el comentario de `routes/marketing.php` y esta matriz.**
+donde los dos casos que documentaban el agujero documentan hoy su cierre.
 
-Decidir si se cierra **es del dueño del producto, no de una prueba ni de este
-documento**.
+**Encender la bandera devuelve el cobro por todos esos caminos**: es una línea del
+entorno, y esa decisión sigue siendo del dueño del producto.
 
 ### 6.2 El cerebro legado sí ve precios
 
@@ -539,4 +553,8 @@ de reescribirse:
 | Los tres vocabularios de herramientas encajan | `Unit\Marketing\UltronToolVocabularyTest` |
 | El RECHAZO de un enum desconocido del Critic | `UltronCriticContractTest` |
 | Qué abre el secreto interno | `InternalSecretAuthoritySurfaceTest` |
+| Que **ningún** camino acuña un cobro con la bandera apagada | `PaymentLinkHardGateTest` |
+| Que lo escrito en la base de conocimiento no publica solo | `KnowledgeTrustBoundaryTest` |
+| Que un traspaso viejo no autoriza todos los turnos futuros | `LeadNeedsHumanLifecycleTest` |
+| Que la referencia de un cobro de pasarela es única en la base | `Payments\PaymentReferenceIdempotencyTest` |
 | El precio inventado no llega a nadie | `UltronCommitTest`, `Torture\MoneyAuthorityTortureTest` |
