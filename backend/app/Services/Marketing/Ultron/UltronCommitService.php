@@ -277,6 +277,23 @@ class UltronCommitService
             );
         }
 
+        /*
+         * ── 7.bis) RENDICIÓN: este turno ya fue rechazado una vez ─────────────
+         *
+         * Va aquí, y no más abajo, por la misma razón por la que existe: lo que
+         * viene a continuación son precisamente los guards que tumbaron el
+         * intento anterior. Pasar otra vez por ellos con el mismo borrador sólo
+         * sirve para repetir el silencio.
+         *
+         * Va DESPUÉS del token, del relevo y del interruptor a propósito: una
+         * rendición no es un salvoconducto. Si la conversación ya no es
+         * elegible, o alguien escribió después, o el mundo cambió, esto se
+         * bloquea exactamente igual que cualquier otro commit.
+         */
+        if ($rendicion = $this->recoveryReason($payload)) {
+            return $this->handleRecovery($conversation, $message, $payload, $currentPhase, $rendicion);
+        }
+
         // ── Camino del critic fallido ─────────────────────────────────────────
         if (CriticContract::isFail($critic)) {
             return $this->handleCriticFailure($conversation, $message, $payload, $currentPhase);
@@ -709,16 +726,12 @@ class UltronCommitService
         ];
     }
 
-    // ── Critic fallido ────────────────────────────────────────────────────────
+    // ── Rendiciones: cuando el borrador del modelo no puede salir ─────────────
 
     /**
      * El borrador que el critic rechazó NO se envía. Ni se valida, ni se
-     * enriquece: se guarda como evidencia y muere ahí.
-     *
-     * Lo que sale en su lugar lo decide una regla, no un modelo: si existe un
-     * texto curado para la intención validada, se usa; si no existe, no se
-     * responde y se marca para el equipo. La existencia del texto curado ES el
-     * discriminante, y ya estaba escrita.
+     * enriquece: se guarda como evidencia y muere ahí. Lo que sale en su lugar
+     * lo decide {@see safeFallback()}.
      *
      * @return array<string,mixed>
      */
@@ -727,6 +740,82 @@ class UltronCommitService
         MarketingMessage $message,
         array $payload,
         string $currentPhase,
+    ): array {
+        return $this->safeFallback($conversation, $message, $payload, $currentPhase, [
+            'flag' => 'critic_failed',
+            'origin' => 'ultron_curated_fallback',
+            'log' => 'ultron.commit.critic_failed',
+            'metadata' => [
+                // Un fail solo llega aquí tras el segundo Critic: si no dice el intento
+                // (ausente o null, que es como n8n manda lo que no aplica), fue el 2.
+                'critic' => CriticContract::forMetadata(array_replace(['attempt' => 2], array_filter((array) ($payload['critic'] ?? []), fn ($v) => $v !== null))),
+            ],
+        ]);
+    }
+
+    /**
+     * RENDICIÓN. El propio CRM rechazó el turno anterior y n8n vuelve a llamar
+     * pidiendo lo único que aquí no se puede rechazar: el texto de Laravel.
+     *
+     * Existe por un fallo medido en el canario físico. Un borrador cayó en un
+     * guard, `/ai/commit` devolvió 422 ANTES de escribir una sola fila, el nodo
+     * HTTP de n8n no considera eso un error y la ejecución terminó en verde.
+     * Resultado: la persona preguntó, nadie contestó, y en las tablas no había
+     * ni rastro de que hubiera habido un turno. Un rechazo del CRM es una razón
+     * para cambiar de texto; nunca una razón para dejar a alguien sin respuesta.
+     *
+     * Lo que NO hace, y es la mitad del diseño:
+     *  - No envía el borrador rechazado. Ni lo revalida: se guarda de evidencia.
+     *  - No se fía de que n8n diga la verdad sobre el motivo. `recovery.reason`
+     *    es una ETIQUETA para la auditoría; no abre ninguna puerta ni se lee
+     *    para decidir nada. Todo lo de arriba —interruptor, canario,
+     *    elegibilidad, relevo, token— ya se comprobó y sigue mandando.
+     *  - No inventa un veredicto del Critic que nadie emitió: la alternativa
+     *    era que n8n mandara `critic.verdict='fail'` fabricado, y eso ensucia
+     *    la única métrica que mide si el Critic sirve.
+     *
+     * @param  array{reason:string,attempt:int}  $rendicion
+     * @return array<string,mixed>
+     */
+    private function handleRecovery(
+        MarketingConversation $conversation,
+        MarketingMessage $message,
+        array $payload,
+        string $currentPhase,
+        array $rendicion,
+    ): array {
+        ChannelLog::warning('ultron.commit.recovery', [
+            'conversation_id' => (int) $conversation->id,
+            'message_id' => (int) $message->id,
+            'reason' => $rendicion['reason'],
+            'attempt' => $rendicion['attempt'],
+        ]);
+
+        return $this->safeFallback($conversation, $message, $payload, $currentPhase, [
+            'flag' => 'commit_rejected',
+            'origin' => 'ultron_recovery_fallback',
+            'log' => 'ultron.commit.recovered',
+            'metadata' => ['recovery' => $rendicion],
+        ]);
+    }
+
+    /**
+     * La salida segura, compartida por las dos rendiciones.
+     *
+     * Lo que sale en lugar del borrador lo decide una regla, no un modelo: si
+     * existe un texto curado para la intención validada, se usa; si no existe,
+     * no se responde y se marca para el equipo. La existencia del texto curado
+     * ES el discriminante, y ya estaba escrita.
+     *
+     * @param  array{flag:string,origin:string,log:string,metadata:array<string,mixed>}  $causa
+     * @return array<string,mixed>
+     */
+    private function safeFallback(
+        MarketingConversation $conversation,
+        MarketingMessage $message,
+        array $payload,
+        string $currentPhase,
+        array $causa,
     ): array {
         $proposal = (array) ($payload['proposal'] ?? []);
         $lead = $conversation->lead;
@@ -764,7 +853,7 @@ class UltronCommitService
         }
 
         $modo = $curado !== null && trim($curado) !== '' ? 'SAFE_CURATED_REPLY' : 'NO_REPLY_AND_HANDOFF';
-        $reason = $modo === 'SAFE_CURATED_REPLY' ? 'critic_failed' : 'critic_failed_no_safe_reply';
+        $reason = $modo === 'SAFE_CURATED_REPLY' ? $causa['flag'] : $causa['flag'].'_no_safe_reply';
 
         $action = $this->persist(
             $conversation,
@@ -774,7 +863,7 @@ class UltronCommitService
                 'intent' => $intent,
                 'confidence' => (float) ($proposal['confidence'] ?? 0.0),
                 'recommended_action' => SalesIntents::ACTION_REPLY,
-                'risk_flags' => ['critic_failed'],
+                'risk_flags' => [$causa['flag']],
                 'tools_requested' => [],
                 'needs_staff_review' => true,
                 'staff_review_reason' => $reason,
@@ -783,14 +872,11 @@ class UltronCommitService
             // que la conversación no ha progresado.
             $currentPhase,
             null,
-            [
-                // Un fail solo llega aquí tras el segundo Critic: si no dice el intento
-                // (ausente o null, que es como n8n manda lo que no aplica), fue el 2.
-                'critic' => CriticContract::forMetadata(array_replace(['attempt' => 2], array_filter((array) ($payload['critic'] ?? []), fn ($v) => $v !== null))),
+            array_merge([
                 'fallback_mode' => $modo,
                 // Evidencia de lo que se descartó, para poder revisarlo. No sale.
                 'discarded_draft' => mb_substr((string) ($proposal['reply_draft'] ?? ''), 0, 500),
-            ],
+            ], $causa['metadata']),
         );
 
         $conversation->forceFill([
@@ -808,7 +894,7 @@ class UltronCommitService
             $action->forceFill(['status' => 'skipped'])->save();
             $this->memoryService->recordSilentTurn($conversation->fresh(), $message, $resolution);
 
-            ChannelLog::info('ultron.commit.critic_failed', [
+            ChannelLog::info($causa['log'], [
                 'ai_action_id' => $action->id, 'mode' => $modo, 'conversation_id' => $conversation->id,
             ]);
 
@@ -828,7 +914,7 @@ class UltronCommitService
             $lead->fresh(),
             $conversation->channel,
             $curado,
-            ['kind' => 'reply', 'origin' => 'ultron_curated_fallback', 'ai_action_id' => $action->id],
+            ['kind' => 'reply', 'origin' => $causa['origin'], 'ai_action_id' => $action->id],
             MarketingMessage::SENDER_AI,
             conversation: $conversation,
         );
@@ -842,7 +928,7 @@ class UltronCommitService
             );
         }
 
-        ChannelLog::info('ultron.commit.critic_failed', [
+        ChannelLog::info($causa['log'], [
             'ai_action_id' => $action->id, 'mode' => $modo,
             'conversation_id' => $conversation->id, 'outcome' => $outcome,
         ]);
@@ -860,6 +946,31 @@ class UltronCommitService
     }
 
     // ── Piezas ────────────────────────────────────────────────────────────────
+
+    /**
+     * ¿Este commit viene a rendirse? Devuelve el motivo etiquetado, o null.
+     *
+     * Deliberadamente tonto: no valida el motivo contra ninguna lista ni lo usa
+     * para decidir nada. Es una etiqueta de auditoría —«esto salió así porque
+     * el intento anterior murió en tal guard»— y la forma (código corto, sin
+     * prosa ni PII) ya la impone la validación del controlador.
+     *
+     * @return array{reason:string,attempt:int}|null
+     */
+    private function recoveryReason(array $payload): ?array
+    {
+        $rendicion = (array) ($payload['recovery'] ?? []);
+        $motivo = trim((string) ($rendicion['reason'] ?? ''));
+
+        if ($motivo === '') {
+            return null;
+        }
+
+        return [
+            'reason' => $motivo,
+            'attempt' => max(1, (int) ($rendicion['attempt'] ?? 2)),
+        ];
+    }
 
     private function findCommitted(string $key): ?MarketingAiAction
     {

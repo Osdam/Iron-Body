@@ -189,6 +189,21 @@ class UltronController extends Controller
             }],
             'critic.issues.*' => ['string', Rule::in(CriticContract::DIMENSIONS)],
             'critic.hard_fail' => ['nullable', 'string', Rule::in(CriticContract::HARD_FAILS)],
+
+            /*
+             * RENDICIÓN. El workflow vuelve a llamar sobre el MISMO turno
+             * después de que este endpoint rechazara el intento anterior, y
+             * pide la salida segura de Laravel en vez de otro borrador.
+             *
+             * El bloque es pobre a propósito: un código y un número. No trae
+             * texto, ni el borrador rechazado, ni el mensaje del cliente, y no
+             * autoriza nada —todas las barreras se vuelven a comprobar—. Es una
+             * ETIQUETA de auditoría: sirve para saber por qué salió el texto
+             * curado, no para conseguir que salga.
+             */
+            'recovery' => ['nullable', 'array'],
+            'recovery.reason' => ['required_with:recovery', 'string', 'max:64', 'regex:/^[A-Za-z0-9_.:-]+$/'],
+            'recovery.attempt' => ['nullable', 'integer', 'min:1', 'max:3'],
         ]);
 
         /*
@@ -322,7 +337,7 @@ class UltronController extends Controller
     {
         $extra = array_keys(array_diff_key($enviado, $validado));
 
-        foreach (['proposal', 'critic'] as $bloque) {
+        foreach (['proposal', 'critic', 'recovery'] as $bloque) {
             if (! is_array($enviado[$bloque] ?? null)) {
                 continue;
             }

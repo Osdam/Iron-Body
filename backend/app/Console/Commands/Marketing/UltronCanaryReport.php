@@ -303,6 +303,14 @@ class UltronCanaryReport extends Command
                 'herramientas_pedidas' => $meta['tools_requested'] ?? [],
                 'herramientas_ejecutadas' => $meta['tools_executed'] ?? [],
                 'critic' => $meta['critic'] ?? null,
+                /*
+                 * Si este turno se RINDIÓ, el texto que leyó la persona lo
+                 * escribió Laravel, no el modelo. Sin esta línea el acta
+                 * atribuiría al modelo una respuesta que no es suya, que es
+                 * justo la clase de mentira que el acta existe para evitar.
+                 */
+                'rendicion' => $meta['recovery'] ?? null,
+                'modo_respaldo' => $meta['fallback_mode'] ?? null,
                 'riesgos' => $meta['risk_flags'] ?? [],
                 'novedad' => $meta['novelty_max_similarity'] ?? null,
                 'revision_humana' => $meta['needs_staff_review'] ?? false,
