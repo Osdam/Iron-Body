@@ -109,6 +109,25 @@ class UltronCanaryReport extends Command
      *
      * @return list<int>
      */
+    /** Milisegundos entre un instante y una marca ISO, o null si falta alguna. */
+    private function msEntre(?Carbon $desde, mixed $hastaIso): ?int
+    {
+        if ($desde === null || ! is_string($hastaIso) || $hastaIso === '') {
+            return null;
+        }
+
+        try {
+            return (int) round($desde->diffInMilliseconds(Carbon::parse($hastaIso)));
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    private function siNo(bool $v): string
+    {
+        return $v ? 'sí' : 'NO';
+    }
+
     private function cifrasDelTexto(string $texto): array
     {
         preg_match_all('/(\d{1,3}(?:[.,\s]\d{3})+)|(\d{4,})/u', $texto, $m, PREG_SET_ORDER);
@@ -325,6 +344,20 @@ class UltronCanaryReport extends Command
                 'latencia_s' => $primera !== null && $entrante->created_at !== null && $primera->created_at !== null
                     ? $entrante->created_at->diffInSeconds($primera->created_at)
                     : null,
+                /*
+                 * Lo que la persona VIO mientras esperaba, y cuánto tardó en
+                 * verlo. El visto y el «escribiendo…» no son respuestas, pero
+                 * si tardan más que la respuesta no sirven de nada, así que se
+                 * miden con la misma vara.
+                 */
+                'presencia' => data_get($entrante->metadata, 'ultron_presence'),
+                'time_to_typing_ms' => $this->msEntre(
+                    $entrante->created_at,
+                    data_get($entrante->metadata, 'ultron_presence.typing_started_at'),
+                ),
+                'time_to_response_ms' => $primera !== null && $entrante->created_at !== null && $primera->created_at !== null
+                    ? (int) round($entrante->created_at->diffInMilliseconds($primera->created_at))
+                    : null,
             ];
 
             if (count($turnos) >= $max) {
@@ -521,6 +554,14 @@ class UltronCanaryReport extends Command
             $this->line('  tools    : pedidas='.json_encode($t['herramientas_pedidas']).' ejecutadas='.json_encode($t['herramientas_ejecutadas']));
             $this->line('  critic   : '.($t['critic'] === null ? '-' : json_encode($t['critic'], JSON_UNESCAPED_UNICODE)));
             $this->line('  commit   : estado='.($t['estado'] ?? '-').' outcome='.($t['outcome'] ?? '-').' bloqueo='.($t['blocked_reason'] ?? '-').' riesgos='.json_encode($t['riesgos']));
+            $p = $t['presencia'] ?? null;
+            $this->line('  presencia: '.($p === null
+                ? 'sin señal (entrante anterior a la UX, o sin wamid)'
+                : 'leido='.$this->siNo((bool) ($p['read_success'] ?? false))
+                    .' escribiendo='.$this->siNo((bool) ($p['typing_success'] ?? false))
+                    .' en '.($t['time_to_typing_ms'] ?? '?').' ms'
+                    .' · respuesta en '.($t['time_to_response_ms'] ?? '?').' ms'
+                    .(($p['provider_error'] ?? null) !== null ? ' · error='.$p['provider_error'] : '')));
 
             foreach ($t['salientes'] as $s) {
                 $this->line('  sale     : ['.$s['tipo'].'] '.$this->corto($s['texto']));

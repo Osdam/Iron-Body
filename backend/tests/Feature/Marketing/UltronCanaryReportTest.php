@@ -522,4 +522,43 @@ class UltronCanaryReportTest extends TestCase
         $this->assertSame(1, $codigo);
         $this->assertStringContainsString('no existe', Artisan::output());
     }
+
+    /**
+     * El acta mide también lo que la persona VIO mientras esperaba.
+     *
+     * Un «escribiendo…» que aparece después de la respuesta no sirve de nada,
+     * así que se mide con la misma vara: milisegundos desde que llegó su
+     * mensaje.
+     */
+    public function test_the_log_measures_the_read_and_typing_signal(): void
+    {
+        $this->turno('cuanto vale?', 'El Mensual vale $80.000 COP.');
+
+        $entrante = MarketingMessage::where('direction', MarketingMessage::DIRECTION_INBOUND)->latest('id')->first();
+        $entrante->forceFill(['metadata' => array_merge((array) $entrante->metadata, [
+            'ultron_presence' => [
+                'read_attempted' => true, 'read_success' => true,
+                'typing_attempted' => true, 'typing_success' => true,
+                'typing_started_at' => $entrante->created_at->copy()->addMilliseconds(420)->toIso8601String(),
+            ],
+        ])])->save();
+
+        [, $salida] = $this->correr();
+
+        $this->assertStringContainsString('presencia:', $salida);
+        $this->assertStringContainsString('leido=sí', $salida);
+        $this->assertStringContainsString('escribiendo=sí', $salida);
+        $this->assertMatchesRegularExpression('~en \d+ ms~', $salida);
+        $this->assertMatchesRegularExpression('~respuesta en \d+ ms~', $salida);
+    }
+
+    /** Y si no hubo señal, lo dice en vez de inventar un cero. */
+    public function test_a_turn_without_a_signal_says_so(): void
+    {
+        $this->turno('hola', 'Claro, te cuento.');
+
+        [, $salida] = $this->correr();
+
+        $this->assertStringContainsString('sin señal', $salida);
+    }
 }
