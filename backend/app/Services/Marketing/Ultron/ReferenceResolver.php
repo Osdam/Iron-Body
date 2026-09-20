@@ -171,9 +171,18 @@ final class ReferenceResolver
                 continue;
             }
             $q = preg_quote($core, '/');
-            // Sólo cuenta con contexto de elección o con el nombre completo «plan X»;
-            // la palabra suelta dentro de una frase no elige nada.
-            $rx = '/(^'.$q.'$)|(^plan\s+'.$q.'$)|\bplan\s+'.$q.'\b|\b(el|la|del|de la|quiero|prefiero|me quedo con|dame|voy con|me interesa|me gusta|el de|con el|con la|si el|si la)\s+(plan\s+)?'.$q.'\b/u';
+            /*
+             * Sólo cuenta con contexto de elección o con el nombre completo
+             * «plan X»; la palabra suelta dentro de una frase no elige nada.
+             *
+             * Y una frecuencia no es una elección. El canario físico lo enseñó
+             * en el séptimo mensaje: «6 dias a la semana» eligió el «Plan
+             * Semana», y la propuesta salió cotizando el plan semanal a alguien
+             * que entrena seis días. Por eso «a la», «por la» y «cada» cierran
+             * la puerta: son las formas en las que un plazo se dice como ritmo
+             * y no como compra. «Me quedo con la semana» sigue eligiendo.
+             */
+            $rx = '/(^'.$q.'$)|(^plan\s+'.$q.'$)|\bplan\s+'.$q.'\b|(?<!\ba )(?<!\bpor )(?<!\bcada )\b(el|la|del|de la|quiero|prefiero|me quedo con|dame|voy con|me interesa|me gusta|el de|con el|con la|si el|si la)\s+(plan\s+)?'.$q.'\b/u';
             if (preg_match($rx, $t, $m, PREG_OFFSET_CAPTURE) === 1) {
                 $esNegado = $this->negatedAt($t, (int) $m[0][1]);
                 if ($esNegado === $negated) {

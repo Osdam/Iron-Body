@@ -18,6 +18,12 @@ class ReferenceResolverTest extends TestCase
         ['id' => 22, 'name' => 'Plan Élite', 'benefits' => []],
     ];
 
+    /** El catálogo real del gimnasio tiene un plan llamado «Plan Semana». */
+    private const PLANES_CON_SEMANA = [
+        ['id' => 20, 'name' => 'Plan Mensual', 'benefits' => []],
+        ['id' => 23, 'name' => 'Plan Semana', 'benefits' => []],
+    ];
+
     private R $r;
 
     protected function setUp(): void
@@ -245,5 +251,58 @@ class ReferenceResolverTest extends TestCase
     private function pair(array $d): array
     {
         return [$d['type'], $d['plan_id']];
+    }
+
+    // ── Una FRECUENCIA no es una elección de plan ────────────────────────────
+
+    /**
+     * Lo encontró el canario físico en el séptimo mensaje: la persona escribió
+     * «6 dias a la semana» —cuántas veces entrena— y el resolutor lo leyó como
+     * elegir el «Plan Semana». La propuesta salió cotizando el plan semanal a
+     * alguien que entrena seis días y que venía mirando el mensual.
+     *
+     * El nombre de un plan que además es una palabra de tiempo («Semana»,
+     * «Mensual») no puede elegirse desde una expresión de ritmo.
+     */
+    #[DataProvider('frecuencias')]
+    public function test_a_frequency_never_chooses_a_plan(string $texto): void
+    {
+        $r = $this->r->resolve($texto, ConversationMemory::empty(), self::PLANES_CON_SEMANA);
+
+        $this->assertSame(R::NONE, $r['type'], $texto.' no elige ningún plan');
+        $this->assertNull($r['plan_id']);
+    }
+
+    public static function frecuencias(): array
+    {
+        return [
+            ['6 dias a la semana'],
+            ['6 veces a la semana'],
+            ['entreno 5 dias por semana'],
+            ['vengo cada semana'],
+            ['esta semana no puedo'],
+            ['voy 3 veces al mes'],
+        ];
+    }
+
+    /** Y elegirlo de verdad sigue funcionando, que es la otra mitad. */
+    #[DataProvider('eleccionesDeVerdad')]
+    public function test_choosing_that_plan_still_works(string $texto, int $plan): void
+    {
+        $r = $this->r->resolve($texto, ConversationMemory::empty(), self::PLANES_CON_SEMANA);
+
+        $this->assertSame(R::CHOOSE_PLAN, $r['type'], $texto.' sí elige');
+        $this->assertSame($plan, $r['plan_id']);
+    }
+
+    public static function eleccionesDeVerdad(): array
+    {
+        return [
+            ['quiero el plan semana', 23],
+            ['me quedo con la semana', 23],
+            ['semana', 23],
+            ['quiero el mensual', 20],
+            ['el plan mensual', 20],
+        ];
     }
 }
