@@ -177,21 +177,6 @@ final class ReferenceResolver
      * @param  array<int, array{id:int, name:string}>  $sellablePlans
      */
     /**
-     * ¿La frase cuenta un RITMO? «3 dias a la semana», «toda la semana».
-     *
-     * Sólo se usa para los nombres ambiguos y sólo en las ramas de precio,
-     * envío e información, donde el nombre puede ir en mitad de la oración. No
-     * pretende cubrir todos los contextos de tiempo —eso ya se intentó dos
-     * veces y no funciona—: cubre la forma en que se dice una frecuencia,
-     * que es numeral (o cuantificador) pegado a una unidad de tiempo.
-     */
-    private function pareceFrecuencia(string $t): bool
-    {
-        return preg_match('/\b(\d+|un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|todos?|todas?)\s+(los|las)?\s*(dias?|veces|vez|semanas?|meses|mes)\b/u', $t) === 1
-            || preg_match('/\b(todos?|todas?|cada|durante)\s+(el|la|los|las)\b/u', $t) === 1;
-    }
-
-    /**
      * El plan que la frase NOMBRA, si de verdad lo nombra.
      *
      * @param  bool  $permisivo  cuando la frase YA está clasificada como «precio
@@ -228,11 +213,10 @@ final class ReferenceResolver
              * frase ya se clasificó como precio, envío o más información, el
              * nombre en cualquier posición («¿cuánto sale el élite?»).
              *
-             * Para uno ambiguo, sólo una más y con dos condiciones: el nombre
-             * al FINAL de una frase de precio/envío/info que no hable de
-             * frecuencia. Así «precio del trimestral» sigue resolviendo y
-             * «cuánto cuesta entrenar 3 días a la semana» —que es el fallo del
-             * canario entrando por la otra puerta— no.
+             * Para uno ambiguo, sólo una más: el nombre REGIDO por el núcleo
+             * de la pregunta de precio o de información. Así «precio del
+             * trimestral» sigue resolviendo y «cuánto cuesta entrenar en la
+             * semana» —el fallo del canario entrando por la otra puerta— no.
              */
             $eleccion = '(quiero|prefiero|me quedo con|me quedo|dame|deme|voy con|me interesa|me gusta|elijo|escojo|llevo|compro)';
             $articulo = '(el|la|los|las|del|de la|con el|con la|si el|si la|el de)';
@@ -250,8 +234,26 @@ final class ReferenceResolver
                 if ($permisivo) {
                     $formas[] = '\b'.$articulo.'\s+(plan\s+)?'.$q.'\b';
                 }
-            } elseif ($permisivo && ! $this->pareceFrecuencia($t)) {
-                $formas[] = '\b'.$articulo.'\s+(plan\s+)?'.$q.$cortesia.'$';
+            } elseif ($permisivo) {
+                /*
+                 * El nombre ambiguo sólo cuenta si lo RIGE el núcleo de la
+                 * pregunta —precio, valor, «cuánto vale», «qué incluye»—, no un
+                 * verbo de actividad.
+                 *
+                 * «precio DEL trimestral»: el artículo cuelga del sustantivo de
+                 * precio, y se está preguntando por un plan.
+                 * «cuánto cuesta entrenar EN la semana»: cuelga de «entrenar»,
+                 * es un complemento de tiempo, y se está preguntando por un
+                 * ritmo. La forma anterior aceptaba las dos y volvía a cotizar
+                 * el Plan Semana, que es el fallo del canario por otra puerta.
+                 *
+                 * El conjunto es cerrado por la misma razón que el del
+                 * calendario: son los encabezados con los que ESTA rama ya
+                 * clasificó la frase, no los contextos donde la palabra es
+                 * inocente, que no terminan nunca.
+                 */
+                $nucleo = '(precio|valor|costo|cuanto\s+(vale|cuesta|sale|es|seria)|info|informacion|que\s+incluye|incluye|que\s+trae|que\s+ofrece)';
+                $formas[] = '\b'.$nucleo.'\s+(de\s+|del\s+|de\s+la\s+|el\s+|la\s+)?(plan\s+)?'.$q.'\b';
             }
 
             $rx = '/('.implode(')|(', $formas).')/u';

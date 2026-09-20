@@ -459,16 +459,44 @@ class ReferenceResolverTest extends TestCase
             ['cuanto cuesta si voy toda la semana'],
             ['cuentame mas de entrenar 3 dias a la semana'],
             ['mandame info de ir 3 dias a la semana'],
+            // Cuantificadores que ninguna lista iba a cubrir, y que enseñaron
+            // que la pregunta correcta no es «¿hay una frecuencia?» sino «¿de
+            // quién cuelga el artículo?».
+            ['cuanto cuesta entrenar varios dias a la semana'],
+            ['cuanto vale ir algunos dias a la semana'],
+            ['cuanto cuesta entrenar muchos dias a la semana'],
+            ['cuanto vale ir un par de dias a la semana'],
+            ['cuanto vale ir medio dia a la semana'],
+            // Y las que no tienen frecuencia ninguna: el artículo cuelga del
+            // verbo, no del precio.
+            ['cuanto cuesta entrenar en la semana'],
+            ['cuanto cuesta si entreno en la semana'],
+            ['cuanto vale venir solo la semana'],
+            ['que incluye entrenar en la semana'],
+            ['cuentame mas de lo que puedo hacer en la semana'],
+            ['mandame info para entrenar en la semana'],
         ];
     }
 
-    /** Y preguntar el precio de un plan ambiguo, sin frecuencia, sí resuelve. */
-    public function test_asking_the_price_of_a_calendar_plan_still_resolves(): void
+    /**
+     * Y el reverso: cuando el núcleo de la pregunta RIGE al nombre, resuelve.
+     * Es la misma palabra que en las pruebas de arriba; lo que cambia es de
+     * quién cuelga el artículo —del sustantivo de precio o del verbo—.
+     */
+    public function test_when_the_price_head_governs_the_name_it_resolves(): void
     {
-        $planes = [['id' => 24, 'name' => 'Plan Trimestral', 'benefits' => []], ['id' => 20, 'name' => 'Plan Mensual', 'benefits' => []]];
+        $planes = [
+            ['id' => 24, 'name' => 'Plan Trimestral', 'benefits' => []],
+            ['id' => 20, 'name' => 'Plan Mensual', 'benefits' => []],
+            ['id' => 23, 'name' => 'Plan Semana', 'benefits' => []],
+        ];
+        $m = ConversationMemory::empty();
 
-        $this->assertSame(24, $this->r->resolve('precio del trimestral', ConversationMemory::empty(), $planes)['plan_id']);
-        $this->assertSame(20, $this->r->resolve('cuanto vale el mensual', ConversationMemory::empty(), $planes)['plan_id']);
+        $this->assertSame(24, $this->r->resolve('precio del trimestral', $m, $planes)['plan_id']);
+        $this->assertSame(20, $this->r->resolve('cuanto vale el mensual', $m, $planes)['plan_id']);
+        $this->assertSame(20, $this->r->resolve('que incluye el mensual', $m, $planes)['plan_id']);
+        $this->assertSame(23, $this->r->resolve('cuanto vale la semana', $m, $planes)['plan_id'], 'preguntar por el plan semanal sigue valiendo');
+        $this->assertSame(23, $this->r->resolve('cuanto cuesta el plan semana', $m, $planes)['plan_id']);
     }
 
     /**
