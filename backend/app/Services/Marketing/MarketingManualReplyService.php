@@ -121,6 +121,8 @@ class MarketingManualReplyService
             unset($metadata['reply_to_meta_message_id']);
         }
 
+        // La conversación del Inbox, explícita: una respuesta escrita por una
+        // persona en un hilo no puede archivarse en otro.
         return $this->dispatcher->dispatchWhatsapp(
             $lead,
             $conversation->channel,
@@ -129,6 +131,7 @@ class MarketingManualReplyService
             MarketingMessage::SENDER_HUMAN,
             $adminId,
             $attachment,
+            $conversation,
         );
     }
 }

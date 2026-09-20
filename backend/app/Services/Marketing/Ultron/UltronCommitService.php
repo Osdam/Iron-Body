@@ -588,12 +588,15 @@ class UltronCommitService
         }
 
         // 14) Envío por el camino de siempre.
+        // La conversación va explícita: la respuesta pertenece al hilo del
+        // turno, no al primero que encuentre el despachador.
         $send = $this->dispatcher->dispatchWhatsapp(
             $lead->fresh(),
             $conversation->channel,
             $replyFinal,
             ['kind' => 'reply', 'origin' => 'ultron', 'ai_action_id' => $action->id],
             MarketingMessage::SENDER_AI,
+            conversation: $conversation,
         );
 
         $outcome = $send['sent'] ? 'sent' : ($send['dry_run'] ? 'dry_run' : 'failed');
@@ -776,6 +779,7 @@ class UltronCommitService
             $curado,
             ['kind' => 'reply', 'origin' => 'ultron_curated_fallback', 'ai_action_id' => $action->id],
             MarketingMessage::SENDER_AI,
+            conversation: $conversation,
         );
 
         $outcome = $send['sent'] || $send['dry_run'] ? 'curated_fallback' : 'failed';
@@ -1069,7 +1073,7 @@ class UltronCommitService
             $body = $this->replies->paymentLinkMessage($plan, (float) $link['amount'], (string) $link['payment_url']);
             $send = $this->dispatcher->dispatchWhatsapp($lead, $conversation->channel, $body, [
                 'kind' => 'payment_link', 'origin' => 'ultron', 'reference' => $link['reference'] ?? null,
-            ], MarketingMessage::SENDER_AI);
+            ], MarketingMessage::SENDER_AI, conversation: $conversation);
             $this->memoryService->recordPaymentLink($conversation->fresh(), [
                 'reference' => $link['reference'] ?? null, 'plan_id' => (int) $plan->id, 'expires_at' => $link['expires_at'] ?? null,
                 'status' => 'pending', 'link_sent_at' => now()->toIso8601String(), 'message_id' => $send['message_id'] ?? null,
@@ -1140,7 +1144,7 @@ class UltronCommitService
         try {
             $send = $this->dispatcher->dispatchWhatsapp($lead, $conversation->channel, MobileAppCatalog::linksMessage(), [
                 'kind' => 'app_links', 'origin' => 'ultron',
-            ], MarketingMessage::SENDER_AI);
+            ], MarketingMessage::SENDER_AI, conversation: $conversation);
 
             // El freno cuenta desde que HUBO mensaje (entregado, en cola o en
             // dry_run). Si el despachador lo bloqueó (do_not_contact, canal no

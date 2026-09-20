@@ -36,6 +36,7 @@ class MarketingMessageDispatcher
         string $senderType = MarketingMessage::SENDER_AI,
         ?int $senderUserId = null,
         ?MarketingMessageAttachment $attachment = null,
+        ?MarketingConversation $conversation = null,
     ): array {
         $base = [
             'ok' => true, 'sent' => false, 'dry_run' => false, 'safe_to_send' => false,
@@ -63,10 +64,44 @@ class MarketingMessageDispatcher
         // sobrescribe el teléfono guardado del lead).
         $metadata = array_merge($metadata, ['recipient' => $to]);
 
-        $conversation = MarketingConversation::firstOrCreate(
-            ['lead_id' => $lead->id, 'channel' => $channel],
-            ['status' => 'open', 'ai_enabled' => true, 'human_takeover' => false, 'last_message_at' => now()],
-        );
+        /*
+         * LA CONVERSACIÓN LA PONE QUIEN LA SABE.
+         *
+         * Aquí había un `firstOrCreate(['lead_id' => ..., 'channel' => ...])`,
+         * que devuelve la PRIMERA fila por orden de inserción. Para un lead con
+         * más de una conversación eso es la más ANTIGUA —normalmente cerrada—,
+         * así que la respuesta llegaba bien a la persona (Meta solo necesita el
+         * teléfono) y se archivaba en el hilo equivocado.
+         *
+         * No es cosmético: el modelo lee `recent_messages` de SU conversación,
+         * de modo que dejaba de ver sus propias respuestas. Contestaba a ciegas
+         * sobre lo que ya había dicho. Se vio en el canario físico: siete
+         * entrantes en la 19 y cuatro salientes archivados en la 2.
+         *
+         * Quien ya resolvió la conversación —el commit de ULTRON, el envío
+         * manual, el webhook— la pasa. Para quien no puede saberla, el respaldo
+         * usa la misma regla del dominio que el entrante
+         * ({@see \App\Services\Meta\MetaLeadService::ensureConversation()}):
+         * abierta primero, luego la del último mensaje, y solo entonces una
+         * nueva.
+         */
+        $conversation = $conversation
+            ?? MarketingConversation::query()
+                ->where('lead_id', $lead->id)
+                ->where('channel', $channel)
+                ->orderByRaw("CASE WHEN status = 'open' THEN 0 ELSE 1 END")
+                ->orderByRaw('CASE WHEN last_message_at IS NULL THEN 1 ELSE 0 END')
+                ->orderByDesc('last_message_at')
+                ->orderByDesc('id')
+                ->first()
+            ?? MarketingConversation::create([
+                'lead_id' => $lead->id,
+                'channel' => $channel,
+                'status' => 'open',
+                'ai_enabled' => true,
+                'human_takeover' => false,
+                'last_message_at' => now(),
+            ]);
 
         // META deshabilitado o sin credenciales → dry_run (prepara, no entrega).
         if (! $this->auth->isConfigured()) {

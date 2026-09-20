@@ -96,7 +96,7 @@ final class MarketingPaymentOutcomeService
         $channel = $conversation?->channel ?? $lead->channel ?? 'whatsapp';
         $send = $this->dispatcher->dispatchWhatsapp($lead, (string) $channel, $body, [
             'kind' => 'onboarding', 'origin' => 'ultron', 'reference' => (string) $tx->reference,
-        ], MarketingMessage::SENDER_AI);
+        ], MarketingMessage::SENDER_AI, conversation: $conversation);
 
         ChannelLog::info('ultron.payment_outcome.approved', [
             'transaction_id' => $tx->id, 'lead_id' => $lead->id, 'conversation_id' => $conversation?->id,

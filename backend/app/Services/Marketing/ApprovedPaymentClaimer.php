@@ -235,7 +235,7 @@ final class ApprovedPaymentClaimer
         $channel = (string) ($conversation?->channel ?? $lead->channel ?? 'whatsapp');
         $send = $this->dispatcher->dispatchWhatsapp($lead, $channel, self::NOTICE, [
             'kind' => 'claim_notice', 'origin' => 'system',
-        ], MarketingMessage::SENDER_AI);
+        ], MarketingMessage::SENDER_AI, conversation: $conversation);
 
         // La espera de 24 h cuenta desde que HUBO mensaje (entregado o en
         // dry_run). Si el despachador lo bloqueó —do_not_contact, canal no
