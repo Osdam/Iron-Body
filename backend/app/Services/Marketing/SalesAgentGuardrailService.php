@@ -106,9 +106,18 @@ class SalesAgentGuardrailService
          * que se guarda sea verdad.
          *
          * La condición NO se calcula aquí: se pregunta a la única autoridad,
-         * {@see SalesPaymentReadinessService::canGenerateAutomaticLink()}.
+         * {@see SalesPaymentReadinessService::canGenerateForConversation()}.
+         *
+         * Lleva la CONVERSACIÓN desde que el permiso dejó de ser global. Sin
+         * ella este guardrail preguntaba «¿está abierto el grifo?» —que con el
+         * canario encendido es que no— y le quitaba la herramienta al único
+         * turno que sí podía usarla. El menú la ofrecía y aquí se caía dos
+         * pasos después, en silencio: el canario habría quedado sin cobro y el
+         * motivo habría sido invisible.
          */
-        if (! $this->paymentReadiness->canGenerateAutomaticLink()) {
+        if (! $this->paymentReadiness->canGenerateForConversation(
+            is_numeric($decision['conversation_id'] ?? null) ? (int) $decision['conversation_id'] : null,
+        )) {
             $tools = (array) ($decision['tools_requested'] ?? []);
             $pedia = in_array(SalesIntents::TOOL_PAYMENT_LINK_SEND, $tools, true);
 

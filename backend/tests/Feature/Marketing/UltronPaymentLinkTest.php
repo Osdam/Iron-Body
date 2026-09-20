@@ -11,6 +11,7 @@ use App\Models\Plan;
 use App\Services\Marketing\CommercialPhaseMachine as P;
 use App\Services\Marketing\OutboundContentGuard;
 use App\Services\Marketing\SalesConversationReplyService;
+use App\Services\Marketing\SalesPaymentGuardrailService;
 use App\Services\Marketing\SalesIntents;
 use App\Services\Wompi\PaymentStateMachine;
 use Illuminate\Database\Eloquent\Collection;
@@ -124,13 +125,23 @@ class UltronPaymentLinkTest extends TestCase
         $this->assertStringContainsString('checkout.wompi.co/p/', (string) $tx->checkout_url);
         $this->assertStringContainsString('signature:integrity=', (string) $tx->checkout_url);
 
-        $links = $this->linkMessages();
-        $this->assertCount(1, $links, 'el link viaja en un mensaje propio de Laravel');
-        $this->assertStringContainsString($tx->checkout_url, $links->first()->body);
-        $this->assertStringContainsString('80.000', $links->first()->body);
-        $reply = MarketingMessage::where('conversation_id', $this->conversation->id)->where('direction', MarketingMessage::DIRECTION_OUTBOUND)->where('body', 'like', 'Listo, te paso el link%')->first();
-        $this->assertNotNull($reply, 'la respuesta del modelo se envió (y «te paso el link» no es un traspaso)');
-        $this->assertLessThan($links->first()->id, $reply->id, 'primero la respuesta, después el link');
+        /*
+         * UN solo mensaje, con el cobro dentro.
+         *
+         * Antes eran dos globos: la respuesta y, detrás, el link. Se leyó en el
+         * canario como lo que parece —el asistente repitiéndose— y es el mismo
+         * arreglo que ya se hizo con los enlaces de la app. El precio va en la
+         * misma línea, porque nadie debería abrir un checkout sin saber cuánto
+         * va a pagar hasta verlo en la pasarela.
+         */
+        $salientes = MarketingMessage::where('conversation_id', $this->conversation->id)
+            ->where('direction', MarketingMessage::DIRECTION_OUTBOUND)->get();
+        $this->assertCount(1, $salientes, 'una sola respuesta visible');
+
+        $unico = $salientes->first();
+        $this->assertStringContainsString('Listo, te paso el link', $unico->body, 'el texto del modelo va primero');
+        $this->assertStringContainsString($tx->checkout_url, $unico->body, 'y el cobro va dentro');
+        $this->assertStringContainsString('80.000', $unico->body, 'con el precio');
 
         $action = MarketingAiAction::latest('id')->first();
         $this->assertContains(SalesIntents::TOOL_PAYMENT_LINK_SEND, $action->metadata['tools_executed'] ?? []);
@@ -195,8 +206,16 @@ class UltronPaymentLinkTest extends TestCase
         $this->commitLink($this->inbound('dale, mándame el link', 'w.12'))->assertOk();
 
         $recent = json_encode($this->decide($this->inbound('listo', 'w.13'))->assertOk()->json('context.recent_messages'));
+
+        // El sujeto es éste y no ha cambiado: la URL viva no vuelve al modelo.
         $this->assertStringNotContainsString('checkout.wompi.co', $recent);
-        $this->assertStringContainsString('[link de pago enviado]', $recent);
+        $this->assertStringNotContainsString('signature', $recent);
+        $this->assertStringNotContainsString('public-key', $recent);
+
+        // Desde que el cobro viaja DENTRO de la respuesta, lo que el modelo ve
+        // es el texto con la URL y el precio tapados, no el marcador del
+        // mensaje aparte que ya no existe.
+        $this->assertStringContainsString('[enlace]', $recent);
     }
 
     /** Revisor: la respuesta a n8n y la metadata deben decir lo mismo: una vez, y solo si se ejecutó. */
@@ -211,11 +230,19 @@ class UltronPaymentLinkTest extends TestCase
     /** Revisor: si el motor de pago revienta, el turno ya enviado no se rompe y queda constancia. */
     public function test_a_payment_engine_error_never_breaks_a_turn_that_already_went_out(): void
     {
-        // Proxy sobre la instancia REAL (conserva su constructor): solo el mensaje del link revienta.
-        $real = app(SalesConversationReplyService::class);
+        /*
+         * El motor revienta donde el camino REAL pasa.
+         *
+         * Antes se simulaba rompiendo el mensaje curado del link, porque el
+         * cobro salía en un globo aparte que lo usaba. Desde que va dentro de
+         * la respuesta, ese mensaje ya no se construye: romperlo dejaría de
+         * probar nada. Ahora revienta el guardrail, que es por donde pasa el
+         * cobro sí o sí.
+         */
+        $real = app(SalesPaymentGuardrailService::class);
         $proxy = \Mockery::mock($real)->makePartial();
-        $proxy->shouldReceive('paymentLinkMessage')->andThrow(new \RuntimeException('boom'));
-        $this->app->instance(SalesConversationReplyService::class, $proxy);
+        $proxy->shouldReceive('assertCanGeneratePaymentLink')->andThrow(new \RuntimeException('boom'));
+        $this->app->instance(SalesPaymentGuardrailService::class, $proxy);
 
         $r = $this->commitLink($this->inbound('dale, mándame el link', 'w.15'))->assertOk();
 

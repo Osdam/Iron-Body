@@ -523,8 +523,22 @@ class FactsAuthorityTortureTest extends TortureCase
         $recientes = $this->decide($this->inbound('ya lo abrí'))->assertOk()->json('context.recent_messages');
         $json = json_encode($recientes);
 
+        /*
+         * El sujeto no ha cambiado y es éste: la URL viva no vuelve al modelo.
+         * Ni la firma, ni la llave, ni el dominio.
+         */
         $this->assertStringNotContainsString('checkout.wompi.co', $json, 'la URL de cobro no vuelve al modelo');
-        $this->assertContains('[link de pago enviado]', array_column($recientes, 'body'), 'el hecho sí viaja; la URL no');
+        $this->assertStringNotContainsString('signature', $json);
+        $this->assertStringNotContainsString('public-key', $json);
+
+        /*
+         * Lo que cambió es el MARCADOR, porque cambió el mecanismo: desde que
+         * el cobro viaja dentro de la respuesta —un solo mensaje visible, no
+         * dos— lo que se tapa es la URL dentro del texto, y no el mensaje
+         * entero. El hecho sigue viajando: el modelo ve que mandó un enlace.
+         */
+        $cuerpos = implode("\n", array_column($recientes, 'body'));
+        $this->assertStringContainsString('[enlace]', $cuerpos, 'el hecho sí viaja; la URL no');
     }
 
     // ── Piezas de estas pruebas ──────────────────────────────────────────────

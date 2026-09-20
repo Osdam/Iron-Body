@@ -78,6 +78,17 @@ class UltronCommitService
      */
     public const APP_LINKS_RESEND_MINUTES = 60;
 
+    /**
+     * Lo que el resolver de Laravel reconoce como «esta persona quiere seguir
+     * adelante». No entra `price_of_pending`: preguntar el precio no es pagar.
+     */
+    private const RESOLUCIONES_QUE_PAGAN = [
+        ReferenceResolver::SEND_IT,
+        ReferenceResolver::CHOOSE_PLAN,
+        ReferenceResolver::ACCEPT_OFFER,
+        ReferenceResolver::HOW_TO_START,
+    ];
+
     public function __construct(
         private readonly UltronDecideService $decide,
         private readonly UltronDecideToken $tokens,
@@ -542,6 +553,9 @@ class UltronCommitService
             'ok' => true,
             'intent' => $sanitized['intent'],
             'confidence' => $sanitized['confidence'],
+            // Para quién es este turno. Lo lee el guardrail, que desde el
+            // canario ya no puede contestar con la bandera global.
+            'conversation_id' => (int) $conversation->id,
             'reply' => $replyFinal,
             'should_reply' => true,
             'should_send_message' => true,
@@ -808,6 +822,63 @@ class UltronCommitService
             // No se despachan (ya salieron hace poco, o no hay a quién): el
             // marcador no puede quedarse escrito en el mensaje del cliente.
             $replyFinal = $this->placeholders->resolveAppLinks($replyFinal, MobileAppCatalog::LINKS_ALREADY_SENT);
+        }
+
+        /*
+         * 13.ter) EL COBRO MANDA SOBRE LA EXPLICACIÓN.
+         *
+         * Esto existe por un fallo medido en el canario físico. La persona
+         * escribió «Listo, quiero pagarlo. ¿Me puedes mandar el enlace para
+         * hacer el pago?» y recibió instrucciones para pagar en el gimnasio o
+         * desde la app, más los tres enlaces de descarga. El checkout real
+         * existía, la autoridad lo permitía y la herramienta estaba en el menú
+         * del turno: el modelo simplemente no la pidió.
+         *
+         * Y no fue un capricho suyo: los prompts, escritos cuando el cobro
+         * automático estaba apagado para siempre, le enseñaban que pagar es la
+         * app o el gimnasio y que no pedir los enlaces de la app es «el error
+         * más caro». Hizo lo que le enseñamos.
+         *
+         * Por eso el arreglo no puede vivir en el prompt. Cuando la intención
+         * VALIDADA es de pago, hay plan vendible y la autoridad permite cobrar,
+         * el checkout no es una opción del redactor: lo impone Laravel, igual
+         * que impone el precio y los enlaces. El modelo no puede omitirlo, ni
+         * sustituirlo por la app, ni inventarse una URL.
+         *
+         * Va DESPUÉS de los enlaces de la app y ANTES del envío, para que salga
+         * UNA sola respuesta visible con el cobro dentro, y no tres globos.
+         */
+        $cobro = $this->checkoutDecision($conversation, $lead, $decision, $plan, (string) $sanitized['intent'], $resolution);
+
+        if ($cobro !== null && ($cobro['status'] ?? null) === 'inlined') {
+            $replyFinal = $this->conCheckout($replyFinal, $cobro);
+
+            /*
+             * Y la fila cuenta que el cobro salió. Se ejecutó —hay referencia y
+             * hay enlace en el mensaje—, sólo que dentro de la respuesta en vez
+             * de en un globo aparte. Que `tools_executed` dijera que no habría
+             * sido el mismo expediente que miente que ya se corrigió tres veces.
+             */
+            $anotacion = [
+                'tool' => SalesIntents::TOOL_PAYMENT_LINK_SEND,
+                'status' => 'executed',
+                'reference' => $cobro['reference'] ?? null,
+                'expires_at' => $cobro['expires_at'] ?? null,
+                'delivery' => 'inlined',
+            ];
+            $this->annotatePayment($action, $anotacion);
+
+            // Y la respuesta a n8n dice lo mismo que la fila. Su docblock lo
+            // promete y ya se rompió una vez: el cobro se ejecutó, sólo que
+            // dentro del mensaje en vez de en uno aparte.
+            $executed[] = $anotacion;
+        } elseif ($cobro !== null) {
+            $this->annotatePayment($action, [
+                'tool' => SalesIntents::TOOL_PAYMENT_LINK_SEND,
+                'status' => $cobro['status'] ?? 'skipped',
+                'reason' => $cobro['reason'] ?? null,
+                'other_plan_id' => $cobro['other_plan_id'] ?? null,
+            ]);
         }
 
         // 14) Envío por el camino de siempre.
@@ -1524,6 +1595,19 @@ class UltronCommitService
     private function execPaymentLink(MarketingConversation $conversation, MarketingMessage $message, array $decision, ?Plan $plan, string $outcome): ?array
     {
         $tool = SalesIntents::TOOL_PAYMENT_LINK_SEND;
+
+        /*
+         * Si el cobro ya viajó DENTRO de la respuesta, aquí no se manda nada.
+         *
+         * Sin esto, un turno de pago acabaría en dos globos con el mismo
+         * enlace: el de la respuesta y el de esta herramienta. Ya pasó una vez
+         * con los enlaces de la app y se leyó en el canario como lo que
+         * parece, el asistente repitiéndose.
+         */
+        if (($decision['checkout_inlined'] ?? false) === true) {
+            return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'already_inlined'];
+        }
+
         if (! in_array($tool, (array) ($decision['tools_requested'] ?? []), true)) {
             return null;
         }
@@ -1675,6 +1759,221 @@ class UltronCommitService
         }
 
         return ['tool' => $tool, 'status' => 'executed'];
+    }
+
+    /**
+     * ¿Este turno tiene que llevar el cobro dentro, lo haya pedido el modelo o no?
+     *
+     * Cuatro condiciones, y las cuatro son del backend: la intención validada
+     * es de pago, hay plan, el plan se vende hoy y la autoridad del canario
+     * permite cobrarle a ESTA conversación. Si alguna falta, se devuelve el
+     * motivo y no se toca nada.
+     *
+     * Reutiliza: `generateForLead()` devuelve la transacción EN VUELO del par
+     * (lead, plan) si existe, así que pedir el enlace tres veces sigue siendo
+     * una sola referencia. Y si el pago ya está aprobado, no hay checkout que
+     * dar: `already_paid` corta antes.
+     *
+     * NUNCA lanza. Un fallo de la pasarela no puede tumbar un turno; se anota
+     * y la respuesta sale sin el enlace, que es peor pero no es mudo.
+     *
+     * @return array<string,mixed>|null null cuando la intención no es de pago
+     */
+    private function checkoutDecision(
+        MarketingConversation $conversation,
+        MarketingLead $lead,
+        array &$decision,
+        ?Plan $plan,
+        string $intent,
+        array $resolution,
+    ): ?array {
+        if (! in_array($intent, SalesIntents::PAYMENT_INTENTS, true)) {
+            return null;
+        }
+
+        /*
+         * DOS TESTIGOS PARA ACUÑAR. La etiqueta del modelo no basta.
+         *
+         * La revisión lo demostró con cinco mensajes que NO piden pagar
+         * —«hola, quiero informacion de los planes», «a que hora abren los
+         * sabados?» y, el peor, «no me interesa por ahora»— etiquetados como
+         * intención de pago: los cinco acuñaban un checkout real y entregaban
+         * la URL. Y el daño no es un cobro no querido, que exige teclear la
+         * tarjeta: es un enlace pagable POR QUIEN LO TENGA en manos de alguien
+         * que acaba de decir que no, una transacción en vuelo que bloquea el
+         * link del plan correcto, y una conversación que se lee como presión.
+         *
+         * El intent y el plan los pone la MISMA etiqueta que esta mañana se
+         * equivocó en la dirección contraria. Así que hace falta un segundo
+         * testigo, y de los dos que hay sirve cualquiera:
+         *
+         *   EL RESOLVER. `ReferenceResolver` lee el mensaje contra la memoria
+         *   y lo calcula LARAVEL, no el modelo. Es el mismo tipo de
+         *   corroboración que se le exige al traspaso. Medido: el mensaje real
+         *   del canario da `send_it`, y los cinco falsos positivos dan `none`
+         *   o `price_of_pending`.
+         *
+         *   LA PETICIÓN EXPLÍCITA. Que el modelo además PIDA la herramienta.
+         *   No es un testigo independiente, pero exige dos errores suyos a la
+         *   vez —clasificar mal Y pedir cobrar— en vez de uno, y es el camino
+         *   que ya existía antes de todo esto.
+         *
+         * Lo que NO se usa es una lista de frases. Se midió: contra el banco
+         * de expresiones cubre 2 de 20, porque la mitad de esa categoría son
+         * preguntas por el medio de pago y reclamos de pagos ya hechos —«ya
+         * pagué», «reciben nequi»—, no peticiones de enlace. Sería el error de
+         * `asesor`/`asesoria` con dinero encima.
+         */
+        $corroborado = in_array($resolution['type'] ?? null, self::RESOLUCIONES_QUE_PAGAN, true)
+            || in_array(SalesIntents::TOOL_PAYMENT_LINK_SEND, (array) ($decision['tools_requested'] ?? []), true);
+
+        if (! $corroborado) {
+            ChannelLog::info('ultron.checkout.intent_not_corroborated', [
+                'conversation_id' => (int) $conversation->id,
+                'intent' => $intent,
+                'resolution' => $resolution['type'] ?? null,
+            ]);
+
+            return ['status' => 'skipped', 'reason' => 'payment_intent_not_corroborated'];
+        }
+
+        $cobro = $this->mintCheckout($conversation, $lead, $plan);
+
+        if (($cobro['status'] ?? null) !== 'ready') {
+            return $cobro;
+        }
+
+        // La herramienta de después no vuelve a mandarlo.
+        $decision['checkout_inlined'] = true;
+
+        $this->memoryService->recordPaymentLink($conversation->fresh(), [
+            'reference' => $cobro['reference'] ?? null,
+            'plan_id' => (int) $plan->id,
+            'expires_at' => $cobro['expires_at'] ?? null,
+            'status' => 'pending',
+            'link_sent_at' => now()->toIso8601String(),
+        ]);
+
+        ChannelLog::info('ultron.checkout.inlined', [
+            'conversation_id' => (int) $conversation->id,
+            'plan_id' => (int) $plan->id,
+            'reference' => $cobro['reference'] ?? null,
+        ]);
+
+        // `+` sobre arrays conserva la clave de la IZQUIERDA, así que
+        // `$cobro + ['status' => 'inlined']` seguía devolviendo 'ready' y el
+        // llamador no inyectaba nada. Con array_merge gana la derecha.
+        return array_merge($cobro, ['status' => 'inlined']);
+    }
+
+    /**
+     * Las guardas del cobro, en UN solo sitio.
+     *
+     * Estaban escritas dos veces —aquí y donde se despachaba el link— durante
+     * exactamente una hora, y en esa hora se coló el fallo que tenían que
+     * impedir: mi camino nuevo no comprobaba si ya había un link vivo para OTRO
+     * plan, así que generaba el segundo. Dos links vivos son dos cobros
+     * posibles, y el checkout de Wompi no se puede anular desde aquí.
+     *
+     * Por eso las guardas del dinero no se copian: se llaman. Las dos entradas
+     * —el cobro dentro de la respuesta y la herramienta que lo manda aparte—
+     * pasan por aquí, y lo único que las distingue es cómo se entrega.
+     *
+     * NUNCA lanza: un fallo de la pasarela no puede tumbar un turno.
+     *
+     * @return array<string,mixed> con `status` ready|skipped y su motivo
+     */
+    private function mintCheckout(MarketingConversation $conversation, ?MarketingLead $lead, ?Plan $plan): array
+    {
+        if (! $this->decide->canOfferLink((int) $conversation->id)) {
+            return ['status' => 'skipped', 'reason' => 'automatic_links_disabled'];
+        }
+        if ($lead === null || $plan === null) {
+            return ['status' => 'skipped', 'reason' => $plan === null ? 'no_plan_to_charge' : 'no_lead'];
+        }
+        if (! $plan->isSellable()) {
+            return ['status' => 'skipped', 'reason' => 'plan_not_sellable'];
+        }
+
+        try {
+            $this->paymentGuardrail->assertCanGeneratePaymentLink($lead, $plan, [], [
+                'conversation_id' => (int) $conversation->id,
+            ]);
+
+            // Dos links vivos para planes distintos serían dos cobros posibles,
+            // y el checkout de Wompi no se puede anular desde aquí: el segundo
+            // no se genera y lo resuelve una persona.
+            $otro = PaymentTransaction::query()
+                ->where('idempotency_key', 'like', 'mkt-lead-'.$lead->id.'-plan-%')
+                ->where('plan_id', '!=', $plan->id)
+                ->whereIn('status', SM::IN_FLIGHT)
+                ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+                ->orderByDesc('id')
+                ->first();
+
+            if ($otro !== null) {
+                $conversation->forceFill([
+                    'staff_review_pending' => true,
+                    'staff_review_reason' => 'payment_link_plan_change',
+                ])->save();
+
+                return ['status' => 'skipped', 'reason' => 'another_link_in_flight', 'other_plan_id' => (int) $otro->plan_id];
+            }
+
+            $link = WompiPaymentLinkService::make()->generateForLead($lead, $plan, [
+                'channel' => $conversation->channel,
+                'conversation_id' => (int) $conversation->id,
+                'message_id' => null,
+            ]);
+        } catch (SalesGuardrailException $e) {
+            return ['status' => 'skipped', 'reason' => $e->errorCode];
+        } catch (Throwable $e) {
+            ChannelLog::error('ultron.checkout.failed', [
+                'conversation_id' => (int) $conversation->id,
+                'plan_id' => (int) $plan->id,
+                'exception' => class_basename($e),
+            ]);
+
+            return ['status' => 'failed', 'reason' => 'payment_engine_error'];
+        }
+
+        if (($link['configured'] ?? true) === false) {
+            return ['status' => 'skipped', 'reason' => 'wompi_checkout_not_configured'];
+        }
+        if (($link['already_paid'] ?? false) === true) {
+            return ['status' => 'skipped', 'reason' => 'already_paid', 'reference' => $link['reference'] ?? null];
+        }
+        if (empty($link['payment_url'])) {
+            return ['status' => 'skipped', 'reason' => $link['error'] ?? 'link_not_safe_to_send'];
+        }
+
+        return [
+            'status' => 'ready',
+            'payment_url' => (string) $link['payment_url'],
+            'reference' => $link['reference'] ?? null,
+            'amount' => (float) ($link['amount'] ?? 0),
+            'expires_at' => $link['expires_at'] ?? null,
+        ];
+    }
+
+    /**
+     * El texto final con el cobro dentro.
+     *
+     * Va al final y en su propia línea. El modelo no escribe URLs —el guard se
+     * lo prohíbe y el Critic lo tumba—, así que aquí no hay marcador que
+     * sustituir: lo pega Laravel después de todos los guards, igual que el
+     * precio y los enlaces de la app.
+     */
+    private function conCheckout(string $reply, array $cobro): string
+    {
+        /*
+         * Con el PRECIO dentro. La línea sustituye a un mensaje curado que sí
+         * lo llevaba, y quitarlo habría dejado a alguien abriendo un checkout
+         * sin saber cuánto va a pagar hasta verlo en la pasarela.
+         */
+        $monto = number_format((float) ($cobro['amount'] ?? 0), 0, ',', '.');
+
+        return rtrim($reply)."\n\nEste es tu enlace de pago seguro por $".$monto.":\n".$cobro['payment_url'];
     }
 
     /**
