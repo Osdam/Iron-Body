@@ -332,6 +332,15 @@ class UltronPresenceTest extends TestCase
         $this->assertNotEmpty($ux['typing_started_at']);
         $this->assertArrayNotHasKey('provider_error', $ux);
 
+        /*
+         * Y cuánto tardó Meta de verdad. Es la única medida real que tiene el
+         * acta: `created_at` del mensaje y `typing_started_at` son marcas de
+         * segundo entero, así que restarlas daba «0 ms» —una cifra falsa con
+         * pinta de medida— cuando la señal había tardado medio segundo.
+         */
+        $this->assertArrayHasKey('provider_duration_ms', $ux);
+        $this->assertIsNumeric($ux['provider_duration_ms']);
+
         $this->assertStringNotContainsString('Bearer', json_encode($m->fresh()->metadata) ?: '');
     }
 

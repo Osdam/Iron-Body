@@ -351,6 +351,8 @@ class UltronCanaryReport extends Command
                  * miden con la misma vara.
                  */
                 'presencia' => data_get($entrante->metadata, 'ultron_presence'),
+                // Si Meta dijo cuánto tardó, esa es la medida buena: las marcas
+                // de la tabla son de segundo entero y restarlas da «0 ms».
                 'time_to_typing_ms' => $this->msEntre(
                     $entrante->created_at,
                     data_get($entrante->metadata, 'ultron_presence.typing_started_at'),
@@ -559,7 +561,7 @@ class UltronCanaryReport extends Command
                 ? 'sin señal (entrante anterior a la UX, o sin wamid)'
                 : 'leido='.$this->siNo((bool) ($p['read_success'] ?? false))
                     .' escribiendo='.$this->siNo((bool) ($p['typing_success'] ?? false))
-                    .' en '.($t['time_to_typing_ms'] ?? '?').' ms'
+                    .' en '.($p['provider_duration_ms'] ?? $t['time_to_typing_ms'] ?? '?').' ms'
                     .' · respuesta en '.($t['time_to_response_ms'] ?? '?').' ms'
                     .(($p['provider_error'] ?? null) !== null ? ' · error='.$p['provider_error'] : '')));
 

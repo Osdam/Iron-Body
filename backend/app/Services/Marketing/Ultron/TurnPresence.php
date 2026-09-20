@@ -90,6 +90,7 @@ class TurnPresence
             'reason' => $r['ok'] ? null : ($r['reason'] ?? 'meta_error'),
             'http_status' => $r['http_status'],
             'error_code' => $r['error_code'],
+            'duration_ms' => $r['duration_ms'] ?? null,
         ]);
     }
 
@@ -115,6 +116,14 @@ class TurnPresence
             'typing_attempted' => $intentado,
             'typing_success' => $ok,
             'typing_started_at' => $ok ? now()->toIso8601String() : null,
+            /*
+             * Lo que tardó Graph en aceptar la señal. Es la ÚNICA medida real
+             * que tiene el acta: `created_at` del mensaje y `typing_started_at`
+             * son marcas de segundo entero, así que restarlas daba «0 ms» —una
+             * cifra falsa con pinta de medida— cuando la señal había tardado
+             * medio segundo.
+             */
+            'provider_duration_ms' => $r['duration_ms'] ?? null,
             'provider_error' => $r['reason'] ?? null,
             'provider_http_status' => $r['http_status'] ?? null,
             'provider_error_code' => $r['error_code'] ?? null,

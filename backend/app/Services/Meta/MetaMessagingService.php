@@ -192,7 +192,11 @@ class MetaMessagingService
         $base = [
             'ok' => false, 'message_id' => null, 'http_status' => null,
             'error_code' => null, 'error_title' => null, 'error_message' => null,
-            'retryable' => false, 'reason' => null,
+            // Cuánto tardó Graph. Viaja en el resultado y no sólo en el log
+            // porque el acta del canario mide la señal de presencia contra la
+            // respuesta, y con marcas de segundo entero salía «0 ms», que es
+            // una cifra falsa con pinta de medida.
+            'retryable' => false, 'reason' => null, 'duration_ms' => null,
         ];
 
         if (! $this->auth->isConfigured()) {
@@ -246,6 +250,7 @@ class MetaMessagingService
                 'ok' => true,
                 'message_id' => is_string($messageId) ? $messageId : null,
                 'http_status' => $response->status(),
+                'duration_ms' => $durationMs,
             ]);
         }
 
@@ -286,6 +291,7 @@ class MetaMessagingService
             'error_message' => isset($error['message']) ? (string) $error['message'] : null,
             'retryable' => $retryable,
             'reason' => 'provider_send_failed',
+            'duration_ms' => $durationMs,
         ]);
     }
 }
