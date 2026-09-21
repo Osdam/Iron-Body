@@ -87,15 +87,34 @@ class UltronCommitService
     public const APP_LINKS_RESEND_MINUTES = 60;
 
     /**
-     * Lo que el resolver de Laravel reconoce como «esta persona quiere seguir
-     * adelante». No entra `price_of_pending`: preguntar el precio no es pagar.
+     * Las resoluciones que por sí solas prueban que alguien quiere PAGAR.
+     *
+     * Era una lista de cuatro y se midió que tres de ellas no lo prueban. El
+     * caso concreto: el agente ofrece un plan, la persona contesta «me
+     * interesa», el resolver lo llama `choose_plan` —está en su lista de
+     * verbos de elección— y con eso se acuñaba y se entregaba un enlace
+     * pagable COLGADO DE UNA PREGUNTA DE DESCUBRIMIENTO: «¿buscas bajar de
+     * peso o ganar masa?» y debajo «Este es tu enlace de pago seguro por
+     * $80.000». A quien solo estaba mirando.
+     *
+     * Elegir un plan, preguntar cómo se empieza o decir que sí a una oferta
+     * cualquiera es INTERÉS. Querer pagar es otra cosa, y sólo `send_it` —«me
+     * lo mandas», «pásame el link»— lo dice sin ambigüedad.
+     *
+     * La única aceptación que cuenta va aparte, abajo, porque depende de QUÉ
+     * se aceptó: decir que sí a «¿te paso el link de pago?» sí es querer
+     * pagar; decir que sí a «¿te explico cómo empezar?» no.
+     *
+     * Esto no deja a nadie sin poder pagar: quedan los otros dos testigos —que
+     * el modelo pida la herramienta y que la respuesta niegue el cobro— y una
+     * frase de pago resuelve a `send_it`.
      */
     private const RESOLUCIONES_QUE_PAGAN = [
         ReferenceResolver::SEND_IT,
-        ReferenceResolver::CHOOSE_PLAN,
-        ReferenceResolver::ACCEPT_OFFER,
-        ReferenceResolver::HOW_TO_START,
     ];
+
+    /** La oferta que, aceptada, sí prueba intención de pagar. */
+    private const OFERTA_DE_COBRO = 'send_payment_link';
 
     public function __construct(
         private readonly UltronDecideService $decide,
@@ -1896,7 +1915,28 @@ class UltronCommitService
          */
         $nego = $this->contentGuard->checkoutDenialIn($respuesta);
 
+        /*
+         * DECIR QUE SÍ AL COBRO ES QUERER PAGAR. DECIR QUE SÍ A OTRA COSA, NO.
+         *
+         * Lo que decide no es el «sí», es QUÉ se ofreció. Y hay que mirarlo en
+         * la memoria, no en la resolución: cuando hay un plan pendiente, el
+         * resolver llama `choose_plan` tanto al «sí» de «¿te paso el link de
+         * pago?» como al «me interesa» de «¿te lo dejo listo?», y por el camino
+         * pierde el dato que los distingue.
+         *
+         * Con la oferta a la vista, la distinción es limpia: sólo cuenta si lo
+         * ofrecido fue el enlace de pago. «¿Te explico cómo empezar?» seguido
+         * de «dale» no es aceptar un cobro, y tampoco lo es «me interesa»
+         * después de presentar un plan.
+         */
+        $tipo = $resolution['type'] ?? null;
+        $ofrecido = $resolution['offer_kind'] ?? data_get($conversation->memory, 'last_agent_offer.kind');
+
+        $aceptoElCobro = in_array($tipo, [ReferenceResolver::ACCEPT_OFFER, ReferenceResolver::CHOOSE_PLAN], true)
+            && $ofrecido === self::OFERTA_DE_COBRO;
+
         $corroborado = in_array($resolution['type'] ?? null, self::RESOLUCIONES_QUE_PAGAN, true)
+            || $aceptoElCobro
             || in_array(SalesIntents::TOOL_PAYMENT_LINK_SEND, (array) ($decision['tools_requested'] ?? []), true)
             || $nego !== null;
 

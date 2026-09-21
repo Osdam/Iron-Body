@@ -92,6 +92,21 @@ class PaymentIntentRoutingTest extends TestCase
         return (string) $this->postJson('/api/internal/marketing/ai/decide', ['conversation_id' => $this->conversation->id, 'message_id' => $m->id], $this->h())->json('decide_token');
     }
 
+    protected function sondaCommit(string $t, string $w, array $o = [])
+    {
+        return $this->commitLink($this->inbound($t, $w), $o);
+    }
+
+    protected function sondaSalientes(): array
+    {
+        return $this->salientes()->pluck('body')->all();
+    }
+
+    protected function sondaUltimoSaliente(): string
+    {
+        return (string) $this->salientes()->last()?->body;
+    }
+
     private function commitLink(MarketingMessage $m, array $overrides = []): TestResponse
     {
         return $this->postJson('/api/internal/marketing/ai/commit', [
@@ -158,12 +173,24 @@ class PaymentIntentRoutingTest extends TestCase
         $this->assertStringContainsString($tx->checkout_url, $this->todoElSaliente(), $texto);
     }
 
+    /**
+     * Lo que el RESOLVER corrobora por sí solo, sin que el modelo pida nada.
+     *
+     * La lista se acortó: ahora sólo `send_it` —«mándamelo», «pásame el
+     * link»— prueba por sí mismo que alguien quiere pagar. «Cómo pago ahora»
+     * salió de aquí porque resuelve a `how_to_start` y preguntar CÓMO se paga
+     * es la regla 2 (se explica), no la 4 (se cobra). Ese turno sigue
+     * acuñando en producción cuando el modelo pide la herramienta, que es lo
+     * que su prompt le dice que haga; lo que ya no hace es acuñar a espaldas
+     * del modelo.
+     *
+     * @return array<int,array{0:string}>
+     */
     public static function mensajesQueLaravelCorrobora(): array
     {
         return array_map(fn ($f) => [$f], [
             'pásame el link',
             'dame el enlace para pagar',
-            'cómo pago ahora',
             'mándamelo otra vez',
         ]);
     }
@@ -540,5 +567,76 @@ class PaymentIntentRoutingTest extends TestCase
 
         $this->assertSame(0, PaymentTransaction::count(), 'se acuñó un cobro por una frase de cortesía');
         $this->assertStringNotContainsString('checkout.wompi.co', $this->todoElSaliente());
+    }
+
+    /**
+     * «me interesa» DESPUÉS de una oferta: interés, no intención de pagar.
+     *
+     * Este es el test que faltaba, y su ausencia daba confianza falsa: el caso
+     * de «me interesa» que ya existía pasaba sólo porque en su escenario no
+     * había ninguna oferta previa, y sin `last_agent_offer` la referencia es
+     * `affirmation_without_offer`, que ni roza la puerta del cobro. Pero «me
+     * interesa» casi siempre llega justo después de que el agente ofrezca algo.
+     *
+     * Con oferta viva, el resolver lo llama `choose_plan`, y eso bastaba para
+     * acuñar: se midió que salía un enlace pagable de $80.000 colgado debajo de
+     * «¿buscas bajar de peso o ganar masa?». Alguien que sólo estaba mirando
+     * recibía un cobro, y encima descoordinado del texto.
+     */
+    public function test_interest_after_an_offer_is_not_a_payment_request(): void
+    {
+        // El agente ofrece. Esto deja la oferta viva en la memoria.
+        $this->commitLink($this->inbound('dale, cuéntame del mensual', 'w.of.1'), [
+            'intent' => SalesIntents::PRICING_QUESTION,
+            'tools_requested' => [],
+            'reply_draft' => 'El {{PLAN_NAME}} está en {{PLAN_PRICE}} e incluye acceso ilimitado. ¿Te lo dejo listo?',
+        ])->assertOk();
+
+        // Y la persona sólo muestra interés.
+        $this->commitLink($this->inbound('me interesa', 'w.of.2'), [
+            'intent' => SalesIntents::HIGH_INTENT_CLOSE,
+            'tools_requested' => [],
+            'reply_draft' => 'Perfecto. Para recomendarte bien, ¿buscas bajar de peso o ganar masa?',
+        ])->assertOk();
+
+        $this->assertSame(
+            'choose_plan',
+            MarketingAiAction::latest('id')->first()->metadata['reference_resolution'] ?? null,
+            'el escenario ya no reproduce el caso: sin choose_plan este test no mide nada',
+        );
+        $this->assertSame(0, PaymentTransaction::count(), 'se acuñó un cobro a quien sólo mostró interés');
+        $this->assertStringNotContainsString('checkout.wompi.co', $this->todoElSaliente());
+    }
+
+    /**
+     * Pero decir que sí a «¿te paso el link de pago?» SÍ es querer pagar.
+     *
+     * Es la otra cara, y sin ella el arreglo de arriba sería una mordaza:
+     * aceptar una oferta sigue valiendo cuando lo ofrecido ERA el cobro.
+     */
+    public function test_accepting_a_payment_link_offer_still_mints(): void
+    {
+        $this->commitLink($this->inbound('y cómo hago para pagarlo', 'w.ac.1'), [
+            'intent' => SalesIntents::PRICING_QUESTION,
+            'tools_requested' => [],
+            'reply_draft' => 'El {{PLAN_NAME}} está en {{PLAN_PRICE}}. ¿Quieres que te pase el link de pago para hacerlo desde el celular?',
+        ])->assertOk();
+
+        // La oferta tiene que quedar registrada COMO oferta de cobro: el
+        // detector exige un verbo de ofrecimiento en la pregunta.
+        $this->assertSame(
+            'send_payment_link',
+            data_get($this->conversation->fresh()->memory, 'last_agent_offer.kind'),
+            'sin oferta de cobro viva, este test no mide lo que dice medir',
+        );
+
+        $this->commitLink($this->inbound('sí, dale', 'w.ac.2'), [
+            'intent' => SalesIntents::PAYMENT_LINK_REQUEST,
+            'tools_requested' => [],
+            'reply_draft' => 'Listo, te paso el link de pago del {{PLAN_NAME}}.',
+        ])->assertOk();
+
+        $this->assertSame(1, PaymentTransaction::count(), 'aceptó el cobro y no se le entregó');
+        $this->assertStringContainsString('checkout.wompi.co', $this->todoElSaliente());
     }
 }
