@@ -136,9 +136,25 @@ case "$db" in
 esac
 
 hdr "Colas y workers"
+# Dos gestores para dos carriles: supervisor lleva los cuatro grupos de la
+# conversacion y systemd lleva el de facturacion. Se cuentan POR SEPARADO a
+# proposito: un solo numero los mezcla, y el que desaparece en la mezcla es el
+# del dinero, que ademas nadie echa de menos hasta que hay factura que emitir.
+SUPERVISOR_ESPERADOS="${SUPERVISOR_ESPERADOS:-12}"
 workers="$(supervisorctl status 2>/dev/null | grep -c RUNNING || echo 0)"
-[ "$workers" -ge 10 ] && ok "workers supervisor" "$workers RUNNING" || bad "workers supervisor" "solo $workers RUNNING"
-systemctl is-active --quiet ironbody-billing-worker && ok "ironbody-billing-worker" "active" || bad "ironbody-billing-worker" "inactivo"
+# Antes bastaba con 10 de 12: dos workers muertos pasaban en verde.
+[ "$workers" -eq "$SUPERVISOR_ESPERADOS" ] \
+  && ok  "workers supervisor" "$workers/$SUPERVISOR_ESPERADOS RUNNING" \
+  || bad "workers supervisor" "$workers/$SUPERVISOR_ESPERADOS RUNNING"
+
+# `activating` es un estado legitimo, no una averia: la unidad sale sola al
+# llegar a --max-jobs y systemd la levanta unos segundos despues. Tratar esa
+# ventana como caida daria falsos rojos varias veces al dia.
+billing="$(systemctl is-active ironbody-billing-worker.service 2>/dev/null || true)"
+case "$billing" in
+  active|activating) ok  "worker systemd · billing" "1/1 ($billing)" ;;
+  *)                 bad "worker systemd · billing" "0/1 (${billing:-desconocido})" ;;
+esac
 artisan_check "queue · listado de colas configuradas" queue:monitor default,billing,agent,commercial,media,whatsapp-high
 
 hdr "Scheduler"

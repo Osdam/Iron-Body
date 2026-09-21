@@ -249,4 +249,13 @@ return [
         'secret',
         'bearer',
     ],
+
+    /*
+     * Cada cuánto se repite el aviso de una emisión bloqueada, por factura y
+     * motivo. No silencia nada: la primera vez sale entera, un motivo nuevo
+     * estrena ventana, y al reabrirse el aviso dice cuántas veces se bloqueó
+     * mientras callaba. Ponerlo a 0 devuelve el comportamiento de antes.
+     */
+    'emission_blocked_log_minutes' => (int) env('BILLING_EMISSION_BLOCKED_LOG_MINUTES', 360),
+
 ];

@@ -336,4 +336,196 @@ class PaymentIntentRoutingTest extends TestCase
         $this->assertSame(0, PaymentTransaction::count());
         $this->assertSame(0, $this->salientes()->count(), 'y no sale ningún mensaje');
     }
+
+    // ── El turno real que falló en el canario ────────────────────────────────
+
+    /**
+     * «y tienes un link de pago mas directo de casualidad?»
+     *
+     * El turno está copiado del canario, con sus tres datos reales: el modelo
+     * clasificó bien —`payment_link_request`—, el resolver dio `none` y el
+     * modelo pidió los enlaces de la APP. Con dos testigos, ninguno de los dos
+     * se cumplía, así que el cobro se saltó y salió «No contamos con un link de
+     * pago directo por ahora».
+     *
+     * El enlace existía. La frase era falsa.
+     */
+    public function test_the_measured_canary_failure_now_gets_the_checkout(): void
+    {
+        $r = $this->commitLink($this->inbound('y tienes un link de pago mas directo de casulidad?', 'w.real1'), [
+            'intent' => SalesIntents::PAYMENT_LINK_REQUEST,
+            'tools_requested' => [SalesIntents::TOOL_APP_LINKS_SEND],
+            'reply_draft' => 'No contamos con un link de pago directo por ahora, pero puedes hacer el pago seguro desde la app Iron Body Workout o directamente en el gimnasio cuando vengas.',
+        ])->assertOk();
+
+        $saliente = $this->todoElSaliente();
+
+        $this->assertStringContainsString('checkout.wompi.co', $saliente, 'el cobro existía y no salió');
+        $this->assertSame(1, PaymentTransaction::count());
+
+        // Y la frase falsa NO sale: el borrador que la llevaba se tira entero.
+        $this->assertStringNotContainsString('No contamos con un link de pago', $saliente);
+        $this->assertStringNotContainsString('no contamos con', mb_strtolower($saliente));
+
+        // Una sola respuesta visible, no el cobro debajo de la negación.
+        $this->assertCount(1, $this->salientes());
+
+        // Y los enlaces de la app no sustituyen al cobro.
+        $this->assertStringNotContainsString('play.google.com', $saliente);
+        $this->assertStringNotContainsString('apps.apple.com', $saliente);
+    }
+
+    /**
+     * La invariante, por debajo del enrutado: cae el BORRADOR, no el turno.
+     *
+     * Aquí la intención NO es de pago, así que el enrutado ni se plantea
+     * acuñar; pero la respuesta niega un enlace que sí está disponible. Esa
+     * frase no sale.
+     *
+     * Y el turno tampoco muere. Esto llegó a lanzar un 422 y era peor que el
+     * problema: la fila de la acción ya se había escrito como ejecutada dos
+     * pasos antes, así que el vigía de turnos sin desenlace no habría visto
+     * nada que abrir. Cambiar una mentira por un silencio invisible no es
+     * arreglarlo.
+     */
+    public function test_denying_an_available_checkout_drops_the_sentence_not_the_turn(): void
+    {
+        $this->commitLink($this->inbound('y como hago para pagar?', 'w.real2'), [
+            'intent' => SalesIntents::GENERAL_INFO,
+            'tools_requested' => [],
+            'reply_draft' => 'Por ahora no tenemos enlace de pago. Puedes venir al gimnasio y te ayudamos con el registro.',
+        ])->assertOk();
+
+        $saliente = $this->todoElSaliente();
+
+        $this->assertSame(1, $this->salientes()->count(), 'el turno se quedó mudo');
+        $this->assertStringNotContainsString('no tenemos enlace de pago', mb_strtolower($saliente));
+        $this->assertStringContainsString('gimnasio', $saliente, 'se llevó por delante el resto del mensaje');
+        $this->assertSame(0, PaymentTransaction::count(), 'la invariante no acuña: corrige el texto');
+
+        /*
+         * Y la corrección deja expediente.
+         *
+         * Sin esto, el CRM reescribiría al modelo en silencio para siempre: el
+         * log no llega a ningún panel y la causa raíz sigue en el prompt. Que
+         * pase en un turno o en todos tiene que poder distinguirse.
+         */
+        $meta = MarketingAiAction::latest('id')->first()->metadata ?? [];
+        $this->assertSame(
+            'machine_reply_denies_available_checkout',
+            $meta['checkout_denial_dropped']['code'] ?? null,
+        );
+        $this->assertSame(1, $meta['checkout_denial_dropped']['frases_retiradas'] ?? 0);
+    }
+
+    /**
+     * Y si TODA la respuesta era la frase que mentía, sale texto curado.
+     *
+     * El caso límite del anterior: quitar la única frase dejaría el mensaje
+     * vacío, y un mensaje vacío es un turno mudo con otro nombre.
+     */
+    public function test_when_the_lie_was_the_whole_reply_a_curated_text_goes_out(): void
+    {
+        $this->commitLink($this->inbound('tienen link de pago?', 'w.real2b'), [
+            'intent' => SalesIntents::GENERAL_INFO,
+            'tools_requested' => [],
+            'reply_draft' => 'No contamos con un link de pago por ahora.',
+        ])->assertOk();
+
+        $saliente = $this->todoElSaliente();
+
+        $this->assertSame(1, $this->salientes()->count());
+        $this->assertNotSame('', trim($saliente));
+        $this->assertStringNotContainsString('no contamos con', mb_strtolower($saliente));
+    }
+
+    /**
+     * Y la misma frase, cuando es VERDAD, sale sin problema.
+     *
+     * Es la otra mitad de la invariante y la que impide que se convierta en una
+     * mordaza: fuera del canario no hay cobro que ofrecer, así que decir que no
+     * hay enlace es exacto.
+     */
+    public function test_the_same_denial_is_allowed_when_there_is_no_checkout(): void
+    {
+        config()->set('marketing.ultron.payment_canary_conversation_id', $this->conversation->id + 500);
+
+        $this->commitLink($this->inbound('y como hago para pagar?', 'w.real3'), [
+            'intent' => SalesIntents::GENERAL_INFO,
+            'tools_requested' => [],
+            'reply_draft' => 'Por ahora no tenemos enlace de pago, el pago se hace en el gimnasio cuando vengas.',
+        ])->assertOk();
+
+        $this->assertSame(1, $this->salientes()->count());
+        $this->assertSame(0, PaymentTransaction::count());
+    }
+
+    /**
+     * Preguntar POR EL MEDIO de pago no es pedir que te cobren.
+     *
+     * Informar es correcto; acuñar no. La respuesta enumera y no niega nada,
+     * así que ni el testigo nuevo ni la invariante tienen nada que hacer.
+     *
+     * @param  string  $texto  lo que escribe la persona
+     * @param  string  $intent  cómo lo clasifica el modelo
+     * @param  string  $borrador  lo que responde
+     */
+    #[DataProvider('preguntasQueNoCobran')]
+    public function test_asking_about_payment_does_not_mint(string $texto, string $intent, string $borrador): void
+    {
+        $this->commitLink($this->inbound($texto, 'w.nomint.'.md5($texto)), [
+            'intent' => $intent,
+            'tools_requested' => [],
+            'reply_draft' => $borrador,
+        ])->assertOk();
+
+        $this->assertSame(0, PaymentTransaction::count(), 'acuñó un cobro que nadie pidió');
+        $this->assertStringNotContainsString('checkout.wompi.co', $this->todoElSaliente());
+    }
+
+    /** @return array<string,array{0:string,1:string,2:string}> */
+    public static function preguntasQueNoCobran(): array
+    {
+        return [
+            'que metodos de pago tienen' => [
+                'que metodos de pago tienen?',
+                SalesIntents::GENERAL_INFO,
+                'Puedes pagar con tarjeta, Nequi o en efectivo directamente en el gimnasio.',
+            ],
+            'cuanto cuesta' => [
+                'cuanto cuesta el plan mensual?',
+                SalesIntents::PRICING_QUESTION,
+                'El {{PLAN_NAME}} está en {{PLAN_PRICE}} e incluye acceso ilimitado al gimnasio.',
+            ],
+            'no me interesa' => [
+                'no me interesa por ahora',
+                SalesIntents::NOT_INTERESTED,
+                'Sin problema, aquí quedo por si más adelante quieres retomarlo.',
+            ],
+        ];
+    }
+
+    /**
+     * La cortesía no puede acuñar un cobro. Reproducción de la revisión.
+     *
+     * La sonda fue exacta: «no me interesa por ahora», mal etiquetado como
+     * intención de pago, sin herramientas pedidas y con el resolver en `none`.
+     * La ÚNICA variable que cambiaba respecto al control era una frase de
+     * cortesía en el borrador —«no hay afán con el link de pago»— y con ella
+     * salía un checkout pagable hacia quien acababa de decir que no.
+     *
+     * Es el daño que el enrutado existe para impedir, entrando por la puerta
+     * que abrí yo al ensanchar el detector.
+     */
+    public function test_courtesy_never_mints_for_someone_who_said_no(): void
+    {
+        $this->commitLink($this->inbound('no me interesa por ahora', 'w.cortesia'), [
+            'intent' => SalesIntents::HIGH_INTENT_CLOSE,
+            'tools_requested' => [],
+            'reply_draft' => 'Sin problema, no hay afán con el link de pago, cuando quieras me escribes.',
+        ])->assertOk();
+
+        $this->assertSame(0, PaymentTransaction::count(), 'se acuñó un cobro por una frase de cortesía');
+        $this->assertStringNotContainsString('checkout.wompi.co', $this->todoElSaliente());
+    }
 }

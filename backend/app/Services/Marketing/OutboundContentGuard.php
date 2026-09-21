@@ -77,6 +77,26 @@ class OutboundContentGuard
      */
     public const CODE_SCHEDULE_DEFERRAL = 'machine_reply_schedule_deferral';
 
+    /**
+     * Negar un cobro que SÍ existe.
+     *
+     * Medido en el canario: a «y tienes un link de pago mas directo de
+     * casualidad?» el asistente contestó «No contamos con un link de pago
+     * directo por ahora, pero puedes hacer el pago desde la app o en el
+     * gimnasio». El checkout estaba disponible, la autoridad lo permitía y el
+     * plan era vendible. La frase era, simplemente, falsa.
+     *
+     * Y no era el modelo equivocándose por su cuenta: los prompts, escritos
+     * cuando el cobro automático estaba apagado para siempre, le enseñaron que
+     * pagar es la app o el gimnasio. Por eso esto no se arregla en el prompt.
+     *
+     * Esto NO es un detector de intención sobre lo que escribe la persona
+     * —eso sería una lista de frases, y ya se midió que cubre 2 de 20—. Es una
+     * comprobación sobre NUESTRO propio texto, que es curado y del que sí
+     * podemos decir si contradice un hecho del sistema.
+     */
+    public const CODE_DENIES_AVAILABLE_CHECKOUT = 'machine_reply_denies_available_checkout';
+
     /** ¿Este autor está sujeto al filtro? */
     public function appliesTo(string $senderType): bool
     {
@@ -176,6 +196,77 @@ class OutboundContentGuard
         '/\b'.self::HORARIO.'\b[^.!?]{0,40}\b(lo|la|los|las|te\s+lo|te\s+la)\s+(confirma|confirman|confirmara|confirmaran|dice|dicen|dira|diran|informa|informan|informara|indica|indican|indicara|da|dan|dara|daran)\b[^.!?]{0,30}\b'.self::PERSONA.'\b/u',
         '/\b'.self::HORARIO.'\b[^.!?]{0,40}\b(lo|la|los|las)\s+(confirma|confirman|confirmara|dice|dicen|dira|informa|informara|indica|indicara)\b(?![^.!?]{0,30}\b(app|aplicacion|sistema|crm|plataforma)\b)/u',
     ];
+
+    /**
+     * Negar el enlace de pago, en las formas en que se niega de verdad.
+     *
+     * Lo que se busca es la NEGACIÓN de que exista o se pueda dar, no el hecho
+     * de mencionar otros medios: «puedes pagar en la app o en el gimnasio» es
+     * una enumeración correcta y no debe caer aquí. Por eso todos los patrones
+     * exigen un verbo de negación pegado al enlace, dentro de la misma frase
+     * —los `[^.!?]` impiden que la negación de una oración se cruce con el
+     * enlace de la siguiente—.
+     */
+    private const ENLACE_DE_COBRO = '(link|enlace|url)s?';
+
+    private const NO_EXISTE = '(contamos\\s+con|tenemos|manejamos|disponemos\\s+de|hay|existe|existen|ofrecemos|trabajamos\\s+con)';
+
+    /**
+     * Lo único que cabe entre la negación y el enlace.
+     *
+     * Aquí había `[^.!?]{0,40}`, y con eso «no hay problema, te paso el link de
+     * pago» contaba como negar el cobro. No es un matiz: se midió que con esa
+     * frase de cortesía —la más corriente que existe— un turno de «no me
+     * interesa por ahora» acuñaba un checkout pagable. El hueco ancho convertía
+     * un detector de polaridad en un detector de dos palabras sueltas.
+     *
+     * Así que entre el verbo negado y el enlace sólo pueden ir determinantes y
+     * adverbios de tiempo: lo que acompaña al objeto, nunca OTRO objeto. En
+     * cuanto aparece un sustantivo («problema», «afán», «prisa»,
+     * «restricción») o una coma, lo negado ya no es el enlace y esto no casa.
+     */
+    private const SOLO_ACOMPANA = '(\\s+(un|una|unos|unas|el|la|los|las|ningun|ninguna|ningunos|ningunas|todavia|aun|ya|por\\s+ahora|de\\s+momento|actualmente|aqui|por\\s+aqui))*\\s+';
+
+    /** Lo único que cabe entre el enlace y su «no está disponible». */
+    private const SOLO_DEMORA = '(\\s+(todavia|aun|ya|por\\s+ahora|de\\s+momento|actualmente))*\\s+';
+
+    private const NIEGA_EL_COBRO = [
+        // «no contamos con un link de pago directo por ahora»
+        '/\\bno\\s+'.self::NO_EXISTE.self::SOLO_ACOMPANA.self::ENLACE_DE_COBRO.'(\\s+(directos?|de\\s+pagos?))*\\s+de\\s+pagos?\\b/u',
+        // «no contamos con un link directo de pago» (el orden inverso)
+        '/\\bno\\s+'.self::NO_EXISTE.self::SOLO_ACOMPANA.self::ENLACE_DE_COBRO.'\\s+(directos?|online|virtuales?)\\s+de\\s+pagos?\\b/u',
+        // «el link de pago (todavía) no está disponible». El hueco va igual de
+        // apretado que en los otros, y por la misma razón medida: con treinta
+        // caracteres libres, «el link de pago te llega ya; el parqueadero no
+        // está disponible» contaba como negar el cobro. Lo que no está
+        // disponible tiene que ser el ENLACE.
+        '/\\b'.self::ENLACE_DE_COBRO.'\\s+de\\s+pagos?'.self::SOLO_DEMORA.'no\\s+(esta|estan|estara|estaran)\\s+disponibles?\\b/u',
+        // «no manejamos pagos en línea»
+        '/\\bno\\s+'.self::NO_EXISTE.self::SOLO_ACOMPANA.'pagos?\\s+(en\\s+linea|online|virtual|virtuales|por\\s+internet)\\b/u',
+        // «no puedo enviarte un enlace de pago»
+        '/\\bno\\s+(puedo|podemos|se\\s+puede|es\\s+posible)\\s+(enviar|mandar|generar|dar|pasar|compartir)[a-z]{0,4}'.self::SOLO_ACOMPANA.self::ENLACE_DE_COBRO.'(\\s+directos?)?\\s+de\\s+pagos?\\b/u',
+    ];
+
+    /**
+     * ¿El borrador niega que exista un enlace de pago? Devuelve la frase, o null.
+     *
+     * Público porque lo consultan dos sitios con propósitos distintos: el
+     * enrutado del cobro, que lo toma como prueba de que a la persona le
+     * interesaba pagar, y la invariante que impide que salga una respuesta
+     * que contradice un hecho del sistema.
+     */
+    public function checkoutDenialIn(string $body): ?string
+    {
+        $t = SalesAgentDecisionSchema::normalize($body);
+
+        foreach (self::NIEGA_EL_COBRO as $patron) {
+            if (preg_match($patron, $t, $m) === 1) {
+                return trim($m[0]);
+            }
+        }
+
+        return null;
+    }
 
     /**
      * ¿El borrador aplaza el horario en una persona? Devuelve la frase, o null.

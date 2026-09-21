@@ -329,6 +329,13 @@ class UltronCanaryReport extends Command
                  * justo la clase de mentira que el acta existe para evitar.
                  */
                 'rendicion' => $meta['recovery'] ?? null,
+                /*
+                 * Y si el CRM tuvo que retirarle al modelo una frase que negaba
+                 * un cobro disponible, el acta lo dice. El sistema se corrige
+                 * solo, pero la causa sigue en el prompt: sin esta línea, que
+                 * pase en un turno o en todos se lee exactamente igual.
+                 */
+                'nego_un_cobro_disponible' => $meta['checkout_denial_dropped'] ?? null,
                 'modo_respaldo' => $meta['fallback_mode'] ?? null,
                 'riesgos' => $meta['risk_flags'] ?? [],
                 'novedad' => $meta['novelty_max_similarity'] ?? null,
@@ -418,9 +425,17 @@ class UltronCanaryReport extends Command
             'precios_que_no_son_del_catalogo' => [],
             'enlaces_no_oficiales' => [],
             'datos_personales' => [],
+            'negaciones_de_un_cobro_disponible' => [],
         ];
 
         foreach ($turnos as $t) {
+            // El texto que leyó la persona ya salió corregido; el hallazgo es
+            // que hubo que corregirlo.
+            if (($t['nego_un_cobro_disponible'] ?? null) !== null) {
+                $mecanicos['negaciones_de_un_cobro_disponible'][] = 'turno '.$t['turno']
+                    .' (frases retiradas: '.(int) data_get($t['nego_un_cobro_disponible'], 'frases_retiradas').')';
+            }
+
             foreach ($t['salientes'] as $s) {
                 $texto = $s['texto'];
                 $ref = 'turno '.$t['turno'].' · mensaje '.$s['id'];

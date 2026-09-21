@@ -60,6 +60,32 @@ class MarketingMessageDispatcher
             return array_merge($base, ['reason' => 'lead_without_phone']);
         }
 
+        /*
+         * EL OPT-OUT ES DEL TELÉFONO, NO DE LA FILA.
+         *
+         * La guardia de arriba pregunta por la fila de lead que resolvió el
+         * webhook, y esa fila se elige por (canal, meta_user_id): el teléfono
+         * no entra nunca en la resolución. Así que un mismo número puede tener
+         * varias filas —la que resuelve Meta hoy y las históricas— y el
+         * `do_not_contact` quedarse en una mientras el mensaje sale por otra.
+         *
+         * En esta base ya pasa: el mismo número está guardado con diez dígitos
+         * en una fila y con el 57 delante en otra, de modo que ni siquiera una
+         * igualdad de texto las une. Por eso se compara sobre el número
+         * NORMALIZADO, que es exactamente el que se le pasa a Meta y la única
+         * identidad que la persona comparte entre filas.
+         *
+         * Basta UNA hermana cerrada para no escribir. Falla hacia el lado que
+         * protege a quien pidió que no le escriban, y eso tiene un coste que
+         * conviene no esconder: dos personas que compartan número de verdad
+         * —una familia, un número reciclado— quedan calladas las dos. Entre
+         * escribirle a quien dijo que no y no escribirle a quien sí quería, el
+         * daño reparable es el segundo.
+         */
+        if ($this->phoneOptedOut($to, (int) $lead->id)) {
+            return array_merge($base, ['reason' => 'do_not_contact_sibling']);
+        }
+
         // El recipiente normalizado usado para Meta queda en metadata (no se
         // sobrescribe el teléfono guardado del lead).
         $metadata = array_merge($metadata, ['recipient' => $to]);
@@ -211,6 +237,35 @@ class MarketingMessageDispatcher
      * antepone 57. Valida E.164 (11–15 dígitos). Inválido → null (bloquea envío).
      * No modifica el teléfono guardado del lead.
      */
+    /**
+     * ¿Alguna OTRA fila de lead con este mismo número pidió que no le escriban?
+     *
+     * Se filtra por la BANDERA primero, no por el teléfono. Parece un detalle
+     * de rendimiento y es lo que hace que la guardia funcione: aquí había un
+     * `LIKE '%últimos-dígitos'` sobre la columna CRUDA, y una hermana guardada
+     * como «+57 315 053 6026» no casaba nunca —los separadores la tiraban antes
+     * de llegar a la comparación normalizada—. La guardia fallaba ABIERTA, que
+     * es la peor forma de fallar para un opt-out: se medió, y el mensaje salía.
+     *
+     * Y esa columna se llena a mano, desde el panel o desde importaciones
+     * —`MetaLeadService` ni siquiera la rellena—, así que los `+57`, los
+     * guiones y los espacios son la norma y no la excepción.
+     *
+     * Filtrando por `do_not_contact` la lista es diminuta —quien pide que no le
+     * escriban es una minoría— y se puede normalizar en PHP, que es la única
+     * forma de comparar que vale igual en PostgreSQL y en SQLite. Se acabaron
+     * las coincidencias de texto sobre un dato que nadie normalizó.
+     */
+    private function phoneOptedOut(string $normalizado, int $exceptoLeadId): bool
+    {
+        return MarketingLead::query()
+            ->where('do_not_contact', true)
+            ->where('id', '!=', $exceptoLeadId)
+            ->whereNotNull('phone')
+            ->get(['id', 'phone'])
+            ->contains(fn (MarketingLead $hermana) => $this->normalizePhone($hermana->phone) === $normalizado);
+    }
+
     public function normalizePhone(?string $phone): ?string
     {
         $digits = preg_replace('/[^0-9]/', '', (string) $phone) ?? '';

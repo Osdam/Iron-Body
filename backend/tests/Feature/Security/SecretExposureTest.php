@@ -4,6 +4,7 @@ namespace Tests\Feature\Security;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Process;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -175,7 +176,18 @@ class SecretExposureTest extends TestCase
         }
     }
 
-    /** El .gitignore tiene que seguir excluyendo el .env y sus respaldos. */
+    /**
+     * El .gitignore tiene que excluir el .env y CUALQUIER respaldo suyo.
+     *
+     * La versión anterior de este test comprobaba una sola línea, `^\.env$`, y
+     * por eso dio verde mientras 22 copias del entorno de producción —con sus
+     * secretos dentro— estaban a un `git add -A` de entrar en el histórico: se
+     * llamaban `.env.bak-*` y el único patrón de respaldos exigía la palabra
+     * `backup`. Un guardia que mira la línea equivocada no es un guardia.
+     *
+     * Así que ahora no se comprueba el TEXTO del fichero: se le pregunta a git,
+     * que es quien decide, por los nombres que se usan de verdad.
+     */
     public function test_git_never_tracks_environment_files_with_secrets(): void
     {
         $gitignore = File::exists(base_path('.gitignore'))
@@ -187,5 +199,38 @@ class SecretExposureTest extends TestCase
             $gitignore,
             'El .gitignore ya no excluye el fichero .env.',
         );
+
+        // Las convenciones reales de respaldo que han existido en este proyecto,
+        // más una que todavía no existe: si mañana alguien inventa otra, tiene
+        // que quedar cubierta por el patrón amplio, no por una línea nueva.
+        $respaldos = [
+            '.env.bak-canario-20260921-015237',
+            '.env.backup-antes-de-activar-meta',
+            '.env.save',
+            '.env.production',
+            '.env.old',
+            '.env.2026-09-21',
+        ];
+
+        foreach ($respaldos as $nombre) {
+            $r = Process::path(base_path())->run(['git', 'check-ignore', '-q', '--no-index', $nombre]);
+
+            $this->assertSame(
+                0,
+                $r->exitCode(),
+                "git NO ignora «{$nombre}»: un respaldo del entorno con secretos podría acabar en el repositorio.",
+            );
+        }
+
+        // Y los ejemplos, que SÍ se versionan, tienen que seguir entrando.
+        foreach (['.env.example', '.env.production.example'] as $ejemplo) {
+            $r = Process::path(base_path())->run(['git', 'check-ignore', '-q', '--no-index', $ejemplo]);
+
+            $this->assertSame(
+                1,
+                $r->exitCode(),
+                "git ignora «{$ejemplo}», que tiene que estar versionado.",
+            );
+        }
     }
 }

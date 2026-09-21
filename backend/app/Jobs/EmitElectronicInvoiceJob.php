@@ -23,6 +23,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Throwable;
@@ -251,10 +252,7 @@ class EmitElectronicInvoiceJob implements ShouldQueue
                 'error',
                 $e->getMessage(),
             );
-            Log::warning('billing.emission_blocked', [
-                'invoice_id' => $invoice->id,
-                'reason' => $e->getMessage(),
-            ]);
+            $this->avisarDelBloqueo($invoice, $e->getMessage());
 
             return; // Deliberado: reintentar a ciegas repetiría el mismo rechazo.
         }
@@ -443,5 +441,45 @@ class EmitElectronicInvoiceJob implements ShouldQueue
         }
 
         $invoice->markError('Reintentos agotados: '.$e->getMessage());
+    }
+
+    /**
+     * El bloqueo se avisa, pero no 96 veces al día por la misma factura.
+     *
+     * El barrido vuelve cada quince minutos y una solicitud bloqueada por sus
+     * DATOS choca siempre con la misma barrera, así que escribía la misma línea
+     * indefinidamente: dos facturas llevaban 8.881 avisos idénticos desde
+     * julio, suficientes para enterrar cualquier incidente nuevo.
+     *
+     * Y el estado NO se toca. `error` está ahí a propósito —es lo que hace que
+     * el barrido y el reintento manual puedan retomarla cuando alguien corrija
+     * la causa—; moverla a `rejected` la sacaría de `canRetry()` y repetiría,
+     * al revés, el fallo de las solicitudes que se quedaban atascadas.
+     *
+     * Así que lo que se controla es el AVISO, no el hecho. Nada se oculta:
+     * la primera vez de cada (factura, motivo) sale entera y de inmediato, un
+     * motivo nuevo o una factura nueva estrenan su propia ventana, y cuando la
+     * ventana se cierra el aviso vuelve diciendo cuántas veces se bloqueó
+     * mientras callaba. Lo que se pierde es la repetición; el recuento, no.
+     */
+    private function avisarDelBloqueo(ElectronicInvoice $invoice, string $motivo): void
+    {
+        $ventana = max(1, (int) config('billing.emission_blocked_log_minutes', 360));
+        $huella = 'billing:emission_blocked:'.$invoice->id.':'.substr(sha1($motivo), 0, 12);
+        $cuenta = 'billing:emission_blocked:n:'.$invoice->id;
+
+        // `add()` es atómico: sólo el primero de la ventana entra.
+        if (Cache::add($huella, true, now()->addMinutes($ventana))) {
+            Log::warning('billing.emission_blocked', array_filter([
+                'invoice_id' => $invoice->id,
+                'reason' => $motivo,
+                'silenciados_desde_el_ultimo_aviso' => (int) Cache::pull($cuenta, 0) ?: null,
+            ], fn ($v) => $v !== null));
+
+            return;
+        }
+
+        Cache::add($cuenta, 0, now()->addMinutes($ventana * 2));
+        Cache::increment($cuenta);
     }
 }

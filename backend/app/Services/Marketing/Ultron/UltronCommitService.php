@@ -68,6 +68,14 @@ class UltronCommitService
     /** Cuánto se espera por el turno de la conversación antes de rendirse. */
     private const LOCK_WAIT_SECONDS = 10;
 
+    /**
+     * Lo que sale cuando la respuesta entera era la frase que mentía.
+     *
+     * No niega el cobro, no promete que nadie escriba y no inventa un enlace
+     * que en ese momento no se pudo acuñar: dice lo que es verdad siempre.
+     */
+    private const SIN_ENLACE_PERO_SIN_MENTIR = 'Puedes hacer el pago desde la app Iron Body Workout o directamente en el gimnasio. Dime qué plan quieres y lo dejamos listo.';
+
     private const LOCK_TTL_SECONDS = 60;
 
     /**
@@ -848,10 +856,20 @@ class UltronCommitService
          * Va DESPUÉS de los enlaces de la app y ANTES del envío, para que salga
          * UNA sola respuesta visible con el cobro dentro, y no tres globos.
          */
-        $cobro = $this->checkoutDecision($conversation, $lead, $decision, $plan, (string) $sanitized['intent'], $resolution);
+        $cobro = $this->checkoutDecision($conversation, $lead, $decision, $plan, (string) $sanitized['intent'], $resolution, $replyFinal);
 
         if ($cobro !== null && ($cobro['status'] ?? null) === 'inlined') {
-            $replyFinal = $this->conCheckout($replyFinal, $cobro);
+            /*
+             * Si el borrador NEGABA el cobro, no se le pega el enlace debajo.
+             *
+             * Quedaría un mensaje que se contradice en dos líneas: «no
+             * contamos con un link de pago» y, a renglón seguido, el link. Ese
+             * borrador ya no sirve para nada, así que se tira entero y sale el
+             * texto curado, que dice el plan, el precio y el enlace.
+             */
+            $replyFinal = ($cobro['nego_el_cobro'] ?? null) !== null && $plan !== null
+                ? $this->replies->paymentLinkMessage($plan, (float) ($cobro['amount'] ?? 0), (string) $cobro['payment_url'])
+                : $this->conCheckout($replyFinal, $cobro);
 
             /*
              * Y la fila cuenta que el cobro salió. Se ejecutó —hay referencia y
@@ -880,6 +898,33 @@ class UltronCommitService
                 'other_plan_id' => $cobro['other_plan_id'] ?? null,
             ]);
         }
+
+        /*
+         * 13.quater) NO SE NIEGA UN COBRO QUE EXISTE.
+         *
+         * La red, por debajo del enrutado. El testigo de arriba arregla el caso
+         * que se midió —intención de pago validada y respuesta que niega el
+         * enlace—, pero la invariante tiene que valer aunque el turno llegue
+         * por un camino que nadie previó: si el cobro está disponible y la
+         * respuesta dice que no existe, esa respuesta es falsa y no sale.
+         *
+         * Falso en el sentido literal: la autoridad permite cobrar en esta
+         * conversación, hay un plan vendible y nadie ha pagado todavía. Decirle
+         * a alguien que no hay forma de pagar por aquí, en ese estado, es la
+         * clase de mentira que cuesta una venta y la confianza de quien la lee.
+         *
+         * Lo que cae es el BORRADOR, no el turno. Esto llegó a lanzar un 422, y
+         * era peor que el problema: el turno se quedaba mudo, la fila de la
+         * acción ya estaba escrita como ejecutada dos pasos antes, y el vigía
+         * —que busca turnos sin desenlace— no veía nada que abrir. Un cerrojo
+         * que apaga la conversación y además ciega al que vigila no es un
+         * cerrojo. Se quita la frase que miente y sale lo demás.
+         *
+         * Se paga barata: primero se mira el texto, que es memoria; las tres
+         * preguntas al estado sólo se hacen cuando ya hay una negación que
+         * verificar, y eso es una minoría ínfima de los turnos.
+         */
+        $replyFinal = $this->sinNegarUnCobroDisponible($conversation, $lead, $plan, $replyFinal, $action);
 
         // 14) Envío por el camino de siempre.
         // La conversación va explícita: la respuesta pertenece al hilo del
@@ -1787,6 +1832,7 @@ class UltronCommitService
         ?Plan $plan,
         string $intent,
         array $resolution,
+        string $respuesta = '',
     ): ?array {
         if (! in_array($intent, SalesIntents::PAYMENT_INTENTS, true)) {
             return null;
@@ -1825,8 +1871,34 @@ class UltronCommitService
          * pagué», «reciben nequi»—, no peticiones de enlace. Sería el error de
          * `asesor`/`asesoria` con dinero encima.
          */
+        /*
+         * EL TERCER TESTIGO: QUE NOSOTROS MISMOS LO NEGUEMOS.
+         *
+         * Los dos primeros fallaron juntos en un turno real. A «y tienes un
+         * link de pago mas directo de casualidad?» el resolver dio `none` y el
+         * modelo pidió… los enlaces de la app. La intención estaba bien
+         * clasificada —`payment_link_request`— pero sin corroborar, así que el
+         * cobro se saltó y salió «No contamos con un link de pago directo».
+         *
+         * Los dos testigos que había dependen de que alguien ACIERTE: el
+         * resolver, calculando; el modelo, pidiendo la herramienta que sus
+         * propios prompts le enseñaron a no pedir. Éste no depende de acertar,
+         * sino de algo que ya ocurrió: si la respuesta NIEGA que exista un
+         * enlace de pago, es porque entendió perfectamente que se lo estaban
+         * pidiendo. La negación es la prueba.
+         *
+         * Y es un testigo que los falsos positivos no producen: los cinco
+         * mensajes mal etiquetados de la revisión —«hola, quiero informacion de
+         * los planes», «a que hora abren los sabados?», «no me interesa por
+         * ahora»— se contestan hablando de planes, de horarios o despidiéndose.
+         * Ninguna de esas respuestas niega un enlace de pago, porque nadie lo
+         * había pedido.
+         */
+        $nego = $this->contentGuard->checkoutDenialIn($respuesta);
+
         $corroborado = in_array($resolution['type'] ?? null, self::RESOLUCIONES_QUE_PAGAN, true)
-            || in_array(SalesIntents::TOOL_PAYMENT_LINK_SEND, (array) ($decision['tools_requested'] ?? []), true);
+            || in_array(SalesIntents::TOOL_PAYMENT_LINK_SEND, (array) ($decision['tools_requested'] ?? []), true)
+            || $nego !== null;
 
         if (! $corroborado) {
             ChannelLog::info('ultron.checkout.intent_not_corroborated', [
@@ -1864,7 +1936,7 @@ class UltronCommitService
         // `+` sobre arrays conserva la clave de la IZQUIERDA, así que
         // `$cobro + ['status' => 'inlined']` seguía devolviendo 'ready' y el
         // llamador no inyectaba nada. Con array_merge gana la derecha.
-        return array_merge($cobro, ['status' => 'inlined']);
+        return array_merge($cobro, ['status' => 'inlined', 'nego_el_cobro' => $nego]);
     }
 
     /**
@@ -1884,6 +1956,98 @@ class UltronCommitService
      *
      * @return array<string,mixed> con `status` ready|skipped y su motivo
      */
+    /**
+     * PAYMENT_CHECKOUT_AVAILABLE + OUTBOUND_DENIES_CHECKOUT: cae el borrador.
+     *
+     * «Hard fail» es del BORRADOR. Tumbar el turno entero sería cambiar una
+     * mentira por un silencio, y el silencio aquí es peor de lo que parece: la
+     * fila de la acción se persiste como ejecutada antes de llegar hasta aquí,
+     * así que el vigía de turnos sin desenlace no vería nada, no abriría
+     * incidente y no accionaría el freno del canario. Se lanzaba un 422 y eso
+     * hacía exactamente eso; ya no.
+     *
+     * El arreglo de verdad está arriba, en {@see checkoutDecision()}: si la
+     * respuesta niega el cobro, esa negación vale como prueba de que a la
+     * persona le interesaba pagar, se acuña y el borrador se sustituye entero
+     * por el texto curado. Aquí abajo sólo quedan los casos en que NO se pudo
+     * acuñar —otro enlace vivo para otro plan, la pasarela caída— o en que la
+     * negación llegó por un camino que no contemplamos.
+     *
+     * En esos, se quita la frase que miente y sale el resto. Si no queda nada
+     * que se sostenga, sale un texto curado que dice lo que SÍ es verdad: se
+     * puede pagar, y por dónde. Nunca se promete que alguien escriba.
+     *
+     * @return string la respuesta que puede salir
+     */
+    private function sinNegarUnCobroDisponible(
+        MarketingConversation $conversation,
+        MarketingLead $lead,
+        ?Plan $plan,
+        string $respuesta,
+        MarketingAiAction $action,
+    ): string {
+        if ($this->contentGuard->checkoutDenialIn($respuesta) === null) {
+            return $respuesta;
+        }
+
+        // Sin plan vendible o sin permiso NO hay cobro que ofrecer: la negación
+        // es verdad y tiene que poder decirse.
+        if ($plan === null || ! $plan->isSellable() || ! $this->decide->canOfferLink((int) $conversation->id)) {
+            return $respuesta;
+        }
+
+        // Y a quien ya pagó no se le reescribe el turno por una frase que ya no
+        // cambia nada: su caso lo resuelve el enrutado con `already_paid`.
+        $yaPago = PaymentTransaction::query()
+            ->where('idempotency_key', 'like', 'mkt-lead-'.$lead->id.'-plan-'.$plan->id.'-%')
+            ->where('status', SM::APPROVED)
+            ->exists();
+
+        if ($yaPago) {
+            return $respuesta;
+        }
+
+        // Frase a frase, porque lo que sobra es UNA, no el mensaje entero.
+        $frases = preg_split('/(?<=[.!?])\s+/u', trim($respuesta)) ?: [];
+        $limpias = array_values(array_filter(
+            $frases,
+            fn (string $frase) => $this->contentGuard->checkoutDenialIn($frase) === null,
+        ));
+
+        $limpio = trim(implode(' ', $limpias));
+
+        ChannelLog::error('ultron.checkout.denied_but_available', [
+            'conversation_id' => (int) $conversation->id,
+            'plan_id' => (int) $plan->id,
+            'frases_retiradas' => count($frases) - count($limpias),
+            'quedo_vacio' => $limpio === '',
+        ]);
+
+        /*
+         * Y QUEDA EN LA FILA, no sólo en un log que no lee nadie.
+         *
+         * El log no llega a ningún panel: el vigía mira `metadata.recovery` y
+         * el detector de salud mira tablas, no ficheros. Sin esto, el CRM
+         * reescribiría al modelo en silencio para siempre —y la causa raíz
+         * sigue ahí, porque el prompt todavía le enseña a no mencionar el
+         * enlace—. Si mañana esto pasa en uno de cada diez turnos o en todos,
+         * la diferencia tiene que verse en algún sitio.
+         *
+         * Va donde mira el acta del canario, que es quien cuenta lo que hizo
+         * cada turno, igual que ya cuenta las rendiciones para no atribuirle al
+         * modelo un texto que escribió Laravel.
+         */
+        $meta = is_array($action->metadata) ? $action->metadata : [];
+        $meta['checkout_denial_dropped'] = [
+            'code' => OutboundContentGuard::CODE_DENIES_AVAILABLE_CHECKOUT,
+            'frases_retiradas' => count($frases) - count($limpias),
+            'texto_curado' => $limpio === '',
+        ];
+        $action->forceFill(['metadata' => $meta])->save();
+
+        return $limpio !== '' ? $limpio : self::SIN_ENLACE_PERO_SIN_MENTIR;
+    }
+
     private function mintCheckout(MarketingConversation $conversation, ?MarketingLead $lead, ?Plan $plan, ?int $messageId = null): array
     {
         if (! $this->decide->canOfferLink((int) $conversation->id)) {

@@ -8,6 +8,16 @@
 .env.save
 .env.production
 *.env.save
+# Y con lista blanca, porque enumerar convenciones ya falló DOS veces: primero
+# `.env.backup` exacto, y ahora `.env.backup*`, que no coge los `.env.bak-*`
+# que el servidor lleva creando desde septiembre —22 copias del entorno a un
+# `git add -A` del histórico—. Se invierte el criterio: queda fuera todo lo que
+# empiece por `.env.`, y los ejemplos se readmiten uno a uno. El orden importa:
+# las negaciones DESPUÉS del patrón amplio, o git no re-incluye nada.
+.env.*
+!.env.example
+!.env.production.example
+.env~
 .phpactor.json
 .phpunit.result.cache
 /.fleet

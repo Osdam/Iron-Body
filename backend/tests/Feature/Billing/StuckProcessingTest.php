@@ -13,7 +13,10 @@ use App\Models\TaxRate;
 use App\Models\User;
 use App\Services\Billing\InvoicingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -219,7 +222,7 @@ class StuckProcessingTest extends TestCase
         // Token OK y luego la red se cae en el POST.
         Http::fake([
             '*oauth/token*' => Http::response(['access_token' => 't', 'expires_in' => 3600], 200),
-            '*bills*' => fn () => throw new \Illuminate\Http\Client\ConnectionException('timeout'),
+            '*bills*' => fn () => throw new ConnectionException('timeout'),
         ]);
 
         try {
@@ -349,7 +352,7 @@ class StuckProcessingTest extends TestCase
             'electronic_invoice_id' => $invoice->id,
             'result' => 'error',
         ]);
-        $log = \Illuminate\Support\Facades\DB::table('electronic_invoice_logs')
+        $log = DB::table('electronic_invoice_logs')
             ->where('electronic_invoice_id', $invoice->id)->latest('id')->first();
         $this->assertStringContainsString('recover-stuck-processing', (string) $log->message);
     }
@@ -401,7 +404,7 @@ class StuckProcessingTest extends TestCase
         $this->artisan("billing:cancel-test-requests --ids={$invoice->id} --not-requested")
             ->assertExitCode(0);
 
-        $log = \Illuminate\Support\Facades\DB::table('electronic_invoice_logs')
+        $log = DB::table('electronic_invoice_logs')
             ->where('electronic_invoice_id', $invoice->id)->where('action', 'cancel')->latest('id')->first();
 
         $this->assertStringContainsString('NO solicitó factura', (string) $log->message);
@@ -459,5 +462,74 @@ class StuckProcessingTest extends TestCase
 
         Queue::assertNothingPushed();
         Http::assertNothingSent();
+    }
+
+    // ── El aviso del bloqueo no puede repetirse 96 veces al día ──────────────
+
+    /**
+     * Una solicitud bloqueada por sus DATOS choca cada quince minutos con la
+     * misma barrera. Dos de ellas llevaban 8.881 avisos idénticos desde julio:
+     * suficiente para enterrar cualquier incidente nuevo de facturación.
+     *
+     * Lo que se controla es el aviso, no el hecho: el estado sigue siendo
+     * `error` —reintentable— y el recuento de lo silenciado vuelve con el
+     * siguiente aviso.
+     */
+    public function test_el_aviso_de_emision_bloqueada_no_se_repite_en_su_ventana(): void
+    {
+        Http::fake();
+        config()->set('billing.emission_blocked_log_minutes', 360);
+
+        $spy = Log::spy();
+        Log::shouldReceive('channel')->andReturn($spy);
+        Log::shouldReceive('getFacadeRoot')->andReturn($spy);
+
+        $sale = $this->sale();
+        $invoice = $this->pendingInvoiceFor($sale);
+
+        // Cuatro barridos seguidos, como los de una hora.
+        for ($i = 0; $i < 4; $i++) {
+            app()->call([new EmitElectronicInvoiceJob($invoice->id), 'handle']);
+            $invoice->fresh()->forceFill(['status' => InvoiceStatus::PENDING])->save();
+        }
+
+        $spy->shouldHaveReceived('warning')
+            ->withArgs(fn (string $evento) => $evento === 'billing.emission_blocked')
+            ->once();
+    }
+
+    /**
+     * Y cuando la ventana se cierra, el aviso vuelve CON LA CUENTA.
+     *
+     * Es la diferencia entre deduplicar y ocultar. Lo que se pierde es la
+     * repetición; el hecho de que la solicitud lleva bloqueándose todo ese
+     * rato, no: vuelve en el siguiente aviso.
+     */
+    public function test_al_cerrarse_la_ventana_el_aviso_vuelve_con_lo_silenciado(): void
+    {
+        Http::fake();
+        config()->set('billing.emission_blocked_log_minutes', 360);
+
+        $sale = $this->sale();
+        $invoice = $this->pendingInvoiceFor($sale);
+
+        // Primer aviso + dos barridos silenciados.
+        for ($i = 0; $i < 3; $i++) {
+            app()->call([new EmitElectronicInvoiceJob($invoice->id), 'handle']);
+            $invoice->fresh()->forceFill(['status' => InvoiceStatus::PENDING])->save();
+        }
+
+        $this->travel(7)->hours();
+
+        $spy = Log::spy();
+        Log::shouldReceive('channel')->andReturn($spy);
+        Log::shouldReceive('getFacadeRoot')->andReturn($spy);
+
+        app()->call([new EmitElectronicInvoiceJob($invoice->id), 'handle']);
+
+        $spy->shouldHaveReceived('warning')
+            ->withArgs(fn (string $evento, array $ctx) => $evento === 'billing.emission_blocked'
+                && ($ctx['silenciados_desde_el_ultimo_aviso'] ?? 0) === 2)
+            ->once();
     }
 }
