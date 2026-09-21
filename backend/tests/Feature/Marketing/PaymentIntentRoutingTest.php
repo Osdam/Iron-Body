@@ -502,6 +502,19 @@ class PaymentIntentRoutingTest extends TestCase
                 SalesIntents::NOT_INTERESTED,
                 'Sin problema, aquí quedo por si más adelante quieres retomarlo.',
             ],
+            // Interés NO es intención de pagar. El turno tiene que avanzar
+            // comercialmente —recomendar, preguntar el objetivo— sin poner un
+            // enlace pagable delante de alguien que todavía está mirando.
+            'me interesa' => [
+                'me interesa',
+                SalesIntents::HIGH_INTENT_CLOSE,
+                'Perfecto. Para recomendarte bien, ¿buscas bajar de peso, ganar masa o mantenerte?',
+            ],
+            'suena bien' => [
+                'suena bien, cuéntame más',
+                SalesIntents::GENERAL_INFO,
+                'Claro, el {{PLAN_NAME}} incluye acceso ilimitado y asesoría con entrenador de planta.',
+            ],
         ];
     }
 
