@@ -622,4 +622,313 @@ class CortesiaTest extends TestCase
 
         $this->assertNotSame('', trim($saliente), 'el turno se quedó mudo con la fila ya escrita');
     }
+
+    // ── La honestidad la sostiene el ESTADO, no el formato de la fecha ───────
+
+    /** Deja una solicitud REGISTRADA (sábado 26 a las 10) y devuelve su fila. */
+    private function conSolicitudRegistrada(): MarketingAgentAction
+    {
+        $this->turno('quiero conocer el gym el sabado a las 10', 'w.st.0', [
+            'courtesy_date' => '2026-09-26', 'courtesy_time' => '10:00',
+        ])->assertOk();
+
+        $a = $this->solicitud();
+        $this->assertNotNull($a);
+        $this->assertSame(MarketingAgentAction::STATUS_SUGGESTED, $a->status);
+
+        return $a;
+    }
+
+    /** El saliente del último turno, en minúsculas. */
+    private function ultimoSaliente(): string
+    {
+        return mb_strtolower((string) MarketingMessage::where('conversation_id', $this->conversation->id)
+            ->where('direction', MarketingMessage::DIRECTION_OUTBOUND)->latest('id')->first()?->body);
+    }
+
+    /** Un turno que sólo redacta: no pide herramientas ni toca la solicitud. */
+    private function soloTexto(string $borrador, string $wamid): void
+    {
+        $this->turno('ok', $wamid, [
+            'tools_requested' => [], 'courtesy_action' => null,
+            'courtesy_date' => null, 'courtesy_time' => null,
+            'reply_draft' => $borrador,
+        ])->assertOk();
+    }
+
+    /** @return array<string,array{0:string}> */
+    public static function afirmacionesConFechaLibre(): array
+    {
+        return [
+            'dia en cifra' => ['Te esperamos el 26 para que conozcas todo.'],
+            'dia con mes' => ['Te esperamos el 26 de septiembre.'],
+            'fecha con barra' => ['Te esperamos el 26/09.'],
+            'este mas cifra' => ['Te esperamos este 26.'],
+            'la una en singular' => ['Te esperamos a la 1.'],
+            'hora en plural' => ['Te esperamos a las 10.'],
+            'sin fecha ninguna' => ['Te esperamos, ya está todo listo.'],
+            // Las cinco formas verbales que la revisión midió escapándose:
+            // cambiar la carrera de los formatos de fecha por una de formas
+            // verbales habría sido cambiar de carrera, no ganarla.
+            'primera del plural sin esperar' => ['Nos vemos el sábado a las 10.'],
+            'primera del singular' => ['Te espero el sábado a las 10.'],
+            'participio suelto' => ['Listo, agendado para el sábado.'],
+            'la persona dada por anotada' => ['Ya estás anotado para el 26.'],
+            'el cupo apartado' => ['Tu cupo quedó apartado.'],
+        ];
+    }
+
+    /**
+     * Con la solicitud REGISTRADA, ninguna forma de escribir el día sale.
+     *
+     * Ésta es la prueba de que la guarda dejó de depender de acertar con el
+     * formato de la fecha. Antes se perseguía cada forma con una regex y cada
+     * forma nueva era un agujero: «el 26» se escapaba, y ensanchar el patrón
+     * a ciegas retiraba frases honestas. Ahora la verdad la sostiene el CRM:
+     * si hay una solicitud sin confirmar, «te esperamos» miente, escriba el
+     * modelo la fecha como la escriba o no la escriba.
+     */
+    #[DataProvider('afirmacionesConFechaLibre')]
+    public function test_con_la_solicitud_registrada_ninguna_afirmacion_sale(string $borrador): void
+    {
+        $this->conSolicitudRegistrada();
+        $this->soloTexto($borrador, 'w.st.'.md5($borrador));
+
+        $saliente = $this->ultimoSaliente();
+
+        $this->assertStringNotContainsString('te esperamos', $saliente);
+        $this->assertNotSame('', trim($saliente), 'el turno no puede quedarse mudo');
+
+        // Y lo que la persona lee sobre el estado lo escribe Laravel, con la
+        // fecha de la fila: ni la inventa el modelo ni se queda sin decir.
+        $this->assertStringContainsString('dejé registrada tu solicitud de cortesía', $saliente);
+        $this->assertStringContainsString('sábado 26 de septiembre a las 10:00', $saliente);
+        $this->assertStringContainsString('el equipo de iron body la revisará', $saliente);
+    }
+
+    /** @return array<string,array{0:string,1:string}> */
+    public static function frasesHonestasConSolicitud(): array
+    {
+        return [
+            'niega que este agendado' => ['Todavía no quedaste agendado: el equipo revisa la solicitud.', 'todavía no quedaste agendado'],
+            'niega la confirmacion' => ['Tu visita aún no está confirmada, el equipo la revisa.', 'aún no está confirmada'],
+            'cuenta lo que hizo' => ['Dejé registrada tu solicitud y el equipo la revisará.', 'dejé registrada tu solicitud'],
+            // Perifrástica: el «no» va delante de «hemos confirmado», no del
+            // participio, y la comprobación de negación no lo veía.
+            'niega en plural' => ['Aún no hemos confirmado tu cita, el equipo la revisa.', 'no hemos confirmado tu cita'],
+            'el uno a uno' => ['El 1 a 1 con el entrenador va incluido en tu plan.', 'el 1 a 1 con el entrenador'],
+            'una direccion' => ['El 5 de la carrera 5 es la entrada principal.', 'el 5 de la carrera 5'],
+        ];
+    }
+
+    /**
+     * Y lo honesto sigue saliendo, incluso con la solicitud registrada.
+     *
+     * Es la otra mitad y la que impide que el arreglo sea una mordaza: negar
+     * que esté agendado es la frase que MÁS queremos que el asesor escriba, y
+     * un número en una dirección o en un porcentaje no afirma ninguna cita.
+     */
+    #[DataProvider('frasesHonestasConSolicitud')]
+    public function test_con_la_solicitud_registrada_lo_honesto_sigue_saliendo(string $borrador, string $esperado): void
+    {
+        $this->conSolicitudRegistrada();
+        $this->soloTexto($borrador, 'w.hon.'.md5($borrador));
+
+        $this->assertStringContainsString($esperado, $this->ultimoSaliente());
+    }
+
+    /**
+     * CANCELADA: tampoco se puede decir que sigue en pie.
+     *
+     * `openFor()` deja de verla —cancelar la saca de los estados abiertos— y
+     * sin mirar el estado la frase volvería a depender de la regex con fecha,
+     * que es justo lo que no queremos. Lo que decide es que esta conversación
+     * TIENE una cortesía; su estado decide qué se dice en su lugar.
+     */
+    public function test_cancelada_no_puede_seguir_diciendo_que_hay_visita(): void
+    {
+        $this->conSolicitudRegistrada();
+
+        $this->turno('ya no voy a poder, cancela', 'w.st.can', [
+            'courtesy_action' => 'cancel', 'courtesy_date' => null, 'courtesy_time' => null,
+            'reply_draft' => 'Sin problema, cancelé la solicitud.',
+        ])->assertOk();
+
+        $this->assertSame(MarketingAgentAction::STATUS_CANCELLED, $this->solicitud()->status);
+
+        $this->soloTexto('Te esperamos el 26 igualmente.', 'w.st.can2');
+
+        $saliente = $this->ultimoSaliente();
+        $this->assertStringNotContainsString('te esperamos', $saliente);
+        $this->assertNotSame('', trim($saliente), 'el turno no puede quedarse mudo');
+        // Cancelada no es «registrada»: el acta no puede resucitarla.
+        $this->assertStringNotContainsString('dejé registrada tu solicitud', $saliente);
+    }
+
+    /**
+     * CUMPLIDA: no se trata como una solicitud pendiente.
+     *
+     * Una visita del pasado no autoriza a esperar a nadie hoy, y tampoco
+     * puede hacer que el acta anuncie una solicitud que ya no está viva.
+     */
+    public function test_cumplida_no_se_trata_como_pendiente(): void
+    {
+        $a = $this->conSolicitudRegistrada();
+        $a->forceFill(['status' => MarketingAgentAction::STATUS_EXECUTED])->save();
+
+        $this->soloTexto('Te esperamos el 26 como quedamos.', 'w.st.exec');
+
+        $saliente = $this->ultimoSaliente();
+        $this->assertStringNotContainsString('te esperamos', $saliente);
+        $this->assertStringNotContainsString('dejé registrada tu solicitud', $saliente);
+        $this->assertNotSame('', trim($saliente), 'el turno no puede quedarse mudo');
+    }
+
+    /**
+     * El corpus de falsos positivos, contra la guarda directamente.
+     *
+     * Va aquí y no de punta a punta por un motivo que conviene dejar escrito:
+     * «el 80% de los socios entrena en la tarde» NO llega a salir, pero no por
+     * la cortesía —la guarda de cortesía la deja pasar, que es lo que se mide
+     * aquí— sino porque {@see ComposerStyleGuard} la rechaza como testimonio
+     * sin fuente. Es un cerrojo distinto, anterior a este cambio, y está
+     * haciendo exactamente su trabajo: una estadística inventada sobre los
+     * socios no tiene por qué salir. Bajarlo para que este test pasara sería
+     * adaptar el sistema al test.
+     */
+    public function test_el_corpus_de_falsos_positivos_no_activa_la_cortesia(): void
+    {
+        $guard = app(\App\Services\Marketing\OutboundContentGuard::class);
+
+        foreach ([
+            'El 1 a 1 con el entrenador va incluido en tu plan.',
+            'El 80% de los socios entrena en la tarde.',
+            'El 20% de la gente viene temprano.',
+            'El 5 de la carrera 5 es la entrada principal.',
+            'Estamos en el 5-40 de la carrera 10.',
+            'El piso 3 es el área de pesas.',
+            'Tu visita aún no está confirmada, el equipo la revisa.',
+            'Todavía no quedaste agendado: el equipo revisa la solicitud.',
+            'No te reservé el cupo, eso lo confirma el equipo.',
+            'Aún no hemos confirmado tu cita, el equipo la revisa.',
+            /*
+             * Lo anotado es la SOLICITUD, no la persona: es verdad y la
+             * guarda de cortesía la deja pasar. De punta a punta no sale, pero
+             * por otro cerrojo y con razón: la invariante de promesas es de
+             * ALCANCE DE TURNO, y en un turno que no registra nada, decir
+             * «queda anotada» afirma un efecto que ese turno no produce.
+             */
+            'Queda anotada tu solicitud para que el equipo la revise.',
+            'Dejé anotado el día que me dijiste.',
+            'La zona reservada para funcionales está al fondo.',
+            'Tenemos un espacio reservado para el entrenamiento personalizado.',
+        ] as $frase) {
+            $this->assertNull($guard->courtesyClaimIn($frase), 'se retiró una frase honesta: '.$frase);
+        }
+
+        // Y lo que sí miente sigue cayendo, incluso con una negación que
+        // pertenece a otra oración de la misma frase.
+        foreach ([
+            'No hay problema, quedaste agendado para el sábado.',
+            'Tu cita, no te preocupes, quedó confirmada.',
+            'Te esperamos este 26.',
+            'Te esperamos a la 1.',
+            'Nos vemos el sábado a las 10.',
+            'Te espero el sábado a las 10.',
+            'Listo, agendado para el sábado.',
+            'Ya estás anotado para el 26.',
+            'Tu cupo quedó apartado.',
+            'Quedaste agendado para el sábado, y aquí está tu link https://checkout.wompi.co/l/ABC',
+        ] as $frase) {
+            $this->assertNotNull($guard->courtesyClaimIn($frase), 'se dejó pasar una mentira: '.$frase);
+        }
+    }
+
+    /**
+     * Lo que va detrás de un salto de línea no se retira con la frase.
+     *
+     * El bloque del cobro se pega con `\n\n` y no lleva punto final, así que
+     * cortando sólo por `.!?` un borrador sin puntuación era UNA pieza: la
+     * frase y el enlace se iban juntos. Un enlace de pago ya acuñado no se
+     * puede anular, así que tragárselo deja a la persona con un cobro vivo que
+     * nunca vio. Aquí se mide el mecanismo que lo impide sin necesidad de
+     * acuñar nada.
+     */
+    public function test_lo_que_va_tras_un_salto_de_linea_sobrevive(): void
+    {
+        $this->conSolicitudRegistrada();
+        $this->soloTexto("Te esperamos el 26\n\nCualquier duda me escribes por aquí", 'w.st.salto');
+
+        $saliente = $this->ultimoSaliente();
+
+        $this->assertStringNotContainsString('te esperamos', $saliente);
+        $this->assertStringContainsString('cualquier duda me escribes', $saliente);
+    }
+
+    /**
+     * Una solicitud cuya fecha ya pasó no se anuncia como pendiente.
+     *
+     * Nada caduca las `suggested`: si nadie la aprueba ni la cancela, la fila
+     * sigue abierta para siempre. Sin esto, el acta le decía a la persona el
+     * día 30 que su visita del 26 seguía pendiente.
+     */
+    public function test_una_solicitud_vencida_no_se_anuncia_con_su_fecha(): void
+    {
+        $this->conSolicitudRegistrada();
+
+        // Cuatro días después de la visita pedida, con la fila intacta.
+        Carbon::setTestNow(Carbon::parse('2026-09-30 14:00', 'UTC'));
+
+        $this->soloTexto('Te esperamos como quedamos.', 'w.st.vieja');
+
+        $saliente = $this->ultimoSaliente();
+
+        $this->assertStringNotContainsString('te esperamos', $saliente);
+        $this->assertStringNotContainsString('26 de septiembre', $saliente, 'el acta anunció como pendiente una fecha que ya pasó');
+        $this->assertNotSame('', trim($saliente), 'el turno no puede quedarse mudo');
+    }
+
+    /**
+     * Y SIN cortesía de por medio, una despedida sigue siendo una despedida.
+     *
+     * Aquí manda la defensa secundaria, la que pide el cuándo. Si el estado
+     * mandara también en las conversaciones que nunca hablaron de una visita,
+     * el asesor no podría despedirse sin sonar a cita.
+     */
+    public function test_sin_cortesia_la_despedida_sigue_saliendo(): void
+    {
+        $this->soloTexto('Claro que sí, te esperamos en la sede de la carrera 5 con gusto.', 'w.st.sede');
+
+        $this->assertStringContainsString('te esperamos en la sede', $this->ultimoSaliente());
+        $this->assertSame(0, MarketingAgentAction::count());
+    }
+
+    /**
+     * Un enlace EN MEDIO de la frase no desactiva la guarda.
+     *
+     * El perdón a los trozos con URL nació para no tragarse un cobro ya
+     * acuñado, y se pasó de largo: los enlaces de la app se insertan donde el
+     * modelo los quiso, o sea dentro de su prosa, así que la presencia de una
+     * URL acababa siendo un interruptor para apagar la guarda entera. Ahora
+     * sólo se perdona el trozo que ES el enlace.
+     *
+     * Y el precio está elegido a conciencia: si la mentira y unos enlaces de
+     * app viajan pegados, se van los dos. Volver a mandar los enlaces no
+     * cuesta nada; mandar a alguien un día que nadie preparó, sí.
+     */
+    public function test_un_enlace_en_la_misma_frase_no_desactiva_la_guarda(): void
+    {
+        $this->conSolicitudRegistrada();
+
+        $this->turno('mandame la app', 'w.st.links', [
+            'tools_requested' => [SalesIntents::TOOL_APP_LINKS_SEND],
+            'courtesy_action' => null, 'courtesy_date' => null, 'courtesy_time' => null,
+            'reply_draft' => 'Quedaste agendado para el sábado y aquí tienes la app {{APP_LINKS}}',
+        ])->assertOk();
+
+        $saliente = $this->ultimoSaliente();
+
+        $this->assertStringNotContainsString('quedaste agendado', $saliente, 'un enlace en la frase apagó la guarda');
+        $this->assertNotSame('', trim($saliente), 'el turno no puede quedarse mudo');
+    }
 }

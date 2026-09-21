@@ -2182,10 +2182,6 @@ class UltronCommitService
         string $respuesta,
         MarketingAiAction $action,
     ): string {
-        if ($this->contentGuard->courtesyConfirmationIn($respuesta) === null) {
-            return $respuesta;
-        }
-
         /*
          * Una cita real y TODAVÍA POR VENIR hace verdadera la frase.
          *
@@ -2211,16 +2207,93 @@ class UltronCommitService
             return $respuesta;
         }
 
-        $frases = preg_split('/(?<=[.!?])\s+/u', trim($respuesta)) ?: [];
+        /*
+         * LA DEFENSA PRINCIPAL ES EL ESTADO, NO LA FECHA.
+         *
+         * Perseguir con una regex todas las formas de escribir un día —«el
+         * 26», «el 26 de septiembre», «el 26/09», «este 26», «a la 1»— es una
+         * carrera que no se gana: cada forma nueva es un agujero, y
+         * ensancharla a ciegas se midió que retira frases honestas («el 1 a 1
+         * con el entrenador», «el 80% de los socios», «el 5 de la carrera 5»).
+         *
+         * Si esta conversación TIENE una solicitud de cortesía, el CRM ya sabe
+         * la verdad sin adivinar nada: no está confirmada. Entonces cualquier
+         * «te esperamos» habla de esa visita y no puede salir, venga la fecha
+         * escrita como venga o sin fecha ninguna. La regex con ancla temporal
+         * se queda como defensa SECUNDARIA para las conversaciones donde no
+         * hay ninguna solicitud de por medio, que son las que todavía pueden
+         * despedirse con un «te esperamos en la sede» sin mentir.
+         */
+        $solicitud = $this->courtesy->latestFor($conversation);
+        $porEstado = $solicitud !== null;
+
+        $afirma = fn (string $frase): ?string => $porEstado
+            ? $this->contentGuard->courtesyClaimIn($frase)
+            : $this->contentGuard->courtesyConfirmationIn($frase);
+
+        if ($afirma($respuesta) === null) {
+            return $respuesta;
+        }
+
+        /*
+         * SE CORTA TAMBIÉN POR SALTO DE LÍNEA, Y EL SEPARADOR SE CONSERVA.
+         *
+         * El bloque del cobro se pega con `\n\n` y no lleva punto final, así
+         * que cortando sólo por `.!?` un borrador sin puntuación era UNA sola
+         * pieza: la frase y el enlace viajaban juntos y se retiraban juntos.
+         * Ese enlace ya está acuñado y no se puede anular desde aquí, así que
+         * tragárselo deja a la persona con un cobro vivo que nunca vio.
+         *
+         * Cortar también por `\n` separa las dos cosas y permite retirar la
+         * frase SIN tocar el enlace, que es mejor que elegir entre una de las
+         * dos. Los separadores se capturan y se vuelven a poner, para que el
+         * mensaje conserve sus saltos de línea tal cual.
+         */
+        $trozos = preg_split('/((?<=[.!?])\s+|\n+)/u', trim($respuesta), -1, PREG_SPLIT_DELIM_CAPTURE) ?: [];
+
+        // Cada pieza con el separador que la sigue, para poder rehacer el
+        // mensaje con sus saltos de línea intactos.
+        $piezas = [];
+        for ($i = 0; $i < count($trozos); $i += 2) {
+            if (trim($trozos[$i]) === '') {
+                continue;
+            }
+            $piezas[] = [$trozos[$i], $trozos[$i + 1] ?? ''];
+        }
+
+        /*
+         * SÓLO SE PERDONA LA PIEZA QUE **ES** UN ENLACE.
+         *
+         * Perdonar cualquier pieza que CONTENGA un enlace convertía la
+         * presencia de una URL en un interruptor para apagar la guarda: los
+         * enlaces de la app se insertan donde el modelo los quiso, o sea en
+         * medio de su prosa, así que «quedaste agendado para el sábado, y aquí
+         * está tu link https://…» salía entero. El bloque del cobro no
+         * necesitaba ese permiso: va aislado con `\n\n` y el corte por salto
+         * de línea ya lo deja en su propia pieza.
+         */
+        $frases = array_column($piezas, 0);
         $limpias = array_values(array_filter(
-            $frases,
-            fn (string $frase) => $this->contentGuard->courtesyConfirmationIn($frase) === null,
+            $piezas,
+            fn (array $p) => $afirma($p[0]) === null || preg_match('/^\s*https?:\/\/\S+\s*$/u', $p[0]) === 1,
         ));
 
-        $limpio = trim(implode(' ', $limpias));
+        // El separador va ENTRE piezas que sobreviven: ponerlo antes de saber
+        // si la siguiente se queda dejaba dobles espacios donde se retiró algo.
+        $salida = '';
+        foreach ($limpias as $i => [$texto, $sep]) {
+            $salida .= $texto;
+            if ($i < count($limpias) - 1) {
+                $salida .= $sep !== '' ? $sep : ' ';
+            }
+        }
+
+        $limpio = trim($salida);
 
         ChannelLog::error('ultron.courtesy.claimed_confirmed', [
             'conversation_id' => (int) $conversation->id,
+            'modo' => $porEstado ? 'estado' : 'texto',
+            'estado_solicitud' => $solicitud?->status,
             'frases_retiradas' => count($frases) - count($limpias),
             'quedo_vacio' => $limpio === '',
         ]);
@@ -2241,6 +2314,18 @@ class UltronCommitService
          * falsa acababa afirmando una cortesía falsa. Se elige según lo que de
          * verdad hay escrito en la conversación.
          */
+        /*
+         * Y la afirmación de estado la pone LARAVEL, con la fecha y la hora
+         * que están en la fila. El modelo puede seguir escribiendo alrededor
+         * —y lo que escriba sale—, pero lo que la persona lee sobre en qué
+         * punto está su visita no depende de que el modelo lo redacte bien.
+         */
+        $acta = $this->courtesy->actaDe($this->courtesy->openFor($conversation));
+
+        if ($acta !== null) {
+            return $limpio !== '' ? $limpio.' '.$acta : $acta;
+        }
+
         if ($limpio !== '') {
             return $limpio;
         }

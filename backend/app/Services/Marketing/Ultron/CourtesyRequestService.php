@@ -180,4 +180,74 @@ class CourtesyRequestService
             ->latest('id')
             ->first();
     }
+
+    /**
+     * La ÚLTIMA solicitud de cortesía de la conversación, en cualquier estado.
+     *
+     * `openFor()` sólo ve las vivas, y eso no basta para decidir si una frase
+     * miente: una solicitud cancelada o ya cumplida tampoco autoriza a decir
+     * «te esperamos el 26». Lo que importa para callar una afirmación es que
+     * esta conversación TENGA una cortesía de por medio; cuál es su estado
+     * decide qué se dice en su lugar, no si se calla.
+     */
+    public function latestFor(MarketingConversation $conversation): ?MarketingAgentAction
+    {
+        return MarketingAgentAction::query()
+            ->where('marketing_conversation_id', $conversation->id)
+            ->where('action_type', MarketingAgentAction::TYPE_CREATE_APPOINTMENT)
+            ->where('payload->source', 'ultron')
+            ->latest('id')
+            ->first();
+    }
+
+    /**
+     * El acta de la solicitud, escrita por Laravel a partir de la FILA.
+     *
+     * Ésta es la frase que la persona lee sobre el estado de su visita, y no
+     * la escribe el modelo: sale de `requested_at_local`, que
+     * es lo que el equipo va a ver en su panel. Mientras la solicitud siga
+     * abierta —nadie la ha confirmado— el acta dice exactamente eso y nada
+     * más, así que no puede envejecer ni exagerar.
+     *
+     * Devuelve null cuando no hay nada que certificar: sin solicitud abierta,
+     * o sin fecha legible en el payload.
+     */
+    public function actaDe(?MarketingAgentAction $accion): ?string
+    {
+        if ($accion === null || ! in_array($accion->status, MarketingAgentAction::OPEN_STATUSES, true)) {
+            return null;
+        }
+
+        $cuando = data_get($accion->payload, 'requested_at_local');
+        if (! is_string($cuando) || $cuando === '') {
+            return null;
+        }
+
+        try {
+            $d = Carbon::parse($cuando, BusinessClock::TZ);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        /*
+         * Una fecha que ya pasó no se anuncia como pendiente.
+         *
+         * Nada caduca las solicitudes `suggested`: si nadie la aprueba ni la
+         * cancela, la fila sigue abierta para siempre. Sin esto, el día 30 se
+         * le decía a la persona «tu solicitud para el 26 está pendiente», que
+         * es un acta que envejeció sin que nadie la tocara. Se devuelve null y
+         * el respaldo genérico dice lo mismo sin fecha.
+         */
+        if ($d->isPast()) {
+            return null;
+        }
+
+        $dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+        $meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+        $fecha = $dias[$d->dayOfWeek].' '.$d->day.' de '.$meses[$d->month - 1];
+
+        return 'Dejé registrada tu solicitud de cortesía para el '.$fecha.' a las '.$d->format('H:i')
+            .'. El equipo de Iron Body la revisará para tener todo preparado.';
+    }
 }

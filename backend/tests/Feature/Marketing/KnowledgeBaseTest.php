@@ -234,4 +234,71 @@ class KnowledgeBaseTest extends TestCase
 
         $this->assertTrue((bool) $lead->fresh()->do_not_contact);
     }
+
+    /**
+     * EL PLAN RECOMENDADO SALE PRIMERO, Y LA COTIZACIÓN POR DEFECTO NO SE MUEVE.
+     *
+     * Son dos cosas distintas que comparten tabla y que es fácil confundir:
+     * `is_recommended` decide QUÉ SE OFRECE PRIMERO y `sort_order` decide QUÉ
+     * SE COTIZA ante un «¿cuánto vale?» genérico. Poner un plan arriba moviendo
+     * su `sort_order` —que es lo que parece natural— cambiaría en silencio el
+     * precio por defecto, y nadie lo notaría hasta oír una cifra rara.
+     *
+     * El catálogo llega al modelo ya ordenado, así que ningún prompt necesita
+     * el id, el nombre ni el precio del plan insignia: el día que el negocio
+     * cambie de buque insignia, se marca en el panel y no se despliega nada.
+     */
+    public function test_el_plan_recomendado_encabeza_el_catalogo_sin_mover_la_cotizacion(): void
+    {
+        $semana = Plan::create(['name' => 'Plan Semana', 'price' => 20000, 'duration_days' => 7, 'active' => true, 'sellable' => true, 'sort_order' => 1]);
+        $mensual = Plan::create(['name' => 'Plan Mensual', 'price' => 80000, 'duration_days' => 30, 'active' => true, 'sellable' => true, 'sort_order' => 3]);
+        $insignia = Plan::create(['name' => 'TOTAL ACCESS - ELITE', 'price' => 150000, 'duration_days' => 30, 'active' => true, 'sellable' => true, 'sort_order' => 108]);
+
+        $kb = app(MarketingKnowledgeBaseService::class);
+
+        // Sin marcar: manda `sort_order` y el insignia queda el último.
+        $catalogo = $kb->activePlans();
+        $this->assertSame($semana->id, $catalogo[0]['id']);
+        $this->assertSame($insignia->id, end($catalogo)['id']);
+        $this->assertSame($mensual->id, $kb->defaultMonthlyPlan()->id);
+
+        $insignia->forceFill(['is_recommended' => true])->save();
+
+        // Marcado: encabeza el catálogo...
+        $catalogo = app(MarketingKnowledgeBaseService::class)->activePlans();
+        $this->assertSame($insignia->id, $catalogo[0]['id'], 'el plan recomendado no encabeza el catálogo');
+        $this->assertTrue($catalogo[0]['is_recommended']);
+
+        // ...y el resto conserva su orden detrás.
+        $this->assertSame([$semana->id, $mensual->id], [$catalogo[1]['id'], $catalogo[2]['id']]);
+
+        // ...pero la cotización por defecto sigue siendo la mensual.
+        $this->assertSame(
+            $mensual->id,
+            app(MarketingKnowledgeBaseService::class)->defaultMonthlyPlan()->id,
+            'marcar el plan insignia movió el precio que se cotiza por defecto',
+        );
+
+        // Y el catálogo sigue trayendo precio y beneficios del CRM, no del código.
+        $this->assertSame(150000.0, $catalogo[0]['price']);
+        $this->assertSame(30, $catalogo[0]['duration_days']);
+    }
+
+    /**
+     * Y si el insignia deja de ser vendible, la prioridad se evapora sola.
+     *
+     * Sin esto, un plan retirado del catálogo podría seguir encabezándolo.
+     */
+    public function test_un_recomendado_no_vendible_desaparece_del_catalogo(): void
+    {
+        Plan::create(['name' => 'Plan Mensual', 'price' => 80000, 'duration_days' => 30, 'active' => true, 'sellable' => true, 'sort_order' => 3]);
+        $insignia = Plan::create(['name' => 'TOTAL ACCESS - ELITE', 'price' => 150000, 'duration_days' => 30, 'active' => true, 'sellable' => true, 'sort_order' => 108, 'is_recommended' => true]);
+
+        $this->assertSame($insignia->id, app(MarketingKnowledgeBaseService::class)->activePlans()[0]['id']);
+
+        $insignia->forceFill(['sellable' => false])->save();
+
+        $catalogo = app(MarketingKnowledgeBaseService::class)->activePlans();
+        $this->assertNotContains($insignia->id, array_column($catalogo, 'id'), 'un plan no vendible siguió en el catálogo');
+    }
 }

@@ -249,20 +249,110 @@ class OutboundContentGuard
      * que es justo la mentira que esto persigue: entre el «no» y la afirmación
      * sólo cabe relleno.
      */
-    private const NIEGA_LA_CITA = '/\b(no|nunca|tampoco|jamas|sin)(\s+(todavia|aun|ya|aqui|te|le|se|me|lo|la))*\s*$/u';
+    private const NIEGA_LA_CITA = '/\b(no|nunca|tampoco|jamas|sin)(\s+(todavia|aun|ya|aqui|te|le|se|me|lo|la|hemos|he|han|ha|puedo|podemos|voy\s+a|vamos\s+a))*\s*$/u';
+
+    /**
+     * La misma negación, pero mirando desde el PARTICIPIO.
+     *
+     * Hay una forma honesta que la comprobación de arriba no podía ver: «tu
+     * visita AÚN NO está confirmada». Ahí el patrón empieza en «tu visita», o
+     * sea ANTES de la negación, así que el «no» queda dentro de lo que casa y
+     * mirar sólo lo que hay delante no encuentra nada. Se midió: esa frase
+     * —que es de las que más queremos que el asesor escriba— se retiraba.
+     *
+     * Por eso se mira también justo delante del participio, y ahí sí pueden
+     * mediar las cópulas. Sigue siendo una ventana pegada y cortada por coma:
+     * «tu cita, no te preocupes, quedó confirmada» no se salva, porque su
+     * negación pertenece a otra oración.
+     */
+    private const NIEGA_ANTES_DEL_PARTICIPIO = '/\b(no|nunca|tampoco|jamas)(\s+(todavia|aun|ya|te|le|se|me|lo|la|esta|estas|estan|es|son|fue|va|sera|quedo|queda|quedas|ha|han|hemos))*\s*$/u';
+
+    /**
+     * Esperar a alguien, SIN pedir el cuándo.
+     *
+     * El ancla temporal de arriba existe para distinguir una despedida —«te
+     * esperamos en la sede»— de una cita. Pero cuando el CRM ya sabe que hay
+     * una solicitud de cortesía sin confirmar, esa distinción sobra: cualquier
+     * «te esperamos» habla de ESA visita, y la visita no está confirmada.
+     *
+     * Por eso este patrón no mira la fecha. Perseguir todas las formas de
+     * escribir un día —«el 26», «el 26 de septiembre», «el 26/09», «este 26»,
+     * «a la 1»— era una carrera perdida: cada forma nueva es un agujero, y
+     * ensanchar la regex a ciegas ya se midió que retira frases honestas («el
+     * 1 a 1 con el entrenador», «el 80% de los socios», «el 5 de la carrera
+     * 5»). El estado persistido sabe la verdad sin adivinar nada.
+     */
+    private const AFIRMA_ESPERANDO = [
+        '/\b(te|los?|las?)\s+esperamos\b/u',
+        // La primera persona del singular. «Te espero el sábado» dice lo mismo
+        // que «te esperamos» y se escapaba por el número del verbo.
+        '/\bte\s+espero\b/u',
+        // «Nos vemos el sábado a las 10» afirma la cita sin nombrarla.
+        '/\bnos\s+vemos\b/u',
+        /*
+         * La PERSONA dada por anotada, en segunda persona.
+         *
+         * Va con `estas` y no con `queda` a propósito: «queda anotada tu
+         * solicitud» es verdad y tiene que salir —lo que está anotado es la
+         * SOLICITUD—, mientras que «ya estás anotado» habla de la persona y de
+         * una visita que nadie ha confirmado.
+         */
+        '/\b(ya\s+)?estas\s+(anotad|agendad|apartad|reservad|confirmad)[oa]\b/u',
+        // El participio suelto: «Listo, agendado para el sábado». Exige
+        // `para`, que es lo que lo ata a una fecha; «dejé anotado el día que
+        // me dijiste» no afirma ninguna cita y no cae.
+        // `reservad` NO entra aquí: «la zona reservada para funcionales» y
+        // «un espacio reservado para el entrenamiento» son frases honestas y
+        // frecuentes en un gimnasio. Reservar un CUPO ya lo cazan el patrón de
+        // «te reservé … cupo» y el de «tu cupo … apartado», así que quitarlo
+        // de esta alternancia cierra el falso positivo sin perder cobertura.
+        '/\b(agendad[oa]|anotad[oa]|apartad[oa])\s+para\b/u',
+        // «Tu cupo quedó apartado».
+        '/\b(tu|su)\s+cupo\b[^.!?]{0,20}\b(qued(o|a)|esta|fue)\s+(apartad|guardad|reservad|confirmad|asegurad)/u',
+    ];
 
     /**
      * ¿El borrador da por confirmada una cortesía? Devuelve la frase, o null.
+     *
+     * Defensa SECUNDARIA: pide el cuándo, así que sólo cae lo que se parece a
+     * una cita. Es la que vale cuando no hay ninguna solicitud de por medio.
      */
     public function courtesyConfirmationIn(string $body): ?string
     {
+        return $this->primeraAfirmacionNoNegada($body, self::AFIRMA_CONFIRMADA);
+    }
+
+    /**
+     * Lo mismo, pero SIN exigir fecha: para cuando hay una solicitud viva.
+     *
+     * Ésta es la defensa principal, y no depende de haber acertado con el
+     * formato de la fecha sino de lo que el CRM tiene escrito.
+     */
+    public function courtesyClaimIn(string $body): ?string
+    {
+        return $this->primeraAfirmacionNoNegada(
+            $body,
+            [...self::AFIRMA_CONFIRMADA, ...self::AFIRMA_ESPERANDO],
+        );
+    }
+
+    /**
+     * La primera afirmación de estado que no venga negada.
+     *
+     * @param  string[]  $patrones
+     */
+    private function primeraAfirmacionNoNegada(string $body, array $patrones): ?string
+    {
         $t = SalesAgentDecisionSchema::normalize($body);
 
-        foreach (self::AFIRMA_CONFIRMADA as $patron) {
+        foreach ($patrones as $patron) {
             if (preg_match($patron, $t, $m, PREG_OFFSET_CAPTURE) !== 1) {
                 continue;
             }
             if ($this->citaNegadaAntesDe($t, (int) $m[0][1])) {
+                continue;
+            }
+            if ($this->negadaJustoAntesDelParticipio($t, $m)) {
                 continue;
             }
 
@@ -294,6 +384,34 @@ class OutboundContentGuard
         }
 
         return preg_match(self::NIEGA_LA_CITA, $antes) === 1;
+    }
+
+    /**
+     * ¿La negación va dentro de lo que casó, pegada al participio?
+     *
+     * El último grupo de cada patrón es la palabra que afirma el estado
+     * —«agendad», «confirmad», «reservad», «cupo»—. Lo que haya justo delante
+     * de ella, dentro de su propia oración, es lo que decide si la frase
+     * afirma o niega.
+     *
+     * @param  array<int, array{0:string,1:int}>  $m
+     */
+    private function negadaJustoAntesDelParticipio(string $texto, array $m): bool
+    {
+        $ultimo = end($m);
+        if (! is_array($ultimo) || ($ultimo[1] ?? -1) < 0) {
+            return false;
+        }
+
+        $antes = substr($texto, 0, (int) $ultimo[1]);
+
+        foreach (['.', '!', '?', ';', ','] as $fin) {
+            if (($corte = strrpos($antes, $fin)) !== false) {
+                $antes = substr($antes, $corte + 1);
+            }
+        }
+
+        return preg_match(self::NIEGA_ANTES_DEL_PARTICIPIO, $antes) === 1;
     }
 
     /**
