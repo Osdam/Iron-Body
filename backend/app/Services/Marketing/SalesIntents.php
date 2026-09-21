@@ -133,6 +133,16 @@ final class SalesIntents
     /** Laravel envía los enlaces oficiales de la app en un mensaje propio. Sin dinero en juego: siempre disponible. */
     public const TOOL_APP_LINKS_SEND = 'app_links_send';
 
+    /**
+     * Dejar REGISTRADA una solicitud de día de cortesía.
+     *
+     * Registrar no es agendar. Lo que esta herramienta escribe es una petición
+     * que una persona de Iron Body confirma a mano, y por eso el nombre dice
+     * `request`: el día que se llame `courtesy_book` alguien escribirá «quedaste
+     * agendado» y será mentira.
+     */
+    public const TOOL_COURTESY_REQUEST = 'courtesy_request';
+
     public const TOOL_SCHEDULE_FOLLOWUP = 'schedule_followup';
 
     // staff_review crea una alerta interna SIN tocar ai_enabled/human_takeover.

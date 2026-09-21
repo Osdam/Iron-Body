@@ -3,6 +3,7 @@
 namespace App\Services\Marketing\Ultron;
 
 use App\Models\MarketingAiAction;
+use App\Models\MarketingAppointment;
 use App\Models\MarketingConversation;
 use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
@@ -74,6 +75,18 @@ class UltronCommitService
      * No niega el cobro, no promete que nadie escriba y no inventa un enlace
      * que en ese momento no se pudo acuñar: dice lo que es verdad siempre.
      */
+    /** Lo que sale cuando el borrador entero daba por confirmada una visita. */
+    private const CORTESIA_SIN_CONFIRMAR = 'Dejé registrada tu solicitud de día de cortesía. El equipo de Iron Body la revisará para tener todo listo para tu visita.';
+
+    /**
+     * Cuando la guarda retira TODO y no hay ninguna solicitud de cortesía.
+     *
+     * No afirma nada: ni que algo quedó registrado, ni que alguien espera a
+     * nadie. Devuelve la conversación al único sitio donde puede seguir sin
+     * mentir, que es preguntar.
+     */
+    private const NADA_QUE_CONFIRMAR = 'Para no darte un dato equivocado: la visita la confirma el equipo de Iron Body. ¿Qué día y a qué hora te quedarían bien?';
+
     private const SIN_ENLACE_PERO_SIN_MENTIR = 'Puedes hacer el pago desde la app Iron Body Workout o directamente en el gimnasio. Dime qué plan quieres y lo dejamos listo.';
 
     private const LOCK_TTL_SECONDS = 60;
@@ -141,6 +154,8 @@ class UltronCommitService
         private readonly UltronAbortLatch $abortLatch = new UltronAbortLatch,
         private readonly StaffReviewAuthority $staffReview = new StaffReviewAuthority,
         private readonly PromiseAuthority $promises = new PromiseAuthority,
+        private readonly CourtesyRequestService $courtesy = new CourtesyRequestService,
+        private readonly GymFactsProvider $gym = new GymFactsProvider,
     ) {}
 
     /**
@@ -606,6 +621,14 @@ class UltronCommitService
             'missing_fields' => [],
             'recommended_action' => SalesIntents::ACTION_REPLY,
             'tools_requested' => $this->allowedTools((array) ($proposal['tools_requested'] ?? []), (int) $conversation->id),
+            /*
+             * El día y la hora de la cortesía viajan tal y como los propuso el
+             * modelo. No se interpretan aquí: quien decide si eso se puede
+             * registrar es {@see CourtesyAuthority}, contra el horario aprobado.
+             */
+            'courtesy_action' => $proposal['courtesy_action'] ?? null,
+            'courtesy_date' => $proposal['courtesy_date'] ?? null,
+            'courtesy_time' => $proposal['courtesy_time'] ?? null,
             'safe_to_send' => false,
             'responder' => 'ultron',
         ], $lead);
@@ -684,7 +707,63 @@ class UltronCommitService
                 true,
             );
 
-            if (! ($marcaAutorizada && $marcaEnElTurno)) {
+            /*
+             * LA CORTESÍA TAMBIÉN DEJA CONSTANCIA, Y AHÍ DECIR «LO DEJÉ
+             * REGISTRADO» NO ES UNA PROMESA: ES UN HECHO.
+             *
+             * Esta invariante nació contra un modelo que prometía que el equipo
+             * revisaría algo sin que nadie lo marcara. Pero la frase honesta de
+             * la cortesía —«dejé registrada tu solicitud»— engancha las mismas
+             * palabras, y sin esto el turno moriría en 422 justo después de
+             * haber escrito la fila correctamente: el agente no podría contar
+             * lo que acaba de hacer.
+             *
+             * La condición es la misma que para la marca, no una excepción: que
+             * el efecto esté AUTORIZADO y que la herramienta esté en el turno.
+             * Aquí la autorización es la propia ejecución, que ya corrió unos
+             * pasos antes y escribió la solicitud. Si la cortesía se rechazó
+             * —día cerrado, fecha pasada—, `tools_executed` no la trae y la
+             * frase vuelve a ser mentira, que es exactamente lo que tiene que
+             * pasar.
+             */
+            $cortesiaEnElTurno = in_array(
+                SalesIntents::TOOL_COURTESY_REQUEST,
+                (array) ($decision['tools_requested'] ?? []),
+                true,
+            );
+
+            // Esta comprobación corre ANTES que las herramientas, igual que la
+            // de la marca, así que pregunta si el efecto VA A OCURRIR y no si
+            // ocurrió: la autoridad es pura y contesta lo mismo aquí que allí.
+            /*
+             * CANCELAR SÓLO ES UN EFECTO SI HAY ALGO QUE CANCELAR.
+             *
+             * Esto cortocircuitaba en «cancel» sin preguntar nada más, y ahí
+             * se abría la invariante desde dentro: un turno que pide cancelar
+             * una solicitud que no existe no toca una sola fila —la
+             * herramienta contesta `courtesy_nothing_to_cancel`— y aun así
+             * desactivaba la comprobación entera. Con eso, «listo, lo dejo
+             * marcado para que el equipo te contacte» salía tal cual sin que
+             * nadie marcara nada ni nadie mirara nada: exactamente el fallo
+             * que esta invariante nació para impedir.
+             *
+             * La solicitud abierta se mira AQUÍ, antes de las herramientas,
+             * que es cuando todavía está viva: la cancelación la borra del
+             * mapa unos pasos después.
+             */
+            $cancela = ($decision['courtesy_action'] ?? 'request') === 'cancel';
+
+            $cortesiaRegistrada = $cortesiaEnElTurno && (
+                $cancela
+                    ? $this->courtesy->openFor($conversation) !== null
+                    : CourtesyAuthority::decide(
+                        $decision['courtesy_date'] ?? null,
+                        $decision['courtesy_time'] ?? null,
+                        $this->gym->openingWindows(),
+                    )['ok']
+            );
+
+            if (! ($marcaAutorizada && $marcaEnElTurno) && ! $cortesiaRegistrada) {
                 ChannelLog::warning('ultron.commit.promised_effect_without_authority', [
                     'conversation_id' => (int) $conversation->id,
                     'message_id' => (int) $message->id,
@@ -754,7 +833,7 @@ class UltronCommitService
         // comprobara primero si hay algo que enviar, se saldría antes de marcar
         // el opt-out y la petición de la persona se perdería: exactamente lo
         // contrario de lo que pidió.
-        $executed = $this->runTools($conversation, $decision);
+        $executed = $this->runTools($conversation, $message, $decision);
 
         /*
          * Lo que corrió, EN LA FILA. `executedTools()` promete en su docblock
@@ -944,6 +1023,7 @@ class UltronCommitService
          * verificar, y eso es una minoría ínfima de los turnos.
          */
         $replyFinal = $this->sinNegarUnCobroDisponible($conversation, $lead, $plan, $replyFinal, $action);
+        $replyFinal = $this->sinConfirmarUnaCortesiaQueNadieConfirmo($conversation, $replyFinal, $action);
 
         // 14) Envío por el camino de siempre.
         // La conversación va explícita: la respuesta pertenece al hilo del
@@ -1551,7 +1631,7 @@ class UltronCommitService
     }
 
     /** @return array<int, array<string,mixed>> */
-    private function runTools(MarketingConversation $conversation, array $decision): array
+    private function runTools(MarketingConversation $conversation, MarketingMessage $message, array $decision): array
     {
         $executed = [];
 
@@ -1559,6 +1639,7 @@ class UltronCommitService
             $executed[] = match ($tool) {
                 SalesIntents::TOOL_STAFF_REVIEW => $this->execStaffReview($conversation, $decision),
                 SalesIntents::TOOL_MARK_DNC => $this->execMarkDnc($conversation),
+                SalesIntents::TOOL_COURTESY_REQUEST => $this->execCourtesyRequest($conversation, $message, $decision),
                 // El link de pago corre DESPUÉS de enviar la respuesta (execPaymentLink).
                 SalesIntents::TOOL_PAYMENT_LINK_SEND => null,
                 // Inalcanzable: la lista ya se filtró contra el menú del turno.
@@ -1567,6 +1648,90 @@ class UltronCommitService
         }
 
         return array_values(array_filter($executed));
+    }
+
+    /**
+     * DEJA ANOTADA LA CORTESÍA. NO LA AGENDA.
+     *
+     * El modelo trae el día y la hora que dijo la persona; quien decide si eso
+     * se puede registrar es {@see CourtesyAuthority}, contra el horario
+     * aprobado del gimnasio. Aquí no se interpreta nada: si la autoridad dice
+     * que no, el turno sigue y la respuesta lo cuenta —«ese día cerramos a las
+     * dos»—, que es más útil que un registro imposible.
+     *
+     * Y el efecto va ANTES de que el texto lo afirme, no después. Es la misma
+     * regla que el cobro: primero el hecho, luego la frase. Si esto falla, la
+     * invariante de promesas de más abajo impide que salga un «lo dejé
+     * registrado» que sería falso.
+     *
+     * @return array<string,mixed>
+     */
+    private function execCourtesyRequest(MarketingConversation $conversation, MarketingMessage $message, array $decision): array
+    {
+        $tool = SalesIntents::TOOL_COURTESY_REQUEST;
+        $accion = (string) ($decision['courtesy_action'] ?? 'request');
+
+        if ($accion === 'cancel') {
+            $r = $this->courtesy->cancel($conversation);
+
+            return $r === null
+                ? ['tool' => $tool, 'status' => 'skipped', 'reason' => 'courtesy_nothing_to_cancel']
+                : ['tool' => $tool, 'status' => 'executed', 'courtesy' => 'cancelled', 'action_id' => $r['action_id']];
+        }
+
+        $lead = $conversation->lead;
+        if ($lead === null) {
+            return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'no_lead'];
+        }
+
+        $veredicto = CourtesyAuthority::decide(
+            $decision['courtesy_date'] ?? null,
+            $decision['courtesy_time'] ?? null,
+            $this->gym->openingWindows(),
+        );
+
+        if (! $veredicto['ok']) {
+            ChannelLog::info('ultron.courtesy.rejected', [
+                'conversation_id' => (int) $conversation->id,
+                'reason' => $veredicto['reason'],
+                'fecha' => $decision['courtesy_date'] ?? null,
+                'hora' => $decision['courtesy_time'] ?? null,
+            ]);
+
+            return array_filter([
+                'tool' => $tool,
+                'status' => 'skipped',
+                'reason' => $veredicto['reason'],
+                'closes_at' => $veredicto['closes_at'],
+                'weekday' => $veredicto['weekday'],
+            ], fn ($v) => $v !== null);
+        }
+
+        $r = $this->courtesy->request(
+            $lead,
+            $conversation,
+            $message,
+            (string) $veredicto['scheduled_at'],
+            $decision['courtesy_date'] ?? null,
+            $decision['courtesy_time'] ?? null,
+        );
+
+        $this->memoryService->recordCourtesyRequest($conversation->fresh(), [
+            'status' => 'requested',
+            'action_id' => $r['action_id'],
+            'scheduled_at' => $r['scheduled_at'],
+            'date' => $decision['courtesy_date'] ?? null,
+            'time' => $decision['courtesy_time'] ?? null,
+            'at' => now()->toIso8601String(),
+        ]);
+
+        return [
+            'tool' => $tool,
+            'status' => 'executed',
+            'courtesy' => $r['nueva'] ? 'requested' : 'updated',
+            'action_id' => $r['action_id'],
+            'scheduled_at' => $r['scheduled_at'],
+        ];
     }
 
     /**
@@ -1996,6 +2161,95 @@ class UltronCommitService
      *
      * @return array<string,mixed> con `status` ready|skipped y su motivo
      */
+    /**
+     * NADIE SE PRESENTA UN DÍA QUE NADIE PREPARÓ.
+     *
+     * El día de cortesía lo confirma una persona del equipo. Mientras la
+     * solicitud sólo esté anotada, decir «quedaste agendado» o «te esperamos
+     * el sábado» manda a alguien a hacer un viaje a un gimnasio que no lo
+     * espera, y eso no lo arregla ninguna disculpa: el viaje ya está hecho.
+     *
+     * No lo cubría nada: se midió que «quedaste agendado», «tu cortesía quedó
+     * confirmada» y «ya te reservé el cupo» pasaban limpias por la invariante
+     * de promesas, que sólo cazaba «te agendo» en primera persona.
+     *
+     * Y si el equipo YA confirmó —existe la cita de verdad— la frase es
+     * cierta y sale sin tocarla. Lo que se corrige es afirmar lo que todavía
+     * no ha pasado, no hablar de citas.
+     */
+    private function sinConfirmarUnaCortesiaQueNadieConfirmo(
+        MarketingConversation $conversation,
+        string $respuesta,
+        MarketingAiAction $action,
+    ): string {
+        if ($this->contentGuard->courtesyConfirmationIn($respuesta) === null) {
+            return $respuesta;
+        }
+
+        /*
+         * Una cita real y TODAVÍA POR VENIR hace verdadera la frase.
+         *
+         * Antes valía cualquier cita, de cualquier fecha y en cualquier
+         * estado. Y una conversación de WhatsApp no se cierra: vive ligada al
+         * par lead+canal durante meses. Así que a un socio con una visita
+         * `completed` en junio se le podía decir en septiembre «quedaste
+         * agendado para el sábado a las 10», intacto, porque aquella visita de
+         * hace tres meses abría la puerta. Esa persona viaja un día que nadie
+         * preparó, y el argumento de la guarda —que el viaje ya está hecho
+         * cuando llega la disculpa— vale igual aquí.
+         *
+         * `completed` se cae por definición: una cita cumplida está en el
+         * pasado y no puede hacer verdadera ninguna frase en futuro.
+         */
+        $confirmada = MarketingAppointment::query()
+            ->where('marketing_conversation_id', $conversation->id)
+            ->where('status', MarketingAppointment::STATUS_SCHEDULED)
+            ->where('scheduled_at', '>=', now())
+            ->exists();
+
+        if ($confirmada) {
+            return $respuesta;
+        }
+
+        $frases = preg_split('/(?<=[.!?])\s+/u', trim($respuesta)) ?: [];
+        $limpias = array_values(array_filter(
+            $frases,
+            fn (string $frase) => $this->contentGuard->courtesyConfirmationIn($frase) === null,
+        ));
+
+        $limpio = trim(implode(' ', $limpias));
+
+        ChannelLog::error('ultron.courtesy.claimed_confirmed', [
+            'conversation_id' => (int) $conversation->id,
+            'frases_retiradas' => count($frases) - count($limpias),
+            'quedo_vacio' => $limpio === '',
+        ]);
+
+        $meta = is_array($action->metadata) ? $action->metadata : [];
+        $meta['courtesy_confirmation_dropped'] = [
+            'code' => OutboundContentGuard::CODE_CLAIMS_CONFIRMED_COURTESY,
+            'frases_retiradas' => count($frases) - count($limpias),
+        ];
+        $action->forceFill(['metadata' => $meta])->save();
+
+        /*
+         * Y si no queda nada, el respaldo tiene que ser verdad TAMBIÉN.
+         *
+         * Había uno solo, y afirmaba «dejé registrada tu solicitud de día de
+         * cortesía». En un turno donde nunca hubo cortesía —un «te esperamos
+         * el sábado» a quien va a pagar— la guarda contra afirmar una cortesía
+         * falsa acababa afirmando una cortesía falsa. Se elige según lo que de
+         * verdad hay escrito en la conversación.
+         */
+        if ($limpio !== '') {
+            return $limpio;
+        }
+
+        return $this->courtesy->openFor($conversation) !== null
+            ? self::CORTESIA_SIN_CONFIRMAR
+            : self::NADA_QUE_CONFIRMAR;
+    }
+
     /**
      * PAYMENT_CHECKOUT_AVAILABLE + OUTBOUND_DENIES_CHECKOUT: cae el borrador.
      *

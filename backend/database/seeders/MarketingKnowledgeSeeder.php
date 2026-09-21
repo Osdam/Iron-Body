@@ -83,6 +83,23 @@ class MarketingKnowledgeSeeder extends Seeder
              'title' => 'Activación',
              'content' => 'La activación de la membresía depende de la confirmación del pago en el sistema. El asesor no puede activar membresías manualmente.'],
 
+            /*
+             * El día de cortesía. Es política comercial del negocio, no una
+             * frase del prompt: quien la cambie lo hace aquí y el agente se
+             * entera sin desplegar nada.
+             *
+             * El texto evita «gratis» y «sin costo» a propósito: los dos están
+             * en el detector de rebajas inventadas, y un mensaje que los lleve
+             * no sale. «Cortesía» dice lo mismo y además suena a invitación en
+             * vez de a descuento.
+             *
+             * Y dice lo que ULTRON NO puede prometer, porque la confirmación la
+             * hace una persona: lo que el agente registra es una SOLICITUD.
+             */
+            ['key' => 'courtesy.day', 'category' => 'membership_policy', 'priority' => 20,
+             'title' => 'Día de cortesía',
+             'content' => 'Iron Body ofrece un día de cortesía a quien quiere conocer y probar el gimnasio antes de decidirse. Sirve para resolver dudas: conocer las instalaciones, ver el ambiente y entrenar una vez. El asesor puede recoger el día y la hora que le convengan a la persona y dejar REGISTRADA la solicitud; la confirmación final la hace el equipo de Iron Body, así que nunca se dice que la visita quedó agendada o confirmada. La hora solicitada tiene que caer dentro del horario de atención.'],
+
             // ── invoice_policy ───────────────────────────────────────────────
             ['key' => 'invoice.request', 'category' => 'invoice_policy', 'priority' => 10,
              'title' => 'Factura',

@@ -69,6 +69,11 @@ final class ConversationMemory
             'questions_answered' => [],     // [{key, at}]
             'last_agent_question' => null,  // {text, at, message_id}
             'last_agent_offer' => null,     // {kind, plan_id, text, at}
+            // La solicitud de día de cortesía viva, para no volver a pedir la
+            // fecha que la persona ya dio y para no prometer una confirmación
+            // que no existe. El valor es SIEMPRE un array: bajo un default
+            // null, un escalar se pierde al releer.
+            'courtesy_request' => null,     // {status, action_id, scheduled_at, date, time, at}
             'last_user_question' => null,   // {text, at, message_id}
             'unresolved_question' => null,  // {text, at, message_id}
             'pending_reference' => null,    // {type, kind|plan_id, at}

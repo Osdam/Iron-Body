@@ -9,6 +9,7 @@ use App\Models\MarketingMessage;
 use App\Services\Marketing\CommercialPhaseMachine as P;
 use App\Services\Marketing\SalesIntents;
 use App\Services\Marketing\StaffReviewAuthority;
+use App\Services\Marketing\Ultron\UltronDecideService;
 use Illuminate\Support\Facades\Cache;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -119,7 +120,17 @@ class ProtocolAuthorityTortureTest extends TortureCase
             'confianza de 2' => [['confidence' => 2], 'proposal.confidence'],
             'confianza de -1' => [['confidence' => -1], 'proposal.confidence'],
             'confianza como palabra' => [['confidence' => 'alta'], 'proposal.confidence'],
-            'cinco herramientas' => [['tools_requested' => ['staff_review', 'mark_do_not_contact', 'app_links_send', 'payment_link_send', 'staff_review']], 'proposal.tools_requested'],
+            /*
+             * Más herramientas que las que existen.
+             *
+             * El número se CUENTA, no se escribe. Estuvo escrito —«cinco»— y
+             * envejeció el día que el vocabulario pasó de cuatro a cinco: lo
+             * que este caso probaba dejó de ser «más de las que hay» para
+             * pasar a ser «todas las que hay», que es una propuesta legítima.
+             * Derivándolo del vocabulario, el caso sigue diciendo lo mismo
+             * cuando llegue la sexta.
+             */
+            'más herramientas que el vocabulario' => [['tools_requested' => [...UltronDecideService::TOOL_VOCABULARY, SalesIntents::TOOL_STAFF_REVIEW]], 'proposal.tools_requested'],
             'herramienta desconocida' => [['tools_requested' => ['refund_money']], 'proposal.tools_requested.0'],
             'herramienta en mayusculas' => [['tools_requested' => ['STAFF_REVIEW']], 'proposal.tools_requested.0'],
             'borrador de 4001' => [['reply_draft' => str_repeat('a', 4001)], 'proposal.reply_draft'],

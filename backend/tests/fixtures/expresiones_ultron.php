@@ -506,4 +506,42 @@ return [
         'buenas tardes | quiero informacion | de los planes',
     ],
 
+    /*
+     * COURTESY · el dia de cortesia.
+     *
+     * Iron Body invita a conocer el gimnasio a quien todavia esta decidiendo, y
+     * esa conversacion tiene forma propia: no pide precio ni pide pagar, pide
+     * VER. Aqui estan las tres formas en que llega —querer probar, desconfiar,
+     * y ya dentro del hilo dar el dia o la hora— porque el ultimo tercio es el
+     * que mas se rompe: «mañana» y «a las 5» solo significan algo si el turno
+     * anterior pregunto, y sin contexto no son nada.
+     *
+     * Ninguna dice «gratis» a proposito. La palabra esta prohibida en la
+     * SALIDA por el detector de rebajas inventadas; en la entrada la persona la
+     * dira igual, y por eso hay dos frases con ella: el sistema tiene que
+     * entenderla sin repetirla.
+     */
+    'COURTESY' => [
+        'puedo probar un dia?',
+        'puedo ir un dia a conocer?',
+        'quiero conocer primero el gym',
+        'me gustaria ver las instalaciones antes',
+        'tienen dia de cortesia?',
+        'hay clase de prueba?',
+        'tienen dia gratis?',
+        'puedo entrenar un dia para ver como es',
+        'me da desconfianza pagar sin conocer',
+        'no se si me vaya a gustar',
+        'antes de pagar quiero ver el gimnasio',
+        'se puede ir a mirar primero',
+        'quiero ir mañana a conocer',
+        'puedo pasar el sabado?',
+        'mejor el domingo',
+        'no puedo ese dia',
+        'cancela lo de mañana',
+        'ya no voy a poder ir',
+        'a que hora puedo ir el sabado',
+        'una prueba sin costo tienen?',
+    ],
+
 ];

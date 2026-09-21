@@ -250,3 +250,56 @@ que falló y arreglarlo antes de volver.
 - El día que se amplíe, la primera ampliación razonable no es «todo el tráfico»,
   sino quitar el id del canario dejando el interruptor encendido y vigilando las
   mismas seis cosas de la tabla anterior.
+
+## 10. Precondición del día de cortesía — SE SIEMBRA CON EL DESPLIEGUE
+
+El día de cortesía no funciona con el código solo. `CourtesyAuthority` valida la
+hora contra `gym.opening_windows`, y ese dato sale de la `metadata.windows` del
+ítem de conocimiento `schedule.opening_hours` — el MISMO que dice el horario en
+palabras, para que la frase que lee la persona y el dato que valida la hora no
+puedan contradecirse. **Nada en el repositorio lo escribe**: no hay seeder de
+categoría `schedule` ni migración que lo ponga.
+
+Sin sembrarlo, esto no es una función inerte y ya: es una función que **degrada
+turnos que hoy salen bien**. `openingWindows()` devuelve `SOURCE_NOT_AVAILABLE`,
+el veredicto es `courtesy_hours_unknown`, no se registra ninguna cortesía nunca,
+y además cualquier borrador que diga «queda registrada tu solicitud» —la
+redacción que el propio ítem `courtesy.day` induce— muere en 422
+`promised_effect_without_authority`, porque la invariante de promesas ve que el
+turno no produjo el efecto que el texto afirma.
+
+Por eso la siembra **va pegada al despliegue, no después**:
+
+```bash
+# En el servidor, después de deploy-produccion.sh y antes de tocar nada más.
+# Lee `courtesy.day` del propio seeder desplegado (por reflexión) para que la
+# fila sea idéntica al repositorio, y escribe las ventanas a partir del horario
+# YA APROBADO que vive en esa misma fila.
+cd /var/www/api/backend
+sudo -u www-data php artisan tinker --execute="require 'scripts/sembrar-cortesia.php';"
+
+# Sonda sin efectos: las siete ventanas y una decisión sobre ellas.
+sudo -u www-data php artisan tinker --execute='
+$g = app(\App\Services\Marketing\Ultron\GymFactsProvider::class);
+echo json_encode($g->openingWindows()).PHP_EOL;
+echo json_encode(\App\Services\Marketing\Ultron\CourtesyAuthority::decide(
+    now()->addDay()->format("Y-m-d"), "10:00", $g->openingWindows(),
+)).PHP_EOL;'
+```
+
+**No se corre el seeder entero.** El repositorio tiene 26 ítems y producción 17,
+y uno de los 17 (`escalation.rules`) está en una versión anterior: `db:seed`
+arrastraría nueve altas y una reescritura que nadie ha pedido. Ponerlos al día es
+una decisión aparte, no un efecto colateral de desplegar la cortesía.
+
+### Lo que este dato NO distingue
+
+Los festivos abren de 8:00 a 14:00, pero las ventanas van por día de la semana:
+un lunes festivo se valida contra la ventana de lunes (5:00–22:00). El daño está
+acotado porque lo que se registra es una SOLICITUD que confirma una persona —que
+sí sabe qué día es festivo—, pero no está resuelto y conviene saberlo antes de
+que alguien lo descubra por su cuenta.
+
+Una ventana mal escrita tampoco tumba nada: `CourtesyAuthority` la lee por
+posición y devuelve `courtesy_hours_unknown` si no la entiende, que significa
+preguntar, nunca registrar a ciegas.

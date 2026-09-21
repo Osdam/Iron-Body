@@ -218,6 +218,26 @@ final class ConversationMemoryService
         return null;
     }
 
+    /**
+     * Anota la solicitud de cortesía en la memoria de la conversación.
+     *
+     * El dato nace de un EFECTO —la fila que se acaba de escribir—, no de
+     * leer el texto, así que sigue el patrón de `recordPaymentLink()`: cargar,
+     * tocar una sola clave y guardar. Sirve para dos cosas concretas: no
+     * volver a preguntar un día que la persona ya dijo, y saber que hay algo
+     * vivo cuando diga «mejor el domingo» o «cancélalo».
+     *
+     * @param  array<string,mixed>  $datos
+     */
+    public function recordCourtesyRequest(MarketingConversation $conversation, array $datos): void
+    {
+        $m = $this->load($conversation);
+        $d = $m->toArray();
+        $d['courtesy_request'] = $datos;
+
+        $conversation->forceFill(['memory' => ConversationMemory::fromArray($d)->toArray()])->save();
+    }
+
     private function offerKindOf(string $question): ?string
     {
         $q = SalesAgentDecisionSchema::normalize($question);

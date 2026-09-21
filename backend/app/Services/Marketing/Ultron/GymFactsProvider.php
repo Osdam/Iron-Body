@@ -71,6 +71,7 @@ final class GymFactsProvider
             'classes' => $this->classes(),
             'trainers' => $this->trainers(),
             'opening_hours' => $this->openingHours(),
+            'opening_windows' => $this->openingWindows(),
             'class_availability' => self::SOURCE_NOT_AVAILABLE,
         ];
     }
@@ -230,6 +231,41 @@ final class GymFactsProvider
         }
 
         return $out;
+    }
+
+    /**
+     * El MISMO horario, legible por una máquina.
+     *
+     * El texto de arriba es el que se le dice a la persona y está bien así;
+     * pero para decidir si «el sábado a las 6 de la tarde» cae dentro del
+     * horario hace falta un dato, no una frase. Parsear el texto sería frágil
+     * y además distinto en cada servidor: esta casa ya se rompió una vez por
+     * una diferencia de PCRE entre local y producción.
+     *
+     * Así que la ventana vive en la `metadata` del MISMO ítem aprobado de la
+     * base de conocimiento. Una sola fuente, editable por el negocio, sin
+     * tabla nueva y sin riesgo de que la frase y el dato se separen.
+     *
+     * Formato: {"lunes": ["05:00","22:00"], ...}. Un día ausente significa
+     * cerrado. Si no hay metadata se devuelve SOURCE_NOT_AVAILABLE, y quien
+     * valide tiene que PREGUNTAR en vez de suponer: no saber el horario no
+     * puede leerse como un sí.
+     *
+     * @return array<string,array{0:string,1:string}>|string
+     */
+    public function openingWindows(): array|string
+    {
+        foreach ($this->activeItems() as $item) {
+            if ($item->category !== 'schedule') {
+                continue;
+            }
+            $ventanas = data_get($item->metadata, 'windows');
+            if (is_array($ventanas) && $ventanas !== []) {
+                return $ventanas;
+            }
+        }
+
+        return self::SOURCE_NOT_AVAILABLE;
     }
 
     /** Horario de apertura: sólo si la base de conocimiento lo declara. */

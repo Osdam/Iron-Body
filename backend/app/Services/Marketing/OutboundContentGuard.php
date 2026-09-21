@@ -97,6 +97,21 @@ class OutboundContentGuard
      */
     public const CODE_DENIES_AVAILABLE_CHECKOUT = 'machine_reply_denies_available_checkout';
 
+    /**
+     * Dar por CONFIRMADA una visita que sólo está solicitada.
+     *
+     * El día de cortesía lo confirma una persona del equipo. Si el mensaje
+     * dice «quedaste agendado» o «te esperamos el sábado», alguien se presenta
+     * un día que nadie preparó, y eso no lo arregla ninguna disculpa
+     * posterior: la persona ya hizo el viaje.
+     *
+     * No lo cubría nada. Se midió: ni «quedaste agendado», ni «tu cortesía
+     * quedó confirmada», ni «ya te reservé el cupo» disparaban la invariante
+     * de promesas —sólo caía «te agendo», en primera persona y futuro—. Las
+     * tres formas que de verdad se escriben pasaban limpias.
+     */
+    public const CODE_CLAIMS_CONFIRMED_COURTESY = 'machine_reply_claims_confirmed_courtesy';
+
     /** ¿Este autor está sujeto al filtro? */
     public function appliesTo(string $senderType): bool
     {
@@ -196,6 +211,90 @@ class OutboundContentGuard
         '/\b'.self::HORARIO.'\b[^.!?]{0,40}\b(lo|la|los|las|te\s+lo|te\s+la)\s+(confirma|confirman|confirmara|confirmaran|dice|dicen|dira|diran|informa|informan|informara|indica|indican|indicara|da|dan|dara|daran)\b[^.!?]{0,30}\b'.self::PERSONA.'\b/u',
         '/\b'.self::HORARIO.'\b[^.!?]{0,40}\b(lo|la|los|las)\s+(confirma|confirman|confirmara|dice|dicen|dira|informa|informara|indica|indicara)\b(?![^.!?]{0,30}\b(app|aplicacion|sistema|crm|plataforma)\b)/u',
     ];
+
+    /**
+     * Las formas de dar por hecha una visita que nadie ha confirmado.
+     *
+     * Se buscan las tres que se escriben de verdad: declarar el estado
+     * («quedaste agendado», «quedó confirmada»), reservar («te reservé el
+     * cupo») y esperar a alguien un día concreto («te esperamos el sábado»).
+     *
+     * Lo que NO cae aquí es lo honesto: «queda registrada tu solicitud», «el
+     * equipo la revisará», «cuando la confirmen te avisan». Decir que algo
+     * está anotado es verdad; decir que está confirmado, no.
+     */
+    /**
+     * El cuándo que convierte una despedida en una cita.
+     *
+     * Sin esto el patrón de «te esperamos» pedía sólo un artículo detrás, y
+     * «te esperamos en la sede de la carrera 5» —que no afirma ninguna cita—
+     * caía igual que «te esperamos el sábado a las 10». Lo que convierte una
+     * despedida en una promesa es el día o la hora, no el artículo.
+     */
+    private const CUANDO_DE_LA_CITA = '(manana|pasado\s+manana|hoy|lunes|martes|miercoles|jueves|viernes|sabado|domingo|a\s+las\s+\d{1,2})';
+
+    private const AFIRMA_CONFIRMADA = [
+        '/\b(qued(as|o|aste|amos)|estas|ya\s+estas)\s+(agendad|confirmad|reservad|anotad[oa]\s+y\s+confirmad)/u',
+        '/\b(tu|su|la)\s+(cita|visita|cortesia)\b[^.!?]{0,30}\b(qued(o|a)|esta|fue)\s+(agendad|confirmad|reservad)/u',
+        '/\b(te|le)\s+(reserv(e|amos|o)|aparte|apartamos|guarde|guardamos)\b[^.!?]{0,20}\b(cupo|lugar|puesto|espacio|hora)/u',
+        '/\b(te|los?|las?)\s+esperamos\b[^.!?]{0,30}\b'.self::CUANDO_DE_LA_CITA.'\b/u',
+        '/\bconfirmad[oa]\s+(tu|su)\s+(cita|visita|cortesia)/u',
+    ];
+
+    /**
+     * La negación que da la vuelta a la afirmación, PEGADA a ella.
+     *
+     * Va así de corta a propósito. Una ventana ancha de «hay un no por aquí
+     * cerca» deja pasar «no hay problema, quedaste agendado para el sábado»,
+     * que es justo la mentira que esto persigue: entre el «no» y la afirmación
+     * sólo cabe relleno.
+     */
+    private const NIEGA_LA_CITA = '/\b(no|nunca|tampoco|jamas|sin)(\s+(todavia|aun|ya|aqui|te|le|se|me|lo|la))*\s*$/u';
+
+    /**
+     * ¿El borrador da por confirmada una cortesía? Devuelve la frase, o null.
+     */
+    public function courtesyConfirmationIn(string $body): ?string
+    {
+        $t = SalesAgentDecisionSchema::normalize($body);
+
+        foreach (self::AFIRMA_CONFIRMADA as $patron) {
+            if (preg_match($patron, $t, $m, PREG_OFFSET_CAPTURE) !== 1) {
+                continue;
+            }
+            if ($this->citaNegadaAntesDe($t, (int) $m[0][1])) {
+                continue;
+            }
+
+            return trim($m[0][0]);
+        }
+
+        return null;
+    }
+
+    /**
+     * ¿Viene negada esta afirmación?
+     *
+     * La frase más honesta que el asesor puede escribir —«NO quedaste agendado
+     * todavía, falta que el equipo confirme»— lleva dentro las mismas palabras
+     * que la mentira. Retirarla no sólo degradaba el turno: enseñaba a no
+     * decirla, que es lo contrario de lo que esta guarda persigue.
+     *
+     * El corte por coma importa tanto como el corte por punto: en «no hay
+     * problema, quedaste agendado» la negación pertenece a otra cosa.
+     */
+    private function citaNegadaAntesDe(string $texto, int $posicion): bool
+    {
+        $antes = substr($texto, 0, $posicion);
+
+        foreach (['.', '!', '?', ';', ','] as $fin) {
+            if (($corte = strrpos($antes, $fin)) !== false) {
+                $antes = substr($antes, $corte + 1);
+            }
+        }
+
+        return preg_match(self::NIEGA_LA_CITA, $antes) === 1;
+    }
 
     /**
      * Negar el enlace de pago, en las formas en que se niega de verdad.

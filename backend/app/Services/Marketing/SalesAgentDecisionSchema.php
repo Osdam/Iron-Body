@@ -75,6 +75,7 @@ final class SalesAgentDecisionSchema
         SalesIntents::TOOL_SCHEDULE_FOLLOWUP,
         SalesIntents::TOOL_STAFF_REVIEW,
         SalesIntents::TOOL_MARK_DNC,
+        SalesIntents::TOOL_COURTESY_REQUEST,
         'reply',
     ];
 

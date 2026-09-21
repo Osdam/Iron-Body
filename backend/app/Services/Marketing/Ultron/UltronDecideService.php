@@ -47,6 +47,9 @@ class UltronDecideService
         SalesIntents::TOOL_STAFF_REVIEW,
         SalesIntents::TOOL_MARK_DNC,
         SalesIntents::TOOL_APP_LINKS_SEND,
+        // La cortesía se puede ofrecer siempre: no mueve dinero, y lo único
+        // que escribe es una solicitud que confirma una persona.
+        SalesIntents::TOOL_COURTESY_REQUEST,
     ];
 
     /**
@@ -60,6 +63,7 @@ class UltronDecideService
         SalesIntents::TOOL_MARK_DNC,
         SalesIntents::TOOL_APP_LINKS_SEND,
         SalesIntents::TOOL_PAYMENT_LINK_SEND,
+        SalesIntents::TOOL_COURTESY_REQUEST,
     ];
 
     public function __construct(
@@ -357,6 +361,21 @@ class UltronDecideService
                  * que sí existe. Los cupos no se afirman.
                  */
                 'gym' => $this->gym->forPrompt(),
+                /*
+                 * QUÉ HORA ES, YA INTERPRETADA.
+                 *
+                 * El contexto no llevaba la hora por ninguna vía, así que un
+                 * saludo por franja salía de lo que el modelo se imaginara, y
+                 * «buenos días» a las nueve de la noche es de las cosas que más
+                 * delatan a un bot. Va con la franja y el saludo resueltos, y
+                 * con el día de la semana escrito: calcular no es su trabajo, y
+                 * es donde se equivoca.
+                 *
+                 * En hora del gimnasio, no del servidor: la aplicación corre en
+                 * UTC y aquí son cinco horas menos, así que a las 02:00 UTC del
+                 * martes en Neiva todavía es lunes por la noche.
+                 */
+                'business_time' => BusinessClock::forPrompt(),
                 /*
                  * La app, desde su código: qué hace de verdad, cómo se entra y se
                  * registra uno, y los enlaces oficiales (que envía Laravel, nunca el

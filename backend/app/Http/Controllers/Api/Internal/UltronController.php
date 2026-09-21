@@ -145,6 +145,38 @@ class UltronController extends Controller
             'proposal.next_best_action' => ['nullable', 'string', 'max:60'],
             'proposal.confidence' => ['nullable', 'numeric', 'min:0', 'max:1'],
             /*
+             * DÍA DE CORTESÍA. El modelo propone el día y la hora que dijo la
+             * persona, ya resueltos contra el calendario que se le da en
+             * `business_time`; quien decide si eso se puede registrar es
+             * {@see CourtesyAuthority}, contra el horario aprobado.
+             *
+             * La fecha viaja en formato cerrado a propósito: «mañana» es
+             * ambiguo a las 23:50 y depende de una zona horaria que el modelo
+             * no tiene por qué calcular. Si no sabe la fecha exacta, que
+             * pregunte en vez de inventarla.
+             */
+            'proposal.courtesy_action' => ['nullable', 'string', Rule::in(['request', 'cancel'])],
+            /*
+             * LA FORMA DE LA FECHA Y DE LA HORA NO SE VALIDA AQUÍ, Y ES
+             * DELIBERADO.
+             *
+             * Estaban con `date_format`, y eso hacía al controlador más
+             * estricto que su propia autoridad: `date_format:H:i` rechaza
+             * «9:00» —PHP no da por iguales '9:00' y '09:00'— mientras
+             * {@see CourtesyAuthority::minutosDe()} lo acepta a propósito,
+             * porque es como escribe la gente. Un desajuste así no degrada el
+             * campo: tumba la petición entera con un 422 y la persona se queda
+             * sin turno por una hora que el sistema sabía leer.
+             *
+             * Aquí sólo se acota el tamaño, que es lo que protege de basura.
+             * Lo que se puede registrar lo decide la autoridad, que ya
+             * contesta `courtesy_date_invalid` y `courtesy_time_invalid` sin
+             * romper nada: la herramienta queda en `skipped` y el asesor
+             * vuelve a preguntar.
+             */
+            'proposal.courtesy_date' => ['nullable', 'string', 'max:10'],
+            'proposal.courtesy_time' => ['nullable', 'string', 'max:5'],
+            /*
              * Campos de DERIVACIÓN. Son una PROPUESTA, nunca una orden: el
              * motivo tiene que estar en la allowlist para llegar siquiera al
              * servicio, y allí se corrobora contra el mensaje real antes de
@@ -174,7 +206,14 @@ class UltronController extends Controller
             'proposal.human_handoff_requested' => ['nullable', 'boolean'],
             'proposal.human_handoff_reason' => ['nullable', 'string', Rule::in(HumanHandoffAuthority::ALLOWED_REASONS)],
             'proposal.human_handoff_evidence' => ['nullable', 'string', 'max:300'],
-            'proposal.tools_requested' => ['nullable', 'array', 'max:4'],
+            /*
+             * El tope se CUENTA, no se escribe. Estaba en 4 desde que el
+             * vocabulario tenía cuatro herramientas; al añadir la quinta pasó
+             * a significar «cuatro de cinco», y una propuesta con todas moría
+             * en un 422 de forma que no corresponde a ninguna regla de
+             * negocio. La sexta habría repetido el error en silencio.
+             */
+            'proposal.tools_requested' => ['nullable', 'array', 'max:'.count(UltronDecideService::TOOL_VOCABULARY)],
             'proposal.tools_requested.*' => ['string', Rule::in(UltronDecideService::TOOL_VOCABULARY)],
             /*
              * POR QUÉ pide `staff_review`. Misma forma que la derivación y por

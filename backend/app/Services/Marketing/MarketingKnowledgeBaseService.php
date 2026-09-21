@@ -102,6 +102,21 @@ class MarketingKnowledgeBaseService
     public function activePlans(): array
     {
         return Plan::sellable()
+            /*
+             * El plan marcado como recomendado sale PRIMERO del catálogo.
+             *
+             * Es lo que el negocio entiende por «el plan que ofrecemos», y con
+             * esto el estratega y el redactor lo ven arriba sin que haya un id
+             * ni un precio escrito en ningún prompt. Si alguien lo desactiva o
+             * le pone precio cero, `Plan::sellable()` lo saca del catálogo y la
+             * prioridad se evapora sola.
+             *
+             * Se ordena por `is_recommended` y NO por `sort_order`: `sort_order`
+             * decide además cuál es el plan que se cotiza por defecto
+             * ({@see defaultMonthlyPlan()}), así que moverlo para «poner uno
+             * primero» cambiaría en silencio la respuesta a «¿cuánto vale?».
+             */
+            ->orderByDesc('is_recommended')
             ->orderBy('sort_order')
             ->get(['id', 'name', 'price', 'duration_days', 'benefits', 'tier',
                 'original_price', 'is_recommended', 'badge', 'access_classes', 'restrictions'])

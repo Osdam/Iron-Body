@@ -44,4 +44,24 @@ class UltronToolVocabularyTest extends TestCase
             $this->assertSame(count($lista), count(array_unique($lista)));
         }
     }
+
+    /**
+     * Y el TOPE del controlador CUENTA el vocabulario, no lo repite a mano.
+     *
+     * Estaba escrito `max:4` desde que había cuatro herramientas. Al añadir la
+     * quinta pasó a significar «cuatro de cinco», y una propuesta con todas
+     * moría en un 422 de forma que no corresponde a ninguna regla de negocio.
+     * Nada avisaba: los tres tests de arriba cuadran las listas entre sí, y un
+     * tope no es una lista.
+     */
+    public function test_the_controller_cap_counts_the_vocabulary(): void
+    {
+        $fuente = (string) file_get_contents(__DIR__.'/../../../app/Http/Controllers/Api/Internal/UltronController.php');
+
+        $this->assertMatchesRegularExpression(
+            "/'proposal\\.tools_requested'\\s*=>\\s*\\['nullable',\\s*'array',\\s*'max:'\\.count\\(UltronDecideService::TOOL_VOCABULARY\\)\\]/",
+            $fuente,
+            'el tope de tools_requested volvió a ser un número escrito a mano',
+        );
+    }
 }

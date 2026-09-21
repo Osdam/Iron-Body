@@ -171,6 +171,10 @@ class ExpresionesTortureTest extends TestCase
             'AFFIRMATION', 'NEGATION', 'INTEREST', 'MORE_INFO', 'START_PROCESS',
             'PLAN_REFERENCE', 'PRICE', 'SCHEDULE', 'CLASS', 'APP',
             'PAYMENT_INTENT', 'OBJECTION', 'HUMAN_REFUSAL', 'AMBIGUOUS', 'TYPO', 'SLANG', 'FRAGMENT',
+            // Querer conocer el gimnasio antes de decidirse no es pedir que te
+            // pasen con alguien: es exactamente lo contrario, alguien que
+            // quiere resolverlo por su cuenta viniendo.
+            'COURTESY',
         );
     }
 
@@ -180,8 +184,8 @@ class ExpresionesTortureTest extends TestCase
     {
         $d = self::dataset();
 
-        $this->assertCount(20, $d, '20 categorías');
-        $this->assertSame(400, array_sum(array_map('count', $d)), '400 expresiones');
+        $this->assertCount(21, $d, '21 categorías');
+        $this->assertSame(420, array_sum(array_map('count', $d)), '420 expresiones');
 
         foreach ($d as $categoria => $frases) {
             $this->assertCount(20, $frases, "la categoría $categoria trae 20");
