@@ -1614,51 +1614,39 @@ class UltronCommitService
         if ($outcome === 'failed') {
             return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'reply_not_sent'];
         }
-        // Doble cerrojo: el menú ya lo filtró, pero la barrera vive donde se ejecuta.
-        if (! $this->decide->canOfferLink((int) $conversation->id)) {
-            return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'automatic_links_disabled'];
+
+        /*
+         * LAS GUARDAS DEL DINERO NO SE COPIAN: SE LLAMAN.
+         *
+         * Aquí vivían otra vez, palabra por palabra, las mismas seis que están
+         * en {@see mintCheckout()}: el permiso del canario, lead y plan nulos,
+         * la autoridad, el otro link vivo, «ya pagó» y la URL vacía. Eran
+         * equivalentes, así que no fallaba nada… hasta que dejaron de serlo:
+         * el corroborador de intención de pago entró en UNA de las dos, y la
+         * asimetría empezó ahí. La misma duplicación ya se había cobrado un
+         * fallo el mismo día —el camino nuevo no miraba si había un link vivo
+         * para otro plan y generaba el segundo—.
+         *
+         * Lo único que distingue a esta entrada es la ENTREGA: aquí el cobro
+         * sale en un mensaje propio, con el texto curado. Todo lo demás es la
+         * misma decisión y se pregunta en el mismo sitio.
+         */
+        $cobro = $this->mintCheckout($conversation, $conversation->lead, $plan, (int) $message->id);
+
+        if (($cobro['status'] ?? null) !== 'ready') {
+            return array_filter([
+                'tool' => $tool,
+                'status' => $cobro['status'] === 'failed' ? 'failed' : 'skipped',
+                'reason' => $cobro['reason'] ?? null,
+                'reference' => $cobro['reference'] ?? null,
+                'other_plan_id' => $cobro['other_plan_id'] ?? null,
+            ], fn ($v) => $v !== null);
         }
+
         $lead = $conversation->lead;
-        if ($lead === null || $plan === null) {
-            return ['tool' => $tool, 'status' => 'skipped', 'reason' => $plan === null ? 'no_plan_to_charge' : 'no_lead'];
-        }
+        $link = $cobro;
 
         try {
-            // La misma autoridad y el mismo dato: esta llamada directa no se
-            // salta el canario por llegar desde dentro.
-            $this->paymentGuardrail->assertCanGeneratePaymentLink($lead, $plan, [], [
-                'conversation_id' => (int) $conversation->id,
-            ]);
-
-            // Dos links vivos para planes distintos serían dos cobros posibles, y el
-            // checkout de Wompi no se puede anular desde aquí: el segundo no se
-            // genera y lo resuelve una persona.
-            $otro = PaymentTransaction::query()
-                ->where('idempotency_key', 'like', 'mkt-lead-'.$lead->id.'-plan-%')
-                ->where('plan_id', '!=', $plan->id)
-                ->whereIn('status', SM::IN_FLIGHT)
-                ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
-                ->orderByDesc('id')
-                ->first();
-            if ($otro !== null) {
-                $conversation->forceFill(['staff_review_pending' => true, 'staff_review_reason' => 'payment_link_plan_change'])->save();
-
-                return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'another_link_in_flight', 'other_plan_id' => (int) $otro->plan_id];
-            }
-
-            $link = WompiPaymentLinkService::make()->generateForLead($lead, $plan, [
-                'channel' => $conversation->channel, 'conversation_id' => $conversation->id, 'message_id' => $message->id,
-            ]);
-            if (($link['configured'] ?? false) === false) {
-                return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'wompi_checkout_not_configured'];
-            }
-            if (($link['already_paid'] ?? false) === true) {
-                return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'already_paid', 'reference' => $link['reference'] ?? null];
-            }
-            if (empty($link['payment_url'])) {
-                return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'link_not_safe_to_send'];
-            }
-
             $body = $this->replies->paymentLinkMessage($plan, (float) $link['amount'], (string) $link['payment_url']);
             $send = $this->dispatcher->dispatchWhatsapp($lead, $conversation->channel, $body, [
                 'kind' => 'payment_link', 'origin' => 'ultron', 'reference' => $link['reference'] ?? null,
@@ -1676,6 +1664,19 @@ class UltronCommitService
         } catch (SalesGuardrailException $e) {
             return ['tool' => $tool, 'status' => 'skipped', 'reason' => $e->errorCode];
         } catch (Throwable $e) {
+            /*
+             * Esta clave ya sólo cubre la ENTREGA.
+             *
+             * Antes cubría las dos mitades: los errores de pasarela al acuñar y
+             * los de mandar el mensaje. Desde que la acuñación vive en un solo
+             * sitio, los primeros salen como `ultron.checkout.failed` desde
+             * {@see mintCheckout()} y aquí queda lo que de verdad pasa aquí:
+             * que el cobro existe y el globo no salió. Ninguna de las dos se
+             * pierde —las dos son `error`—, pero no son el mismo suceso y
+             * conviene que no lo parezcan. Comprobado que nadie consume la
+             * clave vieja: ni el repo, ni n8n, ni la configuración del
+             * servidor.
+             */
             ChannelLog::error('ultron.payment_link.failed', ['conversation_id' => $conversation->id, 'plan_id' => (int) $plan->id, 'exception' => class_basename($e)]);
 
             return ['tool' => $tool, 'status' => 'failed', 'reason' => 'payment_engine_error'];
@@ -1883,7 +1884,7 @@ class UltronCommitService
      *
      * @return array<string,mixed> con `status` ready|skipped y su motivo
      */
-    private function mintCheckout(MarketingConversation $conversation, ?MarketingLead $lead, ?Plan $plan): array
+    private function mintCheckout(MarketingConversation $conversation, ?MarketingLead $lead, ?Plan $plan, ?int $messageId = null): array
     {
         if (! $this->decide->canOfferLink((int) $conversation->id)) {
             return ['status' => 'skipped', 'reason' => 'automatic_links_disabled'];
@@ -1891,9 +1892,20 @@ class UltronCommitService
         if ($lead === null || $plan === null) {
             return ['status' => 'skipped', 'reason' => $plan === null ? 'no_plan_to_charge' : 'no_lead'];
         }
-        if (! $plan->isSellable()) {
-            return ['status' => 'skipped', 'reason' => 'plan_not_sellable'];
-        }
+        /*
+         * La vendibilidad NO se pregunta aquí.
+         *
+         * Estaba, y era la TERCERA copia de la misma regla: la resolución del
+         * plan ya tumba el turno aguas arriba y el guardrail la vuelve a exigir
+         * dos líneas más abajo. Además esta copia era peor que las otras,
+         * porque colapsaba `plan_inactive`, `plan_price_invalid` y
+         * `plan_duration_invalid` en un `plan_not_sellable` genérico: quien
+         * mirara el motivo perdía el dato que explicaba el rechazo.
+         *
+         * Quitarla no abre nada —`assertCanGeneratePaymentLink()` la comprueba
+         * y lanza con el código exacto— y es lo que este método vino a hacer:
+         * que la regla del dinero viva en un sitio.
+         */
 
         try {
             $this->paymentGuardrail->assertCanGeneratePaymentLink($lead, $plan, [], [
@@ -1923,7 +1935,7 @@ class UltronCommitService
             $link = WompiPaymentLinkService::make()->generateForLead($lead, $plan, [
                 'channel' => $conversation->channel,
                 'conversation_id' => (int) $conversation->id,
-                'message_id' => null,
+                'message_id' => $messageId,
             ]);
         } catch (SalesGuardrailException $e) {
             return ['status' => 'skipped', 'reason' => $e->errorCode];

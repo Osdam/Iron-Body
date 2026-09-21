@@ -292,6 +292,27 @@ class MarketingController extends Controller
             ], 503);
         }
 
+        /*
+         * Y sin enlace tampoco es un éxito.
+         *
+         * El embudo puede contestar autorizado y configurado pero sin URL: se
+         * está acuñando el mismo cobro en otra petición (`mint_in_progress`) o
+         * no se pudo asegurar el cerrojo (`mint_lock_unavailable`). Los dos
+         * endpoints internos ya lo cubren con `safe_to_send`; éste no, y
+         * devolvía `ok: true` con `payment_url: null` —justo lo que el
+         * comentario de arriba dice evitar—.
+         *
+         * «Ya pagó» es la excepción: no hay enlace y es exactamente lo que el
+         * panel tiene que mostrar.
+         */
+        if (empty($result['payment_url']) && ($result['already_paid'] ?? false) !== true) {
+            return response()->json([
+                'ok' => false,
+                'code' => $result['error'] ?? 'link_not_safe_to_send',
+                'message' => $result['message'] ?? 'No se pudo generar el enlace de pago ahora mismo.',
+            ], 409);
+        }
+
         return response()->json([
             'ok' => true,
             'lead_id' => $leadModel->id,

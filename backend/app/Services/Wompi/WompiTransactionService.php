@@ -260,6 +260,94 @@ class WompiTransactionService
             // Persistir datos (NO nulos) aunque el estado no avance (p. ej.
             // guardar wompi_transaction_id en un refresco de pending).
             $clean = array_filter($attrs, fn ($v) => $v !== null);
+
+            $entrante = (string) ($clean['wompi_transaction_id'] ?? '');
+            $propia = (string) ($fresh->wompi_transaction_id ?? '');
+
+            /*
+             * Y UNA TRANSICIÓN RECHAZADA NO PASA EN SILENCIO.
+             *
+             * Que la máquina se niegue a mover es correcto y es el anti doble
+             * pago. Lo que no puede ser es que no quede rastro: el caso que
+             * importa es un `approved` de la pasarela sobre una fila ya cerrada
+             * en otro desenlace —dinero que entró sin servicio detrás—. Hoy eso
+             * se aplicaba como un no-op mudo y nadie se enteraba.
+             *
+             * No se cambia la decisión, que es de negocio: se hace visible.
+             *
+             * VA ANTES QUE LA GUARDA DE IDENTIDAD, y no es cosmético: el caso
+             * que más importa —un `approved` ajeno sobre una fila cerrada— cae
+             * en las dos, y al escribirlo después el `return` de la otra se
+             * tragaba justo el registro que hacía falta.
+             */
+            if ($next === $current && $target !== $current) {
+                $nivel = ($target === PaymentStateMachine::APPROVED && $gatewayConfirmed) ? 'error' : 'warning';
+                Log::{$nivel}('wompi.tx.transition_rejected', [
+                    'reference' => $fresh->reference,
+                    'from' => $current,
+                    'to' => $target,
+                    'gateway_confirmed' => $gatewayConfirmed,
+                    'incoming_transaction_id' => $entrante ?: null,
+                ]);
+            }
+
+            /*
+             * UN COBRO YA RESUELTO NO CAMBIA DE TRANSACCIÓN.
+             *
+             * `reference` la ponemos nosotros y el checkout se puede abrir más
+             * de una vez, así que en Wompi pueden convivir varias
+             * transacciones sobre la misma referencia. Mientras el cobro sigue
+             * en vuelo eso es el camino normal y se aplica.
+             *
+             * Cuando ya está resuelto, no. El ESTADO estaba protegido —los
+             * terminales no salen—, pero los DATOS no: aquí se persisten los
+             * atributos no nulos aunque el estado no avance, así que un evento
+             * firmado de otra transacción reescribía `wompi_transaction_id` y
+             * `provider_ref` de una fila cerrada. El rastro contable dejaba de
+             * apuntar al dinero que entró y, si ese id ya era de otra fila, la
+             * unicidad reventaba con una excepción que nadie captura: sube
+             * hasta el webhook, sale un 500 y Wompi reintenta contra el mismo
+             * choque.
+             *
+             * La condición es «el estado no se mueve», no «está aprobado»: así
+             * `expired` sigue pudiendo corregirse al desenlace real, que es la
+             * única salida que la máquina le permite.
+             */
+            if ($next === $current && $this->sm->isTerminal($current) && $entrante !== '' && $propia !== '' && $entrante !== $propia) {
+                /*
+                 * DOS APROBADAS SOBRE LA MISMA REFERENCIA ES DINERO COBRADO DOS
+                 * VECES, y eso no es un aviso: es un error.
+                 *
+                 * Pasa si alguien abre la URL del checkout dos veces y completa
+                 * las dos. Wompi acaba con dos transacciones aprobadas sobre
+                 * nuestra referencia y aquí llega la segunda. El sistema hace lo
+                 * correcto —no la aplica, no activa dos membresías— pero eso NO
+                 * devuelve el dinero: hay un cobro real que alguien tiene que
+                 * mirar y probablemente reembolsar.
+                 *
+                 * La otra cara de esta guarda —un `declined` viejo, un evento de
+                 * otro intento— no cuesta dinero y se queda en aviso. La
+                 * diferencia entre las dos la marca el nivel, porque es lo que
+                 * decide si alguien se entera hoy o dentro de un mes.
+                 */
+                $dobleCobro = $gatewayConfirmed
+                    && $current === PaymentStateMachine::APPROVED
+                    && $target === PaymentStateMachine::APPROVED;
+
+                Log::{$dobleCobro ? 'error' : 'warning'}(
+                    $dobleCobro ? 'wompi.tx.possible_double_charge' : 'wompi.tx.foreign_transaction_ignored',
+                    [
+                        'reference' => $fresh->reference,
+                        'status' => $current,
+                        'stored_transaction_id' => $propia,
+                        'incoming_transaction_id' => $entrante,
+                        'target' => $target,
+                    ]
+                );
+
+                return $fresh;
+            }
+
             $fresh->fill($clean);
 
             $changed = $next !== $current;

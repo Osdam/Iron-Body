@@ -9,8 +9,11 @@ use App\Services\Observability\ChannelLog;
 use App\Services\Wompi\PaymentStateMachine;
 use App\Services\Wompi\WompiSignatureService;
 use App\Services\Wompi\WompiTransactionService;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
+use Throwable;
 
 /**
  * Genera un LINK DE PAGO Wompi (Web Checkout hosteado) reutilizable para enviar
@@ -44,6 +47,9 @@ use Illuminate\Support\Str;
  */
 class WompiPaymentLinkService
 {
+    /** Cuánto puede retener el cerrojo quien está acuñando, antes de caducar solo. */
+    private const MINT_LOCK_SECONDS = 15;
+
     public function __construct(
         private readonly WompiTransactionService $tx,
         private readonly WompiSignatureService $signature,
@@ -121,6 +127,118 @@ class WompiPaymentLinkService
         $currency = strtoupper((string) ($this->cfg['currency'] ?? 'COP'));
         $prefix = $this->dedupKeyPrefix($lead, $plan);
 
+        /*
+         * DE AQUÍ EN ADELANTE, DE UNO EN UNO.
+         *
+         * Lo que viene es un LEE-Y-LUEGO-CREA: se busca un cobro aprobado, se
+         * busca uno en vuelo y, si no hay, se crea. Dos peticiones a la vez
+         * para el mismo (lead, plan) leen las dos que no hay nada y crean las
+         * dos. Y no choca ninguna unicidad que lo salve: la `idempotency_key`
+         * lleva un uuid por intento —a propósito, para que convivan cobros
+         * históricos del mismo par— y la `reference` se regenera en bucle
+         * mientras exista. El resultado son DOS URLs pagables vivas para el
+         * mismo plan, que es justo lo que las guardas de arriba existen para
+         * impedir… una a una, cada una en su turno.
+         *
+         * No es hipotético: el mismo día en que esto se escribió, un camino
+         * nuevo que no miraba si había otro link vivo generó el segundo. Aquel
+         * era un fallo de lógica y se arregló; éste es de concurrencia y la
+         * lógica no lo ve.
+         *
+         * Quien llega segundo ESPERA, no se le rechaza: cuando entra, el cobro
+         * del primero ya está en vuelo y la reutilización de siempre se lo
+         * devuelve. Sólo si el cerrojo no se suelta en el plazo se responde sin
+         * enlace, con un motivo propio. `Cache::lock` es atómico en el store
+         * configurado y ya es el patrón de esta casa para dinero
+         * ({@see RecurringBillingService}, {@see WompiDaviplataPaymentService}).
+         *
+         * EXIGE UN STORE DE CACHÉ COMPARTIDO ENTRE PROCESOS: `database`,
+         * `redis` o `memcached`. Con `array` —el de los tests— el cerrojo vive
+         * en la memoria de cada proceso, así que dos workers lo toman a la vez
+         * y esto no protege de nada, sin avisar. Producción va con `database`
+         * y su tabla `cache_locks`; comprobado allí, con dos adquisiciones
+         * seguidas de la misma clave: la segunda no entra.
+         */
+        $entroAlCobro = false;
+
+        try {
+            return Cache::lock('wompi:mint:'.$prefix, self::MINT_LOCK_SECONDS)->block(
+                $this->mintWaitSeconds(),
+                function () use ($lead, $plan, $options, $currency, $prefix, &$entroAlCobro) {
+                    $entroAlCobro = true;
+
+                    return $this->mintSerialized($lead, $plan, $options, $currency, $prefix);
+                },
+            );
+        } catch (LockTimeoutException) {
+            ChannelLog::warning('wompi.link.mint_busy', [
+                'lead_id' => $lead->id,
+                'plan_id' => $plan->id,
+            ]);
+
+            return [
+                'configured' => true,
+                'authorized' => true,
+                'already_paid' => false,
+                'error' => 'mint_in_progress',
+                'message' => 'Ya se está generando un cobro para este plan.',
+                'payment_url' => null,
+            ];
+        } catch (Throwable $e) {
+            /*
+             * Si el cerrojo NO se pudo ni pedir, esto degrada; no revienta.
+             *
+             * La cabecera de este método promete que nunca lanza, y no es
+             * decorativo: cuatro de los cinco llamadores —el panel, los dos
+             * endpoints internos y la herramienta del subsistema Commercial—
+             * sólo capturan `SalesGuardrailException`, así que cualquier otra
+             * excepción sale como 500 en un endpoint de dinero. `Cache::lock`
+             * puede lanzar por su cuenta: `BadMethodCallException` si el store
+             * configurado no sabe de cerrojos, o `QueryException` si falta la
+             * tabla `cache_locks` o la base no contesta.
+             *
+             * Y se RECHAZA en vez de acuñar sin cerrojo. Es una decisión
+             * consciente: sin cerrojo no hay nada que impida dos cobros vivos,
+             * que es justo lo que esto vino a cerrar, y en el dinero se falla
+             * cerrado. El precio es que una tabla de caché ausente deja de
+             * emitir enlaces; por eso el registro es de error y dice qué pasó.
+             *
+             * Lo que NO se traga es un fallo del cobro en sí: si la excepción
+             * viene de dentro del cerrojo, se propaga como se propagaba antes
+             * de que existiera. Un error del dinero no se disfraza de «ocupado».
+             */
+            if ($entroAlCobro) {
+                throw $e;
+            }
+
+            ChannelLog::error('wompi.link.lock_unavailable', [
+                'lead_id' => $lead->id,
+                'plan_id' => $plan->id,
+                'exception' => class_basename($e),
+            ]);
+
+            return [
+                'configured' => true,
+                'authorized' => true,
+                'already_paid' => false,
+                'error' => 'mint_lock_unavailable',
+                'message' => 'No se pudo asegurar la generación del cobro.',
+                'payment_url' => null,
+            ];
+        }
+    }
+
+    /**
+     * El cuerpo de la acuñación, con el cerrojo de (lead, plan) en la mano.
+     *
+     * Aquí dentro vale asumir que nadie más está leyendo ni escribiendo cobros
+     * de este par. Fuera de aquí, no.
+     *
+     * @param  array<string,mixed>  $options
+     * @return array<string,mixed>
+     */
+    private function mintSerialized(MarketingLead $lead, Plan $plan, array $options, string $currency, string $prefix): array
+    {
         // Si ya hay un pago APROBADO para (lead, plan), NO se genera link nuevo.
         $approved = $this->latestForPrefix($prefix, [PaymentStateMachine::APPROVED]);
         if ($approved !== null) {
@@ -245,6 +363,20 @@ class WompiPaymentLinkService
      * así varias transacciones del mismo lead/plan conviven (la unique de
      * idempotency_key nunca choca) y la idempotencia se resuelve por LIKE.
      */
+    /**
+     * Cuánto espera quien llega segundo.
+     *
+     * Configurable porque en una prueba de carrera hay que poder no esperar: el
+     * test que demuestra el fallo necesita que el segundo intento se dé por
+     * vencido en el acto, no que se quede cinco segundos parado.
+     */
+    private function mintWaitSeconds(): int
+    {
+        $v = data_get($this->cfg, 'checkout.mint_wait_seconds');
+
+        return is_numeric($v) ? max(0, (int) $v) : 3;
+    }
+
     private function dedupKeyPrefix(MarketingLead $lead, Plan $plan): string
     {
         return 'mkt-lead-'.$lead->id.'-plan-'.$plan->id.'-';

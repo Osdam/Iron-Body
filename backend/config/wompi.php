@@ -66,6 +66,11 @@ return [
         // Vigencia del link/transacción (minutos). El link no caduca por sí solo
         // en Wompi; este valor sella expires_at de la PaymentTransaction local.
         'expiration_minutes' => (int) env('WOMPI_CHECKOUT_EXPIRATION_MINUTES', 1440),
+        // Cuánto espera quien llega segundo al cerrojo de acuñación (segundos).
+        // Con contención, un mismo turno puede pedir el cobro dos veces —una
+        // dentro de la respuesta y otra como herramienta—, así que esto se paga
+        // hasta dos veces: bajarlo es la palanca si un turno tarda de más.
+        'mint_wait_seconds'  => (int) env('WOMPI_CHECKOUT_MINT_WAIT_SECONDS', 3),
     ],
 
     // ── Cliente HTTP ────────────────────────────────────────────────────────

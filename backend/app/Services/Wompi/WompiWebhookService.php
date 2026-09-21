@@ -26,6 +26,15 @@ use Illuminate\Support\Str;
  */
 class WompiWebhookService
 {
+    /**
+     * A partir de cuánto se da por muerto un procesamiento que nunca se cerró.
+     *
+     * Por debajo, una entrega simultánea sigue siendo un duplicado. Por encima,
+     * nadie está trabajando en esa fila: el proceso se cayó. El primer reintento
+     * de Wompi llega a los treinta minutos, así que esto no compite con él.
+     */
+    private const MINUTOS_PARA_DAR_POR_MUERTO = 5;
+
     public function __construct(
         private WompiSignatureService $signature,
         private WompiTransactionService $tx,
@@ -73,8 +82,75 @@ class WompiWebhookService
         // 3) Registrar evento (dedupe por payload_hash único).
         $event = $this->recordEvent($payload, $wt, $eventType, $payloadHash);
         if ($event === null) {
-            // Reentrega idéntica ya registrada → 200 idempotente.
-            return ['status' => 'duplicate', 'http' => 200];
+            /*
+             * REENTREGA: idéntica no es lo mismo que ya aplicada.
+             *
+             * Cuando el procesamiento de abajo falla, este método devuelve 500
+             * precisamente PARA QUE Wompi reintente (lo hace a los 30 min, 3 h
+             * y 24 h). Pero la fila del evento se escribe ANTES y sobrevive al
+             * rollback de la transacción de pago, así que el reintento chocaba
+             * aquí con la unicidad de `payload_hash` y se contestaba
+             * «duplicate, 200»: pedíamos una reentrega y luego la tirábamos.
+             *
+             * El caso que lo vuelve grave: si la activación de membresía lanza,
+             * la transición entera se revierte —el pago NO queda aprobado— y la
+             * única oportunidad de repararlo era ese reintento. Dinero dentro,
+             * servicio fuera, y sin más avisos.
+             *
+             * La idempotencia de verdad es sobre lo PROCESADO, no sobre lo
+             * visto: un evento que terminó bien (o que se descartó a
+             * propósito) no se vuelve a aplicar jamás; uno que quedó en
+             * `failed` se reprocesa sobre su misma fila. Los reintentos de
+             * Wompi son tres y acotados, así que esto no puede convertirse en
+             * un bucle.
+             */
+            $previo = PaymentWebhookEvent::query()
+                ->where('provider', 'wompi')
+                ->where('payload_hash', $payloadHash)
+                ->first();
+
+            /*
+             * Y el que se quedó en `received` también vuelve a intentarse.
+             *
+             * `failed` sólo cubre la mitad en que el código llegó a ejecutar su
+             * propio catch. La otra —la más probable en un fallo de
+             * infraestructura— es que el proceso muriera ENTRE el registro del
+             * evento y el final: OOM, kill, timeout de php-fpm, 504 del
+             * balanceador. Esa fila se queda en `received` para siempre porque
+             * nadie llega a cerrarla, y la reentrega la veía «ya registrada».
+             * Mismo desenlace que el otro agujero: dinero dentro, servicio
+             * fuera.
+             *
+             * El umbral de antigüedad es lo que separa «se murió» de «se está
+             * procesando ahora mismo»: dentro de la ventana, dos entregas
+             * simultáneas siguen siendo un duplicado y sólo trabaja una. Cinco
+             * minutos caben de sobra en cualquier procesamiento nuestro y muy
+             * por debajo del primer reintento de Wompi, que es a los treinta.
+             *
+             * Reprocesar es seguro aunque nos equivoquemos: `transitionTo`
+             * serializa con `lockForUpdate` y la activación cuelga de ENTRAR en
+             * approved, así que dos pasadas convergen en una sola membresía.
+             */
+            $reintentable = $previo !== null && (
+                $previo->processing_status === PaymentWebhookEvent::STATUS_FAILED
+                || (
+                    $previo->processing_status === PaymentWebhookEvent::STATUS_RECEIVED
+                    && $previo->updated_at !== null
+                    && $previo->updated_at->lt(now()->subMinutes(self::MINUTOS_PARA_DAR_POR_MUERTO))
+                )
+            );
+
+            if (! $reintentable) {
+                return ['status' => 'duplicate', 'http' => 200];
+            }
+
+            Log::info('wompi.webhook.retry_after_failure', [
+                'reference' => (string) ($wt['reference'] ?? ''),
+                'previous_status' => $previo->processing_status,
+                'previous_error' => $previo->error_message,
+            ]);
+
+            $event = $previo;
         }
 
         // Solo procesamos transaction.updated (extensible a más eventos).
