@@ -69,9 +69,29 @@ class SalesConversationReplyService
                 .'uno equivocado. Si quieres, pregúntame por una clase en concreto y te digo el día y la hora que tengo '
                 .'registrados; también te ayudo con planes o ubicación.',
 
-            SalesIntents::GENERAL_INFO => 'Con gusto te cuento. El mensual te sirve para entrenar constante, y según tu '
-                .'objetivo miramos lo que mejor te sirva. ¿Quieres entrenar por salud, bajar grasa '
-                .'o ganar masa?',
+            /*
+             * NO NOMBRA UN PLAN, Y ESO ES EL ARREGLO.
+             *
+             * Decía «el mensual te sirve para entrenar constante» y preguntaba
+             * el objetivo. Salió tal cual en una prueba física sobre una
+             * conversación recién creada: la persona pidió información del
+             * gimnasio y recibió un plan concreto que nadie había elegido
+             * —`recommended_plan_id` iba en null— más una pregunta de
+             * descubrimiento que no había pedido. Parecía contaminación de
+             * memoria y no lo era: era este texto, escrito aquí.
+             *
+             * Quien pide información general recibe información general y UNA
+             * puerta abierta. No se nombra ningún plan: el catálogo lo sirve el
+             * CRM cuando la conversación llegue ahí, y adelantarlo es empezar a
+             * vender a quien todavía está mirando.
+             *
+             * Tampoco afirma hechos: enumera lo que se puede preguntar, que es
+             * verdad por construcción, en vez de horarios o clases que este
+             * texto no tiene forma de comprobar.
+             */
+            SalesIntents::GENERAL_INFO => 'Con gusto te cuento. Iron Body es un gimnasio en Neiva donde puedes entrenar '
+                .'con acompañamiento y distintas opciones según lo que busques. Puedo contarte sobre planes, horarios, '
+                .'ubicación, clases o lo que necesites. ¿Qué necesitas saber primero?',
 
             SalesIntents::THANKS => 'Con gusto. Si después quieres empezar o comparar planes, me escribes y te ayudo '
                 .'sin problema.',
@@ -321,5 +341,101 @@ class SalesConversationReplyService
         return "¡Hola! 💪 Aquí tienes tu link para activar tu membresía {$plan->name} ({$price}) "
             .'en Iron Body Neiva. Pagas seguro desde acá y tu acceso queda listo al confirmarse '
             ."el pago: {$url}";
+    }
+
+    /**
+     * LO QUE SE DICE CUANDO NO QUEDA NADA MÁS QUE DECIR.
+     *
+     * El texto curado de arriba es la primera red. Tenía un agujero que se vio
+     * en producción: si ya se había usado en la conversación, la guarda
+     * antirrepetición lo anulaba y el turno salía MUDO. Tres mensajes seguidos
+     * sin respuesta, y el vigía en verde porque la fila existía. Un último
+     * recurso que sólo puede dispararse una vez por conversación no es un
+     * último recurso.
+     *
+     * Así que aquí hay varias formas de decir lo mismo, de la más útil a la
+     * más mínima, para que repetirse nunca sea la única salida. Ninguna nombra
+     * un plan ni afirma un hecho que no se pueda comprobar: enumeran lo que se
+     * puede preguntar, que es cierto por construcción.
+     *
+     * Y si al final todas se han usado, se repite la última. Repetirse es un
+     * defecto de estilo; callarse es dejar a una persona esperando.
+     *
+     * @return string[] de más útil a más mínima; nunca vacío
+     */
+    public function lastResorts(string $intent): array
+    {
+        /*
+         * NINGUNA CIERRA CON UN VERBO DE OFRECIMIENTO, Y ES A PROPÓSITO.
+         *
+         * «¿Qué te gustaría…?» y «¿prefieres…?» los lee el detector de ofertas
+         * como una OFERTA del agente, y entonces este texto de relleno pisaba
+         * la oferta viva de la conversación: un «sí, por favor» posterior
+         * dejaba de resolverse contra «te explico cómo empezar» y pasaba a
+         * resolverse contra un ofrecimiento genérico. Lo cazó el arco de
+         * memoria. Un texto que pregunta qué necesitas no ofrece nada, y no
+         * tiene por qué borrar lo que sí se ofreció.
+         */
+        $generales = [
+            'Claro, con gusto te ayudo. Puedes preguntarme por planes, horarios, ubicación, clases o cualquier '
+                .'información del gimnasio. ¿Qué necesitas saber primero?',
+            'Con gusto. Dime qué necesitas —planes, horarios, ubicación o clases— y te cuento.',
+            'Cuéntame qué necesitas saber del gimnasio y te ayudo.',
+        ];
+
+        /*
+         * Y LO SENSIBLE NO RECIBE UN MENÚ DE VENTAS.
+         *
+         * El `default` mandaba el menú comercial a las cinco intenciones que
+         * nunca deberían verlo. Medido: a «me cobraron dos veces», a una queja
+         * o a una lesión se les contestaba «puedes preguntarme por planes,
+         * horarios, ubicación, clases…». La persona llega igual al equipo
+         * —{@see StaffReviewAuthority} levanta la marca por intención— pero el
+         * texto que lee mientras tanto le dice que no la han escuchado.
+         *
+         * Éstas SÍ pueden prometer que alguien lo mira, porque en estas cinco
+         * la marca se pone de verdad. Es la única familia donde esa frase no
+         * es una promesa vacía.
+         */
+        $sensibles = [
+            /*
+             * NO PROMETEN LA MARCA, Y ES A PROPÓSITO.
+             *
+             * Decían «queda registrado para que el equipo lo revise», y la
+             * invariante de promesas clasifica eso como efecto durable: si el
+             * turno no pide `staff_review`, el commit muere en 422 y la
+             * persona se queda sin nada. Justo en las cinco intenciones donde
+             * el silencio duele más.
+             *
+             * Dicen lo que es cierto sin comprometer a nadie: que esto no lo
+             * resuelve una máquina. La marca, cuando toca, la pone la autoridad
+             * de revisión por su cuenta.
+             */
+            'Entiendo, y lo siento. Esto lo revisa una persona del equipo, no yo.',
+            'Entiendo. Esto no lo resuelvo yo: lo ve una persona del equipo.',
+        ];
+
+        return match ($intent) {
+            SalesIntents::COMPLAINT,
+            SalesIntents::FRAUD_OR_PAYMENT_CLAIM,
+            SalesIntents::MEDICAL_RISK_ESCALATION,
+            SalesIntents::HUMAN_REQUEST,
+            SalesIntents::INVOICE_REQUEST => $sensibles,
+            /*
+             * Quien pregunta por el precio o quiere empezar no se merece un
+             * menú: se le dice que de eso se habla aquí y se le deja seguir.
+             * Sigue sin nombrar plan ni cifra, que es lo que no puede salir de
+             * un texto escrito a mano.
+             */
+            SalesIntents::PRICING_QUESTION => [
+                'Con gusto te paso la información de los planes. Dime si empiezas este mes o estás comparando opciones.',
+                ...$generales,
+            ],
+            SalesIntents::LOCATION_QUESTION => [
+                'Con gusto te ayudo con la ubicación y cómo llegar. Dime si necesitas también horarios o planes.',
+                ...$generales,
+            ],
+            default => $generales,
+        };
     }
 }

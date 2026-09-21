@@ -634,17 +634,99 @@ class UltronCommitService
         ], $lead);
 
         if ($respuestaRepetida) {
-            $decision['safe_to_send'] = false;
             $decision['should_send_message'] = false;
             $decision['recommended_action'] = 'repeated_reply';
             $decision['risk_flags'] = array_values(array_unique(array_merge((array) ($decision['risk_flags'] ?? []), ['repeated_reply'])));
         }
         if ($revende) {
-            $decision['safe_to_send'] = false;
             $decision['should_send_message'] = false;
             $decision['should_generate_payment_link'] = false;
             $decision['recommended_action'] = 'resell_blocked';
             $decision['risk_flags'] = array_values(array_unique(array_merge((array) ($decision['risk_flags'] ?? []), ['resell_blocked'])));
+        }
+
+        /*
+         * LA MISMA PUERTA AL SILENCIO, CON EL JUEZ DEL OTRO LADO.
+         *
+         * El último recurso vivía sólo en la rendición —cuando el critic TUMBA
+         * el borrador—, y este camino es el de cuando el critic lo APRUEBA y
+         * lo tumbamos nosotros: repetido, o venta a quien ya compró. Acababa
+         * igual, en `skipped` sin saliente, y además sin marca para nadie.
+         * Misma persona esperando, otra puerta.
+         *
+         * Que el texto del modelo no pueda salir no significa que no haya nada
+         * que decir: significa que hay que decir OTRA cosa. Estos dos motivos
+         * son recuperables por definición —«ya lo dijiste» y «a éste no le
+         * vendas»— y los dos se resuelven con un texto que ni repite ni vende.
+         *
+         * Lo que NO se recupera aquí es el resto: un texto que un guard tumbó
+         * por lo que dice es un problema del texto, y ése camino ya tiene su
+         * propia salida más abajo. Y quien pide que no le escriban sigue sin
+         * recibir nada, se mire el intent o la herramienta.
+         */
+        $intentPropuesto = (string) ($proposal['intent'] ?? SalesIntents::UNKNOWN);
+        $pideBaja = $intentPropuesto === SalesIntents::DO_NOT_CONTACT_REQUEST
+            || in_array(SalesIntents::TOOL_MARK_DNC, (array) ($proposal['tools_requested'] ?? []), true);
+
+        if (($respuestaRepetida || $revende) && ! $pideBaja) {
+            $alternativa = $this->ultimoRecurso($conversation, $intentPropuesto);
+
+            if ($alternativa !== null) {
+                ChannelLog::info('ultron.commit.last_resort_recovered', [
+                    'conversation_id' => (int) $conversation->id,
+                    'motivo' => $decision['recommended_action'],
+                ]);
+
+                $replyFinal = $alternativa;
+                $decision['safe_to_send'] = true;
+                $decision['should_send_message'] = true;
+                $decision['recommended_action'] = $decision['recommended_action'].'_recovered';
+
+                /*
+                 * La bandera es lo que gobierna; la etiqueta sólo se lee.
+                 *
+                 * Esto colgaba de mirar si `recommended_action` terminaba en
+                 * «_recovered», y una puerta del dinero que depende de cómo se
+                 * escriba una cadena se desarma sola el día que alguien
+                 * renombre la etiqueta, sin que nada se ponga rojo.
+                 */
+                $decision['recovered_reply'] = true;
+
+                /*
+                 * Y LAS HERRAMIENTAS SE QUEDAN FUERA. Esto casi se me escapa y
+                 * lo caz{ó} un test de dinero: reabrir el env{í}o reabri{ó} tambi{é}n el
+                 * cobro, y a un socio que ya tiene el plan le sali{ó} un enlace
+                 * de pago de verdad, acu{ñ}ado, justo en el caso que el bloqueo
+                 * de reventa existe para impedir.
+                 *
+                 * El razonamiento es el mismo que en la rendici{ó}n: el enlace
+                 * de pago y los de la app colgaban del texto del modelo, y ese
+                 * texto NO sali{ó}. Lo {ú}nico que se ejecuta es lo que pidi{ó} la
+                 * PERSONA, no lo que propuso el modelo.
+                 */
+                $decision['should_generate_payment_link'] = false;
+
+                /*
+                 * Sólo se caen las DOS que viajaban dentro del texto.
+                 *
+                 * El enlace de pago y los de la app se insertan en el mensaje
+                 * del modelo, y ese mensaje no salió: anunciarlos sería
+                 * mentir. Lo demás sí ocurre, porque no lo pidió el modelo
+                 * sino la PERSONA: la marca para el equipo, la baja y la
+                 * solicitud de cortesía son efectos del mundo real y que el
+                 * texto se repita no los cancela. Quitarlas todas dejaba sin
+                 * marcar una operación que sólo hace el equipo.
+                 */
+                $decision['tools_requested'] = array_values(array_diff(
+                    (array) ($decision['tools_requested'] ?? []),
+                    [SalesIntents::TOOL_PAYMENT_LINK_SEND, SalesIntents::TOOL_APP_LINKS_SEND],
+                ));
+            }
+        }
+
+        if (($respuestaRepetida || $revende) && ($decision['safe_to_send'] ?? false) !== true) {
+            $decision['safe_to_send'] = false;
+            $decision['should_send_message'] = false;
         }
 
         /*
@@ -954,7 +1036,26 @@ class UltronCommitService
          * Va DESPUÉS de los enlaces de la app y ANTES del envío, para que salga
          * UNA sola respuesta visible con el cobro dentro, y no tres globos.
          */
-        $cobro = $this->checkoutDecision($conversation, $lead, $decision, $plan, (string) $sanitized['intent'], $resolution, $replyFinal);
+        /*
+         * SOBRE UN TEXTO DE RELLENO NO SE ACUÑA NADA.
+         *
+         * Apagar `should_generate_payment_link` y quitar la herramienta NO
+         * bastaba: {@see checkoutDecision()} corrobora por su cuenta —con la
+         * referencia resuelta `send_it` o con una oferta de cobro aceptada— y
+         * no lee esa bandera. Lo que impedía acuñar aquí era el corte por
+         * `safe_to_send`, que es justo el que se abrió para dejar de callar.
+         *
+         * Medido en código por la revisión: un socio con plan vigente fuera de
+         * ventana que dice «sí, mándame el link» caía en `resell_blocked`,
+         * entraba en la recuperación y salía con un checkout ACUÑADO pegado a
+         * un texto genérico. El enlace cuelga del mensaje del modelo, y ese
+         * mensaje no salió: sin mensaje no hay enlace.
+         */
+        $recuperado = ($decision['recovered_reply'] ?? false) === true;
+
+        $cobro = $recuperado
+            ? null
+            : $this->checkoutDecision($conversation, $lead, $decision, $plan, (string) $sanitized['intent'], $resolution, $replyFinal);
 
         if ($cobro !== null && ($cobro['status'] ?? null) === 'inlined') {
             /*
@@ -1074,6 +1175,7 @@ class UltronCommitService
             $this->memoryService->recordSentTurn(
                 $conversation->fresh(), $message, $replyFinal, $plan,
                 (string) $sanitized['intent'], $resolution, $send['message_id'] ?? null,
+                ($decision['recovered_reply'] ?? false) === true,
             );
         }
 
@@ -1232,6 +1334,34 @@ class UltronCommitService
         if ($curado !== null && $this->novelty->nearDuplicateOf($curado, $this->previousMachineReplies($conversation)) !== null) {
             ChannelLog::warning('ultron.commit.curated_reply_repeated', ['conversation_id' => $conversation->id, 'intent' => $intent]);
             $curado = null;
+        }
+
+        /*
+         * Y AQUÍ NO SE ACABA LA BÚSQUEDA. SIN TEXTO, SE BUSCA OTRO.
+         *
+         * Esto faltaba, y costó tres mensajes seguidos sin respuesta en una
+         * prueba real. La cadena era: el critic tumba el borrador → sale el
+         * texto curado de esa intención → al turno siguiente el critic vuelve
+         * a tumbar → el MISMO texto curado ya está dicho → la guarda
+         * antirrepetición lo anula → silencio. Un último recurso que sólo
+         * puede dispararse una vez por conversación no es un último recurso.
+         *
+         * La regla es: un entrante atendible termina en un saliente visible.
+         * Las excepciones son gobernadas y se cuentan con los dedos —aquí,
+         * quien pidió que no le escriban—, y no incluyen «al agente se le
+         * atragantó la redacción». Repetirse es un defecto de estilo;
+         * callarse deja a una persona esperando delante del teléfono.
+         */
+        $mudoPorDiseno = $intent === SalesIntents::DO_NOT_CONTACT_REQUEST
+            // La herramienta cuenta tanto como el intent: unas líneas más
+            // abajo el opt-out se ejecuta por las dos vías, y mirar sólo una
+            // aquí elegía un texto de respaldo para alguien que acaba de pedir
+            // que no le escriban. No llegaba a salir —el despachador lo frena—
+            // pero el turno moría marcado como fallido en vez de como correcto.
+            || in_array(SalesIntents::TOOL_MARK_DNC, (array) ($proposal['tools_requested'] ?? []), true);
+
+        if (! $mudoPorDiseno && ($curado === null || trim($curado) === '')) {
+            $curado = $this->ultimoRecurso($conversation, $intent);
         }
 
         $modo = $curado !== null && trim($curado) !== '' ? 'SAFE_CURATED_REPLY' : 'NO_REPLY_AND_HANDOFF';
@@ -2709,6 +2839,42 @@ class UltronCommitService
      *
      * @return string[]
      */
+    /**
+     * El texto que siempre hay: variantes de lo mismo, de útil a mínima.
+     *
+     * Se elige la primera que sea segura y que no se haya dicho ya. Si todas
+     * se dijeron, se repite la última a propósito: repetirse es peor estilo y
+     * mejor servicio que el silencio.
+     *
+     * Devuelve null sólo si NINGUNA pasa el guard de salida, que sería un
+     * fallo de estos textos y no del turno; entonces sí se calla y se marca,
+     * que es el comportamiento que ya había.
+     */
+    private function ultimoRecurso(MarketingConversation $conversation, string $intent): ?string
+    {
+        $previas = $this->previousMachineReplies($conversation);
+        $variantes = $this->replies->lastResorts($intent);
+        $seguras = [];
+
+        foreach ($variantes as $v) {
+            if (! $this->contentGuard->inspect($v, MarketingMessage::SENDER_AI, false)['safe']) {
+                ChannelLog::warning('ultron.commit.last_resort_blocked', [
+                    'conversation_id' => (int) $conversation->id, 'intent' => $intent,
+                ]);
+
+                continue;
+            }
+            $seguras[] = $v;
+
+            if ($this->novelty->nearDuplicateOf($v, $previas) === null) {
+                return $v;
+            }
+        }
+
+        // Todas dichas ya: se repite la más mínima antes que callar.
+        return $seguras === [] ? null : end($seguras);
+    }
+
     private function previousMachineReplies(MarketingConversation $conversation): array
     {
         return $conversation->messages()

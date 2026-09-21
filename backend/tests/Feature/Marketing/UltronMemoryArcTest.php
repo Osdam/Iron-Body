@@ -149,14 +149,29 @@ class UltronMemoryArcTest extends TestCase
         $this->assertSame(R::MORE_INFO, $mem['last_reference_resolution']['type']);
 
         // ── 2b. «y que mas?» con el modelo repitiendo lo del turno 1 ─────────
-        // Lo que pasó aquel día: volver a mandar precio y beneficios. Hoy el
-        // texto no sale, la fase no avanza y el turno queda consumido.
+        /*
+         * Lo que pasó aquel día: volver a mandar precio y beneficios. La
+         * repetición sigue sin salir y la fase sigue sin avanzar, pero la
+         * persona ya no se queda sin nada.
+         *
+         * Esto exigía `no_reply` y que el contador de salientes no se moviera,
+         * o sea exigía el silencio. Se vio lo que costaba en una prueba
+         * física: tres mensajes seguidos sin respuesta por esta misma puerta.
+         * Que el texto del modelo no pueda salir no significa que no haya nada
+         * que decir; significa que hay que decir otra cosa.
+         */
         $m2b = $this->inbound('y que mas?', 'arc.2b');
         $this->commit($m2b, [
             'intent' => SalesIntents::GENERAL_INFO, 'recommended_plan_id' => $this->plan->id,
             'reply_draft' => 'Claro. Tenemos el {{PLAN_NAME}} por {{PLAN_PRICE}}: acceso ilimitado al gimnasio y reserva de clases grupales. ¿Quieres que te cuente más detalles?',
-        ])->assertOk()->assertJsonPath('outcome', 'no_reply')->assertJsonPath('blocked_reason', 'repeated_reply');
-        $this->assertSame(2, $this->outbound(), 'la repetición no salió');
+        ])->assertOk();
+
+        $this->assertSame(3, $this->outbound(), 'la persona se quedó sin respuesta');
+
+        $ultimo = mb_strtolower((string) MarketingMessage::where('conversation_id', $this->conversation->id)
+            ->where('direction', MarketingMessage::DIRECTION_OUTBOUND)->latest('id')->first()?->body);
+        $this->assertStringNotContainsString('acceso ilimitado', $ultimo, 'salió la repetición que se bloqueó');
+        $this->assertStringNotContainsString('$', $ultimo, 'salió el precio otra vez');
         $this->assertSame(P::RECOMMENDATION, $this->conversation->fresh()->commercial_phase, 'la fase no avanza sobre un texto que no salió');
         $this->assertSame('explain_how_to_start', $this->memory()['last_agent_offer']['kind'], 'la oferta del turno 2 sigue vigente: nada nuestro salió después');
 
@@ -195,7 +210,7 @@ class UltronMemoryArcTest extends TestCase
             'intent' => SalesIntents::GENERAL_INFO,
             'reply_draft' => 'Tranquilo, esa info la tiene el equipo humano. Te conecto con alguien para que te cuente bien todo.',
         ], $d4->json('decide_token'))->assertStatus(422)->assertJsonPath('code', OutboundContentGuard::CODE_UNAUTHORIZED_HANDOFF);
-        $this->assertSame(3, $this->outbound());
+        $this->assertSame(4, $this->outbound(), 'el 422 no puede haber mandado nada');
 
         // ── 5. «no quiero alguien del equipo, contesta tú» ───────────────────
         // La pregunta 4 sigue sin respuesta nuestra: la memoria lo sabe sin haberlo guardado.
@@ -220,7 +235,7 @@ class UltronMemoryArcTest extends TestCase
         // ── Cierre del arco ───────────────────────────────────────────────────
         $mem = $this->memory();
         $this->assertContains('trainers_count', array_column($mem['facts_delivered'], 'key'));
-        $this->assertSame(4, $this->outbound(), 'cuatro respuestas salieron, ninguna repetida, ninguna derivó');
+        $this->assertSame(5, $this->outbound(), 'cinco respuestas salieron, ninguna repetida, ninguna derivó y nadie se quedó sin contestación');
         $this->assertNotSame(P::HUMAN_HANDOFF, $this->conversation->fresh()->commercial_phase);
         $this->assertFalse((bool) $this->conversation->fresh()->human_takeover);
 

@@ -259,8 +259,20 @@ class UltronMembershipContextTest extends TestCase
             'reply_draft' => 'El {{PLAN_NAME}} cuesta {{PLAN_PRICE}}.', 'recommended_plan_id' => $this->plan->id,
         ])->assertOk();
 
-        $this->assertSame('resell_blocked', $r->json('blocked_reason'));
-        $this->assertSame(0, PaymentTransaction::count());
+        /*
+         * No se recotiza ni se cobra, pero se contesta.
+         *
+         * Esto miraba `blocked_reason`, que sólo existe cuando el turno se
+         * calla. Lo que protege de verdad es que no salga la cifra del plan
+         * que la socia ya tiene y que no se acuñe nada; quedarse muda ante
+         * quien escribe nunca fue la garantía.
+         */
+        $this->assertSame(0, PaymentTransaction::count(), 'se acuñó un cobro a quien ya tiene el plan');
+
+        $ultimo = mb_strtolower((string) MarketingMessage::where('conversation_id', $this->conversation->id)
+            ->where('direction', MarketingMessage::DIRECTION_OUTBOUND)->latest('id')->first()?->body);
+        $this->assertNotSame('', trim($ultimo), 'la socia se quedó sin respuesta');
+        $this->assertDoesNotMatchRegularExpression('/\$\s*\d/', $ultimo, 'salió la cotización bloqueada');
     }
 
     private function mes(Carbon $d): string

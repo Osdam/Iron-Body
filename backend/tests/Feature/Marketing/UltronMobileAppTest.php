@@ -400,13 +400,19 @@ class UltronMobileAppTest extends TestCase
 
         $r = $this->commit($this->inbound('y para registrarme?', 'a.15'), ['reply_draft' => $mismo])->assertOk();
 
-        $this->assertSame('no_reply', $r->json('outcome'), 'repetir el mismo párrafo no sale');
-        $this->assertSame('repeated_reply', $r->json('blocked_reason'));
-        $this->assertSame(
-            1,
-            MarketingMessage::where('conversation_id', $this->conversation->id)
-                ->where('direction', MarketingMessage::DIRECTION_OUTBOUND)->count(),
-            'un solo saliente en toda la conversación',
-        );
+        /*
+         * El párrafo repetido no sale; la persona sí recibe algo.
+         *
+         * Y los enlaces tampoco se reenvían: viajaban DENTRO del párrafo que
+         * se descartó, así que anunciarlos en un texto que ya no los lleva
+         * sería prometer lo que no va. Ésa es la razón de que la recuperación
+         * deje fuera `app_links_send` y `payment_link_send` y no las demás.
+         */
+        $salientes = MarketingMessage::where('conversation_id', $this->conversation->id)
+            ->where('direction', MarketingMessage::DIRECTION_OUTBOUND)->orderBy('id')->pluck('body')->all();
+
+        $this->assertCount(2, $salientes, 'la persona se quedó sin respuesta');
+        $this->assertNotSame($salientes[0], $salientes[1], 'salió dos veces el mismo párrafo');
+        $this->assertStringNotContainsString('http', mb_strtolower((string) $salientes[1]), 'se reenviaron los enlaces en un texto que no era el suyo');
     }
 }

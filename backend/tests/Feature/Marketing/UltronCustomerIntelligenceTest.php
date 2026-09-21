@@ -147,11 +147,15 @@ class UltronCustomerIntelligenceTest extends TestCase
         $faseAntes = $this->conversation->fresh()->commercial_phase;
         $r = $this->commit($this->inbound('y cómo pago el mensual otra vez?', 'r.3'), ['next_state' => P::CLOSING, 'intent' => SalesIntents::HIGH_INTENT_CLOSE, 'recommended_plan_id' => $this->plan->id,
             'reply_draft' => 'Perfecto, el {{PLAN_NAME}} por {{PLAN_PRICE}}: vienes con tu documento y el equipo confirma el medio de pago.'])->assertOk();
-        $this->assertSame('no_reply', $r->json('outcome'));
-        $this->assertSame('resell_blocked', $r->json('blocked_reason'));
-        $this->assertSame(1, MarketingMessage::where('direction', 'outbound')->count());
+        // No se le vuelve a cotizar el plan que ya tiene, pero se le contesta:
+        // callarse ante una socia que escribe nunca fue parte del trato.
+        $this->assertSame(2, MarketingMessage::where('direction', 'outbound')->count(), 'la socia se quedó sin respuesta');
+        $ultimo = mb_strtolower((string) MarketingMessage::where('direction', 'outbound')->latest('id')->first()?->body);
+        $this->assertStringNotContainsString('documento', $ultimo, 'salió la cotización bloqueada');
+        $this->assertDoesNotMatchRegularExpression('/\$\s*\d/', $ultimo, 'salió una cifra');
         $this->assertSame($faseAntes, $this->conversation->fresh()->commercial_phase, 'la fase no se mueve sobre un texto que no salió');
-        $this->assertSame('skipped', MarketingAiAction::latest('id')->first()->status);
+        // El turno se ejecuta: salió un texto, aunque no fuera el del modelo.
+        $this->assertSame('executed', MarketingAiAction::latest('id')->first()->status);
     }
 
     /** Hallazgo medio: la guardia ya no mata el opt-out del turno. */
@@ -173,7 +177,13 @@ class UltronCustomerIntelligenceTest extends TestCase
         $r = $this->commit($this->inbound('recuérdame cuánto es el mensual', 'r.5'), ['next_state' => P::BUYING_SIGNAL, 'intent' => SalesIntents::PRICING_QUESTION, 'recommended_plan_id' => $this->plan->id,
             'reply_draft' => 'Claro: el {{PLAN_NAME}} vale {{PLAN_PRICE}}. ¿Lo dejamos listo?'])->assertOk();
 
-        $this->assertSame('resell_blocked', $r->json('blocked_reason'));
+        // Lo que importa es que no salga la cifra del plan que ya tiene; que
+        // además se le conteste es el arreglo del turno mudo.
+        $this->assertDoesNotMatchRegularExpression(
+            '/\$\s*\d/',
+            (string) MarketingMessage::where('direction', 'outbound')->latest('id')->first()?->body,
+            'se volvió a cotizar el plan que ya tiene',
+        );
     }
 
     /** Hallazgo bloqueante 2: un pago aprobado de hace un año no convierte a nadie en PAID. */
@@ -218,7 +228,13 @@ class UltronCustomerIntelligenceTest extends TestCase
 
         $r = $this->commit($this->inbound('y el mensual cuánto era?', 'r.11'), ['next_state' => P::CLOSING, 'intent' => SalesIntents::PRICING_QUESTION, 'recommended_plan_id' => $this->plan->id,
             'reply_draft' => 'El {{PLAN_NAME}} vale {{PLAN_PRICE}}. ¿Lo dejamos listo?'])->assertOk();
-        $this->assertSame('resell_blocked', $r->json('blocked_reason'));
+        // Lo que importa es que no salga la cifra del plan que ya tiene; que
+        // además se le conteste es el arreglo del turno mudo.
+        $this->assertDoesNotMatchRegularExpression(
+            '/\$\s*\d/',
+            (string) MarketingMessage::where('direction', 'outbound')->latest('id')->first()?->body,
+            'se volvió a cotizar el plan que ya tiene',
+        );
 
         $this->commit($this->inbound('y si quiero el trimestre?', 'r.12'), ['next_state' => P::RECOMMENDATION, 'intent' => SalesIntents::GENERAL_INFO, 'recommended_plan_id' => $this->otro->id,
             'reply_draft' => 'El {{PLAN_NAME}} sale en {{PLAN_PRICE}}; cuando actives el tuyo lo miramos con calma.'])->assertOk()->assertJsonPath('outcome', 'dry_run');

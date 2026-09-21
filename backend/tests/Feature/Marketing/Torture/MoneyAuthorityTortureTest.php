@@ -623,15 +623,34 @@ class MoneyAuthorityTortureTest extends TortureCase
         $this->makeMember(endsInDays: 20);
         $this->enablePaymentEngine();
 
+        $antes = $this->outbound()->count();
+
         $r = $this->commit($this->inbound('quiero el mensual otra vez'), [
             'reply_draft' => 'Perfecto, el {{PLAN_NAME}} queda en {{PLAN_PRICE}}.',
             'recommended_plan_id' => $this->plan->id,
             'tools_requested' => [SalesIntents::TOOL_PAYMENT_LINK_SEND],
         ])->assertOk();
 
-        $this->assertSame('no_reply', $r->json('outcome'));
-        $this->assertSame('resell_blocked', $r->json('blocked_reason'));
-        $this->assertSame(0, $this->outbound()->count());
+        /*
+         * NO SE COTIZA, PERO SE CONTESTA.
+         *
+         * Esto exigia `no_reply` y cero salientes: o sea, exigia que a un
+         * socio que escribe se le dejara sin respuesta. Lo que hay que
+         * proteger es que no se le vuelva a cotizar ni a cobrar el plan que ya
+         * tiene; callarse no era parte del trato, y esa misma puerta dejo a
+         * una persona sin contestacion tres veces en una prueba real.
+         *
+         * Lo que se fija ahora: sale un texto, y ese texto no nombra el plan,
+         * no lleva precio y no acuna nada.
+         */
+        $this->assertSame('dry_run', $r->json('outcome'), 'el socio se quedo sin respuesta');
+        $this->assertSame($antes + 1, $this->outbound()->count(), 'el socio se quedo sin respuesta');
+
+        $salida = mb_strtolower((string) $this->lastOutboundBody());
+        $this->assertStringNotContainsString('mensual', $salida, 'se volvio a cotizar el plan que ya tiene');
+        $this->assertStringNotContainsString((string) self::PRECIO_MENSUAL, $salida);
+        $this->assertDoesNotMatchRegularExpression('/\$\s*\d/', $salida, 'salio una cifra');
+
         $this->assertSame(0, PaymentTransaction::count(), 'si no se cotiza, tampoco se cobra');
         $this->assertSame(P::RECOMMENDATION, $this->conversation->fresh()->commercial_phase, 'la fase no avanza sobre lo que no salio');
     }
@@ -835,5 +854,41 @@ class MoneyAuthorityTortureTest extends TortureCase
         $r->assertStatus(422)->assertJsonValidationErrors('proposal.tools_requested.0');
         $this->assertSame(0, $this->outbound()->count());
         $this->assertSame(0, PaymentTransaction::count());
+    }
+
+    /**
+     * Y EL SOCIO QUE PIDE EL ENLACE DE SU PROPIO PLAN TAMPOCO ACUÑA.
+     *
+     * El bloqueo de reventa vivía en un `return` temprano: si el texto no
+     * salía, el turno se acababa ahí y el cobro no llegaba a plantearse. Al
+     * abrir ese corte para dejar de callar, el cobro volvió a quedar al
+     * alcance —y apagar la bandera no basta, porque {@see checkoutDecision()}
+     * corrobora por su cuenta con la referencia resuelta o con una oferta
+     * aceptada, sin leerla—.
+     *
+     * Aquí se fija lo que impide que vuelva: sobre un texto de relleno no se
+     * acuña nada. El enlace cuelga del mensaje del modelo, y ese mensaje no
+     * salió.
+     */
+    public function test_a_member_asking_for_the_link_of_her_own_plan_mints_nothing(): void
+    {
+        $this->makeMember(endsInDays: 20);
+        $this->enablePaymentEngine();
+
+        $antes = $this->outbound()->count();
+
+        $this->commit($this->inbound('si, mandame el link'), [
+            'intent' => SalesIntents::PAYMENT_LINK_REQUEST,
+            'reply_draft' => 'Listo, el {{PLAN_NAME}} queda en {{PLAN_PRICE}}.',
+            'recommended_plan_id' => $this->plan->id,
+            'tools_requested' => [SalesIntents::TOOL_PAYMENT_LINK_SEND],
+        ])->assertOk();
+
+        $this->assertSame(0, PaymentTransaction::count(), 'se acuñó un cobro a quien ya tiene el plan');
+
+        $salida = (string) $this->lastOutboundBody();
+        $this->assertSame($antes + 1, $this->outbound()->count(), 'el socio se quedó sin respuesta');
+        $this->assertStringNotContainsString('http', $salida, 'salió un enlace de pago');
+        $this->assertDoesNotMatchRegularExpression('/\$\s*\d/', $salida, 'salió una cifra');
     }
 }

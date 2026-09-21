@@ -366,10 +366,18 @@ class FactsAuthorityTortureTest extends TortureCase
         // texto que nadie leyó.
         $r = $this->commit($this->inbound('¿y qué más?'), ['reply_draft' => $segundoDraft, 'next_state' => P::CLOSING])->assertOk();
 
-        $this->assertSame('no_reply', $r->json('outcome'));
-        $this->assertSame('repeated_reply', $r->json('blocked_reason'));
-        $this->assertSame(1, $this->outbound()->count(), 'la persona sigue teniendo un solo mensaje');
-        $this->assertSame($primera, $this->lastOutboundBody());
+        /*
+         * NO SALE LO REPETIDO, PERO SALE ALGO.
+         *
+         * Esto exigía `no_reply` y que el contador no se moviera: exigía el
+         * silencio. Una prueba física lo cobró —tres mensajes seguidos sin
+         * respuesta por esta misma puerta—, así que lo que se fija ahora es lo
+         * que de verdad protegía: que la repetición NO salga. Que la persona
+         * se quede sin nada nunca fue parte del trato.
+         */
+        $this->assertSame(2, $this->outbound()->count(), 'la persona se quedó sin respuesta');
+        $this->assertNotSame($primera, $this->lastOutboundBody(), 'salió otra vez el mismo texto');
+        $this->assertNotSame($segundoDraft, $this->lastOutboundBody(), 'salió la repetición que se bloqueó');
         $this->assertSame(P::RECOMMENDATION, $this->conversation->fresh()->commercial_phase, 'la fase no avanza sobre lo que no se envió');
     }
 
@@ -413,10 +421,13 @@ class FactsAuthorityTortureTest extends TortureCase
             'staff_review_reason' => StaffReviewAuthority::TEAM_ONLY_OPERATION,
         ])->assertOk();
 
-        $this->assertSame('repeated_reply', $r->json('blocked_reason'));
+        // Lo que se mide es que el texto repetido no se lleve por delante el
+        // resto del turno: la marca para el equipo la pidió la PERSONA y se
+        // pone igual, salga el texto del modelo o salga otro.
         $this->assertSame([SalesIntents::TOOL_STAFF_REVIEW], $r->json('applied.tools_executed'));
         $this->assertTrue((bool) $this->conversation->fresh()->staff_review_pending);
-        $this->assertSame(1, $this->outbound()->count());
+        $this->assertSame(2, $this->outbound()->count(), 'la persona se quedó sin respuesta');
+        $this->assertNotSame($texto, $this->lastOutboundBody(), 'salió la repetición');
     }
 
     /** Repetir la dirección a quien vuelve al día siguiente no es repetirse. */

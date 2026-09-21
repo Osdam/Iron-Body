@@ -277,13 +277,40 @@ class UltronTurnWatchdog extends Command
             ->values();
     }
 
-    /** ¿Existe la fila que dice que ese turno terminó en algo? */
+    /**
+     * ¿Existe la fila que dice que ese turno terminó en algo?
+     *
+     * «Terminó en algo» tenía un agujero semántico que costó tres mensajes sin
+     * respuesta: bastaba con que la fila EXISTIERA. Una acción `skipped` es
+     * precisamente el turno que se rindió sin mandar nada, así que contarla
+     * como desenlace convertía al vigía en el testigo que certifica el
+     * silencio que debía denunciar. Se midió en producción: tres entrantes sin
+     * contestar y el informe diciendo «todo entrante atendible terminó en
+     * algo».
+     *
+     * Ahora un `skipped` sin saliente NO es desenlace. Los silencios legítimos
+     * no se cuelan por aquí: los que dejaron de ser atendibles —baja, traspaso
+     * a una persona, IA apagada— los filtra {@see yaNoEraAtendible()}, y a
+     * quien recibió respuesta más tarde lo filtra {@see respondidaDespues()}.
+     */
     private function tuvoDesenlace(MarketingAutomationEvent $e): bool
     {
-        return MarketingAiAction::query()
+        $accion = MarketingAiAction::query()
             ->where('source_type', UltronSource::INBOUND_MESSAGE)
             ->where('source_event_id', (int) $e->message_id)
-            ->exists();
+            ->latest('id')
+            ->first(['id', 'status', 'metadata']);
+
+        if ($accion === null) {
+            return false;
+        }
+
+        if ((string) $accion->status !== 'skipped') {
+            return true;
+        }
+
+        // Rendido: sólo cuenta si algo salió de verdad.
+        return data_get($accion->metadata, 'outbound.message_id') !== null;
     }
 
     /**

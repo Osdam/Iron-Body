@@ -108,17 +108,50 @@ class UltronMemoryGuardsTest extends TestCase
         $this->assertSame(2, $this->outbound());
     }
 
-    /** El texto curado del critic fallido tampoco se repite palabra por palabra. */
-    public function test_a_curated_fallback_is_not_sent_twice_verbatim(): void
+    /**
+     * El texto curado no se repite palabra por palabra, PERO SE CONTESTA.
+     *
+     * Este test fijaba el fallo como si fuera lo deseado: exigía que el
+     * segundo turno acabara en `NO_REPLY_AND_HANDOFF`, con un solo saliente y
+     * la conversación marcada para una persona. O sea, exigía el silencio.
+     *
+     * Se vio lo que valía en una prueba física: alguien pidió información tres
+     * veces seguidas y no recibió NADA las tres, porque el texto curado ya se
+     * había gastado en el primer turno y la guarda de duplicados lo anulaba.
+     * No repetirse es una preferencia de estilo; contestar es el trabajo.
+     *
+     * Lo que se fija ahora es lo que de verdad importaba: que no salga la
+     * misma frase dos veces Y que la persona reciba algo las dos.
+     */
+    public function test_a_curated_fallback_is_not_repeated_but_is_still_answered(): void
     {
         $fail = ['verdict' => 'fail', 'attempt' => 2, 'score' => 0.2];
         $a = $this->commit($this->inbound('dónde están?', 'c.1'), ['intent' => SalesIntents::LOCATION_QUESTION, 'reply_draft' => 'borrador malo'], $fail)->assertOk();
         $b = $this->commit($this->inbound('dónde queda el gym?', 'c.2'), ['intent' => SalesIntents::LOCATION_QUESTION, 'reply_draft' => 'otro borrador malo'], $fail)->assertOk();
 
         $this->assertSame('SAFE_CURATED_REPLY', $a->json('fallback_mode'));
-        $this->assertSame('NO_REPLY_AND_HANDOFF', $b->json('fallback_mode'));
-        $this->assertSame(1, $this->outbound());
-        $this->assertTrue((bool) $this->conversation->fresh()->staff_review_pending);
+        $this->assertSame('SAFE_CURATED_REPLY', $b->json('fallback_mode'), 'el segundo turno se quedó mudo');
+        $this->assertSame(2, $this->outbound(), 'alguien preguntó dos veces y sólo recibió una respuesta');
+
+        $textos = MarketingMessage::where('conversation_id', $this->conversation->id)
+            ->where('direction', MarketingMessage::DIRECTION_OUTBOUND)
+            ->orderBy('id')->pluck('body')->all();
+        /*
+         * Se mide la SIMILITUD, no la identidad literal.
+         *
+         * `assertNotSame` pasaría con un casi-duplicado: bastaría que una
+         * variante futura del último recurso se pareciera un 0,9 a la anterior
+         * sin ser idéntica. El umbral es el mismo que usa la guarda de
+         * novedad, así que el test dice lo que el sistema promete.
+         */
+        $this->assertLessThan(
+            0.85,
+            app(\App\Services\Marketing\Ultron\NoveltyGuard::class)->similarity($textos[0], $textos[1]),
+            'la segunda respuesta es casi la misma que la primera',
+        );
+
+        // Y que al agente se le atragante la redacción no es trabajo para una persona.
+        $this->assertFalse((bool) $this->conversation->fresh()->staff_review_pending);
     }
 
     /** La memoria no guarda teléfonos, documentos ni correos de la persona. */

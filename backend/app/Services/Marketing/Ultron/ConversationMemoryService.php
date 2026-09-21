@@ -63,6 +63,7 @@ final class ConversationMemoryService
         string $intent,
         array $resolution,
         ?int $outboundMessageId,
+        bool $esUltimoRecurso = false,
     ): ConversationMemory {
         $m = ConversationMemory::fromArray(is_array($conversation->memory) ? $conversation->memory : null);
         $at = now()->toIso8601String();
@@ -131,6 +132,26 @@ final class ConversationMemoryService
         // debe volver a verlo por esta vía.
         $question = $this->lastQuestionIn($replyFinal);
         $offerKind = $question === null ? null : $this->offerKindOf($question);
+
+        /*
+         * UN TEXTO DE RELLENO NO BORRA LO QUE SÍ SE OFRECIÓ.
+         *
+         * El último recurso es lo que sale cuando el texto del modelo no puede
+         * salir: pregunta qué necesitas y no ofrece nada. Sin esta excepción
+         * pisaba la oferta viva —`agentAsked` sobreescribe siempre— y un «sí,
+         * por favor» posterior dejaba de resolverse contra «te explico cómo
+         * empezar». Lo cazó el arco de memoria, que guarda un incidente real.
+         *
+         * La pregunta sí se anota: es la última que hizo el agente. Lo que no
+         * se toca es la OFERTA.
+         */
+        if ($esUltimoRecurso && $offerKind === null && $m->get('last_agent_offer') !== null) {
+            $m->touch($at);
+            $conversation->forceFill(['memory' => $m->toArray()])->save();
+
+            return $m;
+        }
+
         $m->agentAsked(MemoryRedactor::agent($question), $offerKind, $plan?->id ?? $m->pendingPlanId(), $at, $mid);
 
         $m->touch($at);

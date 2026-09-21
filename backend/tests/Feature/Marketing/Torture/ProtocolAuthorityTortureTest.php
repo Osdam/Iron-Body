@@ -308,14 +308,17 @@ class ProtocolAuthorityTortureTest extends TortureCase
         $b = $this->inbound('y que mas me puedes decir');
         $r = $this->commit($b, ['reply_draft' => 'Claro, te cuento con gusto lo que necesites.']);
 
-        // 200, no 422: el turno se ejecutó y la decisión fue callarse.
-        $r->assertOk()
-            ->assertJsonPath('outcome', 'no_reply')
-            ->assertJsonPath('blocked_reason', 'repeated_reply')
-            ->assertJsonPath('reply_final', null);
+        // 200, no 422: el turno se ejecutó. Lo que ya no se hace es callarse:
+        // la repetición no sale, pero sale otra cosa.
+        $r->assertOk();
 
-        $this->assertSame(1, $this->outbound()->count(), 'La persona no puede leer dos veces lo mismo.');
-        $this->assertSame('skipped', MarketingAiAction::latest('id')->first()->status);
+        $this->assertSame(2, $this->outbound()->count(), 'la persona se quedó sin respuesta');
+        $this->assertNotSame(
+            'Claro, te cuento con gusto lo que necesites.',
+            MarketingMessage::where('conversation_id', $this->conversation->id)
+                ->where('direction', MarketingMessage::DIRECTION_OUTBOUND)->latest('id')->first()?->body,
+            'La persona no puede leer dos veces lo mismo.',
+        );
         $this->assertSame(P::RECOMMENDATION, $this->conversation->fresh()->commercial_phase,
             'La fase no avanza sobre una respuesta que no se envió.');
     }

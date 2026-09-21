@@ -550,4 +550,71 @@ class UltronTurnWatchdogTest extends TestCase
 
         $this->assertSame(0, Incident::where('kind', 'ultron.turn.recovered')->count());
     }
+
+    /**
+     * UNA RENDICIÓN QUE NO MANDÓ NADA ES UN HUÉRFANO.
+     *
+     * Éste es el agujero que costó tres mensajes sin respuesta en una prueba
+     * física: bastaba con que la fila EXISTIERA para darla por desenlace, y una
+     * acción `skipped` es justo el turno que se rindió sin mandar nada. El
+     * vigía acabó certificando el silencio que tenía que denunciar —«todo
+     * entrante atendible terminó en algo»— mientras la persona miraba el
+     * teléfono.
+     */
+    public function test_a_surrender_that_sent_nothing_is_an_orphan(): void
+    {
+        $m = $this->entrante('necesito informacion sobre el gimnasio');
+        $this->evento($m);
+        $this->desenlace($m)->forceFill([
+            'status' => 'skipped',
+            'metadata' => ['origin' => 'ultron', 'fallback_mode' => 'NO_REPLY_AND_HANDOFF'],
+        ])->save();
+
+        $this->assertSame(1, $this->vigia(), 'una rendición muda pasó por desenlace');
+
+        $incidente = Incident::first();
+        $this->assertNotNull($incidente);
+        $this->assertSame([$m->id], $incidente->evidence['message_ids']);
+    }
+
+    /** Pero si la rendición SÍ mandó el texto de respaldo, la persona recibió algo. */
+    public function test_a_surrender_that_did_answer_is_not_an_orphan(): void
+    {
+        $m = $this->entrante('necesito informacion sobre el gimnasio');
+        $this->evento($m);
+        $saliente = $this->saliente();
+        $this->desenlace($m)->forceFill([
+            'status' => 'skipped',
+            'metadata' => [
+                'origin' => 'ultron',
+                'fallback_mode' => 'SAFE_CURATED_REPLY',
+                'outbound' => ['sent' => true, 'message_id' => $saliente->id],
+            ],
+        ])->save();
+
+        $this->assertSame(0, $this->vigia());
+        $this->assertSame(0, Incident::count());
+    }
+
+    /**
+     * Y quien pidió que no le escribieran no genera un huérfano falso.
+     *
+     * No contestarle es lo correcto. Si esto se contara como silencio, el
+     * vigía pararía el canario por respetar una baja, y una alarma que suena
+     * cuando se hacen bien las cosas se acaba apagando.
+     */
+    public function test_an_opted_out_lead_does_not_create_a_false_orphan(): void
+    {
+        $m = $this->entrante('no me escriban mas');
+        $this->evento($m);
+        $this->desenlace($m)->forceFill([
+            'status' => 'skipped',
+            'metadata' => ['origin' => 'ultron', 'fallback_mode' => 'NO_REPLY_AND_HANDOFF'],
+        ])->save();
+
+        $this->lead->forceFill(['do_not_contact' => true])->save();
+
+        $this->assertSame(0, $this->vigia());
+        $this->assertSame(0, Incident::count());
+    }
 }
