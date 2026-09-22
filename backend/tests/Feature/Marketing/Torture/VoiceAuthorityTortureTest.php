@@ -3,6 +3,7 @@
 namespace Tests\Feature\Marketing\Torture;
 
 use App\Models\MarketingAiAction;
+use App\Models\MarketingKnowledgeItem;
 use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
 use App\Services\Marketing\CommercialPhaseMachine as P;
@@ -414,6 +415,49 @@ class VoiceAuthorityTortureTest extends TortureCase
             'porcentaje inventado' => ['El 90% de nuestros socios renueva el plan.', 'invented_testimonial'],
             'testimonio' => ['Mis clientes bajan de talla en pocas semanas.', 'invented_testimonial'],
             'cifra social' => ['Cientos de personas ya entrenan con nosotros.', 'invented_testimonial'],
+            /*
+             * SUPERIORIDAD SIN APROBAR. Estas doce frases pasaban TODOS los
+             * guardianes de salida: se midió, y salían por WhatsApp. No es
+             * exageración publicitaria, es una afirmación sobre un ranking que
+             * nadie ha medido, y un redactor no puede deducirla. Solo pasa lo
+             * que el negocio autorizó por escrito en `brand_copy`, y en este
+             * fixture no hay nada autorizado.
+             */
+            'el mejor de Neiva' => ['Iron Body es el mejor gimnasio de Neiva.', 'unapproved_superiority_claim'],
+            'el mejor de la ciudad' => ['Somos el mejor gimnasio de la ciudad.', 'unapproved_superiority_claim'],
+            'número uno del Huila' => ['Somos el número uno del Huila.', 'unapproved_superiority_claim'],
+            'almohadilla uno' => ['Somos el #1 en Neiva.', 'unapproved_superiority_claim'],
+            'ordinal uno' => ['Somos el nº 1 del Huila.', 'unapproved_superiority_claim'],
+            'el más completo de Neiva' => ['Es el gimnasio más completo de Neiva.', 'unapproved_superiority_claim'],
+            'el más moderno de la región' => ['Tenemos el equipo más moderno de la región.', 'unapproved_superiority_claim'],
+            'líderes del mercado' => ['Somos líderes en el mercado de Neiva.', 'unapproved_superiority_claim'],
+            'únicos en la zona' => ['Somos únicos en la zona.', 'unapproved_superiority_claim'],
+            'ningún otro gimnasio' => ['Ningún otro gimnasio de Neiva te da este acompañamiento.', 'unapproved_superiority_claim'],
+            'nadie más' => ['Nadie más en la ciudad tiene un gimnasio así.', 'unapproved_superiority_claim'],
+            'mejor que la competencia' => ['Somos mejores que la competencia.', 'unapproved_superiority_claim'],
+            'mejores que los demás' => ['Nuestras instalaciones son mejores que las de los demás.', 'unapproved_superiority_claim'],
+            'a diferencia de otros' => ['A diferencia de otros gimnasios, aquí sí te acompañan.', 'unapproved_superiority_claim'],
+            // Y las tres formas que la primera versión leía al revés o no veía:
+            // el alcance delante, la exclusividad en negativo y ser el primero.
+            'alcance invertido' => ['De todos los gimnasios de Neiva, somos el mejor.', 'unapproved_superiority_claim'],
+            'nadie como nosotros' => ['En Neiva no hay nadie como nosotros.', 'unapproved_superiority_claim'],
+            'no se nos compara' => ['Ningún gimnasio de Neiva se nos compara.', 'unapproved_superiority_claim'],
+            'los primeros' => ['Somos los primeros en Neiva.', 'unapproved_superiority_claim'],
+            'de acá' => ['Somos el mejor gym de acá.', 'unapproved_superiority_claim'],
+            'del sector' => ['Somos el mejor gimnasio del sector.', 'unapproved_superiority_claim'],
+            'otro lugar así' => ['No hay otro lugar así en Neiva.', 'unapproved_superiority_claim'],
+            'otros centros' => ['A diferencia de otros centros, aquí entrenas con plan.', 'unapproved_superiority_claim'],
+            // Una por familia de las que encontró la revisión final.
+            'alcance delante' => ['En Neiva, somos el mejor gimnasio.', 'unapproved_superiority_claim'],
+            'sin la palabra otro' => ['Ningún gimnasio de Neiva te da este acompañamiento.', 'unapproved_superiority_claim'],
+            'ranking sin alcance' => ['Somos el número uno.', 'unapproved_superiority_claim'],
+            'insuperable' => ['Iron Body es insuperable.', 'unapproved_superiority_claim'],
+            'por encima de la competencia' => ['Estamos por encima de la competencia.', 'unapproved_superiority_claim'],
+            'el resto ni se acerca' => ['El resto de gimnasios ni se acerca.', 'unapproved_superiority_claim'],
+            'del barrio' => ['Somos el mejor gimnasio del barrio.', 'unapproved_superiority_claim'],
+            'de todo Neiva' => ['Somos el mejor gimnasio de todo Neiva.', 'unapproved_superiority_claim'],
+            'coma apositiva' => ['Somos el mejor gimnasio, de Neiva y de todo el Huila.', 'unapproved_superiority_claim'],
+            'alcance sin cerrar' => ['Somos el mejor gimnasio de Neiva para principiantes.', 'unapproved_superiority_claim'],
         ];
     }
 
@@ -428,6 +472,85 @@ class VoiceAuthorityTortureTest extends TortureCase
         $this->assertSame(Style::CODE_PRESSURE, $r->json('code'), "debía bloquearse por presión: «{$texto}»");
         $this->assertContains($senal, (array) $r->json('detail.signals'));
         $this->assertNadieLoLeyo($texto);
+    }
+
+    /**
+     * LA PUERTA QUE SÍ EXISTE: lo que el negocio firma, se dice.
+     *
+     * Una guarda que prohibiera el superlativo SIEMPRE dejaría a Iron Body sin
+     * poder afirmar lo que decida afirmar sobre sí mismo, y eso no es de un
+     * cerrojo: es del negocio. La frase sale porque hay una fila aprobada que
+     * la contiene literalmente, y basta desactivarla para que deje de salir
+     * (lo prueba `CopyAprobadoDeMarcaTest`).
+     */
+    public function test_an_approved_brand_claim_reaches_the_person(): void
+    {
+        MarketingKnowledgeItem::create([
+            'category' => 'brand_copy',
+            'key' => 'brand_copy.neiva',
+            'title' => 'Frase autorizada por el negocio',
+            'content' => 'Iron Body es el mejor gimnasio de Neiva.',
+            'is_active' => true,
+            'origin' => MarketingKnowledgeItem::ORIGIN_HUMAN_PANEL,
+        ]);
+
+        $m = $this->inbound('¿por qué debería entrenar con ustedes?');
+
+        $this->commit($m, ['reply_draft' => 'Iron Body es el mejor gimnasio de Neiva. ¿Qué te gustaría lograr?'])->assertOk();
+
+        $this->assertSalioTalCual('Iron Body es el mejor gimnasio de Neiva. ¿Qué te gustaría lograr?');
+    }
+
+    /**
+     * Recomendar es comparar: «el mejor PARA TI» no es un ranking de ciudad.
+     *
+     * Es la mitad que se rompe sola al endurecer una guarda de estilo, y la que
+     * deja al agente sin poder hacer su trabajo.
+     *
+     * @return array<string, array{0:string}>
+     */
+    public static function comparacionesHonestas(): array
+    {
+        return [
+            'el mejor para ti' => ['Por lo que me cuentas, es el mejor para ti.'],
+            'el más completo de nuestros planes' => ['Es el más completo de nuestros planes.'],
+            'el único con clases' => ['Es el único de nuestros planes que incluye clases.'],
+            'la mejor opción si entrenas a diario' => ['Es la mejor opción si vas a entrenar todos los días.'],
+            'la mejor disposición' => ['Tenemos la mejor disposición para ayudarte a empezar.'],
+            'el mejor momento' => ['El mejor momento para empezar es hoy.'],
+            'el número uno para ti' => ['Para lo que buscas, es el gimnasio #1 para ti.'],
+            'de todas las opciones' => ['De todas las opciones, la mejor para ti es el TOTAL ACCESS - ELITE.'],
+            'los primeros en apoyarte' => ['Somos los primeros en apoyarte cuando empiezas.'],
+            'nadie te obliga' => ['Nadie te obliga a nada: entras cuando quieras.'],
+            'ninguno de nuestros planes' => ['Ninguno de nuestros planes tiene permanencia.'],
+            'la primera clase' => ['Ven a tu primera clase esta semana.'],
+            /*
+             * Las cinco que la guarda mataba de más, encontradas midiendo el
+             * recorrido real. Cada una es una frase que el agente NECESITA
+             * poder decir: comparar dos planes, situar una máquina, avisar de
+             * un día flojo, decir dónde aparcar. Un 422 en cualquiera de ellas
+             * es un turno mudo por hablar bien.
+             */
+            'a diferencia de otros planes' => ['A diferencia de otros planes, este incluye clases.'],
+            'la zona de pesas' => ['Tenemos el mejor ambiente en la zona de pesas.'],
+            'mejor que los demás días' => ['Es mejor que los demás días de la semana.'],
+            'otro sitio para parquear' => ['No hay otro sitio para parquear cerca.'],
+            'lo que nosotros pensamos' => ['Nadie te va a decir lo que nosotros pensamos de eso.'],
+            'la zona tras una coma' => ['Es la mejor hora, en la zona hay menos gente.'],
+            'los demás días' => ['Es mejor que los demás días de la semana.'],
+            'el número uno para ti' => ['Somos el gimnasio #1 para ti.'],
+            'no puedo comparar' => ['No te puedo comparar con otros gimnasios: solo sé lo nuestro.'],
+        ];
+    }
+
+    #[DataProvider('comparacionesHonestas')]
+    public function test_honest_comparisons_still_reach_the_person(string $texto): void
+    {
+        $m = $this->inbound('¿cuál me recomiendas?');
+
+        $this->commit($m, ['reply_draft' => $texto])->assertOk();
+
+        $this->assertSalioTalCual($texto);
     }
 
     /**

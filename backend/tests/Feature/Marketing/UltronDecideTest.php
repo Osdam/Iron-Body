@@ -10,6 +10,7 @@ use App\Models\PaymentTransaction;
 use App\Models\Plan;
 use App\Services\Marketing\CommercialPhaseMachine as P;
 use App\Services\Marketing\SalesIntents;
+use App\Services\Marketing\Ultron\ComposerStyleGuard;
 use App\Services\Marketing\Ultron\UltronDecideService;
 use App\Services\Marketing\Ultron\UltronDecideToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -207,6 +208,44 @@ class UltronDecideTest extends TestCase
             $r->json('context.default_plan_id'),
             array_column($r->json('context.active_plans'), 'id'),
         );
+    }
+
+    /**
+     * LA DOCTRINA COMERCIAL VIAJA EN EL TURNO, no en un prompt que se olvida.
+     *
+     * Un prompt se reescribe y nadie se entera; un contrato que viaja en cada
+     * turno se puede afirmar aquí. Lo que se fija es que la clave existe, que
+     * trae la fase real de la conversación y que sigue sin traer una cifra:
+     * es una capa de lenguaje, no de decisión.
+     */
+    public function test_decide_carries_the_sales_playbook_for_this_phase(): void
+    {
+        $this->conversation->update(['commercial_phase' => P::DISCOVERY]);
+
+        $r = $this->decide($this->inbound('hola, qué tal')->id)->assertOk();
+
+        $this->assertSame(P::DISCOVERY, $r->json('context.sales_playbook.phase'));
+        $this->assertContains('consultive_discovery', (array) $r->json('context.sales_playbook.techniques'));
+        $this->assertNotEmpty($r->json('context.sales_playbook.directives'));
+        // El piso ético viaja siempre, no solo cuando toca cerrar.
+        $this->assertNotEmpty($r->json('context.sales_playbook.never'));
+        // Y en descubrimiento no se cierra.
+        $this->assertNotContains('decided_closing', (array) $r->json('context.sales_playbook.techniques'));
+    }
+
+    /**
+     * Sin frases aprobadas por el negocio, la lista viaja VACÍA.
+     *
+     * Es la diferencia entre «no hay superlativos autorizados» y «el modelo
+     * decide qué superlativo se puede afirmar». Con la lista vacía,
+     * {@see ComposerStyleGuard} bloquea
+     * cualquiera.
+     */
+    public function test_decide_carries_the_approved_brand_copy_and_it_starts_empty(): void
+    {
+        $r = $this->decide($this->inbound('por qué ustedes?')->id)->assertOk();
+
+        $this->assertSame([], $r->json('context.approved_brand_copy'));
     }
 
     /** Un plan desactivado deja de ser el que se cotiza por defecto. */

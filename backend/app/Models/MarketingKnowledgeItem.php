@@ -43,6 +43,17 @@ class MarketingKnowledgeItem extends Model
         'business_identity', 'location', 'schedule', 'plans', 'pricing_policy',
         'payment_policy', 'membership_policy', 'invoice_policy', 'objections',
         'tone', 'restrictions', 'faq', 'human_escalation',
+        /*
+         * Frases publicitarias fuertes que el negocio AUTORIZA por escrito.
+         *
+         * Existe por un hueco medido: ULTRON podia afirmar «Iron Body es el
+         * mejor gimnasio de Neiva» y ninguno de los cerrojos de salida lo
+         * paraba. Un ranking de ciudad no se deduce redactando —hace falta un
+         * dato que nadie tiene—, asi que {@see ComposerStyleGuard} ahora lo
+         * exige aprobado aqui. Categoria propia, y no `tone`, para que en el
+         * panel se vea exactamente que frases fuertes estan autorizadas.
+         */
+        'brand_copy',
     ];
 
     // ── Procedencia ───────────────────────────────────────────────────────────

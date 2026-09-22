@@ -5,6 +5,8 @@ namespace App\Services\Marketing;
 use App\Models\MarketingConversation;
 use App\Models\MarketingLead;
 use App\Services\Marketing\Attribution\AttributionContextService;
+use App\Services\Marketing\Ultron\ConversationMemory;
+use App\Services\Marketing\Ultron\UltronSalesPlaybook;
 
 /**
  * Construye el prompt del sistema + el mensaje de usuario (contexto saneado)
@@ -161,6 +163,26 @@ class SalesAgentPromptBuilder
         - Nunca le expliques al cliente cómo sabemos de dónde llegó, ni menciones anuncios,
           campañas, seguimiento ni identificadores. Puedes usar el contexto; no lo delates.
 
+        CÓMO VENDER (bloque `sales_playbook` del contexto):
+        - `techniques` y `directives` dicen QUÉ PRIORIZAR al redactar en el punto donde está esta
+          conversación, y `never` lo que no se hace nunca. Aplícalo: no es decoración.
+        - Son directrices de LENGUAJE. No autorizan ninguna acción, ningún plan y ningún link: eso
+          lo decide el backend y te lo bloquea si lo intentas.
+        - No enumeres características sueltas. Di qué cambia para ESTA persona, con lo que ya te
+          contó. Dos ideas traducidas convencen más que ocho características seguidas.
+        - Si la persona ya decidió, deja de vender y dale el siguiente paso en una frase.
+        - Si dijo que no o que lo piensa, no insistas: quien no se siente empujado vuelve.
+
+        AFIRMACIONES COMPARATIVAS (bloque `approved_brand_copy`):
+        - Habla con seguridad y orgullo de Iron Body, con hechos concretos del contexto.
+        - NUNCA te declares el mejor, el número uno, el líder ni el único de Neiva, del Huila, de
+          la ciudad ni del mercado, y NUNCA compares con otros gimnasios o con la competencia. Un
+          ranking así no se deduce: hace falta un dato que no tienes.
+        - La ÚNICA excepción son las frases que vengan literalmente en `approved_brand_copy`, que
+          son las que el negocio autorizó por escrito. Si ese bloque está vacío, no hay excepción.
+        - Sí puedes decir que algo es lo mejor PARA ESA PERSONA, o el plan más completo DE NUESTRO
+          catálogo: eso no es un ranking de ciudad, es una recomendación.
+
         REGLAS DURAS (obligatorias):
         - NUNCA inventes precios ni promociones. Los precios SOLO salen de active_plans. Si no hay
           un plan claro, NO inventes: pregunta el objetivo. NUNCA ofrezcas un link de pago si
@@ -224,6 +246,36 @@ class SalesAgentPromptBuilder
                 'can_offer_link' => $this->paymentReadiness->canGenerateAutomaticLink(),
                 'marketing_agent_enabled' => (bool) config('marketing.agent_enabled', false),
             ],
+            /*
+             * CÓMO vender en el punto donde está esta conversación.
+             *
+             * El mismo playbook que recibe ULTRON, y por la misma razón: sin
+             * él el cerebro contesta bien y no vende —suelta características
+             * antes de saber para qué las quiere la persona, y sigue vendiendo
+             * cuando ya dijo que sí—. Son directrices de lenguaje: no traen un
+             * plan, ni una cifra, ni una herramienta.
+             *
+             * Si la conversación todavía no tiene fase (el primer mensaje, o
+             * una conversación anterior a la máquina comercial), entra como
+             * NEW_LEAD: caer bien y ser útil es lo correcto cuando no se sabe
+             * nada de la persona.
+             */
+            'sales_playbook' => UltronSalesPlaybook::forPhase(
+                (string) ($conversation?->commercial_phase ?: CommercialPhaseMachine::NEW_LEAD),
+                [
+                    'is_member' => $lead->member_id !== null,
+                    // Lectura pura de la columna que ya está cargada: quien
+                    // rechazó un plan no vuelve a oír un cierre.
+                    'rejected_a_plan' => $conversation !== null
+                        && ConversationMemory::fromArray(
+                            is_array($conversation->memory) ? $conversation->memory : null,
+                        )->rejectedPlans() !== [],
+                    'has_barrier' => is_string($conversation?->main_barrier)
+                        && trim((string) $conversation->main_barrier) !== '',
+                    'returning' => is_string($conversation?->summary)
+                        && trim((string) $conversation->summary) !== '',
+                ],
+            ),
             'guardrails' => [
                 'no_inventar_precios', 'no_prometer_resultados', 'no_diagnosticar',
                 'no_activar_membresia', 'no_marcar_pago_aprobado', 'escalar_casos_sensibles',

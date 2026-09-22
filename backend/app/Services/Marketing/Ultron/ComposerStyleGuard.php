@@ -58,6 +58,205 @@ final class ComposerStyleGuard
         '/\bel \d+\s?% de (nuestros |los )?(clientes|socios|miembros|alumnos|que entran|que empiezan)\b/u',
     ];
 
+    /**
+     * DECIRSE EL MEJOR DE LA CIUDAD NO ES UNA OPINIÓN: ES UN DATO QUE NADIE TIENE.
+     *
+     * Se midió y el silencio era total: dieciocho frases de superioridad y
+     * ranking —«el mejor gimnasio de Neiva», «somos el número uno», «líderes
+     * en el Huila», «ningún otro gimnasio te da este acompañamiento»— pasaban
+     * los nueve cerrojos de salida sin una sola marca. La medición estaba
+     * validada con control positivo: garantías, traspasos, descuentos y
+     * «últimos cupos» sí bloqueaban con su código.
+     *
+     * Y es el tipo de afirmación que el modelo NO puede deducir: para saber
+     * quién es el mejor de una ciudad hace falta un dato del que Iron Body no
+     * dispone. Si el negocio quiere decirlo, lo aprueba por escrito y entonces
+     * sale; lo que no puede es nacer de una inferencia del redactor.
+     *
+     * LA DISCIPLINA DE DOS PIEZAS, igual que en los testimonios: no basta el
+     * superlativo, hace falta el ÁMBITO con el que se compara. «Es el mejor
+     * PARA TI» es una recomendación y sale —hay un test del repo que lo fija—;
+     * «es el mejor DE NEIVA» es un ranking y no sale. La diferencia no es de
+     * tono: una habla de encaje y la otra de un mercado.
+     */
+    /**
+     * El mercado o la geografía con la que uno se compara.
+     *
+     * Vive en una constante porque la usan cuatro patrones distintos y tenerla
+     * escrita cuatro veces garantizaba que se desincronizaran: ya pasó con el
+     * artículo, que estaba en una lista y no en la otra, y por eso «somos el
+     * mejor gimnasio del sector» no se bloqueó nunca.
+     *
+     * `zona` y `sector` llevan `(?! de )` porque también son el vocabulario
+     * interno del gimnasio: la zona de pesas, el sector de espalda. Y `aqui`
+     * lleva `(?! a )` porque «de aquí a fin de mes» es una fecha, no un sitio.
+     */
+    private const ALCANCE = '(de|en|del) (todo el |toda la |todo |toda |el |la )?'
+        .'(neiva|ciudad|huila|region|colombia|pais|mercado|barrio|departamento|comuna|aca|'
+        .'aqui(?! a )|(zona|sector)(?! de ))\b';
+
+    private const SUPERIORIDAD = [
+        /*
+         * Superlativo + el mercado o la geografía con la que se compara.
+         *
+         * La frontera de la izquierda NO es `\b`: «#1» y «nº 1» empiezan por un
+         * carácter que no es de palabra, así que `\b` no engancha ahí y «somos
+         * el #1 en Neiva» se escapaba entera. Con el lookbehind sí, y sigue sin
+         * enganchar dentro de otra palabra.
+         */
+        '/(?<![a-z0-9])(mejor(es)?|numero uno|#\s?1|n[º°]\s?1|lider(es)?|unic[oa]s?|superior(es)?|insuperable|'
+            .'mas (completo|completa|grande|moderno|moderna|avanzado|avanzada|equipado|equipada|capacitad[oa]s?))\b'
+            /*
+             * SIN COMA EN MEDIO. «Es la mejor hora, en la zona hay menos
+             * gente» son dos frases, no un ranking: el superlativo habla de la
+             * hora y «la zona» de la sala. Al exigir que vayan en la misma
+             * oración se cae ese falso positivo sin tener que sacar `zona` del
+             * alcance, que es lo que hace falta para que «somos únicos en la
+             * zona» siga muriendo.
+             */
+            .'[^.!?,;]{0,40}?\b'.self::ALCANCE.'/u',
+        /*
+         * Y la misma afirmación partida por una coma apositiva: «Somos el
+         * mejor gimnasio, de Neiva y de todo el Huila». Prohibir la coma
+         * arriba curaba un falso positivo y abría esto, que es exactamente lo
+         * que esta familia existe para parar, y no es una evasión exótica: es
+         * como escribe un modelo en WhatsApp.
+         *
+         * Aquí la coma SÍ se admite, y a cambio se exige que el alcance CIERRE
+         * la oración —punto, coma, «y»— porque es lo que distingue las tres
+         * formas: «de Neiva y…» y «de toda la ciudad.» cierran; «en la zona
+         * hay menos gente» sigue con un verbo, y ahí «la zona» es la sala.
+         *
+         * Las dos hacen falta. Esta sola dejaría escapar «somos el mejor
+         * gimnasio de Neiva PARA PRINCIPIANTES», que no cierra la oración.
+         */
+        '/(?<![a-z0-9])(mejor(es)?|numero uno|#\s?1|n[º°]\s?1|lider(es)?|unic[oa]s?|superior(es)?|insuperable|'
+            .'mas (completo|completa|grande|moderno|moderna|avanzado|avanzada|equipado|equipada|capacitad[oa]s?))\b'
+            .'[^.!?]{0,40}?\b'.self::ALCANCE.'(?=[.,;!?]|\s+[ye]\b|$)/u',
+        // Y la comparación explícita con la competencia, que no necesita geografía.
+        '/\b(ningun otro|ninguna otra|nadie mas|no hay otro|no existe otro)\b[^.!?]{0,30}?\b(gimnasio|gym|centro)\b/u',
+        /*
+         * `lugar` y `sitio` son demasiado corrientes para bastar solos: «no hay
+         * otro sitio para parquear» es información, no un ranking. Exigen
+         * además la cola comparativa que los convierte en presunción.
+         */
+        '/\b(ningun otro|no hay otro|no existe otro)\b[^.!?]{0,20}?\b(lugar|sitio)\b[^.!?]{0,25}?'
+            .'\b(asi|igual|como este|como nosotros|en neiva|en la ciudad|en el huila|del huila)\b/u',
+        /*
+         * El determinante del medio es lo que la dejaba pasar: «mejores que
+         * LAS DE los demás» no es «mejores que los demás», y el primer test
+         * end-to-end lo encontró. Sólo se admite ese relleno («las de», «los
+         * de»), no cualquier cosa: con `[^.!?]{0,20}` en medio, «mejor que
+         * esperes a los demás» se bloquearía sin motivo.
+         */
+        '/\b(mejor|mejores) que (l[oa]s? de )?(la competencia|'
+            .'(l[oa]s )?otr[oa]s (gimnasios?|gyms?|centros?)|cualquier otro (gimnasio|gym|centro))\b/u',
+        // Y la forma sin sustantivo —«mejores que los demás»—, que solo cuenta
+        // cuando ahí se acaba la frase: «mejor que los demás días» no compara
+        // negocios, compara días.
+        '/\b(mejor|mejores) que (l[oa]s? de )?(los demas|las demas|los otros|las otras|cualquier otro)\s*([.,;!?]|$)/u',
+        /*
+         * «A diferencia de otros PLANES, este incluye clases» es una frase de
+         * venta correcta y honesta, y la versión anterior la mataba con un 422:
+         * bastaba «a diferencia de otros» para dispararse. La comparación solo
+         * es superioridad cuando lo comparado es OTRO NEGOCIO, así que el
+         * sustantivo es obligatorio —o se nombra a la competencia, que no
+         * necesita sustantivo porque ya lo dice.
+         */
+        '/\ba diferencia de (l[oa]s? )?(otr[oa]s?|dem[a]s)\b[^.!?]{0,15}?'
+            .'\b(gimnasio|gimnasios|gym|gyms|centro|centros|lugar|lugares|sitio|sitios)\b/u',
+        '/\ba diferencia de (la competencia|los demas gimnasios)\b/u',
+        /*
+         * Tres clases más, encontradas midiendo paráfrasis contra la versión
+         * anterior. No son sinónimos sueltos —eso sería ampliar el regex a
+         * ciegas— sino tres FORMAS distintas de decir lo mismo que las de
+         * arriba no podían ver:
+         *
+         *  · el alcance ANTES del superlativo: «De todos los gimnasios de
+         *    Neiva, somos el mejor» leía al revés y se escapaba entera;
+         *  · la exclusividad en negativo sin la palabra «otro»: «no hay nadie
+         *    como nosotros», «ningún gimnasio de Neiva se nos compara»;
+         *  · y ser el primero, que es un ranking con otro nombre. Exige el
+         *    alcance detrás a propósito: «somos los primeros en apoyarte» es
+         *    una frase honesta y no puede morir aquí.
+         */
+        '/\b(de|en|entre) (todos los|todas las) (gimnasios|gyms|centros)\b'
+            .'[^.!?]{0,40}?(?<![a-z0-9])(mejor(es)?|numero uno|primer[oa]?s?|unic[oa]s?)\b/u',
+        '/(?<![a-z0-9])(ningun[oa]?|nadie|nada|no hay|no existe)\b[^.!?]{0,30}?'
+            .'\b(como nosotros|como aqui|se nos compara|nos iguala|como el nuestro|'
+            .'te da lo que nosotros|da lo que nosotros|lo que nosotros te damos)\b/u',
+        '/(?<![a-z0-9])(somos|fuimos|seguimos siendo) (el|la|los|las) primer[oa]?s?\b'
+            .'[^.!?]{0,30}?\b'.self::ALCANCE.'/u',
+
+        /*
+         * ── Cuatro familias más, de una revisión que midió con un corpus que
+         * no estaba escrito alrededor de este patrón. ──────────────────────
+         *
+         * A · INVERSIÓN SIMPLE. El alcance delante SIN el preámbulo «de todos
+         * los»: «En Neiva, somos el mejor gimnasio». Exige sujeto («somos»,
+         * «es») para no matar «En Neiva el mejor momento para entrenar es
+         * temprano», que habla de la hora y no del gimnasio.
+         */
+        '/\b'.self::ALCANCE.'[^.!?]{0,25}?\b(somos|es|son) (el|la|los|las) '
+            .'(mejor(es)?|numero uno|unic[oa]s?|primer[oa]s?|lider(es)?)\b/u',
+        '/\bno hay (un |una |otro |otra |ningun |ninguna )?(gimnasio|gym|centro)\b[^.!?]{0,25}?'
+            .'\b(mejor|igual|asi|como este|como nosotros)\b/u',
+        '/\bno (vas a |va a |vais a |van a )?encontrar\b[^.!?]{0,30}?'
+            .'\b(algo asi|otro (gimnasio|gym|centro)|nada (asi|igual|parecido)|igual)\b/u',
+
+        /*
+         * C · EXCLUSIVIDAD SIN LA PALABRA «OTRO», que es la forma natural:
+         * «Ningún gimnasio de Neiva te da este acompañamiento». La variante
+         * con «otro» ya moría; quitarle esa palabra la liberaba entera.
+         *
+         * `ninguno de (los|las)` y no `ninguno de` a secas para que «ninguno de
+         * NUESTROS planes tiene permanencia» siga saliendo.
+         */
+        '/(?<![a-z0-9])(ningun|ninguna|ninguno de (los|las)|ninguna de (los|las))\b[^.!?]{0,30}?'
+            .'\b(gimnasio|gimnasios|gym|gyms|centro|centros)\b/u',
+
+        /*
+         * D · RANKING SIN ALCANCE. «Somos el número uno», «Iron Body es
+         * insuperable». A diferencia de «mejor» o «más completo», estas
+         * palabras NO tienen lectura honesta cuando uno se las aplica a sí
+         * mismo: no existe un «número uno para ti».
+         *
+         * Por eso es la única familia anclada al SUJETO —y a nosotros, no a
+         * cualquiera—: «llevamos el número uno en la camiseta» habla de un
+         * dorsal, y «el entrenador es el líder del grupo» no es una jactancia.
+         * Y con excepción explícita para «para ti», que sí es recomendación.
+         */
+        '/(?<![a-z0-9])(somos|iron body es|iron body sigue siendo|nuestro (gimnasio|equipo) es|'
+            .'este gimnasio es)\s+(el |la |los |las )?(gimnasio |gym |centro |equipo )?'
+            .'(numero uno|#\s?1|n[º°]\s?1|lider(es)?|insuperable|invencible|imbatible|'
+            .'indiscutibles?|inigualable)\b(?![^.!?]{0,20}\bpara (ti|vos|usted|tu objetivo)\b)/u',
+
+        /*
+         * E · COMPARACIÓN PARAFRASEADA. Aquí NO se persiguen sinónimos del
+         * superlativo —eso no acaba nunca—: se exige la estructura completa,
+         * comparativo + a quién se compara. Nombrar a otros gimnasios sin
+         * compararse es legítimo y tiene que seguir saliendo, porque «no te
+         * puedo comparar con otros gimnasios» es la respuesta honesta a que
+         * te pidan una comparación.
+         */
+        '/(?<![a-z0-9])(somos|estamos|es|son) (mejor(es)?|superior(es)?|por encima)\b[^.!?]{0,25}?'
+            .'\b(que|de|a)\b[^.!?]{0,20}?\b(la competencia|cualquier (gimnasio|gym|centro)|otros gimnasios)\b/u',
+        /*
+         * «Cualquiera», «el resto» y «los demás» solo cuentan si ahí se acaba
+         * la frase. Con un sustantivo detrás ya no comparan negocios: «es mejor
+         * que los demás DÍAS de la semana» y «es mejor que esperes a los demás
+         * para la clase» son frases honestas, y las dos murieron con 422 en la
+         * primera versión de esta familia.
+         */
+        '/(?<![a-z0-9])(somos|estamos|es|son) (mejor(es)?|superior(es)?|por encima)\b[^.!?]{0,25}?'
+            .'\b(que|de|a) (cualquiera|el resto|los demas|las demas|todos)\s*([.,;!?]|$)/u',
+        '/(?<![a-z0-9])(superamos|le ganamos|les ganamos|ganamos) a\b[^.!?]{0,25}?'
+            .'\b(cualquier (gimnasio|gym|centro)|otros gimnasios|la competencia|todos)\b/u',
+        '/(?<![a-z0-9])(otros gimnasios|el resto de (los )?gimnasios|los demas gimnasios|la competencia)\b[^.!?]{0,30}?'
+            .'\b(no (te )?(dan|tienen|ofrecen|llegan)|ni se acercan?|no se comparan?|'
+            .'y ganamos|y salimos ganando|y no hay color)\b/u',
+    ];
+
     /** Lo que PUEDE ser presión o puede ser un hecho: lo decide el Critic. */
     private const URGENCIA_AMBIGUA = '/\b(termina (hoy|pronto|manana)|se acaba (hoy|pronto|ya|manana)|solo hasta|aprovecha (ahora|hoy)|quedan (pocos|solo) dias|ultim[oa]s? dias?|antes de que se (acabe|agote|llene)|precio (sube|subira|aumenta))\b/u';
 
@@ -78,10 +277,16 @@ final class ComposerStyleGuard
     /**
      * @param  array<int, array{id:int, name:string}>  $sellablePlans
      * @param  bool  $askedForAll  la persona pidió ver todos los planes
+     * @param  string[]  $approvedClaims  frases de marca que el negocio aprobó por escrito
      * @return array{hard: string[], soft: string[], plans_mentioned: int}
      */
-    public function inspect(string $replyFinal, array $sellablePlans, bool $askedForAll = false, bool $askedForDetail = false): array
-    {
+    public function inspect(
+        string $replyFinal,
+        array $sellablePlans,
+        bool $askedForAll = false,
+        bool $askedForDetail = false,
+        array $approvedClaims = [],
+    ): array {
         $t = $this->normalize($replyFinal);
         $hard = [];
         $soft = [];
@@ -94,6 +299,55 @@ final class ComposerStyleGuard
                 }
             }
         }
+
+        /*
+         * La superioridad va aparte porque tiene una puerta que las demás no:
+         * el negocio puede autorizarla por escrito. Lo que se comprueba no es
+         * que la frase aprobada esté en algún sitio del mensaje, sino que el
+         * TROZO que dispara la alarma esté dentro de una frase aprobada. Si no,
+         * bastaría con incluir una frase autorizada para colar cualquier otra.
+         */
+        $aprobadas = array_values(array_filter(array_map(
+            fn ($c) => $this->normalize((string) $c),
+            $approvedClaims,
+        )));
+
+        /*
+         * TODAS las coincidencias, no la primera.
+         *
+         * Con `preg_match` se medía sólo una, y bastaba con abrir el mensaje
+         * con la frase que el negocio SÍ aprobó para que la siguiente —«y
+         * somos los número uno del Huila»— saliera de gorra. La autorización
+         * es por frase, así que hay que mirarlas una por una.
+         */
+        foreach (self::SUPERIORIDAD as $rx) {
+            if (preg_match_all($rx, $t, $todas) < 1) {
+                continue;
+            }
+
+            foreach ($todas[0] as $bruto) {
+                $trozo = trim((string) $bruto);
+                $autorizada = false;
+
+                foreach ($aprobadas as $frase) {
+                    if ($trozo !== '' && str_contains($frase, $trozo)) {
+                        $autorizada = true;
+                        break;
+                    }
+                }
+
+                if ($autorizada) {
+                    $soft[] = 'approved_superiority_claim';
+
+                    continue;
+                }
+
+                $hard[] = 'unapproved_superiority_claim';
+            }
+        }
+
+        $hard = array_values(array_unique($hard));
+        $soft = array_values(array_unique($soft));
 
         if (preg_match(self::URGENCIA_AMBIGUA, $t) === 1) {
             $soft[] = 'urgency_wording';

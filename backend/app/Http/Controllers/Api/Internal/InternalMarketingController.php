@@ -10,6 +10,7 @@ use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
 use App\Models\Plan;
 use App\Services\Marketing\MarketingAiDoctorService;
+use App\Services\Marketing\MarketingKnowledgeBaseService;
 use App\Services\Marketing\MarketingMessageDispatcher;
 use App\Services\Marketing\OutboundContentGuard;
 use App\Services\Marketing\SalesAgentOrchestratorService;
@@ -216,6 +217,7 @@ class InternalMarketingController extends Controller
             $estilo = app(ComposerStyleGuard::class)->inspect(
                 $data['body'],
                 Plan::query()->sellable()->get(['id', 'name'])->map(fn (Plan $p) => ['id' => (int) $p->id, 'name' => (string) $p->name])->all(),
+                approvedClaims: app(MarketingKnowledgeBaseService::class)->approvedBrandCopy(),
             );
             if ($estilo['hard'] !== []) {
                 throw SalesGuardrailException::make(ComposerStyleGuard::CODE_PRESSURE, 'La respuesta presiona a la persona: urgencia o escasez inventadas, culpa o testimonios sin fuente.', escalate: true);

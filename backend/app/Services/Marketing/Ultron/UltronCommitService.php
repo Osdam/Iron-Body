@@ -525,6 +525,10 @@ class UltronCommitService
             $planesVendibles,
             $this->style->askedForAllPlans((string) $message->body),
             $this->style->askedForDetail((string) $message->body),
+            // Y las frases comparativas que el negocio aprobó por escrito: sin
+            // esto, «el mejor gimnasio de Neiva» mata el turno incluso cuando
+            // el negocio la autorizó, y con esto sigue muriendo cuando no.
+            $this->knowledge->approvedBrandCopy(),
         );
         if ($estilo['hard'] !== []) {
             ChannelLog::warning('outbound.style.blocked', [

@@ -402,6 +402,44 @@ class UltronDecideService
                  * Va el id, nunca el precio: ULTRON sigue sin ver una cifra.
                  */
                 'default_plan_id' => $this->knowledge->defaultMonthlyPlan()?->id,
+                /*
+                 * CÓMO vender en esta fase. No qué decir.
+                 *
+                 * El agente era correcto y plano: contestaba bien y no vendía.
+                 * Esto le da la técnica que toca —preguntar antes de proponer,
+                 * traducir en beneficio, callarse cuando la persona ya decidió—
+                 * y el piso ético entero en cada turno. Son directrices de
+                 * lenguaje: no traen un plan, ni una cifra, ni una herramienta,
+                 * porque eso lo sigue decidiendo {@see CommercialTurnPolicy}.
+                 *
+                 * Las señales salen de hechos que ya están en este mismo
+                 * contexto; la más importante apaga el cierre cuando la persona
+                 * rechazó un plan o declaró una barrera, porque la fase la
+                 * calcula la intención del último mensaje y «me interesa pero
+                 * está caro» puede aterrizar en BUYING_SIGNAL.
+                 */
+                'sales_playbook' => UltronSalesPlaybook::forPhase($phase, UltronSalesPlaybook::signalsFrom(
+                    $memory,
+                    $lead->member_id !== null,
+                    $conversation->main_barrier,
+                    $conversation->summary,
+                )),
+                /*
+                 * Las ÚNICAS frases comparativas que el negocio autorizó.
+                 *
+                 * «El mejor gimnasio de Neiva» no es una opinión de estilo: es
+                 * una afirmación sobre un ranking que nadie ha medido, y un
+                 * redactor no puede deducirla. Por eso {@see ComposerStyleGuard}
+                 * mata el turno si aparece un superlativo con alcance geográfico
+                 * o competitivo que no esté literalmente en esta lista, y por eso
+                 * la lista viaja: para que el modelo sepa qué SÍ puede decir en
+                 * vez de tener que adivinar dónde está la raya.
+                 *
+                 * Sale de la base de conocimiento (categoría `brand_copy`), así
+                 * que solo la llena el negocio y solo cuenta lo aprobado. Vacía
+                 * por defecto: sin aprobación, ningún superlativo pasa.
+                 */
+                'approved_brand_copy' => $this->knowledge->approvedBrandCopy(),
                 'flags' => [
                     'can_offer_link' => $this->paymentReadiness->canGenerateAutomaticLink(),
                     'payment_readiness' => $this->paymentReadiness->state(),

@@ -26,7 +26,7 @@ class MarketingKnowledgeBaseService
     public const PROMPT_CATEGORIES = [
         'business_identity', 'location', 'schedule', 'gym_info', 'payment_policy',
         'membership_policy', 'invoice_policy', 'objections', 'restrictions',
-        'tone', 'faq', 'human_escalation',
+        'tone', 'faq', 'human_escalation', 'brand_copy',
     ];
 
     /** Categorías recomendadas para una cobertura mínima (doctor). */
@@ -47,6 +47,29 @@ class MarketingKnowledgeBaseService
     public function activeItemsCount(): int
     {
         return MarketingKnowledgeItem::query()->activeNow()->count();
+    }
+
+    /**
+     * Las frases publicitarias fuertes que el negocio aprobó, tal cual.
+     *
+     * Salen SIN título y sin aplanar en «Título: contenido» porque quien las
+     * consume no es un prompt sino un cerrojo: {@see ComposerStyleGuard}
+     * compara el trozo de texto que dispara la alarma contra estas frases, y
+     * cualquier adorno alrededor rompería la comparación.
+     *
+     * Pasan por `activeNow()` como todo lo demás: activo, vigente y APROBADO.
+     * Una frase propuesta desde la API interna nace en borrador y no autoriza
+     * nada hasta que una persona la aprueba por consola.
+     *
+     * @return array<int, string>
+     */
+    public function approvedBrandCopy(): array
+    {
+        return $this->activeItems('brand_copy')
+            ->map(fn (MarketingKnowledgeItem $i) => trim((string) $i->content))
+            ->filter(fn (string $c) => $c !== '')
+            ->values()
+            ->all();
     }
 
     /**

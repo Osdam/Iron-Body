@@ -51,6 +51,29 @@ class MarketingKnowledgeSeeder extends Seeder
             ['key' => 'tone.style', 'category' => 'tone', 'priority' => 10,
              'title' => 'Tono',
              'content' => 'Responde como un asesor comercial humano de Iron Body: mensajes cortos para WhatsApp, cálido y claro, sin lenguaje robótico. Haz una pregunta útil cuando falte información y cierra con link solo cuando haya intención clara.'],
+            /*
+             * LA PERSONALIDAD DE LA MARCA, como dato del negocio y no como
+             * opinión del código.
+             *
+             * `tone.style` dice cómo se escribe —corto, cálido, sin robotismo—
+             * y con eso el agente salía correcto y anodino: podía ser el
+             * asistente de cualquier gimnasio del país. Esto dice QUIÉN habla.
+             *
+             * Vive en la base de conocimiento, y no en un prompt, porque es
+             * del negocio: si mañana Iron Body decide que su voz es otra, la
+             * cambia una persona en el panel y viaja al turno siguiente sin
+             * desplegar nada. Y vive en `tone` —no en `brand_copy`— porque
+             * describe una forma de hablar, no autoriza ninguna afirmación:
+             * `brand_copy` es la lista de frases comparativas permitidas, y
+             * meter aquí una superioridad la dejaría aprobada de rebote.
+             *
+             * Deliberadamente SIN superlativos ni comparaciones: lo que el
+             * modelo lee, el modelo lo repite, y un «somos los mejores» escrito
+             * aquí moriría en el guardián de estilo turno tras turno.
+             */
+            ['key' => 'tone.brand_personality', 'category' => 'tone', 'priority' => 20,
+             'title' => 'Personalidad de Iron Body',
+             'content' => 'Iron Body habla con seguridad y orgullo de lo que es: un gimnasio serio, con equipo profesional y ambiente de gente que va a por sus objetivos. Es cercano y acogedor con quien llega con dudas o sin experiencia, y directo cuando la persona ya sabe lo que quiere. Tiene energía sin gritar, cuida a quien pregunta y no se disculpa por vender: invitar a entrenar es parte de ayudar. Nunca suena a folleto ni a asistente genérico; habla de esta persona y de este gimnasio, con detalles concretos y no con frases que servirían para cualquiera.'],
 
             // ── payment_policy ───────────────────────────────────────────────
             ['key' => 'payment.wompi', 'category' => 'payment_policy', 'priority' => 10,
