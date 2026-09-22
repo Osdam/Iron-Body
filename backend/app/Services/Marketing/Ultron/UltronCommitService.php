@@ -492,6 +492,22 @@ class UltronCommitService
             'missing_fields' => [],
         ], (string) $message->body);
 
+        /*
+         * UN SALUDO PURO ES UN SALUDO, diga lo que diga la etiqueta del modelo.
+         *
+         * `decide` ya lo recalcula desde el texto; si aquí se leyera la
+         * etiqueta de la propuesta, bastaría que el modelo llamara
+         * «high_intent_close» a un «hola» para que el modo recepción no
+         * existiera en el commit y saliera plan, precio y pregunta de
+         * objetivo. La revisión lo midió. Mismo criterio en las dos mitades.
+         */
+        if ($sanitized['intent'] !== SalesIntents::GREETING && SalesIntents::isPureGreeting((string) $message->body)) {
+            ChannelLog::info('ultron.commit.intent_overridden_by_greeting', [
+                'conversation_id' => (int) $conversation->id, 'proposed' => $sanitized['intent'],
+            ]);
+            $sanitized['intent'] = SalesIntents::GREETING;
+        }
+
         if ($sanitized['reply'] === null) {
             // El validador tiró el texto: precio inventado, promesa prohibida o
             // intento de acción vetada. No se negocia ni se reintenta.
@@ -1371,7 +1387,18 @@ class UltronCommitService
          */
         $replyFinal = $this->sinExcusasDePrecio($conversation, $replyFinal, $action, (string) $sanitized['intent']);
 
+        /*
+         * UNA CLASE QUE NO EXISTE TAMPOCO SALE.
+         *
+         * «Entrenadores especializados en musculación, funcional, pilates,
+         * yoga y más» salió en una prueba física: ni pilates ni yoga son
+         * clases del gimnasio; eran especialidades de la ficha de los
+         * entrenadores y el Critic las dio por respaldadas. Lo que ofrecemos
+         * lo dice el CRM; la oración que afirme otra cosa se retira.
+         */
         $hechos = $this->hechosDelGimnasio();
+        $replyFinal = $this->sinServiciosInventados($conversation, $replyFinal, $action, $hechos, $plan);
+
         $incumple = CommercialTurnPolicy::violations($replyFinal, $policy, $catalogo, $hechos);
 
         /*
@@ -1388,7 +1415,11 @@ class UltronCommitService
         }
 
         if ($incumple !== []) {
-            $alternativa = $this->ultimoRecurso($conversation, (string) $sanitized['intent']);
+            $alternativa = $this->respaldoPorIntencion($conversation, (string) $sanitized['intent'], $policy);
+            if ($policy['reception_mode'] ?? false) {
+                // Un saludo no cotiza nada: la memoria dice lo que salió.
+                $plan = null;
+            }
 
             ChannelLog::warning('ultron.commit.policy_violation', [
                 'conversation_id' => (int) $conversation->id,
@@ -1671,9 +1702,23 @@ class UltronCommitService
             $intent = SalesIntents::UNKNOWN;
         }
 
-        $curado = $intent === SalesIntents::DO_NOT_CONTACT_REQUEST
+        /*
+         * EL RESPALDO ES SEMÁNTICO, NO GENÉRICO.
+         *
+         * Con el critic caído, un «hola» recibía el texto curado de saludo y,
+         * si ya se había usado en 24 h, el último recurso genérico («dime qué
+         * necesitas —planes, horarios…»). Quien saluda recibe una bienvenida;
+         * quien pide información, la ficha real. Lo demás sigue por el texto
+         * curado de su intención.
+         */
+        $semantico = $intent === SalesIntents::DO_NOT_CONTACT_REQUEST
             ? null
-            : $this->replies->replyFor($intent, ['lead' => $lead, 'channel' => $conversation->channel]);
+            : $this->respaldoSemantico($conversation, (string) $message->body, $intent);
+        $curado = match (true) {
+            $intent === SalesIntents::DO_NOT_CONTACT_REQUEST => null,
+            $semantico !== null => $semantico,
+            default => $this->replies->replyFor($intent, ['lead' => $lead, 'channel' => $conversation->channel]),
+        };
 
         /*
          * El texto curado es de Laravel y se confía en él, pero confiar no es
@@ -1693,7 +1738,9 @@ class UltronCommitService
 
         // Y el texto curado tampoco se repite palabra por palabra: dos fallos del
         // critic con la misma intención no pueden mandar dos veces la misma frase.
-        if ($curado !== null && $this->novelty->nearDuplicateOf($curado, $this->previousMachineReplies($conversation)) !== null) {
+        // (La bienvenida elige ella misma la variante no repetida, y si todas
+        // se dijeron, repite antes que caer en un menú.)
+        if ($curado !== null && $semantico === null && $this->novelty->nearDuplicateOf($curado, $this->previousMachineReplies($conversation)) !== null) {
             ChannelLog::warning('ultron.commit.curated_reply_repeated', ['conversation_id' => $conversation->id, 'intent' => $intent]);
             $curado = null;
         }
@@ -3286,33 +3333,200 @@ class UltronCommitService
     /**
      * El respaldo de «quiero información», armado con la ficha del gimnasio.
      *
-     * Identidad más lo primero que se cuenta de lo que ofrece, y una pregunta
+     * Quién somos, qué ofrecemos, dónde estamos, cuándo abrimos y qué clases
+     * hay: cada pieza sale de la base de conocimiento o del CRM y falta la
+     * que no exista. Cerraba con un menú («planes, horarios o cómo empezar»)
+     * y eso suena a máquina; ahora cierra con UNA pregunta abierta, que sigue
      * sin verbo de ofrecimiento para no pisar la oferta viva de la memoria.
      * Cumple la política por construcción: los hechos son los mismos que se
      * exigen.
      */
     private function respuestaConHechos(): ?string
     {
-        $identidad = null;
-        $oferta = null;
+        $piezas = ['business_identity' => null, 'gym_info' => null, 'location' => null, 'schedule' => null];
         foreach ($this->knowledge->activeItems() as $item) {
             $c = trim((string) $item->content);
-            if ($c === '') {
-                continue;
-            }
-            if ($identidad === null && $item->category === 'business_identity') {
-                $identidad = $c;
-            } elseif ($oferta === null && $item->category === 'gym_info') {
-                $oferta = $c;
+            if ($c !== '' && array_key_exists($item->category, $piezas) && $piezas[$item->category] === null) {
+                $piezas[$item->category] = $c;
             }
         }
-        if ($identidad === null && $oferta === null) {
+        $partes = array_values(array_filter($piezas));
+        $clases = $this->nombresDeClases();
+        if ($partes === [] && $clases === []) {
             return null;
         }
+        if ($clases !== []) {
+            $partes[] = 'Nuestras clases son '.$this->enumerar($clases).'.';
+        }
 
-        $cuerpo = trim(implode(' ', array_filter([$identidad, $oferta])));
+        return 'Con gusto te cuento. '.implode(' ', $partes).' ¿Qué te cuento más a fondo: los planes, las clases o cómo empezar?';
+    }
 
-        return 'Con gusto te cuento. '.$cuerpo.' ¿Qué necesitas saber primero: planes, horarios o cómo empezar?';
+    /**
+     * Retira las oraciones que afirman una clase, disciplina o instalación que
+     * el gimnasio no tiene.
+     *
+     * Se quita la oración entera, no se reescribe: reescribir sería inventar
+     * otro servicio. Si no queda nada, sale la verdad con lo que sí hay
+     * registrado, en lugar del respaldo genérico: la persona preguntó por una
+     * clase y merece una respuesta sobre clases.
+     */
+    /**
+     * @param  string[]  $hechos  la ficha del gimnasio y los nombres de sus clases
+     * @param  Plan|null  $plan  el plan de este turno, por si la oración retirada se llevaba su precio
+     */
+    private function sinServiciosInventados(MarketingConversation $conversation, string $respuesta, MarketingAiAction $action, array $hechos, ?Plan $plan): string
+    {
+        $ofrecido = $this->loQueOfrecemos($hechos);
+        if ($this->style->inventedServiceIn($respuesta, $ofrecido) === null) {
+            return $respuesta;
+        }
+
+        $retiradas = [];
+        $limpias = [];
+        foreach ($this->oraciones($respuesta) as $pieza) {
+            if ($this->style->inventedServiceIn($pieza[0], $ofrecido) !== null) {
+                $retiradas[] = trim($pieza[0]);
+
+                continue;
+            }
+            $limpias[] = $pieza;
+        }
+
+        /*
+         * Lo que queda tiene que AFIRMAR algo. «Nuestras clases son:» con la
+         * lista retirada, o «¿Cuál prefieres?» a secas, no son un mensaje:
+         * son la coletilla de uno que ya no existe. En ese caso sale la
+         * verdad con las clases reales, y la pregunta final se conserva.
+         *
+         * Y si la oración retirada era la que traía el precio que la persona
+         * preguntó («las clases de yoga están incluidas en el Plan Mensual,
+         * que cuesta $80.000»), el precio del plan de este turno se afirma
+         * igual: la clase no existe, el precio sí.
+         */
+        // Sin `\p{L}`: el PCRE de producción no lo compila.
+        $esPregunta = fn (array $p) => str_ends_with(trim($p[0]), '?');
+        $declara = array_filter($limpias, fn (array $p) => preg_match('/[A-Za-zÁÉÍÓÚÑáéíóúñ]/u', $p[0]) === 1 && preg_match('/[?:]\s*$/u', trim($p[0])) !== 1);
+        $precioRetirado = $plan !== null
+            && array_filter($retiradas, fn (string $r) => str_contains($r, '$')) !== []
+            && ! array_filter($limpias, fn (array $p) => str_contains($p[0], '$'));
+
+        if ($declara === [] || $precioRetirado) {
+            $cuerpo = array_map(fn (array $p) => trim($p[0]), array_values(array_filter($limpias, fn (array $p) => isset($declara[array_search($p, $limpias, true)]))));
+            if ($cuerpo === []) {
+                $cuerpo[] = $this->loQueSiTenemos();
+            }
+            if ($precioRetirado) {
+                $cuerpo[] = 'El '.trim((string) $plan->name).' cuesta '.$this->replies->formatCop((float) $plan->price).'.';
+            }
+            $preguntas = array_map(fn (array $p) => trim($p[0]), array_filter($limpias, $esPregunta));
+            $limpio = trim(implode(' ', $cuerpo).' '.implode(' ', $preguntas));
+        } else {
+            $salida = '';
+            foreach ($limpias as $i => [$texto, $sep]) {
+                $salida .= $texto;
+                if ($i < count($limpias) - 1) {
+                    $salida .= $sep !== '' ? $sep : ' ';
+                }
+            }
+            $limpio = trim($salida);
+        }
+
+        ChannelLog::warning('ultron.commit.invented_service_dropped', [
+            'conversation_id' => (int) $conversation->id,
+            'frases_retiradas' => $retiradas,
+            'quedo_sin_afirmacion' => $declara === [],
+            'precio_repuesto' => $precioRetirado,
+        ]);
+        $meta = is_array($action->metadata) ? $action->metadata : [];
+        $meta['invented_service_dropped'] = $retiradas;
+        $action->forceFill(['metadata' => $meta])->save();
+
+        return $limpio;
+    }
+
+    /**
+     * El texto partido en oraciones, cada una con el separador que la seguía,
+     * para volver a unirlas tal cual tras retirar una.
+     *
+     * @return array<int, array{0:string, 1:string}>
+     */
+    private function oraciones(string $texto): array
+    {
+        $trozos = preg_split('/('.ComposerStyleGuard::SEPARADOR_DE_ORACIONES.')/u', trim($texto), -1, PREG_SPLIT_DELIM_CAPTURE) ?: [];
+        $piezas = [];
+        for ($i = 0; $i < count($trozos); $i += 2) {
+            if (trim($trozos[$i]) === '') {
+                continue;
+            }
+            $piezas[] = [$trozos[$i], $trozos[$i + 1] ?? ''];
+        }
+
+        return $piezas;
+    }
+
+    /**
+     * Lo que el gimnasio SÍ ofrece, para medir el borrador: los hechos de la
+     * ficha más los tipos de las clases activas (el nombre ya va en los hechos).
+     *
+     * @return string[]
+     */
+    private function loQueOfrecemos(array $hechos): array
+    {
+        $ofrecido = $hechos;
+        foreach ((array) ($this->gym->forPrompt()['classes'] ?? []) as $clase) {
+            if (is_array($clase) && ! empty($clase['type'])) {
+                $ofrecido[] = (string) $clase['type'];
+            }
+        }
+
+        return $ofrecido;
+    }
+
+    /** La verdad sobre clases cuando el borrador entero era una clase que no existe. */
+    private function loQueSiTenemos(): string
+    {
+        $clases = $this->nombresDeClases();
+        if ($clases === []) {
+            return 'No tengo esa información confirmada en este momento, pero puedo ayudarte con lo que sí tenemos registrado.';
+        }
+
+        return 'Esa clase no la tengo confirmada en mi información. Lo que sí tenemos registrado es '.$this->enumerar($clases).'.';
+    }
+
+    /**
+     * Nombres de las clases activas, una vez cada uno: una clase con tres
+     * horarios es una clase.
+     *
+     * @return string[]
+     */
+    private function nombresDeClases(): array
+    {
+        $nombres = [];
+        foreach ((array) ($this->gym->forPrompt()['classes'] ?? []) as $clase) {
+            if (is_array($clase) && ! empty($clase['name'])) {
+                $nombres[] = (string) $clase['name'];
+            }
+        }
+
+        return array_values(array_unique($nombres));
+    }
+
+    /**
+     * «A, B y C», con la «e» que pide el español delante de un nombre que
+     * empieza por i: «IRON PARTY, IRON POWERFLOW e IRON STRENGTH».
+     *
+     * @param  string[]  $cosas
+     */
+    private function enumerar(array $cosas): string
+    {
+        if (count($cosas) <= 1) {
+            return (string) ($cosas[0] ?? '');
+        }
+        $ultimo = array_pop($cosas);
+        $nexo = preg_match('/^h?i(?![aeo])/iu', $ultimo) === 1 ? ' e ' : ' y ';
+
+        return implode(', ', $cosas).$nexo.$ultimo;
     }
 
     /**
@@ -3328,14 +3542,7 @@ class UltronCommitService
             return $respuesta;
         }
 
-        $trozos = preg_split('/((?<=[.!?])\s+|\n+)/u', trim($respuesta), -1, PREG_SPLIT_DELIM_CAPTURE) ?: [];
-        $piezas = [];
-        for ($i = 0; $i < count($trozos); $i += 2) {
-            if (trim($trozos[$i]) === '') {
-                continue;
-            }
-            $piezas[] = [$trozos[$i], $trozos[$i + 1] ?? ''];
-        }
+        $piezas = $this->oraciones($respuesta);
         $limpias = array_values(array_filter($piezas, fn (array $p) => $this->style->priceExcuseIn($p[0]) === null));
 
         $salida = '';
@@ -3387,6 +3594,70 @@ class UltronCommitService
 
         // Todas dichas ya: se repite la más mínima antes que callar.
         return $seguras === [] ? null : end($seguras);
+    }
+
+    /**
+     * El respaldo que corresponde a la intención cuando el borrador se
+     * descartó por la política: bienvenida para el saludo puro, la ficha
+     * real para «quiero información», y el último recurso para el resto
+     * (las objeciones y los planes ya tienen su sustituto específico más
+     * abajo en la cadena).
+     *
+     * @param  array<string,mixed>  $policy
+     */
+    private function respaldoPorIntencion(MarketingConversation $conversation, string $intent, array $policy): ?string
+    {
+        // Toda salida de máquina pasa por el guard, también la de Laravel:
+        // por una que no pasaba salieron dos ofertas de traspaso.
+        $seguro = fn (?string $texto): ?string => $texto !== null && trim($texto) !== ''
+            && $this->contentGuard->inspect($texto, MarketingMessage::SENDER_AI, false)['safe'] ? $texto : null;
+
+        if ($policy['reception_mode'] ?? false) {
+            return $seguro($this->saludoDeBienvenida($conversation)) ?? $this->ultimoRecurso($conversation, $intent);
+        }
+        if ($intent === SalesIntents::GENERAL_INFO) {
+            return $seguro($this->respuestaConHechos()) ?? $this->ultimoRecurso($conversation, $intent);
+        }
+
+        return $this->ultimoRecurso($conversation, $intent);
+    }
+
+    /**
+     * El respaldo semántico del camino del critic caído, leído del texto
+     * entrante: un saludo puro recibe bienvenida; «quiero información», la
+     * ficha real. Null = no hay respaldo específico y sigue el curado.
+     */
+    private function respaldoSemantico(MarketingConversation $conversation, string $inbound, string $intent): ?string
+    {
+        if (SalesIntents::isPureGreeting($inbound)) {
+            return $this->saludoDeBienvenida($conversation);
+        }
+        if ($intent === SalesIntents::GENERAL_INFO) {
+            return $this->respuestaConHechos();
+        }
+
+        return null;
+    }
+
+    /**
+     * La bienvenida con el saludo de la franja real del gimnasio; la primera
+     * variante que no se haya dicho en esta conversación, y si todas se
+     * dijeron, la última: repetir un saludo es mejor que un menú.
+     */
+    private function saludoDeBienvenida(MarketingConversation $conversation): string
+    {
+        $franja = (string) (BusinessClock::forPrompt()['greeting'] ?? '');
+        $yaSaludamos = $this->memoryService->load($conversation)->get('greeted') !== null;
+        $previas = $this->previousMachineReplies($conversation);
+        $variantes = $this->replies->welcomeReplies($franja, $yaSaludamos);
+
+        foreach ($variantes as $v) {
+            if ($this->novelty->nearDuplicateOf($v, $previas) === null) {
+                return $v;
+            }
+        }
+
+        return end($variantes) ?: $variantes[0];
     }
 
     private function previousMachineReplies(MarketingConversation $conversation): array

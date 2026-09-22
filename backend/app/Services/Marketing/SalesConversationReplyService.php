@@ -3,6 +3,7 @@
 namespace App\Services\Marketing;
 
 use App\Models\Plan;
+use App\Services\Marketing\Ultron\GymFactsProvider;
 
 /**
  * Construye la respuesta HUMANA sugerida para cada intención. Textos curados,
@@ -17,6 +18,7 @@ class SalesConversationReplyService
 
     public function __construct(
         private readonly SalesObjectionResponderService $objections = new SalesObjectionResponderService,
+        private readonly GymFactsProvider $gym = new GymFactsProvider,
     ) {}
 
     /**
@@ -36,8 +38,15 @@ class SalesConversationReplyService
         }
 
         return match ($intent) {
-            SalesIntents::GREETING => 'Hola, bienvenido a Iron Body. ¿Buscas información de planes, ubicación o quieres '
-                .'empezar con algún objetivo?',
+            /*
+             * Un saludo solo se contesta con saludo, bienvenida y una apertura
+             * humana. Decía «¿Buscas información de planes, ubicación o quieres
+             * empezar con algún objetivo?»: un menú y una pregunta de objetivo
+             * a quien solo dijo «hola», que es lo que hace sonar a máquina.
+             * La pregunta va sin verbo de ofrecimiento (ver `lastResorts`).
+             */
+            SalesIntents::GREETING => 'Hola, bienvenido a Iron Body, qué gusto atenderte. Cuéntame, ¿en qué te podemos '
+                .'ayudar hoy?',
 
             SalesIntents::PRICING_QUESTION => 'Sí, claro. Para recomendarte mejor, ¿quieres empezar por bajar grasa, ganar masa '
                 .'o simplemente coger hábito?',
@@ -63,11 +72,11 @@ class SalesConversationReplyService
              * nadie, porque derivar exige que lo pida la persona.
              *
              * Lo honesto es decir que ese dato no está confirmado y ofrecer lo
-             * que sí existe: las clases, que llevan día y hora reales.
+             * que sí existe: las clases, que llevan día y hora reales. Y si la
+             * base de conocimiento SÍ declara el horario, se dice ese: negarlo
+             * teniéndolo era mentir por escrito.
              */
-            SalesIntents::SCHEDULE_QUESTION => 'No tengo un horario general confirmado en mi información, y prefiero no darte '
-                .'uno equivocado. Si quieres, pregúntame por una clase en concreto y te digo el día y la hora que tengo '
-                .'registrados; también te ayudo con planes o ubicación.',
+            SalesIntents::SCHEDULE_QUESTION => $this->scheduleReply(),
 
             /*
              * NO NOMBRA UN PLAN, Y ESO ES EL ARREGLO.
@@ -85,13 +94,15 @@ class SalesConversationReplyService
              * CRM cuando la conversación llegue ahí, y adelantarlo es empezar a
              * vender a quien todavía está mirando.
              *
-             * Tampoco afirma hechos: enumera lo que se puede preguntar, que es
-             * verdad por construcción, en vez de horarios o clases que este
-             * texto no tiene forma de comprobar.
+             * Tampoco afirma hechos que este texto no tiene forma de comprobar
+             * (horarios, clases). Enumeraba «planes, horarios, ubicación,
+             * clases o lo que necesites», y ese menú es lo que hace sonar a
+             * máquina: ahora presenta y deja UNA pregunta abierta, sin verbo
+             * de ofrecimiento (ver `lastResorts`).
              */
-            SalesIntents::GENERAL_INFO => 'Con gusto te cuento. Iron Body es un gimnasio en Neiva donde puedes entrenar '
-                .'con acompañamiento y distintas opciones según lo que busques. Puedo contarte sobre planes, horarios, '
-                .'ubicación, clases o lo que necesites. ¿Qué necesitas saber primero?',
+            SalesIntents::GENERAL_INFO => 'Con gusto te cuento. Iron Body es un gimnasio en Neiva donde entrenas con '
+                .'acompañamiento y un espacio preparado para avanzar en tu objetivo, seas principiante o ya vengas '
+                .'entrenando. ¿Qué te cuento más a fondo: los planes, las clases o cómo empezar?',
 
             SalesIntents::THANKS => 'Con gusto. Si después quieres empezar o comparar planes, me escribes y te ayudo '
                 .'sin problema.',
@@ -344,6 +355,66 @@ class SalesConversationReplyService
     }
 
     /**
+     * LA BIENVENIDA, cuando el modelo no la dio.
+     *
+     * Un saludo puro con el critic caído o con el borrador descartado por
+     * vender caía en los últimos recursos genéricos («dime qué necesitas…»):
+     * quien dijo «hola» recibía un mostrador, no una persona. Estas son las
+     * variantes de recepción: devuelven el saludo de la franja, dan la
+     * bienvenida a Iron Body y abren, sin planes, precios ni objetivo. Si ya
+     * saludamos en esta conversación, se recibe de nuevo sin volver a dar la
+     * bienvenida. Ninguna cierra con verbo de ofrecimiento (ver `lastResorts`).
+     *
+     * @param  string  $saludoFranja  «buenos dias», «buenas tardes», «buenas noches»
+     * @return string[] de más completa a más mínima; nunca vacío
+     */
+    public function welcomeReplies(string $saludoFranja, bool $yaSaludado): array
+    {
+        // La franja llega sin tildes (así cruza al modelo); a la persona se le
+        // escribe en español correcto.
+        $franja = strtr(trim($saludoFranja) !== '' ? trim($saludoFranja) : 'hola', ['buenos dias' => 'buenos días']);
+
+        if ($yaSaludado) {
+            return [
+                'Hola de nuevo, muy '.$franja.'. Cuéntame, ¿en qué te podemos ayudar hoy?',
+                'Hola, aquí seguimos. Cuéntame qué necesitas y te acompaño.',
+                'Muy '.$franja.'. Dime en qué te ayudo hoy.',
+            ];
+        }
+
+        return [
+            'Hola, muy '.$franja.'. Bienvenido a Iron Body, qué gusto atenderte. Cuéntame, ¿en qué te podemos ayudar hoy?',
+            'Hola, '.$franja.'. Qué gusto tenerte por aquí: bienvenido a Iron Body. Cuéntame, ¿en qué te ayudo hoy?',
+            'Muy '.$franja.', bienvenido a Iron Body. Cuéntame qué necesitas y te acompaño.',
+        ];
+    }
+
+    /**
+     * El horario, si la base de conocimiento lo declara; si no, la honestidad
+     * de antes. La pregunta va sin verbo de ofrecimiento (ver `lastResorts`).
+     * Sin aplicación ni base de datos (los textos se leen también en pruebas
+     * unitarias puras) no hay horario que afirmar, y se cae a la rama honesta.
+     */
+    private function scheduleReply(): string
+    {
+        try {
+            $horario = $this->gym->openingHours();
+        } catch (\Throwable) {
+            $horario = null;
+        }
+        if (is_array($horario) && $horario !== []) {
+            // Cada línea de la ficha cierra con punto antes de la pregunta.
+            $lineas = array_map(fn ($l) => rtrim(trim((string) $l), '.').'.', $horario);
+
+            return 'Claro. '.implode(' ', $lineas).' ¿En qué franja te queda mejor entrenar?';
+        }
+
+        return 'No tengo un horario general confirmado en mi información, y prefiero no darte '
+            .'uno equivocado. Si quieres, pregúntame por una clase en concreto y te digo el día y la hora que tengo '
+            .'registrados; también te ayudo con planes o ubicación.';
+    }
+
+    /**
      * LO QUE SE DICE CUANDO NO QUEDA NADA MÁS QUE DECIR.
      *
      * El texto curado de arriba es la primera red. Tenía un agujero que se vio
@@ -376,10 +447,13 @@ class SalesConversationReplyService
          * memoria. Un texto que pregunta qué necesitas no ofrece nada, y no
          * tiene por qué borrar lo que sí se ofreció.
          */
+        // Y NINGUNA ENUMERA UN MENÚ: «puedes preguntarme por planes, horarios,
+        // ubicación, clases…» es la frase de máquina que la persona reconoce.
+        // Pero la puerta sigue abierta: quien pidió información y recibe este
+        // respaldo tiene que poder seguir con una pregunta, no con un punto.
         $generales = [
-            'Claro, con gusto te ayudo. Puedes preguntarme por planes, horarios, ubicación, clases o cualquier '
-                .'información del gimnasio. ¿Qué necesitas saber primero?',
-            'Con gusto. Dime qué necesitas —planes, horarios, ubicación o clases— y te cuento.',
+            'Claro, con gusto te ayudo. Cuéntame, ¿qué necesitas saber del gimnasio?',
+            'Con gusto. ¿Qué te cuento primero del gimnasio?',
             'Cuéntame qué necesitas saber del gimnasio y te ayudo.',
         ];
 

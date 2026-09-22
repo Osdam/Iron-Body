@@ -12,6 +12,7 @@ use App\Services\Marketing\MobileAppLinks;
 use App\Services\Marketing\OutboundContentGuard;
 use App\Services\Marketing\SalesAgentDecisionSchema;
 use App\Services\Marketing\SalesConversationReplyService;
+use App\Services\Marketing\SalesIntents;
 use App\Services\Marketing\Ultron\UltronCommitService;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -163,6 +164,81 @@ class LaravelAuthoredMessagesTest extends TestCase
         }
         foreach (MobileAppCatalog::HELP as $clave => $texto) {
             $this->assertNull($this->guard->handoffOfferIn($texto), "La ayuda «{$clave}» ofrece pasar a una persona.");
+        }
+    }
+
+    /**
+     * LOS TEXTOS DE RESPALDO NO SUENAN A MÁQUINA.
+     *
+     * El saludo curado decía «¿Buscas información de planes, ubicación o
+     * quieres empezar con algún objetivo?» y los últimos recursos «puedes
+     * preguntarme por planes, horarios, ubicación, clases…»: un menú y una
+     * pregunta de objetivo a quien solo dijo «hola». Esta lectura fija que
+     * ningún texto de respaldo enumere un menú, use «cliente», «usuario»,
+     * «siguiente paso» o «puedes consultar», que el saludo no pregunte por
+     * objetivo, plan o inscripción, y que los que cierran con pregunta no
+     * lleven verbo de ofrecimiento (el detector de ofertas de la memoria los
+     * registraría como oferta del agente). Los textos de pago y traspaso no
+     * son de esta lectura: los gobierna su propia autoridad.
+     */
+    public function test_no_curated_fallback_sounds_like_a_menu_or_a_bot(): void
+    {
+        $replies = new SalesConversationReplyService;
+        $fueraDeLectura = [
+            SalesIntents::PAYMENT_LINK_REQUEST,
+            SalesIntents::HIGH_INTENT_CLOSE,
+            SalesIntents::HUMAN_REQUEST,
+        ];
+        $menu = ['puedes preguntarme por', 'puedes consultar', 'cliente', 'usuario', 'siguiente paso'];
+
+        $textos = [];
+        foreach (SalesAgentDecisionSchema::INTENTS as $intent) {
+            if (in_array($intent, $fueraDeLectura, true)) {
+                continue;
+            }
+            $t = $replies->replyFor($intent);
+            if ($t !== null) {
+                $textos["replyFor({$intent})"] = $t;
+            }
+            foreach ($replies->lastResorts($intent) as $i => $v) {
+                $textos["lastResorts({$intent})[{$i}]"] = $v;
+            }
+        }
+        // Y las bienvenidas de recepción: tres franjas, primera vez y «de nuevo».
+        foreach (['buenos dias', 'buenas tardes', 'buenas noches'] as $franja) {
+            foreach ([false, true] as $yaSaludado) {
+                foreach ($replies->welcomeReplies($franja, $yaSaludado) as $i => $v) {
+                    $textos["welcomeReplies({$franja}, ".($yaSaludado ? 'de nuevo' : 'primera').")[{$i}]"] = $v;
+                }
+            }
+        }
+
+        foreach ($textos as $nombre => $texto) {
+            $bajo = mb_strtolower($texto);
+            foreach ($menu as $frase) {
+                $this->assertStringNotContainsString($frase, $bajo, "El texto «{$nombre}» dice «{$frase}».");
+            }
+        }
+
+        $saludo = mb_strtolower((string) $replies->replyFor(SalesIntents::GREETING));
+        $this->assertStringContainsString('bienvenido', $saludo);
+        foreach (['objetivo', 'plan', 'inscri'] as $prohibido) {
+            $this->assertStringNotContainsString($prohibido, $saludo, "El saludo pregunta por «{$prohibido}» a quien solo dijo hola.");
+        }
+
+        $sinOfrecer = [
+            $replies->replyFor(SalesIntents::GREETING),
+            $replies->replyFor(SalesIntents::GENERAL_INFO),
+            ...$replies->lastResorts(SalesIntents::GENERAL_INFO),
+            ...$replies->welcomeReplies('buenos dias', false),
+            ...$replies->welcomeReplies('buenas noches', true),
+        ];
+        foreach ($sinOfrecer as $texto) {
+            $this->assertDoesNotMatchRegularExpression(
+                '/\\b(quieres|te gustaria|te interesa|prefieres|deseas|te parece)\\b/u',
+                SalesAgentDecisionSchema::normalize((string) $texto),
+                "«{$texto}» cierra con un verbo de ofrecimiento.",
+            );
         }
     }
 }

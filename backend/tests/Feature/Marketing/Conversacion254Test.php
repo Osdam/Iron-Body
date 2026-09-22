@@ -3,10 +3,12 @@
 namespace Tests\Feature\Marketing;
 
 use App\Models\MarketingAgentAction;
+use App\Models\MarketingAiAction;
 use App\Models\MarketingConversation;
 use App\Models\MarketingKnowledgeItem;
 use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
+use App\Models\MyClass;
 use App\Models\Plan;
 use App\Services\Marketing\CommercialPhaseMachine as P;
 use App\Services\Marketing\SalesIntents;
@@ -170,9 +172,11 @@ class Conversacion254Test extends TestCase
         }
         $this->assertNotNull($this->memoria()['greeted'] ?? null);
 
-        // ── 2 · el borrador real de este turno sí informaba; sale intacto ───
+        // ── 2 · un borrador que informa con lo que existe sale intacto ─────
+        // (el real de esa noche decía «pilates, yoga»: ese se fija aparte, y
+        // ya no sale así)
         $this->turno('es que los vi por redes sociales y me gustaria saber mas del gimnasio', 'c254.2', [
-            'reply_draft' => 'Claro, te puedo contar que en Iron Body Neiva contamos con entrenadores especializados en musculación, funcional, pilates, yoga y más. ¿Qué tipo de entrenamiento te llama más la atención?',
+            'reply_draft' => 'Claro, te puedo contar que en Iron Body Neiva contamos con entrenadores especializados en musculación y funcional. ¿Qué tipo de entrenamiento te llama más la atención?',
         ])->assertOk();
         $this->assertStringContainsString('entrenadores', mb_strtolower($this->ultimo()));
 
@@ -399,9 +403,10 @@ class Conversacion254Test extends TestCase
             'tools_requested' => [SalesIntents::TOOL_COURTESY_REQUEST], 'courtesy_action' => 'request',
         ])->assertOk();
 
+        // No hay clase de yoga: la respuesta honesta lo dice y contesta igual.
         $this->turno('cuanto cuestan las clases de yoga?', 'c254.r5b2', [
             'intent' => SalesIntents::PRICING_QUESTION,
-            'reply_draft' => 'Las clases de yoga estan incluidas en el {{PLAN_NAME}}, que cuesta {{PLAN_PRICE}}.',
+            'reply_draft' => 'Clases de yoga no tenemos, pero las clases funcionales estan incluidas en el {{PLAN_NAME}}, que cuesta {{PLAN_PRICE}}.',
             'recommended_plan_id' => $this->mensual->id,
         ])->assertOk();
 
@@ -426,7 +431,7 @@ class Conversacion254Test extends TestCase
         ])->assertOk();
 
         $this->turno('cuanto cuestan las clases de yoga?', 'c254.r5c2', [
-            'reply_draft' => 'Las clases de yoga estan incluidas en el {{PLAN_NAME}}, que cuesta {{PLAN_PRICE}}.',
+            'reply_draft' => 'Clases de yoga no tenemos, pero las clases funcionales estan incluidas en el {{PLAN_NAME}}, que cuesta {{PLAN_PRICE}}.',
             'recommended_plan_id' => $this->mensual->id,
         ])->assertOk();
 
@@ -443,5 +448,29 @@ class Conversacion254Test extends TestCase
         $t = $this->ultimo();
         $this->assertStringContainsString('entrenador', mb_strtolower($t), 'la segunda pregunta se perdió entera');
         $this->assertStringContainsString('visita', mb_strtolower($t), 'contestó y no retomó la visita');
+    }
+
+    /**
+     * El turno 2 real de aquella noche, palabra por palabra. «Pilates» y
+     * «yoga» venían de las especialidades de la ficha de los entrenadores,
+     * no de una clase: el gimnasio tiene IRON PARTY, IRON POWERFLOW e IRON
+     * STRENGTH y nada más, y eso es lo único que puede afirmar.
+     */
+    public function test_el_turno_dos_de_la_254_ya_no_sale_con_pilates_ni_yoga(): void
+    {
+        foreach (['IRON PARTY' => 'friday', 'IRON POWERFLOW' => 'monday', 'IRON STRENGTH' => 'wednesday'] as $nombre => $dia) {
+            MyClass::create(['name' => $nombre, 'type' => 'Funcional', 'day_of_week' => $dia, 'start_time' => '18:00:00', 'end_time' => '19:00:00', 'status' => 'active', 'max_capacity' => 20]);
+        }
+
+        $this->turno('es que los vi por redes sociales y me gustaria saber mas del gimnasio', 'c254.real2', [
+            'reply_draft' => 'Claro, te puedo contar que en Iron Body Neiva contamos con entrenadores especializados en musculación, funcional, pilates, yoga y más. Tenemos clases como IRON POWERFLOW, IRON PARTY e IRON STRENGTH para distintos niveles. ¿Qué tipo de entrenamiento te interesa o qué objetivo tienes en mente?',
+        ])->assertOk();
+
+        $t = $this->ultimo();
+        $this->assertStringNotContainsString('pilates', mb_strtolower($t), 'volvió a afirmar una clase que no existe');
+        $this->assertStringNotContainsString('yoga', mb_strtolower($t), 'volvió a afirmar una clase que no existe');
+        $this->assertStringContainsString('IRON POWERFLOW', $t, 'se perdió lo que sí era verdad');
+        $this->assertStringContainsString('IRON STRENGTH', $t);
+        $this->assertNotEmpty(MarketingAiAction::latest('id')->first()->metadata['invented_service_dropped'] ?? [], 'sin constancia de lo retirado');
     }
 }

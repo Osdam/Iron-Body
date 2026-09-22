@@ -43,7 +43,41 @@ final class StrategyContract
      * @param  array<string,mixed>  $resolved
      * @return array<string,mixed>
      */
-    public static function hints(array $customer, array $resolved, bool $canOfferLink, ?string $baseIntent = null, array $payment = [], array $membership = []): array
+    public static function hints(array $customer, array $resolved, bool $canOfferLink, ?string $baseIntent = null, array $payment = [], array $membership = [], bool $greetingOnly = false): array
+    {
+        /*
+         * MODO RECEPCIÓN: un saludo y nada más se contesta recibiendo.
+         *
+         * Con la memoria comercial del lead (READY_TO_BUY, hot lead) estas
+         * pistas empujaban a cerrar o recomendar ante un «hola» a secas; el
+         * Critic tumbaba el borrador por vender ante un saludo y salía el
+         * respaldo genérico. La memoria no se borra —sigue en `customer`—,
+         * pero no decide ESTE turno: primero se recibe, después se entiende.
+         */
+        if ($greetingOnly) {
+            return array_merge(self::base($customer, $resolved, $canOfferLink, $baseIntent, $payment, $membership), [
+                'hot_lead_fast_path' => false,
+                'fast_path_kind' => null,
+                'lifecycle_mode' => 'consultative',
+                'should_recommend_now' => false,
+                'open_objection' => false,
+                'may_ask' => [],
+                'question_budget' => 1,
+                'greeting_only' => true,
+            ]);
+        }
+
+        return array_merge(self::base($customer, $resolved, $canOfferLink, $baseIntent, $payment, $membership), ['greeting_only' => false]);
+    }
+
+    /** Una pregunta de descubrimiento comercial, la que no cabe en un saludo. */
+    public static function asksDiscovery(string $text): bool
+    {
+        return preg_match(self::PREGUNTA_DESCUBRIMIENTO, SalesAgentDecisionSchema::normalize($text)) === 1;
+    }
+
+    /** @return array<string,mixed> */
+    private static function base(array $customer, array $resolved, bool $canOfferLink, ?string $baseIntent, array $payment, array $membership): array
     {
         $temperature = $customer['lead_temperature'] ?? CustomerIntelligenceService::COLD;
         $lifecycle = $customer['customer_lifecycle'] ?? CustomerIntelligenceService::PROSPECT;

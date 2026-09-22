@@ -89,11 +89,13 @@ final class UltronSalesPlaybook
             'Habla de la persona, no de ti: su meta antes que nuestro catálogo.',
             'Usa su nombre cuando lo sepas, y una sola vez: repetirlo suena a plantilla.',
             'Reconoce lo que dijo con sus propias palabras antes de añadir las tuyas.',
+            'Un saludo solo se contesta con saludo, bienvenida y una apertura humana: sin menú de temas y sin preguntar todavía por el objetivo, el plan o la inscripción.',
         ],
         self::TRADUCCION_DE_VALOR => [
             'No enumeres características: di qué cambia para ella. «Tienes rutina en la app» vale menos que «no llegas a improvisar».',
             'Conecta cada cosa que menciones con el objetivo que la persona ya dijo.',
             'Dos ideas bien traducidas convencen más que ocho características seguidas.',
+            'Justifica la recomendación con lo que la persona te dijo —su objetivo, su disponibilidad y lo que necesita— y con un beneficio real del plan; «te recomiendo este» a secas no es una recomendación.',
         ],
         self::INFLUENCIA_ETICA => [
             'Apóyate solo en lo que es verdad y está confirmado en el contexto.',
@@ -103,14 +105,15 @@ final class UltronSalesPlaybook
         self::DIGNIDAD_DEL_CLIENTE => [
             'Que dudar salga gratis: ninguna respuesta debe hacer sentir mal por preguntar el precio, comparar o pensarlo.',
             'Trata a quien todavía no compra como a quien ya compró.',
-            'Si no le sirve, dilo: perder una venta honesta es más barato que un cliente enfadado.',
+            'Si no le sirve, dilo: perder una venta honesta es más barato que una persona enfadada.',
         ],
         self::MEMORIA_DE_RELACION => [
             'Retoma lo que ya sabes de esta conversación en lugar de empezar de cero.',
             'Quien ya compró es una relación, no un cierre: pregunta cómo va, no qué más compra.',
         ],
         self::CIERRE_DECIDIDO => [
-            'Cuando la persona ya decidió, deja de vender: dale el siguiente paso, claro y en una frase.',
+            'Cuando la persona ya decidió, deja de vender: dile cómo empezar, claro y en una frase.',
+            'Si muestra interés pero aún no decide, no saltes al pago: confirma en una frase que el plan encaja con lo que te contó y cuéntale cómo empezar.',
             'Ni una pregunta más de descubrimiento, ni un beneficio más: estorban.',
             'Decidido no es lo mismo que presionado: si dice que lo piensa, se piensa.',
         ],

@@ -151,6 +151,122 @@ class FactsAuthorityTortureTest extends TortureCase
         ];
     }
 
+    /**
+     * El hueco que documentaba la familia de arriba: una clase inventada A
+     * SECAS —sin cifra, sin URL, sin traspaso— salía tal cual, porque solo el
+     * Critic (el mismo modelo) la miraba y en la prueba física la aprobó.
+     * Ahora la oración que la afirma se retira y lo que el CRM sí tiene sale.
+     */
+    public function test_an_invented_class_with_nothing_else_wrong_is_removed_and_the_real_ones_stay(): void
+    {
+        $this->gimnasioReal();
+
+        $this->commit($this->inbound('¿qué clases tienen?'), [
+            'reply_draft' => 'Tenemos clases de yoga, pilates y spinning. También IRON POWERFLOW e IRON FUNCIONAL para todos los niveles. ¿Cuál te llama más?',
+        ])->assertOk();
+
+        $salida = $this->lastOutboundBody();
+        foreach (['yoga', 'pilates', 'spinning'] as $inventada) {
+            $this->assertStringNotContainsString($inventada, mb_strtolower($salida), "salió «{$inventada}», que no existe");
+        }
+        $this->assertStringContainsString('IRON POWERFLOW', $salida, 'se perdió la clase real');
+        $this->assertStringContainsString('IRON FUNCIONAL', $salida);
+        $this->assertSame(
+            ['Tenemos clases de yoga, pilates y spinning.'],
+            MarketingAiAction::latest('id')->first()->metadata['invented_service_dropped'] ?? null,
+            'la acción no deja constancia de lo que se retiró',
+        );
+    }
+
+    /** Si el borrador entero era la clase que no existe, sale la verdad con las que sí hay. */
+    public function test_a_draft_that_was_only_an_invented_class_becomes_the_truth_about_the_real_ones(): void
+    {
+        $this->gimnasioReal();
+
+        $this->commit($this->inbound('¿tienen yoga?'), ['reply_draft' => 'Claro, tenemos clases de yoga los martes.'])->assertOk();
+
+        $salida = $this->lastOutboundBody();
+        $this->assertStringNotContainsString('yoga', mb_strtolower($salida));
+        $this->assertStringContainsString('IRON POWERFLOW', $salida);
+        $this->assertStringContainsString('IRON FUNCIONAL', $salida);
+        $this->assertStringContainsString('no la tengo confirmada', $salida);
+        // Y la clase apagada no cuenta como clase.
+        $this->assertStringNotContainsString('IRON YOGA', $salida);
+    }
+
+    /**
+     * Retirar una oración no puede romper las demás. La revisión lo midió: el
+     * troceador partía dentro de «a. m.» —que es como el CRM escribe el
+     * horario— y salía «Abrimos a las 5 a. m. m. Te esperamos».
+     */
+    public function test_removing_an_invented_class_never_breaks_the_abbreviations_around_it(): void
+    {
+        $this->gimnasioReal();
+
+        $this->commit($this->inbound('¿a qué hora abren?'), ['reply_draft' => 'Abrimos a las 5 a. m. y tenemos yoga a las 6 a. m. Te esperamos.'])->assertOk();
+
+        $salida = $this->lastOutboundBody();
+        $this->assertStringNotContainsString('m. m.', $salida, 'la abreviatura quedó partida');
+        $this->assertStringNotContainsString('yoga', mb_strtolower($salida));
+        $this->assertStringContainsString('Te esperamos.', $salida);
+    }
+
+    /**
+     * Y lo que queda tiene que afirmar algo: «Nuestras clases son:» con la
+     * lista retirada, o la pregunta final a secas, no son un mensaje. Sale la
+     * verdad con las clases reales, y la pregunta se conserva.
+     */
+    #[DataProvider('restosSinAfirmacion')]
+    public function test_a_remainder_that_states_nothing_becomes_the_truth_about_the_real_classes(string $draft, string $colaEsperada): void
+    {
+        $this->gimnasioReal();
+
+        $this->commit($this->inbound('¿qué clases tienen?'), ['reply_draft' => $draft])->assertOk();
+
+        $salida = $this->lastOutboundBody();
+        foreach (['yoga', 'pilates'] as $inventada) {
+            $this->assertStringNotContainsString($inventada, mb_strtolower($salida));
+        }
+        $this->assertStringContainsString('IRON POWERFLOW', $salida, 'se perdió lo que sí era verdad');
+        $this->assertStringContainsString('IRON FUNCIONAL', $salida);
+        $this->assertStringNotContainsString(':', $salida, 'quedaron dos puntos colgando');
+        if ($colaEsperada !== '') {
+            $this->assertStringEndsWith($colaEsperada, $salida, 'se perdió la pregunta final');
+        }
+    }
+
+    /**
+     * Si la oración retirada era la que traía el precio que la persona
+     * preguntó, el precio del plan del turno se afirma igual: la clase no
+     * existe, el precio sí. La revisión lo midió saliendo sin precio ni clase.
+     */
+    public function test_the_price_the_person_asked_survives_the_removal_of_the_invented_class(): void
+    {
+        $this->gimnasioReal();
+
+        $this->commit($this->inbound('cuanto cuestan las clases de yoga?'), [
+            'intent' => SalesIntents::PRICING_QUESTION,
+            'recommended_plan_id' => $this->plan->id,
+            'reply_draft' => 'Las clases de yoga estan incluidas en el {{PLAN_NAME}}, que cuesta {{PLAN_PRICE}}. Te sirve asi?',
+        ])->assertOk();
+
+        $salida = $this->lastOutboundBody();
+        $this->assertStringNotContainsString('yoga', mb_strtolower($salida));
+        $this->assertStringContainsString('IRON POWERFLOW', $salida, 'sin las clases reales');
+        $this->assertStringContainsString('Plan Mensual cuesta $80.000', $salida, 'la persona preguntó un precio y se quedó sin él');
+        $this->assertStringEndsWith('Te sirve asi?', $salida, 'se perdió la pregunta final');
+    }
+
+    /** @return array<string, array{0:string, 1:string}> */
+    public static function restosSinAfirmacion(): array
+    {
+        return [
+            'lista con dos puntos' => ["Nuestras clases son:\nYoga los martes\nPilates los jueves", ''],
+            'la verdad y el invento en la misma oracion, con pregunta' => ['Tenemos IRON POWERFLOW, y también yoga. ¿Cuál prefieres?', '¿Cuál prefieres?'],
+            'punto y coma' => ['Tenemos IRON POWERFLOW; el yoga es los martes. ¿Vienes?', '¿Vienes?'],
+        ];
+    }
+
     // ── FAMILIA 2: LA APP (context.app) ──────────────────────────────────────
 
     /**

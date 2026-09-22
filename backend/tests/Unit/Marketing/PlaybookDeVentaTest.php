@@ -261,4 +261,31 @@ class PlaybookDeVentaTest extends TestCase
         $this->assertFalse($conRechazo['has_barrier']);
         $this->assertTrue($conRechazo['returning']);
     }
+
+    /**
+     * La FORMA de la conversación también es doctrina: el saludo no es un
+     * menú, la recomendación se justifica con lo que la persona dijo, el
+     * interés no salta al pago, y el vocabulario no calca «cliente» ni
+     * «siguiente paso», que el modelo repite si lo lee.
+     */
+    public function test_la_forma_de_conversar_viaja_en_la_doctrina(): void
+    {
+        $de = fn (string $fase) => mb_strtolower(implode(' ', PB::forPhase($fase)['directives']));
+
+        foreach ([Fase::NEW_LEAD, Fase::RAPPORT] as $fase) {
+            $this->assertStringContainsString('saludo, bienvenida y una apertura humana', $de($fase), "En {$fase} el saludo puede ser un menú.");
+        }
+        foreach ([Fase::VALUE_BUILDING, Fase::RECOMMENDATION] as $fase) {
+            $this->assertStringContainsString('justifica la recomendación', $de($fase), "En {$fase} se puede recomendar a secas.");
+        }
+        $this->assertStringContainsString('no saltes al pago', $de(Fase::BUYING_SIGNAL), 'El interés salta al pago.');
+
+        foreach (Fase::PHASES as $fase) {
+            $p = PB::forPhase($fase);
+            $texto = mb_strtolower(implode(' ', [...$p['directives'], ...$p['never']]));
+            foreach (['cliente', 'usuario', 'siguiente paso', 'puedes consultar'] as $calco) {
+                $this->assertStringNotContainsString($calco, $texto, "La fase {$fase} lee «{$calco}» y lo va a repetir.");
+            }
+        }
+    }
 }

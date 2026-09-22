@@ -193,4 +193,74 @@ class ComposerStyleGuardTest extends TestCase
 
         $this->assertSame($esExcusa, $g->priceExcuseIn($texto) !== null, "«{$texto}»");
     }
+
+    /**
+     * Lo que el gimnasio ofrece de verdad, como llega al guard: nombres y tipos
+     * de las clases activas y la ficha de la base de conocimiento.
+     *
+     * @return array<string, array{0:string, 1:bool}>
+     */
+    public static function serviciosInventados(): array
+    {
+        return [
+            // El mensaje real de la prueba física: las especialidades de la ficha de los entrenadores no son clases.
+            'pilates y yoga como servicios' => ['Claro, contamos con entrenadores especializados en musculacion, funcional, pilates, yoga y mas.', true],
+            'clases de yoga y pilates' => ['Tenemos clases de yoga y pilates para todos los niveles.', true],
+            'spinning en la manana' => ['Puedes hacer spinning en la mañana con nuestros entrenadores.', true],
+            'zona humeda que no existe' => ['Después de entrenar puedes pasar por el sauna.', true],
+            // Negar lo que no hay es honesto.
+            'no tenemos yoga' => ['No tenemos clases de yoga, pero sí IRON POWERFLOW.', false],
+            'yoga no manejamos' => ['Yoga no manejamos por ahora; nuestras clases son funcionales.', false],
+            'no la tengo confirmada' => ['La clase de pilates no la tengo confirmada en mi información.', false],
+            // Negaciones normales y el eco de la pregunta: honestas, se quedan.
+            'yoga no, pero' => ['Yoga no, pero tenemos IRON POWERFLOW.', false],
+            'no hace parte de la oferta' => ['El yoga no hace parte de nuestra oferta.', false],
+            'no hay' => ['No hay pilates, pero sí clases funcionales.', false],
+            'eco de la pregunta' => ['Sobre el yoga que preguntas, te cuento que nuestras clases son IRON POWERFLOW e IRON STRENGTH.', false],
+            'no esta disponible' => ['Lamentablemente yoga no está disponible.', false],
+            // Palabras genéricas del entrenamiento nunca se tocan.
+            'cardio y funcional' => ['Aquí entrenas cardio y funcional con acompañamiento y una zona de pesas completa.', false],
+            'clase real' => ['Tenemos IRON POWERFLOW los lunes a las 06:00, es funcional y dura una hora.', false],
+            // Palabras que la revisión midió como falsas alarmas y ya no están en el léxico.
+            'tenis son zapatillas' => ['Trae tus tenis y ropa cómoda para entrenar. Te esperamos en IRON POWERFLOW.', false],
+            'escalada de cargas' => ['Hacemos una escalada progresiva de cargas en tu rutina.', false],
+            'trx es un aparato' => ['Tenemos TRX en la zona funcional.', false],
+            'ambiente de baile' => ['El ambiente es de baile y energía en IRON PARTY.', false],
+            'primer step' => ['Da el primer step hoy mismo.', false],
+        ];
+    }
+
+    /** Una ficha que NIEGA un servicio no lo habilita: lo permitido se lee con la misma vara. */
+    public function test_a_knowledge_item_that_denies_a_service_does_not_allow_it(): void
+    {
+        $g = new ComposerStyleGuard;
+        $ficha = ['No contamos con piscina ni sauna: somos un gimnasio de fuerza.', 'IRON POWERFLOW'];
+
+        $this->assertNotNull($g->inventedServiceIn('Contamos con piscina climatizada y sauna.', $ficha));
+        $this->assertNull($g->inventedServiceIn('Contamos con piscina climatizada.', ['La sede tiene piscina climatizada.']));
+    }
+
+    #[DataProvider('serviciosInventados')]
+    public function test_a_class_the_gym_does_not_have_is_detected_and_an_honest_sentence_is_not(string $texto, bool $inventado): void
+    {
+        $g = new ComposerStyleGuard;
+        $ofrecido = ['IRON POWERFLOW', 'IRON STRENGTH', 'Funcional', 'Iron Body Neiva es un centro de acondicionamiento físico en Neiva.'];
+
+        $this->assertSame($inventado, $g->inventedServiceIn($texto, $ofrecido) !== null, "«{$texto}»");
+    }
+
+    /** La lista es vocabulario de detección: crear la clase «Yoga» la habilita sin tocar código. */
+    public function test_a_discipline_becomes_real_the_moment_the_crm_has_it(): void
+    {
+        $g = new ComposerStyleGuard;
+
+        $this->assertNotNull($g->inventedServiceIn('Tenemos clases de yoga los martes.', ['IRON POWERFLOW']));
+        $this->assertNull($g->inventedServiceIn('Tenemos clases de yoga los martes.', ['IRON POWERFLOW', 'IRON YOGA']));
+        $this->assertNull($g->inventedServiceIn('Tenemos piscina climatizada.', ['La sede cuenta con piscina y zona de pesas.']));
+        // Y devuelve la oración culpable, no el texto entero, para retirar solo esa.
+        $this->assertSame(
+            'Además hay clases de zumba los viernes.',
+            $g->inventedServiceIn('Tenemos IRON POWERFLOW los lunes. Además hay clases de zumba los viernes. ¿Te animas?', ['IRON POWERFLOW']),
+        );
+    }
 }

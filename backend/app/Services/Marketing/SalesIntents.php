@@ -195,4 +195,33 @@ final class SalesIntents
         self::PAYMENT_LINK_REQUEST,
         self::HIGH_INTENT_CLOSE,
     ];
+
+    /**
+     * Un saludo y NADA MÁS: «hola», «buenas», «hola buenos días», «qué tal»,
+     * con nombre o emoji si acaso. En cuanto trae otra cosa («hola, quiero
+     * información», «buenas, cuánto vale») deja de ser un saludo puro y la
+     * intención la pone lo demás.
+     *
+     * Existe porque un «hola» a secas se decidía con la memoria comercial del
+     * lead (READY_TO_BUY, hot lead) y el turno salía vendiendo o preguntando
+     * el objetivo; el saludo puro tiene prioridad conversacional y entra en
+     * modo recepción.
+     */
+    public static function isPureGreeting(string $texto): bool
+    {
+        $t = SalesAgentDecisionSchema::normalize($texto);
+        // Fuera emojis, signos y muletillas de apertura: queda lo que se dijo.
+        $t = trim((string) preg_replace('/[^a-z0-9\s]/u', ' ', $t));
+        $t = trim((string) preg_replace('/\s+/u', ' ', $t));
+        if ($t === '' || mb_strlen($t) > 60) {
+            return false;
+        }
+        $saludo = '(hola|holi|holaa+|buenas|buenos dias|buen dia|buenas tardes|buenas noches|que tal|que mas|hey|hello|hi|saludos|como estas|como esta|como estan|como va|todo bien)';
+        $relleno = '(muy|de nuevo|otra vez|amigos|amigo|equipo|iron body|iron|body|gym|gimnasio)';
+
+        // Al menos UN saludo de verdad: «gimnasio» o «de nuevo» a secas son
+        // contenido (una respuesta a «¿planes, clases o cómo empezar?»), no un
+        // saludo. La revisión lo midió entrando en recepción.
+        return preg_match('/^('.$relleno.'\s*)*'.$saludo.'(\s*('.$saludo.'|'.$relleno.'))*$/u', $t) === 1;
+    }
 }

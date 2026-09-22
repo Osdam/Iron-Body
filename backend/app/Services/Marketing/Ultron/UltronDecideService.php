@@ -229,7 +229,7 @@ class UltronDecideService
              * visita a medias, y se puso a vender.
              */
             'hard_required_plan', 'preferred_commercial_plan', 'price_verification',
-            'active_goal', 'resume_goal_after_answer',
+            'active_goal', 'resume_goal_after_answer', 'reception_mode',
         ];
 
         $recorte = [];
@@ -321,11 +321,20 @@ class UltronDecideService
         $plansForMemory = $this->memoryService->sellablePlansForMemory();
         $resolved = $this->references->resolve((string) $message->body, $memory, $plansForMemory);
         $novelty = $this->novelty->guidance($memory, $plansForMemory, $resolved);
-        $customer = $this->customers->profile($conversation, $message, $memory, $resolved, (string) ($decision['intent'] ?? SalesIntents::UNKNOWN));
+        /*
+         * UN SALUDO Y NADA MÁS ES UN SALUDO, diga lo que diga el clasificador
+         * y traiga lo que traiga la memoria del lead. Se detecta aquí, con el
+         * texto, y manda sobre el intent base para la política, el perfil y
+         * las pistas: ese turno entra en modo recepción.
+         */
+        $saludoPuro = SalesIntents::isPureGreeting((string) $message->body);
+        $intentTurno = $saludoPuro ? SalesIntents::GREETING : (string) ($decision['intent'] ?? SalesIntents::UNKNOWN);
+
+        $customer = $this->customers->profile($conversation, $message, $memory, $resolved, $intentTurno);
         $payment = $this->payments->forLead($conversation->lead, (string) $message->body);
         $canOfferLink = $this->canOfferLink((int) $conversation->id);
         $membershipFacts = $this->membership->forPrompt($conversation->lead);
-        $strategyHints = StrategyContract::hints($customer, $resolved, $canOfferLink, (string) ($decision['intent'] ?? SalesIntents::UNKNOWN), $payment, $membershipFacts);
+        $strategyHints = StrategyContract::hints($customer, $resolved, $canOfferLink, $intentTurno, $payment, $membershipFacts, $saludoPuro);
         // El objetivo activo también como pista del estratega: es quien
         // decide la acción, y una visita a medias cambia la acción.
         $objetivoVivo = $memory->activeGoal();
@@ -479,7 +488,7 @@ class UltronDecideService
                  * `allowed_plan_ids`—, y lo que no viaja no se malinterpreta.
                  */
                 'commercial_turn_policy' => $this->politicaDelTurno(
-                    (string) ($decision['intent'] ?? SalesIntents::UNKNOWN),
+                    $intentTurno,
                     $phase,
                     $memory,
                     $resolved,

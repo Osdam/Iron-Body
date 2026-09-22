@@ -301,6 +301,51 @@ final class ComposerStyleGuard
     /** Muletillas de bot y cierres automáticos. */
     private const MULETILLAS = '/\b(hay algo mas en (lo )?que (te )?pueda ayudar(te|le)?|no dudes en (consultar|preguntar|escribir)(me|nos)?|estoy aqui para ayudarte|estamos para servirte|quedo atent[oa] a (tus|cualquier)|sera un placer atenderte|como asistente virtual)\b/u';
 
+    /**
+     * Disciplinas e instalaciones que un modelo completa «de gimnasio» cuando
+     * describe lo que ofrecemos. En una prueba física salió «entrenadores
+     * especializados en musculación, funcional, pilates, yoga y más» sin que
+     * exista una sola clase de pilates ni de yoga: las palabras venían de las
+     * especialidades de la ficha de los entrenadores, que no son servicios.
+     *
+     * Es VOCABULARIO DE DETECCIÓN, no verdad de negocio: cada palabra queda
+     * permitida en cuanto aparece en lo que el CRM sí tiene —el nombre o el
+     * tipo de una clase activa, un ítem de la base de conocimiento—, así que
+     * crear la clase «Yoga» la habilita sin tocar esto. No entran palabras
+     * genéricas del entrenamiento (cardio, musculación, funcional, pesas,
+     * fuerza): las dice cualquier conversación normal.
+     */
+    private const DISCIPLINAS = [
+        'yoga', 'pilates', 'spinning', 'zumba', 'crossfit', 'cross training', 'boxeo', 'kickboxing',
+        'natacion', 'piscina', 'sauna', 'turco', 'jacuzzi', 'calistenia', 'aerobicos', 'body pump',
+        'body combat', 'muay thai', 'taekwondo', 'karate', 'padel', 'squash',
+        // Lo que NO entra, medido: «step» («da el primer step»), «tenis» (en
+        // Colombia son las zapatillas: «trae tus tenis»), «escalada» («una
+        // escalada progresiva de cargas»), «trx» (es un aparato de la zona
+        // funcional) y «baile»/«rumba» («el ambiente es de baile y energía»).
+    ];
+
+    /**
+     * Dónde termina una oración, para retirar UNA sin romper las demás.
+     *
+     * Partía tras cualquier punto, y el horario del CRM se escribe «5:00
+     * a. m. a 10:00 p. m.»: «Abrimos a las 5 a. m. y tenemos yoga a las 6
+     * a. m. Te esperamos» salía como «Abrimos a las 5 a. m. m. Te esperamos».
+     * Ahora una oración solo termina cuando lo que sigue empieza como empieza
+     * una oración: mayúscula, cifra, «¿», «¡» o comillas. Un salto de línea
+     * siempre separa.
+     */
+    public const SEPARADOR_DE_ORACIONES = '(?<=[.!?])\s+(?=[A-ZÁÉÍÓÚÑ¿¡«"(0-9])|\n+';
+
+    /**
+     * Decir que NO tenemos algo es honesto: esa oración no se retira. Ni la
+     * que solo repite lo que la persona preguntó («sobre el yoga que
+     * preguntas, te cuento que…»).
+     */
+    private const NIEGA_SERVICIO = '/\b(no (tenemos|hay|ofrecemos|contamos|manejamos|dictamos|damos|existe|existen|esta|estan|abrimos|hace parte|forma parte)'
+        .'|no (la|lo|las|los) (tengo|tenemos|manejamos|ofrecemos)|sin (clases?|servicio) de|todavia no|aun no|por ahora no'
+        .'|no (te )?(la|lo) (puedo|podria) confirmar|no (esta|la tengo|lo tengo) confirmad[oa]|no esta disponible|pregunt(as|aste|abas|o|a)\b)/u';
+
     /** Más de esto en un mensaje de WhatsApp ya es un folleto. */
     public const MAX_PLANS_PER_MESSAGE = 3;
 
@@ -491,6 +536,53 @@ final class ComposerStyleGuard
             if (preg_match($rx, $t, $m) === 1) {
                 return trim((string) $m[0]);
             }
+        }
+
+        return null;
+    }
+
+    /**
+     * La primera oración que afirma una clase, disciplina o instalación que el
+     * gimnasio no tiene, o null.
+     *
+     * @param  string[]  $ofrecido  lo que SÍ existe: nombres y tipos de las clases activas, ítems de la base de conocimiento
+     */
+    public function inventedServiceIn(string $texto, array $ofrecido): ?string
+    {
+        /*
+         * Lo permitido se lee oración a oración y con la misma vara: una
+         * ficha que dice «no contamos con piscina ni sauna» no habilita la
+         * piscina. La revisión lo midió con `str_contains` sobre la prosa.
+         */
+        $permitido = [];
+        foreach ($ofrecido as $cosa) {
+            foreach (preg_split('/'.self::SEPARADOR_DE_ORACIONES.'/u', trim((string) $cosa)) ?: [] as $frase) {
+                $f = $this->normalize($frase);
+                if ($f !== '' && preg_match(self::NIEGA_SERVICIO, $f) !== 1) {
+                    $permitido[] = $f;
+                }
+            }
+        }
+        $permitido = implode(' | ', $permitido);
+        $sospechosas = array_values(array_filter(self::DISCIPLINAS, fn (string $d) => ! str_contains($permitido, $d)));
+        if ($sospechosas === []) {
+            return null;
+        }
+        $lista = implode('|', array_map(fn (string $d) => preg_quote($d, '/'), $sospechosas));
+        $rx = '/\b('.$lista.')\b/u';
+        // «Yoga no, pero…» y «no hay yoga»: la negación pegada a la palabra.
+        $niegaPegado = '/(\b('.$lista.')\b[^.!?]{0,15}\bno\b|\bno\b(\s+\S+){0,4}\s+(de |del |la |el |las |los )?('.$lista.')\b)/u';
+
+        foreach (preg_split('/'.self::SEPARADOR_DE_ORACIONES.'/u', trim($texto)) ?: [] as $oracion) {
+            $o = $this->normalize($oracion);
+            if ($o === '' || preg_match($rx, $o) !== 1) {
+                continue;
+            }
+            if (preg_match(self::NIEGA_SERVICIO, $o) === 1 || preg_match($niegaPegado, $o) === 1) {
+                continue;
+            }
+
+            return trim($oracion);
         }
 
         return null;

@@ -73,6 +73,15 @@ final class CommercialTurnPolicy
     /** Con una visita a medio concretar, el turno se puso a vender. */
     public const VIOLACION_OBJETIVO_PERDIDO = 'policy_active_goal_lost';
 
+    /** Un saludo puro contestado vendiendo, cotizando o preguntando el objetivo. */
+    public const VIOLACION_SALUDO_COMERCIAL = 'policy_greeting_sells';
+
+    /** Lo que no cabe en un saludo: se recibe, no se conduce todavía. */
+    public const PROHIBIDO_EN_RECEPCION = ['discovery', 'plan_recommendation', 'payment', 'checkout', 'registration'];
+
+    /** Lo que convierte un saludo en una venta o en un formulario. */
+    private const VENDE_EN_SALUDO = '/\b(pag(o|ar|as|uelo)|link|enlace|inscri\w*|matric\w*|membres\w*|precio|tarifa|mensualidad|plan(es)?|total access|objetivo|meta|bajar (de )?peso|bajar grasa|ganar (masa|musculo)|tonific\w*|descarg\w* la app|la app)\b/u';
+
     /** Pidió información del gimnasio y el texto no trae ni un hecho del CRM. */
     public const VIOLACION_SIN_HECHO = 'policy_answer_without_fact';
 
@@ -389,6 +398,29 @@ final class CommercialTurnPolicy
             $siguientes[] = 'resume_goal';
         }
 
+        /*
+         * MODO RECEPCIÓN: un saludo y nada más se contesta con saludo,
+         * bienvenida y una apertura. Nada de planes, precios, objetivo, pago
+         * ni inscripción, y la prioridad comercial no entra: el insignia se
+         * recomienda cuando la persona diga qué busca, no cuando dice «hola».
+         *
+         * Antes este turno era «informativo» (answer_first) y un saludo cuyo
+         * único contenido era la apertura se juzgaba como puro
+         * descubrimiento y se descartaba; y con la memoria comercial del lead
+         * (READY_TO_BUY) el modelo vendía ante el saludo, el Critic lo
+         * tumbaba y salía el respaldo genérico. Medido en dos turnos reales.
+         */
+        $recepcion = $intent === SalesIntents::GREETING && SalesIntents::isPureGreeting($inbound);
+        if ($recepcion) {
+            $informativo = false;
+            $exigeHecho = false;
+            $obligatorio = null;
+            $origen = null;
+            $preferido = null;
+            $prohibidasAcciones = self::PROHIBIDO_EN_RECEPCION;
+            $siguientes = ['greet', 'welcome', 'open_question'];
+        }
+
         return [
             'intent' => $intent,
             'commercial_phase' => $phase,
@@ -435,6 +467,8 @@ final class CommercialTurnPolicy
              */
             'goal_takes_turn' => $visitaManda,
             'resume_goal_after_answer' => $retomarVisita,
+            // Un saludo y nada más: se recibe, no se vende ni se descubre.
+            'reception_mode' => $recepcion,
         ];
     }
 
@@ -449,6 +483,22 @@ final class CommercialTurnPolicy
     {
         $t = SalesAgentDecisionSchema::normalize($draft);
         $fallos = [];
+
+        /*
+         * 00. En modo recepción no se vende ni se descubre.
+         *
+         * Un saludo puro se contesta recibiendo: si el borrador nombra un
+         * plan, trae una cifra o su marcador, pregunta el objetivo o habla de
+         * pago, enlace, app o inscripción, se cambió de tema antes de que la
+         * persona dijera nada. La bienvenida con una apertura pasa.
+         */
+        if (($policy['reception_mode'] ?? false)
+            && (self::plansNamedIn($t, $activePlans) !== []
+                || preg_match(self::HAY_PRECIO, $t) === 1
+                || StrategyContract::asksDiscovery($t)
+                || preg_match(self::VENDE_EN_SALUDO, $t) === 1)) {
+            $fallos[] = self::VIOLACION_SALUDO_COMERCIAL;
+        }
 
         /*
          * 0. Con una visita a medio concretar, el turno NO vende.
