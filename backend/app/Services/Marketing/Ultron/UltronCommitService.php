@@ -614,27 +614,40 @@ class UltronCommitService
              * El orden es: el que la persona nombra, el último que se le
              * recomendó, y sólo si no hay ninguno, el insignia.
              */
-            $rechazado = ($policy['required_plan_id'] !== null && ($policy['required_plan_source'] ?? null) === 'named_by_person')
-                ? $policy['required_plan_id']
-                : (($memoriaPrevia->get('last_recommendation')['plan_ids'][0] ?? null)
-                    ?? CommercialTurnPolicy::planInsignia($this->knowledge->activePlans()));
+            $negados = array_values(array_map('intval', (array) ($policy['rejected_plan_ids'] ?? [])));
+            $rechazados = $negados !== []
+                ? $negados
+                : array_filter([
+                    ($policy['required_plan_id'] !== null && in_array($policy['required_plan_source'] ?? null, ['named_by_person', 'resolved_reference'], true))
+                        ? $policy['required_plan_id']
+                        : (($memoriaPrevia->get('last_recommendation')['plan_ids'][0] ?? null)
+                            ?? CommercialTurnPolicy::planInsignia($this->knowledge->activePlans())),
+                ]);
 
-            if ($rechazado !== null) {
+            foreach ($rechazados as $rechazado) {
                 $this->memoryService->recordPlanRejected($conversation, (int) $rechazado);
+            }
+            if ($rechazados !== []) {
                 $memoriaPrevia = $this->memoryService->load($conversation->fresh());
             }
         }
 
         /*
-         * Sólo la PRIORIDAD COMERCIAL pisa el plan del modelo.
+         * LA POLÍTICA PISA EL PLAN DEL MODELO, venga de la prioridad comercial
+         * o de que la persona lo NOMBRÓ.
          *
-         * Si el plan salió de que la persona lo nombró, el id de la propuesta
-         * ya es el bueno: cambiarlo movería el precio que se inyecta debajo de
-         * un texto que habla de otro plan, que es exactamente lo que los tests
-         * de dinero llevan meses impidiendo.
+         * Antes sólo pisaba la prioridad comercial, con el argumento de que si
+         * la persona lo nombró «el id de la propuesta ya es el bueno». Una
+         * prueba física lo desmintió: «¿cuánto vale el mensual?» llegó con el
+         * Trimestral propuesto por el estratega y «Plan Mensual» escrito por
+         * el redactor, y salió el precio del Trimestral bajo el nombre del
+         * Mensual. El plan que la persona nombra es un HECHO, corroborado por
+         * el resolutor de Laravel; ni el estratega ni el redactor lo mueven,
+         * y con él va el precio y el cobro. El texto que nombre otro se
+         * sustituye más abajo.
          */
-        if (($policy['required_plan_source'] ?? null) === 'commercial_priority'
-            && $policy['required_plan_id'] !== null
+        if ($policy['required_plan_id'] !== null
+            && in_array($policy['required_plan_source'] ?? null, ['commercial_priority', 'named_by_person'], true)
             && (int) $policy['required_plan_id'] !== ($plan?->id)) {
             $forzado = $this->resolvePlan((int) $policy['required_plan_id'], $sanitized['reply']);
 
@@ -643,10 +656,133 @@ class UltronCommitService
                     'conversation_id' => (int) $conversation->id,
                     'propuesto' => $plan?->id,
                     'obligatorio' => $forzado->id,
+                    'origen' => $policy['required_plan_source'] ?? null,
                 ]);
 
                 $plan = $forzado;
                 $replyFinal = $this->placeholders->resolve($sanitized['reply'], $plan);
+            }
+        }
+
+        /*
+         * 10.quater) EL PRECIO ES EL DEL PLAN QUE LAS PALABRAS NOMBRAN.
+         *
+         * Prueba física: el estratega eligió el Mensual, el redactor escribió
+         * «Plan Semana» y el marcador se rellenó con el precio del Mensual.
+         * Salió «El Plan Semana … por $80.000» y al turno siguiente «$45.000»:
+         * dos precios para el mismo nombre, y ninguna guarda lo vio, porque
+         * cada una miraba una mitad. El nombre y el precio son UNA cosa.
+         *
+         * Si el texto nombra exactamente un plan y no es el que se iba a
+         * cotizar, se cotiza el que nombra: el precio sigue saliendo del
+         * catálogo del CRM, sólo que del plan correcto. Si nombra varios y
+         * cotiza, no se adivina: sale el respaldo sin cifra. Nada de esto
+         * corre cuando la prioridad comercial ya impuso el plan: ahí el texto
+         * que nombra otro se sustituye unos pasos más abajo.
+         */
+        $realineado = null;
+        $catalogoCompleto = $this->knowledge->activePlans();
+        $nombrados = CommercialTurnPolicy::plansNamedIn($sanitized['reply'], $catalogoCompleto);
+        /*
+         * NO se realinea cuando la política ya fijó el plan, venga de donde
+         * venga. Con la prioridad comercial, el texto que nombra otro se
+         * sustituye más abajo. Y cuando el plan lo NOMBRÓ LA PERSONA, el id
+         * de la propuesta es el suyo: dejar que la prosa del redactor lo
+         * mueva habría movido también el COBRO —la revisión acuñó un link del
+         * Trimestral a quien pidió el Mensual—, y el modelo no toca el dinero.
+         */
+        $obligado = $policy['required_plan_id'] !== null ? (int) $policy['required_plan_id'] : null;
+        $fuerzaComercial = $obligado !== null && (
+            in_array($policy['required_plan_source'] ?? null, ['commercial_priority', 'named_by_person'], true)
+            || $obligado === ($plan?->id)
+        );
+        /*
+         * Una cifra sólo es atribuible cuando el texto nombra UN plan (o ninguno
+         * y habla del que se cotiza). Con dos nombres y una cifra, quien lee
+         * decide a cuál pertenece, y no tiene por qué acertar: sale sin cifra.
+         */
+        $cotiza = $this->placeholders->needsPlan($sanitized['reply']);
+        // El dueño de la cifra: el plan nombrado en la misma oración que el
+        // marcador; si nombra uno solo en todo el texto, ése. Con varios
+        // nombres y ningún dueño claro, no se adivina.
+        $dueno = $cotiza ? CommercialTurnPolicy::planOwningPrice($sanitized['reply'], $catalogoCompleto) : null;
+        if ($dueno === null && count($nombrados) === 1) {
+            $dueno = $nombrados[0];
+        }
+        $ambiguo = $cotiza && $nombrados !== [] && $dueno === null;
+        // Con un plan obligado por referencia y otro propuesto, la cifra sólo
+        // puede moverse HACIA el obligado: nunca hacia un tercero que nombre
+        // la prosa.
+        if ($obligado !== null && $dueno !== null && $dueno !== $obligado) {
+            $dueno = null;
+            $ambiguo = $cotiza;
+        }
+        /*
+         * EN UN TURNO DE COBRO LA CIFRA NO SE MUEVE NUNCA. El link se acuña
+         * para el plan de la propuesta, que ya valida la autoridad de pagos;
+         * si la prosa nombra otro, la prosa se sustituye y el link sale igual.
+         * Mover el plan por lo que escribió el redactor acuñó un cobro de
+         * 210.000 a quien pidió el de 80.000, y eso es el modelo tocando el
+         * dinero.
+         */
+        $turnoDeCobro = in_array(SalesIntents::TOOL_PAYMENT_LINK_SEND, (array) ($sanitized['tools_requested'] ?? []), true)
+            || in_array((string) $sanitized['intent'], [SalesIntents::HIGH_INTENT_CLOSE, SalesIntents::PAYMENT_LINK_REQUEST], true);
+        if ($plan !== null && ! $fuerzaComercial && $nombrados !== [] && ($ambiguo || ($dueno !== null && $dueno !== (int) $plan->id) || (! $cotiza && ! in_array((int) $plan->id, $nombrados, true) && count($nombrados) === 1))) {
+            if ($turnoDeCobro) {
+                ChannelLog::warning('ultron.commit.plan_price_mismatch', [
+                    'conversation_id' => (int) $conversation->id,
+                    'cotizado' => (int) $plan->id,
+                    'nombrados' => $nombrados,
+                    'turno_de_cobro' => true,
+                ]);
+                $sinCifra = $this->ultimoRecurso($conversation, (string) $sanitized['intent']);
+                if ($sinCifra !== null) {
+                    // El plan se queda: es el del link. Solo cambia el texto.
+                    $realineado = ['from' => (int) $plan->id, 'to' => (int) $plan->id, 'fallback' => true, 'money_turn' => true];
+                    $replyFinal = $sinCifra;
+                }
+            } elseif ($dueno !== null || ($obligado === null && count($nombrados) === 1)) {
+                try {
+                    $alineado = $this->resolvePlan($dueno ?? $nombrados[0], $sanitized['reply']);
+                } catch (UltronCommitException $e) {
+                    $alineado = null;
+                }
+                if ($alineado !== null) {
+                    ChannelLog::warning('ultron.commit.plan_price_realigned', [
+                        'conversation_id' => (int) $conversation->id,
+                        'cotizado' => (int) $plan->id,
+                        'nombrado' => (int) $alineado->id,
+                    ]);
+                    $realineado = ['from' => (int) $plan->id, 'to' => (int) $alineado->id];
+                    $plan = $alineado;
+                    $replyFinal = $this->placeholders->resolve($sanitized['reply'], $plan);
+                }
+            }
+            if ($realineado === null) {
+                ChannelLog::warning('ultron.commit.plan_price_mismatch', [
+                    'conversation_id' => (int) $conversation->id,
+                    'cotizado' => (int) $plan->id,
+                    'nombrados' => $nombrados,
+                ]);
+                /*
+                 * El respaldo HABLA DEL PLAN, sin cifra. La revisión midió que
+                 * «Tenemos el Mensual por {{PLAN_PRICE}} y también el
+                 * Trimestral; ¿cuál te sirve?» acababa en «dime si empiezas
+                 * este mes»: se perdía todo. El plan cotizado se presenta con
+                 * sus beneficios del CRM y la puerta abierta; la cifra, que era
+                 * lo ambiguo, es lo único que no sale.
+                 */
+                /*
+                 * Se conserva el texto y se retira SOLO la oración del marcador;
+                 * la cifra vuelve en una frase propia, atribuida al plan que el
+                 * estratega eligió y Laravel validó. Así no se pierde lo que el
+                 * redactor contó de los dos planes y la persona lee un precio
+                 * con dueño explícito.
+                 */
+                $conservado = $this->sinLaOracionDelMarcador($sanitized['reply']);
+                $frasePrecio = 'El '.trim((string) $plan->name).' cuesta '.$this->replies->formatCop((float) $plan->price).'.';
+                $realineado = ['from' => (int) $plan->id, 'to' => (int) $plan->id, 'price_sentence' => true];
+                $replyFinal = trim($conservado === '' ? $frasePrecio : $conservado.' '.$frasePrecio);
             }
         }
 
@@ -974,6 +1110,7 @@ class UltronCommitService
             'critic' => CriticContract::judged($critic) ? CriticContract::forMetadata($critic) : null,
             'strategy' => StrategyContract::fromProposal($proposal) ?: null,
             'plans_mentioned' => $estilo['plans_mentioned'],
+            'plan_price_realigned' => $realineado,
             'strategy_hints' => ['hot_lead_fast_path' => $hints['hot_lead_fast_path'], 'lifecycle_mode' => $hints['lifecycle_mode']],
             'price_enriched' => $plan !== null && $replyFinal !== $sanitized['reply'],
             'reference_resolution' => $resolution['type'],
@@ -1222,7 +1359,20 @@ class UltronCommitService
          * suelo, no el primer intento.
          */
         $catalogo = $this->knowledge->activePlans();
-        $incumple = CommercialTurnPolicy::violations($replyFinal, $policy, $catalogo);
+
+        /*
+         * UNA EXCUSA INVENTADA SOBRE EL PRECIO NO SALE.
+         *
+         * «La diferencia puede ser por confusión con otro plan o información
+         * previa» es especulación: el modelo no sabe por qué la persona vio
+         * dos precios, y lo que sabe el CRM es el precio de hoy. Se retira la
+         * frase y sale lo demás; si queda claro que la persona pregunta por
+         * un precio, el precio actual se afirma abajo desde el catálogo.
+         */
+        $replyFinal = $this->sinExcusasDePrecio($conversation, $replyFinal, $action, (string) $sanitized['intent']);
+
+        $hechos = $this->hechosDelGimnasio();
+        $incumple = CommercialTurnPolicy::violations($replyFinal, $policy, $catalogo, $hechos);
 
         /*
          * Saludar dos veces se ARREGLA, no se castiga.
@@ -1234,7 +1384,7 @@ class UltronCommitService
          */
         if (in_array(CommercialTurnPolicy::VIOLACION_SALUDO_REPETIDO, $incumple, true)) {
             $replyFinal = CommercialTurnPolicy::withoutRepeatedGreeting($replyFinal);
-            $incumple = CommercialTurnPolicy::violations($replyFinal, $policy, $catalogo);
+            $incumple = CommercialTurnPolicy::violations($replyFinal, $policy, $catalogo, $hechos);
         }
 
         if ($incumple !== []) {
@@ -1272,14 +1422,70 @@ class UltronCommitService
                  * ningún plan y por construcción no puede fallar por esto.
                  */
                 if ($dePlanes !== null
-                    && CommercialTurnPolicy::violations($dePlanes, $policy, $catalogo) === []) {
+                    && CommercialTurnPolicy::violations($dePlanes, $policy, $catalogo, $hechos) === []) {
                     $alternativa = $dePlanes;
+                }
+            }
+
+            /*
+             * Si lo que falló fue la VISITA —se puso a vender con el día y la
+             * hora a medias—, el respaldo sigue con la visita: pide el dato
+             * que falta y nada más. Sale del estado, no de una plantilla.
+             */
+            if (in_array(CommercialTurnPolicy::VIOLACION_OBJETIVO_PERDIDO, $incumple, true)) {
+                $deVisita = CommercialTurnPolicy::courtesyReply($policy);
+                if ($deVisita !== null) {
+                    $alternativa = $deVisita;
+                    // Este turno no cotiza nada: lo que se anote en memoria
+                    // tiene que decir lo mismo que lo que salió.
+                    $plan = null;
+                }
+            }
+
+            /*
+             * Si lo que falló fue que pidió información y no recibió ni un
+             * hecho, el respaldo se arma CON los hechos del CRM: cumple por
+             * construcción, y si mañana cambia la ficha del gimnasio cambia
+             * con ella sin tocar código.
+             */
+            if (in_array(CommercialTurnPolicy::VIOLACION_SIN_HECHO, $incumple, true)) {
+                $conHechos = $this->respuestaConHechos();
+                if ($conHechos !== null) {
+                    $alternativa = $conHechos;
                 }
             }
 
             if ($alternativa !== null) {
                 $replyFinal = $alternativa;
             }
+        }
+
+        /*
+         * 13.ter) RETOMAR LO QUE SE ESTABA HACIENDO.
+         *
+         * Una pregunta incidental se contesta y NO borra el hilo: si había una
+         * visita a medio concretar y el texto ya contestó lo suyo pero no la
+         * retoma, se le añade la frase que la retoma, con el dato que falta.
+         * Corrige sin amordazar: lo que contestó sale entero.
+         */
+        if (($policy['resume_goal_after_answer'] ?? false) === true && ! CommercialTurnPolicy::mentionsVisit($replyFinal)) {
+            $cola = CommercialTurnPolicy::courtesyResumption($policy);
+            if ($cola !== null) {
+                ChannelLog::info('ultron.commit.goal_resumed', ['conversation_id' => (int) $conversation->id]);
+                $replyFinal = rtrim($replyFinal).' '.$cola;
+            }
+        }
+
+        /*
+         * 13.quater) QUIEN DUDA DE UN PRECIO RECIBE EL PRECIO DE HOY.
+         *
+         * Del catálogo, con el plan de la política —el que la persona nombró
+         * o el que se venía cotizando—. Si el texto ya lo trae, no se repite;
+         * si el modelo contestó dando rodeos, se añade la cifra verdadera.
+         */
+        if (($policy['price_verification'] ?? false) === true && $plan !== null
+            && preg_match('/\$\s?\d|\d{2,3}[.,]\d{3}/u', $replyFinal) !== 1) {
+            $replyFinal = rtrim($replyFinal).' El precio actual del '.trim((string) $plan->name).' es '.$this->replies->formatCop((float) $plan->price).'.';
         }
 
         // 14) Envío por el camino de siempre.
@@ -1960,6 +2166,10 @@ class UltronCommitService
         if ($accion === 'cancel') {
             $r = $this->courtesy->cancel($conversation);
 
+            if ($r !== null) {
+                $this->memoryService->recordCourtesyCancelled($conversation->fresh());
+            }
+
             return $r === null
                 ? ['tool' => $tool, 'status' => 'skipped', 'reason' => 'courtesy_nothing_to_cancel']
                 : ['tool' => $tool, 'status' => 'executed', 'courtesy' => 'cancelled', 'action_id' => $r['action_id']];
@@ -1982,6 +2192,25 @@ class UltronCommitService
                 'reason' => $veredicto['reason'],
                 'fecha' => $decision['courtesy_date'] ?? null,
                 'hora' => $decision['courtesy_time'] ?? null,
+            ]);
+
+            /*
+             * RECHAZADA NO ES OLVIDADA. Pedir la visita sin hora es lo normal
+             * —se pregunta de uno en uno— y la autoridad la rechaza bien; lo
+             * que no puede pasar es que del rechazo no quede nada: así el
+             * turno siguiente se puso a vender con la visita a medias. Queda
+             * el objetivo en recogida, con el dato que SÍ valía para no
+             * volver a pedirlo.
+             */
+            $fechaVale = in_array($veredicto['reason'], [
+                CourtesyAuthority::HORA_INVALIDA, CourtesyAuthority::FUERA_DE_HORARIO, CourtesyAuthority::SIN_HORARIO,
+            ], true);
+            $horaVale = in_array($veredicto['reason'], [
+                CourtesyAuthority::FECHA_INVALIDA, CourtesyAuthority::FECHA_PASADA, CourtesyAuthority::FECHA_LEJANA, CourtesyAuthority::DIA_CERRADO,
+            ], true) && CourtesyAuthority::minutosDe($decision['courtesy_time'] ?? null) !== null;
+            $this->memoryService->recordCourtesyCollecting($conversation->fresh(), [
+                'date' => $fechaVale ? ($decision['courtesy_date'] ?? null) : null,
+                'time' => $horaVale ? ($decision['courtesy_time'] ?? null) : null,
             ]);
 
             return array_filter([
@@ -3006,6 +3235,135 @@ class UltronCommitService
      * fallo de estos textos y no del turno; entonces sí se calla y se marca,
      * que es el comportamiento que ya había.
      */
+    /**
+     * El borrador sin la oración que contiene el marcador de precio.
+     *
+     * Para cuando la cifra no tiene dueño claro: se quita esa oración y se
+     * deja el resto, que suele contar cosas verdaderas de los planes.
+     */
+    private function sinLaOracionDelMarcador(string $draft): string
+    {
+        $trozos = preg_split('/((?<=[.!?;])\s+|\n+)/u', trim($draft), -1, PREG_SPLIT_DELIM_CAPTURE) ?: [];
+        $salida = [];
+        for ($i = 0; $i < count($trozos); $i += 2) {
+            $pieza = trim($trozos[$i]);
+            if ($pieza === '' || preg_match('/\{\{\s*PLAN_PRICE\s*\}\}/iu', $pieza) === 1) {
+                continue;
+            }
+            // Un punto y coma huérfano al final de lo que queda se vuelve punto.
+            $salida[] = (string) preg_replace('/[;,]\s*$/u', '.', $pieza);
+        }
+
+        return trim(implode(' ', $salida));
+    }
+
+    /**
+     * Lo que el CRM sabe del gimnasio, como lista de contenidos normalizados.
+     *
+     * Son las categorías que describen QUÉ es Iron Body —identidad, lo que
+     * ofrece, dónde está, cuándo abre— más los nombres de las clases. Es lo
+     * que la política exige que aparezca cuando alguien pide información.
+     *
+     * @return string[]
+     */
+    private function hechosDelGimnasio(): array
+    {
+        $hechos = [];
+        foreach ($this->knowledge->activeItems() as $item) {
+            if (in_array($item->category, ['business_identity', 'gym_info', 'location', 'schedule'], true)) {
+                $hechos[] = trim((string) $item->content);
+            }
+        }
+        foreach ((array) ($this->gym->forPrompt()['classes'] ?? []) as $clase) {
+            if (is_array($clase) && ! empty($clase['name'])) {
+                $hechos[] = (string) $clase['name'];
+            }
+        }
+
+        return array_values(array_filter($hechos, fn ($h) => $h !== ''));
+    }
+
+    /**
+     * El respaldo de «quiero información», armado con la ficha del gimnasio.
+     *
+     * Identidad más lo primero que se cuenta de lo que ofrece, y una pregunta
+     * sin verbo de ofrecimiento para no pisar la oferta viva de la memoria.
+     * Cumple la política por construcción: los hechos son los mismos que se
+     * exigen.
+     */
+    private function respuestaConHechos(): ?string
+    {
+        $identidad = null;
+        $oferta = null;
+        foreach ($this->knowledge->activeItems() as $item) {
+            $c = trim((string) $item->content);
+            if ($c === '') {
+                continue;
+            }
+            if ($identidad === null && $item->category === 'business_identity') {
+                $identidad = $c;
+            } elseif ($oferta === null && $item->category === 'gym_info') {
+                $oferta = $c;
+            }
+        }
+        if ($identidad === null && $oferta === null) {
+            return null;
+        }
+
+        $cuerpo = trim(implode(' ', array_filter([$identidad, $oferta])));
+
+        return 'Con gusto te cuento. '.$cuerpo.' ¿Qué necesitas saber primero: planes, horarios o cómo empezar?';
+    }
+
+    /**
+     * Retira las frases que especulan sobre por qué un precio cambió.
+     *
+     * Se quita la oración entera, no se reescribe: reescribir sería inventar
+     * otra explicación. Si el mensaje se queda vacío, sale el respaldo de la
+     * intención; si sigue habiendo texto, sale lo que queda.
+     */
+    private function sinExcusasDePrecio(MarketingConversation $conversation, string $respuesta, MarketingAiAction $action, string $intent): string
+    {
+        if ($this->style->priceExcuseIn($respuesta) === null) {
+            return $respuesta;
+        }
+
+        $trozos = preg_split('/((?<=[.!?])\s+|\n+)/u', trim($respuesta), -1, PREG_SPLIT_DELIM_CAPTURE) ?: [];
+        $piezas = [];
+        for ($i = 0; $i < count($trozos); $i += 2) {
+            if (trim($trozos[$i]) === '') {
+                continue;
+            }
+            $piezas[] = [$trozos[$i], $trozos[$i + 1] ?? ''];
+        }
+        $limpias = array_values(array_filter($piezas, fn (array $p) => $this->style->priceExcuseIn($p[0]) === null));
+
+        $salida = '';
+        foreach ($limpias as $i => [$texto, $sep]) {
+            $salida .= $texto;
+            if ($i < count($limpias) - 1) {
+                $salida .= $sep !== '' ? $sep : ' ';
+            }
+        }
+        $limpio = trim($salida);
+
+        ChannelLog::warning('ultron.commit.price_excuse_dropped', [
+            'conversation_id' => (int) $conversation->id,
+            'frases_retiradas' => count($piezas) - count($limpias),
+            'quedo_vacio' => $limpio === '',
+        ]);
+        $meta = is_array($action->metadata) ? $action->metadata : [];
+        $meta['price_excuse_dropped'] = count($piezas) - count($limpias);
+        $action->forceFill(['metadata' => $meta])->save();
+
+        // Un mensaje vacío no es un mensaje: sale el respaldo de la intención.
+        if ($limpio === '') {
+            return $this->ultimoRecurso($conversation, $intent) ?? $respuesta;
+        }
+
+        return $limpio;
+    }
+
     private function ultimoRecurso(MarketingConversation $conversation, string $intent): ?string
     {
         $previas = $this->previousMachineReplies($conversation);

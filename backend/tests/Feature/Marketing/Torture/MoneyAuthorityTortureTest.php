@@ -349,18 +349,87 @@ class MoneyAuthorityTortureTest extends TortureCase
     }
 
     /**
-     * HALLAZGO H4. El precio sale del catálogo, pero el NOMBRE del plan lo
-     * escribe el modelo en prosa: nadie comprueba que hablen del mismo plan, y
-     * la persona recibe el precio del trimestral atribuido al mensual.
+     * HALLAZGO H4, CERRADO. Este test documentaba el agujero y AFIRMABA la
+     * salida equivocada como esperada: «El Plan Mensual te queda en $210.000»
+     * con el precio del trimestral. Una prueba física lo reprodujo tal cual
+     * —«El Plan Semana … por $80.000» con el precio del Mensual, y al turno
+     * siguiente $45.000— y la persona preguntó por qué veía dos precios.
+     *
+     * El nombre y el precio son UNA cosa: el precio que sale es el del plan
+     * que las palabras nombran, leído del catálogo del CRM en ese momento.
      */
-    public function test_the_quoted_price_belongs_to_the_id_and_not_to_the_plan_the_draft_names(): void
+    public function test_the_quoted_price_follows_the_plan_the_draft_names(): void
     {
-        $this->commit($this->inbound('cuanto vale el mensual?'), [
+        $r = $this->commit($this->inbound('cuanto vale el mensual?'), [
             'reply_draft' => 'El Plan Mensual te queda en {{PLAN_PRICE}} y ya.',
             'recommended_plan_id' => $this->trimestral->id,
         ])->assertOk();
 
-        $this->assertSame('El Plan Mensual te queda en $210.000 COP y ya.', $this->lastOutboundBody());
+        $this->assertSame('El Plan Mensual te queda en '.self::PRECIO_MENSUAL.' y ya.', $this->lastOutboundBody());
+        $this->assertSame($this->plan->id, $r->json('price_source.plan_id'), 'la fuente del precio no es el plan que el texto nombra');
+        $this->assertSame((float) $this->plan->price, (float) $r->json('price_source.price'));
+        // Y la memoria anota el precio del plan que SALIÓ, no del que se propuso.
+        $this->assertSame([$this->plan->id], array_column((array) $this->conversation->fresh()->memory['prices_delivered'], 'plan_id'));
+    }
+
+    /**
+     * EL REALINEAMIENTO NO TOCA EL PLAN QUE LA PERSONA NOMBRÓ. Hallazgo de la
+     * revisión: con «quiero el plan mensual» y un borrador que escribía
+     * «Trimestral», la prosa del redactor movía el plan y con él el COBRO
+     * (se acuñó un link de 210.000 a quien pidió el de 80.000). El id de la
+     * propuesta es el de la persona; el texto que nombra otro se sustituye.
+     */
+    public function test_the_persons_named_plan_is_never_moved_by_the_drafts_prose(): void
+    {
+        $this->enablePaymentEngine();
+        $r = $this->commit($this->inbound('quiero el plan mensual, mandame el link de pago'), [
+            'intent' => SalesIntents::PAYMENT_LINK_REQUEST,
+            'reply_draft' => 'Perfecto, el Plan Trimestral queda en {{PLAN_PRICE}}. Aqui tienes tu enlace.',
+            'recommended_plan_id' => $this->plan->id,
+            'tools_requested' => [SalesIntents::TOOL_PAYMENT_LINK_SEND],
+        ])->assertOk();
+
+        $this->assertSame($this->plan->id, $r->json('price_source.plan_id'), 'la prosa movió el plan del dinero');
+        $this->assertSame(1, PaymentTransaction::count());
+        $this->assertSame($this->plan->id, (int) PaymentTransaction::first()->plan_id, 'se acuñó el cobro de otro plan');
+        $this->assertStringNotContainsString('trimestral', mb_strtolower($this->lastOutboundBody()), 'salió el texto del plan equivocado');
+    }
+
+    /** Y por la vía del resolutor («mándame el link del mensual»), tampoco. */
+    public function test_the_resolved_plan_is_never_moved_by_the_drafts_prose_either(): void
+    {
+        $this->enablePaymentEngine();
+        $r = $this->commit($this->inbound('mandame el link del mensual'), [
+            'intent' => SalesIntents::PAYMENT_LINK_REQUEST,
+            'reply_draft' => 'Listo, el Plan Trimestral queda en {{PLAN_PRICE}}. Aqui va tu enlace.',
+            'recommended_plan_id' => $this->plan->id,
+            'tools_requested' => [SalesIntents::TOOL_PAYMENT_LINK_SEND],
+        ])->assertOk();
+
+        $this->assertSame($this->plan->id, $r->json('price_source.plan_id'));
+        $this->assertSame(1, PaymentTransaction::count());
+        $this->assertSame($this->plan->id, (int) PaymentTransaction::first()->plan_id, 'la prosa movió el cobro');
+        $this->assertStringNotContainsString('trimestral', mb_strtolower($this->lastOutboundBody()));
+    }
+
+    /** Dos planes nombrados y una sola cifra: no se adivina cuál. La cifra sale con dueño explícito. */
+    public function test_two_named_plans_and_one_price_never_go_out_with_a_guess(): void
+    {
+        $r = $this->commit($this->inbound('cuanto vale?'), [
+            'reply_draft' => 'Tienes el Plan Mensual y el Plan Trimestral; el precio es {{PLAN_PRICE}}.',
+            'recommended_plan_id' => $this->plan->id,
+        ])->assertOk();
+
+        $this->assertSame(1, $this->outbound()->count(), 'se quedó mudo');
+        $salida = $this->lastOutboundBody();
+        // La oración ambigua no sale; la cifra vuelve en una frase con dueño
+        // explícito, el plan de la propuesta, y el texto que contaba los dos
+        // planes se conserva.
+        $this->assertStringNotContainsString('el precio es', $salida, 'salió la cifra atribuida a dos planes');
+        $this->assertStringContainsString('El Plan Mensual cuesta '.self::PRECIO_MENSUAL, $salida);
+        $this->assertSame(1, substr_count($salida, '$'), 'más de una cifra');
+        $this->assertStringContainsString('Plan Trimestral', $salida, 'se perdió el texto');
+        $this->assertSame($this->plan->id, $r->json('price_source.plan_id'));
     }
 
     public function test_a_turn_without_a_quoted_plan_answers_without_any_price(): void

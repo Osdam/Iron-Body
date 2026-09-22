@@ -222,6 +222,14 @@ class UltronDecideService
             'intent', 'commercial_phase', 'greet_required', 'welcome_required',
             'answer_first', 'required_plan_id', 'allowed_plan_ids',
             'forbidden_actions', 'required_facts', 'allowed_next_actions',
+            /*
+             * Lo que OBLIGA frente a lo que el negocio PREFIERE, la duda de
+             * precio y el objetivo que la conversación tiene entre manos.
+             * Sin esto el redactor no tenía forma de saber que había una
+             * visita a medias, y se puso a vender.
+             */
+            'hard_required_plan', 'preferred_commercial_plan', 'price_verification',
+            'active_goal', 'resume_goal_after_answer',
         ];
 
         $recorte = [];
@@ -318,6 +326,10 @@ class UltronDecideService
         $canOfferLink = $this->canOfferLink((int) $conversation->id);
         $membershipFacts = $this->membership->forPrompt($conversation->lead);
         $strategyHints = StrategyContract::hints($customer, $resolved, $canOfferLink, (string) ($decision['intent'] ?? SalesIntents::UNKNOWN), $payment, $membershipFacts);
+        // El objetivo activo también como pista del estratega: es quien
+        // decide la acción, y una visita a medias cambia la acción.
+        $objetivoVivo = $memory->activeGoal();
+        $strategyHints['active_goal'] = $objetivoVivo === null ? null : ['kind' => $objetivoVivo['kind'], 'status' => $objetivoVivo['status']];
         // El MENÚ del que ULTRON puede elegir, no un filtrado de lo que Laravel
         // ya propuso: lo que la decisión base pidiera viaja aparte, dentro de
         // `decision`. Mezclar las dos cosas haría que el techo dependiera de la

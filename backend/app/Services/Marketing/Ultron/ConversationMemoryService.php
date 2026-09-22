@@ -8,6 +8,8 @@ use App\Models\Plan;
 use App\Services\Marketing\MarketingKnowledgeBaseService;
 use App\Services\Marketing\SalesAgentDecisionSchema;
 use App\Services\Marketing\SalesIntents;
+use Illuminate\Support\Carbon;
+use Throwable;
 
 /**
  * Carga y actualiza la {@see ConversationMemory} de una conversación.
@@ -26,6 +28,15 @@ final class ConversationMemoryService
         SalesIntents::PRICING_QUESTION => 'price',
         SalesIntents::SCHEDULE_QUESTION => 'schedule',
     ];
+
+    public const GOAL_COURTESY = 'courtesy_request';
+
+    public const GOAL_COLLECTING = 'collecting';
+
+    public const GOAL_REQUESTED = 'requested';
+
+    /** Horas que una visita a medio concretar sigue siendo el tema de la conversación. */
+    public const GOAL_COLLECTING_HOURS = 24;
 
     private const OFERTAS = [
         'explain_how_to_start' => '/(como (empezar|iniciar|seguir|inscribirte|arrancar)|los pasos|siguiente paso)/u',
@@ -47,7 +58,40 @@ final class ConversationMemoryService
         // siguió ningún mensaje nuestro sigue sin responder.
         $memory = $this->withUnresolvedQuestion($conversation, $memory);
 
-        return $memory;
+        return $this->withoutStaleGoal($memory);
+    }
+
+    /**
+     * Un objetivo en recogida de datos caduca solo.
+     *
+     * «Te faltaba decirme la hora» tiene sentido al minuto siguiente y es
+     * absurdo tres días después: quien vuelve tras un fin de semana no está
+     * retomando una visita, está empezando otra vez. Se decide al LEER y no
+     * se persiste, igual que la pregunta sin resolver: el hecho sigue en la
+     * fila por si hace falta auditarlo, pero el turno no lo ve.
+     */
+    private function withoutStaleGoal(ConversationMemory $memory): ConversationMemory
+    {
+        $goal = $memory->activeGoal();
+        if ($goal === null || $goal['status'] !== self::GOAL_COLLECTING || $goal['since'] === null) {
+            return $memory;
+        }
+
+        try {
+            $desde = Carbon::parse($goal['since']);
+        } catch (Throwable) {
+            // Una fecha ilegible no es un objetivo vigente ni caducado: se deja como está.
+            return $memory;
+        }
+
+        if ($desde->diffInHours(now()) < self::GOAL_COLLECTING_HOURS) {
+            return $memory;
+        }
+
+        $data = $memory->toArray();
+        $data['active_goal'] = null;
+
+        return ConversationMemory::fromArray($data);
     }
 
     /**
@@ -100,8 +144,21 @@ final class ConversationMemoryService
             }
         }
         foreach ($this->knowledge->activePlans() as $p) {
-            $core = trim(preg_replace('/^plan\s+/u', '', SalesAgentDecisionSchema::normalize((string) ($p['name'] ?? ''))) ?? '');
-            if ($core !== '' && preg_match('/\b'.preg_quote($core, '/').'\b/u', $reply) === 1) {
+            $full = SalesAgentDecisionSchema::normalize((string) ($p['name'] ?? ''));
+            $core = trim(preg_replace('/^plan\s+/u', '', $full) ?? '');
+            if ($core === '') {
+                continue;
+            }
+            /*
+             * Un nombre que también es palabra del calendario sólo cuenta
+             * ESCRITO ENTERO. «¿Qué días tienes disponibles en la semana?»
+             * anotaba el Plan Semana como discutido; a partir de ahí era el
+             * plan pendiente, la novedad ofrecía sus beneficios como «lo
+             * fresco» y el redactor lo nombró. Así entró «Plan Semana» en una
+             * conversación donde nadie había hablado de planes.
+             */
+            $patron = ReferenceResolver::isCalendarWord($core) ? $full : $core;
+            if (preg_match('/\b'.preg_quote($patron, '/').'\b/u', $reply) === 1) {
                 $m->discussPlan((int) $p['id']);
             }
         }
@@ -153,6 +210,28 @@ final class ConversationMemoryService
         }
 
         $m->agentAsked(MemoryRedactor::agent($question), $offerKind, $plan?->id ?? $m->pendingPlanId(), $at, $mid);
+
+        /*
+         * OFRECER LA VISITA ABRE UN OBJETIVO; DECIR QUE NO LO CIERRA.
+         *
+         * `last_agent_offer` no sirve para esto: la siguiente pregunta del
+         * agente la pisa. Así se perdió la cortesía en la prueba física —se
+         * ofreció, la persona dio el día, y el turno siguiente vendió un plan
+         * porque para entonces la oferta viva era otra—. El objetivo dura
+         * hasta que se registra, se rechaza o caduca.
+         */
+        if ($offerKind === 'book_visit' && ! $m->hasActiveGoal(self::GOAL_COURTESY)) {
+            $conocido = (array) ($m->get('courtesy_request') ?? []);
+            $m->setActiveGoal(self::GOAL_COURTESY, self::GOAL_COLLECTING, [
+                'date' => $conocido['date'] ?? null,
+                'time' => $conocido['time'] ?? null,
+            ], $at);
+        }
+        if ($m->hasActiveGoal(self::GOAL_COURTESY, self::GOAL_COLLECTING)
+            && (($resolution['type'] ?? null) === ReferenceResolver::DECLINE_OFFER
+                || CommercialTurnPolicy::declinesVisit((string) $inbound->body))) {
+            $m->clearActiveGoal();
+        }
 
         /*
          * Ya saludamos. Esto es un HECHO del CRM, no una instrucción.
@@ -209,7 +288,16 @@ final class ConversationMemoryService
     public function sellablePlansForMemory(): array
     {
         $out = [];
-        foreach (Plan::query()->sellable()->orderBy('duration_days')->get() as $p) {
+        /*
+         * EN EL ORDEN DEL NEGOCIO, no por duración.
+         *
+         * Por duración, el primero era el Plan Semana (siete días), y la guía
+         * de novedad tomaba sus beneficios como «lo fresco que contar» desde
+         * el primer turno, sin que nadie hubiera hablado de planes. Así llegó
+         * «Plan Semana» a la boca del redactor en una prueba física. El
+         * insignia va primero, igual que en `activePlans()`.
+         */
+        foreach (Plan::query()->sellable()->orderByDesc('is_recommended')->orderBy('sort_order')->get() as $p) {
             $out[] = ['id' => (int) $p->id, 'name' => (string) $p->name, 'benefits' => array_values($p->benefitsArray())];
         }
 
@@ -284,7 +372,51 @@ final class ConversationMemoryService
         $d = $m->toArray();
         $d['courtesy_request'] = $datos;
 
-        $conversation->forceFill(['memory' => ConversationMemory::fromArray($d)->toArray()])->save();
+        $m = ConversationMemory::fromArray($d);
+        $m->setActiveGoal(self::GOAL_COURTESY, self::GOAL_REQUESTED, [
+            'date' => $datos['date'] ?? null,
+            'time' => $datos['time'] ?? null,
+            'action_id' => $datos['action_id'] ?? null,
+        ], (string) ($datos['at'] ?? now()->toIso8601String()));
+
+        $conversation->forceFill(['memory' => $m->toArray()])->save();
+    }
+
+    /**
+     * La visita se ofreció o se pidió, pero todavía faltan el día o la hora.
+     *
+     * Es el estado que no existía: la herramienta se pedía sin hora, la
+     * autoridad la rechazaba —correcto— y de ese rechazo no quedaba nada. El
+     * turno siguiente no tenía forma de saber que había una visita a medio
+     * concretar, y se ponía a vender. Lo que ya se sabe (el día, si lo dio)
+     * se guarda para no volver a preguntarlo.
+     *
+     * @param  array{date?:?string,time?:?string}  $conocido
+     */
+    public function recordCourtesyCollecting(MarketingConversation $conversation, array $conocido): void
+    {
+        $m = $this->load($conversation);
+        $previo = $m->activeGoal();
+        $data = array_merge(
+            $previo !== null && $previo['kind'] === self::GOAL_COURTESY ? $previo['data'] : [],
+            array_filter(['date' => $conocido['date'] ?? null, 'time' => $conocido['time'] ?? null]),
+        );
+        $m->setActiveGoal(self::GOAL_COURTESY, self::GOAL_COLLECTING, $data, now()->toIso8601String());
+
+        $conversation->forceFill(['memory' => $m->toArray()])->save();
+    }
+
+    /** Cancelar la visita cierra el objetivo; la fila de la solicitud queda, cancelada, para auditar. */
+    public function recordCourtesyCancelled(MarketingConversation $conversation): void
+    {
+        $m = $this->load($conversation);
+        $d = $m->toArray();
+        if (is_array($d['courtesy_request'] ?? null)) {
+            $d['courtesy_request']['status'] = 'cancelled';
+        }
+        $m = ConversationMemory::fromArray($d)->clearActiveGoal();
+
+        $conversation->forceFill(['memory' => $m->toArray()])->save();
     }
 
     private function offerKindOf(string $question): ?string

@@ -267,6 +267,32 @@ final class ComposerStyleGuard
             .'y ganamos|y salimos ganando|y no hay color)\b/u',
     ];
 
+    /**
+     * Especulación sobre por qué un precio cambió.
+     *
+     * Prueba física: la persona vio $80.000 y luego $45.000 para el mismo
+     * plan y preguntó por qué; el modelo contestó «la diferencia puede ser
+     * por confusión con otro plan o información previa». No lo sabía: se lo
+     * inventó. Lo que el CRM sabe es el precio de hoy, y eso es lo único que
+     * se afirma. Se detecta por ORACIÓN para poder retirar la frase y dejar
+     * el resto, que suele traer el precio correcto.
+     *
+     * Disculparse no es especular: «disculpa la confusión» no afirma una
+     * causa y no cae aquí.
+     */
+    private const EXCUSA_DE_PRECIO = [
+        // Con cola CAUSAL obligatoria: «la diferencia de precio puede parecer
+        // grande» es una frase honesta y la revisión la vio morir.
+        '/\b(diferencia|cambio|variacion|discrepancia)\b[^.!?]{0,40}\b(precio|valor|costo|cifra|monto)\b[^.!?]{0,40}'
+            .'\b(puede|podria|pudo|debe|deberia|quiza|quizas|tal vez|seguramente|probablemente|posiblemente)\s+'
+            .'(ser|deberse|haber sido|tratarse|se deba|se debe|venir)\s+(por|a|de)\b/u',
+        '/\b(puede|podria|pudo|quiza|quizas|tal vez|seguramente|probablemente|posiblemente)\s+'
+            .'(ser|es|fue|era|deberse|se deba|se debe|se debio|haber sido|tratarse|se trate|se trata)\s+(por|a|de)\s+'
+            .'(una |un |la |el )?(confusion|error|equivocacion|informacion (previa|anterior|desactualizada|vieja)|otro plan|un plan (distinto|diferente)|promocion)\b/u',
+        '/\b(por (una )?confusion con otro plan|por informacion previa|por informacion anterior)\b/u',
+        '/\b(el precio|ese precio|ese valor)\s+(anterior|de antes)\s+(era|fue|correspondia|seria)\s+(de|a|por|del)\s+(otro plan|una promocion|un error)\b/u',
+    ];
+
     /** Lo que PUEDE ser presión o puede ser un hecho: lo decide el Critic. */
     private const URGENCIA_AMBIGUA = '/\b(termina (hoy|pronto|manana)|se acaba (hoy|pronto|ya|manana)|solo hasta|aprovecha (ahora|hoy)|quedan (pocos|solo) dias|ultim[oa]s? dias?|antes de que se (acabe|agote|llene)|precio (sube|subira|aumenta))\b/u';
 
@@ -450,6 +476,24 @@ final class ComposerStyleGuard
         $picto = self::PICTO.'\x{FE0F}?(?:[\x{1F3FB}-\x{1F3FF}])?';
 
         return preg_match_all('/(?:[\x{1F1E6}-\x{1F1FF}]{2}|'.$picto.'(?:\x{200D}'.$picto.')*)/u', $s);
+    }
+
+    /**
+     * La primera excusa de precio que hay en el texto, o null.
+     *
+     * Devuelve el trozo para que quien llama pueda retirar la oración entera
+     * y dejar el resto; y para que en el log se vea QUÉ se retiró.
+     */
+    public function priceExcuseIn(string $texto): ?string
+    {
+        $t = $this->normalize($texto);
+        foreach (self::EXCUSA_DE_PRECIO as $rx) {
+            if (preg_match($rx, $t, $m) === 1) {
+                return trim((string) $m[0]);
+            }
+        }
+
+        return null;
     }
 
     private function normalize(string $s): string

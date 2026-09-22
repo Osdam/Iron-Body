@@ -162,7 +162,7 @@ class CourtesyAuthority
     }
 
     /** HH:MM en 24 horas, a minutos desde medianoche. */
-    private static function minutosDe(?string $hora): ?int
+    public static function minutosDe(?string $hora): ?int
     {
         if ($hora === null || preg_match('/^([01]?\d|2[0-3]):([0-5]\d)$/', trim($hora), $m) !== 1) {
             return null;

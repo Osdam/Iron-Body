@@ -68,4 +68,34 @@ class NoveltyGuardTest extends TestCase
         $this->assertContains('como empezar (pasos concretos)', $guia['fresh_candidates']);
         $this->assertNotContains('beneficio no contado del plan 20: Acceso ilimitado al gimnasio', $guia['fresh_candidates']);
     }
+
+    /**
+     * SIN PLAN EN FOCO, LO FRESCO SALE DEL PRIMERO DEL CATÁLOGO, NO DEL MÁS CORTO.
+     *
+     * Prueba física: nadie había hablado de planes y la guía traía «beneficio
+     * no contado del plan 2» siete veces, porque el catálogo llegaba por
+     * duración y el más corto era el Plan Semana. El redactor lo nombró. El
+     * catálogo llega ahora en el orden del negocio, y sólo el primero aporta.
+     */
+    public function test_without_a_focus_plan_only_the_first_of_the_catalogue_contributes(): void
+    {
+        $g = new NoveltyGuard;
+        $plans = [
+            ['id' => 22, 'name' => 'TOTAL ACCESS - ELITE', 'benefits' => ['Acceso completo', 'Acompañamiento']],
+            ['id' => 2, 'name' => 'Plan Semana', 'benefits' => ['Siete días', 'Zona de pesas']],
+            ['id' => 4, 'name' => 'Plan Mensual', 'benefits' => ['Acceso ilimitado']],
+        ];
+
+        $guia = $g->guidance(ConversationMemory::empty(), $plans, ['type' => 'none', 'plan_id' => null]);
+
+        $delPreferido = array_filter($guia['fresh_candidates'], fn ($c) => str_starts_with($c, 'beneficio no contado del plan 22'));
+        $deOtros = array_filter($guia['fresh_candidates'], fn ($c) => str_starts_with($c, 'beneficio no contado del plan 2:') || str_starts_with($c, 'beneficio no contado del plan 4'));
+        $this->assertCount(2, $delPreferido, 'el preferido del negocio no aporta lo fresco');
+        $this->assertSame([], array_values($deOtros), 'un plan del que nadie habló entró como «lo fresco que contar»');
+
+        // Con foco, el foco manda, sea cual sea su posición.
+        $conFoco = $g->guidance(ConversationMemory::empty(), $plans, ['type' => 'more_info', 'plan_id' => 4]);
+        $this->assertContains('beneficio no contado del plan 4: Acceso ilimitado', $conFoco['fresh_candidates']);
+        $this->assertNotContains('beneficio no contado del plan 22: Acceso completo', $conFoco['fresh_candidates']);
+    }
 }

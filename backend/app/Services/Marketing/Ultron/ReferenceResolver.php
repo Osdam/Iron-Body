@@ -94,6 +94,20 @@ final class ReferenceResolver
      * @param  array<int, array{id:int, name:string}>  $sellablePlans  planes vendibles, con id y nombre
      * @return array{type:string, plan_id:?int, offer_kind:?string, evidence:?string, unresolved_question:?array{source:string,text:string}}
      */
+    /**
+     * ¿Este nombre de plan es también una palabra del calendario?
+     *
+     * «Semana», «Mensual», «Trimestre» aparecen en frases que no hablan de
+     * ningún plan —«entrenar en la semana», «el mes que viene»—. Quien
+     * busque el plan por su nombre corto tiene que preguntarse esto antes;
+     * la memoria no lo hacía y anotó el Plan Semana como discutido porque el
+     * agente escribió «¿qué días tienes disponibles en la semana?».
+     */
+    public static function isCalendarWord(string $core): bool
+    {
+        return preg_match(self::NOMBRE_DE_CALENDARIO, SalesAgentDecisionSchema::normalize(trim($core))) === 1;
+    }
+
     public function resolve(string $inbound, ConversationMemory $memory, array $sellablePlans): array
     {
         $t = $this->normalize($inbound);

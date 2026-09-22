@@ -249,6 +249,8 @@ class UltronDecideTest extends TestCase
             'intent', 'commercial_phase', 'greet_required', 'welcome_required',
             'answer_first', 'required_plan_id', 'allowed_plan_ids',
             'forbidden_actions', 'required_facts', 'allowed_next_actions',
+            'hard_required_plan', 'preferred_commercial_plan', 'price_verification',
+            'active_goal', 'resume_goal_after_answer',
         ], array_keys($p), 'el recorte de la política cambió sin que nadie lo decidiera');
 
         // La mecánica interna de commit NO viaja.

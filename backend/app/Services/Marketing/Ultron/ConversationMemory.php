@@ -98,6 +98,22 @@ final class ConversationMemory
              * el mismo cuando pide «otro» o dice que está caro.
              */
             'plans_rejected' => [],         // [plan_id]
+            /*
+             * EL OBJETIVO QUE LA CONVERSACIÓN TIENE ENTRE MANOS.
+             *
+             * Nació de una prueba física: se ofreció el día de cortesía, la
+             * persona dio «mañana en la noche», y el turno siguiente vendió un
+             * plan. No había nada que consultar: la herramienta se pidió sin
+             * hora, la autoridad la rechazó, el rechazo no dejó rastro y la
+             * oferta viva se pisó con la siguiente pregunta del agente. Una
+             * conversación que no recuerda qué estaba haciendo no puede
+             * retomarlo después de una pregunta incidental.
+             *
+             * `kind`: courtesy_request (los demás vendrán cuando hagan falta).
+             * `status`: collecting (faltan datos) | requested (registrada).
+             * `data`: lo que ya se sabe (date, time) para no volver a pedirlo.
+             */
+            'active_goal' => null,          // {kind, status, since, data}
             'updated_at' => null,
         ];
     }
@@ -261,6 +277,53 @@ final class ConversationMemory
     }
 
     /** La persona dijo que no a este plan: no se le vuelve a ofrecer el mismo. */
+    /** @return array{kind:string,status:string,since:?string,data:array<string,mixed>}|null */
+    public function activeGoal(): ?array
+    {
+        $g = $this->d['active_goal'] ?? null;
+        if (! is_array($g) || ! isset($g['kind'], $g['status'])) {
+            return null;
+        }
+
+        return [
+            'kind' => (string) $g['kind'],
+            'status' => (string) $g['status'],
+            'since' => isset($g['since']) ? (string) $g['since'] : null,
+            'data' => is_array($g['data'] ?? null) ? $g['data'] : [],
+        ];
+    }
+
+    public function hasActiveGoal(string $kind, ?string $status = null): bool
+    {
+        $g = $this->activeGoal();
+
+        return $g !== null && $g['kind'] === $kind && ($status === null || $g['status'] === $status);
+    }
+
+    /** @param  array<string,mixed>  $data */
+    public function setActiveGoal(string $kind, string $status, array $data, string $at): self
+    {
+        $previo = $this->activeGoal();
+        // Cambiar de estado no reinicia el reloj: «desde» es desde que empezó
+        // el objetivo, no desde el último dato que se supo.
+        $since = ($previo !== null && $previo['kind'] === $kind) ? ($previo['since'] ?? $at) : $at;
+        $this->d['active_goal'] = [
+            'kind' => $kind,
+            'status' => $status,
+            'since' => $since,
+            'data' => array_filter($data, static fn ($v) => $v !== null && $v !== ''),
+        ];
+
+        return $this;
+    }
+
+    public function clearActiveGoal(): self
+    {
+        $this->d['active_goal'] = null;
+
+        return $this;
+    }
+
     public function rejectPlan(int $planId): self
     {
         $this->d['plans_rejected'] = array_values(array_unique(

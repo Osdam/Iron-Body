@@ -158,4 +158,39 @@ class ComposerStyleGuardTest extends TestCase
         $this->assertNotContains('emoji_excess', $this->g->inspect('Marca ©, registro ® y ™ no son emoji', self::PLANS)['soft'], '©®™ son prosa, no emoji');
         $this->assertContains('emoji_excess', $this->g->inspect('Listo ✅ ➡ ⭐', self::PLANS)['soft'], 'símbolos del BMP con presentación emoji cuentan');
     }
+
+    /**
+     * LA EXCUSA DE PRECIO ES ESPECULACIÓN Y SE DETECTA POR ORACIÓN.
+     *
+     * La persona vio dos precios para el mismo plan y preguntó por qué. El
+     * modelo contestó «la diferencia puede ser por confusión con otro plan o
+     * información previa»: no lo sabía. Se detecta la oración para poder
+     * retirarla y dejar el precio verdadero, que suele ir detrás.
+     *
+     * @return array<string,array{0:string,1:bool}>
+     */
+    public static function excusasDePrecio(): array
+    {
+        return [
+            'la real' => ['La diferencia en el precio puede ser por confusión con otro plan o información previa.', true],
+            'quizás fue un error' => ['Quizás fue por un error de información anterior.', true],
+            'tal vez otro plan' => ['Tal vez se debe a otro plan que te mencioné.', true],
+            'probablemente confusión' => ['Probablemente se trate de una confusión con la promoción.', true],
+            'el de antes era de otro plan' => ['El precio anterior era de otro plan.', true],
+            'disculpa sin causa' => ['Disculpa la confusión. El Plan Semana cuesta $45.000 COP.', false],
+            'precio a secas' => ['El Plan Semana cuesta $45.000 COP y te da acceso por 7 días.', false],
+            'explicar un beneficio' => ['La diferencia entre los dos planes es el acceso a clases.', false],
+            'hay diferencia de precio entre planes' => ['Hay diferencia de precio entre el Semana y el Mensual porque duran distinto.', false],
+            'puede parecer grande' => ['La diferencia de precio entre el Plan Semana y el Plan Mensual puede parecer grande, pero el Mensual rinde mucho mas.', false],
+            'puede ser por otro plan' => ['La diferencia de precio puede ser por otro plan que viste.', true],
+        ];
+    }
+
+    #[DataProvider('excusasDePrecio')]
+    public function test_a_price_excuse_is_detected_and_an_honest_sentence_is_not(string $texto, bool $esExcusa): void
+    {
+        $g = new ComposerStyleGuard;
+
+        $this->assertSame($esExcusa, $g->priceExcuseIn($texto) !== null, "«{$texto}»");
+    }
 }

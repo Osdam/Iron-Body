@@ -71,8 +71,21 @@ final class NoveltyGuard
 
         $fresh = [];
         $focus = $resolved['plan_id'] ?? $memory->pendingPlanId();
+        /*
+         * SIN PLAN EN FOCO, SOLO EL PRIMERO DEL CATÁLOGO APORTA BENEFICIOS.
+         *
+         * Antes aportaban todos, y con ocho huecos se llenaban con el primero
+         * de la lista, que por orden de duración era el Plan Semana: el
+         * redactor recibía «beneficio no contado del plan 2» siete veces
+         * antes de que nadie hablara de planes, y lo nombró. El catálogo
+         * llega ya en el orden del negocio, así que el primero es el que el
+         * negocio quiere que se presente.
+         */
         foreach ($plans as $p) {
             if ($focus !== null && (int) $p['id'] !== (int) $focus) {
+                continue;
+            }
+            if ($focus === null && $plans !== [] && (int) $p['id'] !== (int) $plans[0]['id']) {
                 continue;
             }
             foreach ($p['benefits'] ?? [] as $b) {
