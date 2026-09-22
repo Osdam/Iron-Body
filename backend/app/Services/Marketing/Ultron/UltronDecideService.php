@@ -192,6 +192,46 @@ class UltronDecideService
         return $this->paymentReadiness->canGenerateForConversation($conversationId);
     }
 
+    /**
+     * La política del turno, recortada a lo que sirve para redactar.
+     *
+     * La lista blanca es explícita y no un `except()`: si mañana la política
+     * gana un campo nuevo —y ya le ha pasado—, no se filtra solo al prompt por
+     * el hecho de existir. Aquí entra lo que alguien decidió que entre.
+     *
+     * @param  array<string,mixed>  $resolution
+     * @return array<string,mixed>
+     */
+    private function politicaDelTurno(
+        string $intent,
+        string $phase,
+        ConversationMemory $memory,
+        array $resolution,
+        string $inbound,
+    ): array {
+        $politica = CommercialTurnPolicy::decide(
+            $intent,
+            $phase,
+            $memory,
+            $this->knowledge->activePlans(),
+            $resolution,
+            $inbound,
+        );
+
+        $expuestos = [
+            'intent', 'commercial_phase', 'greet_required', 'welcome_required',
+            'answer_first', 'required_plan_id', 'allowed_plan_ids',
+            'forbidden_actions', 'required_facts', 'allowed_next_actions',
+        ];
+
+        $recorte = [];
+        foreach ($expuestos as $campo) {
+            $recorte[$campo] = $politica[$campo] ?? null;
+        }
+
+        return $recorte;
+    }
+
     public function phaseContext(MarketingConversation $conversation, MarketingMessage $message): array
     {
         $lead = $conversation->lead;
@@ -402,6 +442,37 @@ class UltronDecideService
                  * Va el id, nunca el precio: ULTRON sigue sin ver una cifra.
                  */
                 'default_plan_id' => $this->knowledge->defaultMonthlyPlan()?->id,
+                /*
+                 * LO QUE EL TURNO YA TIENE DECIDIDO, ANTES DE REDACTAR.
+                 *
+                 * `CommercialTurnPolicy` ya existía y ya mandaba, pero sólo en
+                 * `/ai/commit`: el modelo escribía a ciegas y se enteraba de la
+                 * regla cuando su borrador ya había sido corregido o rechazado.
+                 * Eso gasta un turno entero y produce respuestas recortadas.
+                 * Aquí va la MISMA política, calculada por el mismo método,
+                 * para que el redactor sepa antes de escribir si toca saludar,
+                 * si hay que responder antes de preguntar y qué plan es el
+                 * obligatorio de este turno.
+                 *
+                 * NO cambia quién manda. Commit la vuelve a calcular con la
+                 * intención final que proponga el modelo y sigue siendo la
+                 * autoridad; si las dos intenciones difieren, la que se aplica
+                 * es la de commit. Esto es un aviso, no un permiso, y por eso
+                 * viaja aquí y no como una orden que el modelo pueda editar.
+                 *
+                 * Sólo los diez campos que sirven para redactar. Se quedan
+                 * fuera `required_plan_source` y `forbidden_plan_ids`, que son
+                 * de la mecánica interna de commit —uno decide si la política
+                 * puede PISAR al plan del modelo, el otro es el complemento de
+                 * `allowed_plan_ids`—, y lo que no viaja no se malinterpreta.
+                 */
+                'commercial_turn_policy' => $this->politicaDelTurno(
+                    (string) ($decision['intent'] ?? SalesIntents::UNKNOWN),
+                    $phase,
+                    $memory,
+                    $resolved,
+                    (string) $message->body,
+                ),
                 /*
                  * CÓMO vender en esta fase. No qué decir.
                  *

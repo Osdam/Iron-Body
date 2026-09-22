@@ -234,6 +234,42 @@ class UltronDecideTest extends TestCase
     }
 
     /**
+     * LA POLÍTICA DEL TURNO, ANTES DE REDACTAR Y NO DESPUÉS.
+     *
+     * Lo que se fija aquí es el recorte: diez campos y ni uno más. Si la
+     * política gana un campo interno, no puede aparecer solo en el prompt.
+     */
+    public function test_decide_carries_the_turn_policy_before_the_model_writes(): void
+    {
+        $r = $this->decide($this->inbound('hola, qué planes tienen?')->id)->assertOk();
+
+        $p = (array) $r->json('context.commercial_turn_policy');
+
+        $this->assertSame([
+            'intent', 'commercial_phase', 'greet_required', 'welcome_required',
+            'answer_first', 'required_plan_id', 'allowed_plan_ids',
+            'forbidden_actions', 'required_facts', 'allowed_next_actions',
+        ], array_keys($p), 'el recorte de la política cambió sin que nadie lo decidiera');
+
+        // La mecánica interna de commit NO viaja.
+        $this->assertArrayNotHasKey('required_plan_source', $p);
+        $this->assertArrayNotHasKey('forbidden_plan_ids', $p);
+
+        // Y dice algo útil: nadie ha saludado todavía en esta conversación.
+        $this->assertTrue($p['greet_required']);
+        $this->assertContains($this->plan->id, (array) $p['allowed_plan_ids']);
+    }
+
+    /** Un plan permitido es un id, nunca un precio. */
+    public function test_the_turn_policy_does_not_leak_a_price(): void
+    {
+        $raw = $this->decide($this->inbound('cuánto vale?')->id)->assertOk()->getContent();
+        $politica = json_encode(json_decode($raw, true)['context']['commercial_turn_policy']);
+
+        $this->assertStringNotContainsString('80000', (string) $politica);
+    }
+
+    /**
      * Sin frases aprobadas por el negocio, la lista viaja VACÍA.
      *
      * Es la diferencia entre «no hay superlativos autorizados» y «el modelo
