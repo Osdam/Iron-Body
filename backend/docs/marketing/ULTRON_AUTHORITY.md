@@ -362,7 +362,8 @@ falla un turno, falla el sistema entero.
 | Estado del pago | `252a650e-dbcd-468d-86e2-b36facf7ecd9` | `ee47d37` | `context.payment` llega `undefined` (no rompe) |
 | Pago → membresía → inicio | *(no requiere cambios en n8n)* | `9f44f08` | — |
 | Inteligencia de la app | `19ef9c2b-eb8f-46af-b200-5048d82150c2` | `32b21a0` | 422 por vocabulario: `app_links_send` no estaba en `TOOL_VOCABULARY` |
-| **Asistente posventa (vigente)** | `7d8477e9-44f9-4862-a023-2becb4f91ed6` | **`86fb788`** | Los enums del Critic suben a 22 `issues` (+`membership_factuality`) y 16 `hard_fail` (+`invented_membership_fact`): un backend anterior los rechaza con 422 de validación |
+| Asistente posventa | `7d8477e9-44f9-4862-a023-2becb4f91ed6` | **`86fb788`** | Los enums del Critic suben a 22 `issues` (+`membership_factuality`) y 16 `hard_fail` (+`invented_membership_fact`): un backend anterior los rechaza con 422 de validación |
+| **Recepción y voz (vigente)** | `55d32bcc-06e0-46d7-83bc-94d08d39c563` | **`40ec5a1`** | Los prompts leen `commercial_turn_policy.reception_mode` y `strategy_hints.greeting_only` (proyección de 16 campos): con un backend anterior llegan `undefined` y un saludo puro vuelve a decidirse con la memoria comercial del lead; los textos de respaldo anteriores son menús. `docs/marketing/prompts/2026-09-22-voz/` guarda `activo.json` (versión anterior), `nuevo3.json` (publicado) y `cambios-prompts.md` |
 
 **Regla de despliegue, en las dos direcciones:** al desplegar **o revertir** cualquiera de
 las dos mitades, se comprueba el par. Revertir el backend por debajo del mínimo con el
