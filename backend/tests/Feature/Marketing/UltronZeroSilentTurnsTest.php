@@ -449,9 +449,22 @@ class UltronZeroSilentTurnsTest extends TestCase
     {
         $m = $this->inbound('hola');
 
-        $this->commit($this->payload($m))->assertOk()->assertJsonPath('outcome', 'dry_run');
+        /*
+         * El borrador cuenta algo ANTES de preguntar, a propósito.
+         *
+         * El que había aquí —«Claro, te cuento. ¿Qué te gustaría lograr?»— no
+         * contaba nada: devolvía la pelota. Desde que existe la política del
+         * turno eso es un incumplimiento y Laravel lo sustituye, así que este
+         * test medía «el camino normal no se toca» con un borrador que ya no
+         * es normal. Lo que se mide sigue siendo lo mismo: un turno que cumple
+         * sale tal cual lo escribió el modelo.
+         */
+        $bueno = 'Claro, te cuento: Iron Body está en Neiva, con zona de pesas y entrenadores. ¿Qué te gustaría saber?';
 
-        $this->assertSame('Claro, te cuento. ¿Qué te gustaría lograr?', (string) $this->salientes()->first()->body);
+        $this->commit($this->payload($m, ['proposal' => ['reply_draft' => $bueno]]))
+            ->assertOk()->assertJsonPath('outcome', 'dry_run');
+
+        $this->assertSame($bueno, (string) $this->salientes()->first()->body, 'un borrador que cumple tiene que salir intacto');
         $this->assertFalse((bool) $this->conversation->fresh()->staff_review_pending);
     }
 

@@ -30,7 +30,16 @@ use Illuminate\Support\Facades\Route;
 */
 
 // ── Agente comercial — endpoints internos (n8n / agente), firmados HMAC ───────
-Route::middleware(['automation.internal', 'throttle:120,1'])
+/*
+ * Cubo PROPIO, no el anónimo por IP.
+ *
+ * `throttle:120,1` construye su clave con el dominio y la IP, así que esta
+ * puerta compartía cubo con la de automatización —todo n8n sale de la misma
+ * IP—. Una avalancha de notificaciones vació el cubo y el asesor se encontró
+ * un 429 al pedir su contexto: tres mensajes de WhatsApp sin respuesta.
+ * {@see \App\Providers\AppServiceProvider::limitadoresInternos()}.
+ */
+Route::middleware(['automation.internal', 'throttle:internal-marketing-ai'])
     ->prefix('internal/marketing')
     ->group(function (): void {
         // Genera un link de pago Wompi para enviar por WhatsApp/Meta. El monto es

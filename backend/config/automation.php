@@ -3,6 +3,33 @@
 return [
 
     /*
+     * Topes de las dos puertas internas, cada una con su propio cubo.
+     *
+     * Van separadas porque compartirlo costó tres mensajes de WhatsApp sin
+     * respuesta: la avalancha diaria de notificaciones vació el cubo y el
+     * asesor se encontró un 429 al pedir su contexto. Subirlos no arregla
+     * aquello —la avalancha se espacia donde nace—; separarlos sí impide que
+     * el gasto de una puerta se cobre en el presupuesto de la otra.
+     */
+    /*
+     * Cadencia de salida hacia n8n. Va por debajo del tope de la puerta a
+     * propósito: el tope es el techo y esto es la velocidad de crucero.
+     */
+    'dispatch_per_minute' => (int) env('AUTOMATION_DISPATCH_PER_MINUTE', 240),
+
+    // Techo de espera: nadie paga la avalancha de otro más de esto.
+    'dispatch_max_delay_seconds' => (int) env('AUTOMATION_DISPATCH_MAX_DELAY_SECONDS', 600),
+
+    'rate_limits' => [
+        // Notificaciones a socios. Ráfagas legítimas, pero acotadas.
+        'automation' => (int) env('AUTOMATION_RATE_LIMIT_PER_MINUTE', 600),
+
+        // El asesor. Bajo volumen por naturaleza: un turno son dos llamadas.
+        'marketing_ai' => (int) env('MARKETING_AI_RATE_LIMIT_PER_MINUTE', 120),
+    ],
+
+
+    /*
     |--------------------------------------------------------------------------
     | Automatización Laravel → n8n
     |--------------------------------------------------------------------------

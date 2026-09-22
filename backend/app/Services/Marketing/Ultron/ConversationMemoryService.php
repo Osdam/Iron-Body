@@ -154,7 +154,35 @@ final class ConversationMemoryService
 
         $m->agentAsked(MemoryRedactor::agent($question), $offerKind, $plan?->id ?? $m->pendingPlanId(), $at, $mid);
 
+        /*
+         * Ya saludamos. Esto es un HECHO del CRM, no una instrucción.
+         *
+         * El prompt pedía no repetir el saludo y el segundo turno de una
+         * prueba física volvió a abrir con «Buenas tardes»: no había nada que
+         * consultar. Se marca en cuanto sale el primer mensaje nuestro, salga
+         * con saludo o sin él, porque a partir de ahí la conversación ya
+         * empezó.
+         */
+        if ($outboundMessageId !== null) {
+            $m->greeted($at, $outboundMessageId, true);
+        }
+
         $m->touch($at);
+        $conversation->forceFill(['memory' => $m->toArray()])->save();
+
+        return $m;
+    }
+
+    /**
+     * La persona dijo que no a un plan: queda anotado para no insistir.
+     *
+     * «Menciona otro plan» y «está muy caro» son un no a ESE plan, y volver a
+     * ofrecérselo en el turno siguiente es no haber escuchado.
+     */
+    public function recordPlanRejected(MarketingConversation $conversation, int $planId): ConversationMemory
+    {
+        $m = ConversationMemory::fromArray(is_array($conversation->memory) ? $conversation->memory : null);
+        $m->rejectPlan($planId)->touch(now()->toIso8601String());
         $conversation->forceFill(['memory' => $m->toArray()])->save();
 
         return $m;

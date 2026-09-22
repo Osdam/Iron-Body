@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use App\Models\MarketingLeadAttribution;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Support\Facades\RateLimiter;
 use App\Models\MarketingMessage;
 use App\Models\Member;
 use App\Models\MemberContract;
@@ -103,6 +105,8 @@ class AppServiceProvider extends ServiceProvider
     {
         // Del pago al inicio: siempre armado, no depende de commercial.events_enabled.
         PaymentTransaction::observe(MarketingPaymentOutcomeObserver::class);
+
+        $this->limitadoresInternos();
 
         $this->guardWompiConfig();
         $this->guardFactusConfig();
@@ -291,5 +295,39 @@ class AppServiceProvider extends ServiceProvider
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * UN VECINO RUIDOSO NO PUEDE DEJAR MUDO A ULTRON.
+     *
+     * Las dos puertas internas —la de automatización y la del asesor— iban con
+     * `throttle:120,1`, el limitador anónimo de Laravel. Ese construye su clave
+     * con el DOMINIO y la IP, no con la ruta, así que las dos compartían un
+     * único cubo. Todo lo que entra por n8n sale de la misma IP.
+     *
+     * Lo que pasó, medido: el detector diario de cumplimiento emitió 3.758
+     * eventos en 28 segundos, n8n los relevó a `notify-member` a ~20 por
+     * segundo y vació el cubo. Tres minutos después llegaron tres mensajes de
+     * WhatsApp, y sus llamadas a `/ai/decide` se encontraron con un 429. El
+     * agente no falló: no llegó a enterarse de que alguien había escrito.
+     *
+     * La clave va por SUPERFICIE, no por IP. Las dos puertas ya están
+     * autenticadas con el secreto compartido, así que lo que hace falta aquí
+     * no es saber quién llama —eso ya se sabe— sino que el gasto de una no se
+     * cobre en el presupuesto de la otra.
+     *
+     * Los topes siguen siendo topes: esto NO es abrir la mano. La avalancha de
+     * notificaciones se arregla donde nace, espaciándola; aquí sólo se impide
+     * que se lleve por delante a quien no tiene nada que ver.
+     */
+    private function limitadoresInternos(): void
+    {
+        RateLimiter::for('internal-automation', fn () => Limit::perMinute(
+            (int) config('automation.rate_limits.automation', 600),
+        )->by('internal-automation'));
+
+        RateLimiter::for('internal-marketing-ai', fn () => Limit::perMinute(
+            (int) config('automation.rate_limits.marketing_ai', 120),
+        )->by('internal-marketing-ai'));
     }
 }

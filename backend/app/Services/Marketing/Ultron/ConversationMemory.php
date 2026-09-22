@@ -83,6 +83,21 @@ final class ConversationMemory
             'last_reference_resolution' => null, // {type, ...} del último turno
             'payment_context' => null,      // lo llena el motor de pagos
             'app_context' => null,          // lo llena el bloque de la app
+            /*
+             * Si ya saludamos, y si la bienvenida ya se dio.
+             *
+             * Iba SÓLO en el prompt —«no repitas el saludo si la conversación
+             * ya empezó»— y una prueba física lo desmintió: el segundo turno
+             * volvió a abrir con «Buenas tardes». Una instrucción sin estado
+             * detrás es una sugerencia. Esto es un hecho del CRM.
+             */
+            'greeted' => null,              // {at, message_id}
+            'initial_welcome_delivered' => null, // {at, message_id}
+            /*
+             * Planes que la persona ya rechazó, para no volver a insistir con
+             * el mismo cuando pide «otro» o dice que está caro.
+             */
+            'plans_rejected' => [],         // [plan_id]
             'updated_at' => null,
         ];
     }
@@ -233,6 +248,34 @@ final class ConversationMemory
     }
 
     /** La última pregunta del agente y, si era una oferta, qué ofrecía. */
+    /** Queda constancia de que ya se saludó y de que la bienvenida ya salió. */
+    public function greeted(string $at, int $messageId, bool $conBienvenida): self
+    {
+        $this->d['greeted'] ??= ['at' => $at, 'message_id' => $messageId];
+
+        if ($conBienvenida) {
+            $this->d['initial_welcome_delivered'] ??= ['at' => $at, 'message_id' => $messageId];
+        }
+
+        return $this;
+    }
+
+    /** La persona dijo que no a este plan: no se le vuelve a ofrecer el mismo. */
+    public function rejectPlan(int $planId): self
+    {
+        $this->d['plans_rejected'] = array_values(array_unique(
+            array_merge((array) ($this->d['plans_rejected'] ?? []), [$planId]),
+        ));
+
+        return $this;
+    }
+
+    /** @return int[] */
+    public function rejectedPlans(): array
+    {
+        return array_map('intval', (array) ($this->d['plans_rejected'] ?? []));
+    }
+
     public function agentAsked(?string $question, ?string $offerKind, ?int $planId, string $at, int $messageId): self
     {
         $this->d['last_agent_question'] = $question === null ? null

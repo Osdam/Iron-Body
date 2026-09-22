@@ -1546,7 +1546,7 @@ Route::get('/reports/stats', function () {
 // n8n solo coordina: NO accede a PostgreSQL ni construye contexto. Laravel
 // genera el resumen y emite iron_ai.weekly_summary_ready.
 // throttle: defensa extra al HMAC (limita el abuso si el secreto se filtra).
-Route::middleware(['automation.internal', 'throttle:120,1'])->prefix('internal/automation')->group(function (): void {
+Route::middleware(['automation.internal', 'throttle:internal-automation'])->prefix('internal/automation')->group(function (): void {
     Route::post('weekly-summary', [\App\Http\Controllers\Api\Internal\WeeklySummaryController::class, 'generate']);
     Route::post('notify-member',  [\App\Http\Controllers\Api\Internal\NotifyMemberController::class, 'notify']);
     // Coach humano: crea/enriquece la tarea del entrenador asignado.

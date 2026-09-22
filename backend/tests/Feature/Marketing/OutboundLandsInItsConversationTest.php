@@ -126,15 +126,24 @@ class OutboundLandsInItsConversationTest extends TestCase
      */
     public function test_the_model_sees_its_own_reply_in_the_next_turn(): void
     {
+        /*
+         * El borrador cuenta algo antes de preguntar. El que había aquí sólo
+         * preguntaba el objetivo, y desde que existe la política del turno eso
+         * no sale: Laravel lo sustituye. Lo que este test mide —que la
+         * respuesta propia vuelva en el contexto del turno siguiente— no
+         * depende de qué diga, así que se usa una que cumple.
+         */
+        $respuesta = 'Claro, te cuento: tenemos zona de pesas y entrenadores. ¿Qué te gustaría saber?';
+
         $primero = $this->entrante('Hola, quiero información', 'w.hilo.2');
-        $this->commit($primero, 'Claro, ¿cuál es tu objetivo al empezar a entrenar?');
+        $this->commit($primero, $respuesta);
 
         $segundo = $this->entrante('quiero ganar masa', 'w.hilo.3');
         $recientes = $this->decide($segundo)['context']['recent_messages'] ?? [];
 
         $roles = array_map(fn ($r) => $r['role'] ?? $r['direction'] ?? '?', $recientes);
         $this->assertContains('ai', $roles, 'su propia respuesta tiene que estar en el contexto del turno siguiente');
-        $this->assertStringContainsString('cuál es tu objetivo', json_encode($recientes, JSON_UNESCAPED_UNICODE));
+        $this->assertStringContainsString('zona de pesas', json_encode($recientes, JSON_UNESCAPED_UNICODE));
     }
 
     /**

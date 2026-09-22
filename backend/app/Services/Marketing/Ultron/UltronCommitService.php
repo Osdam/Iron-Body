@@ -572,6 +572,81 @@ class UltronCommitService
         );
 
         /*
+         * 10.bis) LA POLÍTICA DEL TURNO. QUÉ HAY QUE HACER, DECIDIDO AQUÍ.
+         *
+         * Las reglas comerciales estaban escritas en el prompt y una prueba
+         * física las desmintió las tres: se preguntó el objetivo sin contar
+         * nada, se volvió a saludar en el segundo turno y se ofreció el plan
+         * por defecto en vez del insignia. Una regla que sólo vive en el
+         * prompt es una sugerencia.
+         *
+         * El plan OBLIGATORIO se impone aquí, antes de rellenar el borrador,
+         * para que el precio y el nombre que se inyectan sean los suyos. No
+         * hay id escrito en el código: el insignia es el que el CRM marca como
+         * recomendado, y deja de ser obligatorio en cuanto la persona pide
+         * otro, ya lo rechazó, o viene hablando de otro sin ambigüedad.
+         */
+        $policy = CommercialTurnPolicy::decide(
+            (string) $sanitized['intent'],
+            $currentPhase,
+            $memoriaPrevia,
+            $this->knowledge->activePlans(),
+            $resolution,
+            (string) $message->body,
+        );
+
+        /*
+         * «Menciona otro plan» es un NO a lo anterior, y se anota como tal.
+         * Sin esto, dos turnos después el insignia volvería a ser obligatorio
+         * y se le ofrecería otra vez lo que acaba de rechazar.
+         */
+        if (($policy['wants_alternative'] ?? false) === true) {
+            /*
+             * Se rechaza el plan que se OFRECIÓ, no el insignia.
+             *
+             * «El trimestre está muy caro» es un no al trimestre. Anotar el
+             * insignia porque sí lo dejaba vetado para siempre sin que nadie
+             * lo hubiera rechazado, y de paso dejaba vivo el que sí molestaba.
+             * El orden es: el que la persona nombra, el último que se le
+             * recomendó, y sólo si no hay ninguno, el insignia.
+             */
+            $rechazado = ($policy['required_plan_id'] !== null && ($policy['required_plan_source'] ?? null) === 'named_by_person')
+                ? $policy['required_plan_id']
+                : (($memoriaPrevia->get('last_recommendation')['plan_ids'][0] ?? null)
+                    ?? CommercialTurnPolicy::planInsignia($this->knowledge->activePlans()));
+
+            if ($rechazado !== null) {
+                $this->memoryService->recordPlanRejected($conversation, (int) $rechazado);
+                $memoriaPrevia = $this->memoryService->load($conversation->fresh());
+            }
+        }
+
+        /*
+         * Sólo la PRIORIDAD COMERCIAL pisa el plan del modelo.
+         *
+         * Si el plan salió de que la persona lo nombró, el id de la propuesta
+         * ya es el bueno: cambiarlo movería el precio que se inyecta debajo de
+         * un texto que habla de otro plan, que es exactamente lo que los tests
+         * de dinero llevan meses impidiendo.
+         */
+        if (($policy['required_plan_source'] ?? null) === 'commercial_priority'
+            && $policy['required_plan_id'] !== null
+            && (int) $policy['required_plan_id'] !== ($plan?->id)) {
+            $forzado = $this->resolvePlan((int) $policy['required_plan_id'], $sanitized['reply']);
+
+            if ($forzado !== null) {
+                ChannelLog::info('ultron.commit.policy_plan_forced', [
+                    'conversation_id' => (int) $conversation->id,
+                    'propuesto' => $plan?->id,
+                    'obligatorio' => $forzado->id,
+                ]);
+
+                $plan = $forzado;
+                $replyFinal = $this->placeholders->resolve($sanitized['reply'], $plan);
+            }
+        }
+
+        /*
          * 10.ter) A QUIEN YA PAGÓ NO SE LE COTIZA LO MISMO. Anclado al efecto
          * (el plan que este turno cotiza o compromete), no a la etiqueta de
          * fase que elija el modelo, y sólo cuando se sabe seguro que es el plan
@@ -1125,6 +1200,83 @@ class UltronCommitService
          */
         $replyFinal = $this->sinNegarUnCobroDisponible($conversation, $lead, $plan, $replyFinal, $action);
         $replyFinal = $this->sinConfirmarUnaCortesiaQueNadieConfirmo($conversation, $replyFinal, $action);
+
+        /*
+         * 13.bis) Y LO ÚLTIMO: QUE EL TEXTO CUMPLA LA POLÍTICA DEL TURNO.
+         *
+         * El Critic juzga calidad; esto comprueba HECHOS: que a quien pidió
+         * información se le informe antes de interrogarle, que no se salude
+         * dos veces, y que el plan que se nombra primero sea el que el CRM
+         * manda. Los tres se midieron incumplidos en una prueba física con el
+         * Critic diciendo que estaba bien.
+         *
+         * Si el borrador no cumple, NO se calla: sale el texto de respaldo de
+         * la MISMA intención, que por construcción cumple —cuenta algo y deja
+         * una puerta abierta sin nombrar plan— y el incumplimiento queda
+         * anotado en la fila. La regeneración con el motivo concreto ya existe
+         * aguas arriba, en el Critic y el Composer de reintento; esto es el
+         * suelo, no el primer intento.
+         */
+        $catalogo = $this->knowledge->activePlans();
+        $incumple = CommercialTurnPolicy::violations($replyFinal, $policy, $catalogo);
+
+        /*
+         * Saludar dos veces se ARREGLA, no se castiga.
+         *
+         * Detrás del saludo de más suele venir justo lo que la persona pidió
+         * —la dirección, el horario—, así que tirar el mensaje entero
+         * cambiaría un defecto de forma por uno de fondo. Se recorta la
+         * fórmula y se vuelve a mirar qué queda incumpliendo.
+         */
+        if (in_array(CommercialTurnPolicy::VIOLACION_SALUDO_REPETIDO, $incumple, true)) {
+            $replyFinal = CommercialTurnPolicy::withoutRepeatedGreeting($replyFinal);
+            $incumple = CommercialTurnPolicy::violations($replyFinal, $policy, $catalogo);
+        }
+
+        if ($incumple !== []) {
+            $alternativa = $this->ultimoRecurso($conversation, (string) $sanitized['intent']);
+
+            ChannelLog::warning('ultron.commit.policy_violation', [
+                'conversation_id' => (int) $conversation->id,
+                'violaciones' => $incumple,
+                'sustituido' => $alternativa !== null,
+            ]);
+
+            $meta = is_array($action->metadata) ? $action->metadata : [];
+            $meta['policy'] = $policy;
+            $meta['policy_violations'] = $incumple;
+            $meta['policy_discarded_draft'] = mb_substr($replyFinal, 0, 400);
+            $action->forceFill(['metadata' => $meta])->save();
+
+            /*
+             * Si lo que falló fue el PLAN, el respaldo habla de planes.
+             *
+             * Mandar «cuéntame qué necesitas» a quien acaba de preguntar por
+             * planes cambia un plan mal elegido por una respuesta vacía. El
+             * texto se arma con el catálogo del CRM, así que sigue al negocio
+             * y no a lo que alguien escribiera aquí.
+             */
+            if (in_array(CommercialTurnPolicy::VIOLACION_PLAN_EQUIVOCADO, $incumple, true)) {
+                $dePlanes = CommercialTurnPolicy::planReply($policy, $catalogo);
+
+                /*
+                 * El sustituto también se mide. Sonaba absurdo hasta que la
+                 * revisión lo demostró: si el plan obligatorio estaba a la vez
+                 * en la lista de prohibidos, el respaldo volvía a nombrarlo y
+                 * el turno salía incumpliendo lo mismo que venía a arreglar.
+                 * Si no cumple, se cae al respaldo genérico, que no nombra
+                 * ningún plan y por construcción no puede fallar por esto.
+                 */
+                if ($dePlanes !== null
+                    && CommercialTurnPolicy::violations($dePlanes, $policy, $catalogo) === []) {
+                    $alternativa = $dePlanes;
+                }
+            }
+
+            if ($alternativa !== null) {
+                $replyFinal = $alternativa;
+            }
+        }
 
         // 14) Envío por el camino de siempre.
         // La conversación va explícita: la respuesta pertenece al hilo del
