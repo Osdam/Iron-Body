@@ -201,8 +201,18 @@ final class ComposerStyleGuard
             .'(mejor(es)?|numero uno|unic[oa]s?|primer[oa]s?|lider(es)?)\b/u',
         '/\bno hay (un |una |otro |otra |ningun |ninguna )?(gimnasio|gym|centro)\b[^.!?]{0,25}?'
             .'\b(mejor|igual|asi|como este|como nosotros)\b/u',
-        '/\bno (vas a |va a |vais a |van a )?encontrar\b[^.!?]{0,30}?'
-            .'\b(algo asi|otro (gimnasio|gym|centro)|nada (asi|igual|parecido)|igual)\b/u',
+        /*
+         * «JAMÁS encontrarÁS algo igual» pasaba entera: el patrón pedía «no» y
+         * el infinitivo, y aquí no hay ni una cosa ni la otra. La negación en
+         * español tiene tres adverbios y el verbo va en futuro la mitad de las
+         * veces, así que se admiten los tres y la conjugación.
+         *
+         * Lo que se compara sí va cerrado —«algo igual», «otro gimnasio»— y no
+         * un «igual» suelto: «no vas a encontrar parqueadero igual de cerca»
+         * es información, no una jactancia.
+         */
+        '/\b(no|jamas|nunca)\b[^.!?]{0,15}?\bencontrar(as|a|an|emos|ias|e)?\b[^.!?]{0,30}?'
+            .'\b((algo|nada) (asi|igual|parecido|como esto)|otro (gimnasio|gym|centro))\b/u',
 
         /*
          * C · EXCLUSIVIDAD SIN LA PALABRA «OTRO», que es la forma natural:

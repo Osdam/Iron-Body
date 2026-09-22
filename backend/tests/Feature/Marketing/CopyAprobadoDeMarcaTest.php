@@ -149,6 +149,11 @@ class CopyAprobadoDeMarcaTest extends TestCase
             'Somos el mejor gimnasio de Neiva para principiantes.',
             'Somos el gimnasio más completo de la ciudad para empezar.',
             'Tenemos el mejor equipo del Huila para acompañarte.',
+            // La negación tiene tres adverbios y el verbo va en futuro la mitad
+            // de las veces: pedir «no» y el infinitivo dejaba salir esto entero.
+            'Jamás encontrarás algo igual.',
+            'Nunca vas a encontrar algo igual.',
+            'Jamás vas a encontrar otro gimnasio así.',
         ] as $frase) {
             $this->assertContains(
                 'unapproved_superiority_claim',
@@ -269,6 +274,9 @@ class CopyAprobadoDeMarcaTest extends TestCase
             'No te puedo comparar con otros gimnasios: solo sé lo nuestro.',
             'Es el mejor plan, en la zona de pesas vas a estar cómodo.',
             'Es la mejor opción, en el sector hay parqueadero.',
+            'No vas a encontrar parqueadero igual de cerca.',
+            'Nunca encontrarás la sala vacía a esa hora.',
+            'No vas a encontrar el vestuario sin toallas.',
         ] as $frase) {
             $this->assertSame([], $this->duro($frase), "El guardián mató una frase honesta: {$frase}");
         }

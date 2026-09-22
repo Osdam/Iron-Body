@@ -75,6 +75,31 @@ class MarketingKnowledgeSeeder extends Seeder
              'title' => 'Personalidad de Iron Body',
              'content' => 'Iron Body habla con seguridad y orgullo de lo que es: un gimnasio serio, con equipo profesional y ambiente de gente que va a por sus objetivos. Es cercano y acogedor con quien llega con dudas o sin experiencia, y directo cuando la persona ya sabe lo que quiere. Tiene energía sin gritar, cuida a quien pregunta y no se disculpa por vender: invitar a entrenar es parte de ayudar. Nunca suena a folleto ni a asistente genérico; habla de esta persona y de este gimnasio, con detalles concretos y no con frases que servirían para cualquiera.'],
 
+            /*
+             * ── brand_copy ───────────────────────────────────────────────────
+             *
+             * Las frases fuertes que el negocio autoriza POR ESCRITO, y la
+             * única puerta por la que {@see ComposerStyleGuard} deja salir una
+             * afirmación comparativa con alcance geográfico o de mercado.
+             *
+             * Estas tres NO necesitan esa puerta: se midió y ninguna dispara el
+             * cerrojo. Están aquí por lo otro que hace esta categoría —viaja al
+             * prompt— para que el redactor tenga voz de marca sancionada en vez
+             * de inventarse una. Lo que NO está aquí es deliberado: «el mejor
+             * gimnasio de Neiva» y equivalentes no se aprueban por defecto, y
+             * se añaden con firma ({@see scripts/autorizar-frase-de-marca.php})
+             * el día que el negocio lo decida.
+             */
+            ['key' => 'brand_copy.experiencia', 'category' => 'brand_copy', 'priority' => 10,
+             'title' => 'Promesa de marca',
+             'content' => 'Iron Body lleva tu experiencia de entrenamiento a otro nivel.'],
+            ['key' => 'brand_copy.acompanamiento', 'category' => 'brand_copy', 'priority' => 20,
+             'title' => 'Cómo se entrena aquí',
+             'content' => 'En Iron Body queremos que cada entrenamiento se sienta acompañado, profesional y pensado para ti.'],
+            ['key' => 'brand_copy.aspiracion', 'category' => 'brand_copy', 'priority' => 30,
+             'title' => 'Aspiración',
+             'content' => 'Queremos convertirnos en tu mejor experiencia de entrenamiento.'],
+
             // ── payment_policy ───────────────────────────────────────────────
             ['key' => 'payment.wompi', 'category' => 'payment_policy', 'priority' => 10,
              'title' => 'Pagos',
