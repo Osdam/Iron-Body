@@ -1348,6 +1348,20 @@ Route::get('admin/receivables/debtors',                [ReceivableController::cl
     ->middleware('admin.can:receivables.view');
 // Estado de cuenta del socio: sus deudas de productos y de membresías con un
 // único total. También ANTES del comodín, por lo mismo que «debtors».
+
+// ── LA DEUDA POR PERSONA ─────────────────────────────────────────────────────
+// Va ANTES de `receivables/{receivable}`: si no, «people» se leería como el id
+// de una cuenta y la ruta respondería 404 sin explicar por qué.
+Route::get('admin/receivables/people',                  [ReceivableController::class, 'people'])
+    ->middleware('admin.can:receivables.view');
+Route::get('admin/receivables/people/{type}/{id}',      [ReceivableController::class, 'person'])
+    ->whereNumber('id')->middleware('admin.can:receivables.view');
+Route::get('admin/receivables/people/{type}/{id}/preview', [ReceivableController::class, 'settlePreview'])
+    ->whereNumber('id')->middleware('admin.can:receivables.view');
+// Cobrar de una vez es la misma acción que un abono, así que exige el mismo
+// permiso: quien puede cobrar una deuda puede cobrar las cinco.
+Route::post('admin/receivables/people/{type}/{id}/settle', [ReceivableController::class, 'settleAll'])
+    ->whereNumber('id')->middleware('admin.can:receivables.operate');
 Route::get('admin/receivables/account/{member}',       [ReceivableController::class, 'account'])
     ->whereNumber('member')->middleware('admin.can:receivables.view');
 Route::get('admin/receivables/{receivable}',           [ReceivableController::class, 'show'])

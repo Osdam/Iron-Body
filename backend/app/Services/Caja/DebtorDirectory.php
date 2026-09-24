@@ -99,6 +99,36 @@ class DebtorDirectory
         return $out;
     }
 
+    /**
+     * A quién apunta un texto, en los CUATRO tipos a la vez.
+     *
+     * Lo necesita la vista por persona: allí se busca «Oscar» sin haber elegido
+     * antes si es socio, entrenador o cuenta del CRM, y `receivables` no guarda
+     * el nombre de nadie —solo el tipo y el id—, así que el nombre hay que
+     * traducirlo a claves antes de poder filtrar la deuda.
+     *
+     * Devuelve pares y no fichas: quien busca luego agrupa por deudor, y las
+     * fichas ya las resuelve {@see resolveMany()} para la página que se pinte.
+     *
+     * @return list<array{0: string, 1: int}>  [tipo, id]
+     */
+    public function keysMatching(string $term): array
+    {
+        $term = trim($term);
+        if ($term === '') {
+            return [];
+        }
+
+        $claves = [];
+        foreach (DebtorType::cases() as $type) {
+            foreach ($this->search($type, $term) as $ficha) {
+                $claves[] = [$type->value, (int) $ficha['id']];
+            }
+        }
+
+        return $claves;
+    }
+
     /** @return list<array<string, mixed>> */
     private function members(string $term): array
     {

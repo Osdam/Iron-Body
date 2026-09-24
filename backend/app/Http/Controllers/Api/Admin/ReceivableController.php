@@ -18,6 +18,9 @@ use App\Models\ReceivablePayment;
 use App\Services\Billing\Money;
 use App\Services\Audit\FinancialAudit;
 use App\Services\Caja\CashReceipts;
+use App\Models\CashShift;
+use App\Services\Caja\BulkSettlement;
+use App\Services\Caja\DebtorAccounts;
 use App\Services\Caja\DebtorDirectory;
 use App\Services\Caja\MembershipFinancialStanding;
 use App\Services\Caja\ReceivableDueNotifier;
@@ -461,6 +464,244 @@ class ReceivableController extends Controller
             'data' => $abono->toCrmArray(),
             'receivable' => $receivable->fresh()->load('member')->toCrmArray(),
         ], 201);
+    }
+
+
+    /**
+     * GET /api/admin/receivables/people — LA DEUDA POR PERSONA.
+     *
+     * La vista que pedía el mostrador: una tarjeta por quien debe, con sus
+     * consumos dentro. Antes había que recorrer una ficha por cada agua fiada
+     * para enterarse de que las cinco eran de la misma persona.
+     *
+     * Cada tarjeta trae el total, el desglose por caja y sus líneas con fecha.
+     * Los totales los calcula SQL sobre TODA la deuda de esa persona, no sobre
+     * las líneas que quepan en la tarjeta: una cifra que dependiera de cuántas
+     * líneas se enseñan no serviría para cobrar.
+     */
+    public function people(Request $request): JsonResponse
+    {
+        $filtros = $request->validate([
+            'type' => ['nullable', Rule::in(CashShiftType::values())],
+            'search' => ['nullable', 'string', 'max:120'],
+            'only_overdue' => ['nullable', 'boolean'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:'.DebtorAccounts::MAX_PER_PAGE],
+        ]);
+
+        $pagina = app(DebtorAccounts::class)->page(
+            [
+                'type' => $filtros['type'] ?? null,
+                'search' => $filtros['search'] ?? null,
+                'only_overdue' => $request->boolean('only_overdue'),
+            ],
+            (int) ($filtros['page'] ?? 1),
+            (int) ($filtros['per_page'] ?? DebtorAccounts::PER_PAGE),
+        );
+
+        return response()->json(array_merge(['ok' => true], $pagina, [
+            // Qué cajas están abiertas AHORA: el CRM necesita saberlo para no
+            // ofrecer un botón de cobro que el servidor va a rechazar con 409.
+            'open_shifts' => $this->openShifts(),
+        ]));
+    }
+
+    /**
+     * GET /api/admin/receivables/people/{type}/{id} — una sola tarjeta.
+     *
+     * Se usa después de cobrar: releer la persona cuesta una consulta y evita
+     * recargar la lista entera para ver que su saldo bajó.
+     */
+    public function person(string $type, int $id): JsonResponse
+    {
+        $tipo = DebtorType::tryFrom($type);
+        if ($tipo === null) {
+            return response()->json(['ok' => false, 'message' => 'Tipo de deudor desconocido.'], 422);
+        }
+
+        $tarjeta = app(DebtorAccounts::class)->card($tipo, $id);
+
+        return response()->json([
+            'ok' => true,
+            // Sin deuda viva no hay tarjeta, y eso NO es un error: es la
+            // respuesta a «¿qué debe?» cuando ya no debe nada.
+            'data' => $tarjeta,
+            'settled' => $tarjeta === null,
+            'open_shifts' => $this->openShifts(),
+        ]);
+    }
+
+    /**
+     * GET /api/admin/receivables/people/{type}/{id}/preview — qué cubriría.
+     *
+     * Enseña, antes de cobrar, qué líneas salda el dinero que hay sobre el
+     * mostrador y qué quedaría debiendo. Lo calcula el servidor con las mismas
+     * reglas del cobro: si lo hiciera el navegador, la previsión y el cobro
+     * podrían no coincidir, y el que paga se enteraría después.
+     */
+    public function settlePreview(Request $request, string $type, int $id): JsonResponse
+    {
+        $tipo = DebtorType::tryFrom($type);
+        if ($tipo === null) {
+            return response()->json(['ok' => false, 'message' => 'Tipo de deudor desconocido.'], 422);
+        }
+
+        $data = $request->validate([
+            'amount' => ['nullable', 'numeric', 'min:0.01'],
+            'cash' => ['nullable', Rule::in(CashShiftType::values())],
+            'only_ids' => ['nullable', 'array'],
+            'only_ids.*' => ['integer'],
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'data' => app(BulkSettlement::class)->preview(
+                debtorType: $tipo,
+                debtorId: $id,
+                amount: isset($data['amount']) ? Money::fromAmount($data['amount']) : null,
+                cash: isset($data['cash']) ? CashShiftType::from($data['cash']) : null,
+                onlyIds: $data['only_ids'] ?? [],
+            ),
+        ]);
+    }
+
+    /**
+     * POST /api/admin/receivables/people/{type}/{id}/settle — cobrar de una vez.
+     *
+     * Sin `amount` se cobra TODO lo que deba. Con `amount` se reparte de la
+     * deuda más antigua a la más nueva, que es la única repartición que se le
+     * puede explicar a quien paga.
+     *
+     * Cada deuda conserva su abono y su traza: esto junta el COBRO, no las
+     * obligaciones. Y es todo o nada, así que un fallo a mitad no deja media
+     * cuenta cobrada.
+     */
+    public function settleAll(Request $request, string $type, int $id): JsonResponse
+    {
+        $tipo = DebtorType::tryFrom($type);
+        if ($tipo === null) {
+            return response()->json(['ok' => false, 'message' => 'Tipo de deudor desconocido.'], 422);
+        }
+
+        $data = $request->validate([
+            // Ausente = todo lo que deba. Es el caso normal del mostrador.
+            'amount' => ['nullable', 'numeric', 'min:0.01'],
+            'method' => ['required', Rule::in(PaymentMethodKind::selectableAtCounter())],
+            'cash' => ['nullable', Rule::in(CashShiftType::values())],
+            'only_ids' => ['nullable', 'array'],
+            'only_ids.*' => ['integer'],
+            'client_request_id' => ['nullable', 'string', 'max:80'],
+            'reference' => ['nullable', 'string', 'max:120'],
+            'notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $retenidos = $this->heldMembersFor($tipo, $id);
+
+        try {
+            $resultado = app(BulkSettlement::class)->settle(
+                debtorType: $tipo,
+                debtorId: $id,
+                method: $data['method'],
+                amount: isset($data['amount']) ? Money::fromAmount($data['amount']) : null,
+                actor: AdminActor::from($request),
+                cash: isset($data['cash']) ? CashShiftType::from($data['cash']) : null,
+                onlyIds: $data['only_ids'] ?? [],
+                clientRequestId: $data['client_request_id'] ?? null,
+                reference: $data['reference'] ?? null,
+                notes: $data['notes'] ?? null,
+            );
+        } catch (ReceivableException $e) {
+            return $this->receivableError($e);
+        } catch (CashShiftException $e) {
+            return response()->json([
+                'ok' => false,
+                'code' => $e->code_,
+                'message' => 'Hay que abrir la caja antes de cobrar: '
+                    .'este cobro entra en '.$this->cashNamesFor($tipo, $id).'.',
+            ], 409);
+        }
+
+        // La app del socio se avisa SOLO si la retención cambió de verdad. Un
+        // refresco sin cambio enseña a la app a recargar por nada.
+        $this->notifyIfReleased($retenidos);
+
+        $tarjeta = app(DebtorAccounts::class)->card($tipo, $id);
+
+        return response()->json([
+            'ok' => true,
+            // `true` cuando esta petición era una repetición y no cobró nada
+            // nuevo. El CRM pinta lo mismo en los dos casos; quien mire los
+            // registros sabrá cuál fue la que contó.
+            'replayed' => (bool) ($resultado['replayed'] ?? false),
+            'applied' => $resultado['applied']->toFloat(),
+            'debts_touched' => $resultado['debts_touched'],
+            'settled_debts' => count($resultado['settled_ids']),
+            'remaining' => $resultado['remaining']->toFloat(),
+            'payments' => array_map(
+                fn (ReceivablePayment $abono) => $abono->toCrmArray(),
+                $resultado['payments'],
+            ),
+            // La tarjeta ya actualizada, o null si quedó sin deuda.
+            'data' => $tarjeta,
+            'settled' => $tarjeta === null,
+        ], 201);
+    }
+
+    /** Qué cajas tienen turno abierto ahora mismo. */
+    private function openShifts(): array
+    {
+        $abiertas = [];
+        foreach (CashShiftType::cases() as $caja) {
+            $abiertas[$caja->value] = CashShift::currentOfType($caja) !== null;
+        }
+
+        return $abiertas;
+    }
+
+    /** Los nombres de las cajas que este cobro va a tocar, para el mensaje. */
+    private function cashNamesFor(DebtorType $tipo, int $id): string
+    {
+        $cajas = app(DebtorAccounts::class)->openDebts($tipo, $id)
+            ->map(fn (Receivable $r) => $r->type->label())
+            ->unique()
+            ->values()
+            ->all();
+
+        return $cajas === [] ? 'la caja correspondiente' : implode(' y ', $cajas);
+    }
+
+    /**
+     * Socios que estaban RETENIDOS por saldo vencido antes de cobrar.
+     *
+     * Se mira antes porque la retención se levanta sola al llegar el saldo a
+     * cero, y la app solo debe despertarse si eso ocurrió de verdad.
+     *
+     * @return list<int>
+     */
+    private function heldMembersFor(DebtorType $tipo, int $id): array
+    {
+        if ($tipo !== DebtorType::MEMBER) {
+            return [];
+        }
+
+        $miembro = Member::find($id);
+
+        return $miembro && app(MembershipFinancialStanding::class)->isOverdue($miembro)
+            ? [$miembro->id]
+            : [];
+    }
+
+    /** @param  list<int>  $retenidos */
+    private function notifyIfReleased(array $retenidos): void
+    {
+        foreach ($retenidos as $memberId) {
+            $miembro = Member::find($memberId);
+            if ($miembro && ! app(MembershipFinancialStanding::class)->isOverdue($miembro)) {
+                // El id del SOCIO, igual que en el resto del controlador: la
+                // señal se indexa por `member_id`, no por su cuenta de usuario.
+                RealtimeEvents::emit($miembro->id, RealtimeEvents::APP_STATE, ['membership', 'financial']);
+            }
+        }
     }
 
     /**
