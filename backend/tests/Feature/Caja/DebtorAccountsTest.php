@@ -430,6 +430,63 @@ class DebtorAccountsTest extends TestCase
         $this->assertSame(Receivable::STATUS_PENDING, $lunes->fresh()->status);
     }
 
+
+    public function test_un_abono_parcial_sobre_lineas_elegidas_no_toca_las_demas(): void
+    {
+        $oscar = $this->socio();
+        $lunes = $this->fiado($oscar, 'Agua lunes', 2000, diasAtras: 6);
+        $martes = $this->fiado($oscar, 'Agua martes', 2000, diasAtras: 5);
+        $jueves = $this->fiado($oscar, 'Agua jueves', 2000, diasAtras: 3);
+
+        $this->abrirCaja('products');
+
+        // Marca martes y jueves, y entrega 3.000: se reparte SOLO entre esas
+        // dos, de la más antigua a la más nueva. La del lunes ni se toca, que
+        // es justo el motivo de poder elegir.
+        $res = $this->saldarTodo($oscar, [
+            'amount' => 3000,
+            'only_ids' => [$martes->id, $jueves->id],
+        ])->assertStatus(201)->json();
+
+        $this->assertEquals(3000, $res['applied']);
+        $this->assertSame(Receivable::STATUS_PENDING, $lunes->fresh()->status);
+        $this->assertSame(Receivable::STATUS_PAID, $martes->fresh()->status);
+        $this->assertEquals(1000, $jueves->fresh()->balance()->toFloat());
+    }
+
+    public function test_no_se_puede_pagar_mas_que_las_lineas_elegidas(): void
+    {
+        $oscar = $this->socio();
+        $lunes = $this->fiado($oscar, 'Agua lunes', 2000, diasAtras: 4);
+        $martes = $this->fiado($oscar, 'Agua martes', 2000, diasAtras: 2);
+        $this->abrirCaja('products');
+
+        // Debe 4.000 en total, pero solo se eligió una deuda de 2.000: 3.000
+        // no caben ahí, y el sobrante no se derrama sobre la otra.
+        $this->saldarTodo($oscar, ['amount' => 3000, 'only_ids' => [$martes->id]])
+            ->assertStatus(422);
+
+        $this->assertSame(0, ReceivablePayment::count());
+        $this->assertSame(Receivable::STATUS_PENDING, $lunes->fresh()->status);
+    }
+
+    public function test_la_previsualizacion_de_lineas_elegidas_solo_habla_de_esas(): void
+    {
+        $oscar = $this->socio();
+        $lunes = $this->fiado($oscar, 'Agua lunes', 2000, diasAtras: 5);
+        $martes = $this->fiado($oscar, 'Gatorade', 4500, diasAtras: 2);
+
+        $r = $this->getJson(
+            '/api/admin/receivables/people/member/'.$oscar->id.'/preview?only_ids[]='.$martes->id,
+            $this->h,
+        )->assertOk()->json('data');
+
+        $this->assertEquals(4500, $r['outstanding'], 'El universo es lo marcado, no toda su deuda.');
+        $this->assertCount(1, $r['lines']);
+        $this->assertSame($martes->id, $r['lines'][0]['id']);
+        $this->assertTrue($r['lines'][0]['settles']);
+    }
+
     public function test_la_deuda_del_personal_se_agrupa_por_su_cuenta_del_crm(): void
     {
         // «El jefe» del caso real no es socio: es una cuenta del CRM.
