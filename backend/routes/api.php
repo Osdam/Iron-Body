@@ -151,6 +151,13 @@ Route::middleware('auth.admin')->group(function (): void {
     Route::get('users', [UserController::class, 'index']);
     Route::post('users', [UserController::class, 'store']);
     Route::get('users/{user}', [UserController::class, 'show']);
+    // CONGELAR la membresía: para el reloj y guarda los días que quedan. Exige
+    // su propio permiso (`members.freeze`), no el de editar la ficha: mueve la
+    // vigencia que el socio ya pagó.
+    Route::post('users/{user}/freeze', [\App\Http\Controllers\Api\Admin\MembershipFreezeController::class, 'freeze'])
+        ->whereNumber('user');
+    Route::post('users/{user}/resume', [\App\Http\Controllers\Api\Admin\MembershipFreezeController::class, 'resume'])
+        ->whereNumber('user');
     Route::get('users/{user}/plan-features', [UserController::class, 'planFeatures']);
     Route::patch('users/{user}', [UserController::class, 'update']);
     Route::put('users/{user}', [UserController::class, 'update']);

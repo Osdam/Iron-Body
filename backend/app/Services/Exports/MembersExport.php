@@ -89,6 +89,8 @@ class MembersExport extends ExportDataset
             new ExportColumn('days_left', 'Días restantes', 'Membresía', fn (User $u) => $this->daysLeft($u), $numero),
             new ExportColumn('membership_state', 'Situación', 'Membresía', fn (User $u) => $this->membershipLabel($u)),
             new ExportColumn('auto_renew', 'Renovación automática', 'Membresía', fn (User $u) => $u->membership_auto_renew ? 'Sí' : 'No', default: false),
+            new ExportColumn('frozen_until', 'Congelada hasta', 'Membresía', fn (User $u) => $u->membership_frozen_until ? substr((string) $u->membership_frozen_until, 0, 10) : null, $fecha, default: false),
+            new ExportColumn('frozen_days_left', 'Días guardados', 'Membresía', fn (User $u) => $u->membership_frozen_days_left, $numero, default: false),
 
             // ── Último pago ────────────────────────────────────────────────
             new ExportColumn('last_payment_date', 'Último pago: fecha', 'Último pago', fn (User $u) => $this->paymentDate($u->lastPaidPayment), $fecha),
@@ -230,6 +232,11 @@ class MembersExport extends ExportDataset
 
         return match (true) {
             $dias === null => 'Sin membresía',
+            // Antes que «vencida»: una pausa se ve igual en las fechas —es lo
+            // que la hace bloquear sin tocar la app— pero no es lo mismo, y en
+            // una exportación de cobro confundirlas sería llamar a quien está
+            // de viaje con permiso.
+            $u->membership_frozen_at !== null => 'Congelada',
             $dias < 0 => 'Vencida',
             $this->startsLater($u) => 'Programada',
             $dias <= self::EXPIRING_SOON_DAYS => 'Por vencer',

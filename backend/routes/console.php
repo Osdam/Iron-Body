@@ -8,6 +8,15 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+// Reanudar las membresías congeladas cuyo plazo terminó. Va TEMPRANO, antes de
+// que el gimnasio abra: quien vuelve hoy de su pausa tiene que poder entrar a
+// primera hora. Idempotente: al reanudar se borran las fechas del
+// congelamiento, así que una segunda corrida no devuelve días dos veces.
+Schedule::command('memberships:resume-frozen')
+    ->dailyAt('04:30')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // Notificaciones de membresías próximas a vencer — corre a diario.
 // Idempotente: NotificationService deduplica por
 // membership_expiring_MEMBERID_DATE, así que ejecutarlo varias veces (o el

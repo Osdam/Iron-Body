@@ -382,6 +382,12 @@ final class AuthorizationMap
         // Anular un contrato es una acción sobre el expediente del socio.
         'POST api/admin/contracts/{contract}/void' => 'members.edit',
 
+        // Congelar una membresía mueve su vencimiento, y con él lo que el socio
+        // ya pagó. Por eso es un permiso propio y no «editar miembros»: no todo
+        // el que corrige un teléfono debe poder alargar una vigencia.
+        'POST api/users/{user}/freeze' => 'members.freeze',
+        'POST api/users/{user}/resume' => 'members.freeze',
+
         // Webhook del torniquete: lo llama el hardware, no una persona. Su
         // autenticación es la del propio dispositivo.
         'POST api/turnstile/webhook/fire' => self::PUBLIC,

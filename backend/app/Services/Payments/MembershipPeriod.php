@@ -7,6 +7,7 @@ use App\Models\Member;
 use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\User;
+use App\Services\Membership\MembershipFreeze;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -101,6 +102,18 @@ class MembershipPeriod
 
         /** @var User|null $user */
         $user = User::find($payment->user_id);
+
+        // PAGAR DESCONGELA. Durante una pausa la app le muestra la membresía
+        // vencida —es lo que la hace bloquear sin tocar la app—, así que el
+        // socio puede renovar desde ahí. Si el pago se aplicara encima del
+        // congelamiento, los días guardados se quedarían colgados y al
+        // reanudarse pisarían el periodo recién comprado. Se reanuda primero:
+        // recupera sus días y el cobro se encadena detrás, como cualquier otra
+        // renovación anticipada.
+        if ($user && app(MembershipFreeze::class)->isFrozen($user)) {
+            app(MembershipFreeze::class)->resume($user, null, 'payment');
+            $user->refresh();
+        }
         /** @var Plan|null $plan */
         $plan = Plan::find($payment->plan_id);
         $dias = (int) ($plan?->duration_days ?? 0);

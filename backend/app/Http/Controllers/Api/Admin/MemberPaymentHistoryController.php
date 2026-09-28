@@ -10,6 +10,7 @@ use App\Models\ReceivablePayment;
 use App\Models\User;
 use App\Services\Caja\CashReceipts;
 use App\Services\Exports\PaymentsExport;
+use App\Services\Membership\MembershipFreeze;
 use App\Services\Payments\MembershipPeriod;
 use App\Support\Caja\PaymentOrigin;
 use App\Support\Members\MembershipFilter;
@@ -77,7 +78,14 @@ class MemberPaymentHistoryController extends Controller
         $diasRestantes = $fin ? (int) $hoy->diffInDays($fin, false) : null;
         $diasParaEmpezar = $inicio && $inicio->greaterThan($hoy) ? (int) $hoy->diffInDays($inicio) : null;
 
+        // El congelamiento va PRIMERO. Durante la pausa la vigencia figura
+        // terminada —es lo que hace que la app y el terminal bloqueen el paso
+        // sin tocarlos—, así que sin esto el perfil diría «Vencida» de alguien
+        // que está de viaje con permiso y con sus días guardados.
+        $pausa = app(MembershipFreeze::class)->state($user);
+
         $estado = match (true) {
+            $pausa['frozen'] => 'frozen',
             $fin === null => 'none',
             $diasRestantes < 0 => 'expired',
             $diasParaEmpezar !== null => 'scheduled',
@@ -100,8 +108,12 @@ class MemberPaymentHistoryController extends Controller
                 'expired' => 'Vencida',
                 'scheduled' => 'Programada',
                 'expiring' => 'Por vencer',
+                'frozen' => 'Congelada',
                 default => 'Activa',
             },
+            // Lo que solo el CRM sabe de la pausa: cuándo vuelve y con cuántos
+            // días. Null cuando no está congelada.
+            'freeze' => $pausa['frozen'] ? $pausa : null,
             // Asistencia usa exactamente esta regla para abrir o no la puerta.
             'can_enter' => in_array($estado, ['active', 'expiring'], true),
             'days_left' => $diasRestantes,

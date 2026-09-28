@@ -96,6 +96,11 @@ final class MembershipFilter
 
             'none' => $query->whereNull('users.membership_end_date'),
 
+            // Congeladas: la pausa las deja como cuenta inactiva y vigencia
+            // terminada —así las bloquean la app y el terminal—, así que sin
+            // este filtro se confundirían con bajas y vencimientos de verdad.
+            'frozen' => $query->whereNotNull('users.membership_frozen_at'),
+
             // Pagadas pero todavía sin empezar: pagó hoy para iniciar el lunes.
             // Cuentan también como «activas» —la membresía es suya y no está
             // vencida—, pero Asistencia no las deja entrar hasta ese día.
@@ -172,6 +177,7 @@ final class MembershipFilter
             ['value' => 'all', 'label' => 'Todas'],
             ['value' => 'active', 'label' => 'Activas'],
             ['value' => 'scheduled', 'label' => 'Programadas (inician después)'],
+            ['value' => 'frozen', 'label' => 'Congeladas'],
             ['value' => 'expiring_7', 'label' => 'Vencen en 7 días'],
             ['value' => 'expiring_15', 'label' => 'Vencen en 15 días'],
             ['value' => 'expiring_30', 'label' => 'Vencen en 30 días'],
@@ -185,7 +191,7 @@ final class MembershipFilter
     public static function allowedValues(): array
     {
         return [
-            'all', 'active', 'scheduled', 'inactive', 'pending', 'expired', 'expired_recent', 'none',
+            'all', 'active', 'scheduled', 'frozen', 'inactive', 'pending', 'expired', 'expired_recent', 'none',
             'expiring', 'expiring_7', 'expiring_15', 'expiring_30', 'expiring_60', 'expiring_90',
         ];
     }

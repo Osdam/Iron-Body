@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Member;
 use App\Models\Plan;
 use App\Models\User;
+use App\Services\Membership\MembershipFreeze;
 use App\Services\Audit\AuditTrail;
 use App\Services\NotificationService;
 use Carbon\Carbon;
@@ -29,6 +30,20 @@ class UserController extends Controller
      * servidor (`status`, `search`, `per_page`) para que el CRM cargue SOLO la
      * página visible en vez de recorrer todas las páginas.
      */
+    /**
+     * Columnas crudas del congelamiento. Se consultan para poder resolver la
+     * pausa, pero no se publican: el CRM usa `freeze`, ya interpretado.
+     *
+     * @var list<string>
+     */
+    private const FREEZE_COLUMNS = [
+        'membership_frozen_at',
+        'membership_frozen_until',
+        'membership_frozen_days_left',
+        'membership_frozen_reason',
+        'membership_frozen_by_name',
+    ];
+
     public function index(Request $request)
     {
         $query = User::query();
@@ -58,17 +73,23 @@ class UserController extends Controller
         }
 
         $page = $query
-            ->select($this->memberFields())
+            // Las columnas del congelamiento viajan para poder resolver la
+            // pausa por fila; se ocultan abajo y solo sale `freeze` ya
+            // interpretado, que es lo que el CRM sabe leer.
+            ->select(array_merge($this->memberFields(), self::FREEZE_COLUMNS))
             ->with('appMember.guardian')
             ->orderByDesc('created_at')
             ->paginate($this->resolvePerPage($request));
 
         // Adjunta menor de edad + acudiente por fila (para prefijar el editar)
         // sin exponer la relación cruda del miembro.
-        $page->getCollection()->transform(function (User $u): User {
+        $pausas = app(MembershipFreeze::class);
+        $page->getCollection()->transform(function (User $u) use ($pausas): User {
             $member = $u->appMember;
             $u->setAttribute('isMinor', (bool) ($member?->is_minor));
             $u->setAttribute('guardian', $this->guardianArray($member?->guardian));
+            $u->setAttribute('freeze', $pausas->state($u));
+            $u->makeHidden(self::FREEZE_COLUMNS);
             $u->unsetRelation('appMember');
 
             return $u;
@@ -81,7 +102,13 @@ class UserController extends Controller
     {
         return array_merge(
             $user->only(array_merge($this->memberFields(), ['membershipStartDate', 'membershipEndDate'])),
-            ['features' => $this->featuresFor($user)]
+            [
+                // El congelamiento viaja también en la ficha suelta: el CRM abre
+                // esta ruta para refrescar a un socio concreto, y sin esto la
+                // pausa desaparecía de la pantalla al recargarlo.
+                'freeze' => app(MembershipFreeze::class)->state($user),
+                'features' => $this->featuresFor($user),
+            ]
         );
     }
 
@@ -453,6 +480,10 @@ class UserController extends Controller
             'plan' => $user->plan,
             'membershipStartDate' => $user->membershipStartDate,
             'membershipEndDate' => $user->membershipEndDate,
+            // El congelamiento solo lo entiende el CRM: para la app y el
+            // terminal esta membresía está vencida y la cuenta inactiva, que es
+            // justo lo que hace que no puedan entrar sin tocarlos.
+            'freeze' => app(MembershipFreeze::class)->state($user),
             'features' => $this->featuresFor($user),
             'created_at' => $user->created_at,
         ];
