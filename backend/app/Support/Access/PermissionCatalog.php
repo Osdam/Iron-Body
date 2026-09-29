@@ -72,6 +72,7 @@ final class PermissionCatalog
         'use' => 'Usar',
         'export' => 'Exportar',
         'freeze' => 'Congelar',
+        'adjust' => 'Ajustar',
     ];
 
     /**
@@ -119,6 +120,7 @@ final class PermissionCatalog
         'receivables.operate' => 'Registrar el dinero que alguien abona sobre su saldo y pactar una fecha de pago nueva.',
         'receivables.manage' => 'Anular un abono mal registrado, anular o reabrir una deuda entera y dejarla sin fecha de pago. Nada se borra: todo queda con motivo y autor.',
         'members.archive' => 'Retirar la ficha de un socio. No borra su historial.',
+        'members.adjust' => 'Sumarle o quitarle días y entradas a una membresía a mano: por un día que no pudo venir, una entrada que el lector contó dos veces o un error al venderle el plan. Cada ajuste queda con autor y motivo.',
         'members.freeze' => 'Pausar la membresía de un socio y devolverle después los días que le quedaban. Mientras está congelada no puede entrar, y queda registrado quién la pausó y por qué.',
         'payments.cancel' => 'Anular un pago ya registrado.',
         'members.export' => 'Descargar socios con su membresía en Excel o CSV, incluidos documento y teléfono si se eligen. Queda auditado.',

@@ -8,11 +8,13 @@ use App\Models\MembershipAiCapability;
 use App\Models\Payment;
 use App\Models\Plan;
 use App\Services\Audit\AuditTrail;
+use App\Services\Membership\PlanAccessRules;
 use App\Models\User;
 use App\Services\IronAiMembershipAccessService;
 use App\Services\RealtimeEvents;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class PlanController extends Controller
 {
@@ -25,7 +27,23 @@ class PlanController extends Controller
 
     public function index(Request $request)
     {
-        return Plan::query()->paginate($this->resolvePerPage($request));
+        // `access` va junto a las columnas: son las reglas ya normalizadas, que
+        // es lo que el CRM pinta. Sin esto cada pantalla tendría que volver a
+        // interpretar el JSON de días y franjas, y acabarían discrepando.
+        return Plan::query()
+            ->paginate($this->resolvePerPage($request))
+            ->through(fn (Plan $plan): array => $this->payload($plan));
+    }
+
+    /**
+     * Un plan como lo lee el CRM: sus columnas más las reglas de acceso ya
+     * interpretadas.
+     *
+     * @return array<string, mixed>
+     */
+    private function payload(Plan $plan): array
+    {
+        return array_merge($plan->toArray(), ['access' => $plan->accessRules()->toArray()]);
     }
 
     /**
@@ -115,7 +133,7 @@ class PlanController extends Controller
 
     public function show(Plan $plan)
     {
-        return $plan;
+        return response()->json($this->payload($plan));
     }
 
     public function store(Request $request)
@@ -131,12 +149,12 @@ class PlanController extends Controller
             'metadata' => ['price' => (string) $plan->price, 'duration_days' => $plan->duration_days],
         ]);
 
-        return response()->json($plan, 201);
+        return response()->json($this->payload($plan), 201);
     }
 
     public function update(Request $request, Plan $plan)
     {
-        $data = $this->validatedData($request, true);
+        $data = $this->validatedData($request, true, $plan);
 
         if (array_key_exists('features', $data)) {
             $data['features'] = array_merge(
@@ -157,12 +175,12 @@ class PlanController extends Controller
                 $previoPlan,
                 // Un cambio de precio o de vigencia sin el antes y el después
                 // obliga a reconstruirlo a mano. No son datos personales.
-                ['price', 'duration_days', 'active', 'tier'],
+                ['price', 'duration_days', 'active', 'tier', 'access_mode', 'entry_credits'],
             ),
             'metadata' => ['price' => (string) $plan->price],
         ]);
 
-        return response()->json($plan);
+        return response()->json($this->payload($plan));
     }
 
     public function destroy(Request $request, Plan $plan)
@@ -354,6 +372,57 @@ class PlanController extends Controller
         ];
     }
 
+    /**
+     * Guarda las reglas de acceso ya normalizadas, nunca lo que llegó crudo.
+     *
+     * Por qué aquí y no al leer: lo que se escribe en la fila tiene que ser
+     * exactamente lo que después leen el terminal de recepción y el CRM. Si se
+     * guardara «6:0» o el día 0 y cada uno lo interpretara a su manera, un plan
+     * de horas valle abriría a horas distintas según quién pregunte.
+     *
+     * En una edición parcial se completa con lo que el plan ya tiene: quien
+     * cambia solo el precio no debe perder sus franjas horarias.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function normalizeAccess(array $data, ?Plan $plan): array
+    {
+        $claves = ['access_mode', 'entry_credits', 'access_days', 'access_windows'];
+        $tocadas = array_filter($claves, fn (string $k): bool => array_key_exists($k, $data));
+
+        if ($tocadas === []) {
+            return $data;
+        }
+
+        $crudo = [];
+        foreach ($claves as $clave) {
+            $crudo[$clave] = array_key_exists($clave, $data) ? $data[$clave] : ($plan?->{$clave});
+        }
+
+        // Un plan por consumo sin número de entradas sería una puerta cerrada.
+        // PlanAccessRules lo degrada a ilimitado en silencio —hace falta, porque
+        // lee filas que ya existen—, pero aquí hay alguien llenando un
+        // formulario y se le puede decir.
+        if (($crudo['access_mode'] ?? null) === PlanAccessRules::MODE_ENTRIES
+            && (int) ($crudo['entry_credits'] ?? 0) <= 0) {
+            throw ValidationException::withMessages([
+                'entry_credits' => 'Indica cuántas entradas incluye el plan por consumo.',
+            ]);
+        }
+
+        $reglas = PlanAccessRules::fromArray($crudo);
+
+        $data['access_mode'] = $reglas->mode;
+        $data['entry_credits'] = $reglas->entries;
+        // Vacío se guarda como NULL y no como «[]»: «sin restricción» es la
+        // ausencia de regla, y así lo dice también la columna.
+        $data['access_days'] = $reglas->days === [] ? null : $reglas->days;
+        $data['access_windows'] = $reglas->windows === [] ? null : $reglas->windows;
+
+        return $data;
+    }
+
     private function planSlug(string $name): string
     {
         $s = mb_strtolower(trim($name));
@@ -378,7 +447,7 @@ class PlanController extends Controller
             });
     }
 
-    private function validatedData(Request $request, bool $updating): array
+    private function validatedData(Request $request, bool $updating, ?Plan $plan = null): array
     {
         $req = $updating ? ['sometimes', 'required'] : ['required'];
 
@@ -388,6 +457,21 @@ class PlanController extends Controller
             'price' => [...$req, 'numeric', 'min:0'],
             'original_price' => ['nullable', 'numeric', 'min:0'],
             'duration_days' => [$updating ? 'sometimes' : 'required_without_all:duration_months,months', 'integer', 'min:1'],
+            // TIPO DE PLAN. 'unlimited' es el de siempre: entra cuantas veces
+            // quiera mientras esté vigente. 'entries' es por consumo: la
+            // vigencia sigue siendo `duration_days` y ademas trae un número de
+            // entradas («15 entradas en un mes», el plan Valera).
+            'access_mode' => ['sometimes', 'nullable', 'string', 'in:'.implode(',', PlanAccessRules::MODES)],
+            'entry_credits' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:'.PlanAccessRules::MAX_ENTRIES],
+            // Días de la semana en ISO (1 lunes … 7 domingo). Vacío o los siete
+            // significa sin restricción.
+            'access_days' => ['sometimes', 'nullable', 'array', 'max:7'],
+            'access_days.*' => ['integer', 'min:0', 'max:7'],
+            // Horas valle: las franjas en las que se puede entrar.
+            'access_windows' => ['sometimes', 'nullable', 'array', 'max:'.PlanAccessRules::MAX_WINDOWS],
+            'access_windows.*.from' => ['required', 'string', 'max:8'],
+            'access_windows.*.to' => ['required', 'string', 'max:8'],
+            'access_windows.*.label' => ['nullable', 'string', 'max:40'],
             'duration_months' => ['sometimes', 'integer', 'min:1'],
             'months' => ['sometimes', 'integer', 'min:1'],
             'benefits' => ['nullable'],
@@ -417,6 +501,8 @@ class PlanController extends Controller
         if (array_key_exists('tier', $data) && empty($data['tier'])) {
             $data['tier'] = 'lite';
         }
+
+        $data = $this->normalizeAccess($data, $plan);
 
         if (array_key_exists('benefits', $data) && is_array($data['benefits'])) {
             $data['benefits'] = json_encode(array_values(array_filter(array_map(

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Services\Billing\PricingMode;
+use App\Services\Membership\PlanAccessRules;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,6 +18,11 @@ class Plan extends Model
         'price',
         'original_price',
         'duration_days',
+        // Reglas de acceso: qué compra el plan además de la vigencia.
+        'access_mode',
+        'entry_credits',
+        'access_days',
+        'access_windows',
         'benefits',
         'is_recommended',
         'badge',
@@ -46,12 +52,66 @@ class Plan extends Model
         'sellable' => 'boolean',
         'sort_order' => 'integer',
         'features' => 'array',
+        'entry_credits' => 'integer',
+        'access_days' => 'array',
+        'access_windows' => 'array',
         'price_includes_tax' => 'boolean',
         'billing_enabled' => 'boolean',
     ];
 
     /** Segmentos comerciales disponibles para un plan. */
     public const TIERS = ['lite', 'pro', 'premium'];
+
+    /**
+     * Las reglas de acceso del plan, normalizadas.
+     *
+     * Existe para que nadie vuelva a interpretar las columnas por su cuenta: el
+     * CRM, el terminal de recepción y el registro de asistencia preguntan aquí.
+     * Ver {@see PlanAccessRules}.
+     */
+    public function accessRules(): PlanAccessRules
+    {
+        return PlanAccessRules::fromPlan($this);
+    }
+
+    /** ¿Se vende por entradas («15 entradas al mes») y no por días sueltos? */
+    public function isByEntries(): bool
+    {
+        return $this->accessRules()->isByEntries();
+    }
+
+    /**
+     * Las restricciones del plan dichas como un beneficio más.
+     *
+     * PARA QUÉ. La app del socio no se puede modificar, y de un plan solo lee
+     * precio, vigencia en meses y la lista de beneficios. Sin esto, quien abre
+     * la app vería «Plan Valera · 1 mes» y ni una palabra de que son 15
+     * entradas: la información más importante del plan sería justo la que no
+     * aparece. Escribiéndola en la lista de beneficios —que la app ya pinta— el
+     * socio la ve sin desplegar nada en el teléfono.
+     *
+     * Se generan, no se guardan: si mañana el plan pasa a 20 entradas, el texto
+     * cambia solo y no queda un beneficio viejo mintiendo.
+     *
+     * @return list<string>
+     */
+    public function accessBenefitLines(): array
+    {
+        $reglas = $this->accessRules();
+        $lineas = [];
+
+        if ($reglas->isByEntries()) {
+            $lineas[] = $reglas->entries.' entradas durante la vigencia del plan';
+        }
+        if ($reglas->restrictsDays()) {
+            $lineas[] = 'Días de acceso: '.$reglas->daysLabel();
+        }
+        if ($reglas->restrictsHours()) {
+            $lineas[] = 'Horario de acceso: '.$reglas->hoursLabel();
+        }
+
+        return $lineas;
+    }
 
     /** Tarifa de IVA del plan (facturación electrónica). */
     public function taxRate(): BelongsTo

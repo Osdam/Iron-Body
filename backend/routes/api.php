@@ -158,6 +158,14 @@ Route::middleware('auth.admin')->group(function (): void {
         ->whereNumber('user');
     Route::post('users/{user}/resume', [\App\Http\Controllers\Api\Admin\MembershipFreezeController::class, 'resume'])
         ->whereNumber('user');
+    // ACCESO del socio: si puede entrar ahora y cuántas entradas le quedan en un
+    // plan por consumo. Es la misma respuesta que usa el terminal de recepción,
+    // para que el mostrador y la puerta no puedan decir cosas distintas.
+    Route::get('users/{user}/access', [\App\Http\Controllers\Api\Admin\MembershipAdjustmentController::class, 'show'])
+        ->whereNumber('user');
+    // SUMAR días o entradas a mano: dinero del gimnasio, permiso aparte.
+    Route::post('users/{user}/adjustments', [\App\Http\Controllers\Api\Admin\MembershipAdjustmentController::class, 'store'])
+        ->whereNumber('user');
     Route::get('users/{user}/plan-features', [UserController::class, 'planFeatures']);
     Route::patch('users/{user}', [UserController::class, 'update']);
     Route::put('users/{user}', [UserController::class, 'update']);

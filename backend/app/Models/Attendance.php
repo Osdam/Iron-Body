@@ -15,6 +15,10 @@ class Attendance extends Model
         'confidence',
         'note',
         'captured_at',
+        // Entró cuando las reglas de su plan no se lo permitían. Se registra
+        // igual: la persona está adentro. Ver la migración.
+        'over_limit',
+        'limit_reason',
     ];
 
     protected function casts(): array
@@ -22,6 +26,7 @@ class Attendance extends Model
         return [
             'captured_at' => 'datetime',
             'confidence' => 'float',
+            'over_limit' => 'boolean',
         ];
     }
 

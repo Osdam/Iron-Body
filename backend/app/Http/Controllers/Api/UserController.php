@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Member;
 use App\Models\Plan;
 use App\Models\User;
+use App\Services\Membership\MembershipAccess;
 use App\Services\Membership\MembershipFreeze;
 use App\Services\Audit\AuditTrail;
 use App\Services\NotificationService;
@@ -84,11 +85,17 @@ class UserController extends Controller
         // Adjunta menor de edad + acudiente por fila (para prefijar el editar)
         // sin exponer la relación cruda del miembro.
         $pausas = app(MembershipFreeze::class);
-        $page->getCollection()->transform(function (User $u) use ($pausas): User {
+        // El ACCESO de toda la página de una vez. Es lo que lee el terminal de
+        // recepción para saber si abre la puerta y cuántas entradas le quedan a
+        // cada socio, y se resuelve en bloque: fila por fila serían tres
+        // consultas por socio.
+        $accesos = app(MembershipAccess::class)->statesFor($page->getCollection());
+        $page->getCollection()->transform(function (User $u) use ($pausas, $accesos): User {
             $member = $u->appMember;
             $u->setAttribute('isMinor', (bool) ($member?->is_minor));
             $u->setAttribute('guardian', $this->guardianArray($member?->guardian));
             $u->setAttribute('freeze', $pausas->state($u));
+            $u->setAttribute('access', $accesos[$u->id] ?? null);
             $u->makeHidden(self::FREEZE_COLUMNS);
             $u->unsetRelation('appMember');
 
@@ -107,6 +114,9 @@ class UserController extends Controller
                 // esta ruta para refrescar a un socio concreto, y sin esto la
                 // pausa desaparecía de la pantalla al recargarlo.
                 'freeze' => app(MembershipFreeze::class)->state($user),
+                // Las reglas del plan y las entradas que le quedan: el mostrador
+                // las necesita al abrir la ficha, igual que la puerta.
+                'access' => app(MembershipAccess::class)->state($user),
                 'features' => $this->featuresFor($user),
             ]
         );
@@ -484,6 +494,7 @@ class UserController extends Controller
             // terminal esta membresía está vencida y la cuenta inactiva, que es
             // justo lo que hace que no puedan entrar sin tocarlos.
             'freeze' => app(MembershipFreeze::class)->state($user),
+            'access' => app(MembershipAccess::class)->state($user),
             'features' => $this->featuresFor($user),
             'created_at' => $user->created_at,
         ];

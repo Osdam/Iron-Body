@@ -46,7 +46,15 @@ class MembershipPlanController extends Controller
             'months' => $plan->months,
             'price' => (float) $plan->price,
             'original_price' => $plan->original_price !== null ? (float) $plan->original_price : null,
-            'benefits' => $plan->benefitsArray(),
+            // Las restricciones van DELANTE de los beneficios escritos a mano:
+            // que un plan sea por consumo, o solo de mañanas, es lo primero que
+            // el socio tiene que leer, no la letra pequeña. La app no sabe nada
+            // de esto; recibe una lista de textos, como siempre.
+            'benefits' => array_values(array_unique(array_merge(
+                $plan->accessBenefitLines(),
+                $plan->benefitsArray(),
+            ))),
+            'access' => $plan->accessRules()->toArray(),
             'is_recommended' => (bool) $plan->is_recommended,
             'badge' => $plan->badge,
             'status' => $plan->active ? 'active' : 'inactive',

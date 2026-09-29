@@ -388,6 +388,13 @@ final class AuthorizationMap
         'POST api/users/{user}/freeze' => 'members.freeze',
         'POST api/users/{user}/resume' => 'members.freeze',
 
+        // Consultar el acceso es parte de atender en el mostrador: quien ve la
+        // ficha tiene que poder ver si hoy puede entrar y cuántas entradas le
+        // quedan. Sumarle días o entradas NO: eso es regalar lo que se vende, y
+        // va con su propio permiso para poder dárselo solo a quien deba.
+        'GET api/users/{user}/access' => 'members.view',
+        'POST api/users/{user}/adjustments' => 'members.adjust',
+
         // Webhook del torniquete: lo llama el hardware, no una persona. Su
         // autenticación es la del propio dispositivo.
         'POST api/turnstile/webhook/fire' => self::PUBLIC,

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\Member;
 use App\Services\Audit\AuditTrail;
+use App\Services\Membership\MembershipAccess;
 use App\Models\MemberBiometric;
 use App\Models\TurnstileSetting;
 use App\Models\User;
@@ -117,6 +118,21 @@ class AttendanceController extends Controller
                 }
             }
 
+            // LAS REGLAS DEL PLAN, medidas aquí y no obedecidas aquí.
+            //
+            // El que decide en la puerta es el terminal de recepción, y decide
+            // sin internet con lo que tiene guardado: puede equivocarse —una
+            // entrada que ya se gastó en otra estación, una franja que cambió
+            // esta mañana—. Cuando el registro llega, este backend sí tiene la
+            // cuenta completa y la compara.
+            //
+            // Y LO GUARDA IGUAL. Rechazarlo sería mentir: la persona entró y el
+            // torniquete ya le abrió. Además el envío del terminal descarta los
+            // 4xx como registros envenenados, así que un rechazo borraría la
+            // única prueba de esa entrada. Se marca y el gimnasio decide.
+            $acceso = app(MembershipAccess::class)->state($user);
+            $fueraDeRegla = $action === 'entry' && $acceso['can_enter'] === false;
+
             $attendance = Attendance::query()->create([
                 'user_id' => $user->id,
                 'member_id' => $member?->id,
@@ -125,6 +141,8 @@ class AttendanceController extends Controller
                 'confidence' => $data['confidence'] ?? null,
                 'note' => $data['note'] ?? null,
                 'captured_at' => now(),
+                'over_limit' => $fueraDeRegla,
+                'limit_reason' => $fueraDeRegla ? $acceso['reason'] : null,
             ]);
 
             // Racha semanal: la ÚNICA forma de marcar un día activo es ir al
@@ -157,6 +175,10 @@ class AttendanceController extends Controller
                 'ok' => true,
                 'attendance' => $this->serialize($attendance->load('user:id,name,plan')),
                 'turnstile' => $turnstileResult,
+                // El acceso RECALCULADO, ya contando esta entrada: es lo que el
+                // terminal y el CRM enseñan («le quedan 7 de 15»), y viene del
+                // servidor para que nadie lleve su propia cuenta.
+                'access' => app(MembershipAccess::class)->state($user->refresh()),
             ], 201);
         } catch (Throwable $e) {
             return response()->json([
@@ -481,6 +503,10 @@ class AttendanceController extends Controller
             'source' => $a->source,
             'confidence' => $a->confidence,
             'note' => $a->note,
+            // Entradas que las reglas del plan no permitían. El feed las
+            // distingue para que el gimnasio las vea y decida.
+            'over_limit' => (bool) $a->over_limit,
+            'limit_reason' => $a->limit_reason,
             'captured_at' => $local?->toIso8601String(),
             'date' => $local?->toDateString(),
             'time' => $local?->format('H:i'),
