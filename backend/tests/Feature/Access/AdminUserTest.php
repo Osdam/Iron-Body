@@ -131,10 +131,12 @@ class AdminUserTest extends TestCase
         ], $h)->assertStatus(201);
 
         $creado = Admin::where('email', 'rehecho@ironbody.test')->first();
+        // La elegida exige confirmación y ya NO vuelve en la respuesta: quien la
+        // escribió la conoce, y devolverla solo la dejaba en el navegador.
         $this->postJson("/api/admin/users/{$creado->id}/reset-password",
-            ['password' => 'la-nueva-de-siempre'], $h)
+            ['password' => 'la-nueva-de-siempre', 'password_confirmation' => 'la-nueva-de-siempre'], $h)
             ->assertOk()
-            ->assertJsonPath('password', 'la-nueva-de-siempre')
+            ->assertJsonPath('password', null)
             ->assertJsonPath('generated', false);
 
         $this->postJson('/api/admin/auth/login', [

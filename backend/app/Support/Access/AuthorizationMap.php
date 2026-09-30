@@ -275,6 +275,13 @@ final class AuthorizationMap
             'cash.products.view',
         ],
 
+        /*
+         * El canal que confirma los cambios de contraseña de las cuentas del
+         * CRM. Solo lo abre quien puede hacer esos cambios: ver la lista de
+         * usuarios no basta para seguir quién restablece la contraseña de quién.
+         */
+        'GET api/admin/users/stream' => 'users.manage',
+
         // Puerta de entrada del CRM: sin ella nadie podría autenticarse nunca.
         'POST api/admin/auth/login' => self::PUBLIC,
 

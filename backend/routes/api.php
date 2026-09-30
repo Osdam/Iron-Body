@@ -1316,6 +1316,9 @@ Route::post('admin/caja/shifts/{shift}/difference', [CashShiftController::class,
 // Quién puede entrar y con qué rol. El permiso fino y los invariantes de Super
 // Admin los comprueba el controlador; el mapa central pone la puerta.
 Route::get('admin/users',                       [\App\Http\Controllers\Api\Admin\AdminUserController::class, 'index']);
+// Confirmación en tiempo real de los cambios de contraseña: la traza de
+// auditoría es el flujo de eventos. Exige users.manage (ver AuthorizationMap).
+Route::get('admin/users/stream',                [\App\Http\Controllers\Api\Admin\AdminUserRealtimeController::class, 'stream']);
 Route::post('admin/users',                      [\App\Http\Controllers\Api\Admin\AdminUserController::class, 'store']);
 Route::patch('admin/users/{admin}',             [\App\Http\Controllers\Api\Admin\AdminUserController::class, 'update']);
 Route::post('admin/users/{admin}/status',       [\App\Http\Controllers\Api\Admin\AdminUserController::class, 'setStatus']);
