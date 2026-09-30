@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Member;
 use App\Models\MemberRealtimeEvent;
+use App\Support\Access\TrainerMemberScope;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -156,7 +157,11 @@ class RealtimeEvents
             $version = (int) (microtime(true) * 1000);
             $changedJson = json_encode($changed);
 
-            $ids = Member::query()
+            // Sin el alcance del entrenador: esto no lee datos de nadie, solo
+            // reparte una señal. Si quien dispara el cambio es una cuenta de
+            // entrenador, el scope global dejaría el aviso solo a SUS socios y
+            // el resto seguiría viendo el cupo viejo.
+            $ids = Member::withoutGlobalScope(TrainerMemberScope::NAME)
                 ->where('status', Member::STATUS_ACTIVE)
                 ->pluck('id');
 

@@ -27,7 +27,6 @@ class MyClass extends Model
         'date_time',
         'duration_minutes',
         'max_capacity',
-        'enrolled_count',
         'location',
         'status',
         'description',

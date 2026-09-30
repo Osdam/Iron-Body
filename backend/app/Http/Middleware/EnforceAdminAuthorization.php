@@ -85,7 +85,8 @@ class EnforceAdminAuthorization
         }
 
         // Una LISTA significa «cualquiera de estos»: la ruta la abren varios
-        // perfiles por motivos distintos. Hoy solo el canal financiero.
+        // perfiles por motivos distintos (el canal financiero, inscribir en
+        // clases).
         if (is_array($permiso)) {
             foreach ($permiso as $candidato) {
                 if (CrmPermission::allows($admin, $candidato)) {

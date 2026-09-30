@@ -3,14 +3,12 @@
 namespace App\Http\Controllers\Concerns;
 
 use App\Models\ClassAttendance;
-use App\Models\ClassReservation;
 use App\Models\ClassSession;
-use App\Models\Member;
 use App\Models\MyClass;
+use App\Services\Classes\ClassBookingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Contexto de la clase para el MIEMBRO según la sesión de HOY: si está en curso,
@@ -21,20 +19,6 @@ trait MemberClassContext
 {
     /** Zona horaria operativa del gimnasio (el backend corre en UTC). */
     public const OPERATIONAL_TZ = 'America/Bogota';
-
-    /**
-     * ¿El plan del miembro incluye clases?
-     *
-     * La app ya bloquea la pestaña Clases con este mismo flag
-     * (`Member::resolvedFeatures()`, que es lo que consume el cliente), pero la
-     * API no lo comprobaba: una llamada directa reservaba igual y ocupaba un
-     * cupo que corresponde a otro socio. Se usa la MISMA fuente que el cliente
-     * para que backend y app no puedan divergir.
-     */
-    protected function memberHasClassesFeature(Member $member): bool
-    {
-        return (bool) ($member->resolvedFeatures()['classes'] ?? false);
-    }
 
     /** Respuesta única cuando el plan no incluye clases. */
     protected function classesNotInPlanResponse(): JsonResponse
@@ -125,78 +109,20 @@ trait MemberClassContext
     }
 
     /**
-     * Estado OFICIAL de una sesión de clase, controlado por el entrenador/backend
-     * (NUNCA por la hora local): 'finished' si el entrenador la cerró
-     * (`ended_at`), 'live' si la inició y no la ha cerrado (`started_at`), o
-     * 'scheduled' en cualquier otro caso. Fuente única de verdad para el estado,
-     * compartida por Clases, el detalle y "Organizar mi semana".
+     * Estado OFICIAL de una sesión de clase ('finished' | 'live' | 'scheduled'),
+     * controlado por el entrenador y NUNCA por la hora local.
+     *
+     * Delegado: la regla vive en {@see ClassBookingService::sessionStatus()},
+     * que es también la que decide si se puede reservar o cancelar.
      */
     protected function sessionStatusLabel(?ClassSession $session): string
     {
-        if ($session && $session->ended_at) {
-            return 'finished';
-        }
-        if ($session && $session->started_at) {
-            return 'live';
-        }
-
-        return 'scheduled';
-    }
-
-    /**
-     * Reserva una ocurrencia (clase + fecha de sesión) de forma transaccional y
-     * segura ante concurrencia: bloquea la clase (Postgres; no-op en SQLite de
-     * tests), valida cupo POR FECHA y anti-doble reserva (tolerante a la reserva
-     * legacy sin fecha = ciclo vigente). Devuelve: reserved | already | full.
-     * Compartido por la reserva individual y la reserva semanal en lote.
-     */
-    protected function reserveOccurrence(Member $member, MyClass $class, string $date): string
-    {
-        return DB::transaction(function () use ($member, $class, $date): string {
-            $locked = MyClass::whereKey($class->getKey())->lockForUpdate()->first() ?? $class;
-
-            $already = ClassReservation::where('class_id', $class->getKey())
-                ->where('member_id', $member->getKey())
-                ->where(function ($q) use ($date): void {
-                    $q->whereNull('session_date')->orWhereDate('session_date', $date);
-                })
-                ->exists();
-            if ($already) {
-                return 'already';
-            }
-
-            // El cupo se cuenta SIN lockForUpdate: ya serializamos las reservas
-            // concurrentes de esta clase con el lock de su fila (arriba), así que
-            // dentro de la transacción el conteo es consistente. Postgres además
-            // PROHÍBE `FOR UPDATE` sobre agregados: bloquear la fila y luego contar
-            // lanzaba "FOR UPDATE is not allowed with aggregate functions" (500).
-            $booked = ClassReservation::where('class_id', $class->getKey())
-                ->where(function ($q) use ($date): void {
-                    $q->whereNull('session_date')->orWhereDate('session_date', $date);
-                })
-                ->count();
-            if ($booked >= (int) $locked->max_capacity) {
-                return 'full';
-            }
-
-            ClassReservation::create([
-                'class_id' => $class->getKey(),
-                'member_id' => $member->getKey(),
-                'session_date' => $date,
-                'reserved_at' => now(),
-            ]);
-
-            return 'reserved';
-        });
+        return app(ClassBookingService::class)->sessionStatus($session);
     }
 
     /** Cupo ocupado de una ocurrencia (reservas de esa fecha + legacy sin fecha). */
     protected function occurrenceBookedCount(MyClass $class, string $date): int
     {
-        return (int) ClassReservation::where('class_id', $class->getKey())
-            ->where(function ($q) use ($date): void {
-                $q->whereNull('session_date')->orWhereDate('session_date', $date);
-            })
-            ->count();
+        return app(ClassBookingService::class)->bookedCount($class, $date);
     }
 }

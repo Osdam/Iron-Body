@@ -183,9 +183,10 @@ final class CrmPermission
             // Cuentas por cobrar: el mostrador es quien fía y quien cobra el
             // saldo cuando la persona vuelve. Es exactamente su trabajo.
             'receivables.view', 'receivables.create', 'receivables.operate',
-            // Recepción gestiona inscripciones a clases desde el mostrador, así
-            // que necesita verlas. Es lectura: crear y editar horarios no.
-            'classes.view',
+            // Recepción gestiona inscripciones a clases desde el mostrador:
+            // las ve y las hace, con las mismas reglas que la app. Crear y
+            // editar horarios no (eso es `classes.manage`).
+            'classes.view', 'classes.enroll',
             'support.view',
             // SIN moderación, ni siquiera lectura. ModerationPermission se la
             // concedía, pero el rol base de recepción es atención y cobro; si

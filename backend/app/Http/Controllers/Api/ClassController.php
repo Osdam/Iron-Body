@@ -12,6 +12,7 @@ use App\Models\ClassSession;
 use App\Models\Member;
 use App\Models\MyClass;
 use App\Services\Audit\AuditTrail;
+use App\Services\Classes\ClassBookingService;
 use App\Models\Trainer;
 use App\Models\TrainerRole;
 use App\Services\NotificationService;
@@ -208,7 +209,15 @@ class ClassController extends Controller
             'end_time' => 'sometimes|date_format:H:i|after:start_time',
             'duration_minutes' => 'nullable|integer|min:15',
             'max_capacity' => 'sometimes|integer|min:1',
-            'enrolled_count' => 'nullable|integer|min:0',
+            // El número de inscritos NO se escribe: se cuenta de las reservas.
+            // Era la vía del contador «Agregar/Quitar inscrito» del CRM, que
+            // movía un número sin inscribir a nadie —ni la app ni el
+            // entrenador lo veían— y avisaba «Clase actualizada» a todos los
+            // inscritos en cada clic. Se rechaza en vez de ignorarse para que
+            // una pestaña antigua falle sin efectos, no con ellos. `missing` y
+            // no `prohibited`: esta deja pasar null y vacío, que acababan en un
+            // 500 contra la columna NOT NULL.
+            'enrolled_count' => 'missing',
             'location' => 'nullable|string|max:255',
             'status' => 'sometimes|string|in:active,inactive,finished',
             'trainer_id' => 'nullable|exists:trainers,id',
@@ -220,6 +229,8 @@ class ClassController extends Controller
             'renewal_hours' => 'nullable|integer|in:0,8,12,24,48,168',
             'allow_online_booking' => 'nullable|boolean',
             'requires_active_plan' => 'nullable|boolean',
+        ], [
+            'enrolled_count.missing' => 'El número de inscritos se calcula con las reservas. Inscribe o quita socios desde «Inscritos».',
         ]);
 
         if (
@@ -445,35 +456,35 @@ class ClassController extends Controller
     public function reserve(Request $request, MyClass $myClass): JsonResponse
     {
         $member = $request->attributes->get('auth_member');
+        $booking = app(ClassBookingService::class);
 
-        if (! $this->memberHasClassesFeature($member)) {
+        // Reglas del dominio: una sola fuente para la app y para el mostrador.
+        // Aquí solo se traducen a los textos que la app publicada ya enseña.
+        $motivo = $booking->ineligibility($member, $myClass, ClassBookingService::CHANNEL_MEMBER);
+        if ($motivo === ClassBookingService::NOT_IN_PLAN) {
             return $this->classesNotInPlanResponse();
         }
-
-        if ($myClass->status !== 'active' || ! $myClass->allow_online_booking) {
+        if ($motivo !== null) {
             return response()->json(['message' => 'Clase no disponible para reservas.'], 422);
         }
 
         // Reserva individual = la PRÓXIMA ocurrencia (por fecha), con lock y cupo
         // por fecha para no sobrepasar el aforo ante concurrencia.
-        $date = optional($myClass->operationalOccurrence())->toDateString() ?? $this->operationalToday()->toDateString();
-        $outcome = $this->reserveOccurrence($member, $myClass, $date);
+        $date = $booking->operationalDate($myClass);
+        $outcome = $booking->reserveOccurrence($member, $myClass, $date);
 
-        if ($outcome === 'already') {
+        if ($outcome === ClassBookingService::ALREADY) {
             return response()->json(['message' => 'Ya tienes esta clase reservada.'], 422);
         }
-        if ($outcome === 'full') {
+        if ($outcome === ClassBookingService::FULL) {
             return response()->json(['message' => 'No hay cupos disponibles.'], 422);
         }
 
-        $myClass->reservations_count = $this->occurrenceBookedCount($myClass, $date);
+        $myClass->reservations_count = $booking->bookedCount($myClass, $date);
         $myClass->load('trainer:id,full_name');
 
         // Cupo cambió → refresca Clases para todos en vivo + portal del entrenador.
-        RealtimeEvents::classesChanged();
-        if ($myClass->trainer_id) {
-            TrainerRealtimeEvents::emit((int) $myClass->trainer_id, TrainerRealtimeEvents::CLASS_EVENT, ['classes']);
-        }
+        $booking->announce($myClass);
 
         return response()->json(['data' => $this->memberResource($myClass, $member, true)]);
     }
@@ -492,41 +503,36 @@ class ClassController extends Controller
             ? Carbon::parse($data['session_date'])->toDateString()
             : null;
 
-        // Sesión a validar: la de ESA fecha (semanal) o la vigente de hoy (individual).
-        // No se puede cancelar una clase que ya inició o finalizó.
+        $booking = app(ClassBookingService::class);
+
+        // Sesión a validar: la de ESA fecha (semanal) o la vigente de hoy
+        // (individual). La REGLA —no se cancela lo que el entrenador ya inició o
+        // cerró— vive en el servicio; qué sesión es la relevante lo decide esta
+        // puerta, como siempre.
         $session = $explicit !== null
             ? ClassSession::where('class_id', $myClass->id)->whereDate('session_date', $explicit)->first()
             : $this->currentClassSession($myClass);
-        if ($session && $session->started_at) {
+        $bloqueo = $booking->cancelBlock($session);
+        if ($bloqueo !== null) {
             return response()->json([
-                'message' => $session->ended_at ? 'La clase ya finalizó.' : 'La clase ya está en curso.',
+                'message' => $bloqueo === ClassBookingService::OCCURRENCE_CLOSED
+                    ? 'La clase ya finalizó.'
+                    : 'La clase ya está en curso.',
             ], 422);
         }
 
-        $date = $explicit ?? (optional($myClass->operationalOccurrence())->toDateString() ?? $this->operationalToday()->toDateString());
-        $query = ClassReservation::where('class_id', $myClass->id)
-            ->where('member_id', $member->id);
-        if ($explicit !== null) {
-            $query->whereDate('session_date', $explicit); // ocurrencia exacta de la semana
-        } else {
-            $query->where(function ($q) use ($date): void {
-                $q->whereNull('session_date')->orWhereDate('session_date', $date);
-            });
-        }
-        $deleted = $query->delete();
+        $date = $explicit ?? $booking->operationalDate($myClass);
+        $deleted = $booking->cancelOccurrence($member, $myClass, $explicit, $date);
 
         if (! $deleted) {
             return response()->json(['message' => 'No tienes reserva en esta clase.'], 422);
         }
 
-        $myClass->reservations_count = $this->occurrenceBookedCount($myClass, $date);
+        $myClass->reservations_count = $booking->bookedCount($myClass, $date);
         $myClass->load('trainer:id,full_name');
 
         // Cupo liberado → refresca Clases para todos en vivo + portal del entrenador.
-        RealtimeEvents::classesChanged();
-        if ($myClass->trainer_id) {
-            TrainerRealtimeEvents::emit((int) $myClass->trainer_id, TrainerRealtimeEvents::CLASS_EVENT, ['classes']);
-        }
+        $booking->announce($myClass);
 
         return response()->json(['data' => $this->memberResource($myClass, $member, false)]);
     }

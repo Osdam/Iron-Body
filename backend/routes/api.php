@@ -1050,6 +1050,16 @@ Route::middleware('auth.admin')->prefix('admin/iron-ai')->group(function (): voi
 // Horario programado vs inicio/fin real (con rostro) por sesión de clase.
 Route::get('admin/class-sessions', [\App\Http\Controllers\Api\Admin\ClassSupervisionController::class, 'index']);
 
+// ── Inscripción a clases desde el mostrador (CRM admin) ───────────────────
+// El CRM es otro consumidor del MISMO dominio de reservas que la app
+// (ClassBookingService): mismas reglas, mismo bloqueo, mismo cupo. Ver quién
+// está inscrito exige `classes.view`; inscribir o quitar, `classes.enroll` o
+// `classes.manage` (AuthorizationMap).
+Route::get('admin/classes/stream', [\App\Http\Controllers\Api\Admin\ClassEnrollmentController::class, 'stream']); // SSE tiempo real
+Route::get('admin/classes/{myClass}/enrollments', [\App\Http\Controllers\Api\Admin\ClassEnrollmentController::class, 'index']);
+Route::post('admin/classes/{myClass}/enrollments', [\App\Http\Controllers\Api\Admin\ClassEnrollmentController::class, 'store']);
+Route::delete('admin/classes/{myClass}/enrollments/{member}', [\App\Http\Controllers\Api\Admin\ClassEnrollmentController::class, 'destroy']);
+
 // ── Seguridad: bandeja de reportes (CRM admin — patrón del resto del CRM) ──
 Route::get('admin/security/reports',                       [\App\Http\Controllers\Api\SecuritySupportController::class, 'adminIndex']);
 Route::get('admin/security/reports/{report}',              [\App\Http\Controllers\Api\SecuritySupportController::class, 'adminShow']);

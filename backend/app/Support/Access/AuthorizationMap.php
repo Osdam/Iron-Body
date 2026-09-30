@@ -141,6 +141,7 @@ final class AuthorizationMap
         // ── Clases, asistencia y torniquete ─────────────────────────────────
         'ClassController' => 'classes',
         'ClassSupervisionController' => 'classes',
+        'ClassEnrollmentController' => 'classes',
         'AttendanceController' => 'classes',
         'TurnstileController' => 'classes',
 
@@ -274,6 +275,19 @@ final class AuthorizationMap
             'cash.gym.view',
             'cash.products.view',
         ],
+
+        /*
+         * INSCRIBIR A UN SOCIO EN UNA CLASE desde el mostrador. Es el trabajo
+         * de recepción, pero `classes.manage` además crea, edita y borra
+         * horarios, y eso no lo es: por eso existe `classes.enroll`. Quien
+         * administra las clases también puede inscribir —puede hasta borrar la
+         * clase entera—, así que basta cualquiera de las dos.
+         *
+         * Ver la lista de inscritos sigue siendo `classes.view` (lectura del
+         * controlador), sin excepción.
+         */
+        'POST api/admin/classes/{myClass}/enrollments' => ['classes.enroll', 'classes.manage'],
+        'DELETE api/admin/classes/{myClass}/enrollments/{member}' => ['classes.enroll', 'classes.manage'],
 
         /*
          * El canal que confirma los cambios de contraseña de las cuentas del
@@ -518,7 +532,7 @@ final class AuthorizationMap
      *
      * Puede devolver una LISTA cuando la ruta la pueden abrir varios perfiles
      * por motivos distintos: entonces basta con tener UNO. Ver el canal
-     * financiero en OVERRIDES, que es el único caso hoy.
+     * financiero y la inscripción a clases en OVERRIDES.
      *
      * @return string|list<string>|null
      */
