@@ -43,7 +43,7 @@ final class StrategyContract
      * @param  array<string,mixed>  $resolved
      * @return array<string,mixed>
      */
-    public static function hints(array $customer, array $resolved, bool $canOfferLink, ?string $baseIntent = null, array $payment = [], array $membership = [], bool $greetingOnly = false): array
+    public static function hints(array $customer, array $resolved, bool $canOfferLink, ?string $baseIntent = null, array $payment = [], array $membership = [], bool $greetingOnly = false, bool $memoryOnly = false): array
     {
         /*
          * MODO RECEPCIÓN: un saludo y nada más se contesta recibiendo.
@@ -63,11 +63,62 @@ final class StrategyContract
                 'open_objection' => false,
                 'may_ask' => [],
                 'question_budget' => 1,
+                'suggested_question' => null,
                 'greeting_only' => true,
+                'memory_only' => false,
             ]);
         }
 
-        return array_merge(self::base($customer, $resolved, $canOfferLink, $baseIntent, $payment, $membership), ['greeting_only' => false]);
+        /*
+         * MODO MEMORIA: «¿a qué hora era mi visita?» se resuelve y se espera.
+         *
+         * Es el mismo fallo que el saludo: con un lead READY las pistas
+         * empujaban a cerrar ante una pregunta de memoria, el estratega fijaba
+         * el plan, el redactor vendía y la política tumbaba el borrador. Ni vía
+         * rápida, ni recomendación, ni pregunta de descubrimiento en este turno.
+         */
+        if ($memoryOnly) {
+            return array_merge(self::base($customer, $resolved, $canOfferLink, $baseIntent, $payment, $membership), [
+                'hot_lead_fast_path' => false,
+                'fast_path_kind' => null,
+                'lifecycle_mode' => 'support',
+                'should_recommend_now' => false,
+                'open_objection' => false,
+                'may_ask' => [],
+                'question_budget' => 0,
+                'suggested_question' => null,
+                'greeting_only' => false,
+                'memory_only' => true,
+            ]);
+        }
+
+        return array_merge(self::base($customer, $resolved, $canOfferLink, $baseIntent, $payment, $membership), ['greeting_only' => false, 'memory_only' => false]);
+    }
+
+    /**
+     * La pregunta adaptativa, sin tildes porque cruza al modelo. Null cuando
+     * ya se sabe lo suficiente: entonces se recomienda, no se pregunta.
+     *
+     * @param  string[]  $mayAsk
+     */
+    public static function preguntaAdaptativa(?string $objective, ?string $experience, ?string $availability, array $mayAsk): ?string
+    {
+        if ($objective === null && in_array('objective', $mayAsk, true)) {
+            return match ($experience) {
+                'experienced', 'advanced' => 'vienes buscando mantener tu rendimiento o cambiar tu composicion corporal?',
+                // Sin «te gustaría»: el detector de ofertas lo registra como una oferta y pisa la viva.
+                'beginner' => 'que buscas lograr al empezar: bajar grasa, ganar masa o coger el habito?',
+                default => 'seria tu primera vez entrenando o ya tienes experiencia?',
+            };
+        }
+        if ($experience === null && in_array('experience_level', $mayAsk, true)) {
+            return 'seria tu primera vez entrenando o ya vienes con experiencia?';
+        }
+        if ($availability === null && in_array('time_constraints', $mayAsk, true)) {
+            return 'que dias o en que franja te queda mejor entrenar?';
+        }
+
+        return null;
     }
 
     /** Una pregunta de descubrimiento comercial, la que no cabe en un saludo. */
@@ -128,14 +179,31 @@ final class StrategyContract
             $mayAsk[] = 'main_barrier';
         }
 
+        $recomiendaYa = $enough && in_array($mode, ['consultative', 'closing', 'winback'], true);
+
         return [
             'hot_lead_fast_path' => $hotPath,
             'fast_path_kind' => $fastPathKind,
             'lifecycle_mode' => $mode,
-            'should_recommend_now' => $enough && in_array($mode, ['consultative', 'closing', 'winback'], true),
+            'should_recommend_now' => $recomiendaYa,
             'open_objection' => $objecionAbierta,
             'may_ask' => $mayAsk,
             'question_budget' => $questionBudget,
+            /*
+             * LA PREGUNTA QUE TOCA, si toca alguna: adaptada a lo que ya se
+             * sabe. «¿Cuál es tu objetivo?» por rutina es un formulario; a
+             * quien ya entrenó se le pregunta si quiere mantener rendimiento o
+             * cambiar composición, a quien no dijo nada si es su primera vez,
+             * y a quien ya quiere pagar no se le pregunta nada. Cuando ya toca
+             * recomendar tampoco: se recomienda, no se pregunta. El redactor la
+             * dice con sus palabras; el backend no la impone.
+             */
+            // Sólo a quien todavía no conocemos: a un socio, a un exsocio o a quien tiene un pago
+            // pendiente, «¿sería tu primera vez entrenando?» le dice que no sabemos quién es.
+            'suggested_question' => $questionBudget === 0 || $hotPath || $objecionAbierta || $recomiendaYa
+                || $esCliente || ! in_array($mode, ['consultative', 'closing'], true)
+                ? null
+                : self::preguntaAdaptativa($objective, $customer['inferred']['experience_level'] ?? ($customer['known']['experience_level'] ?? null), $customer['inferred']['availability'] ?? ($customer['known']['availability'] ?? null), $mayAsk),
             'payment_possible' => $canOfferLink,
             'do_not_sell' => $esCliente && ! $renewal,
             // Renovar es la única venta a un cliente: solo en ventana, solo con un

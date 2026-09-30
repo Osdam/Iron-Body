@@ -299,7 +299,10 @@ final class ComposerStyleGuard
     private const EDAD_O_CUERPO = '/\b(a tu edad|gord[oa]s?|obes[oa]s?|flac[oa]s?|barrig[oó]n|panz[oó]n)\b/u';
 
     /** Muletillas de bot y cierres automáticos. */
-    private const MULETILLAS = '/\b(hay algo mas en (lo )?que (te )?pueda ayudar(te|le)?|no dudes en (consultar|preguntar|escribir)(me|nos)?|estoy aqui para ayudarte|estamos para servirte|quedo atent[oa] a (tus|cualquier)|sera un placer atenderte|como asistente virtual)\b/u';
+    private const MULETILLAS = '/\b(hay algo mas en (lo )?que (te )?pueda ayudar(te|le)?|no dudes en (consultar|preguntar|escribir)(me|nos)?|estoy aqui para ayudarte|estamos para servirte|quedo atent[oa] a (tus|cualquier)|sera un placer atenderte|como asistente virtual'
+        // Las de encuesta: salieron dos veces en una prueba física antes de
+        // volver a preguntar lo que la persona ya había dicho.
+        .'|para (orientarte|ayudarte|guiarte|asesorarte) mejor|que necesitas saber|puedes preguntarme por)\b/u';
 
     /**
      * Disciplinas e instalaciones que un modelo completa «de gimnasio» cuando

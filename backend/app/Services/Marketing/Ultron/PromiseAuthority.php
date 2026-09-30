@@ -97,6 +97,88 @@ final class PromiseAuthority
      */
     private const OBJETO_DEL_EQUIPO = '(equipo|solicitud|peticion|caso|reclamo|reporte|revis\w*|radicad\w*)';
 
+    /**
+     * «Cancelé tu visita», «la moví al jueves», «tu visita quedó cancelada»,
+     * «se canceló tu visita», «te la acabo de cancelar»: un cambio que sólo es
+     * verdad si la herramienta de cortesía lo hizo. Sin esto, con una visita
+     * ya confirmada (que la herramienta no toca) o sin nada que cancelar, la
+     * frase salía y la persona no iba, o iba, a una visita que seguía en pie o
+     * que nunca existió.
+     *
+     * Una lista y no una sola expresión: cada forma marca dónde está el verbo
+     * (el grupo `v`), porque la negación y la pregunta se miran pegadas a él y
+     * no a una ventana de caracteres. Sin tildes el subjuntivo y el pretérito
+     * se escriben igual («si quieres que te la cambie» / «la cambié»): tras
+     * «que», con o sin pronombre, es un ofrecimiento. Con el pronombre solo,
+     * los verbos de mover piden además el cuándo, porque «la pasamos bien»
+     * también es «la pasamos». El segundo valor dice si la forma nombra la
+     * visita; si no la nombra, el pronombre puede ser de otra cosa («la
+     * membresía la cancelamos en recepción») y decide el antecedente. El resto
+     * lo decide {@see cambioDeVisitaEn()}.
+     *
+     * @var array<int,array{0:string,1:bool}>
+     */
+    private const CAMBIOS_DE_VISITA = [
+        // «cancelé tu visita», «pasamos tu cita para el lunes».
+        ['/(?<!que )(?<!que te )(?<!que le )\b(?<v>cancele|cancelamos|anule|anulamos|movi|movimos|cambie|cambiamos|corri|corrimos|reagende|reagendamos|reprograme|reprogramamos|elimine|eliminamos|borre|borramos|pase|pasamos)\s+(tu|la|su)\s+(visita|cita|cortesia|solicitud)\b/u', true],
+        // «ya la cancelé», «la reagendamos».
+        ['/(?<!que )(?<!que te )(?<!que le )(?<!que se )(?<!cuando )(?<!apenas )\b(la|lo)\s+(?<v>cancele|cancelamos|anule|anulamos|reagende|reagendamos|reprograme|reprogramamos|elimine|eliminamos|borre|borramos)\b/u', false],
+        // «la moví para el jueves», y no «la pasamos bien».
+        ['/(?<!que )(?<!que te )(?<!que le )(?<!que se )(?<!cuando )(?<!apenas )\b(la|lo)\s+(?<v>movi|movimos|pase|pasamos|corri|corrimos|cambie|cambiamos)\s+(para|al|a|hasta|el)\s+(el |la |las |los )?(manana|pasado|hoy|lunes|martes|miercoles|jueves|viernes|sabado|domingo|proxim\w*|otr[oa]|semana|\d)/u', false],
+        // «tu visita quedó cancelada», «la cita ha sido reprogramada».
+        ['/\b(visita|cita|cortesia|solicitud)\b[^.!?;]{0,40}?(?<v>\b(qued(o|a)|fue|esta|ya\s+esta|ha\s+sido)\s+(cancelad|anulad|movid|cambiad|reagendad|reprogramad|eliminad|borrad)\w*)/u', true],
+        // «ya quedó cancelada tu visita»: el participio delante, el orden más común.
+        ['/(?<v>\b(qued(o|a)|esta|fue|ha\s+sido)\s+(cancelad|anulad|movid|cambiad|reagendad|reprogramad|eliminad|borrad)[oa]s?)\s+(tu|la|su)\s+(visita|cita|cortesia|solicitud)\b/u', true],
+        // «listo, ya quedó anulada».
+        ['/(?<v>\bqued(o|a)\s+(cancelad|anulad|reagendad|reprogramad|eliminad)[oa])\b/u', false],
+        // «se canceló tu visita», «tu visita ya se canceló».
+        ['/(?<v>\bse\s+(cancelo|anulo|movio|cambio|reagendo|reprogramo|elimino|borro))\s+(tu|la|su)\s+(visita|cita|cortesia|solicitud)\b/u', true],
+        ['/\b(visita|cita|cortesia|solicitud)\b[^.!?;]{0,30}?(?<v>\bse\s+(cancelo|anulo|movio|reagendo|reprogramo|elimino|borro))\b/u', true],
+        // «he cancelado tu visita», «ya la he movido».
+        ['/(?<v>\b(he|hemos)\s+(cancelado|anulado|movido|cambiado|reagendado|reprogramado|eliminado|borrado|pasado))\s+(tu|la|su)\s+(visita|cita|cortesia|solicitud)\b/u', true],
+        ['/\b(la|lo)\s+(?<v>(he|hemos)\s+(cancelado|anulado|movido|cambiado|reagendado|reprogramado|eliminado|borrado))\b/u', false],
+        // «dejé cancelada tu visita», «te la dejé cancelada».
+        ['/(?<v>\b(deje|dejamos)\s+(cancelad|anulad|movid|cambiad|reagendad|reprogramad)[oa])\s+(tu|la|su)\s+(visita|cita|cortesia|solicitud)\b/u', true],
+        ['/\b(la|lo)\s+(?<v>(deje|dejamos)\s+(cancelad|anulad|movid|cambiad|reagendad|reprogramad)[oa])\b/u', false],
+        // «acabo de cancelar tu visita», «acabo de cancelarla», «te la acabo de cancelar».
+        ['/(?<v>\b(acabo|acabamos|acabe)\s+de\s+(cancelar|anular|mover|cambiar|reagendar|reprogramar|eliminar|borrar))\s+(tu|la|su)\s+(visita|cita|cortesia|solicitud)\b/u', true],
+        ['/(?<v>\b(acabo|acabamos|acabe)\s+de\s+(cancelar|anular|mover|cambiar|reagendar|reprogramar|eliminar|borrar))(la|lo)\b/u', false],
+        ['/\b(la|lo)\s+(?<v>(acabo|acabamos|acabe)\s+de\s+(cancelar|anular|mover|cambiar|reagendar|reprogramar|eliminar|borrar))\b/u', false],
+    ];
+
+    /** En la primera persona del plural el presente y el pretérito son iguales: «la cancelamos» puede ser un hecho o una oferta. */
+    private const AMBIGUAS = '/\b(cancelamos|anulamos|cambiamos|pasamos|reagendamos|reprogramamos|eliminamos|borramos|dejamos)\b/u';
+
+    /**
+     * La negación PEGADA al cambio, dentro de su cláusula: «no la cancelé»,
+     * «todavía no la he movido», «tu visita no está cancelada». Una ventana de
+     * caracteres leía «No te preocupes, ya la cancelé» como negada, y «bueno»
+     * contiene «no ».
+     */
+    private const NEGACION_PEGADA = '/\b(no|nunca|tampoco|jamas|ni)(\s+(te|le|les|se|me|nos|lo|la|los|las|ya|todavia|aun|he|hemos|ha|han))*\s*$/u';
+
+    /**
+     * Lo que convierte una forma en «-amos» en ofrecimiento: la condición, vaya
+     * delante o detrás en la misma frase («si quieres, la cambiamos para el
+     * sábado», «la cancelamos si quieres», «si no puedes venir, la
+     * cancelamos», «cuando me confirmes la cancelamos»).
+     */
+    private const CONDICION_DE_OFRECIMIENTO = '/\b(si|cuando|apenas|en cuanto)\s+(no\s+)?(me |nos |lo |te |tu |asi lo )?(quieres|quieras|prefieres|prefieras|gustas|gustes|necesitas|necesites|deseas|desees|sirve|parece|queda|dices|digas|confirmas|confirmes|avisas|avises|puedes|puedas|animas|animes|alcanzas|alcances|vienes|vengas|llegas|tienes)\b|\b(de ser necesario|en ese caso|si es necesario)\b/u';
+
+    /** «Dime y la cancelamos», «avísame y la pasamos para el lunes»: se pide el dato antes de hacerlo. */
+    private const PIDE_ANTES = '/\b(dime|avisame|confirmame|cuentame|escribeme|me\s+(dices|avisas|confirmas|escribes|cuentas))\b/u';
+
+    /** «Con gusto la reagendamos»: disposición, no constancia. */
+    private const DISPOSICION = '/\b(con gusto|encantad[oa]s?|claro que si|por supuesto que)\b/u';
+
+    /** Detrás, la pregunta por el día o la hora nuevos: sin ellos no se pudo mover nada. */
+    private const PIDE_DIA_U_HORA = '/\b(que|cual|cuales)\s+(dia|dias|hora|horario|fecha)\b|\ba\s+que\s+hora\b|\bcuando\s+te\s+(sirve|queda|viene|conviene)\b/u';
+
+    /** Lo que no es la visita: si es lo último que se nombró, el pronombre habla de ello. */
+    private const OTRO_OBJETO = '/\b(membresia|plan|planes|debito|cobro|cobros|pago|pagos|suscripcion|mensualidad|inscripcion|matricula|clase|clases|cuota|tarjeta|cuenta|renovacion|congelamiento|sesion|rutina|link|enlace|app|aplicacion|pedido|compra|factura)\b/u';
+
+    private const LA_VISITA = '/\b(visita|cita|cortesia|solicitud)\b/u';
+
     /** «lo envío al equipo», «le paso el caso al equipo»: transferencia explícita. */
     private const TRASLADO_AL_EQUIPO = '/\b(se\s+)?(lo|la|le|les)?\s*(envio|enviamos|paso|pasamos|reporto|reportamos|traslado|trasladamos)\b[^.!?;]{0,40}\bal\s+equipo\b/u';
 
@@ -223,7 +305,133 @@ final class PromiseAuthority
             return $cita;
         }
 
-        return $this->primeraCitaNoNegada($t, [self::TRASLADO_AL_EQUIPO]);
+        return $this->primeraCitaNoNegada($t, [self::TRASLADO_AL_EQUIPO]) ?? $this->cambioDeVisitaEn($t);
+    }
+
+    /**
+     * El cambio de visita que el texto da por HECHO, o null. Cada coincidencia
+     * de cada forma se juzga en su cláusula, no sólo la primera: negada («no la
+     * cancelé»), preguntada («¿tu visita quedó cancelada?»), de otra cosa («la
+     * membresía la cancelamos en recepción») u ofrecida («la cancelamos si
+     * quieres») no afirma nada, y la siguiente de la misma respuesta todavía
+     * puede afirmarlo. Una coletilla detrás («…, ¿algo más?») no convierte en
+     * pregunta lo que ya se afirmó, ni un «no te preocupes» de otra cláusula lo
+     * niega.
+     */
+    private function cambioDeVisitaEn(string $t): ?string
+    {
+        foreach (self::CAMBIOS_DE_VISITA as [$patron, $nombraLaVisita]) {
+            if (preg_match_all($patron, $t, $ms, PREG_OFFSET_CAPTURE) < 1) {
+                continue;
+            }
+            foreach ($ms[0] as $i => [$cita, $ini]) {
+                [$verbo, $posVerbo] = $ms['v'][$i];
+                $ini = (int) $ini;
+                $fin = $ini + strlen((string) $cita);
+                if ($this->negadaEnSuClausula($t, $ini) || $this->negadaEnSuClausula($t, (int) $posVerbo)
+                    || (! $nombraLaVisita && $this->hablaDeOtraCosa($t, $ini))
+                    || $this->enPregunta($t, $ini, $fin)
+                    || (preg_match(self::AMBIGUAS, (string) $verbo) === 1 && $this->loOfrece($t, $ini, $fin))) {
+                    continue;
+                }
+
+                return trim((string) $cita);
+            }
+        }
+
+        return null;
+    }
+
+    /** ¿Hay una negación pegada justo antes de esta posición, dentro de su cláusula? */
+    private function negadaEnSuClausula(string $t, int $pos): bool
+    {
+        $previo = substr($t, 0, $pos);
+        $desde = 0;
+        foreach ([',', ';', ':', '.', '!', '?', "\n", '¿', '¡'] as $corte) {
+            $p = strrpos($previo, $corte);
+            if ($p !== false) {
+                $desde = max($desde, $p + strlen($corte));
+            }
+        }
+
+        return preg_match(self::NEGACION_PEGADA, substr($previo, $desde)) === 1;
+    }
+
+    /** ¿Lo último que se nombró antes del pronombre es otra cosa y no la visita? */
+    private function hablaDeOtraCosa(string $t, int $pos): bool
+    {
+        $previo = substr($t, 0, $pos);
+        $ultima = function (string $patron) use ($previo): int {
+            if (preg_match_all($patron, $previo, $m, PREG_OFFSET_CAPTURE) < 1) {
+                return -1;
+            }
+
+            return (int) end($m[0])[1];
+        };
+        $otra = $ultima(self::OTRO_OBJETO);
+
+        return $otra >= 0 && $otra > $ultima(self::LA_VISITA);
+    }
+
+    /**
+     * ¿El cambio está DENTRO de una pregunta? Un «¿» abierto antes en la misma
+     * oración, o su propia cláusula cerrando con «?» («ya se canceló tu
+     * visita?»). La pregunta de otra cláusula («cancelé tu visita, ¿algo
+     * más?») no cuenta.
+     */
+    private function enPregunta(string $t, int $ini, int $fin): bool
+    {
+        [$antes] = $this->oracionDe($t, $ini, $fin);
+
+        return str_contains($antes, '¿') || preg_match('/^[^,;:.!?¿¡\n]*\?/u', substr($t, $fin)) === 1;
+    }
+
+    /**
+     * ¿Una forma en «-amos» se ofrece en vez de afirmarse? Con «ya» delante es
+     * un hecho («ya la cancelamos»). Si no, la ofrecen la condición antes o
+     * después, el «dime / avísame» que pide el dato antes, la disposición
+     * («con gusto la reagendamos»), la frase que cierra preguntando («la
+     * cambiamos para el viernes, ¿te parece?») o la pregunta que sigue por el
+     * día o la hora nuevos, sin los cuales no se pudo mover nada.
+     */
+    private function loOfrece(string $t, int $ini, int $fin): bool
+    {
+        [$antes, $despues, $cierre, $resto] = $this->oracionDe($t, $ini, $fin);
+        if (preg_match('/\bya(\s+(te|le|se|me|nos))?\s*$/u', $antes) === 1) {
+            return false;
+        }
+
+        return $cierre === '?'
+            || preg_match(self::CONDICION_DE_OFRECIMIENTO, $antes) === 1
+            || preg_match(self::CONDICION_DE_OFRECIMIENTO, $despues) === 1
+            || preg_match(self::PIDE_ANTES, $antes) === 1
+            || preg_match(self::DISPOSICION, $antes) === 1
+            || preg_match(self::PIDE_DIA_U_HORA, $resto) === 1;
+    }
+
+    /**
+     * La oración de una coincidencia: lo que va antes dentro de ella, lo que va
+     * detrás, el signo con que cierra y lo que sigue después.
+     *
+     * @return array{0:string,1:string,2:string,3:string}
+     */
+    private function oracionDe(string $t, int $ini, int $fin): array
+    {
+        $previo = substr($t, 0, $ini);
+        $desde = 0;
+        foreach (['.', '!', '?', ';', "\n"] as $corte) {
+            $p = strrpos($previo, $corte);
+            if ($p !== false) {
+                $desde = max($desde, $p + 1);
+            }
+        }
+        $resto = substr($t, $fin);
+        if (preg_match('/[.!?;\n]/u', $resto, $m, PREG_OFFSET_CAPTURE) !== 1) {
+            return [substr($previo, $desde), $resto, '', ''];
+        }
+        $pos = (int) $m[0][1];
+
+        return [substr($previo, $desde), substr($resto, 0, $pos), $m[0][0], substr($resto, $pos + 1)];
     }
 
     /**

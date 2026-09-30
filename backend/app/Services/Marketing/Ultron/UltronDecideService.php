@@ -229,7 +229,7 @@ class UltronDecideService
              * visita a medias, y se puso a vender.
              */
             'hard_required_plan', 'preferred_commercial_plan', 'price_verification',
-            'active_goal', 'resume_goal_after_answer', 'reception_mode',
+            'active_goal', 'resume_goal_after_answer', 'reception_mode', 'memory_mode',
         ];
 
         $recorte = [];
@@ -334,7 +334,9 @@ class UltronDecideService
         $payment = $this->payments->forLead($conversation->lead, (string) $message->body);
         $canOfferLink = $this->canOfferLink((int) $conversation->id);
         $membershipFacts = $this->membership->forPrompt($conversation->lead);
-        $strategyHints = StrategyContract::hints($customer, $resolved, $canOfferLink, $intentTurno, $payment, $membershipFacts, $saludoPuro);
+        // Y una pregunta de memoria sobre la visita tampoco se decide con la temperatura del lead.
+        $memoriaPura = ! $saludoPuro && CommercialTurnPolicy::esTurnoDeMemoria($intentTurno, (string) $message->body, $this->knowledge->activePlans(), $resolved);
+        $strategyHints = StrategyContract::hints($customer, $resolved, $canOfferLink, $intentTurno, $payment, $membershipFacts, $saludoPuro, $memoriaPura);
         // El objetivo activo también como pista del estratega: es quien
         // decide la acción, y una visita a medias cambia la acción.
         $objetivoVivo = $memory->activeGoal();

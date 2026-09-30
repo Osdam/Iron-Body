@@ -235,8 +235,45 @@ class OutboundContentGuard
 
     private const AFIRMA_CONFIRMADA = [
         '/\b(qued(as|o|aste|amos)|estas|ya\s+estas)\s+(agendad|confirmad|reservad|anotad[oa]\s+y\s+confirmad)/u',
-        '/\b(tu|su|la)\s+(cita|visita|cortesia)\b[^.!?]{0,30}\b(qued(o|a)|esta|fue)\s+(agendad|confirmad|reservad)/u',
-        '/\b(te|le)\s+(reserv(e|amos|o)|aparte|apartamos|guarde|guardamos)\b[^.!?]{0,20}\b(cupo|lugar|puesto|espacio|hora)/u',
+        /*
+         * «Tienes agendada tu visita mañana a las 2» salió en producción: el
+         * participio iba delante de la cita y el verbo no estaba en la lista.
+         * Anclado a la VISITA: sin objeto, retiraba frases honestas de otras
+         * cosas («ya tienes confirmado tu pago», «tenemos reservada la zona
+         * funcional», «¿ya tienes agendado un día para venir?»).
+         */
+        '/\b(tienes|tiene)\s+(ya\s+)?(agendad|confirmad|reservad)[oa]s?\s+(tu|la|su)\s+(visita|cita|cortesia|dia\s+de\s+cortesia)\b/u',
+        '/\b(tienes|tiene)\s+(tu|la|su)\s+(visita|cita|cortesia)\s+(ya\s+)?(agendad|confirmad|reservad)/u',
+        '/\bla\s+tienes\s+(ya\s+)?(agendad|confirmad|reservad)a/u',
+        // «Queda agendada tu visita», «ya está agendada tu visita», «está reservada tu visita»: el participio antes del objeto.
+        '/\b(queda|quedo|esta|ya\s+esta)\s+(agendad|confirmad|reservad|programad|aprobad)[oa]s?\s+(tu|su|la)\s+(visita|cita|cortesia|solicitud)\b/u',
+        /*
+         * El pretérito, con quien lo hizo o con «listo/ya» delante: «Listo,
+         * agendamos tu visita», «ya te agendé la visita», «te reservé la
+         * visita para el sábado». Sin eso es una oferta o una pregunta
+         * («¿agendamos tu visita?», «si quieres, agendamos tu visita»), y una
+         * oferta no afirma nada. «Para que te agende» es subjuntivo.
+         */
+        '/\b(listo|ya|hecho|perfecto)[,:!]?\s+(te\s+|le\s+)?(agende|agendamos|reserve|reservamos|programe|programamos|confirme|confirmamos|anote|anotamos)\s+(tu|su|la)?\s*(visita|cita|cortesia)\b/u',
+        /*
+         * «Listo, te agendé el sábado a las 10», «te separé el cupo del
+         * sábado»: el día o la hora también atan el pretérito a una cita, no
+         * sólo «para el». Y «listo, ya te agendé» a secas, cerrando la frase.
+         */
+        '/(?<!que )(?<!quieres )\b(te|le)\s+(agende|reserve|programe|aparte|separe)\b[^.!?]{0,30}\b(visita|cita|cortesia|cupo|para\s+el|para\s+manana|para\s+hoy|el\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)|manana|hoy|a\s+las?\s+\d)\b/u',
+        '/\b(listo|ya)\W*\s+(ya\s+)?(te|le)\s+(agende|reserve|separe|aparte)\b(?=\s*([.!,;]|$))/u',
+        // «Te dejé agendada tu visita»: con el pronombre de la persona o con la visita detrás,
+        // para no tocar «la zona la dejamos reservada para las clases».
+        '/\b(te|le)\s+(deje|dejamos)\s+(agendad|reservad|separad|apartad|confirmad)[oa]s?\b/u',
+        '/\b(deje|dejamos)\s+(agendad|reservad|separad|apartad|confirmad)[oa]s?\s+(tu|su)\s+(visita|cita|cortesia|cupo)\b/u',
+        // «El equipo ya confirmó tu visita», «tu visita ya la confirmó el equipo»: la confirmación dicha en activa.
+        '/\b(el\s+equipo\s+)?(ya\s+)?(confirmo|aprobo|agendo)\s+(tu|su|la)\s+(visita|cita|cortesia|solicitud)\b/u',
+        '/\b(tu|su|la)\s+(visita|cita|solicitud)\s+(ya\s+)?la\s+(confirmo|aprobo|agendo)\b/u',
+        // «Quedó registrada y confirmada», «quedó solicitada y aprobada»: la confirmación coordinada.
+        '/\b(qued(o|a)|esta)\s+(registrad|solicitad|anotad)[oa]\s+y\s+(confirmad|aprobad|agendad)/u',
+        // Con el día en medio («tu visita del miércoles 1 de octubre a las 14:00 ya está confirmada») caben 60.
+        '/\b(tu|su|la)\s+(cita|visita|cortesia|solicitud)\b[^.!?]{0,60}\b(qued(o|a)|esta|fue)\s+(agendad|confirmad|reservad|programad|aprobad)/u',
+        '/\b(te|le)\s+(reserv(e|amos|o)|aparte|apartamos|separe|separamos|guarde|guardamos)\b[^.!?]{0,20}\b(cupo|lugar|puesto|espacio|hora)/u',
         '/\b(te|los?|las?)\s+esperamos\b[^.!?]{0,30}\b'.self::CUANDO_DE_LA_CITA.'\b/u',
         '/\bconfirmad[oa]\s+(tu|su)\s+(cita|visita|cortesia)/u',
     ];
@@ -320,6 +357,33 @@ class OutboundContentGuard
     public function courtesyConfirmationIn(string $body): ?string
     {
         return $this->primeraAfirmacionNoNegada($body, self::AFIRMA_CONFIRMADA);
+    }
+
+    /**
+     * «Queda registrado tu interés para el miércoles», «tu visita quedó
+     * registrada», «dejé registrada tu visita», «ya quedaste registrado»
+     * dichos cuando NO hay solicitud: la persona se fue creyendo que estaba, y
+     * no estaba. Sólo se mira sin solicitud (modo texto): cuando la solicitud
+     * existe, «quedó registrada tu visita» es la constancia honesta del turno
+     * que la registra, y el acta de Laravel dice su estado. Va aparte de la
+     * confirmación a propósito: registrar no es confirmar, y el contraste del
+     * modo memoria pregunta sólo por lo segundo.
+     */
+    private const AFIRMA_REGISTRO_SIN_SOLICITUD = [
+        '/\b(qued(a|o|an|aron)|ha\s+quedado|esta)\s+registrad[oa]s?\s+(tu|su)\s+(interes|visita|cita|dia\s+de\s+cortesia)\b/u',
+        '/\b(qued(a|o)|esta)\s+(solicitad|anotad|apuntad)[oa]\s+(tu|su)\s+(visita|cita|dia\s+de\s+cortesia)\b/u',
+        '/\b(tu|su)\s+(visita|cita|dia\s+de\s+cortesia)\b[^.!?]{0,40}\b(qued(o|a)|esta|fue)\s+(registrad|solicitad|anotad|apuntad)[oa]/u',
+        '/\b(deje|dejamos)\s+(registrad|solicitad|anotad|apuntad)[oa]\s+(tu|su)\s+(visita|cita|solicitud)\b/u',
+        '/(?<!que )\b(registre|registramos|anote|anotamos|apunte|solicite)\s+(tu|su)\s+(visita|cita|solicitud)\b/u',
+        // Sin «estás»: «¿ya estás registrado en la app?» es una pregunta de la app, y la app pide registrarse.
+        '/\b(ya\s+)?quedaste\s+(registrad|anotad|inscrit)[oa]\b(?!\s+(en|a)\s+(la\s+|el\s+)?(app|aplicacion|plataforma|pagina|sistema))/u',
+        '/\b(tu|su)\s+interes\b[^.!?]{0,30}\bregistrad/u',
+    ];
+
+    /** ¿El borrador da por REGISTRADA una visita? Para el modo sin solicitud; devuelve la frase, o null. */
+    public function courtesyRegistrationIn(string $body): ?string
+    {
+        return $this->primeraAfirmacionNoNegada($body, self::AFIRMA_REGISTRO_SIN_SOLICITUD);
     }
 
     /**

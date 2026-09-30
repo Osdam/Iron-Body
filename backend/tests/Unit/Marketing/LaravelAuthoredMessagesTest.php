@@ -189,7 +189,7 @@ class LaravelAuthoredMessagesTest extends TestCase
             SalesIntents::HIGH_INTENT_CLOSE,
             SalesIntents::HUMAN_REQUEST,
         ];
-        $menu = ['puedes preguntarme por', 'puedes consultar', 'cliente', 'usuario', 'siguiente paso'];
+        $menu = ['puedes preguntarme por', 'puedes consultar', 'cliente', 'usuario', 'siguiente paso', 'qué necesitas saber', 'que necesitas saber', 'para orientarte mejor', 'para ayudarte mejor', 'cuál es tu objetivo'];
 
         $textos = [];
         foreach (SalesAgentDecisionSchema::INTENTS as $intent) {

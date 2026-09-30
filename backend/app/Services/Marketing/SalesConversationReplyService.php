@@ -48,8 +48,10 @@ class SalesConversationReplyService
             SalesIntents::GREETING => 'Hola, bienvenido a Iron Body, qué gusto atenderte. Cuéntame, ¿en qué te podemos '
                 .'ayudar hoy?',
 
-            SalesIntents::PRICING_QUESTION => 'Sí, claro. Para recomendarte mejor, ¿quieres empezar por bajar grasa, ganar masa '
-                .'o simplemente coger hábito?',
+            // Sin «para recomendarte mejor» ni verbo de ofrecimiento: se pide
+            // lo que hace falta para acertar con el plan, y se dice para qué.
+            SalesIntents::PRICING_QUESTION => 'Sí, claro. Cuéntame qué buscas —bajar grasa, ganar masa o coger el hábito— '
+                .'y te digo el plan que mejor te encaja y su precio.',
 
             SalesIntents::PAYMENT_LINK_REQUEST, SalesIntents::HIGH_INTENT_CLOSE => $this->paymentPendingReply(),
 
@@ -120,8 +122,8 @@ class SalesConversationReplyService
             SalesIntents::HUMAN_REQUEST => 'Claro, dejo marcada tu solicitud para que alguien del equipo la revise. Igual sigo '
                 .'por aquí si quieres que te ayude con precios, ubicación o planes.',
 
-            SalesIntents::COMPLAINT => 'Entiendo. Lo dejo marcado como caso para revisión del equipo. Para ayudarte mejor, '
-                .'¿me cuentas qué pasó exactamente?',
+            SalesIntents::COMPLAINT => 'Entiendo. Lo dejo marcado como caso para revisión del equipo. '
+                .'Cuéntame qué pasó exactamente y lo atendemos.',
 
             SalesIntents::INVOICE_REQUEST => 'Claro. Para factura necesito que el equipo confirme los datos correctos para no '
                 .'cometer errores. Te dejo marcada la solicitud de facturación. Si quieres, también '
@@ -451,10 +453,11 @@ class SalesConversationReplyService
         // ubicación, clases…» es la frase de máquina que la persona reconoce.
         // Pero la puerta sigue abierta: quien pidió información y recibe este
         // respaldo tiene que poder seguir con una pregunta, no con un punto.
+        // Y tampoco «¿qué necesitas saber?»: es la pregunta de mostrador.
         $generales = [
-            'Claro, con gusto te ayudo. Cuéntame, ¿qué necesitas saber del gimnasio?',
+            'Claro, con gusto te ayudo. Cuéntame, ¿en qué te ayudo hoy?',
             'Con gusto. ¿Qué te cuento primero del gimnasio?',
-            'Cuéntame qué necesitas saber del gimnasio y te ayudo.',
+            'Cuéntame qué buscas y te oriento con lo que tenemos.',
         ];
 
         /*

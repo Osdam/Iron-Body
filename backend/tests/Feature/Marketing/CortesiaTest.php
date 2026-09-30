@@ -11,11 +11,13 @@ use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
 use App\Models\Plan;
 use App\Services\Marketing\CommercialPhaseMachine as P;
+use App\Services\Marketing\OutboundContentGuard;
 use App\Services\Marketing\SalesIntents;
 use App\Services\Marketing\Ultron\BusinessClock;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -355,18 +357,20 @@ class CortesiaTest extends TestCase
      */
     public function test_con_la_cita_ya_confirmada_la_frase_sale(): void
     {
-        \App\Models\MarketingAppointment::create([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+        // La cita que el equipo confirmó: el sábado 26 a las 10:00 en Neiva. La
+        // persona sólo se despide; no pide otra visita en este turno.
+        MarketingAppointment::create([
+            'uuid' => (string) Str::uuid(),
             'marketing_lead_id' => $this->lead->id,
             'marketing_conversation_id' => $this->conversation->id,
-            'type' => \App\Models\MarketingAppointment::TYPE_VISIT,
-            'status' => \App\Models\MarketingAppointment::STATUS_SCHEDULED,
+            'type' => MarketingAppointment::TYPE_VISIT,
+            'status' => MarketingAppointment::STATUS_SCHEDULED,
             'title' => 'Día de cortesía',
-            'scheduled_at' => now()->addDays(5),
+            'scheduled_at' => Carbon::parse('2026-09-26 10:00', 'America/Bogota')->setTimezone('UTC'),
         ]);
 
         $this->turno('nos vemos el sabado entonces', 'w.conf2', [
-            'courtesy_date' => '2026-09-26', 'courtesy_time' => '10:00',
+            'tools_requested' => [], 'courtesy_action' => null,
             'reply_draft' => 'Listo, te esperamos el sábado a las 10. Trae ropa cómoda.',
         ])->assertOk();
 
@@ -374,6 +378,37 @@ class CortesiaTest extends TestCase
             ->where('direction', MarketingMessage::DIRECTION_OUTBOUND)->latest('id')->first()?->body);
 
         $this->assertStringContainsString('te esperamos el sábado', $saliente);
+    }
+
+    /**
+     * Y la cita confirmada sólo hace verdadera la frase que habla de ELLA.
+     *
+     * Con la cita a las 09:00 y otra solicitud pendiente para las 10:00, «te
+     * esperamos el sábado a las 10» habla de la solicitud, que nadie ha
+     * confirmado. Antes salía intacta por existir una cita cualquiera.
+     */
+    public function test_la_cita_confirmada_no_respalda_otra_hora_ni_otra_solicitud(): void
+    {
+        MarketingAppointment::create([
+            'uuid' => (string) Str::uuid(),
+            'marketing_lead_id' => $this->lead->id,
+            'marketing_conversation_id' => $this->conversation->id,
+            'type' => MarketingAppointment::TYPE_VISIT,
+            'status' => MarketingAppointment::STATUS_SCHEDULED,
+            'title' => 'Día de cortesía',
+            'scheduled_at' => Carbon::parse('2026-09-26 09:00', 'America/Bogota')->setTimezone('UTC'),
+        ]);
+
+        $this->turno('nos vemos el sabado entonces', 'w.conf3', [
+            'courtesy_date' => '2026-09-26', 'courtesy_time' => '10:00',
+            'reply_draft' => 'Listo, te esperamos el sábado a las 10. Trae ropa cómoda.',
+        ])->assertOk();
+
+        $saliente = mb_strtolower((string) MarketingMessage::where('conversation_id', $this->conversation->id)
+            ->where('direction', MarketingMessage::DIRECTION_OUTBOUND)->latest('id')->first()?->body);
+
+        $this->assertStringNotContainsString('te esperamos el sábado a las 10', $saliente);
+        $this->assertStringContainsString('trae ropa cómoda', $saliente, 'lo que no afirmaba nada sigue saliendo');
     }
 
     // ── Lo que encontró la revisión, fijado para que no vuelva ───────────────
@@ -525,7 +560,7 @@ class CortesiaTest extends TestCase
     public function test_una_cita_vieja_no_autoriza_la_frase(): void
     {
         MarketingAppointment::create([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'uuid' => (string) Str::uuid(),
             'marketing_lead_id' => $this->lead->id,
             'marketing_conversation_id' => $this->conversation->id,
             'type' => MarketingAppointment::TYPE_VISIT,
@@ -798,7 +833,7 @@ class CortesiaTest extends TestCase
      */
     public function test_el_corpus_de_falsos_positivos_no_activa_la_cortesia(): void
     {
-        $guard = app(\App\Services\Marketing\OutboundContentGuard::class);
+        $guard = app(OutboundContentGuard::class);
 
         foreach ([
             'El 1 a 1 con el entrenador va incluido en tu plan.',

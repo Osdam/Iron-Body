@@ -29,6 +29,7 @@ use App\Services\Observability\ChannelLog;
 use App\Services\Wompi\PaymentStateMachine as SM;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Context;
 use Throwable;
@@ -156,6 +157,7 @@ class UltronCommitService
         private readonly PromiseAuthority $promises = new PromiseAuthority,
         private readonly CourtesyRequestService $courtesy = new CourtesyRequestService,
         private readonly GymFactsProvider $gym = new GymFactsProvider,
+        private readonly LeadProfileService $leadProfile = new LeadProfileService,
     ) {}
 
     /**
@@ -567,8 +569,28 @@ class UltronCommitService
          * novedad fina —«cuéntame más» que repite beneficios— la juzga el
          * Critic con `novelty.must_not_repeat`; esto es la red de abajo.
          */
+        // El referente se resuelve sobre la memoria de ANTES de este turno.
+        $memoriaPrevia = $this->memoryService->load($conversation);
+        // Y la ficha del lead aprende del delta entre esta foto y lo que quede
+        // al final. Copia, no referencia: la memoria es mutable, y `$memoriaPrevia`
+        // se recarga más abajo con el rechazo ya dentro, lo que dejaba el
+        // episodio «Rechazó el X» imposible de ver.
+        $memoriaAlEntrar = ConversationMemory::fromArray($memoriaPrevia->toArray());
+        $resolution = $this->references->resolve(
+            (string) $message->body,
+            $memoriaPrevia,
+            $planesVendibles,
+        );
+
         $previas = $this->previousMachineReplies($conversation);
-        $duplicadoDe = $this->novelty->isExplicitRepeatRequest((string) $message->body)
+        /*
+         * Una pregunta de MEMORIA pide repetir por definición: «¿a qué hora
+         * era mi visita?» por segunda vez en el día merece la misma hora, no un
+         * «cuéntame en qué te ayudo». Mismo criterio que la política.
+         */
+        $pideRepetir = $this->novelty->isExplicitRepeatRequest((string) $message->body)
+            || CommercialTurnPolicy::esTurnoDeMemoria((string) $sanitized['intent'], (string) $message->body, $this->knowledge->activePlans(), $resolution);
+        $duplicadoDe = $pideRepetir
             ? null // «me repites la dirección?»: repetir es exactamente lo que pidió.
             : $this->novelty->nearDuplicateOf($replyFinal, $previas);
         $respuestaRepetida = $duplicadoDe !== null;
@@ -582,14 +604,6 @@ class UltronCommitService
             ]);
             $nextState = $currentPhase;
         }
-
-        // El referente se resuelve sobre la memoria de ANTES de este turno.
-        $memoriaPrevia = $this->memoryService->load($conversation);
-        $resolution = $this->references->resolve(
-            (string) $message->body,
-            $memoriaPrevia,
-            $planesVendibles,
-        );
 
         /*
          * 10.bis) LA POLÍTICA DEL TURNO. QUÉ HAY QUE HACER, DECIDIDO AQUÍ.
@@ -614,6 +628,23 @@ class UltronCommitService
             $resolution,
             (string) $message->body,
         );
+
+        /*
+         * Un turno de MEMORIA sólo contesta: la persona preguntó por su visita.
+         * Si el modelo pidió el enlace de pago, los de la app o la cortesía, se
+         * retiran aquí, ANTES de que se acuñe o se registre nada: un cobro
+         * acuñado para un texto que la política va a sustituir quedaría vivo
+         * sin que nadie lo viera, y la cortesía, rellenada con el día y la hora
+         * de la PREGUNTA, movía la visita y le quitaba la aprobación. Cambiar o
+         * cancelar nunca entra en modo memoria, así que aquí no se pierde nada.
+         * El marcador de la app tampoco se honra: no hay enlaces en este turno.
+         */
+        if (($policy['memory_mode'] ?? false) === true) {
+            $soloContesta = fn (array $tools): array => array_values(array_diff($tools, [SalesIntents::TOOL_PAYMENT_LINK_SEND, SalesIntents::TOOL_APP_LINKS_SEND, SalesIntents::TOOL_COURTESY_REQUEST]));
+            $sanitized['tools_requested'] = $soloContesta((array) ($sanitized['tools_requested'] ?? []));
+            $proposal['tools_requested'] = $soloContesta((array) ($proposal['tools_requested'] ?? []));
+            $replyFinal = $this->placeholders->resolveAppLinks($replyFinal, '');
+        }
 
         /*
          * «Menciona otro plan» es un NO a lo anterior, y se anota como tal.
@@ -988,6 +1019,9 @@ class UltronCommitService
          * nada, que es exactamente de lo que cuelga la rendición de n8n. La
          * persona recibe el texto curado, que sí dice la verdad.
          */
+        // La fecha y la hora de la cortesía, resueltas UNA vez: la invariante y la herramienta ven lo mismo.
+        $decision = $this->conCortesiaDelTexto($conversation, $message, $decision);
+
         $promesa = $this->promises->detectar($replyFinal);
 
         if ($promesa['kind'] === PromiseAuthority::ACCION_FUTURA) {
@@ -1068,7 +1102,8 @@ class UltronCommitService
 
             $cortesiaRegistrada = $cortesiaEnElTurno && (
                 $cancela
-                    ? $this->courtesy->openFor($conversation) !== null
+                    // La solicitud abierta del lead, también la de otra conversación: es la que cancela la herramienta.
+                    ? ($this->courtesy->openFor($conversation) ?? ($lead !== null ? $this->courtesy->openForLead($lead) : null)) !== null
                     : CourtesyAuthority::decide(
                         $decision['courtesy_date'] ?? null,
                         $decision['courtesy_time'] ?? null,
@@ -1076,7 +1111,22 @@ class UltronCommitService
                     )['ok']
             );
 
-            if (! ($marcaAutorizada && $marcaEnElTurno) && ! $cortesiaRegistrada) {
+            /*
+             * Y RECORDAR UNA VISITA QUE YA ESTÁ SOLICITADA TAMPOCO ES UNA PROMESA.
+             *
+             * «Tu visita quedó solicitada para el miércoles a las 14:00» en
+             * una conversación nueva engancha las mismas palabras que la
+             * constancia, y sin esto el turno moría en 422 justo cuando la
+             * persona preguntaba por lo que ya pidió. La autoridad aquí es la
+             * fila viva del CRM: sólo en modo memoria, sólo si el lead tiene
+             * una solicitud pendiente y por llegar, y sólo si el texto habla
+             * de esa visita. Fuera de eso, la frase vuelve a ser mentira.
+             */
+            $recuerdaVisitaViva = ($policy['memory_mode'] ?? false)
+                && $lead !== null
+                && $this->soloRecuerdaLaVisita($replyFinal, $this->courtesy->commitmentsForLead($lead));
+
+            if (! ($marcaAutorizada && $marcaEnElTurno) && ! $cortesiaRegistrada && ! $recuerdaVisitaViva) {
                 ChannelLog::warning('ultron.commit.promised_effect_without_authority', [
                     'conversation_id' => (int) $conversation->id,
                     'message_id' => (int) $message->id,
@@ -1234,6 +1284,7 @@ class UltronCommitService
          * final— y la sustitución ocurre aquí, después de todos los guards, por
          * el mismo orden que ya gobierna al precio.
          */
+        $textoSustituido = false;
         $enlaces = $this->appLinksDecision($conversation, $decision, $replyFinal);
 
         if ($enlaces !== null && $enlaces['status'] === 'executed') {
@@ -1356,6 +1407,9 @@ class UltronCommitService
          * verificar, y eso es una minoría ínfima de los turnos.
          */
         $replyFinal = $this->sinNegarUnCobroDisponible($conversation, $lead, $plan, $replyFinal, $action);
+        // Primero la constancia sin registro y después la confirmación: al revés, la
+        // primera retiraba el acta que la segunda acababa de escribir con la fila del CRM.
+        $replyFinal = $this->sinConstanciaDeUnaCortesiaQueNoSeRegistro($conversation, $replyFinal, $action, $executed, $decision);
         $replyFinal = $this->sinConfirmarUnaCortesiaQueNadieConfirmo($conversation, $replyFinal, $action);
 
         /*
@@ -1414,10 +1468,21 @@ class UltronCommitService
             $incumple = CommercialTurnPolicy::violations($replyFinal, $policy, $catalogo, $hechos);
         }
 
+        /*
+         * En modo memoria, el día y la hora que el borrador afirma tienen que
+         * ser los del compromiso real. Es justo el dato que este modo existe
+         * para dar bien: «a las 4 pm» por un compromiso de las 14:00 manda a
+         * alguien a una hora que nadie preparó. Si no casan, sale el respaldo,
+         * que está escrito con la fila del CRM.
+         */
+        if (($policy['memory_mode'] ?? false) && $this->contradiceLosCompromisos($conversation, $replyFinal)) {
+            $incumple[] = self::VIOLACION_MEMORIA_DATO;
+        }
+
         if ($incumple !== []) {
             $alternativa = $this->respaldoPorIntencion($conversation, (string) $sanitized['intent'], $policy);
-            if ($policy['reception_mode'] ?? false) {
-                // Un saludo no cotiza nada: la memoria dice lo que salió.
+            if (($policy['reception_mode'] ?? false) || ($policy['memory_mode'] ?? false)) {
+                // Un saludo o un recuerdo no cotizan nada: la memoria dice lo que salió.
                 $plan = null;
             }
 
@@ -1488,6 +1553,8 @@ class UltronCommitService
 
             if ($alternativa !== null) {
                 $replyFinal = $alternativa;
+                // Lo que colgaba del texto del modelo (los enlaces de la app ya pegados) no salió con él.
+                $textoSustituido = true;
             }
         }
 
@@ -1549,7 +1616,11 @@ class UltronCommitService
         // enlaces que espaciar y marcarlo los callaría una hora por nada.
         if ($enlaces !== null) {
             if ($enlaces['status'] === 'executed') {
-                if ($outcome === 'failed') {
+                if ($textoSustituido || ! self::llevaLosEnlaces($replyFinal)) {
+                    // Una guarda cambió o recortó el texto después de pegar los enlaces: no salieron, y
+                    // anotarlos haría que durante una hora se le dijera «te los dejé aquí mismo» sin que estén.
+                    $enlaces = ['tool' => $enlaces['tool'], 'status' => 'skipped', 'reason' => 'reply_replaced'];
+                } elseif ($outcome === 'failed') {
                     $enlaces = ['tool' => $enlaces['tool'], 'status' => 'skipped', 'reason' => 'reply_not_sent'];
                 } else {
                     $this->memoryService->recordAppLinksSent($conversation->fresh());
@@ -1565,11 +1636,13 @@ class UltronCommitService
 
         // 15) La memoria registra lo que SALIÓ, con el plan y el precio reales.
         if ($outcome !== 'failed') {
-            $this->memoryService->recordSentTurn(
+            $memoriaFinal = $this->memoryService->recordSentTurn(
                 $conversation->fresh(), $message, $replyFinal, $plan,
                 (string) $sanitized['intent'], $resolution, $send['message_id'] ?? null,
                 ($decision['recovered_reply'] ?? false) === true,
             );
+            // 15.bis) Y la ficha del lead aprende lo que vale para la próxima conversación.
+            $this->leadProfile->absorb($conversation->fresh(), $message, (string) $sanitized['intent'], $memoriaAlEntrar, $memoriaFinal);
         }
 
         ChannelLog::info('ultron.commit.done', [
@@ -1927,9 +2000,10 @@ class UltronCommitService
             ]);
         }
 
+        $memoriaPrevia = $this->memoryService->load($conversation);
         $resolution = $this->references->resolve(
             (string) $message->body,
-            $this->memoryService->load($conversation),
+            $memoriaPrevia,
             $this->memoryService->sellablePlansForMemory(),
         );
 
@@ -1966,9 +2040,12 @@ class UltronCommitService
         $this->finalise($action, $outcome, $send);
 
         if ($outcome !== 'failed') {
-            $this->memoryService->recordSentTurn(
+            $memoriaFinal = $this->memoryService->recordSentTurn(
                 $conversation->fresh(), $message, (string) $curado, null, $intent, $resolution, $send['message_id'] ?? null,
             );
+            // La ficha del lead también aprende de los turnos que salieron por el respaldo.
+            // La ficha aprende del texto de la persona y de lo que salió, nunca de la etiqueta de la propuesta que se tumbó.
+            $this->leadProfile->absorb($conversation->fresh(), $message, $intent, $memoriaPrevia, $memoriaFinal);
         }
 
         ChannelLog::info($causa['log'], [
@@ -2226,6 +2303,9 @@ class UltronCommitService
         if ($lead === null) {
             return ['tool' => $tool, 'status' => 'skipped', 'reason' => 'no_lead'];
         }
+
+        // Idempotente: el commit ya lo resolvió antes de la invariante; aquí sólo por si llega directo.
+        $decision = $this->conCortesiaDelTexto($conversation, $message, $decision);
 
         $veredicto = CourtesyAuthority::decide(
             $decision['courtesy_date'] ?? null,
@@ -2759,15 +2839,34 @@ class UltronCommitService
          * `completed` se cae por definición: una cita cumplida está en el
          * pasado y no puede hacer verdadera ninguna frase en futuro.
          */
-        $confirmada = MarketingAppointment::query()
-            ->where('marketing_conversation_id', $conversation->id)
-            ->where('status', MarketingAppointment::STATUS_SCHEDULED)
-            ->where('scheduled_at', '>=', now())
-            ->exists();
+        /*
+         * La cita es del LEAD, no de la conversación —quien vuelve en una
+         * conversación nueva tiene la misma visita—, pero sólo cuenta una
+         * VISITA confirmada: una llamada o una valoración agendada por el
+         * equipo no hace verdadera una frase sobre la visita. Y la exime sólo
+         * si no hay OTRA solicitud del lead pendiente (entonces la frase habla
+         * de ésa) y si la frase NOMBRA el día de la cita —y su hora, si nombra
+         * alguna—: con una cita el jueves, «quedaste agendado para el sábado»
+         * sigue siendo mentira, y un «quedaste agendado» sin día, en otra
+         * conversación, no se sabe de qué visita habla. Si se retira, lo que
+         * la persona lee es la cita real, escrita por Laravel.
+         */
+        $lead = $conversation->lead;
+        $citas = $lead !== null ? $this->courtesy->confirmedVisitsFor($lead) : collect();
+        $visitas = $citas->map(function (MarketingAppointment $cita): array {
+            $d = Carbon::parse($cita->scheduled_at)->setTimezone(BusinessClock::TZ);
 
-        if ($confirmada) {
-            return $respuesta;
-        }
+            return ['date' => $d->toDateString(), 'time' => $d->format('H:i'), 'at' => $d];
+        })->all();
+        $abiertaDelLead = $lead !== null ? $this->courtesy->openForLead($lead) : null;
+        $laVisitaLaConfirma = function (string $frase) use ($visitas, $abiertaDelLead): bool {
+            if ($visitas === [] || $abiertaDelLead !== null) {
+                return false;
+            }
+            $menciones = CourtesyAuthority::mencionesEn($frase);
+
+            return $menciones['fechas'] !== [] && $this->casaConAlguno($menciones, $visitas);
+        };
 
         /*
          * LA DEFENSA PRINCIPAL ES EL ESTADO, NO LA FECHA.
@@ -2786,14 +2885,31 @@ class UltronCommitService
          * hay ninguna solicitud de por medio, que son las que todavía pueden
          * despedirse con un «te esperamos en la sede» sin mentir.
          */
-        $solicitud = $this->courtesy->latestFor($conversation);
+        // El estado se mira en el LEAD: una solicitud sin confirmar en otra conversación también es de esta persona.
+        $solicitud = $this->courtesy->latestFor($conversation) ?? $abiertaDelLead;
         $porEstado = $solicitud !== null;
 
-        $afirma = fn (string $frase): ?string => $porEstado
+        $detecta = fn (string $frase): ?string => $porEstado
             ? $this->contentGuard->courtesyClaimIn($frase)
-            : $this->contentGuard->courtesyConfirmationIn($frase);
+            // Sin ninguna solicitud, «tu visita quedó registrada» también es falso.
+            : ($this->contentGuard->courtesyConfirmationIn($frase) ?? $this->contentGuard->courtesyRegistrationIn($frase));
+        /*
+         * Si TODAS las fechas y horas de la respuesta son las de la visita
+         * confirmada, la frase sin fecha («Te esperamos.», «¡Nos vemos!») habla
+         * de esa visita y es verdad. Retirarla pieza a pieza dejaba la
+         * plantilla de confirmada sin su cierre y con el acta repetida detrás.
+         */
+        $todaLaRespuesta = $laVisitaLaConfirma($respuesta);
+        $sinFechaNiHora = function (string $frase): bool {
+            $m = CourtesyAuthority::mencionesEn($frase);
 
-        if ($afirma($respuesta) === null) {
+            return $m['fechas'] === [] && $m['horas'] === [];
+        };
+        $afirma = fn (string $frase): ?string => ($cita = $detecta($frase)) !== null
+            && ! $laVisitaLaConfirma($frase)
+            && ! ($todaLaRespuesta && $sinFechaNiHora($frase)) ? $cita : null;
+
+        if ($detecta($respuesta) === null) {
             return $respuesta;
         }
 
@@ -2811,7 +2927,8 @@ class UltronCommitService
          * dos. Los separadores se capturan y se vuelven a poner, para que el
          * mensaje conserve sus saltos de línea tal cual.
          */
-        $trozos = preg_split('/((?<=[.!?])\s+|\n+)/u', trim($respuesta), -1, PREG_SPLIT_DELIM_CAPTURE) ?: [];
+        // Sin partir «a. m.» ni «p. m.»: el corte en «p.» mutilaba la frase verdadera («m. Trae ropa cómoda») y la leía de la mañana.
+        $trozos = preg_split('/((?<=[.!?])(?<!\b[aApP]\.)\s+|\n+)/u', trim($respuesta), -1, PREG_SPLIT_DELIM_CAPTURE) ?: [];
 
         // Cada pieza con el separador que la sigue, para poder rehacer el
         // mensaje con sus saltos de línea intactos.
@@ -2839,6 +2956,11 @@ class UltronCommitService
             $piezas,
             fn (array $p) => $afirma($p[0]) === null || preg_match('/^\s*https?:\/\/\S+\s*$/u', $p[0]) === 1,
         ));
+
+        // Todo lo que afirmaba hablaba de la visita confirmada, con su día: es verdad y sale tal cual.
+        if (count($limpias) === count($piezas)) {
+            return $respuesta;
+        }
 
         // El separador va ENTRE piezas que sobreviven: ponerlo antes de saber
         // si la siguiente se queda dejaba dobles espacios donde se retiró algo.
@@ -2882,7 +3004,13 @@ class UltronCommitService
          * —y lo que escriba sale—, pero lo que la persona lee sobre en qué
          * punto está su visita no depende de que el modelo lo redacte bien.
          */
-        $acta = $this->courtesy->actaDe($this->courtesy->openFor($conversation));
+        $abierta = $this->courtesy->openFor($conversation) ?? $abiertaDelLead;
+        $acta = $this->courtesy->actaDe($abierta);
+        if ($acta === null && $abierta === null && $visitas !== [] && ! $laVisitaLaConfirma($limpio)) {
+            // Sin solicitud pendiente y con la visita confirmada: el acta es la cita real,
+            // salvo que lo que queda ya la nombre (repetirla detrás no informa de nada).
+            $acta = 'El equipo ya confirmó tu visita: '.$this->courtesy->humanDe($visitas[0]['at']).'.';
+        }
 
         if ($acta !== null) {
             return $limpio !== '' ? $limpio.' '.$acta : $acta;
@@ -2892,9 +3020,70 @@ class UltronCommitService
             return $limpio;
         }
 
-        return $this->courtesy->openFor($conversation) !== null
+        return $abierta !== null
             ? self::CORTESIA_SIN_CONFIRMAR
             : self::NADA_QUE_CONFIRMAR;
+    }
+
+    /**
+     * «Dejé solicitada tu visita» cuando la herramienta NO la registró.
+     *
+     * La invariante de promesas sólo ve la constancia si el «equipo» va en la
+     * misma oración, y con la petición parcial (sólo el día o sólo la hora, que
+     * es lo normal al preguntar de uno en uno) la herramienta no registra
+     * nada: la persona leía «dejé solicitada tu visita para el miércoles» y no
+     * había ninguna solicitud. Si la cortesía se pidió y no se ejecutó, esas
+     * frases se retiran y se pregunta lo que falta, con lo que la conversación
+     * ya recogió. Lo demás del mensaje sale.
+     *
+     * @param  array<int,array<string,mixed>>  $ejecutadas
+     * @param  array<string,mixed>  $decision
+     */
+    private function sinConstanciaDeUnaCortesiaQueNoSeRegistro(
+        MarketingConversation $conversation,
+        string $respuesta,
+        MarketingAiAction $action,
+        array $ejecutadas,
+        array $decision,
+    ): string {
+        $cortesia = collect($ejecutadas)->firstWhere('tool', SalesIntents::TOOL_COURTESY_REQUEST);
+        if ($cortesia === null || ($cortesia['status'] ?? null) === 'executed' || ($decision['courtesy_action'] ?? 'request') === 'cancel') {
+            return $respuesta;
+        }
+
+        $constancia = '/\b(deje|dejo|dejamos|queda|quedo|esta|ya\s+esta)\s+(tu\s+|la\s+|su\s+)?(solicitud\s+|visita\s+|cita\s+)?(de\s+(visita|cortesia)\s+)?(solicitada|registrada|anotada|apuntada)\b'
+            .'|\b(tu|la|su)\s+(visita|cita|solicitud)(\s+de\s+(visita|cortesia))?\s+(ya\s+)?(quedo|queda|esta|sigue)\s+(solicitada|registrada|anotada|apuntada)\b'
+            .'|\b(registre|anote|apunte|solicite)\s+(tu|la|su)\s+(visita|cita|solicitud)\b'
+            .'|\b(ya\s+)?(quedaste|estas)\s+(registrad|anotad|inscrit)[oa]\b/u';
+        // «Todavía no queda registrada tu visita» es la verdad que se quiere oír: no se retira.
+        $negada = '/\b(no|nunca|tampoco)\s+(\w+\s+){0,2}(solicitad|registrad|anotad|apuntad|inscrit)\w*/u';
+
+        $piezas = self::oracionesProtegidas($respuesta);
+        $quedan = array_values(array_filter($piezas, function (string $p) use ($constancia, $negada): bool {
+            $n = SalesAgentDecisionSchema::normalize($p);
+
+            return preg_match($constancia, $n) !== 1 || preg_match($negada, $n) === 1;
+        }));
+        if (count($quedan) === count($piezas)) {
+            return $respuesta;
+        }
+
+        $objetivo = $this->memoryService->load($conversation->fresh())->activeGoal();
+        $pregunta = CommercialTurnPolicy::courtesyReply(['active_goal' => $objetivo])
+            ?? 'Todavía no quedó registrada tu visita. ¿Qué día y a qué hora te queda bien?';
+
+        ChannelLog::warning('ultron.courtesy.unregistered_claim_dropped', [
+            'conversation_id' => (int) $conversation->id,
+            'frases_retiradas' => count($piezas) - count($quedan),
+            'motivo' => $cortesia['reason'] ?? null,
+        ]);
+        $meta = is_array($action->metadata) ? $action->metadata : [];
+        $meta['courtesy_unregistered_claim_dropped'] = count($piezas) - count($quedan);
+        $action->forceFill(['metadata' => $meta])->save();
+
+        $resto = trim(implode(' ', $quedan));
+
+        return $resto === '' ? $pregunta : (str_contains($resto, '?') ? $resto : $resto.' '.$pregunta);
     }
 
     /**
@@ -3331,6 +3520,252 @@ class UltronCommitService
     }
 
     /**
+     * El texto sin teléfonos. El número con su etiqueta («Teléfono de
+     * contacto: 314 3455483») se quita dentro de su frase; una frase con un
+     * teléfono sin etiqueta («Escríbenos al 3143455483») se retira entera,
+     * porque sin el número no dice nada. Teléfono es lo que tiene forma de
+     * teléfono colombiano —móvil de 10 cifras que empieza por 3, fijo 60X—,
+     * con o sin +57. La versión anterior quitaba cualquier tira de cifras y
+     * se comía direcciones («Calle 10 20-30») y años («desde 2015 - 2026»).
+     */
+    private static function sinTelefonos(string $texto): string
+    {
+        // Las abreviaturas de dirección y de contacto no terminan una frase: «Cl. 24», «Tel. 608…».
+        $abreviatura = '/\b(cl|cll|cra|kr|cr|av|avda|dg|diag|tv|transv|mz|no|nro|num|tel|cel|ed|edif|of|apto|int|km|bis|sur|norte|este|oeste)\./iu';
+        // «a. m.» y «p. m.» tampoco: el horario de la ficha se partía en trozos sueltos.
+        $protegido = (string) preg_replace(['/\b([ap])\.(\s?)m\./iu', $abreviatura], ['$1§$2m§', '$1§'], trim($texto));
+
+        $numero = '\(?\+?(?:57)?\)?[\s.-]?\(?\d{1,3}\)?[\d\s.-]{5,}\d';
+        $etiqueta = '(?:tel[eé]fonos?|tel§?|cel§?|celular|whatsapp|wpp|contacto|fijo|l[ií]nea|ll[aá]manos(?:\s+al)?|escr[ií]benos(?:\s+(?:al|por(?:\s+whatsapp)?(?:\s+al)?))?|cont[aá]ctanos(?:\s+al)?)';
+        $etiquetado = '/\s*'.$etiqueta.'(?:\s*[\/|]\s*'.$etiqueta.')*(?:\s+de\s+contacto)?\s*:?\s*'.$numero.'/iu';
+        $conForma = '/(?<!\d)\(?(?:\+?57[\s.-]?)?\(?(?:3\d{2}|60\d)\)?[\s.-]?\d{3}[\s.-]?\d{4}(?!\d)/u';
+        // Lo que queda colgando al quitar el número: «Escríbenos por.», «Tel.», «(tel.», «Teléfono /», «| Dirección».
+        $colgando = '/(\b(al|por|a|de|en|y|o)|'.$etiqueta.'|[\/|(:])\s*[.,;:)]*$/iu';
+
+        $frases = [];
+        foreach (preg_split('/(?<=[.!?])\s+/u', $protegido) ?: [] as $frase) {
+            $limpia = trim((string) preg_replace($etiquetado, '', $frase));
+            if (preg_match($conForma, $limpia) === 1) {
+                continue;
+            }
+            $limpia = trim((string) preg_replace(['/^\s*[|\/,;:]+\s*/u', '/^(o|y)\s+/iu', '/\(\s*\)/u'], '', $limpia));
+            $limpia = (string) preg_replace(['/\s*,(\s*,)+/u', '/,\s*\./u', '/\s{2,}/u', '/\s+([.,;:])/u'], [',', '.', ' ', '$1'], $limpia);
+            if (trim($limpia, " \t.,;:|/()") === '' || preg_match($colgando, rtrim($limpia, '.')) === 1) {
+                continue;
+            }
+            // Si al quitar el número sólo queda la entradilla («Para más información.»), la frase ya no dice nada.
+            if ($limpia !== trim($frase) && preg_match('/^(para|por|pa)\s+(mas\s+|más\s+)?(informaci[oó]n|info|informes|detalles|dudas|consultas)\.?$|^(informes|mas info|más info|cualquier (duda|inquietud|consulta))\.?$/iu', $limpia) === 1) {
+                continue;
+            }
+            $frases[] = mb_strtoupper(mb_substr($limpia, 0, 1)).mb_substr($limpia, 1);
+        }
+
+        // «p.m.» al final de una frase protegida deja «p.m..»: un punto basta.
+        return trim((string) preg_replace('/\.{2,}/u', '.', str_replace('§', '.', implode(' ', $frases))));
+    }
+
+    /**
+     * La fecha y la hora EFECTIVAS de la cortesía: lo que trajo el modelo si
+     * vale; si no, lo que dijo la persona hoy; si no, lo que la conversación
+     * está recogiendo para una visita aún sin registrar. Se resuelve UNA vez, antes de la invariante de promesas, y la
+     * invariante y la herramienta usan los mismos valores: antes la invariante
+     * decidía con los null del modelo y tumbaba en 422 el turno que la
+     * herramienta sí habría registrado —el mismo incidente que esto venía a
+     * arreglar—. Lo que el modelo resolvió bien no se pisa con una lectura
+     * literal del texto, y la autoridad sigue decidiendo si vale.
+     *
+     * @param  array<string,mixed>  $decision
+     * @return array<string,mixed>
+     */
+    private function conCortesiaDelTexto(MarketingConversation $conversation, MarketingMessage $message, array $decision): array
+    {
+        if (! in_array(SalesIntents::TOOL_COURTESY_REQUEST, (array) ($decision['tools_requested'] ?? []), true)
+            || ($decision['courtesy_action'] ?? 'request') === 'cancel') {
+            return $decision;
+        }
+        /*
+         * Sólo lo que la conversación está RECOGIENDO: el día o la hora que la
+         * persona ya dio para una visita que todavía no se registró. Un
+         * objetivo ya SOLICITADO es el hueco registrado y no caduca: rellenar
+         * con él registraba a las 18:00 del jueves a quien sólo dijo «quiero
+         * volver a ir el jueves», o reescribía el viernes que la persona acababa
+         * de rechazar con «el viernes no puedo, mejor el miércoles».
+         */
+        $objetivo = $this->memoryService->load($conversation)->activeGoal();
+        $recogido = ($objetivo['kind'] ?? null) === ConversationMemoryService::GOAL_COURTESY
+            && ($objetivo['status'] ?? null) === ConversationMemoryService::GOAL_COLLECTING
+            ? (array) ($objetivo['data'] ?? [])
+            : [];
+        /*
+         * El texto sólo cuenta si se lee SIN DUDAS: una negación, una
+         * alternativa, una corrección, un rango o una pregunta hacen que no se
+         * registre nada con él, y se pregunta. Registrar el día equivocado
+         * manda al equipo a preparar una visita que nadie pidió; no registrar
+         * sólo cuesta una pregunta más. Y si el texto NOMBRA un día o una hora
+         * que no se pudo leer sin dudas, tampoco se rellena ese dato con lo
+         * recogido: la persona acaba de decir otra cosa.
+         */
+        $body = (string) $message->body;
+        $delTexto = CourtesyAuthority::textoSinDudas($body);
+        $menciones = CourtesyAuthority::mencionesEn($body);
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($decision['courtesy_date'] ?? '')) !== 1) {
+            $decision['courtesy_date'] = ($delTexto ? CourtesyAuthority::fechaDesdeTexto($body) : null)
+                ?? ($menciones['fechas'] === [] ? ($recogido['date'] ?? null) : null);
+        }
+        if (CourtesyAuthority::minutosDe($decision['courtesy_time'] ?? null) === null) {
+            $decision['courtesy_time'] = ($delTexto ? CourtesyAuthority::horaDesdeTexto($body) : null)
+                ?? ($menciones['horas'] === [] ? ($recogido['time'] ?? null) : null);
+        }
+
+        return $decision;
+    }
+
+    /**
+     * ¿El texto que sale lleva TODOS los enlaces de la app? Se mira el texto
+     * final y no qué guarda lo tocó: la política, la guarda de cortesía o la
+     * de servicios pueden retirar justo la frase donde se pegaron.
+     */
+    private static function llevaLosEnlaces(string $texto): bool
+    {
+        if (preg_match_all('#https?://\S+#u', MobileAppCatalog::linksInline(), $m) < 1) {
+            return str_contains($texto, MobileAppCatalog::linksInline());
+        }
+        foreach ($m[0] as $url) {
+            if (! str_contains($texto, rtrim($url, '.,;:!?)'))) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * La frase HONESTA sobre una visita que existe: «tu visita quedó
+     * solicitada», «quedó registrada tu solicitud de visita». Nombra la
+     * visita (o la solicitud DE visita), nunca una «solicitud» cualquiera.
+     */
+    private const RECUERDO_HONESTO = '/\b(tu|la|su)\s+(visita|cita)(\s+de\s+cortesia)?\s+(ya\s+)?(quedo|queda|esta|sigue)\s+(solicitada|registrada|pendiente|anotada)\b'
+        .'|\b(quedo|queda|esta)\s+(solicitada|registrada|anotada)\s+(tu|la|su)\s+(visita|cita|solicitud\s+de\s+(visita|cortesia))\b'
+        .'|\b(tu|la|su)\s+solicitud\s+de\s+(visita|cortesia)\s+(ya\s+)?(quedo|queda|esta|sigue)\s+(registrada|solicitada|pendiente|anotada)\b/u';
+
+    /** Lo que, pegado a la frase honesta, la convierte en otra constancia: «y escalada», «y el caso de tu cobro», «de cambio». */
+    private const MAS_QUE_EL_RECUERDO = '/\b(escalad|radicad|reportad|marcad|anotad|registrad|solicitad|abiert)\w*|\b(cambio|cambiar\w*|mover\w*|cancel\w*|reprogram\w*|caso|reclamo|reporte|revision|peticion|cobro|pago)\b|\b(y|e)\s+(la|el|lo|las|los)\s+de\b/u';
+
+    /**
+     * ¿Toda constancia de efecto durable del borrador es el recuerdo honesto
+     * de una visita que sigue viva? Oración a oración: cada una que la
+     * invariante vea como constancia tiene que ser la frase honesta sobre un
+     * compromiso del lead que aún no pasó, con SU día y SU hora si los nombra
+     * (todos los que nombre), y sin nada más coordinado. Lo demás sigue
+     * necesitando autoridad: «tu visita quedó solicitada. Lo dejo escalado al
+     * equipo» es una promesa.
+     *
+     * @param  array<int,array<string,mixed>>  $compromisos
+     */
+    private function soloRecuerdaLaVisita(string $texto, array $compromisos): bool
+    {
+        $vivos = array_values(array_filter($compromisos, fn (array $c) => ! ($c['past'] ?? false)));
+        if ($vivos === []) {
+            return false;
+        }
+
+        $alguna = false;
+        foreach (self::oracionesProtegidas(SalesAgentDecisionSchema::normalize($texto)) as $frase) {
+            if ($this->promises->efectoDurableEn($frase) === null) {
+                continue;
+            }
+            if (preg_match(self::RECUERDO_HONESTO, $frase) !== 1) {
+                return false;
+            }
+            $resto = (string) preg_replace(self::RECUERDO_HONESTO, ' ', $frase);
+            if (preg_match(self::MAS_QUE_EL_RECUERDO, $resto) === 1 || $this->promises->efectoDurableEn($resto) !== null) {
+                return false;
+            }
+            if (! $this->casaConAlguno(CourtesyAuthority::mencionesEn($frase), $vivos)) {
+                return false;
+            }
+            $alguna = true;
+        }
+
+        return $alguna;
+    }
+
+    /**
+     * Las oraciones de un texto sin partir «a. m.» ni «p. m.»: cortar por el
+     * punto de «p.» dejaba «…a las 7:00 p.» por un lado y «m. Trae ropa
+     * cómoda» por otro, y la hora se leía de la mañana.
+     *
+     * @return string[]
+     */
+    private static function oracionesProtegidas(string $texto): array
+    {
+        return array_values(array_filter(
+            preg_split('/(?<=[.!?;])(?<!\b[aApP]\.)\s+|\n+/u', $texto) ?: [],
+            fn (string $f) => trim($f) !== '',
+        ));
+    }
+
+    /**
+     * ¿Lo que un texto nombra de fecha y hora casa ENTERO con algún
+     * compromiso? Toda fecha que nombre tiene que ser la suya —una que no se
+     * puede resolver no casa con nada— y toda hora tiene que tener, entre sus
+     * lecturas, la del compromiso. Sin fecha ni hora nombradas, casa.
+     *
+     * @param  array{fechas: array<int,?string>, horas: array<int,array<int,string>>}  $menciones
+     * @param  array<int,array<string,mixed>>  $compromisos
+     */
+    private function casaConAlguno(array $menciones, array $compromisos): bool
+    {
+        foreach ($compromisos as $c) {
+            $casa = true;
+            foreach ($menciones['fechas'] as $f) {
+                $casa = $casa && $f !== null && $f === $c['date'];
+            }
+            foreach ($menciones['horas'] as $lecturas) {
+                $casa = $casa && in_array($c['time'], $lecturas, true);
+            }
+            if ($casa) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** La violación de un turno de memoria que da un día, una hora o un estado que no son los del compromiso. */
+    public const VIOLACION_MEMORIA_DATO = 'memory_turn_wrong_commitment';
+
+    /**
+     * ¿El borrador de un turno de memoria da un día, una hora o un estado que
+     * no son los de un compromiso del lead? Se leen TODAS las fechas y horas
+     * que nombra (no se elige ni se descarta nada: una fecha de más, una
+     * negación o una cláusula sobre el horario no lo vuelven un comodín) y
+     * tienen que casar con un mismo compromiso. Si el borrador dice que la
+     * visita está confirmada, el compromiso tiene que estarlo. Un compromiso
+     * que ya pasó sólo vale si el borrador habla en pasado («era», «estaba»).
+     * Sin fecha ni hora nombradas no hay nada que contradecir, salvo que
+     * afirme una confirmación que no existe.
+     */
+    private function contradiceLosCompromisos(MarketingConversation $conversation, string $texto): bool
+    {
+        $menciones = CourtesyAuthority::mencionesEn($texto);
+        $afirmaConfirmada = $this->contentGuard->courtesyConfirmationIn($texto) !== null;
+        if ($menciones['fechas'] === [] && $menciones['horas'] === [] && ! $afirmaConfirmada) {
+            return false;
+        }
+        $lead = $conversation->lead;
+        $compromisos = $lead !== null ? $this->courtesy->commitmentsForLead($lead) : [];
+        $enPasado = preg_match('/\b(era|estaba|fue|tenias)\b/u', SalesAgentDecisionSchema::normalize($texto)) === 1;
+
+        $candidatos = array_values(array_filter(
+            $compromisos,
+            fn (array $c) => (! $c['past'] || $enPasado) && (! $afirmaConfirmada || $c['status'] === 'confirmed'),
+        ));
+
+        return ! $this->casaConAlguno($menciones, $candidatos);
+    }
+
+    /**
      * El respaldo de «quiero información», armado con la ficha del gimnasio.
      *
      * Quién somos, qué ofrecemos, dónde estamos, cuándo abrimos y qué clases
@@ -3345,7 +3780,13 @@ class UltronCommitService
     {
         $piezas = ['business_identity' => null, 'gym_info' => null, 'location' => null, 'schedule' => null];
         foreach ($this->knowledge->activeItems() as $item) {
-            $c = trim((string) $item->content);
+            /*
+             * Sin teléfonos: la ficha de ubicación de producción trae el
+             * número de contacto, y el guard de salida lee siete cifras
+             * seguidas como un precio inventado. Este respaldo se bloqueó
+             * entero por eso en una prueba física y salió el último recurso.
+             */
+            $c = self::sinTelefonos(trim((string) $item->content));
             if ($c !== '' && array_key_exists($item->category, $piezas) && $piezas[$item->category] === null) {
                 $piezas[$item->category] = $c;
             }
@@ -3615,6 +4056,9 @@ class UltronCommitService
         if ($policy['reception_mode'] ?? false) {
             return $seguro($this->saludoDeBienvenida($conversation)) ?? $this->ultimoRecurso($conversation, $intent);
         }
+        if ($policy['memory_mode'] ?? false) {
+            return $seguro($this->respaldoDeMemoria($conversation)) ?? $this->ultimoRecurso($conversation, $intent);
+        }
         if ($intent === SalesIntents::GENERAL_INFO) {
             return $seguro($this->respuestaConHechos()) ?? $this->ultimoRecurso($conversation, $intent);
         }
@@ -3623,20 +4067,125 @@ class UltronCommitService
     }
 
     /**
+     * La respuesta a «¿a qué hora era mi visita?» cuando el modelo no la dio
+     * o la dio vendiendo: el compromiso vivo del lead, venga de la
+     * conversación que venga, con la verdad de su estado. Confirmada, se dice
+     * que el equipo la confirmó; solicitada, que el equipo la revisa; si era
+     * hoy y la hora ya pasó, se dice eso y no «te esperamos». No se ofrece
+     * moverla ni cancelarla desde aquí: esas herramientas sólo tocan la
+     * solicitud de su conversación, y prometerlo sería prometer lo que no se
+     * puede cumplir. Sin compromiso, se dice que no hay y se pide el dato.
+     * Sin verbos de ofrecimiento.
+     */
+    private function respaldoDeMemoria(MarketingConversation $conversation): string
+    {
+        $lead = $conversation->lead;
+        $compromisos = $lead !== null ? $this->courtesy->commitmentsForLead($lead) : [];
+        // Van primero las que aún no pasaron: el primero es el que importa.
+        $c = $compromisos[0] ?? null;
+
+        if ($c === null) {
+            return 'No tengo registrada una visita tuya. Dime el día y la hora que te sirven y la dejo solicitada.';
+        }
+        if ($c['past']) {
+            return 'Tu visita estaba para el '.$c['human'].'. Si no alcanzaste a venir, dime qué otro día y hora te sirven y la dejo solicitada.';
+        }
+        if ($c['status'] === 'confirmed') {
+            return 'Claro. El equipo ya confirmó tu visita: '.$c['human'].'. Te esperamos.';
+        }
+
+        return 'Claro. Tu visita de cortesía quedó solicitada para el '.$c['human'].'; el equipo la revisa para tenerlo todo listo.';
+    }
+
+    /**
+     * Las intenciones que tienen su PROPIO texto curado y su propia marca: ni
+     * la memoria ni una visita a medias las pisan con el critic caído. La
+     * revisión midió «me lesioné la rodilla» contestado con «¿qué día y a qué
+     * hora te queda bien?».
+     */
+    private const RESPALDO_PROPIO = [
+        SalesIntents::MEDICAL_RISK_ESCALATION, SalesIntents::FRAUD_OR_PAYMENT_CLAIM, SalesIntents::HUMAN_REQUEST,
+        SalesIntents::COMPLAINT, SalesIntents::INVOICE_REQUEST,
+        SalesIntents::NOT_INTERESTED, SalesIntents::DO_NOT_CONTACT_REQUEST,
+        SalesIntents::PAYMENT_LINK_REQUEST, SalesIntents::HIGH_INTENT_CLOSE, SalesIntents::PRICING_QUESTION,
+        // Las objeciones y las despedidas también tienen el suyo: «lo voy a pensar» no es un día para la visita.
+        ...SalesIntents::OBJECTION_INTENTS,
+        SalesIntents::THANKS, SalesIntents::GOODBYE, SalesIntents::BOT_QUESTION,
+    ];
+
+    /**
      * El respaldo semántico del camino del critic caído, leído del texto
-     * entrante: un saludo puro recibe bienvenida; «quiero información», la
-     * ficha real. Null = no hay respaldo específico y sigue el curado.
+     * entrante con los MISMOS criterios que el camino normal: un saludo puro
+     * recibe bienvenida; una pregunta de memoria sobre la visita, el
+     * compromiso real; un fragmento de la visita a medias («mañana», «tipo
+     * 7»), la visita; «quiero información», la ficha real. Null = no hay
+     * respaldo específico y sigue el curado de su intención.
      */
     private function respaldoSemantico(MarketingConversation $conversation, string $inbound, string $intent): ?string
     {
         if (SalesIntents::isPureGreeting($inbound)) {
             return $this->saludoDeBienvenida($conversation);
         }
+        if (in_array($intent, self::RESPALDO_PROPIO, true)) {
+            return null;
+        }
+
+        $planes = $this->knowledge->activePlans();
+        $memoria = $this->memoryService->load($conversation);
+        $resolucion = $this->references->resolve($inbound, $memoria, $this->memoryService->sellablePlansForMemory());
+        if (CommercialTurnPolicy::esTurnoDeMemoria($intent, $inbound, $planes, $resolucion)) {
+            return $this->respaldoDeMemoria($conversation);
+        }
+
+        /*
+         * Con la visita a medio concretar, el respaldo es la visita SÓLO si el
+         * mensaje es un fragmento de la visita. Lo decide la misma política del
+         * camino normal (`goal_takes_turn`) leyendo el TEXTO: una pregunta, un
+         * precio, los planes o un «ya no quiero ir» se contestan como lo que
+         * son. La etiqueta del modelo no cuenta aquí —lo sensible y lo del
+         * dinero ya salieron arriba—, porque este camino existe justo cuando el
+         * modelo falló: en producción un «mañana miércoles a 2 pm» llegó
+         * etiquetado como pregunta de horario y salió el horario de apertura.
+         */
+        $politica = CommercialTurnPolicy::decide(
+            SalesIntents::UNKNOWN,
+            (string) ($conversation->commercial_phase ?? ''),
+            $memoria,
+            $planes,
+            $resolucion,
+            $inbound,
+        );
+        if (($politica['goal_takes_turn'] ?? false) === true && self::esFragmentoDeLaVisita($inbound)) {
+            $deVisita = CommercialTurnPolicy::courtesyReply($politica);
+            if ($deVisita !== null) {
+                return $deVisita;
+            }
+        }
         if ($intent === SalesIntents::GENERAL_INFO) {
             return $this->respuestaConHechos();
         }
 
         return null;
+    }
+
+    /**
+     * ¿El mensaje es un FRAGMENTO de la visita a medias? Trae un día, una hora
+     * o una franja («mañana», «tipo 7», «en la noche»), o es una respuesta
+     * cortísima sin negación («sí», «ok»). «Lo voy a pensar», «no voy a ir» o
+     * «me da pena» no lo son: tienen su propio texto.
+     */
+    private static function esFragmentoDeLaVisita(string $inbound): bool
+    {
+        $t = SalesAgentDecisionSchema::normalize($inbound);
+        $menciones = CourtesyAuthority::mencionesEn($inbound);
+        if ($menciones['fechas'] !== [] || $menciones['horas'] !== []
+            || preg_match('/\b(manana|tarde|noche|mediodia|madrugada|temprano|hoy|pasado)\b/u', $t) === 1) {
+            return true;
+        }
+        // Sin \p{…}: el PCRE de producción no lo soporta. El texto ya viene en minúsculas y sin tildes.
+        $palabras = preg_split('/\s+/u', trim((string) preg_replace('/[^a-z0-9\s]/u', ' ', $t))) ?: [];
+
+        return count(array_filter($palabras)) <= 2 && preg_match('/\b(no|nunca|ni|tampoco|nel|paso)\b/u', $t) !== 1;
     }
 
     /**
@@ -3647,7 +4196,10 @@ class UltronCommitService
     private function saludoDeBienvenida(MarketingConversation $conversation): string
     {
         $franja = (string) (BusinessClock::forPrompt()['greeting'] ?? '');
-        $yaSaludamos = $this->memoryService->load($conversation)->get('greeted') !== null;
+        // Ya saludamos en esta conversación, o ya hablamos con esta persona en
+        // otra: a quien vuelve se le recibe de nuevo, no se le estrena.
+        $yaSaludamos = $this->memoryService->load($conversation)->get('greeted') !== null
+            || MarketingConversation::query()->where('lead_id', $conversation->lead_id)->where('id', '!=', $conversation->id)->exists();
         $previas = $this->previousMachineReplies($conversation);
         $variantes = $this->replies->welcomeReplies($franja, $yaSaludamos);
 

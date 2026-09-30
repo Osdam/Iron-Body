@@ -3,11 +3,13 @@
 namespace App\Services\Marketing\Ultron;
 
 use App\Models\MarketingAgentAction;
+use App\Models\MarketingAppointment;
 use App\Models\MarketingConversation;
 use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
 use App\Services\Observability\ChannelLog;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * LA SOLICITUD DE UN DÍA DE CORTESÍA. REGISTRAR NO ES AGENDAR.
@@ -61,7 +63,9 @@ class CourtesyRequestService
         ?string $fecha = null,
         ?string $hora = null,
     ): array {
-        $abierta = $this->openFor($conversation);
+        // La solicitud abierta del LEAD, venga de la conversación que venga:
+        // quien vuelve y pide otro día mueve SU solicitud, no abre una segunda.
+        $abierta = $this->openFor($conversation) ?? $this->openForLead($lead);
 
         $payload = [
             'type' => 'visit',
@@ -150,7 +154,8 @@ class CourtesyRequestService
      */
     public function cancel(MarketingConversation $conversation, ?string $motivo = null): ?array
     {
-        $abierta = $this->openFor($conversation);
+        // Igual que al pedir: se cancela la solicitud abierta del lead, también la de otra conversación.
+        $abierta = $this->openFor($conversation) ?? ($conversation->lead !== null ? $this->openForLead($conversation->lead) : null);
 
         if ($abierta === null) {
             return null;
@@ -179,6 +184,154 @@ class CourtesyRequestService
             ->where('payload->source', 'ultron')
             ->latest('id')
             ->first();
+    }
+
+    /**
+     * La solicitud de cortesía ABIERTA del lead, venga de la conversación que
+     * venga. La guarda de cortesía decide con ella si una frase de «quedaste
+     * agendado» miente: si el lead tiene una solicitud sin confirmar en otra
+     * conversación, esa frase habla de ella igual.
+     */
+    /** «miércoles 30 de septiembre a las 14:00»: el día y la hora como se le dicen a la persona. */
+    public function humanDe(Carbon $d): string
+    {
+        $dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+        $meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+        $d = $d->copy()->setTimezone(BusinessClock::TZ);
+
+        return $dias[$d->dayOfWeek].' '.$d->day.' de '.$meses[$d->month - 1].' a las '.$d->format('H:i');
+    }
+
+    /** Cuántos días atrás sigue siendo un compromiso que se puede recordar. */
+    public const DIAS_DE_MEMORIA = 7;
+
+    public function openForLead(MarketingLead $lead): ?MarketingAgentAction
+    {
+        return MarketingAgentAction::query()
+            ->where('marketing_lead_id', $lead->id)
+            ->where('action_type', MarketingAgentAction::TYPE_CREATE_APPOINTMENT)
+            ->whereIn('status', MarketingAgentAction::OPEN_STATUSES)
+            ->where('payload->source', 'ultron')
+            ->latest('id')
+            ->first();
+    }
+
+    /**
+     * Las citas de VISITA confirmadas del lead que aún no han pasado: sólo
+     * una visita hace verdadera una frase sobre la visita. Una llamada o una
+     * valoración agendada por el equipo no es la visita de cortesía, y
+     * contarla le decía a alguien «te esperamos» por una llamada telefónica.
+     *
+     * @return Collection<int,MarketingAppointment>
+     */
+    public function confirmedVisitsFor(MarketingLead $lead, ?Carbon $desde = null)
+    {
+        return MarketingAppointment::query()
+            ->where('marketing_lead_id', $lead->id)
+            ->where('type', MarketingAppointment::TYPE_VISIT)
+            ->where('status', MarketingAppointment::STATUS_SCHEDULED)
+            ->where('scheduled_at', '>=', ($desde ?? Carbon::now())->copy()->setTimezone('UTC'))
+            ->orderBy('scheduled_at')
+            ->limit(5)
+            ->get();
+    }
+
+    /**
+     * Los compromisos del LEAD, vengan de la conversación que vengan: la
+     * visita de cortesía de la última semana en adelante. Es lo que permite
+     * contestar «¿a qué hora era mi visita?» en una conversación nueva, y lo
+     * que el modelo recibe como hecho en customer.commitments. Van primero los
+     * que aún no pasaron (del más próximo al más lejano) y después los
+     * pasados (del más reciente al más viejo): el primero es el que importa.
+     *
+     * `status` es lo que se le puede DECIR a la persona, con el mismo
+     * criterio que la guarda de cortesía: `confirmed` sólo cuando existe la
+     * cita real de VISITA (el equipo ejecutó la solicitud); `requested`
+     * mientras no, también si alguien del equipo ya la aprobó en el panel pero
+     * la cita todavía no existe. `past` es true cuando su hora ya pasó: sigue
+     * siendo lo que la persona pidió, pero ya no se le puede decir «te
+     * esperamos».
+     *
+     * @return array<int,array{kind:string,status:string,past:bool,scheduled_at:string,date:string,time:string,weekday:string,human:string,conversation_id:int}>
+     */
+    public function commitmentsForLead(MarketingLead $lead): array
+    {
+        $dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+        $meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+        $hoy = Carbon::now(BusinessClock::TZ)->startOfDay();
+        $salida = [];
+
+        /*
+         * Primero la cita REAL: cuando el equipo ejecuta la solicitud desde el
+         * panel, la acción pasa a `executed` y nace la cita en
+         * marketing_appointments. Sin mirar aquí, a quien SÍ tiene visita
+         * confirmada se le decía «no tengo nada registrado».
+         */
+        $ahora = Carbon::now(BusinessClock::TZ);
+        // Hasta una semana atrás: «¿a qué hora era mi visita?» también se pregunta al día siguiente.
+        $desde = $hoy->copy()->subDays(self::DIAS_DE_MEMORIA);
+        foreach ($this->confirmedVisitsFor($lead, $desde) as $cita) {
+            $d = Carbon::parse($cita->scheduled_at)->setTimezone(BusinessClock::TZ);
+            $salida[] = [
+                'kind' => 'courtesy_visit',
+                'status' => 'confirmed',
+                // La hora ya pasó: no se le dice «te esperamos».
+                'past' => $d->isBefore($ahora),
+                'scheduled_at' => $d->toIso8601String(),
+                'date' => $d->toDateString(),
+                'time' => $d->format('H:i'),
+                'weekday' => $dias[$d->dayOfWeek],
+                'human' => $dias[$d->dayOfWeek].' '.$d->day.' de '.$meses[$d->month - 1].' a las '.$d->format('H:i'),
+                'conversation_id' => (int) $cita->marketing_conversation_id,
+            ];
+        }
+
+        // Sin límite antes de filtrar por fecha: con tres solicitudes ya
+        // pasadas, una futura más antigua se perdía. Abiertas hay pocas.
+        $acciones = MarketingAgentAction::query()
+            ->where('marketing_lead_id', $lead->id)
+            ->where('action_type', MarketingAgentAction::TYPE_CREATE_APPOINTMENT)
+            ->where('payload->source', 'ultron')
+            ->whereIn('status', MarketingAgentAction::OPEN_STATUSES)
+            ->latest('id')
+            ->limit(50)
+            ->get();
+
+        foreach ($acciones as $accion) {
+            $cuando = data_get($accion->payload, 'requested_at_local');
+            if (! is_string($cuando) || $cuando === '') {
+                continue;
+            }
+            try {
+                $d = Carbon::parse($cuando, BusinessClock::TZ);
+            } catch (\Throwable) {
+                continue;
+            }
+            // Más de una semana atrás ya no es algo que se recuerde por aquí.
+            if ($d->isBefore($desde)) {
+                continue;
+            }
+            $salida[] = [
+                'kind' => 'courtesy_visit',
+                'status' => 'requested',
+                'past' => $d->isBefore($ahora),
+                'scheduled_at' => $d->toIso8601String(),
+                'date' => $d->toDateString(),
+                'time' => $d->format('H:i'),
+                'weekday' => $dias[$d->dayOfWeek],
+                'human' => $dias[$d->dayOfWeek].' '.$d->day.' de '.$meses[$d->month - 1].' a las '.$d->format('H:i'),
+                'conversation_id' => (int) $accion->marketing_conversation_id,
+            ];
+        }
+
+        // Primero las que aún no pasaron, de la más próxima a la más lejana;
+        // después las pasadas, de la más reciente a la más vieja. Así el
+        // primero es siempre el que importa.
+        usort($salida, fn (array $a, array $b) => $a['past'] !== $b['past']
+            ? ($a['past'] ? 1 : -1)
+            : ($a['past'] ? strcmp($b['scheduled_at'], $a['scheduled_at']) : strcmp($a['scheduled_at'], $b['scheduled_at'])));
+
+        return array_slice($salida, 0, 3);
     }
 
     /**

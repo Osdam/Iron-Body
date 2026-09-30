@@ -79,6 +79,12 @@ final class CommercialTurnPolicy
     /** Lo que no cabe en un saludo: se recibe, no se conduce todavía. */
     public const PROHIBIDO_EN_RECEPCION = ['discovery', 'plan_recommendation', 'payment', 'checkout', 'registration'];
 
+    /** Una pregunta de memoria contestada vendiendo o preguntando el objetivo. */
+    public const VIOLACION_MEMORIA_VENDE = 'policy_memory_turn_sells';
+
+    /** Lo que convierte un recuerdo en una venta: se nombra el plan, se cotiza o se manda a pagar. */
+    private const VENDE_EN_MEMORIA = '/\b(pag(o|ar|as|uelo)|link|enlace|inscri\w*|matric\w*|membres\w*|precio|tarifa|mensualidad|total access|plan elite|tu plan|el plan|descarg\w* la app|te (cuento|explico) (mas )?(sobre|de) (las clases|los planes|el plan))\b/u';
+
     /** Lo que convierte un saludo en una venta o en un formulario. */
     private const VENDE_EN_SALUDO = '/\b(pag(o|ar|as|uelo)|link|enlace|inscri\w*|matric\w*|membres\w*|precio|tarifa|mensualidad|plan(es)?|total access|objetivo|meta|bajar (de )?peso|bajar grasa|ganar (masa|musculo)|tonific\w*|descarg\w* la app|la app)\b/u';
 
@@ -171,6 +177,45 @@ final class CommercialTurnPolicy
      * preguntar en abierto —qué planes hay, cuál recomiendan, qué ofrecen—.
      */
     private const PIDE_RECOMENDACION = '/\b(planes|membresias|recomendad|recomiendas|recomienda|que\s+ofrecen|que\s+opciones|opciones\s+(hay|tienen))/u';
+
+    /**
+     * Las intenciones que nunca se contestan en modo memoria: el pago, el
+     * cierre y el precio se contestan como tales, y lo sensible (una queja,
+     * un riesgo médico, un reclamo de pago, pedir una persona, no querer
+     * seguir, no querer mensajes) tiene su propio texto y su propia marca.
+     */
+    private const NUNCA_EN_MEMORIA = [
+        SalesIntents::PAYMENT_LINK_REQUEST, SalesIntents::HIGH_INTENT_CLOSE, SalesIntents::PRICING_QUESTION,
+        SalesIntents::NOT_INTERESTED, SalesIntents::DO_NOT_CONTACT_REQUEST,
+        ...SalesIntents::STAFF_REVIEW_INTENTS,
+    ];
+
+    /**
+     * ¿ESTE turno es una pregunta de memoria sobre la visita? Un solo criterio
+     * —el MISMO— para la política, las pistas del estratega y el respaldo con
+     * el critic caído: cuando eran tres, divergían y el respaldo contestaba con
+     * la visita a una queja. Sin intención sensible, de pago o de plan ya
+     * elegido; sin precio, planes nombrados ni plan referido en el mismo
+     * mensaje (entonces se contesta ESO, con la memoria de contexto); y con
+     * {@see SalesIntents::isMemoryQuestion()}.
+     *
+     * @param  array<int,array{id:int,name:string}>  $activePlans
+     * @param  array<string,mixed>  $resolution  lo que resolvió {@see ReferenceResolver}
+     */
+    public static function esTurnoDeMemoria(string $intent, string $inbound, array $activePlans = [], array $resolution = []): bool
+    {
+        if (in_array($intent, self::NUNCA_EN_MEMORIA, true) || in_array($intent, self::PLAN_YA_ELEGIDO, true)
+            || ! SalesIntents::isMemoryQuestion($inbound)) {
+            return false;
+        }
+        $texto = SalesAgentDecisionSchema::normalize($inbound);
+
+        return preg_match(self::PREGUNTA_PRECIO, $texto) !== 1
+            && preg_match(self::PRECIO_EN_DUDA, $texto) !== 1
+            && preg_match(self::PIDE_RECOMENDACION, $texto) !== 1
+            && self::plansNamedIn($inbound, $activePlans) === []
+            && self::planDeLaReferencia($resolution, $activePlans) === null;
+    }
 
     /**
      * @param  array<int,array<string,mixed>>  $activePlans  catálogo del CRM, ya ordenado
@@ -421,6 +466,23 @@ final class CommercialTurnPolicy
             $siguientes = ['greet', 'welcome', 'open_question'];
         }
 
+        /*
+         * MODO MEMORIA: «me acuerdas a qué hora agendé» se resuelve, se
+         * confirma el compromiso y se espera. No es una oportunidad
+         * comercial: a esa pregunta se le contestó en una prueba física con
+         * la hora y con el plan Élite, y eso es lo que aquí deja de pasar.
+         */
+        $memoria = ! $recepcion && self::esTurnoDeMemoria($intent, $inbound, $activePlans, $resolution);
+        if ($memoria) {
+            $informativo = true;
+            $exigeHecho = false;
+            $obligatorio = null;
+            $origen = null;
+            $preferido = null;
+            $prohibidasAcciones = self::PROHIBIDO_EN_RECEPCION;
+            $siguientes = ['answer', 'confirm_commitment', 'wait'];
+        }
+
         return [
             'intent' => $intent,
             'commercial_phase' => $phase,
@@ -469,6 +531,8 @@ final class CommercialTurnPolicy
             'resume_goal_after_answer' => $retomarVisita,
             // Un saludo y nada más: se recibe, no se vende ni se descubre.
             'reception_mode' => $recepcion,
+            // Una pregunta de memoria: se resuelve y se espera.
+            'memory_mode' => $memoria,
         ];
     }
 
@@ -498,6 +562,16 @@ final class CommercialTurnPolicy
                 || StrategyContract::asksDiscovery($t)
                 || preg_match(self::VENDE_EN_SALUDO, $t) === 1)) {
             $fallos[] = self::VIOLACION_SALUDO_COMERCIAL;
+        }
+
+        // 000. En modo memoria tampoco: resolver y esperar. Un plan, una
+        // cifra o una pregunta de descubrimiento convierten el recuerdo en venta.
+        if (($policy['memory_mode'] ?? false)
+            && (self::plansNamedIn($t, $activePlans) !== []
+                || preg_match(self::HAY_PRECIO, $t) === 1
+                || StrategyContract::asksDiscovery($t)
+                || preg_match(self::VENDE_EN_MEMORIA, $t) === 1)) {
+            $fallos[] = self::VIOLACION_MEMORIA_VENDE;
         }
 
         /*

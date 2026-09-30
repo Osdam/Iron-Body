@@ -77,6 +77,32 @@ class CustomerIntelligenceService
 
     private const CON_EXPERIENCIA = '/\b(ya (he )?entren(e|ado)|entrenaba|antes iba|llevo (anos|meses) entrenando|tengo experiencia|vengo de otro gym)\b/u';
 
+    /*
+     * Colaboradores perezosos, no promovidos ni de sólo lectura: hay pruebas
+     * que extienden esta clase con un constructor propio (para dictar el
+     * sujeto comercial) y no llaman al padre. Una propiedad readonly sin
+     * inicializar tumbaría el perfil entero.
+     */
+    private ?LeadProfileService $leadProfile = null;
+
+    private ?CourtesyRequestService $courtesy = null;
+
+    public function __construct(?LeadProfileService $leadProfile = null, ?CourtesyRequestService $courtesy = null)
+    {
+        $this->leadProfile = $leadProfile;
+        $this->courtesy = $courtesy;
+    }
+
+    private function leadProfile(): LeadProfileService
+    {
+        return $this->leadProfile ??= new LeadProfileService;
+    }
+
+    private function courtesy(): CourtesyRequestService
+    {
+        return $this->courtesy ??= new CourtesyRequestService;
+    }
+
     /** Hechos del subsistema Commercial. Público para poder sustituirlo en pruebas. */
     public function subjectFor(MarketingLead $lead): CommercialSubject
     {
@@ -107,9 +133,18 @@ class CustomerIntelligenceService
         $paidRecent = $identity ? $this->recentApprovedPayment($subject->member) : null;
         $currentPlanId = $subject->currentPlanId ?? ($identity ? $this->planIdFromUser($subject->member) : null);
 
+        // La ficha permanente del lead: lo que contó en conversaciones anteriores.
+        $ficha = $this->leadProfile()->profileOf($lead);
+
         $known = [
             'has_name' => $lead !== null && trim((string) $lead->name) !== '',
-            'objective' => $lead !== null && trim((string) $lead->objective) !== '' ? (string) $lead->objective : null,
+            // La ficha resuelve quién manda: lo escrito a mano en el CRM, o lo último que la persona dijo.
+            'objective' => $ficha['objective'],
+            'experience_level' => $ficha['experience_level'],
+            'availability' => $ficha['availability'],
+            'preferences' => $ficha['preferences'],
+            // Ya habló con nosotros antes: se le recibe «de nuevo», no con la bienvenida de estreno.
+            'returning_lead' => $lead !== null && MarketingConversation::query()->where('lead_id', $lead->id)->where('id', '!=', $conversation->id)->exists(),
             'is_member' => $identity,
             'has_active_membership' => $subject->hasActiveMembership,
             'membership_days_to_expiry' => $subject->daysToExpiry,
@@ -135,7 +170,9 @@ class CustomerIntelligenceService
         $inferred = [
             'objective' => $known['objective'] === null && trim((string) $conversation->detected_objective) !== '' ? (string) $conversation->detected_objective : null,
             'main_barrier' => $conversation->main_barrier,
-            'experience_level' => $this->experience($textos),
+            'experience_level' => $this->experience($textos) ?? $known['experience_level'],
+            // Lo que dijo de cuándo puede venir, en esta conversación o en la ficha.
+            'availability' => $this->availability($textos) ?? $known['availability'],
             'plan_interest' => $resolved['plan_id'] ?? $memory->pendingPlanId(),
             'buying_signals' => $buying,
             'budget_signal' => in_array(SalesIntents::PRICE_OBJECTION, $known['objections_seen'], true) || $baseIntent === SalesIntents::PRICE_OBJECTION ? 'price_sensitive' : null,
@@ -147,7 +184,7 @@ class CustomerIntelligenceService
         ];
 
         $unknown = [];
-        foreach (['objective' => $known['objective'] ?? $inferred['objective'], 'experience_level' => $inferred['experience_level'], 'main_barrier' => $inferred['main_barrier'], 'plan_interest' => $inferred['plan_interest'], 'time_constraints' => null, 'class_interest' => $memory->get('classes_discussed') === [] ? null : true, 'budget_signal' => $inferred['budget_signal']] as $k => $v) {
+        foreach (['objective' => $known['objective'] ?? $inferred['objective'], 'experience_level' => $inferred['experience_level'], 'main_barrier' => $inferred['main_barrier'], 'plan_interest' => $inferred['plan_interest'], 'time_constraints' => $inferred['availability'], 'class_interest' => $memory->get('classes_discussed') === [] ? null : true, 'budget_signal' => $inferred['budget_signal']] as $k => $v) {
             if ($v === null) {
                 $unknown[] = $k;
             }
@@ -169,6 +206,18 @@ class CustomerIntelligenceService
             'app_state' => $subject->hasAppAccount ? 'has_account' : 'unknown',
             'risk' => in_array($baseIntent, self::RISK, true),
             'renewal_window' => $subject->hasActiveMembership && $subject->daysToExpiry !== null && $subject->daysToExpiry <= self::RENEWAL_WINDOW_DAYS,
+            /*
+             * Lo que pasó antes, con significado, y lo que está comprometido.
+             * Son HECHOS del lead, no de esta conversación: sirven para no
+             * volver a preguntar y para contestar «¿a qué hora era mi visita?»
+             * en una conversación nueva. No dicen qué quiere hoy: eso lo dice
+             * el mensaje de hoy.
+             */
+            'history' => array_map(
+                fn (array $e) => ['at' => (string) $e['at'], 'kind' => (string) ($e['kind'] ?? ''), 'meaning' => (string) $e['meaning']],
+                array_slice($ficha['episodes'], -6),
+            ),
+            'commitments' => $lead !== null ? $this->courtesy()->commitmentsForLead($lead) : [],
         ];
     }
 
@@ -384,6 +433,19 @@ class CustomerIntelligenceService
         }
 
         return $subject->approvedPaymentsCount > 0 ? 'approved_past' : 'none';
+    }
+
+    /** @param  string[]  $textos */
+    private function availability(array $textos): ?string
+    {
+        foreach (array_reverse($textos) as $t) {
+            $d = LeadProfileService::disponibilidadEn($t);
+            if ($d !== null) {
+                return $d;
+            }
+        }
+
+        return null;
     }
 
     /** @param string[] $textos */

@@ -397,8 +397,14 @@ final class ConversationMemoryService
     {
         $m = $this->load($conversation);
         $previo = $m->activeGoal();
+        /*
+         * Sólo se suma a lo que se estaba RECOGIENDO. Los datos de una visita ya
+         * solicitada son el hueco registrado: heredarlos dejaba «mejor el
+         * viernes» con la hora de la visita vieja, y el turno siguiente la
+         * registraba sin que nadie la hubiera dicho para el viernes.
+         */
         $data = array_merge(
-            $previo !== null && $previo['kind'] === self::GOAL_COURTESY ? $previo['data'] : [],
+            $previo !== null && $previo['kind'] === self::GOAL_COURTESY && ($previo['status'] ?? null) === self::GOAL_COLLECTING ? $previo['data'] : [],
             array_filter(['date' => $conocido['date'] ?? null, 'time' => $conocido['time'] ?? null]),
         );
         $m->setActiveGoal(self::GOAL_COURTESY, self::GOAL_COLLECTING, $data, now()->toIso8601String());
