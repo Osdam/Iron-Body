@@ -490,3 +490,15 @@ reception_mode: $("Pedir Contexto al CRM").first().json.context.commercial_turn_
 
 DESPUES:
 reception_mode: $("Pedir Contexto al CRM").first().json.context.commercial_turn_policy.reception_mode, memory_mode: $("Pedir Contexto al CRM").first().json.context.commercial_turn_policy.memory_mode, greet_required: $("Pedir Contexto al CRM").first().json.context.commercial_turn_policy.greet_required }
+
+## PUBLICACION DE nuevo4.json (2026-09-30)
+
+Publicado en n8n el 2026-09-30 hacia las 02:28 UTC, despues de desplegar el backend
+`5a8769e` en produccion. `activeVersionId` pasa de `55d32bcc-06e0-46d7-83bc-94d08d39c563`
+a `29de5119-2e5a-4bc8-a479-60f4fe37c5b3` (fila en `ULTRON_AUTHORITY.md` §4.2).
+Comprobado por programa antes y despues de publicar: lo que estaba publicado era
+exactamente `nuevo3.json`; los 10 textos de los cinco nodos (Strategist, Composer,
+Critic Comercial, Composer Reintento, Critic Comercial 2) quedan exactamente como
+`nuevo4.json`; los otros 19 nodos y las conexiones no cambian. Vuelta atras:
+`publish_workflow` con el `versionId` completo `55d32bcc-06e0-46d7-83bc-94d08d39c563`.
+
