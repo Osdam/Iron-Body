@@ -73,7 +73,7 @@ class TrainerClassController extends Controller
     {
         $this->assertOwner($this->trainer($request), $class);
         $pedida = $request->query('session_date');
-        $sessionDate = Carbon::parse($this->sessionToShow($class, is_string($pedida) ? $pedida : null));
+        $sessionDate = Carbon::parse($this->trainerSessionDate($class, is_string($pedida) ? $pedida : null));
         // Inscritos/cupo de la SESIÓN que se está viendo (coherente con la lista
         // de participantes de esa misma fecha), no el histórico de la clase.
         $class->reservations_count = $this->booking->bookedCount($class, $sessionDate->toDateString());
@@ -96,12 +96,15 @@ class TrainerClassController extends Controller
         $this->assertOwner($trainer, $class);
 
         $data = $this->validateAttendance($request);
+        // La sesión que el entrenador VE, no la fecha literal del teléfono (ver
+        // trainerSessionDate): la app publicada manda siempre su «hoy».
+        $sessionDate = Carbon::parse($this->trainerSessionDate($class, $data['session_date']));
 
         try {
             $this->attendance->mark(
                 $class,
                 $data['member_id'],
-                Carbon::parse($data['session_date']),
+                $sessionDate,
                 $data['status'],
                 $trainer,
             );
@@ -112,7 +115,7 @@ class TrainerClassController extends Controller
         // El aviso (al socio marcado, al entrenador y al CRM) lo emite el
         // servicio de asistencia, una vez y tras guardar.
 
-        return $this->participantsResponse($class, Carbon::parse($data['session_date']), 'Asistencia registrada.');
+        return $this->participantsResponse($class, $sessionDate, 'Asistencia registrada.');
     }
 
     public function correctAttendance(Request $request, MyClass $class): JsonResponse
@@ -121,12 +124,13 @@ class TrainerClassController extends Controller
         $this->assertOwner($trainer, $class);
 
         $data = $this->validateAttendance($request, withNote: true);
+        $sessionDate = Carbon::parse($this->trainerSessionDate($class, $data['session_date']));
 
         try {
             $this->attendance->correct(
                 $class,
                 $data['member_id'],
-                Carbon::parse($data['session_date']),
+                $sessionDate,
                 $data['status'],
                 $data['note'] ?? null,
                 $trainer,
@@ -135,7 +139,7 @@ class TrainerClassController extends Controller
             return $this->error($e);
         }
 
-        return $this->participantsResponse($class, Carbon::parse($data['session_date']), 'Asistencia corregida.');
+        return $this->participantsResponse($class, $sessionDate, 'Asistencia corregida.');
     }
 
     /**
@@ -160,10 +164,10 @@ class TrainerClassController extends Controller
             ], 422);
         }
 
-        // Se inicia la sesión de HOY en el gimnasio (Bogotá), nunca la de
-        // `now()` en UTC: pasadas las 19:00 esa ya es mañana y la sesión quedaba
-        // guardada en otra fecha, invisible para la app y para la lista.
-        $fecha = $this->booking->resolveSessionDate($class, $data['session_date'] ?? null);
+        // Se inicia la sesión que el entrenador ve, y solo si es la de HOY en el
+        // gimnasio (Bogotá), nunca la de `now()` en UTC: pasadas las 19:00 esa ya
+        // es mañana y la sesión quedaba guardada en otra fecha.
+        $fecha = $this->trainerSessionDate($class, $data['session_date'] ?? null);
         if ($fecha !== $this->booking->todayDate()) {
             return response()->json([
                 'ok' => false,
@@ -200,13 +204,10 @@ class TrainerClassController extends Controller
             ], 422);
         }
 
-        // Se finaliza la sesión EN CURSO. Con la fecha pedida si esa es la que
-        // está en curso; si no —una clase que pasa de la medianoche y el
-        // dispositivo ya dice «mañana»—, la que el entrenador tenga abierta.
-        $pedida = $this->booking->plainDate($data['session_date'] ?? null);
-        $sessionDate = $pedida !== null && $this->sessions->isLive($class, Carbon::parse($pedida))
-            ? Carbon::parse($pedida)
-            : ($this->sessions->liveDate($class) ?? Carbon::parse($pedida ?? $this->booking->todayDate()));
+        // Se finaliza la sesión que el entrenador ve. Una clase que pasa de la
+        // medianoche, con el dispositivo diciendo ya «mañana», es la que sigue
+        // en curso (ver trainerSessionDate).
+        $sessionDate = Carbon::parse($this->trainerSessionDate($class, $data['session_date'] ?? null));
         $session = $this->sessions->end($class, $trainer, $sessionDate, true);
 
         if ($session === null) {
@@ -225,15 +226,21 @@ class TrainerClassController extends Controller
     }
 
     /**
-     * La sesión del detalle: la pedida si es un día real de la clase; si no,
-     * la que el entrenador tiene EN CURSO (de hoy o de ayer) y, si no hay, la
-     * próxima ocurrencia.
+     * LA sesión con la que trabaja el entrenador en el detalle: la que ve, la
+     * que marca y corrige, la que inicia y la que finaliza. Una sola regla
+     * para todo, para que lo que se ve sea lo que se toca:
+     *   1. la pedida, si es un día real de la clase;
+     *   2. si no, la que el entrenador tiene EN CURSO (de hoy o de ayer);
+     *   3. si no, la próxima ocurrencia.
+     * Luego cada operación aplica su regla de calendario (no se marca ni se
+     * inicia una sesión futura), igual que antes.
      *
-     * Una clase que pasa de la medianoche: a las 00:10 el teléfono pide la
-     * fecha del martes, que no es día de la clase, y sin esto se enseñaba la
-     * del lunes siguiente mientras la de anoche seguía abierta.
+     * La app publicada del entrenador manda siempre la fecha de su teléfono
+     * («hoy»). Una clase que pasa de la medianoche: a las 00:10 pide el martes,
+     * que no es día de la clase; la lista enseñaba la sesión de anoche, que
+     * sigue abierta, pero marcar con la fecha literal daba 422.
      */
-    private function sessionToShow(MyClass $class, ?string $pedida): string
+    private function trainerSessionDate(MyClass $class, ?string $pedida): string
     {
         $fecha = $this->booking->plainDate($pedida);
         if ($fecha !== null && $this->booking->isOccurrence($class, $fecha)) {

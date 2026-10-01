@@ -234,7 +234,9 @@ class TrainerSessionDateTest extends TestCase
         ], $this->entrenador());
 
         // Miércoles: la clase no se dicta hoy.
-        $marcar($this->hoyDelDispositivo(), $socia->id)->assertStatus(422)->assertJsonPath('message', 'Esta clase no se dicta ese día.');
+        // Con la fecha del dispositivo (miércoles) se trabaja sobre la sesión que
+        // el entrenador VE, la del lunes: no se marca antes de tiempo.
+        $marcar($this->hoyDelDispositivo(), $socia->id)->assertStatus(422)->assertJsonPath('message', 'La asistencia se marca el día de la clase, no antes.');
         // El lunes que viene todavía no ha llegado.
         $marcar(self::LUNES, $socia->id)->assertStatus(422)->assertJsonPath('message', 'La asistencia se marca el día de la clase, no antes.');
         $this->assertSame(0, ClassAttendance::count());

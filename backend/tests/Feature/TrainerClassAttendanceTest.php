@@ -158,9 +158,13 @@ class TrainerClassAttendanceTest extends TestCase
     {
         $payload = ['member_id' => $this->member->id, 'session_date' => $this->today, 'status' => 'present'];
         $this->postJson("/api/trainer/classes/{$this->class->id}/attendance", $payload, $this->auth())->assertOk();
-        $this->postJson("/api/trainer/classes/{$this->class->id}/attendance", $payload, $this->auth())->assertStatus(409);
+        // La MISMA marca otra vez (doble toque) es idempotente: 200, sin duplicar.
+        $this->postJson("/api/trainer/classes/{$this->class->id}/attendance", $payload, $this->auth())->assertOk();
+        // Otra marca distinta no pisa la primera: eso es una corrección (PUT).
+        $this->postJson("/api/trainer/classes/{$this->class->id}/attendance", ['status' => 'late'] + $payload, $this->auth())->assertStatus(409);
 
         $this->assertSame(1, ClassAttendance::where('class_id', $this->class->id)->count());
+        $this->assertSame('present', ClassAttendance::where('class_id', $this->class->id)->value('status'));
     }
 
     public function test_cannot_mark_non_participant(): void

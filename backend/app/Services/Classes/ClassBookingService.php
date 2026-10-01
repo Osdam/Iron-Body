@@ -234,31 +234,6 @@ class ClassBookingService
             ?? $this->today()->toDateString();
     }
 
-    /**
-     * La ocurrencia que se está MIRANDO: la que pide el cliente si es un día
-     * real de la clase; si no, la operativa.
-     *
-     * Existe por un fallo de producción: la app del entrenador pedía la lista
-     * de HOY (fecha del dispositivo) y la reserva estaba en la PRÓXIMA
-     * ocurrencia, así que una clase del lunes consultada un miércoles salía
-     * «Sin inscritos» mientras la app de los socios contaba 1/20. Con esto,
-     * pedir un día en que la clase no se dicta devuelve la misma ocurrencia
-     * que cuentan la app y el CRM, y la respuesta dice cuál es.
-     *
-     * Solo se acepta `Y-m-d`: una fecha con hora o zona se recorta al día, sin
-     * convertirla, porque es un DÍA del gimnasio y no un instante.
-     */
-    public function resolveSessionDate(MyClass $class, ?string $requested): string
-    {
-        $pedida = $this->plainDate($requested);
-
-        if ($pedida !== null && $this->isOccurrence($class, $pedida)) {
-            return $pedida;
-        }
-
-        return $this->operationalDate($class);
-    }
-
     /** Hoy en el gimnasio (Bogotá), como `Y-m-d`. */
     public function todayDate(): string
     {

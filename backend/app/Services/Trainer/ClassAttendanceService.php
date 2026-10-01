@@ -118,7 +118,10 @@ class ClassAttendanceService
 
     /**
      * Marca la asistencia de un miembro inscrito. Anti-doble: si ya existe para
-     * esa sesión, lanza {@see AttendanceException::alreadyMarked} (usar corrección).
+     * esa sesión con OTRO estado, lanza {@see AttendanceException::alreadyMarked}
+     * (cambiarla es una corrección, auditada). Repetir la MISMA marca —el doble
+     * toque, o dos peticiones a la vez— es idempotente: devuelve la que hay, sin
+     * duplicar ni volver a avisar. La carrera la decide el índice único.
      */
     public function mark(
         MyClass $class,
@@ -129,24 +132,24 @@ class ClassAttendanceService
     ): ClassAttendance {
         $this->assertMarkable($class, $memberId, $status, $sessionDate);
 
-        $exists = ClassAttendance::query()
-            ->where('class_id', $class->getKey())
-            ->where('member_id', $memberId)
-            ->whereDate('session_date', $sessionDate->toDateString())
-            ->exists();
-
-        if ($exists) {
-            throw AttendanceException::alreadyMarked();
+        $existente = $this->markFor($class, $memberId, $sessionDate);
+        if ($existente !== null) {
+            return $this->sameMarkOrFail($existente, $status);
         }
 
-        $attendance = ClassAttendance::create([
-            'class_id' => $class->getKey(),
-            'member_id' => $memberId,
-            'session_date' => $sessionDate->toDateString(),
-            'status' => $status,
-            'marked_by_trainer_id' => $trainer->getKey(),
-            'marked_at' => now(),
-        ]);
+        try {
+            $attendance = ClassAttendance::create([
+                'class_id' => $class->getKey(),
+                'member_id' => $memberId,
+                'session_date' => $sessionDate->toDateString(),
+                'status' => $status,
+                'marked_by_trainer_id' => $trainer->getKey(),
+                'marked_at' => now(),
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            // Otra petición la guardó en el mismo instante: gana la primera.
+            return $this->sameMarkOrFail($this->markFor($class, $memberId, $sessionDate), $status);
+        }
 
         // La reserva de ese socio cambió de estado: lo ven el propio socio, el
         // entrenador y el CRM. Los demás socios no: su cupo no se movió.
@@ -235,6 +238,25 @@ class ClassAttendanceService
      * quien reservó el lunes que viene, o registrar asistencia en un día en que
      * la clase no se dicta.
      */
+    private function markFor(MyClass $class, int $memberId, Carbon $sessionDate): ?ClassAttendance
+    {
+        return ClassAttendance::query()
+            ->where('class_id', $class->getKey())
+            ->where('member_id', $memberId)
+            ->whereDate('session_date', $sessionDate->toDateString())
+            ->first();
+    }
+
+    /** La misma marca otra vez: idempotente. Otra distinta no se pisa: se corrige. */
+    private function sameMarkOrFail(?ClassAttendance $existente, string $status): ClassAttendance
+    {
+        if ($existente === null || $existente->status !== $status) {
+            throw AttendanceException::alreadyMarked();
+        }
+
+        return $existente;
+    }
+
     private function assertMarkable(MyClass $class, int $memberId, string $status, Carbon $sessionDate): void
     {
         $this->assertValid($class, $status);
