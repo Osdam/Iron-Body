@@ -7,6 +7,7 @@ use App\Enums\DebtorType;
 use App\Http\Controllers\Api\Admin\ClassEnrollmentController;
 use App\Models\Admin;
 use App\Models\AuditLog;
+use App\Models\CatalogEvent;
 use App\Models\ClassReservation;
 use App\Models\ClassSession;
 use App\Models\Member;
@@ -134,9 +135,12 @@ class ClassEnrollmentFromCrmTest extends TestCase
         return ['Authorization' => 'Bearer '.$m->access_hash];
     }
 
+    /** Avisos a la app de TODOS los socios (canal global, una fila por hecho). */
     private function señales(): int
     {
-        return MemberRealtimeEvent::where('type', 'class.updated')->count();
+        return CatalogEvent::where(function ($q): void {
+            $q->where('type', 'like', 'class.%')->orWhere('type', 'like', 'reservation.%');
+        })->count();
     }
 
     private function deudaVencida(Member $socio): void
@@ -709,8 +713,10 @@ class ClassEnrollmentFromCrmTest extends TestCase
         $cabeceras = $this->recepcion();
 
         $this->inscribir($clase, $this->socio(), [], $cabeceras)->assertOk();
-        $this->assertTrue(MemberRealtimeEvent::where('member_id', $otro->id)->where('type', 'class.updated')->exists(),
-            'Todos los socios activos ven el cupo nuevo, no solo el inscrito.');
+        // Todos los socios activos ven el cupo nuevo, no solo el inscrito: UNA
+        // fila global que el stream entrega a cada uno. Ninguna fila por socio.
+        $this->assertTrue(CatalogEvent::where('type', 'reservation.created')->where('class_id', $clase->id)->exists());
+        $this->assertFalse(MemberRealtimeEvent::where('member_id', $otro->id)->exists(), 'Sin fan-out por socio.');
         $this->assertSame(1, TrainerRealtimeEvent::where('trainer_id', $coach->id)->where('type', 'class.updated')->count());
 
         $antes = $this->señales();
@@ -741,8 +747,10 @@ class ClassEnrollmentFromCrmTest extends TestCase
 
         $this->inscribir($clase, $suyo, [], $this->actingAsAdmin($cuenta))->assertOk();
 
+        // El aviso es GLOBAL (una fila que el stream entrega a cada socio): el
+        // alcance del entrenador no puede recortarlo.
         $this->assertTrue(
-            MemberRealtimeEvent::where('member_id', $ajeno->id)->where('type', 'class.updated')->exists(),
+            CatalogEvent::where('type', 'reservation.created')->where('class_id', $clase->id)->exists(),
             'Un socio que no es del entrenador también tiene que ver el cupo nuevo.',
         );
     }
@@ -752,11 +760,16 @@ class ClassEnrollmentFromCrmTest extends TestCase
         $clase = $this->clase();
         $socio = $this->socio();
 
+        // try/finally: si una aserción falla con la transacción abierta, sin el
+        // rollback el error se arrastraría a las pruebas siguientes.
         DB::beginTransaction();
-        $resultado = app(ClassBookingService::class)->enrollByStaff($socio, $clase, null);
-        $this->assertTrue($resultado->ok);
-        $this->assertSame(0, $this->señales(), 'Dentro de la transacción todavía no se ha anunciado nada.');
-        DB::rollBack();
+        try {
+            $resultado = app(ClassBookingService::class)->enrollByStaff($socio, $clase, null);
+            $this->assertTrue($resultado->ok);
+            $this->assertSame(0, $this->señales(), 'Dentro de la transacción todavía no se ha anunciado nada.');
+        } finally {
+            DB::rollBack();
+        }
 
         $this->assertSame(0, ClassReservation::count());
         $this->assertSame(0, $this->señales(), 'Lo que se revierte no se anuncia.');

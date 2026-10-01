@@ -152,7 +152,7 @@ class MyClass extends Model
 
         // Clase ÚNICA (no recurrente): solo aparece en la semana de su fecha fija.
         if (! $this->is_recurring && $this->date_time) {
-            $dt = Carbon::parse($this->date_time);
+            $dt = $this->wallDateTime($monday);
 
             return $dt->betweenIncluded($monday, $end) ? $dt : null;
         }
@@ -161,7 +161,7 @@ class MyClass extends Model
         if ($index === null || ! $this->start_time) {
             // Recurrente sin día válido pero con fecha (compat): trátala como única.
             if ($this->date_time) {
-                $dt = Carbon::parse($this->date_time);
+                $dt = $this->wallDateTime($monday);
 
                 return $dt->betweenIncluded($monday, $end) ? $dt : null;
             }
@@ -173,11 +173,23 @@ class MyClass extends Model
         $occ = $monday->copy()->addDays($index)->setTime((int) $hour, (int) $minute, 0);
 
         // Recurrente con fecha de inicio de vigencia: no aparece antes de esa fecha.
-        if ($this->date_time && $occ->copy()->startOfDay()->lessThan(Carbon::parse($this->date_time)->startOfDay())) {
+        if ($this->date_time && $occ->copy()->startOfDay()->lessThan($this->wallDateTime($monday)->startOfDay())) {
             return null;
         }
 
         return $occ;
+    }
+
+    /**
+     * `date_time` en la zona de `$ref`. La columna guarda la hora de PARED del
+     * gimnasio, sin zona, y el modelo la lee como UTC: comparada con una semana
+     * en hora de Bogotá, una clase de fecha única del lunes antes de las 05:00
+     * caía en la semana anterior y ninguna fecha la reconocía como suya (no se
+     * podía reservar ni salía en «Organizar mi semana»).
+     */
+    private function wallDateTime(Carbon $ref): Carbon
+    {
+        return Carbon::parse(Carbon::parse($this->date_time)->format('Y-m-d H:i:s'), $ref->getTimezone());
     }
 
     /**

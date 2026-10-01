@@ -799,22 +799,24 @@ Route::middleware('auth.member')->group(function (): void {
     Route::get('app/classes', [AppClassController::class, 'index']);
     // "Organizar mi semana": planificación y reserva semanal en lote. DEBEN ir
     // antes de las rutas con {myClass} para que "weekly" no se enlace como clase.
+    // Las escrituras llevan `throttle:class-writes` (por socio): cada una avisa a
+    // todas las apps conectadas (ver AppServiceProvider::limitadorDeClases).
     Route::get('app/classes/weekly', [AppClassController::class, 'weeklyPlan']);
     Route::post('app/classes/weekly/reserve', [AppClassController::class, 'reserveWeek'])
-        ->middleware('membership.benefits');
+        ->middleware(['throttle:class-writes', 'membership.benefits']);
     Route::post('app/classes/{myClass}/reserve', [AppClassController::class, 'reserve'])
-        ->middleware('membership.benefits');
+        ->middleware(['throttle:class-writes', 'membership.benefits']);
     Route::delete('app/classes/{myClass}/reserve', [AppClassController::class, 'cancel'])
-        ->middleware('membership.benefits');
+        ->middleware(['throttle:class-writes', 'membership.benefits']);
     Route::post('app/classes/{myClass}/check-in', [AppClassController::class, 'checkIn'])
-        ->middleware('membership.benefits');
+        ->middleware(['throttle:class-writes', 'membership.benefits']);
     // Rutas alias en /classes para compatibilidad con la app móvil
     Route::post('classes/{myClass}/reserve', [ClassController::class, 'reserve'])
-        ->middleware('membership.benefits');
+        ->middleware(['throttle:class-writes', 'membership.benefits']);
     Route::post('classes/{myClass}/cancel',  [ClassController::class, 'cancel'])
-        ->middleware('membership.benefits');
+        ->middleware(['throttle:class-writes', 'membership.benefits']);
     Route::post('classes/{myClass}/check-in', [ClassController::class, 'checkIn'])
-        ->middleware('membership.benefits');
+        ->middleware(['throttle:class-writes', 'membership.benefits']);
     // Entrenador asignado al miembro autenticado (antes de trainers/{trainer}).
     Route::get('trainers/mine', [MemberTrainerController::class, 'mine']);
     // Calificación de entrenadores

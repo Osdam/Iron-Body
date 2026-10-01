@@ -10,6 +10,7 @@ use App\Models\MemberAuthChallenge;
 use App\Models\MemberSecurityEvent;
 use App\Models\Payment;
 use App\Models\SupportSecurityReport;
+use App\Services\Classes\ClassBookingService;
 use App\Services\DeviceSessionService;
 use App\Services\NotificationService;
 use App\Services\OtpService;
@@ -301,6 +302,12 @@ class MemberAccountController extends Controller
                     ->where('member_id', $member->id)
                     ->update(['document' => null]);
             }
+
+            // 3c) Clases: libera las reservas que aún ocupan cupo (de hoy en
+            //     adelante y las heredadas sin fecha). Sin esto seguían tomando
+            //     plazas y salían como «Cuenta eliminada» en la lista del
+            //     entrenador y del CRM. Las pasadas se quedan: son historial.
+            app(ClassBookingService::class)->releaseUpcomingFor($member);
 
             // 4) Anonimizar el miembro (se conserva el id para contratos/pagos).
             $member->forceFill([

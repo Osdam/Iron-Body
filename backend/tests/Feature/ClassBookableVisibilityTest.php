@@ -82,9 +82,10 @@ class ClassBookableVisibilityTest extends TestCase
         $this->makeClass();
         $this->makeClass(['name' => 'Copia de IRON POWERFLOW', 'status' => 'inactive']);
 
-        // Sin contexto de miembro (sesión admin del CRM) el catálogo completo
-        // sigue disponible: gestionar un borrador exige poder verlo.
-        $data = $this->getJson('/api/classes')->assertOk()->json('data');
+        // Con sesión de administrador (el CRM) el catálogo completo sigue
+        // disponible: gestionar un borrador exige poder verlo. Sin sesión, la
+        // lectura es pública y solo trae lo reservable.
+        $data = $this->adminGetJson('/api/classes')->assertOk()->json('data');
 
         $this->assertContains('Copia de IRON POWERFLOW', collect($data)->pluck('name')->all());
     }

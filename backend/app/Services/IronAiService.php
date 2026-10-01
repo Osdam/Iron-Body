@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\ClassReservation;
 use App\Models\IronAiConversation;
 use App\Models\IronAiMessage;
 use App\Models\IronAiMessageAttachment;
@@ -13,6 +12,7 @@ use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\Routine;
 use App\Models\User;
+use App\Services\Classes\ClassBookingService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -88,6 +88,7 @@ TXT;
         private readonly IronAiTranscriptionService $transcription,
         private readonly IronAiVisionService $vision,
         private readonly GymEquipmentContextService $gymEquipment,
+        private readonly ClassBookingService $booking,
     ) {}
 
     /**
@@ -940,24 +941,12 @@ TXT;
     /** @return array<int, string> */
     private function classLines(Member $member): array
     {
-        $reservations = ClassReservation::with('gymClass')
-            ->where('member_id', $member->id)
-            ->latest('id')
-            ->limit(5)
-            ->get();
-
-        $upcoming = $reservations
-            ->map(fn ($r) => $r->gymClass)
-            ->filter()
-            ->map(function ($c) {
-                $when = $c->date_time ? Carbon::parse($c->date_time)->format('Y-m-d H:i') : ($c->day_of_week ?? null);
-
-                return trim($c->name.($when ? " ({$when})" : ''));
-            })
-            ->filter()
-            ->take(3)
-            ->values()
-            ->all();
+        // Las sesiones que de verdad le quedan, con su fecha y hora; no las
+        // últimas reservas creadas (que podían ser de semanas pasadas).
+        $upcoming = array_map(
+            fn (array $s) => $s['class']->name.' ('.$s['starts_at']->format('Y-m-d H:i').')',
+            $this->booking->upcomingFor((int) $member->id, 3),
+        );
 
         if (empty($upcoming)) {
             return [];
@@ -1189,18 +1178,12 @@ TXT;
 
         // 2) Clases próximas (recordatorio).
         if ($member) {
-            $next = ClassReservation::with('gymClass')
-                ->where('member_id', $member->id)
-                ->latest('id')
-                ->first();
-            if ($next && $next->gymClass) {
-                $when = $next->gymClass->date_time
-                    ? Carbon::parse($next->gymClass->date_time)->format('Y-m-d H:i')
-                    : null;
+            $next = $this->booking->upcomingFor((int) $member->id, 1)[0] ?? null;
+            if ($next) {
                 $recs[] = [
                     'type' => 'class',
                     'title' => 'Tienes una clase reservada',
-                    'message' => 'Recuerda tu clase '.$next->gymClass->name.($when ? " ({$when})" : '').'. ¡Te esperamos!',
+                    'message' => 'Recuerda tu clase '.$next['class']->name.' ('.$next['starts_at']->format('Y-m-d H:i').'). ¡Te esperamos!',
                 ];
             }
         }

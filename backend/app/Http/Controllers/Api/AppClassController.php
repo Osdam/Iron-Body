@@ -11,8 +11,9 @@ use App\Models\ClassSession;
 use App\Models\Member;
 use App\Models\MyClass;
 use App\Services\Classes\ClassBookingService;
+use App\Services\Classes\ClassEventBus;
 use App\Services\NotificationService;
-use App\Services\Trainer\TrainerRealtimeEvents;
+use App\Services\Trainer\ClassAttendanceService;
 use App\Support\ClassStateResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -50,14 +51,14 @@ class AppClassController extends Controller
 
         $classIds = $classes->pluck('id');
         $today = $this->operationalToday();
+        $booking = app(ClassBookingService::class);
 
-        // Reservas vigentes/futuras (por fecha) + legacy sin fecha, en bloque.
-        $reservations = ClassReservation::whereIn('class_id', $classIds)
-            ->where(function ($q) use ($today): void {
-                $q->whereNull('session_date')->orWhereDate('session_date', '>=', $today->toDateString());
-            })
-            ->get(['id', 'class_id', 'member_id', 'session_date'])
-            ->groupBy('class_id');
+        // Cupo y reserva propia de la PRÓXIMA ocurrencia, con la misma condición
+        // que el cupo al reservar (servicio único), en bloque. Y las próximas
+        // sesiones también en bloque: sin precalcular, el recurso las pedía
+        // clase a clase (dos consultas más por clase).
+        $filas = $booking->operationalRowsFor($classes);
+        $proximas = $booking->upcomingSessionsFor($classes);
 
         // Sesión vigente (en curso / recién finalizada / hoy) + asistencia de HOY
         // del miembro, en bloque (sin N+1).
@@ -69,12 +70,10 @@ class AppClassController extends Controller
             ->keyBy('class_id');
 
         return response()->json([
-            'data' => $classes->map(function (MyClass $c) use ($reservations, $sessions, $attendance, $member, $today) {
+            'data' => $classes->map(function (MyClass $c) use ($filas, $proximas, $sessions, $attendance, $member) {
                 // Cupo/estado referidos a la PRÓXIMA ocurrencia de la clase.
-                $occDate = optional($c->operationalOccurrence())->toDateString() ?? $today->toDateString();
-                $rows = ($reservations->get($c->id) ?? collect())->filter(
-                    fn ($r) => $r->session_date === null || optional($r->session_date)->toDateString() === $occDate,
-                );
+                $rows = $filas[$c->id] ?? collect();
+                $c->setAttribute('upcoming_sessions', $proximas[$c->id] ?? []);
 
                 $c->reservations_count = $rows->count();
                 $myRow = $rows->first(fn ($r) => (int) $r->member_id === (int) $member->id);
@@ -95,43 +94,37 @@ class AppClassController extends Controller
         $member = $this->member($request);
         $booking = app(ClassBookingService::class);
 
-        // Reglas del dominio: una sola fuente para la app y para el mostrador.
-        // Aquí solo se traducen a los textos que la app publicada ya enseña.
-        $motivo = $booking->ineligibility($member, $myClass, ClassBookingService::CHANNEL_MEMBER);
-        if ($motivo === ClassBookingService::NOT_IN_PLAN) {
-            return $this->classesNotInPlanResponse();
-        }
-        if ($motivo !== null) {
-            return response()->json(['message' => 'Clase no disponible para reservas.'], 422);
-        }
+        // Reglas, bloqueo, cupo y aviso: el dominio de reservas (el mismo que el
+        // CRM). Aquí solo se traducen a los textos de esta puerta.
+        $resultado = $booking->reserveForMember($member, $myClass);
 
-        // Reserva individual = la PRÓXIMA ocurrencia de la clase (sin cambiar la UX).
-        $date = $booking->operationalDate($myClass);
+        if (! $resultado->ok) {
+            if ($resultado->outcome === ClassBookingService::NOT_IN_PLAN) {
+                return $this->classesNotInPlanResponse();
+            }
 
-        $outcome = $booking->reserveOccurrence($member, $myClass, $date);
-
-        if ($outcome === ClassBookingService::ALREADY) {
-            return response()->json(['message' => 'Ya tienes una reserva para esta clase.'], 422);
-        }
-        if ($outcome === ClassBookingService::FULL) {
-            return response()->json(['message' => 'Clase completa.'], 422);
+            return response()->json(['message' => match ($resultado->outcome) {
+                ClassBookingService::ALREADY => 'Ya tienes una reserva para esta clase.',
+                ClassBookingService::FULL => 'Clase completa.',
+                ClassBookingService::OCCURRENCE_LIVE => 'La clase ya está en curso.',
+                ClassBookingService::OCCURRENCE_CLOSED => 'La clase ya finalizó.',
+                ClassBookingService::OCCURRENCE_PAST => 'Esta clase ya pasó.',
+                default => 'Clase no disponible para reservas.',
+            }], 422);
         }
 
-        // Notificación de clase reservada (ADITIVO; no afecta la reserva).
+        // Notificación de clase reservada (ADITIVO; no afecta la reserva), por
+        // SESIÓN: cada reserva de cada semana se avisa.
         $notifier = app(NotificationService::class);
-        $notifier->notifyClassReserved($member, $myClass);
+        $notifier->notifyClassReserved($member, $myClass, $resultado->date);
 
-        $booked = $booking->bookedCount($myClass, $date);
+        $booked = $booking->bookedCount($myClass, $resultado->date);
         if ($booked >= (int) $myClass->max_capacity) {
-            $notifier->notifyClassFull($myClass);
+            $notifier->notifyClassFull($myClass, $resultado->date);
         }
 
         $myClass->reservations_count = $booked;
         $myClass->load('trainer:id,full_name');
-
-        // Cupo cambió → refresca el módulo de Clases para todos en vivo (app + CRM)
-        // y el portal del entrenador dueño de la clase.
-        $booking->announce($myClass);
 
         return response()->json(['data' => $this->resourceFor($myClass, $member, true)]);
     }
@@ -150,37 +143,21 @@ class AppClassController extends Controller
             : null;
 
         $booking = app(ClassBookingService::class);
+        $resultado = $booking->cancelForMember($member, $myClass, $explicit);
 
-        // No se puede cancelar una clase que ya inició o finalizó. Qué sesión es
-        // la relevante lo decide esta puerta —la de ESA fecha (semanal) o la
-        // vigente de hoy (individual)—; la regla vive en el servicio.
-        $session = $explicit !== null
-            ? ClassSession::where('class_id', $myClass->id)->whereDate('session_date', $explicit)->first()
-            : $this->currentClassSession($myClass);
-        $bloqueo = $booking->cancelBlock($session);
-        if ($bloqueo !== null) {
-            return response()->json([
-                'message' => $bloqueo === ClassBookingService::OCCURRENCE_CLOSED
-                    ? 'La clase ya finalizó.'
-                    : 'La clase ya está en curso.',
-            ], 422);
-        }
-
-        $date = $explicit ?? $booking->operationalDate($myClass);
-        $deleted = $booking->cancelOccurrence($member, $myClass, $explicit, $date);
-
-        if (! $deleted) {
-            return response()->json(['message' => 'No tienes reserva en esta clase.'], 422);
+        if (! $resultado->ok) {
+            return response()->json(['message' => match ($resultado->outcome) {
+                ClassBookingService::OCCURRENCE_CLOSED => 'La clase ya finalizó.',
+                ClassBookingService::OCCURRENCE_LIVE => 'La clase ya está en curso.',
+                default => 'No tienes reserva en esta clase.',
+            }], 422);
         }
 
         // Notificación de reserva cancelada (ADITIVO; no afecta la cancelación).
         app(NotificationService::class)->notifyClassReservationCancelled($member, $myClass);
 
-        $myClass->reservations_count = $booking->bookedCount($myClass, $date);
+        $myClass->reservations_count = $booking->bookedCount($myClass, $resultado->date);
         $myClass->load('trainer:id,full_name');
-
-        // Cupo liberado → refresca el módulo de Clases para todos en vivo.
-        $booking->announce($myClass);
 
         return response()->json(['data' => $this->resourceFor($myClass, $member, false)]);
     }
@@ -206,32 +183,43 @@ class AppClassController extends Controller
             ->get();
 
         $classIds = $classes->pluck('id');
+        // Por día (`whereDate`) y no `whereBetween`: en SQLite la fecha se guarda
+        // con hora y el domingo quedaba fuera del rango.
+        $desde = $weekStart->toDateString();
+        $hasta = $weekEnd->toDateString();
+        $enLaSemana = fn ($q) => $q->whereDate('session_date', '>=', $desde)->whereDate('session_date', '<=', $hasta);
 
         // Reservas del miembro (con id, para reservation_id) por (clase, fecha)
-        // dentro de la semana, en bloque.
-        $myReserved = ClassReservation::where('member_id', $member->id)
+        // dentro de la semana, en bloque. Y las heredadas sin fecha, que ocupan
+        // TODAS las sesiones de su clase (como en el cupo): sin ellas el plan
+        // ofrecía «Reservar» en una clase que el socio ya tenía y la reserva
+        // contestaba «ya reservada».
+        $misFilas = ClassReservation::where('member_id', $member->id)
             ->whereIn('class_id', $classIds)
-            ->whereBetween('session_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
-            ->get(['id', 'class_id', 'session_date'])
-            ->keyBy(fn ($r) => $r->class_id.'|'.optional($r->session_date)->toDateString());
+            ->where(fn ($q) => $q->whereNull('session_date')->orWhere($enLaSemana))
+            ->get(['id', 'class_id', 'session_date']);
+        $myReserved = $misFilas->whereNotNull('session_date')
+            ->keyBy(fn ($r) => $r->class_id.'|'.$r->session_date->toDateString());
+        $myLegacy = $misFilas->whereNull('session_date')->keyBy('class_id');
 
         // Asistencia del miembro por (clase, fecha) de la semana: present/late/absent.
         // Es el historial real (sobrevive aunque la reserva se limpie al renovar).
         $myAttendance = ClassAttendance::where('member_id', $member->id)
             ->whereIn('class_id', $classIds)
-            ->whereBetween('session_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
+            ->where($enLaSemana)
             ->get(['class_id', 'session_date', 'status'])
             ->keyBy(fn ($a) => $a->class_id.'|'.optional($a->session_date)->toDateString());
 
-        $counts = ClassReservation::whereIn('class_id', $classIds)
-            ->whereBetween('session_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
-            ->selectRaw('class_id, session_date, COUNT(*) as c')
-            ->groupBy('class_id', 'session_date')
-            ->get()
-            ->mapWithKeys(fn ($r) => [$r->class_id.'|'.Carbon::parse($r->session_date)->toDateString() => (int) $r->c]);
+        // Cupo por (clase, fecha) con la MISMA regla que al reservar: reservas
+        // de esa fecha + heredadas sin fecha (antes estas no contaban aquí).
+        $conteos = app(ClassBookingService::class)->countsByDate(
+            $classIds->map(fn ($id) => (int) $id)->all(),
+            $weekStart->toDateString(),
+            $weekEnd->toDateString(),
+        );
 
         $sessions = ClassSession::whereIn('class_id', $classIds)
-            ->whereBetween('session_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
+            ->where($enLaSemana)
             ->get()
             ->keyBy(fn ($s) => $s->class_id.'|'.optional($s->session_date)->toDateString());
 
@@ -258,11 +246,11 @@ class AppClassController extends Controller
             }
             $dateStr = $occ->toDateString();
             $key = $class->id.'|'.$dateStr;
-            $booked = $counts[$key] ?? 0;
+            $booked = ($conteos[$class->id][$dateStr] ?? 0) + ($conteos[$class->id]['*'] ?? 0);
             $capacity = (int) $class->max_capacity;
             $available = max(0, $capacity - $booked);
             $session = $sessions->get($key);
-            $reservation = $myReserved->get($key);
+            $reservation = $myReserved->get($key) ?? $myLegacy->get($class->id);
             $isReserved = $reservation !== null;
             $attendanceStatus = $myAttendance->get($key)?->status; // present|late|absent|null
 
@@ -302,7 +290,8 @@ class AppClassController extends Controller
                 'session_date' => $dateStr,
                 'name' => $class->name,
                 'type' => $class->type,
-                'instructor' => $class->instructor ?? $class->trainer?->full_name ?? '',
+                // El entrenador asignado manda (ver ClassResource).
+                'instructor' => $class->trainer?->full_name ?? $class->instructor ?? '',
                 'start_time' => $class->start_time,
                 'end_time' => $class->end_time,
                 'date_time' => $occ->toIso8601String(),
@@ -367,56 +356,61 @@ class AppClassController extends Controller
             'unavailable' => [], 'past' => [], 'closed' => [], 'live' => [], 'conflict' => [],
         ];
         $acceptedSlots = []; // [date => [[start,end], ...]] para detectar conflictos en la selección
-        $affectedTrainers = [];
 
-        foreach ($data['items'] as $item) {
-            $class = MyClass::find($item['class_id']);
-            $date = Carbon::parse($item['session_date'])->toDateString();
-            $tag = ['class_id' => (int) $item['class_id'], 'session_date' => $date, 'name' => $class?->name];
+        // Un aviso por envío, no uno por reserva: cada aviso hace que cada app
+        // abierta vuelva a pedir sus clases.
+        app(ClassEventBus::class)->batch(function () use ($data, $booking, $member, &$results, &$acceptedSlots): void {
+            foreach ($data['items'] as $item) {
+                $class = MyClass::find($item['class_id']);
+                $date = Carbon::parse($item['session_date'])->toDateString();
+                $tag = ['class_id' => (int) $item['class_id'], 'session_date' => $date, 'name' => $class?->name];
 
-            // El plan del socio ya se comprobó arriba; aquí solo cuenta la clase.
-            if (! $class || ! $booking->isOpenFor($class, ClassBookingService::CHANNEL_MEMBER)) {
-                $results['unavailable'][] = $tag;
+                // El plan del socio ya se comprobó arriba; aquí solo cuenta la clase.
+                // Y la fecha tiene que ser un día REAL de la clase: sin esto, una
+                // llamada directa reservaba un miércoles una clase de los lunes, en
+                // una fila que no sale en ningún roster.
+                if (! $class
+                    || ! $booking->isOpenFor($class, ClassBookingService::CHANNEL_MEMBER)
+                    || ! $booking->isOccurrence($class, $date)) {
+                    $results['unavailable'][] = $tag;
 
-                continue;
-            }
-
-            $occStart = Carbon::parse($date.' '.($class->start_time ?: '00:00'));
-            $occEnd = $this->occurrenceEnd($class, $occStart);
-
-            // Estado OFICIAL de la sesión (entrenador/backend) con la MISMA
-            // precedencia que el plan semanal: cerrada → en curso → vencida (por
-            // DÍA operativo, no por hora). Así una clase en curso que ya pasó su
-            // hora no se etiqueta "vencida". La regla vive en el servicio; los
-            // motivos son las mismas claves que este resumen publica.
-            $bloqueo = $booking->occurrenceBlock($class, $date);
-            if ($bloqueo !== null) {
-                $results[$bloqueo][] = $tag;
-
-                continue;
-            }
-
-            // Conflicto de horario dentro de la propia selección (mismo día, solape).
-            if ($this->conflictsWithSelection($acceptedSlots, $date, $occStart, $occEnd)) {
-                $results['conflict'][] = $tag;
-
-                continue;
-            }
-
-            $outcome = $booking->reserveOccurrence($member, $class, $date);
-            $results[$outcome][] = $tag;
-
-            if ($outcome === ClassBookingService::RESERVED) {
-                $acceptedSlots[$date][] = [$occStart, $occEnd];
-                if ($class->trainer_id) {
-                    $affectedTrainers[(int) $class->trainer_id] = true;
+                    continue;
                 }
-                $booked = $booking->bookedCount($class, $date);
-                if ($booked >= (int) $class->max_capacity) {
-                    app(NotificationService::class)->notifyClassFull($class);
+
+                $occStart = Carbon::parse($date.' '.($class->start_time ?: '00:00'));
+                $occEnd = $this->occurrenceEnd($class, $occStart);
+
+                // Estado OFICIAL de la sesión (entrenador/backend) con la MISMA
+                // precedencia que el plan semanal: cerrada → en curso → vencida (por
+                // DÍA operativo, no por hora). Así una clase en curso que ya pasó su
+                // hora no se etiqueta "vencida". La regla vive en el servicio; los
+                // motivos son las mismas claves que este resumen publica.
+                $bloqueo = $booking->occurrenceBlock($class, $date);
+                if ($bloqueo !== null) {
+                    $results[$bloqueo][] = $tag;
+
+                    continue;
+                }
+
+                // Conflicto de horario dentro de la propia selección (mismo día, solape).
+                if ($this->conflictsWithSelection($acceptedSlots, $date, $occStart, $occEnd)) {
+                    $results['conflict'][] = $tag;
+
+                    continue;
+                }
+
+                $outcome = $booking->reserveOccurrence($member, $class, $date);
+                $results[$outcome][] = $tag;
+
+                if ($outcome === ClassBookingService::RESERVED) {
+                    $acceptedSlots[$date][] = [$occStart, $occEnd];
+                    $booked = $booking->bookedCount($class, $date);
+                    if ($booked >= (int) $class->max_capacity) {
+                        app(NotificationService::class)->notifyClassFull($class, $date);
+                    }
                 }
             }
-        }
+        });
 
         $reservedCount = count($results['reserved']);
         $failedCount = count($results['already']) + count($results['full']) + count($results['unavailable'])
@@ -425,11 +419,6 @@ class AppClassController extends Controller
 
         // Notificación interna de confirmación (resumen del plan semanal).
         app(NotificationService::class)->notifyWeeklyPlanConfirmed($member, $reservedCount, $failedCount);
-
-        // Realtime: refresca Clases para todos y el portal de cada entrenador tocado.
-        if ($reservedCount > 0) {
-            $booking->announceFor(array_keys($affectedTrainers));
-        }
 
         return response()->json([
             'summary' => [
@@ -449,51 +438,25 @@ class AppClassController extends Controller
 
     /**
      * AUTO CHECK-IN: el miembro marca su propia asistencia (presente) cuando la
-     * clase está EN CURSO. Requiere reserva y que el entrenador haya iniciado la
-     * clase (sesión con `started_at` y sin `ended_at`).
+     * clase está EN CURSO. Requiere reserva de ESA sesión; si el entrenador ya
+     * marcó la asistencia, se respeta (ver ClassAttendanceService::selfCheckIn).
      */
     public function checkIn(Request $request, MyClass $myClass): JsonResponse
     {
         $member = $this->member($request);
-        $today = $this->operationalToday();
+        $resultado = app(ClassAttendanceService::class)->selfCheckIn($member, $myClass);
 
-        $reserved = ClassReservation::where('class_id', $myClass->id)
-            ->where('member_id', $member->id)
-            ->exists();
-        if (! $reserved) {
-            return response()->json(['message' => 'No tienes reserva en esta clase.'], 422);
+        [$codigo, $mensaje] = ClassAttendanceService::checkInReply($resultado);
+        if ($codigo !== 200) {
+            return response()->json(['message' => $mensaje], $codigo);
         }
 
-        $session = $this->currentClassSession($myClass);
-        if (! $session || ! $session->started_at) {
-            return response()->json(['message' => 'La clase aún no ha iniciado.'], 422);
-        }
-        if ($session->ended_at) {
-            return response()->json(['message' => 'La clase ya finalizó.'], 422);
-        }
-
-        $sessionDate = optional($session->session_date)->toDateString() ?? $today->toDateString();
-        ClassAttendance::updateOrCreate(
-            [
-                'class_id' => $myClass->id,
-                'member_id' => $member->id,
-                'session_date' => $sessionDate,
-            ],
-            [
-                'status' => ClassAttendance::STATUS_PRESENT,
-                'marked_at' => now(),
-            ],
-        );
-
-        $myClass->loadCount('reservations')->load('trainer:id,full_name');
-
-        // Realtime: el entrenador ve la asistencia entrar en vivo en su portal.
-        if ($myClass->trainer_id) {
-            TrainerRealtimeEvents::emit((int) $myClass->trainer_id, TrainerRealtimeEvents::ATTENDANCE, ['classes']);
-        }
+        // Cupo de ESA sesión, no la suma de todas las semanas.
+        $myClass->reservations_count = app(ClassBookingService::class)->bookedCount($myClass, $resultado['date']);
+        $myClass->load('trainer:id,full_name');
 
         return response()->json([
-            'message' => 'Asistencia registrada.',
+            'message' => $mensaje,
             'data' => $this->resourceFor($myClass, $member, true),
         ]);
     }

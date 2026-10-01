@@ -23,7 +23,17 @@ class AttendanceException extends RuntimeException
 
     public static function notAParticipant(): self
     {
-        return new self('El miembro no está inscrito en esta clase.', 422);
+        return new self('El miembro no está inscrito en esta sesión de la clase.', 422);
+    }
+
+    public static function notAnOccurrence(): self
+    {
+        return new self('Esta clase no se dicta ese día.', 422);
+    }
+
+    public static function notYet(): self
+    {
+        return new self('La asistencia se marca el día de la clase, no antes.', 422);
     }
 
     public static function alreadyMarked(): self

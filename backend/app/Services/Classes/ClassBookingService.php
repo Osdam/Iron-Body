@@ -8,8 +8,7 @@ use App\Models\Member;
 use App\Models\MyClass;
 use App\Services\Caja\MembershipFinancialStanding;
 use App\Services\Moderation\SessionEnforcer;
-use App\Services\RealtimeEvents;
-use App\Services\Trainer\TrainerRealtimeEvents;
+use App\Support\Access\TrainerMemberScope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -91,6 +90,7 @@ class ClassBookingService
     public function __construct(
         private readonly MembershipFinancialStanding $standing,
         private readonly SessionEnforcer $moderation,
+        private readonly ClassEventBus $events,
     ) {}
 
     // ── Reglas ────────────────────────────────────────────────────────────
@@ -235,6 +235,142 @@ class ClassBookingService
     }
 
     /**
+     * La ocurrencia que se está MIRANDO: la que pide el cliente si es un día
+     * real de la clase; si no, la operativa.
+     *
+     * Existe por un fallo de producción: la app del entrenador pedía la lista
+     * de HOY (fecha del dispositivo) y la reserva estaba en la PRÓXIMA
+     * ocurrencia, así que una clase del lunes consultada un miércoles salía
+     * «Sin inscritos» mientras la app de los socios contaba 1/20. Con esto,
+     * pedir un día en que la clase no se dicta devuelve la misma ocurrencia
+     * que cuentan la app y el CRM, y la respuesta dice cuál es.
+     *
+     * Solo se acepta `Y-m-d`: una fecha con hora o zona se recorta al día, sin
+     * convertirla, porque es un DÍA del gimnasio y no un instante.
+     */
+    public function resolveSessionDate(MyClass $class, ?string $requested): string
+    {
+        $pedida = $this->plainDate($requested);
+
+        if ($pedida !== null && $this->isOccurrence($class, $pedida)) {
+            return $pedida;
+        }
+
+        return $this->operationalDate($class);
+    }
+
+    /** Hoy en el gimnasio (Bogotá), como `Y-m-d`. */
+    public function todayDate(): string
+    {
+        return $this->today()->toDateString();
+    }
+
+    /**
+     * Fecha mínima de una sesión que cuenta como EN CURSO para los socios: la
+     * de hoy o la de ayer (una clase que pasa de la medianoche). Una sesión que
+     * el entrenador olvidó cerrar hace días no deja la clase «en curso» para
+     * siempre; él sí puede cerrarla cuando quiera.
+     */
+    public function liveSince(): string
+    {
+        return $this->today()->subDay()->toDateString();
+    }
+
+    /**
+     * El instante en que empieza la ocurrencia de esa fecha. `null` si la clase
+     * no tiene hora.
+     *
+     * La hora de una clase es de PARED, la del gimnasio. `nextOccurrence()` la
+     * ponía sobre el reloj UTC del servidor: el recordatorio de una clase de
+     * las 18:00 salía a las 10:00, y a quien había reservado cualquier semana.
+     */
+    public function occurrenceStart(MyClass $class, string $date): ?Carbon
+    {
+        $hora = preg_match('/^(\d{1,2}):(\d{2})/', (string) $class->start_time, $m)
+            ? sprintf('%02d:%s', (int) $m[1], $m[2])
+            : ($class->date_time ? Carbon::parse($class->date_time)->format('H:i') : null);
+
+        return $hora === null ? null : Carbon::createFromFormat('Y-m-d H:i', "{$date} {$hora}", self::TZ)->startOfMinute();
+    }
+
+    /**
+     * `Y-m-d` si el texto empieza por una fecha de calendario válida; si no, null.
+     */
+    public function plainDate(?string $valor): ?string
+    {
+        if ($valor === null || ! preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $valor, $m)) {
+            return null;
+        }
+
+        return checkdate((int) $m[2], (int) $m[3], (int) $m[1]) ? "{$m[1]}-{$m[2]}-{$m[3]}" : null;
+    }
+
+    /**
+     * ¿Este socio ocupa esa ocurrencia? Con la MISMA condición que cuenta el
+     * cupo: reserva de esa fecha o heredada sin fecha.
+     */
+    public function occupies(int $memberId, MyClass $class, string $date): bool
+    {
+        return $this->occurrenceQuery($class, $date)->where('member_id', $memberId)->exists();
+    }
+
+    /**
+     * Los socios que ocupan una ocurrencia, sin repetir. Para avisar a quien
+     * reservó ESA sesión, y no a cualquiera que alguna vez reservó la clase.
+     *
+     * @return list<int>
+     */
+    public function occurrenceMemberIds(MyClass $class, string $date): array
+    {
+        return $this->occurrenceQuery($class, $date)
+            ->distinct()
+            ->pluck('member_id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Las próximas sesiones que ocupa un socio, por hora de inicio.
+     *
+     * Para contarle a él (o a su asistente) qué tiene reservado: la fecha de
+     * CADA reserva —una heredada sin fecha, en la próxima ocurrencia de su
+     * clase— a la hora de pared de la clase. Solo las que aún no han empezado,
+     * de clases activas. Antes se tomaba la última reserva creada, aunque
+     * fuera de una clase de hace un mes.
+     *
+     * @return list<array{class: MyClass, session_date: string, starts_at: Carbon}>
+     */
+    public function upcomingFor(int $memberId, int $limit = 3): array
+    {
+        $ahora = Carbon::now();
+
+        $filas = ClassReservation::query()
+            ->with('gymClass')
+            ->where('member_id', $memberId)
+            ->where(fn ($q) => $q->whereNull('session_date')->orWhereDate('session_date', '>=', $this->todayDate()))
+            ->get();
+
+        $sesiones = [];
+        foreach ($filas as $r) {
+            $clase = $r->gymClass;
+            if (! $clase || $clase->status !== 'active') {
+                continue;
+            }
+            $fecha = $r->session_date?->toDateString() ?? $this->operationalDate($clase);
+            $inicio = $this->occurrenceStart($clase, $fecha);
+            if ($inicio === null || $inicio->lt($ahora)) {
+                continue;
+            }
+            $sesiones[$clase->getKey().'|'.$fecha] = ['class' => $clase, 'session_date' => $fecha, 'starts_at' => $inicio];
+        }
+
+        usort($sesiones, fn (array $a, array $b) => $a['starts_at'] <=> $b['starts_at']);
+
+        return array_slice($sesiones, 0, max(0, $limit));
+    }
+
+    /**
      * Las próximas ocurrencias reservables, empezando por la operativa.
      *
      * No calcula fechas por su cuenta: parte de `operationalDate()` y se queda
@@ -284,12 +420,22 @@ class ClassBookingService
      * crear la fila, y solo si se creó. Es para la auditoría del mostrador: o
      * quedan las dos cosas o ninguna.
      *
+     * EL HECHO. Cada reserva creada deja `booking.created` en el registro de
+     * eventos en la misma transacción, y los avisos a la app y al entrenador
+     * salen tras el commit ({@see ClassEventBus}). Es el ÚNICO sitio que crea
+     * reservas, así que ningún camino puede olvidarse de avisar.
+     *
      * @param  (callable(ClassReservation): void)|null  $enLaTransaccion
      */
-    public function reserveOccurrence(Member $member, MyClass $class, string $date, ?callable $enLaTransaccion = null): string
-    {
+    public function reserveOccurrence(
+        Member $member,
+        MyClass $class,
+        string $date,
+        ?callable $enLaTransaccion = null,
+        string $source = ClassEventBus::SOURCE_APP,
+    ): string {
         try {
-            return DB::transaction(function () use ($member, $class, $date, $enLaTransaccion): string {
+            return DB::transaction(function () use ($member, $class, $date, $enLaTransaccion, $source): string {
                 $locked = MyClass::whereKey($class->getKey())->lockForUpdate()->first() ?? $class;
 
                 $already = $this->occurrenceQuery($class, $date)
@@ -315,6 +461,8 @@ class ClassBookingService
                     $enLaTransaccion($reservation);
                 }
 
+                $this->events->booking(ClassEventBus::BOOKING_CREATED, $class, $date, $source, (int) $reservation->id);
+
                 return self::RESERVED;
             });
         } catch (UniqueConstraintViolationException) {
@@ -333,6 +481,9 @@ class ClassBookingService
      * No hay estado «cancelada»: cancelar es un DELETE y el cupo se libera en
      * el acto, porque se cuenta en vivo.
      *
+     * Cada fila borrada deja `booking.cancelled` en el registro de eventos,
+     * en la misma transacción. Es el ÚNICO sitio que cancela reservas.
+     *
      * @param  (callable(int): void)|null  $enLaTransaccion  recibe las filas borradas
      */
     public function cancelOccurrence(
@@ -341,8 +492,9 @@ class ClassBookingService
         ?string $explicitDate,
         string $fallbackDate,
         ?callable $enLaTransaccion = null,
+        string $source = ClassEventBus::SOURCE_APP,
     ): int {
-        return DB::transaction(function () use ($member, $class, $explicitDate, $fallbackDate, $enLaTransaccion): int {
+        return DB::transaction(function () use ($member, $class, $explicitDate, $fallbackDate, $enLaTransaccion, $source): int {
             $query = ClassReservation::where('class_id', $class->getKey())
                 ->where('member_id', $member->getKey());
 
@@ -354,10 +506,21 @@ class ClassBookingService
                 });
             }
 
+            $filas = (clone $query)->get(['id', 'session_date']);
             $deleted = $query->delete();
 
             if ($deleted > 0 && $enLaTransaccion !== null) {
                 $enLaTransaccion($deleted);
+            }
+
+            foreach ($filas as $fila) {
+                $this->events->booking(
+                    ClassEventBus::BOOKING_CANCELLED,
+                    $class,
+                    $fila->session_date?->toDateString() ?? $explicitDate ?? $fallbackDate,
+                    $source,
+                    (int) $fila->id,
+                );
             }
 
             return $deleted;
@@ -405,43 +568,316 @@ class ClassBookingService
             });
     }
 
-    // ── Avisos ────────────────────────────────────────────────────────────
+    // ── La app del socio ──────────────────────────────────────────────────
 
     /**
-     * Avisa en tiempo real de que el cupo de una clase cambió.
+     * Reserva desde la app la ocurrencia operativa, con las MISMAS reglas que
+     * el mostrador: plan, clase abierta al canal, ocurrencia no vencida, no en
+     * curso y no cerrada, cupo. Antes la reserva individual no miraba si la
+     * sesión ya había empezado o terminado: la app ocultaba el botón, pero una
+     * llamada directa reservaba igual.
      *
-     * A la app de todos los socios (`classesChanged`) y al portal del entrenador
-     * dueño de la clase. Son SEÑALES, no datos: quien las recibe vuelve a leer
-     * de la base, que es la verdad.
-     *
-     * SIEMPRE DESPUÉS DEL COMMIT. `afterCommit` hace que nunca se anuncie una
-     * reserva que luego se revierte, y que un aviso que falla no pueda tumbar
-     * la reserva: ambos emisores ya se tragan sus errores. Si un aviso se
-     * pierde, el dato no: la siguiente lectura lo trae. Fuera de una
-     * transacción, `afterCommit` ejecuta en el acto.
+     * Cada puerta traduce el resultado a sus textos (la app publicada los
+     * muestra literalmente).
      */
-    public function announce(MyClass $class): void
+    public function reserveForMember(Member $member, MyClass $class): ClassBookingResult
     {
-        $this->announceFor($class->trainer_id ? [(int) $class->trainer_id] : []);
+        $date = $this->operationalDate($class);
+
+        if ($motivo = $this->ineligibility($member, $class, self::CHANNEL_MEMBER)) {
+            return ClassBookingResult::rejected($motivo, $date);
+        }
+        if ($motivo = $this->occurrenceBlock($class, $date)) {
+            return ClassBookingResult::rejected($motivo, $date);
+        }
+
+        $outcome = $this->reserveOccurrence($member, $class, $date, null, ClassEventBus::SOURCE_APP);
+
+        return $outcome === self::RESERVED
+            ? ClassBookingResult::done($outcome, $date)
+            : ClassBookingResult::rejected($outcome, $date);
     }
 
     /**
-     * Un único aviso para un cambio que tocó varias clases (el plan semanal):
-     * `classesChanged` una vez y cada entrenador afectado una vez, en lugar de
-     * un anuncio por reserva.
+     * Cancela desde la app. Con fecha explícita («Organizar mi semana»), esa
+     * ocurrencia; sin ella, la operativa más la heredada sin fecha.
      *
-     * @param  array<int, int>  $trainerIds
+     * La sesión que se mira es la de ESA fecha. Antes se miraba la sesión
+     * «relevante» de la clase, que puede ser la de la semana pasada: una clase
+     * finalizada el lunes impedía cancelar la reserva del lunes siguiente con
+     * «La clase ya finalizó.».
      */
-    public function announceFor(array $trainerIds): void
+    public function cancelForMember(Member $member, MyClass $class, ?string $explicitDate): ClassBookingResult
     {
-        $trainerIds = array_values(array_unique(array_map('intval', $trainerIds)));
+        $date = $explicitDate ?? $this->operationalDate($class);
 
-        DB::afterCommit(function () use ($trainerIds): void {
-            RealtimeEvents::classesChanged();
-            foreach ($trainerIds as $trainerId) {
-                TrainerRealtimeEvents::emit($trainerId, TrainerRealtimeEvents::CLASS_EVENT, ['classes']);
+        $session = ClassSession::where('class_id', $class->getKey())->whereDate('session_date', $date)->first();
+        if ($motivo = $this->cancelBlock($session)) {
+            return ClassBookingResult::rejected($motivo, $date);
+        }
+
+        // Lo que ocupa esa sesión: la fila de su fecha y la heredada sin fecha,
+        // igual que al quitar desde el mostrador. Con solo la de la fecha, una
+        // reserva heredada no se podía cancelar desde «Organizar mi semana».
+        $deleted = $this->cancelOccurrence($member, $class, null, $date, null, ClassEventBus::SOURCE_APP);
+
+        return $deleted > 0
+            ? ClassBookingResult::done(self::REMOVED, $date)
+            : ClassBookingResult::rejected(self::ALREADY, $date);
+    }
+
+    // ── Cambio de horario ─────────────────────────────────────────────────
+
+    /**
+     * La clase cambió de día (o de fecha): las reservas FUTURAS que ya no caen
+     * en un día real de la clase se mueven a la ocurrencia de SU MISMA SEMANA.
+     * Si esa ocurrencia ya pasó, no existe o no cabe, la reserva se cancela.
+     * Las de una sesión que el entrenador ya inició o cerró (la de hoy) no se
+     * tocan: esa clase ya se dictó en su día y la reserva es su registro.
+     *
+     * Antes quedaban huérfanas: con fecha de un día en que la clase ya no se
+     * dicta, la app contaba 0/20, el entrenador veía «Sin inscritos» y el socio
+     * creía tener plaza. Bajo el bloqueo de la clase, como cualquier reserva.
+     *
+     * @return array{moved: list<ClassReservation>, dropped: list<array{reservation: ClassReservation, date: string}>}
+     */
+    public function reconcileFutureReservations(MyClass $class): array
+    {
+        return DB::transaction(function () use ($class): array {
+            MyClass::whereKey($class->getKey())->lockForUpdate()->first();
+            $hoy = $this->todayDate();
+
+            $filas = ClassReservation::query()
+                ->where('class_id', $class->getKey())
+                ->whereNotNull('session_date')
+                ->whereDate('session_date', '>=', $hoy)
+                ->orderBy('reserved_at')
+                ->orderBy('id')
+                ->get();
+
+            $movidas = [];
+            $canceladas = [];
+            foreach ($filas as $reserva) {
+                $vieja = $reserva->session_date->toDateString();
+                if ($this->isOccurrence($class, $vieja)) {
+                    continue;
+                }
+                // Moverla le daría al socio una reserva que no pidió en otro día,
+                // y borrarla, perder quién estaba en la clase que ya se dictó.
+                $sesion = ClassSession::where('class_id', $class->getKey())->whereDate('session_date', $vieja)->first();
+                if ($this->cancelBlock($sesion) !== null) {
+                    continue;
+                }
+
+                $nueva = optional($class->occurrenceDateTimeInWeek(Carbon::parse($vieja, self::TZ)))->toDateString();
+                $cabe = $nueva !== null
+                    && $nueva >= $hoy
+                    && ! $this->occupies((int) $reserva->member_id, $class, $nueva)
+                    && $this->bookedCount($class, $nueva) < (int) $class->max_capacity;
+
+                if ($cabe) {
+                    $reserva->update(['session_date' => $nueva]);
+                    $this->events->booking(ClassEventBus::BOOKING_CANCELLED, $class, $vieja, ClassEventBus::SOURCE_CRM, (int) $reserva->id);
+                    $this->events->booking(ClassEventBus::BOOKING_CREATED, $class, $nueva, ClassEventBus::SOURCE_CRM, (int) $reserva->id);
+                    $movidas[] = $reserva;
+                } else {
+                    $reserva->delete();
+                    $this->events->booking(ClassEventBus::BOOKING_CANCELLED, $class, $vieja, ClassEventBus::SOURCE_CRM, (int) $reserva->id);
+                    $canceladas[] = ['reservation' => $reserva, 'date' => $vieja];
+                }
             }
+
+            return ['moved' => $movidas, 'dropped' => $canceladas];
         });
+    }
+
+    /**
+     * Libera las reservas de un socio que TODAVÍA ocupan cupo (de hoy en
+     * adelante y las heredadas sin fecha), cada una con su hecho para el CRM,
+     * el entrenador y la app. Las pasadas se quedan: son el historial.
+     *
+     * La baja de una cuenta la anonimizaba sin tocar sus reservas: seguían
+     * ocupando plazas y salían en las listas como «Cuenta eliminada».
+     */
+    public function releaseUpcomingFor(Member $member, string $source = ClassEventBus::SOURCE_SYSTEM): int
+    {
+        $filas = ClassReservation::query()
+            ->with('gymClass')
+            ->where('member_id', $member->getKey())
+            ->where(fn ($q) => $q->whereNull('session_date')->orWhereDate('session_date', '>=', $this->todayDate()))
+            ->get();
+
+        foreach ($filas as $fila) {
+            $fila->delete();
+            if ($fila->gymClass !== null) {
+                $fecha = $fila->session_date?->toDateString() ?? $this->operationalDate($fila->gymClass);
+                $this->events->booking(ClassEventBus::BOOKING_CANCELLED, $fila->gymClass, $fecha, $source, (int) $fila->id);
+            }
+        }
+
+        return $filas->count();
+    }
+
+    /**
+     * ¿Ese aforo deja alguna sesión futura con más inscritos que plazas? El
+     * texto del rechazo, o null si cabe. Cuenta como el cupo: las reservas de
+     * cada fecha más las heredadas sin fecha, que ocupan todas las sesiones.
+     */
+    public function capacityConflict(MyClass $class, int $capacity): ?string
+    {
+        $classId = (int) $class->getKey();
+        $conteos = $this->countsByDate([$classId], $this->todayDate(), '9999-12-31')[$classId] ?? [];
+        $heredadas = (int) ($conteos['*'] ?? 0);
+        unset($conteos['*']);
+
+        $fecha = $this->operationalDate($class);
+        $inscritos = $heredadas;
+        foreach ($conteos as $dia => $n) {
+            if ($n + $heredadas > $inscritos) {
+                [$fecha, $inscritos] = [$dia, $n + $heredadas];
+            }
+        }
+
+        return $inscritos > $capacity
+            ? "La sesión del {$fecha} ya tiene {$inscritos} inscritos: el aforo no puede quedar por debajo. Quita inscritos antes o elige un aforo de {$inscritos} o más."
+            : null;
+    }
+
+    /**
+     * Socios con alguna reserva que TODAVÍA importa (de hoy en adelante, o
+     * heredada sin fecha). Para avisar de un cambio de la clase a quien le
+     * afecta, y no a quien fue en agosto.
+     *
+     * @return \Illuminate\Support\Collection<int, Member>
+     */
+    public function membersWithUpcomingReservations(MyClass $class): \Illuminate\Support\Collection
+    {
+        $hoy = $this->todayDate();
+
+        return ClassReservation::query()
+            ->where('class_id', $class->getKey())
+            ->where(function ($q) use ($hoy): void {
+                $q->whereNull('session_date')->orWhereDate('session_date', '>=', $hoy);
+            })
+            // Sin el alcance del entrenador del CRM: es a quién avisar, no lo
+            // que él ve. Con ese alcance, quien no tenía asignado se quedaba sin
+            // el aviso de que su clase cambió o se canceló.
+            ->with(['member' => fn ($q) => $q->withoutGlobalScope(TrainerMemberScope::NAME)])
+            ->get()
+            ->pluck('member')
+            ->filter()
+            ->unique('id')
+            ->values();
+    }
+
+    // ── Lecturas en bloque (listados sin N+1) ─────────────────────────────
+
+    /**
+     * Las reservas que ocupan la ocurrencia operativa de cada clase, en una
+     * sola consulta. Misma condición que el cupo: esa fecha o heredada.
+     *
+     * @param  iterable<MyClass>  $classes
+     * @return array<int, \Illuminate\Support\Collection<int, ClassReservation>> clase => filas
+     */
+    public function operationalRowsFor(iterable $classes): array
+    {
+        $fechas = [];
+        foreach ($classes as $class) {
+            $fechas[(int) $class->getKey()] = $this->operationalDate($class);
+        }
+        if ($fechas === []) {
+            return [];
+        }
+
+        // `whereDate` y no `whereIn` sobre la fecha: en SQLite la columna guarda
+        // '2026-10-05 00:00:00' y la igualdad de texto no casaría nunca.
+        $desde = min($fechas);
+        $filas = ClassReservation::query()
+            ->whereIn('class_id', array_keys($fechas))
+            ->where(function ($q) use ($desde): void {
+                $q->whereNull('session_date')->orWhereDate('session_date', '>=', $desde);
+            })
+            ->get(['id', 'class_id', 'member_id', 'session_date', 'reserved_at'])
+            ->groupBy('class_id');
+
+        $out = [];
+        foreach ($fechas as $classId => $fecha) {
+            $out[$classId] = ($filas->get($classId) ?? collect())
+                ->filter(fn (ClassReservation $r) => $r->session_date === null || $r->session_date->toDateString() === $fecha)
+                ->values();
+        }
+
+        return $out;
+    }
+
+    /**
+     * Cupo ocupado por clase y fecha en un rango, incluidas las heredadas sin
+     * fecha (que ocupan TODAS las ocurrencias de su clase).
+     *
+     * @param  list<int>  $classIds
+     * @return array<int, array<string, int>> clase => [fecha => ocupados]
+     */
+    public function countsByDate(array $classIds, string $from, string $to): array
+    {
+        if ($classIds === []) {
+            return [];
+        }
+
+        $conFecha = ClassReservation::query()
+            ->whereIn('class_id', $classIds)
+            ->whereDate('session_date', '>=', $from)
+            ->whereDate('session_date', '<=', $to)
+            ->get(['class_id', 'session_date']);
+        $heredadas = ClassReservation::query()
+            ->whereIn('class_id', $classIds)
+            ->whereNull('session_date')
+            ->selectRaw('class_id, COUNT(*) AS n')
+            ->groupBy('class_id')
+            ->pluck('n', 'class_id');
+
+        $out = [];
+        foreach ($conFecha as $r) {
+            $fecha = $r->session_date->toDateString();
+            $out[(int) $r->class_id][$fecha] = ($out[(int) $r->class_id][$fecha] ?? 0) + 1;
+        }
+        foreach ($classIds as $classId) {
+            $out[$classId] ??= [];
+            $out[$classId]['*'] = (int) ($heredadas[$classId] ?? 0);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Próximas ocurrencias de cada clase con su cupo ocupado (la operativa
+     * primero). Para el calendario del CRM.
+     *
+     * @param  iterable<MyClass>  $classes
+     * @return array<int, list<array{session_date:string, booked:int}>>
+     */
+    public function upcomingSessionsFor(iterable $classes, int $weeks = 4): array
+    {
+        $fechas = [];
+        foreach ($classes as $class) {
+            $fechas[(int) $class->getKey()] = $this->upcomingOccurrences($class, $weeks);
+        }
+        $todas = array_merge([], ...array_values($fechas));
+        if ($todas === []) {
+            return array_map(fn () => [], $fechas);
+        }
+
+        $conteos = $this->countsByDate(array_keys($fechas), min($todas), max($todas));
+
+        $out = [];
+        foreach ($fechas as $classId => $lista) {
+            $heredadas = $conteos[$classId]['*'] ?? 0;
+            $out[$classId] = array_map(fn (string $f) => [
+                'session_date' => $f,
+                'booked' => ($conteos[$classId][$f] ?? 0) + $heredadas,
+            ], $lista);
+        }
+
+        return $out;
     }
 
     // ── El mostrador ──────────────────────────────────────────────────────
@@ -483,16 +919,12 @@ class ClassBookingService
             return ClassBookingResult::rejected($motivo, $date);
         }
 
-        $outcome = $this->reserveOccurrence($member, $class, $date, $auditar);
+        // Solo se avisa de lo que cambió: «ya estaba» no movió ningún cupo, y el
+        // núcleo solo emite el hecho cuando crea la fila.
+        $outcome = $this->reserveOccurrence($member, $class, $date, $auditar, ClassEventBus::SOURCE_CRM);
 
         if ($outcome === self::FULL) {
             return ClassBookingResult::rejected(self::FULL, $date);
-        }
-
-        // Solo se anuncia lo que cambió: «ya estaba» no movió ningún cupo, y cada
-        // anuncio escribe una fila por socio activo.
-        if ($outcome === self::RESERVED) {
-            $this->announce($class);
         }
 
         return ClassBookingResult::done($outcome, $date);
@@ -527,15 +959,9 @@ class ClassBookingService
             return ClassBookingResult::rejected($motivo, $date);
         }
 
-        $deleted = $this->cancelOccurrence($member, $class, null, $date, $auditar);
+        $deleted = $this->cancelOccurrence($member, $class, null, $date, $auditar, ClassEventBus::SOURCE_CRM);
 
-        if ($deleted === 0) {
-            return ClassBookingResult::done(self::ALREADY, $date);
-        }
-
-        $this->announce($class);
-
-        return ClassBookingResult::done(self::REMOVED, $date);
+        return ClassBookingResult::done($deleted === 0 ? self::ALREADY : self::REMOVED, $date);
     }
 
     private function today(): Carbon

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Classes;
 
+use App\Models\CatalogEvent;
 use App\Models\ClassReservation;
 use App\Models\ClassSession;
 use App\Models\Member;
@@ -87,9 +88,16 @@ class ClassBookingAppContractTest extends TestCase
         ], $extra));
     }
 
+    /**
+     * Avisos a la app de TODOS los socios: una fila en el canal global (el
+     * mismo stream, cursor `c`), que la app enruta por tipo: `class.*` y
+     * `reservation.*` refrescan Clases. Antes era una fila por socio activo.
+     */
     private function señalesDeClase(): int
     {
-        return MemberRealtimeEvent::where('type', 'class.updated')->count();
+        return CatalogEvent::where(function ($q): void {
+            $q->where('type', 'like', 'class.%')->orWhere('type', 'like', 'reservation.%');
+        })->count();
     }
 
     // ── Puerta heredada: /api/classes/{id}/reserve ──────────────────────────
@@ -110,6 +118,8 @@ class ClassBookingAppContractTest extends TestCase
         $this->assertSame(self::OCCURRENCE, $fila->session_date->toDateString());
 
         $this->assertGreaterThan(0, $this->señalesDeClase(), 'La app de los socios debe enterarse del cupo.');
+        $this->assertTrue(CatalogEvent::where('type', 'reservation.created')->where('class_id', $clase->id)->exists());
+        $this->assertSame(0, MemberRealtimeEvent::count(), 'Ni una fila por socio: el aviso va en el canal global.');
         $this->assertTrue(
             TrainerRealtimeEvent::where('trainer_id', $coach->id)->where('type', 'class.updated')->exists(),
             'El portal del entrenador debe enterarse.',
@@ -322,8 +332,10 @@ class ClassBookingAppContractTest extends TestCase
         ]], $this->auth($socio))->assertOk()->assertJsonPath('summary.already', 1);
         $this->assertSame(2, ClassReservation::where('member_id', $socio->id)->count());
 
-        // Dos reservas en un envío = UN aviso a cada socio y UNO al entrenador.
-        $this->assertSame(1, MemberRealtimeEvent::where('member_id', $socio->id)->where('type', 'class.updated')->count());
+        // Dos reservas en un envío = UN aviso global (lo recibe cada socio) y UNO
+        // al entrenador, no uno por reserva.
+        $this->assertSame(1, $this->señalesDeClase());
+        $this->assertSame(0, MemberRealtimeEvent::count());
         $this->assertSame(1, TrainerRealtimeEvent::where('trainer_id', $coach->id)->where('type', 'class.updated')->count());
     }
 }

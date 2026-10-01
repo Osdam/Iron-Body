@@ -228,10 +228,15 @@ class NotificationService
 
     // ── Eventos de CLASE ─────────────────────────────────────────────────────────
 
-    /** Miembro reserva una clase desde la app. Notifica al miembro y al CRM. */
-    public function notifyClassReserved($member, $class): void
+    /**
+     * Miembro reserva una clase desde la app. Notifica al miembro y al CRM.
+     *
+     * La clave anti-duplicado lleva la FECHA de la sesión: sin ella, la primera
+     * reserva de una clase era la única que se avisaba en la vida del socio.
+     */
+    public function notifyClassReserved($member, $class, ?string $sessionDate = null): void
     {
-        $this->safe(function () use ($member, $class): void {
+        $this->safe(function () use ($member, $class, $sessionDate): void {
             $classId = $this->attr($class, 'id');
             $className = $this->attr($class, 'name') ?? 'una clase';
             $when = $this->classWhenLabel($class);
@@ -248,7 +253,7 @@ class NotificationService
                 'action_type' => 'class_detail',
                 'action_payload' => $payload,
                 'metadata' => $meta + ['source_event' => 'class_reserved'],
-                'event_key' => ($member && $classId) ? "class_reserved_{$classId}_{$member->id}" : null,
+                'event_key' => ($member && $classId) ? "class_reserved_{$classId}_{$member->id}".($sessionDate ? "_{$sessionDate}" : '') : null,
             ]);
 
             // Aviso operativo al CRM (sin event_key: puede reservar/cancelar varias veces).
@@ -436,9 +441,9 @@ class NotificationService
      *
      * @param  iterable<Member>  $members  miembros con reserva activa
      */
-    public function notifyClassCancelled($class, iterable $members = []): void
+    public function notifyClassCancelled($class, iterable $members = [], ?string $sessionDate = null): void
     {
-        $this->safe(function () use ($class, $members): void {
+        $this->safe(function () use ($class, $members, $sessionDate): void {
             $classId = $this->attr($class, 'id');
             $className = $this->attr($class, 'name') ?? 'una clase';
             $payload = array_filter(['class_id' => $classId]);
@@ -452,7 +457,7 @@ class NotificationService
                     'action_type' => 'class_detail',
                     'action_payload' => $payload,
                     'metadata' => ['class_id' => $classId, 'class' => $className, 'member_name' => $member?->full_name],
-                    'event_key' => ($member && $classId) ? "class_cancelled_{$classId}_{$member->id}" : null,
+                    'event_key' => ($member && $classId) ? "class_cancelled_{$classId}_{$member->id}".($sessionDate ? "_{$sessionDate}" : '') : null,
                 ]);
             }
 
@@ -464,15 +469,50 @@ class NotificationService
                 'action_type' => 'class_detail',
                 'action_payload' => $payload,
                 'metadata' => array_filter(['class_id' => $classId, 'class' => $className]),
-                'event_key' => $classId ? "admin_class_cancelled_{$classId}" : null,
+                'event_key' => $classId ? "admin_class_cancelled_{$classId}".($sessionDate ? "_{$sessionDate}" : '') : null,
             ]);
         });
     }
 
-    /** Clase sin cupos disponibles. Aviso operativo al CRM. */
-    public function notifyClassFull($class): void
+    /**
+     * La clase cambió de día y la reserva de ESE socio no se pudo mover a la
+     * nueva fecha de su semana (ya pasó, no existe o está llena): se canceló.
+     * Solo al socio; la administración ya sabe que editó la clase.
+     */
+    public function notifyReservationDroppedBySchedule($member, $class, string $sessionDate): void
     {
-        $this->safe(function () use ($class): void {
+        // Sin socio no hay a quién avisar: un aviso de socio sin member_id se
+        // publica para todos.
+        if ($member === null) {
+            return;
+        }
+
+        $this->safe(function () use ($member, $class, $sessionDate): void {
+            $classId = $this->attr($class, 'id');
+            $className = $this->attr($class, 'name') ?? 'tu clase';
+
+            $this->createMemberNotification($member, [
+                'type' => 'class',
+                'title' => 'Tu reserva cambió',
+                'message' => "La clase {$className} cambió de horario y tu reserva del {$sessionDate} ya no está activa. Puedes reservar la nueva fecha.",
+                'priority' => 'high',
+                'action_type' => 'class_detail',
+                'action_payload' => array_filter(['class_id' => $classId]),
+                'metadata' => ['class_id' => $classId, 'class' => $className, 'member_name' => $member?->full_name, 'session_date' => $sessionDate],
+                'event_key' => ($member && $classId) ? "class_dropped_{$classId}_{$member->id}_{$sessionDate}" : null,
+            ]);
+        });
+    }
+
+    /**
+     * Clase sin cupos disponibles. Aviso operativo al CRM.
+     *
+     * Por SESIÓN: sin la fecha en la clave, solo avisaba la primera vez que la
+     * clase se llenó en toda su historia.
+     */
+    public function notifyClassFull($class, ?string $sessionDate = null): void
+    {
+        $this->safe(function () use ($class, $sessionDate): void {
             $classId = $this->attr($class, 'id');
             $className = $this->attr($class, 'name') ?? 'una clase';
 
@@ -484,7 +524,7 @@ class NotificationService
                 'action_type' => 'class_detail',
                 'action_payload' => array_filter(['class_id' => $classId]),
                 'metadata' => array_filter(['class_id' => $classId, 'class' => $className]),
-                'event_key' => $classId ? "class_full_{$classId}" : null,
+                'event_key' => $classId ? "class_full_{$classId}".($sessionDate ? "_{$sessionDate}" : '') : null,
             ]);
         });
     }
@@ -515,13 +555,18 @@ class NotificationService
         });
     }
 
-    /** La clase INICIÓ: aviso al miembro inscrito (push + bandeja). */
-    public function notifyClassStarted($member, $class): void
+    /**
+     * La clase INICIÓ: aviso al miembro inscrito (push + bandeja).
+     *
+     * La clave usa la fecha de la SESIÓN (día del gimnasio). Con `now()` en UTC,
+     * una clase iniciada después de las 19:00 quedaba fechada al día siguiente.
+     */
+    public function notifyClassStarted($member, $class, ?string $sessionDate = null): void
     {
-        $this->safe(function () use ($member, $class): void {
+        $this->safe(function () use ($member, $class, $sessionDate): void {
             $classId = $this->attr($class, 'id');
             $className = $this->attr($class, 'name') ?? 'tu clase';
-            $today = Carbon::now()->toDateString();
+            $today = $sessionDate ?? Carbon::now('America/Bogota')->toDateString();
 
             $this->createMemberNotification($member, [
                 'type' => 'class',

@@ -18,7 +18,7 @@ use Illuminate\Support\Collection;
 trait MemberClassContext
 {
     /** Zona horaria operativa del gimnasio (el backend corre en UTC). */
-    public const OPERATIONAL_TZ = 'America/Bogota';
+    public const OPERATIONAL_TZ = ClassBookingService::TZ;
 
     /** Respuesta única cuando el plan no incluye clases. */
     protected function classesNotInPlanResponse(): JsonResponse
@@ -42,7 +42,7 @@ trait MemberClassContext
 
     /**
      * Sesión relevante de la clase para el miembro. Prioriza: (1) EN CURSO
-     * (iniciada y sin finalizar), (2) recién FINALIZADA (en las últimas 8 h, para
+     * (iniciada y sin finalizar, de hoy o de ayer), (2) recién FINALIZADA (para
      * mostrar "finalizada/espera" hasta la próxima clase), (3) la de HOY. No
      * depende de que la fecha calce exacto (evita desajustes de zona horaria).
      */
@@ -81,8 +81,12 @@ trait MemberClassContext
         return ClassSession::query()
             ->whereNull('renewed_at')
             ->where(function ($q) {
+                // En curso, con la misma cota que el check-in: una sesión que el
+                // entrenador olvidó cerrar hace días dejaba la clase «en curso»
+                // para siempre en la app, sin check-in ni cancelación posibles.
                 $q->whereDate('session_date', $this->operationalToday())
-                    ->orWhere(fn ($q2) => $q2->whereNotNull('started_at')->whereNull('ended_at'))
+                    ->orWhere(fn ($q2) => $q2->whereNotNull('started_at')->whereNull('ended_at')
+                        ->whereDate('session_date', '>=', app(ClassBookingService::class)->liveSince()))
                     ->orWhere(fn ($q2) => $q2->whereNotNull('ended_at')
                         ->where('session_date', '>=', $this->operationalToday()->subDays(8)));
             })
@@ -103,7 +107,9 @@ trait MemberClassContext
         return [
             'session_status' => $status,
             'my_attendance' => $myAttendance,
-            'can_check_in' => $reserved && $status === 'live' && $myAttendance !== ClassAttendance::STATUS_PRESENT,
+            // Solo sin marca: si el entrenador ya marcó «tarde» o «ausente», el
+            // check-in la respeta y el botón quedaba sin salida.
+            'can_check_in' => $reserved && $status === 'live' && $myAttendance === null,
             'can_cancel' => $reserved && $status === 'scheduled',
         ];
     }

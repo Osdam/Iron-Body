@@ -8,6 +8,7 @@ use App\Models\NutritionAiRecommendation;
 use App\Models\NutritionGuide;
 use App\Models\PhysicalEvaluation;
 use App\Models\WorkoutSession;
+use App\Services\Classes\ClassBookingService;
 use Carbon\CarbonImmutable;
 
 /**
@@ -30,6 +31,7 @@ class IronAiUserContextService
         private readonly WeeklyStreakService $streak,
         private readonly GymEquipmentContextService $equipment,
         private readonly PersonalRecordService $records,
+        private readonly ClassBookingService $booking,
     ) {}
 
     /**
@@ -124,18 +126,17 @@ class IronAiUserContextService
 
     private function classesContext(Member $member): array
     {
-        $today = CarbonImmutable::now(NutritionService::TZ);
+        // La próxima es la próxima SESIÓN que ocupa, no la reserva que hizo hoy:
+        // `reserved_at` es cuándo reservó, no cuándo es la clase.
+        $proxima = $this->booking->upcomingFor((int) $member->id, 1)[0] ?? null;
 
         return [
             'reservations_last_30d' => ClassReservation::query()
                 ->where('member_id', $member->id)
-                ->where('reserved_at', '>=', $today->subDays(30))
+                ->where('reserved_at', '>=', now()->subDays(30))
                 ->count(),
-            'next_reservation_at' => ClassReservation::query()
-                ->where('member_id', $member->id)
-                ->where('reserved_at', '>=', $today)
-                ->orderBy('reserved_at')
-                ->value('reserved_at')?->toIso8601String(),
+            'next_reservation_at' => $proxima ? $proxima['starts_at']->toIso8601String() : null,
+            'next_reservation_class' => $proxima ? $proxima['class']->name : null,
         ];
     }
 

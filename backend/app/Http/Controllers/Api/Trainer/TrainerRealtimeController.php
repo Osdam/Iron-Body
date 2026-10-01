@@ -32,6 +32,8 @@ class TrainerRealtimeController extends Controller
 
         $trainerId = (int) $trainer->getKey();
 
+        $sinCursor = ! $request->filled('after_id');
+
         // Solo lo NUEVO tras conectar (señales efímeras, no histórico).
         $cursor = $request->filled('after_id')
             ? (int) $request->query('after_id')
@@ -55,6 +57,12 @@ class TrainerRealtimeController extends Controller
                 ], $e->id);
                 $cursor = (int) $e->id;
             }
-        }, 25, 1500); // tick 1.5s durante ~25s; el cliente reconecta solo.
+        }, 25, 1500, function () use ($sinCursor, &$cursor): void {
+            // Un cliente sin cursor aprende el suyo antes del primer evento: si
+            // no, al reconectar pedía «desde ahora» y perdía lo del hueco.
+            if ($sinCursor) {
+                echo "id: {$cursor}\n\n";
+            }
+        }); // tick 1.5s durante ~25s; el cliente reconecta solo.
     }
 }

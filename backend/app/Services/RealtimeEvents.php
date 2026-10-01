@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\CatalogEvent;
 use App\Models\Member;
 use App\Models\MemberRealtimeEvent;
 use App\Support\Access\TrainerMemberScope;
@@ -190,10 +191,51 @@ class RealtimeEvents
         }
     }
 
-    /** Cambió una clase o sus cupos/reservas (afecta a todos). */
-    public static function classesChanged(): void
+    /**
+     * Cambió una clase o sus cupos/reservas (afecta a todos).
+     *
+     * UNA fila en el canal global, no una por socio. Antes cada reserva
+     * escribía unas 3.900 filas en `member_realtime_events` (una por socio
+     * activo) dentro de la petición. El canal global (`catalog_events`, cursor
+     * `c` del mismo stream) lo leen todas las versiones de la app en uso, y
+     * todas enrutan por `type`: `class.*` y `reservation.*` refrescan Clases.
+     */
+    public static function classesChanged(?int $classId = null, ?string $sessionDate = null, string $type = self::CLASS_EVENT): void
     {
-        self::broadcastToActiveMembers(self::CLASS_EVENT, ['classes']);
+        self::global($type, $classId, $sessionDate, ['classes']);
+    }
+
+    /**
+     * Señal para TODOS los socios, en una sola fila del canal global.
+     *
+     * Best-effort como el resto: un aviso que no se puede escribir no tumba la
+     * operación de negocio. Quien llama decide si va después del commit.
+     */
+    public static function global(string $type, ?int $classId, ?string $sessionDate, array $changed = []): void
+    {
+        try {
+            CatalogEvent::create([
+                'type' => $type,
+                'product_id' => null,
+                'class_id' => $classId,
+                'session_date' => $sessionDate,
+                'changed' => $changed,
+                'version' => (int) (microtime(true) * 1000),
+                'created_at' => now(),
+            ]);
+
+            // Poda: las señales de clases son efímeras, como lo eran las de
+            // cada socio (>5 min). Solo hacen falta para cubrir una reconexión;
+            // al volver de segundo plano la app recarga. Sin poda, la app que
+            // volvía tras horas recibía todas las señales de la pausa. Las de
+            // producto no se tocan (las poda `realtime:prune`).
+            CatalogEvent::query()
+                ->where(fn ($q) => $q->where('type', 'like', 'class.%')->orWhere('type', 'like', 'reservation.%'))
+                ->where('created_at', '<', now()->subMinutes(5))
+                ->delete();
+        } catch (\Throwable $e) {
+            Log::warning('realtime.global_failed', ['type' => $type, 'error' => $e->getMessage()]);
+        }
     }
 
     /** Cambió el ranking/datos de entrenadores (afecta a todos). */

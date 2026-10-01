@@ -37,11 +37,16 @@ class TrainerClassAttendanceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // La clase es de los LUNES y la asistencia solo se marca en un día real
+        // de la clase, ya llegado. Se fija el reloj en un lunes (14:00 en
+        // Bogotá). Antes este test usaba la fecha real de la máquina y solo
+        // pasaba porque el backend aceptaba cualquier día: era el fallo.
+        Carbon::setTestNow(Carbon::parse('2026-10-05 14:00', 'America/Bogota')->utc());
         config([
             'trainer.flags.trainer_auth_enabled' => true,
             'trainer.flags.trainer_classes_enabled' => true,
         ]);
-        $this->today = now()->toDateString();
+        $this->today = Carbon::now('America/Bogota')->toDateString();
 
         $this->trainer = $this->makeTrainer('100', [TrainerRole::FUNCTIONAL]);
         $this->token = $this->login('100');
@@ -58,6 +63,12 @@ class TrainerClassAttendanceTest extends TestCase
             'phone' => '+573001112233', 'status' => Member::STATUS_ACTIVE,
         ]);
         ClassReservation::create(['class_id' => $this->class->id, 'member_id' => $this->member->id]);
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
     }
 
     private function makeTrainer(string $document, array $roles): Trainer

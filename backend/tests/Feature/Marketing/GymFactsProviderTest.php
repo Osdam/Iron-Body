@@ -2,7 +2,9 @@
 
 namespace Tests\Feature\Marketing;
 
+use App\Models\ClassReservation;
 use App\Models\MarketingKnowledgeItem;
+use App\Models\Member;
 use App\Models\MyClass;
 use App\Models\Plan;
 use App\Models\Trainer;
@@ -60,6 +62,18 @@ class GymFactsProviderTest extends TestCase
         $this->assertSame(12, $this->g->classAvailability($con->id, '2026-09-23')['spots_left']);
         $this->assertSame(GymFactsProvider::SOURCE_NOT_AVAILABLE, $this->g->classAvailability($sin->id, '2026-09-24')['spots_left']);
         $this->assertSame(GymFactsProvider::SOURCE_NOT_AVAILABLE, $this->g->classAvailability(999, '2026-09-24')['spots_left']);
+    }
+
+    public function test_class_availability_counts_the_spots_like_the_app(): void
+    {
+        $c = MyClass::create(['name' => 'IRON STRENGTH', 'type' => 'grupal', 'day_of_week' => 'Miércoles', 'start_time' => '08:00:00', 'end_time' => '09:00:00', 'status' => 'active', 'max_capacity' => 12]);
+        foreach (['2026-09-23', null, '2026-09-30'] as $i => $fecha) {
+            $m = Member::create(['full_name' => "Socio {$i}", 'document_number' => "61000{$i}", 'status' => Member::STATUS_ACTIVE]);
+            ClassReservation::create(['class_id' => $c->id, 'member_id' => $m->id, 'session_date' => $fecha]);
+        }
+
+        // La de esa fecha y la heredada sin fecha ocupan; la de otra semana, no.
+        $this->assertSame(10, $this->g->classAvailability($c->id, '2026-09-23')['spots_left']);
     }
 
     public function test_trainers_expose_count_and_specialties_and_nothing_personal(): void

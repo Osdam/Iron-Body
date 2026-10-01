@@ -10,10 +10,13 @@ use App\Models\MyClass;
 use App\Services\Audit\AuditTrail;
 use App\Services\Classes\ClassBookingResult;
 use App\Services\Classes\ClassBookingService;
+use App\Services\Classes\ClassesChannel;
+use App\Services\Classes\ClassEventsFeed;
 use App\Support\Access\CrmPermission;
 use App\Support\SseStream;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -175,20 +178,28 @@ class ClassEnrollmentController extends Controller
      */
     public function stream(Request $request): StreamedResponse
     {
-        $last = null;
+        // Reanudación: el cliente manda el último id que vio. Sin él (primera
+        // conexión) o si ya no hay continuidad, `resync` le pide releer todo.
+        $after = $request->query('after_id');
+        $apertura = ClassEventsFeed::open(is_numeric($after) ? (int) $after : null);
 
-        return SseStream::response(function () use (&$last): void {
-            $now = self::classesSignature();
-            if ($last === null) {
-                $last = $now; // primer latido: línea base, no dispara
+        // Qué recibe esta conexión en cada latido: los hechos tipados y la
+        // huella de lo que no pasa por el registro. `proto=2` es el CRM que
+        // entiende los hechos; las pestañas del CRM anterior no lo mandan y
+        // siguen recibiendo la huella de todo. Ver ClassesChannel.
+        $canal = new ClassesChannel(
+            ClassEventsFeed::floorFor($apertura),
+            $request->query('proto') === '2',
+            fn (): string => self::classesSignature(),
+        );
 
-                return;
+        return SseStream::response(function () use ($canal): void {
+            foreach ($canal->tick() as $salida) {
+                SseStream::emit($salida['event'], $salida['data'], $salida['id']);
             }
-            if ($now !== $last) {
-                $last = $now;
-                SseStream::emit('classes', ['sig' => $now]);
-            }
-        }, 25, 2000); // sondeo cada 2 s durante ~25 s; el cliente reconecta solo
+        }, 25, 2000, function () use ($apertura): void {
+            SseStream::emit('ready', $apertura);
+        }); // sondeo cada 2 s durante ~25 s; el cliente reconecta solo
     }
 
     /**
@@ -206,6 +217,11 @@ class ClassEnrollmentController extends Controller
      */
     public static function classesSignature(): string
     {
+        // Sesiones y asistencia, solo de la ventana que enseña el CRM (8 días
+        // atrás en adelante): son tablas históricas que no se podan, y esta
+        // huella se calcula cada 2 s por pestaña abierta.
+        $desde = Carbon::parse(app(ClassBookingService::class)->todayDate())->subDays(8)->toDateString();
+
         $reservas = DB::table('class_reservations')
             ->selectRaw('COUNT(*) AS n, COALESCE(SUM(id), 0) AS s, MAX(updated_at) AS t')
             ->first();
@@ -217,14 +233,23 @@ class ClassEnrollmentController extends Controller
             ->first();
 
         $sesiones = DB::table('class_sessions')
+            ->whereDate('session_date', '>=', $desde)
             ->selectRaw('COUNT(*) AS n, MAX(updated_at) AS t')
             ->selectRaw('COUNT(started_at) AS iniciadas, COUNT(ended_at) AS cerradas, COUNT(renewed_at) AS renovadas')
+            ->first();
+
+        // La asistencia también se ve en el CRM: marcar o corregir mueve la huella.
+        $asistencia = DB::table('class_attendances')
+            ->whereDate('session_date', '>=', $desde)
+            ->selectRaw('COUNT(*) AS n, COALESCE(SUM(id), 0) AS s, MAX(updated_at) AS t')
+            ->selectRaw("COALESCE(SUM(CASE WHEN status = 'present' THEN 1 WHEN status = 'late' THEN 2 ELSE 3 END), 0) AS estados")
             ->first();
 
         return hash('xxh128', implode('|', [
             "{$reservas->n}:{$reservas->s}:{$reservas->t}",
             "{$clases->n}:{$clases->t}:{$clases->cupo}:{$clases->activas}:{$clases->online}",
             "{$sesiones->n}:{$sesiones->t}:{$sesiones->iniciadas}:{$sesiones->cerradas}:{$sesiones->renovadas}",
+            "{$asistencia->n}:{$asistencia->s}:{$asistencia->t}:{$asistencia->estados}",
         ]));
     }
 

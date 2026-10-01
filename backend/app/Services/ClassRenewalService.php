@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Models\ClassReservation;
 use App\Models\ClassSession;
 use App\Models\MyClass;
+use App\Services\Classes\ClassBookingService;
+use App\Services\Classes\ClassEventBus;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -69,32 +71,52 @@ class ClassRenewalService
         }
 
         $ids = array_keys($dueUpTo);
+        $bus = app(ClassEventBus::class);
 
-        DB::transaction(function () use ($dueUpTo, $ids): void {
-            // Limpia SOLO el ciclo vencido por clase: reservas con fecha <= la
-            // sesión renovada, más las legacy sin fecha. Nunca borra futuras.
-            foreach ($dueUpTo as $classId => $upTo) {
-                ClassReservation::where('class_id', $classId)
-                    ->where(function ($q) use ($upTo): void {
-                        $q->whereNull('session_date')
-                            ->orWhereDate('session_date', '<=', $upTo);
-                    })
-                    ->delete();
+        // El hecho de cada clase se escribe DENTRO de la transacción, como pide
+        // el bus (o quedan el cambio y su hecho, o ninguno), y el lote envuelve
+        // la transacción: los avisos salen tras el commit, uno por clase para el
+        // CRM y su entrenador y uno solo a los socios, para que la clase vuelva a
+        // aparecer reservable para todos.
+        $bus->batch(function () use ($dueUpTo, $bus): void {
+            DB::transaction(function () use ($dueUpTo, $bus): void {
+                // Limpia SOLO el ciclo vencido por clase: reservas con fecha <= la
+                // sesión renovada, más las legacy sin fecha. Nunca borra futuras.
+                foreach ($dueUpTo as $classId => $upTo) {
+                    ClassReservation::where('class_id', $classId)
+                        ->where(function ($q) use ($upTo): void {
+                            $q->whereNull('session_date')
+                                ->orWhereDate('session_date', '<=', $upTo);
+                        })
+                        ->delete();
 
-                // enrolled_count (display CRM) = reservas futuras que sobreviven.
-                $remaining = ClassReservation::where('class_id', $classId)->count();
-                MyClass::whereKey($classId)->update(['enrolled_count' => $remaining]);
-            }
+                    // Columna heredada: el cupo de la ocurrencia operativa, con la
+                    // misma regla que el resto (antes, «todas las que sobreviven»).
+                    $clase = MyClass::find($classId);
+                    if ($clase !== null) {
+                        $booking = app(ClassBookingService::class);
+                        MyClass::whereKey($classId)->update([
+                            'enrolled_count' => $booking->bookedCount($clase, $booking->operationalDate($clase)),
+                        ]);
+                    }
 
-            // Archiva las sesiones finalizadas (conserva el historial/asistencia).
-            ClassSession::whereIn('class_id', $ids)
-                ->whereNotNull('ended_at')
-                ->whereNull('renewed_at')
-                ->update(['renewed_at' => now()]);
+                    // Archiva SOLO las sesiones del ciclo vencido (conserva el
+                    // historial y la asistencia). Antes archivaba todas las
+                    // finalizadas de la clase, también una recién cerrada que aún
+                    // no había cumplido su ventana: esa ya no se renovaba nunca y
+                    // sus reservas se quedaban.
+                    ClassSession::where('class_id', $classId)
+                        ->whereNotNull('ended_at')
+                        ->whereNull('renewed_at')
+                        ->whereDate('session_date', '<=', $upTo)
+                        ->update(['renewed_at' => now()]);
+
+                    if ($clase !== null) {
+                        $bus->classChanged($clase, 'renewal', ClassEventBus::SOURCE_SYSTEM);
+                    }
+                }
+            });
         });
-
-        // Refresco en vivo: la clase vuelve a aparecer reservable para todos.
-        RealtimeEvents::classesChanged();
 
         return count($ids);
     }

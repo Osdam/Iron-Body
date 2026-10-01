@@ -23,9 +23,9 @@ class SseStream
      * @param  callable  $tick  Se invoca cada `intervalMs`; debe emitir eventos
      *                          con {@see SseStream::emit()} (hace echo).
      */
-    public static function response(callable $tick, int $maxSeconds = 20, int $intervalMs = 2000): StreamedResponse
+    public static function response(callable $tick, int $maxSeconds = 20, int $intervalMs = 2000, ?callable $onOpen = null): StreamedResponse
     {
-        $response = new StreamedResponse(function () use ($tick, $maxSeconds, $intervalMs): void {
+        $response = new StreamedResponse(function () use ($tick, $maxSeconds, $intervalMs, $onOpen): void {
             @set_time_limit($maxSeconds + 10);
             @ignore_user_abort(false);
             while (ob_get_level() > 0) {
@@ -34,6 +34,11 @@ class SseStream
 
             echo "retry: 3000\n";
             echo ": connected\n\n";
+            // Preludio opcional (una vez): p. ej. decirle al cliente su cursor
+            // antes de que llegue ningún evento.
+            if ($onOpen !== null) {
+                $onOpen();
+            }
             self::flush();
 
             $deadline = microtime(true) + $maxSeconds;

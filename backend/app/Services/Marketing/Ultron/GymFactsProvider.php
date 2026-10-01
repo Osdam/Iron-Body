@@ -2,11 +2,11 @@
 
 namespace App\Services\Marketing\Ultron;
 
-use App\Models\ClassReservation;
 use App\Models\MarketingKnowledgeItem;
 use App\Models\MyClass;
 use App\Models\Plan;
 use App\Models\Trainer;
+use App\Services\Classes\ClassBookingService;
 use App\Services\Marketing\MarketingKnowledgeBaseService;
 use App\Services\Marketing\SalesAgentDecisionSchema;
 use App\Services\Observability\ChannelLog;
@@ -169,7 +169,9 @@ final class GymFactsProvider
             if ($c === null || (int) $c->max_capacity <= 0 || ! Schema::hasTable('class_reservations')) {
                 return ['class_id' => $classId, 'date' => $date, 'spots_left' => self::SOURCE_NOT_AVAILABLE];
             }
-            $reserved = ClassReservation::query()->where('class_id', $classId)->whereDate('session_date', $date)->count();
+            // El mismo cupo que la app, el CRM y el entrenador: las reservas de
+            // esa fecha y las heredadas sin fecha, que ocupan todas las sesiones.
+            $reserved = app(ClassBookingService::class)->bookedCount($c, $date);
 
             return ['class_id' => $classId, 'date' => $date, 'spots_left' => max(0, (int) $c->max_capacity - $reserved)];
         } catch (Throwable $e) {

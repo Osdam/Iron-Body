@@ -16,12 +16,14 @@ class CatalogEvent extends Model
 {
     public $timestamps = false;
 
-    protected $fillable = ['type', 'product_id', 'changed', 'version', 'created_at'];
+    protected $fillable = ['type', 'product_id', 'class_id', 'session_date', 'changed', 'version', 'created_at'];
 
     protected function casts(): array
     {
         return [
             'product_id' => 'integer',
+            'class_id' => 'integer',
+            'session_date' => 'date',
             'changed' => 'array',
             'version' => 'integer',
             'created_at' => 'datetime',

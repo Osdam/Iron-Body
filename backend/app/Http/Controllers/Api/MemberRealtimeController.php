@@ -32,6 +32,9 @@ class MemberRealtimeController extends Controller
             return response()->json(['ok' => false, 'message' => 'Sesión requerida.'], 401);
         }
 
+        $sinCursor = ! $request->filled('after_id');
+        $sinCursorCatalogo = ! $request->filled('after_catalog_id');
+
         // Solo lo NUEVO tras conectar (las señales son efímeras, no histórico).
         $cursor = $request->filled('after_id')
             ? (int) $request->query('after_id')
@@ -44,9 +47,7 @@ class MemberRealtimeController extends Controller
         // mezclarlas en `Last-Event-ID` haría que un evento personal tapara uno
         // de catálogo, o al revés. Y va aquí, y no en una segunda conexión SSE,
         // porque el teléfono ya mantiene ésta abierta.
-        $catalogCursor = $request->filled('after_catalog_id')
-            ? (int) $request->query('after_catalog_id')
-            : (int) (CatalogEvent::max('id') ?? 0);
+        $catalogCursor = self::initialCatalogCursor($request);
 
         return SseStream::response(function () use ($memberId, &$cursor, &$catalogCursor): void {
             $items = MemberRealtimeEvent::query()
@@ -75,17 +76,95 @@ class MemberRealtimeController extends Controller
                 ->limit(50)
                 ->get();
 
-            foreach ($catalog as $e) {
-                SseStream::emit('catalog', [
-                    'type' => $e->type,
-                    'product_id' => $e->product_id,
-                    'changed' => $e->changed ?? [],
-                    'version' => (string) $e->version,
-                    'event_id' => (int) $e->id,
-                    'timestamp' => $e->created_at?->toIso8601String(),
-                ], 'c'.$e->id);
-                $catalogCursor = (int) $e->id;
+            foreach (self::catalogToEmit($catalog) as $e) {
+                SseStream::emit('catalog', self::catalogPayload($e), 'c'.$e->id);
             }
-        }, 25, 1500); // tick 1.5s durante ~25s; el cliente reconecta solo.
+            if ($catalog->isNotEmpty()) {
+                $catalogCursor = (int) $catalog->last()->id;
+            }
+        }, 25, 1500, function () use ($sinCursor, $sinCursorCatalogo, &$cursor, &$catalogCursor): void {
+            // Un cliente sin cursor aprende el suyo ANTES de que llegue ningún
+            // evento. Sin esto, al reconectar volvía a pedir «desde ahora» y lo
+            // ocurrido en el hueco de reconexión (~2 s de cada ~27) se perdía.
+            // La app ya lee las líneas `id:` por separado de los datos.
+            if ($sinCursor) {
+                echo "id: {$cursor}\n\n";
+            }
+            if ($sinCursorCatalogo) {
+                echo "id: c{$catalogCursor}\n\n";
+            }
+        }); // tick 1.5s durante ~25s; el cliente reconecta solo.
+    }
+
+    /**
+     * Desde dónde se lee el canal global en esta conexión.
+     *
+     * La app 1.0.x solo manda `after_id`: no sabe reanudar el canal global, y
+     * con «desde ahora» perdía las señales de clases del hueco de cada
+     * reconexión (~2 s de cada ~27). A ese cliente se le repiten las de los
+     * últimos segundos; volver a recibir una señal solo cuesta una recarga.
+     */
+    public static function initialCatalogCursor(Request $request): int
+    {
+        if ($request->filled('after_catalog_id')) {
+            return (int) $request->query('after_catalog_id');
+        }
+        if ($request->filled('after_id')) {
+            return (int) (CatalogEvent::where('created_at', '<', now()->subSeconds(10))->max('id') ?? 0);
+        }
+
+        return (int) (CatalogEvent::max('id') ?? 0);
+    }
+
+    /**
+     * Lo que se emite de una lectura del canal global: todos los avisos de
+     * producto y, de los de clases, solo el ÚLTIMO. La app vuelve a pedir sus
+     * clases con cada aviso de clases y uno basta: al volver de segundo plano
+     * con un cursor viejo recibía uno por cada reserva de la pausa.
+     *
+     * @param  iterable<CatalogEvent>  $filas  en orden de id
+     * @return list<CatalogEvent>
+     */
+    public static function catalogToEmit(iterable $filas): array
+    {
+        $deClases = fn (CatalogEvent $e): bool => str_starts_with((string) $e->type, 'class.')
+            || str_starts_with((string) $e->type, 'reservation.');
+
+        $ultimaDeClases = null;
+        foreach ($filas as $e) {
+            if ($deClases($e)) {
+                $ultimaDeClases = $e;
+            }
+        }
+
+        $salida = [];
+        foreach ($filas as $e) {
+            if (! $deClases($e) || $e === $ultimaDeClases) {
+                $salida[] = $e;
+            }
+        }
+
+        return $salida;
+    }
+
+    /**
+     * Payload de un evento del canal global. `class_id` y `session_date` dicen
+     * de qué clase y ocurrencia es un aviso de clases; la app actual los ignora
+     * y enruta por `type` (`class.*` y `reservation.*` refrescan Clases).
+     *
+     * @return array<string, mixed>
+     */
+    public static function catalogPayload(CatalogEvent $e): array
+    {
+        return [
+            'type' => $e->type,
+            'product_id' => $e->product_id,
+            'class_id' => $e->class_id,
+            'session_date' => $e->session_date?->toDateString(),
+            'changed' => $e->changed ?? [],
+            'version' => (string) $e->version,
+            'event_id' => (int) $e->id,
+            'timestamp' => $e->created_at?->toIso8601String(),
+        ];
     }
 }

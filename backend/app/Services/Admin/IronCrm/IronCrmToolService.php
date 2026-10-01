@@ -12,6 +12,7 @@ use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\Trainer;
 use App\Models\User;
+use App\Services\Classes\ClassBookingService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -35,7 +36,10 @@ class IronCrmToolService
 {
     private int $maxRows;
 
-    public function __construct()
+    /** 0 = domingo, como lo describe la herramienta; la columna guarda el nombre. */
+    private const DIAS = [0 => 'Domingo', 1 => 'Lunes', 2 => 'Martes', 3 => 'Miércoles', 4 => 'Jueves', 5 => 'Viernes', 6 => 'Sábado'];
+
+    public function __construct(private readonly ClassBookingService $booking)
     {
         $this->maxRows = max(1, (int) config('iron_crm.max_rows_per_tool', 25));
     }
@@ -66,7 +70,7 @@ class IronCrmToolService
             ['list_trainers', 'Lista entrenadores. Filtra por estado (active|inactive|all).', [
                 'status' => ['type' => 'string', 'description' => 'Estado del entrenador.'],
             ], []],
-            ['list_classes', 'Lista clases del catálogo. Filtra por día de la semana (0=domingo..6=sábado) y estado.', [
+            ['list_classes', 'Lista clases del catálogo con los inscritos de su próxima sesión. Filtra por día de la semana (0=domingo..6=sábado) y estado.', [
                 'day_of_week' => ['type' => 'integer', 'description' => '0..6 (opcional).'],
                 'status' => ['type' => 'string', 'description' => 'active|inactive|all (opcional).'],
             ], []],
@@ -328,18 +332,33 @@ class IronCrmToolService
     /** @param array<string, mixed> $args @return array<string, mixed> */
     private function listClasses(array $args): array
     {
-        $q = MyClass::query()->with(['trainer:id,full_name'])->orderBy('day_of_week')->orderBy('start_time');
+        $q = MyClass::query()->with(['trainer:id,full_name']);
+        // La columna guarda el NOMBRE del día («Lunes»): comparar con el número
+        // no casaba nunca, y en PostgreSQL la consulta fallaba.
         if (isset($args['day_of_week']) && $args['day_of_week'] !== '') {
-            $q->where('day_of_week', (int) $args['day_of_week']);
+            $dia = self::DIAS[(int) $args['day_of_week']] ?? null;
+            if ($dia === null) {
+                return ['error' => 'day_of_week debe estar entre 0 (domingo) y 6 (sábado).'];
+            }
+            $q->where('day_of_week', $dia);
         }
         $status = strtolower((string) ($args['status'] ?? 'all'));
         if (in_array($status, ['active', 'inactive'], true)) {
             $q->whereRaw('LOWER(status) = ?', [$status]);
         }
-        $rows = $q->limit($this->maxRows)->get();
+        // Orden de calendario (lunes → domingo) y hora, no alfabético.
+        $todas = $q->get()
+            ->sortBy(fn (MyClass $c) => sprintf('%d %s', MyClass::WEEK_DAY_INDEX[$c->day_of_week] ?? 9, (string) $c->start_time))
+            ->values();
+        $rows = $todas->take($this->maxRows);
+
+        // Inscritos = los de la PRÓXIMA sesión, con la misma cuenta que la app,
+        // el CRM y el entrenador. La columna `enrolled_count` ya no se mantiene.
+        $filas = $this->booking->operationalRowsFor($rows);
 
         return [
             'count' => $rows->count(),
+            'total' => $todas->count(),
             'classes' => $rows->map(fn (MyClass $c) => [
                 'id' => $c->id,
                 'name' => $c->name,
@@ -349,7 +368,8 @@ class IronCrmToolService
                 'start_time' => $c->start_time,
                 'end_time' => $c->end_time,
                 'max_capacity' => $c->max_capacity,
-                'enrolled' => $c->enrolled_count,
+                'next_session_date' => $this->booking->operationalDate($c),
+                'enrolled' => ($filas[(int) $c->id] ?? collect())->count(),
                 'location' => $c->location,
                 'status' => $c->status,
             ])->all(),
@@ -362,22 +382,41 @@ class IronCrmToolService
         if (! $this->tableExists('class_reservations')) {
             return ['available' => false, 'note' => 'Módulo de reservas no detectado.'];
         }
+        // «Hoy» es el día del gimnasio: con el reloj UTC, desde las 19:00 la
+        // herramienta contestaba con las reservas de mañana.
         $date = ! empty($args['date'])
-            ? CarbonImmutable::parse((string) $args['date'])->toDateString()
-            : CarbonImmutable::now()->toDateString();
+            ? ($this->booking->plainDate((string) $args['date']) ?? CarbonImmutable::parse((string) $args['date'])->toDateString())
+            : $this->booking->todayDate();
 
-        $rows = ClassReservation::query()
-            ->with(['member:id,full_name'])
-            ->whereDate('session_date', $date)
+        // Las heredadas sin fecha ocupan todas las sesiones de su clase: cuentan
+        // en las clases que ese día se dictan, igual que en el cupo.
+        $heredadas = ClassReservation::query()->whereNull('session_date')->distinct()->pluck('class_id')->all();
+        $conHeredadas = MyClass::query()->whereIn('id', $heredadas)->get()
+            ->filter(fn (MyClass $c) => $this->booking->isOccurrence($c, $date))
+            ->modelKeys();
+
+        $q = ClassReservation::query()
+            ->where(function ($w) use ($date, $conHeredadas): void {
+                $w->whereDate('session_date', $date);
+                if ($conHeredadas !== []) {
+                    $w->orWhere(fn ($h) => $h->whereNull('session_date')->whereIn('class_id', $conHeredadas));
+                }
+            });
+        $total = (clone $q)->count();
+        $rows = $q->with(['member:id,full_name', 'gymClass:id,name,start_time'])
             ->orderBy('class_id')
+            ->orderBy('id')
             ->limit($this->maxRows)
             ->get();
 
         return [
             'date' => $date,
             'count' => $rows->count(),
+            'total' => $total,
             'reservations' => $rows->map(fn ($r) => [
                 'class_id' => $r->class_id,
+                'class' => $r->gymClass?->name,
+                'start_time' => $r->gymClass?->start_time,
                 'member' => $r->member?->full_name,
                 'reserved_at' => optional($r->reserved_at)->toIso8601String(),
             ])->all(),

@@ -2,14 +2,14 @@
 
 namespace App\Services\Trainer;
 
-use App\Models\ClassReservation;
 use App\Models\ClassSession;
 use App\Models\Member;
 use App\Models\MyClass;
 use App\Models\Trainer;
 use App\Models\TrainerAuditLog;
+use App\Services\Classes\ClassBookingService;
+use App\Services\Classes\ClassEventBus;
 use App\Services\NotificationService;
-use App\Services\RealtimeEvents;
 use Illuminate\Support\Carbon;
 
 /**
@@ -23,6 +23,8 @@ class ClassSessionService
     public function __construct(
         private readonly NotificationService $notifications,
         private readonly TrainerAuditService $audit,
+        private readonly ClassBookingService $booking,
+        private readonly ClassEventBus $events,
     ) {}
 
     /**
@@ -55,12 +57,13 @@ class ClassSessionService
                 ],
             );
 
-            $this->notifyEnrolled($class);
-        }
+            $this->notifyEnrolled($class, $sessionDate->toDateString());
 
-        // Realtime: los miembros refrescan sus clases en vivo → aparece el botón
-        // "Marcar presente" sin recargar.
-        RealtimeEvents::classesChanged();
+            // Realtime SOLO si cambió algo: los socios ven «en curso» (y el botón
+            // de marcar presente), el entrenador y el CRM también. Reintentar
+            // «Iniciar» con mala red ya no repite el aviso a todos.
+            $this->events->classChanged($class, 'session.started', ClassEventBus::SOURCE_TRAINER, $sessionDate->toDateString());
+        }
 
         return $session;
     }
@@ -93,12 +96,33 @@ class ClassSessionService
                     'face_verified' => $faceVerified,
                 ],
             );
+
+            // Realtime solo en el primer cierre: «finalizada» para todos.
+            $this->events->classChanged($class, 'session.ended', ClassEventBus::SOURCE_TRAINER, $sessionDate->toDateString());
         }
 
-        // Realtime: al finalizar, los miembros ven el estado "finalizada" en vivo.
-        RealtimeEvents::classesChanged();
-
         return $session;
+    }
+
+    /** ¿La sesión de esa fecha está en curso (iniciada y sin finalizar)? */
+    public function isLive(MyClass $class, Carbon $sessionDate): bool
+    {
+        $session = $this->forDate($class, $sessionDate);
+
+        return $session !== null && $session->started_at !== null && $session->ended_at === null;
+    }
+
+    /** Fecha de la sesión que el entrenador tiene abierta en esta clase, si hay una. */
+    public function liveDate(MyClass $class): ?Carbon
+    {
+        $session = ClassSession::query()
+            ->where('class_id', $class->getKey())
+            ->whereNotNull('started_at')
+            ->whereNull('ended_at')
+            ->orderByDesc('session_date')
+            ->first();
+
+        return $session ? Carbon::parse($session->session_date->toDateString()) : null;
     }
 
     /** Sesión real (si existe) de una clase en una fecha. */
@@ -110,14 +134,16 @@ class ClassSessionService
             ->first();
     }
 
-    /** Notifica "la clase inició" a los miembros inscritos en la clase. */
-    private function notifyEnrolled(MyClass $class): void
+    /**
+     * Notifica "la clase inició" a quien reservó ESA sesión.
+     *
+     * Antes avisaba a todo el que tuviera alguna reserva de la clase, de
+     * cualquier semana: al iniciar la clase de un lunes le llegaba a quien fue
+     * en agosto y a quien reservó para el lunes siguiente.
+     */
+    private function notifyEnrolled(MyClass $class, string $sessionDate): void
     {
-        $memberIds = ClassReservation::query()
-            ->where('class_id', $class->getKey())
-            ->pluck('member_id')
-            ->unique()
-            ->all();
+        $memberIds = $this->booking->occurrenceMemberIds($class, $sessionDate);
 
         if ($memberIds === []) {
             return;
@@ -126,6 +152,6 @@ class ClassSessionService
         Member::query()
             ->whereIn('id', $memberIds)
             ->get()
-            ->each(fn (Member $member) => $this->notifications->notifyClassStarted($member, $class));
+            ->each(fn (Member $member) => $this->notifications->notifyClassStarted($member, $class, $sessionDate));
     }
 }

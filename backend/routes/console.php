@@ -51,6 +51,14 @@ Schedule::command('stories:purge')
     ->withoutOverlapping()
     ->onOneServer();
 
+// Purga de las señales de tiempo real (socios, entrenadores, canal global y
+// registro de clases del CRM). Son avisos efímeros: quien los lee vuelve a la
+// base. El canal global y el registro de clases no se podaban nunca.
+Schedule::command('realtime:prune')
+    ->hourly()
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // Purga de la evidencia de moderación cuya retención ya venció.
 //
 // Sin esta entrada el comando existía pero no lo ejecutaba nadie: los binarios

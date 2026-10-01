@@ -45,6 +45,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        // Un bus de hechos de clases por proceso: `batch()` agrupa los avisos de
+        // un plan semanal en uno, y para eso tiene que ser la MISMA instancia en
+        // toda la petición.
+        $this->app->singleton(\App\Services\Classes\ClassEventBus::class);
+
         // Hoy NO hay fuente de gasto publicitario. Se enlaza la implementacion
         // que lo dice en vez de una que devuelva cero: un ROAS calculado sobre
         // gasto cero es una mentira con formato de numero, y alguien tomaria
@@ -107,6 +112,7 @@ class AppServiceProvider extends ServiceProvider
         PaymentTransaction::observe(MarketingPaymentOutcomeObserver::class);
 
         $this->limitadoresInternos();
+        $this->limitadorDeClases();
 
         $this->guardWompiConfig();
         $this->guardFactusConfig();
@@ -295,6 +301,35 @@ class AppServiceProvider extends ServiceProvider
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Escrituras de clases del socio: reservar, cancelar, plan semanal y
+     * check-in. Cada una avisa a TODAS las apps conectadas, que vuelven a pedir
+     * sus clases, así que un bucle de reservar y cancelar se multiplicaba por
+     * cada socio conectado. Por socio y no por IP: en el gimnasio muchos socios
+     * comparten la misma red. 30 por minuto sobra para un uso real (doble toque,
+     * reintentos).
+     *
+     * La clave sale del token y no del socio resuelto: Laravel adelanta
+     * `ThrottleRequests` a todo el grupo `api` por su prioridad de middleware,
+     * así que corre ANTES que `auth.member` y aún no hay socio. Con el socio,
+     * caía a la IP y un socio insistente bloqueaba a todo el gimnasio.
+     */
+    private function limitadorDeClases(): void
+    {
+        RateLimiter::for('class-writes', function (\Illuminate\Http\Request $request) {
+            $token = $request->bearerToken();
+
+            // Texto propio: el de Laravel («Too Many Attempts.») llega en inglés y
+            // la app lo enseña tal cual.
+            return Limit::perMinute(30)
+                ->by($token ? 'member:'.hash('sha256', $token) : 'ip:'.$request->ip())
+                ->response(fn ($request, array $headers) => response()->json([
+                    'message' => 'Hiciste muchos cambios seguidos en tus clases. Espera un minuto e inténtalo de nuevo.',
+                    'code' => 'too_many_class_writes',
+                ], 429, $headers));
+        });
     }
 
     /**
