@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api\Internal;
 
 use App\Http\Controllers\Controller;
 use App\Models\Incident;
+use App\Models\MarketingAutomationEvent;
 use App\Models\MarketingConversation;
 use App\Models\MarketingMessage;
 use App\Services\IronGuard\IncidentRecorder;
 use App\Services\Marketing\CommercialPhaseMachine;
 use App\Services\Marketing\HumanHandoffAuthority;
+use App\Services\Marketing\MarketingAgentSwitch;
 use App\Services\Marketing\SalesAgentDecisionSchema;
 use App\Services\Marketing\StaffReviewAuthority;
 use App\Services\Marketing\Ultron\CriticContract;
@@ -27,7 +29,10 @@ use Illuminate\Validation\Rule;
  * Dos puertas y ninguna más:
  *
  *   POST /ai/decide  → lee. Devuelve contexto, decisión base, fase y listas
- *                      blancas. No escribe una sola fila.
+ *                      blancas. No crea filas ni tiene efectos de negocio:
+ *                      su única escritura es la constancia `decide_outcome`
+ *                      en el evento del turno cuando lo cierra sin commit
+ *                      (pausa o relevo), y de ella depende el vigía.
  *   POST /ai/commit  → escribe. Valida, aplica guardrails, persiste, ejecuta y
  *                      envía. (Se añade en su propia fase.)
  *
@@ -68,7 +73,10 @@ class UltronController extends Controller
      *
      * Sin efectos de negocio. Puede llamar al modelo —eso cuesta dinero y
      * tiempo, pero no cambia nada—; lo que no hace es crear mensajes, acciones
-     * ni transiciones.
+     * ni transiciones. Su única escritura es una constancia para el vigía:
+     * cuando cierra el turno sin commit —lo cortó la pausa del agente o lo
+     * relevó un mensaje más nuevo—, lo apunta en el evento del turno
+     * ({@see UltronDecideService::recordOutcome()}).
      */
     public function decide(Request $request): JsonResponse
     {
@@ -85,6 +93,13 @@ class UltronController extends Controller
         }
 
         if ($reason = $this->decide->ineligibleReason($conversation, $message)) {
+            if ($reason === MarketingAgentSwitch::REASON) {
+                // Lo cortó la pausa y aquí no queda ninguna fila: sin esta
+                // constancia, el vigía no sabría distinguirlo de un turno que
+                // murió en n8n.
+                $this->decide->recordOutcome($message, MarketingAutomationEvent::OUTCOME_AGENT_PAUSED);
+            }
+
             return response()->json([
                 'ok' => false,
                 'code' => 'not_eligible',
@@ -102,6 +117,10 @@ class UltronController extends Controller
          * corta sin componer nada. El del último mensaje sí llegará.
          */
         if ($newer = $this->decide->supersededBy($conversation, $message)) {
+            // Tampoco aquí queda fila: el vigía necesita saber que este turno
+            // delegó en el del mensaje nuevo, y no que se perdió.
+            $this->decide->recordOutcome($message, MarketingAutomationEvent::OUTCOME_SUPERSEDED);
+
             return response()->json([
                 'ok' => true,
                 'superseded' => true,

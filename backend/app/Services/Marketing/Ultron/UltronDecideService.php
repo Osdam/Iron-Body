@@ -9,6 +9,7 @@ use App\Models\MarketingMessage;
 use App\Services\Commercial\Tools\Commercial\EscalateToHumanTool;
 use App\Services\Marketing\CommercialPhaseMachine;
 use App\Services\Marketing\HumanHandoffAuthority;
+use App\Services\Marketing\MarketingAgentSwitch;
 use App\Services\Marketing\MarketingKnowledgeBaseService;
 use App\Services\Marketing\MobileAppCatalog;
 use App\Services\Marketing\OutboundContentGuard;
@@ -21,7 +22,9 @@ use App\Services\Marketing\StaffReviewAuthority;
 /**
  * Lo que ULTRON necesita saber para proponer una respuesta, y nada más.
  *
- * Es la mitad de solo lectura del contrato: aquí no se escribe una fila. Llama
+ * Es la mitad sin efectos de negocio del contrato: aquí no se crea una fila, y
+ * la única escritura es la constancia {@see recordOutcome()}, que el vigía
+ * necesita cuando el decide cierra un turno sin commit. Llama
  * al cerebro que ya existe —`SalesAgentOrchestratorService::analyze()`, que
  * está documentado como puro— y le añade el estado de la máquina comercial y
  * las listas blancas con las que ULTRON tiene que jugar.
@@ -81,6 +84,7 @@ class UltronDecideService
         private readonly MobileAppCatalog $appCatalog,
         private readonly MembershipFactsProvider $membership,
         private readonly HumanHandoffAuthority $handoff = new HumanHandoffAuthority,
+        private readonly MarketingAgentSwitch $agentSwitch = new MarketingAgentSwitch,
     ) {}
 
     /**
@@ -116,6 +120,22 @@ class UltronDecideService
         }
         if (! $conversation->ai_enabled) {
             return 'ai_disabled';
+        }
+
+        /*
+         * El agente pausado desde el CRM, contra el INICIO del turno (el
+         * entrante): basta con que estuviera pausado en algún momento desde que
+         * empezó. Un turno así no se confirma nunca, aunque su respuesta llegue
+         * con el agente ya reactivado: durante la pausa pudo contestar una
+         * persona. Por esta misma función pasan el decide (422), el commit
+         * (turno bloqueado, con fila: un reintento recibe 409) y el vigía.
+         *
+         * Va la ÚLTIMA a propósito: si sale este motivo, ningún otro aplica, y
+         * el vigía puede decidir solo con la pausa si fue ella la que cortó el
+         * turno o si el turno ya estaba muerto antes.
+         */
+        if ($this->agentSwitch->pausedSince($message->created_at)) {
+            return MarketingAgentSwitch::REASON;
         }
 
         return null;
@@ -165,6 +185,24 @@ class UltronDecideService
             ->max('id');
 
         return $ultimo !== null ? (int) $ultimo : null;
+    }
+
+    /**
+     * Deja constancia, en el evento del turno, de cómo lo cerró el decide
+     * cuando lo cerró sin commit: lo cortó la pausa del agente o lo relevó un
+     * mensaje más nuevo. El decide no crea filas, y sin esta marca el vigía no
+     * distinguiría un turno cerrado a propósito de uno que murió en n8n.
+     *
+     * Va en su propia columna, que solo escribe este método: el job que
+     * entrega el evento reescribe `status` y `last_error` al terminar, al
+     * fallar y al reintentar, y n8n le responde DESPUÉS del decide.
+     */
+    public function recordOutcome(MarketingMessage $message, string $outcome): void
+    {
+        MarketingAutomationEvent::query()
+            ->where('event_type', MarketingAutomationEvent::TYPE_MESSAGE_RECEIVED)
+            ->where('message_id', (int) $message->id)
+            ->update(['decide_outcome' => $outcome]);
     }
 
     /** Fase actual de la conversación, normalizada. */

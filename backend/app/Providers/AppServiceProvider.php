@@ -113,6 +113,7 @@ class AppServiceProvider extends ServiceProvider
 
         $this->limitadoresInternos();
         $this->limitadorDeClases();
+        $this->limitadorDelAgente();
 
         $this->guardWompiConfig();
         $this->guardFactusConfig();
@@ -330,6 +331,35 @@ class AppServiceProvider extends ServiceProvider
                     'code' => 'too_many_class_writes',
                 ], 429, $headers));
         });
+    }
+
+    /**
+     * EL INTERRUPTOR DEL AGENTE IA NO PUEDE QUEDAR DETRÁS DEL CUBO DE LA IP.
+     *
+     * Con el limitador anónimo (`throttle:10,1`) el PUT compartía cubo con todo
+     * lo que sale de la misma IP —el CRM entero y la app de los socios en el
+     * Wi-Fi del gimnasio—, y en pleno incidente pausar devolvía 429 a la
+     * primera. La clave es la credencial del admin, por la misma razón que en
+     * `class-writes`: el throttle corre antes que la autenticación.
+     */
+    private function limitadorDelAgente(): void
+    {
+        $credencial = function (\Illuminate\Http\Request $request): string {
+            $token = $request->bearerToken();
+
+            return $token ? 'admin:'.hash('sha256', $token) : 'ip:'.$request->ip();
+        };
+
+        RateLimiter::for('marketing-agent-write', fn (\Illuminate\Http\Request $request) => Limit::perMinute(10)
+            ->by('agent-write:'.$credencial($request))
+            ->response(fn ($request, array $headers) => response()->json([
+                'ok' => false,
+                'code' => 'too_many_agent_changes',
+                'message' => 'Demasiados cambios seguidos del agente IA. Espera un momento.',
+            ], 429, $headers)));
+
+        RateLimiter::for('marketing-agent-read', fn (\Illuminate\Http\Request $request) => Limit::perMinute(120)
+            ->by('agent-read:'.$credencial($request)));
     }
 
     /**

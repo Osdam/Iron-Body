@@ -20,6 +20,7 @@ class MarketingMessageDispatcher
     public function __construct(
         private readonly MetaAuthService $auth,
         private readonly WhatsappOutboxService $outbox,
+        private readonly MarketingAgentSwitch $agentSwitch = new MarketingAgentSwitch,
     ) {}
 
     /**
@@ -84,6 +85,18 @@ class MarketingMessageDispatcher
          */
         if ($this->phoneOptedOut($to, (int) $lead->id)) {
             return array_merge($base, ['reason' => 'do_not_contact_sibling']);
+        }
+
+        /*
+         * El agente pausado desde el CRM: lo que redacta la máquina no sale, y
+         * no deja fila ni mueve `last_outbound_at`, igual que el opt-out de
+         * arriba. Lo que escribe una persona y los avisos de pago sí salen
+         * ({@see MarketingAgentSwitch::holdsOutbound()}). Es la misma puerta
+         * para todo el que llega aquí: el commit de ULTRON, el cerebro local y
+         * los endpoints internos de envío.
+         */
+        if ($this->agentSwitch->holdsOutbound($senderType, $metadata)) {
+            return array_merge($base, ['reason' => MarketingAgentSwitch::REASON]);
         }
 
         // El recipiente normalizado usado para Meta queda en metadata (no se

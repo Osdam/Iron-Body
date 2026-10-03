@@ -20,11 +20,13 @@ use Tests\Support\UltronTurnEvents;
 use Tests\TestCase;
 
 /**
- * `/ai/decide` — la mitad de solo lectura del contrato con ULTRON.
+ * `/ai/decide` — la mitad sin efectos de negocio del contrato con ULTRON.
  *
  * Lo que se fija aquí, por orden de importancia:
  *
- *  1. Que NO escribe. Es la razón de que exista separado del commit.
+ *  1. Que NO escribe nada de negocio. Es la razón de que exista separado del
+ *     commit. Su única escritura, la constancia `decide_outcome` del evento
+ *     cuando cierra el turno sin commit, la fija MarketingAgentPauseTest.
  *  2. Que no entrega PII ni precios. Lo que no viaja no se filtra, y un modelo
  *     que nunca ve una cifra no puede inventársela.
  *  3. Que el último mensaje gana. Tres mensajes seguidos de la misma persona no

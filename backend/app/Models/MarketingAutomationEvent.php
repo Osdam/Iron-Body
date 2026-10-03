@@ -25,10 +25,19 @@ class MarketingAutomationEvent extends Model
 
     public const TYPE_MESSAGE_RECEIVED = 'marketing.message.received';
 
+    /**
+     * Cómo cerró el decide el turno cuando lo cerró sin commit (`decide_outcome`):
+     * lo cortó la pausa del agente o lo relevó un mensaje más nuevo. Solo lo
+     * escribe el decide; el job no lo toca. Lo lee el vigía de turnos.
+     */
+    public const OUTCOME_AGENT_PAUSED = 'agent_paused';
+
+    public const OUTCOME_SUPERSEDED = 'superseded';
+
     protected $fillable = [
         'event_type', 'lead_id', 'conversation_id', 'message_id',
         'payload_json', 'status', 'idempotency_key', 'attempts',
-        'last_error', 'correlation_id', 'processed_at',
+        'last_error', 'correlation_id', 'processed_at', 'decide_outcome',
     ];
 
     protected $casts = [

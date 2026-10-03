@@ -93,6 +93,7 @@ final class PermissionCatalog
     private const DISPLAY_DOMAIN = [
         'members.export' => 'exports',
         'payments.export' => 'exports',
+        'marketing.agent.manage' => 'marketing',
     ];
 
     /**
@@ -104,6 +105,7 @@ final class PermissionCatalog
     private const LABELS = [
         'members.export' => 'Miembros',
         'payments.export' => 'Pagos',
+        'marketing.agent.manage' => 'Pausar o reactivar el agente IA',
     ];
 
     /**
@@ -134,6 +136,7 @@ final class PermissionCatalog
         'users.manage' => 'Crear cuentas del CRM y asignarles rol.',
         'integrations.manage' => 'Conectar y desconectar WhatsApp Business.',
         'moderation.manage' => 'Sancionar, retirar contenido y resolver apelaciones.',
+        'marketing.agent.manage' => 'Pausar o reactivar las respuestas automáticas del agente IA para TODAS las conversaciones de WhatsApp. En pausa los mensajes se siguen recibiendo y guardando para atenderlos a mano. Queda auditado.',
     ];
 
     /**

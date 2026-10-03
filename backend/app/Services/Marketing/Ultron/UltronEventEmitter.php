@@ -6,6 +6,7 @@ use App\Jobs\SendUltronEventToN8n;
 use App\Models\MarketingAutomationEvent;
 use App\Models\MarketingConversation;
 use App\Models\MarketingMessage;
+use App\Services\Marketing\MarketingAgentSwitch;
 use App\Services\Observability\ChannelLog;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Context;
@@ -28,6 +29,7 @@ class UltronEventEmitter
     public function __construct(
         private readonly UltronAbortLatch $latch = new UltronAbortLatch,
         private readonly TurnPresence $presence = new TurnPresence,
+        private readonly MarketingAgentSwitch $agentSwitch = new MarketingAgentSwitch,
     ) {}
 
     /**
@@ -56,6 +58,16 @@ class UltronEventEmitter
          */
         if ($this->latch->engaged()) {
             return 'ultron_aborted';
+        }
+
+        /*
+         * La pausa del agente desde el CRM, de la misma clase que el freno: una
+         * decisión de operación. Va ANTES de crear el evento: n8n no se entera
+         * y tampoco sale el «visto / escribiendo…». El mensaje ya está guardado
+         * y lo atiende una persona.
+         */
+        if ($this->agentSwitch->pausedSince($message->created_at)) {
+            return MarketingAgentSwitch::REASON;
         }
 
         /*

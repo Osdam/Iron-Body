@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\MarketingAutomationEvent;
+use App\Services\Marketing\MarketingAgentSwitch;
 use App\Services\Observability\ChannelLog;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -45,7 +46,7 @@ class SendUltronEventToN8n implements ShouldQueue
         return 'ultron-event:'.$this->eventId;
     }
 
-    public function handle(): void
+    public function handle(MarketingAgentSwitch $agentSwitch): void
     {
         $event = MarketingAutomationEvent::find($this->eventId);
 
@@ -65,6 +66,26 @@ class SendUltronEventToN8n implements ShouldQueue
             $event->update([
                 'status' => MarketingAutomationEvent::STATUS_SKIPPED,
                 'last_error' => 'ultron deshabilitado o sin configuración',
+            ]);
+
+            return;
+        }
+
+        /*
+         * La pausa del agente, también justo antes de salir hacia n8n: un evento
+         * que ya estaba en la cola —o un reintento, o un `queue:retry` de IRON
+         * GUARD— no sale si el agente se pausó después de que naciera. Queda
+         * `skipped` con su motivo, y el vigía no lo cuenta como silencio.
+         */
+        if ($agentSwitch->pausedSince($event->created_at)) {
+            $event->update([
+                'status' => MarketingAutomationEvent::STATUS_SKIPPED,
+                'last_error' => MarketingAgentSwitch::REASON,
+            ]);
+
+            ChannelLog::info('ultron.event.skipped', [
+                'reason' => MarketingAgentSwitch::REASON,
+                'event_id' => (int) $event->id,
             ]);
 
             return;

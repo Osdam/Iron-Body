@@ -6,6 +6,7 @@ use App\Models\MarketingAiAction;
 use App\Models\MarketingConversation;
 use App\Models\MarketingFollowup;
 use App\Models\MarketingLead;
+use App\Models\MarketingMessage;
 use App\Models\Plan;
 
 /**
@@ -28,6 +29,7 @@ class SalesAgentOrchestratorService
         private readonly MarketingKnowledgeBaseService $knowledge,
         private readonly SalesConversationMemoryService $memory,
         private readonly SalesPaymentReadinessService $paymentReadiness,
+        private readonly MarketingAgentSwitch $agentSwitch = new MarketingAgentSwitch,
     ) {}
 
     /**
@@ -45,6 +47,17 @@ class SalesAgentOrchestratorService
         ?Plan $plan,
         bool $autoExecute,
     ): array {
+        // Con el agente pausado se analiza y queda constancia (decisión
+        // propuesta), pero nada se ejecuta solo: ni respuesta, ni enlace, ni
+        // herramientas. Cubre el router, AnalyzeInboundMessage y
+        // /ai/analyze-message, que toma auto_execute del request. Se juzga
+        // contra el INICIO del turno (el entrante), no contra el estado de
+        // ahora: un job atrasado de un mensaje que llegó en pausa no contesta
+        // al reactivar, porque esa conversación pudo atenderla una persona.
+        if ($autoExecute && $this->pausedForTurn($messageId)) {
+            $autoExecute = false;
+        }
+
         $decision = $this->analyze($lead, $body, [
             'lead' => $lead, 'channel' => $conversation->channel,
             'conversation' => $conversation, 'plan' => $plan,
@@ -697,5 +710,17 @@ class SalesAgentOrchestratorService
             SalesIntents::TEMP_WARM => 'warm',
             default => 'cold',
         };
+    }
+
+    /** ¿La pausa del agente alcanza a este turno? Sin entrante, el estado de ahora. */
+    private function pausedForTurn(?int $messageId): bool
+    {
+        $inicio = $messageId !== null
+            ? MarketingMessage::query()->whereKey($messageId)->first(['created_at'])?->created_at
+            : null;
+
+        return $inicio !== null
+            ? $this->agentSwitch->pausedSince($inicio)
+            : $this->agentSwitch->isPaused();
     }
 }

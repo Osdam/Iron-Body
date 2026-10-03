@@ -40,7 +40,10 @@ class WhatsappOutboxService
     /** Meta apagado: se preparó pero no salió. Sigue siendo un éxito de flujo. */
     public const STATUS_DRY_RUN = 'dry_run';
 
-    public function __construct(private readonly MetaMessagingService $messaging) {}
+    public function __construct(
+        private readonly MetaMessagingService $messaging,
+        private readonly MarketingAgentSwitch $agentSwitch = new MarketingAgentSwitch,
+    ) {}
 
     /**
      * Intenta entregar un mensaje. Idempotente: llamarlo dos veces sobre el
@@ -87,6 +90,50 @@ class WhatsappOutboxService
                 'sent' => false,
                 'provider_message_id' => null,
                 'reason' => 'human_takeover',
+                'retryable' => false,
+            ];
+        }
+
+        /*
+         * El agente pausado, también hacia atrás: un saliente de la máquina que
+         * esperaba su reintento, o que se redactó justo antes de pausar, no sale
+         * ni durante la pausa ni al reactivar —se juzga por cuándo NACIÓ—. Queda
+         * muerto y visible en el Inbox con su motivo. Va aquí porque este es el
+         * único punto por el que sale un mensaje, también desde retry-outbox.
+         */
+        if ($this->agentSwitch->holdsOutbound(
+            (string) $message->sender_type,
+            is_array($message->metadata) ? $message->metadata : null,
+            $message->created_at,
+        )) {
+            $message->forceFill([
+                'status' => self::STATUS_DEAD,
+                // Sin el código ni el fallo de Meta de un intento anterior: a
+                // este saliente no lo paró Meta sino la pausa. IRON GUARD titula
+                // sus incidentes con ese código, y el Inbox le enseñaría al
+                // asesor aquel fallo como si fuera el motivo.
+                'last_error_code' => null,
+                'last_error_message' => MarketingAgentSwitch::REASON,
+                'next_attempt_at' => null,
+                'metadata' => array_merge((array) $message->metadata, [
+                    'failure' => [
+                        'code' => MarketingAgentSwitch::REASON,
+                        'title' => 'No se envió: el agente IA estaba en pausa',
+                        'message' => 'Esta respuesta automática se canceló al pausar el agente IA. Si hace falta, contesta a mano.',
+                    ],
+                ]),
+            ])->save();
+
+            ChannelLog::info('outbox.cancelled', [
+                'reason' => MarketingAgentSwitch::REASON,
+                'message_id' => $message->id,
+                'conversation_id' => $message->conversation_id,
+            ]);
+
+            return [
+                'sent' => false,
+                'provider_message_id' => null,
+                'reason' => MarketingAgentSwitch::REASON,
                 'retryable' => false,
             ];
         }

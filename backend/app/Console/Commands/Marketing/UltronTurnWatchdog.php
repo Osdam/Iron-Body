@@ -9,6 +9,7 @@ use App\Models\MarketingConversation;
 use App\Models\MarketingMessage;
 use App\Models\UltronAbort;
 use App\Services\IronGuard\IncidentRecorder;
+use App\Services\Marketing\MarketingAgentSwitch;
 use App\Services\Marketing\Ultron\UltronAbortLatch;
 use App\Services\Marketing\Ultron\UltronDecideService;
 use App\Services\Marketing\Ultron\UltronSource;
@@ -55,6 +56,9 @@ class UltronTurnWatchdog extends Command
         {--json : salida en JSON}';
 
     protected $description = 'Encuentra entrantes atendibles que se quedaron sin desenlace y, en el canario, para ULTRON.';
+
+    /** El motivo con que el commit bloquea un turno relevado por un mensaje más nuevo. */
+    private const BLOQUEO_POR_RELEVO = 'superseded';
 
     private UltronDecideService $decide;
 
@@ -234,7 +238,7 @@ class UltronTurnWatchdog extends Command
             ->when($this->option('since'), fn ($q, $desde) => $q->where('created_at', '>=', $desde))
             ->orderByDesc('id')
             ->limit(max(1, (int) $this->option('limit')))
-            ->get(['id', 'message_id', 'conversation_id', 'status', 'created_at']);
+            ->get(['id', 'message_id', 'conversation_id', 'status', 'decide_outcome', 'created_at']);
 
         return $eventos
             ->filter(fn (MarketingAutomationEvent $e) => ! $this->tuvoDesenlace($e)
@@ -352,7 +356,94 @@ class UltronTurnWatchdog extends Command
             return true; // ya no hay a quién contestar
         }
 
-        return $this->decide->ineligibleReason($conversation, $message) !== null;
+        $motivo = $this->decide->ineligibleReason($conversation, $message);
+        if ($motivo !== MarketingAgentSwitch::REASON) {
+            return $motivo !== null;
+        }
+
+        // La pausa es el ÚNICO motivo (va la última en ineligibleReason): solo
+        // excusa el turno si consta que lo cortó ella.
+        return $this->laPausaLoCorto($e);
+    }
+
+    /**
+     * ¿Consta que fue la pausa del agente la que dejó este turno sin respuesta?
+     *
+     * Solo con la constancia que dejaron, en el momento, las puertas que
+     * cierran un turno; nunca por cercanía en el tiempo:
+     *  - lo cortó la pausa: el decide lo anotó en el evento
+     *    ({@see UltronDecideService::recordOutcome()}), o el commit dejó su
+     *    acción bloqueada por ella;
+     *  - lo relevó un mensaje más nuevo —el decide lo anotó, o el commit lo
+     *    bloqueó por relevo— y la pausa cortó un turno posterior de la misma
+     *    conversación: el relevado delegó su respuesta en ese turno, así que su
+     *    silencio también es de la pausa.
+     * Los demás cortes no llegan aquí: el emisor no crea evento, el job lo deja
+     * `skipped`, y el despachador y el outbox terminan en un desenlace.
+     *
+     * Una pausa no absuelve lo que ya estaba muerto: un turno que n8n aceptó y
+     * que no llegó ni al decide no tiene constancia de nada, y llega al
+     * incidente —y, en el canario, al freno— aunque alguien pausara y
+     * reactivara al notarlo. Y como no depende de cuándo fue la ÚLTIMA pausa,
+     * otro ciclo de pausar y reactivar no cambia lo que ya se absolvió.
+     */
+    private function laPausaLoCorto(MarketingAutomationEvent $e): bool
+    {
+        $mensaje = (int) $e->message_id;
+
+        if ($e->decide_outcome === MarketingAutomationEvent::OUTCOME_AGENT_PAUSED
+            || $this->accionCortadaPorLaPausa([$mensaje])) {
+            return true;
+        }
+
+        $relevado = $e->decide_outcome === MarketingAutomationEvent::OUTCOME_SUPERSEDED
+            || $this->accionesDe([$mensaje])->contains(
+                fn (MarketingAiAction $a) => data_get($a->metadata, 'blocked_reason') === self::BLOQUEO_POR_RELEVO
+            );
+        if (! $relevado) {
+            return false;
+        }
+
+        $posteriores = MarketingAutomationEvent::query()
+            ->where('event_type', MarketingAutomationEvent::TYPE_MESSAGE_RECEIVED)
+            ->where('conversation_id', (int) $e->conversation_id)
+            ->where('message_id', '>', $mensaje)
+            ->get(['message_id', 'status', 'last_error', 'decide_outcome']);
+
+        return $posteriores->contains(
+            fn (MarketingAutomationEvent $p) => $p->decide_outcome === MarketingAutomationEvent::OUTCOME_AGENT_PAUSED
+                || ($p->status === MarketingAutomationEvent::STATUS_SKIPPED && $p->last_error === MarketingAgentSwitch::REASON)
+        ) || $this->accionCortadaPorLaPausa($posteriores->pluck('message_id')->map(fn ($id) => (int) $id)->all());
+    }
+
+    /**
+     * ¿Alguna acción de estos entrantes la cortó la pausa? El commit la bloqueó
+     * por ella, o el despachador retuvo su envío.
+     *
+     * @param  list<int>  $mensajes
+     */
+    private function accionCortadaPorLaPausa(array $mensajes): bool
+    {
+        return $this->accionesDe($mensajes)->contains(
+            fn (MarketingAiAction $a) => data_get($a->metadata, 'blocked_reason') === MarketingAgentSwitch::REASON
+                || data_get($a->metadata, 'outbound.reason') === MarketingAgentSwitch::REASON
+        );
+    }
+
+    /**
+     * @param  list<int>  $mensajes
+     * @return Collection<int,MarketingAiAction>
+     */
+    private function accionesDe(array $mensajes): Collection
+    {
+        if ($mensajes === []) {
+            return collect();
+        }
+
+        return MarketingAiAction::query()
+            ->where('source_type', UltronSource::INBOUND_MESSAGE)
+            ->whereIn('source_event_id', $mensajes)
+            ->get(['metadata']);
     }
 
     /** @param  Collection<int,array<string,mixed>>  $huerfanos */

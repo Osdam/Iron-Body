@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\Admin\IronGuardController;
 use App\Http\Controllers\Api\Admin\MarketingAgentActionController;
+use App\Http\Controllers\Api\Admin\MarketingAgentController;
 use App\Http\Controllers\Api\Admin\MarketingAnalyticsController;
 use App\Http\Controllers\Api\Admin\MarketingAppointmentController;
 use App\Http\Controllers\Api\Admin\MarketingAttachmentController;
@@ -281,6 +282,20 @@ Route::middleware('throttle:120,1')
         Route::post('{id}/cancel', [MarketingAppointmentController::class, 'cancel']);
         Route::post('{id}/reschedule', [MarketingAppointmentController::class, 'reschedule']);
     });
+
+// ── El agente IA: activo o en pausa ──────────────────────────────────────────
+// Fuente de verdad en la base (MarketingAgentSwitch). Leer y escuchar piden
+// marketing.view; cambiarlo, marketing.agent.manage (ver AuthorizationMap).
+// Fuera del limitador anónimo `throttle:N,1`, cuya clave es la IP y comparte
+// cubo con todo lo que sale de la misma red (el login incluido): limitadores
+// con nombre por credencial del admin (AppServiceProvider::limitadorDelAgente).
+// El stream va sin throttle, como los demás canales SSE del CRM: reconecta solo
+// cada ~25 s y no puede gastar el cubo de nadie.
+Route::get('admin/marketing/agent', [MarketingAgentController::class, 'show'])
+    ->middleware('throttle:marketing-agent-read');
+Route::put('admin/marketing/agent', [MarketingAgentController::class, 'update'])
+    ->middleware('throttle:marketing-agent-write');
+Route::get('admin/marketing/agent/stream', [MarketingAgentController::class, 'stream']);
 
 // ── IRON GUARD — panel de incidentes del canal ────────────────────────────────
 // Protegido por el blindaje global de /api/admin/* y, además, restringido a

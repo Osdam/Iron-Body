@@ -159,6 +159,7 @@ final class AuthorizationMap
         'MarketingController' => 'marketing',
         'MarketingInboxController' => 'marketing',
         'MarketingAgentActionController' => 'marketing',
+        'MarketingAgentController' => 'marketing',
         'MarketingAppointmentController' => 'marketing',
         'MarketingAnalyticsController' => 'marketing',
         'MarketingAttachmentController' => 'marketing',
@@ -239,6 +240,14 @@ final class AuthorizationMap
          * no es de esta persona» dejaría la alerta sin quien la cierre.
          */
         'POST api/admin/marketing/inbox/payment-claims/{transaction}/accept' => 'payments.create',
+
+        /*
+         * Pausar o reactivar el agente IA es una decisión sobre TODO el negocio,
+         * no una tarea del Inbox: `marketing.manage` lo tiene cualquiera que
+         * conteste, y no basta. Leer el estado y escucharlo sí van con
+         * `marketing.view`, como el resto de Mercadeo.
+         */
+        'PUT api/admin/marketing/agent' => 'marketing.agent.manage',
 
         // Registrar un abono es COBRAR, no crear deuda: el verbo POST no
         // distingue las dos cosas y aquí sí importa. Quien está en el mostrador
