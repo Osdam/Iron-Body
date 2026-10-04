@@ -51,15 +51,27 @@ class CourtesyAuthority
      */
     public const SIN_HORARIO = 'courtesy_hours_unknown';
 
+    /**
+     * La hora que se iba a registrar sale de una mención que admite dos lecturas
+     * dentro del horario de ese día («a las 7»: 07:00 o 19:00). No se elige
+     * ninguna: se pregunta. Lleva las lecturas en `options`.
+     */
+    public const HORA_AMBIGUA = 'courtesy_time_ambiguous';
+
+    /** Lo que dura una visita de cortesía: una lectura que no cabe antes del cierre no es real. */
+    private const VISITA_MINUTOS = 60;
+
     private const DIAS = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
 
     /**
      * @param  string|null  $fecha  YYYY-MM-DD, en el calendario del gimnasio
      * @param  string|null  $hora  HH:MM, hora de Neiva
      * @param  array<string,array{0:string,1:string}>|string  $ventanas  del horario aprobado, o SOURCE_NOT_AVAILABLE
-     * @return array{ok:bool, reason:string, scheduled_at:?string, closes_at:?string, weekday:?string}
+     * @param  string|null  $texto  lo que escribió la persona: si la hora propuesta sale de una mención
+     *                              ambigua de ese texto, no se registra (ver {@see lecturasAmbiguas()})
+     * @return array{ok:bool, reason:string, scheduled_at:?string, closes_at:?string, weekday:?string, options?:array<int,string>}
      */
-    public static function decide(?string $fecha, ?string $hora, array|string $ventanas, ?Carbon $ahora = null): array
+    public static function decide(?string $fecha, ?string $hora, array|string $ventanas, ?Carbon $ahora = null, ?string $texto = null): array
     {
         $no = fn (string $motivo, ?string $cierra = null, ?string $dia = null) => [
             'ok' => false, 'reason' => $motivo, 'scheduled_at' => null, 'closes_at' => $cierra, 'weekday' => $dia,
@@ -135,6 +147,11 @@ class CourtesyAuthority
             return $no(self::FECHA_PASADA, (string) $hasta, $nombreDia);
         }
 
+        $lecturas = $texto !== null ? self::lecturasAmbiguas($texto, $fecha, $hora, $ventanas, $ahora) : null;
+        if ($lecturas !== null) {
+            return ['ok' => false, 'reason' => self::HORA_AMBIGUA, 'scheduled_at' => null, 'closes_at' => (string) $hasta, 'weekday' => $nombreDia, 'options' => $lecturas];
+        }
+
         return [
             'ok' => true,
             'reason' => self::OK,
@@ -142,6 +159,50 @@ class CourtesyAuthority
             'closes_at' => (string) $hasta,
             'weekday' => $nombreDia,
         ];
+    }
+
+    /**
+     * ¿Sale la hora propuesta de una mención AMBIGUA del texto? «a las 7» se lee
+     * 07:00 o 19:00: si las dos lecturas caben en el horario de ese día, la
+     * persona no dijo cuál y no se registra ninguna. «a las 7 pm», «7 de la
+     * mañana» o «a las 3» (las 03:00 están cerradas) no son ambiguas, y una hora
+     * que el texto no nombra («una hora después») no se juzga aquí. Sin hora
+     * propuesta, devuelve la primera mención ambigua del texto.
+     *
+     * @return array<int,string>|null las lecturas válidas (HH:MM, de la mañana a la noche), o null
+     */
+    public static function lecturasAmbiguas(?string $texto, ?string $fecha, ?string $hora, array|string $ventanas, ?Carbon $ahora = null): ?array
+    {
+        if ($texto === null || trim($texto) === '') {
+            return null;
+        }
+        $propuesta = self::minutosDe($hora);
+        $hhmm = $propuesta !== null ? sprintf('%02d:%02d', intdiv($propuesta, 60), $propuesta % 60) : null;
+        $ambiguas = null;
+        foreach (self::mencionesEn($texto, $ahora)['horas'] as $lecturas) {
+            // Una lectura es real si la visita ENTERA cabe antes del cierre: «a las
+            // 10» no es ambiguo con el gimnasio cerrando a las 22:00.
+            $validas = array_values(array_unique(array_filter($lecturas, function (string $l) use ($fecha, $ventanas, $ahora): bool {
+                $d = self::decide($fecha, $l, $ventanas, $ahora);
+
+                return $d['ok'] && self::minutosDe($l) + self::VISITA_MINUTOS <= (int) self::minutosDe($d['closes_at']);
+            })));
+            if ($hhmm !== null && ! in_array($hhmm, $validas, true)) {
+                continue;
+            }
+            if (count($validas) === 1 && $hhmm !== null) {
+                // Una mención inequívoca de esa misma hora decide: no se pregunta.
+                return null;
+            }
+            if (count($validas) >= 2) {
+                $ambiguas ??= $validas;
+            }
+        }
+        if ($ambiguas !== null) {
+            sort($ambiguas);
+        }
+
+        return $ambiguas;
     }
 
     /** Sólo se acepta una fecha ya resuelta: «mañana» lo traduce quien habla con la persona. */

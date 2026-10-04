@@ -1109,6 +1109,8 @@ class UltronCommitService
                         $decision['courtesy_date'] ?? null,
                         $decision['courtesy_time'] ?? null,
                         $this->gym->openingWindows(),
+                        null,
+                        (string) $message->body,
                     )['ok']
             );
 
@@ -1127,7 +1129,31 @@ class UltronCommitService
                 && $lead !== null
                 && $this->soloRecuerdaLaVisita($replyFinal, $this->courtesy->commitmentsForLead($lead));
 
-            if (! ($marcaAutorizada && $marcaEnElTurno) && ! $cortesiaRegistrada && ! $recuerdaVisitaViva) {
+            /*
+             * SI LO ÚNICO QUE SE AFIRMA ES UN CAMBIO DE LA VISITA, NO SE TUMBA EL
+             * TURNO: SE CUENTA LA VERDAD. «Cambio la visita para mañana a las 7»
+             * sin herramienta ejecutada es falso, pero el 422 dejaba a la persona
+             * con un texto genérico. Laravel lo reescribe tras las herramientas
+             * con el estado real de la fila y, si la hora era ambigua, pregunta
+             * ({@see sinConstanciaDeUnaCortesiaQueNoSeRegistro()}). Cualquier otro
+             * efecto durable sin autoridad (escalar, marcar) sigue cayendo aquí.
+             */
+            // Con la hora ambigua, la herramienta no va a registrar nada: cualquier
+            // constancia SOBRE LA VISITA («queda registrada tu solicitud de día de
+            // cortesía») va por la misma reescritura, que pregunta la hora.
+            $horaAmbigua = $cortesiaEnElTurno && ! $cancela && CourtesyAuthority::decide(
+                $decision['courtesy_date'] ?? null,
+                $decision['courtesy_time'] ?? null,
+                $this->gym->openingWindows(),
+                null,
+                (string) $message->body,
+            )['reason'] === CourtesyAuthority::HORA_AMBIGUA;
+            $soloLaVisita = $horaAmbigua
+                ? $this->promises->efectoDurableEn($this->sinCambiosDeVisita($replyFinal, true)) === null
+                : $this->promises->cambioDeVisita($replyFinal) !== null
+                    && $this->promises->efectoDurableEn($this->sinCambiosDeVisita($replyFinal)) === null;
+
+            if (! ($marcaAutorizada && $marcaEnElTurno) && ! $cortesiaRegistrada && ! $recuerdaVisitaViva && ! $soloLaVisita) {
                 ChannelLog::warning('ultron.commit.promised_effect_without_authority', [
                     'conversation_id' => (int) $conversation->id,
                     'message_id' => (int) $message->id,
@@ -1410,7 +1436,7 @@ class UltronCommitService
         $replyFinal = $this->sinNegarUnCobroDisponible($conversation, $lead, $plan, $replyFinal, $action);
         // Primero la constancia sin registro y después la confirmación: al revés, la
         // primera retiraba el acta que la segunda acababa de escribir con la fila del CRM.
-        $replyFinal = $this->sinConstanciaDeUnaCortesiaQueNoSeRegistro($conversation, $replyFinal, $action, $executed, $decision);
+        $replyFinal = $this->sinConstanciaDeUnaCortesiaQueNoSeRegistro($conversation, $message, $replyFinal, $action, $executed, $decision);
         $replyFinal = $this->sinConfirmarUnaCortesiaQueNadieConfirmo($conversation, $replyFinal, $action);
         // Y lo último de la cortesía: el día y la hora que se dicen son los de la fila guardada.
         $replyFinal = $this->conLaFechaDeLaCita($replyFinal, $action, $executed);
@@ -2326,6 +2352,8 @@ class UltronCommitService
             $decision['courtesy_date'] ?? null,
             $decision['courtesy_time'] ?? null,
             $this->gym->openingWindows(),
+            null,
+            (string) $message->body,
         );
 
         if (! $veredicto['ok']) {
@@ -2345,7 +2373,7 @@ class UltronCommitService
              * volver a pedirlo.
              */
             $fechaVale = in_array($veredicto['reason'], [
-                CourtesyAuthority::HORA_INVALIDA, CourtesyAuthority::FUERA_DE_HORARIO, CourtesyAuthority::SIN_HORARIO,
+                CourtesyAuthority::HORA_INVALIDA, CourtesyAuthority::FUERA_DE_HORARIO, CourtesyAuthority::SIN_HORARIO, CourtesyAuthority::HORA_AMBIGUA,
             ], true);
             $horaVale = in_array($veredicto['reason'], [
                 CourtesyAuthority::FECHA_INVALIDA, CourtesyAuthority::FECHA_PASADA, CourtesyAuthority::FECHA_LEJANA, CourtesyAuthority::DIA_CERRADO,
@@ -2361,6 +2389,7 @@ class UltronCommitService
                 'reason' => $veredicto['reason'],
                 'closes_at' => $veredicto['closes_at'],
                 'weekday' => $veredicto['weekday'],
+                'options' => $veredicto['options'] ?? null,
             ], fn ($v) => $v !== null);
         }
 
@@ -3048,6 +3077,97 @@ class UltronCommitService
     }
 
     /**
+     * Un turno que NO pidió la cortesía (o pidió cancelar y no había nada) y aun
+     * así cuenta un cambio de la visita: «cambio la visita», «te la cancelo»,
+     * «la moví al jueves». Se retiran esas frases; sale el estado real de la
+     * fila y la pregunta que toque: la de la hora, si la que nombra la persona
+     * es ambigua, o la de confirmar, si nombra un día y una hora sin dudas.
+     * Lo que se pregunta queda en recogida para el turno siguiente.
+     *
+     * @param  array<string,mixed>  $decision
+     * @param  array<string,mixed>|null  $cortesia
+     */
+    private function sinCambioDeVisitaQueNoSeHizo(
+        MarketingConversation $conversation,
+        MarketingMessage $message,
+        string $respuesta,
+        MarketingAiAction $action,
+        array $decision,
+        ?array $cortesia,
+    ): string {
+        $piezas = self::oracionesProtegidas($respuesta);
+        $quedan = array_values(array_filter($piezas, fn (string $p): bool => $this->promises->cambioDeVisita($p) === null));
+        if (count($quedan) === count($piezas)) {
+            return $respuesta;
+        }
+        $cancelaba = collect($piezas)->contains(fn (string $p): bool => preg_match('/\b(cancel|anul|elimin|borr)/u', (string) $this->promises->cambioDeVisita($p)) === 1);
+
+        $lead = $conversation->lead;
+        $estado = $lead !== null ? $this->courtesy->estadoDe($lead, $conversation) : null;
+        $texto = (string) $message->body;
+        $menciones = CourtesyAuthority::mencionesEn($texto);
+        $ventanas = $this->gym->openingWindows();
+        // El día de la pregunta: el que nombra la persona, el que propuso el modelo o el de su visita.
+        $fecha = ($menciones['fechas'][0] ?? null) ?? ($decision['courtesy_date'] ?? null)
+            ?? ($lead !== null ? optional($this->courtesy->openForLead($lead))->scheduled_at?->copy()->setTimezone(BusinessClock::TZ)->toDateString() : null);
+        $pregunta = null;
+        if ($menciones['horas'] !== [] && $fecha !== null) {
+            $lecturas = CourtesyAuthority::lecturasAmbiguas($texto, $fecha, null, $ventanas);
+            if ($lecturas !== null) {
+                $pregunta = CourtesyRequestService::preguntaDeHora($lecturas, $estado === null);
+                $this->memoryService->recordCourtesyCollecting($conversation->fresh(), ['date' => $fecha]);
+            } elseif (count($menciones['horas'][0]) >= 1) {
+                $hora = collect($menciones['horas'][0])->first(fn (string $l) => CourtesyAuthority::decide($fecha, $l, $ventanas)['ok']);
+                if ($hora !== null) {
+                    $d = Carbon::parse($fecha.' '.$hora, BusinessClock::TZ);
+                    $pregunta = '¿Quieres que la deje para el '.CourtesyRequestService::fechaDicha($d).' a las '.CourtesyRequestService::horaDicha($d).'?';
+                    $this->memoryService->recordCourtesyCollecting($conversation->fresh(), ['date' => $fecha, 'time' => $hora]);
+                }
+            }
+        }
+
+        ChannelLog::warning('ultron.courtesy.unexecuted_change_dropped', [
+            'conversation_id' => (int) $conversation->id,
+            'frases_retiradas' => count($piezas) - count($quedan),
+            'motivo' => $cortesia['reason'] ?? 'no_tool',
+        ]);
+        $meta = is_array($action->metadata) ? $action->metadata : [];
+        $meta['courtesy_unexecuted_change_dropped'] = count($piezas) - count($quedan);
+        $action->forceFill(['metadata' => $meta])->save();
+
+        $partes = array_values(array_filter([
+            trim(implode(' ', $quedan)),
+            $estado !== null ? rtrim($estado, '.').'.' : null,
+            $pregunta,
+        ], fn ($p) => $p !== null && $p !== ''));
+        $salida = trim(implode(' ', $partes));
+
+        if ($salida !== '') {
+            return $salida;
+        }
+
+        return ($decision['courtesy_action'] ?? null) === 'cancel' || $cancelaba
+            ? 'No encontré ninguna visita pendiente a tu nombre para cancelar.'
+            : 'Todavía no cambié nada de tu visita. ¿Qué día y a qué hora te queda bien?';
+    }
+
+    /**
+     * El texto sin las oraciones que cuentan un cambio de la visita y, si se
+     * pide, tampoco las que dan constancia de ella («queda registrada tu
+     * solicitud de día de cortesía»).
+     */
+    private function sinCambiosDeVisita(string $texto, bool $tambienConstancias = false): string
+    {
+        return trim(implode(' ', array_filter(
+            self::oracionesProtegidas($texto),
+            fn (string $p): bool => $this->promises->cambioDeVisita($p) === null
+                && ! ($tambienConstancias
+                    && $this->promises->efectoDurableEn($p) !== null
+                    && preg_match('/\b(visita|cita|cortesia)\b/u', SalesAgentDecisionSchema::normalize($p)) === 1),
+        )));
+    }
+
+    /**
      * LA FECHA Y LA HORA QUE SE DICEN SON LAS DE LA FILA.
      *
      * El borrador lo escribe el modelo ANTES de que la herramienta se ejecute,
@@ -3133,14 +3253,27 @@ class UltronCommitService
      */
     private function sinConstanciaDeUnaCortesiaQueNoSeRegistro(
         MarketingConversation $conversation,
+        MarketingMessage $message,
         string $respuesta,
         MarketingAiAction $action,
         array $ejecutadas,
         array $decision,
     ): string {
         $cortesia = collect($ejecutadas)->firstWhere('tool', SalesIntents::TOOL_COURTESY_REQUEST);
-        if ($cortesia === null || ($cortesia['status'] ?? null) === 'executed' || ($decision['courtesy_action'] ?? 'request') === 'cancel') {
+        if (($cortesia['status'] ?? null) === 'executed') {
             return $respuesta;
+        }
+        /*
+         * SIN HERRAMIENTA EJECUTADA, NINGUNA ACCIÓN SOBRE LA VISITA SE DA POR
+         * HECHA. Medido en el canario el 2026-10-04: «Perfecto, cambio la visita
+         * de cortesía para mañana a las 7:00 a. m.» en un turno que ni pidió la
+         * herramienta; la cita seguía a las 18:00. Lo que dice ULTRON tiene que
+         * ser lo que ejecutó Laravel y lo que enseña la agenda: la frase se
+         * retira y sale el estado real de la fila y, si la hora era ambigua,
+         * la pregunta.
+         */
+        if ($cortesia === null || ($decision['courtesy_action'] ?? 'request') === 'cancel') {
+            return $this->sinCambioDeVisitaQueNoSeHizo($conversation, $message, $respuesta, $action, $decision, $cortesia);
         }
 
         $constancia = '/\b(deje|dejo|dejamos|queda|quedo|esta|ya\s+esta)\s+(tu\s+|la\s+|su\s+)?(solicitud\s+|visita\s+|cita\s+)?(de\s+(visita|cortesia)\s+)?(solicitada|registrada|anotada|apuntada)\b'
@@ -3154,15 +3287,24 @@ class UltronCommitService
         $quedan = array_values(array_filter($piezas, function (string $p) use ($constancia, $negada): bool {
             $n = SalesAgentDecisionSchema::normalize($p);
 
-            return preg_match($constancia, $n) !== 1 || preg_match($negada, $n) === 1;
+            // Y tampoco una acción en presente o en pasado: «te registro la visita», «la muevo al jueves».
+            return (preg_match($constancia, $n) !== 1 || preg_match($negada, $n) === 1) && $this->promises->cambioDeVisita($p) === null;
         }));
         if (count($quedan) === count($piezas)) {
             return $respuesta;
         }
 
         $objetivo = $this->memoryService->load($conversation->fresh())->activeGoal();
-        $pregunta = CommercialTurnPolicy::courtesyReply(['active_goal' => $objetivo])
-            ?? 'Todavía no quedó registrada tu visita. ¿Qué día y a qué hora te queda bien?';
+        $lead = $conversation->lead;
+        $estado = $lead !== null ? $this->courtesy->estadoDe($lead, $conversation) : null;
+        $pregunta = ($cortesia['reason'] ?? null) === CourtesyAuthority::HORA_AMBIGUA && ! empty($cortesia['options'])
+            ? CourtesyRequestService::preguntaDeHora((array) $cortesia['options'], $estado === null)
+            : (CommercialTurnPolicy::courtesyReply(['active_goal' => $objetivo])
+                ?? 'Todavía no quedó registrada tu visita. ¿Qué día y a qué hora te queda bien?');
+        if ($estado !== null && ($cortesia['reason'] ?? null) === CourtesyAuthority::HORA_AMBIGUA) {
+            // El punto de «p. m.» cierra la oración: sin otro detrás.
+            $pregunta = rtrim($estado, '.').'. '.$pregunta;
+        }
 
         ChannelLog::warning('ultron.courtesy.unregistered_claim_dropped', [
             'conversation_id' => (int) $conversation->id,

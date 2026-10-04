@@ -217,7 +217,7 @@ class AgendaComercialUltronTest extends TestCase
         // El mismo turno otra vez: el commit ya se decidió y no vuelve a ejecutar nada.
         $this->commit($m, 'w.o2.retry', $token, $datos)->assertStatus(409);
         // Y otro mensaje pidiendo lo mismo mueve la misma solicitud, no abre otra.
-        $this->turno('si, mañana a las 6', 'w.o2.retry2', $datos)->assertOk();
+        $this->turno('si, mañana a las 6 de la tarde', 'w.o2.retry2', $datos)->assertOk();
 
         $this->assertSame(1, MarketingAppointment::query()->where('source', MarketingAppointment::SOURCE_ULTRON)->count());
     }
@@ -226,7 +226,7 @@ class AgendaComercialUltronTest extends TestCase
 
     public function test_4_mientras_siga_solicitada_ultron_no_la_da_por_confirmada(): void
     {
-        $this->turno('quiero ir mañana a las 6', 'w.o2.claim', [
+        $this->turno('quiero ir mañana a las 6 de la tarde', 'w.o2.claim', [
             'courtesy_date' => '2026-09-22', 'courtesy_time' => '18:00',
             'reply_draft' => 'Listo, tu visita quedó confirmada para mañana a las 6. ¡Te esperamos!',
         ])->assertOk();
@@ -350,8 +350,8 @@ class AgendaComercialUltronTest extends TestCase
             'type' => 'visit', 'title' => 'Visita', 'scheduled_at' => '2026-09-22T18:00:00-05:00', 'marketing_lead_id' => $this->lead->id,
         ], $this->sesion())->assertCreated()->json('data.id');
 
-        $this->turno('mejor el miércoles a las 6', 'w.o2.crm1', ['courtesy_date' => '2026-09-23', 'courtesy_time' => '18:00'])->assertOk();
-        $this->turno('no, mejor el jueves a las 6', 'w.o2.crm2', ['courtesy_date' => '2026-09-24', 'courtesy_time' => '18:00'])->assertOk();
+        $this->turno('mejor el miércoles a las 6 de la tarde', 'w.o2.crm1', ['courtesy_date' => '2026-09-23', 'courtesy_time' => '18:00'])->assertOk();
+        $this->turno('no, mejor el jueves a las 6 de la tarde', 'w.o2.crm2', ['courtesy_date' => '2026-09-24', 'courtesy_time' => '18:00'])->assertOk();
 
         $this->assertSame(1, $this->activas(), 'la visita del CRM movida por el chat dejó dos activas');
         $cita = MarketingAppointment::findOrFail($id);
@@ -388,12 +388,16 @@ class AgendaComercialUltronTest extends TestCase
         $cita = $this->pideLaVisita();
         $this->postJson(self::AGENDA."/{$cita->id}/confirm", [], $this->sesion())->assertOk();
 
+        // Lo que dice ULTRON = lo que ejecutó Laravel: la cancelación no sale, sale el estado real.
         $this->turno('ya no voy a poder ir, cancela por favor', 'w.o2.cancela', [
             'courtesy_action' => 'cancel', 'courtesy_date' => null, 'courtesy_time' => null,
             'reply_draft' => 'Sin problema, cancelé tu visita. Cuando quieras la retomamos.',
-        ])->assertStatus(422)->assertJsonPath('code', 'promised_effect_without_authority');
+        ])->assertOk();
 
         $this->assertSame(MarketingAppointment::STATUS_SCHEDULED, $cita->fresh()->status, 'la cita confirmada cambió sin que nadie del equipo la tocara');
+        $sale = $this->ultimoSaliente();
+        $this->assertStringNotContainsString('cancelé', $sale, 'se afirmó una cancelación que no ocurrió');
+        $this->assertStringContainsString('sigue confirmada para el martes 22 de septiembre a las 6:00 p. m.', $sale);
     }
 
     /** Un turno que solo redacta: no pide herramientas ni toca la cita. */
@@ -441,7 +445,7 @@ class AgendaComercialUltronTest extends TestCase
         $cita = $this->pideLaVisita();
         $this->patchJson(self::AGENDA."/{$cita->id}", ['type' => 'call'], $this->sesion())->assertOk();
 
-        $this->turno('quiero ir el miércoles a las 6', 'w.o2.tipo', ['courtesy_date' => '2026-09-23', 'courtesy_time' => '18:00'])->assertOk();
+        $this->turno('quiero ir el miércoles a las 6 de la tarde', 'w.o2.tipo', ['courtesy_date' => '2026-09-23', 'courtesy_time' => '18:00'])->assertOk();
 
         $this->assertSame(1, MarketingAppointment::query()->where('source', 'ultron')->where('type', 'visit')->where('status', 'requested')->count());
     }
@@ -485,7 +489,7 @@ class AgendaComercialUltronTest extends TestCase
         $s = $this->sesion();
         $primera = $this->pideLaVisita();
         $this->patchJson(self::AGENDA."/{$primera->id}", ['type' => 'call'], $s)->assertOk();
-        $this->turno('quiero ir el miércoles a las 6', 'w.o2.dup', ['courtesy_date' => '2026-09-23', 'courtesy_time' => '18:00'])->assertOk();
+        $this->turno('quiero ir el miércoles a las 6 de la tarde', 'w.o2.dup', ['courtesy_date' => '2026-09-23', 'courtesy_time' => '18:00'])->assertOk();
 
         $this->patchJson(self::AGENDA."/{$primera->id}", ['type' => 'visit'], $s)
             ->assertStatus(409)->assertJsonPath('code', 'appointment_duplicate_request');
@@ -626,7 +630,7 @@ class AgendaComercialUltronTest extends TestCase
             'marketing_lead_id' => $this->lead->id, 'marketing_conversation_id' => $this->conversation->id,
         ], $s)->assertCreated()->json('data.id');
 
-        $this->turno('perfecto, nos vemos mañana a las 6', 'w.o2.rep1', ['courtesy_date' => '2026-09-22', 'courtesy_time' => '18:00'])->assertOk();
+        $this->turno('perfecto, nos vemos mañana a las 6 de la tarde', 'w.o2.rep1', ['courtesy_date' => '2026-09-22', 'courtesy_time' => '18:00'])->assertOk();
         $this->assertSame(MarketingAppointment::STATUS_SCHEDULED, MarketingAppointment::findOrFail($id)->status, 'repetir la hora des-confirmó la visita');
         $this->postJson(self::AGENDA."/{$id}/cancel", [], $s)->assertOk();
 
@@ -640,7 +644,7 @@ class AgendaComercialUltronTest extends TestCase
         $s = $this->sesion();
         $cita = $this->pideLaVisita();
         $vista = $cita->scheduled_at->toIso8601String();
-        $this->turno('mejor el miércoles a las 6', 'w.o2.mueve', ['courtesy_date' => '2026-09-23', 'courtesy_time' => '18:00'])->assertOk();
+        $this->turno('mejor el miércoles a las 6 de la tarde', 'w.o2.mueve', ['courtesy_date' => '2026-09-23', 'courtesy_time' => '18:00'])->assertOk();
 
         $this->postJson(self::AGENDA."/{$cita->id}/confirm", ['expected_scheduled_at' => $vista], $s)
             ->assertStatus(409)->assertJsonPath('code', 'appointment_changed');
@@ -660,7 +664,7 @@ class AgendaComercialUltronTest extends TestCase
         $s = $this->sesion();
         $cita = $this->pideLaVisita();
         $vista = $cita->scheduled_at->toIso8601String();
-        $this->turno('mejor el miércoles a las 6', 'w.o2.mueve2', ['courtesy_date' => '2026-09-23', 'courtesy_time' => '18:00'])->assertOk();
+        $this->turno('mejor el miércoles a las 6 de la tarde', 'w.o2.mueve2', ['courtesy_date' => '2026-09-23', 'courtesy_time' => '18:00'])->assertOk();
         $pedida = $cita->fresh()->scheduled_at->toIso8601String();
 
         $this->postJson(self::AGENDA."/{$cita->id}/reschedule", ['scheduled_at' => '2026-09-24T09:00:00-05:00', 'expected_scheduled_at' => $vista], $s)
@@ -689,7 +693,7 @@ class AgendaComercialUltronTest extends TestCase
             ->assertStatus(422)->assertJsonPath('code', 'expected_scheduled_at_required');
 
         // ULTRON la mueve; el formulario viejo, con su fecha y la que vio, no la devuelve ni la confirma.
-        $this->turno('mejor el miércoles a las 6', 'w.o2.mueve3', ['courtesy_date' => '2026-09-23', 'courtesy_time' => '18:00'])->assertOk();
+        $this->turno('mejor el miércoles a las 6 de la tarde', 'w.o2.mueve3', ['courtesy_date' => '2026-09-23', 'courtesy_time' => '18:00'])->assertOk();
         $pedida = $cita->fresh()->scheduled_at->toIso8601String();
         $this->patchJson(self::AGENDA."/{$cita->id}", ['scheduled_at' => $vista, 'status' => 'scheduled', 'expected_scheduled_at' => $vista], $s)
             ->assertStatus(409)->assertJsonPath('code', 'appointment_changed');
@@ -753,7 +757,7 @@ class AgendaComercialUltronTest extends TestCase
     /** Medido en el canario (2026-10-04): la fila a las 18:00 y la respuesta «a las 6:00 a. m.». Sale la hora de la fila. */
     public function test_29_registrada_a_las_18_ultron_dice_6_pm_aunque_el_borrador_diga_6_am(): void
     {
-        [$sale, $fila] = $this->trasElTurno('quiero ir mañana a las 6', 'w.o2.h1', [
+        [$sale, $fila] = $this->trasElTurno('quiero ir mañana a las 6 de la tarde', 'w.o2.h1', [
             'courtesy_date' => '2026-09-22', 'courtesy_time' => '18:00',
             'reply_draft' => 'Perfecto, te registro la visita de cortesía para mañana a las 6:00 a. m.',
         ]);
@@ -778,7 +782,7 @@ class AgendaComercialUltronTest extends TestCase
     /** Si el borrador ya dice la verdad —con la hora exacta o con un «a las 6» que admite las 18:00—, sale intacto. */
     public function test_29c_un_borrador_que_casa_con_la_fila_sale_intacto(): void
     {
-        [$sale] = $this->trasElTurno('quiero ir mañana a las 6', 'w.o2.h3', [
+        [$sale] = $this->trasElTurno('quiero ir mañana a las 6 de la tarde', 'w.o2.h3', [
             'courtesy_date' => '2026-09-22', 'courtesy_time' => '18:00',
             'reply_draft' => 'Listo, te registro la visita de cortesía para mañana a las 6:00 p. m. Abrimos de lunes a viernes de 5:00 a. m. a 10:00 p. m.',
         ]);
@@ -788,7 +792,7 @@ class AgendaComercialUltronTest extends TestCase
 
         MarketingAppointment::query()->delete();
         $this->conversation = MarketingConversation::create(['lead_id' => $this->lead->id, 'channel' => 'whatsapp', 'status' => 'open', 'ai_enabled' => true, 'human_takeover' => false, 'commercial_phase' => P::DISCOVERY]);
-        [$sale2] = $this->trasElTurno('quiero ir mañana a las 6', 'w.o2.h3b', [
+        [$sale2] = $this->trasElTurno('quiero ir mañana a las 6 de la tarde', 'w.o2.h3b', [
             'courtesy_date' => '2026-09-22', 'courtesy_time' => '18:00',
             'reply_draft' => 'Listo, te registro la visita de cortesía para mañana a las 6.',
         ]);
@@ -798,7 +802,7 @@ class AgendaComercialUltronTest extends TestCase
 
     public function test_29d_un_dia_que_no_es_el_de_la_fila_tampoco_sale(): void
     {
-        [$sale] = $this->trasElTurno('quiero ir mañana a las 6', 'w.o2.h4', [
+        [$sale] = $this->trasElTurno('quiero ir mañana a las 6 de la tarde', 'w.o2.h4', [
             'courtesy_date' => '2026-09-22', 'courtesy_time' => '18:00',
             'reply_draft' => 'Perfecto, te registro la visita de cortesía para el miércoles a las 6:00 p. m.',
         ]);
@@ -810,7 +814,7 @@ class AgendaComercialUltronTest extends TestCase
     public function test_29e_al_reprogramar_sale_el_dia_y_la_hora_nuevos_de_la_fila(): void
     {
         $this->pideLaVisita();
-        [$sale, $fila] = $this->trasElTurno('mejor el miércoles a las 7', 'w.o2.h5', [
+        [$sale, $fila] = $this->trasElTurno('mejor el miércoles a las 7 de la noche', 'w.o2.h5', [
             'courtesy_date' => '2026-09-23', 'courtesy_time' => '19:00',
             'reply_draft' => 'Listo, moví tu visita de cortesía para el jueves a las 7:00 p. m.',
         ]);
@@ -834,6 +838,148 @@ class AgendaComercialUltronTest extends TestCase
         $this->assertStringContainsString('cancelé tu solicitud de visita para el martes 22 de septiembre a las 6:00 p. m.', $sale);
     }
 
+    // ── Lo que dice ULTRON = lo que ejecutó Laravel = lo que enseña la agenda ─
+
+    private function horaLocal(MarketingAppointment $cita): string
+    {
+        return $cita->fresh()->scheduled_at->copy()->setTimezone('America/Bogota')->format('Y-m-d H:i');
+    }
+
+    /**
+     * Medido en el canario (2026-10-04): la visita a las 18:00, «Mejor mañana a
+     * las 7», el modelo NO pidió la herramienta y escribió «cambio la visita…
+     * 7:00 a. m.». No se mueve, no se afirma, se dice el estado real y se pregunta.
+     */
+    public function test_31_sin_herramienta_no_se_afirma_el_cambio_y_se_pregunta_la_hora(): void
+    {
+        $cita = $this->pideLaVisita();
+        $version = MarketingAgendaVersion::current();
+
+        $this->turno('Mejor mañana a las 7', 'w.o2.amb1', [
+            'tools_requested' => [], 'courtesy_action' => null, 'courtesy_date' => null, 'courtesy_time' => null,
+            'reply_draft' => 'Perfecto, cambio la visita de cortesía para mañana a las 7:00 a. m. para que puedas venir a conocer el gimnasio.',
+        ])->assertOk();
+
+        $sale = $this->ultimoSaliente();
+        $this->assertStringNotContainsString('cambio la visita', $sale, 'afirmó un cambio que nadie hizo');
+        $this->assertStringContainsString('sigue registrada para el martes 22 de septiembre a las 6:00 p. m.', $sale);
+        $this->assertStringContainsString('¿te refieres a las 7:00 a. m. o a las 7:00 p. m.?', $sale);
+        $this->assertStringNotContainsString('p. m..', $sale);
+        $this->assertSame('2026-09-22 18:00', $this->horaLocal($cita));
+        $this->assertSame(MarketingAppointment::STATUS_REQUESTED, $cita->fresh()->status);
+        $this->assertSame($version, MarketingAgendaVersion::current(), 'la agenda avisó un cambio que no hubo');
+        $this->assertSame(['kind' => 'courtesy_request', 'status' => 'collecting', 'date' => '2026-09-22'], [
+            'kind' => data_get($this->conversation->fresh()->memory, 'active_goal.kind'),
+            'status' => data_get($this->conversation->fresh()->memory, 'active_goal.status'),
+            'date' => data_get($this->conversation->fresh()->memory, 'active_goal.data.date'),
+        ], 'el día no quedó en recogida para el turno siguiente');
+    }
+
+    /** El modelo SÍ pide la herramienta, pero con una hora ambigua: no se registra nada, se pregunta. */
+    public function test_31b_con_herramienta_y_hora_ambigua_no_se_mueve_y_se_pregunta(): void
+    {
+        $cita = $this->pideLaVisita();
+
+        $this->turno('Mejor mañana a las 7', 'w.o2.amb2', [
+            'courtesy_date' => '2026-09-22', 'courtesy_time' => '07:00',
+            'reply_draft' => 'Listo, te cambio la visita para mañana a las 7:00 a. m.',
+        ])->assertOk();
+
+        $sale = $this->ultimoSaliente();
+        $this->assertStringNotContainsString('te cambio la visita', $sale);
+        $this->assertStringContainsString('sigue registrada para el martes 22 de septiembre a las 6:00 p. m.', $sale);
+        $this->assertStringContainsString('¿te refieres a las 7:00 a. m. o a las 7:00 p. m.?', $sale);
+        $this->assertSame('2026-09-22 18:00', $this->horaLocal($cita));
+        $this->assertSame(1, $this->activas());
+    }
+
+    /** Aclarada la hora («7 p. m.»), la MISMA cita pasa a las 19:00 y ULTRON dice exactamente «7:00 p. m.». */
+    public function test_31c_aclarada_la_hora_se_mueve_la_misma_cita_y_se_dice_7_pm(): void
+    {
+        $cita = $this->pideLaVisita();
+        $this->turno('Mejor mañana a las 7', 'w.o2.amb3', [
+            'tools_requested' => [], 'courtesy_action' => null, 'courtesy_date' => null, 'courtesy_time' => null,
+            'reply_draft' => 'Perfecto, cambio la visita para mañana a las 7:00 a. m.',
+        ])->assertOk();
+        $version = MarketingAgendaVersion::current();
+
+        // El día no viene en este mensaje: sale del que quedó en recogida.
+        $this->turno('7 p. m.', 'w.o2.amb4', [
+            'courtesy_date' => null, 'courtesy_time' => '19:00',
+            'reply_draft' => 'Listo, tu visita de cortesía quedó solicitada para mañana a las 7:00 p. m.; el equipo la confirma.',
+        ])->assertOk();
+
+        $sale = $this->ultimoSaliente();
+        $this->assertSame('2026-09-22 19:00', $this->horaLocal($cita), 'no se movió la misma cita');
+        $this->assertSame(MarketingAppointment::STATUS_REQUESTED, $cita->fresh()->status);
+        $this->assertSame(1, $this->activas(), 'quedó una segunda cita');
+        $this->assertStringContainsString('7:00 p. m.', $sale);
+        $this->assertStringNotContainsString('a. m.', $sale);
+        $this->assertGreaterThan($version, MarketingAgendaVersion::current(), 'la agenda no se enteró del cambio');
+    }
+
+    /** «mañana a las 7 pm» no es ambiguo: se registra a las 19:00. «de la mañana», a las 07:00. */
+    public function test_31d_una_hora_sin_dudas_se_registra_tal_cual(): void
+    {
+        $this->turno('quiero ir mañana a las 7 pm', 'w.o2.amb5', [
+            'courtesy_date' => '2026-09-22', 'courtesy_time' => '19:00',
+            'reply_draft' => 'Listo, dejé solicitada tu visita para mañana a las 7:00 p. m.; el equipo la confirma.',
+        ])->assertOk();
+        $cita = MarketingAppointment::query()->where('marketing_lead_id', $this->lead->id)->sole();
+        $this->assertSame('2026-09-22 19:00', $this->horaLocal($cita));
+        $this->assertStringContainsString('7:00 p. m.', $this->ultimoSaliente());
+    }
+
+    /** Una solicitud NUEVA con hora ambigua («mañana a las 6») tampoco se registra: se pregunta. */
+    public function test_31e_una_solicitud_nueva_con_hora_ambigua_se_pregunta(): void
+    {
+        $this->turno('Quiero ir mañana a las 6', 'w.o2.amb6', [
+            'courtesy_date' => '2026-09-22', 'courtesy_time' => '18:00',
+            'reply_draft' => 'Perfecto, te registro la visita de cortesía para mañana a las 6:00 a. m.',
+        ])->assertOk();
+
+        $sale = $this->ultimoSaliente();
+        $this->assertSame(0, MarketingAppointment::count(), 'se registró una hora que la persona no aclaró');
+        $this->assertStringNotContainsString('te registro la visita', $sale);
+        $this->assertStringContainsString('¿te refieres a las 6:00 a. m. o a las 6:00 p. m.?', $sale);
+    }
+
+    /** Con la hora ambigua, una constancia de ESTADO («queda registrada tu solicitud…») tampoco tumba el turno: se pregunta. */
+    public function test_31h_una_constancia_con_hora_ambigua_se_reescribe_y_pregunta(): void
+    {
+        $this->turno('Quiero ir mañana a las 6', 'w.o2.amb9', [
+            'courtesy_date' => '2026-09-22', 'courtesy_time' => '18:00',
+            'reply_draft' => 'Listo, queda registrada tu solicitud de día de cortesía. El equipo la revisará.',
+        ])->assertOk();
+
+        $sale = $this->ultimoSaliente();
+        $this->assertSame(0, MarketingAppointment::count());
+        $this->assertStringNotContainsString('queda registrada', $sale);
+        $this->assertStringContainsString('¿te refieres a las 6:00 a. m. o a las 6:00 p. m.?', $sale);
+    }
+
+    /** «Te la cancelo» sin nada que cancelar: no se afirma, se dice la verdad. */
+    public function test_31f_cancelar_sin_nada_que_cancelar_no_se_afirma(): void
+    {
+        $this->turno('cancela mi visita', 'w.o2.amb7', [
+            'courtesy_action' => 'cancel', 'courtesy_date' => null, 'courtesy_time' => null,
+            'reply_draft' => 'Listo, te la cancelo.',
+        ])->assertOk();
+        $sale = $this->ultimoSaliente();
+        $this->assertStringNotContainsString('cancelo', $sale);
+        $this->assertStringContainsString('no encontré ninguna visita pendiente', $sale);
+    }
+
+    /** Si además promete OTRO efecto sin autoridad («lo dejo escalado»), el turno sigue cayendo en 422. */
+    public function test_31g_otro_efecto_sin_autoridad_sigue_cayendo(): void
+    {
+        $this->pideLaVisita();
+        $this->turno('Mejor mañana a las 7', 'w.o2.amb8', [
+            'tools_requested' => [], 'courtesy_action' => null, 'courtesy_date' => null, 'courtesy_time' => null,
+            'reply_draft' => 'Cambio la visita para mañana a las 7. Lo dejo escalado al equipo.',
+        ])->assertStatus(422)->assertJsonPath('code', 'promised_effect_without_authority');
+    }
+
     /** Una visita heredada en estado «reprogramada» está en firme: ULTRON la mueve, no abre otra encima. */
     public function test_26_una_visita_heredada_reprogramada_cuenta_como_confirmada(): void
     {
@@ -841,7 +987,7 @@ class AgendaComercialUltronTest extends TestCase
             'marketing_lead_id' => $this->lead->id, 'marketing_conversation_id' => $this->conversation->id,
             'type' => 'visit', 'status' => MarketingAppointment::STATUS_RESCHEDULED, 'title' => 'Visita', 'scheduled_at' => '2026-09-22 23:00:00',
         ]);
-        $this->turno('mejor el miércoles a las 6', 'w.o2.resch', ['courtesy_date' => '2026-09-23', 'courtesy_time' => '18:00'])->assertOk();
+        $this->turno('mejor el miércoles a las 6 de la tarde', 'w.o2.resch', ['courtesy_date' => '2026-09-23', 'courtesy_time' => '18:00'])->assertOk();
 
         $this->assertSame(1, $this->activas(), 'abrió otra solicitud encima de la visita reprogramada');
         $this->assertSame(MarketingAppointment::STATUS_REQUESTED, $vieja->fresh()->status);
@@ -896,7 +1042,7 @@ class AgendaComercialUltronTest extends TestCase
     {
         $this->pausar();
 
-        $this->turno('quiero ir mañana a las 6', 'w.o2.pausa', ['courtesy_date' => '2026-09-22', 'courtesy_time' => '18:00']);
+        $this->turno('quiero ir mañana a las 6 de la tarde', 'w.o2.pausa', ['courtesy_date' => '2026-09-22', 'courtesy_time' => '18:00']);
 
         $this->assertSame(1, MarketingMessage::query()->where('meta_message_id', 'w.o2.pausa')->count(), 'el mensaje tiene que quedar guardado');
         $this->assertSame(0, MarketingAppointment::count(), 'con el agente pausado nació una cita automática');
@@ -912,7 +1058,7 @@ class AgendaComercialUltronTest extends TestCase
     {
         MarketingAiAction::created(fn () => $this->pausar());
 
-        $this->turno('quiero ir mañana a las 6', 'w.o2.mitad', ['courtesy_date' => '2026-09-22', 'courtesy_time' => '18:00']);
+        $this->turno('quiero ir mañana a las 6 de la tarde', 'w.o2.mitad', ['courtesy_date' => '2026-09-22', 'courtesy_time' => '18:00']);
 
         $this->assertSame(0, MarketingAppointment::count(), 'la pausa a mitad del commit dejó una cita automática');
     }
@@ -999,7 +1145,7 @@ class AgendaComercialUltronTest extends TestCase
         // Confirmada por una sesión mientras ULTRON trae otro día: la misma cita, reabierta, una sola viva.
         $nueva = $this->pideLaVisita('w.o2.c2');
         $this->postJson(self::AGENDA."/{$nueva->id}/confirm", [], $a)->assertOk();
-        $this->turno('mejor el miércoles a las 6', 'w.o2.c3', ['courtesy_date' => '2026-09-23', 'courtesy_time' => '18:00'])->assertOk();
+        $this->turno('mejor el miércoles a las 6 de la tarde', 'w.o2.c3', ['courtesy_date' => '2026-09-23', 'courtesy_time' => '18:00'])->assertOk();
         $this->assertSame(1, $this->activas());
         $this->assertSame(MarketingAppointment::STATUS_REQUESTED, $nueva->fresh()->status);
 

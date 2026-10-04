@@ -956,9 +956,11 @@ class AsesorSeniorTest extends TestCase
     public function test_27_decir_que_se_cancelo_sin_haber_cancelado_nada_no_sale(): void
     {
         ['message' => $m] = $this->decide('cancela mi visita', 'w.as.27a');
-        $r = $this->commitCrudo($m, ['intent' => SalesIntents::GENERAL_INFO, 'reply_draft' => 'Listo, cancelé tu visita del sábado.']);
-        $r->assertStatus(422);
-        $this->assertSame('promised_effect_without_authority', $r->json('code'));
+        // Lo que dice ULTRON = lo que ejecutó Laravel: no sale la cancelación, sale la verdad.
+        $this->commitCrudo($m, ['intent' => SalesIntents::GENERAL_INFO, 'reply_draft' => 'Listo, cancelé tu visita del sábado.'])->assertOk();
+        $t = mb_strtolower($this->ultimo());
+        $this->assertStringNotContainsString('cancelé', $t);
+        $this->assertStringContainsString('no encontré ninguna visita pendiente', $t);
     }
 
     /** En modo memoria, decir «confirmada» de una visita que sólo está SOLICITADA no sale: sale el estado real. */
@@ -1220,9 +1222,10 @@ class AsesorSeniorTest extends TestCase
             'scheduled_at' => Carbon::parse('2026-09-26 10:00', 'America/Bogota')->setTimezone('UTC'), 'status' => MarketingAppointment::STATUS_SCHEDULED,
         ]);
         ['message' => $m] = $this->decide('cancela mi visita del sábado', 'w.as.38a');
-        $r = $this->commitCrudo($m, ['reply_draft' => 'Sin problema, cancelé tu visita del sábado, ¿algo más?']);
-        $r->assertStatus(422);
-        $this->assertSame('promised_effect_without_authority', $r->json('code'));
+        $this->commitCrudo($m, ['reply_draft' => 'Sin problema, cancelé tu visita del sábado, ¿algo más?'])->assertOk();
+        $t = mb_strtolower($this->ultimo());
+        $this->assertStringNotContainsString('cancelé', $t, 'se afirmó una cancelación que no ocurrió');
+        $this->assertStringContainsString('sigue confirmada para el sábado 26 de septiembre a las 10:00 a. m.', $t);
 
         ['message' => $m2] = $this->decide('cancela mi visita del sábado', 'w.as.38b');
         $this->commit($m2, ['reply_draft' => 'Tu visita del sábado ya la confirmó el equipo. ¿Quieres que la cancele?']);

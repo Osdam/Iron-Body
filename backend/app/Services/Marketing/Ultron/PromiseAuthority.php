@@ -144,10 +144,21 @@ final class PromiseAuthority
         ['/(?<v>\b(acabo|acabamos|acabe)\s+de\s+(cancelar|anular|mover|cambiar|reagendar|reprogramar|eliminar|borrar))\s+(tu|la|su)\s+(visita|cita|cortesia|solicitud)\b/u', true],
         ['/(?<v>\b(acabo|acabamos|acabe)\s+de\s+(cancelar|anular|mover|cambiar|reagendar|reprogramar|eliminar|borrar))(la|lo)\b/u', false],
         ['/\b(la|lo)\s+(?<v>(acabo|acabamos|acabe)\s+de\s+(cancelar|anular|mover|cambiar|reagendar|reprogramar|eliminar|borrar))\b/u', false],
+        /*
+         * EN PRESENTE TAMBIÉN ES UN HECHO. «Perfecto, cambio la visita para
+         * mañana a las 7», «te registro la visita de cortesía»: medido en el
+         * canario el 2026-10-04, con la herramienta sin ejecutar y la cita sin
+         * tocar. El presente de primera persona afirma lo que se está haciendo
+         * en este turno; ofrecido («si quieres, la cambio»), preguntado o negado
+         * no afirma nada, igual que las demás formas.
+         */
+        ['/(?<!que )(?<!que te )(?<!que le )\b(te\s+)?(?<v>cambio|muevo|corro|reagendo|reprogramo|cancelo|anulo|elimino|borro|registro|anoto|apunto)\s+(tu|la|su)\s+(visita|cita|cortesia|solicitud)\b/u', true],
+        ['/(?<!que )(?<!que te )(?<!que le )(?<!que se )(?<!cuando )(?<!apenas )\b(te\s+)?(la|lo)\s+(?<v>cambio|muevo|corro|paso|reagendo|reprogramo|registro|anoto)\s+(para|al|a|hasta|el)\s+(el |la |las |los )?(manana|pasado|hoy|lunes|martes|miercoles|jueves|viernes|sabado|domingo|proxim\w*|otr[oa]|semana|\d)/u', false],
+        ['/(?<!que )(?<!que te )(?<!que le )(?<!que se )(?<!cuando )(?<!apenas )\b(te\s+)?(la|lo)\s+(?<v>cancelo|anulo|elimino|borro)\b/u', false],
     ];
 
     /** En la primera persona del plural el presente y el pretérito son iguales: «la cancelamos» puede ser un hecho o una oferta. */
-    private const AMBIGUAS = '/\b(cancelamos|anulamos|cambiamos|pasamos|reagendamos|reprogramamos|eliminamos|borramos|dejamos)\b/u';
+    private const AMBIGUAS = '/\b(cancelamos|anulamos|cambiamos|pasamos|reagendamos|reprogramamos|eliminamos|borramos|dejamos|cambio|muevo|corro|paso|reagendo|reprogramo|cancelo|anulo|elimino|borro|registro|anoto|apunto)\b/u';
 
     /**
      * La negación PEGADA al cambio, dentro de su cláusula: «no la cancelé»,
@@ -306,6 +317,18 @@ final class PromiseAuthority
         }
 
         return $this->primeraCitaNoNegada($t, [self::TRASLADO_AL_EQUIPO]) ?? $this->cambioDeVisitaEn($t);
+    }
+
+    /**
+     * El cambio o el registro DE LA VISITA que el texto da por hecho (en
+     * pasado o en presente), o null. Es la parte del efecto durable que solo
+     * puede volver verdadera la herramienta de cortesía.
+     */
+    public function cambioDeVisita(?string $texto): ?string
+    {
+        $t = $this->normalizar((string) $texto);
+
+        return $t === '' ? null : $this->cambioDeVisitaEn($t);
     }
 
     /**

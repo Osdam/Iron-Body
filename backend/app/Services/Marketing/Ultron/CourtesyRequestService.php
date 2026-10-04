@@ -437,6 +437,39 @@ class CourtesyRequestService
         };
     }
 
+    /**
+     * Cómo está la visita de esta persona AHORA, sin afirmar ninguna acción:
+     * lo que se dice cuando el borrador contaba un cambio que no se hizo.
+     */
+    public function estadoDe(MarketingLead $lead, MarketingConversation $conversation): ?string
+    {
+        $cita = $this->openFor($conversation) ?? $this->openForLead($lead) ?? $this->confirmedVisitsFor($lead)->first();
+        if ($cita === null || $cita->scheduled_at === null) {
+            return null;
+        }
+        $d = Carbon::parse($cita->scheduled_at)->setTimezone(BusinessClock::TZ);
+        $cuando = 'el '.self::fechaDicha($d).' a las '.self::horaDicha($d);
+
+        return $cita->status === MarketingAppointment::STATUS_REQUESTED
+            ? 'Tu solicitud de visita sigue registrada para '.$cuando
+            : 'Tu visita sigue confirmada para '.$cuando;
+    }
+
+    /**
+     * «¿Te refieres a las 7:00 a. m. o a las 7:00 p. m.?»: las lecturas de una
+     * hora ambigua, como pregunta. Sin nada delante que cuente algo (ninguna
+     * visita viva que nombrar), va con su contexto: una pregunta sola no le
+     * dice nada a quien está pidiendo la visita.
+     */
+    public static function preguntaDeHora(array $lecturas, bool $conContexto = false): string
+    {
+        $dichas = implode(' o ', array_map(fn (string $l) => 'a las '.self::horaDicha(Carbon::parse('2000-01-01 '.$l, BusinessClock::TZ)), $lecturas));
+
+        return $conContexto
+            ? 'Perfecto. Para tu visita al gimnasio, ya tengo el día y solo me falta confirmar la hora: ¿te refieres '.$dichas.'?'
+            : '¿Te refieres '.$dichas.'?';
+    }
+
     /** «lunes 5 de octubre»: el día como se le dice a la persona. */
     public static function fechaDicha(CarbonInterface $d): string
     {

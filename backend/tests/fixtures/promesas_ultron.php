@@ -44,6 +44,12 @@ return [
         'Queda reportado al equipo.',
         'Tu caso queda abierto con el equipo.',
         'Lo dejo escalado.',
+        'Perfecto, cambio la visita de cortesía para mañana a las 7:00 a. m.',
+        'Perfecto, te registro la visita de cortesía para mañana a las 6:00 a. m.',
+        'Listo, te cambio la cita para el jueves.',
+        'La muevo para mañana a las 7.',
+        'Te la cancelo de una.',
+        'Reprogramo tu visita para el lunes.',
     ],
 
     // ── Promete que la maquina actuara despues, sola ──────────────────────────
@@ -136,5 +142,10 @@ return [
         'No puedo agendarte nada por aqui; la cita la haces en el gimnasio.',
         'No te puedo guardar el cupo, se toman al llegar.',
         'No manejo recordatorios, pero puedes escribirme cuando quieras.',
+        'Si quieres, cambio la visita para el jueves.',
+        '¿Te cambio la visita para el jueves?',
+        'No cambio tu visita hasta que me confirmes la hora.',
+        '¿Quieres que te registre la visita para mañana?',
+        'Registro tu nombre en la app y listo.',
     ],
 ];
