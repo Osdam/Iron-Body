@@ -3,8 +3,6 @@
 namespace App\Providers;
 
 use App\Models\MarketingLeadAttribution;
-use Illuminate\Cache\RateLimiting\Limit;
-use Illuminate\Support\Facades\RateLimiter;
 use App\Models\MarketingMessage;
 use App\Models\Member;
 use App\Models\MemberContract;
@@ -18,6 +16,7 @@ use App\Observers\Marketing\MarketingPaymentOutcomeObserver;
 use App\Services\Billing\Factus\FactusClient;
 use App\Services\Billing\Factus\FactusConfigValidator;
 use App\Services\Billing\Factus\FactusTokenManager;
+use App\Services\Classes\ClassEventBus;
 use App\Services\Exercises\ExerciseCatalogResolver;
 use App\Services\Marketing\Analytics\AdvertisingSpendProvider;
 use App\Services\Marketing\Analytics\UnavailableSpendProvider;
@@ -33,9 +32,12 @@ use App\Services\Meta\WhatsappIntegrationRegistry;
 use App\Services\Observability\QueueHealthService;
 use App\Services\Wompi\WompiConfigValidator;
 use App\Support\Access\TrainerMemberScope;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -48,7 +50,7 @@ class AppServiceProvider extends ServiceProvider
         // Un bus de hechos de clases por proceso: `batch()` agrupa los avisos de
         // un plan semanal en uno, y para eso tiene que ser la MISMA instancia en
         // toda la petición.
-        $this->app->singleton(\App\Services\Classes\ClassEventBus::class);
+        $this->app->singleton(ClassEventBus::class);
 
         // Hoy NO hay fuente de gasto publicitario. Se enlaza la implementacion
         // que lo dice en vez de una que devuelva cero: un ROAS calculado sobre
@@ -319,7 +321,7 @@ class AppServiceProvider extends ServiceProvider
      */
     private function limitadorDeClases(): void
     {
-        RateLimiter::for('class-writes', function (\Illuminate\Http\Request $request) {
+        RateLimiter::for('class-writes', function (Request $request) {
             $token = $request->bearerToken();
 
             // Texto propio: el de Laravel («Too Many Attempts.») llega en inglés y
@@ -344,13 +346,13 @@ class AppServiceProvider extends ServiceProvider
      */
     private function limitadorDelAgente(): void
     {
-        $credencial = function (\Illuminate\Http\Request $request): string {
+        $credencial = function (Request $request): string {
             $token = $request->bearerToken();
 
             return $token ? 'admin:'.hash('sha256', $token) : 'ip:'.$request->ip();
         };
 
-        RateLimiter::for('marketing-agent-write', fn (\Illuminate\Http\Request $request) => Limit::perMinute(10)
+        RateLimiter::for('marketing-agent-write', fn (Request $request) => Limit::perMinute(10)
             ->by('agent-write:'.$credencial($request))
             ->response(fn ($request, array $headers) => response()->json([
                 'ok' => false,
@@ -358,8 +360,19 @@ class AppServiceProvider extends ServiceProvider
                 'message' => 'Demasiados cambios seguidos del agente IA. Espera un momento.',
             ], 429, $headers)));
 
-        RateLimiter::for('marketing-agent-read', fn (\Illuminate\Http\Request $request) => Limit::perMinute(120)
+        RateLimiter::for('marketing-agent-read', fn (Request $request) => Limit::perMinute(120)
             ->by('agent-read:'.$credencial($request)));
+
+        // La Agenda comercial, por la misma razón: se relee con cada aviso del
+        // canal y con «Cargar más», y con la clave por IP esas lecturas gastaban
+        // el cubo del login de toda la oficina.
+        RateLimiter::for('marketing-agenda', fn (Request $request) => Limit::perMinute(120)
+            ->by('agenda:'.$credencial($request))
+            ->response(fn ($request, array $headers) => response()->json([
+                'ok' => false,
+                'code' => 'too_many_agenda_requests',
+                'message' => 'Demasiadas consultas seguidas a la agenda. Espera un momento.',
+            ], 429, $headers)));
     }
 
     /**

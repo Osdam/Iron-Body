@@ -81,7 +81,7 @@ class ChaosCommercialTest extends ChaosTestCase
 
         $this->app->bind(\App\Services\Marketing\MarketingAppointmentService::class, fn () => new class(app(\App\Services\Marketing\MarketingAppointmentAuthorizationService::class)) extends \App\Services\Marketing\MarketingAppointmentService
         {
-            public function create(array $data, ?int $createdBy): MarketingAppointment
+            public function create(array $data, ?int $createdBy, ?string $source = null, ?\Illuminate\Http\Request $request = null): MarketingAppointment
             {
                 throw new \RuntimeException('la agenda no responde');
             }
@@ -227,7 +227,7 @@ class ChaosCommercialTest extends ChaosTestCase
                     parent::__construct($authz);
                 }
 
-                public function create(array $data, ?int $createdBy): MarketingAppointment
+                public function create(array $data, ?int $createdBy, ?string $source = null, ?\Illuminate\Http\Request $request = null): MarketingAppointment
                 {
                     if ($this->falla) {
                         throw new \RuntimeException('el ejecutor se cayó');

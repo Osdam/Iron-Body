@@ -11,6 +11,7 @@ use App\Models\PaymentTransaction;
 use App\Models\Plan;
 use App\Services\Marketing\CommercialPhaseMachine;
 use App\Services\Marketing\HumanHandoffAuthority;
+use App\Services\Marketing\MarketingAgentSwitch;
 use App\Services\Marketing\MarketingKnowledgeBaseService;
 use App\Services\Marketing\MarketingMessageDispatcher;
 use App\Services\Marketing\MobileAppCatalog;
@@ -2287,6 +2288,18 @@ class UltronCommitService
         $tool = SalesIntents::TOOL_COURTESY_REQUEST;
         $accion = (string) ($decision['courtesy_action'] ?? 'request');
 
+        /*
+         * La pausa del agente, otra vez y justo antes de escribir en la agenda.
+         * Las cabeceras del commit ya la miraron, pero una pausa que llegue
+         * entre ellas y esta herramienta dejaría una cita automática con el
+         * agente pausado. Es la misma ventana que cierra el despachador para
+         * los envíos: sin efecto automático, la conversación queda para una
+         * persona, que sí puede operar la agenda a mano.
+         */
+        if (app(MarketingAgentSwitch::class)->pausedSince($message->created_at)) {
+            return ['tool' => $tool, 'status' => 'skipped', 'reason' => MarketingAgentSwitch::REASON];
+        }
+
         if ($accion === 'cancel') {
             $r = $this->courtesy->cancel($conversation);
 
@@ -2296,7 +2309,7 @@ class UltronCommitService
 
             return $r === null
                 ? ['tool' => $tool, 'status' => 'skipped', 'reason' => 'courtesy_nothing_to_cancel']
-                : ['tool' => $tool, 'status' => 'executed', 'courtesy' => 'cancelled', 'action_id' => $r['action_id']];
+                : ['tool' => $tool, 'status' => 'executed', 'courtesy' => 'cancelled', 'appointment_id' => $r['appointment_id']];
         }
 
         $lead = $conversation->lead;
@@ -2358,9 +2371,15 @@ class UltronCommitService
             $decision['courtesy_time'] ?? null,
         );
 
+        // La misma hora de una visita YA confirmada no cambió nada: ni la memoria
+        // ni la ficha pueden contarla como una solicitud pendiente.
+        if (! $r['changed'] && in_array($r['status'], MarketingAppointment::CONFIRMED_STATUSES, true)) {
+            return ['tool' => $tool, 'status' => 'executed', 'courtesy' => 'unchanged', 'appointment_id' => $r['appointment_id'], 'scheduled_at' => $r['scheduled_at']];
+        }
+
         $this->memoryService->recordCourtesyRequest($conversation->fresh(), [
             'status' => 'requested',
-            'action_id' => $r['action_id'],
+            'appointment_id' => $r['appointment_id'],
             'scheduled_at' => $r['scheduled_at'],
             'date' => $decision['courtesy_date'] ?? null,
             'time' => $decision['courtesy_time'] ?? null,
@@ -2370,8 +2389,8 @@ class UltronCommitService
         return [
             'tool' => $tool,
             'status' => 'executed',
-            'courtesy' => $r['nueva'] ? 'requested' : 'updated',
-            'action_id' => $r['action_id'],
+            'courtesy' => ! $r['changed'] ? 'unchanged' : ($r['nueva'] ? 'requested' : 'updated'),
+            'appointment_id' => $r['appointment_id'],
             'scheduled_at' => $r['scheduled_at'],
         ];
     }
@@ -2887,7 +2906,8 @@ class UltronCommitService
          */
         // El estado se mira en el LEAD: una solicitud sin confirmar en otra conversación también es de esta persona.
         $solicitud = $this->courtesy->latestFor($conversation) ?? $abiertaDelLead;
-        $porEstado = $solicitud !== null;
+        // Una cortesía de antes de la agenda (en el panel viejo) también cuenta.
+        $porEstado = $solicitud !== null || $this->courtesy->hadLegacyCourtesy($conversation);
 
         $detecta = fn (string $frase): ?string => $porEstado
             ? $this->contentGuard->courtesyClaimIn($frase)
@@ -2977,7 +2997,7 @@ class UltronCommitService
         ChannelLog::error('ultron.courtesy.claimed_confirmed', [
             'conversation_id' => (int) $conversation->id,
             'modo' => $porEstado ? 'estado' : 'texto',
-            'estado_solicitud' => $solicitud?->status,
+            'estado_solicitud' => $solicitud?->status ?? ($porEstado ? 'heredada' : null),
             'frases_retiradas' => count($frases) - count($limpias),
             'quedo_vacio' => $limpio === '',
         ]);

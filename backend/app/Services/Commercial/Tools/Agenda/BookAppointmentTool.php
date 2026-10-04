@@ -6,6 +6,7 @@ use App\Models\MarketingAppointment;
 use App\Services\Commercial\Tools\BaseTool;
 use App\Services\Commercial\Tools\ToolContext;
 use App\Services\Commercial\Tools\ToolResult;
+use App\Services\Marketing\MarketingAgentSwitch;
 use App\Services\Marketing\MarketingAppointmentService;
 use Illuminate\Support\Carbon;
 
@@ -100,12 +101,21 @@ class BookAppointmentTool extends BaseTool
             return ToolResult::failed('scheduled_too_far', 'Esa fecha está demasiado lejos. Confirma el día.');
         }
 
-        // Anti duplicado: una cita viva del mismo tipo para la misma persona.
-        // Sin esto, un cliente que dice dos veces «sí, el martes» acaba con dos
-        // reservas y alguien del equipo pierde una hora.
+        // Con el agente IA pausado nada automático escribe en la agenda: la
+        // conversación queda para una persona, que sí puede agendar a mano.
+        if (app(MarketingAgentSwitch::class)->isPaused()) {
+            return ToolResult::skipped('El agente IA está en pausa: la agenda la opera una persona.', [
+                'reason' => MarketingAgentSwitch::REASON,
+            ]);
+        }
+
+        // Anti duplicado: una cita viva para la misma persona, confirmada o
+        // solicitada (p. ej. la cortesía que pidió por WhatsApp). Sin esto, un
+        // cliente que dice dos veces «sí, el martes» acaba con dos reservas y
+        // alguien del equipo pierde una hora.
         $existing = MarketingAppointment::query()
             ->where('marketing_lead_id', $lead->id)
-            ->where('status', MarketingAppointment::STATUS_SCHEDULED)
+            ->whereIn('status', MarketingAppointment::ACTIVE_STATUSES)
             ->where('scheduled_at', '>=', now())
             ->first();
 
@@ -124,7 +134,7 @@ class BookAppointmentTool extends BaseTool
             'notes' => $arguments['notes'] ?? null,
             'scheduled_at' => $scheduledAt,
             'duration_minutes' => $arguments['duration_minutes'] ?? 30,
-        ], null);
+        ], null, MarketingAppointment::SOURCE_COMMERCIAL_TOOL);
 
         return ToolResult::ok([
             'appointment_id' => $appointment->id,

@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Marketing;
 
-use App\Models\MarketingAgentAction;
 use App\Models\MarketingAiAction;
 use App\Models\MarketingAppointment;
 use App\Models\MarketingConversation;
@@ -263,11 +262,11 @@ class AsesorSeniorTest extends TestCase
             'reply_draft' => 'Perfecto, dejo solicitada tu visita para mañana miércoles a las 2:00 p. m.; el equipo la confirma.',
         ]);
 
-        $a = MarketingAgentAction::query()->where('marketing_lead_id', $this->lead->id)->latest('id')->first();
+        $a = MarketingAppointment::query()->where('source', MarketingAppointment::SOURCE_ULTRON)->where('marketing_lead_id', $this->lead->id)->latest('id')->first();
         $this->assertNotNull($a, 'la visita no se registró: la fecha y la hora iban en null y nadie las leyó del texto');
-        $this->assertSame(MarketingAgentAction::STATUS_SUGGESTED, $a->status);
-        $this->assertSame('2026-09-23', data_get($a->payload, 'requested_date'));
-        $this->assertSame('14:00', data_get($a->payload, 'requested_time'));
+        $this->assertSame(MarketingAppointment::STATUS_REQUESTED, $a->status);
+        $this->assertSame('2026-09-23', data_get($a->metadata, 'requested_date'));
+        $this->assertSame('14:00', data_get($a->metadata, 'requested_time'));
         $this->assertSame('requested', data_get($this->conversation->fresh()->memory, 'courtesy_request.status'));
         $this->assertContains('Solicitó una visita de cortesía para el miércoles 23 de septiembre a las 14:00; el equipo la confirma.', $this->significados());
         $this->assertContains('quiere conocer las instalaciones antes de decidir', $this->ficha()['preferences']);
@@ -325,18 +324,12 @@ class AsesorSeniorTest extends TestCase
             'courtesy_date' => '2026-09-23', 'courtesy_time' => '14:00',
             'reply_draft' => 'Listo, dejo solicitada tu visita para mañana a las 2:00 p. m.; el equipo la confirma.',
         ]);
-        $a = MarketingAgentAction::query()->where('marketing_lead_id', $this->lead->id)->latest('id')->first();
+        $a = MarketingAppointment::query()->where('source', MarketingAppointment::SOURCE_ULTRON)->where('marketing_lead_id', $this->lead->id)->latest('id')->first();
         $this->assertNotNull($a);
 
-        // El equipo la aprueba y ejecuta: la solicitud se cierra y nace la cita.
-        $a->forceFill(['status' => MarketingAgentAction::STATUS_EXECUTED, 'executed_at' => now()])->save();
-        MarketingAppointment::create([
-            'marketing_lead_id' => $this->lead->id, 'marketing_conversation_id' => $this->conversation->id,
-            'type' => MarketingAppointment::TYPE_VISIT, 'title' => 'Día de cortesía',
-            // Como lo escribe el panel: la hora local llevada a la zona de la app (UTC), sin desplazamiento en la columna.
-            'scheduled_at' => Carbon::parse('2026-09-23 14:00', 'America/Bogota')->setTimezone('UTC'), 'status' => MarketingAppointment::STATUS_SCHEDULED,
-            'duration_minutes' => 60, 'location' => 'Sede principal',
-        ]);
+        // El equipo la confirma desde la agenda: la MISMA cita pasa a confirmada.
+        $a->forceFill(['status' => MarketingAppointment::STATUS_SCHEDULED])->save();
+        $this->assertSame('2026-09-23 19:00:00', $a->scheduled_at->copy()->utc()->toDateTimeString(), 'la hora de Neiva no se guardó en UTC');
 
         $this->conversation = $this->nuevaConversacion();
         ['message' => $m2, 'json' => $j] = $this->decide('me recuerdas a qué hora era mi visita?', 'w.as.2f');
@@ -648,7 +641,7 @@ class AsesorSeniorTest extends TestCase
             'courtesy_date' => null, 'courtesy_time' => null,
             'reply_draft' => 'Perfecto, dejo solicitada tu visita para el miércoles a las 10:00 a. m.; el equipo la confirma.',
         ]);
-        $this->assertSame(0, MarketingAgentAction::query()->where('marketing_lead_id', $this->lead->id)->count(), 'se registró una visita leyendo un texto con dudas');
+        $this->assertSame(0, MarketingAppointment::query()->where('source', MarketingAppointment::SOURCE_ULTRON)->where('marketing_lead_id', $this->lead->id)->count(), 'se registró una visita leyendo un texto con dudas');
         $t = mb_strtolower($this->ultimo());
         $this->assertStringNotContainsString('dejo solicitada', $t, 'se afirmó una solicitud que no existe');
         $this->assertStringContainsString('?', $t, 'no se preguntó lo que falta');
@@ -665,7 +658,7 @@ class AsesorSeniorTest extends TestCase
             'courtesy_date' => null, 'courtesy_time' => null,
             'reply_draft' => 'Con gusto. ¿Cuál de los dos te queda mejor, el sábado o el domingo?',
         ]);
-        $this->assertSame(0, MarketingAgentAction::query()->where('marketing_lead_id', $otro->id)->count(), 'se registró una visita para un día que la persona no eligió');
+        $this->assertSame(0, MarketingAppointment::query()->where('source', MarketingAppointment::SOURCE_ULTRON)->where('marketing_lead_id', $otro->id)->count(), 'se registró una visita para un día que la persona no eligió');
     }
 
     /** El respaldo con la ficha real: sin teléfonos, pero con la dirección entera aunque tenga cifras. */
@@ -773,10 +766,10 @@ class AsesorSeniorTest extends TestCase
             'courtesy_date' => null, 'courtesy_time' => null,
             'reply_draft' => 'Listo, tu solicitud queda registrada para mañana miércoles a las 2 pm y el equipo la revisará.',
         ]);
-        $a = MarketingAgentAction::query()->where('marketing_lead_id', $this->lead->id)->latest('id')->first();
+        $a = MarketingAppointment::query()->where('source', MarketingAppointment::SOURCE_ULTRON)->where('marketing_lead_id', $this->lead->id)->latest('id')->first();
         $this->assertNotNull($a, 'la visita no se registró');
-        $this->assertSame('2026-09-23', data_get($a->payload, 'requested_date'));
-        $this->assertSame('14:00', data_get($a->payload, 'requested_time'));
+        $this->assertSame('2026-09-23', data_get($a->metadata, 'requested_date'));
+        $this->assertSame('14:00', data_get($a->metadata, 'requested_time'));
     }
 
     /** Una LLAMADA agendada por el equipo no es la visita: no se cuenta como compromiso ni abre la guarda. */
@@ -893,7 +886,7 @@ class AsesorSeniorTest extends TestCase
     // ── Tercera tanda de arreglos: cada hallazgo de la segunda revisión, por el recorrido real ──
 
     /** Deja una visita SOLICITADA para mañana a las 14:00 y abre una conversación nueva. */
-    private function conVisitaSolicitadaYConversacionNueva(): MarketingAgentAction
+    private function conVisitaSolicitadaYConversacionNueva(): MarketingAppointment
     {
         ['message' => $m] = $this->decide('quiero conocer el gimnasio mañana a las 2 pm', 'w.prep.'.uniqid());
         $this->commit($m, [
@@ -904,7 +897,7 @@ class AsesorSeniorTest extends TestCase
         ]);
         $this->conversation = $this->nuevaConversacion();
 
-        return MarketingAgentAction::query()->where('marketing_lead_id', $this->lead->id)->latest('id')->firstOrFail();
+        return MarketingAppointment::query()->where('source', MarketingAppointment::SOURCE_ULTRON)->where('marketing_lead_id', $this->lead->id)->latest('id')->firstOrFail();
     }
 
     /** La misma pregunta de memoria dos veces en el día recibe la hora las dos veces: no es una respuesta «repetida». */
@@ -927,7 +920,8 @@ class AsesorSeniorTest extends TestCase
     public function test_25_el_modo_memoria_no_toca_la_visita_ni_manda_enlaces(): void
     {
         $solicitud = $this->conVisitaSolicitadaYConversacionNueva();
-        $solicitud->forceFill(['status' => MarketingAgentAction::STATUS_APPROVED])->save();
+        // El equipo ya la confirmó en la agenda.
+        $solicitud->forceFill(['status' => MarketingAppointment::STATUS_SCHEDULED])->save();
 
         ['message' => $m] = $this->decide('me recuerdas qué día agendé la visita?', 'w.as.25a');
         $this->commit($m, [
@@ -938,8 +932,8 @@ class AsesorSeniorTest extends TestCase
         ]);
 
         $solicitud->refresh();
-        $this->assertSame(MarketingAgentAction::STATUS_APPROVED, $solicitud->status, 'la pregunta de memoria le quitó la aprobación a la visita');
-        $this->assertSame('2026-09-23', data_get($solicitud->payload, 'requested_date'), 'la pregunta de memoria movió la visita');
+        $this->assertSame(MarketingAppointment::STATUS_SCHEDULED, $solicitud->status, 'la pregunta de memoria le quitó la confirmación a la visita');
+        $this->assertSame('2026-09-23', data_get($solicitud->metadata, 'requested_date'), 'la pregunta de memoria movió la visita');
         $this->assertNull(data_get($this->conversation->fresh()->memory, 'app_context.links_sent_at'), 'se anotaron enlaces que no salieron');
         $this->assertStringNotContainsString('{{', $this->ultimo());
     }
@@ -955,7 +949,7 @@ class AsesorSeniorTest extends TestCase
             'tools_requested' => [SalesIntents::TOOL_COURTESY_REQUEST], 'courtesy_action' => 'cancel',
             'reply_draft' => 'Listo, cancelé tu visita del miércoles. Cuando quieras volvemos a agendarla.',
         ]);
-        $this->assertSame(MarketingAgentAction::STATUS_CANCELLED, $solicitud->fresh()->status, 'la cancelación no llegó a la solicitud de la otra conversación');
+        $this->assertSame(MarketingAppointment::STATUS_CANCELLED, $solicitud->fresh()->status, 'la cancelación no llegó a la solicitud de la otra conversación');
     }
 
     /** «Listo, cancelé tu visita» sin nada que cancelar es una promesa sin autoridad: el turno no sale así. */
@@ -1068,8 +1062,8 @@ class AsesorSeniorTest extends TestCase
 
     // ── Tercera revisión: el relleno de la cortesía, la visita confirmada, el orden de las guardas ──
 
-    /** Registra en ESTA conversación una visita solicitada y devuelve la acción. */
-    private function conVisitaSolicitadaAqui(string $fecha, string $hora, string $wamid): MarketingAgentAction
+    /** Registra en ESTA conversación una visita solicitada y devuelve su cita (solicitada). */
+    private function conVisitaSolicitadaAqui(string $fecha, string $hora, string $wamid): MarketingAppointment
     {
         ['message' => $m] = $this->decide("quiero ir el {$fecha} a las {$hora}", $wamid);
         $this->commit($m, [
@@ -1079,7 +1073,7 @@ class AsesorSeniorTest extends TestCase
             'reply_draft' => 'Listo, el equipo revisa tu solicitud de visita y te confirma.',
         ]);
 
-        return MarketingAgentAction::query()->where('marketing_lead_id', $this->lead->id)->latest('id')->firstOrFail();
+        return MarketingAppointment::query()->where('source', MarketingAppointment::SOURCE_ULTRON)->where('marketing_lead_id', $this->lead->id)->latest('id')->firstOrFail();
     }
 
     /**
@@ -1093,7 +1087,7 @@ class AsesorSeniorTest extends TestCase
     public function test_33_la_franja_ya_registrada_no_rellena_la_cortesia(): void
     {
         $solicitud = $this->conVisitaSolicitadaAqui('2026-09-25', '18:00', 'w.as.33a');
-        $franja = fn (): array => [data_get($solicitud->fresh()->payload, 'requested_date'), data_get($solicitud->fresh()->payload, 'requested_time')];
+        $franja = fn (): array => [data_get($solicitud->fresh()->metadata, 'requested_date'), data_get($solicitud->fresh()->metadata, 'requested_time')];
 
         // Justo después de solicitar el viernes: el jueves sin hora no se registra con las 18:00 del viernes.
         ['message' => $m] = $this->decide('quiero volver a ir el jueves', 'w.as.33b');
@@ -1103,7 +1097,7 @@ class AsesorSeniorTest extends TestCase
             'reply_draft' => '¡Qué bien! ¿A qué hora te queda bien el jueves?',
         ]);
         $this->assertSame(['2026-09-25', '18:00'], $franja(), 'se registró el jueves con una hora que nadie dijo');
-        $this->assertSame(1, MarketingAgentAction::query()->where('marketing_lead_id', $this->lead->id)->count());
+        $this->assertSame(1, MarketingAppointment::query()->where('source', MarketingAppointment::SOURCE_ULTRON)->where('marketing_lead_id', $this->lead->id)->count());
 
         // Un «dale» sin hora tampoco: el objetivo en recogida no heredó las 18:00 de la visita solicitada.
         ['message' => $m2] = $this->decide('dale', 'w.as.33c');
@@ -1142,12 +1136,8 @@ class AsesorSeniorTest extends TestCase
     public function test_34_la_plantilla_de_confirmada_sale_entera_en_la_misma_conversacion(): void
     {
         $solicitud = $this->conVisitaSolicitadaAqui('2026-09-23', '14:00', 'w.as.34a');
-        $solicitud->forceFill(['status' => MarketingAgentAction::STATUS_EXECUTED])->save();
-        MarketingAppointment::create([
-            'marketing_lead_id' => $this->lead->id, 'marketing_conversation_id' => $this->conversation->id,
-            'type' => MarketingAppointment::TYPE_VISIT, 'title' => 'Día de cortesía',
-            'scheduled_at' => Carbon::parse('2026-09-23 14:00', 'America/Bogota')->setTimezone('UTC'), 'status' => MarketingAppointment::STATUS_SCHEDULED,
-        ]);
+        // El equipo la confirma desde la agenda: la MISMA cita pasa a confirmada.
+        $solicitud->forceFill(['status' => MarketingAppointment::STATUS_SCHEDULED])->save();
 
         $plantilla = 'Claro. El equipo ya confirmó tu visita: miércoles 23 de septiembre a las 14:00. Te esperamos.';
         ['message' => $m] = $this->decide('me recuerdas a qué hora era mi visita?', 'w.as.34b');
@@ -1253,7 +1243,7 @@ class AsesorSeniorTest extends TestCase
             'courtesy_date' => '2026-09-25', 'courtesy_time' => null,
             'reply_draft' => '¡Genial! ¿A qué hora te queda bien el viernes?',
         ]);
-        $this->assertSame(0, MarketingAgentAction::query()->where('marketing_lead_id', $this->lead->id)->count());
+        $this->assertSame(0, MarketingAppointment::query()->where('source', MarketingAppointment::SOURCE_ULTRON)->where('marketing_lead_id', $this->lead->id)->count());
 
         ['message' => $m2] = $this->decide('el viernes no puedo, mejor el sábado a las 10', 'w.as.39b');
         $this->commit($m2, [
@@ -1261,6 +1251,6 @@ class AsesorSeniorTest extends TestCase
             'courtesy_date' => null, 'courtesy_time' => '10:00',
             'reply_draft' => '¿Entonces el sábado a las 10:00 a. m.?',
         ]);
-        $this->assertSame(0, MarketingAgentAction::query()->where('marketing_lead_id', $this->lead->id)->count(), 'se registró el viernes que la persona cambió');
+        $this->assertSame(0, MarketingAppointment::query()->where('source', MarketingAppointment::SOURCE_ULTRON)->where('marketing_lead_id', $this->lead->id)->count(), 'se registró el viernes que la persona cambió');
     }
 }

@@ -251,7 +251,9 @@ class MarketingAgentRecommendationService
     private function hasFutureAppointment(MarketingConversation $conversation): bool
     {
         return MarketingAppointment::query()
-            ->where('status', MarketingAppointment::STATUS_SCHEDULED)
+            // Activa = confirmada o solicitada (la cortesía de ULTRON): sugerir
+            // otra cita encima dejaría a la persona con dos.
+            ->whereIn('status', MarketingAppointment::ACTIVE_STATUSES)
             ->where('scheduled_at', '>=', now())
             ->where(function ($q) use ($conversation): void {
                 $q->where('marketing_conversation_id', $conversation->id);

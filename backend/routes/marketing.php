@@ -269,7 +269,14 @@ Route::middleware('throttle:120,1')
 // ── Agenda comercial / citas para leads (Fase 4B) ─────────────────────────────
 // Misma protección global de /api/admin/*. Autorización fina por rol/estado +
 // ownership en MarketingAppointmentAuthorizationService.
-Route::middleware('throttle:120,1')
+//
+// El canal SSE va sin throttle, como los demás canales del CRM: reconecta solo
+// cada ~25 s por pestaña. El resto, con un limitador con nombre por credencial
+// del admin (AppServiceProvider): el anónimo `throttle:120,1` tiene la IP como
+// clave, y las relecturas de la agenda gastaban el cubo que comparte toda la
+// oficina, login incluido.
+Route::get('admin/marketing/appointments/stream', [MarketingAppointmentController::class, 'stream']);
+Route::middleware('throttle:marketing-agenda')
     ->prefix('admin/marketing/appointments')
     ->where(['id' => '[0-9]+'])
     ->group(function (): void {
@@ -278,6 +285,7 @@ Route::middleware('throttle:120,1')
         Route::get('capabilities', [MarketingAppointmentController::class, 'capabilities']);
         Route::get('{id}', [MarketingAppointmentController::class, 'show']);
         Route::patch('{id}', [MarketingAppointmentController::class, 'update']);
+        Route::post('{id}/confirm', [MarketingAppointmentController::class, 'confirm']);
         Route::post('{id}/complete', [MarketingAppointmentController::class, 'complete']);
         Route::post('{id}/cancel', [MarketingAppointmentController::class, 'cancel']);
         Route::post('{id}/reschedule', [MarketingAppointmentController::class, 'reschedule']);

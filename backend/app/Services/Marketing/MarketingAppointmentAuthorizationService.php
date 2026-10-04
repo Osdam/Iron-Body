@@ -4,6 +4,7 @@ namespace App\Services\Marketing;
 
 use App\Models\Admin;
 use App\Models\MarketingAppointment;
+use App\Support\Access\CrmPermission;
 
 /**
  * Autorización de la Agenda comercial (Fase 4B). Misma filosofía que el Inbox:
@@ -32,10 +33,16 @@ class MarketingAppointmentAuthorizationService
 
     public const CAP_RESCHEDULE = 'reschedule';
 
+    /** Confirmar una solicitud (p. ej. la cortesía que pidió ULTRON): `requested → scheduled`. */
+    public const CAP_CONFIRM = 'confirm';
+
     public const ALL_CAPS = [
         self::CAP_VIEW, self::CAP_CREATE, self::CAP_UPDATE, self::CAP_ASSIGN,
-        self::CAP_COMPLETE, self::CAP_CANCEL, self::CAP_RESCHEDULE,
+        self::CAP_COMPLETE, self::CAP_CANCEL, self::CAP_RESCHEDULE, self::CAP_CONFIRM,
     ];
+
+    /** Capacidades de solo lectura: con `marketing.view` bastan; el resto escribe y pide `marketing.manage`. */
+    private const READ_CAPS = [self::CAP_VIEW];
 
     private const FULL_ROLES = ['super admin', 'administrador', 'admin'];
 
@@ -43,8 +50,42 @@ class MarketingAppointmentAuthorizationService
         'asesor comercial', 'asesor', 'ventas', 'recepción', 'recepcion',
     ];
 
-    /** @return array<string,bool> */
+    /** @var array<int,array<string,bool>> por admin, durante la petición */
+    private array $memo = [];
+
+    /**
+     * Lo que el rol permite Y lo que sus permisos reales dejan hacer.
+     *
+     * La capa por rol es la de siempre; encima se exige la llave que pide el
+     * middleware (`marketing.view` para leer, `marketing.manage` para escribir).
+     * Antes un rol comercial sin `marketing.manage` veía botones que daban 403:
+     * esto solo puede QUITAR capacidades, nunca darlas.
+     *
+     * @return array<string,bool>
+     */
     public function capabilities(?Admin $admin): array
+    {
+        if ($admin instanceof Admin && isset($this->memo[(int) $admin->id])) {
+            return $this->memo[(int) $admin->id];
+        }
+
+        $porRol = $this->porRol($admin);
+        if (! $admin instanceof Admin || ! in_array(true, $porRol, true)) {
+            return $porRol;
+        }
+
+        $llaves = CrmPermission::forAdmin($admin);
+        $lee = in_array('marketing.view', $llaves, true);
+        $escribe = in_array('marketing.manage', $llaves, true);
+        foreach ($porRol as $cap => $permitido) {
+            $porRol[$cap] = $permitido && (in_array($cap, self::READ_CAPS, true) ? $lee : $escribe);
+        }
+
+        return $this->memo[(int) $admin->id] = $porRol;
+    }
+
+    /** @return array<string,bool> */
+    private function porRol(?Admin $admin): array
     {
         $caps = array_fill_keys(self::ALL_CAPS, false);
 

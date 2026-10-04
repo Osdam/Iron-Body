@@ -73,7 +73,7 @@ final class ConversationMemory
             // fecha que la persona ya dio y para no prometer una confirmación
             // que no existe. El valor es SIEMPRE un array: bajo un default
             // null, un escalar se pierde al releer.
-            'courtesy_request' => null,     // {status, action_id, scheduled_at, date, time, at}
+            'courtesy_request' => null,     // {status, appointment_id, scheduled_at, date, time, at}
             'last_user_question' => null,   // {text, at, message_id}
             'unresolved_question' => null,  // {text, at, message_id}
             'pending_reference' => null,    // {type, kind|plan_id, at}

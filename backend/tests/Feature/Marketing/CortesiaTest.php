@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Marketing;
 
-use App\Models\MarketingAgentAction;
 use App\Models\MarketingAiAction;
 use App\Models\MarketingAppointment;
 use App\Models\MarketingConversation;
@@ -114,9 +113,20 @@ class CortesiaTest extends TestCase
         ], $this->h());
     }
 
-    private function solicitud(): ?MarketingAgentAction
+    /** La solicitud de cortesía de esta conversación: una cita de la Agenda comercial que creó ULTRON. */
+    private function solicitud(): ?MarketingAppointment
     {
-        return MarketingAgentAction::query()->where('marketing_conversation_id', $this->conversation->id)->latest('id')->first();
+        return MarketingAppointment::query()
+            ->where('marketing_conversation_id', $this->conversation->id)
+            ->where('source', MarketingAppointment::SOURCE_ULTRON)
+            ->latest('id')
+            ->first();
+    }
+
+    /** Cuántas solicitudes de cortesía hay en la agenda del equipo (en cualquier estado). */
+    private function cuantasSolicitudes(): int
+    {
+        return MarketingAppointment::query()->where('source', MarketingAppointment::SOURCE_ULTRON)->count();
     }
 
     private function ultimaAccion(): array
@@ -154,20 +164,19 @@ class CortesiaTest extends TestCase
             'courtesy_date' => '2026-09-26', 'courtesy_time' => '10:00',
         ])->assertOk();
 
-        $this->assertSame(1, MarketingAgentAction::count());
+        $this->assertSame(1, $this->cuantasSolicitudes());
         $a = $this->solicitud();
 
-        $this->assertSame(MarketingAgentAction::STATUS_SUGGESTED, $a->status, 'solicitada no es agendada');
-        $this->assertSame(MarketingAgentAction::TYPE_CREATE_APPOINTMENT, $a->action_type);
+        $this->assertSame(MarketingAppointment::STATUS_REQUESTED, $a->status, 'solicitada no es agendada');
+        $this->assertSame(MarketingAppointment::TYPE_VISIT, $a->type);
         $this->assertSame($this->lead->id, $a->marketing_lead_id);
         $this->assertSame($this->conversation->id, $a->marketing_conversation_id);
-        $this->assertSame('ultron', data_get($a->payload, 'source'));
-        $this->assertSame('2026-09-26', data_get($a->payload, 'requested_date'));
-        $this->assertSame('10:00', data_get($a->payload, 'requested_time'));
-        $this->assertTrue((bool) $a->requires_approval);
+        $this->assertSame(MarketingAppointment::SOURCE_ULTRON, $a->source);
+        $this->assertSame('2026-09-26', data_get($a->metadata, 'requested_date'));
+        $this->assertSame('10:00', data_get($a->metadata, 'requested_time'));
 
-        // Y NO nace ninguna cita: la cita la crea una persona al aprobar.
-        $this->assertSame(0, MarketingAppointment::count(), 'se agendó sin que nadie confirmara');
+        // Y NO nace ninguna cita CONFIRMADA: la confirma una persona desde la agenda.
+        $this->assertSame(0, MarketingAppointment::query()->where('status', MarketingAppointment::STATUS_SCHEDULED)->count(), 'se confirmó sin que nadie confirmara');
 
         // La memoria lo recuerda, para no volver a preguntar el día.
         $this->assertSame('requested', data_get($this->conversation->fresh()->memory, 'courtesy_request.status'));
@@ -183,7 +192,7 @@ class CortesiaTest extends TestCase
             'reply_draft' => 'Sí, ya la tengo anotada para el sábado. El equipo la revisará.',
         ])->assertOk();
 
-        $this->assertSame(1, MarketingAgentAction::count(), 'la misma visita quedó dos veces en la agenda del equipo');
+        $this->assertSame(1, $this->cuantasSolicitudes(), 'la misma visita quedó dos veces en la agenda del equipo');
     }
 
     // ── H · cambio de día: actualiza, no acumula ─────────────────────────────
@@ -196,8 +205,8 @@ class CortesiaTest extends TestCase
             'reply_draft' => 'Listo, la cambié al domingo. El equipo la revisará.',
         ])->assertOk();
 
-        $this->assertSame(1, MarketingAgentAction::count(), 'se quedó basura histórica en la agenda');
-        $this->assertSame('2026-09-27', data_get($this->solicitud()->payload, 'requested_date'));
+        $this->assertSame(1, $this->cuantasSolicitudes(), 'se quedó basura histórica en la agenda');
+        $this->assertSame('2026-09-27', data_get($this->solicitud()->metadata, 'requested_date'));
     }
 
     // ── I · cancelación: se refleja de verdad ────────────────────────────────
@@ -212,8 +221,8 @@ class CortesiaTest extends TestCase
         ])->assertOk();
 
         $a = $this->solicitud();
-        $this->assertSame(1, MarketingAgentAction::count(), 'cancelar no puede borrar el rastro');
-        $this->assertSame(MarketingAgentAction::STATUS_CANCELLED, $a->status);
+        $this->assertSame(1, $this->cuantasSolicitudes(), 'cancelar no puede borrar el rastro');
+        $this->assertSame(MarketingAppointment::STATUS_CANCELLED, $a->status);
     }
 
     // ── E · fuera de horario: no se registra ─────────────────────────────────
@@ -226,7 +235,7 @@ class CortesiaTest extends TestCase
             'reply_draft' => 'Ese día atendemos hasta las 2 de la tarde. ¿Te sirve antes de esa hora?',
         ])->assertOk();
 
-        $this->assertSame(0, MarketingAgentAction::count(), 'se registró una visita a una hora con el gimnasio cerrado');
+        $this->assertSame(0, $this->cuantasSolicitudes(), 'se registró una visita a una hora con el gimnasio cerrado');
 
         $tools = $this->ultimaAccion()['tools_executed'] ?? [];
         $this->assertNotContains(SalesIntents::TOOL_COURTESY_REQUEST, $tools);
@@ -263,7 +272,7 @@ class CortesiaTest extends TestCase
             'reply_draft' => '¿Qué día te gustaría venir a conocer el gimnasio?',
         ])->assertOk();
 
-        $this->assertSame(0, MarketingAgentAction::count());
+        $this->assertSame(0, $this->cuantasSolicitudes());
     }
 
     // ── La honestidad, que es el punto de todo esto ──────────────────────────
@@ -287,7 +296,7 @@ class CortesiaTest extends TestCase
             'reply_draft' => 'Listo, queda registrada tu solicitud de día de cortesía para el sábado. El equipo la revisará.',
         ])->assertOk();
 
-        $this->assertSame(1, MarketingAgentAction::count());
+        $this->assertSame(1, $this->cuantasSolicitudes());
         $saliente = (string) MarketingMessage::where('conversation_id', $this->conversation->id)
             ->where('direction', MarketingMessage::DIRECTION_OUTBOUND)->latest('id')->first()?->body;
 
@@ -311,7 +320,7 @@ class CortesiaTest extends TestCase
         ]);
 
         $r->assertStatus(422)->assertJsonPath('code', 'promised_effect_without_authority');
-        $this->assertSame(0, MarketingAgentAction::count());
+        $this->assertSame(0, $this->cuantasSolicitudes());
     }
 
     /** Y la palabra prohibida sigue prohibida: «gratis» no sale, cortesía sí. */
@@ -345,7 +354,7 @@ class CortesiaTest extends TestCase
         $this->assertStringNotContainsString('quedaste agendado', $saliente);
         $this->assertNotSame('', trim($saliente), 'el turno no puede quedarse mudo');
         // Y la solicitud sí se registró: lo que cae es la frase, no el efecto.
-        $this->assertSame(1, MarketingAgentAction::count());
+        $this->assertSame(1, $this->cuantasSolicitudes());
         $this->assertNotNull(data_get($this->ultimaAccion(), 'courtesy_confirmation_dropped.code'));
     }
 
@@ -427,14 +436,13 @@ class CortesiaTest extends TestCase
             'courtesy_date' => '2026-09-26', 'courtesy_time' => '9:00',
         ])->assertOk();
 
-        $this->assertSame(1, MarketingAgentAction::count(), 'una hora que la gente escribe así se perdió por el camino');
-        $this->assertSame('9:00', data_get($this->solicitud()->payload, 'requested_time'));
+        $this->assertSame(1, $this->cuantasSolicitudes(), 'una hora que la gente escribe así se perdió por el camino');
+        $this->assertSame('9:00', data_get($this->solicitud()->metadata, 'requested_time'));
 
         // Y se entendió como las nueve de la mañana DE NEIVA, no como una hora
-        // UTC: la fila se guarda en UTC, y ahí las nueve son las catorce.
-        $this->assertSame('09:00', Carbon::parse(
-            (string) data_get($this->solicitud()->payload, 'scheduled_at'), 'UTC',
-        )->setTimezone(BusinessClock::TZ)->format('H:i'));
+        // UTC: la cita se guarda en UTC, y ahí las nueve son las catorce.
+        $this->assertSame('14:00', $this->solicitud()->scheduled_at->copy()->utc()->format('H:i'));
+        $this->assertSame('09:00', $this->solicitud()->scheduled_at->copy()->setTimezone(BusinessClock::TZ)->format('H:i'));
     }
 
     /**
@@ -523,7 +531,7 @@ class CortesiaTest extends TestCase
         $this->assertNotSame('', trim($saliente), 'el turno no puede quedarse mudo');
         $this->assertStringNotContainsString('registrada', $saliente);
         $this->assertStringNotContainsString('solicitud', $saliente);
-        $this->assertSame(0, MarketingAgentAction::count(), 'no había ninguna solicitud que registrar');
+        $this->assertSame(0, $this->cuantasSolicitudes(), 'no había ninguna solicitud que registrar');
     }
 
     /**
@@ -544,7 +552,7 @@ class CortesiaTest extends TestCase
         ]);
 
         $r->assertStatus(422)->assertJsonPath('code', 'promised_effect_without_authority');
-        $this->assertSame(0, MarketingAgentAction::count());
+        $this->assertSame(0, $this->cuantasSolicitudes());
     }
 
     /**
@@ -582,26 +590,23 @@ class CortesiaTest extends TestCase
     }
 
     /**
-     * Cambiar el día de una solicitud YA APROBADA reabre la aprobación.
+     * Cambiar el día de una visita YA CONFIRMADA la devuelve a solicitada.
      *
-     * `openFor()` devuelve las filas abiertas, y «abierta» incluye las que un
-     * humano aprobó. Sin esto, ULTRON reescribía el día y la dejaba aprobada:
-     * el panel ejecuta desde `approved`, así que nacía una cita real un
-     * domingo que nadie miró, y el acta seguía diciendo que la había aprobado
-     * quien aprobó el sábado. Un registro que afirma algo que no ocurrió es el
-     * mismo fallo que persigue la invariante de promesas, sólo que en el
-     * expediente en vez de en el texto.
+     * El equipo confirmó el sábado en la agenda. Si ULTRON reescribiera el día
+     * y la dejara confirmada, el domingo quedaría «confirmado» sin que nadie lo
+     * mirara; y si abriera otra solicitud, la persona tendría dos citas vivas.
+     * Se mueve la MISMA cita y vuelve a solicitada: el día nuevo lo confirma
+     * una persona. Un registro que afirma algo que no ocurrió es el mismo fallo
+     * que persigue la invariante de promesas, sólo que en el expediente.
      */
-    public function test_cambiar_el_dia_de_una_solicitud_aprobada_reabre_la_aprobacion(): void
+    public function test_cambiar_el_dia_de_una_visita_confirmada_la_devuelve_a_solicitada(): void
     {
         $this->turno('quiero ir el sabado a las 10', 'w.ap1', [
             'courtesy_date' => '2026-09-26', 'courtesy_time' => '10:00',
         ])->assertOk();
 
-        $this->solicitud()->forceFill([
-            'status' => MarketingAgentAction::STATUS_APPROVED,
-            'approved_at' => now(),
-        ])->save();
+        // El equipo la confirma desde la agenda.
+        $this->solicitud()->forceFill(['status' => MarketingAppointment::STATUS_SCHEDULED])->save();
 
         $this->turno('mejor el domingo a la misma hora', 'w.ap2', [
             'courtesy_date' => '2026-09-27', 'courtesy_time' => '10:00',
@@ -610,10 +615,10 @@ class CortesiaTest extends TestCase
 
         $a = $this->solicitud();
 
-        $this->assertSame(1, MarketingAgentAction::count(), 'cambiar de día no puede dejar dos filas');
-        $this->assertSame('2026-09-27', data_get($a->payload, 'requested_date'));
-        $this->assertSame(MarketingAgentAction::STATUS_SUGGESTED, $a->status, 'el día nuevo salió aprobado sin que nadie lo mirara');
-        $this->assertNull($a->approved_at, 'quedó la firma de una aprobación que era de otro día');
+        $this->assertSame(1, $this->cuantasSolicitudes(), 'cambiar de día no puede dejar dos filas');
+        $this->assertSame('2026-09-27', data_get($a->metadata, 'requested_date'));
+        $this->assertSame(MarketingAppointment::STATUS_REQUESTED, $a->status, 'el día nuevo salió confirmado sin que nadie lo mirara');
+        $this->assertSame('reopened', data_get(collect($a->metadata['history'] ?? [])->last(), 'event'), 'el historial no cuenta que se reabrió');
     }
 
     /**
@@ -661,7 +666,7 @@ class CortesiaTest extends TestCase
     // ── La honestidad la sostiene el ESTADO, no el formato de la fecha ───────
 
     /** Deja una solicitud REGISTRADA (sábado 26 a las 10) y devuelve su fila. */
-    private function conSolicitudRegistrada(): MarketingAgentAction
+    private function conSolicitudRegistrada(): MarketingAppointment
     {
         $this->turno('quiero conocer el gym el sabado a las 10', 'w.st.0', [
             'courtesy_date' => '2026-09-26', 'courtesy_time' => '10:00',
@@ -669,7 +674,7 @@ class CortesiaTest extends TestCase
 
         $a = $this->solicitud();
         $this->assertNotNull($a);
-        $this->assertSame(MarketingAgentAction::STATUS_SUGGESTED, $a->status);
+        $this->assertSame(MarketingAppointment::STATUS_REQUESTED, $a->status);
 
         return $a;
     }
@@ -789,7 +794,7 @@ class CortesiaTest extends TestCase
             'reply_draft' => 'Sin problema, cancelé la solicitud.',
         ])->assertOk();
 
-        $this->assertSame(MarketingAgentAction::STATUS_CANCELLED, $this->solicitud()->status);
+        $this->assertSame(MarketingAppointment::STATUS_CANCELLED, $this->solicitud()->status);
 
         $this->soloTexto('Te esperamos el 26 igualmente.', 'w.st.can2');
 
@@ -809,7 +814,8 @@ class CortesiaTest extends TestCase
     public function test_cumplida_no_se_trata_como_pendiente(): void
     {
         $a = $this->conSolicitudRegistrada();
-        $a->forceFill(['status' => MarketingAgentAction::STATUS_EXECUTED])->save();
+        // La visita ya ocurrió: el equipo la marcó cumplida en la agenda.
+        $a->forceFill(['status' => MarketingAppointment::STATUS_COMPLETED, 'completed_at' => now()])->save();
 
         $this->soloTexto('Te esperamos el 26 como quedamos.', 'w.st.exec');
 
@@ -935,7 +941,7 @@ class CortesiaTest extends TestCase
         $this->soloTexto('Claro que sí, te esperamos en la sede de la carrera 5 con gusto.', 'w.st.sede');
 
         $this->assertStringContainsString('te esperamos en la sede', $this->ultimoSaliente());
-        $this->assertSame(0, MarketingAgentAction::count());
+        $this->assertSame(0, $this->cuantasSolicitudes());
     }
 
     /**

@@ -2,8 +2,8 @@
 
 namespace Tests\Feature\Marketing;
 
-use App\Models\MarketingAgentAction;
 use App\Models\MarketingAiAction;
+use App\Models\MarketingAppointment;
 use App\Models\MarketingConversation;
 use App\Models\MarketingKnowledgeItem;
 use App\Models\MarketingLead;
@@ -252,7 +252,7 @@ class Conversacion254Test extends TestCase
             }
         }
         $this->assertSame(9, count($this->salientes()), 'algún turno se quedó mudo');
-        $this->assertSame(0, MarketingAgentAction::where('status', MarketingAgentAction::STATUS_SUGGESTED)->count(), 'se registró una visita que nadie completó');
+        $this->assertSame(0, MarketingAppointment::query()->where('status', MarketingAppointment::STATUS_REQUESTED)->count(), 'se registró una visita que nadie completó');
     }
 
     /**

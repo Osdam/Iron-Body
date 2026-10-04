@@ -2,14 +2,20 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Exceptions\AppointmentException;
 use App\Http\Controllers\Controller;
 use App\Models\Admin;
 use App\Models\MarketingAppointment;
+use App\Services\Marketing\MarketingAgendaVersion;
 use App\Services\Marketing\MarketingAppointmentAuthorizationService;
 use App\Services\Marketing\MarketingAppointmentService;
+use App\Support\SseStream;
+use Carbon\CarbonInterface;
+use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Agenda comercial (Fase 4B). Citas con leads de marketing para convertir.
@@ -64,22 +70,31 @@ class MarketingAppointmentController extends Controller
         $request->validate([
             'status' => ['nullable', Rule::in(MarketingAppointment::STATUSES)],
             'type' => ['nullable', Rule::in(MarketingAppointment::TYPES)],
+            'source' => ['nullable', Rule::in([MarketingAppointment::SOURCE_ULTRON, MarketingAppointment::SOURCE_CRM, MarketingAppointment::SOURCE_COMMERCIAL_TOOL])],
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date'],
             'q' => ['nullable', 'string', 'max:80'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $page = $this->service->list($request, $this->admin($request));
+        $viewer = $this->admin($request);
+        try {
+            $page = $this->service->list($request, $viewer);
+            $counts = $this->service->countsByStatus($request, $viewer);
+        } catch (AppointmentException $e) {
+            return $this->falla($e);
+        }
 
         return response()->json([
             'ok' => true,
-            'data' => collect($page->items())->map(fn ($a) => $this->service->present($a))->all(),
+            'data' => collect($page->items())->map(fn ($a) => $this->service->present($a, $viewer))->all(),
             'meta' => [
                 'current_page' => $page->currentPage(),
                 'last_page' => $page->lastPage(),
                 'per_page' => $page->perPage(),
                 'total' => $page->total(),
+                // Por estado, con los mismos filtros salvo el de estado y sin paginar.
+                'counts' => $counts,
             ],
         ]);
     }
@@ -99,9 +114,14 @@ class MarketingAppointmentController extends Controller
             return response()->json(['ok' => false, 'code' => 'appointments_forbidden', 'message' => 'No puedes asignar citas a otro asesor.'], 403);
         }
 
-        $appointment = $this->service->create($data, $this->admin($request)?->id);
+        try {
+            $data['scheduled_at'] = MarketingAppointmentService::fromClientTime((string) $data['scheduled_at']);
+        } catch (AppointmentException $e) {
+            return $this->falla($e);
+        }
+        $appointment = $this->service->create($data, $this->admin($request)?->id, MarketingAppointment::SOURCE_CRM, $request);
 
-        return response()->json(['ok' => true, 'data' => $this->service->present($appointment)], 201);
+        return response()->json(['ok' => true, 'data' => $this->service->present($appointment->fresh(), $this->admin($request))], 201);
     }
 
     // ── Detalle ──────────────────────────────────────────────────────────────
@@ -115,7 +135,7 @@ class MarketingAppointmentController extends Controller
             return $err;
         }
 
-        return response()->json(['ok' => true, 'data' => $this->service->present($appointment)]);
+        return response()->json(['ok' => true, 'data' => $this->service->present($appointment, $this->admin($request))]);
     }
 
     // ── Editar ───────────────────────────────────────────────────────────────
@@ -136,9 +156,35 @@ class MarketingAppointmentController extends Controller
             return response()->json(['ok' => false, 'code' => 'appointments_forbidden', 'message' => 'No puedes asignar citas a otro asesor.'], 403);
         }
 
-        $this->service->update($appointment, $data);
+        // Cambiar la fecha o confirmar por la puerta genérica exige decir qué fecha
+        // se vio: un formulario desactualizado no puede deshacer, sin aviso, el día
+        // que la persona pidió por WhatsApp ni confirmar uno que nadie revisó.
+        $request->validate(['expected_scheduled_at' => ['nullable', 'date']]);
+        $tocaLaFecha = ! empty($data['scheduled_at']) || ($data['status'] ?? null) === MarketingAppointment::STATUS_SCHEDULED;
+        if ($tocaLaFecha && ! $request->filled('expected_scheduled_at')) {
+            return response()->json([
+                'ok' => false, 'code' => 'expected_scheduled_at_required',
+                'message' => 'Para cambiar la fecha o confirmar una cita, envía la fecha que estás viendo (expected_scheduled_at).',
+            ], 422);
+        }
 
-        return response()->json(['ok' => true, 'data' => $this->service->present($appointment->fresh())]);
+        return $this->aplicar($request, fn () => $this->service->update($appointment, $data, $request, $this->fechaVista($request)));
+    }
+
+    // ── Confirmar una solicitud ──────────────────────────────────────────────
+    public function confirm(Request $request, int $id): JsonResponse
+    {
+        if ($r = $this->guard($request, MarketingAppointmentAuthorizationService::CAP_CONFIRM)) {
+            return $r;
+        }
+        [$appointment, $err] = $this->findOwned($request, $id);
+        if ($err) {
+            return $err;
+        }
+        // Opcional, para no romper clientes viejos: la fecha que vio quien confirma.
+        $request->validate(['expected_scheduled_at' => ['nullable', 'date']]);
+
+        return $this->aplicar($request, fn () => $this->service->confirm($appointment, $request, $this->fechaVista($request)));
     }
 
     // ── Completar ────────────────────────────────────────────────────────────
@@ -152,9 +198,8 @@ class MarketingAppointmentController extends Controller
             return $err;
         }
         $data = $request->validate(['note' => ['nullable', 'string', 'max:500']]);
-        $this->service->complete($appointment, $data['note'] ?? null);
 
-        return response()->json(['ok' => true, 'data' => $this->service->present($appointment->fresh())]);
+        return $this->aplicar($request, fn () => $this->service->complete($appointment, $data['note'] ?? null, $request));
     }
 
     // ── Cancelar ─────────────────────────────────────────────────────────────
@@ -167,10 +212,10 @@ class MarketingAppointmentController extends Controller
         if ($err) {
             return $err;
         }
-        $data = $request->validate(['reason' => ['nullable', 'string', 'max:500']]);
-        $this->service->cancel($appointment, $data['reason'] ?? null);
+        // 255: lo que cabe en `cancellation_reason`; con 500, PostgreSQL rechazaba al guardar.
+        $data = $request->validate(['reason' => ['nullable', 'string', 'max:255']]);
 
-        return response()->json(['ok' => true, 'data' => $this->service->present($appointment->fresh())]);
+        return $this->aplicar($request, fn () => $this->service->cancel($appointment, $data['reason'] ?? null, $request));
     }
 
     // ── Reprogramar ──────────────────────────────────────────────────────────
@@ -186,10 +231,13 @@ class MarketingAppointmentController extends Controller
         $data = $request->validate([
             'scheduled_at' => ['required', 'date'],
             'duration_minutes' => ['nullable', 'integer', 'min:5', 'max:600'],
+            // Opcional, para no romper clientes viejos: la fecha que tenía la cita al abrir el panel.
+            'expected_scheduled_at' => ['nullable', 'date'],
         ]);
-        $this->service->reschedule($appointment, $data['scheduled_at'], $data['duration_minutes'] ?? null);
 
-        return response()->json(['ok' => true, 'data' => $this->service->present($appointment->fresh())]);
+        return $this->aplicar($request, fn () => $this->service->reschedule(
+            $appointment, (string) $data['scheduled_at'], $data['duration_minutes'] ?? null, $request, vista: $this->fechaVista($request),
+        ));
     }
 
     // ── Citas de una conversación ────────────────────────────────────────────
@@ -204,10 +252,56 @@ class MarketingAppointmentController extends Controller
             ->orderByDesc('scheduled_at')
             ->limit(20)
             ->get()
-            ->map(fn ($a) => $this->service->present($a))
+            ->map(fn ($a) => $this->service->present($a, $this->admin($request)))
             ->all();
 
         return response()->json(['ok' => true, 'data' => $appointments]);
+    }
+
+    // ── Tiempo real ──────────────────────────────────────────────────────────
+    /**
+     * SSE: avisa cuando cambia cualquier cita —la crea ULTRON, la confirma otra
+     * sesión, la mueve una herramienta—. Solo viaja la versión de la agenda:
+     * quien escucha relee la lista por el GET, con sus filtros y su alcance.
+     */
+    public function stream(Request $request): Response
+    {
+        if ($r = $this->guard($request, MarketingAppointmentAuthorizationService::CAP_VIEW)) {
+            return $r;
+        }
+
+        $ultima = null;
+        $avisa = function () use (&$ultima): void {
+            $version = MarketingAgendaVersion::current();
+            if ($ultima !== $version) {
+                $ultima = $version;
+                SseStream::emit('agenda', ['version' => $version], $version);
+            }
+        };
+
+        return SseStream::response($avisa, 25, 2000, $avisa);
+    }
+
+    /**
+     * Ejecuta una transición y responde siempre igual: la cita como queda y si
+     * cambió algo. Lo que el dominio no permite vuelve como 409/422 con un
+     * código estable y el motivo en español, para que el CRM lo enseñe tal cual.
+     *
+     * @param  Closure(): array{appointment:MarketingAppointment, changed:bool}  $accion
+     */
+    private function aplicar(Request $request, Closure $accion): JsonResponse
+    {
+        try {
+            $r = $accion();
+        } catch (AppointmentException $e) {
+            return $this->falla($e);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'changed' => $r['changed'],
+            'data' => $this->service->present($r['appointment']->fresh(), $this->admin($request)),
+        ]);
     }
 
     // ── Capacidades para el frontend ─────────────────────────────────────────
@@ -222,6 +316,19 @@ class MarketingAppointmentController extends Controller
         }
 
         return response()->json(['ok' => true, 'data' => $this->authz->frontendCapabilities($admin)]);
+    }
+
+    /** La fecha que vio quien escribe, si la manda (en hora de Bogotá si llega sin desfase). */
+    private function fechaVista(Request $request): ?CarbonInterface
+    {
+        return $request->filled('expected_scheduled_at')
+            ? MarketingAppointmentService::fromClientTime((string) $request->input('expected_scheduled_at'))
+            : null;
+    }
+
+    private function falla(AppointmentException $e): JsonResponse
+    {
+        return response()->json(['ok' => false, 'code' => $e->errorCode, 'message' => $e->getMessage()], $e->status);
     }
 
     /** @return array<string,mixed> */

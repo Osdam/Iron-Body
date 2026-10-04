@@ -376,7 +376,8 @@ final class ConversationMemoryService
         $m->setActiveGoal(self::GOAL_COURTESY, self::GOAL_REQUESTED, [
             'date' => $datos['date'] ?? null,
             'time' => $datos['time'] ?? null,
-            'action_id' => $datos['action_id'] ?? null,
+            // La cita solicitada de la Agenda comercial (`marketing_appointments`).
+            'appointment_id' => $datos['appointment_id'] ?? null,
         ], (string) ($datos['at'] ?? now()->toIso8601String()));
 
         $conversation->forceFill(['memory' => $m->toArray()])->save();

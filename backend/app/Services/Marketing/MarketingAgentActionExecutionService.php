@@ -3,6 +3,7 @@
 namespace App\Services\Marketing;
 
 use App\Models\MarketingAgentAction;
+use App\Models\MarketingAppointment;
 use App\Models\MarketingConversation;
 use App\Models\MarketingFollowup;
 use App\Models\MarketingLead;
@@ -160,7 +161,7 @@ class MarketingAgentActionExecutionService
             'notes' => $p['notes'] ?? null,
             'marketing_lead_id' => $action->marketing_lead_id,
             'marketing_conversation_id' => $action->marketing_conversation_id,
-        ], $admin);
+        ], $admin, MarketingAppointment::SOURCE_CRM);
 
         return ['appointment_id' => $appointment->id];
     }
