@@ -180,13 +180,7 @@ class CourtesyAuthority
         $hhmm = $propuesta !== null ? sprintf('%02d:%02d', intdiv($propuesta, 60), $propuesta % 60) : null;
         $ambiguas = null;
         foreach (self::mencionesEn($texto, $ahora)['horas'] as $lecturas) {
-            // Una lectura es real si la visita ENTERA cabe antes del cierre: «a las
-            // 10» no es ambiguo con el gimnasio cerrando a las 22:00.
-            $validas = array_values(array_unique(array_filter($lecturas, function (string $l) use ($fecha, $ventanas, $ahora): bool {
-                $d = self::decide($fecha, $l, $ventanas, $ahora);
-
-                return $d['ok'] && self::minutosDe($l) + self::VISITA_MINUTOS <= (int) self::minutosDe($d['closes_at']);
-            })));
+            $validas = self::lecturasValidas($lecturas, $fecha, $ventanas, $ahora);
             if ($hhmm !== null && ! in_array($hhmm, $validas, true)) {
                 continue;
             }
@@ -203,6 +197,59 @@ class CourtesyAuthority
         }
 
         return $ambiguas;
+    }
+
+    /**
+     * Las lecturas VÁLIDAS de la hora que la persona propone para su visita.
+     *
+     * Se lee como {@see self::horaDesdeTexto()}: cláusula a cláusula, sin las
+     * del gimnasio o del trabajo ni las negadas, y con la corrección que manda
+     * («a las 7 no puedo, mejor a las 8» es la de las 8). A diferencia de
+     * {@see self::lecturasAmbiguas()}, que contrasta un borrador y mira todas
+     * las menciones, aquí cuenta lo que la persona PIDE: en «mejor mañana a
+     * las 7, salgo del trabajo a las 7 pm» la hora de la visita es ambigua.
+     *
+     * Null si no propone UNA hora (no nombra ninguna, o duda entre dos
+     * distintas). Si la propone: [] fuera del horario de ese día, una lectura
+     * si es inequívoca («a las 7 pm», «a las 3») y dos si es ambigua («mejor
+     * mañana a las 7» → 07:00 y 19:00).
+     *
+     * @return array<int,string>|null
+     */
+    public static function lecturasPropuestas(string $texto, ?string $fecha, array|string $ventanas, ?Carbon $ahora = null): ?array
+    {
+        $candidatos = [];
+        foreach (Clausulas::de(SalesAgentDecisionSchema::normalize($texto)) as $clausula) {
+            if (preg_match(self::DEL_GIMNASIO_O_DEL_TRABAJO, $clausula['texto']) === 1) {
+                continue;
+            }
+            foreach (self::horasEn($clausula['texto'], true) as $lecturas) {
+                $candidatos[] = [implode('|', self::lecturasValidas($lecturas, $fecha, $ventanas, $ahora)), $clausula];
+            }
+        }
+        $elegida = Clausulas::eleccion($candidatos);
+
+        return $elegida === null ? null : ($elegida === '' ? [] : explode('|', $elegida));
+    }
+
+    /**
+     * Las lecturas de una hora que caben en el horario de ese día, ordenadas.
+     * Una lectura es real si la visita ENTERA cabe antes del cierre: «a las 10»
+     * no es ambiguo con el gimnasio cerrando a las 22:00.
+     *
+     * @param  array<int,string>  $lecturas
+     * @return array<int,string>
+     */
+    private static function lecturasValidas(array $lecturas, ?string $fecha, array|string $ventanas, ?Carbon $ahora): array
+    {
+        $validas = array_values(array_unique(array_filter($lecturas, function (string $l) use ($fecha, $ventanas, $ahora): bool {
+            $d = self::decide($fecha, $l, $ventanas, $ahora);
+
+            return $d['ok'] && self::minutosDe($l) + self::VISITA_MINUTOS <= (int) self::minutosDe($d['closes_at']);
+        })));
+        sort($validas);
+
+        return $validas;
     }
 
     /** Sólo se acepta una fecha ya resuelta: «mañana» lo traduce quien habla con la persona. */

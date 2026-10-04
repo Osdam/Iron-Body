@@ -413,6 +413,37 @@ final class ConversationMemoryService
         $conversation->forceFill(['memory' => $m->toArray()])->save();
     }
 
+    /**
+     * Laravel preguntó «¿a. m. o p. m.?» para la visita: queda PENDIENTE la
+     * aclaración —el día y las lecturas— para que la respuesta («7 p. m.») la
+     * resuelva Laravel, no la etiqueta que ponga el modelo.
+     *
+     * No toca lo demás del objetivo. Una visita ya solicitada sigue solicitada
+     * con su día, su hora y su cita: la agenda no cambió, y el objetivo dice lo
+     * mismo que la agenda. Medido en el canario (2026-10-04): pasarla a
+     * «recogida» perdía la cita del objetivo justo cuando la persona pedía
+     * moverla. Sin visita solicitada, el objetivo queda en recogida con ese día.
+     *
+     * @param  array<int,string>  $opciones
+     */
+    public function recordCourtesyHourQuestion(MarketingConversation $conversation, string $fecha, array $opciones): void
+    {
+        $m = $this->load($conversation);
+        $previo = $m->activeGoal();
+        $pendiente = ['date' => $fecha, 'options' => array_values($opciones), 'at' => now()->toIso8601String()];
+        $deVisita = $previo !== null && $previo['kind'] === self::GOAL_COURTESY;
+
+        if ($deVisita && $previo['status'] === self::GOAL_REQUESTED) {
+            $m->setActiveGoal(self::GOAL_COURTESY, self::GOAL_REQUESTED, array_merge($previo['data'], ['pending_hour' => $pendiente]), now()->toIso8601String());
+        } else {
+            // La hora es justo lo que se aclara: una recogida antes ya no vale.
+            $recogido = $deVisita && $previo['status'] === self::GOAL_COLLECTING ? array_diff_key($previo['data'], ['time' => true]) : [];
+            $m->setActiveGoal(self::GOAL_COURTESY, self::GOAL_COLLECTING, array_merge($recogido, ['date' => $fecha, 'pending_hour' => $pendiente]), now()->toIso8601String());
+        }
+
+        $conversation->forceFill(['memory' => $m->toArray()])->save();
+    }
+
     /** Cancelar la visita cierra el objetivo; la fila de la solicitud queda, cancelada, para auditar. */
     public function recordCourtesyCancelled(MarketingConversation $conversation): void
     {

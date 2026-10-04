@@ -858,6 +858,25 @@ final class CommercialTurnPolicy
         return preg_match(self::NIEGA_VISITA, SalesAgentDecisionSchema::normalize($inbound)) === 1;
     }
 
+    /**
+     * ¿Trae el mensaje, además de la visita, algo que se contesta como lo que
+     * es: el precio, los planes, el horario o la ubicación del gimnasio? Quien
+     * se queda el turno para la visita (la hora ambigua) no secuestra eso: va
+     * por el camino normal, que contesta y retoma la visita.
+     *
+     * @param  array<int,array{id:int,name:string}>  $activePlans
+     */
+    public static function traeOtroTema(string $inbound, array $activePlans): bool
+    {
+        $t = SalesAgentDecisionSchema::normalize($inbound);
+
+        return preg_match(self::PREGUNTA_INCIDENTAL, $t) === 1
+            || preg_match(self::PREGUNTA_PRECIO, $t) === 1
+            || preg_match(self::PRECIO_EN_DUDA, $t) === 1
+            || preg_match(self::PIDE_RECOMENDACION, $t) === 1
+            || self::plansNamedIn($inbound, $activePlans) !== [];
+    }
+
     /** El texto sigue hablando de la visita: eso es retomar el objetivo. */
     public static function mentionsVisit(string $draft): bool
     {

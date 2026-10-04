@@ -61,6 +61,41 @@ class HoraAmbiguaTest extends TestCase
         }
     }
 
+    /**
+     * La hora que la persona PROPONE, leída por cláusulas: sin las del trabajo
+     * o el gimnasio, sin las negadas y con la corrección que manda. Null si no
+     * propone una; una lectura si es inequívoca; dos si es ambigua.
+     *
+     * @return array<string,array{0:string,1:string,2:?array}>
+     */
+    public static function propuestas(): array
+    {
+        return [
+            'el caso del canario' => ['Mejor mañana a las 7', '2026-10-05', ['07:00', '19:00']],
+            'sin día: el de la visita' => ['mejor a las 7', '2026-10-05', ['07:00', '19:00']],
+            'con pregunta sigue siendo la propuesta' => ['¿Mejor mañana a las 7?', '2026-10-05', ['07:00', '19:00']],
+            '7 p. m.' => ['7 p. m.', '2026-10-05', ['19:00']],
+            '7pm porfa' => ['7pm porfa', '2026-10-05', ['19:00']],
+            'de la noche' => ['a las 7 de la noche', '2026-10-05', ['19:00']],
+            'de la mañana' => ['mañana a las 7 de la mañana', '2026-10-05', ['07:00']],
+            'la del trabajo no es la de la visita' => ['mejor mañana a las 7, salgo del trabajo a las 7 pm', '2026-10-05', ['07:00', '19:00']],
+            'ni estorba a una sin dudas' => ['salgo a las 5, mejor mañana a las 7 pm', '2026-10-05', ['19:00']],
+            'la del trabajo tampoco cuenta sin corrección' => ['mañana a las 7, salgo del trabajo a las 6 pm', '2026-10-05', ['07:00', '19:00']],
+            'la corrección manda' => ['a las 7 no puedo, mejor a las 8', '2026-10-05', ['08:00', '20:00']],
+            'a las 3: sólo la tarde' => ['a las 3', '2026-10-05', ['15:00']],
+            'a las 9 el sábado: sólo la mañana' => ['a las 9', '2026-10-10', ['09:00']],
+            'fuera del horario' => ['a las 23', '2026-10-05', []],
+            'dos horas distintas' => ['a las 7 u 8', '2026-10-05', null],
+            'ninguna hora' => ['mejor una hora después', '2026-10-05', null],
+        ];
+    }
+
+    #[DataProvider('propuestas')]
+    public function test_la_hora_propuesta_se_lee_por_clausulas(string $texto, string $fecha, ?array $esperado): void
+    {
+        $this->assertSame($esperado, CourtesyAuthority::lecturasPropuestas($texto, $fecha, self::VENTANAS, Carbon::parse('2026-10-04 21:49:00', 'UTC')));
+    }
+
     public function test_sin_el_texto_la_autoridad_decide_como_siempre(): void
     {
         $v = CourtesyAuthority::decide('2026-10-05', '07:00', self::VENTANAS, Carbon::parse('2026-10-04 21:25:00', 'UTC'));

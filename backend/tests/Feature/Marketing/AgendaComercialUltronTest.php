@@ -21,6 +21,7 @@ use App\Services\Marketing\MarketingAgendaVersion;
 use App\Services\Marketing\MarketingAppointmentService;
 use App\Services\Marketing\SalesIntents;
 use App\Services\Marketing\Ultron\BusinessClock;
+use App\Services\Marketing\Ultron\ConversationMemoryService;
 use App\Services\Marketing\Ultron\CourtesyRequestService;
 use App\Support\Access\RolePermissionPolicy;
 use Illuminate\Database\QueryException;
@@ -31,6 +32,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -96,17 +98,18 @@ class AgendaComercialUltronTest extends TestCase
     // ── Andamio ──────────────────────────────────────────────────────────────
 
     /** Un turno real de ULTRON: el entrante, el decide y el commit con la herramienta de cortesía. */
-    private function turno(string $texto, string $wamid, array $overrides = []): TestResponse
+    private function turno(string $texto, string $wamid, array $overrides = [], array $extra = []): TestResponse
     {
         $m = MarketingMessage::create(['conversation_id' => $this->conversation->id, 'direction' => MarketingMessage::DIRECTION_INBOUND, 'sender_type' => MarketingMessage::SENDER_LEAD, 'body' => $texto, 'meta_message_id' => $wamid, 'status' => 'received']);
         $token = (string) $this->postJson('/api/internal/marketing/ai/decide', ['conversation_id' => $this->conversation->id, 'message_id' => $m->id], $this->internas())->json('decide_token');
 
-        return $this->commit($m, $wamid, $token, $overrides);
+        return $this->commit($m, $wamid, $token, $overrides, $extra);
     }
 
-    private function commit(MarketingMessage $m, string $wamid, string $token, array $overrides = []): TestResponse
+    /** `$extra` va en la raíz del commit: el veredicto del critic o la rendición de n8n. */
+    private function commit(MarketingMessage $m, string $wamid, string $token, array $overrides = [], array $extra = []): TestResponse
     {
-        return $this->postJson('/api/internal/marketing/ai/commit', [
+        return $this->postJson('/api/internal/marketing/ai/commit', array_merge([
             'source_type' => 'inbound_message', 'source_event_id' => $m->id, 'idempotency_key' => $wamid,
             'conversation_id' => $this->conversation->id, 'decide_token' => $token,
             'proposal' => array_merge([
@@ -117,7 +120,7 @@ class AgendaComercialUltronTest extends TestCase
                 'courtesy_action' => 'request',
             ], $overrides),
             'critic' => ['verdict' => 'pass', 'attempt' => 1, 'score' => 0.9, 'issues' => [], 'hard_fail' => null],
-        ], $this->internas());
+        ], $extra), $this->internas());
     }
 
     /** «Quiero ir mañana a las 6»: martes 22 a las 18:00 de Neiva. */
@@ -868,11 +871,15 @@ class AgendaComercialUltronTest extends TestCase
         $this->assertSame('2026-09-22 18:00', $this->horaLocal($cita));
         $this->assertSame(MarketingAppointment::STATUS_REQUESTED, $cita->fresh()->status);
         $this->assertSame($version, MarketingAgendaVersion::current(), 'la agenda avisó un cambio que no hubo');
-        $this->assertSame(['kind' => 'courtesy_request', 'status' => 'collecting', 'date' => '2026-09-22'], [
+        $this->assertSame(['kind' => 'courtesy_request', 'status' => 'requested', 'cita' => $cita->id, 'pendiente' => ['2026-09-22', ['07:00', '19:00']]], [
             'kind' => data_get($this->conversation->fresh()->memory, 'active_goal.kind'),
             'status' => data_get($this->conversation->fresh()->memory, 'active_goal.status'),
-            'date' => data_get($this->conversation->fresh()->memory, 'active_goal.data.date'),
-        ], 'el día no quedó en recogida para el turno siguiente');
+            'cita' => data_get($this->conversation->fresh()->memory, 'active_goal.data.appointment_id'),
+            'pendiente' => [
+                data_get($this->conversation->fresh()->memory, 'active_goal.data.pending_hour.date'),
+                data_get($this->conversation->fresh()->memory, 'active_goal.data.pending_hour.options'),
+            ],
+        ], 'el objetivo de la visita no se conservó con la aclaración pendiente');
     }
 
     /** El modelo SÍ pide la herramienta, pero con una hora ambigua: no se registra nada, se pregunta. */
@@ -974,10 +981,340 @@ class AgendaComercialUltronTest extends TestCase
     public function test_31g_otro_efecto_sin_autoridad_sigue_cayendo(): void
     {
         $this->pideLaVisita();
-        $this->turno('Mejor mañana a las 7', 'w.o2.amb8', [
+        // Con la hora sin dudas el turno no es de Laravel: va por el camino normal y su invariante.
+        $this->turno('Mejor mañana a las 7 pm', 'w.o2.amb8', [
             'tools_requested' => [], 'courtesy_action' => null, 'courtesy_date' => null, 'courtesy_time' => null,
-            'reply_draft' => 'Cambio la visita para mañana a las 7. Lo dejo escalado al equipo.',
+            'reply_draft' => 'Cambio la visita para mañana a las 7 pm. Lo dejo escalado al equipo.',
         ])->assertStatus(422)->assertJsonPath('code', 'promised_effect_without_authority');
+    }
+
+    // ── La hora de la visita la decide Laravel, no la etiqueta del modelo ────
+
+    /** El critic del canario (2026-10-04, ai#3215): segundo intento, suspenso. */
+    private const CRITIC_CAIDO = ['critic' => ['verdict' => 'fail', 'attempt' => 2, 'score' => 0.3, 'issues' => ['context_use', 'question_discipline', 'phase_alignment'], 'hard_fail' => null]];
+
+    /** La propuesta del canario: etiqueta `goal_fat_loss`, sin herramienta, y el borrador del Composer Reintento. */
+    private const COMO_EL_CANARIO = [
+        'strategy_goal' => 'collect_data', 'intent' => SalesIntents::GOAL_FAT_LOSS, 'next_best_action' => 'ask_discovery',
+        'main_barrier' => 'other', 'confidence' => 0.85, 'tools_requested' => [],
+        'courtesy_action' => null, 'courtesy_date' => null, 'courtesy_time' => null,
+        'reply_draft' => 'Perfecto, entonces te dejo registrada la visita de cortesía para mañana a las 7:00 a. m. mientras tanto, cuéntame qué te ha motivado a buscar bajar grasa y cómo has intentado lograrlo hasta ahora para acompañarte mejor.',
+    ];
+
+    private const ACLARACION = 'Tu solicitud de visita sigue registrada para el martes 22 de septiembre a las 6:00 p. m. ¿Te refieres a las 7:00 a. m. o a las 7:00 p. m.?';
+
+    private function ultimoSalienteLiteral(): string
+    {
+        return (string) MarketingMessage::query()->where('conversation_id', $this->conversation->id)
+            ->where('direction', MarketingMessage::DIRECTION_OUTBOUND)->latest('id')->value('body');
+    }
+
+    /** La visita a las 18:00 y, antes, una charla de «bajar grasa» que dejó su pregunta en la memoria. */
+    private function visitaConMemoriaDeBajarGrasa(): MarketingAppointment
+    {
+        $cita = $this->pideLaVisita();
+        $this->turno('quiero bajar grasa', 'w.o2.grasa', [
+            'intent' => SalesIntents::GOAL_FAT_LOSS, 'tools_requested' => [], 'courtesy_action' => null,
+            'courtesy_date' => null, 'courtesy_time' => null, 'next_best_action' => 'ask_discovery',
+            'reply_draft' => 'Para bajar grasa lo más importante es empezar con algo que puedas sostener. ¿Ya vienes entrenando o arrancas desde cero?',
+        ])->assertOk();
+
+        return $cita;
+    }
+
+    /**
+     * EL CASO EXACTO DEL CANARIO. Visita a las 18:00, «Mejor mañana a las 7», el
+     * modelo etiqueta `goal_fat_loss`, no pide la herramienta y el critic tumba
+     * los dos borradores. Salía «Listo. Para bajar grasa…». Sale el estado real
+     * y la pregunta; la cita no se toca y el objetivo sigue siendo la visita.
+     */
+    public function test_32_el_caso_del_canario_pregunta_la_hora_y_no_salta_a_bajar_grasa(): void
+    {
+        $cita = $this->visitaConMemoriaDeBajarGrasa();
+        $version = MarketingAgendaVersion::current();
+
+        $this->turno('Mejor mañana a las 7', 'w.o2.canario', self::COMO_EL_CANARIO, self::CRITIC_CAIDO)->assertOk();
+
+        $this->assertSame(self::ACLARACION, $this->ultimoSalienteLiteral());
+        $this->assertSame('2026-09-22 18:00', $this->horaLocal($cita), 'la cita se movió sin aclarar la hora');
+        $this->assertSame(MarketingAppointment::STATUS_REQUESTED, $cita->fresh()->status);
+        $this->assertSame(1, $this->activas());
+        $this->assertSame($version, MarketingAgendaVersion::current(), 'la agenda avisó un cambio que no hubo');
+
+        $objetivo = data_get($this->conversation->fresh()->memory, 'active_goal');
+        $this->assertSame(['courtesy_request', 'requested', $cita->id, '18:00'], [$objetivo['kind'], $objetivo['status'], $objetivo['data']['appointment_id'], $objetivo['data']['time']], 'el objetivo de la visita no se conservó');
+        $this->assertSame(['date' => '2026-09-22', 'options' => ['07:00', '19:00']], array_intersect_key($objetivo['data']['pending_hour'], ['date' => 1, 'options' => 1]));
+
+        $accion = MarketingAiAction::query()->where('conversation_id', $this->conversation->id)->latest('id')->firstOrFail();
+        $this->assertSame('ask', data_get($accion->metadata, 'visit_hour.mode'));
+        $this->assertSame(SalesIntents::GOAL_FAT_LOSS, data_get($accion->metadata, 'model_intent'), 'la etiqueta del modelo no quedó de evidencia');
+        $this->assertNotSame(SalesIntents::GOAL_FAT_LOSS, data_get($accion->metadata, 'intent'));
+        $this->assertSame([], (array) data_get($accion->metadata, 'tools_executed', []), 'se ejecutó una herramienta con la hora sin aclarar');
+        $this->assertNotContains('critic_failed', (array) data_get($accion->metadata, 'risk_flags', []));
+    }
+
+    /**
+     * La memoria comercial anterior no contamina la reprogramación, salga el
+     * turno por donde salga: critic aprobado con un borrador que sólo vende
+     * «bajar grasa», critic caído o rendición de n8n.
+     */
+    public function test_32b_la_memoria_de_bajar_grasa_no_contamina_por_ningun_camino(): void
+    {
+        $cita = $this->visitaConMemoriaDeBajarGrasa();
+        $soloGrasa = array_merge(self::COMO_EL_CANARIO, [
+            'reply_draft' => 'Para bajar grasa lo más importante es la constancia. ¿Ya vienes entrenando o arrancas desde cero?',
+        ]);
+
+        foreach ([
+            'critic aprobado' => [$soloGrasa, []],
+            'critic caído' => [self::COMO_EL_CANARIO, self::CRITIC_CAIDO],
+            'rendición' => [self::COMO_EL_CANARIO, ['recovery' => ['reason' => 'promised_effect_without_authority', 'attempt' => 2]]],
+        ] as $camino => [$propuesta, $extra]) {
+            $this->turno('Mejor mañana a las 7', 'w.o2.contamina.'.Str::slug($camino), $propuesta, $extra)->assertOk();
+
+            $sale = $this->ultimoSalienteLiteral();
+            $this->assertSame(self::ACLARACION, $sale, "por el camino «{$camino}» no salió la aclaración");
+            $this->assertStringNotContainsString('grasa', mb_strtolower($sale), "por el camino «{$camino}» volvió «bajar grasa»");
+            $this->assertSame('2026-09-22 18:00', $this->horaLocal($cita), "por el camino «{$camino}» se movió la cita");
+        }
+        $this->assertSame(1, $this->activas());
+    }
+
+    /** «Mejor a las 7» sin día: la pregunta es sobre el día de su visita. */
+    public function test_32l_sin_dia_se_pregunta_sobre_el_dia_de_la_visita(): void
+    {
+        $cita = $this->pideLaVisita();
+
+        $this->turno('mejor a las 7', 'w.o2.sindia', self::COMO_EL_CANARIO, self::CRITIC_CAIDO)->assertOk();
+
+        $this->assertSame(self::ACLARACION, $this->ultimoSalienteLiteral());
+        $this->assertSame('2026-09-22', data_get($this->conversation->fresh()->memory, 'active_goal.data.pending_hour.date'));
+        $this->assertSame('2026-09-22 18:00', $this->horaLocal($cita));
+    }
+
+    /** Aunque el modelo SÍ pida la herramienta con una lectura (07:00), mientras la hora siga ambigua no se ejecuta nada. */
+    public function test_32c_mientras_siga_ambigua_no_se_ejecuta_ninguna_herramienta(): void
+    {
+        $cita = $this->pideLaVisita();
+        $version = MarketingAgendaVersion::current();
+
+        $this->turno('Mejor mañana a las 7', 'w.o2.ambtool', [
+            'courtesy_date' => '2026-09-22', 'courtesy_time' => '07:00',
+            'reply_draft' => 'Listo, te cambio la visita para mañana a las 7:00 a. m.',
+        ])->assertOk()->assertJsonPath('applied.tools_executed', []);
+
+        $this->assertSame(self::ACLARACION, $this->ultimoSalienteLiteral());
+        $this->assertSame('2026-09-22 18:00', $this->horaLocal($cita));
+        $this->assertSame($version, MarketingAgendaVersion::current());
+        $this->assertSame(1, MarketingAppointment::count());
+    }
+
+    /**
+     * Y la respuesta a la pregunta la resuelve Laravel: «7 p. m.» mueve la MISMA
+     * cita a las 19:00 aunque el modelo vuelva a etiquetar `goal_fat_loss`, no
+     * pida la herramienta y el critic vuelva a caer. ULTRON dice «7:00 p. m.»,
+     * la agenda enseña las 19:00 (y su canal avisa) y no aparece otra cita.
+     */
+    public function test_32d_despues_7_pm_mueve_la_misma_cita_y_ultron_y_la_agenda_coinciden(): void
+    {
+        $cita = $this->visitaConMemoriaDeBajarGrasa();
+        $this->turno('Mejor mañana a las 7', 'w.o2.canario2', self::COMO_EL_CANARIO, self::CRITIC_CAIDO)->assertOk();
+        $version = MarketingAgendaVersion::current();
+
+        $this->turno('7 p. m.', 'w.o2.7pm', array_merge(self::COMO_EL_CANARIO, [
+            'reply_draft' => 'Perfecto. Para bajar grasa, ¿ya vienes entrenando o arrancas desde cero?',
+        ]), self::CRITIC_CAIDO)->assertOk()->assertJsonPath('applied.tools_executed', [SalesIntents::TOOL_COURTESY_REQUEST]);
+
+        $this->assertSame('2026-09-22 19:00', $this->horaLocal($cita), 'no se movió la misma cita');
+        $this->assertSame(MarketingAppointment::STATUS_REQUESTED, $cita->fresh()->status);
+        $this->assertSame(1, $this->activas(), 'apareció una segunda cita');
+        $this->assertSame(1, MarketingAppointment::count());
+        $this->assertGreaterThan($version, MarketingAgendaVersion::current(), 'el canal de la agenda no avisó');
+
+        $sale = $this->ultimoSalienteLiteral();
+        $this->assertSame('Dejé registrada tu solicitud de cortesía para el martes 22 de septiembre a las 7:00 p. m. El equipo de Iron Body la revisará para tener todo preparado.', $sale);
+        $this->assertStringNotContainsString('grasa', mb_strtolower($sale));
+
+        // Lo que dice ULTRON = lo que enseña la agenda del CRM.
+        $fila = collect($this->getJson(self::AGENDA, $this->sesion())->assertOk()->json('data'))->firstWhere('id', $cita->id);
+        $this->assertNotNull($fila, 'la agenda no enseña la cita');
+        $enLaAgenda = Carbon::parse($fila['scheduled_at'])->setTimezone(BusinessClock::TZ);
+        $this->assertSame('19:00', $enLaAgenda->format('H:i'));
+        $this->assertStringContainsString(CourtesyRequestService::horaDicha($enLaAgenda), $sale);
+
+        $objetivo = data_get($this->conversation->fresh()->memory, 'active_goal');
+        $this->assertSame(['requested', '19:00'], [$objetivo['status'], $objetivo['data']['time']]);
+        $this->assertArrayNotHasKey('pending_hour', $objetivo['data'], 'la aclaración quedó pendiente después de resolverse');
+        $accion = MarketingAiAction::query()->where('conversation_id', $this->conversation->id)->latest('id')->firstOrFail();
+        $this->assertSame(['resolve', '19:00'], [data_get($accion->metadata, 'visit_hour.mode'), data_get($accion->metadata, 'visit_hour.chosen')]);
+    }
+
+    /** Sin pregunta suya pendiente, Laravel no ejecuta nada por su cuenta: «7 p. m.» a secas sigue el camino normal. */
+    public function test_32e_sin_su_pregunta_pendiente_laravel_no_mueve_nada(): void
+    {
+        $cita = $this->pideLaVisita();
+
+        $this->turno('7 p. m.', 'w.o2.sinpregunta', [
+            'tools_requested' => [], 'courtesy_action' => null, 'courtesy_date' => null, 'courtesy_time' => null,
+            'reply_draft' => 'Cuéntame, ¿qué buscas lograr con tu entrenamiento?',
+        ])->assertOk();
+
+        $this->assertSame('2026-09-22 18:00', $this->horaLocal($cita));
+        $accion = MarketingAiAction::query()->where('conversation_id', $this->conversation->id)->latest('id')->firstOrFail();
+        $this->assertNull(data_get($accion->metadata, 'visit_hour'));
+    }
+
+    /**
+     * Laravel sólo resuelve la respuesta a SU pregunta: una de las lecturas que
+     * ofreció, dicha sin dudas y a tiempo. Otra hora, una pregunta o una
+     * respuesta del día siguiente siguen el camino normal.
+     */
+    public function test_32g_laravel_solo_resuelve_su_propia_pregunta(): void
+    {
+        $cita = $this->pideLaVisita();
+        $sinHerramienta = ['tools_requested' => [], 'courtesy_action' => null, 'courtesy_date' => null, 'courtesy_time' => null, 'reply_draft' => 'Perfecto.'];
+        $this->turno('Mejor mañana a las 7', 'w.o2.propia', self::COMO_EL_CANARIO, self::CRITIC_CAIDO)->assertOk();
+
+        // Repetir la hora ambigua vuelve a preguntar: no se elige una lectura por la persona.
+        $this->turno('mañana a las 7', 'w.o2.repite', $sinHerramienta)->assertOk();
+        $this->assertSame('2026-09-22 18:00', $this->horaLocal($cita), 'se eligió una lectura de una hora que seguía ambigua');
+        $this->assertSame(self::ACLARACION, $this->ultimoSalienteLiteral());
+
+        $this->turno('8 pm', 'w.o2.otrahora', $sinHerramienta)->assertOk();
+        $this->assertSame('2026-09-22 18:00', $this->horaLocal($cita), 'Laravel movió la cita a una hora que no ofreció');
+
+        $this->turno('¿y a las 7 pm sí hay cupo?', 'w.o2.pregunta', $sinHerramienta)->assertOk();
+        $this->assertSame('2026-09-22 18:00', $this->horaLocal($cita), 'una pregunta se tomó como elección');
+
+        $this->travel(25)->hours();
+        $this->turno('7 p. m.', 'w.o2.tarde', $sinHerramienta)->assertOk();
+        $this->assertSame('2026-09-22 18:00', $this->horaLocal($cita), 'se resolvió una aclaración caducada');
+    }
+
+    /** Sin el número no la resuelve Laravel, pero si el modelo pide la herramienta el día sale de la aclaración pendiente. */
+    public function test_32h_el_modelo_puede_resolverla_con_el_dia_pendiente(): void
+    {
+        $cita = $this->pideLaVisita();
+        $this->turno('Mejor mañana a las 7', 'w.o2.pend1', self::COMO_EL_CANARIO, self::CRITIC_CAIDO)->assertOk();
+
+        $this->turno('la de la noche', 'w.o2.pend2', [
+            'courtesy_date' => null, 'courtesy_time' => '19:00',
+            'reply_draft' => 'Listo, tu visita de cortesía quedó solicitada para mañana a las 7:00 p. m.; el equipo la confirma.',
+        ])->assertOk();
+
+        $this->assertSame('2026-09-22 19:00', $this->horaLocal($cita));
+        $this->assertSame(1, $this->activas());
+    }
+
+    /** Sin visita todavía: la pregunta de la herramienta también queda pendiente, y «6 pm» la resuelve Laravel. */
+    public function test_32i_una_solicitud_nueva_ambigua_se_resuelve_con_la_respuesta(): void
+    {
+        $this->turno('Quiero ir mañana a las 6', 'w.o2.nueva1', [
+            'courtesy_date' => '2026-09-22', 'courtesy_time' => '18:00',
+            'reply_draft' => 'Perfecto, te registro la visita de cortesía para mañana a las 6:00 a. m.',
+        ])->assertOk();
+        $this->assertSame(0, MarketingAppointment::count());
+        $this->assertSame(['2026-09-22', ['06:00', '18:00']], [
+            data_get($this->conversation->fresh()->memory, 'active_goal.data.pending_hour.date'),
+            data_get($this->conversation->fresh()->memory, 'active_goal.data.pending_hour.options'),
+        ]);
+
+        $this->turno('6 pm', 'w.o2.nueva2', ['tools_requested' => [], 'courtesy_action' => null, 'courtesy_date' => null, 'courtesy_time' => null, 'reply_draft' => 'Perfecto.'])->assertOk();
+
+        $cita = MarketingAppointment::query()->where('marketing_lead_id', $this->lead->id)->sole();
+        $this->assertSame('2026-09-22 18:00', $this->horaLocal($cita));
+        $this->assertStringContainsString('a las 6:00 p. m.', $this->ultimoSalienteLiteral());
+    }
+
+    /** La hora que se recogía antes no sobrevive a la aclaración: la hora es justo lo que se pregunta. */
+    public function test_32j_la_hora_recogida_antes_no_sobrevive_a_la_aclaracion(): void
+    {
+        app(ConversationMemoryService::class)->recordCourtesyCollecting($this->conversation->fresh(), ['time' => '18:00']);
+
+        $this->turno('mañana a las 7', 'w.o2.recog', ['tools_requested' => [], 'courtesy_action' => null, 'courtesy_date' => null, 'courtesy_time' => null, 'reply_draft' => 'Perfecto.'])->assertOk();
+
+        $data = (array) data_get($this->conversation->fresh()->memory, 'active_goal.data');
+        $this->assertSame(['2026-09-22', null], [$data['date'] ?? null, $data['time'] ?? null]);
+        $this->assertSame(['07:00', '19:00'], data_get($data, 'pending_hour.options'));
+    }
+
+    /** Con otro tema la pregunta la hace la guarda del camino normal, y la visita solicitada tampoco pierde su objetivo. */
+    public function test_32k_la_guarda_del_camino_normal_tambien_conserva_el_objetivo(): void
+    {
+        $cita = $this->pideLaVisita();
+
+        $this->turno('Mejor mañana a las 7, hasta qué hora abren?', 'w.o2.guardaobj', [
+            'tools_requested' => [], 'courtesy_action' => null, 'courtesy_date' => null, 'courtesy_time' => null,
+            'reply_draft' => 'Abrimos de lunes a viernes de 5:00 a. m. a 10:00 p. m. Perfecto, cambio la visita para mañana a las 7:00 a. m.',
+        ])->assertOk();
+
+        $this->assertSame('2026-09-22 18:00', $this->horaLocal($cita));
+        $objetivo = data_get($this->conversation->fresh()->memory, 'active_goal');
+        $this->assertSame(['requested', $cita->id], [$objetivo['status'], $objetivo['data']['appointment_id'] ?? null]);
+        $this->assertSame(['07:00', '19:00'], data_get($objetivo, 'data.pending_hour.options'));
+    }
+
+    /** Lo que no es la hora de la visita no se secuestra: otra pregunta, una queja o una derivación siguen su camino. */
+    public function test_32f_otro_tema_o_el_opt_out_no_se_secuestran(): void
+    {
+        $cita = $this->pideLaVisita();
+
+        foreach ([
+            'precio' => 'Mejor mañana a las 7, y cuánto vale?',
+            'precio en duda' => 'Mejor mañana a las 7, de verdad cuesta eso?',
+            'horario' => 'Mejor mañana a las 7, hasta qué hora abren?',
+            'planes' => 'Mejor mañana a las 7, qué planes tienen?',
+            'un plan' => 'Mejor mañana a las 7, me interesa el Plan Mensual',
+        ] as $tema => $texto) {
+            $this->turno($texto, 'w.o2.otrotema.'.Str::slug($tema), [
+                'tools_requested' => [], 'courtesy_action' => null, 'courtesy_date' => null, 'courtesy_time' => null,
+                'intent' => SalesIntents::GENERAL_INFO, 'reply_draft' => 'Abrimos de lunes a viernes de 5:00 a. m. a 10:00 p. m.',
+            ]);
+            $accion = MarketingAiAction::query()->where('conversation_id', $this->conversation->id)->latest('id')->first();
+            $this->assertNull(data_get($accion?->metadata, 'visit_hour'), "se secuestró una pregunta de {$tema}");
+        }
+
+        $this->turno('Mejor mañana a las 7', 'w.o2.queja', [
+            'tools_requested' => [], 'courtesy_action' => null, 'courtesy_date' => null, 'courtesy_time' => null,
+            'intent' => SalesIntents::COMPLAINT, 'reply_draft' => 'Lamento lo ocurrido. Lo dejo marcado para revisión del equipo.',
+        ]);
+        $accion = MarketingAiAction::query()->where('conversation_id', $this->conversation->id)->latest('id')->first();
+        $this->assertNull(data_get($accion?->metadata, 'visit_hour'), 'se secuestró una queja');
+
+        // Una derivación propuesta va a su cerrojo, que la rechaza: el turno no es de Laravel.
+        $this->turno('Mejor mañana a las 7', 'w.o2.humano', [
+            'tools_requested' => [], 'courtesy_action' => null, 'courtesy_date' => null, 'courtesy_time' => null,
+            'human_handoff_requested' => true, 'reply_draft' => 'Te paso con una persona del equipo.',
+        ])->assertStatus(422)->assertJsonPath('code', 'unauthorized_handoff');
+
+        $this->assertSame('2026-09-22 18:00', $this->horaLocal($cita));
+    }
+
+    /**
+     * Pedir que no le escriban tampoco se secuestra, lo diga la etiqueta o lo
+     * pida la herramienta: cada una basta, como en el resto del commit.
+     *
+     * @return array<string,array{0:string,1:array<int,string>}>
+     */
+    public static function optOuts(): array
+    {
+        return [
+            'por la etiqueta' => [SalesIntents::DO_NOT_CONTACT_REQUEST, []],
+            'por la herramienta' => [SalesIntents::GENERAL_INFO, [SalesIntents::TOOL_MARK_DNC]],
+        ];
+    }
+
+    #[DataProvider('optOuts')]
+    public function test_32m_el_opt_out_no_se_secuestra(string $intent, array $herramientas): void
+    {
+        $this->pideLaVisita();
+
+        $this->turno('no me escriban más, mejor a las 7', 'w.o2.dnc', [
+            'tools_requested' => $herramientas, 'courtesy_action' => null, 'courtesy_date' => null, 'courtesy_time' => null,
+            'intent' => $intent, 'reply_draft' => 'Entendido, no te escribiremos más.',
+        ]);
+        $accion = MarketingAiAction::query()->where('conversation_id', $this->conversation->id)->latest('id')->firstOrFail();
+        $this->assertNull(data_get($accion->metadata, 'visit_hour'), 'se secuestró una petición de no escribir');
     }
 
     /** Una visita heredada en estado «reprogramada» está en firme: ULTRON la mueve, no abre otra encima. */

@@ -337,6 +337,28 @@ class UltronCommitService
         }
 
         /*
+         * ── 7.ter) LA HORA DE LA VISITA LA DECIDE LARAVEL ─────────────────────
+         *
+         * Medido en el canario el 2026-10-04: la visita a las 18:00, «Mejor
+         * mañana a las 7», y el Strategist etiquetó el turno `goal_fat_loss`
+         * sin pedir la herramienta; el critic tumbó los dos borradores y salió
+         * el respaldo de ESA etiqueta: «Listo. Para bajar grasa…». La pregunta
+         * de a. m./p. m. sólo vivía en el camino de la herramienta, y aquí ni
+         * se pidió la herramienta ni hubo camino normal.
+         *
+         * Con una visita viva (o a medio concretar) y una hora con dos lecturas
+         * dentro del horario, el turno es de la visita diga lo que diga la
+         * etiqueta: no se ejecuta nada y se pregunta. La respuesta a esa
+         * pregunta («7 p. m.») la resuelve Laravel también, porque la pregunta
+         * la hizo él. Va antes de la rendición y del critic justo por eso: esos
+         * caminos eligen el texto por la etiqueta del modelo. Y después del
+         * token, del relevo y de la elegibilidad: no es un salvoconducto.
+         */
+        if ($horaDeLaVisita = $this->horaDeLaVisita($conversation, $message, $proposal)) {
+            return $this->contestarLaHoraDeLaVisita($conversation, $message, $payload, $currentPhase, $horaDeLaVisita);
+        }
+
+        /*
          * ── 7.bis) RENDICIÓN: este turno ya fue rechazado una vez ─────────────
          *
          * Va aquí, y no más abajo, por la misma razón por la que existe: lo que
@@ -2094,6 +2116,198 @@ class UltronCommitService
         ];
     }
 
+    /**
+     * ¿Este turno es la HORA DE LA VISITA, y la decide Laravel? Dos casos:
+     *
+     *  - `preguntar`: hay visita viva o a medio concretar y la persona propone
+     *    una hora con dos lecturas dentro del horario de ese día («mejor
+     *    mañana a las 7»). No se ejecuta nada: se pregunta cuál.
+     *  - `resolver`: Laravel ya preguntó (queda `pending_hour` en el objetivo)
+     *    y la persona elige, sin dudas, una de esas lecturas («7 p. m.»).
+     *
+     * Null —y el turno sigue su camino— si la persona trae otra cosa (precio,
+     * planes, horario, ubicación), rechaza o cancela la visita, o si el modelo
+     * propone que no le escriban, una revisión del equipo o una persona: esos
+     * caminos tienen su propia autoridad y no se secuestran.
+     *
+     * @param  array<string,mixed>  $proposal
+     * @return array{modo:string,fecha:string,opciones?:array<int,string>,hora?:string}|null
+     */
+    private function horaDeLaVisita(MarketingConversation $conversation, MarketingMessage $message, array $proposal): ?array
+    {
+        $lead = $conversation->lead;
+        $texto = (string) $message->body;
+        $intent = (string) ($proposal['intent'] ?? '');
+        if ($lead === null
+            || $intent === SalesIntents::DO_NOT_CONTACT_REQUEST
+            || StaffReviewAuthority::motivoDeIntencion($intent) !== null
+            || array_intersect((array) ($proposal['tools_requested'] ?? []), [SalesIntents::TOOL_MARK_DNC, SalesIntents::TOOL_STAFF_REVIEW]) !== []
+            || ($proposal['next_state'] ?? null) === CommercialPhaseMachine::HUMAN_HANDOFF
+            || (bool) ($proposal['human_handoff_requested'] ?? false)
+            || ($proposal['courtesy_action'] ?? null) === 'cancel'
+            || CommercialTurnPolicy::declinesVisit($texto)
+            || CommercialTurnPolicy::traeOtroTema($texto, $this->knowledge->activePlans())) {
+            return null;
+        }
+
+        $objetivo = $this->memoryService->load($conversation)->activeGoal();
+        $objetivo = ($objetivo['kind'] ?? null) === ConversationMemoryService::GOAL_COURTESY ? $objetivo : null;
+        $viva = $this->courtesy->visitaVivaDe($lead, $conversation);
+        if ($objetivo === null && $viva === null) {
+            return null;
+        }
+
+        $ventanas = $this->gym->openingWindows();
+        $fechaDelTexto = CourtesyAuthority::fechaDesdeTexto($texto);
+        // Un día nombrado que no se lee sin dudas no es una hora por aclarar.
+        if ($fechaDelTexto === null && CourtesyAuthority::mencionesEn($texto)['fechas'] !== []) {
+            return null;
+        }
+
+        $pendiente = (array) ($objetivo['data']['pending_hour'] ?? []);
+        $vigente = isset($pendiente['date'], $pendiente['at']) && is_array($pendiente['options'] ?? null)
+            && rescue(fn () => Carbon::parse((string) $pendiente['at'])->diffInHours(now()) < ConversationMemoryService::GOAL_COLLECTING_HOURS, false, false);
+        if ($vigente && ($fechaDelTexto === null || $fechaDelTexto === $pendiente['date']) && CourtesyAuthority::textoSinDudas($texto)) {
+            $elegida = CourtesyAuthority::lecturasPropuestas($texto, (string) $pendiente['date'], $ventanas);
+            if ($elegida !== null && count($elegida) === 1 && in_array($elegida[0], $pendiente['options'], true)) {
+                return ['modo' => 'resolver', 'fecha' => (string) $pendiente['date'], 'hora' => $elegida[0]];
+            }
+        }
+
+        // El día de la pregunta: el que nombra, el de la aclaración en curso, el que se recogía o el de su visita.
+        $fecha = $fechaDelTexto
+            ?? ($vigente ? (string) $pendiente['date'] : null)
+            ?? (($objetivo['status'] ?? null) === ConversationMemoryService::GOAL_COLLECTING ? ($objetivo['data']['date'] ?? null) : null)
+            ?? $viva?->scheduled_at?->copy()->setTimezone(BusinessClock::TZ)->toDateString()
+            ?? ($objetivo['data']['date'] ?? null);
+        if ($fecha === null) {
+            return null;
+        }
+        $lecturas = CourtesyAuthority::lecturasPropuestas($texto, (string) $fecha, $ventanas);
+
+        return $lecturas !== null && count($lecturas) >= 2
+            ? ['modo' => 'preguntar', 'fecha' => (string) $fecha, 'opciones' => $lecturas]
+            : null;
+    }
+
+    /**
+     * El turno de la hora de la visita, contestado por Laravel. La etiqueta y
+     * el borrador del modelo no se usan: quedan en la fila como evidencia.
+     *
+     * Al preguntar no se ejecuta nada; se dice cómo está la visita y se
+     * pregunta, y la aclaración queda pendiente sin tocar el objetivo. Al
+     * resolver corre la MISMA herramienta que pediría el modelo —con su pausa
+     * y su autoridad— DESPUÉS de dejar la fila, como en el camino normal, y lo
+     * que se dice es el acta de la cita tal y como quedó.
+     *
+     * @param  array{modo:string,fecha:string,opciones?:array<int,string>,hora?:string}  $turno
+     * @return array<string,mixed>
+     */
+    private function contestarLaHoraDeLaVisita(
+        MarketingConversation $conversation,
+        MarketingMessage $message,
+        array $payload,
+        string $currentPhase,
+        array $turno,
+    ): array {
+        $proposal = (array) ($payload['proposal'] ?? []);
+        $lead = $conversation->lead;
+        $resolver = $turno['modo'] === 'resolver';
+        // La etiqueta más cercana del contrato: la que pone el decide de Laravel a estos mensajes.
+        $intent = SalesIntents::SCHEDULE_QUESTION;
+        $decision = [
+            'intent' => $intent,
+            'confidence' => 1.0,
+            'recommended_action' => SalesIntents::ACTION_REPLY,
+            'risk_flags' => [],
+            'tools_requested' => $resolver ? [SalesIntents::TOOL_COURTESY_REQUEST] : [],
+            'needs_staff_review' => false,
+            'courtesy_action' => 'request',
+            'courtesy_date' => $turno['fecha'],
+            'courtesy_time' => $turno['hora'] ?? null,
+        ];
+        $memoriaPrevia = $this->memoryService->load($conversation);
+
+        $action = $this->persist($conversation, $message, $payload, $decision, $currentPhase, null, array_filter([
+            'visit_hour' => array_filter([
+                'mode' => $resolver ? 'resolve' : 'ask',
+                'date' => $turno['fecha'],
+                'options' => $turno['opciones'] ?? null,
+                'chosen' => $turno['hora'] ?? null,
+            ], fn ($v) => $v !== null),
+            'model_intent' => $proposal['intent'] ?? null,
+            'model_tools_requested' => ((array) ($proposal['tools_requested'] ?? [])) ?: null,
+            'discarded_draft' => mb_substr((string) ($proposal['reply_draft'] ?? ''), 0, 500) ?: null,
+        ], fn ($v) => $v !== null));
+
+        $ejecutadas = [];
+        if ($resolver) {
+            $r = $this->execCourtesyRequest($conversation, $message, $decision);
+            $ejecutadas[] = $r;
+            $this->annotateExecuted($action, $r);
+            $meta = is_array($action->metadata) ? $action->metadata : [];
+            $meta['visit_hour']['result'] = array_filter([
+                'status' => $r['status'] ?? null,
+                'courtesy' => $r['courtesy'] ?? null,
+                'reason' => $r['reason'] ?? null,
+                'appointment_id' => $r['appointment_id'] ?? null,
+            ], fn ($v) => $v !== null);
+            $action->forceFill(['metadata' => $meta])->save();
+
+            $cita = ($r['status'] ?? null) === 'executed' ? MarketingAppointment::find((int) ($r['appointment_id'] ?? 0)) : null;
+            $texto = $cita !== null ? $this->courtesy->actaDeLaFila($cita) : null;
+            if ($texto === null) {
+                $estado = $this->courtesy->estadoDe($lead, $conversation);
+                $texto = ($estado !== null ? rtrim($estado, '.').'. ' : '').'Todavía no cambié nada de tu visita. ¿Qué día y a qué hora te queda bien?';
+            }
+        } else {
+            $this->memoryService->recordCourtesyHourQuestion($conversation->fresh(), $turno['fecha'], (array) $turno['opciones']);
+            $estado = $this->courtesy->estadoDe($lead, $conversation);
+            $pregunta = CourtesyRequestService::preguntaDeHora((array) $turno['opciones'], $estado === null);
+            $texto = $estado === null ? $pregunta : rtrim($estado, '.').'. '.$pregunta;
+        }
+
+        ChannelLog::info('ultron.courtesy.visit_hour_turn', [
+            'conversation_id' => (int) $conversation->id,
+            'ai_action_id' => (int) $action->id,
+            'mode' => $resolver ? 'resolve' : 'ask',
+            'model_intent' => $proposal['intent'] ?? null,
+        ]);
+
+        $resolution = $this->references->resolve((string) $message->body, $memoriaPrevia, $this->memoryService->sellablePlansForMemory());
+        $send = $this->dispatcher->dispatchWhatsapp(
+            $lead->fresh(),
+            $conversation->channel,
+            $texto,
+            ['kind' => 'reply', 'origin' => 'ultron', 'ai_action_id' => $action->id],
+            MarketingMessage::SENDER_AI,
+            conversation: $conversation,
+        );
+        $outcome = $send['sent'] ? 'sent' : ($send['dry_run'] ? 'dry_run' : 'failed');
+        $this->finalise($action, $outcome, $send);
+
+        if ($outcome !== 'failed') {
+            $memoriaFinal = $this->memoryService->recordSentTurn(
+                $conversation->fresh(), $message, $texto, null, $intent, $resolution, $send['message_id'] ?? null,
+            );
+            $this->leadProfile->absorb($conversation->fresh(), $message, $intent, $memoriaPrevia, $memoriaFinal);
+        }
+
+        return [
+            'ok' => true,
+            'ai_action_id' => (int) $action->id,
+            'outcome' => $outcome,
+            'message_id' => $send['message_id'],
+            'provider_message_id' => $send['provider_message_id'],
+            'commercial_phase' => ['from' => $currentPhase, 'to' => $currentPhase],
+            'reply_final' => $texto,
+            'applied' => [
+                'tools_executed' => $this->executedTools($ejecutadas),
+                'tools_rejected' => array_values(array_diff((array) ($proposal['tools_requested'] ?? []), $this->executedTools($ejecutadas))),
+            ],
+        ];
+    }
+
     // ── Piezas ────────────────────────────────────────────────────────────────
 
     /**
@@ -2378,10 +2592,15 @@ class UltronCommitService
             $horaVale = in_array($veredicto['reason'], [
                 CourtesyAuthority::FECHA_INVALIDA, CourtesyAuthority::FECHA_PASADA, CourtesyAuthority::FECHA_LEJANA, CourtesyAuthority::DIA_CERRADO,
             ], true) && CourtesyAuthority::minutosDe($decision['courtesy_time'] ?? null) !== null;
-            $this->memoryService->recordCourtesyCollecting($conversation->fresh(), [
-                'date' => $fechaVale ? ($decision['courtesy_date'] ?? null) : null,
-                'time' => $horaVale ? ($decision['courtesy_time'] ?? null) : null,
-            ]);
+            // La hora ambigua deja la aclaración pendiente y no degrada una visita ya solicitada.
+            if ($veredicto['reason'] === CourtesyAuthority::HORA_AMBIGUA && ! empty($veredicto['options'])) {
+                $this->memoryService->recordCourtesyHourQuestion($conversation->fresh(), (string) $decision['courtesy_date'], $veredicto['options']);
+            } else {
+                $this->memoryService->recordCourtesyCollecting($conversation->fresh(), [
+                    'date' => $fechaVale ? ($decision['courtesy_date'] ?? null) : null,
+                    'time' => $horaVale ? ($decision['courtesy_time'] ?? null) : null,
+                ]);
+            }
 
             return array_filter([
                 'tool' => $tool,
@@ -3115,7 +3334,7 @@ class UltronCommitService
             $lecturas = CourtesyAuthority::lecturasAmbiguas($texto, $fecha, null, $ventanas);
             if ($lecturas !== null) {
                 $pregunta = CourtesyRequestService::preguntaDeHora($lecturas, $estado === null);
-                $this->memoryService->recordCourtesyCollecting($conversation->fresh(), ['date' => $fecha]);
+                $this->memoryService->recordCourtesyHourQuestion($conversation->fresh(), (string) $fecha, $lecturas);
             } elseif (count($menciones['horas'][0]) >= 1) {
                 $hora = collect($menciones['horas'][0])->first(fn (string $l) => CourtesyAuthority::decide($fecha, $l, $ventanas)['ok']);
                 if ($hora !== null) {
@@ -3830,6 +4049,11 @@ class UltronCommitService
             && ($objetivo['status'] ?? null) === ConversationMemoryService::GOAL_COLLECTING
             ? (array) ($objetivo['data'] ?? [])
             : [];
+        // La aclaración de a. m./p. m. en curso sobre una visita ya solicitada: su día es el recogido.
+        if ($recogido === [] && ($objetivo['kind'] ?? null) === ConversationMemoryService::GOAL_COURTESY
+            && isset($objetivo['data']['pending_hour']['date'])) {
+            $recogido = ['date' => (string) $objetivo['data']['pending_hour']['date']];
+        }
         /*
          * El texto sólo cuenta si se lee SIN DUDAS: una negación, una
          * alternativa, una corrección, un rango o una pregunta hacen que no se

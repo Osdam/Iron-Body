@@ -438,12 +438,22 @@ class CourtesyRequestService
     }
 
     /**
+     * La visita viva de esta persona: la solicitud abierta de esta
+     * conversación, la de cualquier conversación suya o, si no hay ninguna,
+     * su próxima visita confirmada. Es la que ULTRON movería.
+     */
+    public function visitaVivaDe(MarketingLead $lead, MarketingConversation $conversation): ?MarketingAppointment
+    {
+        return $this->openFor($conversation) ?? $this->openForLead($lead) ?? $this->confirmedVisitsFor($lead)->first();
+    }
+
+    /**
      * Cómo está la visita de esta persona AHORA, sin afirmar ninguna acción:
      * lo que se dice cuando el borrador contaba un cambio que no se hizo.
      */
     public function estadoDe(MarketingLead $lead, MarketingConversation $conversation): ?string
     {
-        $cita = $this->openFor($conversation) ?? $this->openForLead($lead) ?? $this->confirmedVisitsFor($lead)->first();
+        $cita = $this->visitaVivaDe($lead, $conversation);
         if ($cita === null || $cita->scheduled_at === null) {
             return null;
         }
