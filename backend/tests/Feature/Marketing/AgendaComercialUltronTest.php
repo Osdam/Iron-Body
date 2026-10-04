@@ -739,6 +739,101 @@ class AgendaComercialUltronTest extends TestCase
         $this->assertSame(255, mb_strlen((string) $cita->fresh()->cancellation_reason));
     }
 
+    // ── La fecha y la hora que dice ULTRON son las de la fila ───────────────
+
+    /** El borrador y la fila guardada, tras un turno con la herramienta de cortesía. */
+    private function trasElTurno(string $texto, string $wamid, array $propuesta): array
+    {
+        $this->turno($texto, $wamid, $propuesta)->assertOk();
+        $cita = MarketingAppointment::query()->where('marketing_lead_id', $this->lead->id)->latest('updated_at')->latest('id')->first();
+
+        return [$this->ultimoSaliente(), $cita?->scheduled_at?->copy()->setTimezone('America/Bogota')->format('Y-m-d H:i')];
+    }
+
+    /** Medido en el canario (2026-10-04): la fila a las 18:00 y la respuesta «a las 6:00 a. m.». Sale la hora de la fila. */
+    public function test_29_registrada_a_las_18_ultron_dice_6_pm_aunque_el_borrador_diga_6_am(): void
+    {
+        [$sale, $fila] = $this->trasElTurno('quiero ir mañana a las 6', 'w.o2.h1', [
+            'courtesy_date' => '2026-09-22', 'courtesy_time' => '18:00',
+            'reply_draft' => 'Perfecto, te registro la visita de cortesía para mañana a las 6:00 a. m.',
+        ]);
+        $this->assertSame('2026-09-22 18:00', $fila);
+        $this->assertStringNotContainsString('6:00 a. m.', $sale, 'salió una hora que no es la de la cita guardada');
+        $this->assertStringContainsString('martes 22 de septiembre a las 6:00 p. m.', $sale);
+        $this->assertStringNotContainsString('confirmad', $sale, 'una solicitud no se cuenta como confirmada');
+        $this->assertSame(MarketingAppointment::STATUS_REQUESTED, MarketingAppointment::query()->where('marketing_lead_id', $this->lead->id)->sole()->status);
+    }
+
+    public function test_29b_registrada_a_las_06_ultron_dice_6_am_aunque_el_borrador_diga_6_pm(): void
+    {
+        [$sale, $fila] = $this->trasElTurno('quiero ir mañana a las 6 de la mañana', 'w.o2.h2', [
+            'courtesy_date' => '2026-09-22', 'courtesy_time' => '06:00',
+            'reply_draft' => 'Listo, te registro la visita de cortesía para mañana a las 6:00 p. m.',
+        ]);
+        $this->assertSame('2026-09-22 06:00', $fila);
+        $this->assertStringNotContainsString('6:00 p. m.', $sale);
+        $this->assertStringContainsString('martes 22 de septiembre a las 6:00 a. m.', $sale);
+    }
+
+    /** Si el borrador ya dice la verdad —con la hora exacta o con un «a las 6» que admite las 18:00—, sale intacto. */
+    public function test_29c_un_borrador_que_casa_con_la_fila_sale_intacto(): void
+    {
+        [$sale] = $this->trasElTurno('quiero ir mañana a las 6', 'w.o2.h3', [
+            'courtesy_date' => '2026-09-22', 'courtesy_time' => '18:00',
+            'reply_draft' => 'Listo, te registro la visita de cortesía para mañana a las 6:00 p. m. Abrimos de lunes a viernes de 5:00 a. m. a 10:00 p. m.',
+        ]);
+        $this->assertStringContainsString('te registro la visita de cortesía para mañana a las 6:00 p. m.', $sale);
+        $this->assertStringContainsString('abrimos de lunes a viernes de 5:00 a. m. a 10:00 p. m.', $sale, 'se retiró el horario, que no habla de la visita');
+        $this->assertStringNotContainsString('dejé registrada tu solicitud', $sale, 'se añadió un acta sin que nada mintiera');
+
+        MarketingAppointment::query()->delete();
+        $this->conversation = MarketingConversation::create(['lead_id' => $this->lead->id, 'channel' => 'whatsapp', 'status' => 'open', 'ai_enabled' => true, 'human_takeover' => false, 'commercial_phase' => P::DISCOVERY]);
+        [$sale2] = $this->trasElTurno('quiero ir mañana a las 6', 'w.o2.h3b', [
+            'courtesy_date' => '2026-09-22', 'courtesy_time' => '18:00',
+            'reply_draft' => 'Listo, te registro la visita de cortesía para mañana a las 6.',
+        ]);
+        $this->assertStringContainsString('te registro la visita de cortesía para mañana a las 6', $sale2);
+        $this->assertStringNotContainsString('dejé registrada tu solicitud', $sale2);
+    }
+
+    public function test_29d_un_dia_que_no_es_el_de_la_fila_tampoco_sale(): void
+    {
+        [$sale] = $this->trasElTurno('quiero ir mañana a las 6', 'w.o2.h4', [
+            'courtesy_date' => '2026-09-22', 'courtesy_time' => '18:00',
+            'reply_draft' => 'Perfecto, te registro la visita de cortesía para el miércoles a las 6:00 p. m.',
+        ]);
+        $this->assertStringNotContainsString('miércoles', $sale);
+        $this->assertStringContainsString('martes 22 de septiembre a las 6:00 p. m.', $sale);
+    }
+
+    /** Al MOVER la visita, la respuesta dice el día y la hora nuevos de la fila. */
+    public function test_29e_al_reprogramar_sale_el_dia_y_la_hora_nuevos_de_la_fila(): void
+    {
+        $this->pideLaVisita();
+        [$sale, $fila] = $this->trasElTurno('mejor el miércoles a las 7', 'w.o2.h5', [
+            'courtesy_date' => '2026-09-23', 'courtesy_time' => '19:00',
+            'reply_draft' => 'Listo, moví tu visita de cortesía para el jueves a las 7:00 p. m.',
+        ]);
+        $this->assertSame('2026-09-23 19:00', $fila);
+        $this->assertStringNotContainsString('jueves', $sale);
+        $this->assertStringContainsString('miércoles 23 de septiembre a las 7:00 p. m.', $sale);
+        $this->assertSame(1, $this->activas());
+    }
+
+    /** Al CANCELAR, la respuesta nombra la visita que de verdad se canceló. */
+    public function test_29f_al_cancelar_sale_la_visita_que_de_verdad_se_cancelo(): void
+    {
+        $cita = $this->pideLaVisita();
+        $this->turno('ya no voy a poder ir, cancela', 'w.o2.h6', [
+            'courtesy_action' => 'cancel', 'courtesy_date' => null, 'courtesy_time' => null,
+            'reply_draft' => 'Sin problema, cancelé tu visita del miércoles a las 7:00 p. m.',
+        ])->assertOk();
+        $sale = $this->ultimoSaliente();
+        $this->assertSame(MarketingAppointment::STATUS_CANCELLED, $cita->fresh()->status);
+        $this->assertStringNotContainsString('miércoles', $sale);
+        $this->assertStringContainsString('cancelé tu solicitud de visita para el martes 22 de septiembre a las 6:00 p. m.', $sale);
+    }
+
     /** Una visita heredada en estado «reprogramada» está en firme: ULTRON la mueve, no abre otra encima. */
     public function test_26_una_visita_heredada_reprogramada_cuenta_como_confirmada(): void
     {

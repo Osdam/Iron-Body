@@ -972,7 +972,7 @@ class AsesorSeniorTest extends TestCase
         $t = mb_strtolower($this->ultimo());
         $this->assertStringNotContainsString('ya confirmó', $t, 'se afirmó una confirmación que no existe');
         $this->assertMatchesRegularExpression('/solicit(ada|ud)/u', $t);
-        $this->assertStringContainsString('miércoles 23 de septiembre a las 14:00', $t);
+        $this->assertStringContainsString('miércoles 23 de septiembre a las 2:00 p. m.', $t);
     }
 
     /** Con la visita a medias y el critic caído, una objeción recibe su propio texto, no la pregunta por el día. */
@@ -1165,7 +1165,7 @@ class AsesorSeniorTest extends TestCase
         ]);
         $t = mb_strtolower($this->ultimo());
         $this->assertStringNotContainsString('quedaste agendado', $t);
-        $this->assertStringContainsString('dejé registrada tu solicitud de cortesía para el miércoles 23 de septiembre a las 14:00', $t, 'el acta salió mutilada');
+        $this->assertStringContainsString('dejé registrada tu solicitud de cortesía para el miércoles 23 de septiembre a las 2:00 p. m.', $t, 'el acta salió mutilada');
 
         ['message' => $m2] = $this->decide('y el jueves a las 11 pm?', 'w.as.35c');
         $this->commit($m2, [

@@ -10,6 +10,7 @@ use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
 use App\Services\Marketing\MarketingAppointmentService;
 use App\Services\Observability\ChannelLog;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -408,13 +409,55 @@ class CourtesyRequestService
             return null;
         }
 
+        // El punto de «p. m.» cierra la oración: sin otro detrás («p. m.. El»).
+        return 'Dejé registrada tu solicitud de cortesía para el '.self::fechaDicha($d).' a las '.self::horaDicha($d)
+            .' El equipo de Iron Body la revisará para tener todo preparado.';
+    }
+
+    /**
+     * El acta de la cita que la herramienta ACABA de tocar, según cómo quedó la
+     * fila: solicitada, confirmada o cancelada. Es lo que la persona lee sobre
+     * su visita cuando el borrador del modelo nombra otro día u otra hora: el
+     * borrador se escribe antes de que la herramienta se ejecute, y la verdad
+     * es la fila. Devuelve null si no hay nada que contar.
+     */
+    public function actaDeLaFila(MarketingAppointment $cita): ?string
+    {
+        if ($cita->scheduled_at === null) {
+            return null;
+        }
+        $d = Carbon::parse($cita->scheduled_at)->setTimezone(BusinessClock::TZ);
+        $cuando = 'el '.self::fechaDicha($d).' a las '.self::horaDicha($d);
+
+        return match (true) {
+            $cita->status === MarketingAppointment::STATUS_REQUESTED => $this->actaDe($cita),
+            in_array($cita->status, MarketingAppointment::CONFIRMED_STATUSES, true) => 'Tu visita está confirmada para '.$cuando,
+            $cita->status === MarketingAppointment::STATUS_CANCELLED => 'Cancelé tu solicitud de visita para '.$cuando,
+            default => null,
+        };
+    }
+
+    /** «lunes 5 de octubre»: el día como se le dice a la persona. */
+    public static function fechaDicha(CarbonInterface $d): string
+    {
         $dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
         $meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+        $d = Carbon::instance($d)->setTimezone(BusinessClock::TZ);
 
-        $fecha = $dias[$d->dayOfWeek].' '.$d->day.' de '.$meses[$d->month - 1];
+        return $dias[$d->dayOfWeek].' '.$d->day.' de '.$meses[$d->month - 1];
+    }
 
-        return 'Dejé registrada tu solicitud de cortesía para el '.$fecha.' a las '.$d->format('H:i')
-            .'. El equipo de Iron Body la revisará para tener todo preparado.';
+    /**
+     * «6:00 p. m.»: la hora como se dice en Colombia, sin ambigüedad. Las 18:00
+     * se dicen «6:00 p. m.» y las 06:00 «6:00 a. m.»: con el reloj de 24 horas
+     * o con un «6» suelto, la persona puede leer la mañana donde era la tarde.
+     */
+    public static function horaDicha(CarbonInterface $d): string
+    {
+        $d = Carbon::instance($d)->setTimezone(BusinessClock::TZ);
+        $h = $d->hour % 12 === 0 ? 12 : $d->hour % 12;
+
+        return $h.':'.$d->format('i').' '.($d->hour < 12 ? 'a. m.' : 'p. m.');
     }
 
     /**

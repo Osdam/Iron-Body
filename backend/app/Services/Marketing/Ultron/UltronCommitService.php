@@ -1412,6 +1412,8 @@ class UltronCommitService
         // primera retiraba el acta que la segunda acababa de escribir con la fila del CRM.
         $replyFinal = $this->sinConstanciaDeUnaCortesiaQueNoSeRegistro($conversation, $replyFinal, $action, $executed, $decision);
         $replyFinal = $this->sinConfirmarUnaCortesiaQueNadieConfirmo($conversation, $replyFinal, $action);
+        // Y lo último de la cortesía: el día y la hora que se dicen son los de la fila guardada.
+        $replyFinal = $this->conLaFechaDeLaCita($replyFinal, $action, $executed);
 
         /*
          * 13.bis) Y LO ÚLTIMO: QUE EL TEXTO CUMPLA LA POLÍTICA DEL TURNO.
@@ -3043,6 +3045,76 @@ class UltronCommitService
         return $abierta !== null
             ? self::CORTESIA_SIN_CONFIRMAR
             : self::NADA_QUE_CONFIRMAR;
+    }
+
+    /**
+     * LA FECHA Y LA HORA QUE SE DICEN SON LAS DE LA FILA.
+     *
+     * El borrador lo escribe el modelo ANTES de que la herramienta se ejecute,
+     * así que puede nombrar un día o una hora que no son los que quedaron
+     * guardados. Medido en el canario el 2026-10-04: «te registro la visita de
+     * cortesía para mañana a las 6:00 a. m.» con la cita guardada a las 18:00.
+     *
+     * Ejecutada la cortesía (solicitarla, moverla, repetirla o cancelarla),
+     * cada frase que nombra un día o una hora que no casa con la cita REAL se
+     * retira, y en su lugar va el acta que Laravel escribe desde la fila. Un
+     * «a las 6» suelto casa con las 18:00 (es una de sus lecturas); «6:00 a. m.»
+     * no. Las frases del horario del gimnasio no hablan de la visita y no se
+     * tocan. Lo demás del mensaje sale como lo escribió el modelo.
+     *
+     * @param  array<int,array<string,mixed>>  $ejecutadas
+     */
+    private function conLaFechaDeLaCita(string $respuesta, MarketingAiAction $action, array $ejecutadas): string
+    {
+        $hecho = collect($ejecutadas)->first(fn (array $r): bool => ($r['tool'] ?? null) === SalesIntents::TOOL_COURTESY_REQUEST
+            && ($r['status'] ?? null) === 'executed'
+            && ! empty($r['appointment_id']));
+        $cita = $hecho !== null ? MarketingAppointment::find((int) $hecho['appointment_id']) : null;
+        if ($cita === null || $cita->scheduled_at === null) {
+            return $respuesta;
+        }
+        $d = $cita->scheduled_at->copy()->setTimezone(BusinessClock::TZ);
+        $laFila = [['date' => $d->toDateString(), 'time' => $d->format('H:i')]];
+        $delHorario = '/\b(abrimos|abre|abierto|cerramos|cierra|horario|atendemos|atencion|lunes\s+a\s+viernes|de\s+lunes\s+a)\b/u';
+
+        // Una oración termina donde empieza otra en mayúscula: «de 5:00 a. m. a
+        // 10:00 p. m.» es UNA, y partirla dejaba «a 10:00 p. m.» sin su «abrimos».
+        // Lookbehinds de longitud fija: el PCRE de producción no admite otros.
+        $piezas = array_values(array_filter(
+            preg_split('/(?<=[.!?;])\s+(?=[A-ZÁÉÍÓÚÑ¿¡])|\n+/u', trim($respuesta)) ?: [],
+            fn (string $f) => trim($f) !== '',
+        ));
+        $quedan = array_values(array_filter($piezas, function (string $frase) use ($laFila, $delHorario): bool {
+            $m = CourtesyAuthority::mencionesEn($frase);
+            if ($m['fechas'] === [] && $m['horas'] === []) {
+                return true;
+            }
+
+            return preg_match($delHorario, SalesAgentDecisionSchema::normalize($frase)) === 1 || $this->casaConAlguno($m, $laFila);
+        }));
+        if (count($quedan) === count($piezas)) {
+            return $respuesta;
+        }
+
+        $acta = $this->courtesy->actaDeLaFila($cita);
+        $limpio = trim(implode(' ', $quedan));
+        $salida = $acta === null || str_contains($limpio, $acta) ? $limpio : trim($limpio.' '.$acta);
+
+        ChannelLog::warning('ultron.courtesy.reply_date_corrected', [
+            'conversation_id' => (int) $action->conversation_id,
+            'appointment_id' => (int) $cita->id,
+            'cita' => $d->format('Y-m-d H:i'),
+            'frases_retiradas' => count($piezas) - count($quedan),
+        ]);
+        $meta = is_array($action->metadata) ? $action->metadata : [];
+        $meta['courtesy_reply_corrected'] = [
+            'appointment_id' => (int) $cita->id,
+            'cita' => $d->format('Y-m-d H:i'),
+            'frases_retiradas' => count($piezas) - count($quedan),
+        ];
+        $action->forceFill(['metadata' => $meta])->save();
+
+        return $salida !== '' ? $salida : self::CORTESIA_SIN_CONFIRMAR;
     }
 
     /**
