@@ -192,7 +192,10 @@ class ReportsEndpointsTest extends TestCase
             'membership_end_date' => $hoy->subDays(10)->toDateString(),
         ]);
 
-        $r = $this->getJson('/api/admin/reports/members/lapsed?preset=this_month', $this->h)->assertOk()->json();
+        // `last_30` y no `this_month`: la membresia vence hace diez dias, y con
+        // el mes en curso el test fallaba todos los dias 1 a 10, cuando ese
+        // vencimiento cae en el mes anterior y queda fuera del rango.
+        $r = $this->getJson('/api/admin/reports/members/lapsed?preset=last_30', $this->h)->assertOk()->json();
 
         $this->assertSame(1, $r['total']);
         $this->assertSame('Se fue', $r['data'][0]['name']);
