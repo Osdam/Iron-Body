@@ -60,6 +60,9 @@ class User extends Authenticatable
             'membership_auto_renew' => 'boolean',
             'membership_cancellation_requested_at' => 'datetime',
             'membership_cancellation_effective_at' => 'date:Y-m-d',
+            // Cuándo entró la ficha desde el sistema anterior. Null = se creó
+            // aquí, en el mostrador o desde la app.
+            'imported_at' => 'datetime',
         ];
     }
 

@@ -274,6 +274,12 @@ class ImportLegacyCrmCommand extends Command
             $user = new User;
             // El acceso es por OTP, no por contraseña; el cast `hashed` la cifra.
             $user->password = Str::random(40);
+            // VIENE DEL SISTEMA ANTERIOR, no del mostrador. Sin esta marca, los
+            // informes cuentan la carga como altas del día: miles de socios
+            // «nuevos» de golpe y un desplome del 99 % en el periodo siguiente.
+            // Se marca solo al crearla: una ficha que ya existía en Iron Body no
+            // se convierte en importada porque el export la vuelva a traer.
+            $user->imported_at = now();
         }
 
         $user->name = $nombre;

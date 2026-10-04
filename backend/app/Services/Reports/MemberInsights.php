@@ -18,6 +18,13 @@ use Illuminate\Database\Eloquent\Builder;
  * no por su primer pago: son dos preguntas distintas y mezclarlas hacía que un
  * socio de hace dos años que hoy renueva apareciera como «nuevo».
  *
+ * Y NO CUENTAN LAS FICHAS IMPORTADAS. El export del sistema anterior se vuelve
+ * a cargar cada tanto, y para esas fichas `created_at` es el día de la carga, no
+ * el día en que el socio se inscribió. Sin excluirlas, el periodo de la carga
+ * enseñaba miles de altas y el siguiente un desplome del 99 % — una caída que
+ * nunca ocurrió. Se cuentan aparte, en `imported`, que sí es una cifra real:
+ * cuántas fichas viejas entraron al sistema en este periodo.
+ *
  * LA RETENCIÓN se mide sobre el pasado, no sobre el futuro: de las membresías
  * que vencieron dentro del periodo, cuántas volvieron a pagar después. Por eso
  * un periodo que termina hoy da siempre una retención más baja de la real —a
@@ -47,12 +54,13 @@ final class MemberInsights
 
         $fila = User::query()->selectRaw(
             'COUNT(*) as total,'
-            .' COUNT(CASE WHEN users.created_at BETWEEN ? AND ? THEN 1 END) as nuevos,'
+            .' COUNT(CASE WHEN users.created_at BETWEEN ? AND ? AND users.imported_at IS NULL THEN 1 END) as nuevos,'
+            .' COUNT(CASE WHEN users.imported_at BETWEEN ? AND ? THEN 1 END) as importados,'
             .' COUNT(CASE WHEN '.$cuenta.' IN (?, ?, ?) THEN 1 END) as inactivos,'
             .' COUNT(CASE WHEN membership_end_date >= ? THEN 1 END) as vigentes,'
             .' COUNT(CASE WHEN membership_end_date < ? THEN 1 END) as vencidos,'
             .' COUNT(CASE WHEN membership_end_date IS NULL THEN 1 END) as sin_membresia',
-            [$desde, $hasta, 'inactive', 'inactivo', 'inactiva', $hoy, $hoy]
+            [$desde, $hasta, $desde, $hasta, 'inactive', 'inactivo', 'inactiva', $hoy, $hoy]
         )->first();
 
         $retencion = $this->retention();
@@ -60,6 +68,7 @@ final class MemberInsights
         return [
             'members' => (int) $fila->total,
             'new' => (int) $fila->nuevos,
+            'imported' => (int) $fila->importados,
             'inactive' => (int) $fila->inactivos,
             'active' => (int) $fila->vigentes,
             'expired' => (int) $fila->vencidos,
@@ -278,6 +287,7 @@ final class MemberInsights
         $bucket = ReportSql::businessDate('users.created_at');
 
         $porDia = User::query()
+            ->whereNull('users.imported_at')
             ->whereBetween('users.created_at', [$desde, $hasta])
             ->selectRaw("{$bucket} as periodo, COUNT(*) as n")
             ->groupByRaw($bucket)

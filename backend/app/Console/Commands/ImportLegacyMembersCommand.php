@@ -152,6 +152,9 @@ class ImportLegacyMembersCommand extends Command
         if ($userIsNew) {
             $user = new User;
             $user->password = Str::random(40); // el cast 'hashed' lo bcrypt-ea; el login es por OTP, no por password
+            // Viene del sistema anterior: que los informes no la cuenten como
+            // un alta del día de la carga. Ver la migración de `imported_at`.
+            $user->imported_at = now();
         }
 
         $user->name = $fullName;
