@@ -263,6 +263,10 @@ class MarketingAppointmentController extends Controller
      * SSE: avisa cuando cambia cualquier cita —la crea ULTRON, la confirma otra
      * sesión, la mueve una herramienta—. Solo viaja la versión de la agenda:
      * quien escucha relee la lista por el GET, con sus filtros y su alcance.
+     *
+     * Mira la versión cada segundo: la Agenda abierta tiene que enseñar el
+     * cambio en dos segundos como mucho, y con dos de espera más la relectura
+     * se pasaba. Es una lectura de una fila por clave primaria.
      */
     public function stream(Request $request): Response
     {
@@ -279,7 +283,7 @@ class MarketingAppointmentController extends Controller
             }
         };
 
-        return SseStream::response($avisa, 25, 2000, $avisa);
+        return SseStream::response($avisa, 25, 1000, $avisa);
     }
 
     /**
