@@ -292,11 +292,156 @@ class AgendaComercialUltronTest extends TestCase
 
         $this->postJson(self::AGENDA."/{$cita->id}/complete", [], $s)->assertStatus(409)->assertJsonPath('code', 'appointment_not_confirmed');
         $this->postJson(self::AGENDA."/{$cita->id}/confirm", [], $s)->assertOk();
+        // Completar exige además que haya llegado su hora (test_34): se va a ella, con una sesión viva.
+        $this->travelTo($cita->fresh()->scheduled_at->copy()->addMinute());
+        $s = $this->sesion();
         $this->postJson(self::AGENDA."/{$cita->id}/complete", ['note' => 'Vino con un amigo'], $s)->assertOk()
             ->assertJsonPath('changed', true)->assertJsonPath('data.status', 'completed');
         $this->postJson(self::AGENDA."/{$cita->id}/complete", [], $s)->assertOk()->assertJsonPath('changed', false);
         $this->postJson(self::AGENDA."/{$cita->id}/cancel", [], $s)->assertStatus(409)->assertJsonPath('code', 'appointment_closed');
         $this->assertNotNull($cita->fresh()->completed_at);
+    }
+
+    // ── 7.bis · completar, no antes de su hora ───────────────────────────────
+
+    private const NO_HA_LLEGADO = 'La visita todavía no puede marcarse como completada porque su hora no ha llegado.';
+
+    /** Una visita confirmada desde el CRM para esa hora de Bogotá. */
+    private function confirmadaPara(string $bogota): MarketingAppointment
+    {
+        return MarketingAppointment::create([
+            'marketing_lead_id' => $this->lead->id, 'type' => MarketingAppointment::TYPE_VISIT, 'title' => 'Visita de prueba',
+            'status' => MarketingAppointment::STATUS_SCHEDULED, 'source' => MarketingAppointment::SOURCE_CRM,
+            'scheduled_at' => Carbon::parse($bogota, 'America/Bogota')->utc(),
+        ]);
+    }
+
+    /**
+     * Ese instante de Bogotá, con el reloj simulado en UTC como la app: con uno
+     * en otra zona, Carbon lee las fechas sin zona de la base de datos en la
+     * zona del reloj simulado, y la cita de las 18:00 pasaría a las 23:00.
+     */
+    private function enBogota(string $bogota): void
+    {
+        Carbon::setTestNow(Carbon::parse($bogota, 'America/Bogota')->utc());
+    }
+
+    private function auditoriasDe(MarketingAppointment $cita): int
+    {
+        return AuditLog::query()->where('entity', 'cita')->where('entity_id', $cita->id)->count();
+    }
+
+    /** Completar es decir que la visita ocurrió: antes de su hora, 409 y nada cambia (ni estado, ni historia, ni aviso, ni auditoría). */
+    public function test_34_completar_antes_de_su_hora_da_409_y_no_toca_nada(): void
+    {
+        // Ahora es el lunes 21 a las 09:00 de Bogotá; la visita es el martes 22 a las 18:00.
+        $cita = $this->confirmadaPara('2026-09-22 18:00');
+        $version = MarketingAgendaVersion::current();
+        $auditorias = $this->auditoriasDe($cita);
+
+        $this->postJson(self::AGENDA."/{$cita->id}/complete", ['note' => 'antes de tiempo'], $this->sesion())
+            ->assertStatus(409)->assertJsonPath('code', 'appointment_not_due')->assertJsonPath('message', self::NO_HA_LLEGADO);
+
+        $fila = $cita->fresh();
+        $this->assertSame(MarketingAppointment::STATUS_SCHEDULED, $fila->status);
+        $this->assertNull($fila->completed_at);
+        $this->assertNull($fila->notes);
+        $this->assertSame([], (array) data_get($fila->metadata, 'history', []));
+        $this->assertSame($version, MarketingAgendaVersion::current(), 'la agenda avisó un cambio que no hubo');
+        $this->assertSame($auditorias, $this->auditoriasDe($cita));
+    }
+
+    /** En su hora exacta ya se puede, y una pasada también; repetirlo sigue siendo un «ya estaba así», sin aviso ni auditoría. */
+    public function test_34b_en_su_hora_exacta_y_despues_se_completa_y_repetir_no_hace_nada(): void
+    {
+        $cita = $this->confirmadaPara('2026-09-22 18:00');
+        $pasada = $this->confirmadaPara('2026-09-22 10:00');
+
+        $this->enBogota('2026-09-22 18:00:00');
+        $s = $this->sesion();
+        $version = MarketingAgendaVersion::current();
+        $this->postJson(self::AGENDA."/{$cita->id}/complete", [], $s)->assertOk()
+            ->assertJsonPath('changed', true)->assertJsonPath('data.status', 'completed');
+        $this->assertSame($version + 1, MarketingAgendaVersion::current());
+
+        $auditorias = $this->auditoriasDe($cita);
+        $this->postJson(self::AGENDA."/{$cita->id}/complete", [], $s)->assertOk()->assertJsonPath('changed', false);
+        $this->assertSame($version + 1, MarketingAgendaVersion::current(), 'repetir avisó un cambio que no hubo');
+        $this->assertSame($auditorias, $this->auditoriasDe($cita));
+
+        $this->postJson(self::AGENDA."/{$pasada->id}/complete", [], $s)->assertOk()
+            ->assertJsonPath('changed', true)->assertJsonPath('data.status', 'completed');
+    }
+
+    /** El borde de medianoche en Bogotá: a esa hora ya es otro día en UTC, y eso no puede engañar a la regla. */
+    public function test_34c_el_borde_de_medianoche_en_bogota(): void
+    {
+        $alFinal = $this->confirmadaPara('2026-09-22 23:59');   // 2026-09-23 04:59 UTC
+        $alEmpezar = $this->confirmadaPara('2026-09-23 00:01'); // 2026-09-23 05:01 UTC
+
+        $this->enBogota('2026-09-22 23:58:59');
+        $s = $this->sesion();
+        $this->postJson(self::AGENDA."/{$alFinal->id}/complete", [], $s)->assertStatus(409)->assertJsonPath('code', 'appointment_not_due');
+
+        $this->enBogota('2026-09-22 23:59:00');
+        $this->postJson(self::AGENDA."/{$alFinal->id}/complete", [], $s)->assertOk()->assertJsonPath('changed', true);
+        // Las 23:59 del 22 en Bogotá ya son el 23 en UTC, el mismo día que la visita de las 00:01: sigue sin poder completarse.
+        $this->postJson(self::AGENDA."/{$alEmpezar->id}/complete", [], $s)->assertStatus(409)->assertJsonPath('code', 'appointment_not_due');
+
+        $this->enBogota('2026-09-23 00:01:00');
+        $this->postJson(self::AGENDA."/{$alEmpezar->id}/complete", [], $s)->assertOk()->assertJsonPath('changed', true);
+    }
+
+    /** Lo que ya se rechazaba conserva su motivo, antes y después de la hora: el estado se mira antes que el reloj. */
+    public function test_34d_solicitada_cancelada_y_completada_conservan_su_respuesta(): void
+    {
+        $solicitada = $this->pideLaVisita();
+        $cancelada = $this->confirmadaPara('2026-09-22 10:00');
+        $this->postJson(self::AGENDA."/{$cancelada->id}/cancel", ['reason' => 'No puede venir'], $this->sesion())->assertOk();
+        $noVino = $this->confirmadaPara('2026-09-22 11:00');
+        $noVino->forceFill(['status' => MarketingAppointment::STATUS_NO_SHOW])->save();
+        // Un dato heredado: completada aunque su fecha sea futura. Repetir sigue siendo un «ya estaba así».
+        $completada = MarketingAppointment::create([
+            'marketing_lead_id' => $this->lead->id, 'type' => MarketingAppointment::TYPE_VISIT, 'title' => 'Heredada',
+            'status' => MarketingAppointment::STATUS_COMPLETED, 'completed_at' => now(),
+            'scheduled_at' => Carbon::parse('2026-09-25 18:00', 'America/Bogota')->utc(),
+        ]);
+
+        foreach (['2026-09-21 09:00:00', '2026-09-23 09:00:00'] as $cuando) {
+            $this->enBogota($cuando);
+            $s = $this->sesion();
+            $this->postJson(self::AGENDA."/{$solicitada->id}/complete", [], $s)->assertStatus(409)->assertJsonPath('code', 'appointment_not_confirmed');
+            $this->postJson(self::AGENDA."/{$cancelada->id}/complete", [], $s)->assertStatus(409)->assertJsonPath('code', 'appointment_closed');
+            $this->postJson(self::AGENDA."/{$noVino->id}/complete", [], $s)->assertStatus(409)->assertJsonPath('code', 'appointment_closed');
+            $this->postJson(self::AGENDA."/{$completada->id}/complete", [], $s)->assertOk()->assertJsonPath('changed', false);
+        }
+    }
+
+    /** Doble clic en su hora: un solo efecto, una sola auditoría y un solo aviso. */
+    public function test_34e_doble_clic_en_su_hora_un_solo_efecto(): void
+    {
+        $cita = $this->confirmadaPara('2026-09-22 18:00');
+        $this->enBogota('2026-09-22 18:30:00');
+        $s = $this->sesion();
+        $version = MarketingAgendaVersion::current();
+
+        $primera = $this->postJson(self::AGENDA."/{$cita->id}/complete", [], $s)->assertOk();
+        $segunda = $this->postJson(self::AGENDA."/{$cita->id}/complete", [], $s)->assertOk();
+
+        $this->assertSame([true, false], [$primera->json('changed'), $segunda->json('changed')]);
+        $this->assertSame($version + 1, MarketingAgendaVersion::current());
+        $this->assertSame(1, AuditLog::query()->where('entity', 'cita')->where('entity_id', $cita->id)->where('action', 'status')->count());
+    }
+
+    /** El PATCH que cambia el estado pasa por la misma regla: no es una puerta de atrás. */
+    public function test_34f_el_patch_a_completada_tambien_respeta_la_hora(): void
+    {
+        $cita = $this->confirmadaPara('2026-09-22 18:00');
+
+        $this->patchJson(self::AGENDA."/{$cita->id}", ['status' => 'completed'], $this->sesion())
+            ->assertStatus(409)->assertJsonPath('code', 'appointment_not_due');
+
+        $this->assertSame(MarketingAppointment::STATUS_SCHEDULED, $cita->fresh()->status);
     }
 
     // ── 8 · reprogramar no deja dos activas ──────────────────────────────────

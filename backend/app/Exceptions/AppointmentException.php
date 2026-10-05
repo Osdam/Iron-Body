@@ -26,6 +26,12 @@ class AppointmentException extends RuntimeException
         return new self('Esta visita está solicitada pero nadie la ha confirmado: confírmala antes de marcarla como cumplida.', 'appointment_not_confirmed');
     }
 
+    /** Completar es decir que la visita ocurrió: antes de su hora no ha podido ocurrir. */
+    public static function notDue(): self
+    {
+        return new self('La visita todavía no puede marcarse como completada porque su hora no ha llegado.', 'appointment_not_due');
+    }
+
     public static function closed(): self
     {
         return new self('La cita ya está cerrada (cumplida, cancelada o no asistió): su historial no se reescribe.', 'appointment_closed');

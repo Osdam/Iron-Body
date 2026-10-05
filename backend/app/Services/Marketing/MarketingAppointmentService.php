@@ -423,6 +423,15 @@ class MarketingAppointmentService
                 throw AppointmentException::invalidTransition($desde, $hacia);
             }
 
+            // Completar es decir que la visita OCURRIÓ: antes de su hora no puede
+            // haber ocurrido. El reloj es el del gimnasio (Bogotá) y se comparan
+            // instantes, así que el cambio de día en UTC no engaña. Va con la fila
+            // bloqueada y después del «ya estaba así», que sigue sin tocar nada.
+            if ($hacia === MarketingAppointment::STATUS_COMPLETED && $fila->scheduled_at !== null
+                && Carbon::now(BusinessClock::TZ)->lt($fila->scheduled_at)) {
+                throw AppointmentException::notDue();
+            }
+
             $cambios = ['status' => $hacia];
             if ($hacia === MarketingAppointment::STATUS_COMPLETED) {
                 $cambios['completed_at'] = now();

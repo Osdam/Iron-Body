@@ -152,7 +152,9 @@ class MarketingAppointmentTest extends TestCase
 
     public function test_completes_appointment(): void
     {
-        $id = $this->create()->json('data.id');
+        // Completar exige que haya llegado su hora: la cita es dentro de 10 min y se va a después.
+        $id = $this->create(['scheduled_at' => now()->addMinutes(10)->toIso8601String()])->json('data.id');
+        $this->travel(15)->minutes();
 
         $this->postJson($this->url("/$id/complete"), ['note' => 'asistió'], $this->saHeaders)
             ->assertOk()->assertJsonPath('data.status', 'completed');
@@ -211,7 +213,8 @@ class MarketingAppointmentTest extends TestCase
     public function test_advisor_can_create_and_operate_own(): void
     {
         $h = $this->headersFor(Admin::ROLE_RECEPCION);
-        $id = $this->create([], $h)->assertStatus(201)->json('data.id');
+        $id = $this->create(['scheduled_at' => now()->addMinutes(10)->toIso8601String()], $h)->assertStatus(201)->json('data.id');
+        $this->travel(15)->minutes();
 
         $this->postJson($this->url("/$id/complete"), [], $h)->assertOk();
     }
