@@ -110,23 +110,29 @@ class MetaDashboardEndpointsTest extends TestCase
 
         foreach ($sinDinero as $quien => $h) {
             $kpis = $this->getJson(self::BASE.$q, $h)->assertOk()->json('data.kpis');
-            foreach (['revenue_new', 'revenue_renewal', 'revenue_attributed', 'roas', 'roas_new', 'cac'] as $campo) {
+            foreach (['revenue_new', 'revenue_renewal', 'revenue_attributed', 'roas', 'roas_new', 'cac', 'return_after_ad_spend', 'return_state'] as $campo) {
                 $this->assertNull($kpis[$campo], "{$quien}: {$campo}");
             }
             $this->assertFalse($kpis['money_visible'], $quien);
-            foreach (['revenue_reason', 'roas_reason', 'roas_new_reason', 'cac_reason'] as $campo) {
+            foreach (['revenue_reason', 'roas_reason', 'roas_new_reason', 'cac_reason', 'return_after_ad_spend_reason'] as $campo) {
                 $this->assertSame('forbidden', $kpis[$campo], "{$quien}: {$campo}");
             }
             $this->assertSame(['leads' => 1, 'converted' => 1, 'revenue' => null], $kpis['paid'], $quien);
-            $this->assertSame(['leads' => 1, 'converted' => 1, 'revenue' => null, 'revenue_new' => null], $kpis['paid_resolved'], $quien);
-            // Los conteos se ven.
-            $this->assertEquals([1, 1, 1.0], [$kpis['leads'], $kpis['converted'], $kpis['conversion_rate']], $quien);
+            $this->assertSame(['leads' => 1, 'converted' => 1, 'revenue' => null, 'revenue_new' => null, 'renewals' => 0, 'revenue_renewal' => null], $kpis['paid_resolved'], $quien);
+            // Los conteos se ven, y las conversiones (que no son dinero) también.
+            $this->assertEquals([1, 1, 1.0, 1.0], [$kpis['leads'], $kpis['converted'], $kpis['conversion_rate'], $kpis['meta_conversion_rate']], $quien);
 
-            $panel = $this->getJson(self::BASE.$q, $h)->json('data');
+            $res = $this->getJson(self::BASE.$q, $h);
+            $panel = $res->json('data');
             $this->assertSame([null], array_values(array_unique(array_column($panel['origins'], 'revenue'))), $quien);
             foreach ($panel['campaigns']['rows'] as $row) {
-                $this->assertSame([null, null, null], [$row['revenue'], $row['roas'], $row['cac']], $quien);
+                $this->assertSame([null, null, null, null], [$row['revenue'], $row['roas'], $row['cac'], $row['return_after_ad_spend']], $quien);
             }
+            // El periodo anterior tampoco enseña dinero.
+            foreach (['revenue_attributed', 'meta_revenue', 'roas', 'cac', 'return_after_ad_spend'] as $campo) {
+                $this->assertNull($panel['previous']['kpis'][$campo], "{$quien}: previous.{$campo}");
+            }
+            $this->assertStringNotContainsString('150000', $res->getContent(), $quien);
 
             $tabla = $this->getJson(self::BASE.'/campaigns?level=ad&period=custom&from=2026-10-01&to=2026-10-05', $h)->assertOk();
             $tabla->assertJsonPath('data.money_visible', false)
@@ -153,7 +159,10 @@ class MetaDashboardEndpointsTest extends TestCase
                 ->assertJsonPath('data.kpis.paid_resolved.revenue', 150000)
                 ->assertJsonPath('data.kpis.roas', 1.5)
                 ->assertJsonPath('data.kpis.cac', 100000)
-                ->assertJsonPath('data.kpis.cac_reason', null);
+                ->assertJsonPath('data.kpis.cac_reason', null)
+                ->assertJsonPath('data.kpis.return_after_ad_spend', 50000)
+                ->assertJsonPath('data.kpis.return_state', 'positive')
+                ->assertJsonPath('data.kpis.meta_conversion_rate', 1);
             $this->getJson(self::BASE.'/campaigns?level=ad&period=custom&from=2026-10-01&to=2026-10-05', $h)
                 ->assertJsonPath('data.money_visible', true)
                 ->assertJsonPath('data.rows.0.revenue', 150000);
@@ -272,10 +281,13 @@ class MetaDashboardEndpointsTest extends TestCase
         $res = $this->getJson(self::BASE.'?period=custom&from=2026-10-01&to=2026-10-05', $this->adminAs(Admin::ROLE_ADMINISTRADOR))
             ->assertOk();
 
-        $this->assertSame(
-            ['period', 'spend', 'kpis', 'secondary', 'origins', 'unattributed_share', 'campaigns', 'attribution', 'sync'],
-            array_keys($res->json('data')),
-        );
+        // El contrato del cierre del Objetivo 3: lo de antes, más periodo anterior,
+        // datos atribuibles y qué métricas reporta Meta.
+        $claves = [
+            'period', 'previous_period', 'spend', 'kpis', 'previous', 'secondary', 'origins', 'unattributed_share',
+            'attributable_share', 'campaigns', 'attribution', 'sync', 'metrics_available',
+        ];
+        $this->assertSame($claves, array_keys($res->json('data')));
         $res->assertJsonPath('data.period', ['key' => 'custom', 'from' => '2026-10-01', 'to' => '2026-10-05', 'timezone' => 'America/Bogota'])
             ->assertJsonPath('data.spend.status', 'not_configured')
             ->assertJsonPath('data.spend.amount', null)
@@ -286,10 +298,12 @@ class MetaDashboardEndpointsTest extends TestCase
             ->assertJsonPath('data.kpis.leads', 1)
             ->assertJsonPath('data.kpis.roas', null)
             ->assertJsonPath('data.kpis.roas_reason', 'spend_not_configured');
-        $this->assertSame(
-            ['period', 'spend', 'kpis', 'secondary', 'origins', 'unattributed_share', 'campaigns', 'attribution', 'sync'],
-            array_keys($res->json('data')),
-        );
+        $this->assertSame($claves, array_keys($res->json('data')));
+        $res->assertJsonPath('data.previous_period', ['from' => '2026-09-26', 'to' => '2026-09-30'])
+            ->assertJsonPath('data.previous.period', ['from' => '2026-09-26', 'to' => '2026-09-30'])
+            ->assertJsonPath('data.spend.complete', true)
+            ->assertJsonPath('data.campaigns.partial', false);
+        $this->assertSame(['messaging_started', 'messaging_replied', 'landing_page_views', 'reach'], array_keys($res->json('data.metrics_available')));
         $this->assertSame(['hot_leads', 'pending_followups', 'ai_actions', 'human_control'], array_keys($res->json('data.secondary')));
         $this->assertIsString($res->json('data.attribution.definitions.leads'));
 
@@ -442,6 +456,26 @@ class MetaDashboardEndpointsTest extends TestCase
         Carbon::setTestNow('2026-10-05 15:20:00');
         $this->postJson(self::BASE.'/sync', [], $h)->assertStatus(202)->assertJsonPath('data.status', 'queued');
         Queue::assertPushed(SyncMetaAdsInsights::class, 2);
+    }
+
+    /**
+     * El 202 trae el estado de ANTES de despachar: si el job corre antes de
+     * contestar (aquí la cola es síncrona), el panel ve cambiar la hora del
+     * último intento y sabe que terminó, en vez de esperarlo tres minutos.
+     */
+    public function test_el_202_trae_el_estado_de_antes_de_despachar(): void
+    {
+        $this->configureMetaAds();
+        $this->fakeMeta(['data' => [$this->insightRow('2026-10-05', '9001', '1000.00')]]);
+        $h = $this->adminWithPermissions(['marketing.view', 'marketing.manage']);
+
+        $this->postJson(self::BASE.'/sync', [], $h)->assertStatus(202)
+            ->assertJsonPath('data.status', 'queued')
+            ->assertJsonPath('data.sync.last_attempt_at', null);
+
+        $this->assertSame('ok', MetaSyncRun::sole()->status, 'el job corrió dentro de la petición');
+        $this->getJson(self::BASE.'?period=today', $h)->assertOk()
+            ->assertJsonPath('data.sync.last_attempt_at', MetaSyncRun::sole()->started_at->toIso8601String());
     }
 
     /**

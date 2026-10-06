@@ -55,6 +55,12 @@ class SyncMetaAdsInsights implements ShouldQueue
             return;
         }
 
+        // Con el gasto al día, el alcance de los rangos del panel. Accesorio: no
+        // lanza, y su fallo queda en el log del canal sin tocar la pasada.
+        if (($result['status'] ?? null) === 'ok') {
+            $sync->refreshReach();
+        }
+
         if (($result['status'] ?? null) === 'failed' && ($result['retryable'] ?? false) === true) {
             $code = (string) ($result['error_code'] ?? MetaAdsApiException::TRANSIENT);
 

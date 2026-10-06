@@ -52,7 +52,13 @@ class MetaDashboardController extends Controller
         return response()->json(['ok' => true, 'data' => $this->dashboard->dashboard($period, $this->moneyVisible($request))]);
     }
 
-    /** GET /api/admin/marketing/meta-dashboard/campaigns?level=campaign|adset|ad&period= */
+    /**
+     * GET /api/admin/marketing/meta-dashboard/campaigns?level=campaign|adset|ad&period=&parent=&page=&per_page=
+     *
+     * Sin `parent`, la tabla entera del nivel, como antes. Con `parent` (la clave
+     * opaca de una fila), el desglose perezoso: los conjuntos de una campaña o
+     * los anuncios de un conjunto, paginados (máximo 50 por página).
+     */
     public function campaigns(Request $request): JsonResponse
     {
         $level = $request->query('level');
@@ -63,33 +69,61 @@ class MetaDashboardController extends Controller
             return $this->invalid('invalid_level', 'Nivel desconocido: usa campaign, adset o ad.');
         }
 
+        $parent = $request->query('parent');
+        if ($parent !== null && $parent !== '') {
+            $expected = match ($level) {
+                MetaAdEntity::LEVEL_ADSET => MetaAdEntity::LEVEL_CAMPAIGN,
+                MetaAdEntity::LEVEL_AD => MetaAdEntity::LEVEL_ADSET,
+                default => null,
+            };
+            if ($expected === null || ! is_string($parent) || preg_match('/^'.$expected.':[a-f0-9]{16}\z/', $parent) !== 1) {
+                return $this->invalid('invalid_parent', 'El padre del desglose no es válido: los conjuntos se piden con una campaña y los anuncios con un conjunto.');
+            }
+        } else {
+            $parent = null;
+        }
+
+        [$page, $perPage] = $parent === null ? [1, PHP_INT_MAX] : $this->paging($request, MetaDashboardService::CHILDREN_PER_PAGE);
+        if ($page === null) {
+            return $this->invalid('invalid_page', 'page y per_page tienen que ser enteros positivos (page hasta '.MetaDashboardService::MAX_PAGE.').');
+        }
+
         $period = $this->period($request);
         if ($period instanceof JsonResponse) {
             return $period;
         }
 
         $moneyVisible = $this->moneyVisible($request);
+        // Sin padre, la tabla entera (como antes); con padre, páginas de hasta 50.
+        $table = $this->dashboard->campaignTable(
+            $level, $period['start'], $period['end'], $moneyVisible, $parent, $page,
+            $parent === null ? PHP_INT_MAX : min($perPage, MetaDashboardService::MAX_PER_PAGE),
+        );
 
         return response()->json(['ok' => true, 'data' => [
             'level' => $level,
-            'rows' => $this->dashboard->campaigns($level, $period['start'], $period['end'], $moneyVisible),
+            'rows' => $table['rows'],
             'money_visible' => $moneyVisible,
+            'partial' => $table['partial'],
+            'covered_to' => $table['covered_to'],
+            'meta' => $table['meta'],
         ]]);
     }
 
-    /** GET /api/admin/marketing/meta-dashboard/leads?period=&page=&per_page= (máximo 50; página hasta 10000) */
+    /** GET /api/admin/marketing/meta-dashboard/leads?period=&page=&per_page=&origin= (máximo 50; página hasta 10000) */
     public function leads(Request $request): JsonResponse
     {
-        $page = filter_var($request->query('page', 1), FILTER_VALIDATE_INT);
-        $perPage = filter_var($request->query('per_page', 20), FILTER_VALIDATE_INT);
-        if ($page === false || $page < 1 || $perPage === false || $perPage < 1) {
-            return $this->invalid('invalid_page', 'page y per_page tienen que ser enteros positivos.');
+        [$page, $perPage] = $this->paging($request, 20);
+        if ($page === null) {
+            return $this->invalid('invalid_page', 'page y per_page tienen que ser enteros positivos (page hasta '.MetaDashboardService::MAX_PAGE.').');
         }
 
-        // Antes de calcular nada: una página absurda no puede costar el periodo
-        // entero, ni desbordar la cuenta del desplazamiento.
-        if ($page > MetaDashboardService::MAX_PAGE) {
-            return $this->invalid('invalid_page', 'page no puede pasar de '.MetaDashboardService::MAX_PAGE.'.');
+        $origin = $request->query('origin');
+        if ($origin === '') {
+            $origin = null;
+        }
+        if ($origin !== null && (! is_string($origin) || ! in_array($origin, MetaDashboardService::ORIGIN_ORDER, true))) {
+            return $this->invalid('invalid_origin', 'Origen desconocido.');
         }
 
         $period = $this->period($request);
@@ -99,7 +133,7 @@ class MetaDashboardController extends Controller
 
         $moneyVisible = $this->moneyVisible($request);
         $result = $this->dashboard->leads(
-            $period['start'], $period['end'], $page, min($perPage, MetaDashboardService::MAX_PER_PAGE), $moneyVisible,
+            $period['start'], $period['end'], $page, min($perPage, MetaDashboardService::MAX_PER_PAGE), $moneyVisible, $origin,
         );
 
         return response()->json(['ok' => true, 'data' => $result['data'], 'meta' => [
@@ -108,7 +142,27 @@ class MetaDashboardController extends Controller
             'per_page' => $result['meta']['per_page'],
             'total' => $result['meta']['total'],
             'money_visible' => $moneyVisible,
+            'origin' => $origin,
         ]]);
+    }
+
+    /**
+     * `page` y `per_page` de la query, o [null, null] si no valen. Antes de
+     * calcular nada: una página absurda no puede costar el periodo entero, ni
+     * desbordar la cuenta del desplazamiento.
+     *
+     * @return array{0: ?int, 1: ?int}
+     */
+    private function paging(Request $request, int $defaultPerPage): array
+    {
+        $page = filter_var($request->query('page', 1), FILTER_VALIDATE_INT);
+        $perPage = filter_var($request->query('per_page', $defaultPerPage), FILTER_VALIDATE_INT);
+
+        if ($page === false || $page < 1 || $perPage === false || $perPage < 1 || $page > MetaDashboardService::MAX_PAGE) {
+            return [null, null];
+        }
+
+        return [$page, $perPage];
     }
 
     /**

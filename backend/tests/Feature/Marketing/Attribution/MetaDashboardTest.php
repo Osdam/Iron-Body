@@ -342,7 +342,10 @@ class MetaDashboardTest extends TestCase
         }
 
         $this->assertSame(1, $this->dashboard()['kpis']['leads']);
-        $this->assertSame(2, $this->service()->leads(...$this->bounds('2026-10-01', '2026-10-05'))['meta']['total'], 'la lista enseña los dos leads');
+        // La lista enseña PERSONAS (FASE 16): la misma persona con dos leads sale una vez, como en Leads.
+        $lista = $this->service()->leads(...$this->bounds('2026-10-01', '2026-10-05'));
+        $this->assertSame(1, $lista['meta']['total'], 'la lista enseña a la persona una vez');
+        $this->assertCount(1, $lista['data']);
     }
 
     /**
@@ -367,8 +370,10 @@ class MetaDashboardTest extends TestCase
         $this->assertSame(1.0, $kpis['conversion_rate']);
         $this->assertSame(100000.0, $kpis['revenue_attributed'], 'el dinero de la persona de su lead principal, una vez');
 
+        // La lista enseña a la persona una vez, con su lead principal y su compra; el segundo lead no sale aparte.
         $lista = collect($this->service()->leads(...$this->bounds('2026-10-01', '2026-10-05'))['data'])->keyBy('id');
-        $this->assertSame(['kind' => 'duplicate', 'revenue' => 0.0, 'duplicate_of' => $primero->id], $lista[$segundo->id]['conversion']);
+        $this->assertSame([$primero->id], $lista->keys()->all());
+        $this->assertFalse($lista->has($segundo->id));
         $this->assertSame(['kind' => 'new', 'revenue' => 100000.0, 'duplicate_of' => null], $lista[$primero->id]['conversion']);
     }
 
@@ -399,9 +404,11 @@ class MetaDashboardTest extends TestCase
             $this->assertLessThanOrEqual($row['leads'], $row['converted'], "campaña {$row['id']}");
         }
 
+        // La persona sale una vez, con el origen de su lead principal (sin anuncio): la pauta del duplicado no aparece.
         $lista = collect($this->service()->leads(...$this->bounds('2026-10-01', '2026-10-05'))['data'])->keyBy('id');
-        $this->assertSame('duplicate', $lista[$segundo->id]['conversion']['kind']);
-        $this->assertSame($primero->id, $lista[$segundo->id]['conversion']['duplicate_of']);
+        $this->assertSame([$primero->id], $lista->keys()->all());
+        $this->assertFalse($lista->has($segundo->id));
+        $this->assertSame('unknown', $lista[$primero->id]['first_touch']['origin']);
     }
 
     /**
@@ -437,13 +444,14 @@ class MetaDashboardTest extends TestCase
         }
         $this->assertLessThanOrEqual($mes['kpis']['revenue_attributed'], $semana['kpis']['revenue_attributed']);
 
-        // Y la lista de la semana enseña su lead como duplicado del de septiembre.
-        $lista = $this->service()->leads(...$this->bounds('2026-09-29', '2026-10-05'))['data'];
-        $this->assertSame([$despues->id], array_column($lista, 'id'));
-        $this->assertSame(['kind' => 'duplicate', 'revenue' => 0.0, 'duplicate_of' => $antes->id], $lista[0]['conversion']);
+        // Y la lista de la semana no la enseña: no es una persona nueva de la semana (Leads = 0).
+        $lista = $this->service()->leads(...$this->bounds('2026-09-29', '2026-10-05'));
+        $this->assertSame([], $lista['data']);
+        $this->assertSame(0, $lista['meta']['total']);
+        $this->assertNotNull($despues);
     }
 
-    /** «Origen de leads»: las seis filas siempre, y «Sin atribuir» bien visible. */
+    /** «Origen de leads»: solo las categorías con evidencia (FASE 13), en su orden, y «Sin atribuir» bien visible. */
     public function test_origen_de_leads(): void
     {
         $this->scenario();
@@ -453,14 +461,17 @@ class MetaDashboardTest extends TestCase
         $origins = collect($d['origins'])->keyBy('key');
 
         $this->assertSame(
-            ['facebook_ads', 'instagram_ads', 'facebook_organic', 'instagram_organic', 'whatsapp_direct', 'unattributed'],
+            ['facebook_ads', 'instagram_ads', 'instagram_organic', 'unattributed'],
             array_column($d['origins'], 'key'),
         );
         $this->assertSame(['leads' => 3, 'share' => 0.5, 'converted' => 2, 'revenue' => 250000.0], Arr::only($origins['facebook_ads'], ['leads', 'share', 'converted', 'revenue']));
         $this->assertSame(1, $origins['instagram_ads']['leads']);
         $this->assertSame(['leads' => 1, 'converted' => 1, 'revenue' => 80000.0], Arr::only($origins['instagram_organic'], ['leads', 'converted', 'revenue']));
-        $this->assertSame(0, $origins['whatsapp_direct']['leads']);
-        $this->assertSame(0.0, $origins['whatsapp_direct']['share']);
+        // Sin evidencia, sin fila: no se pinta «WhatsApp directo» ni «Facebook orgánico» en cero.
+        $this->assertFalse($origins->has('whatsapp_direct'));
+        $this->assertFalse($origins->has('facebook_organic'));
+        // Las cuotas (redondeadas a 4 decimales cada una) suman el 100 %.
+        $this->assertEqualsWithDelta(1.0, array_sum(array_column($d['origins'], 'share')), 0.0005);
         $this->assertSame(['leads' => 1, 'converted' => 0, 'revenue' => 50000.0], Arr::only($origins['unattributed'], ['leads', 'converted', 'revenue']));
         $this->assertSame('Sin atribuir', $origins['unattributed']['label']);
         $this->assertSame(0.1667, $d['unattributed_share']);
@@ -542,7 +553,7 @@ class MetaDashboardTest extends TestCase
         $kpis = $d['kpis'];
 
         $this->assertSame(['leads' => 2, 'converted' => 2, 'revenue' => 200000.0], $kpis['paid']);
-        $this->assertSame(['leads' => 1, 'converted' => 1, 'revenue' => 50000.0, 'revenue_new' => 50000.0], $kpis['paid_resolved']);
+        $this->assertSame(['leads' => 1, 'converted' => 1, 'revenue' => 50000.0, 'revenue_new' => 50000.0, 'renewals' => 0, 'revenue_renewal' => 0.0], $kpis['paid_resolved']);
         $this->assertSame(0.5, $kpis['roas'], 'solo los ingresos de la cuenta del gasto');
         $this->assertSame(0.5, $kpis['roas_new']);
         $this->assertSame(100000.0, $kpis['cac'], 'solo los clientes nuevos de la cuenta del gasto');
@@ -573,7 +584,7 @@ class MetaDashboardTest extends TestCase
 
         $kpis = $this->dashboard()['kpis'];
 
-        $this->assertSame(['leads' => 2, 'converted' => 1, 'revenue' => 150000.0, 'revenue_new' => 60000.0], $kpis['paid_resolved']);
+        $this->assertSame(['leads' => 2, 'converted' => 1, 'revenue' => 150000.0, 'revenue_new' => 60000.0, 'renewals' => 1, 'revenue_renewal' => 90000.0], $kpis['paid_resolved']);
         $this->assertSame(1.5, $kpis['roas']);
         $this->assertSame(0.6, $kpis['roas_new']);
         $this->assertNull($kpis['roas_new_reason']);

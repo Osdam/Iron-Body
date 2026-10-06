@@ -5,6 +5,7 @@ namespace Tests\Feature\Marketing\MetaAds;
 use App\Models\MetaAdEntity;
 use App\Models\MetaAdInsightDaily;
 use App\Models\MetaSyncRun;
+use App\Services\Marketing\Meta\MetaAdsApiClient;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -83,8 +84,22 @@ class MetaAdsSyncTest extends TestCase
         $this->assertSame('1', $query['time_increment']);
         $this->assertSame(['since' => '2026-10-01', 'until' => '2026-10-05'], json_decode($query['time_range'], true));
         $this->assertSame(
-            'date_start,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,reach,clicks,account_currency',
+            'date_start,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,reach,clicks,inline_link_clicks,actions,account_currency',
             $query['fields'],
+        );
+        // Con los anuncios eliminados y archivados: su gasto cuenta en el total
+        // de la cuenta del Administrador de anuncios, y sin ellos no cuadraría.
+        $filtro = json_decode($query['filtering'], true);
+        $this->assertSame('ad.effective_status', $filtro[0]['field']);
+        $this->assertSame('IN', $filtro[0]['operator']);
+        $this->assertContains('DELETED', $filtro[0]['value']);
+        $this->assertContains('ARCHIVED', $filtro[0]['value']);
+        $this->assertContains('ACTIVE', $filtro[0]['value']);
+        $this->assertContains('PAUSED', $filtro[0]['value']);
+        // Todos los estados: uno que faltara dejaría fuera su gasto y la pasada borraría sus filas.
+        $this->assertSame(
+            ['ACTIVE', 'ADSET_PAUSED', 'ARCHIVED', 'CAMPAIGN_PAUSED', 'DELETED', 'DISAPPROVED', 'IN_PROCESS', 'PAUSED', 'PENDING_BILLING_INFO', 'PENDING_REVIEW', 'PREAPPROVED', 'WITH_ISSUES'],
+            collect($filtro[0]['value'])->sort()->values()->all(),
         );
 
         $gasto = $this->spendFor('2026-10-01', '2026-10-05');
@@ -273,14 +288,16 @@ class MetaAdsSyncTest extends TestCase
         $estados = $this->requestsTo('campaigns');
         $this->assertCount(1, $estados);
         $this->assertSame('id,name,effective_status', $this->queryOf($estados[0])['fields']);
+        $this->assertSame(MetaAdsApiClient::CAMPAIGN_STATUSES, json_decode($this->queryOf($estados[0])['effective_status'], true));
 
         // Por nivel, de mayor a menor gasto, con nombre y estado.
         [$desde, $hasta] = $this->bogotaDays('2026-10-05', '2026-10-05');
 
         $campanas = $this->reader()->byLevel('campaign', $desde, $hasta);
+        $metricasNuevas = ['link_clicks' => 0, 'messaging_started' => 0, 'messaging_replied' => 0, 'landing_page_views' => 0, 'reach' => null, 'frequency' => null];
         $this->assertSame([
-            ['id' => '502', 'name' => 'Campaña B', 'campaign_id' => '502', 'adset_id' => null, 'spend' => 4000.0, 'currency' => 'COP', 'impressions' => 1000, 'clicks' => 25, 'status' => 'PAUSED'],
-            ['id' => '501', 'name' => 'Campaña A', 'campaign_id' => '501', 'adset_id' => null, 'spend' => 3000.0, 'currency' => 'COP', 'impressions' => 2000, 'clicks' => 50, 'status' => 'ACTIVE'],
+            ['id' => '502', 'name' => 'Campaña B', 'campaign_id' => '502', 'adset_id' => null, 'spend' => 4000.0, 'currency' => 'COP', 'impressions' => 1000, 'clicks' => 25, ...$metricasNuevas, 'status' => 'PAUSED', 'partial' => false],
+            ['id' => '501', 'name' => 'Campaña A', 'campaign_id' => '501', 'adset_id' => null, 'spend' => 3000.0, 'currency' => 'COP', 'impressions' => 2000, 'clicks' => 50, ...$metricasNuevas, 'status' => 'ACTIVE', 'partial' => false],
         ], $campanas->all());
 
         $conjuntos = $this->reader()->byLevel('adset', $desde, $hasta);
@@ -468,11 +485,18 @@ class MetaAdsSyncTest extends TestCase
 
         $this->assertSame('ok', $this->sync()->run('schedule')['status']);
 
+        // Gasto, estados de campañas y estados de conjuntos y anuncios por id.
         $peticiones = Http::recorded()->map(fn (array $par): Request => $par[0]);
-        $this->assertCount(2, $peticiones);
+        $this->assertCount(4, $peticiones);
 
         foreach ($peticiones as $peticion) {
-            $this->assertStringStartsWith(self::GRAPH.'/act_'.self::ACCOUNT.'/', $peticion->url());
+            $ruta = (string) parse_url($peticion->url(), PHP_URL_PATH);
+            if ($ruta === '/v99.0/') {
+                // La consulta de estados por id: solo ids numéricos en la query.
+                $this->assertMatchesRegularExpression('/^\d+(,\d+)*$/', $this->queryOf($peticion)['ids']);
+            } else {
+                $this->assertStringStartsWith(self::GRAPH.'/act_'.self::ACCOUNT.'/', $peticion->url());
+            }
             $this->assertStringNotContainsString(self::ADS_TOKEN, $peticion->url());
             $this->assertStringNotContainsString('access_token', $peticion->url());
             $this->assertStringNotContainsString('act_act_', $peticion->url());

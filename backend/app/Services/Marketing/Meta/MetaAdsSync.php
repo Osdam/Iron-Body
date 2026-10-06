@@ -4,6 +4,7 @@ namespace App\Services\Marketing\Meta;
 
 use App\Models\MetaAdEntity;
 use App\Models\MetaAdInsightDaily;
+use App\Models\MetaAdReachSnapshot;
 use App\Models\MetaSyncRun;
 use App\Services\Observability\ChannelLog;
 use Carbon\CarbonImmutable;
@@ -36,6 +37,27 @@ class MetaAdsSync
 
     /** Filas por sentencia: lejos del límite de parámetros de PostgreSQL y de SQLite. */
     private const CHUNK = 200;
+
+    /**
+     * El primer día que se sincroniza [DECISIÓN DEL USUARIO]: nada de antes de
+     * 2026, venga del relleno, del comando manual o de quien sea.
+     */
+    public const MIN_DATE = '2026-01-01';
+
+    /**
+     * Los `action_type` de Meta que se guardan en columnas propias. Lo demás se
+     * conserva en `actions` sin interpretar. Si Meta no reporta uno de ellos
+     * para la cuenta, la columna queda en 0 y el panel lo trata como «no
+     * reportado», nunca como cero ({@see MetaSpendReader::metricsAvailable()}).
+     */
+    public const ACTION_MESSAGING_STARTED = 'onsite_conversion.messaging_conversation_started_7d';
+
+    public const ACTION_MESSAGING_REPLIED = 'onsite_conversion.messaging_conversation_replied_7d';
+
+    public const ACTION_LANDING_PAGE_VIEW = 'landing_page_view';
+
+    /** Días que se conserva una foto de alcance después de su último día. */
+    private const REACH_RETENTION_DAYS = 120;
 
     public function __construct(private readonly MetaAdsApiClient $client) {}
 
@@ -101,12 +123,17 @@ class MetaAdsSync
      *
      * `status`:
      *  - not_configured: falta el token o la cuenta (`reason` dice qué).
-     *  - running: hay una pasada en curso.
+     *  - running: hay una pasada en curso (también un tramo del relleno).
      *  - failed: el último intento falló (`last_error`), aunque quede una foto
      *    anterior buena.
      *  - stale: el último éxito es más viejo que `stale_after_minutes`, o todavía
      *    no ha habido ninguno.
      *  - ok: lo demás.
+     *
+     * «Intento» y «éxito» son los de las pasadas que mantienen el panel al día
+     * (la de cada hora y la del botón). Un tramo del relleno trae días del
+     * pasado: ni dice si los de hoy están al día ni su fallo es el de esas
+     * pasadas. Solo cuenta mientras corre, porque ocupa la sincronización.
      *
      * Las fechas van en ISO 8601. `covered_from`/`covered_to` son el tramo
      * continuo de días cubierto más reciente.
@@ -118,24 +145,27 @@ class MetaAdsSync
         $problem = $this->client->configurationProblem();
         $account = $this->client->accountId();
 
-        $runs = fn () => MetaSyncRun::query()
+        $runs = fn (bool $backfill = false) => MetaSyncRun::query()
             ->where('kind', MetaSyncRun::KIND_INSIGHTS)
-            ->when($account !== null, fn ($q) => $q->where('ad_account_id', $account));
+            ->when($account !== null, fn ($q) => $q->where('ad_account_id', $account))
+            ->where('trigger', $backfill ? '=' : '<>', MetaSyncRun::TRIGGER_BACKFILL);
 
         $lastSuccess = $runs()->where('status', MetaSyncRun::STATUS_OK)->orderByDesc('id')->first();
         $lastAttempt = $runs()
             ->whereIn('status', [MetaSyncRun::STATUS_RUNNING, MetaSyncRun::STATUS_OK, MetaSyncRun::STATUS_FAILED])
             ->orderByDesc('id')
             ->first();
+        $backfill = $runs(true)->where('status', MetaSyncRun::STATUS_RUNNING)->orderByDesc('id')->first();
 
-        $running = false;
+        $alive = fn (?MetaSyncRun $run): bool => $run?->status === MetaSyncRun::STATUS_RUNNING
+            && $run->started_at !== null
+            && $run->started_at->greaterThan(now()->subSeconds(self::LOCK_SECONDS));
+
+        $running = $alive($lastAttempt) || $alive($backfill);
         $lastError = null;
 
         if ($lastAttempt?->status === MetaSyncRun::STATUS_RUNNING) {
-            $running = $lastAttempt->started_at !== null
-                && $lastAttempt->started_at->greaterThan(now()->subSeconds(self::LOCK_SECONDS));
-
-            if (! $running) {
+            if (! $alive($lastAttempt)) {
                 // Murió sin cerrar su fila: a efectos del estado, es un fallo.
                 $lastError = ['code' => MetaSyncRun::ERROR_INTERRUPTED, 'message' => 'La última pasada no terminó.'];
             }
@@ -229,6 +259,119 @@ class MetaAdsSync
         return false;
     }
 
+    /**
+     * Hasta qué día de `[from, to]` hay datos buenos SIN HUECOS desde `from`: el
+     * final del tramo cubierto que contiene `from`, sin pasar de `to`. Null si
+     * `from` no está cubierto. Es lo que permite decir «datos hasta el 4» cuando
+     * la última pasada falló, en vez de enseñar un guion o, peor, un cero.
+     */
+    public function coveredThrough(string $from, string $to): ?string
+    {
+        foreach ($this->coverage() as [$start, $end]) {
+            if ($start <= $from && $from <= $end) {
+                return min($end, $to);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Fotos de ALCANCE de los rangos que el panel ofrece (hoy, 7 días, 30 días,
+     * este mes y el mes anterior), de la cuenta y de cada campaña, tal como las
+     * calcula Meta. El alcance no se suma por días: un rango que no está aquí
+     * enseña el alcance como «—».
+     *
+     * Accesorio: cada rango se pide y se guarda por separado, y un fallo se anota
+     * en el log del canal sin tocar las fotos que ya hay ni la pasada de gasto.
+     * Nunca lanza.
+     *
+     * @return array{status: string, ranges_ok: int, ranges_failed: int, rows: int}
+     */
+    public function refreshReach(): array
+    {
+        if ($this->client->configurationProblem() !== null) {
+            return ['status' => MetaSyncRun::STATUS_NOT_CONFIGURED, 'ranges_ok' => 0, 'ranges_failed' => 0, 'rows' => 0];
+        }
+
+        $account = (string) $this->client->accountId();
+        $ok = 0;
+        $failed = 0;
+        $written = 0;
+
+        foreach ($this->reachRanges() as [$since, $until]) {
+            try {
+                $accountRow = $this->client->reach('account', $since, $until)[0] ?? null;
+                $campaignRows = $this->client->reach('campaign', $since, $until);
+
+                $written += DB::transaction(fn (): int => $this->writeReach($account, $since, $until, $accountRow, $campaignRows));
+                $ok++;
+            } catch (MetaAdsApiException $e) {
+                $failed++;
+                ChannelLog::warning('meta.ads.reach.skipped', [
+                    'since' => $since,
+                    'until' => $until,
+                    'error_code' => $e->category,
+                    'http_status' => $e->httpStatus,
+                    'meta_code' => $e->metaCode,
+                ]);
+            } catch (Throwable $e) {
+                // Un fallo nuestro (la base, un bug) no tumba el gasto, pero no se
+                // esconde: va como error al log del canal, con su detalle saneado.
+                $failed++;
+                ChannelLog::error('meta.ads.reach.crashed', [
+                    'since' => $since,
+                    'until' => $until,
+                    'exception' => class_basename($e),
+                    'error_message' => MetaAdsApiClient::sanitize($e->getMessage(), 1000),
+                ]);
+            }
+        }
+
+        try {
+            DB::table('meta_ad_reach_snapshots')
+                ->where('ad_account_id', $account)
+                ->where('date_to', '<', CarbonImmutable::now($this->client->timezone())->subDays(self::REACH_RETENTION_DAYS)->toDateString())
+                ->delete();
+        } catch (Throwable $e) {
+            ChannelLog::warning('meta.ads.reach.prune_skipped', ['exception' => class_basename($e)]);
+        }
+
+        return [
+            'status' => $failed === 0 ? MetaSyncRun::STATUS_OK : MetaSyncRun::STATUS_FAILED,
+            'ranges_ok' => $ok,
+            'ranges_failed' => $failed,
+            'rows' => $written,
+        ];
+    }
+
+    /**
+     * Los rangos de alcance que se guardan, en días de la cuenta: los mismos que
+     * calcula MetaDashboardService::period() para cada botón del panel.
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    public function reachRanges(): array
+    {
+        $today = CarbonImmutable::now($this->client->timezone())->startOfDay();
+        $previousMonth = $today->startOfMonth()->subMonthNoOverflow();
+
+        $ranges = [
+            [$today, $today],
+            [$today->subDays(6), $today],
+            [$today->subDays(29), $today],
+            [$today->startOfMonth(), $today],
+            [$previousMonth, $previousMonth->endOfMonth()->startOfDay()],
+        ];
+
+        $out = [];
+        foreach ($ranges as [$from, $to]) {
+            $out[$from->toDateString().'|'.$to->toDateString()] = [$from->toDateString(), $to->toDateString()];
+        }
+
+        return array_values($out);
+    }
+
     /** @return array<string,mixed> */
     private function runLocked(string $trigger, string $since, string $until): array
     {
@@ -252,11 +395,12 @@ class MetaAdsSync
             // Todo lo que viene de la red, ANTES de abrir la transacción.
             $rows = $this->normalize($this->client->insights($since, $until), $account, $since, $until);
             $campaigns = $this->campaignStatuses();
+            $statuses = $this->entityStatuses($rows);
 
-            $deleted = DB::transaction(function () use ($run, $rows, $campaigns, $account, $since, $until): int {
+            $deleted = DB::transaction(function () use ($run, $rows, $campaigns, $statuses, $account, $since, $until): int {
                 $this->upsertInsights($rows);
                 $deleted = $this->deleteVanished($rows, $account, $since, $until);
-                $this->upsertEntities($rows, $campaigns, $account);
+                $this->upsertEntities($rows, $campaigns, $account, $statuses);
 
                 $run->forceFill([
                     'status' => MetaSyncRun::STATUS_OK,
@@ -353,6 +497,8 @@ class MetaAdsSync
                 throw new MetaAdsApiException(MetaAdsApiException::OTHER, 'Meta devolvió un gasto que no es un número.');
             }
 
+            $actions = $this->actions($r['actions'] ?? null);
+
             // Si Meta repitiera una fila (dos páginas que se solapan), vale la
             // última: en PostgreSQL un upsert con la misma clave dos veces falla.
             $rows[$date.'|'.$adId] = [
@@ -369,6 +515,14 @@ class MetaAdsSync
                 'impressions' => $this->count($r['impressions'] ?? null),
                 'reach' => $this->count($r['reach'] ?? null),
                 'clicks' => $this->count($r['clicks'] ?? null),
+                'inline_link_clicks' => $this->count($r['inline_link_clicks'] ?? null),
+                'messaging_conversations_started' => $actions[self::ACTION_MESSAGING_STARTED] ?? 0,
+                'messaging_conversations_replied' => $actions[self::ACTION_MESSAGING_REPLIED] ?? 0,
+                'landing_page_views' => $actions[self::ACTION_LANDING_PAGE_VIEW] ?? 0,
+                // El upsert va por el query builder, que no aplica casts: se codifica aquí.
+                'actions' => $actions === [] ? null : json_encode(
+                    array_map(static fn (string $type, int $value): array => ['action_type' => $type, 'value' => $value], array_keys($actions), $actions),
+                ),
                 'synced_at' => $now,
             ];
         }
@@ -420,6 +574,139 @@ class MetaAdsSync
         return array_values($campaigns);
     }
 
+    /**
+     * Estado efectivo de los conjuntos y anuncios de estas filas, por su id. Es
+     * accesorio como el de las campañas: si falla, la pasada sigue y los estados
+     * se quedan como estaban.
+     *
+     * @param  array<string, array<string,mixed>>  $rows
+     * @return array{adset: list<array{id: string, name: ?string, effective_status: ?string}>,
+     *     ad: list<array{id: string, name: ?string, effective_status: ?string}>}|null
+     */
+    private function entityStatuses(array $rows): ?array
+    {
+        $ids = [MetaAdEntity::LEVEL_ADSET => [], MetaAdEntity::LEVEL_AD => []];
+        foreach ($rows as $r) {
+            if ($r['adset_id'] !== null) {
+                $ids[MetaAdEntity::LEVEL_ADSET][$r['adset_id']] = true;
+            }
+            $ids[MetaAdEntity::LEVEL_AD][$r['ad_id']] = true;
+        }
+
+        $out = [];
+        try {
+            foreach ($ids as $level => $wanted) {
+                $out[$level] = [];
+                foreach ($this->client->lookup(array_keys($wanted)) as $id => $entity) {
+                    $status = is_string($entity['effective_status'] ?? null) ? mb_substr(trim($entity['effective_status']), 0, 32) : '';
+                    $out[$level][] = [
+                        'id' => (string) $id,
+                        'name' => $this->name($entity['name'] ?? null),
+                        'effective_status' => $status !== '' ? $status : null,
+                    ];
+                }
+            }
+        } catch (MetaAdsApiException $e) {
+            ChannelLog::warning('meta.ads.sync.entity_status_skipped', [
+                'error_code' => $e->category,
+                'http_status' => $e->httpStatus,
+                'meta_code' => $e->metaCode,
+            ]);
+
+            return null;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Las acciones de una fila de Meta como `action_type => valor`, solo las que
+     * tienen forma válida. Una lista malformada no invalida la pasada (el gasto
+     * no depende de ella): se queda sin acciones.
+     *
+     * @return array<string, int>
+     */
+    private function actions(mixed $raw): array
+    {
+        if (! is_array($raw) || ! array_is_list($raw)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($raw as $a) {
+            $type = is_array($a) && is_string($a['action_type'] ?? null) ? trim($a['action_type']) : '';
+            $value = is_array($a) ? ($a['value'] ?? null) : null;
+
+            if (preg_match('/^[a-z0-9_.]{1,100}$/i', $type) !== 1 || ! is_numeric($value)) {
+                continue;
+            }
+
+            $out[$type] = ($out[$type] ?? 0) + max(0, (int) round((float) $value));
+        }
+
+        ksort($out);
+
+        return $out;
+    }
+
+    /**
+     * Guarda el alcance de UN rango: la fila de la cuenta y las de sus campañas.
+     * Las campañas de ese mismo rango que Meta ya no devuelve se borran; las de
+     * otros rangos no se tocan.
+     *
+     * @param  array<string,mixed>|null  $accountRow
+     * @param  list<array<string,mixed>>  $campaignRows
+     */
+    private function writeReach(string $account, string $since, string $until, ?array $accountRow, array $campaignRows): int
+    {
+        $now = now()->toDateTimeString();
+        $rows = [];
+
+        $put = function (string $level, string $entity, array $r) use (&$rows, $account, $since, $until, $now): void {
+            $rows[$level.'|'.$entity] = [
+                'ad_account_id' => $account,
+                'level' => $level,
+                'entity_id' => $entity,
+                'date_from' => $since,
+                'date_to' => $until,
+                'reach' => $this->count($r['reach'] ?? null),
+                'impressions' => $this->count($r['impressions'] ?? null),
+                'frequency' => is_numeric($r['frequency'] ?? null) ? round((float) $r['frequency'], 4) : null,
+                'synced_at' => $now,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        };
+
+        // Sin fila de cuenta, la cuenta no tuvo entrega en el rango: alcance 0 comprobado.
+        $put(MetaAdReachSnapshot::LEVEL_ACCOUNT, $account, $accountRow ?? []);
+
+        foreach ($campaignRows as $r) {
+            $campaign = $this->id($r['campaign_id'] ?? null);
+            if ($campaign !== null) {
+                $put(MetaAdReachSnapshot::LEVEL_CAMPAIGN, $campaign, $r);
+            }
+        }
+
+        DB::table('meta_ad_reach_snapshots')
+            ->where('ad_account_id', $account)
+            ->where('level', MetaAdReachSnapshot::LEVEL_CAMPAIGN)
+            ->where('date_from', $since)
+            ->where('date_to', $until)
+            ->whereNotIn('entity_id', array_map(static fn (array $r): string => $r['entity_id'], array_values($rows)))
+            ->delete();
+
+        foreach (array_chunk(array_values($rows), self::CHUNK) as $chunk) {
+            DB::table('meta_ad_reach_snapshots')->upsert(
+                $chunk,
+                ['ad_account_id', 'level', 'entity_id', 'date_from', 'date_to'],
+                ['reach', 'impressions', 'frequency', 'synced_at', 'updated_at'],
+            );
+        }
+
+        return count($rows);
+    }
+
     /** @param  array<string, array<string,mixed>>  $rows */
     private function upsertInsights(array $rows): void
     {
@@ -429,7 +716,9 @@ class MetaAdsSync
                 ['ad_account_id', 'date', 'ad_id'],
                 [
                     'campaign_id', 'campaign_name', 'adset_id', 'adset_name', 'ad_name',
-                    'spend', 'currency', 'impressions', 'reach', 'clicks', 'synced_at',
+                    'spend', 'currency', 'impressions', 'reach', 'clicks', 'inline_link_clicks',
+                    'messaging_conversations_started', 'messaging_conversations_replied', 'landing_page_views',
+                    'actions', 'synced_at',
                 ],
             );
         }
@@ -469,8 +758,9 @@ class MetaAdsSync
      *
      * @param  array<string, array<string,mixed>>  $rows
      * @param  list<array{id: string, name: ?string, effective_status: ?string}>|null  $campaigns
+     * @param  array<string, list<array{id: string, name: ?string, effective_status: ?string}>>|null  $statuses  conjuntos y anuncios
      */
-    private function upsertEntities(array $rows, ?array $campaigns, string $account): void
+    private function upsertEntities(array $rows, ?array $campaigns, string $account, ?array $statuses = null): void
     {
         $now = now()->toDateTimeString();
         $entities = [];
@@ -502,6 +792,21 @@ class MetaAdsSync
 
         foreach (array_chunk(array_values($entities), self::CHUNK) as $chunk) {
             MetaAdEntity::query()->upsert($chunk, $uniqueBy, ['name', 'campaign_id', 'adset_id', 'synced_at']);
+        }
+
+        // Estado de conjuntos y anuncios: solo de los que trajo esta pasada (ya
+        // están en la dimensión, recién escritos arriba), sin tocar su jerarquía.
+        $statusRows = [];
+        foreach ($statuses ?? [] as $level => $list) {
+            foreach ($list as $s) {
+                $known = $entities[$level.'|'.$s['id']] ?? null;
+                if ($known !== null && $s['effective_status'] !== null) {
+                    $statusRows[] = ['effective_status' => $s['effective_status']] + $known;
+                }
+            }
+        }
+        foreach (array_chunk($statusRows, self::CHUNK) as $chunk) {
+            MetaAdEntity::query()->upsert($chunk, $uniqueBy, ['effective_status', 'synced_at']);
         }
 
         if ($campaigns === null || $campaigns === []) {
@@ -542,6 +847,14 @@ class MetaAdsSync
         $since = $from !== null
             ? CarbonImmutable::instance($from)->setTimezone($tz)->startOfDay()
             : $until->subDays(max(1, (int) config('meta.ads.sync_days', 7)) - 1);
+
+        if ($since->toDateString() < self::MIN_DATE) {
+            if ($from !== null) {
+                throw new InvalidArgumentException('Meta Ads no se sincroniza antes de '.self::MIN_DATE.'.');
+            }
+            // La ventana por defecto solo se recorta: la pasada de cada hora no falla por ella.
+            $since = CarbonImmutable::createFromFormat('!Y-m-d', self::MIN_DATE, $tz);
+        }
 
         if ($since->greaterThan($until)) {
             throw new InvalidArgumentException('El rango a sincronizar empieza después de terminar, o en el futuro.');

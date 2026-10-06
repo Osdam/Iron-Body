@@ -32,7 +32,10 @@ class MetaSyncRun extends Model
 
     public const TRIGGER_MANUAL = 'manual';
 
-    public const TRIGGERS = [self::TRIGGER_SCHEDULE, self::TRIGGER_MANUAL];
+    /** Un tramo del relleno del pasado (`marketing:meta-ads-backfill`). */
+    public const TRIGGER_BACKFILL = 'backfill';
+
+    public const TRIGGERS = [self::TRIGGER_SCHEDULE, self::TRIGGER_MANUAL, self::TRIGGER_BACKFILL];
 
     /** La pasada anterior murió sin cerrar su fila (proceso caído o cerrojo vencido). */
     public const ERROR_INTERRUPTED = 'interrupted';

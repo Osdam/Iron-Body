@@ -9,8 +9,9 @@ use Illuminate\Support\Facades\Http;
 use Throwable;
 
 /**
- * Cliente de LECTURA de la Marketing API de Meta: el gasto por anuncio y día, y
- * el estado de las campañas. Nada más.
+ * Cliente de LECTURA de la Marketing API de Meta: el gasto y las métricas por
+ * anuncio y día, el alcance de un rango, el estado de campañas, conjuntos y
+ * anuncios, la ficha de la cuenta y qué es el token. Nada escribe en Meta.
  *
  * Tres reglas que no se negocian:
  *
@@ -29,8 +30,36 @@ use Throwable;
  */
 class MetaAdsApiClient
 {
-    /** Campos que se piden a `/insights`. */
-    public const INSIGHTS_FIELDS = 'date_start,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,reach,clicks,account_currency';
+    /**
+     * Campos que se piden a `/insights` por anuncio y día. Solo métricas que se
+     * pueden sumar entre días; CPM, CTR y CPC se calculan después a partir de
+     * las sumas, porque la media de ratios diarios no es el ratio del periodo.
+     */
+    public const INSIGHTS_FIELDS = 'date_start,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,reach,clicks,inline_link_clicks,actions,account_currency';
+
+    /**
+     * TODOS los estados efectivos de un anuncio, para pedir sus insights. Sin
+     * este filtro Meta deja fuera los anuncios eliminados y archivados, y su
+     * gasto, que sí cuenta en el total de la cuenta del Administrador de
+     * anuncios: el gasto del CRM no cuadraría. Y un estado que faltara aquí no
+     * solo dejaría fuera su gasto: la pasada borraría las filas que ya tenía de
+     * esos días (las que Meta «ya no devuelve»). Por eso va la lista completa, y
+     * la conciliación (`marketing:meta-ads-reconcile`) lo comprueba con la cuenta.
+     */
+    public const AD_STATUSES = [
+        'ACTIVE', 'PAUSED', 'DELETED', 'PENDING_REVIEW', 'DISAPPROVED', 'PREAPPROVED',
+        'PENDING_BILLING_INFO', 'CAMPAIGN_PAUSED', 'ARCHIVED', 'ADSET_PAUSED',
+        'IN_PROCESS', 'WITH_ISSUES',
+    ];
+
+    /** Lo mismo para el alcance por campaña: todos sus estados efectivos. */
+    public const CAMPAIGN_STATUSES = ['ACTIVE', 'PAUSED', 'DELETED', 'ARCHIVED', 'IN_PROCESS', 'WITH_ISSUES'];
+
+    /** Campos de la cuenta publicitaria que se comprueban antes de sincronizar. */
+    public const ACCOUNT_FIELDS = 'id,account_id,name,currency,timezone_name,timezone_offset_hours_utc,account_status';
+
+    /** Ids por petición al consultar estados (`?ids=`): Meta acepta 50. */
+    private const LOOKUP_CHUNK = 50;
 
     /** Zona de respaldo si la configurada no es válida (el problema se reporta aparte). */
     private const FALLBACK_TIMEZONE = 'America/Bogota';
@@ -124,12 +153,140 @@ class MetaAdsApiClient
             'time_increment' => 1,
             'time_range' => json_encode(['since' => $since, 'until' => $until]),
             'fields' => self::INSIGHTS_FIELDS,
+            'filtering' => json_encode([['field' => 'ad.effective_status', 'operator' => 'IN', 'value' => self::AD_STATUSES]]),
             'limit' => self::PAGE_LIMIT,
         ]);
     }
 
     /**
-     * Campañas de la cuenta con su estado efectivo (ACTIVE, PAUSED…).
+     * Alcance (personas únicas), impresiones y frecuencia de TODO el rango
+     * `[since, until]`, de la cuenta (`account`) o por campaña (`campaign`).
+     *
+     * Sin `time_increment`: Meta calcula el alcance del rango entero, que no es
+     * la suma del de cada día.
+     *
+     * @return list<array<string,mixed>>
+     *
+     * @throws MetaAdsApiException
+     */
+    public function reach(string $level, string $since, string $until): array
+    {
+        $query = [
+            'level' => $level === 'campaign' ? 'campaign' : 'account',
+            'time_range' => json_encode(['since' => $since, 'until' => $until]),
+            'fields' => $level === 'campaign'
+                ? 'campaign_id,campaign_name,reach,impressions,frequency,spend,account_currency'
+                : 'reach,impressions,frequency,spend,account_currency',
+            'limit' => self::PAGE_LIMIT,
+        ];
+
+        if ($level === 'campaign') {
+            $query['filtering'] = json_encode([['field' => 'campaign.effective_status', 'operator' => 'IN', 'value' => self::CAMPAIGN_STATUSES]]);
+        }
+
+        return $this->paginate('insights', $query);
+    }
+
+    /**
+     * Totales de la CUENTA en `[since, until]`: gasto, impresiones y alcance tal
+     * como los da el Administrador de anuncios. Para conciliar, no para el panel.
+     *
+     * @return array<string,mixed>|null null si Meta no devuelve fila (sin actividad)
+     *
+     * @throws MetaAdsApiException
+     */
+    public function accountTotals(string $since, string $until): ?array
+    {
+        $rows = $this->reach('account', $since, $until);
+
+        return $rows[0] ?? null;
+    }
+
+    /**
+     * Nombre y estado efectivo de campañas, conjuntos o anuncios por su id, con
+     * `GET /?ids=` en tandas de 50. Solo ids numéricos: van en la query.
+     *
+     * @param  list<string>  $ids
+     * @return array<string, array<string,mixed>> por id
+     *
+     * @throws MetaAdsApiException
+     */
+    public function lookup(array $ids, string $fields = 'name,effective_status'): array
+    {
+        $ids = array_values(array_unique(array_filter(
+            array_map(static fn (mixed $id): string => trim((string) $id), $ids),
+            static fn (string $id): bool => preg_match('/^\d{1,40}$/', $id) === 1,
+        )));
+
+        $out = [];
+        foreach (array_chunk($ids, self::LOOKUP_CHUNK) as $chunk) {
+            $body = $this->call('', ['ids' => implode(',', $chunk), 'fields' => $fields]);
+            foreach ($chunk as $id) {
+                if (is_array($body[$id] ?? null)) {
+                    $out[$id] = $body[$id];
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * La cuenta publicitaria configurada: id, nombre, moneda, zona horaria y
+     * estado. Lo primero que se comprueba con un token nuevo.
+     *
+     * @return array<string,mixed>
+     *
+     * @throws MetaAdsApiException
+     */
+    public function account(): array
+    {
+        $account = $this->accountId();
+        if ($account === null) {
+            throw new MetaAdsApiException(MetaAdsApiException::OTHER, 'Meta Ads no está configurado.');
+        }
+
+        return $this->call("act_{$account}", ['fields' => self::ACCOUNT_FIELDS]);
+    }
+
+    /**
+     * Quién es el token configurado y qué permisos tiene concedidos, con
+     * `/me` y `/me/permissions`. Nunca devuelve el token.
+     *
+     * No se usa `/debug_token` a propósito: exige el token a examinar en la URL
+     * (`input_token`), y una URL acaba en logs y en trazas. Aquí el token solo
+     * va en la cabecera, como en el resto del cliente. Un token inválido o
+     * caducado no llega a contestar: Meta responde 190 y sale como fallo
+     * `permission`.
+     *
+     * @return array{id: ?string, name: ?string, scopes: list<string>}
+     *
+     * @throws MetaAdsApiException
+     */
+    public function tokenInfo(): array
+    {
+        $me = $this->call('me', ['fields' => 'id,name']);
+        $permissions = $this->call('me/permissions', []);
+
+        $granted = [];
+        foreach ((array) ($permissions['data'] ?? []) as $p) {
+            if (is_array($p) && ($p['status'] ?? null) === 'granted' && is_string($p['permission'] ?? null)) {
+                $granted[] = $p['permission'];
+            }
+        }
+
+        return [
+            'id' => is_scalar($me['id'] ?? null) ? (string) $me['id'] : null,
+            'name' => is_string($me['name'] ?? null) ? mb_substr($me['name'], 0, 120) : null,
+            'scopes' => array_values(array_unique($granted)),
+        ];
+    }
+
+    /**
+     * Campañas de la cuenta con su estado efectivo (ACTIVE, PAUSED…), también
+     * las archivadas y eliminadas: sin el filtro, Meta solo devuelve las que no
+     * lo están, y una campaña archivada se quedaría en ACTIVE para siempre
+     * mientras su gasto sigue entrando.
      *
      * @return list<array<string,mixed>>
      *
@@ -139,6 +296,7 @@ class MetaAdsApiClient
     {
         return $this->paginate('campaigns', [
             'fields' => 'id,name,effective_status',
+            'effective_status' => json_encode(self::CAMPAIGN_STATUSES),
             'limit' => self::PAGE_LIMIT,
         ]);
     }
@@ -233,11 +391,34 @@ class MetaAdsApiClient
      */
     private function get(string $edge, array $query): array
     {
-        $token = trim((string) config('meta.ads.access_token'));
         $account = $this->accountId();
 
-        if ($token === '' || $account === null) {
+        if ($account === null) {
             // Quien llama comprueba la configuración antes; esto es la red.
+            throw new MetaAdsApiException(MetaAdsApiException::OTHER, 'Meta Ads no está configurado.');
+        }
+
+        $body = $this->call("act_{$account}/{$edge}", $query, $status);
+        if (! is_array($body['data'] ?? null) || ! array_is_list($body['data'])) {
+            throw new MetaAdsApiException(MetaAdsApiException::OTHER, 'Meta respondió sin la lista de datos esperada.', $status);
+        }
+
+        return $body;
+    }
+
+    /**
+     * Un GET a Graph con el token en la cabecera; devuelve el JSON decodificado
+     * y deja en `$status` el código HTTP, para el diagnóstico.
+     *
+     * @return array<string,mixed>
+     *
+     * @throws MetaAdsApiException
+     */
+    private function call(string $path, array $query, ?int &$status = null): array
+    {
+        $token = trim((string) config('meta.ads.access_token'));
+
+        if ($token === '') {
             throw new MetaAdsApiException(MetaAdsApiException::OTHER, 'Meta Ads no está configurado.');
         }
 
@@ -245,7 +426,7 @@ class MetaAdsApiClient
             $response = Http::withToken($token)
                 ->acceptJson()
                 ->timeout(max(1, (int) config('meta.timeout', 20)))
-                ->get($this->url("act_{$account}/{$edge}"), $query);
+                ->get($this->url($path), $query);
         } catch (ConnectionException $e) {
             // El texto de Guzzle trae la URL completa: se resume, no se copia.
             preg_match('/cURL error \d+/', $e->getMessage(), $curl);
@@ -256,17 +437,14 @@ class MetaAdsApiClient
             );
         }
 
+        $status = $response->status();
         if (! $response->successful()) {
             throw $this->failure($response);
         }
 
         $body = $response->json();
-        if (! is_array($body) || ! is_array($body['data'] ?? null) || ! array_is_list($body['data'])) {
-            throw new MetaAdsApiException(
-                MetaAdsApiException::OTHER,
-                'Meta respondió sin la lista de datos esperada.',
-                $response->status(),
-            );
+        if (! is_array($body)) {
+            throw new MetaAdsApiException(MetaAdsApiException::OTHER, 'Meta respondió algo que no es JSON.', $response->status());
         }
 
         return $body;
@@ -309,7 +487,7 @@ class MetaAdsApiClient
         $base = rtrim((string) config('meta.graph_base', 'https://graph.facebook.com'), '/');
         $version = trim((string) config('meta.ads.graph_version'), '/');
 
-        return "{$base}/{$version}/{$path}";
+        return $path === '' ? "{$base}/{$version}/" : "{$base}/{$version}/{$path}";
     }
 
     private function validTimezone(string $tz): bool

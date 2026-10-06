@@ -27,6 +27,8 @@ class MetaAdInsightDaily extends Model
     protected $fillable = [
         'ad_account_id', 'date', 'campaign_id', 'campaign_name', 'adset_id', 'adset_name',
         'ad_id', 'ad_name', 'spend', 'currency', 'impressions', 'reach', 'clicks', 'synced_at',
+        'inline_link_clicks', 'messaging_conversations_started', 'messaging_conversations_replied',
+        'landing_page_views', 'actions',
     ];
 
     protected $casts = [
@@ -34,6 +36,11 @@ class MetaAdInsightDaily extends Model
         'impressions' => 'integer',
         'reach' => 'integer',
         'clicks' => 'integer',
+        'inline_link_clicks' => 'integer',
+        'messaging_conversations_started' => 'integer',
+        'messaging_conversations_replied' => 'integer',
+        'landing_page_views' => 'integer',
+        'actions' => 'array',
         'synced_at' => 'datetime',
     ];
 

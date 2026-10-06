@@ -24,7 +24,8 @@ class MetaAdsSyncCommand extends Command
 {
     protected $signature = 'marketing:meta-ads-sync
         {--from= : Primer día, AAAA-MM-DD en la zona de la cuenta. Por defecto, los últimos META_ADS_SYNC_DAYS días}
-        {--to= : Último día, inclusive, AAAA-MM-DD. Por defecto, hoy}';
+        {--to= : Último día, inclusive, AAAA-MM-DD. Por defecto, hoy}
+        {--no-reach : No refresca el alcance de los rangos del panel al terminar}';
 
     protected $description = 'Trae de Meta Ads el gasto por anuncio y día de un rango (relleno manual del pasado).';
 
@@ -73,6 +74,11 @@ class MetaAdsSyncCommand extends Command
         }
 
         $this->info('Listo. El gasto de esos días ya está en el CRM.');
+
+        if (! $this->option('no-reach')) {
+            $reach = $sync->refreshReach();
+            $this->line("Alcance de los rangos del panel: {$reach['ranges_ok']} al día, {$reach['ranges_failed']} con fallo (ver el log del canal).");
+        }
 
         return self::SUCCESS;
     }

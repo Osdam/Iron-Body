@@ -35,6 +35,21 @@ trait FakesMetaAds
     /** @var array<string,mixed>|callable */
     private mixed $metaCampaigns = ['data' => []];
 
+    /** Alcance por rango (`/insights` con level=account|campaign). @var array<string,mixed>|callable */
+    private mixed $metaReach = ['data' => []];
+
+    /** Estados por id (`GET /?ids=`). @var array<string,mixed>|callable */
+    private mixed $metaLookup = [];
+
+    /** La ficha de la cuenta (`GET /act_{id}`). @var array<string,mixed>|callable */
+    private mixed $metaAccount = [];
+
+    /** `/me` y `/me/permissions`: de quién es el token y qué tiene concedido. @var array<string,mixed>|callable */
+    private mixed $metaMe = ['id' => '100001', 'name' => 'iron-ads-reader'];
+
+    /** @var array<string,mixed>|callable */
+    private mixed $metaPermissions = ['data' => [['permission' => 'ads_read', 'status' => 'granted']]];
+
     private bool $metaFaked = false;
 
     protected function configureMetaAds(array $overrides = []): void
@@ -69,15 +84,49 @@ trait FakesMetaAds
         Http::preventStrayRequests();
         Http::fake(function (Request $request) {
             $path = (string) parse_url($request->url(), PHP_URL_PATH);
+            $query = $this->queryOf($request);
 
             $responder = match (true) {
+                // El alcance de un rango es /insights sin desglose por día ni por anuncio.
+                str_ends_with($path, '/insights') && in_array($query['level'] ?? 'ad', ['account', 'campaign'], true) => $this->metaReach,
                 str_ends_with($path, '/insights') => $this->metaInsights,
                 str_ends_with($path, '/campaigns') => $this->metaCampaigns,
+                str_ends_with($path, '/me/permissions') => $this->metaPermissions,
+                str_ends_with($path, '/me') => $this->metaMe,
+                preg_match('#/v[0-9.]+/?$#', $path) === 1 && isset($query['ids']) => $this->metaLookup,
+                preg_match('#/act_\d+$#', $path) === 1 => $this->metaAccount,
                 default => fn () => Http::response(['error' => ['message' => 'Ruta no fingida en la prueba', 'code' => 100]], 404),
             };
 
             return is_callable($responder) ? $responder($request) : Http::response($responder);
         });
+    }
+
+    /**
+     * Respuestas de las aristas nuevas: alcance por rango, estados por id, la
+     * ficha de la cuenta, y `/me` y `/me/permissions`. Solo cambia lo que se pasa.
+     */
+    protected function fakeMetaExtras(
+        array|callable|null $reach = null,
+        array|callable|null $lookup = null,
+        array|callable|null $account = null,
+        array|callable|null $me = null,
+        array|callable|null $permissions = null,
+    ): void {
+        $this->metaReach = $reach ?? $this->metaReach;
+        $this->metaLookup = $lookup ?? $this->metaLookup;
+        $this->metaAccount = $account ?? $this->metaAccount;
+        $this->metaMe = $me ?? $this->metaMe;
+        $this->metaPermissions = $permissions ?? $this->metaPermissions;
+    }
+
+    /** @return list<Request> las peticiones de gasto por anuncio y día (no las de alcance) */
+    protected function dailyInsightRequests(): array
+    {
+        return array_values(array_filter(
+            $this->requestsTo('insights'),
+            fn (Request $r): bool => ($this->queryOf($r)['level'] ?? null) === 'ad',
+        ));
     }
 
     /** Una fila de /insights tal como la da Meta: todo en texto. */

@@ -8,6 +8,7 @@ use App\Models\MarketingConversation;
 use App\Models\MarketingFollowup;
 use App\Models\MarketingLead;
 use App\Models\MarketingLeadAttribution;
+use App\Models\MarketingLeadIdentity;
 use App\Models\MarketingMessage;
 use App\Models\MetaAdEntity;
 use App\Models\MetaSyncRun;
@@ -80,14 +81,39 @@ class MetaDashboardService
     /** Su nombre si Meta Ads no está conectado: no hay dimensión contra la que resolver. */
     public const UNRESOLVED_NAME = 'Sin campaña (Meta Ads sin conexión)';
 
-    /** Su nombre si Meta Ads está conectado: el anuncio no es de la cuenta configurada (o no se ha sincronizado). */
+    /** Su nombre si Meta Ads está conectado y sincronizado: el anuncio no es de la cuenta configurada. */
     public const UNRESOLVED_NAME_OTHER_ACCOUNT = 'Sin campaña (anuncio fuera de la cuenta conectada)';
+
+    /**
+     * Su nombre si Meta Ads está conectado pero ninguna pasada ha salido bien:
+     * la dimensión está vacía, así que no se sabe si el anuncio es de la cuenta.
+     */
+    public const UNRESOLVED_NAME_NEVER_SYNCED = 'Sin campaña (Meta Ads aún sin sincronizar)';
 
     /** Motivo de un importe que el usuario no puede ver. */
     public const MONEY_FORBIDDEN = 'forbidden';
 
     /** Aviso del ROAS: hay leads de pauta cuyo anuncio no es de la cuenta configurada. */
     public const WARNING_UNRESOLVED_PAID_LEADS = 'unresolved_paid_leads';
+
+    /** Motivo del retorno y de las cifras con gasto cuando el gasto es solo de una parte del periodo. */
+    public const SPEND_INCOMPLETE = 'spend_incomplete';
+
+    /**
+     * Las filas de «Origen de leads», en el orden en que se pintan. Solo salen
+     * las que tienen leads. Lo que no es de esta lista (un anuncio o una
+     * publicación sin plataforma reconocible, un «directo» de otro canal) va a
+     * «Otros», que dice qué incluye.
+     */
+    public const ORIGIN_ORDER = [
+        'facebook_ads', 'instagram_ads', 'whatsapp_direct', 'instagram_organic', 'facebook_organic',
+        self::ORIGIN_OTHERS, LeadSourceClassifier::KEY_UNATTRIBUTED,
+    ];
+
+    public const ORIGIN_OTHERS = 'others';
+
+    /** Filas por página en el desglose de conjuntos y anuncios. */
+    public const CHILDREN_PER_PAGE = 25;
 
     /** Pausa mínima entre dos sincronizaciones pedidas desde el panel. */
     public const SYNC_COOLDOWN_SECONDS = 300;
@@ -176,6 +202,13 @@ class MetaDashboardService
         $conversations = $this->conversationsByLead($from, $to, $ctx);
         $spend = $this->spend->snapshot($from, $to);
         [$origins, $unattributedShare] = $this->origins($ctx, $moneyVisible);
+        $attributableShare = $unattributedShare === null ? null : round(1 - $unattributedShare, 4);
+
+        $kpis = $this->kpis($ctx, $conversations, $spend, $moneyVisible);
+        $kpis['attributable_share'] = $attributableShare;
+
+        $coverage = $this->spend->coverage($from, $to);
+        $previous = $this->previousPeriod($period);
 
         return [
             'period' => [
@@ -184,14 +217,19 @@ class MetaDashboardService
                 'to' => $period['to'],
                 'timezone' => $period['timezone'],
             ],
+            'previous_period' => ['from' => $previous['from'], 'to' => $previous['to']],
             'spend' => $spend,
-            'kpis' => $this->kpis($ctx, $conversations, $spend, $moneyVisible),
+            'kpis' => $kpis,
+            'previous' => $this->previousSummary($previous, $moneyVisible),
             'secondary' => $this->secondary($ctx, $from, $to),
             'origins' => $origins,
             'unattributed_share' => $unattributedShare,
+            'attributable_share' => $attributableShare,
             'campaigns' => [
                 'level' => MetaAdEntity::LEVEL_CAMPAIGN,
                 'rows' => $this->campaignRows(MetaAdEntity::LEVEL_CAMPAIGN, $ctx, $conversations, $from, $to, $moneyVisible),
+                'partial' => $coverage['known'] && ! $coverage['complete'],
+                'covered_to' => $coverage['known'] && ! $coverage['complete'] ? $coverage['through'] : null,
             ],
             'attribution' => [
                 'model' => 'first_touch',
@@ -199,6 +237,7 @@ class MetaDashboardService
                 'definitions' => self::definitions(),
             ],
             'sync' => $this->sync->status(),
+            'metrics_available' => $this->spend->metricsAvailable(),
         ];
     }
 
@@ -209,29 +248,75 @@ class MetaDashboardService
      */
     public function campaigns(string $level, CarbonInterface $from, CarbonInterface $to, bool $moneyVisible = true): array
     {
+        return $this->campaignTable($level, $from, $to, $moneyVisible, null, 1, PHP_INT_MAX)['rows'];
+    }
+
+    /**
+     * La tabla de un nivel, o el desglose de los hijos de una fila: los
+     * conjuntos de una campaña (`$parentId` de una campaña, nivel adset) o los
+     * anuncios de un conjunto (de un conjunto, nivel ad). `$parentId` es la
+     * clave opaca de la fila ({@see opaqueId()}); si no es de la cuenta
+     * configurada, no hay hijos.
+     *
+     * @return array{rows: list<array<string, mixed>>, partial: bool, covered_to: ?string,
+     *     meta: array{current_page: int, last_page: int, per_page: int, total: int}}
+     */
+    public function campaignTable(
+        string $level,
+        CarbonInterface $from,
+        CarbonInterface $to,
+        bool $moneyVisible = true,
+        ?string $parentId = null,
+        int $page = 1,
+        int $perPage = self::CHILDREN_PER_PAGE,
+    ): array {
         if (! in_array($level, MetaAdEntity::LEVELS, true)) {
             throw new InvalidArgumentException('Nivel desconocido: usa campaign, adset o ad.');
         }
 
         [$from, $to] = $this->bounds($from, $to);
+        $coverage = $this->spend->coverage($from, $to);
+        $perPage = max(1, $perPage);
+        $page = max(1, min(self::MAX_PAGE, $page));
+
+        $parent = null;
+        if ($parentId !== null) {
+            $parent = $this->resolveParent($level, $parentId);
+            if ($parent === null) {
+                return $this->tableOf([], $coverage, 1, $perPage);
+            }
+        }
+
         $ctx = $this->context($from, $to);
         $conversations = $this->conversationsByLead($from, $to, $ctx);
+        $rows = $this->campaignRows($level, $ctx, $conversations, $from, $to, $moneyVisible, $parent);
 
-        return $this->campaignRows($level, $ctx, $conversations, $from, $to, $moneyVisible);
+        return $this->tableOf($rows, $coverage, $page, $perPage);
     }
 
     /**
-     * Los leads reales cuyo primer contacto cae en el periodo, del más reciente
-     * al más antiguo. Un lead que no es el principal de su persona sale como
-     * `duplicate`, con `duplicate_of` (que puede ser de antes del periodo).
+     * Las PERSONAS del periodo (una fila cada una, con su lead principal), de la
+     * más reciente a la más antigua. Una persona con dos perfiles de WhatsApp, o
+     * con dos teléfonos que llevan al mismo cliente, sale una vez: `meta.total`
+     * es la cifra «Leads». `$origin` filtra por la fila de «Origen de leads».
      *
      * Sin teléfono, sin wa_id, sin referral crudo y sin el `ad_id` completo: el
      * anuncio va enmascarado en `ad_ref`.
      *
      * @return array{data: list<array<string, mixed>>, meta: array{current_page: int, last_page: int, per_page: int, total: int}}
      */
-    public function leads(CarbonInterface $from, CarbonInterface $to, int $page = 1, int $perPage = 20, bool $moneyVisible = true): array
-    {
+    public function leads(
+        CarbonInterface $from,
+        CarbonInterface $to,
+        int $page = 1,
+        int $perPage = 20,
+        bool $moneyVisible = true,
+        ?string $origin = null,
+    ): array {
+        if ($origin !== null && ! in_array($origin, self::ORIGIN_ORDER, true)) {
+            throw new InvalidArgumentException('Origen desconocido.');
+        }
+
         [$from, $to] = $this->bounds($from, $to);
         $perPage = max(1, min(self::MAX_PER_PAGE, $perPage));
         // El tope va antes de la cuenta: (página - 1) × tamaño no puede desbordarse.
@@ -240,9 +325,16 @@ class MetaDashboardService
         // El libro se calcula sobre TODO el periodo y luego se pagina: una
         // persona con dos leads en páginas distintas no puede cobrar dos veces.
         $ctx = $this->context($from, $to);
-        $total = $ctx['leads']->count();
+        $principals = array_flip(array_values($ctx['persons']));
 
-        $data = $ctx['leads']->values()
+        // `leads` ya va del primer contacto más reciente al más antiguo.
+        $people = $ctx['leads']->filter(function (MarketingLead $lead, int $id) use ($principals, $ctx, $origin): bool {
+            return isset($principals[$id])
+                && ($origin === null || self::originGroup($ctx['firstTouch'][$id]['key']) === $origin);
+        });
+        $total = $people->count();
+
+        $data = $people->values()
             ->slice(($page - 1) * $perPage, $perPage)
             ->map(fn (MarketingLead $lead): array => $this->leadRow($lead, $ctx, $moneyVisible))
             ->values()
@@ -259,6 +351,12 @@ class MetaDashboardService
         ];
     }
 
+    /** La fila de «Origen de leads» de una clave del clasificador. */
+    public static function originGroup(string $key): string
+    {
+        return in_array($key, self::ORIGIN_ORDER, true) ? $key : self::ORIGIN_OTHERS;
+    }
+
     /**
      * «Actualizar»: despacha una pasada de Meta Ads si tiene sentido.
      *
@@ -266,17 +364,23 @@ class MetaDashboardService
      * `running` (ya hay una pasada) o `cooldown` (hubo un intento o una petición
      * en los últimos cinco minutos; repetir solo gastaría cuota de Meta).
      *
+     * `sync` es el estado de ANTES de despachar: el panel compara con él para
+     * saber cuándo terminó la pasada pedida. Leído después, si el job ya corrió
+     * (una cola síncrona, o un worker que lo toma al instante) traería la hora
+     * de la pasada nueva, y el panel la esperaría sin fin.
+     *
      * @return array{status: string, sync: array<string, mixed>}
      */
     public function requestSync(): array
     {
-        $outcome = $this->syncOutcome();
+        $before = $this->sync->status();
+        $outcome = $this->syncOutcome($before);
 
         if ($outcome === 'queued') {
             SyncMetaAdsInsights::dispatch(MetaSyncRun::TRIGGER_MANUAL);
         }
 
-        return ['status' => $outcome, 'sync' => $this->sync->status()];
+        return ['status' => $outcome, 'sync' => $before];
     }
 
     /**
@@ -288,21 +392,29 @@ class MetaDashboardService
     {
         $days = ConversionLedger::windowDays();
 
+        // Las frases principales son las del cliente, palabra por palabra; detrás,
+        // la precisión que evita malentendidos.
         return [
-            'period' => 'Días completos en hora de Bogotá. Todas las cifras usan el mismo periodo.',
-            'leads' => 'Personas distintas cuyo primer contacto (el primero de toda su historia) cayó en el periodo. Sin leads de prueba, y el mismo teléfono cuenta una vez: quien ya había escrito antes del periodo no cuenta de nuevo.',
-            'conversations' => 'Conversaciones de leads reales con al menos un mensaje entrante en el periodo. No tiene por qué coincidir con Leads: un lead antiguo puede escribir en el periodo y un lead puede tener varias conversaciones.',
-            'converted' => "Personas del periodo que no habían pagado nunca y pagaron (más de \$0) en los {$days} días siguientes a su primer contacto. Cada persona convierte una vez.",
-            'renewals' => "Personas del periodo que ya habían pagado antes de escribir y volvieron a pagar en los {$days} días siguientes. Se cuentan aparte, no como convertidos.",
-            'revenue_attributed' => "Dinero cobrado de planes y membresías (pagos válidos y abonos aplicados, de más de \$0) en los {$days} días siguientes al primer contacto. Sin tienda ni cafetería, y una deuda sin cobrar no cuenta. Si un pago se anula o un abono se revierte, sale.",
-            'paid' => 'Universo pauta: personas cuyo primer contacto llegó desde un anuncio de Meta. Para ROAS y CAC solo cuentan las de anuncios de la cuenta publicitaria conectada, que es la del gasto.',
-            'roas' => 'Ingresos de las personas de pauta de la cuenta conectada entre el gasto de esa cuenta en el periodo. Sin gasto conocido, en otra moneda o en cero, no se calcula.',
+            'period' => 'Días completos en hora de Bogotá. Todas las cifras usan el mismo periodo, y la comparación usa el mismo número de días justo antes.',
+            'spend' => 'Suma del importe gastado que Meta reporta para el periodo. Sin conexión o sin datos de Meta es «—», nunca $0.',
+            'leads' => 'Personas únicas que iniciaron contacto comercial en el periodo. Una persona cuenta una vez aunque escriba desde dos perfiles o teléfonos que llevan al mismo cliente; sin leads de prueba, y quien ya había escrito antes del periodo no cuenta de nuevo.',
+            'conversations' => 'Hilos con al menos un mensaje entrante en el periodo. No tiene por qué coincidir con Leads: un lead antiguo puede escribir en el periodo y un lead puede tener varios hilos.',
+            'converted' => "Leads que realizaron su primer cobro válido de membresía dentro de la ventana de atribución ({$days} días desde el primer contacto). Un cobro de \$0 no cuenta.",
+            'renewals' => "Miembros existentes que realizaron un cobro válido después del contacto comercial (dentro de los {$days} días). Se cuentan aparte de los nuevos clientes.",
+            'revenue_attributed' => "Dinero realmente cobrado y vinculado a leads dentro de la ventana ({$days} días): planes y membresías, pagos válidos y abonos aplicados. Sin tienda ni cafetería; una deuda sin cobrar no cuenta, y si un pago se anula o un abono se revierte, sale.",
+            'meta_revenue' => 'Dinero cobrado a leads cuyo primer contacto fue un anuncio de la cuenta publicitaria conectada (nuevos clientes y renovaciones). Lo orgánico y lo sin atribuir no entran.',
+            'paid' => 'Pauta Meta: personas cuyo primer contacto llegó desde un anuncio de la cuenta publicitaria conectada, que es la del gasto. ROAS, CAC, conversión Meta y retorno usan solo este universo.',
+            'roas' => 'Ingreso atribuible a Meta / gasto Meta. Sin gasto completo y conocido, en otra moneda o en cero, no se calcula.',
             'roas_new' => 'Como el ROAS, pero solo con el dinero de clientes nuevos: sin las renovaciones de quien ya pagaba.',
-            'cac' => 'Gasto en Meta Ads entre clientes nuevos de pauta de la cuenta conectada. Sin gasto conocido o sin clientes nuevos de pauta, no se calcula.',
-            'conversion_rate' => 'Convertidos entre leads.',
+            'cac' => 'Gasto Meta / nuevos clientes obtenidos desde pauta. Sin gasto completo y conocido o sin clientes nuevos de pauta, no se calcula.',
+            'conversion_rate' => 'Nuevos clientes / leads del mismo universo: todos los leads del periodo.',
+            'meta_conversion_rate' => 'Nuevos clientes de pauta / leads de pauta de la cuenta conectada.',
+            'return_after_ad_spend' => 'Ingresos atribuidos a Meta menos el gasto publicitario. No incluye nómina, arriendo ni otros costos operativos.',
+            'unattributed' => 'Sin atribuir significa que no existe evidencia técnica suficiente para asignar el lead a una campaña. No se asignan campañas por suposición.',
             'identity' => 'El lead se enlaza con una persona del CRM por su ficha de socio o porque los 10 últimos dígitos de su teléfono coinciden con UNA sola persona. Si coinciden con varias, no se enlaza; también si coinciden una ficha de socio y otra cuenta de usuario distinta: es más prudente que enlazar con la ficha.',
             'first_touch' => 'El origen es el del primer contacto, que no cambia. Sin un anuncio o publicación de Meta que lo pruebe, el lead queda «Sin atribuir».',
             'campaign' => 'La campaña se obtiene del anuncio por la Marketing API de Meta, solo de la cuenta publicitaria conectada. Sin esa conexión, o si el anuncio es de otra cuenta, los leads de pauta van a «Sin campaña».',
+            'reach' => 'Personas únicas que vieron los anuncios, según Meta. No se suma por días: solo se enseña para los periodos que Meta calculó enteros.',
         ];
     }
 
@@ -317,7 +429,9 @@ class MetaDashboardService
      *  - `persons`: persona de U (D6) → su lead principal.
      *  - `mainOf`: lead del periodo → lead principal de su persona, que puede
      *    ser de antes del periodo (entonces la persona no es de U).
-     *  - `ledger`: el libro, SOLO de los leads principales de U.
+     *  - `ledger`: el libro de los leads principales de U. Si alguno es del
+     *    mismo cliente que un lead anterior al periodo, lleva también ese lead,
+     *    solo para saber que no es nuevo: lo que se cuenta sale de U.
      *
      * @return array{leads: Collection<int, MarketingLead>, firstTouch: array<int, array<string, mixed>>,
      *     lastTouch: array<int, array<string, mixed>>, persons: array<string, int>, mainOf: array<int, int>,
@@ -373,6 +487,34 @@ class MetaDashboardService
         }
 
         $principals = $leads->only(array_values($persons))->values();
+        $ledger = $this->ledger->forLeads($principals);
+
+        // También ANTES del periodo: quien ya había escrito desde otro teléfono
+        // o perfil que lleva al mismo cliente no es nuevo. Con esos leads
+        // anteriores, el libro le da el cliente al más antiguo, igual que entre
+        // dos leads del periodo. Solo se recalcula si hay alguno.
+        $earlier = $this->earlierLeadsOfSameCustomers($ledger, $from);
+        if ($earlier !== []) {
+            $ledger = $this->ledger->forLeads($principals->merge($earlier));
+        }
+
+        // Una PERSONA, una vez, también por su identidad: dos teléfonos (o dos
+        // perfiles) que llevan al mismo cliente son la misma persona. El libro
+        // se lo da al lead más antiguo (`duplicate_of`), sea del periodo o de
+        // antes; el otro sale de U, y sus leads pasan a apuntar a ese lead.
+        foreach ($persons as $key => $leadId) {
+            $record = $ledger[$leadId] ?? null;
+            if (($record['kind'] ?? null) !== ConversionLedger::KIND_DUPLICATE || $record['duplicate_of'] === null) {
+                continue;
+            }
+
+            unset($persons[$key]);
+            foreach ($mainOf as $id => $main) {
+                if ($main === $leadId) {
+                    $mainOf[$id] = (int) $record['duplicate_of'];
+                }
+            }
+        }
 
         return [
             'leads' => $leads,
@@ -380,7 +522,7 @@ class MetaDashboardService
             'lastTouch' => $lastTouch,
             'persons' => $persons,
             'mainOf' => $mainOf,
-            'ledger' => $this->ledger->forLeads($principals),
+            'ledger' => $ledger,
             'otherTouch' => [],
         ];
     }
@@ -442,6 +584,90 @@ class MetaDashboardService
                 if (isset($wanted[LeadUniverse::personKey($lead)])) {
                     $out[(int) $lead->id] = $lead;
                 }
+            }
+        }
+
+        return array_values($out);
+    }
+
+    /**
+     * Los leads reales con primer contacto ANTERIOR al periodo que pueden ser del
+     * mismo CLIENTE que una persona de U con otro teléfono o perfil: los
+     * enlazados a sus fichas de socio y los que escribieron desde un teléfono de
+     * ese cliente (el de su usuario o el de sus fichas). Son candidatos: si de
+     * verdad son el mismo cliente lo decide el libro, con la regla de identidad
+     * de siempre ({@see LeadIdentityResolver}). En lote, como
+     * {@see earlierLeadsOfSamePersons()}.
+     *
+     * @param  Collection<int, array<string, mixed>>  $ledger  el libro de los principales de U
+     * @return list<MarketingLead>
+     */
+    private function earlierLeadsOfSameCustomers(Collection $ledger, CarbonImmutable $from): array
+    {
+        $userIds = [];
+        $memberIds = [];
+        foreach ($ledger as $record) {
+            if (! in_array($record['identity'], MarketingLeadIdentity::LINKED, true)) {
+                continue;
+            }
+            if ($record['user_id'] !== null) {
+                $userIds[(int) $record['user_id']] = true;
+            }
+            if ($record['member_id'] !== null) {
+                $memberIds[(int) $record['member_id']] = true;
+            }
+        }
+
+        if ($userIds === [] && $memberIds === []) {
+            return [];
+        }
+
+        // Los teléfonos del cliente: el de su usuario y los de todas sus fichas.
+        $phones = [];
+        $known = [];
+        $remember = function (?string $phone) use (&$phones): void {
+            $digits = LeadUniverse::last10($phone);
+            if ($digits !== null) {
+                $phones[$digits] = $digits;
+            }
+        };
+        foreach (array_chunk(array_keys($userIds), self::CHUNK) as $ids) {
+            foreach (DB::table('users')->whereIn('id', $ids)->get(['phone']) as $user) {
+                $remember($user->phone);
+            }
+            foreach (DB::table('members')->whereIn('user_id', $ids)->get(['id', 'phone']) as $member) {
+                $memberIds[(int) $member->id] = true;
+                $known[(int) $member->id] = true;
+                $remember($member->phone);
+            }
+        }
+        foreach (array_chunk(array_keys(array_diff_key($memberIds, $known)), self::CHUNK) as $ids) {
+            foreach (DB::table('members')->whereIn('id', $ids)->get(['phone']) as $member) {
+                $remember($member->phone);
+            }
+        }
+
+        $first = LeadUniverse::firstContactSql();
+        $last10 = LeadUniverse::phoneTailSql('marketing_leads.phone');
+
+        $queries = [];
+        foreach (array_chunk(array_keys($memberIds), self::CHUNK) as $ids) {
+            $queries[] = fn ($q) => $q->whereIn('member_id', $ids);
+        }
+        foreach (array_chunk(array_values($phones), self::CHUNK) as $chunk) {
+            $queries[] = fn ($q) => $q->whereIn(DB::raw($last10), $chunk);
+        }
+
+        $out = [];
+        foreach ($queries as $match) {
+            $rows = LeadUniverse::constrain(MarketingLead::query())
+                ->select(['id', 'channel', 'meta_user_id', 'phone', 'member_id', 'first_message_at', 'created_at'])
+                ->whereRaw("{$first} < ?", [$from])
+                ->where($match)
+                ->get();
+
+            foreach ($rows as $lead) {
+                $out[(int) $lead->id] = $lead;
             }
         }
 
@@ -547,7 +773,7 @@ class MetaDashboardService
         $revenueNew = 0.0;
         $revenueRenewal = 0.0;
         $paid = ['leads' => 0, 'converted' => 0, 'revenue' => 0.0];
-        $resolved = ['leads' => 0, 'converted' => 0, 'revenue' => 0.0, 'revenue_new' => 0.0];
+        $resolved = ['leads' => 0, 'converted' => 0, 'revenue' => 0.0, 'revenue_new' => 0.0, 'renewals' => 0, 'revenue_renewal' => 0.0];
 
         // Una persona, una vez: todo se cuenta sobre su lead principal.
         foreach ($ctx['persons'] as $leadId) {
@@ -569,6 +795,8 @@ class MetaDashboardService
             } elseif ($record['kind'] === ConversionLedger::KIND_RENEWAL) {
                 $renewals++;
                 $revenueRenewal += $record['revenue'];
+                $resolved['renewals'] += $fromAccount ? 1 : 0;
+                $resolved['revenue_renewal'] += $fromAccount ? $record['revenue'] : 0.0;
             } else {
                 continue;
             }
@@ -581,11 +809,17 @@ class MetaDashboardService
         $paid['revenue'] = round($paid['revenue'], 2);
         $resolved['revenue'] = round($resolved['revenue'], 2);
         $resolved['revenue_new'] = round($resolved['revenue_new'], 2);
+        $resolved['revenue_renewal'] = round($resolved['revenue_renewal'], 2);
         $unresolved = $paid['leads'] - $resolved['leads'];
 
         $spendProblem = $this->spendProblem($spend);
         $roasReason = $spendProblem;
         $cacReason = $spendProblem ?? ($resolved['converted'] === 0 ? 'no_paid_conversions' : null);
+
+        // Retorno = ingresos Meta − gasto Meta. Una resta, no una división: un
+        // gasto de cero comprobado vale; uno incompleto o desconocido, no.
+        $returnReason = $this->returnProblem($spend);
+        $return = $returnReason === null ? round($resolved['revenue'] - (float) $spend['amount'], 2) : null;
 
         // Hay leads de pauta que el gasto de la cuenta no cubre: el ROAS de la
         // cuenta no los incluye, y hay que decirlo.
@@ -611,7 +845,17 @@ class MetaDashboardService
             'roas_warning' => $unresolved > 0 && $spendKnown ? self::WARNING_UNRESOLVED_PAID_LEADS : null,
             'cac' => $cacReason === null ? round($spend['amount'] / $resolved['converted'], 2) : null,
             'cac_reason' => $cacReason,
+            // Cada conversión con su universo: nuevos de TODOS los leads entre
+            // todos los leads; nuevos de pauta entre los leads de pauta.
             'conversion_rate' => $leads > 0 ? round($converted / $leads, 4) : null,
+            'meta_conversion_rate' => $resolved['leads'] > 0 ? round($resolved['converted'] / $resolved['leads'], 4) : null,
+            'return_after_ad_spend' => $return,
+            'return_after_ad_spend_reason' => $returnReason,
+            'return_state' => $return === null ? null : match (true) {
+                $return > 0 => 'positive',
+                $return < 0 => 'negative',
+                default => 'breakeven',
+            },
             'money_visible' => $moneyVisible,
         ];
 
@@ -628,15 +872,16 @@ class MetaDashboardService
      */
     private function withoutMoney(array $kpis): array
     {
-        foreach (['revenue_new', 'revenue_renewal', 'revenue_attributed', 'roas', 'roas_new', 'cac'] as $field) {
+        foreach (['revenue_new', 'revenue_renewal', 'revenue_attributed', 'roas', 'roas_new', 'cac', 'return_after_ad_spend', 'return_state'] as $field) {
             $kpis[$field] = null;
         }
-        foreach (['revenue_reason', 'roas_reason', 'roas_new_reason', 'cac_reason'] as $field) {
+        foreach (['revenue_reason', 'roas_reason', 'roas_new_reason', 'cac_reason', 'return_after_ad_spend_reason'] as $field) {
             $kpis[$field] = self::MONEY_FORBIDDEN;
         }
         $kpis['paid']['revenue'] = null;
         $kpis['paid_resolved']['revenue'] = null;
         $kpis['paid_resolved']['revenue_new'] = null;
+        $kpis['paid_resolved']['revenue_renewal'] = null;
         $kpis['money_visible'] = false;
 
         return $kpis;
@@ -649,6 +894,13 @@ class MetaDashboardService
      */
     private function spendProblem(array $spend): ?string
     {
+        // Un importe de una parte del periodo daría un ROAS y un CAC que parecen
+        // del periodo y no lo son. Va primero: sea cual sea el estado de la
+        // última pasada, el motivo es el mismo.
+        if ($spend['amount'] !== null && ($spend['complete'] ?? true) === false) {
+            return self::SPEND_INCOMPLETE;
+        }
+
         if (! in_array($spend['status'], [MetaSpendReader::OK, MetaSpendReader::STALE], true)) {
             return 'spend_'.$spend['status'];
         }
@@ -666,6 +918,33 @@ class MetaDashboardService
     }
 
     /**
+     * Por qué no se puede restar el gasto a los ingresos de pauta, o null si se
+     * puede. A diferencia de dividir, un gasto de cero comprobado sirve.
+     *
+     * @param  array<string, mixed>  $spend
+     */
+    private function returnProblem(array $spend): ?string
+    {
+        if ($spend['amount'] !== null && ($spend['complete'] ?? true) === false) {
+            return self::SPEND_INCOMPLETE;
+        }
+
+        if (! in_array($spend['status'], [MetaSpendReader::OK, MetaSpendReader::STALE, MetaSpendReader::REAL_ZERO], true)) {
+            return 'spend_'.$spend['status'];
+        }
+
+        if ($spend['amount'] === null) {
+            return 'spend_unknown';
+        }
+
+        if ($spend['amount'] > 0 && strtoupper((string) $spend['currency']) !== self::REVENUE_CURRENCY) {
+            return 'currency_mismatch';
+        }
+
+        return null;
+    }
+
+    /**
      * Las cifras secundarias, cada una con su alcance: `period` si es del
      * periodo, `now` si es una foto del momento.
      *
@@ -674,12 +953,16 @@ class MetaDashboardService
      */
     private function secondary(array $ctx, CarbonImmutable $from, CarbonImmutable $to): array
     {
-        // Personas de U con algún lead caliente del periodo.
+        // Personas de U con algún lead caliente del periodo. Por su lead principal
+        // (`mainOf`), no por el teléfono: el perfil que se fundió con otro por
+        // identidad ya no tiene clave propia en `persons`, pero sigue siendo de
+        // esa persona.
+        $principals = array_flip(array_values($ctx['persons']));
         $hot = [];
-        foreach ($ctx['leads'] as $lead) {
-            $key = LeadUniverse::personKey($lead);
-            if ($lead->temperature === MarketingLead::STATUS_HOT && isset($ctx['persons'][$key])) {
-                $hot[$key] = true;
+        foreach ($ctx['leads'] as $id => $lead) {
+            $main = $ctx['mainOf'][$id];
+            if ($lead->temperature === MarketingLead::STATUS_HOT && isset($principals[$main])) {
+                $hot[$main] = true;
             }
         }
 
@@ -715,45 +998,64 @@ class MetaDashboardService
     /**
      * «Origen de leads»: personas, cuota, convertidos e ingresos por primer toque.
      *
+     * Solo las categorías con evidencia (con algún lead), en el orden de
+     * {@see ORIGIN_ORDER}. Lo que no es de la lista principal va a «Otros», con
+     * `includes` = las etiquetas de lo que agrupa. «Directo» solo aparece si
+     * algo lo prueba: no se deduce de que falte el referral.
+     *
      * @param  array<string, mixed>  $ctx
      * @return array{0: list<array<string, mixed>>, 1: ?float}
      */
     private function origins(array $ctx, bool $moneyVisible): array
     {
         $rows = [];
-        foreach (LeadSourceClassifier::KEYS as $key) {
-            $rows[$key] = $this->originRow($key);
-        }
+        $includes = [];
+        $row = function (string $key) use (&$rows): void {
+            $rows[$key] ??= $this->originRow($key);
+        };
 
         foreach ($ctx['persons'] as $leadId) {
             $key = $ctx['firstTouch'][$leadId]['key'];
-            $rows[$key] ??= $this->originRow($key);
-            $rows[$key]['leads']++;
+            $group = self::originGroup($key);
+            $row($group);
+            $rows[$group]['leads']++;
+            if ($group === self::ORIGIN_OTHERS) {
+                $includes[LeadSourceClassifier::labelFor($key)] = true;
+            }
         }
 
         // El libro solo trae los leads principales de U: una persona, una vez.
-        foreach ($ctx['ledger'] as $leadId => $record) {
+        foreach ($ctx['persons'] as $leadId) {
+            $record = $ctx['ledger'][$leadId];
             if (! in_array($record['kind'], [ConversionLedger::KIND_NEW, ConversionLedger::KIND_RENEWAL], true)) {
                 continue;
             }
 
-            $key = $ctx['firstTouch'][$leadId]['key'];
-            $rows[$key] ??= $this->originRow($key);
-            $rows[$key]['converted'] += $record['kind'] === ConversionLedger::KIND_NEW ? 1 : 0;
-            $rows[$key]['revenue'] += $record['revenue'];
+            $group = self::originGroup($ctx['firstTouch'][$leadId]['key']);
+            $rows[$group]['converted'] += $record['kind'] === ConversionLedger::KIND_NEW ? 1 : 0;
+            $rows[$group]['revenue'] += $record['revenue'];
         }
 
         $total = count($ctx['persons']);
-        foreach ($rows as $key => $row) {
-            $rows[$key]['share'] = $total > 0 ? round($row['leads'] / $total, 4) : null;
-            $rows[$key]['revenue'] = $moneyVisible ? round($row['revenue'], 2) : null;
+        $out = [];
+        foreach (self::ORIGIN_ORDER as $key) {
+            if (! isset($rows[$key])) {
+                continue;
+            }
+            $r = $rows[$key];
+            $r['share'] = $total > 0 ? round($r['leads'] / $total, 4) : null;
+            $r['revenue'] = $moneyVisible ? round($r['revenue'], 2) : null;
+            if ($key === self::ORIGIN_OTHERS) {
+                $r['includes'] = array_keys($includes);
+            }
+            $out[] = $r;
         }
 
         $unattributed = $total > 0
-            ? round($rows[LeadSourceClassifier::KEY_UNATTRIBUTED]['leads'] / $total, 4)
+            ? round(($rows[LeadSourceClassifier::KEY_UNATTRIBUTED]['leads'] ?? 0) / $total, 4)
             : null;
 
-        return [array_values($rows), $unattributed];
+        return [$out, $unattributed];
     }
 
     /** @return array{key: string, label: string, leads: int, share: ?float, converted: int, revenue: float} */
@@ -761,7 +1063,7 @@ class MetaDashboardService
     {
         return [
             'key' => $key,
-            'label' => LeadSourceClassifier::labelFor($key),
+            'label' => $key === self::ORIGIN_OTHERS ? 'Otros' : LeadSourceClassifier::labelFor($key),
             'leads' => 0,
             'share' => null,
             'converted' => 0,
@@ -805,12 +1107,26 @@ class MetaDashboardService
         CarbonImmutable $from,
         CarbonImmutable $to,
         bool $moneyVisible,
+        ?array $parent = null,
     ): array {
+        // Con padre, solo cuenta lo que es de él: un toque de otra campaña (o de
+        // otro conjunto) no es de esta fila, y uno sin resolver no es de ninguna.
+        $ofParent = function (array $touch) use ($parent): bool {
+            if ($parent === null) {
+                return true;
+            }
+
+            return $touch['resolved'] && match ($parent['level']) {
+                MetaAdEntity::LEVEL_CAMPAIGN => $touch['campaign_id'] === $parent['id'],
+                default => $touch['adset_id'] === $parent['id'],
+            };
+        };
+
         // Las entidades a las que llevan las personas y las conversaciones.
         $include = [];
         foreach ([...array_values($ctx['persons']), ...array_keys($conversations)] as $leadId) {
             $touch = $ctx['firstTouch'][$leadId] ?? $ctx['otherTouch'][$leadId] ?? null;
-            if ($touch !== null && $touch['origin'] === LeadSourceClassifier::ORIGIN_PAID) {
+            if ($touch !== null && $touch['origin'] === LeadSourceClassifier::ORIGIN_PAID && $ofParent($touch)) {
                 [$entity] = $this->entityOf($level, $touch);
                 if ($entity !== null) {
                     $include[$entity] = true;
@@ -818,16 +1134,22 @@ class MetaDashboardService
             }
         }
 
+        $available = $this->spend->metricsAvailable();
         $rows = [];
-        foreach ($this->spend->byLevel($level, $from, $to, array_keys($include)) as $s) {
-            $rows[$s['id']] = $this->campaignRow($s['id'], $s['name'], $s['status'], $s['spend'], $s['currency']);
+        foreach ($this->spend->byLevel($level, $from, $to, array_keys($include), $parent) as $s) {
+            $rows[$s['id']] = $this->campaignRow($s['id'], $s['name'], $s['status'], $s, $available);
         }
 
-        $unresolvedName = $this->client->isConfigured() ? self::UNRESOLVED_NAME_OTHER_ACCOUNT : self::UNRESOLVED_NAME;
+        $unresolvedName = match (true) {
+            ! $this->client->isConfigured() => self::UNRESOLVED_NAME,
+            // Sin ninguna pasada buena (ni de relleno) la dimensión está vacía.
+            $this->sync->coverage() === [] => self::UNRESOLVED_NAME_NEVER_SYNCED,
+            default => self::UNRESOLVED_NAME_OTHER_ACCOUNT,
+        };
 
         $lookups = [];
-        $bucket = function (?array $touch) use (&$rows, &$lookups, $level, $unresolvedName): ?string {
-            if ($touch === null || $touch['origin'] !== LeadSourceClassifier::ORIGIN_PAID) {
+        $bucket = function (?array $touch) use (&$rows, &$lookups, $level, $unresolvedName, $ofParent): ?string {
+            if ($touch === null || $touch['origin'] !== LeadSourceClassifier::ORIGIN_PAID || ! $ofParent($touch)) {
                 return null;
             }
 
@@ -835,10 +1157,10 @@ class MetaDashboardService
 
             $id = $entity ?? self::UNRESOLVED;
             if (! isset($rows[$id])) {
-                // Sin fila del lector (Meta Ads sin conexión): el gasto no se sabe.
+                // Sin fila del lector (Meta Ads sin conexión): las cifras de Meta no se saben.
                 $rows[$id] = $entity === null
-                    ? $this->campaignRow(null, $unresolvedName, null, null, null)
-                    : $this->campaignRow($entity, $name, null, null, null);
+                    ? $this->campaignRow(null, $unresolvedName, null, null, [])
+                    : $this->campaignRow($entity, $name, null, null, []);
                 if ($entity !== null) {
                     $lookups[] = $entity;
                 }
@@ -853,12 +1175,15 @@ class MetaDashboardService
             }
         }
 
-        foreach ($ctx['ledger'] as $leadId => $record) {
+        // Solo las personas de U (su lead principal): una persona, una vez.
+        foreach ($ctx['persons'] as $leadId) {
+            $record = $ctx['ledger'][$leadId];
             if (! in_array($record['kind'], [ConversionLedger::KIND_NEW, ConversionLedger::KIND_RENEWAL], true)) {
                 continue;
             }
             if (($id = $bucket($ctx['firstTouch'][$leadId])) !== null) {
                 $rows[$id]['converted'] += $record['kind'] === ConversionLedger::KIND_NEW ? 1 : 0;
+                $rows[$id]['renewals'] += $record['kind'] === ConversionLedger::KIND_RENEWAL ? 1 : 0;
                 $rows[$id]['revenue'] += $record['revenue'];
             }
         }
@@ -873,13 +1198,29 @@ class MetaDashboardService
         $this->completeFromDimension($level, $rows, $lookups);
 
         foreach ($rows as $id => $row) {
-            $valid = $row['spend'] !== null && $row['spend'] > 0
-                && strtoupper((string) $row['currency']) === self::REVENUE_CURRENCY;
+            $spend = $row['spend'];
+            // Gasto que se puede afirmar para TODO el periodo y en pesos: lo único
+            // con que se divide o se resta.
+            $complete = $spend !== null && ! $row['partial']
+                && ($spend == 0.0 || strtoupper((string) $row['currency']) === self::REVENUE_CURRENCY);
+            $divisible = $complete && $spend > 0;
+            $ratio = fn (?int $part, int|float|null $whole, int $digits = 4): ?float => $part !== null && $whole !== null && $whole > 0
+                ? round($part / $whole, $digits)
+                : null;
 
             $rows[$id]['revenue'] = round($row['revenue'], 2);
-            $rows[$id]['roas'] = $valid ? round($row['revenue'] / $row['spend'], 2) : null;
-            $rows[$id]['cac'] = $valid && $row['converted'] > 0 ? round($row['spend'] / $row['converted'], 2) : null;
+            $rows[$id]['roas'] = $divisible ? round($row['revenue'] / $spend, 2) : null;
+            $rows[$id]['cac'] = $divisible && $row['converted'] > 0 ? round($spend / $row['converted'], 2) : null;
             $rows[$id]['conversion_rate'] = $row['leads'] > 0 ? round($row['converted'] / $row['leads'], 4) : null;
+            $rows[$id]['return_after_ad_spend'] = $complete ? round($row['revenue'] - $spend, 2) : null;
+            // Derivadas de las sumas del periodo, no medias de los ratios diarios.
+            $rows[$id]['ctr'] = $ratio($row['clicks'], $row['impressions']);
+            $rows[$id]['cpm'] = $spend !== null && $row['impressions'] !== null && $row['impressions'] > 0
+                ? round($spend / $row['impressions'] * 1000, 2) : null;
+            $rows[$id]['cpc'] = $spend !== null && $row['clicks'] !== null && $row['clicks'] > 0
+                ? round($spend / $row['clicks'], 2) : null;
+            $rows[$id]['cost_per_conversation'] = $spend !== null && $row['meta_conversations'] !== null && $row['meta_conversations'] > 0
+                ? round($spend / $row['meta_conversations'], 2) : null;
         }
 
         uasort($rows, function (array $a, array $b): int {
@@ -894,18 +1235,39 @@ class MetaDashboardService
         return array_values(array_map(fn (array $row): array => $this->publicCampaignRow($level, $row, $moneyVisible), $rows));
     }
 
-    /** @return array<string, mixed> */
-    private function campaignRow(?string $entity, ?string $name, ?string $status, ?float $spend, ?string $currency): array
+    /**
+     * Una fila con las cifras de Meta del lector (`$s`, null si no se saben) y los
+     * contadores del CRM a cero. Una métrica que Meta no reporta para la cuenta
+     * queda en null, nunca en 0.
+     *
+     * @param  array<string, mixed>|null  $s
+     * @param  array<string, bool>  $available
+     * @return array<string, mixed>
+     */
+    private function campaignRow(?string $entity, ?string $name, ?string $status, ?array $s, array $available): array
     {
+        $metric = fn (string $key, ?string $flag = null): ?int => $s !== null && $s[$key] !== null && ($flag === null || ($available[$flag] ?? false))
+            ? (int) $s[$key]
+            : null;
+
         return [
             'entity' => $entity,
             'name' => $name,
             'status' => $status,
-            'spend' => $spend,
-            'currency' => $currency,
+            'spend' => $s['spend'] ?? null,
+            'currency' => $s['currency'] ?? null,
+            'partial' => (bool) ($s['partial'] ?? false),
+            'impressions' => $metric('impressions'),
+            'reach' => $s['reach'] ?? null,
+            'clicks' => $metric('clicks'),
+            'link_clicks' => $metric('link_clicks'),
+            'meta_conversations' => $metric('messaging_started', 'messaging_started'),
+            'meta_replies' => $metric('messaging_replied', 'messaging_replied'),
+            'landing_page_views' => $metric('landing_page_views', 'landing_page_views'),
             'leads' => 0,
             'conversations' => 0,
             'converted' => 0,
+            'renewals' => 0,
             'revenue' => 0.0,
         ];
     }
@@ -956,16 +1318,176 @@ class MetaDashboardService
             'ref' => LeadSourceClassifier::maskId($entity),
             'name' => LeadSourceClassifier::maskDigits($row['name']),
             'status' => $row['status'],
+            'level' => $level,
+            // «Sin campaña» no tiene conjuntos que abrir, y un anuncio no tiene hijos.
+            'has_children' => $entity !== null && $level !== MetaAdEntity::LEVEL_AD,
             'spend' => $row['spend'],
             'currency' => $row['currency'],
+            'partial' => $row['partial'],
+            'impressions' => $row['impressions'],
+            'reach' => $row['reach'],
+            'clicks' => $row['clicks'],
+            'link_clicks' => $row['link_clicks'],
+            'meta_conversations' => $row['meta_conversations'],
+            'meta_replies' => $row['meta_replies'],
+            'landing_page_views' => $row['landing_page_views'],
+            'cpm' => $row['cpm'],
+            'ctr' => $row['ctr'],
+            'cpc' => $row['cpc'],
+            'cost_per_conversation' => $row['cost_per_conversation'],
             'leads' => $row['leads'],
             'conversations' => $row['conversations'],
             'converted' => $row['converted'],
+            'renewals' => $row['renewals'],
             'revenue' => $moneyVisible ? $row['revenue'] : null,
             'cac' => $moneyVisible ? $row['cac'] : null,
             'roas' => $moneyVisible ? $row['roas'] : null,
             'conversion_rate' => $row['conversion_rate'],
+            'return_after_ad_spend' => $moneyVisible ? $row['return_after_ad_spend'] : null,
         ];
+    }
+
+    /**
+     * El padre de un desglose, a partir de su clave opaca: la campaña de los
+     * conjuntos o el conjunto de los anuncios. Solo de la cuenta configurada;
+     * null si no se reconoce.
+     *
+     * @return array{level: string, id: string}|null
+     */
+    private function resolveParent(string $level, string $parentId): ?array
+    {
+        $parentLevel = match ($level) {
+            MetaAdEntity::LEVEL_ADSET => MetaAdEntity::LEVEL_CAMPAIGN,
+            MetaAdEntity::LEVEL_AD => MetaAdEntity::LEVEL_ADSET,
+            default => null,
+        };
+
+        if ($parentLevel === null || ! str_starts_with($parentId, $parentLevel.':')) {
+            return null;
+        }
+
+        foreach (MetaAdEntity::query()->forConfiguredAccount()->where('level', $parentLevel)->pluck('entity_id') as $id) {
+            if (hash_equals(self::opaqueId($parentLevel, (string) $id), $parentId)) {
+                return ['level' => $parentLevel, 'id' => (string) $id];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Una página de filas con lo que el panel necesita para decir si los datos de
+     * Meta son parciales.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     * @param  array{known: bool, complete: bool, through: ?string}  $coverage
+     * @return array{rows: list<array<string, mixed>>, partial: bool, covered_to: ?string,
+     *     meta: array{current_page: int, last_page: int, per_page: int, total: int}}
+     */
+    private function tableOf(array $rows, array $coverage, int $page, int $perPage): array
+    {
+        $total = count($rows);
+        // Sin paginar (la tabla entera de un nivel, que llega sin tope) la página
+        // es el total: un PHP_INT_MAX en el JSON no lo representa bien JavaScript.
+        if ($perPage > self::MAX_PER_PAGE) {
+            $perPage = max(1, $total);
+        }
+        $lastPage = max(1, (int) ceil($total / $perPage));
+        $page = min($page, $lastPage);
+        $partial = $coverage['known'] && ! $coverage['complete'];
+
+        return [
+            'rows' => array_values(array_slice($rows, ($page - 1) * $perPage, $perPage)),
+            'partial' => $partial,
+            'covered_to' => $partial ? $coverage['through'] : null,
+            'meta' => [
+                'current_page' => $page,
+                'last_page' => $lastPage,
+                'per_page' => $perPage,
+                'total' => $total,
+            ],
+        ];
+    }
+
+    /**
+     * El periodo anterior equivalente: el mismo número de días de Bogotá, justo
+     * antes del elegido. Para «30 días», los 30 anteriores.
+     *
+     * @param  array{from: string, to: string}  $period
+     * @return array{from: string, to: string, start: CarbonImmutable, end: CarbonImmutable}
+     */
+    private function previousPeriod(array $period): array
+    {
+        $tz = self::timezone();
+        $first = CarbonImmutable::createFromFormat('!Y-m-d', $period['from'], $tz);
+        $last = CarbonImmutable::createFromFormat('!Y-m-d', $period['to'], $tz);
+        $days = (int) $first->diffInDays($last) + 1;
+
+        $prevLast = $first->subDay();
+        $prevFirst = $prevLast->subDays($days - 1);
+
+        return [
+            'from' => $prevFirst->toDateString(),
+            'to' => $prevLast->toDateString(),
+            'start' => $prevFirst->utc(),
+            'end' => $first->utc(),
+        ];
+    }
+
+    /**
+     * Las cifras del periodo anterior que el panel compara. Mismo cálculo que el
+     * periodo elegido (mismo universo, mismo libro, mismas reglas de gasto), sin
+     * tablas ni listas.
+     *
+     * @param  array{from: string, to: string, start: CarbonImmutable, end: CarbonImmutable}  $previous
+     * @return array<string, mixed>
+     */
+    private function previousSummary(array $previous, bool $moneyVisible): array
+    {
+        [$from, $to] = $this->bounds($previous['start'], $previous['end']);
+
+        $ctx = $this->context($from, $to);
+        $spend = $this->spend->snapshot($from, $to);
+        // kpis() suma las conversaciones por lead; aquí basta el total.
+        $k = $this->kpis($ctx, [$this->conversationCount($from, $to)], $spend, $moneyVisible);
+
+        return [
+            'period' => ['from' => $previous['from'], 'to' => $previous['to']],
+            'spend' => [
+                'status' => $spend['status'],
+                'amount' => $spend['amount'],
+                'currency' => $spend['currency'],
+                'complete' => $spend['complete'],
+            ],
+            'kpis' => [
+                'leads' => $k['leads'],
+                'conversations' => $k['conversations'],
+                'converted' => $k['converted'],
+                'renewals' => $k['renewals'],
+                'revenue_attributed' => $k['revenue_attributed'],
+                'meta_leads' => $k['paid_resolved']['leads'],
+                'meta_converted' => $k['paid_resolved']['converted'],
+                'meta_revenue' => $k['paid_resolved']['revenue'],
+                'roas' => $k['roas'],
+                'cac' => $k['cac'],
+                'conversion_rate' => $k['conversion_rate'],
+                'meta_conversion_rate' => $k['meta_conversion_rate'],
+                'return_after_ad_spend' => $k['return_after_ad_spend'],
+            ],
+        ];
+    }
+
+    /** Conversaciones distintas de leads reales con algún mensaje entrante en `[from, to)`: una consulta. */
+    private function conversationCount(CarbonImmutable $from, CarbonImmutable $to): int
+    {
+        $query = DB::table('marketing_messages as m')
+            ->join('marketing_conversations as c', 'c.id', '=', 'm.conversation_id')
+            ->join('marketing_leads as l', 'l.id', '=', 'c.lead_id')
+            ->where('m.direction', MarketingMessage::DIRECTION_INBOUND)
+            ->where('m.created_at', '>=', $from)
+            ->where('m.created_at', '<', $to);
+
+        return (int) LeadUniverse::constrain($query, 'l.source')->distinct()->count('m.conversation_id');
     }
 
     /**
@@ -1087,13 +1609,13 @@ class MetaDashboardService
         return $day;
     }
 
-    private function syncOutcome(): string
+    /** @param  array<string, mixed>  $status  {@see MetaAdsSync::status()} */
+    private function syncOutcome(array $status): string
     {
         if (! $this->client->isConfigured()) {
             return 'not_configured';
         }
 
-        $status = $this->sync->status();
         if ($status['status'] === MetaSyncRun::STATUS_RUNNING) {
             return 'running';
         }

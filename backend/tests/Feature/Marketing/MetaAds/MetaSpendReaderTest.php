@@ -96,33 +96,53 @@ class MetaSpendReaderTest extends TestCase
         $this->assertTrue($this->reader()->byLevel('campaign', ...$this->bogotaDays('2026-10-05', '2026-10-05'))->isEmpty());
     }
 
-    /** Contrato 3, del lado del lector: un fallo deja la última foto, y al envejecer se dice. */
+    /**
+     * Contrato 3, del lado del lector: un fallo deja la última foto, y al envejecer
+     * se dice. Los días que el éxito vio enteros siguen con su cifra, marcada como
+     * vieja; el día en que corrió (hoy, a las 10:00) solo lo vio en parte, así que,
+     * vieja la foto, ya no se da por completo.
+     */
     public function test_un_fallo_conserva_la_ultima_foto_y_al_envejecer_se_marca(): void
     {
-        $this->fakeMeta(['data' => [$this->insightRow('2026-10-05', '9001', '30000')]]);
-        $this->sync()->run('manual', $this->day('2026-10-05'), $this->day('2026-10-05'));
+        $this->fakeMeta(['data' => [
+            $this->insightRow('2026-10-04', '9001', '20000'),
+            $this->insightRow('2026-10-05', '9001', '30000'),
+        ]]);
+        $this->sync()->run('manual', $this->day('2026-10-04'), $this->day('2026-10-05'));
 
         $this->fakeMeta(fn () => Http::response(['error' => ['message' => 'Service temporarily unavailable', 'code' => 2]], 503));
         $this->assertSame('failed', $this->sync()->run('schedule')['status']);
 
+        // Recién fallado, la foto es reciente: hoy vale lo que valía, también entero.
         $gasto = $this->leer('2026-10-05', '2026-10-05');
-        $this->assertSame('ok', $gasto['status']);
-        $this->assertSame(30000.0, $gasto['amount']);
+        $this->assertSame(['ok', 30000.0, true], [$gasto['status'], $gasto['amount'], $gasto['complete']]);
 
         $gasto = $this->leer('2026-09-29', '2026-10-05');
         $this->assertSame('sync_failed', $gasto['status']);
         $this->assertNull($gasto['amount']);
         $this->assertSame('transient', $gasto['reason']);
 
-        // Tres horas y un minuto sin un éxito: la cifra sigue, marcada como vieja.
+        // Tres horas y un minuto sin un éxito.
         Carbon::setTestNow(now()->addMinutes(181));
+
+        // El día que el éxito vio entero: la cifra sigue, marcada como vieja.
+        $gasto = $this->leer('2026-10-04', '2026-10-04');
+        $this->assertSame(['stale', 20000.0, 'stale', true], [$gasto['status'], $gasto['amount'], $gasto['reason'], $gasto['complete']]);
+
+        // Hoy solo se vio hasta las 10:00: sin cifra, con el error. Nunca un importe completo.
         $gasto = $this->leer('2026-10-05', '2026-10-05');
-        $this->assertSame('stale', $gasto['status']);
-        $this->assertSame(30000.0, $gasto['amount']);
-        $this->assertSame('stale', $gasto['reason']);
+        $this->assertSame(['sync_failed', null, 'transient'], [$gasto['status'], $gasto['amount'], $gasto['reason']]);
+
+        // Los dos días: lo visto entero, como parcial y con su fecha.
+        $gasto = $this->leer('2026-10-04', '2026-10-05');
+        $this->assertSame(['sync_failed', 20000.0, false, '2026-10-04'], [$gasto['status'], $gasto['amount'], $gasto['complete'], $gasto['covered_to']]);
     }
 
-    /** Un cero comprobado que envejece sigue siendo cero comprobado, con el aviso en `reason`. */
+    /**
+     * Un cero comprobado que envejece sigue siendo cero comprobado, con el aviso en
+     * `reason`, en los días que el éxito vio enteros. El día en que corrió solo lo
+     * vio en parte: vieja la foto, ese día no es un cero comprobado.
+     */
     public function test_un_cero_viejo_sigue_siendo_real_zero(): void
     {
         $this->fakeMeta(['data' => []]);
@@ -130,10 +150,16 @@ class MetaSpendReaderTest extends TestCase
 
         Carbon::setTestNow(now()->addMinutes(181));
 
-        $gasto = $this->leer('2026-10-01', '2026-10-05');
+        $gasto = $this->leer('2026-10-01', '2026-10-04');
         $this->assertSame('real_zero', $gasto['status']);
         $this->assertSame(0.0, $gasto['amount']);
         $this->assertSame('stale', $gasto['reason']);
+
+        $gasto = $this->leer('2026-10-01', '2026-10-05');
+        $this->assertSame(['stale', 0.0, false, '2026-10-04', 'partial'], [$gasto['status'], $gasto['amount'], $gasto['complete'], $gasto['covered_to'], $gasto['reason']]);
+
+        $gasto = $this->leer('2026-10-05', '2026-10-05');
+        $this->assertSame(['unknown', null, 'not_covered'], [$gasto['status'], $gasto['amount'], $gasto['reason']]);
     }
 
     /**
@@ -268,15 +294,21 @@ class MetaSpendReaderTest extends TestCase
         [$conGasto, $ceroComprobado, $deOtraCuenta, $desconocida] = $filas->all();
 
         $this->assertSame(30000.0, $conGasto['spend']);
+        // Todas sus métricas de Meta son 0 comprobado; el alcance no, porque no
+        // hay foto de Meta de este rango (no se suma por días).
         $this->assertSame(
             ['id' => '120203', 'name' => 'Campaña C', 'campaign_id' => '120203', 'adset_id' => null,
-                'spend' => 0.0, 'currency' => 'COP', 'impressions' => 0, 'clicks' => 0, 'status' => null],
+                'spend' => 0.0, 'currency' => 'COP', 'impressions' => 0, 'clicks' => 0, 'link_clicks' => 0,
+                'messaging_started' => 0, 'messaging_replied' => 0, 'landing_page_views' => 0,
+                'reach' => null, 'frequency' => null, 'status' => null, 'partial' => false],
             $ceroComprobado,
         );
         // Ni su gasto ni su nombre salen de la otra cuenta.
         $this->assertSame(
             ['id' => '120201', 'name' => null, 'campaign_id' => '120201', 'adset_id' => null,
-                'spend' => null, 'currency' => null, 'impressions' => null, 'clicks' => null, 'status' => null],
+                'spend' => null, 'currency' => null, 'impressions' => null, 'clicks' => null, 'link_clicks' => null,
+                'messaging_started' => null, 'messaging_replied' => null, 'landing_page_views' => null,
+                'reach' => null, 'frequency' => null, 'status' => null, 'partial' => false],
             $deOtraCuenta,
         );
         $this->assertNull($desconocida['spend']);
@@ -343,16 +375,28 @@ class MetaSpendReaderTest extends TestCase
     private function revisar(array $gasto): void
     {
         $this->assertSame(
-            ['status', 'amount', 'currency', 'last_synced_at', 'covered_to', 'reason'],
+            ['status', 'amount', 'currency', 'last_synced_at', 'covered_to', 'reason', 'complete'],
             array_keys($gasto),
         );
 
-        if ($gasto['amount'] !== null && (float) $gasto['amount'] === 0.0) {
+        // Un 0 solo es real_zero, o la parte comprobada de un periodo que se dice incompleto.
+        if ($gasto['amount'] !== null && (float) $gasto['amount'] === 0.0 && $gasto['complete']) {
             $this->assertSame('real_zero', $gasto['status'], 'Un 0 que no es real_zero.');
         }
 
-        if (in_array($gasto['status'], ['unknown', 'not_configured', 'sync_failed'], true)) {
+        if (in_array($gasto['status'], ['unknown', 'not_configured'], true)) {
             $this->assertNull($gasto['amount'], "Con {$gasto['status']} el importe tiene que ser null.");
+        }
+
+        // Tras un fallo solo sale el último dato bueno, y dicho como parcial y hasta qué día.
+        if ($gasto['status'] === 'sync_failed' && $gasto['amount'] !== null) {
+            $this->assertFalse($gasto['complete'], 'Un sync_failed con importe tiene que ser parcial.');
+            $this->assertNotNull($gasto['covered_to']);
+        }
+
+        if (! $gasto['complete']) {
+            $this->assertNotNull($gasto['amount'], 'Solo un importe puede ser parcial.');
+            $this->assertNotNull($gasto['covered_to'], 'Un importe parcial dice hasta qué día llega.');
         }
     }
 }
