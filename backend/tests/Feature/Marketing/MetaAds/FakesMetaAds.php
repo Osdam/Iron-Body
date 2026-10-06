@@ -38,8 +38,14 @@ trait FakesMetaAds
     /** Alcance por rango (`/insights` con level=account|campaign). @var array<string,mixed>|callable */
     private mixed $metaReach = ['data' => []];
 
-    /** Estados por id (`GET /?ids=`). @var array<string,mixed>|callable */
-    private mixed $metaLookup = [];
+    /** Estados de los conjuntos de la cuenta (`GET /act_{id}/adsets`). @var array<string,mixed>|callable */
+    private mixed $metaAdsets = ['data' => []];
+
+    /** Estados de los anuncios de la cuenta (`GET /act_{id}/ads`). @var array<string,mixed>|callable */
+    private mixed $metaAds = ['data' => []];
+
+    /** Un objeto suelto por id (`GET /{id}`): ids → respuesta, o un callable. @var array<string,mixed>|callable */
+    private mixed $metaNodes = [];
 
     /** La ficha de la cuenta (`GET /act_{id}`). @var array<string,mixed>|callable */
     private mixed $metaAccount = [];
@@ -93,8 +99,14 @@ trait FakesMetaAds
                 str_ends_with($path, '/campaigns') => $this->metaCampaigns,
                 str_ends_with($path, '/me/permissions') => $this->metaPermissions,
                 str_ends_with($path, '/me') => $this->metaMe,
-                preg_match('#/v[0-9.]+/?$#', $path) === 1 && isset($query['ids']) => $this->metaLookup,
+                str_ends_with($path, '/adsets') => $this->metaAdsets,
+                str_ends_with($path, '/ads') => $this->metaAds,
+                // `?ids=` ya no existe en v26: si algo lo pidiera, la prueba lo vería.
+                isset($query['ids']) => fn () => Http::response(['error' => ['message' => 'The ids query parameter is deprecated in v26.0+.', 'code' => 100]], 500),
                 preg_match('#/act_\d+$#', $path) === 1 => $this->metaAccount,
+                preg_match('#/v[0-9.]+/(\d+)$#', $path, $m) === 1 => is_callable($this->metaNodes)
+                    ? $this->metaNodes
+                    : ($this->metaNodes[$m[1]] ?? fn () => $this->graphError(100, "Unsupported get request. Object with ID '{$m[1]}' does not exist, cannot be loaded due to missing permissions", 400, ['error_subcode' => 33])),
                 default => fn () => Http::response(['error' => ['message' => 'Ruta no fingida en la prueba', 'code' => 100]], 404),
             };
 
@@ -103,18 +115,23 @@ trait FakesMetaAds
     }
 
     /**
-     * Respuestas de las aristas nuevas: alcance por rango, estados por id, la
-     * ficha de la cuenta, y `/me` y `/me/permissions`. Solo cambia lo que se pasa.
+     * Respuestas de las aristas nuevas: alcance por rango, estados de conjuntos y
+     * anuncios de la cuenta, la ficha de la cuenta, y `/me` y `/me/permissions`.
+     * Solo cambia lo que se pasa.
      */
     protected function fakeMetaExtras(
         array|callable|null $reach = null,
-        array|callable|null $lookup = null,
+        array|callable|null $adsets = null,
+        array|callable|null $ads = null,
+        array|callable|null $nodes = null,
         array|callable|null $account = null,
         array|callable|null $me = null,
         array|callable|null $permissions = null,
     ): void {
         $this->metaReach = $reach ?? $this->metaReach;
-        $this->metaLookup = $lookup ?? $this->metaLookup;
+        $this->metaAdsets = $adsets ?? $this->metaAdsets;
+        $this->metaAds = $ads ?? $this->metaAds;
+        $this->metaNodes = $nodes ?? $this->metaNodes;
         $this->metaAccount = $account ?? $this->metaAccount;
         $this->metaMe = $me ?? $this->metaMe;
         $this->metaPermissions = $permissions ?? $this->metaPermissions;
@@ -147,6 +164,25 @@ trait FakesMetaAds
             'clicks' => '25',
             'account_currency' => 'COP',
         ], $extra);
+    }
+
+    /**
+     * Un borde de estados (`/campaigns`, `/adsets`, `/ads`) que contesta como Meta:
+     * solo los objetos cuyo estado se pidió en `effective_status`, y 400 100/1815001
+     * si se piden eliminados (comprobado con la cuenta real).
+     *
+     * @param  list<array{id: string, effective_status: string}>  $objetos
+     */
+    protected function bordeComoMeta(array $objetos): callable
+    {
+        return function (Request $r) use ($objetos) {
+            $pedidos = json_decode($this->queryOf($r)['effective_status'] ?? '[]', true) ?: [];
+            if (in_array('DELETED', $pedidos, true)) {
+                return $this->graphError(100, 'No se pueden solicitar objetos eliminados en este extremo.', 400, ['error_subcode' => 1815001]);
+            }
+
+            return Http::response(['data' => array_values(array_filter($objetos, fn (array $o) => in_array($o['effective_status'], $pedidos, true)))]);
+        };
     }
 
     /** Un error de Graph con su forma real. */

@@ -32,6 +32,8 @@ class MetaDashboardEndpointsTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // La cobertura histórica tiene sus propias pruebas: aquí todo el año está cubierto.
+        config()->set('marketing.attribution.coverage_since', '2026-01-01');
         Carbon::setTestNow('2026-10-05 15:00:00');
         foreach (Admin::ROLES as $rol) {
             AdminRole::firstOrCreate(['name' => $rol], ['is_system' => true]);
@@ -284,7 +286,7 @@ class MetaDashboardEndpointsTest extends TestCase
         // El contrato del cierre del Objetivo 3: lo de antes, más periodo anterior,
         // datos atribuibles y qué métricas reporta Meta.
         $claves = [
-            'period', 'previous_period', 'spend', 'kpis', 'previous', 'secondary', 'origins', 'unattributed_share',
+            'period', 'previous_period', 'historical_coverage', 'spend', 'kpis', 'previous', 'secondary', 'origins', 'unattributed_share',
             'attributable_share', 'campaigns', 'attribution', 'sync', 'metrics_available',
         ];
         $this->assertSame($claves, array_keys($res->json('data')));

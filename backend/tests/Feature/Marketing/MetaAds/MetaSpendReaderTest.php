@@ -293,14 +293,14 @@ class MetaSpendReaderTest extends TestCase
         $this->assertSame(['120202', '120203', '120201', '120299'], $filas->pluck('id')->all());
         [$conGasto, $ceroComprobado, $deOtraCuenta, $desconocida] = $filas->all();
 
-        $this->assertSame(30000.0, $conGasto['spend']);
+        $this->assertSame([30000.0, '2026-10-05'], [$conGasto['spend'], $conGasto['last_day']]);
         // Todas sus métricas de Meta son 0 comprobado; el alcance no, porque no
         // hay foto de Meta de este rango (no se suma por días).
         $this->assertSame(
             ['id' => '120203', 'name' => 'Campaña C', 'campaign_id' => '120203', 'adset_id' => null,
                 'spend' => 0.0, 'currency' => 'COP', 'impressions' => 0, 'clicks' => 0, 'link_clicks' => 0,
                 'messaging_started' => 0, 'messaging_replied' => 0, 'landing_page_views' => 0,
-                'reach' => null, 'frequency' => null, 'status' => null, 'partial' => false],
+                'reach' => null, 'frequency' => null, 'status' => null, 'partial' => false, 'last_day' => null],
             $ceroComprobado,
         );
         // Ni su gasto ni su nombre salen de la otra cuenta.
@@ -308,7 +308,7 @@ class MetaSpendReaderTest extends TestCase
             ['id' => '120201', 'name' => null, 'campaign_id' => '120201', 'adset_id' => null,
                 'spend' => null, 'currency' => null, 'impressions' => null, 'clicks' => null, 'link_clicks' => null,
                 'messaging_started' => null, 'messaging_replied' => null, 'landing_page_views' => null,
-                'reach' => null, 'frequency' => null, 'status' => null, 'partial' => false],
+                'reach' => null, 'frequency' => null, 'status' => null, 'partial' => false, 'last_day' => null],
             $deOtraCuenta,
         );
         $this->assertNull($desconocida['spend']);

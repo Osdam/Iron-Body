@@ -6,12 +6,16 @@ use App\Models\MetaAdEntity;
 use App\Models\MetaAdInsightDaily;
 use App\Models\MetaAdReachSnapshot;
 use App\Models\MetaSyncRun;
+use App\Services\Marketing\Meta\MetaAdsSync;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Sleep;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Feature\Marketing\Attribution\SeedsAttribution;
 use Tests\TestCase;
 
 /**
@@ -23,7 +27,7 @@ use Tests\TestCase;
  */
 class MetaAdsCierreTest extends TestCase
 {
-    use FakesMetaAds, RefreshDatabase;
+    use FakesMetaAds, RefreshDatabase, SeedsAttribution;
 
     private const STARTED = 'onsite_conversion.messaging_conversation_started_7d';
 
@@ -117,52 +121,210 @@ class MetaAdsCierreTest extends TestCase
         $this->assertSame(2, MetaSyncRun::where('status', 'ok')->count());
     }
 
-    /** El estado efectivo de conjuntos y anuncios se pide por id y se guarda; si falla, la pasada sigue. */
-    public function test_estado_de_conjuntos_y_anuncios_por_id(): void
+    /**
+     * Los estados de conjuntos y anuncios salen de los bordes de la cuenta
+     * (`/adsets` y `/ads`), que aquí contestan como Meta: solo lo que se pide, y
+     * error si se piden eliminados. `?ids=` ya no existe en v26 (el falso lo
+     * rechaza). Las listas pedidas se fijan literales, no contra la constante.
+     */
+    public function test_estados_de_conjuntos_y_anuncios_por_los_bordes_de_la_cuenta(): void
     {
         $this->fakeMeta(
             ['data' => [$this->insightRow('2026-10-02', '9001', '1000.00')]],
-            ['data' => [['id' => '120201', 'name' => 'Campaña Octubre', 'effective_status' => 'ACTIVE']]],
+            $this->bordeComoMeta([['id' => '120201', 'name' => 'Campaña Octubre', 'effective_status' => 'PAUSED'], ['id' => '120299', 'name' => 'Sin gasto', 'effective_status' => 'ARCHIVED']]),
         );
-        $this->fakeMetaExtras(lookup: fn (Request $r) => Http::response(match ($this->queryOf($r)['ids']) {
-            '120211' => ['120211' => ['id' => '120211', 'name' => 'Neiva 18-35', 'effective_status' => 'PAUSED']],
-            '9001' => ['9001' => ['id' => '9001', 'name' => 'Video promo 9001', 'effective_status' => 'DELETED']],
-            default => [],
-        }));
+        $this->fakeMetaExtras(
+            adsets: $this->bordeComoMeta([['id' => '120211', 'effective_status' => 'CAMPAIGN_PAUSED'], ['id' => '555', 'effective_status' => 'ACTIVE']]),
+            ads: $this->bordeComoMeta([['id' => '9001', 'effective_status' => 'ARCHIVED']]),
+        );
 
         $this->assertSame('ok', $this->sync()->run('manual', $this->day('2026-10-01'), $this->day('2026-10-05'))['status']);
 
-        $this->assertSame('ACTIVE', MetaAdEntity::where('level', 'campaign')->sole()->effective_status);
-        $this->assertSame('PAUSED', MetaAdEntity::where('level', 'adset')->sole()->effective_status);
-        $this->assertSame('DELETED', MetaAdEntity::where('level', 'ad')->sole()->effective_status);
+        $this->assertSame(['PAUSED', 'CAMPAIGN_PAUSED', 'ARCHIVED'], [
+            MetaAdEntity::where('level', 'campaign')->sole()->effective_status,
+            MetaAdEntity::where('level', 'adset')->sole()->effective_status,
+            MetaAdEntity::where('level', 'ad')->sole()->effective_status,
+        ]);
+        $this->assertSame(0, MetaAdEntity::whereIn('entity_id', ['555', '120299'])->count(), 'un estado no mete entidades sin gasto en la dimensión (tampoco campañas)');
 
-        // Si la consulta de estados falla, el gasto se guarda igual y el estado conocido no se borra.
-        $this->fakeMetaExtras(lookup: fn () => $this->graphError(100, 'Unsupported get request'));
-        $this->assertSame('ok', $this->sync()->run('manual', $this->day('2026-10-01'), $this->day('2026-10-05'))['status']);
-        $this->assertSame('PAUSED', MetaAdEntity::where('level', 'adset')->sole()->effective_status);
+        $pedidos = fn (string $borde) => json_decode($this->queryOf($this->requestsTo($borde)[0])['effective_status'], true);
+        $this->assertSame(['ACTIVE', 'PAUSED', 'ARCHIVED', 'IN_PROCESS', 'WITH_ISSUES'], $pedidos('campaigns'));
+        $this->assertSame(['ACTIVE', 'PAUSED', 'CAMPAIGN_PAUSED', 'ARCHIVED', 'IN_PROCESS', 'WITH_ISSUES'], $pedidos('adsets'));
+        $this->assertSame([
+            'ACTIVE', 'PAUSED', 'PENDING_REVIEW', 'DISAPPROVED', 'PREAPPROVED', 'PENDING_BILLING_INFO',
+            'CAMPAIGN_PAUSED', 'ARCHIVED', 'ADSET_PAUSED', 'IN_PROCESS', 'WITH_ISSUES',
+        ], $pedidos('ads'));
+        $this->assertSame([], collect(Http::recorded())->filter(fn (array $p) => isset($this->queryOf($p[0])['ids']))->all(), 'nada pide ?ids=');
     }
 
-    /** Una campaña archivada deja de salir como ACTIVE: se piden también las archivadas y eliminadas. */
-    public function test_una_campana_archivada_no_se_queda_en_activa(): void
+    /** Si un borde de estados falla, el otro se aplica igual y lo conocido del que falló no se borra (en las dos direcciones). */
+    public function test_un_borde_de_estados_que_falla_no_impide_el_otro(): void
+    {
+        $this->fakeMeta(['data' => [$this->insightRow('2026-10-02', '9001', '1000.00')]], ['data' => []]);
+        $this->fakeMetaExtras(
+            adsets: $this->bordeComoMeta([['id' => '120211', 'effective_status' => 'ACTIVE']]),
+            ads: $this->bordeComoMeta([['id' => '9001', 'effective_status' => 'ACTIVE']]),
+        );
+        $pasar = fn () => $this->sync()->run('manual', $this->day('2026-10-01'), $this->day('2026-10-05'))['status'];
+        $estados = fn () => [MetaAdEntity::where('level', 'adset')->sole()->effective_status, MetaAdEntity::where('level', 'ad')->sole()->effective_status];
+        $this->assertSame('ok', $pasar());
+        $this->assertSame(['ACTIVE', 'ACTIVE'], $estados());
+
+        // /ads falla (un error cualquiera, no un límite): /adsets se aplica y el anuncio conserva lo que tenía.
+        $this->fakeMetaExtras(adsets: $this->bordeComoMeta([['id' => '120211', 'effective_status' => 'PAUSED']]), ads: fn () => $this->graphError(1, 'An unknown error has occurred.', 500));
+        $this->assertSame('ok', $pasar());
+        $this->assertSame(['PAUSED', 'ACTIVE'], $estados());
+
+        // Al revés: /adsets falla y /ads se aplica.
+        $this->fakeMetaExtras(adsets: fn () => $this->graphError(1, 'An unknown error has occurred.', 500), ads: $this->bordeComoMeta([['id' => '9001', 'effective_status' => 'ARCHIVED']]));
+        $this->assertSame('ok', $pasar());
+        $this->assertSame(['PAUSED', 'ARCHIVED'], $estados());
+    }
+
+    /** refreshStatuses() respeta el cerrojo de la sincronización y nunca lanza (ni con la base caída). */
+    public function test_refrescar_estados_respeta_el_cerrojo_y_no_lanza(): void
+    {
+        $this->fakeMeta(['data' => [$this->insightRow('2026-10-02', '9001', '1000.00')]], ['data' => []]);
+        $this->assertSame('ok', $this->sync()->run(MetaSyncRun::TRIGGER_BACKFILL, $this->day('2026-10-01'), $this->day('2026-10-05'))['status']);
+        $this->fakeMetaExtras(ads: $this->bordeComoMeta([['id' => '9001', 'effective_status' => 'PAUSED']]));
+
+        $cerrojo = Cache::lock(MetaAdsSync::LOCK_KEY, 60);
+        $this->assertTrue($cerrojo->get());
+        $this->assertSame(['status' => 'running', 'campaigns' => 0, 'adsets' => 0, 'ads' => 0], $this->sync()->refreshStatuses());
+        $this->assertNull(MetaAdEntity::where('level', 'ad')->sole()->effective_status, 'con una pasada en curso no toca nada');
+        $cerrojo->release();
+
+        $this->assertSame(['status' => 'ok', 'campaigns' => 0, 'adsets' => 0, 'ads' => 1], $this->sync()->refreshStatuses());
+        $this->assertSame('PAUSED', MetaAdEntity::where('level', 'ad')->sole()->effective_status);
+
+        Schema::rename('meta_ad_entities', 'meta_ad_entities_fuera');
+        $this->assertSame('failed', $this->sync()->refreshStatuses()['status']);
+        Schema::rename('meta_ad_entities_fuera', 'meta_ad_entities');
+        $this->assertTrue(Cache::lock(MetaAdsSync::LOCK_KEY, 60)->get(), 'el cerrojo se suelta también al fallar');
+    }
+
+    /**
+     * Una pasada manual de días viejos (un re-sync de enero) trae cobertura,
+     * pero no hace «al día» un panel cuya foto de hoy es vieja, ni su fallo lo
+     * pone en «Error».
+     */
+    public function test_una_pasada_de_dias_viejos_no_cambia_la_frescura(): void
+    {
+        $this->fakeMeta(['data' => [$this->insightRow('2026-10-02', '9001', '1000.00')]]);
+        Carbon::setTestNow('2026-10-05 10:00:00');
+        $this->assertSame('ok', $this->sync()->run(MetaSyncRun::TRIGGER_SCHEDULE)['status']);
+
+        Carbon::setTestNow('2026-10-05 15:00:00');
+        $this->fakeMeta(['data' => []]);
+        $this->assertSame('ok', $this->sync()->run(MetaSyncRun::TRIGGER_MANUAL, $this->day('2026-01-01'), $this->day('2026-01-31'))['status']);
+        $estado = $this->sync()->status();
+        $this->assertSame(['stale', 300, '2026-10-05T10:00:00+00:00'], [$estado['status'], $estado['minutes_since_success'], $estado['last_success_at']]);
+
+        $this->fakeMeta(fn () => $this->graphError(1, 'An unknown error has occurred.', 500));
+        $this->assertSame('failed', $this->sync()->run(MetaSyncRun::TRIGGER_MANUAL, $this->day('2026-02-01'), $this->day('2026-02-28'))['status']);
+        $this->assertSame(['stale', null], [$this->sync()->status()['status'], $this->sync()->status()['last_error']]);
+
+        // Una manual que llega hasta hoy sí cuenta.
+        $this->fakeMeta(['data' => []]);
+        $this->assertSame('ok', $this->sync()->run(MetaSyncRun::TRIGGER_MANUAL)['status']);
+        $this->assertSame(['ok', 0], [$this->sync()->status()['status'], $this->sync()->status()['minutes_since_success']]);
+    }
+
+    /** Los estados llegan también a entidades que trajo OTRA pasada (un tramo del relleno de hace horas). */
+    public function test_los_estados_llegan_a_entidades_de_otras_pasadas(): void
+    {
+        $this->fakeMeta(fn (Request $r) => Http::response(['data' => json_decode($this->queryOf($r)['time_range'], true)['since'] <= '2026-01-02'
+            && json_decode($this->queryOf($r)['time_range'], true)['until'] >= '2026-01-02'
+            ? [$this->insightRow('2026-01-02', '9001', '1000.00')] : []]));
+
+        $this->assertSame('ok', $this->sync()->run(MetaSyncRun::TRIGGER_BACKFILL, $this->day('2026-01-01'), $this->day('2026-01-14'))['status']);
+        $this->assertNull(MetaAdEntity::where('level', 'ad')->sole()->effective_status, 'el tramo no pide estados');
+
+        Carbon::setTestNow(now()->addHour());
+        $this->fakeMetaExtras(
+            adsets: ['data' => [['id' => '120211', 'effective_status' => 'CAMPAIGN_PAUSED']]],
+            ads: ['data' => [['id' => '9001', 'effective_status' => 'ARCHIVED']]],
+        );
+        $this->assertSame('ok', $this->sync()->run('manual', $this->day('2026-10-01'), $this->day('2026-10-05'))['status']);
+
+        $this->assertSame(['CAMPAIGN_PAUSED', 'ARCHIVED'], [
+            MetaAdEntity::where('level', 'adset')->sole()->effective_status,
+            MetaAdEntity::where('level', 'ad')->sole()->effective_status,
+        ]);
+    }
+
+    /**
+     * Un tramo del relleno no pide estados (son de toda la cuenta y la app tiene
+     * un cupo corto): el relleno los refresca UNA vez al final, también los de
+     * las entidades que trajeron los tramos.
+     */
+    public function test_el_relleno_pide_los_estados_una_sola_vez_al_final(): void
+    {
+        $this->fakeMeta(
+            // Solo el tramo que contiene el 2 de enero trae la fila.
+            fn (Request $r) => Http::response(['data' => json_decode($this->queryOf($r)['time_range'], true)['since'] <= '2026-01-02'
+                && json_decode($this->queryOf($r)['time_range'], true)['until'] >= '2026-01-02'
+                ? [$this->insightRow('2026-01-02', '9001', '1000.00')] : []]),
+            ['data' => [['id' => '120201', 'name' => 'Campaña Octubre', 'effective_status' => 'PAUSED']]],
+        );
+        $this->fakeMetaExtras(
+            adsets: ['data' => [['id' => '120211', 'effective_status' => 'CAMPAIGN_PAUSED']]],
+            ads: ['data' => [['id' => '9001', 'effective_status' => 'CAMPAIGN_PAUSED']]],
+        );
+        Sleep::fake();
+
+        $this->artisan('marketing:meta-ads-backfill', ['--from' => '2026-01-01', '--to' => '2026-01-28', '--batch-days' => 14])
+            ->expectsOutputToContain('Estados de Meta aplicados: 1 campañas, 1 conjuntos y 1 anuncios (ok)')
+            ->assertSuccessful();
+
+        $this->assertCount(1, $this->requestsTo('campaigns'));
+        $this->assertCount(1, $this->requestsTo('adsets'));
+        $this->assertCount(1, $this->requestsTo('ads'));
+        $this->assertSame(['PAUSED', 'CAMPAIGN_PAUSED', 'CAMPAIGN_PAUSED'], [
+            MetaAdEntity::where('level', 'campaign')->sole()->effective_status,
+            MetaAdEntity::where('level', 'adset')->sole()->effective_status,
+            MetaAdEntity::where('level', 'ad')->sole()->effective_status,
+        ]);
+    }
+
+    /**
+     * Una campaña archivada deja de salir como ACTIVE: `/campaigns` devuelve las
+     * archivadas si se piden. Pedir las eliminadas en ese borde es un error
+     * (400, 100/1815001, comprobado con la cuenta real), así que no se piden: una
+     * eliminada conserva su último estado conocido, y su gasto sigue entrando.
+     */
+    public function test_una_campana_archivada_no_se_queda_en_activa_y_nunca_se_piden_eliminadas(): void
     {
         $estado = 'ACTIVE';
         $this->fakeMeta(
             ['data' => [$this->insightRow('2026-10-02', '9001', '1000.00')]],
             function (Request $r) use (&$estado) {
                 $pedidos = json_decode($this->queryOf($r)['effective_status'] ?? '[]', true) ?: [];
-                // Como Meta: sin pedirlas, ni archivadas ni eliminadas.
-                $ve = $estado === 'ACTIVE' || in_array($estado, $pedidos, true);
+                // Como Meta: pedir eliminadas en este borde es un error.
+                if (in_array('DELETED', $pedidos, true)) {
+                    return $this->graphError(100, 'No se pueden solicitar objetos eliminados en este extremo.', 400, ['error_subcode' => 1815001]);
+                }
+                // Sin pedirlas, ni archivadas ni eliminadas; las eliminadas, nunca.
+                $ve = $estado === 'ACTIVE' || ($estado !== 'DELETED' && in_array($estado, $pedidos, true));
 
                 return Http::response(['data' => $ve ? [['id' => '120201', 'name' => 'Campaña Octubre', 'effective_status' => $estado]] : []]);
             },
         );
 
-        $this->assertSame('ok', $this->sync()->run('manual', $this->day('2026-10-01'), $this->day('2026-10-05'))['status']);
-        $this->assertSame('ACTIVE', MetaAdEntity::where('level', 'campaign')->sole()->effective_status);
+        $pasar = fn () => $this->sync()->run('manual', $this->day('2026-10-01'), $this->day('2026-10-05'))['status'];
+        $estadoGuardado = fn () => MetaAdEntity::where('level', 'campaign')->sole()->effective_status;
+
+        $this->assertSame('ok', $pasar());
+        $this->assertSame('ACTIVE', $estadoGuardado());
 
         $estado = 'ARCHIVED';
-        $this->assertSame('ok', $this->sync()->run('manual', $this->day('2026-10-01'), $this->day('2026-10-05'))['status']);
-        $this->assertSame('ARCHIVED', MetaAdEntity::where('level', 'campaign')->sole()->effective_status);
+        $this->assertSame('ok', $pasar());
+        $this->assertSame('ARCHIVED', $estadoGuardado());
+
+        $estado = 'DELETED';
+        $this->assertSame('ok', $pasar());
+        $this->assertSame('ARCHIVED', $estadoGuardado(), 'una eliminada conserva el último estado conocido');
+        $this->assertSame(1000.0, (float) MetaAdInsightDaily::sum('spend'), 'el gasto no depende del estado');
     }
 
     // ── Alcance: no se suma por días ───────────────────────────────────────
@@ -178,7 +340,8 @@ class MetaAdsCierreTest extends TestCase
             $peticiones[] = [$q['level'], $rango['since'], $rango['until'], $q['time_increment'] ?? null, $q['filtering'] ?? null];
 
             if ($rango['since'] === '2026-10-05') {
-                return $this->graphError(80000, 'There have been too many calls');
+                // Un fallo cualquiera (no un límite: tras un límite se deja de pedir).
+                return $this->graphError(1, 'An unknown error has occurred.', 500);
             }
 
             return Http::response(['data' => $q['level'] === 'account'
@@ -214,6 +377,38 @@ class MetaAdsCierreTest extends TestCase
     }
 
     // ── FASE 2: comprobar la cuenta antes de sincronizar ────────────────────
+
+    /**
+     * Tras un límite de Meta (17/2446079, 80000…) en una petición accesoria no se
+     * pide nada más en esa pasada: ni los otros bordes de estados ni el alcance.
+     * El gasto se guarda igual.
+     */
+    public function test_tras_un_limite_de_meta_no_se_le_pide_nada_mas_en_la_pasada(): void
+    {
+        $this->fakeMeta(
+            ['data' => [$this->insightRow('2026-10-02', '9001', '1000.00')]],
+            fn () => $this->graphError(17, 'User request limit reached', 400, ['error_subcode' => 2446079]),
+        );
+        $this->fakeMetaExtras(
+            adsets: ['data' => [['id' => '120211', 'effective_status' => 'PAUSED']]],
+            ads: ['data' => [['id' => '9001', 'effective_status' => 'ACTIVE']]],
+            reach: ['data' => [['reach' => '10', 'impressions' => '20']]],
+        );
+
+        // La misma instancia para la pasada y el alcance, como el job y el comando.
+        $sync = $this->sync();
+        $this->assertSame('ok', $sync->run('manual', $this->day('2026-10-01'), $this->day('2026-10-05'))['status']);
+        $this->assertSame([], $this->requestsTo('adsets'), 'tras el límite no se piden los estados de conjuntos');
+        $this->assertSame([], $this->requestsTo('ads'));
+        $this->assertSame(['status' => 'rate_limit', 'ranges_ok' => 0, 'ranges_failed' => 0, 'rows' => 0], $sync->refreshReach());
+        $this->assertSame(0, MetaAdReachSnapshot::count());
+        $this->assertSame(1000.0, (float) MetaAdInsightDaily::sum('spend'));
+
+        // La pasada siguiente (misma instancia) empieza limpia: el límite era de la anterior.
+        $this->fakeMeta(['data' => [$this->insightRow('2026-10-02', '9001', '1000.00')]], ['data' => []]);
+        $this->assertSame('ok', $sync->run('manual', $this->day('2026-10-01'), $this->day('2026-10-05'))['status']);
+        $this->assertCount(1, $this->requestsTo('adsets'));
+    }
 
     /** @return array<string, mixed> */
     private function cuenta(array $overrides = []): array
@@ -375,7 +570,7 @@ class MetaAdsCierreTest extends TestCase
         $this->artisan('marketing:meta-ads-backfill', ['--from' => '2026-09-20', '--to' => '2026-10-05', '--batch-days' => 7, '--pause' => 0, '--dry-run' => true])
             ->expectsTable(['dato', 'valor'], [
                 ['days', 16], ['batches', 3], ['campaigns', 1], ['adsets', 2], ['ads', 2],
-                ['insight_rows', 32], ['spend', '24000.00'], ['estimated_requests', 3 + 3 + 1 + 1 + 10],
+                ['insight_rows', 32], ['spend', '24000.00'], ['estimated_requests', 3 + 10 + 3],
             ])
             ->assertSuccessful();
         $this->assertSame(0, MetaAdInsightDaily::count());
@@ -514,6 +709,156 @@ class MetaAdsCierreTest extends TestCase
         $this->artisan('marketing:meta-ads-reconcile', ['--period' => 'custom', '--from' => '2026-10-01', '--to' => '2026-10-04'])
             ->expectsOutputToContain('SPEND_MATCH=YES')
             ->expectsOutputToContain('CAMPAIGNS_MATCH=YES')
+            ->assertSuccessful();
+    }
+
+    // ── Diagnóstico: de qué cuenta es cada anuncio que trae leads ───────────
+
+    /** Leads reales de pauta con su anuncio de primer toque: anuncio → cuántos. */
+    private function leadsDePautaCon(array $anuncios): void
+    {
+        foreach ($anuncios as $ad => $n) {
+            for ($i = 0; $i < $n; $i++) {
+                $this->touch($this->lead('2026-10-01 15:00:00'), $this->adReferral((string) $ad), '2026-10-01 15:00:00');
+            }
+        }
+    }
+
+    /**
+     * Cada anuncio se pregunta a Meta por id (`GET /{ad_id}`), sin asumir que sea
+     * de la cuenta configurada. Con dos cuentas a la vista: MULTI=YES; un anuncio
+     * de una cuenta que el token no ve sale «sin acceso». No cambia nada.
+     */
+    public function test_el_diagnostico_dice_de_que_cuenta_es_cada_anuncio(): void
+    {
+        Sleep::fake();
+        $this->fakeMeta(['data' => []]);
+        $this->leadsDePautaCon(['120253617613620387' => 3, '120251095823850062' => 2, '9001' => 1]);
+        $this->fakeMetaExtras(nodes: [
+            '9001' => ['id' => '9001', 'account_id' => self::ACCOUNT, 'effective_status' => 'PAUSED'],
+            '120251095823850062' => ['id' => '120251095823850062', 'account_id' => '555000111', 'effective_status' => 'ACTIVE'],
+            // 120253617613620387: de una cuenta que el token no ve (el falso contesta 100/33, como Meta).
+        ]);
+
+        $this->artisan('marketing:meta-ads-ad-accounts', ['--since' => '2026-09-01'])
+            ->expectsOutputToContain('AD_IDS_CHECKED=3 de 3')
+            ->expectsOutputToContain('AD_ACCOUNTS=555000111,'.self::ACCOUNT)
+            ->expectsOutputToContain('CONNECTED_ACCOUNT_ADS=1 · leads 1')
+            ->expectsOutputToContain('OTHER_ACCOUNT_ADS=1')
+            ->expectsOutputToContain('UNREADABLE_ADS=1 · leads 3')
+            ->expectsOutputToContain('CONNECTED_ACCOUNT_HAS_LEAD_ADS=YES')
+            ->expectsOutputToContain('MULTI_AD_ACCOUNT_REQUIRED=YES')
+            ->doesntExpectOutputToContain(self::ADS_TOKEN)
+            ->assertSuccessful();
+
+        $rutas = collect(Http::recorded())->map(fn (array $p) => $p[0])->filter(fn (Request $r) => preg_match('#/v99\.0/\d+$#', (string) parse_url($r->url(), PHP_URL_PATH)) === 1);
+        $this->assertCount(3, $rutas, 'una petición por anuncio');
+        foreach ($rutas as $r) {
+            $this->assertSame('account_id,campaign_id,effective_status', $this->queryOf($r)['fields']);
+            $this->assertArrayNotHasKey('ids', $this->queryOf($r));
+            $this->assertSame(['Bearer '.self::ADS_TOKEN], $r->header('Authorization'));
+        }
+        $this->assertSame(self::ACCOUNT, config('meta.ads.ad_account_id'), 'el diagnóstico no cambia la configuración');
+    }
+
+    /** @return array<string, array{0: array<string,int>, 1: array<string, array<string,string>>, 2: string}> */
+    public static function diagnosticos(): array
+    {
+        return [
+            'todo de la cuenta conectada' => [['9001' => 2, '9002' => 1], ['9001' => ['account_id' => self::ACCOUNT], '9002' => ['account_id' => self::ACCOUNT]], 'NO'],
+            'una cuenta vista y otro sin acceso' => [['9001' => 2, '9003' => 1], ['9001' => ['account_id' => self::ACCOUNT]], 'UNKNOWN'],
+        ];
+    }
+
+    #[DataProvider('diagnosticos')]
+    public function test_el_diagnostico_no_supone_una_sola_cuenta(array $anuncios, array $nodos, string $multi): void
+    {
+        Sleep::fake();
+        $this->fakeMeta(['data' => []]);
+        $this->leadsDePautaCon($anuncios);
+        $this->fakeMetaExtras(nodes: $nodos);
+
+        $this->artisan('marketing:meta-ads-ad-accounts', ['--since' => '2026-09-01'])
+            ->expectsOutputToContain("MULTI_AD_ACCOUNT_REQUIRED={$multi}")
+            ->assertSuccessful();
+    }
+
+    /**
+     * Todos los anuncios con leads son de UNA cuenta ajena. Si la conectada gastó
+     * en la ventana, también está en juego: dos cuentas, MULTI=YES. Si no gastó,
+     * una sola cuenta, pero la conectada no tiene ningún anuncio con leads, y el
+     * diagnóstico lo dice sin cambiar nada.
+     */
+    public function test_el_diagnostico_con_una_sola_cuenta_ajena_cuenta_la_conectada(): void
+    {
+        Sleep::fake();
+        $ajena = ['9101' => ['id' => '9101', 'account_id' => '555000111'], '9102' => ['id' => '9102', 'account_id' => '555000111']];
+
+        // La conectada gastó el 20 de septiembre.
+        $this->fakeMeta(['data' => [$this->insightRow('2026-09-20', '7777', '5000.00')]]);
+        $this->assertSame('ok', $this->sync()->run('manual', $this->day('2026-09-20'), $this->day('2026-09-20'))['status']);
+        $this->leadsDePautaCon(['9101' => 2, '9102' => 1]);
+        $this->fakeMetaExtras(nodes: $ajena);
+
+        $this->artisan('marketing:meta-ads-ad-accounts', ['--since' => '2026-09-01'])
+            ->expectsOutputToContain('CONNECTED_ACCOUNT_SPEND_SINCE=YES')
+            ->expectsOutputToContain('OTHER_ACCOUNT_ADS=2')
+            ->expectsOutputToContain('CONNECTED_ACCOUNT_HAS_LEAD_ADS=NO')
+            ->expectsOutputToContain('MULTI_AD_ACCOUNT_REQUIRED=YES')
+            ->expectsOutputToContain('Nada cambia')
+            ->assertSuccessful();
+
+        // Sin gasto de la conectada en la ventana: una sola cuenta, y se dice que la conectada no tiene ninguno.
+        $this->artisan('marketing:meta-ads-ad-accounts', ['--since' => '2026-09-21'])
+            ->expectsOutputToContain('CONNECTED_ACCOUNT_SPEND_SINCE=NO')
+            ->expectsOutputToContain('CONNECTED_ACCOUNT_HAS_LEAD_ADS=NO')
+            ->expectsOutputToContain('MULTI_AD_ACCOUNT_REQUIRED=NO')
+            ->expectsOutputToContain('Ningún anuncio con leads es de la cuenta conectada')
+            ->expectsOutputToContain('Nada cambia')
+            ->assertSuccessful();
+    }
+
+    /** Con el token inválido (190) se detiene en el primero: las demás fallarían igual. Un 5xx es «error pasajero», no «sin acceso». */
+    public function test_el_diagnostico_se_detiene_con_el_token_invalido_y_distingue_lo_pasajero(): void
+    {
+        Sleep::fake();
+        $this->fakeMeta(['data' => []]);
+        $this->leadsDePautaCon(['9001' => 2, '9002' => 1]);
+        $this->fakeMetaExtras(nodes: fn (Request $r) => $this->graphError(190, 'Error validating access token', 400, ['error_subcode' => 463]));
+
+        $this->artisan('marketing:meta-ads-ad-accounts', ['--since' => '2026-09-01'])
+            ->expectsOutputToContain('Meta rechaza el token (190')
+            ->expectsOutputToContain('AD_IDS_CHECKED=0 de 2')
+            ->expectsOutputToContain('MULTI_AD_ACCOUNT_REQUIRED=UNKNOWN')
+            ->doesntExpectOutputToContain(self::ADS_TOKEN)
+            ->assertSuccessful();
+        $nodos = collect(Http::recorded())->map(fn (array $p) => $p[0])->filter(fn (Request $r) => preg_match('#/v99\.0/\d+$#', (string) parse_url($r->url(), PHP_URL_PATH)) === 1);
+        $this->assertCount(1, $nodos, 'una sola petición con el token rechazado');
+
+        $this->fakeMetaExtras(nodes: fn (Request $r) => str_ends_with((string) parse_url($r->url(), PHP_URL_PATH), '/9001')
+            ? $this->graphError(2, 'An unexpected error has occurred', 500, ['is_transient' => true])
+            : Http::response(['id' => '9002', 'account_id' => self::ACCOUNT]));
+        $this->artisan('marketing:meta-ads-ad-accounts', ['--since' => '2026-09-01'])
+            ->expectsOutputToContain('error pasajero')
+            ->doesntExpectOutputToContain('sin acceso')
+            ->expectsOutputToContain('MULTI_AD_ACCOUNT_REQUIRED=UNKNOWN')
+            ->assertSuccessful();
+    }
+
+    /** Ante un límite de Meta se detiene, lo dice y no concluye nada. */
+    public function test_el_diagnostico_se_detiene_ante_un_limite(): void
+    {
+        Sleep::fake();
+        $this->fakeMeta(['data' => []]);
+        $this->leadsDePautaCon(['9001' => 2, '9002' => 1]);
+        $this->fakeMetaExtras(nodes: fn (Request $r) => str_ends_with((string) parse_url($r->url(), PHP_URL_PATH), '/9001')
+            ? Http::response(['id' => '9001', 'account_id' => self::ACCOUNT])
+            : $this->graphError(17, 'User request limit reached', 400, ['error_subcode' => 2446079]));
+
+        $this->artisan('marketing:meta-ads-ad-accounts', ['--since' => '2026-09-01'])
+            ->expectsOutputToContain('límite de peticiones')
+            ->expectsOutputToContain('AD_IDS_CHECKED=1 de 2')
+            ->expectsOutputToContain('MULTI_AD_ACCOUNT_REQUIRED=UNKNOWN')
             ->assertSuccessful();
     }
 

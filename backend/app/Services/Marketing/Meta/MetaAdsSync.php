@@ -59,6 +59,13 @@ class MetaAdsSync
     /** Días que se conserva una foto de alcance después de su último día. */
     private const REACH_RETENTION_DAYS = 120;
 
+    /**
+     * Meta contestó «límite» (17/2446079…) a una petición accesoria de esta
+     * pasada: no se le pide nada más (ni los otros bordes de estados ni el
+     * alcance). La app tiene un cupo corto, y seguir pidiendo lo alarga.
+     */
+    private bool $limited = false;
+
     public function __construct(private readonly MetaAdsApiClient $client) {}
 
     /**
@@ -104,6 +111,7 @@ class MetaAdsSync
         }
 
         [$since, $until] = $this->range($from, $to);
+        $this->limited = false;
 
         $lock = Cache::lock(self::LOCK_KEY, self::LOCK_SECONDS);
         if (! $lock->get()) {
@@ -130,10 +138,12 @@ class MetaAdsSync
      *    no ha habido ninguno.
      *  - ok: lo demás.
      *
-     * «Intento» y «éxito» son los de las pasadas que mantienen el panel al día
-     * (la de cada hora y la del botón). Un tramo del relleno trae días del
-     * pasado: ni dice si los de hoy están al día ni su fallo es el de esas
-     * pasadas. Solo cuenta mientras corre, porque ocupa la sincronización.
+     * «Intento» y «éxito» son los de las pasadas que mantienen el panel al día:
+     * las que llegan hasta el día en que corren (la de cada hora y la del
+     * botón). Un tramo del relleno, o una pasada manual de días viejos (un
+     * re-sync de enero), trae cobertura del pasado: ni dice si lo de hoy está al
+     * día ni su fallo es el de esas pasadas. Cualquier pasada en curso sí cuenta,
+     * porque ocupa la sincronización.
      *
      * Las fechas van en ISO 8601. `covered_from`/`covered_to` son el tramo
      * continuo de días cubierto más reciente.
@@ -145,23 +155,32 @@ class MetaAdsSync
         $problem = $this->client->configurationProblem();
         $account = $this->client->accountId();
 
-        $runs = fn (bool $backfill = false) => MetaSyncRun::query()
+        $runs = fn () => MetaSyncRun::query()
             ->where('kind', MetaSyncRun::KIND_INSIGHTS)
-            ->when($account !== null, fn ($q) => $q->where('ad_account_id', $account))
-            ->where('trigger', $backfill ? '=' : '<>', MetaSyncRun::TRIGGER_BACKFILL);
+            ->when($account !== null, fn ($q) => $q->where('ad_account_id', $account));
 
-        $lastSuccess = $runs()->where('status', MetaSyncRun::STATUS_OK)->orderByDesc('id')->first();
-        $lastAttempt = $runs()
+        // Llega hasta el día (de la cuenta) en que corrió: es de las que mantienen el panel al día.
+        $tz = $this->client->timezone();
+        $current = fn (MetaSyncRun $run): bool => $run->range_to === null || $run->started_at === null
+            || (string) $run->range_to >= $run->started_at->copy()->setTimezone($tz)->toDateString();
+
+        $recent = $runs()
+            ->where('trigger', '<>', MetaSyncRun::TRIGGER_BACKFILL)
             ->whereIn('status', [MetaSyncRun::STATUS_RUNNING, MetaSyncRun::STATUS_OK, MetaSyncRun::STATUS_FAILED])
             ->orderByDesc('id')
-            ->first();
-        $backfill = $runs(true)->where('status', MetaSyncRun::STATUS_RUNNING)->orderByDesc('id')->first();
+            ->limit(50)
+            ->get()
+            ->filter($current)
+            ->values();
+        $lastSuccess = $recent->firstWhere('status', MetaSyncRun::STATUS_OK);
+        $lastAttempt = $recent->first();
+        $inFlight = $runs()->where('status', MetaSyncRun::STATUS_RUNNING)->orderByDesc('id')->first();
 
         $alive = fn (?MetaSyncRun $run): bool => $run?->status === MetaSyncRun::STATUS_RUNNING
             && $run->started_at !== null
             && $run->started_at->greaterThan(now()->subSeconds(self::LOCK_SECONDS));
 
-        $running = $alive($lastAttempt) || $alive($backfill);
+        $running = $alive($lastAttempt) || $alive($inFlight);
         $lastError = null;
 
         if ($lastAttempt?->status === MetaSyncRun::STATUS_RUNNING) {
@@ -294,12 +313,23 @@ class MetaAdsSync
             return ['status' => MetaSyncRun::STATUS_NOT_CONFIGURED, 'ranges_ok' => 0, 'ranges_failed' => 0, 'rows' => 0];
         }
 
+        if ($this->limited) {
+            ChannelLog::warning('meta.ads.reach.skipped', ['error_code' => MetaAdsApiException::RATE_LIMIT]);
+
+            return ['status' => MetaAdsApiException::RATE_LIMIT, 'ranges_ok' => 0, 'ranges_failed' => 0, 'rows' => 0];
+        }
+
         $account = (string) $this->client->accountId();
         $ok = 0;
         $failed = 0;
         $written = 0;
 
         foreach ($this->reachRanges() as [$since, $until]) {
+            if ($this->limited) {
+                $failed++;
+
+                continue;
+            }
             try {
                 $accountRow = $this->client->reach('account', $since, $until)[0] ?? null;
                 $campaignRows = $this->client->reach('campaign', $since, $until);
@@ -308,6 +338,7 @@ class MetaAdsSync
                 $ok++;
             } catch (MetaAdsApiException $e) {
                 $failed++;
+                $this->limited = $this->limited || $e->category === MetaAdsApiException::RATE_LIMIT;
                 ChannelLog::warning('meta.ads.reach.skipped', [
                     'since' => $since,
                     'until' => $until,
@@ -394,8 +425,12 @@ class MetaAdsSync
         try {
             // Todo lo que viene de la red, ANTES de abrir la transacción.
             $rows = $this->normalize($this->client->insights($since, $until), $account, $since, $until);
-            $campaigns = $this->campaignStatuses();
-            $statuses = $this->entityStatuses($rows);
+            // Los estados son de toda la cuenta: un tramo del relleno no los pide
+            // (la app tiene un cupo de peticiones corto); el relleno los refresca
+            // una vez al final con refreshStatuses().
+            $backfill = $trigger === MetaSyncRun::TRIGGER_BACKFILL;
+            $campaigns = $backfill ? null : $this->campaignStatuses();
+            $statuses = $backfill ? [] : $this->entityStatuses();
 
             $deleted = DB::transaction(function () use ($run, $rows, $campaigns, $statuses, $account, $since, $until): int {
                 $this->upsertInsights($rows);
@@ -534,8 +569,9 @@ class MetaAdsSync
     }
 
     /**
-     * Estado efectivo de las campañas. Es accesorio: si falla, la pasada sigue
-     * (el gasto ya está completo) y los estados se quedan como estaban.
+     * Estado efectivo de las campañas de la cuenta (el borde `/campaigns`, sin
+     * eliminadas). Es accesorio: si falla, la pasada sigue (el gasto ya está
+     * completo) y los estados se quedan como estaban.
      *
      * @return list<array{id: string, name: ?string, effective_status: ?string}>|null
      */
@@ -544,6 +580,7 @@ class MetaAdsSync
         try {
             $raw = $this->client->campaigns();
         } catch (MetaAdsApiException $e) {
+            $this->limited = $this->limited || $e->category === MetaAdsApiException::RATE_LIMIT;
             ChannelLog::warning('meta.ads.sync.campaign_status_skipped', [
                 'error_code' => $e->category,
                 'http_status' => $e->httpStatus,
@@ -575,45 +612,45 @@ class MetaAdsSync
     }
 
     /**
-     * Estado efectivo de los conjuntos y anuncios de estas filas, por su id. Es
-     * accesorio como el de las campañas: si falla, la pasada sigue y los estados
-     * se quedan como estaban.
+     * Estado efectivo de los conjuntos y anuncios de TODA la cuenta, de los bordes
+     * `/adsets` y `/ads` (`?ids=` ya no existe en v26). Los eliminados no se
+     * pueden pedir a esos bordes: su estado se queda como el último conocido.
      *
-     * @param  array<string, array<string,mixed>>  $rows
-     * @return array{adset: list<array{id: string, name: ?string, effective_status: ?string}>,
-     *     ad: list<array{id: string, name: ?string, effective_status: ?string}>}|null
+     * Accesorio, nivel a nivel: si un borde falla (un límite de Meta, por
+     * ejemplo), la pasada sigue, se anota y los estados de ese nivel se quedan
+     * como estaban.
+     *
+     * @return array<string, array<string, string>> nivel → (id → estado)
      */
-    private function entityStatuses(array $rows): ?array
+    private function entityStatuses(): array
     {
-        $ids = [MetaAdEntity::LEVEL_ADSET => [], MetaAdEntity::LEVEL_AD => []];
-        foreach ($rows as $r) {
-            if ($r['adset_id'] !== null) {
-                $ids[MetaAdEntity::LEVEL_ADSET][$r['adset_id']] = true;
-            }
-            $ids[MetaAdEntity::LEVEL_AD][$r['ad_id']] = true;
-        }
-
         $out = [];
-        try {
-            foreach ($ids as $level => $wanted) {
-                $out[$level] = [];
-                foreach ($this->client->lookup(array_keys($wanted)) as $id => $entity) {
-                    $status = is_string($entity['effective_status'] ?? null) ? mb_substr(trim($entity['effective_status']), 0, 32) : '';
-                    $out[$level][] = [
-                        'id' => (string) $id,
-                        'name' => $this->name($entity['name'] ?? null),
-                        'effective_status' => $status !== '' ? $status : null,
-                    ];
+        foreach ([MetaAdEntity::LEVEL_ADSET => fn () => $this->client->adsets(), MetaAdEntity::LEVEL_AD => fn () => $this->client->ads()] as $level => $edge) {
+            if ($this->limited) {
+                break;
+            }
+            try {
+                $raw = $edge();
+            } catch (MetaAdsApiException $e) {
+                $this->limited = $this->limited || $e->category === MetaAdsApiException::RATE_LIMIT;
+                ChannelLog::warning('meta.ads.sync.entity_status_skipped', [
+                    'level' => $level,
+                    'error_code' => $e->category,
+                    'http_status' => $e->httpStatus,
+                    'meta_code' => $e->metaCode,
+                ]);
+
+                continue;
+            }
+
+            $out[$level] = [];
+            foreach ($raw as $entity) {
+                $id = $this->id($entity['id'] ?? null);
+                $status = is_string($entity['effective_status'] ?? null) ? mb_substr(trim($entity['effective_status']), 0, 32) : '';
+                if ($id !== null && $status !== '') {
+                    $out[$level][$id] = $status;
                 }
             }
-        } catch (MetaAdsApiException $e) {
-            ChannelLog::warning('meta.ads.sync.entity_status_skipped', [
-                'error_code' => $e->category,
-                'http_status' => $e->httpStatus,
-                'meta_code' => $e->metaCode,
-            ]);
-
-            return null;
         }
 
         return $out;
@@ -794,38 +831,97 @@ class MetaAdsSync
             MetaAdEntity::query()->upsert($chunk, $uniqueBy, ['name', 'campaign_id', 'adset_id', 'synced_at']);
         }
 
-        // Estado de conjuntos y anuncios: solo de los que trajo esta pasada (ya
-        // están en la dimensión, recién escritos arriba), sin tocar su jerarquía.
-        $statusRows = [];
-        foreach ($statuses ?? [] as $level => $list) {
-            foreach ($list as $s) {
-                $known = $entities[$level.'|'.$s['id']] ?? null;
-                if ($known !== null && $s['effective_status'] !== null) {
-                    $statusRows[] = ['effective_status' => $s['effective_status']] + $known;
+        $this->applyStatuses($account, $statuses ?? []);
+
+        // Las campañas, igual: solo las que ya están en la dimensión (vienen del
+        // gasto). El borde trae todas las de la cuenta, también las que nunca
+        // gastaron, y la dimensión sale de las filas de gasto.
+        if ($campaigns !== null && $campaigns !== []) {
+            $this->applyStatuses($account, [MetaAdEntity::LEVEL_CAMPAIGN => array_column($campaigns, 'effective_status', 'id')]);
+        }
+    }
+
+    /**
+     * Pone el estado de Meta a las campañas, conjuntos y anuncios que YA están
+     * en la dimensión de la cuenta (de esta pasada o de otras, como las del
+     * relleno). No añade entidades: la dimensión sale de las filas de gasto.
+     *
+     * @param  array<string, array<string, ?string>>  $statuses  nivel → (id → estado)
+     * @return array<string, int> nivel → filas de la dimensión actualizadas
+     */
+    private function applyStatuses(string $account, array $statuses): array
+    {
+        $now = now()->toDateTimeString();
+        $touched = [];
+        foreach ($statuses as $level => $byId) {
+            $touched[$level] = 0;
+            $byStatus = [];
+            foreach ($byId as $id => $status) {
+                if (is_string($status) && $status !== '') {
+                    $byStatus[$status][] = (string) $id;
+                }
+            }
+            foreach ($byStatus as $status => $ids) {
+                foreach (array_chunk($ids, self::CHUNK) as $chunk) {
+                    $touched[$level] += MetaAdEntity::query()
+                        ->where('ad_account_id', $account)
+                        ->where('level', $level)
+                        ->whereIn('entity_id', $chunk)
+                        ->update(['effective_status' => $status, 'synced_at' => $now]);
                 }
             }
         }
-        foreach (array_chunk($statusRows, self::CHUNK) as $chunk) {
-            MetaAdEntity::query()->upsert($chunk, $uniqueBy, ['effective_status', 'synced_at']);
+
+        return $touched;
+    }
+
+    /**
+     * Estados de campañas, conjuntos y anuncios de toda la cuenta, fuera de una
+     * pasada de gasto: lo usa el relleno al terminar, una sola vez. Con el
+     * cerrojo de la sincronización (si hay una pasada en curso, no hace nada:
+     * la siguiente pasada ya aplica los estados a toda la dimensión). Accesorio:
+     * nunca lanza.
+     *
+     * @return array{status: string, campaigns: int, adsets: int, ads: int} filas de la dimensión actualizadas
+     */
+    public function refreshStatuses(): array
+    {
+        $nothing = ['campaigns' => 0, 'adsets' => 0, 'ads' => 0];
+        $account = $this->client->accountId();
+        if ($account === null || $this->client->configurationProblem() !== null) {
+            return ['status' => MetaSyncRun::STATUS_NOT_CONFIGURED] + $nothing;
         }
 
-        if ($campaigns === null || $campaigns === []) {
-            return;
+        $lock = Cache::lock(self::LOCK_KEY, self::LOCK_SECONDS);
+        if (! $lock->get()) {
+            return ['status' => MetaSyncRun::STATUS_RUNNING] + $nothing;
         }
 
-        $statusRows = array_map(static fn (array $c): array => [
-            'ad_account_id' => $account,
-            'level' => MetaAdEntity::LEVEL_CAMPAIGN,
-            'entity_id' => $c['id'],
-            'name' => $c['name'] ?? ($entities[MetaAdEntity::LEVEL_CAMPAIGN.'|'.$c['id']]['name'] ?? null),
-            'campaign_id' => $c['id'],
-            'adset_id' => null,
-            'effective_status' => $c['effective_status'],
-            'synced_at' => $now,
-        ], $campaigns);
+        try {
+            $this->limited = false;
+            $campaigns = $this->campaignStatuses();
+            $statuses = $this->entityStatuses();
+            if ($campaigns !== null) {
+                $statuses[MetaAdEntity::LEVEL_CAMPAIGN] = array_column($campaigns, 'effective_status', 'id');
+            }
 
-        foreach (array_chunk($statusRows, self::CHUNK) as $chunk) {
-            MetaAdEntity::query()->upsert($chunk, $uniqueBy, ['name', 'effective_status', 'synced_at']);
+            $touched = DB::transaction(fn (): array => $this->applyStatuses($account, $statuses));
+
+            return [
+                'status' => count($statuses) < 3 ? 'partial' : MetaSyncRun::STATUS_OK,
+                'campaigns' => $touched[MetaAdEntity::LEVEL_CAMPAIGN] ?? 0,
+                'adsets' => $touched[MetaAdEntity::LEVEL_ADSET] ?? 0,
+                'ads' => $touched[MetaAdEntity::LEVEL_AD] ?? 0,
+            ];
+        } catch (Throwable $e) {
+            ChannelLog::error('meta.ads.statuses.crashed', [
+                'exception' => class_basename($e),
+                'error_message' => MetaAdsApiClient::sanitize($e->getMessage(), 1000),
+            ]);
+
+            return ['status' => MetaSyncRun::STATUS_FAILED] + $nothing;
+        } finally {
+            $lock->release();
         }
     }
 

@@ -55,11 +55,26 @@ class MetaAdsApiClient
     /** Lo mismo para el alcance por campaña: todos sus estados efectivos. */
     public const CAMPAIGN_STATUSES = ['ACTIVE', 'PAUSED', 'DELETED', 'ARCHIVED', 'IN_PROCESS', 'WITH_ISSUES'];
 
+    /**
+     * Los estados que se pueden pedir a `/act_{id}/campaigns`. Es la lista de
+     * arriba SIN `DELETED`: ese borde lo rechaza («No se pueden solicitar objetos
+     * eliminados en este extremo», código 100/1815001, comprobado con la cuenta
+     * real). Y `?ids=` ya no existe en v26: el estado de una eliminada se
+     * queda como el último conocido.
+     */
+    public const CAMPAIGN_EDGE_STATUSES = ['ACTIVE', 'PAUSED', 'ARCHIVED', 'IN_PROCESS', 'WITH_ISSUES'];
+
+    /** Lo mismo para `/act_{id}/adsets`: todos sus estados efectivos menos DELETED. */
+    public const ADSET_EDGE_STATUSES = ['ACTIVE', 'PAUSED', 'CAMPAIGN_PAUSED', 'ARCHIVED', 'IN_PROCESS', 'WITH_ISSUES'];
+
+    /** Lo mismo para `/act_{id}/ads`: los de AD_STATUSES menos DELETED. */
+    public const AD_EDGE_STATUSES = [
+        'ACTIVE', 'PAUSED', 'PENDING_REVIEW', 'DISAPPROVED', 'PREAPPROVED', 'PENDING_BILLING_INFO',
+        'CAMPAIGN_PAUSED', 'ARCHIVED', 'ADSET_PAUSED', 'IN_PROCESS', 'WITH_ISSUES',
+    ];
+
     /** Campos de la cuenta publicitaria que se comprueban antes de sincronizar. */
     public const ACCOUNT_FIELDS = 'id,account_id,name,currency,timezone_name,timezone_offset_hours_utc,account_status';
-
-    /** Ids por petición al consultar estados (`?ids=`): Meta acepta 50. */
-    private const LOOKUP_CHUNK = 50;
 
     /** Zona de respaldo si la configurada no es válida (el problema se reporta aparte). */
     private const FALLBACK_TIMEZONE = 'America/Bogota';
@@ -203,32 +218,28 @@ class MetaAdsApiClient
     }
 
     /**
-     * Nombre y estado efectivo de campañas, conjuntos o anuncios por su id, con
-     * `GET /?ids=` en tandas de 50. Solo ids numéricos: van en la query.
+     * A qué cuenta publicitaria pertenece un anuncio: `GET /{ad_id}` con
+     * `account_id`. La lectura de un objeto suelto sí existe en v26 (`?ids=` no).
+     * Un anuncio de una cuenta que el token no ve contesta 100/33 («does not
+     * exist, cannot be loaded due to missing permissions»): lanza.
      *
-     * @param  list<string>  $ids
-     * @return array<string, array<string,mixed>> por id
+     * @return array{account_id: ?string, campaign_id: ?string, effective_status: ?string}
      *
      * @throws MetaAdsApiException
      */
-    public function lookup(array $ids, string $fields = 'name,effective_status'): array
+    public function adOwner(string $adId): array
     {
-        $ids = array_values(array_unique(array_filter(
-            array_map(static fn (mixed $id): string => trim((string) $id), $ids),
-            static fn (string $id): bool => preg_match('/^\d{1,40}$/', $id) === 1,
-        )));
-
-        $out = [];
-        foreach (array_chunk($ids, self::LOOKUP_CHUNK) as $chunk) {
-            $body = $this->call('', ['ids' => implode(',', $chunk), 'fields' => $fields]);
-            foreach ($chunk as $id) {
-                if (is_array($body[$id] ?? null)) {
-                    $out[$id] = $body[$id];
-                }
-            }
+        if (preg_match('/^\d{1,40}$/', $adId) !== 1) {
+            throw new MetaAdsApiException(MetaAdsApiException::OTHER, 'Id de anuncio no válido.');
         }
 
-        return $out;
+        $body = $this->call($adId, ['fields' => 'account_id,campaign_id,effective_status']);
+
+        return [
+            'account_id' => isset($body['account_id']) && is_scalar($body['account_id']) ? (string) $body['account_id'] : null,
+            'campaign_id' => isset($body['campaign_id']) && is_scalar($body['campaign_id']) ? (string) $body['campaign_id'] : null,
+            'effective_status' => is_string($body['effective_status'] ?? null) ? $body['effective_status'] : null,
+        ];
     }
 
     /**
@@ -284,9 +295,10 @@ class MetaAdsApiClient
 
     /**
      * Campañas de la cuenta con su estado efectivo (ACTIVE, PAUSED…), también
-     * las archivadas y eliminadas: sin el filtro, Meta solo devuelve las que no
-     * lo están, y una campaña archivada se quedaría en ACTIVE para siempre
-     * mientras su gasto sigue entrando.
+     * las archivadas: sin el filtro, Meta solo devuelve las que no lo están, y
+     * una campaña archivada se quedaría en ACTIVE para siempre mientras su gasto
+     * sigue entrando. Las eliminadas no se pueden pedir aquí
+     * ({@see CAMPAIGN_EDGE_STATUSES}): su estado se queda como el último conocido.
      *
      * @return list<array<string,mixed>>
      *
@@ -296,7 +308,41 @@ class MetaAdsApiClient
     {
         return $this->paginate('campaigns', [
             'fields' => 'id,name,effective_status',
-            'effective_status' => json_encode(self::CAMPAIGN_STATUSES),
+            'effective_status' => json_encode(self::CAMPAIGN_EDGE_STATUSES),
+            'limit' => self::PAGE_LIMIT,
+        ]);
+    }
+
+    /**
+     * Conjuntos de la cuenta con su estado efectivo, también los archivados. Los
+     * eliminados no se pueden pedir a este borde, y `?ids=` ya no existe en
+     * v26: su estado se queda como el último conocido.
+     *
+     * @return list<array<string,mixed>>
+     *
+     * @throws MetaAdsApiException
+     */
+    public function adsets(): array
+    {
+        return $this->paginate('adsets', [
+            'fields' => 'id,name,effective_status',
+            'effective_status' => json_encode(self::ADSET_EDGE_STATUSES),
+            'limit' => self::PAGE_LIMIT,
+        ]);
+    }
+
+    /**
+     * Anuncios de la cuenta con su estado efectivo, como {@see adsets()}.
+     *
+     * @return list<array<string,mixed>>
+     *
+     * @throws MetaAdsApiException
+     */
+    public function ads(): array
+    {
+        return $this->paginate('ads', [
+            'fields' => 'id,name,effective_status',
+            'effective_status' => json_encode(self::AD_EDGE_STATUSES),
             'limit' => self::PAGE_LIMIT,
         ]);
     }

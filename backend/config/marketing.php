@@ -378,5 +378,17 @@ return [
         // cada petición. Un socio recién dado de alta tarda hasta este tiempo
         // en enlazarse con su lead en el panel. 0 lo apaga.
         'phone_index_cache_seconds' => max(0, (int) env('MARKETING_ATTRIBUTION_PHONE_INDEX_CACHE_SECONDS', 300)),
+
+        /*
+         * Desde qué día (AAAA-MM-DD, hora de Bogotá) el CRM capta de verdad leads
+         * y referrals. Antes, los ingresos atribuibles, el ROAS, el CAC y el
+         * retorno no son una medición: el panel los da como «—». Vacío: se
+         * deduce de los datos, del primer tramo sostenido de días con leads
+         * reales captados al llegar (ni un lead viejo que vuelve a escribir ni
+         * uno que recupera el relleno cuentan, así que la fecha no retrocede).
+         * Fijarla manda sobre lo deducido; una fecha que no existe se ignora
+         * con un aviso en el log.
+         */
+        'coverage_since' => env('MARKETING_ATTRIBUTION_COVERAGE_SINCE') ?: null,
     ],
 ];

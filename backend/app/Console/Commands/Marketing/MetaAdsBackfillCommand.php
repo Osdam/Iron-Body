@@ -121,9 +121,11 @@ class MetaAdsBackfillCommand extends Command
         }
 
         unset($campaigns[''], $adsets[''], $ads['']);
-        // Por tramo en la pasada real: /campaigns (1) y los estados de conjuntos y
-        // anuncios por id (de 50 en 50); el alcance, una vez al final (5 rangos × 2).
-        $estimated = $requests + count($batches) + (int) ceil(count($adsets) / 50) + (int) ceil(count($ads) / 50) + 10;
+        // La pasada real pide lo mismo de insights (una página por cada 500 filas)
+        // y, una vez al final, el alcance (5 rangos × 2 niveles) y los estados (los
+        // bordes /campaigns, /adsets y /ads: una página cada uno, más si alguno pasa
+        // de 500 objetos). Los tramos no piden estados.
+        $estimated = $requests + 10 + 3;
 
         $this->table(['dato', 'valor'], [
             ['days', $days],
@@ -171,6 +173,9 @@ class MetaAdsBackfillCommand extends Command
 
         $reach = $sync->refreshReach();
         $this->line("Alcance de los rangos del panel: {$reach['ranges_ok']} al día, {$reach['ranges_failed']} con fallo.");
+        // Los tramos no piden estados (son de toda la cuenta): una sola vez, aquí.
+        $estados = $sync->refreshStatuses();
+        $this->line("Estados de Meta aplicados: {$estados['campaigns']} campañas, {$estados['adsets']} conjuntos y {$estados['ads']} anuncios ({$estados['status']}).");
         $this->summary($client, $from, $to, $days, count($batches), $done, $skipped, 'OK');
 
         return self::SUCCESS;

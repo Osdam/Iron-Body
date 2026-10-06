@@ -28,6 +28,8 @@ class MetaDashboardTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // La cobertura histórica tiene sus propias pruebas: aquí todo el año está cubierto.
+        config()->set('marketing.attribution.coverage_since', '2026-01-01');
         Carbon::setTestNow('2026-10-05 15:00:00');
         config()->set('marketing.attribution.window_days', 30);
         // Las pruebas dan de alta socios a mitad de prueba: sin el índice de
@@ -494,7 +496,7 @@ class MetaDashboardTest extends TestCase
 
         $rows = collect($this->dashboard()['campaigns']['rows']);
         // Con Meta Ads conectado, el anuncio que no está en la cuenta no es «falta de acceso».
-        $this->assertSame(['Campaña Octubre', 'Campaña Reels', 'Sin campaña (anuncio fuera de la cuenta conectada)'], $rows->pluck('name')->all());
+        $this->assertSame(['Campaña Octubre', 'Campaña Reels', 'Sin campaña (anuncio no encontrado en la cuenta conectada)'], $rows->pluck('name')->all());
 
         $octubre = $rows->firstWhere('name', 'Campaña Octubre');
         $this->assertSame(100000.0, $octubre['spend']);
@@ -521,7 +523,7 @@ class MetaDashboardTest extends TestCase
         $this->assertNull($sin['ref']);
 
         $adsets = collect($this->service()->campaigns('adset', ...$this->bounds('2026-10-01', '2026-10-05')));
-        $this->assertSame(['Neiva 18-35', 'Reels Neiva', 'Sin campaña (anuncio fuera de la cuenta conectada)'], $adsets->pluck('name')->all());
+        $this->assertSame(['Neiva 18-35', 'Reels Neiva', 'Sin campaña (anuncio no encontrado en la cuenta conectada)'], $adsets->pluck('name')->all());
         $this->assertSame(3, $adsets->first()['leads']);
 
         $ads = collect($this->service()->campaigns('ad', ...$this->bounds('2026-10-01', '2026-10-05')));
@@ -566,7 +568,7 @@ class MetaDashboardTest extends TestCase
             $rows['Campaña Octubre']['spend'], $rows['Campaña Octubre']['leads'], $rows['Campaña Octubre']['revenue'],
             $rows['Campaña Octubre']['roas'], $rows['Campaña Octubre']['cac'],
         ]);
-        $fuera = $rows['Sin campaña (anuncio fuera de la cuenta conectada)'];
+        $fuera = $rows['Sin campaña (anuncio no encontrado en la cuenta conectada)'];
         $this->assertSame(['unresolved', null, 1, 150000.0, null], [$fuera['id'], $fuera['spend'], $fuera['leads'], $fuera['revenue'], $fuera['roas']]);
     }
 
@@ -614,7 +616,7 @@ class MetaDashboardTest extends TestCase
         $this->assertSame(3, $d['kpis']['unresolved_paid_leads']);
         $this->assertSame('unresolved_paid_leads', $d['kpis']['roas_warning']);
         $this->assertSame(['unresolved'], array_column($d['campaigns']['rows'], 'id'));
-        $this->assertSame('Sin campaña (anuncio fuera de la cuenta conectada)', $d['campaigns']['rows'][0]['name']);
+        $this->assertSame('Sin campaña (anuncio no encontrado en la cuenta conectada)', $d['campaigns']['rows'][0]['name']);
     }
 
     /**
@@ -637,7 +639,7 @@ class MetaDashboardTest extends TestCase
 
         $rows = $this->dashboard()['campaigns']['rows'];
 
-        $this->assertSame(['Campaña B', 'Sin campaña (anuncio fuera de la cuenta conectada)'], array_column($rows, 'name'));
+        $this->assertSame(['Campaña B', 'Sin campaña (anuncio no encontrado en la cuenta conectada)'], array_column($rows, 'name'));
         $this->assertSame([30000.0, 0], [$rows[0]['spend'], $rows[0]['leads']]);
         $this->assertSame([null, 1], [$rows[1]['spend'], $rows[1]['leads']]);
     }

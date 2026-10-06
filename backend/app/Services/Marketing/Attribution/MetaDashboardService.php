@@ -20,6 +20,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 
 /**
@@ -81,8 +82,12 @@ class MetaDashboardService
     /** Su nombre si Meta Ads no está conectado: no hay dimensión contra la que resolver. */
     public const UNRESOLVED_NAME = 'Sin campaña (Meta Ads sin conexión)';
 
-    /** Su nombre si Meta Ads está conectado y sincronizado: el anuncio no es de la cuenta configurada. */
-    public const UNRESOLVED_NAME_OTHER_ACCOUNT = 'Sin campaña (anuncio fuera de la cuenta conectada)';
+    /**
+     * Su nombre si Meta Ads está conectado y sincronizado: el anuncio no está en
+     * lo sincronizado de la cuenta configurada. Lo normal es que sea de otra
+     * cuenta, pero el código no lo comprueba anuncio a anuncio: dice lo que sabe.
+     */
+    public const UNRESOLVED_NAME_OTHER_ACCOUNT = 'Sin campaña (anuncio no encontrado en la cuenta conectada)';
 
     /**
      * Su nombre si Meta Ads está conectado pero ninguna pasada ha salido bien:
@@ -98,6 +103,41 @@ class MetaDashboardService
 
     /** Motivo del retorno y de las cifras con gasto cuando el gasto es solo de una parte del periodo. */
     public const SPEND_INCOMPLETE = 'spend_incomplete';
+
+    /**
+     * Motivo del retorno cuando la cuenta no tuvo ni gasto ni ingresos en el
+     * periodo: la resta daría 0, y eso no es un «punto de equilibrio».
+     */
+    public const NO_AD_ACTIVITY = 'no_ad_activity';
+
+    /**
+     * Motivo de las cifras atribuibles de un periodo ANTERIOR a la cobertura: el
+     * CRM aún no captaba leads ni referrals, así que un 0 no sería una medición.
+     */
+    public const NO_HISTORICAL_COVERAGE = 'no_historical_coverage';
+
+    /** Lo mismo cuando el periodo empieza antes de la cobertura y termina después. */
+    public const PARTIAL_HISTORICAL_COVERAGE = 'partial_historical_coverage';
+
+    /** Huecos de hasta tantos días no cortan un tramo de captación. */
+    private const COVERAGE_MAX_GAP_DAYS = 7;
+
+    /** Un tramo de captación abre la cobertura si dura al menos tantos días… */
+    private const COVERAGE_MIN_RUN_DAYS = 7;
+
+    /** …y tiene al menos tantos días distintos con captación. */
+    private const COVERAGE_MIN_ACTIVE_DAYS = 4;
+
+    /**
+     * Un lead se captó AL LLEGAR si su registro de atribución se escribió
+     * (`created_at`) a menos de tanto de su primer contacto. Uno viejo que
+     * vuelve a escribir estrena su registro ese día, y uno que recupera el
+     * relleno lo escribe el día del relleno (aunque su `first_touch_at` sea el
+     * del mensaje antiguo): ninguno dice nada de entonces.
+     */
+    private const COVERAGE_CAPTURE_TOLERANCE_SECONDS = 86400;
+
+    private const COVERAGE_CACHE_KEY = 'marketing:meta-dashboard:coverage-since';
 
     /**
      * Las filas de «Origen de leads», en el orden en que se pintan. Solo salen
@@ -207,6 +247,16 @@ class MetaDashboardService
         $kpis = $this->kpis($ctx, $conversations, $spend, $moneyVisible);
         $kpis['attributable_share'] = $attributableShare;
 
+        // Antes de que el CRM captara leads y referrals, lo atribuible no es una medición.
+        $history = $this->coverageOf($from, $to);
+        $kpis = $this->withoutCoverage($kpis, $history['state']);
+        $secondary = $this->secondary($ctx, $from, $to);
+        if ($history['state'] === 'none') {
+            [$origins, $unattributedShare, $attributableShare] = [[], null, null];
+            // Las del periodo también son de leads: sin captación, «—». Las de ahora no dependen del periodo.
+            $secondary = array_map(fn (array $m): array => $m['scope'] === 'period' ? ['value' => null] + $m : $m, $secondary);
+        }
+
         $coverage = $this->spend->coverage($from, $to);
         $previous = $this->previousPeriod($period);
 
@@ -218,16 +268,17 @@ class MetaDashboardService
                 'timezone' => $period['timezone'],
             ],
             'previous_period' => ['from' => $previous['from'], 'to' => $previous['to']],
+            'historical_coverage' => $history,
             'spend' => $spend,
             'kpis' => $kpis,
             'previous' => $this->previousSummary($previous, $moneyVisible),
-            'secondary' => $this->secondary($ctx, $from, $to),
+            'secondary' => $secondary,
             'origins' => $origins,
             'unattributed_share' => $unattributedShare,
             'attributable_share' => $attributableShare,
             'campaigns' => [
                 'level' => MetaAdEntity::LEVEL_CAMPAIGN,
-                'rows' => $this->campaignRows(MetaAdEntity::LEVEL_CAMPAIGN, $ctx, $conversations, $from, $to, $moneyVisible),
+                'rows' => $this->campaignRows(MetaAdEntity::LEVEL_CAMPAIGN, $ctx, $conversations, $from, $to, $moneyVisible, null, $history),
                 'partial' => $coverage['known'] && ! $coverage['complete'],
                 'covered_to' => $coverage['known'] && ! $coverage['complete'] ? $coverage['through'] : null,
             ],
@@ -289,7 +340,7 @@ class MetaDashboardService
 
         $ctx = $this->context($from, $to);
         $conversations = $this->conversationsByLead($from, $to, $ctx);
-        $rows = $this->campaignRows($level, $ctx, $conversations, $from, $to, $moneyVisible, $parent);
+        $rows = $this->campaignRows($level, $ctx, $conversations, $from, $to, $moneyVisible, $parent, $this->coverageOf($from, $to));
 
         return $this->tableOf($rows, $coverage, $page, $perPage);
     }
@@ -819,6 +870,11 @@ class MetaDashboardService
         // Retorno = ingresos Meta − gasto Meta. Una resta, no una división: un
         // gasto de cero comprobado vale; uno incompleto o desconocido, no.
         $returnReason = $this->returnProblem($spend);
+        // Sin pauta ni ingresos de la cuenta, la resta da 0, pero no hubo nada que
+        // equilibrar: «Punto de equilibrio» diría lo que no pasó.
+        if ($returnReason === null && abs((float) $spend['amount']) < 0.005 && abs($resolved['revenue']) < 0.005) {
+            $returnReason = self::NO_AD_ACTIVITY;
+        }
         $return = $returnReason === null ? round($resolved['revenue'] - (float) $spend['amount'], 2) : null;
 
         // Hay leads de pauta que el gasto de la cuenta no cubre: el ROAS de la
@@ -834,6 +890,8 @@ class MetaDashboardService
             'revenue_renewal' => round($revenueRenewal, 2),
             'revenue_attributed' => round($revenueNew + $revenueRenewal, 2),
             'revenue_reason' => null,
+            // Por qué falta «Ingresos Meta» (paid_resolved.revenue): sin permiso o sin cobertura histórica.
+            'meta_revenue_reason' => null,
             'currency' => self::REVENUE_CURRENCY,
             'paid' => $paid,
             'paid_resolved' => $resolved,
@@ -875,7 +933,7 @@ class MetaDashboardService
         foreach (['revenue_new', 'revenue_renewal', 'revenue_attributed', 'roas', 'roas_new', 'cac', 'return_after_ad_spend', 'return_state'] as $field) {
             $kpis[$field] = null;
         }
-        foreach (['revenue_reason', 'roas_reason', 'roas_new_reason', 'cac_reason', 'return_after_ad_spend_reason'] as $field) {
+        foreach (['revenue_reason', 'meta_revenue_reason', 'roas_reason', 'roas_new_reason', 'cac_reason', 'return_after_ad_spend_reason'] as $field) {
             $kpis[$field] = self::MONEY_FORBIDDEN;
         }
         $kpis['paid']['revenue'] = null;
@@ -949,7 +1007,7 @@ class MetaDashboardService
      * periodo, `now` si es una foto del momento.
      *
      * @param  array<string, mixed>  $ctx
-     * @return array<string, array{value: int, scope: string}>
+     * @return array<string, array{value: int, scope: string}> (en `dashboard()`, `value` null sin cobertura)
      */
     private function secondary(array $ctx, CarbonImmutable $from, CarbonImmutable $to): array
     {
@@ -1108,6 +1166,7 @@ class MetaDashboardService
         CarbonImmutable $to,
         bool $moneyVisible,
         ?array $parent = null,
+        array $history = ['since' => null, 'state' => 'full'],
     ): array {
         // Con padre, solo cuenta lo que es de él: un toque de otra campaña (o de
         // otro conjunto) no es de esta fila, y uno sin resolver no es de ninguna.
@@ -1212,7 +1271,9 @@ class MetaDashboardService
             $rows[$id]['roas'] = $divisible ? round($row['revenue'] / $spend, 2) : null;
             $rows[$id]['cac'] = $divisible && $row['converted'] > 0 ? round($spend / $row['converted'], 2) : null;
             $rows[$id]['conversion_rate'] = $row['leads'] > 0 ? round($row['converted'] / $row['leads'], 4) : null;
-            $rows[$id]['return_after_ad_spend'] = $complete ? round($row['revenue'] - $spend, 2) : null;
+            // Sin gasto ni ingresos en la fila no hay retorno que dar (como en el KPI).
+            $active = $spend > 0 || abs($row['revenue']) >= 0.005;
+            $rows[$id]['return_after_ad_spend'] = $complete && $active ? round($row['revenue'] - $spend, 2) : null;
             // Derivadas de las sumas del periodo, no medias de los ratios diarios.
             $rows[$id]['ctr'] = $ratio($row['clicks'], $row['impressions']);
             $rows[$id]['cpm'] = $spend !== null && $row['impressions'] !== null && $row['impressions'] > 0
@@ -1232,7 +1293,13 @@ class MetaDashboardService
             return [$b['spend'] ?? -1, $b['leads'], (string) $a['name']] <=> [$a['spend'] ?? -1, $a['leads'], (string) $b['name']];
         });
 
-        return array_values(array_map(fn (array $row): array => $this->publicCampaignRow($level, $row, $moneyVisible), $rows));
+        $rows = array_values($rows);
+
+        return $this->rowsWithoutCoverage(
+            array_map(fn (array $row): array => $this->publicCampaignRow($level, $row, $moneyVisible), $rows),
+            $history,
+            array_map(fn (array $row): ?string => $row['last_day'], $rows),
+        );
     }
 
     /**
@@ -1264,6 +1331,8 @@ class MetaDashboardService
             'meta_conversations' => $metric('messaging_started', 'messaging_started'),
             'meta_replies' => $metric('messaging_replied', 'messaging_replied'),
             'landing_page_views' => $metric('landing_page_views', 'landing_page_views'),
+            // El último día con actividad en Meta dentro del periodo (no sale en la respuesta).
+            'last_day' => $s['last_day'] ?? null,
             'leads' => 0,
             'conversations' => 0,
             'converted' => 0,
@@ -1410,6 +1479,185 @@ class MetaDashboardService
     }
 
     /**
+     * El primer día (AAAA-MM-DD, Bogotá) en que el CRM capta de verdad leads y
+     * referrals, o null si todavía no. Por configuración
+     * (`marketing.attribution.coverage_since`) o deducido de los datos (ver
+     * deducedCoverageSince()). Diez minutos en caché, también el «todavía no»;
+     * la clave lleva la configuración, así que cambiarla vale al momento.
+     */
+    public function coverageSince(): ?string
+    {
+        $fixed = trim((string) config('marketing.attribution.coverage_since'));
+
+        // null no se guarda en caché: «todavía no» va como ''.
+        $since = Cache::remember(self::COVERAGE_CACHE_KEY.':'.md5($fixed), 600, function () use ($fixed): string {
+            if ($fixed !== '') {
+                $day = CarbonImmutable::createFromFormat('!Y-m-d', $fixed, self::timezone());
+                // createFromFormat acepta el 31 de septiembre y lo corre a octubre: esa no es la fecha que se fijó.
+                if ($day !== false && $day->format('Y-m-d') === $fixed) {
+                    return $fixed;
+                }
+                // Una fecha mal escrita no mueve la cobertura en silencio: se avisa y se deduce.
+                Log::warning('marketing.attribution.coverage_since no es un día AAAA-MM-DD válido: se deduce de los datos.', ['value' => $fixed]);
+            }
+
+            return $this->deducedCoverageSince() ?? '';
+        });
+
+        return $since === '' ? null : $since;
+    }
+
+    /**
+     * El primer día del primer tramo SOSTENIDO de días en que el CRM captó
+     * leads al llegar: leads reales cuyo registro de atribución (el que deja la
+     * captura del referral) se escribió a menos de un día de su primer
+     * contacto. Ni un lead viejo que vuelve a escribir ni uno que recupera el
+     * relleno cuentan, así que la fecha no retrocede. Tramo sostenido: huecos de hasta 7 días, al menos 7
+     * días de duración y al menos 4 días distintos con captación. Los leads
+     * sueltos de antes (pruebas, una importación) no abren la cobertura.
+     */
+    private function deducedCoverageSince(): ?string
+    {
+        $tz = self::timezone();
+        $first = LeadUniverse::firstContactSql();
+        $days = LeadUniverse::constrain(MarketingLead::query())
+            ->join('marketing_lead_attributions', 'marketing_lead_attributions.marketing_lead_id', '=', 'marketing_leads.id')
+            // La hora en que el CRM escribió el registro, no la del toque: el relleno la pone en el pasado.
+            ->selectRaw("{$first} as first_contact, marketing_lead_attributions.created_at as captured_at")
+            ->toBase()
+            ->get()
+            ->map(fn (object $r): array => [
+                CarbonImmutable::parse((string) $r->first_contact, 'UTC'),
+                CarbonImmutable::parse((string) $r->captured_at, 'UTC'),
+            ])
+            ->filter(fn (array $at): bool => abs($at[1]->getTimestamp() - $at[0]->getTimestamp()) <= self::COVERAGE_CAPTURE_TOLERANCE_SECONDS)
+            ->map(fn (array $at): string => $at[0]->setTimezone($tz)->toDateString())
+            ->unique()
+            ->sort()
+            ->values();
+
+        $start = null;
+        $prev = null;
+        $active = 0;
+        foreach ($days as $day) {
+            $d = CarbonImmutable::parse($day);
+            if ($prev === null || $prev->diffInDays($d) > self::COVERAGE_MAX_GAP_DAYS) {
+                $start = $d;
+                $active = 0;
+            }
+            $prev = $d;
+            $active++;
+            if ($start->diffInDays($d) >= self::COVERAGE_MIN_RUN_DAYS && $active >= self::COVERAGE_MIN_ACTIVE_DAYS) {
+                return $start->toDateString();
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Cuánto del periodo `[from, to)` cubre la captación del CRM: `full`,
+     * `partial` (empieza antes y termina después) o `none`.
+     *
+     * @return array{since: ?string, state: string}
+     */
+    private function coverageOf(CarbonImmutable $from, CarbonImmutable $to): array
+    {
+        $since = $this->coverageSince();
+        if ($since === null) {
+            return ['since' => null, 'state' => 'none'];
+        }
+
+        $start = CarbonImmutable::createFromFormat('!Y-m-d', $since, self::timezone())->utc();
+
+        return ['since' => $since, 'state' => match (true) {
+            $from->greaterThanOrEqualTo($start) => 'full',
+            $to->lessThanOrEqualTo($start) => 'none',
+            default => 'partial',
+        }];
+    }
+
+    /**
+     * Los KPI sin lo que no es una medición. Con días sin captación dentro
+     * (`partial`), lo atribuible a la pauta (ingresos Meta, ROAS, CAC,
+     * conversión Meta y retorno) va en null con su motivo: el gasto de esos días
+     * no tiene leads con los que compararse. Sin ninguna captación (`none`),
+     * tampoco los recuentos comerciales: un 0 diría que se midió.
+     *
+     * @param  array<string, mixed>  $kpis
+     * @return array<string, mixed>
+     */
+    private function withoutCoverage(array $kpis, string $state): array
+    {
+        if ($state === 'full') {
+            return $kpis;
+        }
+
+        $reason = $state === 'none' ? self::NO_HISTORICAL_COVERAGE : self::PARTIAL_HISTORICAL_COVERAGE;
+        // Un importe que el usuario no puede ver sigue diciendo `forbidden`.
+        $because = fn (?string $current): string => $current === self::MONEY_FORBIDDEN ? $current : $reason;
+        foreach (['roas', 'roas_new', 'cac', 'meta_conversion_rate', 'return_after_ad_spend', 'return_state'] as $field) {
+            $kpis[$field] = null;
+        }
+        foreach (['roas_reason', 'roas_new_reason', 'cac_reason', 'return_after_ad_spend_reason', 'meta_revenue_reason'] as $field) {
+            $kpis[$field] = $because($kpis[$field] ?? null);
+        }
+        foreach (['revenue', 'revenue_new', 'revenue_renewal'] as $field) {
+            if (is_array($kpis['paid_resolved'] ?? null)) {
+                $kpis['paid_resolved'][$field] = null;
+            }
+        }
+
+        if ($state === 'none') {
+            foreach (['leads', 'conversations', 'converted', 'renewals', 'revenue_new', 'revenue_renewal', 'revenue_attributed', 'conversion_rate', 'attributable_share', 'unresolved_paid_leads', 'roas_warning'] as $field) {
+                $kpis[$field] = null;
+            }
+            $kpis['revenue_reason'] = $because($kpis['revenue_reason'] ?? null);
+            $kpis['paid'] = array_map(fn () => null, is_array($kpis['paid'] ?? null) ? $kpis['paid'] : []);
+            $kpis['paid_resolved'] = array_map(fn () => null, is_array($kpis['paid_resolved'] ?? null) ? $kpis['paid_resolved'] : []);
+        }
+
+        return $kpis;
+    }
+
+    /**
+     * Las filas de campaña, conjunto o anuncio sin lo atribuible cuando el
+     * periodo no está cubierto entero. Los recuentos del CRM tampoco son una
+     * medición sin ninguna cobertura, ni en una fila cuya actividad en Meta
+     * acabó antes de la cobertura y no tiene nada captado: su «0» no se midió.
+     * Lo que viene de Meta (gasto, impresiones…) se queda: es de Meta.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     * @param  array{since: ?string, state: string}  $history
+     * @param  list<?string>  $lastDays  el último día con actividad en Meta de cada fila
+     * @return list<array<string, mixed>>
+     */
+    private function rowsWithoutCoverage(array $rows, array $history, array $lastDays): array
+    {
+        if ($history['state'] === 'full') {
+            return $rows;
+        }
+
+        $counts = ['leads', 'conversations', 'converted', 'renewals'];
+
+        return array_map(function (array $row, ?string $lastDay) use ($history, $counts): array {
+            $fields = ['revenue', 'roas', 'cac', 'conversion_rate', 'return_after_ad_spend'];
+            $nothingCaptured = array_sum(array_map(fn (string $f): int => (int) ($row[$f] ?? 0), $counts)) === 0;
+            $endedBefore = $lastDay !== null && $history['since'] !== null && $lastDay < $history['since'];
+            if ($history['state'] === 'none' || ($endedBefore && $nothingCaptured)) {
+                $fields = [...$fields, ...$counts];
+            }
+            foreach ($fields as $field) {
+                if (array_key_exists($field, $row)) {
+                    $row[$field] = null;
+                }
+            }
+
+            return $row;
+        }, $rows, $lastDays);
+    }
+
+    /**
      * El periodo anterior equivalente: el mismo número de días de Bogotá, justo
      * antes del elegido. Para «30 días», los 30 anteriores.
      *
@@ -1450,6 +1698,10 @@ class MetaDashboardService
         $spend = $this->spend->snapshot($from, $to);
         // kpis() suma las conversaciones por lead; aquí basta el total.
         $k = $this->kpis($ctx, [$this->conversationCount($from, $to)], $spend, $moneyVisible);
+        // Un periodo anterior sin cobertura entera no es una base: frente a sus
+        // días sin captación, cualquier periodo cubierto «crecería». Sin
+        // comparación, mejor que un +400 % que no pasó. Su gasto sí se compara: es de Meta.
+        $covered = $this->coverageOf($from, $to)['state'] === 'full';
 
         return [
             'period' => ['from' => $previous['from'], 'to' => $previous['to']],
@@ -1459,7 +1711,7 @@ class MetaDashboardService
                 'currency' => $spend['currency'],
                 'complete' => $spend['complete'],
             ],
-            'kpis' => [
+            'kpis' => array_map(fn (mixed $v): mixed => $covered ? $v : null, [
                 'leads' => $k['leads'],
                 'conversations' => $k['conversations'],
                 'converted' => $k['converted'],
@@ -1473,7 +1725,7 @@ class MetaDashboardService
                 'conversion_rate' => $k['conversion_rate'],
                 'meta_conversion_rate' => $k['meta_conversion_rate'],
                 'return_after_ad_spend' => $k['return_after_ad_spend'],
-            ],
+            ]),
         ];
     }
 

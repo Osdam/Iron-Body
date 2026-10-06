@@ -282,6 +282,8 @@ class MetaSpendReader
                 ->selectRaw('SUM(messaging_conversations_started) as messaging_started, SUM(messaging_conversations_replied) as messaging_replied')
                 ->selectRaw('MAX(currency) as currency, MAX(campaign_id) as parent_campaign_id, MAX(adset_id) as parent_adset_id')
                 ->selectRaw("MAX({$nameColumn}) as fallback_name")
+                // El último día con actividad en el periodo: el panel lo cruza con la cobertura del CRM.
+                ->selectRaw('MAX(date) as last_day')
                 ->get()
                 ->keyBy(fn (object $g): string => (string) $g->entity_id);
         }
@@ -350,6 +352,7 @@ class MetaSpendReader
                 'frequency' => $reach[$id]['frequency'] ?? null,
                 'status' => $entity?->effective_status,
                 'partial' => $partial,
+                'last_day' => $g->last_day === null ? null : substr((string) $g->last_day, 0, 10),
             ];
         });
 
@@ -373,6 +376,7 @@ class MetaSpendReader
                 'frequency' => $reach[$id]['frequency'] ?? null,
                 'status' => $entity?->effective_status,
                 'partial' => $partial,
+                'last_day' => null,
             ];
         });
 

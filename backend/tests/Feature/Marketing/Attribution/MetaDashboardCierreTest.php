@@ -9,7 +9,9 @@ use App\Models\MetaAdReachSnapshot;
 use App\Services\Marketing\Attribution\MetaDashboardService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Feature\Marketing\MetaAds\FakesMetaAds;
 use Tests\TestCase;
@@ -31,6 +33,8 @@ class MetaDashboardCierreTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // La cobertura histórica tiene sus propias pruebas: aquí todo el año está cubierto.
+        config()->set('marketing.attribution.coverage_since', '2026-01-01');
         Carbon::setTestNow('2026-10-05 15:00:00');
         config()->set('caja.timezone', 'America/Bogota');
         config()->set('marketing.attribution.window_days', 30);
@@ -157,6 +161,238 @@ class MetaDashboardCierreTest extends TestCase
         $this->assertSame([50000.0, 'positive'], [$k['return_after_ad_spend'], $k['return_state']]);
         $this->assertSame([null, 'spend_real_zero'], [$k['roas'], $k['roas_reason']]);
         $this->assertNull($k['cac']);
+    }
+
+    /**
+     * Sin gasto y sin ingresos de la cuenta en el periodo, la resta da 0, pero no
+     * hubo nada que equilibrar: el retorno no sale como «Punto de equilibrio»
+     * sino sin cifra, con su motivo. Es el caso real de producción: la cuenta
+     * conectada no entregaba y los leads de pauta venían de anuncios de otra.
+     */
+    public function test_sin_pauta_ni_ingresos_de_la_cuenta_no_hay_punto_de_equilibrio(): void
+    {
+        $this->syncSpend([$this->insightRow('2026-10-02', '120230001', '0.00')]);
+        $this->paidLead('2026-10-02 16:00:00', '999000111');
+
+        $k = $this->dashboard()['kpis'];
+
+        $this->assertSame([null, MetaDashboardService::NO_AD_ACTIVITY, null], [$k['return_after_ad_spend'], $k['return_after_ad_spend_reason'], $k['return_state']]);
+        $this->assertSame([0, 1, MetaDashboardService::WARNING_UNRESOLVED_PAID_LEADS], [$k['paid_resolved']['leads'], $k['unresolved_paid_leads'], $k['roas_warning']]);
+
+        // Con ingresos de la cuenta y gasto cero comprobado, sí hay retorno (positivo).
+        [$cliente] = $this->customer('3001110001');
+        $this->paidLead('2026-10-03 15:00:00', '120230001', attrs: ['phone' => '573001110001']);
+        $this->payment($cliente, 50000, '2026-10-03 16:00:00');
+        $this->assertSame([50000.0, 'positive'], [$this->dashboard()['kpis']['return_after_ad_spend'], $this->dashboard()['kpis']['return_state']]);
+    }
+
+    // ── Cobertura histórica: antes de captar leads y referrals, nada atribuible ──
+
+    /**
+     * Un lead con primer contacto en `$at` cuyo registro de atribución escribe el
+     * CRM en `$registro` (su `created_at`; por defecto, al llegar), con el toque
+     * fechado en `$toque` (el relleno usa la hora del mensaje antiguo).
+     */
+    private function captado(string $at, ?string $registro = null, ?string $toque = null): void
+    {
+        $ahora = Carbon::now();
+        Carbon::setTestNow($registro ?? $at);
+        $this->touch($this->lead($at), null, $toque ?? $registro ?? $at);
+        Carbon::setTestNow($ahora);
+    }
+
+    /**
+     * La cobertura se deduce de los días en que el CRM captó leads AL LLEGAR (su
+     * registro de atribución se escribe con su primer contacto), en días de
+     * Bogotá: el primer tramo con huecos de hasta 7 días, 7 días de duración y
+     * 4 días con captación. Ni un lead viejo que vuelve a escribir ni uno que
+     * recupera el relleno la mueven. Una fecha fijada manda; una mal escrita se
+     * avisa y no cuenta. El «todavía no» también va en caché.
+     */
+    public function test_la_cobertura_se_deduce_del_primer_tramo_sostenido(): void
+    {
+        config()->set('marketing.attribution.coverage_since', null);
+        Cache::flush();
+        $captado = fn (string $at, ?string $registro = null, ?string $toque = null) => $this->captado($at, $registro, $toque);
+
+        // Como en producción: pruebas de junio sin atribución, y leads de junio que
+        // vuelven a escribir en octubre (su registro nace en octubre, no en junio).
+        $this->lead('2026-06-29 15:00:00');
+        foreach (['2026-06-01', '2026-06-08', '2026-06-15', '2026-06-22'] as $dia) {
+            $captado("{$dia} 15:00:00", '2026-10-01 15:00:00');
+        }
+        // Leads de junio que recupera el relleno en octubre: su toque es de junio, su registro de octubre.
+        foreach (['2026-06-02', '2026-06-04', '2026-06-06', '2026-06-10'] as $dia) {
+            $captado("{$dia} 15:00:00", '2026-10-05 15:00:00', "{$dia} 15:00:00");
+        }
+        // Tramos que no bastan: en julio, 3 días con captación y luego un hueco de 8;
+        // en agosto, 4 días pero solo 6 de duración.
+        foreach (['2026-07-01', '2026-07-04', '2026-07-08', '2026-07-16', '2026-08-03', '2026-08-04', '2026-08-05', '2026-08-09'] as $dia) {
+            $captado("{$dia} 15:00:00");
+        }
+        // La captación de verdad: 4 días en 7. El primero, a las 23:30 del 16 en
+        // Bogotá (ya el 17 en UTC); el del 17, registrado 5 horas después.
+        $captado('2026-09-17 04:30:00');
+        $captado('2026-09-17 15:00:00', '2026-09-17 20:00:00');
+        $captado('2026-09-18 15:00:00');
+        $captado('2026-09-23 15:00:00');
+
+        $this->assertSame('2026-09-16', $this->service()->coverageSince());
+
+        // Una fecha fijada manda sobre lo deducido…
+        config()->set('marketing.attribution.coverage_since', '2026-09-20');
+        $this->assertSame('2026-09-20', $this->service()->coverageSince());
+        // …pero una que no existe no se corre al día siguiente: se avisa y se deduce.
+        Log::spy();
+        config()->set('marketing.attribution.coverage_since', '2026-09-31');
+        $this->assertSame('2026-09-16', $this->service()->coverageSince());
+        Log::shouldHaveReceived('warning')->once()->withArgs(fn (string $mensaje, array $ctx): bool => $ctx === ['value' => '2026-09-31']);
+
+        // Sin tramo sostenido, no hay cobertura, y ese «todavía no» también se guarda.
+        config()->set('marketing.attribution.coverage_since', null);
+        Cache::flush();
+        DB::table('marketing_lead_attributions')->where('created_at', '>=', '2026-09-20')->delete();
+        DB::enableQueryLog();
+        $this->assertNull($this->service()->coverageSince());
+        $this->assertNull($this->service()->coverageSince());
+        $barridos = collect(DB::getQueryLog())->filter(fn (array $q): bool => str_contains($q['query'], 'marketing_lead_attributions'));
+        DB::disableQueryLog();
+        $this->assertCount(1, $barridos, 'sin cobertura, el barrido no se repite en cada carga');
+    }
+
+    /** Un hueco de 7 días justos no corta el tramo; uno de 8 sí (lo prueba la anterior). */
+    public function test_un_hueco_de_siete_dias_no_corta_el_tramo(): void
+    {
+        config()->set('marketing.attribution.coverage_since', null);
+        Cache::flush();
+        foreach (['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-10'] as $dia) {
+            $this->captado("{$dia} 15:00:00");
+        }
+
+        $this->assertSame('2026-10-01', $this->service()->coverageSince());
+    }
+
+    /**
+     * Antes de la cobertura, lo atribuible (ingresos Meta, ROAS, CAC, conversión
+     * Meta y retorno) es «—» con su motivo, también por campaña y en el periodo
+     * anterior; sin ninguna cobertura, tampoco los recuentos. El gasto de Meta
+     * se ve: es de Meta. Un periodo que la cruza es parcial; uno dentro, normal.
+     */
+    public function test_antes_de_la_cobertura_lo_atribuible_no_es_una_medicion(): void
+    {
+        config()->set('marketing.attribution.coverage_since', '2026-09-16');
+        $this->syncSpend([
+            $this->insightRow('2026-09-05', '120230001', '30000.00'),
+            $this->insightRow('2026-09-18', '120230001', '20000.00'),
+        ], '2026-09-01', '2026-09-20');
+        [$cliente] = $this->customer('3001110001');
+        $this->paidLead('2026-09-17 15:00:00', '120230001', attrs: ['phone' => '573001110001']);
+        $this->payment($cliente, 80000, '2026-09-18 15:00:00');
+
+        $antes = $this->dashboard('2026-09-01', '2026-09-10');
+        $this->assertSame(['since' => '2026-09-16', 'state' => 'none'], $antes['historical_coverage']);
+        $this->assertSame(30000.0, $antes['spend']['amount'], 'el gasto es de Meta y se ve');
+        $k = $antes['kpis'];
+        $this->assertSame([null, null, null, null, null], [$k['roas'], $k['cac'], $k['return_after_ad_spend'], $k['meta_conversion_rate'], $k['paid_resolved']['revenue']]);
+        $this->assertSame(MetaDashboardService::NO_HISTORICAL_COVERAGE, $k['roas_reason']);
+        $this->assertSame(MetaDashboardService::NO_HISTORICAL_COVERAGE, $k['return_after_ad_spend_reason']);
+        $this->assertSame([null, null, null, null], [$k['leads'], $k['converted'], $k['revenue_attributed'], $k['conversion_rate']], 'sin captación, un 0 no sería una medición');
+        $this->assertSame([[], null], [$antes['origins'], $antes['unattributed_share']]);
+        $this->assertSame(
+            [['value' => null, 'scope' => 'period'], ['value' => null, 'scope' => 'period']],
+            [$antes['secondary']['hot_leads'], $antes['secondary']['ai_actions']],
+            'las secundarias del periodo tampoco son una medición',
+        );
+        $this->assertSame('now', $antes['secondary']['pending_followups']['scope']);
+        $this->assertIsInt($antes['secondary']['pending_followups']['value'], 'las de ahora no dependen del periodo');
+        $fila = collect($antes['campaigns']['rows'])->firstWhere('name', 'Campaña Octubre');
+        $this->assertSame([30000.0, null, null, null, null], [$fila['spend'], $fila['revenue'], $fila['roas'], $fila['return_after_ad_spend'], $fila['leads']]);
+
+        $cruza = $this->dashboard('2026-09-10', '2026-09-20');
+        $this->assertSame('partial', $cruza['historical_coverage']['state']);
+        $this->assertSame([null, MetaDashboardService::PARTIAL_HISTORICAL_COVERAGE], [$cruza['kpis']['roas'], $cruza['kpis']['roas_reason']]);
+        $this->assertSame([1, 1], [$cruza['kpis']['leads'], $cruza['kpis']['converted']], 'los recuentos de los días cubiertos sí valen');
+        $this->assertIsInt($cruza['secondary']['hot_leads']['value']);
+
+        // Quien no ve dinero sigue leyendo `forbidden`: la cobertura no tapa ese motivo.
+        $sinDinero = $this->service()->dashboard($this->service()->period('custom', '2026-09-01', '2026-09-10'), false)['kpis'];
+        $this->assertSame(
+            array_fill(0, 4, MetaDashboardService::MONEY_FORBIDDEN),
+            [$sinDinero['roas_reason'], $sinDinero['revenue_reason'], $sinDinero['meta_revenue_reason'], $sinDinero['return_after_ad_spend_reason']],
+        );
+        $this->assertNull($sinDinero['leads']);
+
+        $dentro = $this->dashboard('2026-09-16', '2026-09-20');
+        $this->assertSame('full', $dentro['historical_coverage']['state']);
+        $this->assertSame([4.0, 80000.0], [$dentro['kpis']['roas'], $dentro['kpis']['paid_resolved']['revenue']]);
+        $this->assertNull($dentro['kpis']['meta_revenue_reason']);
+        // Su periodo anterior (11 al 15) no está cubierto: sin comparación posible.
+        $this->assertSame([null, null], [$dentro['previous']['kpis']['roas'], $dentro['previous']['kpis']['leads']]);
+    }
+
+    /**
+     * Un periodo anterior que no está cubierto entero no es base de nada: sus
+     * días sin captación harían «crecer» cualquier periodo. Sin comparación, y
+     * su gasto (de Meta) sí se manda. Contra uno cubierto, se compara.
+     */
+    public function test_el_periodo_anterior_sin_cobertura_entera_no_es_base(): void
+    {
+        config()->set('marketing.attribution.coverage_since', '2026-09-16');
+        foreach (['2026-09-14', '2026-09-16', '2026-09-17', '2026-09-18', '2026-09-22'] as $dia) {
+            $this->touch($this->lead("{$dia} 15:00:00"), null, "{$dia} 15:00:00");
+        }
+
+        // 17–20: el anterior (13–16) empieza antes de la cobertura.
+        $d = $this->dashboard('2026-09-17', '2026-09-20');
+        $this->assertSame(['full', 2], [$d['historical_coverage']['state'], $d['kpis']['leads']]);
+        $this->assertSame(['2026-09-13', '2026-09-16'], [$d['previous']['period']['from'], $d['previous']['period']['to']]);
+        $this->assertSame([], array_filter($d['previous']['kpis'], fn (mixed $v): bool => $v !== null), 'ninguna cifra de un periodo a medias');
+        $this->assertArrayHasKey('status', $d['previous']['spend']);
+
+        // 21–24: el anterior (17–20) está cubierto entero.
+        $e = $this->dashboard('2026-09-21', '2026-09-24');
+        $this->assertSame([1, 2], [$e['kpis']['leads'], $e['previous']['kpis']['leads']]);
+    }
+
+    /**
+     * En un periodo parcial, una campaña (o conjunto, o anuncio) cuya actividad
+     * en Meta acabó antes de la cobertura y no tiene nada captado no enseña «0»:
+     * ese cero no se midió. Una activa después sí lo enseña, y una con leads
+     * captados enseña los suyos. Sin ninguna cobertura, ningún recuento.
+     */
+    public function test_en_un_periodo_parcial_una_fila_que_acabo_antes_no_ensena_ceros(): void
+    {
+        config()->set('marketing.attribution.coverage_since', '2026-09-16');
+        $agosto = ['campaign_id' => '120209', 'campaign_name' => 'Campaña Agosto', 'adset_id' => '120219', 'adset_name' => 'Agosto Neiva'];
+        $justo = ['campaign_id' => '120208', 'campaign_name' => 'Campaña Justo', 'adset_id' => '120218', 'adset_name' => 'Justo Neiva'];
+        $this->syncSpend([
+            $this->insightRow('2026-09-05', '120239', '30000.00', $agosto),
+            $this->insightRow('2026-09-16', '120238', '10000.00', $justo),
+            $this->insightRow('2026-09-18', '120230001', '20000.00'),
+        ], '2026-09-01', '2026-09-20');
+
+        $filas = fn (string $desde, string $hasta) => collect($this->dashboard($desde, $hasta)['campaigns']['rows'])->keyBy('name');
+        $recuentos = fn (array $f): array => [$f['leads'], $f['conversations'], $f['converted'], $f['renewals']];
+
+        $parcial = $filas('2026-09-01', '2026-09-20');
+        $this->assertSame([30000.0, null, null, null, null], [$parcial['Campaña Agosto']['spend'], ...$recuentos($parcial['Campaña Agosto'])]);
+        $this->assertSame([20000.0, 0, 0, 0, 0], [$parcial['Campaña Octubre']['spend'], ...$recuentos($parcial['Campaña Octubre'])], 'activa después: su 0 sí se midió');
+        $this->assertSame([0, 0, 0, 0], $recuentos($parcial['Campaña Justo']), 'activa el mismo día en que empieza la cobertura: también se midió');
+
+        // Lo mismo al desplegar: el conjunto y el anuncio de agosto.
+        [$desde, $hasta] = $this->bounds('2026-09-01', '2026-09-20');
+        $conjunto = $this->service()->campaignTable('adset', $desde, $hasta, true, MetaDashboardService::opaqueId('campaign', '120209'))['rows'][0];
+        $anuncio = $this->service()->campaignTable('ad', $desde, $hasta, true, MetaDashboardService::opaqueId('adset', '120219'))['rows'][0];
+        $this->assertSame([null, null, null, null], $recuentos($conjunto));
+        $this->assertSame([null, null, null, null], $recuentos($anuncio));
+
+        // Sin ninguna cobertura, tampoco al desplegar.
+        [$antes, $hastaAntes] = $this->bounds('2026-09-01', '2026-09-10');
+        $this->assertSame([null, null, null, null], $recuentos($this->service()->campaignTable('adset', $antes, $hastaAntes, true, MetaDashboardService::opaqueId('campaign', '120209'))['rows'][0]));
+
+        // Con un lead captado de ese anuncio, la fila enseña lo captado.
+        $this->paidLead('2026-09-18 15:00:00', '120239');
+        $this->assertSame(1, $filas('2026-09-01', '2026-09-20')['Campaña Agosto']['leads']);
     }
 
     /** Sin conexión a Meta no hay retorno: ni cero ni el ingreso entero. */
