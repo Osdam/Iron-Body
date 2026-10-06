@@ -361,4 +361,22 @@ return [
             'fail_closed' => filter_var(env('MARKETING_OPENAI_FAIL_CLOSED', true), FILTER_VALIDATE_BOOLEAN),
         ],
     ],
+
+    /*
+    | Atribución comercial del panel «Mercadeo digital (Meta)».
+    |
+    | `window_days` es una DECISIÓN DEL USUARIO, no un dato técnico: cuántos
+    | días después del primer contacto de un lead se le atribuye el dinero que
+    | el gimnasio cobre a esa persona. Pasado ese plazo, el cobro ya no se
+    | cuenta como fruto de esa conversación.
+    */
+    'attribution' => [
+        'window_days' => max(1, (int) env('MARKETING_ATTRIBUTION_WINDOW_DAYS', 30)),
+
+        // Segundos que el panel reutiliza el índice «10 últimos dígitos del
+        // teléfono → socios y usuarios» en vez de recorrer todas las fichas en
+        // cada petición. Un socio recién dado de alta tarda hasta este tiempo
+        // en enlazarse con su lead en el panel. 0 lo apaga.
+        'phone_index_cache_seconds' => max(0, (int) env('MARKETING_ATTRIBUTION_PHONE_INDEX_CACHE_SECONDS', 300)),
+    ],
 ];

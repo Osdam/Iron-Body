@@ -162,6 +162,9 @@ final class AuthorizationMap
         'MarketingAgentController' => 'marketing',
         'MarketingAppointmentController' => 'marketing',
         'MarketingAnalyticsController' => 'marketing',
+        // El panel «Mercadeo digital (Meta)»: lo mismo que /overview para leer
+        // (marketing.view); pedir la sincronización, marketing.manage.
+        'MetaDashboardController' => 'marketing',
         'MarketingAttachmentController' => 'marketing',
         // Aceptar o descartar el reclamo de un pago huérfano del CRM. Mismo
         // dominio que el Inbox a propósito: es el cierre de una revisión del

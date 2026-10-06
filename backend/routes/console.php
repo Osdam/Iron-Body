@@ -342,3 +342,18 @@ Schedule::command('ultron:turn-watchdog')
     // seis horas, que es exactamente el hueco en el que no vería nada.
     ->withoutOverlapping(10)
     ->onOneServer();
+
+// ── Meta Ads: el gasto real de la pauta ──────────────────────────────────────
+// INERTE por defecto: solo se agenda si META_ADS_SYNC_ENABLED=true. Cada hora,
+// en el minuto 15, repasa los últimos META_ADS_SYNC_DAYS días de
+// `/act_{id}/insights`, porque Meta corrige el gasto de los días recientes.
+// Idempotente: la clave (cuenta, día, anuncio) actualiza en vez de duplicar, y
+// un cerrojo impide dos pasadas a la vez. Si Meta falla no se toca nada: la
+// última foto buena sigue ahí y el panel dice que está desactualizada, nunca $0.
+// El job reintenta solo cuando Meta pide frenar o no contesta.
+if ((bool) config('meta.ads.sync_enabled', false)) {
+    Schedule::job(new \App\Jobs\SyncMetaAdsInsights)
+        ->hourlyAt(15)
+        ->withoutOverlapping()
+        ->onOneServer();
+}

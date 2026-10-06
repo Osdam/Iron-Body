@@ -124,6 +124,57 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Meta Ads — lectura del gasto real (Marketing API)
+    |--------------------------------------------------------------------------
+    | Desacoplado A PROPÓSITO del resto del canal:
+    |
+    |   · No mira META_ENABLED. Ese interruptor autoriza a escribirle a los
+    |     clientes; leer cuánto se gastó en anuncios es otra decisión, y atarlas
+    |     obligaría a encender la mensajería para poder ver una cifra.
+    |   · No usa el token de WhatsApp. Ese token solo tiene permisos de WhatsApp
+    |     y no ve ninguna cuenta publicitaria: cualquier llamada fallaría por
+    |     permisos. Hace falta uno propio, de un usuario del sistema con
+    |     `ads_read` sobre la cuenta.
+    |
+    | Sin token o sin cuenta, todo lo que lee el gasto responde «sin conexión»;
+    | nunca $0.
+    */
+    'ads' => [
+        'access_token' => env('META_ADS_ACCESS_TOKEN'),
+
+        // Con o sin el prefijo `act_`: el cliente lo normaliza.
+        'ad_account_id' => env('META_AD_ACCOUNT_ID'),
+
+        /*
+         * La Marketing API caduca sus versiones antes que el resto de Graph, así
+         * que puede fijarse aparte. Si no se declara, hereda la del canal.
+         */
+        'graph_version' => $envConRespaldo(
+            'META_ADS_GRAPH_VERSION',
+            $envConRespaldo('META_GRAPH_VERSION', 'v21.0'),
+        ),
+
+        // Sincronización horaria. Apagada por defecto: encenderla es una decisión.
+        'sync_enabled' => filter_var(env('META_ADS_SYNC_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
+        // Días hacia atrás que repasa cada pasada (hoy incluido): Meta corrige
+        // el gasto de los últimos días después de cerrarlos.
+        'sync_days' => max(1, (int) $envConRespaldo('META_ADS_SYNC_DAYS', '7')),
+
+        // A partir de cuántos minutos sin un éxito la cifra se marca como vieja.
+        'stale_after_minutes' => max(1, (int) $envConRespaldo('META_ADS_STALE_MINUTES', '180')),
+
+        /*
+         * Zona horaria de la cuenta publicitaria. Meta parte los días en ella
+         * (`date_start`), y con ella se traduce un periodo del CRM a días de la
+         * cuenta. Tiene que coincidir con la que muestra el Administrador de
+         * anuncios; si no, los días quedan corridos.
+         */
+        'timezone' => $envConRespaldo('META_AD_ACCOUNT_TIMEZONE', 'America/Bogota'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Embedded Signup — onboarding oficial desde el CRM
     |--------------------------------------------------------------------------
     | El flujo por el que el dueño del número autoriza a esta app SIN sacar el

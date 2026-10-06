@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\Admin\MarketingAttachmentController;
 use App\Http\Controllers\Api\Admin\MarketingController;
 use App\Http\Controllers\Api\Admin\MarketingInboxController;
 use App\Http\Controllers\Api\Admin\MarketingPaymentClaimController;
+use App\Http\Controllers\Api\Admin\MetaDashboardController;
 use App\Http\Controllers\Api\Admin\SupervisionController;
 use App\Http\Controllers\Api\Admin\WhatsappIntegrationController;
 use App\Http\Controllers\Api\Internal\InternalMarketingController;
@@ -205,6 +206,25 @@ Route::middleware('throttle:60,1')
         Route::get('campaigns/{campaign}', [MarketingAnalyticsController::class, 'campaign'])
             ->where('campaign', '.*');
         Route::get('breakdown/{dimension}', [MarketingAnalyticsController::class, 'breakdown']);
+    });
+
+// ── Panel «Mercadeo digital (Meta)»: gasto real, atribución y conversiones ───
+// Mismo blindaje y mismo permiso que admin/marketing/overview, que no se toca:
+// el grupo `api` (ProtectAdminPaths + EnforceAdminAuthorization) y
+// `marketing.view` vía AuthorizationMap. Las lecturas recalculan el periodo
+// entero y llevan el mismo límite que la analítica (60/min por IP), con cubo
+// PROPIO: sin prefijo, todos los `throttle:N,1` comparten un solo contador por
+// IP. Pedir una sincronización escribe (`marketing.manage`) y su límite va en
+// el controlador, por administrador y después de autenticar: un throttle de
+// ruta corre antes de la sesión y lo gastarían las peticiones anónimas.
+Route::prefix('admin/marketing/meta-dashboard')
+    ->group(function (): void {
+        Route::middleware('throttle:60,1,meta-dashboard')->group(function (): void {
+            Route::get('/', [MetaDashboardController::class, 'show']);
+            Route::get('campaigns', [MetaDashboardController::class, 'campaigns']);
+            Route::get('leads', [MetaDashboardController::class, 'leads']);
+        });
+        Route::post('sync', [MetaDashboardController::class, 'sync']);
     });
 
 // ── Centro de supervision del agente (Fase E) ─────────────────────────────────
