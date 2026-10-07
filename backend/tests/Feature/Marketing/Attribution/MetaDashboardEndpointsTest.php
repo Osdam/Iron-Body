@@ -5,9 +5,7 @@ namespace Tests\Feature\Marketing\Attribution;
 use App\Jobs\SyncMetaAdsInsights;
 use App\Models\Admin;
 use App\Models\AdminRole;
-use App\Models\MarketingAiAction;
 use App\Models\MarketingCampaign;
-use App\Models\MarketingFollowup;
 use App\Models\MarketingLeadIdentity;
 use App\Models\MetaSyncRun;
 use App\Services\Marketing\Attribution\MetaDashboardService;
@@ -72,7 +70,8 @@ class MetaDashboardEndpointsTest extends TestCase
         }
 
         $lector = $this->adminWithPermissions(['marketing.view']);
-        $this->getJson('/api/admin/marketing/overview', $lector)->assertOk();
+        // Retirado: con permiso, 410 (ver test_overview_retirado_pide_recargar); sin él, 401/403 como siempre.
+        $this->getJson('/api/admin/marketing/overview', $lector)->assertStatus(410);
         foreach ($this->reads() as [$verb, $uri]) {
             $this->json($verb, $uri, [], $lector)->assertOk()->assertJsonPath('ok', true);
         }
@@ -493,46 +492,23 @@ class MetaDashboardEndpointsTest extends TestCase
     }
 
     /**
-     * `/overview` no cambia: mismas claves, mismas cifras de siempre (todo el
-     * histórico, pruebas incluidas), y abrir el panel nuevo no las mueve.
+     * `/overview` está retirado: lo leía el panel anterior, con ceros de tablas
+     * que nadie sincroniza. Una pestaña vieja que lo pida recibe 410 con el
+     * motivo (y su panel enseña un error, no ceros); el panel actual sigue igual.
      */
-    public function test_overview_no_ha_cambiado(): void
+    public function test_overview_retirado_pide_recargar(): void
     {
-        $real = $this->lead('2026-10-02 15:00:00', ['phone' => '573001112233', 'temperature' => 'hot']);
-        $this->lead('2026-09-02 15:00:00', ['status' => 'converted']);
-        $this->lead('2026-10-02 16:00:00', ['source' => 'manual_test']);
-        $this->conversation($real, ['human_takeover' => true]);
-        MarketingFollowup::forceCreate(['lead_id' => $real->id, 'status' => 'pending']);
-        MarketingAiAction::forceCreate(['lead_id' => $real->id, 'action_type' => 'reply', 'status' => 'executed']);
         MarketingCampaign::forceCreate(['name' => 'Campaña vieja', 'spend' => 50000]);
-        [$user] = $this->customer('3001112233');
-        $this->payment($user, 120000, '2026-10-03 15:00:00');
-
-        $esperado = [
-            'ok' => true,
-            'data' => [
-                'spend_total' => 50000,
-                'leads_total' => 3,
-                'conversations_total' => 1,
-                'converted_leads' => 1,
-                'revenue_total' => 0,
-                'roas' => 0,
-                'cac' => null,
-                'conversion_rate' => 0.3333,
-                'hot_leads' => 1,
-                'pending_followups' => 1,
-                'ai_actions_count' => 1,
-                'human_takeover_count' => 1,
-            ],
-        ];
-
         $h = $this->adminWithPermissions(['marketing.view']);
-        $this->getJson('/api/admin/marketing/overview', $h)->assertOk()->assertExactJson($esperado);
 
-        // El panel nuevo resuelve identidades y cuenta el pago; /overview no se entera.
-        $this->getJson(self::BASE.'?period=30d', $h)->assertOk()->assertJsonPath('data.kpis.converted', 1);
-        $this->getJson('/api/admin/marketing/overview', $h)->assertOk()->assertExactJson($esperado);
-        $this->assertNull($real->fresh()->member_id);
+        $this->getJson('/api/admin/marketing/overview', $h)
+            ->assertStatus(410)
+            ->assertExactJson([
+                'ok' => false,
+                'code' => 'client_outdated',
+                'message' => 'Esta pantalla es de una versión anterior del CRM: recarga la página para ver las cifras actuales.',
+            ]);
+        $this->getJson(self::BASE.'?period=30d', $h)->assertOk()->assertJsonPath('ok', true);
     }
 
     /** @return list<string> todas las claves de la respuesta, a cualquier profundidad */

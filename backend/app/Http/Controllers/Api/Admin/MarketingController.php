@@ -30,10 +30,23 @@ class MarketingController extends Controller
 {
     public function __construct(private readonly MarketingMetricsService $metrics) {}
 
-    /** GET /api/admin/marketing/overview */
+    /**
+     * GET /api/admin/marketing/overview — RETIRADO.
+     *
+     * Lo leía el panel de Mercadeo anterior al Objetivo 3, con cifras de tablas
+     * que nadie sincroniza (gasto 0, convertidos 0, ingresos 0). Una pestaña
+     * abierta desde antes de un despliegue sigue llamándolo y pintaba esos ceros
+     * como si fueran reales. Ahora contesta 410 y ese panel enseña su error
+     * («No pudimos cargar…»), que se arregla recargando. El panel actual lee
+     * /meta-dashboard.
+     */
     public function overview(): JsonResponse
     {
-        return response()->json(['ok' => true, 'data' => $this->metrics->overview()]);
+        return response()->json([
+            'ok' => false,
+            'code' => 'client_outdated',
+            'message' => 'Esta pantalla es de una versión anterior del CRM: recarga la página para ver las cifras actuales.',
+        ], 410);
     }
 
     /** GET /api/admin/marketing/campaigns */
