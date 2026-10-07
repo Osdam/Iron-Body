@@ -53,7 +53,11 @@ class SyncMetaAdsInsightsJobTest extends TestCase
         $this->assertSame(4, $job->tries);
         $this->assertSame([60, 300, 900], $job->backoff);
         $this->assertSame('schedule', $job->trigger);
+        // Sin cuenta es el abanico; con cuenta, la pasada de esa cuenta.
+        $this->assertNull($job->account);
         $this->assertSame('manual', (new SyncMetaAdsInsights('manual'))->trigger);
+        $this->assertSame(self::ACCOUNT, (new SyncMetaAdsInsights('manual', self::ACCOUNT))->account);
+        $this->assertSame('commercial', (new SyncMetaAdsInsights('manual', self::ACCOUNT))->queue);
     }
 
     /** @return array<string, array{0: string, 1: Closure}> */
@@ -82,7 +86,8 @@ class SyncMetaAdsInsightsJobTest extends TestCase
         $this->fakeMeta($respuesta);
 
         try {
-            app()->call([new SyncMetaAdsInsights, 'handle']);
+            // El job de UNA cuenta: es el que reintenta (el abanico solo despacha).
+            app()->call([new SyncMetaAdsInsights('schedule', self::ACCOUNT), 'handle']);
             $this->fail('El job tenía que lanzar para que la cola lo reintente.');
         } catch (MetaAdsApiException $e) {
             $this->assertSame($categoria, $e->category);
@@ -115,7 +120,7 @@ class SyncMetaAdsInsightsJobTest extends TestCase
     {
         $this->fakeMeta(fn () => $this->graphError($codigo, $mensaje));
 
-        $job = (new SyncMetaAdsInsights)->withFakeQueueInteractions();
+        $job = (new SyncMetaAdsInsights('schedule', self::ACCOUNT))->withFakeQueueInteractions();
         $job->handle(app(MetaAdsSync::class));
 
         $job->assertNotReleased();
@@ -140,7 +145,7 @@ class SyncMetaAdsInsightsJobTest extends TestCase
         ])->assertExitCode(0);
 
         $this->fakeMeta(fn () => $this->graphError(17, 'User request limit reached'));
-        SyncMetaAdsInsights::dispatch();
+        SyncMetaAdsInsights::dispatch('schedule', self::ACCOUNT);
         $this->assertSame(1, DB::table('jobs')->where('queue', 'commercial')->count());
 
         $trabajar();
@@ -153,7 +158,7 @@ class SyncMetaAdsInsightsJobTest extends TestCase
         DB::table('jobs')->delete();
 
         $this->fakeMeta(fn () => $this->graphError(190, 'Error validating access token'));
-        SyncMetaAdsInsights::dispatch();
+        SyncMetaAdsInsights::dispatch('schedule', self::ACCOUNT);
 
         $trabajar();
 
@@ -174,7 +179,7 @@ class SyncMetaAdsInsightsJobTest extends TestCase
         // La tabla de destino no existe: el fallo es nuestro, no de Meta.
         DB::statement('DROP TABLE meta_ad_insights_daily');
 
-        $job = (new SyncMetaAdsInsights)->withFakeQueueInteractions();
+        $job = (new SyncMetaAdsInsights('schedule', self::ACCOUNT))->withFakeQueueInteractions();
         $job->handle(app(MetaAdsSync::class));
 
         $job->assertFailedWith(QueryException::class);
@@ -195,10 +200,11 @@ class SyncMetaAdsInsightsJobTest extends TestCase
         $this->assertCount(1, $eventos);
         $this->assertSame('15 * * * *', $eventos[0]->expression);
 
-        // Y lo que despacha va al carril comercial, como pasada programada.
+        // Y lo que despacha va al carril comercial, como pasada programada: el
+        // abanico (sin cuenta), que luego despacha una por cuenta.
         Queue::fake();
         $eventos[0]->run($this->app);
-        Queue::assertPushedOn('commercial', SyncMetaAdsInsights::class, fn (SyncMetaAdsInsights $job) => $job->trigger === 'schedule');
+        Queue::assertPushedOn('commercial', SyncMetaAdsInsights::class, fn (SyncMetaAdsInsights $job) => $job->trigger === 'schedule' && $job->account === null);
     }
 
     public function test_el_comando_rellena_el_rango_pedido(): void

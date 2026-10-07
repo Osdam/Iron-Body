@@ -16,17 +16,19 @@ use Illuminate\Support\Sleep;
  *
  * Toma los anuncios del primer toque de los leads reales de pauta y pregunta a
  * Meta, uno a uno (`GET /{ad_id}`, el token solo en la cabecera), su
- * `account_id`. No asume que todos sean de la cuenta configurada. Un anuncio
+ * `account_id`. No asume que todos sean de las cuentas conectadas. Un anuncio
  * de una cuenta que el token no ve sale «sin acceso»: hay que dar `ads_read`
  * sobre esa cuenta al usuario de sistema para saber cuál es.
  *
+ * «Conectadas» son TODAS las de META_AD_ACCOUNT_IDS (o META_AD_ACCOUNT_ID).
+ *
  * Solo lee: no cambia la configuración ni la atribución. Las cuentas en juego
- * son las de esos anuncios y la conectada si gastó en la ventana (su gasto
- * también es pauta). Con dos o más, MULTI_AD_ACCOUNT_REQUIRED=YES, y no se
- * fuerza nada: el panel sigue resolviendo contra la cuenta configurada y avisa
- * de la pauta que no está en ella. Con algún anuncio sin respuesta y menos de
- * dos cuentas vistas, UNKNOWN. CONNECTED_ACCOUNT_HAS_LEAD_ADS dice aparte si
- * la conectada tiene alguno de esos anuncios.
+ * son las de esos anuncios y las conectadas que gastaron en la ventana (su
+ * gasto también es pauta). Con dos o más, MULTI_AD_ACCOUNT_REQUIRED=YES, y no
+ * se fuerza nada: el panel sigue resolviendo contra las cuentas conectadas y
+ * avisa de la pauta que no está en ellas. Con algún anuncio sin respuesta y
+ * menos de dos cuentas vistas, UNKNOWN. CONNECTED_ACCOUNT_HAS_LEAD_ADS dice
+ * aparte si alguna conectada tiene alguno de esos anuncios.
  *
  * Una petición por anuncio, con pausa: la app tiene un cupo corto. Ante un
  * límite de Meta o un token inválido (190) se detiene y lo dice.
@@ -60,7 +62,8 @@ class MetaAdsAdAccountsCommand extends Command
         }
         $max = max(1, (int) $this->option('max'));
         $pause = max(0, (int) $this->option('pause'));
-        $connected = (string) $client->accountId();
+        $connected = $client->accountIds();
+        $isConnected = fn (?string $account): bool => $account !== null && in_array($account, $connected, true);
 
         $first = LeadUniverse::firstContactSql('l');
         $ads = LeadUniverse::constrain(
@@ -118,7 +121,7 @@ class MetaAdsAdAccountsCommand extends Command
             $r['leads'],
             $r['account'] === null
                 ? (($r['transient'] ?? false) ? 'error pasajero' : 'sin acceso').' ('.$r['error'].')'
-                : $r['account'].($r['account'] === $connected ? ' (conectada)' : ''),
+                : $r['account'].($isConnected($r['account']) ? ' (conectada)' : ''),
             $r['status'] ?? '—',
         ], $rows));
 
@@ -133,15 +136,29 @@ class MetaAdsAdAccountsCommand extends Command
         $pending = $ads->count() - count($rows);
         $complete = $unreadable === [] && ! $stopped && $pending === 0;
 
-        // La conectada también está en juego si gastó en la ventana, aunque ningún anuncio con leads sea suyo.
-        $connectedSpent = DB::table('meta_ad_insights_daily')
-            ->where('ad_account_id', $connected)
+        // Las conectadas también están en juego si gastaron en la ventana, aunque ningún anuncio con leads sea suyo.
+        $spent = $connected === [] ? [] : DB::table('meta_ad_insights_daily')
+            ->whereIn('ad_account_id', $connected)
             ->where('date', '>=', $sinceRaw)
             ->where('spend', '>', 0)
-            ->exists();
-        $accounts = array_keys($byAccount);
-        if ($connectedSpent && ! in_array($connected, $accounts, true)) {
-            $accounts[] = $connected;
+            ->distinct()
+            ->pluck('ad_account_id')
+            ->map(fn (mixed $a): string => (string) $a)
+            ->all();
+        $accounts = array_map('strval', array_keys($byAccount));
+        foreach ($connected as $account) {
+            if (in_array($account, $spent, true) && ! in_array($account, $accounts, true)) {
+                $accounts[] = $account;
+            }
+        }
+
+        $connectedAds = 0;
+        $connectedLeads = 0;
+        foreach ($byAccount as $account => $n) {
+            if ($isConnected((string) $account)) {
+                $connectedAds += $n['ads'];
+                $connectedLeads += $n['leads'];
+            }
         }
 
         $multi = match (true) {
@@ -150,24 +167,26 @@ class MetaAdsAdAccountsCommand extends Command
             default => 'UNKNOWN',
         };
         $connectedHasLeadAds = match (true) {
-            isset($byAccount[$connected]) => 'YES',
+            $connectedAds > 0 => 'YES',
             $complete => 'NO',
             default => 'UNKNOWN',
         };
+        [$theConnected, $inThem] = count($connected) === 1 ? ['la cuenta conectada', 'en ella'] : ['las cuentas conectadas', 'en ellas'];
 
         $this->line('AD_IDS_CHECKED='.count($rows).' de '.$ads->count());
         $this->line('AD_ACCOUNTS='.implode(',', array_keys($byAccount)));
-        $this->line('CONNECTED_ACCOUNT_ADS='.($byAccount[$connected]['ads'] ?? 0).' · leads '.($byAccount[$connected]['leads'] ?? 0));
-        $this->line('CONNECTED_ACCOUNT_SPEND_SINCE='.($connectedSpent ? 'YES' : 'NO'));
-        $this->line('OTHER_ACCOUNT_ADS='.(count($rows) - count($unreadable) - ($byAccount[$connected]['ads'] ?? 0)));
+        $this->line('CONNECTED_ACCOUNTS='.count($connected));
+        $this->line('CONNECTED_ACCOUNT_ADS='.$connectedAds.' · leads '.$connectedLeads);
+        $this->line('CONNECTED_ACCOUNT_SPEND_SINCE='.($spent !== [] ? 'YES' : 'NO'));
+        $this->line('OTHER_ACCOUNT_ADS='.(count($rows) - count($unreadable) - $connectedAds));
         $this->line('UNREADABLE_ADS='.count($unreadable).' · leads '.array_sum(array_column($unreadable, 'leads')));
         $this->line('CONNECTED_ACCOUNT_HAS_LEAD_ADS='.$connectedHasLeadAds);
         $this->line('MULTI_AD_ACCOUNT_REQUIRED='.$multi);
         if ($connectedHasLeadAds === 'NO') {
-            $this->line('Ningún anuncio con leads es de la cuenta conectada: cambiar de cuenta dejaría fuera del panel el gasto ya sincronizado de la conectada. Decidir entre multicuenta o una sola.');
+            $this->line("Ningún anuncio con leads es de {$theConnected}: cambiar de cuenta dejaría fuera del panel el gasto ya sincronizado. Decidir qué cuentas conectar.");
         }
         if ($multi !== 'NO' || $connectedHasLeadAds !== 'YES') {
-            $this->line('Nada cambia: el panel sigue resolviendo contra la cuenta configurada y avisa de la pauta que no está en ella.');
+            $this->line("Nada cambia: el panel sigue resolviendo contra {$theConnected} y avisa de la pauta que no está {$inThem}.");
         }
 
         return self::SUCCESS;

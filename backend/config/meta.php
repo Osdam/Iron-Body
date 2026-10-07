@@ -1,5 +1,7 @@
 <?php
 
+use App\Services\Marketing\Meta\MetaAdsApiClient;
+
 /*
 |------------------------------------------------------------------------------
 | Identidad de la app que ejecuta Embedded Signup
@@ -142,8 +144,28 @@ return [
     'ads' => [
         'access_token' => env('META_ADS_ACCESS_TOKEN'),
 
-        // Con o sin el prefijo `act_`: el cliente lo normaliza.
+        /*
+         * LEGADO, se queda tal cual: UNA cuenta, con o sin el prefijo `act_`
+         * (el cliente lo normaliza). Es el respaldo de `ad_account_ids` y lo
+         * que escribe el instalador del token.
+         */
         'ad_account_id' => env('META_AD_ACCOUNT_ID'),
+
+        /*
+         * Las cuentas publicitarias CONECTADAS, de META_AD_ACCOUNT_IDS: separadas
+         * por comas y/o espacios, con o sin `act_`. Cada una se sincroniza por
+         * su lado y el panel las consolida sin contar nada dos veces.
+         *
+         *  · Solo dígitos (de 1 a 40): un id que no lo es se descarta, porque va
+         *    en la ruta de la URL y no puede colar otro segmento.
+         *  · Sin duplicados y en el orden escrito. La PRIMERA es la principal:
+         *    la que usa lo que todavía necesita una sola cuenta.
+         *  · Si no queda ninguna, respaldo: META_AD_ACCOUNT_ID, normalizado.
+         *
+         * La regla vive en MetaAdsApiClient::parseAccountIds(), que también la
+         * aplica a lo que se fije en tiempo de ejecución.
+         */
+        'ad_account_ids' => MetaAdsApiClient::parseAccountIds(env('META_AD_ACCOUNT_IDS'), env('META_AD_ACCOUNT_ID')),
 
         /*
          * La Marketing API caduca sus versiones antes que el resto de Graph, así

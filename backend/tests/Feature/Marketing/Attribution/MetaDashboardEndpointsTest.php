@@ -284,10 +284,11 @@ class MetaDashboardEndpointsTest extends TestCase
             ->assertOk();
 
         // El contrato del cierre del Objetivo 3: lo de antes, más periodo anterior,
-        // datos atribuibles y qué métricas reporta Meta.
+        // datos atribuibles y qué métricas reporta Meta; y el de multicuenta:
+        // cobertura de pauta, la tabla por cuenta y el resumen ejecutivo.
         $claves = [
             'period', 'previous_period', 'historical_coverage', 'spend', 'kpis', 'previous', 'secondary', 'origins', 'unattributed_share',
-            'attributable_share', 'campaigns', 'attribution', 'sync', 'metrics_available',
+            'attributable_share', 'campaigns', 'attribution', 'sync', 'metrics_available', 'paid_coverage', 'accounts', 'executive',
         ];
         $this->assertSame($claves, array_keys($res->json('data')));
         $res->assertJsonPath('data.period', ['key' => 'custom', 'from' => '2026-10-01', 'to' => '2026-10-05', 'timezone' => 'America/Bogota'])
@@ -306,6 +307,17 @@ class MetaDashboardEndpointsTest extends TestCase
             ->assertJsonPath('data.spend.complete', true)
             ->assertJsonPath('data.campaigns.partial', false);
         $this->assertSame(['messaging_started', 'messaging_replied', 'landing_page_views', 'reach'], array_keys($res->json('data.metrics_available')));
+        // Sin Meta configurado: la pauta no se puede dar ni por de una cuenta conectada ni por de una
+        // que no lo está (sin evidencia, `established` = false y los dos lados en null; antes
+        // `unconnected` era el total), no hay tabla por cuenta (el panel enseña la de campañas) y la
+        // conclusión no se puede sacar.
+        $res->assertJsonPath('data.paid_coverage', ['total' => 1, 'connected' => null, 'unconnected' => null, 'share' => null, 'established' => false])
+            ->assertJsonPath('data.accounts', ['rows' => [], 'unconnected' => null])
+            ->assertJsonPath('data.spend.accounts', [])
+            ->assertJsonPath('data.sync.accounts', [])
+            ->assertJsonPath('data.executive.conclusion.profitable', 'INCONCLUSIVE')
+            ->assertJsonPath('data.executive.conclusion.reason', 'El gasto de Meta del periodo no está completo o no se conoce.');
+        $this->assertSame(['investment', 'acquisition', 'return', 'coverage', 'conclusion'], array_keys($res->json('data.executive')));
         $this->assertSame(['hot_leads', 'pending_followups', 'ai_actions', 'human_control'], array_keys($res->json('data.secondary')));
         $this->assertIsString($res->json('data.attribution.definitions.leads'));
 

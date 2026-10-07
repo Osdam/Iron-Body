@@ -297,9 +297,10 @@ class MetaAdsSyncTest extends TestCase
 
         $campanas = $this->reader()->byLevel('campaign', $desde, $hasta);
         $metricasNuevas = ['link_clicks' => 0, 'messaging_started' => 0, 'messaging_replied' => 0, 'landing_page_views' => 0, 'reach' => null, 'frequency' => null];
+        // Cada fila dice de qué cuenta es (cruda: solo para uso interno del panel).
         $this->assertSame([
-            ['id' => '502', 'name' => 'Campaña B', 'campaign_id' => '502', 'adset_id' => null, 'spend' => 4000.0, 'currency' => 'COP', 'impressions' => 1000, 'clicks' => 25, ...$metricasNuevas, 'status' => 'PAUSED', 'partial' => false, 'last_day' => '2026-10-05'],
-            ['id' => '501', 'name' => 'Campaña A', 'campaign_id' => '501', 'adset_id' => null, 'spend' => 3000.0, 'currency' => 'COP', 'impressions' => 2000, 'clicks' => 50, ...$metricasNuevas, 'status' => 'ACTIVE', 'partial' => false, 'last_day' => '2026-10-05'],
+            ['id' => '502', 'name' => 'Campaña B', 'campaign_id' => '502', 'adset_id' => null, 'spend' => 4000.0, 'currency' => 'COP', 'impressions' => 1000, 'clicks' => 25, ...$metricasNuevas, 'status' => 'PAUSED', 'partial' => false, 'last_day' => '2026-10-05', 'account_id' => self::ACCOUNT],
+            ['id' => '501', 'name' => 'Campaña A', 'campaign_id' => '501', 'adset_id' => null, 'spend' => 3000.0, 'currency' => 'COP', 'impressions' => 2000, 'clicks' => 50, ...$metricasNuevas, 'status' => 'ACTIVE', 'partial' => false, 'last_day' => '2026-10-05', 'account_id' => self::ACCOUNT],
         ], $campanas->all());
 
         $conjuntos = $this->reader()->byLevel('adset', $desde, $hasta);
@@ -350,11 +351,12 @@ class MetaAdsSyncTest extends TestCase
         ])]]);
         $this->assertSame('ok', $this->sync()->run('manual', $this->day('2026-10-05'), $this->day('2026-10-05'))['status']);
 
-        // Cada entidad con su cuenta, sin `act_`; las de la anterior siguen ahí.
+        // Cada entidad con su cuenta, sin `act_`; las de la anterior siguen ahí. Cada
+        // pasada guarda además la fila de nivel `account` de su cuenta (su nombre).
         $this->assertSame(
             [
-                ['1111111111', 'ad', '9001'], ['1111111111', 'adset', '120211'], ['1111111111', 'campaign', '120201'],
-                ['2222222222', 'ad', '9002'], ['2222222222', 'adset', '120212'], ['2222222222', 'campaign', '120202'],
+                ['1111111111', 'account', '1111111111'], ['1111111111', 'ad', '9001'], ['1111111111', 'adset', '120211'], ['1111111111', 'campaign', '120201'],
+                ['2222222222', 'account', '2222222222'], ['2222222222', 'ad', '9002'], ['2222222222', 'adset', '120212'], ['2222222222', 'campaign', '120202'],
             ],
             MetaAdEntity::orderBy('ad_account_id')->orderBy('level')->get()
                 ->map(fn (MetaAdEntity $e): array => [$e->ad_account_id, $e->level, $e->entity_id])->all(),
@@ -373,12 +375,13 @@ class MetaAdsSyncTest extends TestCase
         }
     }
 
-    /** Contrato 23: con otra pasada en curso no se llama a Meta ni se escribe nada. */
+    /** Contrato 23: con otra pasada en curso no se llama a Meta ni se escribe nada. El cerrojo es de la cuenta. */
     public function test_con_otra_pasada_en_curso_no_hace_nada(): void
     {
         $this->fakeMeta(['data' => [$this->insightRow('2026-10-05', '9001', '30000')]]);
 
-        $cerrojo = Cache::lock('meta-ads-sync', 900);
+        $this->assertSame('meta-ads-sync:'.self::ACCOUNT, $this->sync()->lockKey());
+        $cerrojo = Cache::lock('meta-ads-sync:'.self::ACCOUNT, 900);
         $this->assertTrue($cerrojo->get());
 
         $this->assertSame(['status' => 'running'], $this->sync()->run('schedule'));
@@ -399,7 +402,7 @@ class MetaAdsSyncTest extends TestCase
 
         $this->assertSame('failed', $this->sync()->run('schedule')['status']);
 
-        $cerrojo = Cache::lock('meta-ads-sync', 900);
+        $cerrojo = Cache::lock('meta-ads-sync:'.self::ACCOUNT, 900);
         $this->assertTrue($cerrojo->get(), 'El cerrojo quedó tomado tras un fallo.');
         $cerrojo->release();
     }
@@ -488,12 +491,14 @@ class MetaAdsSyncTest extends TestCase
         $this->assertSame('ok', $this->sync()->run('schedule')['status']);
 
         // Gasto y estados de campañas, conjuntos y anuncios: los cuatro, bordes de la
-        // cuenta (`?ids=` ya no existe en v26).
+        // cuenta (`?ids=` ya no existe en v26). Y la ficha de la cuenta (su nombre),
+        // porque aún no estaba guardada.
         $peticiones = Http::recorded()->map(fn (array $par): Request => $par[0]);
-        $this->assertSame(['insights', 'campaigns', 'adsets', 'ads'], $peticiones->map(fn (Request $r) => basename((string) parse_url($r->url(), PHP_URL_PATH)))->values()->all());
+        $this->assertSame(['insights', 'campaigns', 'adsets', 'ads', 'act_'.self::ACCOUNT], $peticiones->map(fn (Request $r) => basename((string) parse_url($r->url(), PHP_URL_PATH)))->values()->all());
+        $this->assertSame(MetaAdsApiClient::ACCOUNT_FIELDS, $this->queryOf($peticiones->last())['fields']);
 
         foreach ($peticiones as $peticion) {
-            $this->assertStringStartsWith(self::GRAPH.'/act_'.self::ACCOUNT.'/', $peticion->url());
+            $this->assertMatchesRegularExpression('#^'.preg_quote(self::GRAPH.'/act_'.self::ACCOUNT, '#').'(/|\?)#', $peticion->url());
             $this->assertStringNotContainsString(self::ADS_TOKEN, $peticion->url());
             $this->assertStringNotContainsString('access_token', $peticion->url());
             $this->assertStringNotContainsString('act_act_', $peticion->url());

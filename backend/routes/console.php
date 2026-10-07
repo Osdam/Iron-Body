@@ -347,10 +347,14 @@ Schedule::command('ultron:turn-watchdog')
 // INERTE por defecto: solo se agenda si META_ADS_SYNC_ENABLED=true. Cada hora,
 // en el minuto 15, repasa los últimos META_ADS_SYNC_DAYS días de
 // `/act_{id}/insights`, porque Meta corrige el gasto de los días recientes.
+// Solo LEE de Meta. Es un abanico: el job despacha uno por cuenta conectada
+// (META_AD_ACCOUNT_IDS), y cada cuenta tiene su cerrojo, su transacción y sus
+// reintentos; un fallo en una no toca los datos de las otras.
 // Idempotente: la clave (cuenta, día, anuncio) actualiza en vez de duplicar, y
-// un cerrojo impide dos pasadas a la vez. Si Meta falla no se toca nada: la
-// última foto buena sigue ahí y el panel dice que está desactualizada, nunca $0.
-// El job reintenta solo cuando Meta pide frenar o no contesta.
+// un cerrojo por cuenta impide dos pasadas a la vez. Si Meta falla no se toca
+// nada: la última foto buena sigue ahí y el panel dice que está
+// desactualizada, nunca $0. El job reintenta solo cuando Meta pide frenar o no
+// contesta.
 if ((bool) config('meta.ads.sync_enabled', false)) {
     Schedule::job(new \App\Jobs\SyncMetaAdsInsights)
         ->hourlyAt(15)

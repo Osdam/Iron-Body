@@ -44,12 +44,18 @@ use InvalidArgumentException;
  * antiguo.
  *
  * ROAS y CAC miran el universo PAUTA RESUELTO: las personas cuyo primer toque
- * fue un anuncio de la cuenta publicitaria CONFIGURADA (`kpis.paid_resolved`),
- * que es la única cuyo gasto se conoce. Así no se atribuye a los anuncios lo
- * que vendió lo orgánico, ni a una cuenta lo que trajo otra. Sin gasto
- * conocido, en otra moneda o en cero, valen null con su motivo: nunca se
- * inventa un número. Si hay leads de pauta que no se resuelven contra la cuenta
- * y el gasto se conoce, `roas_warning` lo avisa.
+ * fue un anuncio de CUALQUIERA de las cuentas publicitarias CONECTADAS
+ * (`kpis.paid_resolved`), que son las únicas cuyo gasto se conoce; el gasto es
+ * el consolidado de esas mismas cuentas. Así no se atribuye a los anuncios lo
+ * que vendió lo orgánico, ni a una cuenta lo que trajo otra que no está
+ * conectada. Sin gasto conocido, en otra moneda o en cero, valen null con su
+ * motivo: nunca se inventa un número. Si hay leads de pauta de una cuenta no
+ * conectada y el gasto se conoce, `roas_warning` lo avisa, y `paid_coverage`
+ * dice cuántos son, solo si hay evidencia de que lo son (`established`).
+ *
+ * Desglose: cuenta (`accounts`) → campaña → conjunto → anuncio. Los leads de
+ * pauta de una cuenta no conectada van a «Cuenta publicitaria no conectada»,
+ * sin gasto, ingresos atribuibles, ROAS ni CAC: no se inventan.
  *
  * EL DINERO (ingresos, ROAS, CAC) solo lo ve quien tiene visión COMPLETA, igual
  * que en /admin/marketing/analytics. A los demás les llega en null con el
@@ -76,29 +82,47 @@ class MetaDashboardService
     /** Página más alta que se atiende: más allá no hay leads y la cuenta se desborda. */
     public const MAX_PAGE = 10000;
 
-    /** La fila de los leads de pauta cuyo anuncio no está en la dimensión de la cuenta configurada. */
+    /** La fila de los leads de pauta cuyo anuncio no está en la dimensión de ninguna cuenta conectada. */
     public const UNRESOLVED = 'unresolved';
+
+    /** La fila de nivel cuenta de esos mismos leads ({@see accountTable()}). */
+    public const UNCONNECTED = 'unconnected';
 
     /** Su nombre si Meta Ads no está conectado: no hay dimensión contra la que resolver. */
     public const UNRESOLVED_NAME = 'Sin campaña (Meta Ads sin conexión)';
 
     /**
-     * Su nombre si Meta Ads está conectado y sincronizado: el anuncio no está en
-     * lo sincronizado de la cuenta configurada. Lo normal es que sea de otra
-     * cuenta, pero el código no lo comprueba anuncio a anuncio: dice lo que sabe.
+     * Su nombre si Meta Ads está conectado y hay EVIDENCIA ({@see established()}):
+     * todas las cuentas conectadas tienen alguna pasada buena y el gasto del
+     * periodo está cubierto entero, así que un anuncio que no está en lo
+     * sincronizado de ninguna es de una cuenta que no está conectada. Sigue
+     * siendo pauta; su gasto no se conoce.
      */
-    public const UNRESOLVED_NAME_OTHER_ACCOUNT = 'Sin campaña (anuncio no encontrado en la cuenta conectada)';
+    public const UNRESOLVED_NAME_OTHER_ACCOUNT = 'Cuenta publicitaria no conectada';
 
     /**
-     * Su nombre si Meta Ads está conectado pero ninguna pasada ha salido bien:
-     * la dimensión está vacía, así que no se sabe si el anuncio es de la cuenta.
+     * Su nombre, neutro, si Meta Ads está conectado pero esa evidencia falta:
+     * alguna cuenta conectada aún sin ninguna pasada buena (su dimensión está
+     * vacía), o el periodo sin cubrir entero (la pasada horaria mira 7 días: un
+     * anuncio que solo entregó antes no está en la dimensión aunque sea de una
+     * cuenta conectada). No se sabe si el anuncio es de una de ellas.
      */
     public const UNRESOLVED_NAME_NEVER_SYNCED = 'Sin campaña (Meta Ads aún sin sincronizar)';
+
+    /** Las tres respuestas de la conclusión ejecutiva. */
+    public const PROFITABLE_YES = 'YES';
+
+    public const PROFITABLE_NO = 'NO';
+
+    public const PROFITABLE_INCONCLUSIVE = 'INCONCLUSIVE';
+
+    /** Meses abreviados como los escribe el panel («16 sept 2026»). */
+    private const SHORT_MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic'];
 
     /** Motivo de un importe que el usuario no puede ver. */
     public const MONEY_FORBIDDEN = 'forbidden';
 
-    /** Aviso del ROAS: hay leads de pauta cuyo anuncio no es de la cuenta configurada. */
+    /** Aviso del ROAS: hay leads de pauta cuyo anuncio no es de ninguna cuenta conectada. */
     public const WARNING_UNRESOLVED_PAID_LEADS = 'unresolved_paid_leads';
 
     /** Motivo del retorno y de las cifras con gasto cuando el gasto es solo de una parte del periodo. */
@@ -260,6 +284,13 @@ class MetaDashboardService
         $coverage = $this->spend->coverage($from, $to);
         $previous = $this->previousPeriod($period);
 
+        // Una vez por carga: si se puede afirmar que la pauta sin resolver es de una cuenta NO
+        // conectada, y con eso el nombre de su fila, la cobertura de pauta y la regla 8.
+        $established = $this->established($coverage);
+        $unresolvedName = $this->unresolvedName($established);
+        $campaignRows = $this->campaignRows(MetaAdEntity::LEVEL_CAMPAIGN, $ctx, $conversations, $from, $to, $moneyVisible, null, $history, $unresolvedName);
+        $paidCoverage = $this->paidCoverage($kpis, $history['state'], $established);
+
         return [
             'period' => [
                 'key' => $period['key'],
@@ -278,7 +309,7 @@ class MetaDashboardService
             'attributable_share' => $attributableShare,
             'campaigns' => [
                 'level' => MetaAdEntity::LEVEL_CAMPAIGN,
-                'rows' => $this->campaignRows(MetaAdEntity::LEVEL_CAMPAIGN, $ctx, $conversations, $from, $to, $moneyVisible, null, $history),
+                'rows' => $campaignRows,
                 'partial' => $coverage['known'] && ! $coverage['complete'],
                 'covered_to' => $coverage['known'] && ! $coverage['complete'] ? $coverage['through'] : null,
             ],
@@ -287,8 +318,11 @@ class MetaDashboardService
                 'window_days' => ConversionLedger::windowDays(),
                 'definitions' => self::definitions(),
             ],
-            'sync' => $this->sync->status(),
+            'sync' => $this->sync->statusAll(),
             'metrics_available' => $this->spend->metricsAvailable(),
+            'paid_coverage' => $paidCoverage,
+            'accounts' => $this->accountTable($ctx, $conversations, $from, $to, $moneyVisible, $history, $campaignRows, $unresolvedName),
+            'executive' => $this->executive($spend, $kpis, $paidCoverage, $history, $to, $established),
         ];
     }
 
@@ -306,8 +340,8 @@ class MetaDashboardService
      * La tabla de un nivel, o el desglose de los hijos de una fila: los
      * conjuntos de una campaña (`$parentId` de una campaña, nivel adset) o los
      * anuncios de un conjunto (de un conjunto, nivel ad). `$parentId` es la
-     * clave opaca de la fila ({@see opaqueId()}); si no es de la cuenta
-     * configurada, no hay hijos.
+     * clave opaca de la fila ({@see opaqueId()}); si no es de una cuenta
+     * conectada, no hay hijos.
      *
      * @return array{rows: list<array<string, mixed>>, partial: bool, covered_to: ?string,
      *     meta: array{current_page: int, last_page: int, per_page: int, total: int}}
@@ -340,7 +374,9 @@ class MetaDashboardService
 
         $ctx = $this->context($from, $to);
         $conversations = $this->conversationsByLead($from, $to, $ctx);
-        $rows = $this->campaignRows($level, $ctx, $conversations, $from, $to, $moneyVisible, $parent, $this->coverageOf($from, $to));
+        // El mismo nombre de la pauta sin resolver que en el panel del periodo.
+        $unresolvedName = $this->unresolvedName($this->established($coverage));
+        $rows = $this->campaignRows($level, $ctx, $conversations, $from, $to, $moneyVisible, $parent, $this->coverageOf($from, $to), $unresolvedName);
 
         return $this->tableOf($rows, $coverage, $page, $perPage);
     }
@@ -352,7 +388,8 @@ class MetaDashboardService
      * es la cifra «Leads». `$origin` filtra por la fila de «Origen de leads».
      *
      * Sin teléfono, sin wa_id, sin referral crudo y sin el `ad_id` completo: el
-     * anuncio va enmascarado en `ad_ref`.
+     * anuncio va enmascarado en `ad_ref`. Un toque de pauta dice si su anuncio
+     * es de una cuenta conectada (`account_status`) y de cuál (`account_name`).
      *
      * @return array{data: list<array<string, mixed>>, meta: array{current_page: int, last_page: int, per_page: int, total: int}}
      */
@@ -385,9 +422,17 @@ class MetaDashboardService
         });
         $total = $people->count();
 
+        // De qué cuenta es la pauta de cada lead: se mira una vez, no por lead.
+        $accounts = [
+            'configured' => $this->client->isConfigured(),
+            // «No conectada» solo con evidencia para el periodo de la lista, como en el panel.
+            'established' => $this->established($this->spend->coverage($from, $to)),
+            'names' => MetaAdEntity::accountNames($this->client->accountIds()),
+        ];
+
         $data = $people->values()
             ->slice(($page - 1) * $perPage, $perPage)
-            ->map(fn (MarketingLead $lead): array => $this->leadRow($lead, $ctx, $moneyVisible))
+            ->map(fn (MarketingLead $lead): array => $this->leadRow($lead, $ctx, $moneyVisible, $accounts))
             ->values()
             ->all();
 
@@ -412,8 +457,10 @@ class MetaDashboardService
      * «Actualizar»: despacha una pasada de Meta Ads si tiene sentido.
      *
      * Devuelve `queued`, o por qué no: `not_configured` (falta token o cuenta),
-     * `running` (ya hay una pasada) o `cooldown` (hubo un intento o una petición
-     * en los últimos cinco minutos; repetir solo gastaría cuota de Meta).
+     * `running` (ya hay una pasada de alguna cuenta) o `cooldown` (hubo un
+     * intento o una petición en los últimos cinco minutos; repetir solo gastaría
+     * cuota de Meta). El estado es el consolidado de todas las cuentas
+     * ({@see MetaAdsSync::statusAll()}).
      *
      * `sync` es el estado de ANTES de despachar: el panel compara con él para
      * saber cuándo terminó la pasada pedida. Leído después, si el job ya corrió
@@ -424,10 +471,11 @@ class MetaDashboardService
      */
     public function requestSync(): array
     {
-        $before = $this->sync->status();
+        $before = $this->sync->statusAll();
         $outcome = $this->syncOutcome($before);
 
         if ($outcome === 'queued') {
+            // Sin cuenta: el job despacha uno por cuenta conectada, y cada una reintenta sola.
             SyncMetaAdsInsights::dispatch(MetaSyncRun::TRIGGER_MANUAL);
         }
 
@@ -447,25 +495,26 @@ class MetaDashboardService
         // la precisión que evita malentendidos.
         return [
             'period' => 'Días completos en hora de Bogotá. Todas las cifras usan el mismo periodo, y la comparación usa el mismo número de días justo antes.',
-            'spend' => 'Suma del importe gastado que Meta reporta para el periodo. Sin conexión o sin datos de Meta es «—», nunca $0.',
+            'spend' => 'Suma del gasto que Meta reporta para el periodo en las cuentas conectadas, sin contar nada dos veces. Sin conexión, o si alguna cuenta conectada no tiene datos del periodo, es «—», nunca $0.',
             'leads' => 'Personas únicas que iniciaron contacto comercial en el periodo. Una persona cuenta una vez aunque escriba desde dos perfiles o teléfonos que llevan al mismo cliente; sin leads de prueba, y quien ya había escrito antes del periodo no cuenta de nuevo.',
             'conversations' => 'Hilos con al menos un mensaje entrante en el periodo. No tiene por qué coincidir con Leads: un lead antiguo puede escribir en el periodo y un lead puede tener varios hilos.',
             'converted' => "Leads que realizaron su primer cobro válido de membresía dentro de la ventana de atribución ({$days} días desde el primer contacto). Un cobro de \$0 no cuenta.",
             'renewals' => "Miembros existentes que realizaron un cobro válido después del contacto comercial (dentro de los {$days} días). Se cuentan aparte de los nuevos clientes.",
             'revenue_attributed' => "Dinero realmente cobrado y vinculado a leads dentro de la ventana ({$days} días): planes y membresías, pagos válidos y abonos aplicados. Sin tienda ni cafetería; una deuda sin cobrar no cuenta, y si un pago se anula o un abono se revierte, sale.",
-            'meta_revenue' => 'Dinero cobrado a leads cuyo primer contacto fue un anuncio de la cuenta publicitaria conectada (nuevos clientes y renovaciones). Lo orgánico y lo sin atribuir no entran.',
-            'paid' => 'Pauta Meta: personas cuyo primer contacto llegó desde un anuncio de la cuenta publicitaria conectada, que es la del gasto. ROAS, CAC, conversión Meta y retorno usan solo este universo.',
-            'roas' => 'Ingreso atribuible a Meta / gasto Meta. Sin gasto completo y conocido, en otra moneda o en cero, no se calcula.',
+            'meta_revenue' => 'Dinero cobrado a leads cuyo primer contacto fue un anuncio de una de las cuentas publicitarias conectadas (nuevos clientes y renovaciones). Lo orgánico, lo sin atribuir y la pauta de una cuenta no conectada no entran.',
+            'paid' => 'Pauta Meta: personas cuyo primer contacto llegó desde un anuncio de una de las cuentas publicitarias conectadas, que son las del gasto. ROAS, CAC, conversión Meta y retorno usan solo este universo; la pauta de una cuenta no conectada se cuenta aparte, en la cobertura de pauta.',
+            'roas' => 'Ingreso atribuible a Meta / gasto Meta. Los dos, de las cuentas conectadas: el mismo universo arriba y abajo. Sin gasto completo y conocido, en otra moneda o en cero, no se calcula.',
             'roas_new' => 'Como el ROAS, pero solo con el dinero de clientes nuevos: sin las renovaciones de quien ya pagaba.',
-            'cac' => 'Gasto Meta / nuevos clientes obtenidos desde pauta. Sin gasto completo y conocido o sin clientes nuevos de pauta, no se calcula.',
+            'cac' => 'Gasto Meta / nuevos clientes obtenidos desde pauta. Los dos, de las cuentas conectadas. Sin gasto completo y conocido o sin clientes nuevos de pauta, no se calcula.',
             'conversion_rate' => 'Nuevos clientes / leads del mismo universo: todos los leads del periodo.',
-            'meta_conversion_rate' => 'Nuevos clientes de pauta / leads de pauta de la cuenta conectada.',
+            'meta_conversion_rate' => 'Nuevos clientes de pauta / leads de pauta de las cuentas conectadas.',
             'return_after_ad_spend' => 'Ingresos atribuidos a Meta menos el gasto publicitario. No incluye nómina, arriendo ni otros costos operativos.',
             'unattributed' => 'Sin atribuir significa que no existe evidencia técnica suficiente para asignar el lead a una campaña. No se asignan campañas por suposición.',
             'identity' => 'El lead se enlaza con una persona del CRM por su ficha de socio o porque los 10 últimos dígitos de su teléfono coinciden con UNA sola persona. Si coinciden con varias, no se enlaza; también si coinciden una ficha de socio y otra cuenta de usuario distinta: es más prudente que enlazar con la ficha.',
             'first_touch' => 'El origen es el del primer contacto, que no cambia. Sin un anuncio o publicación de Meta que lo pruebe, el lead queda «Sin atribuir».',
-            'campaign' => 'La campaña se obtiene del anuncio por la Marketing API de Meta, solo de la cuenta publicitaria conectada. Sin esa conexión, o si el anuncio es de otra cuenta, los leads de pauta van a «Sin campaña».',
+            'campaign' => 'La campaña se obtiene del anuncio por la Marketing API de Meta, de las cuentas publicitarias conectadas. Sin conexión, los leads de pauta van a «Sin campaña»; si el anuncio es de una cuenta no conectada, a «Cuenta publicitaria no conectada».',
             'reach' => 'Personas únicas que vieron los anuncios, según Meta. No se suma por días: solo se enseña para los periodos que Meta calculó enteros.',
+            'paid_coverage' => 'Cobertura de pauta: de las personas cuyo primer contacto fue un anuncio en el periodo, cuántas llegaron por una de las cuentas publicitarias conectadas. Las de una cuenta no conectada siguen siendo pauta, pero su gasto no se conoce: no entran en Ingresos Meta, ROAS, CAC, Conversión Meta ni Retorno después de pauta.',
         ];
     }
 
@@ -807,10 +856,11 @@ class MetaDashboardService
     /**
      * Las cifras principales, por persona de U (su lead principal).
      *
-     * `paid` es toda la pauta; `paid_resolved`, la de anuncios de la cuenta
-     * configurada, que es el universo de ROAS, ROAS de clientes nuevos y CAC.
-     * `unresolved_paid_leads` cuenta las personas de pauta que no son de esa
-     * cuenta, y `roas_warning` lo avisa cuando el gasto se conoce.
+     * `paid` es toda la pauta; `paid_resolved`, la de anuncios de las cuentas
+     * conectadas, que es el universo de ROAS, ROAS de clientes nuevos y CAC (el
+     * gasto es el consolidado de esas mismas cuentas). `unresolved_paid_leads`
+     * cuenta las personas de pauta que no son de ninguna, y `roas_warning` lo
+     * avisa cuando el gasto se conoce.
      *
      * @param  array<string, mixed>  $ctx
      * @param  array<int, int>  $conversations
@@ -830,7 +880,7 @@ class MetaDashboardService
         foreach ($ctx['persons'] as $leadId) {
             $touch = $ctx['firstTouch'][$leadId];
             $fromAds = $touch['origin'] === LeadSourceClassifier::ORIGIN_PAID;
-            // Pauta de la cuenta configurada: la única cuyo gasto se conoce.
+            // Pauta de una cuenta conectada: las únicas cuyo gasto se conoce.
             $fromAccount = $fromAds && $touch['resolved'];
             $record = $ctx['ledger'][$leadId];
 
@@ -877,8 +927,8 @@ class MetaDashboardService
         }
         $return = $returnReason === null ? round($resolved['revenue'] - (float) $spend['amount'], 2) : null;
 
-        // Hay leads de pauta que el gasto de la cuenta no cubre: el ROAS de la
-        // cuenta no los incluye, y hay que decirlo.
+        // Hay leads de pauta que el gasto de las cuentas conectadas no cubre: el
+        // ROAS no los incluye, y hay que decirlo.
         $spendKnown = in_array($spend['status'], [MetaSpendReader::OK, MetaSpendReader::STALE, MetaSpendReader::REAL_ZERO], true);
 
         $kpis = [
@@ -1131,7 +1181,7 @@ class MetaDashboardService
 
     /**
      * La entidad de este nivel a la que lleva un primer toque de pauta, o null
-     * si el anuncio no se resolvió contra la cuenta configurada.
+     * si el anuncio no se resolvió contra ninguna cuenta conectada.
      *
      * @param  array<string, mixed>  $touch
      * @return array{0: ?string, 1: ?string} id y nombre
@@ -1147,15 +1197,18 @@ class MetaDashboardService
 
     /**
      * Filas de campaña, conjunto o anuncio: el gasto de Meta y lo que trajeron
-     * las personas cuyo PRIMER toque fue ese anuncio.
+     * las personas cuyo PRIMER toque fue ese anuncio. Cada fila dice de qué
+     * cuenta es (`account_id` opaco, `account_ref` y `account_name`).
      *
      * Las entidades a las que llevan los leads salen aunque no gastaran en el
      * periodo, y su gasto lo decide el lector de gasto ({@see MetaSpendReader::byLevel()}):
-     * 0,00 comprobado si es de la cuenta configurada y el periodo está cubierto;
-     * null si no se sabe. Nunca un cero por defecto.
+     * 0,00 comprobado si es de una cuenta conectada y el periodo de esa cuenta
+     * está cubierto; null si no se sabe. Nunca un cero por defecto.
      *
      * @param  array<string, mixed>  $ctx
      * @param  array<int, int>  $conversations
+     * @param  array{since: ?string, state: string}  $history
+     * @param  string  $unresolvedName  el de {@see unresolvedName()} para el periodo
      * @return list<array<string, mixed>>
      */
     private function campaignRows(
@@ -1165,8 +1218,9 @@ class MetaDashboardService
         CarbonImmutable $from,
         CarbonImmutable $to,
         bool $moneyVisible,
-        ?array $parent = null,
-        array $history = ['since' => null, 'state' => 'full'],
+        ?array $parent,
+        array $history,
+        string $unresolvedName,
     ): array {
         // Con padre, solo cuenta lo que es de él: un toque de otra campaña (o de
         // otro conjunto) no es de esta fila, y uno sin resolver no es de ninguna.
@@ -1193,18 +1247,13 @@ class MetaDashboardService
             }
         }
 
-        $available = $this->spend->metricsAvailable();
+        // Qué reporta Meta, por cuenta: una métrica que la cuenta de la fila no
+        // reporta es null en esa fila, aunque otra cuenta sí la reporte.
+        $available = $this->spend->availabilityByAccount();
         $rows = [];
         foreach ($this->spend->byLevel($level, $from, $to, array_keys($include), $parent) as $s) {
-            $rows[$s['id']] = $this->campaignRow($s['id'], $s['name'], $s['status'], $s, $available);
+            $rows[$s['id']] = $this->campaignRow($s['id'], $s['name'], $s['status'], $s, $available[$s['account_id']] ?? [], $s['account_id']);
         }
-
-        $unresolvedName = match (true) {
-            ! $this->client->isConfigured() => self::UNRESOLVED_NAME,
-            // Sin ninguna pasada buena (ni de relleno) la dimensión está vacía.
-            $this->sync->coverage() === [] => self::UNRESOLVED_NAME_NEVER_SYNCED,
-            default => self::UNRESOLVED_NAME_OTHER_ACCOUNT,
-        };
 
         $lookups = [];
         $bucket = function (?array $touch) use (&$rows, &$lookups, $level, $unresolvedName, $ofParent): ?string {
@@ -1219,7 +1268,7 @@ class MetaDashboardService
                 // Sin fila del lector (Meta Ads sin conexión): las cifras de Meta no se saben.
                 $rows[$id] = $entity === null
                     ? $this->campaignRow(null, $unresolvedName, null, null, [])
-                    : $this->campaignRow($entity, $name, null, null, []);
+                    : $this->campaignRow($entity, $name, null, null, [], $touch['account_id'] ?? null);
                 if ($entity !== null) {
                     $lookups[] = $entity;
                 }
@@ -1228,13 +1277,48 @@ class MetaDashboardService
             return $id;
         };
 
+        $this->tally($rows, $ctx, $conversations, $bucket);
+        $this->completeFromDimension($level, $rows, $lookups);
+        $rows = $this->withDerived($rows);
+
+        uasort($rows, function (array $a, array $b): int {
+            // «Sin campaña» siempre al final; el resto, por gasto, leads y nombre.
+            if (($a['entity'] === null) !== ($b['entity'] === null)) {
+                return $a['entity'] === null ? 1 : -1;
+            }
+
+            return [$b['spend'] ?? -1, $b['leads'], (string) $a['name']] <=> [$a['spend'] ?? -1, $a['leads'], (string) $b['name']];
+        });
+
+        $rows = array_values($rows);
+        $names = MetaAdEntity::accountNames($this->client->accountIds());
+
+        return $this->rowsWithoutCoverage(
+            array_map(fn (array $row): array => $this->publicCampaignRow($level, $row, $moneyVisible, $names), $rows),
+            $history,
+            array_map(fn (array $row): ?string => $row['last_day'], $rows),
+        );
+    }
+
+    /**
+     * Cuenta en cada fila lo que trajeron las personas de U (leads, nuevos,
+     * renovaciones e ingresos, sobre su lead principal: una persona, una vez) y
+     * las conversaciones del periodo. `$bucket` dice a qué fila lleva un toque
+     * (y la crea si hace falta), o null si a ninguna.
+     *
+     * @param  array<int|string, array<string, mixed>>  $rows
+     * @param  array<string, mixed>  $ctx
+     * @param  array<int, int>  $conversations
+     * @param  callable(?array<string, mixed>): ?string  $bucket
+     */
+    private function tally(array &$rows, array $ctx, array $conversations, callable $bucket): void
+    {
         foreach ($ctx['persons'] as $leadId) {
             if (($id = $bucket($ctx['firstTouch'][$leadId])) !== null) {
                 $rows[$id]['leads']++;
             }
         }
 
-        // Solo las personas de U (su lead principal): una persona, una vez.
         foreach ($ctx['persons'] as $leadId) {
             $record = $ctx['ledger'][$leadId];
             if (! in_array($record['kind'], [ConversionLedger::KIND_NEW, ConversionLedger::KIND_RENEWAL], true)) {
@@ -1253,9 +1337,18 @@ class MetaDashboardService
                 $rows[$id]['conversations'] += $n;
             }
         }
+    }
 
-        $this->completeFromDimension($level, $rows, $lookups);
-
+    /**
+     * Lo que se calcula con las sumas de cada fila: ROAS, CAC, conversión,
+     * retorno, CTR, CPM, CPC y costo por conversación. Las mismas reglas para
+     * campañas, conjuntos, anuncios y cuentas.
+     *
+     * @param  array<int|string, array<string, mixed>>  $rows
+     * @return array<int|string, array<string, mixed>>
+     */
+    private function withDerived(array $rows): array
+    {
         foreach ($rows as $id => $row) {
             $spend = $row['spend'];
             // Gasto que se puede afirmar para TODO el periodo y en pesos: lo único
@@ -1284,22 +1377,7 @@ class MetaDashboardService
                 ? round($spend / $row['meta_conversations'], 2) : null;
         }
 
-        uasort($rows, function (array $a, array $b): int {
-            // «Sin campaña» siempre al final; el resto, por gasto, leads y nombre.
-            if (($a['entity'] === null) !== ($b['entity'] === null)) {
-                return $a['entity'] === null ? 1 : -1;
-            }
-
-            return [$b['spend'] ?? -1, $b['leads'], (string) $a['name']] <=> [$a['spend'] ?? -1, $a['leads'], (string) $b['name']];
-        });
-
-        $rows = array_values($rows);
-
-        return $this->rowsWithoutCoverage(
-            array_map(fn (array $row): array => $this->publicCampaignRow($level, $row, $moneyVisible), $rows),
-            $history,
-            array_map(fn (array $row): ?string => $row['last_day'], $rows),
-        );
+        return $rows;
     }
 
     /**
@@ -1309,9 +1387,10 @@ class MetaDashboardService
      *
      * @param  array<string, mixed>|null  $s
      * @param  array<string, bool>  $available
+     * @param  string|null  $account  la cuenta conectada de la fila (cruda), si se sabe
      * @return array<string, mixed>
      */
-    private function campaignRow(?string $entity, ?string $name, ?string $status, ?array $s, array $available): array
+    private function campaignRow(?string $entity, ?string $name, ?string $status, ?array $s, array $available, ?string $account = null): array
     {
         $metric = fn (string $key, ?string $flag = null): ?int => $s !== null && $s[$key] !== null && ($flag === null || ($available[$flag] ?? false))
             ? (int) $s[$key]
@@ -1321,6 +1400,7 @@ class MetaDashboardService
             'entity' => $entity,
             'name' => $name,
             'status' => $status,
+            'account' => $account,
             'spend' => $s['spend'] ?? null,
             'currency' => $s['currency'] ?? null,
             'partial' => (bool) ($s['partial'] ?? false),
@@ -1373,14 +1453,18 @@ class MetaDashboardService
 
     /**
      * La fila tal como sale: el id de Meta se sustituye por una clave opaca y
-     * estable, y solo se enseña enmascarado. Sin visión completa, sin dinero.
+     * estable, y solo se enseña enmascarado; la cuenta, igual. Sin visión
+     * completa, sin dinero.
      *
      * @param  array<string, mixed>  $row
+     * @param  array<string, ?string>  $names  nombre de cada cuenta conectada
      * @return array<string, mixed>
      */
-    private function publicCampaignRow(string $level, array $row, bool $moneyVisible): array
+    private function publicCampaignRow(string $level, array $row, bool $moneyVisible, array $names = []): array
     {
         $entity = $row['entity'];
+        $account = $row['account'] ?? null;
+        $face = $account === null ? null : MetaAdEntity::publicAccount($account, $names[$account] ?? null);
 
         return [
             'id' => $entity === null ? self::UNRESOLVED : self::opaqueId($level, $entity),
@@ -1413,12 +1497,385 @@ class MetaDashboardService
             'roas' => $moneyVisible ? $row['roas'] : null,
             'conversion_rate' => $row['conversion_rate'],
             'return_after_ad_spend' => $moneyVisible ? $row['return_after_ad_spend'] : null,
+            // La cuenta de la fila; null en la de la pauta sin cuenta conectada.
+            'account_id' => $face['id'] ?? null,
+            'account_ref' => $face['ref'] ?? null,
+            'account_name' => $face['name'] ?? null,
         ];
     }
 
     /**
+     * La tabla por CUENTA conectada (el primer nivel del desglose) y, aparte,
+     * la pauta cuya cuenta no está conectada.
+     *
+     *  - `rows`: una fila por cuenta conectada, de mayor a menor gasto y luego
+     *    por nombre, con las columnas de una fila de campaña más `covered_to`,
+     *    `campaign_count` (sus campañas en `campaigns.rows`) y `has_children`.
+     *    Lo de Meta sale de {@see MetaSpendReader::accounts()}; los recuentos
+     *    del CRM, de las personas cuyo anuncio es de esa cuenta. Mismas reglas
+     *    que las campañas: dinero oculto, gasto parcial, cobertura histórica y
+     *    sin retorno cuando no hubo ni gasto ni ingresos.
+     *  - `unconnected`: id, nombre y recuentos de la pauta sin cuenta conectada.
+     *    Su nombre es el de {@see unresolvedName()}: «Cuenta publicitaria no
+     *    conectada» solo con evidencia; si no, el neutro. SIN gasto, ingresos,
+     *    ROAS, CAC ni retorno: no se conocen y no se inventan. Null si no hay
+     *    nada que contar en ella, o si Meta no está configurado (lo dice ya la
+     *    fila «Sin campaña (Meta Ads sin conexión)»).
+     *
+     * Sin Meta configurado, sin filas: el panel enseña la tabla de campañas.
+     *
+     * @param  array<string, mixed>  $ctx
+     * @param  array<int, int>  $conversations
+     * @param  array{since: ?string, state: string}  $history
+     * @param  list<array<string, mixed>>  $campaignRows  las filas públicas de campaña del mismo periodo
+     * @return array{rows: list<array<string, mixed>>, unconnected: ?array<string, mixed>}
+     */
+    private function accountTable(
+        array $ctx,
+        array $conversations,
+        CarbonImmutable $from,
+        CarbonImmutable $to,
+        bool $moneyVisible,
+        array $history,
+        array $campaignRows,
+        string $unresolvedName,
+    ): array {
+        if (! $this->client->isConfigured()) {
+            return ['rows' => [], 'unconnected' => null];
+        }
+
+        $available = $this->spend->availabilityByAccount();
+        $rows = [];
+        foreach ($this->spend->accounts($from, $to) as $s) {
+            $account = (string) $s['account'];
+            $rows[$account] = $this->campaignRow($account, $s['name'], null, $s, $available[$account] ?? [], $account)
+                + ['covered_to' => $s['covered_to']];
+        }
+
+        $bucket = function (?array $touch) use (&$rows, $unresolvedName): ?string {
+            if ($touch === null || $touch['origin'] !== LeadSourceClassifier::ORIGIN_PAID) {
+                return null;
+            }
+
+            if ($touch['resolved'] && $touch['account_id'] !== null) {
+                $account = (string) $touch['account_id'];
+                // Toda cuenta conectada tiene su fila; si faltara, sin cifras de Meta inventadas.
+                $rows[$account] ??= $this->campaignRow($account, null, null, null, [], $account) + ['covered_to' => null];
+
+                return $account;
+            }
+
+            $rows[self::UNCONNECTED] ??= $this->campaignRow(null, $unresolvedName, null, null, []);
+
+            return self::UNCONNECTED;
+        };
+
+        $this->tally($rows, $ctx, $conversations, $bucket);
+
+        $unconnected = $rows[self::UNCONNECTED] ?? null;
+        unset($rows[self::UNCONNECTED]);
+
+        $rows = $this->withDerived($rows);
+        uasort($rows, fn (array $a, array $b): int => [$b['spend'] ?? -1, (string) $a['name']] <=> [$a['spend'] ?? -1, (string) $b['name']]);
+        $rows = array_values($rows);
+
+        $campaigns = [];
+        foreach ($campaignRows as $c) {
+            if (($c['account_id'] ?? null) !== null) {
+                $campaigns[$c['account_id']] = ($campaigns[$c['account_id']] ?? 0) + 1;
+            }
+        }
+
+        $public = array_map(function (array $row) use ($moneyVisible, $campaigns): array {
+            $out = $this->publicCampaignRow(MetaAdEntity::LEVEL_ACCOUNT, $row, $moneyVisible);
+            // Una cuenta no es «de una cuenta»: sus campos de cuenta sobran.
+            unset($out['account_id'], $out['account_ref'], $out['account_name']);
+            $count = $campaigns[$out['id']] ?? 0;
+            $out['covered_to'] = $row['covered_to'];
+            $out['campaign_count'] = $count;
+            $out['has_children'] = $count > 0;
+
+            return $out;
+        }, $rows);
+
+        return [
+            'rows' => $this->rowsWithoutCoverage($public, $history, array_map(fn (array $row): ?string => $row['last_day'], $rows)),
+            'unconnected' => $unconnected === null ? null : $this->rowsWithoutCoverage([[
+                'id' => self::UNCONNECTED,
+                'name' => $unconnected['name'],
+                'leads' => $unconnected['leads'],
+                'conversations' => $unconnected['conversations'],
+                'converted' => $unconnected['converted'],
+                'renewals' => $unconnected['renewals'],
+            ]], $history, [null])[0],
+        ];
+    }
+
+    /**
+     * «Cobertura de pauta»: de las personas de pauta del periodo
+     * (`kpis.paid.leads`), cuántas llegaron por una cuenta conectada
+     * (`kpis.paid_resolved.leads`) y cuántas por una que no lo está
+     * (`kpis.unresolved_paid_leads`), la cuota con cuenta conectada y
+     * `established` ({@see established()}).
+     *
+     * Sin cobertura histórica, los recuentos en null (un 0 no sería una
+     * medición). Sin evidencia (`established = false`: Meta sin configurar,
+     * alguna cuenta sin ninguna pasada buena o el periodo sin cubrir entero),
+     * el total sí, pero ni los de un lado ni los del otro: un anuncio que no
+     * está en la dimensión podría ser de una cuenta conectada.
+     *
+     * @param  array<string, mixed>  $kpis  ya sin lo que la cobertura histórica no permite
+     * @return array{total: ?int, connected: ?int, unconnected: ?int, share: ?float, established: bool}
+     */
+    private function paidCoverage(array $kpis, string $historyState, bool $established): array
+    {
+        if ($historyState === 'none') {
+            return ['total' => null, 'connected' => null, 'unconnected' => null, 'share' => null, 'established' => $established];
+        }
+
+        $total = $kpis['paid']['leads'] ?? null;
+        if (! $established) {
+            return ['total' => $total, 'connected' => null, 'unconnected' => null, 'share' => null, 'established' => false];
+        }
+
+        $connected = $kpis['paid_resolved']['leads'] ?? null;
+
+        return [
+            'total' => $total,
+            'connected' => $connected,
+            'unconnected' => $kpis['unresolved_paid_leads'] ?? null,
+            'share' => $total !== null && $total > 0 && $connected !== null ? round($connected / $total, 4) : null,
+            'established' => true,
+        ];
+    }
+
+    /**
+     * El resumen para administración: las MISMAS cifras de las tarjetas, nunca
+     * otras (inversión, adquisición, retorno y cobertura), y la conclusión con
+     * su motivo y su recomendación ({@see conclusion()}).
+     *
+     * `roi` = (ingresos − gasto) / gasto, con 4 decimales; null cuando el ROAS
+     * es null (el gasto no sirve para dividir, no hay permiso o no hay
+     * cobertura): las mismas condiciones.
+     *
+     * @param  array<string, mixed>  $spend  el gasto consolidado
+     * @param  array<string, mixed>  $kpis  ya sin dinero y sin lo que la cobertura histórica no permite
+     * @param  array{total: ?int, connected: ?int, unconnected: ?int, share: ?float, established: bool}  $paidCoverage
+     * @param  array{since: ?string, state: string}  $history
+     * @return array<string, mixed>
+     */
+    private function executive(array $spend, array $kpis, array $paidCoverage, array $history, CarbonImmutable $periodEnd, bool $established): array
+    {
+        $revenue = $kpis['paid_resolved']['revenue'] ?? null;
+        $amount = $spend['amount'];
+        $roi = $kpis['roas'] !== null && $revenue !== null && $amount !== null && $amount > 0
+            ? round(($revenue - $amount) / $amount, 4)
+            : null;
+
+        return [
+            'investment' => [
+                'spend' => $amount,
+                'currency' => $spend['currency'],
+                'complete' => $spend['complete'],
+            ],
+            'acquisition' => [
+                'paid_leads' => $paidCoverage['total'],
+                'connected_paid_leads' => $paidCoverage['connected'],
+                'new_customers' => $kpis['paid_resolved']['converted'] ?? null,
+                'renewals' => $kpis['paid_resolved']['renewals'] ?? null,
+                'conversion_rate' => $kpis['meta_conversion_rate'],
+                'cac' => $kpis['cac'],
+            ],
+            'return' => [
+                'revenue' => $revenue,
+                'roas' => $kpis['roas'],
+                'roi' => $roi,
+            ],
+            'coverage' => [
+                'connected' => $paidCoverage['connected'],
+                'unconnected' => $paidCoverage['unconnected'],
+                'share' => $paidCoverage['share'],
+            ],
+            'conclusion' => $this->conclusion($spend, $kpis, $paidCoverage, $history, $periodEnd, $established),
+        ];
+    }
+
+    /**
+     * ¿Fue rentable la pauta de las cuentas conectadas en el periodo? Con la
+     * caja real, y en este orden:
+     *
+     *  1. sin permiso para ver ingresos → no concluyente;
+     *  2. sin Meta, o con el gasto desconocido o incompleto → no concluyente
+     *     (y con el gasto en otra moneda que la caja, tampoco: no se comparan);
+     *  3. el periodo empieza antes de la cobertura histórica → no concluyente;
+     *  4. gasto 0 → no concluyente (con o sin ingresos: no hubo inversión);
+     *  5. ingresos ≥ gasto → sí;
+     *  6. ingresos < gasto con la ventana de atribución abierta → no concluyente
+     *     (aún pueden llegar pagos);
+     *  7. ingresos < gasto con la ventana cerrada → no;
+     *  8. si hay leads de pauta de una cuenta no conectada (solo con evidencia,
+     *     {@see established()}), se añade al motivo y a la recomendación.
+     *
+     * @param  array<string, mixed>  $spend
+     * @param  array<string, mixed>  $kpis
+     * @param  array{total: ?int, connected: ?int, unconnected: ?int, share: ?float, established: bool}  $paidCoverage
+     * @param  array{since: ?string, state: string}  $history
+     * @return array{profitable: string, reason: string, recommendation: string}
+     */
+    private function conclusion(array $spend, array $kpis, array $paidCoverage, array $history, CarbonImmutable $periodEnd, bool $established): array
+    {
+        $verdict = fn (string $profitable, string $reason, string $recommendation): array => [
+            'profitable' => $profitable,
+            'reason' => $reason,
+            'recommendation' => $recommendation,
+        ];
+        $inconclusive = fn (string $reason, string $recommendation): array => $verdict(self::PROFITABLE_INCONCLUSIVE, $reason, $recommendation);
+
+        $amount = $spend['amount'];
+        $revenue = $kpis['paid_resolved']['revenue'] ?? null;
+        $currency = strtoupper((string) $spend['currency']);
+
+        $base = match (true) {
+            ($kpis['money_visible'] ?? false) !== true => $inconclusive(
+                'Sin permiso para ver ingresos.',
+                'Pedir la conclusión a un administrador que pueda ver los ingresos.',
+            ),
+            ! $this->client->isConfigured(), $amount === null, ($spend['complete'] ?? true) === false => $inconclusive(
+                'El gasto de Meta del periodo no está completo o no se conoce.',
+                'Revisar la sincronización de Meta Ads.',
+            ),
+            $amount > 0 && $currency !== self::REVENUE_CURRENCY => $inconclusive(
+                'El gasto de Meta está en otra moneda ('.($currency !== '' ? $currency : 'sin moneda').'): no se puede comparar con la caja en pesos.',
+                'Revisar la moneda de las cuentas publicitarias.',
+            ),
+            $history['state'] !== 'full' => $history['since'] !== null
+                ? $inconclusive(
+                    'El periodo empieza antes del '.$this->shortDate($history['since']).', cuando el CRM empezó a captar leads.',
+                    'Elige un periodo desde el '.$this->shortDate($history['since']).'.',
+                )
+                : $inconclusive(
+                    'El CRM todavía no capta leads de forma continua: no hay con qué medir el periodo.',
+                    'Revisar la captación de leads del CRM.',
+                ),
+            abs((float) $amount) < 0.005 => $revenue !== null && $revenue >= 0.005
+                ? $inconclusive(
+                    'Hubo ingresos de leads de pauta, pero ningún gasto en el periodo: sus anuncios gastaron antes.',
+                    'Mirar un periodo más largo, que incluya el gasto de esos anuncios.',
+                )
+                : $inconclusive(
+                    'Sin inversión ni ingresos de las cuentas conectadas en el periodo.',
+                    'Elegir un periodo con pauta activa.',
+                ),
+            // Defensa: con todo lo anterior descartado, ingresos y ROAS tienen cifra.
+            $revenue === null || $kpis['roas'] === null => $inconclusive(
+                'No se puede calcular el retorno del periodo.',
+                'Revisar la sincronización de Meta Ads.',
+            ),
+            $revenue >= $amount => $verdict(
+                self::PROFITABLE_YES,
+                'Los leads de pauta de las cuentas conectadas pagaron '.$this->cop($revenue).' en caja frente a '.$this->cop($amount).' de gasto (ROAS '.$this->times($kpis['roas']).').',
+                'Mantener la inversión y vigilar el CAC.',
+            ),
+            $periodEnd->addDays(ConversionLedger::windowDays())->greaterThan(now()) => $inconclusive(
+                'Por ahora los ingresos ('.$this->cop($revenue).') no cubren el gasto ('.$this->cop($amount).'), pero la ventana de '
+                    .ConversionLedger::windowDays().' días sigue abierta: aún pueden llegar pagos.',
+                'Revisar de nuevo cuando cierre la ventana (el '
+                    .$this->shortDate($periodEnd->addDays(ConversionLedger::windowDays())->setTimezone(self::timezone())->toDateString()).').',
+            ),
+            default => $verdict(
+                self::PROFITABLE_NO,
+                'Los ingresos en caja ('.$this->cop($revenue).') no cubren el gasto ('.$this->cop($amount).'): ROAS '.$this->times($kpis['roas']).'.',
+                'Revisar las campañas con gasto y sin clientes nuevos.',
+            ),
+        };
+
+        // Solo se puede afirmar que son de una cuenta no conectada con evidencia.
+        $unconnected = (int) ($paidCoverage['unconnected'] ?? 0);
+        $total = (int) ($paidCoverage['total'] ?? 0);
+        if ($established && $unconnected > 0 && $total > 0) {
+            $share = (int) round($unconnected / $total * 100);
+            // Con leads a los dos lados, el redondeo no borra a nadie: nunca «0 %» ni «100 %» (como el front).
+            if ($unconnected < $total) {
+                $share = min(99, max(1, $share));
+            }
+            $base['reason'] .= ' No incluye '.$unconnected.($unconnected === 1 ? ' lead' : ' leads')
+                .' ('.$share.' %) de una cuenta publicitaria no conectada.';
+            $base['recommendation'] .= ' Conectar esa cuenta para medir el resto.';
+        }
+
+        return $base;
+    }
+
+    /** Pesos sin decimales, como los escribe el panel: «$ 329.199». */
+    private function cop(float|int $value): string
+    {
+        return '$ '.number_format(round((float) $value), 0, ',', '.');
+    }
+
+    /** Un ROAS como «12,04×». */
+    private function times(float|int $value): string
+    {
+        return number_format((float) $value, 2, ',', '.').'×';
+    }
+
+    /** Un día AAAA-MM-DD como «16 sept 2026». */
+    private function shortDate(string $day): string
+    {
+        $d = CarbonImmutable::createFromFormat('!Y-m-d', $day, self::timezone());
+
+        return $d->day.' '.self::SHORT_MONTHS[$d->month - 1].' '.$d->year;
+    }
+
+    /**
+     * El nombre de la fila de la pauta que no resuelve contra ninguna cuenta
+     * conectada, que dice lo que se sabe:
+     *  - sin Meta Ads configurado, «sin conexión»;
+     *  - con evidencia ({@see established()}), «Cuenta publicitaria no conectada»;
+     *  - si no, el neutro «aún sin sincronizar»: el anuncio podría ser de una
+     *    cuenta conectada cuyos días no se han sincronizado.
+     */
+    private function unresolvedName(bool $established): string
+    {
+        return match (true) {
+            ! $this->client->isConfigured() => self::UNRESOLVED_NAME,
+            $established => self::UNRESOLVED_NAME_OTHER_ACCOUNT,
+            default => self::UNRESOLVED_NAME_NEVER_SYNCED,
+        };
+    }
+
+    /**
+     * ¿Se puede afirmar, en el periodo, que un anuncio de pauta que no está en
+     * la dimensión de ninguna cuenta conectada es de una cuenta NO conectada?
+     * Solo con evidencia:
+     *  - Meta Ads configurado;
+     *  - TODAS las cuentas conectadas con al menos una pasada buena (si no, su
+     *    dimensión está vacía);
+     *  - y el gasto del periodo cubierto entero en todas ({@see MetaSpendReader::coverage()}):
+     *    la dimensión sale de las filas de gasto, y la pasada horaria mira 7
+     *    días; un anuncio que solo entregó antes no está aunque sea de una
+     *    cuenta conectada.
+     *
+     * @param  array{complete: bool}  $coverage  la cobertura consolidada del gasto del periodo
+     */
+    private function established(array $coverage): bool
+    {
+        if (! $this->client->isConfigured() || $coverage['complete'] !== true) {
+            return false;
+        }
+
+        foreach ($this->client->accountIds() as $account) {
+            // Sin ninguna pasada buena (ni de relleno) la dimensión de esa cuenta está vacía.
+            if ($this->sync->forAccount($account)->coverage() === []) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * El padre de un desglose, a partir de su clave opaca: la campaña de los
-     * conjuntos o el conjunto de los anuncios. Solo de la cuenta configurada;
+     * conjuntos o el conjunto de los anuncios. Solo de las cuentas conectadas;
      * null si no se reconoce.
      *
      * @return array{level: string, id: string}|null
@@ -1743,15 +2200,13 @@ class MetaDashboardService
     }
 
     /**
-     * Clave pública y estable de una campaña, un conjunto o un anuncio.
-     *
-     * Con la clave de la aplicación (HMAC): un SHA-256 sin secreto del id de
-     * Meta se podría invertir por fuerza bruta a partir del `ref` («***1234») y
-     * del prefijo típico de los ids de Meta.
+     * Clave pública y estable de una cuenta, una campaña, un conjunto o un
+     * anuncio ({@see MetaAdEntity::opaqueId()}: HMAC con la clave de la
+     * aplicación, para que no se pueda invertir desde el `ref`).
      */
     public static function opaqueId(string $level, string $entity): string
     {
-        return $level.':'.substr(hash_hmac('sha256', $level.'|'.$entity, (string) config('app.key')), 0, 16);
+        return MetaAdEntity::opaqueId($level, $entity);
     }
 
     /**
@@ -1759,9 +2214,10 @@ class MetaDashboardService
      * `ad_id` completo e identidad financiera.
      *
      * @param  array<string, mixed>  $ctx
+     * @param  array{configured: bool, established: bool, names: array<string, ?string>}  $accounts
      * @return array<string, mixed>
      */
-    private function leadRow(MarketingLead $lead, array $ctx, bool $moneyVisible): array
+    private function leadRow(MarketingLead $lead, array $ctx, bool $moneyVisible, array $accounts): array
     {
         $id = (int) $lead->id;
         $main = $ctx['mainOf'][$id];
@@ -1784,8 +2240,8 @@ class MetaDashboardService
             // Hay quien pone su número o su correo como nombre de perfil de WhatsApp.
             'name' => LeadSourceClassifier::maskPersonName($lead->name),
             'channel' => $lead->channel,
-            'first_touch' => $this->touchView($ctx['firstTouch'][$id]),
-            'last_touch' => $this->touchView($ctx['lastTouch'][$id]),
+            'first_touch' => $this->touchView($ctx['firstTouch'][$id], $accounts),
+            'last_touch' => $this->touchView($ctx['lastTouch'][$id], $accounts),
             'temperature' => $lead->temperature,
             'status' => $lead->status,
             'conversion' => $conversion,
@@ -1794,11 +2250,27 @@ class MetaDashboardService
     }
 
     /**
+     * Un toque tal como sale. En uno de pauta, `account_status`:
+     *  - `connected`: el anuncio es de una cuenta conectada (`account_name`, la
+     *    suya, o null si aún no se leyó);
+     *  - `unconnected`: con evidencia de que no es de ninguna ({@see established()}:
+     *    todas las cuentas con alguna pasada buena y el periodo cubierto entero);
+     *  - null: no es pauta, Meta no está configurado o aún no se puede afirmar.
+     *
      * @param  array<string, mixed>  $touch
+     * @param  array{configured: bool, established: bool, names: array<string, ?string>}  $accounts
      * @return array<string, mixed>
      */
-    private function touchView(array $touch): array
+    private function touchView(array $touch, array $accounts): array
     {
+        $status = match (true) {
+            $touch['origin'] !== LeadSourceClassifier::ORIGIN_PAID, ! $accounts['configured'] => null,
+            $touch['resolved'] => 'connected',
+            $accounts['established'] => 'unconnected',
+            default => null,
+        };
+        $account = $status === 'connected' ? ($touch['account_id'] ?? null) : null;
+
         return [
             'origin' => $touch['origin'],
             'platform' => $touch['platform'],
@@ -1808,6 +2280,8 @@ class MetaDashboardService
             'adset_name' => LeadSourceClassifier::maskDigits($touch['adset_name']),
             'ad_name' => LeadSourceClassifier::maskDigits($touch['ad_name']),
             'ad_ref' => LeadSourceClassifier::maskId($touch['ad_id']),
+            'account_status' => $status,
+            'account_name' => $account === null ? null : LeadSourceClassifier::maskDigits($accounts['names'][$account] ?? null),
         ];
     }
 

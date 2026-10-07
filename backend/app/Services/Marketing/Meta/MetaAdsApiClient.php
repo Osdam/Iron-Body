@@ -6,12 +6,18 @@ use DateTimeZone;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use InvalidArgumentException;
 use Throwable;
 
 /**
  * Cliente de LECTURA de la Marketing API de Meta: el gasto y las métricas por
  * anuncio y día, el alcance de un rango, el estado de campañas, conjuntos y
  * anuncios, la ficha de la cuenta y qué es el token. Nada escribe en Meta.
+ *
+ * MULTICUENTA: las cuentas conectadas son las de {@see accountIds()}. Todo lo
+ * que lee UNA cuenta (insights, bordes, ficha, alcance) lee la cuenta ligada
+ * con {@see forAccount()}; sin ligar, la principal (la primera), que es lo que
+ * hacía el cliente cuando solo había una.
  *
  * Tres reglas que no se negocian:
  *
@@ -88,13 +94,19 @@ class MetaAdsApiClient
     /** Texto legible de cada problema de configuración. */
     private const PROBLEMS = [
         'missing_access_token' => 'Falta el token de Meta Ads (META_ADS_ACCESS_TOKEN).',
-        'missing_ad_account_id' => 'Falta la cuenta publicitaria (META_AD_ACCOUNT_ID).',
+        'missing_ad_account_id' => 'Falta la cuenta publicitaria (META_AD_ACCOUNT_IDS o META_AD_ACCOUNT_ID).',
         'invalid_ad_account_id' => 'La cuenta publicitaria configurada no es un id numérico de Meta.',
         'invalid_timezone' => 'La zona horaria de la cuenta (META_AD_ACCOUNT_TIMEZONE) no es válida.',
     ];
 
+    /** La cuenta de este clon ({@see forAccount()}); null = sin ligar. */
+    private ?string $bound = null;
+
     /**
      * Qué falta para poder leer anuncios, o null si nada.
+     *
+     * Sin ligar, mira el conjunto: sin token o sin NINGUNA cuenta conectada, el
+     * problema de siempre. Ligado, el de su cuenta, que ya se validó al ligarla.
      *
      * Solo mira la configuración, no llama a Meta. Un token presente pero sin
      * permisos se descubre al sincronizar y queda como fallo `permission`.
@@ -105,12 +117,9 @@ class MetaAdsApiClient
             return 'missing_access_token';
         }
 
-        if (trim((string) config('meta.ads.ad_account_id')) === '') {
-            return 'missing_ad_account_id';
-        }
-
-        if ($this->accountId() === null) {
-            return 'invalid_ad_account_id';
+        if ($this->bound === null && $this->accountIds() === []) {
+            // Algo escrito que no es un id frente a nada escrito: el arreglo es distinto.
+            return $this->accountsDeclared() ? 'invalid_ad_account_id' : 'missing_ad_account_id';
         }
 
         if (! $this->validTimezone(trim((string) config('meta.ads.timezone')))) {
@@ -131,16 +140,102 @@ class MetaAdsApiClient
     }
 
     /**
-     * Id de la cuenta publicitaria SIN el prefijo `act_` (se acepta con o sin
-     * él), o null si falta o no es numérico. Solo dígitos: el valor va en la
-     * ruta de la URL y no puede colar otro segmento.
+     * La cuenta de este cliente SIN el prefijo `act_`: la ligada o, sin ligar,
+     * la principal (la primera conectada). Null si no hay ninguna válida.
      */
     public function accountId(): ?string
     {
-        $raw = trim((string) config('meta.ads.ad_account_id'));
+        return $this->bound ?? ($this->accountIds()[0] ?? null);
+    }
+
+    /**
+     * Las cuentas publicitarias conectadas, normalizadas y en orden: las de
+     * `meta.ads.ad_account_ids` o, si no queda ninguna válida, la de
+     * `meta.ads.ad_account_id` ({@see parseAccountIds()}).
+     *
+     * @return list<string>
+     */
+    public function accountIds(): array
+    {
+        return self::parseAccountIds(config('meta.ads.ad_account_ids'), config('meta.ads.ad_account_id'));
+    }
+
+    /**
+     * Un clon ligado a UNA cuenta conectada. Todo lo que lee una cuenta
+     * (insights, bordes de estados, la ficha, el alcance) lee esa. No cambia
+     * este cliente: el clon es otro objeto.
+     *
+     * @throws InvalidArgumentException si la cuenta no está entre las conectadas
+     */
+    public function forAccount(string $id): static
+    {
+        $account = self::normalizeAccountId($id);
+        if ($account === null || ! in_array($account, $this->accountIds(), true)) {
+            // Sin el id en el texto: puede acabar en un log.
+            throw new InvalidArgumentException('Esa cuenta publicitaria no está entre las conectadas (META_AD_ACCOUNT_IDS).');
+        }
+
+        $clone = clone $this;
+        $clone->bound = $account;
+
+        return $clone;
+    }
+
+    /** ¿Está ligado a una cuenta? Sin ligar, lo que es de una cuenta mira la principal. */
+    public function isBound(): bool
+    {
+        return $this->bound !== null;
+    }
+
+    /**
+     * Un id de cuenta SIN el prefijo `act_` (se acepta con o sin él), o null si
+     * no es numérico. Solo dígitos, de 1 a 40: el valor va en la ruta de la URL
+     * y no puede colar otro segmento.
+     */
+    public static function normalizeAccountId(mixed $raw): ?string
+    {
+        if (! is_string($raw) && ! is_int($raw)) {
+            return null;
+        }
+
+        $raw = trim((string) $raw);
         $id = str_starts_with($raw, 'act_') ? substr($raw, 4) : $raw;
 
         return preg_match('/^\d{1,40}$/', $id) === 1 ? $id : null;
+    }
+
+    /**
+     * La lista de cuentas conectadas a partir de lo escrito: separadas por comas
+     * y/o espacios (o una lista), cada una normalizada como
+     * {@see normalizeAccountId()}, sin las que no son un id, sin duplicados y en
+     * el orden en que se escribieron. Si no queda ninguna, `$fallback` (la cuenta
+     * única de siempre) normalizada, o ninguna.
+     *
+     * Pura, a propósito: la usa también config/meta.php.
+     *
+     * @return list<string>
+     */
+    public static function parseAccountIds(mixed $list, mixed $fallback = null): array
+    {
+        $text = is_array($list)
+            ? implode(',', array_filter($list, static fn (mixed $v): bool => is_string($v) || is_int($v)))
+            : (is_string($list) || is_int($list) ? (string) $list : '');
+
+        $ids = [];
+        foreach (preg_split('/[\s,]+/', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $raw) {
+            $id = self::normalizeAccountId($raw);
+            if ($id !== null && ! in_array($id, $ids, true)) {
+                $ids[] = $id;
+            }
+        }
+
+        if ($ids !== []) {
+            return $ids;
+        }
+
+        $single = self::normalizeAccountId($fallback);
+
+        return $single === null ? [] : [$single];
     }
 
     /** Zona horaria en la que Meta parte los días de la cuenta. */
@@ -243,8 +338,9 @@ class MetaAdsApiClient
     }
 
     /**
-     * La cuenta publicitaria configurada: id, nombre, moneda, zona horaria y
-     * estado. Lo primero que se comprueba con un token nuevo.
+     * La ficha de la cuenta de este cliente (la ligada o la principal): id,
+     * nombre, moneda, zona horaria y estado. Lo primero que se comprueba con un
+     * token nuevo, y de donde sale el nombre que enseña el panel.
      *
      * @return array<string,mixed>
      *
@@ -534,6 +630,20 @@ class MetaAdsApiClient
         $version = trim((string) config('meta.ads.graph_version'), '/');
 
         return $path === '' ? "{$base}/{$version}/" : "{$base}/{$version}/{$path}";
+    }
+
+    /**
+     * ¿Hay algo escrito como cuenta, aunque no sea un id? Distingue «falta la
+     * cuenta» de «la cuenta escrita no vale», que se arreglan distinto.
+     */
+    private function accountsDeclared(): bool
+    {
+        $list = config('meta.ads.ad_account_ids');
+        $written = is_array($list)
+            ? implode('', array_filter($list, static fn (mixed $v): bool => is_string($v) || is_int($v)))
+            : (is_string($list) || is_int($list) ? (string) $list : '');
+
+        return trim($written) !== '' || trim((string) config('meta.ads.ad_account_id')) !== '';
     }
 
     private function validTimezone(string $tz): bool

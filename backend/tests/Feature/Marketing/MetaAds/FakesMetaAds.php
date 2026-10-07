@@ -196,6 +196,12 @@ trait FakesMetaAds
         ], $extra)], $status);
     }
 
+    /** La cuenta de la ruta de una petición (`/act_{id}…`), o null si no es de una cuenta. */
+    protected function accountOf(Request $request): ?string
+    {
+        return preg_match('#/act_(\d+)(?:/|$)#', (string) parse_url($request->url(), PHP_URL_PATH), $m) === 1 ? $m[1] : null;
+    }
+
     /** @return array<string,mixed> los parámetros de la query de una petición */
     protected function queryOf(Request $request): array
     {

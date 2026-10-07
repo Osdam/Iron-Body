@@ -821,7 +821,7 @@ class MetaDashboardCierreTest extends TestCase
         $d = MetaDashboardService::definitions();
 
         foreach ([
-            'spend' => 'Suma del importe gastado que Meta reporta para el periodo.',
+            'spend' => 'Suma del gasto que Meta reporta para el periodo en las cuentas conectadas',
             'leads' => 'Personas únicas que iniciaron contacto comercial en el periodo.',
             'conversations' => 'Hilos con al menos un mensaje entrante en el periodo.',
             'converted' => 'Leads que realizaron su primer cobro válido de membresía dentro de la ventana de atribución',

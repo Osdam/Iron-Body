@@ -6,6 +6,7 @@ use App\Models\MetaAdEntity;
 use App\Models\MetaAdInsightDaily;
 use App\Models\MetaAdReachSnapshot;
 use App\Models\MetaSyncRun;
+use App\Services\Marketing\Attribution\LeadSourceClassifier;
 use App\Services\Observability\ChannelLog;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -27,13 +28,40 @@ use Throwable;
  *
  * Idempotente: la clave (cuenta, día, anuncio) hace que repetir una pasada
  * actualice en vez de duplicar, y un cerrojo impide dos pasadas a la vez.
+ *
+ * MULTICUENTA: una pasada es de UNA cuenta, la del cliente (la ligada con
+ * {@see forAccount()} o, sin ligar, la principal), con su cerrojo, su
+ * transacción y su fila en `meta_sync_runs`. Lo que falla en una cuenta no toca
+ * los datos de las demás: todo lo que se escribe o se borra va acotado a la
+ * cuenta de la pasada. {@see runAll()} y {@see statusAll()} recorren todas.
  */
 class MetaAdsSync
 {
+    /** Prefijo del cerrojo: hay uno por cuenta ({@see lockKey()}). */
     public const LOCK_KEY = 'meta-ads-sync';
 
     /** Lo máximo que se espera de una pasada, y el plazo para darla por muerta. */
     public const LOCK_SECONDS = 900;
+
+    /** Una cuenta que {@see runAll()} no pidió en esa vuelta (motivo en `reason`). */
+    public const STATUS_SKIPPED = 'skipped';
+
+    /** La vuelta de {@see runAll()} terminó bien en unas cuentas y no en otras. */
+    public const STATUS_PARTIAL = 'partial';
+
+    /** {@see refreshReach()} no pidió nada: la cuenta no tuvo impresiones en {@see REACH_ACTIVE_DAYS} días. */
+    public const REACH_SKIPPED_INACTIVE = 'skipped_inactive';
+
+    /**
+     * Días hacia atrás que miran los rangos de alcance del panel: el mes
+     * anterior entero empieza como mucho 61 días antes de hoy (31 de agosto →
+     * 1 de julio). Sin impresiones en ellos, el alcance de esos rangos es 0 y
+     * pedirlo solo gastaría cupo.
+     */
+    public const REACH_ACTIVE_DAYS = 62;
+
+    /** Horas que vale el nombre guardado de una cuenta antes de volver a pedirlo. */
+    public const ACCOUNT_PROFILE_HOURS = 24;
 
     /** Filas por sentencia: lejos del límite de parámetros de PostgreSQL y de SQLite. */
     private const CHUNK = 200;
@@ -67,6 +95,42 @@ class MetaAdsSync
     private bool $limited = false;
 
     public function __construct(private readonly MetaAdsApiClient $client) {}
+
+    /**
+     * La misma sincronización, ligada a UNA cuenta conectada: sus pasadas, su
+     * cerrojo, su estado, su cobertura, su alcance y sus estados.
+     *
+     * @throws InvalidArgumentException si la cuenta no está entre las conectadas
+     */
+    public function forAccount(string $id): self
+    {
+        return new self($this->client->forAccount($id));
+    }
+
+    /** Las cuentas conectadas, en orden ({@see MetaAdsApiClient::accountIds()}). */
+    public function accountIds(): array
+    {
+        return $this->client->accountIds();
+    }
+
+    /**
+     * El cerrojo de la cuenta de esta sincronización: una pasada de una cuenta
+     * no bloquea la de otra (cada una tiene su transacción y sus filas).
+     */
+    public function lockKey(): string
+    {
+        return self::LOCK_KEY.':'.($this->client->accountId() ?? 'none');
+    }
+
+    /**
+     * ¿Contestó Meta «límite» a alguna petición de la última pasada (o del
+     * alcance) de esta instancia? El cupo es de la app, compartido por todas las
+     * cuentas: quien recorre varias deja de pedir.
+     */
+    public function limited(): bool
+    {
+        return $this->limited;
+    }
 
     /**
      * Sincroniza un rango de días de la cuenta, ambos inclusive.
@@ -113,7 +177,7 @@ class MetaAdsSync
         [$since, $until] = $this->range($from, $to);
         $this->limited = false;
 
-        $lock = Cache::lock(self::LOCK_KEY, self::LOCK_SECONDS);
+        $lock = Cache::lock($this->lockKey(), self::LOCK_SECONDS);
         if (! $lock->get()) {
             return ['status' => MetaSyncRun::STATUS_RUNNING];
         }
@@ -126,8 +190,103 @@ class MetaAdsSync
     }
 
     /**
-     * Cómo está la sincronización, para la cabecera del panel y para decidir si
-     * se puede lanzar otra.
+     * Una vuelta por TODAS las cuentas conectadas (o por `$only`), en orden:
+     * cada una en su propia pasada ({@see run()}), con su transacción y su fila
+     * en `meta_sync_runs`.
+     *
+     *  - Si una cuenta falla, las demás siguen: sus datos no dependen de ella.
+     *  - Si Meta contesta «límite» en una, las siguientes NO se piden en esta
+     *    vuelta (el cupo es de la app y lo comparten todas) y quedan `skipped`
+     *    con motivo `rate_limit`.
+     *
+     * Devuelve `status` (ok | partial | failed | running | not_configured) y,
+     * por cuenta, el resultado de su pasada (más `limited`, el de sus peticiones
+     * accesorias) o el del salto. Si la vuelta llegó a pedir algo, `limited`
+     * dice si Meta contestó «límite» en ALGUNA cuenta, también en la petición
+     * principal de la última, donde ya no queda nadie a quien saltar: quien
+     * llama no debe pedir nada más en esa vuelta (el alcance, por ejemplo).
+     *
+     * @param  list<string>|null  $only  un subconjunto de las conectadas; null = todas
+     * @return array{status: string, reason?: string, limited?: bool, accounts: array<string, array<string, mixed>>}
+     *
+     * @throws InvalidArgumentException con un disparador o un rango que no valen,
+     *                                  o una cuenta de `$only` que no está conectada
+     */
+    public function runAll(
+        string $trigger = 'schedule',
+        ?CarbonInterface $from = null,
+        ?CarbonInterface $to = null,
+        ?array $only = null,
+    ): array {
+        if (! in_array($trigger, MetaSyncRun::TRIGGERS, true)) {
+            throw new InvalidArgumentException("Disparador de sincronización desconocido: {$trigger}");
+        }
+
+        $problem = $this->client->configurationProblem();
+        if ($problem !== null) {
+            // La pasada de siempre deja constancia del motivo, sin llamar a Meta.
+            $this->run($trigger, $from, $to);
+
+            return ['status' => MetaSyncRun::STATUS_NOT_CONFIGURED, 'reason' => $problem, 'accounts' => []];
+        }
+
+        // Antes de pedir nada: un rango que no vale no vale para ninguna cuenta.
+        $this->range($from, $to);
+
+        // Cuentas que no están conectadas, también antes: no se deja una vuelta a medias.
+        // Pares [cuenta, sincronización]: una clave numérica de PHP dejaría de ser texto.
+        $syncs = [];
+        foreach ($only ?? $this->client->accountIds() as $account) {
+            $sync = $this->forAccount((string) $account);
+            $syncs[] = [(string) $sync->client->accountId(), $sync];
+        }
+
+        $results = [];
+        $limited = false;
+        foreach ($syncs as [$account, $sync]) {
+            if (array_key_exists($account, $results)) {
+                continue;
+            }
+
+            if ($limited) {
+                $results[$account] = ['account' => $account, 'status' => self::STATUS_SKIPPED, 'reason' => MetaAdsApiException::RATE_LIMIT];
+
+                continue;
+            }
+
+            try {
+                $result = $sync->run($trigger, $from, $to);
+            } catch (Throwable $e) {
+                // Un fallo NUESTRO en esta cuenta no tumba la vuelta de las demás.
+                // No se esconde: va al log del canal con su detalle saneado (y, si
+                // llegó a abrir la pasada, run() ya dejó su fila como `internal`).
+                ChannelLog::error('meta.ads.sync.account_crashed', [
+                    'account' => LeadSourceClassifier::maskId($account),
+                    'trigger' => $trigger,
+                    'exception' => class_basename($e),
+                    'error_message' => MetaAdsApiClient::sanitize($e->getMessage(), 1000),
+                ]);
+                $result = [
+                    'status' => MetaSyncRun::STATUS_FAILED,
+                    'error_code' => MetaSyncRun::ERROR_INTERNAL,
+                    'error_message' => MetaSyncRun::INTERNAL_ERROR_MESSAGE,
+                    'retryable' => false,
+                ];
+            }
+
+            // Un límite en la pasada, o en una petición accesoria de ella, es del cupo de la app.
+            $limited = $sync->limited()
+                || (($result['status'] ?? null) === MetaSyncRun::STATUS_FAILED && ($result['error_code'] ?? null) === MetaAdsApiException::RATE_LIMIT);
+            $results[$account] = ['account' => $account] + $result + ['limited' => $sync->limited()];
+        }
+
+        // Una vez en true no vuelve a false: las cuentas de después se saltaron sin pedir nada.
+        return ['status' => $this->overall(array_column($results, 'status')), 'limited' => $limited, 'accounts' => $results];
+    }
+
+    /**
+     * Cómo está la sincronización de la cuenta de esta instancia (la ligada o la
+     * principal). El de todas, consolidado, es {@see statusAll()}.
      *
      * `status`:
      *  - not_configured: falta el token o la cuenta (`reason` dice qué).
@@ -221,8 +380,93 @@ class MetaAdsSync
     }
 
     /**
-     * Días de la cuenta configurada cubiertos por pasadas CON ÉXITO, fundidos en
-     * tramos continuos y ordenados. Es lo que separa «cero» de «no se sabe».
+     * El estado de TODAS las cuentas conectadas, con las mismas claves que
+     * {@see status()} y el detalle por cuenta en `accounts`:
+     *
+     *  - status: `not_configured` sin token o sin ninguna cuenta; si no, el peor
+     *    de las cuentas (running > failed > stale > ok).
+     *  - last_success_at y minutes_since_success: los del éxito MÁS VIEJO (null
+     *    si alguna cuenta nunca lo tuvo): «al día» solo si lo están todas.
+     *  - last_attempt_at: el intento más reciente de cualquiera.
+     *  - last_error: el de una cuenta fallida (la primera en orden), con su
+     *    `account_id` enmascarado.
+     *  - covered_from y covered_to: la intersección de los tramos de cada
+     *    cuenta (el `from` más tardío y el `to` más temprano), o null.
+     *  - accounts: por cuenta, `id` opaco, `ref` («***» y cuatro dígitos),
+     *    `name` (null si aún no se leyó) y su estado, con su último intento
+     *    (`last_attempt_at`, ISO como el consolidado): así se ve qué cuenta ya
+     *    corrió de las que despachó el abanico.
+     *
+     * @return array<string, mixed>
+     */
+    public function statusAll(): array
+    {
+        $problem = $this->client->configurationProblem();
+        $accounts = $this->client->accountIds();
+        $names = MetaAdEntity::accountNames($accounts);
+
+        $states = [];
+        foreach ($accounts as $account) {
+            $states[$account] = $this->forAccount($account)->status();
+        }
+
+        $rows = [];
+        $lastError = null;
+        foreach ($accounts as $account) {
+            $s = $states[$account];
+            $rows[] = MetaAdEntity::publicAccount($account, $names[$account] ?? null) + [
+                'status' => $s['status'],
+                'last_success_at' => $s['last_success_at'],
+                'last_attempt_at' => $s['last_attempt_at'],
+                'minutes_since_success' => $s['minutes_since_success'],
+                'last_error' => $s['last_error'],
+                'covered_from' => $s['covered_from'],
+                'covered_to' => $s['covered_to'],
+            ];
+            if ($lastError === null && $s['status'] === MetaSyncRun::STATUS_FAILED && $s['last_error'] !== null) {
+                $lastError = $s['last_error'] + ['account_id' => LeadSourceClassifier::maskId($account)];
+            }
+        }
+
+        $successes = array_column($states, 'last_success_at');
+        $everySucceeded = $states !== [] && ! in_array(null, $successes, true);
+        $oldest = $everySucceeded ? $this->oldestState($states) : null;
+
+        $attempts = array_filter(array_column($states, 'last_attempt_at'), fn (?string $at): bool => $at !== null);
+        $lastAttempt = $attempts === [] ? null : array_reduce(
+            $attempts,
+            fn (?string $carry, string $at): string => $carry === null || CarbonImmutable::parse($at)->greaterThan(CarbonImmutable::parse($carry)) ? $at : $carry,
+        );
+
+        [$coveredFrom, $coveredTo] = $this->intersection($states);
+
+        $statuses = array_column($states, 'status');
+        $status = match (true) {
+            $problem !== null || $states === [] => MetaSyncRun::STATUS_NOT_CONFIGURED,
+            in_array(MetaSyncRun::STATUS_RUNNING, $statuses, true) => MetaSyncRun::STATUS_RUNNING,
+            in_array(MetaSyncRun::STATUS_FAILED, $statuses, true) => MetaSyncRun::STATUS_FAILED,
+            in_array('stale', $statuses, true) => 'stale',
+            default => MetaSyncRun::STATUS_OK,
+        };
+
+        return [
+            'status' => $status,
+            'configured' => $problem === null && $states !== [],
+            'reason' => $problem ?? ($states === [] ? 'missing_ad_account_id' : null),
+            'last_success_at' => $oldest['last_success_at'] ?? null,
+            'last_attempt_at' => $lastAttempt,
+            'minutes_since_success' => $oldest['minutes_since_success'] ?? null,
+            'last_error' => $lastError,
+            'covered_from' => $coveredFrom,
+            'covered_to' => $coveredTo,
+            'accounts' => $rows,
+        ];
+    }
+
+    /**
+     * Días de la cuenta de esta sincronización cubiertos por pasadas CON ÉXITO,
+     * fundidos en tramos continuos y ordenados. Es lo que separa «cero» de «no
+     * se sabe». Cada cuenta tiene los suyos: los de una no cubren a otra.
      *
      * @return list<array{0: string, 1: string}> tramos [desde, hasta], inclusive
      */
@@ -305,6 +549,11 @@ class MetaAdsSync
      * en el log del canal sin tocar las fotos que ya hay ni la pasada de gasto.
      * Nunca lanza.
      *
+     * Es de la cuenta de esta sincronización. Una cuenta sin impresiones en los
+     * últimos {@see REACH_ACTIVE_DAYS} días no se pide (`skipped_inactive`): su
+     * alcance en esos rangos es 0 y pedirlo gastaría el cupo de la app, que
+     * comparten todas. Tampoco se le escribe un 0: sin foto, el panel dice «—».
+     *
      * @return array{status: string, ranges_ok: int, ranges_failed: int, rows: int}
      */
     public function refreshReach(): array
@@ -314,12 +563,33 @@ class MetaAdsSync
         }
 
         if ($this->limited) {
-            ChannelLog::warning('meta.ads.reach.skipped', ['error_code' => MetaAdsApiException::RATE_LIMIT]);
+            ChannelLog::warning('meta.ads.reach.skipped', ['error_code' => MetaAdsApiException::RATE_LIMIT, 'account' => $this->accountRef()]);
 
             return ['status' => MetaAdsApiException::RATE_LIMIT, 'ranges_ok' => 0, 'ranges_failed' => 0, 'rows' => 0];
         }
 
         $account = (string) $this->client->accountId();
+
+        try {
+            $active = $this->hadRecentImpressions($account);
+        } catch (Throwable $e) {
+            // Sin poder leer la base no se le pide nada a Meta; nunca lanza, pero no se esconde.
+            ChannelLog::error('meta.ads.reach.crashed', [
+                'account' => $this->accountRef(),
+                'exception' => class_basename($e),
+                'error_message' => MetaAdsApiClient::sanitize($e->getMessage(), 1000),
+            ]);
+
+            return ['status' => MetaSyncRun::STATUS_FAILED, 'ranges_ok' => 0, 'ranges_failed' => 0, 'rows' => 0];
+        }
+
+        if (! $active) {
+            ChannelLog::info('meta.ads.reach.skipped_inactive', ['account' => $this->accountRef(), 'days' => self::REACH_ACTIVE_DAYS]);
+            $this->pruneReach($account);
+
+            return ['status' => self::REACH_SKIPPED_INACTIVE, 'ranges_ok' => 0, 'ranges_failed' => 0, 'rows' => 0];
+        }
+
         $ok = 0;
         $failed = 0;
         $written = 0;
@@ -340,6 +610,7 @@ class MetaAdsSync
                 $failed++;
                 $this->limited = $this->limited || $e->category === MetaAdsApiException::RATE_LIMIT;
                 ChannelLog::warning('meta.ads.reach.skipped', [
+                    'account' => $this->accountRef(),
                     'since' => $since,
                     'until' => $until,
                     'error_code' => $e->category,
@@ -351,6 +622,7 @@ class MetaAdsSync
                 // esconde: va como error al log del canal, con su detalle saneado.
                 $failed++;
                 ChannelLog::error('meta.ads.reach.crashed', [
+                    'account' => $this->accountRef(),
                     'since' => $since,
                     'until' => $until,
                     'exception' => class_basename($e),
@@ -359,14 +631,7 @@ class MetaAdsSync
             }
         }
 
-        try {
-            DB::table('meta_ad_reach_snapshots')
-                ->where('ad_account_id', $account)
-                ->where('date_to', '<', CarbonImmutable::now($this->client->timezone())->subDays(self::REACH_RETENTION_DAYS)->toDateString())
-                ->delete();
-        } catch (Throwable $e) {
-            ChannelLog::warning('meta.ads.reach.prune_skipped', ['exception' => class_basename($e)]);
-        }
+        $this->pruneReach($account);
 
         return [
             'status' => $failed === 0 ? MetaSyncRun::STATUS_OK : MetaSyncRun::STATUS_FAILED,
@@ -403,14 +668,44 @@ class MetaAdsSync
         return array_values($out);
     }
 
+    /** ¿Tuvo la cuenta alguna impresión en los últimos {@see REACH_ACTIVE_DAYS} días (de la base)? */
+    private function hadRecentImpressions(string $account): bool
+    {
+        return DB::table('meta_ad_insights_daily')
+            ->where('ad_account_id', $account)
+            ->where('date', '>=', CarbonImmutable::now($this->client->timezone())->subDays(self::REACH_ACTIVE_DAYS)->toDateString())
+            ->where('impressions', '>', 0)
+            ->exists();
+    }
+
+    /** Borra las fotos de alcance de la cuenta que ya no sirven a ningún rango del panel. Nunca lanza. */
+    private function pruneReach(string $account): void
+    {
+        try {
+            DB::table('meta_ad_reach_snapshots')
+                ->where('ad_account_id', $account)
+                ->where('date_to', '<', CarbonImmutable::now($this->client->timezone())->subDays(self::REACH_RETENTION_DAYS)->toDateString())
+                ->delete();
+        } catch (Throwable $e) {
+            ChannelLog::warning('meta.ads.reach.prune_skipped', ['exception' => class_basename($e), 'account' => $this->accountRef()]);
+        }
+    }
+
+    /** La cuenta de esta sincronización como va a los logs: «***» y sus cuatro últimos dígitos. */
+    private function accountRef(): ?string
+    {
+        return LeadSourceClassifier::maskId($this->client->accountId());
+    }
+
     /** @return array<string,mixed> */
     private function runLocked(string $trigger, string $since, string $until): array
     {
         $account = (string) $this->client->accountId();
 
-        // Con el cerrojo en la mano, cualquier fila `running` es de una pasada que
-        // murió sin cerrarla. Se cierra para que el estado no diga «en curso».
-        $this->closeInterrupted();
+        // Con el cerrojo de la cuenta en la mano, cualquier fila `running` suya es
+        // de una pasada que murió sin cerrarla. Se cierra para que el estado no
+        // diga «en curso».
+        $this->closeInterrupted($account);
 
         $run = MetaSyncRun::create([
             'kind' => MetaSyncRun::KIND_INSIGHTS,
@@ -431,11 +726,16 @@ class MetaAdsSync
             $backfill = $trigger === MetaSyncRun::TRIGGER_BACKFILL;
             $campaigns = $backfill ? null : $this->campaignStatuses();
             $statuses = $backfill ? [] : $this->entityStatuses();
+            // El nombre de la cuenta, una vez al día como mucho: accesorio, como los estados.
+            $profile = $this->accountProfile($account);
 
-            $deleted = DB::transaction(function () use ($run, $rows, $campaigns, $statuses, $account, $since, $until): int {
+            $deleted = DB::transaction(function () use ($run, $rows, $campaigns, $statuses, $profile, $account, $since, $until): int {
                 $this->upsertInsights($rows);
                 $deleted = $this->deleteVanished($rows, $account, $since, $until);
                 $this->upsertEntities($rows, $campaigns, $account, $statuses);
+                if ($profile !== null) {
+                    $this->upsertAccountProfile($account, $profile['name']);
+                }
 
                 $run->forceFill([
                     'status' => MetaSyncRun::STATUS_OK,
@@ -450,6 +750,7 @@ class MetaAdsSync
 
             ChannelLog::warning('meta.ads.sync.failed', [
                 'run_id' => $run->id,
+                'account' => $this->accountRef(),
                 'trigger' => $trigger,
                 'error_code' => $e->category,
                 'http_status' => $e->httpStatus,
@@ -476,6 +777,7 @@ class MetaAdsSync
 
             ChannelLog::error('meta.ads.sync.crashed', [
                 'run_id' => $run->id,
+                'account' => $this->accountRef(),
                 'trigger' => $trigger,
                 'error_code' => MetaSyncRun::ERROR_INTERNAL,
                 'exception' => class_basename($e),
@@ -490,6 +792,7 @@ class MetaAdsSync
         // teléfono toda clave con «from» o «to» y enmascararía la fecha.
         ChannelLog::info('meta.ads.sync.ok', [
             'run_id' => $run->id,
+            'account' => $this->accountRef(),
             'trigger' => $trigger,
             'since' => $since,
             'until' => $until,
@@ -582,6 +885,7 @@ class MetaAdsSync
         } catch (MetaAdsApiException $e) {
             $this->limited = $this->limited || $e->category === MetaAdsApiException::RATE_LIMIT;
             ChannelLog::warning('meta.ads.sync.campaign_status_skipped', [
+                'account' => $this->accountRef(),
                 'error_code' => $e->category,
                 'http_status' => $e->httpStatus,
                 'meta_code' => $e->metaCode,
@@ -634,6 +938,7 @@ class MetaAdsSync
             } catch (MetaAdsApiException $e) {
                 $this->limited = $this->limited || $e->category === MetaAdsApiException::RATE_LIMIT;
                 ChannelLog::warning('meta.ads.sync.entity_status_skipped', [
+                    'account' => $this->accountRef(),
                     'level' => $level,
                     'error_code' => $e->category,
                     'http_status' => $e->httpStatus,
@@ -842,6 +1147,69 @@ class MetaAdsSync
     }
 
     /**
+     * El nombre de la cuenta, si hace falta pedirlo: su fila de nivel `account`
+     * no existe o tiene más de {@see ACCOUNT_PROFILE_HOURS} horas. `GET act_{id}`
+     * con los campos de la ficha. Accesorio: si falla, la pasada sigue y se
+     * pedirá en la siguiente; tras un límite de Meta, no se pide.
+     *
+     * @return array{name: ?string}|null null si no hay nada que escribir
+     */
+    private function accountProfile(string $account): ?array
+    {
+        if ($this->limited) {
+            return null;
+        }
+
+        $syncedAt = MetaAdEntity::query()
+            ->where('ad_account_id', $account)
+            ->where('level', MetaAdEntity::LEVEL_ACCOUNT)
+            ->where('entity_id', $account)
+            ->value('synced_at');
+
+        if ($syncedAt instanceof CarbonInterface && $syncedAt->greaterThan(now()->subHours(self::ACCOUNT_PROFILE_HOURS))) {
+            return null;
+        }
+
+        try {
+            $body = $this->client->account();
+        } catch (MetaAdsApiException $e) {
+            $this->limited = $this->limited || $e->category === MetaAdsApiException::RATE_LIMIT;
+            ChannelLog::warning('meta.ads.sync.account_profile_skipped', [
+                'account' => $this->accountRef(),
+                'error_code' => $e->category,
+                'http_status' => $e->httpStatus,
+                'meta_code' => $e->metaCode,
+            ]);
+
+            return null;
+        }
+
+        return ['name' => $this->name($body['name'] ?? null)];
+    }
+
+    /**
+     * Guarda el nombre de la cuenta en su fila de nivel `account` (entity_id =
+     * la cuenta). Si Meta no trajo nombre, se conserva el que había y solo se
+     * anota que se miró.
+     */
+    private function upsertAccountProfile(string $account, ?string $name): void
+    {
+        MetaAdEntity::query()->upsert(
+            [[
+                'ad_account_id' => $account,
+                'level' => MetaAdEntity::LEVEL_ACCOUNT,
+                'entity_id' => $account,
+                'name' => $name,
+                'campaign_id' => null,
+                'adset_id' => null,
+                'synced_at' => now()->toDateTimeString(),
+            ]],
+            ['ad_account_id', 'level', 'entity_id'],
+            $name === null ? ['synced_at'] : ['name', 'synced_at'],
+        );
+    }
+
+    /**
      * Pone el estado de Meta a las campañas, conjuntos y anuncios que YA están
      * en la dimensión de la cuenta (de esta pasada o de otras, como las del
      * relleno). No añade entidades: la dimensión sale de las filas de gasto.
@@ -877,8 +1245,8 @@ class MetaAdsSync
 
     /**
      * Estados de campañas, conjuntos y anuncios de toda la cuenta, fuera de una
-     * pasada de gasto: lo usa el relleno al terminar, una sola vez. Con el
-     * cerrojo de la sincronización (si hay una pasada en curso, no hace nada:
+     * pasada de gasto: lo usa el relleno al terminar, una sola vez por cuenta.
+     * Con el cerrojo de la cuenta (si hay una pasada suya en curso, no hace nada:
      * la siguiente pasada ya aplica los estados a toda la dimensión). Accesorio:
      * nunca lanza.
      *
@@ -892,7 +1260,7 @@ class MetaAdsSync
             return ['status' => MetaSyncRun::STATUS_NOT_CONFIGURED] + $nothing;
         }
 
-        $lock = Cache::lock(self::LOCK_KEY, self::LOCK_SECONDS);
+        $lock = Cache::lock($this->lockKey(), self::LOCK_SECONDS);
         if (! $lock->get()) {
             return ['status' => MetaSyncRun::STATUS_RUNNING] + $nothing;
         }
@@ -915,6 +1283,7 @@ class MetaAdsSync
             ];
         } catch (Throwable $e) {
             ChannelLog::error('meta.ads.statuses.crashed', [
+                'account' => $this->accountRef(),
                 'exception' => class_basename($e),
                 'error_message' => MetaAdsApiClient::sanitize($e->getMessage(), 1000),
             ]);
@@ -959,11 +1328,74 @@ class MetaAdsSync
         return [$since->toDateString(), $until->toDateString()];
     }
 
-    private function closeInterrupted(): void
+    /**
+     * El estado de la vuelta de {@see runAll()} a partir de los de cada cuenta.
+     *
+     * @param  list<string>  $statuses
+     */
+    private function overall(array $statuses): string
+    {
+        $unique = array_values(array_unique($statuses));
+
+        return match (true) {
+            $unique === [] => MetaSyncRun::STATUS_NOT_CONFIGURED,
+            count($unique) === 1 && $unique[0] !== self::STATUS_SKIPPED => $unique[0],
+            in_array(MetaSyncRun::STATUS_OK, $unique, true) => self::STATUS_PARTIAL,
+            default => MetaSyncRun::STATUS_FAILED,
+        };
+    }
+
+    /**
+     * El estado de la cuenta cuyo último éxito es el MÁS VIEJO.
+     *
+     * @param  array<string, array<string, mixed>>  $states  todas con `last_success_at`
+     * @return array<string, mixed>
+     */
+    private function oldestState(array $states): array
+    {
+        $oldest = null;
+        foreach ($states as $s) {
+            if ($oldest === null || CarbonImmutable::parse($s['last_success_at'])->lessThan(CarbonImmutable::parse($oldest['last_success_at']))) {
+                $oldest = $s;
+            }
+        }
+
+        return $oldest ?? [];
+    }
+
+    /**
+     * La intersección de los tramos cubiertos de cada cuenta: el `from` más
+     * tardío y el `to` más temprano. Null si alguna no tiene tramo o si no se
+     * solapan.
+     *
+     * @param  array<string, array<string, mixed>>  $states
+     * @return array{0: ?string, 1: ?string}
+     */
+    private function intersection(array $states): array
+    {
+        $froms = array_column($states, 'covered_from');
+        $tos = array_column($states, 'covered_to');
+        if ($states === [] || in_array(null, $froms, true) || in_array(null, $tos, true)) {
+            return [null, null];
+        }
+
+        $from = max($froms);
+        $to = min($tos);
+
+        return $from <= $to ? [$from, $to] : [null, null];
+    }
+
+    /**
+     * Con el cerrojo de la cuenta en la mano, cualquier fila `running` de ESA
+     * cuenta es de una pasada que murió sin cerrarla. Las de otras cuentas
+     * tienen su propio cerrojo y pueden estar corriendo de verdad.
+     */
+    private function closeInterrupted(string $account): void
     {
         MetaSyncRun::query()
             ->where('kind', MetaSyncRun::KIND_INSIGHTS)
             ->where('status', MetaSyncRun::STATUS_RUNNING)
+            ->where('ad_account_id', $account)
             ->update([
                 'status' => MetaSyncRun::STATUS_FAILED,
                 'error_code' => MetaSyncRun::ERROR_INTERRUPTED,

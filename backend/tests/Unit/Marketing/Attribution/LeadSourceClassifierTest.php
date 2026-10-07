@@ -68,6 +68,43 @@ class LeadSourceClassifierTest extends TestCase
         $this->assertTrue($c['resolved']);
     }
 
+    /**
+     * Multicuenta: un anuncio de CUALQUIER cuenta conectada resuelve, con su
+     * cuenta (cruda, para quien agrega); uno de una cuenta que no está conectada
+     * no resuelve, aunque esté en la dimensión.
+     */
+    public function test_un_anuncio_de_cualquier_cuenta_conectada_resuelve(): void
+    {
+        config()->set('meta.ads.ad_account_ids', ['1111111111', 'act_2222222222']);
+        $this->adHierarchy('120230001', '120211', '120201', 'Campaña de A', account: '1111111111');
+        $this->adHierarchy('120230002', '120212', '120202', 'Campaña de B', 'Conjunto B', 'Anuncio B', account: '2222222222');
+        $this->adHierarchy('120230003', '120213', '120203', 'Campaña ajena', account: '3333333333');
+
+        $clasificar = function (string $adId): array {
+            $lead = $this->lead('2026-10-02 15:00:00');
+            $this->touch($lead, $this->adReferral($adId, 'https://fb.me/x', 'clic-'.$adId), '2026-10-02 15:00:00');
+
+            return $this->classifier()->classify($this->attributionOf($lead), $lead);
+        };
+
+        $a = $clasificar('120230001');
+        $this->assertSame([true, '1111111111', '120201', 'Campaña de A'], [$a['resolved'], $a['account_id'], $a['campaign_id'], $a['campaign_name']]);
+
+        $b = $clasificar('120230002');
+        $this->assertSame(
+            [true, '2222222222', '120202', 'Campaña de B', '120212', 'Conjunto B', 'Anuncio B'],
+            [$b['resolved'], $b['account_id'], $b['campaign_id'], $b['campaign_name'], $b['adset_id'], $b['adset_name'], $b['ad_name']],
+        );
+
+        $ajena = $clasificar('120230003');
+        $this->assertSame(['paid', false, null, null, null], [$ajena['origin'], $ajena['resolved'], $ajena['account_id'], $ajena['campaign_id'], $ajena['campaign_name']]);
+
+        // Lo que no es pauta no tiene cuenta.
+        $organico = $this->lead('2026-10-02 16:00:00');
+        $this->touch($organico, $this->postReferral(), '2026-10-02 16:00:00');
+        $this->assertNull($this->classifier()->classify($this->attributionOf($organico), $organico)['account_id']);
+    }
+
     /** D9: sin la dimensión no hay campaña, y no se deduce de nada que coincida en fechas. */
     public function test_sin_dimension_no_hay_campana_y_no_se_deduce_por_fechas(): void
     {

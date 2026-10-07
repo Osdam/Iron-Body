@@ -23,9 +23,10 @@ use InvalidArgumentException;
  * La campaña, el conjunto y el nombre del anuncio se resuelven por el `ad_id`
  * contra la dimensión que sincroniza la Marketing API (`meta_ad_entities`): la
  * relación anuncio → conjunto → campaña la da Meta. Solo cuenta la dimensión de
- * la cuenta publicitaria CONFIGURADA ({@see MetaAdEntity::scopeForConfiguredAccount()}):
- * un anuncio de otra cuenta no tiene gasto conocido en esta, así que no se
- * resuelve (`resolved = false`). Sin esa fila quedan en null.
+ * las cuentas publicitarias CONECTADAS ({@see MetaAdEntity::scopeForConfiguredAccount()}):
+ * un anuncio de cualquiera de ellas resuelve, con su cuenta en `account_id`; uno
+ * de una cuenta no conectada no tiene gasto conocido, así que no se resuelve
+ * (`resolved = false`). Sin esa fila quedan en null.
  * NUNCA se deduce la campaña por coincidencia de fechas.
  *
  * Solo lee. Para no hacer una consulta por lead, quien clasifica muchos llama
@@ -71,7 +72,7 @@ class LeadSourceClassifier
         'meta_organic' => 'Meta orgánico (plataforma sin identificar)',
     ];
 
-    /** @var array<string, array{name: ?string, campaign_id: ?string, adset_id: ?string}|null> anuncios ya buscados; null = no está */
+    /** @var array<string, array{name: ?string, campaign_id: ?string, adset_id: ?string, account_id: string}|null> anuncios ya buscados; null = no está */
     private array $ads = [];
 
     /** @var array<string, ?string> nombres de campañas y conjuntos por «nivel|id» */
@@ -101,7 +102,7 @@ class LeadSourceClassifier
                 ->forConfiguredAccount()
                 ->where('level', MetaAdEntity::LEVEL_AD)
                 ->whereIn('entity_id', array_map('strval', $ids))
-                ->get(['entity_id', 'name', 'campaign_id', 'adset_id'])
+                ->get(['entity_id', 'name', 'campaign_id', 'adset_id', 'ad_account_id'])
                 ->keyBy('entity_id');
 
             foreach ($ids as $id) {
@@ -110,6 +111,8 @@ class LeadSourceClassifier
                     'name' => $ad->name,
                     'campaign_id' => $ad->campaign_id,
                     'adset_id' => $ad->adset_id,
+                    // De qué cuenta conectada es (cruda: solo para quien agrega).
+                    'account_id' => (string) $ad->ad_account_id,
                 ];
             }
         }
@@ -120,12 +123,13 @@ class LeadSourceClassifier
     /**
      * Clasifica el primer o el último contacto de un lead.
      *
-     * `ad_id` va completo porque lo necesita quien agrega; quien responde al
-     * front tiene que enmascararlo ({@see maskId()}).
+     * `ad_id` y `account_id` (la cuenta conectada del anuncio, si resolvió) van
+     * completos porque los necesita quien agrega; quien responde al front tiene
+     * que enmascararlos ({@see maskId()}).
      *
      * @return array{touch: string, channel: ?string, origin: string, platform: ?string, key: string,
      *     ad_id: ?string, campaign_id: ?string, campaign_name: ?string, adset_id: ?string,
-     *     adset_name: ?string, ad_name: ?string, resolved: bool}
+     *     adset_name: ?string, ad_name: ?string, resolved: bool, account_id: ?string}
      */
     public function classify(?MarketingLeadAttribution $a, MarketingLead $lead, string $touch = 'first'): array
     {
@@ -169,6 +173,7 @@ class LeadSourceClassifier
                 : null,
             'ad_name' => $ad['name'] ?? null,
             'resolved' => $ad !== null,
+            'account_id' => $ad['account_id'] ?? null,
         ];
     }
 
@@ -356,7 +361,7 @@ class LeadSourceClassifier
         return ! $a->first_touch_at->equalTo($a->last_touch_at);
     }
 
-    /** @return array{name: ?string, campaign_id: ?string, adset_id: ?string}|null */
+    /** @return array{name: ?string, campaign_id: ?string, adset_id: ?string, account_id: string}|null */
     private function ad(?string $adId): ?array
     {
         if ($adId === null) {

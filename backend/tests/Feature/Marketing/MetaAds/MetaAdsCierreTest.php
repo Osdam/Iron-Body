@@ -188,7 +188,8 @@ class MetaAdsCierreTest extends TestCase
         $this->assertSame('ok', $this->sync()->run(MetaSyncRun::TRIGGER_BACKFILL, $this->day('2026-10-01'), $this->day('2026-10-05'))['status']);
         $this->fakeMetaExtras(ads: $this->bordeComoMeta([['id' => '9001', 'effective_status' => 'PAUSED']]));
 
-        $cerrojo = Cache::lock(MetaAdsSync::LOCK_KEY, 60);
+        // El cerrojo de ESTA cuenta (hay uno por cuenta).
+        $cerrojo = Cache::lock(MetaAdsSync::LOCK_KEY.':'.self::ACCOUNT, 60);
         $this->assertTrue($cerrojo->get());
         $this->assertSame(['status' => 'running', 'campaigns' => 0, 'adsets' => 0, 'ads' => 0], $this->sync()->refreshStatuses());
         $this->assertNull(MetaAdEntity::where('level', 'ad')->sole()->effective_status, 'con una pasada en curso no toca nada');
@@ -200,7 +201,7 @@ class MetaAdsCierreTest extends TestCase
         Schema::rename('meta_ad_entities', 'meta_ad_entities_fuera');
         $this->assertSame('failed', $this->sync()->refreshStatuses()['status']);
         Schema::rename('meta_ad_entities_fuera', 'meta_ad_entities');
-        $this->assertTrue(Cache::lock(MetaAdsSync::LOCK_KEY, 60)->get(), 'el cerrojo se suelta también al fallar');
+        $this->assertTrue(Cache::lock(MetaAdsSync::LOCK_KEY.':'.self::ACCOUNT, 60)->get(), 'el cerrojo se suelta también al fallar');
     }
 
     /**
@@ -332,6 +333,8 @@ class MetaAdsCierreTest extends TestCase
     /** El alcance se pide por rango entero y se guarda con sus fechas; un fallo de un rango no toca los demás. */
     public function test_el_alcance_se_guarda_por_rango_y_no_se_suma(): void
     {
+        // La cuenta tuvo impresiones hace poco: sin ellas no se pide el alcance (skipped_inactive).
+        MetaAdInsightDaily::create(['ad_account_id' => self::ACCOUNT, 'date' => '2026-10-02', 'ad_id' => '9001', 'spend' => '100', 'currency' => 'COP', 'impressions' => 1000]);
         $this->fakeMeta(['data' => []]);
         $peticiones = [];
         $this->fakeMetaExtras(reach: function (Request $r) use (&$peticiones) {
@@ -361,11 +364,15 @@ class MetaAdsCierreTest extends TestCase
         }
 
         $this->assertSame(4000, MetaAdReachSnapshot::where('level', 'campaign')->where('date_from', '2026-09-06')->where('date_to', '2026-10-05')->sole()->reach);
-        $this->assertSame(['reach' => 5000, 'impressions' => 9000, 'frequency' => 1.8], array_slice($this->reader()->accountReach('2026-09-06', '2026-10-05'), 0, 3));
-        $this->assertNull($this->reader()->accountReach('2026-10-05', '2026-10-05'), 'el rango que falló no tiene foto');
+        // La foto de la cuenta, leída con el lector de esa cuenta: no depende de qué otras cuentas tuvieron actividad.
+        $cuenta = $this->reader()->forAccount(self::ACCOUNT);
+        $this->assertSame(['reach' => 5000, 'impressions' => 9000, 'frequency' => 1.8], array_slice($cuenta->accountReach('2026-09-06', '2026-10-05'), 0, 3));
+        $this->assertNull($cuenta->accountReach('2026-10-05', '2026-10-05'), 'el rango que falló no tiene foto');
         // Del 1 al 5 de octubre es «Este mes»: Meta lo calculó. Del 2 al 5 no es ningún botón del panel.
-        $this->assertSame(5000, $this->reader()->accountReach('2026-10-01', '2026-10-05')['reach']);
-        $this->assertNull($this->reader()->accountReach('2026-10-02', '2026-10-05'), 'un rango que Meta no calculó no tiene alcance');
+        $this->assertSame(5000, $cuenta->accountReach('2026-10-01', '2026-10-05')['reach']);
+        $this->assertNull($cuenta->accountReach('2026-10-02', '2026-10-05'), 'un rango que Meta no calculó no tiene alcance');
+        // El consolidado, con una sola cuenta activa en el rango, es su foto.
+        $this->assertSame(5000, $this->reader()->accountReach('2026-09-06', '2026-10-05')['reach']);
 
         // Repetirlo no duplica; una campaña que ya no sale de ese rango se borra solo de ese rango.
         $this->fakeMetaExtras(reach: fn (Request $r) => Http::response(['data' => $this->queryOf($r)['level'] === 'account'

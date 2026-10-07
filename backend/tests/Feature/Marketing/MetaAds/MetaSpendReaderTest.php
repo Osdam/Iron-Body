@@ -264,10 +264,12 @@ class MetaSpendReaderTest extends TestCase
     }
 
     /**
-     * Por nivel, con las entidades que pide quien llama (las de los leads): una
-     * sin ninguna fila de gasto en la cuenta configurada (aquí, de la cuenta
-     * anterior) sale con gasto null, no con un 0 «comprobado»; una de esta
-     * cuenta que no gastó en el periodo cubierto, con 0.
+     * Por nivel, con las entidades que pide quien llama (las de los leads). El
+     * lector de UNA cuenta (lo de siempre): una sin ninguna fila de gasto en esa
+     * cuenta (aquí, de la cuenta anterior) sale con gasto null, no con un 0
+     * «comprobado»; una de esta cuenta que no gastó en el periodo cubierto, con
+     * 0. El consolidado reparte las pedidas por su cuenta dueña: una que no es
+     * de ninguna cuenta conectada no sale (el panel la trata como no conectada).
      */
     public function test_por_nivel_una_entidad_sin_gasto_en_la_cuenta_actual_no_es_cero(): void
     {
@@ -285,11 +287,17 @@ class MetaSpendReaderTest extends TestCase
         $this->sync()->run('manual', $this->day('2026-10-01'), $this->day('2026-10-05'));
 
         [$desde, $hasta] = $this->bogotaDays('2026-10-05', '2026-10-05');
+        $cuenta = $this->reader()->forAccount('2222222222');
 
         // Sin nada que incluir: solo lo que gastó la cuenta configurada en el periodo.
         $this->assertSame(['120202'], $this->reader()->byLevel('campaign', $desde, $hasta)->pluck('id')->all());
+        $this->assertSame(['120202'], $cuenta->byLevel('campaign', $desde, $hasta)->pluck('id')->all());
 
-        $filas = $this->reader()->byLevel('campaign', $desde, $hasta, ['120201', '120202', '120203', '120299', '120202', '']);
+        // El consolidado: solo las de una cuenta conectada; 120201 (de la anterior) y 120299 (de ninguna), no.
+        $pedidas = ['120201', '120202', '120203', '120299', '120202', ''];
+        $this->assertSame(['120202', '120203'], $this->reader()->byLevel('campaign', $desde, $hasta, $pedidas)->pluck('id')->all());
+
+        $filas = $cuenta->byLevel('campaign', $desde, $hasta, $pedidas);
         $this->assertSame(['120202', '120203', '120201', '120299'], $filas->pluck('id')->all());
         [$conGasto, $ceroComprobado, $deOtraCuenta, $desconocida] = $filas->all();
 
@@ -300,7 +308,8 @@ class MetaSpendReaderTest extends TestCase
             ['id' => '120203', 'name' => 'Campaña C', 'campaign_id' => '120203', 'adset_id' => null,
                 'spend' => 0.0, 'currency' => 'COP', 'impressions' => 0, 'clicks' => 0, 'link_clicks' => 0,
                 'messaging_started' => 0, 'messaging_replied' => 0, 'landing_page_views' => 0,
-                'reach' => null, 'frequency' => null, 'status' => null, 'partial' => false, 'last_day' => null],
+                'reach' => null, 'frequency' => null, 'status' => null, 'partial' => false, 'last_day' => null,
+                'account_id' => '2222222222'],
             $ceroComprobado,
         );
         // Ni su gasto ni su nombre salen de la otra cuenta.
@@ -308,15 +317,18 @@ class MetaSpendReaderTest extends TestCase
             ['id' => '120201', 'name' => null, 'campaign_id' => '120201', 'adset_id' => null,
                 'spend' => null, 'currency' => null, 'impressions' => null, 'clicks' => null, 'link_clicks' => null,
                 'messaging_started' => null, 'messaging_replied' => null, 'landing_page_views' => null,
-                'reach' => null, 'frequency' => null, 'status' => null, 'partial' => false, 'last_day' => null],
+                'reach' => null, 'frequency' => null, 'status' => null, 'partial' => false, 'last_day' => null,
+                'account_id' => '2222222222'],
             $deOtraCuenta,
         );
         $this->assertNull($desconocida['spend']);
 
         // Lo mismo por anuncio, con la jerarquía de la cuenta configurada.
-        $anuncios = $this->reader()->byLevel('ad', $desde, $hasta, ['9001', '9003'])->keyBy('id');
+        $anuncios = $cuenta->byLevel('ad', $desde, $hasta, ['9001', '9003'])->keyBy('id');
         $this->assertNull($anuncios['9001']['spend']);
         $this->assertSame([0.0, '120203', '120211'], [$anuncios['9003']['spend'], $anuncios['9003']['campaign_id'], $anuncios['9003']['adset_id']]);
+        // El consolidado: 9002 (gastó en el periodo) y 9003 (cero comprobado); 9001, de la cuenta anterior, no.
+        $this->assertSame(['9002', '9003'], $this->reader()->byLevel('ad', $desde, $hasta, ['9001', '9003'])->pluck('id')->all());
 
         // Sin una pasada que cubra el periodo, tampoco lo de esta cuenta es cero.
         [$desde, $hasta] = $this->bogotaDays('2026-09-20', '2026-09-20');
@@ -374,10 +386,24 @@ class MetaSpendReaderTest extends TestCase
 
     private function revisar(array $gasto): void
     {
+        // Las claves de siempre, más el gasto de cada cuenta conectada.
         $this->assertSame(
-            ['status', 'amount', 'currency', 'last_synced_at', 'covered_to', 'reason', 'complete'],
+            ['status', 'amount', 'currency', 'last_synced_at', 'covered_to', 'reason', 'complete', 'accounts'],
             array_keys($gasto),
         );
+        foreach ($gasto['accounts'] as $cuenta) {
+            $this->assertSame(['id', 'ref', 'name', 'status', 'amount', 'currency', 'complete', 'covered_to', 'reason'], array_keys($cuenta));
+            $this->assertMatchesRegularExpression('/^account:[a-f0-9]{16}$/', $cuenta['id']);
+            $this->assertMatchesRegularExpression('/^\*\*\*\d{4}$/', $cuenta['ref']);
+        }
+        // Con una sola cuenta, el consolidado es el de esa cuenta tal cual.
+        if (count($gasto['accounts']) === 1) {
+            $sola = $gasto['accounts'][0];
+            $this->assertSame(
+                [$sola['status'], $sola['amount'], $sola['currency'], $sola['complete'], $sola['covered_to'], $sola['reason']],
+                [$gasto['status'], $gasto['amount'], $gasto['currency'], $gasto['complete'], $gasto['covered_to'], $gasto['reason']],
+            );
+        }
 
         // Un 0 solo es real_zero, o la parte comprobada de un periodo que se dice incompleto.
         if ($gasto['amount'] !== null && (float) $gasto['amount'] === 0.0 && $gasto['complete']) {
