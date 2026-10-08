@@ -31,6 +31,7 @@ final class PermissionCatalog
         'cash.products' => ['label' => 'Caja de productos', 'icon' => 'storefront', 'hint' => 'Mostrador y venta de productos'],
         'cash.gym' => ['label' => 'Caja del gimnasio', 'icon' => 'fitness_center', 'hint' => 'Turno de caja de membresías'],
         'receivables' => ['label' => 'Cuentas por cobrar', 'icon' => 'request_quote', 'hint' => 'Saldos pendientes, créditos y abonos'],
+        'commissions' => ['label' => 'Comisiones', 'icon' => 'handshake', 'hint' => 'El piso que pagan los entrenadores por cada cliente personalizado'],
         'plans' => ['label' => 'Planes', 'icon' => 'card_membership', 'hint' => 'Catálogo de planes y sus funciones'],
         'inventory' => ['label' => 'Inventario', 'icon' => 'inventory_2', 'hint' => 'Productos y existencias'],
         'classes' => ['label' => 'Clases y asistencia', 'icon' => 'calendar_month', 'hint' => 'Horarios, reservas, ingreso y torniquete'],
@@ -75,6 +76,7 @@ final class PermissionCatalog
         'adjust' => 'Ajustar',
         'employee' => 'Acceso de empleado',
         'backdate' => 'Fechar hacia atrás',
+        'charge' => 'Cobrar',
         'enroll' => 'Inscribir',
     ];
 
@@ -129,6 +131,9 @@ final class PermissionCatalog
         'members.employee' => 'Dar y retirar el acceso de empleado: entrar a entrenar porque trabaja aquí, sin comprar un plan y sin que entre dinero en caja. Se le pueden poner días y franjas horarias, igual que a las horas valle de un plan, y se apaga el día que la persona deja de trabajar en el gimnasio. Convive con una membresía pagada: un entrenador puede ser empleado y además socio.',
         'members.freeze' => 'Pausar la membresía de un socio y devolverle después los días que le quedaban. Mientras está congelada no puede entrar, y queda registrado quién la pausó y por qué.',
         'payments.cancel' => 'Anular un pago ya registrado.',
+        'commissions.view' => 'Ver el panel del mes y el histórico de los pisos: quién pagó, quién debe y a quién no se le ha registrado todavía.',
+        'commissions.charge' => 'Registrar que alguien pagó el piso del mes, o abrirle la deuda. El dinero entra en la caja del gimnasio, así que hace falta tenerla abierta para cobrar en el acto.',
+        'commissions.manage' => 'Pactar con qué entrenador y por qué cliente se cobra piso, cuánto cuesta y quién lo asume. Es decidir un precio, no cobrarlo.',
         'payments.backdate' => 'Registrar un cobro con fecha de inicio ANTERIOR a hoy, para el socio que pagó hace días y se está registrando ahora. El dinero no se mueve: el cobro sigue entrando en la caja de hoy. Lo que retrocede es la vigencia, y con ella el vencimiento, así que puede dejar al socio vencido en el mismo momento del registro. Programar un inicio futuro no necesita este permiso.',
         'classes.enroll' => 'Inscribir socios en una clase y quitarlos, desde el mostrador. Aplica las mismas reglas que la app: plan con clases, cuenta al día y cupo. No permite crear ni editar horarios. Para buscar al socio hace falta también «Ver» en Miembros.',
         'classes.manage' => 'Crear, editar y eliminar clases y horarios. Incluye inscribir socios.',

@@ -84,6 +84,13 @@ final class CrmPermission
     // hace el mostrador todo el día, lo segundo mueve una vigencia al pasado.
     public const PAYMENTS_BACKDATE = 'payments.backdate';
 
+    // ── Comisiones (piso de entrenadores) ───────────────────────────────────
+    public const COMMISSIONS_VIEW = 'commissions.view';
+
+    public const COMMISSIONS_CHARGE = 'commissions.charge';
+
+    public const COMMISSIONS_MANAGE = 'commissions.manage';
+
     // ── Administración de roles ─────────────────────────────────────────────
     public const ROLES_MANAGE = 'roles.manage';
 
@@ -198,6 +205,9 @@ final class CrmPermission
             // Cuentas por cobrar: el mostrador es quien fía y quien cobra el
             // saldo cuando la persona vuelve. Es exactamente su trabajo.
             'receivables.view', 'receivables.create', 'receivables.operate',
+            // El piso de los entrenadores: lo cobra quien está en el mostrador
+            // cuando el entrenador se acerca. Pactar cuánto cuesta, no.
+            'commissions.view', 'commissions.charge',
             // Recepción gestiona inscripciones a clases desde el mostrador:
             // las ve y las hace, con las mismas reglas que la app. Crear y
             // editar horarios no (eso es `classes.manage`).

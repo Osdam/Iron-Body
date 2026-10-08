@@ -129,6 +129,9 @@ final class AuthorizationMap
         // lo mismo que operar un turno.
         'ReceivableController' => 'receivables',
 
+        // ── Comisiones (piso de entrenadores) ───────────────────────────────
+        'TrainerCommissionController' => 'commissions',
+
         // ── Inventario ──────────────────────────────────────────────────────
         'ProductController' => 'inventory',
         'InventoryController' => 'inventory',
@@ -449,6 +452,11 @@ final class AuthorizationMap
 
         // Anular una venta ya cobrada es supervisión, no operación de mostrador.
         'POST api/admin/caja/sales/{sale}/cancel' => 'cash.products.manage',
+
+        // Registrar que un entrenador pagó su piso —o abrirle la deuda— es
+        // trabajo de mostrador. Decidir CUÁNTO cuesta, no: eso es precio, y el
+        // precio no lo cambia quien cobra.
+        'POST api/admin/commissions/agreements/{agreement}/charge' => 'commissions.charge',
 
         // Ver el catálogo de roles ya revela el organigrama y qué puede cada
         // uno. Se exige el mismo permiso que para tocarlo: un dominio con una

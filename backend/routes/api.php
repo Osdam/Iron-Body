@@ -1429,6 +1429,31 @@ Route::patch('admin/receivables/{receivable}/due-date', [ReceivableController::c
 Route::delete('admin/receivables/{receivable}/due-date', [ReceivableController::class, 'removeDueDate'])
     ->whereNumber('receivable')->middleware('admin.can:receivables.manage');
 
+// ── Comisiones: el piso de los entrenadores ──────────────────────────────────
+//
+// Lo que el gimnasio cobra por cada cliente personalizado. Antes se registraba
+// como un PLAN —«Comisión de personalizados»— y un plan define la membresía de
+// quien lo tiene: había socios cuya vigencia la fijaba una comisión. Esto es su
+// sitio propio.
+//
+// El dinero NO estrena libro: cada mes cobrado abre una cuenta por cobrar de la
+// caja del GIMNASIO, con sus abonos y su anulación, y por eso aparece en Pagos
+// y en los informes del gimnasio sin tocarlos.
+Route::get('admin/commissions/board',       [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'board']);
+Route::get('admin/commissions/people',      [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'people']);
+Route::get('admin/commissions/agreements',  [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'index']);
+Route::post('admin/commissions/agreements', [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'store']);
+Route::get('admin/commissions/agreements/{agreement}/history', [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'history'])
+    ->whereNumber('agreement');
+// COBRAR es mostrador; PACTAR el valor no. Dos permisos distintos, y por eso
+// esta ruta se nombra aparte en AuthorizationMap.
+Route::post('admin/commissions/agreements/{agreement}/charge', [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'charge'])
+    ->whereNumber('agreement');
+Route::put('admin/commissions/agreements/{agreement}',    [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'update'])
+    ->whereNumber('agreement');
+Route::delete('admin/commissions/agreements/{agreement}', [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'destroy'])
+    ->whereNumber('agreement');
+
 // ── Facturación electrónica (Factus) — API administrativa (Fase 2) ────────────
 // Bajo /api/admin/* → blindado por ProtectAdminPaths (sesión admin o token).
 // Las rutas LITERALES (stats/config/manual-emit) van ANTES del wildcard
