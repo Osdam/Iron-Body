@@ -377,6 +377,60 @@ class PlanAccessTest extends TestCase
         );
     }
 
+    public function test_quitar_dias_recorta_desde_el_vencimiento(): void
+    {
+        // Le sobran 25 días y se le quitan 5: le tienen que quedar 20. Recortar
+        // «desde hoy» se los habría llevado casi todos de golpe.
+        $user = $this->socio($this->planIlimitado(), diasTranscurridos: 5);
+        $finPrevio = $user->membership_end_date;
+
+        $res = $this->postJson("/api/users/{$user->id}/adjustments", [
+            'kind' => 'days',
+            'amount' => -5,
+            'reason' => 'Se le cargaron días de más al vender el plan',
+        ], $this->h)->assertStatus(201)->json();
+
+        $this->assertSame(
+            CarbonImmutable::parse($finPrevio)->subDays(5)->toDateString(),
+            substr((string) $user->refresh()->membership_end_date, 0, 10),
+        );
+        $this->assertSame('−5 días', $res['adjustment']['label']);
+        $this->assertSame(-5, $res['adjustment']['amount']);
+    }
+
+    public function test_quitar_dias_puede_dejar_la_membresia_vencida(): void
+    {
+        // Deshacer 30 días dados por error el mes pasado deja al socio vencido,
+        // y eso es exactamente lo que se pretende. Queda con autor y motivo.
+        $user = $this->socio($this->planIlimitado(), diasTranscurridos: 25);
+
+        $this->postJson("/api/users/{$user->id}/adjustments", [
+            'kind' => 'days', 'amount' => -10, 'reason' => 'Corrige un ajuste anterior',
+        ], $this->h)->assertStatus(201);
+
+        $this->assertSame(
+            $this->hoy()->subDays(5)->toDateString(),
+            substr((string) $user->refresh()->membership_end_date, 0, 10),
+        );
+    }
+
+    public function test_no_se_quitan_mas_dias_de_los_que_tiene(): void
+    {
+        // Una vigencia no puede terminar antes de empezar.
+        $user = $this->socio($this->planIlimitado(), diasTranscurridos: 5);
+
+        $this->postJson("/api/users/{$user->id}/adjustments", [
+            'kind' => 'days', 'amount' => -300,
+        ], $this->h)
+            ->assertStatus(422)
+            ->assertJsonPath('ok', false);
+
+        $this->assertSame(
+            $this->hoy()->addDays(25)->toDateString(),
+            substr((string) $user->refresh()->membership_end_date, 0, 10),
+        );
+    }
+
     public function test_no_se_suman_dias_sobre_una_membresia_congelada(): void
     {
         $user = $this->socio($this->planIlimitado());

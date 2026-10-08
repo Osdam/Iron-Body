@@ -111,18 +111,75 @@ class MembershipStartAndChannelTest extends TestCase
         $this->assertSame($this->hoy()->toDateString(), $pago->period_start->toDateString());
     }
 
-    public function test_no_acepta_inicio_en_el_pasado_ni_demasiado_lejos(): void
+    public function test_el_inicio_solo_se_acepta_dentro_de_la_ventana(): void
     {
         $u = $this->socio();
         $plan = $this->plan();
 
-        $this->cobrar($u, $plan, ['starts_on' => $this->hoy()->subDay()->toDateString()])
+        // Fuera de rango por los dos lados. Casi siempre es un año mal escrito.
+        $this->cobrar($u, $plan, ['starts_on' => $this->hoy()->subDays(MembershipPeriod::MAX_START_BEHIND_DAYS + 1)->toDateString()])
             ->assertStatus(422)->assertJsonValidationErrors('starts_on');
 
         $this->cobrar($u, $plan, ['starts_on' => $this->hoy()->addDays(MembershipPeriod::MAX_START_AHEAD_DAYS + 1)->toDateString()])
             ->assertStatus(422)->assertJsonValidationErrors('starts_on');
 
         $this->assertDatabaseCount('payments', 0);
+    }
+
+    // ── Registro con fecha anterior ─────────────────────────────────────────
+
+    public function test_pago_el_dia_1_y_se_registra_el_8(): void
+    {
+        $u = $this->socio();
+        $inicio = $this->hoy()->subDays(7);
+
+        $this->cobrar($u, $this->plan(), ['starts_on' => $inicio->toDateString()])->assertStatus(201);
+
+        $pago = Payment::firstWhere('user_id', $u->id);
+
+        // La vigencia cuenta desde que el socio pagó de verdad, no desde que
+        // alguien tuvo tiempo de teclearlo: si empezara hoy se le regalarían
+        // siete días que no compró.
+        $this->assertSame($inicio->toDateString(), $pago->period_start->toDateString());
+        $this->assertSame($inicio->addDays(30)->toDateString(), $pago->period_end->toDateString());
+        $this->assertSame($inicio->addDays(30)->toDateString(), $u->refresh()->membership_end_date);
+    }
+
+    public function test_la_fecha_anterior_no_mueve_el_dinero_de_la_caja(): void
+    {
+        $u = $this->socio();
+        $inicio = $this->hoy()->subDays(10);
+
+        $this->cobrar($u, $this->plan(), ['starts_on' => $inicio->toDateString()])->assertStatus(201);
+
+        $pago = Payment::firstWhere('user_id', $u->id);
+
+        // ESTA es la comprobación que importa: el cobro sigue siendo de HOY.
+        // El dinero entró hoy al cajón y tiene que aparecer en el arqueo de hoy
+        // y en los ingresos de hoy, por mucho que la membresía arranque antes.
+        $this->assertSame($this->hoy()->toDateString(), $pago->paid_at->setTimezone(MembershipPeriod::TZ)->toDateString());
+        // Y la fecha pedida vive en su propio campo, sin pisar la del cobro.
+        $this->assertSame($inicio->toDateString(), $pago->starts_on->toDateString());
+    }
+
+    public function test_una_renovacion_con_fecha_anterior_no_se_solapa_con_lo_vigente(): void
+    {
+        // Sigue vigente diez días más y se registra un cobro fechado la semana
+        // pasada: el periodo nuevo se encadena al final del actual, como
+        // cualquier renovación anticipada. No se le quitan días ni se solapan.
+        $u = $this->socio([
+            'membership_start_date' => $this->hoy()->subDays(20)->toDateString(),
+            'membership_end_date' => $this->hoy()->addDays(10)->toDateString(),
+            'plan' => 'Mensual',
+        ]);
+
+        $this->cobrar($u, $this->plan(), ['starts_on' => $this->hoy()->subDays(7)->toDateString()])
+            ->assertStatus(201);
+
+        $pago = Payment::firstWhere('user_id', $u->id);
+
+        $this->assertSame($this->hoy()->addDays(10)->toDateString(), $pago->period_start->toDateString());
+        $this->assertSame($this->hoy()->addDays(40)->toDateString(), $u->refresh()->membership_end_date);
     }
 
     public function test_renovar_antes_de_vencer_encadena_y_no_pierde_dias(): void

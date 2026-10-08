@@ -39,7 +39,7 @@ class MembershipAdjustments
     public const ENTRY_PRESETS = [1, 2, 5, 10];
 
     /**
-     * Suma (o resta) días de vigencia.
+     * Suma o quita días de vigencia. Negativo = quitar.
      *
      * @return array{adjustment: MembershipAdjustment, membership: array{previous_end: string, end: string}}
      *
@@ -48,7 +48,7 @@ class MembershipAdjustments
     public function addDays(User $user, int $days, ?string $reason = null, ?Admin $actor = null): array
     {
         if ($days === 0) {
-            throw new RuntimeException('Indica cuántos días quieres sumar.');
+            throw new RuntimeException('Indica cuántos días quieres sumar o quitar.');
         }
         if (abs($days) > self::MAX_DAYS) {
             throw new RuntimeException('El ajuste no puede pasar de '.self::MAX_DAYS.' días.');
@@ -56,22 +56,47 @@ class MembershipAdjustments
 
         // Una membresía congelada tiene la vigencia movida al pasado a propósito
         // —es lo que hace que el terminal y la app bloqueen el paso—, así que
-        // sumarle días ahí los tiraría a la basura al reanudarse.
+        // tocarle los días ahí los tiraría a la basura al reanudarse.
         if (app(MembershipFreeze::class)->isFrozen($user)) {
-            throw new RuntimeException('Esta membresía está congelada. Reanúdala primero y después súmale los días.');
+            throw new RuntimeException('Esta membresía está congelada. Reanúdala primero y después ajústale los días.');
         }
 
         $hoy = MembershipFreeze::today();
         $fin = $this->day($user->membership_end_date);
+        $inicio = $this->day($user->membership_start_date);
 
-        // Si ya venció, los días se cuentan desde HOY: es lo que quiere decir
-        // quien los regala. Sumarlos detrás de un vencimiento viejo no le
-        // devolvería el acceso, que es justo lo que se está intentando.
-        $base = $fin && $fin->greaterThanOrEqualTo($hoy) ? $fin : $hoy;
+        /*
+         * DE DÓNDE SE CUENTA, que no es lo mismo al sumar que al quitar.
+         *
+         * SUMANDO, si ya venció se cuenta desde HOY: quien regala tres días
+         * quiere que el socio entre tres días, y ponerlos detrás de un
+         * vencimiento de hace un mes no le devolvería el acceso, que es justo
+         * lo que se está intentando.
+         *
+         * QUITANDO se cuenta siempre desde su vencimiento. Recortar «desde hoy»
+         * le quitaría de golpe todo lo que le quedaba: a quien le sobran veinte
+         * días y se le quitan tres, le tienen que quedar diecisiete.
+         */
+        if ($days < 0) {
+            if ($fin === null) {
+                throw new RuntimeException('Este socio no tiene vigencia que recortar.');
+            }
+            $base = $fin;
+        } else {
+            $base = $fin && $fin->greaterThanOrEqualTo($hoy) ? $fin : $hoy;
+        }
+
         $nuevo = $base->addDays($days);
 
-        if ($nuevo->lessThan($hoy->subDays(1)) && $days < 0) {
-            throw new RuntimeException('Con ese descuento la membresía quedaría vencida hace días. Revisa la cantidad.');
+        // El único límite de verdad: una vigencia no puede terminar antes de
+        // empezar. Que quede vencida en el pasado SÍ se permite — es lo que
+        // hace falta para deshacer unos días que se dieron por error el mes
+        // pasado—, y queda registrado con su motivo y su responsable.
+        if ($inicio !== null && $nuevo->lessThan($inicio)) {
+            throw new RuntimeException(
+                'Con ese descuento la membresía terminaría antes de empezar ('
+                .$inicio->toDateString().'). Revisa la cantidad.'
+            );
         }
 
         $previo = $fin?->toDateString() ?? '—';

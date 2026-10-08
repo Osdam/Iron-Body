@@ -12,6 +12,10 @@ class MembershipPlanController extends Controller
     {
         $plans = Plan::query()
             ->where('active', true)
+            // Oculto en la app NO es lo mismo que inactivo: el plan se sigue
+            // cobrando en el mostrador, pero el socio no lo ve en su teléfono.
+            // Ver la migración de `visible_in_app`.
+            ->where(fn ($q) => $q->where('visible_in_app', true)->orWhereNull('visible_in_app'))
             ->orderBy('sort_order')
             ->orderBy('price')
             ->get()
@@ -26,7 +30,9 @@ class MembershipPlanController extends Controller
 
     public function show(Plan $plan): JsonResponse
     {
-        if (! $plan->active) {
+        // Mismo criterio que el listado: si no se enseña, tampoco se abre por
+        // su enlace directo. Un 404 y no un 403: para la app ese plan no existe.
+        if (! $plan->isVisibleInApp()) {
             abort(404);
         }
 

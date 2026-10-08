@@ -24,9 +24,16 @@ use Illuminate\Support\Facades\Log;
  *
  * LAS REGLAS
  *
- *   1. Nunca empieza antes de pagarse. El inicio efectivo es el mayor entre el
- *      pedido y el día del cobro. Un pago pendiente que se confirma tarde no
- *      regala los días que pasaron sin pagar.
+ *   1. El inicio es el que se pide, y sin pedido el del día del cobro. Una
+ *      fecha hacia atrás se respeta —«pagó el día 1 y lo registramos el 8»—
+ *      dentro de la ventana que fija {@see startError()}.
+ *
+ *      CON UNA EXCEPCIÓN: un pago que estuvo PENDIENTE y se confirmó días
+ *      después no puede empezar antes de que entrara el dinero. Ahí la fecha
+ *      pedida se escribió cuando aún no había pagado, y respetarla le regalaría
+ *      los días que pasó sin pagar. Se distinguen por sus propias marcas: en un
+ *      cobro registrado con el dinero delante, cobro y creación son del mismo
+ *      día; en uno que esperó, no.
  *   2. Renovación anticipada: si el socio sigue vigente el día pedido, el
  *      periodo nuevo se ENCADENA al final del actual. No pierde los días que le
  *      quedaban ni se solapan dos periodos pagados.
@@ -52,6 +59,17 @@ class MembershipPeriod
      */
     public const MAX_START_AHEAD_DAYS = 90;
 
+    /**
+     * Cuánto se puede fechar hacia ATRÁS.
+     *
+     * Noventa días cubren lo que de verdad pasa —«pagó el día 1 y lo estamos
+     * registrando el 8», «se nos quedó sin registrar el cobro de la semana
+     * pasada»— y siguen dejando fuera el error de digitación de año, que es el
+     * que de verdad hace daño: un 2025 por un 2026 pone la membresía a vencer
+     * hace meses y el socio se queda en la puerta.
+     */
+    public const MAX_START_BEHIND_DAYS = 90;
+
     public static function today(): CarbonImmutable
     {
         return CarbonImmutable::now(self::TZ)->startOfDay();
@@ -60,8 +78,20 @@ class MembershipPeriod
     /**
      * Motivo por el que no se acepta un inicio pedido desde el CRM, o null.
      *
-     * Hacia atrás no: arrancar en el pasado le quita al socio días que pagó,
-     * que es justo el error que esto viene a evitar.
+     * HACIA ATRÁS SÍ, dentro de una ventana. Antes se rechazaba cualquier fecha
+     * pasada para que nadie fechara una membresía antes de pagarla y le robara
+     * días al socio. Pero el mostrador tiene el caso contrario todos los meses:
+     * el socio pagó el día 1 y el cobro se registra el 8, y forzar el inicio a
+     * hoy le regala siete días que no compró y descuadra su vencimiento con el
+     * del resto de su historial.
+     *
+     * Así que se permite, acotado: {@see MAX_START_BEHIND_DAYS} hacia atrás y
+     * {@see MAX_START_AHEAD_DAYS} hacia delante. Lo que queda fuera de esa
+     * ventana casi siempre es un año mal escrito.
+     *
+     * EL DINERO NO SE MUEVE. Esta fecha solo dice desde cuándo vale la
+     * membresía; el cobro se fecha cuando entra el dinero y entra en la caja
+     * abierta en ese momento. Son dos datos distintos a propósito.
      */
     public static function startError(?string $startsOn): ?string
     {
@@ -79,8 +109,8 @@ class MembershipPeriod
         }
 
         $hoy = self::today();
-        if ($fecha->lessThan($hoy)) {
-            return 'La membresía no puede empezar antes de hoy: el socio perdería días que pagó.';
+        if ($fecha->lessThan($hoy->subDays(self::MAX_START_BEHIND_DAYS))) {
+            return 'Solo se puede fechar el inicio hasta '.self::MAX_START_BEHIND_DAYS.' días atrás. Revisa el año.';
         }
         if ($fecha->greaterThan($hoy->addDays(self::MAX_START_AHEAD_DAYS))) {
             return 'Solo se puede programar el inicio hasta '.self::MAX_START_AHEAD_DAYS.' días después de hoy.';
@@ -123,11 +153,16 @@ class MembershipPeriod
         }
 
         $cobro = $this->paidDay($payment);
-        $pedido = $payment->starts_on
+        // Regla 1: manda la fecha pedida; sin ella, el día del cobro. Ya viene
+        // acotada por startError(), que es quien decide hasta dónde hacia atrás.
+        $inicio = $payment->starts_on
             ? CarbonImmutable::parse($payment->starts_on->format('Y-m-d'), self::TZ)->startOfDay()
             : $cobro;
-        // Regla 1: nunca antes del cobro.
-        $inicio = $pedido->lessThan($cobro) ? $cobro : $pedido;
+
+        // La excepción: lo que esperó a confirmarse no empieza antes de pagarse.
+        if ($inicio->lessThan($cobro) && $this->confirmadoMasTarde($payment)) {
+            $inicio = $cobro;
+        }
 
         $finActual = $user->membership_end_date
             ? CarbonImmutable::parse($user->membership_end_date, self::TZ)->startOfDay()
@@ -284,12 +319,10 @@ class MembershipPeriod
         $dias = (int) $this->day($payment->period_start->format('Y-m-d'))
             ->diffInDays($this->day($payment->period_end->format('Y-m-d')));
 
-        $cobro = $this->paidDay($payment);
-        $pedido = $payment->starts_on
+        // Regla 1, otra vez: el inicio es el pedido, y sin pedido el del cobro.
+        $inicio = $payment->starts_on
             ? $this->day($payment->starts_on->format('Y-m-d'))
-            : $cobro;
-        // Regla 1, otra vez: ningún periodo empieza antes de haberse pagado.
-        $inicio = $pedido->lessThan($cobro) ? $cobro : $pedido;
+            : $this->paidDay($payment);
         $base = $cursor->greaterThan($inicio) ? $cursor : $inicio;
         $fin = $base->addDays($dias);
 
@@ -305,6 +338,26 @@ class MembershipPeriod
     private function day(string $fecha): CarbonImmutable
     {
         return CarbonImmutable::parse($fecha, self::TZ)->startOfDay();
+    }
+
+    /**
+     * ¿Este cobro estuvo esperando?
+     *
+     * Un pago registrado con el dinero delante nace cobrado: su día de cobro y
+     * el de creación son el mismo. Uno que se dejó pendiente y se confirmó
+     * después lleva las dos fechas separadas, y es la única señal que distingue
+     * «registro hoy lo que se pagó el día 1» de «esto llevaba una semana sin
+     * pagarse». Sin ella, las dos cosas se escriben igual en la base.
+     */
+    private function confirmadoMasTarde(Payment $payment): bool
+    {
+        if (! $payment->paid_at || ! $payment->created_at) {
+            return false;
+        }
+
+        $creado = CarbonImmutable::parse($payment->created_at)->setTimezone(self::TZ)->startOfDay();
+
+        return $this->paidDay($payment)->greaterThan($creado);
     }
 
     /** Día del negocio en que entró el dinero. */

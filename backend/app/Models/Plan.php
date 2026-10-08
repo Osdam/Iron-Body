@@ -33,6 +33,7 @@ class Plan extends Model
         'restrictions',
         'active',
         'sellable',
+        'visible_in_app',
         'features',
         // Facturación electrónica (aditivo).
         'tax_rate_id',
@@ -50,6 +51,7 @@ class Plan extends Model
         'access_classes' => 'boolean',
         'active' => 'boolean',
         'sellable' => 'boolean',
+        'visible_in_app' => 'boolean',
         'sort_order' => 'integer',
         'features' => 'array',
         'entry_credits' => 'integer',
@@ -228,6 +230,18 @@ class Plan extends Model
             ->where('sellable', true)
             ->where('price', '>', 0)
             ->where('duration_days', '>', 0);
+    }
+
+    /**
+     * ¿Se le enseña al socio en la app?
+     *
+     * Null cuenta como SÍ: es el valor por defecto de la columna, y un plan
+     * creado antes de que existiera no debe desaparecer de la app por no tener
+     * el dato materializado. Ocultar es siempre una decisión explícita.
+     */
+    public function isVisibleInApp(): bool
+    {
+        return ($this->visible_in_app ?? true) && (bool) $this->active;
     }
 
     /** La misma regla, para un plan ya cargado. */

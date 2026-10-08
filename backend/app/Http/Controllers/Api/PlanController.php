@@ -175,7 +175,7 @@ class PlanController extends Controller
                 $previoPlan,
                 // Un cambio de precio o de vigencia sin el antes y el después
                 // obliga a reconstruirlo a mano. No son datos personales.
-                ['price', 'duration_days', 'active', 'tier', 'access_mode', 'entry_credits'],
+                ['price', 'duration_days', 'active', 'tier', 'access_mode', 'entry_credits', 'visible_in_app'],
             ),
             'metadata' => ['price' => (string) $plan->price],
         ]);
@@ -483,6 +483,9 @@ class PlanController extends Controller
             'access_locations' => ['nullable', 'string'],
             'restrictions' => ['nullable', 'string'],
             'active' => [$updating ? 'sometimes' : 'required', 'boolean'],
+            // Visible en la app del socio. Independiente de `active`: un plan
+            // puede seguir cobrándose en caja sin anunciarse en el teléfono.
+            'visible_in_app' => ['sometimes', 'boolean'],
             'features' => ['sometimes', 'nullable', 'array'],
             'features.*' => ['boolean'],
         ]);
