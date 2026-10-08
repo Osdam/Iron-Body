@@ -1440,6 +1440,7 @@ Route::delete('admin/receivables/{receivable}/due-date', [ReceivableController::
 // caja del GIMNASIO, con sus abonos y su anulación, y por eso aparece en Pagos
 // y en los informes del gimnasio sin tocarlos.
 Route::get('admin/commissions/board',       [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'board']);
+Route::get('admin/commissions/members',     [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'members']);
 Route::get('admin/commissions/people',      [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'people']);
 Route::get('admin/commissions/agreements',  [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'index']);
 Route::post('admin/commissions/agreements', [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'store']);

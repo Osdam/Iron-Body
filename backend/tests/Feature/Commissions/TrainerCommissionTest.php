@@ -391,6 +391,50 @@ class TrainerCommissionTest extends TestCase
         ], $this->h)->assertStatus(403);
     }
 
+    // ── Elegir a quien se le pacta ──────────────────────────────────────────
+
+    public function test_los_socios_se_buscan_y_no_se_descargan_enteros(): void
+    {
+        // Son mas de tres mil. Una lista completa no se manda, y un
+        // desplegable de tres mil opciones no resuelve nada.
+        $this->member('Ana Ruiz');
+        $this->member('Anabel Torres');
+        $this->member('Pedro Nel');
+
+        $this->assertArrayNotHasKey('members', $this->getJson('/api/admin/commissions/people', $this->h)
+            ->assertOk()->json());
+
+        $nombres = array_column(
+            $this->getJson('/api/admin/commissions/members?q=ana', $this->h)->assertOk()->json('data'),
+            'name',
+        );
+        sort($nombres);
+        $this->assertSame(['Ana Ruiz', 'Anabel Torres'], $nombres);
+    }
+
+    public function test_al_cliente_tambien_se_le_busca_por_documento(): void
+    {
+        // Es como se busca a quien esta delante: con la cedula en la mano.
+        $socio = $this->member('Ana Ruiz');
+
+        $this->assertSame(
+            $socio->id,
+            $this->getJson('/api/admin/commissions/members?q='.$socio->document_number, $this->h)
+                ->assertOk()
+                ->json('data.0.id'),
+        );
+    }
+
+    public function test_sin_termino_no_se_devuelve_una_lista_de_muestra(): void
+    {
+        // Una muestra invita a elegir de ella, y en tres mil socios casi nunca
+        // contiene a quien se busca.
+        $this->member('Ana Ruiz');
+
+        $this->assertSame([], $this->getJson('/api/admin/commissions/members?q=a', $this->h)
+            ->assertOk()->json('data'));
+    }
+
     public function test_los_tres_permisos_aparecen_en_la_pantalla_de_roles(): void
     {
         $catalogo = collect(\App\Support\Access\PermissionCatalog::rows());

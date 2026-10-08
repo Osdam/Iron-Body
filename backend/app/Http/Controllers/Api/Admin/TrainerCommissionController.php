@@ -209,33 +209,70 @@ class TrainerCommissionController extends Controller
     }
 
     /**
-     * GET /api/admin/commissions/people — a quién se le puede pactar un piso.
+     * GET /api/admin/commissions/people — los entrenadores.
      *
-     * Entrenadores y socios en la misma respuesta: el formulario los pide a la
-     * vez y pedirlos por separado deja dos esperas donde hay una.
+     * Solo ellos. Los socios NO vienen aquí: son más de tres mil, y mandarlos
+     * todos para que el navegador pinte un desplegable con tres mil opciones
+     * es una descarga grande para un problema que no se resuelve —nadie
+     * encuentra a nadie en una lista así—. Los socios se buscan.
      */
     public function people(): JsonResponse
     {
         return response()->json([
             'trainers' => Trainer::query()
+                ->orderByRaw("CASE WHEN status = 'active' THEN 0 ELSE 1 END")
                 ->orderBy('full_name')
-                ->get(['id', 'full_name', 'document', 'status'])
+                ->get(['id', 'full_name', 'document', 'status', 'main_specialty'])
                 ->map(fn (Trainer $t) => [
                     'id' => $t->id,
                     'name' => $t->full_name,
                     'document' => $t->document,
+                    'specialty' => $t->main_specialty,
                     'active' => $t->status === 'active',
                 ]),
-            'members' => Member::query()
-                ->orderBy('full_name')
-                ->limit(2000)
-                ->get(['id', 'full_name', 'document_number'])
-                ->map(fn (Member $m) => [
-                    'id' => $m->id,
-                    'name' => $m->full_name,
-                    'document' => $m->document_number,
-                ]),
         ]);
+    }
+
+    /**
+     * GET /api/admin/commissions/members?q= — buscar al cliente.
+     *
+     * Por nombre o por documento, que es como se busca a alguien que está
+     * delante: o se sabe cómo se llama, o se tiene su cédula en la mano.
+     *
+     * Sin término no se devuelve nada. Es a propósito: una lista «de muestra»
+     * invita a elegir de ella, y en tres mil socios la muestra casi nunca
+     * contiene a quien se busca.
+     */
+    public function members(Request $request): JsonResponse
+    {
+        $termino = trim((string) $request->input('q', ''));
+
+        if (mb_strlen($termino) < 2) {
+            return response()->json(['data' => [], 'hint' => 'Escribe al menos dos letras o el documento.']);
+        }
+
+        $driver = Member::query()->getConnection()->getDriverName();
+        // `ilike` en PostgreSQL —allí LIKE distingue mayúsculas—; en SQLite y
+        // MySQL el collation por defecto ya es insensible.
+        $operador = $driver === 'pgsql' ? 'ilike' : 'like';
+        $patron = '%'.str_replace(['%', '_'], ['\\%', '\\_'], $termino).'%';
+
+        $socios = Member::query()
+            ->where(function ($q) use ($operador, $patron): void {
+                $q->where('full_name', $operador, $patron)
+                    ->orWhere('document_number', $operador, $patron);
+            })
+            ->orderBy('full_name')
+            ->limit(25)
+            ->get(['id', 'full_name', 'document_number', 'status'])
+            ->map(fn (Member $m) => [
+                'id' => $m->id,
+                'name' => $m->full_name,
+                'document' => $m->document_number,
+                'status' => $m->status,
+            ]);
+
+        return response()->json(['data' => $socios]);
     }
 
     // ────────────────────────────────────────────────────────────────────────
