@@ -143,6 +143,13 @@ class AttendanceController extends Controller
                 'captured_at' => now(),
                 'over_limit' => $fueraDeRegla,
                 'limit_reason' => $fueraDeRegla ? $acceso['reason'] : null,
+                // Por qué puerta pasó, CONGELADO. Dentro de un mes esta persona
+                // puede haber dejado de ser empleada, y el histórico tiene que
+                // seguir diciendo que aquel martes entró como entrenador.
+                'access_via' => $acceso['via'] ?? null,
+                'employee_role' => ($acceso['via'] ?? null) === MembershipAccess::VIA_EMPLOYEE
+                    ? ($acceso['employee']['position'] ?? 'Empleado')
+                    : null,
             ]);
 
             // Racha semanal: la ÚNICA forma de marcar un día activo es ir al

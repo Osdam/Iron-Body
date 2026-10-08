@@ -249,6 +249,61 @@ class EmployeeAccessTest extends TestCase
         $this->assertTrue(MembershipAccess::consumesEntry($comoSocio, true));
     }
 
+    // ── El registro de quién entra ──────────────────────────────────────────
+
+    public function test_la_asistencia_guarda_que_entro_como_empleado(): void
+    {
+        // Sin esto no hay forma de contestar «a que hora entran los empleados»:
+        // un entrenador que ademas paga su membresia queda indistinguible de
+        // cualquier otro socio, porque lo que los separa no es el nombre sino
+        // la puerta que usaron.
+        $user = $this->persona();
+        $this->conceder($user, ['position' => 'Entrenador'])->assertStatus(201);
+
+        $this->postJson('/api/attendances', [
+            'user_id' => $user->id, 'action' => 'entry', 'source' => 'manual',
+        ], $this->h)->assertStatus(201);
+
+        $marcaje = \App\Models\Attendance::where('user_id', $user->id)->firstOrFail();
+        $this->assertSame(MembershipAccess::VIA_EMPLOYEE, $marcaje->access_via);
+        $this->assertSame('Entrenador', $marcaje->employee_role);
+    }
+
+    public function test_el_socio_normal_queda_marcado_como_membresia(): void
+    {
+        $plan = Plan::create(['name' => 'Mensual', 'price' => 90000, 'duration_days' => 30, 'active' => true]);
+        $user = $this->persona([
+            'plan' => $plan->name,
+            'membership_start_date' => $this->hoy()->subDays(5)->toDateString(),
+            'membership_end_date' => $this->hoy()->addDays(25)->toDateString(),
+        ]);
+
+        $this->postJson('/api/attendances', [
+            'user_id' => $user->id, 'action' => 'entry', 'source' => 'manual',
+        ], $this->h)->assertStatus(201);
+
+        $marcaje = \App\Models\Attendance::where('user_id', $user->id)->firstOrFail();
+        $this->assertSame(MembershipAccess::VIA_MEMBERSHIP, $marcaje->access_via);
+        $this->assertNull($marcaje->employee_role);
+    }
+
+    public function test_el_cargo_queda_congelado_aunque_despues_renuncie(): void
+    {
+        $user = $this->persona();
+        $this->conceder($user, ['position' => 'Recepción'])->assertStatus(201);
+        $this->postJson('/api/attendances', [
+            'user_id' => $user->id, 'action' => 'entry', 'source' => 'manual',
+        ], $this->h)->assertStatus(201);
+
+        $this->deleteJson("/api/users/{$user->id}/employee-access", [], $this->h)->assertOk();
+
+        // Dejo de trabajar aqui, pero aquel dia entro como recepcionista.
+        $this->assertSame(
+            'Recepción',
+            \App\Models\Attendance::where('user_id', $user->id)->firstOrFail()->employee_role,
+        );
+    }
+
     // ── Quién puede concederlo ──────────────────────────────────────────────
 
     public function test_recepcion_no_reparte_accesos_gratuitos(): void

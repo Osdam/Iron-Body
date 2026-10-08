@@ -18,6 +18,9 @@ class Attendance extends Model
         // Entró cuando las reglas de su plan no se lo permitían. Se registra
         // igual: la persona está adentro. Ver la migración.
         'over_limit',
+        // Por dónde entró: 'membership' o 'employee'. Ver la migración.
+        'access_via',
+        'employee_role',
         'limit_reason',
     ];
 
