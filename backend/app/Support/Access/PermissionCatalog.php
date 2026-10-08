@@ -73,6 +73,7 @@ final class PermissionCatalog
         'export' => 'Exportar',
         'freeze' => 'Congelar',
         'adjust' => 'Ajustar',
+        'backdate' => 'Fechar hacia atrás',
         'enroll' => 'Inscribir',
     ];
 
@@ -126,6 +127,7 @@ final class PermissionCatalog
         'members.adjust' => 'Sumarle o quitarle días y entradas a una membresía a mano: por un día que no pudo venir, una entrada que el lector contó dos veces o un error al venderle el plan. Cada ajuste queda con autor y motivo.',
         'members.freeze' => 'Pausar la membresía de un socio y devolverle después los días que le quedaban. Mientras está congelada no puede entrar, y queda registrado quién la pausó y por qué.',
         'payments.cancel' => 'Anular un pago ya registrado.',
+        'payments.backdate' => 'Registrar un cobro con fecha de inicio ANTERIOR a hoy, para el socio que pagó hace días y se está registrando ahora. El dinero no se mueve: el cobro sigue entrando en la caja de hoy. Lo que retrocede es la vigencia, y con ella el vencimiento, así que puede dejar al socio vencido en el mismo momento del registro. Programar un inicio futuro no necesita este permiso.',
         'classes.enroll' => 'Inscribir socios en una clase y quitarlos, desde el mostrador. Aplica las mismas reglas que la app: plan con clases, cuenta al día y cupo. No permite crear ni editar horarios. Para buscar al socio hace falta también «Ver» en Miembros.',
         'classes.manage' => 'Crear, editar y eliminar clases y horarios. Incluye inscribir socios.',
         'members.export' => 'Descargar socios con su membresía en Excel o CSV, incluidos documento y teléfono si se eligen. Queda auditado.',

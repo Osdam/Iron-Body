@@ -514,10 +514,16 @@ final class AuthorizationMap
      * Permisos REALES que no exige ninguna ruta, porque se comprueban DENTRO
      * del controlador con una granularidad que la ruta no puede expresar.
      *
-     * El caso son los turnos de caja: la ruta es la misma para productos y para
+     * Un caso son los turnos de caja: la ruta es la misma para productos y para
      * gimnasio —el tipo va en el cuerpo— y cerrar el turno de otra persona
      * depende de quién lo abrió, no de la URL. CashShiftController y su
      * orquestador lo resuelven caja por caja.
+     *
+     * El otro es `payments.backdate`. Cobrar es `payments.create` y lo tiene el
+     * mostrador; fechar ese cobro en el pasado es otra cosa —mueve una vigencia
+     * hacia atrás y puede dejar al socio vencido— y no puede depender de la URL
+     * porque va en el mismo POST que cualquier otro cobro. Lo decide
+     * PaymentController al ver la fecha pedida.
      *
      * Se declaran aquí para que el catálogo los ofrezca: un permiso que se
      * comprueba pero que nadie puede conceder es peor que no tenerlo.
@@ -525,6 +531,7 @@ final class AuthorizationMap
      * @var array<string>
      */
     private const CONTROLLER_ENFORCED = [
+        'payments.backdate',
         'cash.products.view',
         'cash.products.operate',
         'cash.products.manage',

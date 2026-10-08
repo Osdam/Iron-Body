@@ -162,6 +162,87 @@ class MembershipStartAndChannelTest extends TestCase
         $this->assertSame($inicio->toDateString(), $pago->starts_on->toDateString());
     }
 
+    // ── Fechar hacia atrás es un permiso aparte ────────────────────────────
+    //
+    // Cobrar lo hace el mostrador todo el día. Fechar el cobro en el pasado
+    // retrocede la vigencia y con ella el vencimiento: mal puesto deja al socio
+    // vencido en el mismo momento de registrarlo, y no lo delata ninguna cifra
+    // de caja, porque el dinero entró hoy igual. Por eso va en su propia llave.
+
+    /** Sesión de un rol con los permisos de fábrica que le toquen. */
+    private function sesion(string $rol): array
+    {
+        return $this->actingAsAdmin(Admin::create([
+            'name' => 'Quien sea',
+            'email' => 'rol-'.uniqid().'@ironbody.test',
+            'password' => 'secret-password',
+            'role' => $rol,
+            'status' => 'active',
+        ]));
+    }
+
+    public function test_recepcion_no_puede_fechar_un_cobro_antes_de_hoy(): void
+    {
+        $u = $this->socio();
+        $this->h = $this->sesion(Admin::ROLE_RECEPCION);
+
+        $this->cobrar($u, $this->plan(), ['starts_on' => $this->hoy()->subDays(5)->toDateString()])
+            ->assertStatus(403);
+
+        // Y no queda cobro a medias: se rechaza antes de tocar nada.
+        $this->assertNull(Payment::firstWhere('user_id', $u->id));
+        $this->assertNull($u->refresh()->membership_end_date);
+    }
+
+    public function test_recepcion_sigue_cobrando_hoy_y_programando_a_futuro(): void
+    {
+        // El permiso nuevo no puede estorbar el trabajo de todos los días.
+        $plan = $this->plan();
+        $this->h = $this->sesion(Admin::ROLE_RECEPCION);
+
+        $hoy = $this->socio();
+        $this->cobrar($hoy, $plan)->assertStatus(201);
+
+        $lunes = $this->socio();
+        $this->cobrar($lunes, $plan, ['starts_on' => $this->hoy()->addDays(7)->toDateString()])
+            ->assertStatus(201);
+
+        $this->assertSame(
+            $this->hoy()->addDays(7)->toDateString(),
+            Payment::firstWhere('user_id', $lunes->id)->period_start->toDateString(),
+        );
+    }
+
+    public function test_quien_tiene_el_permiso_si_feche_hacia_atras(): void
+    {
+        $u = $this->socio();
+        $inicio = $this->hoy()->subDays(5);
+        $this->h = $this->sesion(Admin::ROLE_ADMINISTRADOR);
+
+        $this->cobrar($u, $this->plan(), ['starts_on' => $inicio->toDateString()])->assertStatus(201);
+
+        $pago = Payment::firstWhere('user_id', $u->id);
+        $this->assertSame($inicio->toDateString(), $pago->period_start->toDateString());
+        // Y el dinero sigue siendo de hoy, que es lo que no se negocia.
+        $this->assertSame(
+            $this->hoy()->toDateString(),
+            $pago->paid_at->setTimezone(MembershipPeriod::TZ)->toDateString(),
+        );
+    }
+
+    public function test_el_permiso_se_puede_conceder_desde_la_pantalla_de_roles(): void
+    {
+        // Un interruptor que se comprueba pero que nadie puede encender es peor
+        // que no tenerlo: tiene que aparecer en el catálogo que pinta la matriz.
+        $this->assertContains('payments.backdate', \App\Support\Access\PermissionCatalog::all());
+
+        $fila = collect(\App\Support\Access\PermissionCatalog::rows())
+            ->firstWhere('key', 'payments.backdate');
+
+        $this->assertSame('payments', $fila['domain']);
+        $this->assertNotNull($fila['help'], 'sin explicación, quien reparte permisos no sabe qué concede');
+    }
+
     public function test_una_renovacion_con_fecha_anterior_no_se_solapa_con_lo_vigente(): void
     {
         // Sigue vigente diez días más y se registra un cobro fechado la semana

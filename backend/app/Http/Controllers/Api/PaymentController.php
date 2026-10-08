@@ -13,6 +13,7 @@ use App\Models\Payment;
 use App\Services\Caja\CashReceipts;
 use App\Services\Audit\FinancialAudit;
 use App\Support\Access\AdminActor;
+use App\Support\Access\CrmPermission;
 use App\Models\Plan;
 use App\Models\User;
 use App\Rules\DeliverableInvoiceEmail;
@@ -445,7 +446,7 @@ class PaymentController extends Controller
         unset($data['splits']);
 
         $this->assertAmountMatchesPlan($data);
-        $this->assertStartsOn($data);
+        $this->assertStartsOn($request, $data);
 
         $invoiceRequest = $this->extractInvoiceRequest($data);
 
@@ -588,7 +589,7 @@ class PaymentController extends Controller
             if ($wasPaid) {
                 unset($data['starts_on']);
             } else {
-                $this->assertStartsOn($data, $payment);
+                $this->assertStartsOn($request, $data, $payment);
             }
         }
 
@@ -652,9 +653,19 @@ class PaymentController extends Controller
      * fija MembershipPeriod. Sin plan se descarta: un pago libre no compra
      * membresía y guardar una fecha de inicio ahí sería ruido.
      *
+     * HACIA ATRÁS HACE FALTA PERMISO. Cobrar es `payments.create` y lo tiene el
+     * mostrador entero; fechar ese cobro antes de hoy es otra cosa, porque
+     * retrocede la vigencia y con ella el vencimiento: mal puesta, deja al socio
+     * vencido en el mismo momento de registrarlo, y mal usada regala o quita
+     * días sin que se note en ninguna cifra de caja. Por eso va aparte, en
+     * `payments.backdate`, y de fábrica no lo trae recepción.
+     *
+     * Hacia DELANTE no pide nada: programar un inicio futuro no mueve nada que
+     * ya esté corriendo.
+     *
      * @param  array<string,mixed>  $data
      */
-    private function assertStartsOn(array &$data, ?Payment $existente = null): void
+    private function assertStartsOn(Request $request, array &$data, ?Payment $existente = null): void
     {
         $conPlan = ! empty($data['plan_id']) || (bool) $existente?->plan_id;
 
@@ -667,6 +678,33 @@ class PaymentController extends Controller
         if ($error = MembershipPeriod::startError($data['starts_on'])) {
             throw ValidationException::withMessages(['starts_on' => [$error]]);
         }
+
+        $this->assertPuedeFecharAtras($request, (string) $data['starts_on']);
+    }
+
+    /**
+     * Fechar el inicio en el pasado exige `payments.backdate`.
+     *
+     * Se compara contra el día del NEGOCIO, no contra `now()`: en Bogotá, a las
+     * siete de la tarde el servidor ya está en el día siguiente en UTC, y sin
+     * esto un cobro con la fecha de hoy se habría leído como retroactivo cada
+     * noche. {@see MembershipPeriod::today()}.
+     *
+     * Falla CERRADO: una credencial sin persona detrás —el token de
+     * automatizaciones— no resuelve a un Admin y no obtiene el permiso.
+     */
+    private function assertPuedeFecharAtras(Request $request, string $startsOn): void
+    {
+        if ($startsOn >= MembershipPeriod::today()->toDateString()) {
+            return;
+        }
+
+        if (CrmPermission::allows(AdminActor::from($request), CrmPermission::PAYMENTS_BACKDATE)) {
+            return;
+        }
+
+        abort(403, 'No tienes permiso para registrar un cobro con fecha de inicio anterior a hoy. '
+            .'Pídeselo a un administrador o deja el inicio en hoy.');
     }
 
     /**

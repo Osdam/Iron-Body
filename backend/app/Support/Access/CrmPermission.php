@@ -72,6 +72,12 @@ final class CrmPermission
 
     public const CASH_GYM_MANAGE = 'cash.gym.manage';
 
+    // ── Pagos ───────────────────────────────────────────────────────────────
+    //
+    // Cobrar es una cosa y fechar el cobro hacia atrás es otra: lo primero lo
+    // hace el mostrador todo el día, lo segundo mueve una vigencia al pasado.
+    public const PAYMENTS_BACKDATE = 'payments.backdate';
+
     // ── Administración de roles ─────────────────────────────────────────────
     public const ROLES_MANAGE = 'roles.manage';
 
@@ -171,7 +177,10 @@ final class CrmPermission
          *
          * Fuera queda todo lo que no necesita para atender: ganancias,
          * auditoría, roles, usuarios, integraciones, facturación electrónica,
-         * moderación y seguridad de plataforma.
+         * moderación y seguridad de plataforma. Y fuera queda `payments.backdate`:
+         * cobra y programa inicios futuros, pero fechar una membresía en el
+         * pasado —que puede dejar al socio vencido al registrarlo— se concede a
+         * mano desde la pantalla de Roles.
          */
         $recepcion = [
             'members.view', 'members.create',
