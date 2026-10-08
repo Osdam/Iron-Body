@@ -7,6 +7,7 @@ use App\Models\Attendance;
 use App\Models\MembershipAdjustment;
 use App\Models\Payment;
 use App\Models\Plan;
+use App\Models\EmployeeAccess;
 use App\Models\User;
 use App\Services\Payments\MembershipPeriod;
 use Carbon\CarbonImmutable;
@@ -36,6 +37,12 @@ use Illuminate\Support\Collection;
  * UNA entrada, no dos. Es lo que el gimnasio vende («15 entradas al mes» = 15
  * días en que puede venir) y además hace que el doble marcaje del lector facial
  * no le cueste dinero a nadie.
+ *
+ * HAY DOS PUERTAS, Y BASTA CON QUE UNA ESTÉ ABIERTA. La membresía es una; el
+ * acceso de empleado es la otra, y no tiene precio ni vencimiento comprado: el
+ * gimnasio le permite entrenar porque trabaja aquí. Un entrenador puede tener
+ * las dos —paga su mensualidad y además es empleado— y entonces entra por la
+ * que esté abierta en ese momento. Ver {@see EmployeeAccess}.
  */
 class MembershipAccess
 {
@@ -59,6 +66,11 @@ class MembershipAccess
     public const REASON_HOURS = 'hours';
 
     public const REASON_NO_ENTRIES = 'no_entries';
+
+    /** Por dónde entró, cuando entró. Lo necesita quien descuenta entradas. */
+    public const VIA_MEMBERSHIP = 'membership';
+
+    public const VIA_EMPLOYEE = 'employee';
 
     /** @var Collection<string, Plan>|null */
     private ?Collection $planCache = null;
@@ -100,6 +112,14 @@ class MembershipAccess
             $reglas[$user->id] = PlanAccessRules::fromPlan($plan);
         }
 
+        // Los permisos de empleado de toda la página, de una consulta. Son
+        // pocos —el personal del gimnasio— pero la puerta los pregunta por
+        // todos, así que no pueden costar una consulta por socio.
+        $empleos = EmployeeAccess::query()
+            ->whereIn('user_id', $users->pluck('id')->all())
+            ->get()
+            ->keyBy('user_id');
+
         $porConsumo = $users->filter(fn (User $u): bool => $reglas[$u->id]->isByEntries());
         $ventanas = $this->windowsFor($porConsumo, $hoy);
         $usadas = $this->usedEntriesFor($porConsumo, $ventanas, $ahora);
@@ -115,6 +135,7 @@ class MembershipAccess
                 $ventanas[$user->id] ?? null,
                 $usadas[$user->id] ?? ['days' => [], 'last' => null],
                 $regaladas[$user->id] ?? 0,
+                $empleos->get($user->id),
                 $ahora,
             );
         }
@@ -138,11 +159,13 @@ class MembershipAccess
         ?array $ventana,
         array $usadas,
         int $regaladas,
+        ?EmployeeAccess $empleo,
         CarbonImmutable $ahora,
     ): array {
         $hoy = $ahora->startOfDay();
         $inicio = $this->day($user->membership_start_date);
         $fin = $this->day($user->membership_end_date);
+        $empleado = $this->employeeState($empleo, $ahora);
 
         // ── Las entradas ────────────────────────────────────────────────────
         $entradas = null;
@@ -172,27 +195,129 @@ class MembershipAccess
         }
 
         // ── La decisión ─────────────────────────────────────────────────────
-        [$motivo, $mensaje] = $this->decide($reglas, $pausa, $entradas, $inicio, $fin, $ahora);
+        [$motivo, $mensaje, $via] = $this->decide($reglas, $pausa, $entradas, $empleado, $inicio, $fin, $ahora);
 
         return [
             'plan' => $plan ? ['id' => $plan->id, 'name' => $plan->name] : null,
             'rules' => $reglas->toArray(),
             'entries' => $entradas,
+            'employee' => $empleado,
             'can_enter' => $motivo === null,
+            // Por qué puerta pasó. El registro de asistencia lo necesita para
+            // NO descontarle una entrada a quien entró por ser empleado.
+            'via' => $via,
             'reason' => $motivo,
             'message' => $mensaje,
             // Resumen de una línea para la ficha y el terminal: «7 de 15
             // entradas · Lun, Mié y Vie · 06:00–10:00».
-            'summary' => $this->summary($reglas, $entradas),
+            'summary' => $this->summary($reglas, $entradas, $empleado),
         ];
     }
 
     /**
+     * LAS DOS PUERTAS.
+     *
+     * Primero la del empleado, porque es la que no cuesta nada: quien trabaja
+     * aquí y está en su franja pasa, tenga o no membresía, y sin gastar una
+     * entrada de ningún plan.
+     *
+     * Después la de la membresía, exactamente como siempre.
+     *
+     * Y si las dos están cerradas hay que elegir QUÉ se le dice. A quien solo
+     * entra por ser empleado no le sirve «no tiene una membresía registrada»:
+     * no la necesita, lo que pasa es que su permiso se acabó o no es su hora.
+     * A quien además es socio se le da el motivo de la membresía, que es lo
+     * que puede renovar.
+     *
+     * @param  array<string, mixed>  $pausa
+     * @param  array<string, mixed>|null  $entradas
+     * @param  array<string, mixed>|null  $empleado
+     * @return array{0: string|null, 1: string|null, 2: string|null}
+     */
+    private function decide(
+        PlanAccessRules $reglas,
+        array $pausa,
+        ?array $entradas,
+        ?array $empleado,
+        ?CarbonImmutable $inicio,
+        ?CarbonImmutable $fin,
+        CarbonImmutable $ahora,
+    ): array {
+        if ($empleado !== null && $empleado['open_now']) {
+            return [null, null, self::VIA_EMPLOYEE];
+        }
+
+        [$motivo, $mensaje] = $this->decideMembership($reglas, $pausa, $entradas, $inicio, $fin, $ahora);
+
+        if ($motivo === null) {
+            return [null, null, self::VIA_MEMBERSHIP];
+        }
+
+        if ($empleado !== null && $fin === null) {
+            return $this->employeeReason($empleado, $ahora);
+        }
+
+        return [$motivo, $mensaje, null];
+    }
+
+    /**
+     * Por qué no pasa un empleado que no tiene membresía.
+     *
+     * Se reutilizan los motivos que ya existen —el terminal y el CRM saben
+     * pintarlos— y lo que cambia es el texto, que es lo único que de verdad
+     * necesita ser distinto: a un empleado no se le habla de «su plan».
+     *
+     * @param  array<string, mixed>  $empleado
+     * @return array{0: string, 1: string, 2: null}
+     */
+    private function employeeReason(array $empleado, CarbonImmutable $ahora): array
+    {
+        if (! $empleado['current']) {
+            $hasta = $empleado['ends_on'] ?? null;
+
+            return [
+                self::REASON_NO_MEMBERSHIP,
+                $hasta
+                    ? 'Su acceso de empleado terminó el '.$this->prettyDay($hasta).'.'
+                    : 'Su acceso de empleado está desactivado.',
+                null,
+            ];
+        }
+
+        $reglas = PlanAccessRules::fromArray([
+            'access_days' => $empleado['rules']['days'],
+            'access_windows' => $empleado['rules']['windows'],
+        ]);
+
+        if (! $reglas->allowsDay($ahora)) {
+            return [self::REASON_WEEKDAY, 'Su acceso de empleado es solo '.$reglas->daysLabel().'.', null];
+        }
+
+        // Sin franjas no habría por qué negarle el paso, así que esto no
+        // debería alcanzarse. Si se alcanza, se dice algo cierto en vez de
+        // «Su acceso de empleado es de .».
+        if (! $reglas->restrictsHours()) {
+            return [self::REASON_NO_MEMBERSHIP, 'Su acceso de empleado no está disponible ahora.', null];
+        }
+
+        $siguiente = $reglas->nextWindowAfter($ahora);
+
+        return [
+            self::REASON_HOURS,
+            'Su acceso de empleado es de '.$reglas->hoursLabel().
+                ($siguiente ? '. Vuelve a abrir a las '.$siguiente : '').'.',
+            null,
+        ];
+    }
+
+    /**
+     * La puerta de la membresía: la de siempre, intacta.
+     *
      * @param  array<string, mixed>  $pausa
      * @param  array<string, mixed>|null  $entradas
      * @return array{0: string|null, 1: string|null}
      */
-    private function decide(
+    private function decideMembership(
         PlanAccessRules $reglas,
         array $pausa,
         ?array $entradas,
@@ -247,11 +372,57 @@ class MembershipAccess
     }
 
     /**
-     * @param  array<string, mixed>|null  $entradas
+     * El permiso de empleado, ya resuelto, o null si la persona no lo tiene.
+     *
+     * Se separan dos cosas que parecen una. `current` dice si el permiso VALE
+     * hoy —está encendido y dentro de sus fechas—; `open_now` dice además si
+     * es su día y su hora. Distinguirlas es lo que permite que recepción lea
+     * «sí es empleado, pero su franja es de 14:00 a 17:00» en vez de un seco
+     * «no puede entrar».
+     *
+     * @return array<string, mixed>|null
      */
-    private function summary(PlanAccessRules $reglas, ?array $entradas): ?string
+    private function employeeState(?EmployeeAccess $empleo, CarbonImmutable $ahora): ?array
+    {
+        if ($empleo === null) {
+            return null;
+        }
+
+        $reglas = $empleo->rules();
+        $vigente = $empleo->isCurrentOn($ahora->startOfDay());
+
+        return [
+            'position' => $empleo->position,
+            'active' => (bool) $empleo->active,
+            'current' => $vigente,
+            'open_now' => $vigente && $reglas->allowsDay($ahora) && $reglas->allowsHour($ahora),
+            'starts_on' => $empleo->starts_on?->format('Y-m-d'),
+            'ends_on' => $empleo->ends_on?->format('Y-m-d'),
+            'note' => $empleo->note,
+            'rules' => $reglas->toArray(),
+            'granted_by_name' => $empleo->granted_by_name,
+            'revoked_at' => $empleo->revoked_at?->toIso8601String(),
+            'revoked_by_name' => $empleo->revoked_by_name,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $entradas
+     * @param  array<string, mixed>|null  $empleado
+     */
+    private function summary(PlanAccessRules $reglas, ?array $entradas, ?array $empleado = null): ?string
     {
         $partes = [];
+
+        if ($empleado !== null && $empleado['current']) {
+            $partes[] = 'Empleado'.($empleado['position'] ? ' · '.$empleado['position'] : '');
+            if ($empleado['rules']['days_label']) {
+                $partes[] = (string) $empleado['rules']['days_label'];
+            }
+            if ($empleado['rules']['hours_label']) {
+                $partes[] = (string) $empleado['rules']['hours_label'];
+            }
+        }
 
         if ($entradas !== null) {
             $partes[] = $entradas['used'].' de '.$entradas['total'].' entradas';
@@ -300,6 +471,13 @@ class MembershipAccess
      */
     public static function consumesEntry(array $estado, bool $isEntry): bool
     {
+        // Quien pasó por ser empleado no gasta nada: su entrada no la vendió
+        // nadie. Si además tiene un plan por consumo, las entradas que compró
+        // siguen ahí para el día que venga fuera de su franja.
+        if (($estado['via'] ?? null) === self::VIA_EMPLOYEE) {
+            return false;
+        }
+
         return $isEntry
             && is_array($estado['entries'] ?? null)
             && ! ($estado['entries']['used_today'] ?? false);

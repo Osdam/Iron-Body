@@ -72,6 +72,12 @@ final class CrmPermission
 
     public const CASH_GYM_MANAGE = 'cash.gym.manage';
 
+    // ── Miembros ────────────────────────────────────────────────────────────
+    //
+    // Dar entrada gratuita a un empleado no es editar una ficha: es decidir
+    // quién entra sin pagar. Va aparte, como `members.adjust`.
+    public const MEMBERS_EMPLOYEE = 'members.employee';
+
     // ── Pagos ───────────────────────────────────────────────────────────────
     //
     // Cobrar es una cosa y fechar el cobro hacia atrás es otra: lo primero lo

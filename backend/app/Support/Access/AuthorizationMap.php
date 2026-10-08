@@ -427,6 +427,11 @@ final class AuthorizationMap
         // va con su propio permiso para poder dárselo solo a quien deba.
         'GET api/users/{user}/access' => 'members.view',
         'POST api/users/{user}/adjustments' => 'members.adjust',
+        // Consultar quién es empleado va con ver la ficha; conceder el acceso
+        // gratuito, no: eso es regalar lo que el gimnasio vende.
+        'GET api/users/{user}/employee-access' => 'members.view',
+        'PUT api/users/{user}/employee-access' => 'members.employee',
+        'DELETE api/users/{user}/employee-access' => 'members.employee',
 
         // Webhook del torniquete: lo llama el hardware, no una persona. Su
         // autenticación es la del propio dispositivo.

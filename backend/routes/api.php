@@ -166,6 +166,15 @@ Route::middleware('auth.admin')->group(function (): void {
     // SUMAR días o entradas a mano: dinero del gimnasio, permiso aparte.
     Route::post('users/{user}/adjustments', [\App\Http\Controllers\Api\Admin\MembershipAdjustmentController::class, 'store'])
         ->whereNumber('user');
+    // ACCESO DE EMPLEADO: entrar a entrenar porque trabaja aquí, sin plan y sin
+    // cobro. Es una puerta distinta de la membresía y se apaga el día que la
+    // persona se va, así que también es un permiso distinto.
+    Route::get('users/{user}/employee-access', [\App\Http\Controllers\Api\Admin\EmployeeAccessController::class, 'show'])
+        ->whereNumber('user');
+    Route::put('users/{user}/employee-access', [\App\Http\Controllers\Api\Admin\EmployeeAccessController::class, 'store'])
+        ->whereNumber('user');
+    Route::delete('users/{user}/employee-access', [\App\Http\Controllers\Api\Admin\EmployeeAccessController::class, 'destroy'])
+        ->whereNumber('user');
     Route::get('users/{user}/plan-features', [UserController::class, 'planFeatures']);
     Route::patch('users/{user}', [UserController::class, 'update']);
     Route::put('users/{user}', [UserController::class, 'update']);
