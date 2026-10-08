@@ -65,11 +65,19 @@ class MembershipFinancialStanding
     }
 
     /**
-     * Las obligaciones de gimnasio vencidas y con saldo.
+     * Las obligaciones de gimnasio vencidas, con saldo Y QUE BLOQUEAN.
      *
      * CUALQUIERA basta para bloquear, no solo la última: quien pagó el plan de
      * este mes pero dejó a medias el del anterior sigue debiendo, y mirar solo
      * la deuda más reciente lo dejaría pasar.
+     *
+     * PERO NO TODA DEUDA DE GIMNASIO CASTIGA. Antes la categoría decidía —si
+     * era del gimnasio, bloqueaba— y eso valía mientras todas fueran
+     * membresías. El piso de un entrenador también es del gimnasio y no es lo
+     * que el socio compró para usar la app: si lo asume el cliente, perder las
+     * rutinas por una comisión pactada entre su entrenador y el gimnasio es
+     * una consecuencia que sorprende. Ahora lo decide cada deuda al abrirse,
+     * y lo que no diga nada bloquea, como siempre.
      *
      * @return Collection<int, Receivable>
      */
@@ -85,6 +93,9 @@ class MembershipFinancialStanding
             ->where('member_id', $member->id)
             ->where('debtor_type', DebtorType::MEMBER->value)
             ->ofType(CashShiftType::GYM)
+            // Null cuenta como que SÍ bloquea: son las filas anteriores a la
+            // columna, y todas eran membresías.
+            ->where(fn ($q) => $q->where('blocks_benefits', true)->orWhereNull('blocks_benefits'))
             ->overdue($hoy)
             ->withSum('appliedPayments', 'amount')
             ->orderBy('due_at')

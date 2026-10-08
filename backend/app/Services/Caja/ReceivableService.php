@@ -73,6 +73,16 @@ class ReceivableService
         ?Model $source = null,
         ?string $notes = null,
         ?CarbonInterface $dueAt = null,
+        /**
+         * ¿Vencida, le retira al socio los beneficios de la app?
+         *
+         * `true` por defecto, que es lo de siempre: una membresía impagada
+         * retiene el acceso. Se pasa `false` para una deuda que se reclama
+         * pero no castiga —el piso de un entrenador asumido por el cliente—,
+         * porque perder las rutinas por una comisión ajena sorprende a quien
+         * la sufre.
+         */
+        bool $blocksBenefits = true,
     ): Receivable {
         if (! $total->isPositive()) {
             throw ReceivableException::invalidTotal();
@@ -93,6 +103,7 @@ class ReceivableService
             // Sin fecha no hay vencimiento y por tanto no hay bloqueo: quien
             // no pacta plazo no crea un moroso por descuido.
             'due_at' => $dueAt?->toDateString(),
+            'blocks_benefits' => $blocksBenefits,
             'created_by' => $actor?->id,
             'created_by_name' => $actor?->name,
             'notes' => $notes,

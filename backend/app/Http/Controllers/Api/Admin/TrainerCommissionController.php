@@ -63,6 +63,9 @@ class TrainerCommissionController extends Controller
             // El valor es del trato. 50.000 es lo habitual, no una regla.
             'amount' => ['required', 'numeric', 'min:1', 'max:99999999'],
             'payer' => ['required', 'in:'.implode(',', TrainerCommissionAgreement::PAYERS)],
+            // Si se pasa de la fecha, ¿le retira al cliente los beneficios de
+            // la app? Nace apagado: ver la migración.
+            'blocks_app' => ['nullable', 'boolean'],
             'starts_on' => ['nullable', 'date_format:Y-m-d'],
             'ends_on' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:starts_on'],
             'notes' => ['nullable', 'string', 'max:255'],
@@ -86,6 +89,7 @@ class TrainerCommissionController extends Controller
         // con esta persona es el mismo, se retomó.
         $acuerdo = $existente ?: new TrainerCommissionAgreement();
         $acuerdo->fill(array_merge($data, [
+            'blocks_app' => (bool) ($data['blocks_app'] ?? false),
             'active' => true,
             'ended_at' => null,
             'ended_by_name' => null,
@@ -105,6 +109,7 @@ class TrainerCommissionController extends Controller
         $data = $request->validate([
             'amount' => ['sometimes', 'numeric', 'min:1', 'max:99999999'],
             'payer' => ['sometimes', 'in:'.implode(',', TrainerCommissionAgreement::PAYERS)],
+            'blocks_app' => ['nullable', 'boolean'],
             'starts_on' => ['nullable', 'date_format:Y-m-d'],
             'ends_on' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:starts_on'],
             'notes' => ['nullable', 'string', 'max:255'],
@@ -299,6 +304,7 @@ class TrainerCommissionController extends Controller
             'amount' => (float) $a->amount,
             'payer' => $a->payer,
             'payer_label' => $a->payerLabel(),
+            'blocks_app' => (bool) $a->blocks_app,
             'active' => (bool) $a->active,
             'starts_on' => $a->starts_on?->toDateString(),
             'ends_on' => $a->ends_on?->toDateString(),

@@ -79,6 +79,7 @@ class TrainerCommissions
                 'amount' => (float) $a->amount,
                 'payer' => $a->payer,
                 'payer_label' => $a->payerLabel(),
+                'blocks_app' => (bool) $a->blocks_app,
                 'period' => $periodo->toDateString(),
                 'charge' => $cobro ? $this->chargeArray($cobro) : null,
                 'state' => $this->stateOf($cobro),
@@ -156,6 +157,9 @@ class TrainerCommissions
                 null,
                 $notas,
                 $vence,
+                // Solo castiga si el trato lo dice, y solo tiene efecto cuando
+                // el deudor es el socio: un entrenador no tiene app que perder.
+                (bool) $acuerdo->blocks_app,
             );
 
             return TrainerCommissionCharge::create([

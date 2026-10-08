@@ -44,7 +44,7 @@ class Receivable extends Model
 
     protected $fillable = [
         'member_id', 'debtor_type', 'debtor_id', 'type', 'concept', 'total_amount', 'status',
-        'due_at', 'source_type', 'source_id', 'created_by', 'created_by_name',
+        'due_at', 'blocks_benefits', 'source_type', 'source_id', 'created_by', 'created_by_name',
         'notes', 'cancelled_at', 'cancelled_by', 'cancellation_reason',
     ];
 
@@ -54,6 +54,10 @@ class Receivable extends Model
         'debtor_id' => 'integer',
         'total_amount' => 'decimal:2',
         'due_at' => 'date',
+        // ¿Vencida, le retira al socio los beneficios de la app? Nace en true:
+        // una membresía impagada sí los retira, que es lo de siempre. Ver la
+        // migración que añadió la columna.
+        'blocks_benefits' => 'boolean',
         'cancelled_at' => 'datetime',
     ];
 

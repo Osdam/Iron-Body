@@ -391,6 +391,97 @@ class TrainerCommissionTest extends TestCase
         ], $this->h)->assertStatus(403);
     }
 
+    // ── ¿Le quita la app al cliente? ────────────────────────────────────────
+    //
+    // Antes la categoria decidia: cualquier deuda de gimnasio vencida retiraba
+    // los beneficios de la app. Valia mientras todas fueran membresias. El
+    // piso tambien es del gimnasio y NO es lo que el socio compro para usar la
+    // app: perder las rutinas por una comision pactada entre su entrenador y
+    // el gimnasio es una consecuencia que sorprende, asi que se marca.
+
+    /** @return array{0: TrainerCommissionAgreement, 1: Member} */
+    private function acuerdoDelCliente(bool $bloquea): array
+    {
+        $entrenador = $this->trainer();
+        $cliente = $this->member();
+
+        $res = $this->postJson('/api/admin/commissions/agreements', [
+            'trainer_id' => $entrenador->id,
+            'member_id' => $cliente->id,
+            'amount' => 50000,
+            'payer' => 'member',
+            'blocks_app' => $bloquea,
+        ], $this->h)->assertStatus(201)->json();
+
+        return [TrainerCommissionAgreement::findOrFail($res['id']), $cliente];
+    }
+
+    private function estaBloqueado(Member $cliente): bool
+    {
+        return app(\App\Services\Caja\MembershipFinancialStanding::class)->isOverdue($cliente->fresh());
+    }
+
+    public function test_por_defecto_el_piso_vencido_no_le_quita_la_app_al_cliente(): void
+    {
+        [$acuerdo, $cliente] = $this->acuerdoDelCliente(bloquea: false);
+
+        $this->cobrar($acuerdo, ['due_at' => CarbonImmutable::now()->subDays(5)->toDateString()])
+            ->assertStatus(201);
+
+        // La deuda existe, esta vencida y se le reclama...
+        $this->assertSame('overdue', $this->getJson('/api/admin/commissions/board', $this->h)
+            ->json('rows.0.state'));
+        // ...pero no le quita las rutinas ni la nutricion.
+        $this->assertFalse($this->estaBloqueado($cliente));
+    }
+
+    public function test_si_se_marca_la_casilla_el_piso_vencido_si_le_quita_la_app(): void
+    {
+        [$acuerdo, $cliente] = $this->acuerdoDelCliente(bloquea: true);
+
+        $this->cobrar($acuerdo, ['due_at' => CarbonImmutable::now()->subDays(5)->toDateString()])
+            ->assertStatus(201);
+
+        $this->assertTrue($this->estaBloqueado($cliente));
+    }
+
+    public function test_pagarlo_le_devuelve_la_app_en_el_acto(): void
+    {
+        // La mora se deriva del saldo, no se guarda: no hay proceso que correr.
+        $this->abrirCajaDelGimnasio();
+        [$acuerdo, $cliente] = $this->acuerdoDelCliente(bloquea: true);
+        $this->cobrar($acuerdo, ['due_at' => CarbonImmutable::now()->subDays(5)->toDateString()])
+            ->assertStatus(201);
+        $this->assertTrue($this->estaBloqueado($cliente));
+
+        $deuda = Receivable::firstOrFail();
+        $this->postJson("/api/admin/receivables/{$deuda->id}/payments", [
+            'amount' => 50000, 'method' => 'cash',
+        ], $this->h)->assertSuccessful();
+
+        $this->assertFalse($this->estaBloqueado($cliente));
+    }
+
+    public function test_una_membresia_impagada_sigue_bloqueando_como_siempre(): void
+    {
+        // Lo que no diga nada, bloquea: es lo que habia y no se toca.
+        $cliente = $this->member();
+
+        app(\App\Services\Caja\ReceivableService::class)->create(
+            \App\Enums\DebtorType::MEMBER,
+            $cliente->id,
+            CashShiftType::GYM,
+            'Plan mensual a plazos',
+            \App\Services\Billing\Money::fromAmount(80000),
+            $this->admin,
+            null,
+            null,
+            CarbonImmutable::now()->subDays(3),
+        );
+
+        $this->assertTrue($this->estaBloqueado($cliente));
+    }
+
     // ── Elegir a quien se le pacta ──────────────────────────────────────────
 
     public function test_los_socios_se_buscan_y_no_se_descargan_enteros(): void
