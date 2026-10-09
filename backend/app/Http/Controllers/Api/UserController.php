@@ -58,6 +58,26 @@ class UserController extends Controller
             MembershipFilter::apply($query, (string) $request->input('status'));
         }
 
+        // FILTRAR POR PLAN. Lo usa «Miembros» en la tarjeta de un plan, que
+        // hasta ahora navegaba con `?plan=3` y nadie leía el parámetro: se
+        // abría el listado completo y parecía que el botón no hacía nada.
+        //
+        // Llega el ID, pero `users.plan` guarda el NOMBRE —es una columna de
+        // texto heredada, no una relación—, así que se traduce aquí. Comparar
+        // en minúsculas y sin espacios recoge las filas importadas del sistema
+        // anterior, que escribieron el mismo plan de tres maneras distintas.
+        if ($request->filled('plan')) {
+            $plan = Plan::find((int) $request->input('plan'));
+
+            if (! $plan) {
+                // Un plan que ya no existe no devuelve «todos los socios»: eso
+                // es justo el error que se está arreglando.
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereRaw('LOWER(TRIM(plan)) = ?', [mb_strtolower(trim((string) $plan->name))]);
+            }
+        }
+
         // Búsqueda server-side sobre los campos que el CRM muestra en la tabla.
         // `ilike` en PostgreSQL (LIKE distingue mayúsculas ahí); en MySQL/SQLite
         // el collation por defecto ya es insensible a mayúsculas.
