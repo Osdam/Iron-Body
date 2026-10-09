@@ -66,15 +66,25 @@ class TrainerCommissions
             ->with(['trainer:id,full_name,document', 'member:id,full_name,document_number'])
             ->get();
 
+        // Puede haber VARIAS filas del mismo mes: las anuladas se conservan
+        // para que el histórico pueda contestar «¿se le cobró octubre?» con
+        // «sí, y se anuló porque…». Se agrupan y abajo se elige la que vale.
         $cobros = TrainerCommissionCharge::query()
             ->whereIn('agreement_id', $acuerdos->pluck('id')->all())
             ->whereDate('period', $periodo->toDateString())
             ->with('receivable.payments')
+            ->orderBy('id')
             ->get()
-            ->keyBy('agreement_id');
+            ->groupBy('agreement_id');
 
         $filas = $acuerdos->map(function (TrainerCommissionAgreement $a) use ($cobros, $periodo): array {
-            $cobro = $cobros->get($a->id);
+            /** @var Collection<int, TrainerCommissionCharge> $delMes */
+            $delMes = $cobros->get($a->id) ?? collect();
+
+            // EL QUE MANDA ES EL VIGENTE. Si todos están anulados, el mes
+            // vuelve a estar por cobrar: eso es para lo que sirve anular.
+            $cobro = $delMes->first(fn (TrainerCommissionCharge $c) => ! $this->isCancelled($c));
+            $anulados = $delMes->filter(fn (TrainerCommissionCharge $c) => $this->isCancelled($c))->count();
 
             return [
                 'agreement_id' => $a->id,
@@ -88,6 +98,9 @@ class TrainerCommissions
                 'period' => $periodo->toDateString(),
                 'charge' => $cobro ? $this->chargeArray($cobro) : null,
                 'state' => $this->stateOf($cobro),
+                // Para poder decir «hubo un cobro anulado» sin esconderlo ni
+                // dejar la fila bloqueada por él.
+                'cancelled_attempts' => $anulados,
             ];
         })->values()->all();
 
@@ -138,9 +151,12 @@ class TrainerCommissions
             throw new RuntimeException('El valor del piso tiene que ser mayor que cero.');
         }
 
+        // LA INVARIANTE ES «UN COBRO VIGENTE POR MES», no «una fila por mes».
+        // Un mes anulado vuelve a estar libre: anular existe para corregir y
+        // registrar bien, y si bloqueara el mes no serviría de nada.
         if ($this->chargeFor($acuerdo, $periodo)) {
             throw new RuntimeException(
-                'Ese mes ya está registrado para este acuerdo. Si hay que corregirlo, anula la deuda.'
+                'Ese mes ya está cobrado para este acuerdo. Si hay que corregirlo, anúlalo primero.'
             );
         }
 
@@ -281,14 +297,27 @@ class TrainerCommissions
             ->all();
     }
 
-    /** El cobro de un mes concreto, si ya existe. */
+    /**
+     * El cobro VIGENTE de un mes, si lo hay.
+     *
+     * Los anulados no cuentan: siguen en la tabla para el histórico, pero no
+     * ocupan el sitio del mes.
+     */
     public function chargeFor(TrainerCommissionAgreement $acuerdo, CarbonImmutable $mes): ?TrainerCommissionCharge
     {
         return TrainerCommissionCharge::query()
             ->where('agreement_id', $acuerdo->id)
             ->whereDate('period', $mes->startOfMonth()->toDateString())
             ->with('receivable.payments')
-            ->first();
+            ->orderBy('id')
+            ->get()
+            ->first(fn (TrainerCommissionCharge $c) => ! $this->isCancelled($c));
+    }
+
+    /** Anulado es: sin deuda, o con la deuda anulada. */
+    private function isCancelled(TrainerCommissionCharge $cobro): bool
+    {
+        return $cobro->receivable === null || $cobro->receivable->isCancelled();
     }
 
     // ────────────────────────────────────────────────────────────────────────

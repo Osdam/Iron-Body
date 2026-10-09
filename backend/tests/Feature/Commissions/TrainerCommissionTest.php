@@ -473,11 +473,34 @@ class TrainerCommissionTest extends TestCase
             'reason' => 'Importe equivocado',
         ], $this->h)->assertOk();
 
-        // El indice unico es por acuerdo y mes, asi que el anterior se borra
-        // del camino solo si el servicio lo permite: aqui se comprueba que el
-        // mostrador puede salir del paso.
-        TrainerCommissionCharge::findOrFail($cobroId)->delete();
+        // Y se vuelve a cobrar sin borrar nada: el anulado se queda en el
+        // historico y el mes vuelve a estar libre.
         $this->cobrar($acuerdo, ['method' => 'cash', 'amount' => 60000])->assertStatus(201);
+
+        $this->assertSame(2, TrainerCommissionCharge::count(), 'el anulado se conserva');
+        $this->assertSame('paid', $this->getJson('/api/admin/commissions/board', $this->h)
+            ->json('rows.0.state'));
+        $this->assertSame(1, $this->getJson('/api/admin/commissions/board', $this->h)
+            ->json('rows.0.cancelled_attempts'));
+    }
+
+    public function test_anulado_el_mes_vuelve_a_salir_por_cobrar(): void
+    {
+        // Era un callejon sin salida: anulado, la fila decia «Anulada» y ya no
+        // ofrecia ni cobrar ni abrir deuda, asi que ese mes quedaba muerto.
+        $this->abrirCajaDelGimnasio();
+        [$acuerdo] = $this->acuerdo();
+        $cobroId = $this->cobrar($acuerdo, ['method' => 'cash'])->assertStatus(201)->json('charge.id');
+
+        $this->postJson("/api/admin/commissions/charges/{$cobroId}/cancel", [
+            'reason' => 'Se cobro al entrenador equivocado',
+        ], $this->h)->assertOk();
+
+        $fila = $this->getJson('/api/admin/commissions/board', $this->h)->assertOk()->json('rows.0');
+
+        $this->assertSame('pending', $fila['state'], 'vuelve a estar por cobrar');
+        $this->assertNull($fila['charge']);
+        $this->assertSame(1, $fila['cancelled_attempts'], 'pero no se esconde que hubo uno');
     }
 
     public function test_recepcion_cobra_pero_no_anula(): void
