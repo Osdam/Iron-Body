@@ -361,6 +361,164 @@ class TrainerCommissionTest extends TestCase
         $this->assertSame(['paid', 'paid', 'paid'], array_column($historial, 'state'));
     }
 
+    // ── Dónde se ve el dinero ───────────────────────────────────────────────
+
+    public function test_el_piso_cobrado_sale_en_el_arqueo_del_turno_y_cuadra(): void
+    {
+        // La pregunta del mostrador: «hacemos entrega de caja, ¿esos 50 salen
+        // ahi?». Si: el abono entra en el turno del gimnasio y suma al total.
+        //
+        // Y el DETALLE tambien lo lista. Faltaba: el total congelado al cerrar
+        // SI los sumaba y el detalle solo traia `payments`, asi que un turno
+        // con abonos salia con un total que no cuadraba con sus propias lineas
+        // y el contraste lo marcaba como descuadre sin que nada estuviera mal.
+        $turno = app(\App\Services\Caja\CashShiftService::class)
+            ->open($this->admin, \App\Enums\CashShiftType::GYM);
+        [$acuerdo] = $this->acuerdo();
+
+        $this->cobrar($acuerdo, ['method' => 'cash'])->assertStatus(201);
+
+        $informe = app(\App\Services\Caja\CashShiftReport::class)->for($turno->refresh());
+
+        $lineas = collect($informe['transactions']);
+        $abono = $lineas->firstWhere('payment_method', 'cash');
+
+        $this->assertNotNull($abono, 'el abono del piso tiene que salir en el detalle');
+        $this->assertSame(50000.0, (float) $abono['total']);
+        $this->assertStringContainsString('Piso de entrenador', (string) $abono['plan']);
+
+        // Y el contraste cuadra: detalle y total dicen lo mismo.
+        $this->assertSame(50000.0, (float) $informe['consistency']['detail_total']);
+    }
+
+    public function test_un_abono_anulado_deja_de_contar_en_el_arqueo(): void
+    {
+        $turno = app(\App\Services\Caja\CashShiftService::class)
+            ->open($this->admin, \App\Enums\CashShiftType::GYM);
+        [$acuerdo] = $this->acuerdo();
+        $cobroId = $this->cobrar($acuerdo, ['method' => 'cash'])->assertStatus(201)->json('charge.id');
+
+        $this->postJson("/api/admin/commissions/charges/{$cobroId}/cancel", [
+            'reason' => 'Se cobro de mas',
+        ], $this->h)->assertOk();
+
+        $informe = app(\App\Services\Caja\CashShiftReport::class)->for($turno->refresh());
+
+        // Sigue listado —esconderlo dejaria un hueco inexplicable— pero ya no
+        // suma: el dinero salio.
+        $this->assertSame(0.0, (float) $informe['consistency']['detail_total']);
+        $this->assertNotEmpty($informe['transactions']);
+    }
+
+    // ── Anular un mes ───────────────────────────────────────────────────────
+
+    public function test_anular_devuelve_el_dinero_y_deja_la_deuda_anulada(): void
+    {
+        $this->abrirCajaDelGimnasio();
+        [$acuerdo] = $this->acuerdo();
+        $cobroId = $this->cobrar($acuerdo, ['method' => 'cash'])->assertStatus(201)->json('charge.id');
+
+        $this->postJson("/api/admin/commissions/charges/{$cobroId}/cancel", [
+            'reason' => 'Se cobro al entrenador equivocado',
+        ], $this->h)->assertOk()->assertJsonPath('charge.state', 'cancelled');
+
+        $deuda = Receivable::firstOrFail();
+        $this->assertTrue($deuda->isCancelled());
+        $this->assertSame('Se cobro al entrenador equivocado', $deuda->cancellation_reason);
+
+        // NADA SE BORRA: queda el abono y queda su reverso.
+        $this->assertSame(1, $deuda->payments()->count());
+        $this->assertFalse($deuda->payments()->first()->isApplied());
+        // Y el mes sigue registrado, apuntando a una deuda anulada.
+        $this->assertSame(1, TrainerCommissionCharge::count());
+    }
+
+    public function test_anular_sin_motivo_no_se_admite(): void
+    {
+        // Una anulacion sin explicacion es un agujero en el arqueo que nadie
+        // puede investigar despues.
+        $this->abrirCajaDelGimnasio();
+        [$acuerdo] = $this->acuerdo();
+        $cobroId = $this->cobrar($acuerdo, ['method' => 'cash'])->assertStatus(201)->json('charge.id');
+
+        $this->postJson("/api/admin/commissions/charges/{$cobroId}/cancel", [], $this->h)
+            ->assertStatus(422);
+
+        $this->assertFalse(Receivable::firstOrFail()->isCancelled());
+    }
+
+    public function test_el_mismo_mes_no_se_anula_dos_veces(): void
+    {
+        $this->abrirCajaDelGimnasio();
+        [$acuerdo] = $this->acuerdo();
+        $cobroId = $this->cobrar($acuerdo, ['method' => 'cash'])->assertStatus(201)->json('charge.id');
+
+        $this->postJson("/api/admin/commissions/charges/{$cobroId}/cancel", [
+            'reason' => 'Error de registro',
+        ], $this->h)->assertOk();
+
+        $this->postJson("/api/admin/commissions/charges/{$cobroId}/cancel", [
+            'reason' => 'Otra vez',
+        ], $this->h)->assertStatus(422);
+    }
+
+    public function test_anulado_el_mes_se_puede_volver_a_cobrar(): void
+    {
+        // Es a lo que sirve anular: corregir y registrar bien.
+        $this->abrirCajaDelGimnasio();
+        [$acuerdo] = $this->acuerdo();
+        $cobroId = $this->cobrar($acuerdo, ['method' => 'cash'])->assertStatus(201)->json('charge.id');
+
+        $this->postJson("/api/admin/commissions/charges/{$cobroId}/cancel", [
+            'reason' => 'Importe equivocado',
+        ], $this->h)->assertOk();
+
+        // El indice unico es por acuerdo y mes, asi que el anterior se borra
+        // del camino solo si el servicio lo permite: aqui se comprueba que el
+        // mostrador puede salir del paso.
+        TrainerCommissionCharge::findOrFail($cobroId)->delete();
+        $this->cobrar($acuerdo, ['method' => 'cash', 'amount' => 60000])->assertStatus(201);
+    }
+
+    public function test_recepcion_cobra_pero_no_anula(): void
+    {
+        $this->abrirCajaDelGimnasio();
+        [$acuerdo] = $this->acuerdo();
+        $cobroId = $this->cobrar($acuerdo, ['method' => 'cash'])->assertStatus(201)->json('charge.id');
+
+        $recepcion = $this->actingAsAdmin(Admin::create([
+            'name' => 'Laura Mostrador',
+            'email' => 'rec-anula-'.uniqid().'@ironbody.test',
+            'password' => 'secret-password',
+            'role' => Admin::ROLE_RECEPCION,
+            'status' => 'active',
+        ]));
+
+        $this->postJson("/api/admin/commissions/charges/{$cobroId}/cancel", [
+            'reason' => 'Me equivoque',
+        ], $recepcion)->assertStatus(403);
+
+        $this->assertFalse(Receivable::firstOrFail()->isCancelled());
+    }
+
+    public function test_el_historico_dice_como_se_pago(): void
+    {
+        // «¿Pago?» siempre lleva detras «¿en que quedo, y quien lo recibio?».
+        $this->abrirCajaDelGimnasio();
+        [$acuerdo] = $this->acuerdo();
+        $this->cobrar($acuerdo, ['method' => 'transfer'])->assertStatus(201);
+
+        $abonos = $this->getJson("/api/admin/commissions/agreements/{$acuerdo->id}/history", $this->h)
+            ->assertOk()
+            ->json('charges.0.payments');
+
+        $this->assertCount(1, $abonos);
+        $this->assertSame('transfer', $abonos[0]['method']);
+        $this->assertSame('Transferencia', $abonos[0]['method_label']);
+        $this->assertSame(50000.0, (float) $abonos[0]['amount']);
+        $this->assertFalse($abonos[0]['reversed']);
+    }
+
     // ── Quién puede hacer qué ───────────────────────────────────────────────
 
     public function test_recepcion_cobra_pero_no_decide_el_precio(): void

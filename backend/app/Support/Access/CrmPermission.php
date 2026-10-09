@@ -89,6 +89,8 @@ final class CrmPermission
 
     public const COMMISSIONS_CHARGE = 'commissions.charge';
 
+    public const COMMISSIONS_CANCEL = 'commissions.cancel';
+
     public const COMMISSIONS_MANAGE = 'commissions.manage';
 
     // ── Administración de roles ─────────────────────────────────────────────

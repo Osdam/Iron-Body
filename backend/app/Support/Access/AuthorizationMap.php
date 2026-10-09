@@ -457,6 +457,8 @@ final class AuthorizationMap
         // trabajo de mostrador. Decidir CUÁNTO cuesta, no: eso es precio, y el
         // precio no lo cambia quien cobra.
         'POST api/admin/commissions/agreements/{agreement}/charge' => 'commissions.charge',
+        // Deshacer un cobro es supervisión, no mostrador.
+        'POST api/admin/commissions/charges/{charge}/cancel' => 'commissions.cancel',
 
         // Ver el catálogo de roles ya revela el organigrama y qué puede cada
         // uno. Se exige el mismo permiso que para tocarlo: un dominio con una

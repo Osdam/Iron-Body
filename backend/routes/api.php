@@ -1450,6 +1450,11 @@ Route::get('admin/commissions/agreements/{agreement}/history', [\App\Http\Contro
 // esta ruta se nombra aparte en AuthorizationMap.
 Route::post('admin/commissions/agreements/{agreement}/charge', [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'charge'])
     ->whereNumber('agreement');
+// ANULAR un mes cobrado: revierte el dinero y anula la deuda. Quien se
+// equivoca al cobrar no debería poder deshacerlo sin que lo vea nadie, así que
+// es una llave distinta de la de cobrar.
+Route::post('admin/commissions/charges/{charge}/cancel', [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'cancelCharge'])
+    ->whereNumber('charge');
 Route::put('admin/commissions/agreements/{agreement}',    [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'update'])
     ->whereNumber('agreement');
 Route::delete('admin/commissions/agreements/{agreement}', [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'destroy'])

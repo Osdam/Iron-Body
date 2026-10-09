@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Member;
 use App\Models\Trainer;
 use App\Models\TrainerCommissionAgreement;
+use App\Models\TrainerCommissionCharge;
 use App\Services\Audit\AuditTrail;
 use App\Exceptions\CashShiftException;
 use App\Exceptions\ReceivableException;
@@ -219,6 +220,50 @@ class TrainerCommissionController extends Controller
         ]);
 
         return response()->json(['ok' => true, 'charge' => $cobro], 201);
+    }
+
+    /**
+     * POST /api/admin/commissions/charges/{charge}/cancel — el mes no iba.
+     *
+     * Revierte el dinero si lo había y anula la deuda, las dos cosas con
+     * motivo. No borra nada: queda el abono, queda su reverso y queda la
+     * deuda anulada, que es lo que permite contestar «¿se le cobró octubre?»
+     * con un «sí, y se anuló el día tal porque…».
+     *
+     * PERMISO APARTE (`commissions.cancel`). Quien se equivoca al cobrar no
+     * debería poder deshacerlo sin que lo vea nadie: es la misma regla que
+     * para anular un abono en Cuentas por cobrar.
+     */
+    public function cancelCharge(Request $request, TrainerCommissionCharge $charge, TrainerCommissions $servicio): JsonResponse
+    {
+        $data = $request->validate([
+            // El motivo es obligatorio: una anulación sin explicación es un
+            // agujero en el arqueo que nadie puede investigar después.
+            'reason' => ['required', 'string', 'min:4', 'max:255'],
+        ]);
+
+        try {
+            $resultado = $servicio->cancelCharge($charge, $data['reason'], AdminActor::from($request));
+        } catch (ReceivableException|RuntimeException $e) {
+            return response()->json(['ok' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        app(AuditTrail::class)->record($request, [
+            'action' => 'delete',
+            'module' => 'Comisiones',
+            'entity' => 'piso de entrenador',
+            'entity_id' => (string) $charge->agreement_id,
+            'target_name' => $charge->agreement?->trainer?->full_name,
+            'summary' => 'Anuló el piso de '.$charge->periodLabel(),
+            'metadata' => [
+                'period' => $resultado['period'],
+                'amount' => $resultado['amount'],
+                'reason' => $data['reason'],
+                'receivable_id' => $charge->receivable_id,
+            ],
+        ]);
+
+        return response()->json(['ok' => true, 'charge' => $resultado]);
     }
 
     /** GET /api/admin/commissions/agreements/{agreement}/history */

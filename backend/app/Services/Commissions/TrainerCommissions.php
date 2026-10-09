@@ -216,6 +216,54 @@ class TrainerCommissions
     }
 
     /**
+     * ANULA UN COBRO: el mes no debía cobrarse, o se cobró mal.
+     *
+     * Deshace las dos cosas que ese cobro produjo, en este orden:
+     *
+     *   1. el DINERO, si se había pagado: cada abono se revierte con motivo,
+     *      y al revertirse sale del arqueo del turno en que entró. No se borra
+     *      nada: queda el abono y queda su reverso;
+     *   2. la DEUDA, que se anula con motivo y autor.
+     *
+     * El cobro del mes tampoco se borra. Queda apuntado a una deuda anulada,
+     * que es lo que permite contestar «¿se le cobró octubre?» con un «sí, y se
+     * anuló el día tal porque…», en vez de con un silencio.
+     *
+     * Y el ACCESO se recalcula: si ese mes era el que le tenía la puerta
+     * abierta al entrenador, deja de tenerla.
+     *
+     * @return array<string, mixed>
+     */
+    public function cancelCharge(TrainerCommissionCharge $cobro, string $motivo, ?Admin $actor = null): array
+    {
+        $deuda = $cobro->receivable;
+
+        if (! $deuda) {
+            throw new RuntimeException('Ese cobro ya no tiene deuda asociada.');
+        }
+
+        if ($deuda->isCancelled()) {
+            throw new RuntimeException('Ese mes ya estaba anulado.');
+        }
+
+        // El dinero primero. Revertir después de anular la deuda dejaría un
+        // abono aplicado sobre algo que ya no se debe.
+        foreach ($deuda->payments()->get() as $abono) {
+            if ($abono->isApplied()) {
+                $this->receivables->reverse($abono, $motivo, $actor);
+            }
+        }
+
+        $this->receivables->cancel($deuda->fresh(), $motivo, $actor);
+
+        if ($cobro->agreement?->trainer) {
+            $this->access->sync($cobro->agreement->trainer);
+        }
+
+        return $this->chargeArray($cobro->fresh(['receivable.payments']));
+    }
+
+    /**
      * El histórico de un acuerdo: todos sus meses, del más reciente al más
      * antiguo. Es lo que contesta «¿desde cuándo viene pagando?».
      *
@@ -292,6 +340,47 @@ class TrainerCommissions
             : 'open';
     }
 
+    /**
+     * Cómo se pagó un mes: cada abono con su medio, su importe y su fecha.
+     *
+     * Es la pregunta que llega después de «¿pagó?»: en qué quedó, si fue en
+     * efectivo o por transferencia, y quién lo recibió. Sin esto hay que ir a
+     * Cuentas por cobrar a buscarlo.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function paymentsOf(?Receivable $deuda): array
+    {
+        if (! $deuda) {
+            return [];
+        }
+
+        return $deuda->payments()
+            ->orderBy('id')
+            ->get()
+            ->map(fn ($abono) => [
+                'id' => $abono->id,
+                'amount' => (float) $abono->amount,
+                'method' => $abono->method,
+                'method_label' => self::METHOD_LABELS[strtolower((string) $abono->method)] ?? $abono->method,
+                'at' => $abono->created_at?->toIso8601String(),
+                'by' => $abono->created_by_name,
+                'reversed' => ! $abono->isApplied(),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /** Los medios de pago, dichos como se dicen. */
+    private const METHOD_LABELS = [
+        'cash' => 'Efectivo',
+        'card' => 'Tarjeta',
+        'transfer' => 'Transferencia',
+        'nequi' => 'Nequi',
+        'daviplata' => 'Daviplata',
+        'wompi' => 'Wompi',
+    ];
+
     /** @return array<string, mixed> */
     private function chargeArray(TrainerCommissionCharge $cobro): array
     {
@@ -314,6 +403,12 @@ class TrainerCommissions
             'due_at' => $deuda?->due_at?->toDateString(),
             'by' => $cobro->created_by_name,
             'created_at' => $cobro->created_at?->toIso8601String(),
+            // Cómo se pagó: medio, importe y quién lo recibió.
+            'payments' => $this->paymentsOf($deuda),
+            // Lo que explica una anulación meses después.
+            'cancelled_at' => $deuda?->cancelled_at?->toIso8601String(),
+            'cancel_reason' => $deuda?->cancellation_reason,
+            'concept' => $deuda?->concept,
         ];
     }
 

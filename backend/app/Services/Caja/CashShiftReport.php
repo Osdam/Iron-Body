@@ -5,6 +5,7 @@ namespace App\Services\Caja;
 use App\Enums\CashShiftType;
 use App\Models\CashShift;
 use App\Models\Payment;
+use App\Models\ReceivablePayment;
 use App\Models\ProductSale;
 
 /**
@@ -114,7 +115,7 @@ class CashShiftReport
      */
     private function cobros(CashShift $shift): array
     {
-        return Payment::query()
+        $cobros = Payment::query()
             ->where('cash_shift_id', $shift->id)
             ->with(['user:id,name', 'plan:id,name'])
             ->orderBy('id')
@@ -128,6 +129,51 @@ class CashShiftReport
                 'payment_method' => $p->method,
                 'status' => $p->status,
                 'total' => (float) $p->amount,
+            ])
+            ->all();
+
+        return array_merge($cobros, $this->abonos($shift));
+    }
+
+    /**
+     * LOS ABONOS A CUENTAS POR COBRAR TAMBIÉN SON DINERO DE ESTE TURNO.
+     *
+     * Faltaban, y el informe se contradecía solo: el total congelado al cerrar
+     * sale de CashShiftTotalsService, que SÍ los suma, mientras que el detalle
+     * solo listaba `payments`. Resultado: un turno con un abono salía con un
+     * total que no cuadraba con sus propias líneas, y el contraste lo marcaba
+     * como descuadre sin que nada estuviera mal.
+     *
+     * Se notaba poco porque en la caja del gimnasio los abonos eran raros. Con
+     * el piso de los entrenadores pasan a ser de todos los días, y un arqueo
+     * que no cuadra por diseño es un arqueo que nadie vuelve a mirar.
+     *
+     * Se listan TODOS, también los anulados, por la misma razón que las ventas
+     * canceladas: esconderlos dejaría un hueco inexplicable. El estado va en la
+     * fila, y el contraste solo cuenta los que siguen siendo dinero.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function abonos(CashShift $shift): array
+    {
+        return ReceivablePayment::query()
+            ->where('cash_shift_id', $shift->id)
+            ->with(['receivable:id,concept,debtor_type', 'receivable.member:id,full_name'])
+            ->orderBy('id')
+            ->get()
+            ->map(fn (ReceivablePayment $a) => [
+                'id' => 'abono-'.$a->id,
+                'reference' => null,
+                'at' => optional($a->created_at)->toIso8601String(),
+                'member' => $a->receivable?->member?->full_name ?? $a->created_by_name,
+                // El concepto de la deuda es lo que explica el apunte meses
+                // después: «Piso de entrenador · Carlos → Olga · octubre».
+                'plan' => $a->receivable?->concept,
+                'payment_method' => $a->method,
+                // El contraste solo suma 'paid' y 'delivered'; un abono
+                // aplicado tiene que contar, y uno revertido no.
+                'status' => $a->isApplied() ? 'paid' : 'reversed',
+                'total' => (float) $a->amount,
             ])
             ->all();
     }

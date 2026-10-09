@@ -77,6 +77,7 @@ final class PermissionCatalog
         'employee' => 'Acceso de empleado',
         'backdate' => 'Fechar hacia atrás',
         'charge' => 'Cobrar',
+        'cancel' => 'Anular',
         'enroll' => 'Inscribir',
     ];
 
@@ -133,6 +134,7 @@ final class PermissionCatalog
         'payments.cancel' => 'Anular un pago ya registrado.',
         'commissions.view' => 'Ver el panel del mes y el histórico de los pisos: quién pagó, quién debe y a quién no se le ha registrado todavía.',
         'commissions.charge' => 'Registrar que alguien pagó el piso del mes, o abrirle la deuda. El dinero entra en la caja del gimnasio, así que hace falta tenerla abierta para cobrar en el acto.',
+        'commissions.cancel' => 'Anular un mes ya cobrado: devuelve el dinero al estado anterior —el abono se revierte y sale del arqueo del turno en que entró— y deja la deuda anulada con motivo y autor. Nada se borra. Si ese mes era el que le tenía la puerta abierta al entrenador, deja de tenerla.',
         'commissions.manage' => 'Pactar con qué entrenador y por qué cliente se cobra piso, cuánto cuesta y quién lo asume. Es decidir un precio, no cobrarlo.',
         'payments.backdate' => 'Registrar un cobro con fecha de inicio ANTERIOR a hoy, para el socio que pagó hace días y se está registrando ahora. El dinero no se mueve: el cobro sigue entrando en la caja de hoy. Lo que retrocede es la vigencia, y con ella el vencimiento, así que puede dejar al socio vencido en el mismo momento del registro. Programar un inicio futuro no necesita este permiso.',
         'classes.enroll' => 'Inscribir socios en una clase y quitarlos, desde el mostrador. Aplica las mismas reglas que la app: plan con clases, cuenta al día y cupo. No permite crear ni editar horarios. Para buscar al socio hace falta también «Ver» en Miembros.',
