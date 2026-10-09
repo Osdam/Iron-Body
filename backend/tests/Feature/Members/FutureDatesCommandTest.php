@@ -147,6 +147,83 @@ class FutureDatesCommandTest extends TestCase
         $this->assertSame('Anualidad', $user->plan);
     }
 
+    public function test_gana_el_pago_que_llega_mas_lejos_y_no_el_mas_reciente(): void
+    {
+        // ESTO SE VIO EN PRODUCCION. Una socia con la ANUALIDAD de enero
+        // —vigente hasta enero del ano siguiente— y una mensualidad suelta de
+        // mayo salia con la vigencia de la mensualidad: la habria dejado
+        // vencida en junio. Un pago posterior no sustituye a uno que cubre
+        // mas tiempo.
+        $anual = Plan::create(['name' => 'Anualidad', 'price' => 900000, 'duration_days' => 365, 'active' => true]);
+        $mensual = Plan::create(['name' => 'Mensual', 'price' => 80000, 'duration_days' => 30, 'active' => true]);
+
+        $user = $this->socio('Alejandra Palacios', [
+            'plan' => 'Comisión de personalizados',
+            'membership_start_date' => '2027-03-01',
+            'membership_end_date' => '2027-03-01',
+        ]);
+
+        $enero = CarbonImmutable::parse('2026-01-05');
+        $this->pago($user, $anual, $enero, $enero->addDays(364));
+        // La mensualidad de mayo: mas reciente, pero cubre mucho menos.
+        $this->pago($user, $mensual, CarbonImmutable::parse('2026-05-27'));
+
+        $this->artisan('members:future-dates', ['--fix' => true])->assertSuccessful();
+
+        $user->refresh();
+        $this->assertSame('2026-01-05', substr((string) $user->membership_start_date, 0, 10));
+        $this->assertSame('2027-01-04', substr((string) $user->membership_end_date, 0, 10));
+        $this->assertSame('Anualidad', $user->plan);
+    }
+
+    public function test_las_fechas_se_pueden_escribir_a_mano_sobre_una_persona(): void
+    {
+        // Hay socios cuya membresia de verdad no esta en `payments`: se
+        // importaron con las fechas en la ficha y sin cobro detras. Para esos
+        // no hay regla que valga.
+        $user = $this->socio('Alejandra Palacios', [
+            'plan' => 'Comisión de personalizados',
+            'membership_start_date' => '2027-03-01',
+            'membership_end_date' => '2027-03-01',
+        ]);
+
+        $this->artisan('members:future-dates', [
+            '--user' => $user->id,
+            '--fix' => true,
+            '--start' => '2026-01-05',
+            '--end' => '2027-01-04',
+            '--plan' => 'Anualidad',
+        ])->assertSuccessful();
+
+        $user->refresh();
+        $this->assertSame('2026-01-05', substr((string) $user->membership_start_date, 0, 10));
+        $this->assertSame('2027-01-04', substr((string) $user->membership_end_date, 0, 10));
+        $this->assertSame('Anualidad', $user->plan);
+    }
+
+    public function test_escribir_fechas_a_mano_sin_user_se_rechaza(): void
+    {
+        // Soltarlo sobre una lista pondria la misma vigencia a todo el mundo:
+        // el peor accidente que podria tener este comando.
+        $this->socio('Uno', ['plan' => 'X', 'membership_start_date' => '2027-03-01', 'membership_end_date' => '2027-03-01']);
+
+        $this->artisan('members:future-dates', [
+            '--fix' => true, '--start' => '2026-01-05', '--end' => '2027-01-04',
+        ])->assertFailed();
+    }
+
+    public function test_una_fecha_de_fin_anterior_al_inicio_se_rechaza(): void
+    {
+        $user = $this->socio('Uno', ['plan' => 'X', 'membership_start_date' => '2027-03-01', 'membership_end_date' => '2027-03-01']);
+
+        $this->artisan('members:future-dates', [
+            '--user' => $user->id, '--fix' => true,
+            '--start' => '2026-06-01', '--end' => '2026-01-01',
+        ])->assertFailed();
+
+        $this->assertSame('2027-03-01', substr((string) $user->refresh()->membership_start_date, 0, 10));
+    }
+
     public function test_a_quien_no_tiene_ningun_pago_real_no_se_le_inventa_nada(): void
     {
         [, $comision] = $this->planes();

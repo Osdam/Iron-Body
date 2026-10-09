@@ -37,6 +37,9 @@ class MembershipFutureDatesCommand extends Command
         {--months=6 : Marca también las vigencias que terminan más allá de estos meses}
         {--fix : Escribe la vigencia que sale del último pago real. Sin esto no toca nada}
         {--user= : Revisa un solo socio por su id}
+        {--start= : Fecha de inicio EXACTA (YYYY-MM-DD). Solo con --user y --fix}
+        {--end= : Fecha de fin EXACTA (YYYY-MM-DD). Solo con --user y --fix}
+        {--plan= : Nombre del plan a dejar puesto. Solo con --user y --fix}
         {--limit=200 : Cuántos listar}';
 
     protected $description = 'Socios con la vigencia empezando en el futuro o terminando dentro de años, y de qué pago salió.';
@@ -45,6 +48,31 @@ class MembershipFutureDatesCommand extends Command
     {
         $hoy = MembershipPeriod::today();
         $tope = $hoy->addMonths(max(1, (int) $this->option('months')));
+
+        // ESCRIBIR FECHAS A MANO ES SOBRE UNA PERSONA, Y CON LAS DOS PUESTAS.
+        // Soltarlo sobre una lista pondría la misma vigencia a todo el mundo,
+        // que es el peor accidente que podría tener este comando.
+        if ($this->manual() !== null) {
+            if (! $this->option('user') || ! $this->option('fix')) {
+                $this->error('--start y --end solo valen junto a --user y --fix.');
+
+                return self::FAILURE;
+            }
+
+            $m = $this->manual();
+            foreach (['start' => $m['start'], 'end' => $m['end']] as $cual => $valor) {
+                if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $valor)) {
+                    $this->error('--'.$cual.' tiene que ser una fecha YYYY-MM-DD.');
+
+                    return self::FAILURE;
+                }
+            }
+            if ($m['end'] < $m['start']) {
+                $this->error('La fecha de fin no puede ser anterior a la de inicio.');
+
+                return self::FAILURE;
+            }
+        }
 
         $socios = User::query()
             ->when($this->option('user'), fn ($q) => $q->whereKey((int) $this->option('user')))
@@ -69,8 +97,8 @@ class MembershipFutureDatesCommand extends Command
         $arreglados = 0;
 
         foreach ($socios as $socio) {
-            $real = $this->ultimoPagoReal($socio, $planes);
-            $sugerida = $this->vigenciaDe($real, $planes);
+            $real = $this->pagoQueMasCubre($socio, $planes);
+            $sugerida = $this->manual() ?? $this->vigenciaDe($real, $planes);
 
             $filas[] = [
                 $socio->id,
@@ -87,7 +115,7 @@ class MembershipFutureDatesCommand extends Command
                 $socio->forceFill([
                     'membership_start_date' => $sugerida['start'],
                     'membership_end_date' => $sugerida['end'],
-                    'plan' => $real?->plan?->name ?? $socio->plan,
+                    'plan' => $this->option('plan') ?: ($real?->plan?->name ?? $socio->plan),
                 ])->save();
                 $arreglados++;
             }
@@ -130,19 +158,25 @@ class MembershipFutureDatesCommand extends Command
     }
 
     /**
-     * El último pago de esa persona que SÍ compra membresía.
+     * El pago real que llega MÁS LEJOS. No el último que se registró.
      *
-     * Se descartan los planes que no son membresías —una comisión no da
-     * acceso a nada— y los pagos sin plan, que no compran vigencia. Lo que
-     * queda es lo que de verdad define hasta cuándo puede entrar.
+     * ESTO ESTABA MAL Y SE VIO EN PRODUCCIÓN. La primera versión cogía el
+     * último pago por fecha, y con eso una socia con la ANUALIDAD de enero
+     * —vigente hasta enero del año siguiente— y una mensualidad suelta de mayo
+     * salía con la vigencia de la mensualidad: la habría dejado vencida en
+     * junio. Un pago posterior no sustituye a uno que cubre más tiempo; lo que
+     * define hasta cuándo puede entrar es el que llega más lejos.
+     *
+     * Es la misma regla del importador, menos su error: las comisiones no
+     * cuentan, porque no compran acceso a nada.
      *
      * @param  Collection<string, Plan>  $planes
      */
-    private function ultimoPagoReal(User $socio, Collection $planes): ?Payment
+    private function pagoQueMasCubre(User $socio, Collection $planes): ?Payment
     {
         $marcadores = implode(',', array_fill(0, count(PaymentController::PAID_STATUSES), '?'));
 
-        return Payment::query()
+        $reales = Payment::query()
             ->where('user_id', $socio->id)
             ->whereNotNull('plan_id')
             ->whereRaw('LOWER(status) IN ('.$marcadores.')', PaymentController::PAID_STATUSES)
@@ -150,7 +184,45 @@ class MembershipFutureDatesCommand extends Command
             ->orderByDesc('paid_at')
             ->orderByDesc('id')
             ->get()
-            ->first(fn (Payment $p) => ! $this->esComision((string) ($p->plan?->name ?? '')));
+            ->filter(fn (Payment $p) => ! $this->esComision((string) ($p->plan?->name ?? '')));
+
+        $mejor = null;
+        $masLejos = null;
+
+        foreach ($reales as $pago) {
+            $vigencia = $this->vigenciaDe($pago, $planes);
+            if (! $vigencia) {
+                continue;
+            }
+            if ($masLejos === null || $vigencia['end'] > $masLejos) {
+                $masLejos = $vigencia['end'];
+                $mejor = $pago;
+            }
+        }
+
+        return $mejor;
+    }
+
+    /**
+     * Las fechas puestas a mano, cuando quien manda el comando SABE cuáles son.
+     *
+     * Hay socios cuya membresía de verdad no está en `payments`: se importaron
+     * con las fechas escritas directamente en la ficha y sin un cobro detrás.
+     * Para esos no hay regla que valga, y adivinar es peor que preguntar; así
+     * que se pueden escribir, pero solo sobre UNA persona a la vez.
+     *
+     * @return array{start: string, end: string}|null
+     */
+    private function manual(): ?array
+    {
+        $inicio = (string) $this->option('start');
+        $fin = (string) $this->option('end');
+
+        if ($inicio === '' && $fin === '') {
+            return null;
+        }
+
+        return ['start' => $inicio, 'end' => $fin];
     }
 
     /**
