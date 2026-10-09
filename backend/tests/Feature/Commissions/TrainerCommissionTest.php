@@ -526,6 +526,48 @@ class TrainerCommissionTest extends TestCase
             ->assertOk()->json('data'));
     }
 
+    // ── Lo que se le dice a quien se equivoca ───────────────────────────────
+
+    public function test_un_valor_invalido_se_explica_en_castellano(): void
+    {
+        // Al usuario le llegaba literalmente «validation.min.numeric». No es un
+        // mensaje feo: es un formulario que no se puede corregir porque no dice
+        // que le pasa. La app corre con APP_LOCALE=es y no habia traducciones.
+        $this->app->setLocale('es');
+        $entrenador = $this->trainer();
+        $cliente = $this->member();
+
+        $res = $this->postJson('/api/admin/commissions/agreements', [
+            'trainer_id' => $entrenador->id,
+            'member_id' => $cliente->id,
+            'amount' => 0,
+            'payer' => 'trainer',
+        ], $this->h)->assertStatus(422);
+
+        $mensaje = $res->json('errors.amount.0');
+
+        $this->assertStringNotContainsString('validation.', (string) $mensaje);
+        $this->assertStringContainsString('valor', mb_strtolower((string) $mensaje));
+    }
+
+    public function test_el_campo_se_nombra_como_lo_llama_el_mostrador(): void
+    {
+        // «amount no puede ser menor que 1» no le sirve a nadie: quien esta en
+        // el mostrador no sabe que es `amount`.
+        $this->app->setLocale('es');
+
+        $res = $this->postJson('/api/admin/commissions/agreements', [
+            'member_id' => $this->member()->id,
+            'amount' => 50000,
+            'payer' => 'trainer',
+        ], $this->h)->assertStatus(422);
+
+        $this->assertStringContainsString(
+            'entrenador',
+            mb_strtolower((string) $res->json('errors.trainer_id.0')),
+        );
+    }
+
     public function test_los_tres_permisos_aparecen_en_la_pantalla_de_roles(): void
     {
         $catalogo = collect(\App\Support\Access\PermissionCatalog::rows());
