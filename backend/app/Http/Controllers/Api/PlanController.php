@@ -456,7 +456,22 @@ class PlanController extends Controller
             'tier' => ['sometimes', 'nullable', 'string', 'in:'.implode(',', Plan::TIERS)],
             'price' => [...$req, 'numeric', 'min:0'],
             'original_price' => ['nullable', 'numeric', 'min:0'],
-            'duration_days' => [$updating ? 'sometimes' : 'required_without_all:duration_months,months', 'integer', 'min:1'],
+            /*
+             * CERO DÍAS ES UN COBRO QUE NO DA VIGENCIA.
+             *
+             * Existe porque ya existía el caso: la «Comisión de
+             * personalizados» estaba cargada como un plan de treinta días, y
+             * un plan define la membresía de quien lo tiene. Por eso hubo
+             * socios con la vigencia puesta por una comisión, vencida en 2027
+             * y sin poder entrar.
+             *
+             * MembershipPeriod::apply() ya se detiene en `dias <= 0` y no
+             * toca la membresía de nadie; lo único que faltaba era poder
+             * ponerlo sin entrar a la base a mano. Para cobros nuevos está el
+             * módulo de Comisiones: esto es para los planes heredados que ya
+             * están en el catálogo y en el histórico.
+             */
+            'duration_days' => [$updating ? 'sometimes' : 'required_without_all:duration_months,months', 'integer', 'min:0'],
             // TIPO DE PLAN. 'unlimited' es el de siempre: entra cuantas veces
             // quiera mientras esté vigente. 'entries' es por consumo: la
             // vigencia sigue siendo `duration_days` y ademas trae un número de
