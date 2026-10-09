@@ -168,6 +168,28 @@ class MembershipPeriod
             ? CarbonImmutable::parse($user->membership_end_date, self::TZ)->startOfDay()
             : null;
 
+        // ── MEJORA DE PLAN ──────────────────────────────────────────────
+        //
+        // Se mejora lo que le queda del periodo que YA compró: cambia el plan
+        // y el vencimiento se queda donde estaba. Sin esta salida, el camino
+        // normal le encadenaría la duración del plan nuevo al final de lo que
+        // tiene y le regalaría un mes entero por pagar una diferencia.
+        //
+        // Lo que se cobró es la diferencia de precio; lo decide PlanUpgrades,
+        // que es quien sabe de qué plan venía.
+        if ($payment->upgraded_from_plan_id) {
+            $user->plan = $plan->name;
+            $user->status = 'active';
+            $user->save();
+
+            return [
+                'start' => $payment->period_start?->toDateString() ?? $inicio->toDateString(),
+                'end' => $finActual?->toDateString(),
+                'chained' => false,
+                'upgrade' => true,
+            ];
+        }
+
         // Regla 2: sigue vigente ese día → se encadena.
         $encadena = $finActual !== null && $finActual->greaterThan($inicio);
         $base = $encadena ? $finActual : $inicio;

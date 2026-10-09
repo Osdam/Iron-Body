@@ -117,7 +117,7 @@ class CashShiftReport
     {
         $cobros = Payment::query()
             ->where('cash_shift_id', $shift->id)
-            ->with(['user:id,name', 'plan:id,name'])
+            ->with(['user:id,name', 'plan:id,name', 'upgradedFrom:id,name'])
             ->orderBy('id')
             ->get()
             ->map(fn (Payment $p) => [
@@ -125,7 +125,12 @@ class CashShiftReport
                 'reference' => $p->reference,
                 'at' => optional($p->created_at)->toIso8601String(),
                 'member' => $p->user?->name,
-                'plan' => $p->plan?->name,
+                // Una mejora dice de dónde viene: sin eso, en el informe
+                // aparece un Total Access cobrado a 70.000 y parece un error
+                // de precio. Ver PlanUpgrades.
+                'plan' => $p->upgraded_from_plan_id
+                    ? ($p->plan?->name.' · mejora desde '.($p->upgradedFrom?->name ?? 'otro plan'))
+                    : $p->plan?->name,
                 'payment_method' => $p->method,
                 'status' => $p->status,
                 'total' => (float) $p->amount,

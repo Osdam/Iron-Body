@@ -175,6 +175,13 @@ Route::middleware('auth.admin')->group(function (): void {
         ->whereNumber('user');
     Route::delete('users/{user}/employee-access', [\App\Http\Controllers\Api\Admin\EmployeeAccessController::class, 'destroy'])
         ->whereNumber('user');
+    // MEJORAR DE PLAN a mitad de periodo: paga la diferencia de precio y el
+    // vencimiento NO se mueve. Sin esto, cobrarle el plan nuevo le encadenaba
+    // su duración al final de lo que ya tenía y le regalaba un mes.
+    Route::get('users/{user}/plan-upgrade', [\App\Http\Controllers\Api\Admin\PlanUpgradeController::class, 'preview'])
+        ->whereNumber('user');
+    Route::post('users/{user}/plan-upgrade', [\App\Http\Controllers\Api\Admin\PlanUpgradeController::class, 'store'])
+        ->whereNumber('user');
     Route::get('users/{user}/plan-features', [UserController::class, 'planFeatures']);
     Route::patch('users/{user}', [UserController::class, 'update']);
     Route::put('users/{user}', [UserController::class, 'update']);

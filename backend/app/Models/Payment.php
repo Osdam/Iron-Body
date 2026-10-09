@@ -38,6 +38,10 @@ class Payment extends Model
 
     protected $fillable = [
         'user_id', 'member_id', 'plan_id', 'amount', 'method', 'reference', 'status', 'paid_at',
+        // MEJORA DE PLAN: desde qué plan se subió. Marca este cobro como una
+        // mejora —se paga la diferencia y el vencimiento NO se mueve— y no
+        // como una renovación. Ver MembershipPeriod::apply().
+        'upgraded_from_plan_id',
         // Turno de la caja del gimnasio al que pertenece este cobro. Lo fija el
         // SERVIDOR (PaymentController lo resuelve y lo borra del payload antes
         // de validar); nunca llega del cliente. Los pagos de pasarela y los
@@ -146,6 +150,12 @@ class Payment extends Model
     public function member(): BelongsTo
     {
         return $this->belongsTo(Member::class);
+    }
+
+    /** El plan desde el que se mejoró, si este cobro fue una mejora. */
+    public function upgradedFrom(): BelongsTo
+    {
+        return $this->belongsTo(Plan::class, 'upgraded_from_plan_id');
     }
 
     public function plan(): BelongsTo

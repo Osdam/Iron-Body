@@ -430,6 +430,9 @@ final class AuthorizationMap
         // va con su propio permiso para poder dárselo solo a quien deba.
         'GET api/users/{user}/access' => 'members.view',
         'POST api/users/{user}/adjustments' => 'members.adjust',
+        // Mejorar de plan es VENDER: lo hace quien cobra en el mostrador.
+        'GET api/users/{user}/plan-upgrade' => 'payments.view',
+        'POST api/users/{user}/plan-upgrade' => 'payments.create',
         // Consultar quién es empleado va con ver la ficha; conceder el acceso
         // gratuito, no: eso es regalar lo que el gimnasio vende.
         'GET api/users/{user}/employee-access' => 'members.view',
