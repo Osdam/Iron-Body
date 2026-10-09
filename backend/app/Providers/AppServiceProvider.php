@@ -8,8 +8,10 @@ use App\Models\Member;
 use App\Models\MemberContract;
 use App\Models\MemberRiskLock;
 use App\Models\PaymentTransaction;
+use App\Models\ReceivablePayment;
 use App\Models\PhysicalEvaluation;
 use App\Models\User;
+use App\Observers\Commissions\CommissionAccessObserver;
 use App\Observers\Marketing\AttributionOfferObserver;
 use App\Observers\Marketing\ConversationPreviewObserver;
 use App\Observers\Marketing\MarketingPaymentOutcomeObserver;
@@ -112,6 +114,13 @@ class AppServiceProvider extends ServiceProvider
     {
         // Del pago al inicio: siempre armado, no depende de commercial.events_enabled.
         PaymentTransaction::observe(MarketingPaymentOutcomeObserver::class);
+
+        // El acceso del entrenador depende de que su piso esté pagado, y el
+        // abono no siempre pasa por el módulo de Comisiones: también se
+        // registra desde Cuentas por cobrar y se deshace al anularlo. Se
+        // escucha el movimiento de dinero, que es el hecho que cambia la
+        // respuesta, y no la pantalla desde la que se hizo.
+        ReceivablePayment::observe(CommissionAccessObserver::class);
 
         $this->limitadoresInternos();
         $this->limitadorDeClases();

@@ -9,6 +9,7 @@ use App\Models\TrainerCommissionAgreement;
 use App\Services\Audit\AuditTrail;
 use App\Exceptions\CashShiftException;
 use App\Exceptions\ReceivableException;
+use App\Services\Commissions\TrainerCommissionAccess;
 use App\Services\Commissions\TrainerCommissions;
 use App\Support\Access\AdminActor;
 use Carbon\CarbonImmutable;
@@ -67,6 +68,10 @@ class TrainerCommissionController extends Controller
             // en cero: eso lo rechaza la cuenta por cobrar, porque una deuda
             // de cero pesos no es una deuda.
             'amount' => ['required', 'numeric', 'min:0', 'max:99999999'],
+            // Cuántos días cubre cada cobro. Hoy se cobra mensual, pero eso es
+            // una costumbre: en cuanto alguien pacte quince días, el mes del
+            // calendario deja de servir para contar nada.
+            'cycle_days' => ['nullable', 'integer', 'min:1', 'max:366'],
             'payer' => ['required', 'in:'.implode(',', TrainerCommissionAgreement::PAYERS)],
             // Si se pasa de la fecha, ¿le retira al cliente los beneficios de
             // la app? Nace apagado: ver la migración.
@@ -94,6 +99,7 @@ class TrainerCommissionController extends Controller
         // con esta persona es el mismo, se retomó.
         $acuerdo = $existente ?: new TrainerCommissionAgreement();
         $acuerdo->fill(array_merge($data, [
+            'cycle_days' => (int) ($data['cycle_days'] ?? TrainerCommissions::DEFAULT_CYCLE_DAYS),
             'blocks_app' => (bool) ($data['blocks_app'] ?? false),
             'active' => true,
             'ended_at' => null,
@@ -113,6 +119,7 @@ class TrainerCommissionController extends Controller
     {
         $data = $request->validate([
             'amount' => ['sometimes', 'numeric', 'min:0', 'max:99999999'],
+            'cycle_days' => ['sometimes', 'integer', 'min:1', 'max:366'],
             'payer' => ['sometimes', 'in:'.implode(',', TrainerCommissionAgreement::PAYERS)],
             'blocks_app' => ['nullable', 'boolean'],
             'starts_on' => ['nullable', 'date_format:Y-m-d'],
@@ -165,6 +172,9 @@ class TrainerCommissionController extends Controller
             'due_at' => ['nullable', 'date_format:Y-m-d'],
             // Un mes a medias o un descuento puntual. No toca el acuerdo.
             'amount' => ['nullable', 'numeric', 'min:1', 'max:99999999'],
+            // El tramo, corregible solo para este cobro.
+            'cycle_days' => ['nullable', 'integer', 'min:1', 'max:366'],
+            'covers_from' => ['nullable', 'date_format:Y-m-d'],
             'notes' => ['nullable', 'string', 'max:255'],
         ]);
 
@@ -177,6 +187,8 @@ class TrainerCommissionController extends Controller
                 isset($data['due_at']) ? CarbonImmutable::parse($data['due_at']) : null,
                 isset($data['amount']) ? (float) $data['amount'] : null,
                 $data['notes'] ?? null,
+                isset($data['cycle_days']) ? (int) $data['cycle_days'] : null,
+                isset($data['covers_from']) ? CarbonImmutable::parse($data['covers_from']) : null,
             );
         } catch (CashShiftException $e) {
             // El caso real: no hay caja del gimnasio abierta. Se dice qué hacer,
@@ -307,6 +319,7 @@ class TrainerCommissionController extends Controller
             'trainer' => ['id' => $a->trainer_id, 'name' => $a->trainer?->full_name],
             'member' => ['id' => $a->member_id, 'name' => $a->member?->full_name],
             'amount' => (float) $a->amount,
+            'cycle_days' => (int) ($a->cycle_days ?? TrainerCommissions::DEFAULT_CYCLE_DAYS),
             'payer' => $a->payer,
             'payer_label' => $a->payerLabel(),
             'blocks_app' => (bool) $a->blocks_app,

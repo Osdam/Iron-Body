@@ -20,7 +20,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class TrainerCommissionCharge extends Model
 {
     protected $fillable = [
-        'agreement_id', 'period', 'amount', 'payer',
+        'agreement_id', 'period', 'covers_from', 'covers_to', 'cycle_days', 'amount', 'payer',
         'debtor_type', 'debtor_id', 'receivable_id',
         'created_by', 'created_by_name',
     ];
@@ -29,6 +29,10 @@ class TrainerCommissionCharge extends Model
     {
         return [
             'period' => 'date',
+            // El tramo EXACTO que cubrió, congelado como el importe.
+            'covers_from' => 'date',
+            'covers_to' => 'date',
+            'cycle_days' => 'integer',
             'amount' => 'decimal:2',
         ];
     }

@@ -24,7 +24,7 @@ class TrainerCommissionAgreement extends Model
     public const PAYERS = [self::PAYER_TRAINER, self::PAYER_MEMBER];
 
     protected $fillable = [
-        'trainer_id', 'member_id', 'amount', 'payer', 'blocks_app', 'active',
+        'trainer_id', 'member_id', 'amount', 'cycle_days', 'payer', 'blocks_app', 'active',
         'starts_on', 'ends_on', 'notes',
         'created_by', 'created_by_name', 'ended_at', 'ended_by_name',
     ];
@@ -33,6 +33,8 @@ class TrainerCommissionAgreement extends Model
     {
         return [
             'amount' => 'decimal:2',
+            // Cuántos días cubre cada cobro. 30 es la costumbre, no la regla.
+            'cycle_days' => 'integer',
             // ¿Si se pasa de la fecha, le quita la app al socio? Solo tiene
             // sentido cuando lo asume el cliente: un entrenador no es socio y
             // no tiene beneficios que perder.

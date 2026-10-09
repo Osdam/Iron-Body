@@ -21,6 +21,9 @@ class EmployeeAccess extends Model
     protected $fillable = [
         'user_id',
         'position',
+        // 'manual' (lo concedió alguien) o 'commission' (lo abrió un piso
+        // pagado). Lo manual no lo toca nunca el piso.
+        'source',
         'active',
         'starts_on',
         'ends_on',

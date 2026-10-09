@@ -38,9 +38,13 @@ use RuntimeException;
  */
 class TrainerCommissions
 {
+    /** Lo que se usa si el acuerdo no dice otra cosa. */
+    public const DEFAULT_CYCLE_DAYS = 30;
+
     public function __construct(
         private readonly ReceivableService $receivables,
         private readonly CashShiftService $shifts,
+        private readonly TrainerCommissionAccess $access,
     ) {}
 
     /**
@@ -77,6 +81,7 @@ class TrainerCommissions
                 'trainer' => ['id' => $a->trainer_id, 'name' => $a->trainer?->full_name],
                 'member' => ['id' => $a->member_id, 'name' => $a->member?->full_name],
                 'amount' => (float) $a->amount,
+                'cycle_days' => (int) ($a->cycle_days ?? self::DEFAULT_CYCLE_DAYS),
                 'payer' => $a->payer,
                 'payer_label' => $a->payerLabel(),
                 'blocks_app' => (bool) $a->blocks_app,
@@ -112,8 +117,18 @@ class TrainerCommissions
         ?CarbonImmutable $vence = null,
         ?float $importe = null,
         ?string $notas = null,
+        ?int $dias = null,
+        ?CarbonImmutable $desde = null,
     ): array {
         $periodo = $mes->startOfMonth();
+
+        // EL TRAMO QUE CUBRE. Por defecto arranca el primer día del mes que se
+        // está cobrando y dura lo que diga el trato; las dos cosas se pueden
+        // corregir en este cobro —entró a mitad de mes, se le dan quince días—
+        // sin tocar el acuerdo.
+        $cubreDias = max(1, (int) ($dias ?? $acuerdo->cycle_days ?? self::DEFAULT_CYCLE_DAYS));
+        $cubreDesde = $desde ?? $periodo;
+        $cubreHasta = $cubreDesde->addDays($cubreDias - 1);
         // El importe del acuerdo, salvo que se corrija en este mes concreto:
         // un mes a medias, un descuento puntual. Lo que se decida queda
         // congelado en el cobro y no toca el trato.
@@ -143,7 +158,7 @@ class TrainerCommissions
             $this->shifts->requireOpen(CashShiftType::GYM);
         }
 
-        $cobro = DB::transaction(function () use ($acuerdo, $periodo, $total, $actor, $vence, $notas) {
+        $cobro = DB::transaction(function () use ($acuerdo, $periodo, $total, $actor, $vence, $notas, $cubreDesde, $cubreHasta, $cubreDias) {
             $deuda = $this->receivables->create(
                 $acuerdo->debtorType(),
                 $acuerdo->debtorId(),
@@ -165,6 +180,9 @@ class TrainerCommissions
             return TrainerCommissionCharge::create([
                 'agreement_id' => $acuerdo->id,
                 'period' => $periodo->toDateString(),
+                'covers_from' => $cubreDesde->toDateString(),
+                'covers_to' => $cubreHasta->toDateString(),
+                'cycle_days' => $cubreDias,
                 'amount' => $total->toDatabase(),
                 'payer' => $acuerdo->payer,
                 'debtor_type' => $acuerdo->debtorType()->value,
@@ -185,6 +203,13 @@ class TrainerCommissions
                 null,
                 $notas,
             );
+        }
+
+        // Pagado el piso, el entrenador entra hasta que se le acabe. Se
+        // recalcula siempre —también cuando NO se pagó— porque abrir una deuda
+        // nueva no concede nada y conviene que eso se vea reflejado.
+        if ($acuerdo->trainer) {
+            $this->access->sync($acuerdo->trainer);
         }
 
         return $this->chargeArray($cobro->fresh(['receivable.payments']));
@@ -277,6 +302,9 @@ class TrainerCommissions
             'id' => $cobro->id,
             'period' => CarbonImmutable::parse($cobro->period)->toDateString(),
             'period_label' => $cobro->periodLabel(),
+            'covers_from' => $cobro->covers_from?->toDateString(),
+            'covers_to' => $cobro->covers_to?->toDateString(),
+            'cycle_days' => $cobro->cycle_days,
             'amount' => (float) $cobro->amount,
             'paid' => max(0.0, (float) $cobro->amount - $saldo),
             'balance' => $saldo,
