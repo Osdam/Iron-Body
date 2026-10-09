@@ -526,6 +526,42 @@ class TrainerCommissionTest extends TestCase
             ->assertOk()->json('data'));
     }
 
+    public function test_un_trato_se_puede_pactar_en_cero(): void
+    {
+        // Para dejar el acuerdo hecho mientras se decide el precio, y para
+        // probar. El trato existe; lo que no existe todavia es el cobro.
+        $entrenador = $this->trainer();
+        $cliente = $this->member();
+
+        $res = $this->postJson('/api/admin/commissions/agreements', [
+            'trainer_id' => $entrenador->id,
+            'member_id' => $cliente->id,
+            'amount' => 0,
+            'payer' => 'trainer',
+        ], $this->h)->assertStatus(201)->json();
+
+        $this->assertSame(0.0, (float) $res['amount']);
+    }
+
+    public function test_pero_un_mes_no_se_cobra_en_cero(): void
+    {
+        // Una deuda de cero pesos no es una deuda: la rechaza la cuenta por
+        // cobrar, que es la que manda sobre el dinero.
+        $this->abrirCajaDelGimnasio();
+        $acuerdo = TrainerCommissionAgreement::findOrFail(
+            $this->postJson('/api/admin/commissions/agreements', [
+                'trainer_id' => $this->trainer()->id,
+                'member_id' => $this->member()->id,
+                'amount' => 0,
+                'payer' => 'trainer',
+            ], $this->h)->assertStatus(201)->json('id'),
+        );
+
+        $this->cobrar($acuerdo, ['method' => 'cash'])->assertStatus(422);
+        $this->assertSame(0, TrainerCommissionCharge::count());
+        $this->assertSame(0, Receivable::count());
+    }
+
     // ── Lo que se le dice a quien se equivoca ───────────────────────────────
 
     public function test_un_valor_invalido_se_explica_en_castellano(): void
@@ -540,7 +576,8 @@ class TrainerCommissionTest extends TestCase
         $res = $this->postJson('/api/admin/commissions/agreements', [
             'trainer_id' => $entrenador->id,
             'member_id' => $cliente->id,
-            'amount' => 0,
+            // Negativo: cero ya es válido, pero un piso en contra no.
+            'amount' => -5,
             'payer' => 'trainer',
         ], $this->h)->assertStatus(422);
 

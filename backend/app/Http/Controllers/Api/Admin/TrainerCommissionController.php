@@ -61,7 +61,12 @@ class TrainerCommissionController extends Controller
             'trainer_id' => ['required', 'integer', 'exists:trainers,id'],
             'member_id' => ['required', 'integer', 'exists:members,id'],
             // El valor es del trato. 50.000 es lo habitual, no una regla.
-            'amount' => ['required', 'numeric', 'min:1', 'max:99999999'],
+            //
+            // CERO SE ADMITE. Deja pactar el trato mientras se decide el
+            // precio, y sirve para probar. Lo que no se puede es COBRAR un mes
+            // en cero: eso lo rechaza la cuenta por cobrar, porque una deuda
+            // de cero pesos no es una deuda.
+            'amount' => ['required', 'numeric', 'min:0', 'max:99999999'],
             'payer' => ['required', 'in:'.implode(',', TrainerCommissionAgreement::PAYERS)],
             // Si se pasa de la fecha, ¿le retira al cliente los beneficios de
             // la app? Nace apagado: ver la migración.
@@ -107,7 +112,7 @@ class TrainerCommissionController extends Controller
     public function update(Request $request, TrainerCommissionAgreement $agreement): JsonResponse
     {
         $data = $request->validate([
-            'amount' => ['sometimes', 'numeric', 'min:1', 'max:99999999'],
+            'amount' => ['sometimes', 'numeric', 'min:0', 'max:99999999'],
             'payer' => ['sometimes', 'in:'.implode(',', TrainerCommissionAgreement::PAYERS)],
             'blocks_app' => ['nullable', 'boolean'],
             'starts_on' => ['nullable', 'date_format:Y-m-d'],
