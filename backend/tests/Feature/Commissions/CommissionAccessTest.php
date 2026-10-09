@@ -303,6 +303,107 @@ class CommissionAccessTest extends TestCase
         $this->assertSame(0, EmployeeAccess::count());
     }
 
+    // ── Correr las fechas sin mover dinero ──────────────────────────────────
+
+    public function test_se_corre_el_tramo_cuando_no_entrenaron_una_semana(): void
+    {
+        // Se pago el mes pero hubo un paron: los dias pagados no se gastaron.
+        // Antes la unica salida era anular y volver a cobrar, que mueve dinero
+        // que nadie movio y ensucia el arqueo de dos turnos.
+        [$trainer, $user] = $this->entrenadorConFicha();
+        $acuerdo = $this->acuerdo($trainer, dias: 30);
+
+        $cobroId = $this->cobrar($acuerdo, [
+            'method' => 'cash',
+            'covers_from' => $this->hoy()->toDateString(),
+        ])->assertStatus(201)->json('charge.id');
+
+        // El dia 31 ya no entraria…
+        $this->assertFalse($this->puedeEntrar($user, $this->hoy()->addDays(30)->setTime(10, 0)));
+
+        $this->patchJson("/api/admin/commissions/charges/{$cobroId}/coverage", [
+            'cycle_days' => 37,
+            'reason' => 'Una semana sin entrenar: el entrenador estuvo enfermo',
+        ], $this->h)->assertOk()->assertJsonPath('charge.cycle_days', 37);
+
+        // …y ahora si, siete dias mas.
+        $this->assertTrue($this->puedeEntrar($user, $this->hoy()->addDays(30)->setTime(10, 0)));
+        $this->assertSame(
+            $this->hoy()->addDays(36)->toDateString(),
+            EmployeeAccess::where('user_id', $user->id)->firstOrFail()->ends_on->toDateString(),
+        );
+    }
+
+    public function test_correr_el_tramo_no_toca_el_dinero(): void
+    {
+        [$trainer] = $this->entrenadorConFicha();
+        $acuerdo = $this->acuerdo($trainer);
+        $cobroId = $this->cobrar($acuerdo, [
+            'method' => 'cash',
+            'covers_from' => $this->hoy()->toDateString(),
+        ])->assertStatus(201)->json('charge.id');
+
+        $deuda = Receivable::firstOrFail();
+        $abonosAntes = $deuda->payments()->count();
+
+        $this->patchJson("/api/admin/commissions/charges/{$cobroId}/coverage", [
+            'covers_from' => $this->hoy()->addDays(7)->toDateString(),
+            'reason' => 'Empezaron una semana mas tarde',
+        ], $this->h)->assertOk();
+
+        $deuda->refresh();
+        $this->assertSame($abonosAntes, $deuda->payments()->count());
+        $this->assertTrue($deuda->balance()->isZero(), 'sigue pagado');
+        $this->assertSame('50000.00', (string) $deuda->total_amount);
+    }
+
+    public function test_correr_el_tramo_exige_motivo(): void
+    {
+        [$trainer] = $this->entrenadorConFicha();
+        $acuerdo = $this->acuerdo($trainer);
+        $cobroId = $this->cobrar($acuerdo, ['method' => 'cash'])->assertStatus(201)->json('charge.id');
+
+        $this->patchJson("/api/admin/commissions/charges/{$cobroId}/coverage", [
+            'cycle_days' => 45,
+        ], $this->h)->assertStatus(422);
+    }
+
+    public function test_un_mes_anulado_no_se_corre(): void
+    {
+        [$trainer] = $this->entrenadorConFicha();
+        $acuerdo = $this->acuerdo($trainer);
+        $cobroId = $this->cobrar($acuerdo, ['method' => 'cash'])->assertStatus(201)->json('charge.id');
+
+        $this->postJson("/api/admin/commissions/charges/{$cobroId}/cancel", [
+            'reason' => 'No iba',
+        ], $this->h)->assertOk();
+
+        $this->patchJson("/api/admin/commissions/charges/{$cobroId}/coverage", [
+            'cycle_days' => 45, 'reason' => 'Da igual',
+        ], $this->h)->assertStatus(422);
+    }
+
+    public function test_recepcion_no_alarga_los_dias_de_nadie(): void
+    {
+        // Alargar el tramo le da al entrenador mas dias de puerta por el mismo
+        // dinero: eso es comercial, no mostrador.
+        [$trainer] = $this->entrenadorConFicha();
+        $acuerdo = $this->acuerdo($trainer);
+        $cobroId = $this->cobrar($acuerdo, ['method' => 'cash'])->assertStatus(201)->json('charge.id');
+
+        $recepcion = $this->actingAsAdmin(\App\Models\Admin::create([
+            'name' => 'Laura Mostrador',
+            'email' => 'rec-tramo-'.uniqid().'@ironbody.test',
+            'password' => 'secret-password',
+            'role' => \App\Models\Admin::ROLE_RECEPCION,
+            'status' => 'active',
+        ]));
+
+        $this->patchJson("/api/admin/commissions/charges/{$cobroId}/coverage", [
+            'cycle_days' => 90, 'reason' => 'Porque si',
+        ], $recepcion)->assertStatus(403);
+    }
+
     // ── Los días ────────────────────────────────────────────────────────────
 
     public function test_los_dias_se_pactan_en_el_trato(): void

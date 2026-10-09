@@ -1455,6 +1455,11 @@ Route::post('admin/commissions/agreements/{agreement}/charge', [\App\Http\Contro
 // es una llave distinta de la de cobrar.
 Route::post('admin/commissions/charges/{charge}/cancel', [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'cancelCharge'])
     ->whereNumber('charge');
+// CORRER LAS FECHAS de un mes ya cobrado, sin mover dinero: se pagó pero no
+// se entrenó una semana. Va con `commissions.manage` porque alarga los días
+// que el entrenador puede entrar por el mismo dinero.
+Route::patch('admin/commissions/charges/{charge}/coverage', [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'moveCoverage'])
+    ->whereNumber('charge');
 Route::put('admin/commissions/agreements/{agreement}',    [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'update'])
     ->whereNumber('agreement');
 Route::delete('admin/commissions/agreements/{agreement}', [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'destroy'])

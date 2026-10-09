@@ -232,6 +232,68 @@ class TrainerCommissions
     }
 
     /**
+     * CORRE EL TRAMO DE UN COBRO YA REGISTRADO. No mueve dinero.
+     *
+     * El caso es de todos los meses: se pagó el mes, pero una semana no
+     * entrenaron —el entrenador se enfermó, el cliente viajó— y los días
+     * pagados no se gastaron. Hasta ahora solo se podía corregir al cobrar el
+     * SIGUIENTE mes, empezándolo más tarde; el que ya estaba registrado no se
+     * tocaba, y la única salida era anularlo y volver a cobrarlo, que mueve
+     * dinero que nadie movió y ensucia el arqueo de dos turnos.
+     *
+     * Esto cambia solo FECHAS: desde cuándo cuenta y cuántos días dura. El
+     * importe, el pagador y los abonos se quedan como están, porque no ha
+     * pasado nada con el dinero.
+     *
+     * Y SE RECALCULA EL ACCESO, que es lo que de verdad cambia: alargar el
+     * tramo le alarga al entrenador los días que puede entrar.
+     *
+     * @return array<string, mixed>
+     */
+    public function moveCoverage(
+        TrainerCommissionCharge $cobro,
+        ?CarbonImmutable $desde,
+        ?int $dias,
+        string $motivo,
+        ?Admin $actor = null,
+    ): array {
+        if ($this->isCancelled($cobro)) {
+            throw new RuntimeException('Ese mes está anulado: no hay nada que correr.');
+        }
+
+        $nuevoDesde = $desde ?? ($cobro->covers_from
+            ? CarbonImmutable::parse($cobro->covers_from->format('Y-m-d'))
+            : CarbonImmutable::parse($cobro->period->format('Y-m-d')));
+
+        $nuevosDias = max(1, (int) ($dias ?? $cobro->cycle_days ?? self::DEFAULT_CYCLE_DAYS));
+
+        $antes = [
+            'from' => $cobro->covers_from?->toDateString(),
+            'to' => $cobro->covers_to?->toDateString(),
+            'days' => $cobro->cycle_days,
+        ];
+
+        $cobro->update([
+            'covers_from' => $nuevoDesde->toDateString(),
+            'covers_to' => $nuevoDesde->addDays($nuevosDias - 1)->toDateString(),
+            'cycle_days' => $nuevosDias,
+        ]);
+
+        // La nota se añade a la deuda, no se pisa: lo que explicaba el cobro
+        // original sigue siendo cierto.
+        $cobro->receivable?->update([
+            'notes' => trim(($cobro->receivable->notes ? $cobro->receivable->notes."\n" : '')
+                .'Tramo corregido ('.($antes['from'] ?? '—').' → '.($antes['to'] ?? '—').'): '.$motivo),
+        ]);
+
+        if ($cobro->agreement?->trainer) {
+            $this->access->sync($cobro->agreement->trainer);
+        }
+
+        return $this->chargeArray($cobro->fresh(['receivable.payments']));
+    }
+
+    /**
      * ANULA UN COBRO: el mes no debía cobrarse, o se cobró mal.
      *
      * Deshace las dos cosas que ese cobro produjo, en este orden:

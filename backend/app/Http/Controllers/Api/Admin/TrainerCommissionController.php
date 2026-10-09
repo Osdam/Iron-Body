@@ -223,6 +223,55 @@ class TrainerCommissionController extends Controller
     }
 
     /**
+     * PATCH /api/admin/commissions/charges/{charge}/coverage — correr fechas.
+     *
+     * Para cuando el mes se pagó pero no se entrenó: una semana de parón, un
+     * viaje. Cambia DESDE CUÁNDO cuenta y CUÁNTOS días dura, y nada más: el
+     * dinero ya entró y no se vuelve a tocar.
+     *
+     * Va con `commissions.manage` y no con cobrar: alargar el tramo le alarga
+     * al entrenador los días que puede entrar por el mismo dinero, y eso es
+     * una decisión comercial, no mostrador.
+     */
+    public function moveCoverage(Request $request, TrainerCommissionCharge $charge, TrainerCommissions $servicio): JsonResponse
+    {
+        $data = $request->validate([
+            'covers_from' => ['nullable', 'date_format:Y-m-d'],
+            'cycle_days' => ['nullable', 'integer', 'min:1', 'max:366'],
+            'reason' => ['required', 'string', 'min:4', 'max:255'],
+        ]);
+
+        try {
+            $resultado = $servicio->moveCoverage(
+                $charge,
+                isset($data['covers_from']) ? CarbonImmutable::parse($data['covers_from']) : null,
+                isset($data['cycle_days']) ? (int) $data['cycle_days'] : null,
+                $data['reason'],
+                AdminActor::from($request),
+            );
+        } catch (RuntimeException $e) {
+            return response()->json(['ok' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        app(AuditTrail::class)->record($request, [
+            'action' => 'update',
+            'module' => 'Comisiones',
+            'entity' => 'piso de entrenador',
+            'entity_id' => (string) $charge->agreement_id,
+            'target_name' => $charge->agreement?->trainer?->full_name,
+            'summary' => 'Corrió el tramo del piso de '.$charge->periodLabel(),
+            'metadata' => [
+                'period' => $resultado['period'],
+                'covers_from' => $resultado['covers_from'],
+                'covers_to' => $resultado['covers_to'],
+                'reason' => $data['reason'],
+            ],
+        ]);
+
+        return response()->json(['ok' => true, 'charge' => $resultado]);
+    }
+
+    /**
      * POST /api/admin/commissions/charges/{charge}/cancel — el mes no iba.
      *
      * Revierte el dinero si lo había y anula la deuda, las dos cosas con
