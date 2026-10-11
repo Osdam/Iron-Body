@@ -21,6 +21,12 @@ class ClassSession extends Model
         'ended_by',
         'start_face_verified',
         'end_face_verified',
+        'start_device_id',
+        'start_declared_device',
+        'start_identity_method',
+        'end_device_id',
+        'end_declared_device',
+        'end_identity_method',
     ];
 
     protected function casts(): array
@@ -45,6 +51,16 @@ class ClassSession extends Model
         return $this->belongsTo(Trainer::class, 'started_by');
     }
 
+    public function startDevice(): BelongsTo
+    {
+        return $this->belongsTo(AuthorizedDevice::class, 'start_device_id');
+    }
+
+    public function endDevice(): BelongsTo
+    {
+        return $this->belongsTo(AuthorizedDevice::class, 'end_device_id');
+    }
+
     public function isLive(): bool
     {
         return $this->started_at !== null && $this->ended_at === null;
@@ -62,6 +78,8 @@ class ClassSession extends Model
             'ended_by' => $this->ended_by,
             'start_face_verified' => (bool) $this->start_face_verified,
             'end_face_verified' => (bool) $this->end_face_verified,
+            'start_identity_method' => $this->start_identity_method,
+            'end_identity_method' => $this->end_identity_method,
             'is_live' => $this->isLive(),
         ];
     }

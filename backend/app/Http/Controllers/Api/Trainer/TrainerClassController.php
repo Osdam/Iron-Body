@@ -10,6 +10,7 @@ use App\Models\Trainer;
 use App\Services\Classes\ClassBookingService;
 use App\Services\Trainer\ClassAttendanceService;
 use App\Services\Trainer\ClassSessionService;
+use App\Services\Workforce\ClassIdentityVerifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -29,6 +30,7 @@ class TrainerClassController extends Controller
         private readonly ClassAttendanceService $attendance,
         private readonly ClassSessionService $sessions,
         private readonly ClassBookingService $booking,
+        private readonly ClassIdentityVerifier $identity,
     ) {}
 
     /** Agenda: las clases del entrenador autenticado, con aforo real. */
@@ -143,26 +145,20 @@ class TrainerClassController extends Controller
     }
 
     /**
-     * Inicia la clase del día: registra la hora real, exige rostro del entrenador
-     * (`face_verified`) y avisa a los inscritos. Idempotente (no reenvía avisos).
+     * Inicia la clase del día: registra la hora real, exige la identidad del
+     * entrenador y avisa a los inscritos. Idempotente (no reenvía avisos).
+     *
+     * Identidad: rostro comparado en el servidor (`embedding`), código de
+     * respaldo de un administrador (`fallback_code`) o, mientras dure la
+     * transición, la app publicada con `face_verified: true` (queda como
+     * `legacy_claim`). Ver ClassIdentityVerifier y el contrato §6.1.
      */
     public function startSession(Request $request, MyClass $class): JsonResponse
     {
         $trainer = $this->trainer($request);
         $this->assertOwner($trainer, $class);
 
-        $data = $request->validate([
-            'session_date' => ['nullable', 'date'],
-            'face_verified' => ['required', 'boolean'],
-        ]);
-
-        if (! $data['face_verified']) {
-            return response()->json([
-                'ok' => false,
-                'code' => 'face_required',
-                'message' => 'Debes verificar tu rostro para iniciar la clase.',
-            ], 422);
-        }
+        $data = $this->validateSessionProof($request);
 
         // Se inicia la sesión que el entrenador ve, y solo si es la de HOY en el
         // gimnasio (Bogotá), nunca la de `now()` en UTC: pasadas las 19:00 esa ya
@@ -176,7 +172,9 @@ class TrainerClassController extends Controller
                 'session_date' => $fecha,
             ], 422);
         }
-        $session = $this->sessions->start($class, $trainer, Carbon::parse($fecha), true);
+
+        $proof = $this->identity->verify($request, $trainer, $data);
+        $session = $this->sessions->start($class, $trainer, Carbon::parse($fecha), $proof['face_verified'], $proof);
 
         return response()->json([
             'ok' => true,
@@ -185,32 +183,20 @@ class TrainerClassController extends Controller
         ]);
     }
 
-    /** Finaliza la clase del día: registra la hora real (también con rostro). */
+    /** Finaliza la clase del día: registra la hora real (con la misma prueba de identidad). */
     public function endSession(Request $request, MyClass $class): JsonResponse
     {
         $trainer = $this->trainer($request);
         $this->assertOwner($trainer, $class);
 
-        $data = $request->validate([
-            'session_date' => ['nullable', 'date'],
-            'face_verified' => ['required', 'boolean'],
-        ]);
-
-        if (! $data['face_verified']) {
-            return response()->json([
-                'ok' => false,
-                'code' => 'face_required',
-                'message' => 'Debes verificar tu rostro para finalizar la clase.',
-            ], 422);
-        }
+        $data = $this->validateSessionProof($request);
 
         // Se finaliza la sesión que el entrenador ve. Una clase que pasa de la
         // medianoche, con el dispositivo diciendo ya «mañana», es la que sigue
         // en curso (ver trainerSessionDate).
         $sessionDate = Carbon::parse($this->trainerSessionDate($class, $data['session_date'] ?? null));
-        $session = $this->sessions->end($class, $trainer, $sessionDate, true);
-
-        if ($session === null) {
+        $existing = $this->sessions->forDate($class, $sessionDate);
+        if ($existing === null || $existing->started_at === null) {
             return response()->json([
                 'ok' => false,
                 'code' => 'not_started',
@@ -218,10 +204,30 @@ class TrainerClassController extends Controller
             ], 422);
         }
 
+        $proof = $this->identity->verify($request, $trainer, $data);
+        $session = $this->sessions->end($class, $trainer, $sessionDate, $proof['face_verified'], $proof);
+
         return response()->json([
             'ok' => true,
             'message' => 'Clase finalizada.',
             'session' => $session->toPublicArray(),
+        ]);
+    }
+
+    /**
+     * La prueba de identidad de iniciar/finalizar. `face_verified` sigue
+     * aceptándose para la app publicada; `embedding` y `fallback_code` son la
+     * prueba real.
+     *
+     * @return array{session_date?:?string, face_verified?:?bool, embedding?:?array, fallback_code?:?string}
+     */
+    private function validateSessionProof(Request $request): array
+    {
+        return $request->validate([
+            'session_date' => ['nullable', 'date'],
+            'face_verified' => ['nullable', 'boolean'],
+            'embedding' => ['nullable', 'array'],
+            'fallback_code' => ['nullable', 'string', 'max:20'],
         ]);
     }
 

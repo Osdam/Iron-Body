@@ -13,7 +13,10 @@ class ClassEvent extends Model
 {
     public $timestamps = false;
 
-    protected $fillable = ['type', 'class_id', 'session_date', 'reservation_id', 'source', 'reason', 'created_at'];
+    // `subject` y `audience`: hechos de personal, jornadas, biometría y
+    // dispositivos que viajan por el mismo canal (ver
+    // `add_subject_and_audience_to_class_events`). audience NULL = clases.
+    protected $fillable = ['type', 'class_id', 'session_date', 'reservation_id', 'source', 'reason', 'subject', 'audience', 'created_at'];
 
     protected function casts(): array
     {

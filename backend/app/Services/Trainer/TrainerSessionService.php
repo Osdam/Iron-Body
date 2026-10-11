@@ -22,9 +22,13 @@ class TrainerSessionService
      * varios equipos); la política anti-cuentas-compartidas se aplica del lado
      * del miembro.
      *
+     * `$trusted = false` + `$expiresAt`: sesión de KIOSKO. No deja la tablet
+     * como dispositivo de confianza (si lo hiciera, `access` daría después una
+     * sesión sin segundo factor a quien declare ese device_id) y caduca.
+     *
      * @return array{token: string, session: TrainerDeviceSession, was_new_device: bool}
      */
-    public function issueSession(Trainer $trainer, array $context): array
+    public function issueSession(Trainer $trainer, array $context, bool $trusted = true, ?\DateTimeInterface $expiresAt = null): array
     {
         $deviceId = $context['device_id'] ?? null;
         $deviceId = ($deviceId !== null && trim((string) $deviceId) !== '')
@@ -43,7 +47,8 @@ class TrainerSessionService
                 'ip_address' => $context['ip_address'] ?? null,
                 'user_agent' => isset($context['user_agent']) ? mb_substr((string) $context['user_agent'], 0, 500) : null,
                 'last_seen_at' => now(),
-                'trusted_at' => now(),
+                'trusted_at' => $trusted ? now() : null,
+                'expires_at' => $expiresAt,
                 'revoked_at' => null,
                 'revoked_reason' => null,
             ],
@@ -78,10 +83,17 @@ class TrainerSessionService
             return null;
         }
 
+        // Un id de kiosko nunca es «este equipo ya verificó al entrenador»: lo
+        // conoce cualquiera que vea la tablet en el CRM o en una respuesta.
+        if (str_starts_with($deviceId, 'kiosk:')) {
+            return null;
+        }
+
         $query = TrainerDeviceSession::query()
             ->where('trainer_id', $trainer->id)
             ->where('device_id', $deviceId)
             ->active()
+            ->whereNull('expires_at')
             ->whereNotNull('trusted_at');
 
         if ($ttlDays > 0) {

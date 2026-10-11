@@ -10,11 +10,13 @@ use App\Models\Member;
 use App\Models\Trainer;
 use App\Models\TrainerAuditLog;
 use App\Models\TrainerDeviceSession;
-use App\Models\TrainerFaceReference;
 use App\Services\Identity\IdentityLinkService;
 use App\Services\Trainer\MemberAssignmentService;
 use App\Services\Trainer\TrainerAuditService;
 use App\Services\Trainer\TrainerSessionService;
+use App\Services\Workforce\FaceReferenceService;
+use App\Services\Workforce\WorkforceEvents;
+use App\Support\Access\AdminActor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -138,27 +140,36 @@ class TrainerAdminController extends Controller
     }
 
     /**
-     * Borra el rostro enrolado del entrenador (caso: falla el reconocimiento).
-     * Tras esto, el portal del entrenador vuelve a ofrecer "Configurar mi rostro".
+     * «Borrar rostro» de la ficha del entrenador = REVOCAR su biometría: se
+     * borra la plantilla y queda la traza (quién, cuándo, por qué). Exige
+     * `biometrics.manage` (ver AuthorizationMap). El motivo es opcional para
+     * no romper pestañas del CRM anterior; el CRM nuevo siempre lo pide.
      */
     public function deleteFace(Request $request, Trainer $trainer): JsonResponse
     {
-        $deleted = TrainerFaceReference::where('trainer_id', $trainer->getKey())->delete();
+        $data = $request->validate(['reason' => ['nullable', 'string', 'max:500']]);
+        $faces = app(FaceReferenceService::class);
+        $ref = $faces->referenceForTrainer($trainer);
+        $reason = trim((string) ($data['reason'] ?? '')) ?: 'Eliminado desde la ficha del entrenador';
+
+        $revoked = $ref !== null && $faces->revoke($ref, $reason, AdminActor::id($request), AdminActor::label($request), WorkforceEvents::SOURCE_CRM, $request);
 
         $this->audit->record(
             TrainerAuditLog::EVENT_PROFILE_UPDATED,
             $trainer,
             actorType: TrainerAuditLog::ACTOR_ADMIN,
-            metadata: ['face_deleted' => true],
+            actorId: AdminActor::id($request),
+            metadata: ['face_deleted' => $revoked, 'reason' => $reason],
             request: $request,
         );
 
         return response()->json([
             'ok' => true,
             'face_enrolled' => false,
-            'message' => $deleted
-                ? 'Rostro del entrenador eliminado. Podrá volver a registrarlo desde su portal.'
+            'message' => $revoked
+                ? 'Biometría revocada: la plantilla se borró. Para registrar un rostro nuevo hace falta la autorización de un administrador.'
                 : 'El entrenador no tenía rostro registrado.',
+            'biometric' => ['status' => $faces->status($faces->referenceForTrainer($trainer))],
         ]);
     }
 

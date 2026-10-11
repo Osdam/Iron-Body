@@ -12,6 +12,7 @@ use App\Services\Classes\ClassBookingResult;
 use App\Services\Classes\ClassBookingService;
 use App\Services\Classes\ClassesChannel;
 use App\Services\Classes\ClassEventsFeed;
+use App\Support\Access\AdminActor;
 use App\Support\Access\CrmPermission;
 use App\Support\SseStream;
 use Illuminate\Http\JsonResponse;
@@ -187,10 +188,15 @@ class ClassEnrollmentController extends Controller
         // huella de lo que no pasa por el registro. `proto=2` es el CRM que
         // entiende los hechos; las pestañas del CRM anterior no lo mandan y
         // siguen recibiendo la huella de todo. Ver ClassesChannel.
+        // Cada hecho solo a quien tiene su permiso: el canal lo abren clases,
+        // personal, biometría y dispositivos (ver AuthorizationMap).
+        $admin = AdminActor::from($request);
+        $permisos = array_map(CrmPermission::canonical(...), CrmPermission::forAdmin($admin));
         $canal = new ClassesChannel(
             ClassEventsFeed::floorFor($apertura),
             $request->query('proto') === '2',
             fn (): string => self::classesSignature(),
+            fn (string $permiso): bool => in_array(CrmPermission::canonical($permiso), $permisos, true),
         );
 
         return SseStream::response(function () use ($canal): void {

@@ -151,11 +151,20 @@ final class CrmPermission
         // credencial sin persona detrás: puede consultar para automatizar, pero
         // nunca cobrar, mover existencias ni sancionar, porque un descuadre sin
         // responsable no se puede investigar.
+        //
+        // Salvo los dominios de PERSONAS QUE TRABAJAN AQUÍ: jornadas, datos
+        // biométricos y dispositivos. Una automatización no necesita saber a
+        // qué hora entró alguien ni el estado de su rostro, y un dato sensible
+        // (Ley 1581) no se reparte por defecto a una credencial sin persona.
         return array_values(array_filter(
             PermissionCatalog::all(),
-            fn (string $p) => str_ends_with($p, '.view'),
+            fn (string $p) => str_ends_with($p, '.view')
+                && ! in_array(PermissionCatalog::split($p)[0] ?? '', self::PERSONNEL_DOMAINS, true),
         ));
     }
+
+    /** Dominios que nunca obtiene el token compartido (ver readOnly()). */
+    public const PERSONNEL_DOMAINS = ['workforce', 'biometrics', 'devices'];
 
     /**
      * Permisos por defecto de cada rol del sistema.

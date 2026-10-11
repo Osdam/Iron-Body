@@ -158,6 +158,15 @@ final class AuthorizationMap
         'TrainerAdminController' => 'trainers',
         'TrainerTaskController' => 'trainers',
 
+        // ── Personal, jornadas, biometría y dispositivos ────────────────────
+        // Dominios propios y no `trainers` ni `classes`: ver la asistencia
+        // laboral de la gente no es ver clases (que tiene recepción), y
+        // revocar un dato biométrico o un dispositivo no es editar una ficha.
+        'WorkforceSupervisionController' => 'workforce',
+        'WorkforceStaffController' => 'workforce',
+        'BiometricAdminController' => 'biometrics',
+        'DeviceAdminController' => 'devices',
+
         // ── Mercadeo ────────────────────────────────────────────────────────
         'MarketingController' => 'marketing',
         'MarketingInboxController' => 'marketing',
@@ -434,6 +443,22 @@ final class AuthorizationMap
         'GET api/users/{user}/plan-upgrade' => 'payments.view',
         'POST api/users/{user}/plan-upgrade' => 'payments.create',
         'GET api/admin/memberships/stream' => ['members.view', 'plans.view', 'payments.view'],
+
+        /*
+         * El canal del CRM lleva ahora también los hechos de personal,
+         * biometría y dispositivos (outbox `class_events`, un solo stream por
+         * pestaña). Lo abre quien vea cualquiera de las pantallas que lo
+         * escuchan; QUÉ hechos recibe lo decide el canal, hecho a hecho, con
+         * el permiso de cada uno (ClassesChannel).
+         */
+        'GET api/admin/classes/stream' => ['classes.view', 'workforce.view', 'biometrics.view', 'devices.view'],
+
+        /*
+         * «Borrar rostro» de la ficha del entrenador es revocar un dato
+         * biométrico: lo mismo que la pantalla de biometría, con su permiso, y
+         * no `trainers.manage` (editar la ficha no es borrar un dato sensible).
+         */
+        'DELETE api/admin/trainers/{trainer}/face' => 'biometrics.manage',
         // Consultar quién es empleado va con ver la ficha; conceder el acceso
         // gratuito, no: eso es regalar lo que el gimnasio vende.
         'GET api/users/{user}/employee-access' => 'members.view',

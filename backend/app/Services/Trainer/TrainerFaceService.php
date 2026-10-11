@@ -4,77 +4,43 @@ namespace App\Services\Trainer;
 
 use App\Models\Trainer;
 use App\Models\TrainerFaceReference;
+use App\Services\Workforce\FaceReferenceService;
+use App\Support\Workforce\FaceVector;
 use Illuminate\Support\Collection;
 
 /**
- * Lógica del login facial de entrenadores (kiosko en tablet). El match ocurre
- * AQUÍ (backend): el dispositivo solo envía el embedding vivo; la referencia
- * nunca sale del servidor, así un dispositivo no puede autenticarse como alguien
- * cuya referencia no conoce. Distancia euclídea con el mismo umbral que on-device.
+ * Vista del portal del entrenador sobre la plantilla facial.
+ *
+ * Desde 2026-10 la plantilla es de la PERSONA y la gestiona
+ * {@see FaceReferenceService} (cifrada, con estados, sin sobrescrituras, con
+ * control de norma y de intentos). Esta clase conserva las preguntas que ya
+ * hacían el recurso del entrenador y el selector de la tablet.
  */
 class TrainerFaceService
 {
-    private function embeddingSize(): int
-    {
-        return (int) config('trainer.face.embedding_size', 192);
-    }
+    public function __construct(private readonly FaceReferenceService $faces) {}
 
-    private function threshold(): float
-    {
-        return (float) config('trainer.face.match_threshold', 1.0);
-    }
-
-    /** Guarda/reemplaza la referencia facial del entrenador (enrolamiento). */
-    public function enroll(Trainer $trainer, array $embedding): TrainerFaceReference
-    {
-        return TrainerFaceReference::updateOrCreate(
-            ['trainer_id' => $trainer->getKey()],
-            ['embedding' => array_map('floatval', $embedding), 'enrolled_at' => now()],
-        );
-    }
-
+    /** ¿Tiene una plantilla ACTIVA? Una revocada no cuenta. */
     public function hasReference(Trainer $trainer): bool
     {
-        return TrainerFaceReference::where('trainer_id', $trainer->getKey())->exists();
+        return (bool) $this->faces->referenceForTrainer($trainer)?->isActive();
     }
 
     /**
-     * Compara el embedding vivo con la referencia del entrenador.
-     *
-     * @return array{matched: bool, distance: ?float}
-     */
-    public function match(Trainer $trainer, array $liveEmbedding): array
-    {
-        $ref = TrainerFaceReference::where('trainer_id', $trainer->getKey())->first();
-        if ($ref === null || ! is_array($ref->embedding)) {
-            return ['matched' => false, 'distance' => null];
-        }
-
-        $reference = $ref->embedding;
-        if (count($reference) !== count($liveEmbedding)) {
-            return ['matched' => false, 'distance' => null];
-        }
-
-        $distance = $this->euclidean($reference, $liveEmbedding);
-
-        return [
-            'matched' => $distance !== null && $distance <= $this->threshold(),
-            'distance' => $distance,
-        ];
-    }
-
-    /**
-     * Entrenadores ACTIVOS con rostro enrolado (para el selector de la tablet).
+     * Entrenadores ACTIVOS con plantilla ACTIVA (selector de la tablet).
      *
      * @return Collection<int, array{id:int, full_name:string}>
      */
     public function roster(): Collection
     {
-        $trainerIds = TrainerFaceReference::query()->pluck('trainer_id');
+        // Solo plantillas validadas: una pendiente de renovación no entra.
+        $active = TrainerFaceReference::query()->active()->whereNotNull('consent_version')->get(['trainer_id', 'identity_id']);
+        $byIdentity = $active->pluck('identity_id')->filter()->values();
+        $byTrainer = $active->pluck('trainer_id')->filter()->values();
 
         return Trainer::query()
-            ->whereIn('id', $trainerIds)
             ->whereIn('status', ['active', 'activo'])
+            ->where(fn ($q) => $q->whereIn('id', $byTrainer)->orWhereIn('identity_id', $byIdentity))
             ->orderBy('full_name')
             ->get(['id', 'full_name'])
             ->map(fn (Trainer $t): array => [
@@ -84,29 +50,9 @@ class TrainerFaceService
             ->values();
     }
 
-    /** Valida que el embedding tenga el tamaño correcto y números finitos. */
+    /** Un rostro que la app pudo calcular: tamaño, finitos y norma 1. */
     public function isValidEmbedding(mixed $embedding): bool
     {
-        if (! is_array($embedding) || count($embedding) !== $this->embeddingSize()) {
-            return false;
-        }
-        foreach ($embedding as $v) {
-            if (! is_numeric($v) || ! is_finite((float) $v)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private function euclidean(array $a, array $b): ?float
-    {
-        $sum = 0.0;
-        foreach ($a as $i => $av) {
-            $diff = (float) $av - (float) ($b[$i] ?? 0.0);
-            $sum += $diff * $diff;
-        }
-
-        return sqrt($sum);
+        return FaceVector::isValid($embedding, (float) config('workforce.face.norm_min'), (float) config('workforce.face.norm_max'));
     }
 }

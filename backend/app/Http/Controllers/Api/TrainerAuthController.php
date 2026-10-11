@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exceptions\OtpException;
+use App\Exceptions\WorkforceException;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TrainerProfessionalResource;
 use App\Models\Trainer;
@@ -12,6 +13,7 @@ use App\Services\Trainer\TrainerAuditService;
 use App\Services\Trainer\TrainerFaceService;
 use App\Services\Trainer\TrainerOtpService;
 use App\Services\Trainer\TrainerSessionService;
+use App\Services\Workforce\FaceReferenceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -34,13 +36,20 @@ class TrainerAuthController extends Controller
         private readonly IdentityLinkService $identities,
         private readonly TrainerAuditService $audit,
         private readonly TrainerFaceService $face,
+        private readonly FaceReferenceService $faceReferences,
     ) {}
 
     // ── Login facial en tablet (kiosko) ──────────────────────────────────────
 
     /**
-     * Enrolamiento: guarda el embedding facial del entrenador AUTENTICADO. El
-     * cliente lo calcula on-device durante la captura; aquí solo se persiste.
+     * Enrolamiento desde el portal (app 2.0.x): el embedding se calcula en el
+     * dispositivo y aquí se guarda como PLANTILLA DE LA PERSONA, cifrada.
+     *
+     * Ya no sobrescribe: con una plantilla activa responde 409
+     * `face_already_enrolled`, y una revocada exige la autorización de un
+     * administrador (kiosko con código). Antes cualquiera con una sesión de
+     * entrenador —que hoy se obtiene con el documento— podía cambiar el rostro
+     * de esa persona por el suyo. Ver docs/asistencia-laboral/CONTRATO.md §6.3.
      */
     public function enrollFace(Request $request): JsonResponse
     {
@@ -50,15 +59,18 @@ class TrainerAuthController extends Controller
             'embedding' => ['required', 'array'],
         ]);
 
-        if (! $this->face->isValidEmbedding($data['embedding'])) {
-            return response()->json([
-                'ok' => false,
-                'code' => 'invalid_embedding',
-                'message' => 'No pudimos procesar el rostro. Intenta de nuevo.',
-            ], 422);
+        try {
+            $this->faceReferences->enrollLegacyTrainer($trainer, $data['embedding'], $request);
+        } catch (WorkforceException $e) {
+            if ($e->code_ === 'embedding_invalid') {
+                return response()->json([
+                    'ok' => false,
+                    'code' => 'invalid_embedding',
+                    'message' => 'No pudimos procesar el rostro. Intenta de nuevo.',
+                ], 422);
+            }
+            throw $e;
         }
-
-        $this->face->enroll($trainer, $data['embedding']);
 
         $this->audit->record(
             TrainerAuditLog::EVENT_LOGIN,
@@ -109,21 +121,26 @@ class TrainerAuthController extends Controller
             'message' => 'El rostro no coincide. Intenta de nuevo o usa el código.',
         ], 422);
 
-        if (! $trainer || ! $this->face->isValidEmbedding($data['embedding'])) {
+        if (! $trainer) {
             return $genericFail;
         }
 
-        $result = $this->face->match($trainer, $data['embedding']);
-        if (! $result['matched']) {
+        // Comparación en el servidor con las defensas del kiosko: vector de
+        // norma 1 (un vector casi nulo coincidía con cualquiera), plantilla
+        // activa (una revocada no entra) e intentos limitados por persona.
+        try {
+            $key = $trainer->identity_id ? 'identity:'.$trainer->identity_id : 'trainer:'.$trainer->getKey();
+            $distance = $this->faceReferences->verify($this->faceReferences->referenceForTrainer($trainer), $data['embedding'], $key, $request);
+        } catch (WorkforceException $e) {
             $this->audit->record(
                 TrainerAuditLog::EVENT_LOGIN,
                 $trainer,
                 actorType: TrainerAuditLog::ACTOR_TRAINER,
-                metadata: ['face_login' => true, 'matched' => false, 'distance' => $result['distance']],
+                metadata: ['face_login' => true, 'matched' => false, 'reason' => $e->code_],
                 request: $request,
             );
 
-            return $genericFail;
+            return $e->code_ === 'face_attempts_exceeded' ? $e->render() : $genericFail;
         }
 
         $issued = $this->sessions->issueSession($trainer, $this->context($request));
@@ -133,7 +150,7 @@ class TrainerAuthController extends Controller
             TrainerAuditLog::EVENT_LOGIN,
             $trainer,
             actorType: TrainerAuditLog::ACTOR_TRAINER,
-            metadata: ['session' => $issued['session']->uuid, 'face_login' => true, 'matched' => true],
+            metadata: ['session' => $issued['session']->uuid, 'face_login' => true, 'matched' => true, 'distance' => round($distance, 4)],
             request: $request,
         );
 
@@ -384,11 +401,12 @@ class TrainerAuthController extends Controller
         $trainer = $request->attributes->get('auth_trainer');
         $session = $request->attributes->get('auth_trainer_session');
 
-        // Rota el token sobre el MISMO dispositivo de la sesión actual.
+        // Rota el token sobre el MISMO dispositivo de la sesión actual. Una
+        // sesión de kiosko sigue siéndolo: ni gana confianza ni deja de caducar.
         $issued = $this->sessions->issueSession($trainer, array_merge(
             $this->context($request),
             ['device_id' => $session->device_id],
-        ));
+        ), trusted: ! $session->isEphemeral(), expiresAt: $session->expires_at);
         $trainer->load('roleAssignments');
 
         $this->audit->record(
@@ -406,6 +424,27 @@ class TrainerAuthController extends Controller
         ]);
     }
 
+    /**
+     * Cierra la sesión del portal EN EL SERVIDOR. En una tablet compartida no
+     * basta con borrar el token del equipo: si se copió, seguiría valiendo.
+     */
+    public function logout(Request $request): JsonResponse
+    {
+        $trainer = $request->attributes->get('auth_trainer');
+        $session = $request->attributes->get('auth_trainer_session');
+        $this->sessions->revoke($session, 'logout');
+
+        $this->audit->record(
+            TrainerAuditLog::EVENT_SESSION_REVOKED,
+            $trainer,
+            actorType: TrainerAuditLog::ACTOR_TRAINER,
+            metadata: ['session' => $session->uuid, 'reason' => 'logout'],
+            request: $request,
+        );
+
+        return response()->json(['ok' => true]);
+    }
+
     private function resolveActiveTrainer(string $document): ?Trainer
     {
         $identity = $this->identities->findByDocument($document);
@@ -420,8 +459,16 @@ class TrainerAuthController extends Controller
 
     private function context(Request $request): array
     {
+        // `kiosk:` es el espacio de nombres de las sesiones que emite el
+        // kiosko. Un id DECLARADO por el cliente nunca puede caer ahí: pisaría
+        // la sesión de la tablet (updateOrCreate por trainer + device_id).
+        $deviceId = $request->input('device_id');
+        if (is_string($deviceId) && str_starts_with($deviceId, 'kiosk:')) {
+            $deviceId = 'client:'.$deviceId;
+        }
+
         return [
-            'device_id' => $request->input('device_id'),
+            'device_id' => $deviceId,
             'device_name' => $request->input('device_name'),
             'platform' => $request->input('platform'),
             'app_version' => $request->input('app_version'),

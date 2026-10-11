@@ -22,6 +22,11 @@ use Closure;
  * latido con hechos ya se avisó. Queda una ventana de milisegundos entre las
  * dos lecturas: un cambio que se confirme justo ahí puede avisarse dos veces o,
  * si no tiene hecho y coincide con otro, quedar sin huella hasta el siguiente.
+ *
+ * Por el mismo canal viajan los hechos de personal, jornadas, biometría y
+ * dispositivos (`class_events.audience`). Cada conexión recibe SOLO los que su
+ * permiso le deja ver; los demás avanzan el cursor sin emitirse, para que no
+ * se queden ocupando la ventana de lectura de cada latido.
  */
 final class ClassesChannel
 {
@@ -35,13 +40,21 @@ final class ClassesChannel
     /**
      * @param  int  $suelo  cursor con el que abrió la conexión
      * @param  Closure(): string  $firma  la huella del módulo de clases
+     * @param  (Closure(string): bool)|null  $puedeVer  ¿esta conexión tiene el permiso? null = todo (clases de siempre)
      */
     public function __construct(
         private readonly int $suelo,
         private readonly bool $soloNoCubiertos,
         private readonly Closure $firma,
+        private readonly ?Closure $puedeVer = null,
     ) {
         $this->cursor = $suelo;
+    }
+
+    /** Permiso que exige un hecho: el suyo o, si no declara, el de clases. */
+    private function permite(?string $audience): bool
+    {
+        return $this->puedeVer === null || ($this->puedeVer)($audience ?? 'classes.view');
     }
 
     /**
@@ -52,13 +65,24 @@ final class ClassesChannel
     public function tick(): array
     {
         $salida = [];
+        $hechos = 0;
         foreach (ClassEventsFeed::pending($this->suelo, $this->cursor, $this->enviados) as $evento) {
             $id = (int) $evento->id;
-            $salida[] = ['event' => $evento->type, 'data' => ClassEventsFeed::payload($evento), 'id' => $id];
             $this->enviados[$id] = true;
             $this->cursor = max($this->cursor, $id);
+            if (! $this->permite($evento->audience)) {
+                continue;
+            }
+            $salida[] = ['event' => $evento->type, 'data' => ClassEventsFeed::payload($evento), 'id' => $id];
+            if ($evento->audience === null) {
+                $hechos++;
+            }
         }
-        $hechos = count($salida);
+
+        // Sin permiso de clases, la huella de clases no le dice nada.
+        if (! $this->permite(null)) {
+            return $salida;
+        }
 
         $ahora = ($this->firma)();
         if ($this->huella === null) {

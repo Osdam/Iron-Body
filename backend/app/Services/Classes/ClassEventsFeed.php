@@ -102,6 +102,8 @@ final class ClassEventsFeed
             'session_date' => $e->session_date?->toDateString(),
             'source' => $e->source,
             'reason' => $e->reason,
+            // uuid de la jornada, identidad o dispositivo (hechos de personal).
+            'subject' => $e->subject,
             'at' => $e->created_at?->toIso8601String(),
         ];
     }

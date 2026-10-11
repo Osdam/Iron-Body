@@ -59,6 +59,14 @@ Schedule::command('realtime:prune')
     ->withoutOverlapping()
     ->onOneServer();
 
+// Kiosko de personal: salidas olvidadas → incidencia (sin cerrar ni inventar
+// horas) y poda de nonces/tokens caducados. Cada hora: el umbral es de 16 h, el
+// CRM no debe contar como «en jornada» a quien se fue sin marcar.
+Schedule::command('workforce:maintenance')
+    ->hourly()
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // Purga de la evidencia de moderación cuya retención ya venció.
 //
 // Sin esta entrada el comando existía pero no lo ejecutaba nadie: los binarios

@@ -30,8 +30,13 @@ class ClassSessionService
     /**
      * Marca el INICIO real de la clase para la fecha dada. Solo notifica a los
      * inscritos la PRIMERA vez que se inicia (no en reintentos).
+     *
+     * `$proof`: cómo se identificó el entrenador y desde qué dispositivo (ver
+     * ClassIdentityVerifier). Se guarda solo en el PRIMER inicio, como la hora.
+     *
+     * @param  array{method?:string, device_id?:?int, declared_device?:?string}|null  $proof
      */
-    public function start(MyClass $class, Trainer $trainer, Carbon $sessionDate, bool $faceVerified): ClassSession
+    public function start(MyClass $class, Trainer $trainer, Carbon $sessionDate, bool $faceVerified, ?array $proof = null): ClassSession
     {
         $session = ClassSession::firstOrNew([
             'class_id' => $class->getKey(),
@@ -44,6 +49,9 @@ class ClassSessionService
             $session->started_at = now();
             $session->started_by = $trainer->getKey();
             $session->start_face_verified = $faceVerified;
+            $session->start_identity_method = $proof['method'] ?? null;
+            $session->start_device_id = $proof['device_id'] ?? null;
+            $session->start_declared_device = $proof['declared_device'] ?? null;
             $session->save();
 
             $this->audit->record(
@@ -54,6 +62,8 @@ class ClassSessionService
                     'class_id' => $class->getKey(),
                     'session_date' => $sessionDate->toDateString(),
                     'face_verified' => $faceVerified,
+                    'identity_method' => $proof['method'] ?? null,
+                    'device_id' => $proof['device_id'] ?? null,
                 ],
             );
 
@@ -69,7 +79,8 @@ class ClassSessionService
     }
 
     /** Marca el FIN real de la clase. Requiere que se haya iniciado. */
-    public function end(MyClass $class, Trainer $trainer, Carbon $sessionDate, bool $faceVerified): ?ClassSession
+    /** @param array{method?:string, device_id?:?int, declared_device?:?string}|null $proof */
+    public function end(MyClass $class, Trainer $trainer, Carbon $sessionDate, bool $faceVerified, ?array $proof = null): ?ClassSession
     {
         $session = ClassSession::query()
             ->where('class_id', $class->getKey())
@@ -84,6 +95,9 @@ class ClassSessionService
             $session->ended_at = now();
             $session->ended_by = $trainer->getKey();
             $session->end_face_verified = $faceVerified;
+            $session->end_identity_method = $proof['method'] ?? null;
+            $session->end_device_id = $proof['device_id'] ?? null;
+            $session->end_declared_device = $proof['declared_device'] ?? null;
             $session->save();
 
             $this->audit->record(
@@ -94,6 +108,8 @@ class ClassSessionService
                     'class_id' => $class->getKey(),
                     'session_date' => $sessionDate->toDateString(),
                     'face_verified' => $faceVerified,
+                    'identity_method' => $proof['method'] ?? null,
+                    'device_id' => $proof['device_id'] ?? null,
                 ],
             );
 

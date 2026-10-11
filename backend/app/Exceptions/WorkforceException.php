@@ -1,0 +1,201 @@
+<?php
+
+namespace App\Exceptions;
+
+use Illuminate\Http\JsonResponse;
+use RuntimeException;
+
+/**
+ * Operación rechazada del dominio de personal: jornada, biometría, dispositivo
+ * o autorización. Lleva el código estable del contrato
+ * (docs/asistencia-laboral/CONTRATO.md), el estado HTTP y, si hace falta,
+ * campos extra para que el cliente pinte la situación real (p. ej. la jornada
+ * que ya está abierta).
+ *
+ * Excepción y no booleano: un `false` ignorado aquí es una jornada fantasma o
+ * una identidad dada por buena.
+ */
+class WorkforceException extends RuntimeException
+{
+    /** @param array<string, mixed> $extra */
+    public function __construct(
+        string $message,
+        public readonly string $code_,
+        public readonly int $status = 422,
+        public readonly array $extra = [],
+    ) {
+        parent::__construct($message);
+    }
+
+    public function render(): JsonResponse
+    {
+        return response()->json(array_merge([
+            'ok' => false,
+            'code' => $this->code_,
+            'message' => $this->getMessage(),
+        ], $this->extra), $this->status);
+    }
+
+    // ── Dispositivo ─────────────────────────────────────────────────────────
+
+    public static function deviceSignatureRequired(): self
+    {
+        return new self('Este dispositivo no está autorizado para esta operación.', 'device_signature_required', 401);
+    }
+
+    public static function deviceUnknown(): self
+    {
+        return new self('Este dispositivo no está vinculado. Pide a un administrador que lo vincule.', 'device_unknown', 401);
+    }
+
+    public static function deviceRevoked(): self
+    {
+        return new self('Este dispositivo fue revocado por la administración.', 'device_revoked', 403);
+    }
+
+    public static function challengeInvalid(): self
+    {
+        return new self('La verificación del dispositivo caducó. Intenta de nuevo.', 'device_challenge_invalid', 401);
+    }
+
+    public static function signatureInvalid(): self
+    {
+        return new self('No pudimos verificar este dispositivo.', 'device_signature_invalid', 401);
+    }
+
+    public static function deviceNotAuthorized(): self
+    {
+        return new self('Esta operación solo se puede hacer desde un dispositivo autorizado.', 'device_not_authorized', 403);
+    }
+
+    public static function pairingCodeInvalid(): self
+    {
+        return new self('El código de vinculación no es válido o ya caducó.', 'pairing_code_invalid', 422);
+    }
+
+    // ── Identidad y biometría ───────────────────────────────────────────────
+
+    public static function employeeNotFound(): self
+    {
+        return new self('No encontramos a un empleado activo con ese documento.', 'employee_not_found', 404);
+    }
+
+    public static function employeeRefInvalid(): self
+    {
+        return new self('La identificación caducó. Vuelve a empezar.', 'employee_ref_invalid', 401);
+    }
+
+    public static function embeddingInvalid(): self
+    {
+        return new self('No pudimos procesar el rostro. Intenta de nuevo con buena luz.', 'embedding_invalid', 422);
+    }
+
+    public static function faceNoMatch(): self
+    {
+        return new self('El rostro no coincide. Intenta de nuevo o usa un código de administrador.', 'face_no_match', 422);
+    }
+
+    public static function faceAttemptsExceeded(int $minutes): self
+    {
+        return new self("Demasiados intentos. Espera {$minutes} minutos o usa un código de administrador.", 'face_attempts_exceeded', 429);
+    }
+
+    public static function biometricNotEnrolled(string $status): self
+    {
+        return new self(
+            'Esta persona no tiene un rostro registrado. Un administrador debe autorizar el registro.',
+            'biometric_not_enrolled',
+            409,
+            ['biometric' => ['status' => $status]],
+        );
+    }
+
+    public static function notATrainer(): self
+    {
+        return new self('Esta persona no tiene acceso al portal de entrenadores.', 'not_a_trainer', 403);
+    }
+
+    public static function authorizationCodeInvalid(): self
+    {
+        return new self('El código no es válido o ya caducó.', 'authorization_code_invalid', 422);
+    }
+
+    public static function authorizationCodeAttemptsExceeded(): self
+    {
+        return new self('Demasiados intentos con este código. Pide uno nuevo a un administrador.', 'authorization_code_attempts_exceeded', 429);
+    }
+
+    public static function consentRequired(): self
+    {
+        return new self('Para registrar tu rostro debes aceptar la autorización de tratamiento de datos.', 'consent_required', 422);
+    }
+
+    public static function embeddingsInconsistent(): self
+    {
+        return new self('Las capturas no coinciden entre sí. Repite el registro mirando de frente a la cámara.', 'embeddings_inconsistent', 422);
+    }
+
+    public static function faceAlreadyLinked(): self
+    {
+        return new self('Este rostro ya está registrado para otra persona. Contacta a un administrador.', 'face_already_linked', 409);
+    }
+
+    public static function enrollmentInvalid(): self
+    {
+        return new self('El registro de rostro caducó. Vuelve a empezar.', 'enrollment_invalid', 401);
+    }
+
+    public static function faceAlreadyEnrolled(): self
+    {
+        return new self('Ya tienes un rostro registrado. Para cambiarlo, pide a un administrador que autorice uno nuevo.', 'face_already_enrolled', 409);
+    }
+
+    public static function enrollmentRequiresAuthorization(): self
+    {
+        return new self('Para registrar tu rostro necesitas la autorización de un administrador.', 'enrollment_requires_authorization', 409);
+    }
+
+    // ── Jornada ─────────────────────────────────────────────────────────────
+
+    public static function verificationInvalid(): self
+    {
+        return new self('La verificación caducó. Vuelve a identificarte.', 'verification_invalid', 401);
+    }
+
+    public static function workdayNotApplicable(): self
+    {
+        return new self('Tu cargo no registra jornada laboral.', 'workday_not_applicable', 403);
+    }
+
+    /** @param array<string, mixed> $workday */
+    public static function workdayAlreadyOpen(array $workday): self
+    {
+        return new self('Ya tienes una jornada activa.', 'workday_already_open', 409, ['workday' => $workday]);
+    }
+
+    /** @param array<string, mixed>|null $last */
+    public static function noOpenWorkday(?array $last): self
+    {
+        return new self('No tienes una jornada activa para cerrar.', 'no_open_workday', 409, ['last' => $last]);
+    }
+
+    public static function idempotencyConflict(): self
+    {
+        return new self('Esta operación ya se usó para otra cosa. Vuelve a empezar.', 'idempotency_conflict', 409);
+    }
+
+    public static function workdayNotIncident(): self
+    {
+        return new self('Esta jornada no tiene una incidencia pendiente.', 'workday_not_incident', 409);
+    }
+
+    public static function clockOutInvalid(string $why): self
+    {
+        return new self($why, 'clock_out_invalid', 422);
+    }
+
+    public static function staffProfileExists(): self
+    {
+        return new self('Esta persona ya tiene un perfil de personal.', 'staff_profile_exists', 409);
+    }
+}

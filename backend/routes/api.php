@@ -212,6 +212,31 @@ Route::middleware('trainer.feature:trainer_auth_enabled')->prefix('trainer/auth'
         Route::post('face/enroll',      [\App\Http\Controllers\Api\TrainerAuthController::class, 'enrollFace'])->middleware('throttle:10,1');
         // Canal SSE del portal: empuja cambios de los clientes del entrenador.
         Route::get('realtime',          [\App\Http\Controllers\Api\Trainer\TrainerRealtimeController::class, 'stream']);
+        // Cierre de sesión EN EL SERVIDOR (tablet compartida).
+        Route::post('logout',           [\App\Http\Controllers\Api\TrainerAuthController::class, 'logout']);
+    });
+});
+
+// ── Kiosko de personal: jornada laboral, enrolamiento y dispositivos ──────────
+// Contrato: docs/asistencia-laboral/CONTRATO.md. Sin sesión de persona: la
+// persona se verifica en cada operación (rostro o código de un administrador)
+// y el DISPOSITIVO firma cada petición con su clave no exportable
+// (`device.signed`). Vincular un dispositivo exige el código que genera un
+// administrador en el CRM; pedir un desafío solo identifica al dispositivo.
+Route::prefix('kiosk')->middleware('throttle:kiosk')->group(function (): void {
+    Route::post('device/register', [\App\Http\Controllers\Api\Kiosk\KioskDeviceController::class, 'register'])->middleware('throttle:kiosk-register');
+    Route::post('device/challenge', [\App\Http\Controllers\Api\Kiosk\KioskDeviceController::class, 'challenge']);
+
+    Route::middleware('device.signed')->group(function (): void {
+        Route::get('device/status', [\App\Http\Controllers\Api\Kiosk\KioskDeviceController::class, 'status']);
+        Route::post('employees/identify', [\App\Http\Controllers\Api\Kiosk\KioskEmployeeController::class, 'identify'])->middleware('throttle:kiosk-identify');
+        Route::get('employees/roster', [\App\Http\Controllers\Api\Kiosk\KioskEmployeeController::class, 'roster']);
+        Route::post('verify', [\App\Http\Controllers\Api\Kiosk\KioskVerificationController::class, 'verify']);
+        Route::post('verify-code', [\App\Http\Controllers\Api\Kiosk\KioskVerificationController::class, 'verifyCode']);
+        Route::post('workday/clock-in', [\App\Http\Controllers\Api\Kiosk\KioskWorkdayController::class, 'clockIn']);
+        Route::post('workday/clock-out', [\App\Http\Controllers\Api\Kiosk\KioskWorkdayController::class, 'clockOut']);
+        Route::post('enrollment/start', [\App\Http\Controllers\Api\Kiosk\KioskEnrollmentController::class, 'start']);
+        Route::post('enrollment/complete', [\App\Http\Controllers\Api\Kiosk\KioskEnrollmentController::class, 'complete']);
     });
 });
 
@@ -1067,6 +1092,26 @@ Route::middleware('auth.admin')->prefix('admin/iron-ai')->group(function (): voi
 // ── Supervisión de horarios de clases (CRM admin) ─────────────────────────
 // Horario programado vs inicio/fin real (con rostro) por sesión de clase.
 Route::get('admin/class-sessions', [\App\Http\Controllers\Api\Admin\ClassSupervisionController::class, 'index']);
+
+// ── Supervisión de empleados: jornadas, personal, biometría, dispositivos ─────
+// Permisos por controlador en AuthorizationMap (workforce / biometrics / devices).
+Route::get('admin/workforce/workdays', [\App\Http\Controllers\Api\Admin\WorkforceSupervisionController::class, 'index']);
+Route::get('admin/workforce/workdays/summary', [\App\Http\Controllers\Api\Admin\WorkforceSupervisionController::class, 'summary']);
+Route::get('admin/workforce/workdays/{workday}', [\App\Http\Controllers\Api\Admin\WorkforceSupervisionController::class, 'show'])->whereUuid('workday');
+Route::post('admin/workforce/workdays/{workday}/resolve', [\App\Http\Controllers\Api\Admin\WorkforceSupervisionController::class, 'resolve'])->whereUuid('workday');
+Route::get('admin/workforce/positions', [\App\Http\Controllers\Api\Admin\WorkforceStaffController::class, 'positions']);
+Route::get('admin/workforce/staff', [\App\Http\Controllers\Api\Admin\WorkforceStaffController::class, 'index']);
+Route::post('admin/workforce/staff', [\App\Http\Controllers\Api\Admin\WorkforceStaffController::class, 'store']);
+Route::patch('admin/workforce/staff/{identity}', [\App\Http\Controllers\Api\Admin\WorkforceStaffController::class, 'update'])->whereUuid('identity');
+Route::post('admin/workforce/staff/{identity}/fallback-code', [\App\Http\Controllers\Api\Admin\WorkforceStaffController::class, 'fallbackCode'])->whereUuid('identity');
+Route::get('admin/biometrics/identities/{identity}', [\App\Http\Controllers\Api\Admin\BiometricAdminController::class, 'show'])->whereUuid('identity');
+Route::post('admin/biometrics/identities/{identity}/enrollment-code', [\App\Http\Controllers\Api\Admin\BiometricAdminController::class, 'enrollmentCode'])->whereUuid('identity');
+Route::post('admin/biometrics/identities/{identity}/revoke', [\App\Http\Controllers\Api\Admin\BiometricAdminController::class, 'revoke'])->whereUuid('identity');
+Route::get('admin/devices', [\App\Http\Controllers\Api\Admin\DeviceAdminController::class, 'index']);
+Route::post('admin/devices/pairing-codes', [\App\Http\Controllers\Api\Admin\DeviceAdminController::class, 'pairingCode']);
+Route::get('admin/devices/security-events', [\App\Http\Controllers\Api\Admin\DeviceAdminController::class, 'securityEvents']);
+Route::patch('admin/devices/{device}', [\App\Http\Controllers\Api\Admin\DeviceAdminController::class, 'update'])->whereUuid('device');
+Route::post('admin/devices/{device}/revoke', [\App\Http\Controllers\Api\Admin\DeviceAdminController::class, 'revoke'])->whereUuid('device');
 
 // ── Inscripción a clases desde el mostrador (CRM admin) ───────────────────
 // El CRM es otro consumidor del MISMO dominio de reservas que la app

@@ -38,6 +38,11 @@ class AuthenticateTrainer
             if (! $trainer->isActive()) {
                 return $this->unauthorized('trainer_inactive', 'Tu acceso profesional fue desactivado.');
             }
+            if ($session->isEphemeral() && $this->expired($session)) {
+                $this->sessions->revoke($session, 'expired');
+
+                return $this->unauthorized('session_expired', 'Tu sesión en esta tablet terminó. Vuelve a identificarte.');
+            }
 
             $this->sessions->touch($session);
             $request->attributes->set('auth_trainer', $trainer);
@@ -56,6 +61,15 @@ class AuthenticateTrainer
         }
 
         return $this->unauthorized('invalid_token', 'Token inválido.');
+    }
+
+    /** Sesión de kiosko vencida: pasó su hora límite o lleva demasiado sin uso. */
+    private function expired(TrainerDeviceSession $session): bool
+    {
+        $idle = (int) config('workforce.kiosk.trainer_session_idle_minutes', 15);
+
+        return $session->expires_at->isPast()
+            || ($session->last_seen_at !== null && $session->last_seen_at->lt(now()->subMinutes($idle)));
     }
 
     private function unauthorized(string $code, string $message): Response

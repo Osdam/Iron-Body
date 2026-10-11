@@ -41,6 +41,18 @@ class Identity extends Model
         return $this->hasMany(Trainer::class);
     }
 
+    /** Perfil laboral (recepción, administración…), si lo tiene. */
+    public function staffProfile(): HasOne
+    {
+        return $this->hasOne(StaffProfile::class);
+    }
+
+    /** Plantilla facial de la persona (activa o revocada), si existe. */
+    public function faceReference(): HasOne
+    {
+        return $this->hasOne(TrainerFaceReference::class);
+    }
+
     /** ¿La identidad tiene un perfil de miembro? */
     public function hasMemberProfile(): bool
     {

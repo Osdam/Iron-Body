@@ -225,6 +225,8 @@ class ClassEventsFeedTest extends TestCase
             'session_date' => '2026-10-07',
             'source' => 'crm',
             'reason' => null,
+            // uuid del sujeto en los hechos de personal; null en los de clases.
+            'subject' => null,
             'at' => '2026-10-05T15:00:00+00:00',
         ], ClassEventsFeed::payload($hecho->fresh()));
     }

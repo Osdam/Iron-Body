@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AuthorizedDevice;
 use App\Models\ClassAttendance;
+use App\Models\ClassEvent;
 use App\Models\ClassSession;
 use App\Models\MyClass;
 use App\Models\Trainer;
@@ -50,10 +52,13 @@ class ClassSupervisionController extends Controller
             return response()->json(['message' => 'Consulta como mucho 93 días seguidos.', 'errors' => ['to' => ['Consulta como mucho 93 días seguidos.']]], 422);
         }
 
+        // Cursor ANTES de leer las sesiones (ver WorkforceSupervisionController).
+        $cursor = (int) (ClassEvent::max('id') ?? 0);
+
         $query = ClassSession::query()
             ->whereDate('session_date', '>=', $from)
             ->whereDate('session_date', '<=', $to)
-            ->with(['gymClass.trainer', 'startedByTrainer']);
+            ->with(['gymClass.trainer', 'startedByTrainer', 'startDevice', 'endDevice']);
 
         if ($request->filled('trainer_id')) {
             $query->whereHas('gymClass', fn ($q) => $q->where('trainer_id', $request->query('trainer_id')));
@@ -75,7 +80,9 @@ class ClassSupervisionController extends Controller
 
         $rows = $sessions->map(fn (ClassSession $s) => $this->row($s, $reservas, $asistencia));
 
-        return response()->json(['ok' => true, 'data' => $rows->values()]);
+        // `events_cursor`: el CRM compara con el cursor del canal para no
+        // perder un hecho que llegue entre la lectura y la suscripción.
+        return response()->json(['ok' => true, 'data' => $rows->values(), 'events_cursor' => $cursor]);
     }
 
     /**
@@ -159,6 +166,26 @@ class ClassSupervisionController extends Controller
             'end_face_verified' => (bool) $s->end_face_verified,
             'is_live' => $s->isLive(),
             'completed' => $s->ended_at !== null,
+            // Desde qué dispositivo y con qué prueba de identidad. Verificado =
+            // firmó un dispositivo autorizado; declarado = lo que dijo la app
+            // anterior; null = sesión histórica sin dato («No registrado»).
+            'start_device' => $this->device($s->startDevice, $s->start_declared_device),
+            'end_device' => $this->device($s->endDevice, $s->end_declared_device),
+            'start_identity_method' => $s->start_identity_method,
+            'end_identity_method' => $s->end_identity_method,
         ];
+    }
+
+    /** @return array{id:?string, name:string, verified:bool}|null */
+    private function device(?AuthorizedDevice $device, ?string $declared): ?array
+    {
+        if ($device !== null) {
+            return ['id' => $device->uuid, 'name' => $device->name, 'verified' => true];
+        }
+        if ($declared !== null && $declared !== '') {
+            return ['id' => null, 'name' => $declared, 'verified' => false];
+        }
+
+        return null;
     }
 }

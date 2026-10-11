@@ -10,11 +10,14 @@ use App\Models\MemberRiskLock;
 use App\Models\PaymentTransaction;
 use App\Models\ReceivablePayment;
 use App\Models\PhysicalEvaluation;
+use App\Models\StaffProfile;
+use App\Models\Trainer;
 use App\Models\User;
 use App\Observers\Commissions\CommissionAccessObserver;
 use App\Observers\Marketing\AttributionOfferObserver;
 use App\Observers\Marketing\ConversationPreviewObserver;
 use App\Observers\Marketing\MarketingPaymentOutcomeObserver;
+use App\Observers\WorkforceProfileObserver;
 use App\Services\Billing\Factus\FactusClient;
 use App\Services\Billing\Factus\FactusConfigValidator;
 use App\Services\Billing\Factus\FactusTokenManager;
@@ -121,6 +124,12 @@ class AppServiceProvider extends ServiceProvider
         // escucha el movimiento de dinero, que es el hecho que cambia la
         // respuesta, y no la pantalla desde la que se hizo.
         ReceivablePayment::observe(CommissionAccessObserver::class);
+
+        // Quien deja de trabajar aquí pierde su plantilla facial (retención de
+        // datos biométricos) y su jornada abierta queda como incidencia, venga
+        // la desactivación del camino que venga.
+        Trainer::observe(WorkforceProfileObserver::class);
+        StaffProfile::observe(WorkforceProfileObserver::class);
 
         $this->limitadoresInternos();
         $this->limitadorDeClases();
@@ -330,6 +339,57 @@ class AppServiceProvider extends ServiceProvider
      */
     private function limitadorDeClases(): void
     {
+        // Kiosko de personal: por DISPOSITIVO declarado (las rutas firmadas
+        // validan después que lo sea de verdad). Por IP bloquearía a todo el
+        // gimnasio, que sale por la misma.
+        //
+        // Clave: el id que el controlador VA A USAR. En `device/challenge` es el
+        // del cuerpo (la cabecera la pondría quien quisiera); en las firmadas, la
+        // cabecera, que la firma ata a la clave del dispositivo. Más un tope por
+        // IP: rotar ids inventados no puede dar cupo infinito (revisión de
+        // seguridad 2026-10-11, F4).
+        RateLimiter::for('kiosk', function (Request $request) {
+            $device = (string) ($request->input('device_id') ?: $request->header('X-Device-Id', ''));
+            $tooMany = fn ($request, array $headers) => response()->json([
+                'ok' => false,
+                'code' => 'too_many_requests',
+                'message' => 'Demasiados intentos seguidos. Espera un momento.',
+            ], 429, $headers);
+
+            return [
+                Limit::perMinute(60)
+                    ->by($device !== '' ? 'device:'.hash('sha256', $device) : 'ip:'.$request->ip())
+                    ->response($tooMany),
+                // Todas las tablets del gimnasio salen por la misma IP: holgado
+                // para un cambio de turno, corto para un barrido.
+                Limit::perMinute(300)->by('kiosk-ip:'.$request->ip())->response($tooMany),
+            ];
+        });
+
+        // Vincular una tablet: poco frecuente. Cupo propio por IP para no
+        // compartirlo con otras rutas `throttle:N,1` (F3).
+        RateLimiter::for('kiosk-register', fn (Request $request) => Limit::perMinute(10)
+            ->by('kiosk-register:'.$request->ip())
+            ->response(fn ($request, array $headers) => response()->json([
+                'ok' => false,
+                'code' => 'too_many_requests',
+                'message' => 'Demasiados intentos de vinculación. Espera un minuto.',
+            ], 429, $headers)));
+
+        // Identificar por documento: por dispositivo y más estricto que el
+        // resto del kiosko (es lo que se usaría para tantear documentos).
+        RateLimiter::for('kiosk-identify', function (Request $request) {
+            $device = (string) $request->header('X-Device-Id', '');
+
+            return Limit::perMinute(20)
+                ->by($device !== '' ? 'identify:'.hash('sha256', $device) : 'identify-ip:'.$request->ip())
+                ->response(fn ($request, array $headers) => response()->json([
+                    'ok' => false,
+                    'code' => 'too_many_requests',
+                    'message' => 'Demasiadas búsquedas seguidas. Espera un momento.',
+                ], 429, $headers));
+        });
+
         RateLimiter::for('class-writes', function (Request $request) {
             $token = $request->bearerToken();
 

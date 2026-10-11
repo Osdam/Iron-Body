@@ -647,7 +647,10 @@ class ClassEnrollmentFromCrmTest extends TestCase
             return AuthorizationMap::resolve($ruta);
         };
 
-        $this->assertSame('classes.view', $permiso('GET', '/api/admin/classes/stream'));
+        // El canal lleva también hechos de personal, biometría y dispositivos:
+        // lo abre cualquiera de esos permisos y el canal filtra hecho a hecho
+        // (los de clases, solo con classes.view: ver WorkforceStreamAudienceTest).
+        $this->assertSame(['classes.view', 'workforce.view', 'biometrics.view', 'devices.view'], $permiso('GET', '/api/admin/classes/stream'));
         $this->assertSame('classes.view', $permiso('GET', '/api/admin/classes/1/enrollments'));
         $this->assertSame(['classes.enroll', 'classes.manage'], $permiso('POST', '/api/admin/classes/1/enrollments'));
         $this->assertSame(['classes.enroll', 'classes.manage'], $permiso('DELETE', '/api/admin/classes/1/enrollments/1'));

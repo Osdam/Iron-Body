@@ -28,6 +28,7 @@ class TrainerDeviceSession extends Model
         'trusted_at',
         'revoked_at',
         'revoked_reason',
+        'expires_at',
     ];
 
     protected $hidden = [
@@ -40,6 +41,7 @@ class TrainerDeviceSession extends Model
             'last_seen_at' => 'datetime',
             'trusted_at' => 'datetime',
             'revoked_at' => 'datetime',
+            'expires_at' => 'datetime',
         ];
     }
 
@@ -63,6 +65,15 @@ class TrainerDeviceSession extends Model
     public function isActive(): bool
     {
         return $this->revoked_at === null;
+    }
+
+    /**
+     * Sesión de kiosko (tablet compartida): caduca a una hora fija y por
+     * inactividad, y nunca convierte la tablet en dispositivo de confianza.
+     */
+    public function isEphemeral(): bool
+    {
+        return $this->expires_at !== null;
     }
 
     public static function hashToken(string $token): string

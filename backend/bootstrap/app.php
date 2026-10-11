@@ -12,6 +12,7 @@ use App\Http\Middleware\ProtectAdminPaths;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\EnsureTrainerFeature;
 use App\Http\Middleware\EnsureTrainerPermission;
+use App\Http\Middleware\VerifyDeviceSignature;
 use App\Http\Middleware\VerifyInternalAutomationSignature;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -40,6 +41,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'auth.member'               => AuthenticateMember::class,
             'membership.benefits'       => EnsureMembershipBenefitsAvailable::class,
             'auth.trainer'              => AuthenticateTrainer::class,
+            'device.signed'             => VerifyDeviceSignature::class,
             'auth.admin'                => EnsureAdminAuth::class,
             'admin.can'                 => EnsureAdminPermission::class,
             'automation.internal'       => VerifyInternalAutomationSignature::class,
