@@ -653,15 +653,17 @@ class KioskWorkdayFlowTest extends TestCase
         $this->enroll($coach->identity, '1075000002', $this->face(3), $tablet)->assertCreated();
         $ajena = $this->capture($this->face(9), 1);
 
-        $intento = fn (string $ip) => $this->withServerVariables(['REMOTE_ADDR' => $ip])
-            ->postJson('/api/trainer/auth/face/login', ['trainer_id' => $coach->id, 'embedding' => $ajena]);
-        for ($i = 0; $i < 5; $i++) {
-            $intento('203.0.113.7')->assertStatus(422)->assertJsonPath('code', 'face_no_match');
+        $intento = fn (string $ip, array $rostro) => $this->withServerVariables(['REMOTE_ADDR' => $ip])
+            ->postJson('/api/trainer/auth/face/login', ['trainer_id' => $coach->id, 'embedding' => $rostro]);
+        // Cinco fallos repartidos entre IPs distintas: rotar direcciones no da
+        // intentos de más.
+        foreach (['203.0.113.7', '203.0.113.8', '2001:db8::1', '2001:db8::2', '198.51.100.4'] as $ip) {
+            $intento($ip, $ajena)->assertStatus(422)->assertJsonPath('code', 'face_no_match');
         }
-        // Quien insiste desde esa IP queda bloqueado…
-        $intento('203.0.113.7')->assertStatus(429)->assertJsonPath('code', 'face_attempts_exceeded');
-        // …pero no otra IP, ni la tablet del gimnasio.
-        $intento('198.51.100.4')->assertStatus(422)->assertJsonPath('code', 'face_no_match');
+        $intento('2001:db8::3', $ajena)->assertStatus(429)->assertJsonPath('code', 'face_attempts_exceeded');
+        // Bloqueado el login público, ni siquiera con su rostro entra por ahí…
+        $intento('192.0.2.10', $this->face(3))->assertStatus(429);
+        // …pero la tablet del gimnasio no se entera: jornada y clases siguen.
         $this->verifyFace('1075000002', $this->face(3), $tablet)->assertOk()->assertJsonPath('verification.method', 'face');
     }
 

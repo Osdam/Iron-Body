@@ -177,8 +177,10 @@ identificar y verificar).
 
 Cada vía cuenta sus fallos por separado: kiosko (por persona; solo lo alcanza una tablet
 vinculada), inicio/fin de clase (por persona; exige la sesión del entrenador) y login
-facial público `trainer/auth/face/login` (por persona **e IP**). Fallar en el login
-público, que no exige nada, nunca bloquea el rostro en la tablet.
+facial público `trainer/auth/face/login` (por persona, sin mirar la IP: rotar direcciones
+no da intentos de más). Fallar en el login público, que no exige nada, bloquea como mucho
+ese login de esa persona un rato (sigue entrando con su documento); nunca el rostro en la
+tablet.
 
 Respaldo y entrenadores: el código de propósito `class` sirve UNA vez, para entrar al
 portal (`trainer_session`) o para iniciar/finalizar una clase (`fallback_code`).
