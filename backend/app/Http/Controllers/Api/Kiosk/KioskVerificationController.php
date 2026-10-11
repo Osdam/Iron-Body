@@ -61,7 +61,9 @@ class KioskVerificationController extends Controller
         $distance = $this->faces->verify(
             $this->faces->referenceForIdentity($identity),
             $data['embedding'],
-            'identity:'.$identity->getKey(),
+            // Contador propio del kiosko (solo lo alcanza una tablet vinculada):
+            // fallar en el login público o en el teléfono no lo agota.
+            'kiosk:identity:'.$identity->getKey(),
             $request,
         );
 

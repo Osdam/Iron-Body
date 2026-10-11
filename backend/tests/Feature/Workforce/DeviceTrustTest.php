@@ -8,6 +8,7 @@ use App\Models\DeviceSecurityEvent;
 use App\Support\Workforce\DeviceSignature;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Tests\Feature\Workforce\Concerns\WorkforceKit;
 use Tests\TestCase;
@@ -151,6 +152,27 @@ class DeviceTrustTest extends TestCase
     public function test_sin_cabeceras_de_firma_no_hay_operacion(): void
     {
         $this->getJson('/api/kiosk/device/status')->assertStatus(401)->assertJsonPath('code', 'device_signature_required');
+    }
+
+    public function test_todas_las_rutas_del_kiosko_salvo_vincular_y_pedir_desafio_exigen_firma(): void
+    {
+        // Barrido sobre la tabla de rutas real: una ruta de kiosko nueva sin
+        // `device.signed` saldría aquí.
+        $abiertas = ['api/kiosk/device/register', 'api/kiosk/device/challenge'];
+        $rutas = collect(Route::getRoutes()->getRoutes())
+            ->filter(fn ($r) => str_starts_with($r->uri(), 'api/kiosk/'));
+        $this->assertGreaterThanOrEqual(11, $rutas->count());
+
+        foreach ($rutas as $ruta) {
+            $firmada = in_array('device.signed', $ruta->gatherMiddleware(), true);
+            $this->assertSame(! in_array($ruta->uri(), $abiertas, true), $firmada, "{$ruta->uri()} ".($firmada ? 'no debería' : 'debería').' exigir firma');
+            if ($firmada) {
+                $uri = '/'.preg_replace('/\{[^}]+\}/', 'x', $ruta->uri());
+                foreach (array_diff($ruta->methods(), ['HEAD']) as $metodo) {
+                    $this->json($metodo, $uri)->assertStatus(401);
+                }
+            }
+        }
     }
 
     public function test_un_dispositivo_revocado_desde_el_crm_deja_de_operar(): void

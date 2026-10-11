@@ -642,6 +642,29 @@ class KioskWorkdayFlowTest extends TestCase
         $this->assertSame($antes, ClassEvent::query()->where('type', 'workday.updated')->count());
     }
 
+    public function test_fallar_el_login_facial_publico_no_deja_a_nadie_sin_rostro_en_la_tablet(): void
+    {
+        // El login facial es público y el trainer_id, secuencial: si compartiera
+        // el contador del kiosko, cualquiera bloquearía la jornada y las clases
+        // de todos los entrenadores fallando cinco veces por cada uno.
+        config(['trainer.flags.trainer_auth_enabled' => true, 'trainer.face.login_enabled' => true]);
+        $coach = $this->floorTrainer('1075000002');
+        $tablet = $this->tablet();
+        $this->enroll($coach->identity, '1075000002', $this->face(3), $tablet)->assertCreated();
+        $ajena = $this->capture($this->face(9), 1);
+
+        $intento = fn (string $ip) => $this->withServerVariables(['REMOTE_ADDR' => $ip])
+            ->postJson('/api/trainer/auth/face/login', ['trainer_id' => $coach->id, 'embedding' => $ajena]);
+        for ($i = 0; $i < 5; $i++) {
+            $intento('203.0.113.7')->assertStatus(422)->assertJsonPath('code', 'face_no_match');
+        }
+        // Quien insiste desde esa IP queda bloqueado…
+        $intento('203.0.113.7')->assertStatus(429)->assertJsonPath('code', 'face_attempts_exceeded');
+        // …pero no otra IP, ni la tablet del gimnasio.
+        $intento('198.51.100.4')->assertStatus(422)->assertJsonPath('code', 'face_no_match');
+        $this->verifyFace('1075000002', $this->face(3), $tablet)->assertOk()->assertJsonPath('verification.method', 'face');
+    }
+
     public function test_acertar_limpia_el_contador_de_intentos(): void
     {
         // F8: el intento se cuenta antes de comparar y se limpia al acertar.

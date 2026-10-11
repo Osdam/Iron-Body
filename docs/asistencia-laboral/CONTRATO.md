@@ -175,6 +175,11 @@ Errores: 422 `face_no_match` (uniforme), 409 `biometric_not_enrolled` (con `biom
 bloqueo 15 min), 401 `employee_ref_invalid`, 404 `employee_not_found` (desactivada entre
 identificar y verificar).
 
+Cada vía cuenta sus fallos por separado: kiosko (por persona; solo lo alcanza una tablet
+vinculada), inicio/fin de clase (por persona; exige la sesión del entrenador) y login
+facial público `trainer/auth/face/login` (por persona **e IP**). Fallar en el login
+público, que no exige nada, nunca bloquea el rostro en la tablet.
+
 Respaldo y entrenadores: el código de propósito `class` sirve UNA vez, para entrar al
 portal (`trainer_session`) o para iniciar/finalizar una clase (`fallback_code`).
 

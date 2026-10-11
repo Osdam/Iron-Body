@@ -51,7 +51,9 @@ class ClassIdentityVerifier
 
         if (array_key_exists('embedding', $data) && $data['embedding'] !== null) {
             $ref = $this->faces->referenceForTrainer($trainer);
-            $key = $identity ? 'identity:'.$identity->getKey() : 'trainer:'.$trainer->getKey();
+            // Contador de esta vía (exige la sesión del propio entrenador),
+            // separado del kiosko y del login público.
+            $key = 'class:'.($identity ? 'identity:'.$identity->getKey() : 'trainer:'.$trainer->getKey());
             $this->faces->verify($ref, $data['embedding'], $key, $request);
 
             return ['method' => self::METHOD_FACE, 'face_verified' => true, 'device_id' => $device?->getKey(), 'declared_device' => $declared];

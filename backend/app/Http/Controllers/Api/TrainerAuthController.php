@@ -127,9 +127,15 @@ class TrainerAuthController extends Controller
 
         // Comparación en el servidor con las defensas del kiosko: vector de
         // norma 1 (un vector casi nulo coincidía con cualquiera), plantilla
-        // activa (una revocada no entra) e intentos limitados por persona.
+        // activa (una revocada no entra) e intentos limitados.
+        //
+        // El contador es de ESTA vía y por persona + IP: el endpoint es público
+        // y el trainer_id, secuencial. Con el contador del kiosko, cualquiera
+        // podría dejar sin rostro en la tablet (jornada y clases) a todos los
+        // entrenadores fallando cinco veces por cada uno. Así, quien insiste
+        // desde una IP solo se bloquea a sí mismo.
         try {
-            $key = $trainer->identity_id ? 'identity:'.$trainer->identity_id : 'trainer:'.$trainer->getKey();
+            $key = 'portal-login:'.($trainer->identity_id ? 'identity:'.$trainer->identity_id : 'trainer:'.$trainer->getKey()).':ip:'.$request->ip();
             $distance = $this->faceReferences->verify($this->faceReferences->referenceForTrainer($trainer), $data['embedding'], $key, $request);
         } catch (WorkforceException $e) {
             $this->audit->record(

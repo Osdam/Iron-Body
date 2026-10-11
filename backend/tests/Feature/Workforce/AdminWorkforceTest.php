@@ -14,6 +14,7 @@ use App\Support\Access\CrmPermission;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Tests\Feature\Workforce\Concerns\WorkforceKit;
 use Tests\TestCase;
@@ -55,6 +56,22 @@ class AdminWorkforceTest extends TestCase
             ['workforce.view', 'workforce.manage', 'biometrics.view', 'biometrics.manage', 'devices.view', 'devices.manage'],
             CrmPermission::defaultsFor('Recepción'),
         )));
+    }
+
+    public function test_ninguna_ruta_nueva_de_administracion_responde_sin_sesion(): void
+    {
+        // Barrido sobre la tabla de rutas real: una ruta nueva que quedara fuera
+        // de la protección por prefijo (/api/admin/*) saldría aquí.
+        $rutas = collect(Route::getRoutes()->getRoutes())
+            ->filter(fn ($r) => preg_match('#^api/admin/(workforce|biometrics|devices)(/|$)#', $r->uri()) === 1);
+        $this->assertGreaterThanOrEqual(17, $rutas->count());
+
+        foreach ($rutas as $ruta) {
+            $uri = '/'.preg_replace('/\{[^}]+\}/', (string) Str::uuid(), $ruta->uri());
+            foreach (array_diff($ruta->methods(), ['HEAD']) as $metodo) {
+                $this->json($metodo, $uri)->assertStatus(401);
+            }
+        }
     }
 
     public function test_ver_jornadas_no_permite_corregirlas(): void
