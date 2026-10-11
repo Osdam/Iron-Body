@@ -39,9 +39,9 @@ class Payment extends Model
     protected $fillable = [
         'user_id', 'member_id', 'plan_id', 'amount', 'method', 'reference', 'status', 'paid_at',
         // MEJORA DE PLAN: desde qué plan se subió. Marca este cobro como una
-        // mejora —se paga la diferencia y el vencimiento NO se mueve— y no
-        // como una renovación. Ver MembershipPeriod::apply().
+        // mejora: sustituye el periodo vigente en lugar de encadenar otro.
         'upgraded_from_plan_id',
+        'upgrade_snapshot',
         // Turno de la caja del gimnasio al que pertenece este cobro. Lo fija el
         // SERVIDOR (PaymentController lo resuelve y lo borra del payload antes
         // de validar); nunca llega del cliente. Los pagos de pasarela y los
@@ -71,6 +71,7 @@ class Payment extends Model
         'starts_on' => 'date:Y-m-d',
         'period_start' => 'date:Y-m-d',
         'period_end' => 'date:Y-m-d',
+        'upgrade_snapshot' => 'array',
     ];
 
     /**

@@ -12,6 +12,8 @@ use App\Models\AuditLog;
 use App\Models\Payment;
 use App\Services\Caja\CashReceipts;
 use App\Services\Audit\FinancialAudit;
+use App\Services\Audit\AuditTrail;
+use App\Services\RealtimeEvents;
 use App\Support\Access\AdminActor;
 use App\Support\Access\CrmPermission;
 use App\Models\Plan;
@@ -603,11 +605,72 @@ class PaymentController extends Controller
 
         $actor = AdminActor::from($request);
         DB::transaction(function () use ($payment, $data, $splits, $estadoPrevio, $actor, $request) {
+            $cancellingCoverage = isset($data['status']) && $data['status'] !== 'paid'
+                && in_array(strtolower((string) $payment->status), self::PAID_STATUSES, true);
+            if ($payment->upgraded_from_plan_id || $cancellingCoverage) {
+                // Una mejora tiene importe y periodo calculados por el servidor.
+                // Su estado y su cobertura se cambian juntos, con el mismo orden
+                // de bloqueo que al crear la mejora: socio, después pago.
+                User::whereKey($payment->user_id)->lockForUpdate()->firstOrFail();
+                $locked = Payment::whereKey($payment->id)->lockForUpdate()->firstOrFail();
+                $payment->setRawAttributes($locked->getAttributes(), true);
+                if (isset($data['status']) && $data['status'] !== 'paid'
+                    && in_array(strtolower((string) $payment->status), self::PAID_STATUSES, true)
+                    && Payment::where('user_id', $payment->user_id)
+                        ->whereNotNull('upgraded_from_plan_id')
+                        ->where('upgrade_snapshot->source_payment_id', $payment->id)
+                        ->whereRaw('LOWER(status) IN ('.implode(',', array_fill(0, count(self::PAID_STATUSES), '?')).')', self::PAID_STATUSES)
+                        ->exists()) {
+                    throw ValidationException::withMessages([
+                        'status' => ['Primero anula la mejora que depende de este cobro.'],
+                    ]);
+                }
+                foreach (['user_id', 'plan_id', 'amount'] as $field) {
+                    if ($payment->upgraded_from_plan_id && array_key_exists($field, $data) && (float) $data[$field] !== (float) $payment->{$field}) {
+                        throw ValidationException::withMessages([
+                            $field => ['La mejora conserva el socio, el plan y el importe calculados al cobrar.'],
+                        ]);
+                    }
+                }
+                $estadoPrevio = $payment->status;
+            }
             $payment->update($data);
             if ($splits) {
                 $this->syncSplits($payment, $splits);
             }
             app(FinancialAudit::class)->paymentUpdated($payment, $estadoPrevio, $actor, $request);
+            if ($payment->upgraded_from_plan_id && ($payment->wasChanged() || $splits)) {
+                $event = 'membership.plan.upgrade.updated';
+                try {
+                    if ($estadoPrevio === 'paid' && $payment->status !== 'paid') {
+                        $devuelto = app(MembershipPeriod::class)->revert($payment);
+                        if (! $devuelto) {
+                            throw new \RuntimeException('La membresía tiene cambios posteriores. Revisa sus periodos antes de anular esta mejora.');
+                        }
+                        $this->auditMembershipReverted($payment, $devuelto, $request);
+                        $event = 'membership.plan.upgrade.cancelled';
+                    } elseif ($estadoPrevio !== 'paid' && $payment->status === 'paid') {
+                        if (! app(MembershipPeriod::class)->apply($payment)) {
+                            throw new \RuntimeException('El plan de esta mejora ya no está disponible. Revisa el cobro antes de reconfirmarlo.');
+                        }
+                        $event = 'membership.plan.upgrade.restored';
+                    }
+                } catch (\RuntimeException $e) {
+                    throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
+                }
+                app(AuditTrail::class)->record($request, [
+                    'action' => 'update', 'module' => 'Pagos', 'entity' => 'mejora de plan',
+                    'entity_id' => (string) $payment->id,
+                    'summary' => 'Actualizó el cobro de una mejora de plan',
+                    'metadata' => ['event' => $event, 'user_id' => $payment->user_id,
+                        'plan_id' => $payment->plan_id,
+                        'changed' => ['membership', 'payments', 'history', 'features', 'plans']],
+                ]);
+                $memberId = User::find($payment->user_id)?->appMember?->id;
+                RealtimeEvents::payment($memberId);
+                RealtimeEvents::membership($memberId);
+                RealtimeEvents::features($memberId);
+            }
         });
 
         if ($invoiceRequest['requested']) {
@@ -615,7 +678,9 @@ class PaymentController extends Controller
         }
 
         if (! $wasPaid && $payment->status === 'paid') {
-            app(MembershipPeriod::class)->apply($payment);
+            if (! $payment->upgraded_from_plan_id) {
+                app(MembershipPeriod::class)->apply($payment);
+            }
             // Facturación electrónica al confirmar (correcciones / histórico).
             app(InvoicingService::class)->enqueueForPayment(
                 $payment,
@@ -631,7 +696,7 @@ class PaymentController extends Controller
         // Best-effort a propósito: si la devolución no cuadra (ver
         // MembershipPeriod::revert) se registra y el pago queda anulado igual.
         // Que un cobro no se pueda anular por una fecha sería peor.
-        if ($wasPaid && $payment->status !== 'paid') {
+        if ($wasPaid && $payment->status !== 'paid' && ! $payment->upgraded_from_plan_id) {
             try {
                 $devuelto = app(MembershipPeriod::class)->revert($payment);
                 if ($devuelto) {

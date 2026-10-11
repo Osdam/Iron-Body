@@ -175,9 +175,9 @@ Route::middleware('auth.admin')->group(function (): void {
         ->whereNumber('user');
     Route::delete('users/{user}/employee-access', [\App\Http\Controllers\Api\Admin\EmployeeAccessController::class, 'destroy'])
         ->whereNumber('user');
-    // MEJORAR DE PLAN a mitad de periodo: paga la diferencia de precio y el
-    // vencimiento NO se mueve. Sin esto, cobrarle el plan nuevo le encadenaba
-    // su duración al final de lo que ya tenía y le regalaba un mes.
+    // Cambios confirmados de membresías y planes para el CRM abierto.
+    Route::get('admin/memberships/stream', [\App\Http\Controllers\Api\Admin\MembershipRealtimeController::class, 'stream']);
+    // MEJORAR DE PLAN a mitad de periodo: cobro y vigencia los calcula el servidor.
     Route::get('users/{user}/plan-upgrade', [\App\Http\Controllers\Api\Admin\PlanUpgradeController::class, 'preview'])
         ->whereNumber('user');
     Route::post('users/{user}/plan-upgrade', [\App\Http\Controllers\Api\Admin\PlanUpgradeController::class, 'store'])

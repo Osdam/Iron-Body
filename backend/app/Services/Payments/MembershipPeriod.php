@@ -130,6 +130,10 @@ class MembershipPeriod
             return null;
         }
 
+        if ($payment->upgraded_from_plan_id) {
+            return app(PlanUpgrades::class)->apply($payment);
+        }
+
         /** @var User|null $user */
         $user = User::find($payment->user_id);
 
@@ -167,28 +171,6 @@ class MembershipPeriod
         $finActual = $user->membership_end_date
             ? CarbonImmutable::parse($user->membership_end_date, self::TZ)->startOfDay()
             : null;
-
-        // ── MEJORA DE PLAN ──────────────────────────────────────────────
-        //
-        // Se mejora lo que le queda del periodo que YA compró: cambia el plan
-        // y el vencimiento se queda donde estaba. Sin esta salida, el camino
-        // normal le encadenaría la duración del plan nuevo al final de lo que
-        // tiene y le regalaría un mes entero por pagar una diferencia.
-        //
-        // Lo que se cobró es la diferencia de precio; lo decide PlanUpgrades,
-        // que es quien sabe de qué plan venía.
-        if ($payment->upgraded_from_plan_id) {
-            $user->plan = $plan->name;
-            $user->status = 'active';
-            $user->save();
-
-            return [
-                'start' => $payment->period_start?->toDateString() ?? $inicio->toDateString(),
-                'end' => $finActual?->toDateString(),
-                'chained' => false,
-                'upgrade' => true,
-            ];
-        }
 
         // Regla 2: sigue vigente ese día → se encadena.
         $encadena = $finActual !== null && $finActual->greaterThan($inicio);
@@ -248,6 +230,9 @@ class MembershipPeriod
      */
     public function revert(Payment $payment): ?array
     {
+        if ($payment->upgraded_from_plan_id) {
+            return app(PlanUpgrades::class)->revert($payment);
+        }
         if (! $payment->plan_id || ! $payment->period_start || ! $payment->period_end) {
             return null; // nunca activó membresía (o es anterior al periodo congelado)
         }

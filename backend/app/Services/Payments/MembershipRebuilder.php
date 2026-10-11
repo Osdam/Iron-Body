@@ -63,6 +63,16 @@ class MembershipRebuilder
         $aplicados = 0;
 
         foreach ($pagos as $pago) {
+            if ($pago->upgraded_from_plan_id) {
+                // Una mejora reemplaza el periodo de su pago origen; no suma
+                // otra duración encima del mensual que ya se contó.
+                if ($pago->upgrade_snapshot) {
+                    $cursor = $this->day($pago->period_end->toDateString());
+                }
+                $aplicados++;
+
+                continue;
+            }
             $dias = $this->durationOf($pago);
             if ($dias <= 0) {
                 continue;
@@ -177,6 +187,20 @@ class MembershipRebuilder
         }
 
         foreach ($pagos as $pago) {
+            if ($pago->upgraded_from_plan_id) {
+                // Legacy: solo cambió el plan, sin días nuevos. Las nuevas
+                // necesitan el pago origen para reconstruir sin inventar la
+                // membresía concedida fuera de caja.
+                if (! $pago->upgrade_snapshot) {
+                    continue;
+                }
+                $origen = $pagos->firstWhere('id', $pago->upgrade_snapshot['source_payment_id'] ?? null);
+                if (! $origen || ! $pago->period_start || ! $pago->period_end) {
+                    return "la mejora #{$pago->id} no tiene un periodo de pago origen cobrado que permita reconstruirla";
+                }
+
+                continue;
+            }
             if ($this->durationOf($pago) <= 0) {
                 return "el pago #{$pago->id} apunta al plan {$pago->plan_id}, que no existe o no tiene duración";
             }

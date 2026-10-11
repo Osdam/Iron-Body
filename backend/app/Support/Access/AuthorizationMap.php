@@ -433,6 +433,7 @@ final class AuthorizationMap
         // Mejorar de plan es VENDER: lo hace quien cobra en el mostrador.
         'GET api/users/{user}/plan-upgrade' => 'payments.view',
         'POST api/users/{user}/plan-upgrade' => 'payments.create',
+        'GET api/admin/memberships/stream' => ['members.view', 'plans.view', 'payments.view'],
         // Consultar quién es empleado va con ver la ficha; conceder el acceso
         // gratuito, no: eso es regalar lo que el gimnasio vende.
         'GET api/users/{user}/employee-access' => 'members.view',

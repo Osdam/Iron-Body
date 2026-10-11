@@ -292,7 +292,17 @@ class EarningsController extends Controller
                 [CashShiftStatus::OPEN->value])
             ->first();
 
+        // Anular y reconfirmar una mejora en el mismo segundo conserva el
+        // conteo y MAX(updated_at). Su contenido y desglose deben mover la
+        // firma para que Caja y Pagos se actualicen en el siguiente tick.
+        $mejoras = Payment::whereNotNull('upgraded_from_plan_id')
+            ->select(['id', 'user_id', 'plan_id', 'status', 'amount', 'method', 'paid_at', 'cash_shift_id', 'reference'])
+            ->with(['splits' => fn ($query) => $query
+                ->select(['id', 'payment_id', 'method', 'amount', 'reference'])->orderBy('id')])
+            ->orderBy('id')->get()->toJson();
+
         return Payment::count().':'.(string) Payment::max('updated_at').'|'.
+            $mejoras.'|'.
             ProductSale::count().':'.(string) ProductSale::max('updated_at').'|'.
             $abonos->n.':'.(string) $abonos->t.':'.$abonos->aplicado.'|'.
             $deudas->n.':'.(string) $deudas->t.':'.$deudas->total.':'.$deudas->con_plazo

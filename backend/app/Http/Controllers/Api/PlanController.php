@@ -140,14 +140,20 @@ class PlanController extends Controller
     {
         $data = $this->validatedData($request, false);
 
-        $plan = Plan::create($data);
+        $plan = DB::transaction(function () use ($request, $data): Plan {
+            $plan = Plan::create($data);
 
-        app(AuditTrail::class)->record($request, [
-            'action' => 'create', 'module' => 'Planes', 'entity' => 'plan',
-            'entity_id' => $plan->id, 'target_name' => $plan->name,
-            'summary' => "Creó el plan {$plan->name}",
-            'metadata' => ['price' => (string) $plan->price, 'duration_days' => $plan->duration_days],
-        ]);
+            app(AuditTrail::class)->record($request, [
+                'action' => 'create', 'module' => 'Planes', 'entity' => 'plan',
+                'entity_id' => $plan->id, 'target_name' => $plan->name,
+                'summary' => "Creó el plan {$plan->name}",
+                'metadata' => $this->eventMetadata($plan, 'plan.created') + [
+                    'price' => (string) $plan->price, 'duration_days' => $plan->duration_days,
+                ],
+            ]);
+
+            return $plan;
+        });
 
         return response()->json($this->payload($plan), 201);
     }
@@ -163,37 +169,46 @@ class PlanController extends Controller
             );
         }
 
-        $previoPlan = $plan->getOriginal();
-        $plan->update($data);
+        DB::transaction(function () use ($request, $plan, $data): void {
+            $previoPlan = $plan->getOriginal();
+            $plan->update($data);
 
-        app(AuditTrail::class)->record($request, [
-            'action' => 'update', 'module' => 'Planes', 'entity' => 'plan',
-            'entity_id' => $plan->id, 'target_name' => $plan->name,
-            'summary' => "Modificó el plan {$plan->name}",
-            'changes' => app(AuditTrail::class)->changesOf(
-                $plan,
-                $previoPlan,
-                // Un cambio de precio o de vigencia sin el antes y el después
-                // obliga a reconstruirlo a mano. No son datos personales.
-                ['price', 'duration_days', 'active', 'tier', 'access_mode', 'entry_credits', 'visible_in_app'],
-            ),
-            'metadata' => ['price' => (string) $plan->price],
-        ]);
+            app(AuditTrail::class)->record($request, [
+                'action' => 'update', 'module' => 'Planes', 'entity' => 'plan',
+                'entity_id' => $plan->id, 'target_name' => $plan->name,
+                'summary' => "Modificó el plan {$plan->name}",
+                'changes' => app(AuditTrail::class)->changesOf(
+                    $plan,
+                    $previoPlan,
+                    // Un cambio de precio o de vigencia sin el antes y el después
+                    // obliga a reconstruirlo a mano. No son datos personales.
+                    ['price', 'duration_days', 'active', 'tier', 'access_mode', 'entry_credits', 'visible_in_app'],
+                ),
+                'metadata' => $this->eventMetadata($plan, 'plan.updated') + ['price' => (string) $plan->price],
+            ]);
+
+            if (array_key_exists('features', $data)) {
+                $this->notifyPlanMembers($plan);
+            }
+        });
 
         return response()->json($this->payload($plan));
     }
 
     public function destroy(Request $request, Plan $plan)
     {
-        $nombre = $plan->name;
-        $id = $plan->id;
-        $plan->delete();
+        DB::transaction(function () use ($request, $plan): void {
+            $nombre = $plan->name;
+            $id = $plan->id;
+            $plan->delete();
 
-        app(AuditTrail::class)->record($request, [
-            'action' => 'delete', 'module' => 'Planes', 'entity' => 'plan',
-            'entity_id' => $id, 'target_name' => $nombre,
-            'summary' => "Eliminó el plan {$nombre}",
-        ]);
+            app(AuditTrail::class)->record($request, [
+                'action' => 'delete', 'module' => 'Planes', 'entity' => 'plan',
+                'entity_id' => $id, 'target_name' => $nombre,
+                'summary' => "Eliminó el plan {$nombre}",
+                'metadata' => $this->eventMetadata($plan, 'plan.deleted'),
+            ]);
+        });
 
         return response()->json(null, 204);
     }
@@ -225,19 +240,21 @@ class PlanController extends Controller
             $featureRules
         ));
 
-        $plan->features = array_merge($plan->resolvedFeatures(), $data['features']);
-        $plan->save();
+        DB::transaction(function () use ($request, $plan, $data): void {
+            $plan->features = array_merge($plan->resolvedFeatures(), $data['features']);
+            $plan->save();
 
-        // Empuja la señal de cambio por SSE a los miembros activos del plan para
-        // que la app reevalúe el gating de módulos al instante (sin reiniciar).
-        $this->notifyPlanMembers($plan);
+            app(AuditTrail::class)->record($request, [
+                'action' => 'update', 'module' => 'Planes', 'entity' => 'plan',
+                'entity_id' => $plan->id, 'target_name' => $plan->name,
+                'summary' => "Cambió las funciones incluidas en {$plan->name}",
+                'changes' => [['field' => 'features']],
+                'metadata' => $this->eventMetadata($plan, 'plan.updated'),
+            ]);
 
-        app(AuditTrail::class)->record($request, [
-            'action' => 'update', 'module' => 'Planes', 'entity' => 'plan',
-            'entity_id' => $plan->id, 'target_name' => $plan->name,
-            'summary' => "Cambió las funciones incluidas en {$plan->name}",
-            'changes' => [['field' => 'features']],
-        ]);
+            // La señal privada de la app también pertenece a esta mutación.
+            $this->notifyPlanMembers($plan);
+        });
 
         return response()->json([
             'planId' => (string) $plan->id,
@@ -321,32 +338,40 @@ class PlanController extends Controller
             }
         }
 
-        $row = MembershipAiCapability::updateOrCreate(
-            ['membership_plan_id' => $plan->id],
-            array_merge($columns, [
-                'plan_code' => $this->planSlug($plan->name),
-                'is_active' => true,
-            ]),
-        );
+        $row = DB::transaction(function () use ($request, $plan, $columns): MembershipAiCapability {
+            $row = MembershipAiCapability::updateOrCreate(
+                ['membership_plan_id' => $plan->id],
+                array_merge($columns, [
+                    'plan_code' => $this->planSlug($plan->name),
+                    'is_active' => true,
+                ]),
+            );
 
-        app(AuditTrail::class)->record($request, [
-            'action' => 'update', 'module' => 'Planes', 'entity' => 'plan',
-            'entity_id' => $plan->id, 'target_name' => $plan->name,
-            'summary' => "Cambió las capacidades de IRON IA de {$plan->name}",
-            // `updateOrCreate` deja el modelo con su seguimiento hecho, así que
-            // solo salen las capacidades que de verdad cambiaron de valor. Sin
-            // el antes y el después: son banderas, y el nombre ya lo dice todo.
-            'changes' => app(AuditTrail::class)->changesOf($row),
-        ]);
+            app(AuditTrail::class)->record($request, [
+                'action' => 'update', 'module' => 'Planes', 'entity' => 'plan',
+                'entity_id' => $plan->id, 'target_name' => $plan->name,
+                'summary' => "Cambió las capacidades de IRON IA de {$plan->name}",
+                // `updateOrCreate` conserva el seguimiento de Eloquent.
+                'changes' => app(AuditTrail::class)->changesOf($row),
+                'metadata' => $this->eventMetadata($plan, 'plan.updated'),
+            ]);
 
-        // Notifica a los miembros activos del plan (SSE) para refrescar acceso.
-        $this->notifyPlanMembers($plan);
+            $this->notifyPlanMembers($plan);
+
+            return $row;
+        });
 
         return response()->json([
             'planId' => (string) $plan->id,
             'planName' => $plan->name,
             'capabilities' => $this->capabilitiesToApi($row->toCapabilities()),
         ]);
+    }
+
+    /** Señal mínima que el canal del CRM publica desde la auditoría comprometida. */
+    private function eventMetadata(Plan $plan, string $type): array
+    {
+        return ['event' => $type, 'plan_id' => (int) $plan->id, 'changed' => ['plans', 'features']];
     }
 
     /** Convierte capacidades internas (config/fila) al contrato del CRM (ai_*). */

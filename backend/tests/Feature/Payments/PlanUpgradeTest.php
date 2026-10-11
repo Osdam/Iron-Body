@@ -23,11 +23,9 @@ use Tests\TestCase;
  * final de los que ya tenía, regalándole un mes— o se anulaba el cobro
  * anterior y se rehacía, moviendo dinero de un turno que podía estar cerrado.
  *
- * Las dos reglas que se fijan aquí, elegidas por lo mismo —que se puedan
- * explicar de pie en el mostrador—:
- *
- *   · se cobra la DIFERENCIA de precio, completa y sin prorratear;
- *   · el VENCIMIENTO NO SE MUEVE.
+ * Estos casos conservan dos planes de igual duración: se cobra la diferencia
+ * y descontar los días consumidos conserva el fin del periodo. Los cambios de
+ * duración, como Mensual → Trimestre, se prueban en PlanUpgradePeriodTest.
  *
  * Y una tercera: solo hacia arriba. Bajar de plan obligaría a devolver dinero,
  * que es otro producto con su autorización y su efecto en el arqueo.
@@ -104,10 +102,9 @@ class PlanUpgradeTest extends TestCase
             ->assertJsonPath('to.name', 'Total Access');
     }
 
-    public function test_el_vencimiento_no_se_mueve(): void
+    public function test_con_igual_duracion_se_conserva_el_vencimiento(): void
     {
-        // Es la mitad de la explicación: se mejora lo que le queda del periodo
-        // que ya compró, no se le vende uno nuevo.
+        // Los dos planes duran 30 días desde el inicio del periodo original.
         [$mensual, $total] = $this->planes();
         $user = $this->socioConMensual($mensual);
         $venceAntes = $user->membership_end_date;
