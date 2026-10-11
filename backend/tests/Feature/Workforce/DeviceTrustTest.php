@@ -2,12 +2,15 @@
 
 namespace Tests\Feature\Workforce;
 
+use App\Exceptions\WorkforceException;
 use App\Models\AuthorizedDevice;
 use App\Models\ClassEvent;
 use App\Models\DeviceSecurityEvent;
 use App\Support\Workforce\DeviceSignature;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Tests\Feature\Workforce\Concerns\WorkforceKit;
@@ -173,6 +176,28 @@ class DeviceTrustTest extends TestCase
                 }
             }
         }
+    }
+
+    public function test_un_rechazo_previsto_no_ensucia_el_log_de_errores(): void
+    {
+        // En producción cada rechazo del kiosko salía como ERROR con su traza.
+        $errores = [];
+        Event::listen(MessageLogged::class, function (MessageLogged $m) use (&$errores): void {
+            if (in_array($m->level, ['error', 'critical', 'alert', 'emergency'], true)) {
+                $errores[] = $m->message;
+            }
+        });
+
+        $this->postJson('/api/kiosk/employees/identify', ['document' => '1075000001'])
+            ->assertStatus(401)->assertJsonPath('code', 'device_signature_required');
+        $tablet = $this->tablet();
+        $this->signed('POST', '/api/kiosk/employees/identify', ['document' => '9999999999'], $tablet)->assertStatus(404);
+
+        $this->assertSame([], $errores);
+        // El intento sin firma sigue quedando donde se consulta (CRM → Dispositivos).
+        $this->assertGreaterThanOrEqual(1, DeviceSecurityEvent::query()->count());
+        // Y un 5xx del dominio, si algún día existe, sí se registra.
+        $this->assertFalse((new WorkforceException('x', 'y', 503))->report());
     }
 
     public function test_un_dispositivo_revocado_desde_el_crm_deja_de_operar(): void

@@ -27,6 +27,20 @@ class WorkforceException extends RuntimeException
         parent::__construct($message);
     }
 
+    /**
+     * Un rechazo del dominio es una respuesta prevista (rostro que no coincide,
+     * equipo sin firma, jornada ya abierta), no un fallo del servidor: no va al
+     * log de errores, donde taparía los de verdad. Lo que importa para
+     * seguridad ya queda en sus tablas (`device_security_events`,
+     * `trainer_audit_logs`, historial de la jornada). Un 5xx sí se registra.
+     *
+     * Laravel no registra la excepción si esto devuelve algo distinto de false.
+     */
+    public function report(): bool
+    {
+        return $this->status < 500;
+    }
+
     public function render(): JsonResponse
     {
         return response()->json(array_merge([
