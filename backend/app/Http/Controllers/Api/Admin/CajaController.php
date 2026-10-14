@@ -24,6 +24,7 @@ use App\Services\Caja\CashReceipts;
 use App\Services\Caja\ReceivableService;
 use App\Services\Inventory\InventoryService;
 use App\Services\Audit\FinancialAudit;
+use App\Services\Payments\PaymentSplits;
 use App\Support\Access\AdminActor;
 use App\Support\Caja\PaymentTerm;
 use Illuminate\Http\JsonResponse;
@@ -206,7 +207,7 @@ class CajaController extends Controller
             // cobrada. Nunca se activa por defecto.
             'request_invoice' => ['nullable', 'boolean'],
             'invoice_email' => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail],
-        ]);
+        ] + PaymentSplits::rules());
 
         $this->assertInvoiceRequestIsComplete($data);
 
@@ -244,6 +245,15 @@ class CajaController extends Controller
         try {
             $sale = DB::transaction(function () use ($data, $request, $shift, $deudor) {
                 $venta = $this->buildSale($data, $request, $shift, $deudor);
+
+                // EL DESGLOSE SE COMPRUEBA DENTRO DE LA TRANSACCIÓN, contra el
+                // total que acaba de calcular el servidor. Si no cuadra, la
+                // venta entera se deshace: validarlo después dejaría una venta
+                // creada que nadie pagó, y el cajero la encontraría pendiente
+                // sin saber por qué.
+                if ($partes = ($data['splits'] ?? null)) {
+                    app(PaymentSplits::class)->assertMatchesTotal($partes, (float) $venta->total);
+                }
 
                 // La traza se escribe AQUÍ, no en una segunda petición del
                 // navegador: si la venta se deshace, la auditoría se deshace
@@ -295,13 +305,30 @@ class CajaController extends Controller
         // movimiento de inventario (origen: venta de cafetería).
         if ($data['paid'] ?? true) {
             $sale->load('items');
+
+            // COBRO MIXTO: «10.000 en efectivo y el resto con tarjeta». Antes
+            // había que elegir UNO y el otro se perdía: el cajón cuadraba en
+            // total pero no por medio, y el arqueo daba por faltante un
+            // efectivo que sí estaba. La suma se comprueba contra el total de
+            // la venta —no contra lo que diga el formulario— porque es lo que
+            // va a tener que cuadrar en el cierre.
+            $partes = $data['splits'] ?? null;
+
             try {
-                $sale->markPaid($data['payment_method'], null, AdminActor::from($request));
+                $sale->markPaid(
+                    $partes ? PaymentSplits::MIXED : $data['payment_method'],
+                    null,
+                    AdminActor::from($request),
+                );
             } catch (InsufficientStockException $e) {
                 // La venta queda `pending`, sin stock movido: el cajero puede
                 // corregirla o cancelarla, y nada se cobró a medias.
                 return $this->insufficientStockResponse($e, $sale);
             }
+            if ($partes) {
+                app(PaymentSplits::class)->sync($sale, $partes);
+            }
+
             $this->enqueueInvoice($sale);
         }
 

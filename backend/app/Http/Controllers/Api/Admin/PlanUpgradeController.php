@@ -9,6 +9,7 @@ use App\Models\Plan;
 use App\Models\User;
 use App\Services\Audit\AuditTrail;
 use App\Services\Caja\CashShiftService;
+use App\Services\Payments\PaymentSplits;
 use App\Services\Payments\PlanUpgrades;
 use App\Support\Access\AdminActor;
 use App\Support\Caja\PaymentMethodKind;
@@ -54,7 +55,7 @@ class PlanUpgradeController extends Controller
         $data = $request->validate([
             'plan_id' => ['required', 'integer', 'exists:plans,id'],
             'method' => ['required', 'string', 'max:30'],
-        ]);
+        ] + PaymentSplits::rules());
 
         $nuevo = Plan::findOrFail($data['plan_id']);
         try {
@@ -64,13 +65,30 @@ class PlanUpgradeController extends Controller
                 // el plan del socio.
                 $turno = app(CashShiftService::class)->requireOpen(CashShiftType::GYM);
 
+                // COBRO MIXTO: la diferencia también se puede repartir entre
+                // varios medios. La suma se comprueba contra lo que CALCULA el
+                // servidor, no contra un total enviado: si se midiera contra lo
+                // que diga el formulario, un desglose cuadrado podría acabar
+                // cobrando otra cosa.
+                $partes = $data['splits'] ?? null;
+                if ($partes) {
+                    app(PaymentSplits::class)->assertMatchesTotal(
+                        $partes,
+                        (float) $upgrades->preview($user, $nuevo)['amount'],
+                    );
+                }
+
                 $resultado = $upgrades->upgrade(
                     $user,
                     $nuevo,
-                    PaymentMethodKind::normalize($data['method'])->value,
+                    $partes ? PaymentSplits::MIXED : PaymentMethodKind::normalize($data['method'])->value,
                     AdminActor::from($request),
                     $turno->id,
                 );
+
+                if ($partes) {
+                    app(PaymentSplits::class)->sync($resultado['payment'], $partes);
+                }
 
                 app(AuditTrail::class)->record($request, [
                     'action' => 'create',

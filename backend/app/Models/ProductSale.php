@@ -37,7 +37,13 @@ class ProductSale extends Model
 
     public const STATUSES = ['pending', 'paid', 'delivered', 'cancelled', self::STATUS_CREDIT];
 
-    public const PAYMENT_METHODS = ['cash', 'card', 'online', 'nequi', 'transfer'];
+    /**
+     * `mixed` no es un medio de pago: nadie paga «con mixto». Es la marca de
+     * que la venta se repartió, y el detalle vive en `product_sale_splits`.
+     * Está en la lista para que el formulario pueda elegirlo; quien agrupe por
+     * medio tiene que mirar las partes. Ver CashShiftTotalsService.
+     */
+    public const PAYMENT_METHODS = ['cash', 'card', 'online', 'nequi', 'transfer', 'mixed'];
 
     protected $fillable = [
         'uuid',
@@ -132,6 +138,12 @@ class ProductSale extends Model
             $s->uuid ??= (string) Str::uuid();
             $s->code ??= self::nextCode();
         });
+    }
+
+    /** Las partes, si la venta se cobró entre varios medios. */
+    public function splits(): HasMany
+    {
+        return $this->hasMany(ProductSaleSplit::class);
     }
 
     public function items(): HasMany

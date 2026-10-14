@@ -4,6 +4,7 @@ namespace App\Services\Caja;
 
 use App\Enums\CashShiftType;
 use App\Models\CashShift;
+use App\Services\Payments\PaymentSplits;
 use App\Support\Caja\PaymentMethodKind;
 use Illuminate\Support\Facades\DB;
 
@@ -78,14 +79,31 @@ class CashShiftTotalsService
      */
     private function productSalesByMethod(CashShift $shift): array
     {
+        // Las MIXTAS se dejan fuera de la suma por medio y entran por sus
+        // partes: «mixed» no es un medio de pago, y meter ahí la venta entera
+        // haría que el arqueo diera por faltantes los billetes que sí están en
+        // el cajón. Es lo mismo que ya se hacía con los cobros del gimnasio.
         $filas = DB::table('product_sales')
             ->where('cash_shift_id', $shift->id)
             ->whereIn('status', ['paid', 'delivered'])
+            ->whereRaw('(payment_method IS NULL OR LOWER(payment_method) <> ?)', [PaymentSplits::MIXED])
             ->groupBy('payment_method')
             ->select('payment_method', DB::raw('SUM(total) AS suma'), DB::raw('COUNT(*) AS n'))
             ->get();
 
-        return $this->fold($filas, 'payment_method');
+        $porMedio = $this->fold($filas, 'payment_method');
+        $porMedio = $this->mergeTotals($porMedio, $this->productSaleSplitsByMethod($shift));
+
+        // EL NÚMERO DE OPERACIONES se cuenta aparte, sobre las ventas, porque
+        // las mixtas se excluyeron arriba y entraron por sus partes: contarlas
+        // ahí diría que hubo dos ventas donde hubo una. Es el mismo remedio
+        // que ya usaba la caja del gimnasio.
+        $porMedio['count'] = (int) DB::table('product_sales')
+            ->where('cash_shift_id', $shift->id)
+            ->whereIn('status', ['paid', 'delivered'])
+            ->count();
+
+        return $porMedio;
     }
 
     /**
@@ -171,6 +189,38 @@ class CashShiftTotalsService
      *
      * @return array{totals: array<string,string>, count: int}
      */
+    /**
+     * Las partes de las ventas MIXTAS de este turno, por medio.
+     *
+     * Espejo de lo que ya se hacía con los cobros: agrupar por
+     * `product_sales.payment_method` a secas metería la venta entera en
+     * «mixed», que no es un medio de pago, y el arqueo diría que faltan en el
+     * cajón los billetes que sí están.
+     *
+     * @return array<string, float>
+     */
+    private function productSaleSplitsByMethod(CashShift $shift): array
+    {
+        $filas = DB::table('product_sale_splits')
+            ->join('product_sales', 'product_sales.id', '=', 'product_sale_splits.product_sale_id')
+            ->where('product_sales.cash_shift_id', $shift->id)
+            // LOS MISMOS ESTADOS que la consulta de arriba. Si aquí entrara un
+            // estado distinto, una venta mixta contaría de más o de menos y el
+            // descuadre sería de los que no se encuentran mirando el cajón.
+            ->whereIn('product_sales.status', ['paid', 'delivered'])
+            ->groupBy('product_sale_splits.method')
+            ->select(
+                'product_sale_splits.method',
+                DB::raw('SUM(product_sale_splits.amount) AS suma'),
+                // La venta mixta es UNA operación, no una por parte: se cuenta
+                // aparte y aquí no, igual que con los cobros repartidos.
+                DB::raw('0 AS n'),
+            )
+            ->get();
+
+        return $this->fold($filas, 'method');
+    }
+
     private function receivablePaymentsByMethod(CashShift $shift): array
     {
         $filas = DB::table('receivable_payments')
