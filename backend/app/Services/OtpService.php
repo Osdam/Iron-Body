@@ -33,6 +33,24 @@ class OtpService
     }
 
     /**
+     * ¿El código de este propósito tiene que ir LIGADO A SU RETO?
+     *
+     * Twilio Verify comprueba TELÉFONO + código, no el reto: un código pedido
+     * para vincular la ficha de socio con el personal —que el socio dicta en el
+     * mostrador a quien lo atiende— serviría también para un reto de login
+     * abierto aparte para ese número (H1, revisión 2026-10-15). Así que ese
+     * propósito nunca pasa por Verify, ni como reserva: el código es nuestro, se
+     * guarda como hash en el reto, sale por SMS normal
+     * ({@see SmsSenderFactory::forChallengeBoundCode()}) y se comprueba aquí
+     * contra ESE reto, de ESE socio y de ESE propósito. Ningún otro propósito
+     * cambia: el login y las acciones sensibles siguen por Verify si está activo.
+     */
+    private function codigoLigadoAlReto(string $purpose): bool
+    {
+        return $purpose === MemberAuthChallenge::PURPOSE_IDENTITY_LINK;
+    }
+
+    /**
      * Crea un reto y envía el código. Devuelve el reto, el código en claro (sólo
      * para exponerlo en dev) y si el envío fue aceptado por el proveedor.
      *
@@ -61,6 +79,12 @@ class OtpService
         $policy = $this->policy();
 
         $policy->event('otp.requested', $this->trazas($member, $purpose, $phone, $ip));
+
+        // Sin SMS normal no hay código ligado al reto, y Verify no es una
+        // alternativa: se niega antes de crear el reto o de gastar cupo.
+        if ($this->codigoLigadoAlReto($purpose)) {
+            $this->assertCanalLigadoDisponible($member, $purpose, $phone, $ip);
+        }
 
         // Primer intento de reuso ANTES de pedir el candado: el caso normal no
         // paga ni siquiera la espera.
@@ -335,12 +359,18 @@ class OtpService
             throw new OtpException('Verificación bloqueada por demasiados intentos. Solicita un código nuevo.', 423);
         }
 
-        if ($challenge->isExpired()) {
+        $ligado = $this->codigoLigadoAlReto($challenge->purpose);
+
+        // Un código ligado vive y muere con SU reto: si un reto más nuevo del
+        // mismo propósito lo sustituyó (emitir() lo marca vencido), no vale
+        // aunque su hora no haya pasado.
+        if ($challenge->isExpired()
+            || ($ligado && $challenge->status !== MemberAuthChallenge::STATUS_PENDING)) {
             $challenge->update(['status' => MemberAuthChallenge::STATUS_EXPIRED]);
             throw new OtpException('El código expiró. Solicita uno nuevo.', 410);
         }
 
-        $accepted = $this->usesTwilioVerify()
+        $accepted = (! $ligado && $this->usesTwilioVerify())
             ? app(TwilioVerifyService::class)->check($challenge->destination, $code)
             : Hash::check($code, $challenge->code_hash);
 
@@ -401,7 +431,10 @@ class OtpService
         $policy = $this->policy();
         $policy->forgetLive(OtpPolicy::SCOPE_MEMBER, $challenge->member_id, $challenge->purpose);
         // Twilio sólo cobra las verificaciones que se completan: ésta es una.
-        $policy->registerVerification();
+        // Un código ligado no pasó por Verify: ahí solo se pagó el SMS.
+        if (! $ligado) {
+            $policy->registerVerification();
+        }
         $policy->event('otp.verified', [
             'scope' => OtpPolicy::SCOPE_MEMBER,
             'subject_id' => $challenge->member_id,
@@ -661,11 +694,29 @@ class OtpService
             return false;
         }
 
+        $ligado = $this->codigoLigadoAlReto($purpose);
+        $canal = $ligado ? SmsSenderFactory::forChallengeBoundCode() : null;
+
+        // Segunda barrera para el código ligado (la primera está en
+        // startChallenge; el reenvío llega aquí directo): sin SMS normal no se
+        // envía nada y no se cuenta como llamada. Nunca se cae a Verify.
+        if ($canal !== null && ! $canal->isConfigured()) {
+            $policy->event('otp.provider_failed', [
+                'scope' => $scope, 'subject_id' => $subjectId, 'purpose' => $purpose,
+                'challenge' => $challengeUuid, 'provider' => 'sms_'.$canal->name(),
+                'decision' => 'bound_channel_not_configured',
+            ]);
+
+            return false;
+        }
+
         $policy->registerProviderCall($scope, $subjectId, $phone, $ip);
 
-        $sent = $this->usesTwilioVerify()
-            ? app(TwilioVerifyService::class)->start($phone, $policy->phoneHash($phone))
-            : $this->dispatch($phone, $code);
+        $sent = match (true) {
+            $canal !== null => $canal->send($phone, $this->mensajeLigado($code)),
+            $this->usesTwilioVerify() => app(TwilioVerifyService::class)->start($phone, $policy->phoneHash($phone)),
+            default => $this->dispatch($phone, $code),
+        };
 
         $policy->event($sent ? 'otp.provider_called' : 'otp.provider_failed', [
             'scope' => $scope,
@@ -675,7 +726,7 @@ class OtpService
             'ip_hash' => $policy->ipHash($ip),
             'challenge' => $challengeUuid,
             'decision' => $sent ? 'sent' : 'provider_rejected',
-        ]);
+        ] + ($canal !== null ? ['provider' => 'sms_'.$canal->name()] : []));
 
         if ($sent) {
             // La marca de "verificación viva" SÓLO se pone si el proveedor
@@ -707,6 +758,46 @@ class OtpService
         $message = "{$brand}: tu código de verificación es {$code}. Vence en {$mins} min. No lo compartas con nadie.";
 
         return SmsSenderFactory::make()->send($phone, $message);
+    }
+
+    /**
+     * El SMS del vínculo dice para qué es y a quién se da. NO lleva «no lo
+     * compartas con nadie»: este código, precisamente, se le dicta a quien
+     * atiende; lo que no se hace es darlo fuera del mostrador (por teléfono, por
+     * chat) a alguien que diga ser del gimnasio.
+     */
+    private function mensajeLigado(string $code): string
+    {
+        $brand = config('otp.brand', 'Iron Body');
+        $mins = (int) ceil($this->ttl() / 60);
+
+        return "{$brand}: código {$code} para vincular tu ficha de socio con tu perfil de personal. "
+            ."Dalo solo en persona en el mostrador del gimnasio. Vence en {$mins} min.";
+    }
+
+    /**
+     * 503 controlado si el SMS normal no está configurado. La ficha laboral se
+     * queda en «coincide por documento, sin verificar», que no vincula nada.
+     *
+     * @throws OtpException
+     */
+    private function assertCanalLigadoDisponible(Member $member, string $purpose, ?string $phone, ?string $ip): void
+    {
+        $canal = SmsSenderFactory::forChallengeBoundCode();
+        if ($canal->isConfigured()) {
+            return;
+        }
+
+        $this->policy()->event('otp.unavailable', $this->trazas($member, $purpose, $phone, $ip) + [
+            'provider' => 'sms_'.$canal->name(),
+            'decision' => 'bound_channel_not_configured',
+        ]);
+
+        throw new OtpException(
+            'El envío de este código por SMS no está disponible.',
+            503,
+            ['code' => 'bound_channel_unavailable'],
+        );
     }
 
     private function flagSuspicious(Member $member, array $context): void

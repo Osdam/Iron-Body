@@ -17,6 +17,7 @@ use App\Observers\Commissions\CommissionAccessObserver;
 use App\Observers\Marketing\AttributionOfferObserver;
 use App\Observers\Marketing\ConversationPreviewObserver;
 use App\Observers\Marketing\MarketingPaymentOutcomeObserver;
+use App\Observers\MemberPhoneObserver;
 use App\Observers\WorkforceProfileObserver;
 use App\Services\Admin\AdminSessionService;
 use App\Services\Billing\Factus\FactusClient;
@@ -132,6 +133,11 @@ class AppServiceProvider extends ServiceProvider
         // la desactivación del camino que venga.
         Trainer::observe(WorkforceProfileObserver::class);
         StaffProfile::observe(WorkforceProfileObserver::class);
+
+        // Cada cambio real del teléfono de una ficha de socio deja rastro, venga
+        // del camino que venga: la cuarentena del vínculo con el personal lo
+        // necesita para no verificar con un número recién puesto (M2).
+        Member::observe(MemberPhoneObserver::class);
 
         $this->limitadoresInternos();
         $this->limitadorDeClases();

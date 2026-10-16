@@ -27,10 +27,13 @@ return [
     /*
     | Vínculo verificado de la ficha laboral con la ficha de socio (código SMS
     | al teléfono del socio, docs/asistencia-laboral/CONTRATO.md §7.2).
-    | APAGADO por defecto y en producción hasta cumplir sus precondiciones
-    | (DISENO.md §10b): en producción el OTP de socios va por Twilio Verify,
-    | que valida teléfono + código y no el reto, así que el código del vínculo
-    | serviría también para un reto de login abierto para ese número (H1).
+    | APAGADO por defecto. Sus dos precondiciones (H1, DISENO.md §10b) ya están
+    | en el código: el código del vínculo NO va por Twilio Verify —que valida
+    | teléfono + código y no el reto— sino ligado a su reto por SMS normal
+    | (con OTP_DRIVER=twilio exige TWILIO_FROM; sin él, 503 y sin vínculo), y
+    | todo cambio de `members.phone` deja rastro para la cuarentena. Encenderlo
+    | es decisión del propietario, tras comprobar en producción que el SMS
+    | normal llega al teléfono del socio presente.
     */
     'member_link_enabled' => (bool) env('WORKFORCE_MEMBER_LINK_ENABLED', false),
 

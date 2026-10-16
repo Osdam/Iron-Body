@@ -166,6 +166,12 @@ return [
     | Con Verify activo este camino no se alcanza nunca. Se deja explícitamente
     | fail-closed para que rellenar TWILIO_FROM en el futuro NO reviva por
     | accidente un segundo camino facturable. Un solo emisor: Twilio Verify.
+    |
+    | Excepción deliberada, que NO pasa por esta bandera: el código que vincula
+    | la ficha de socio con el personal (WORKFORCE_MEMBER_LINK_ENABLED) no puede
+    | ir por Verify —valida teléfono + código, no el reto— y sale por la API de
+    | Messages con TWILIO_FROM. Sin TWILIO_FROM ese inicio responde 503 y no
+    | envía nada; el login y el acceso profesional no cambian.
     */
     'legacy_sms_sender_enabled' => filter_var(env('OTP_ALLOW_LEGACY_SMS_SENDER', false), FILTER_VALIDATE_BOOLEAN),
 

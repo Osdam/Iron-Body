@@ -219,9 +219,55 @@ Sin migraciones, sin permisos nuevos y sin tocar el kiosko ni la APK. Contrato: 
   servicio de Verify separado); (b) cerrar el hueco M2: si `users.phone` ya tenía el número
   nuevo, el PATCH de usuarios cambia `members.phone` sin que `phone` aparezca en la traza y la
   cuarentena no lo ve; hay que registrar el cambio de `members.phone` antes de encender.
+  Las dos quedaron cumplidas el 2026-10-16 (siguiente punto). La bandera sigue en `false`.
   Pendiente aparte: `members/login/resend` también busca el reto solo por uuid (reenvía el
   código de un reto de otra acción y reinicia sus intentos, con el tope de 3 reenvíos); no se
-  filtró porque la app podría usar esa ruta para retos de acciones.
+  filtró porque la app podría usar esa ruta para retos de acciones. Desde el 2026-10-16, si
+  reenvía un reto del vínculo lo hace por el mismo canal ligado (nunca por Verify).
+- **Precondiciones cumplidas (2026-10-16, rama `feat/member-link-secure-channel`, sin
+  migraciones).**
+  (a) *Código ligado al reto.* `OtpService` trata `identity_link` como propósito de código
+  propio: se genera aquí, se guarda su hash en el reto, sale por SMS normal
+  (`SmsSenderFactory::forChallengeBoundCode()`: con `OTP_DRIVER=twilio`, la API de Messages
+  desde `TWILIO_FROM`, destino normalizado a E.164) y se comprueba con `Hash::check` contra el
+  reto buscado por uuid + socio + propósito. Nunca toca Verify, ni como reserva: sin SMS normal
+  configurado el inicio responde 503 `otp_unavailable` antes de crear el reto o gastar cupo, y el
+  reenvío no envía nada ni cuenta gasto. Ese emisor NO exige `OTP_ALLOW_LEGACY_SMS_SENDER`: lo
+  habilita encender el vínculo, y solo para este código; el login y el acceso profesional siguen
+  necesitando la bandera heredada (con Verify activo no la usan). Un reto sustituido por otro
+  más nuevo del mismo propósito ya no vale aunque su hora no haya pasado (410). El SMS dice para
+  qué es y que se da solo en persona en el mostrador del gimnasio (no «no lo compartas»).
+  (b) *Hueco M2.* `MemberPhoneTrail` es el punto único: cada cambio real de `members.phone` (otro
+  número de destino; mismo número en otro formato no cuenta) escribe `phone_field_changed` en
+  `member_security_events`, sin el número ni una huella suya, con `via` = método + plantilla de
+  la ruta o `console`. Lo llama `MemberPhoneObserver` en `updating` —el rastro se escribe ANTES
+  del cambio y, si no se puede escribir, el teléfono no cambia— y, a mano, `UserController::update`,
+  único camino que escribe la columna con el constructor de consultas (sin eventos). El alta de
+  una ficha no cuenta. `phoneRecentlyChanged` lo lee junto a la traza del PATCH y `phone_changed`
+  (que siguen cubriendo los cambios anteriores al despliegue; la traza del PATCH también marca un
+  cambio solo de formato de `users.phone`: falso positivo del lado seguro).
+  Pruebas: `MemberLinkBoundChannelTest` (Verify activo, Twilio fingido con estado en la frontera
+  HTTP) y `MemberPhoneTrailTest` (cada camino por su puerta real).
+- **Cómo encenderlo (decisión del propietario; nada de esto se ha ejecutado).**
+  1. Desplegar este backend (sin migraciones). Con la bandera apagada no cambia nada visible.
+  2. En el `.env` de producción, `TWILIO_FROM` = número o remitente de Twilio habilitado para SMS
+     a Colombia. NO tocar `OTP_ALLOW_LEGACY_SMS_SENDER` (sigue en `false`) ni Verify. Después,
+     `config:cache` como `www-data`. Comprobación sin secretos:
+     `php artisan tinker --execute="var_dump(App\Services\Sms\SmsSenderFactory::forChallengeBoundCode()->isConfigured());"` → `true`.
+  3. Comprobar en producción, ANTES de dejarlo encendido, con una persona del personal que sea
+     socia y esté en el mostrador con su teléfono: encender (`WORKFORCE_MEMBER_LINK_ENABLED=true`
+     + `config:cache`), pedir el código desde su ficha laboral y verificar que (i) el SMS llega a
+     SU teléfono, desde el remitente esperado y con el texto del vínculo; (ii) en la consola de
+     Twilio el mensaje figura en Messaging (no en Verify) como entregado; (iii) el log trae
+     `otp.event` `otp.provider_called` con `purpose=identity_link`, `provider=sms_twilio` y
+     `decision=sent` (no `provider=twilio_verify`); (iv) el código vincula; (v) ese mismo código
+     NO abre la app del socio. Si el SMS no llega (permisos geográficos de Messaging, remitente no
+     admitido en Colombia), volver a apagar la bandera y revisar el remitente en Twilio.
+  4. Reversión: `WORKFORCE_MEMBER_LINK_ENABLED=false` + `config:cache`. Los vínculos ya hechos
+     quedan (son verificados); `TWILIO_FROM` puede quedarse: sin la bandera nadie lo usa.
+  Coste: el texto lleva «ó», así que va en UCS-2 y ocupa 3 segmentos (Messaging cobra por
+  segmento); el techo de gasto lo estima como 1 SMS. Con una verificación por persona del
+  personal el importe es despreciable.
 - **Decisiones del 2026-10-15:** quien tiene perfil de entrenador queda fuera de esta fase (409
   `member_link_trainer_unsupported`: comisiones y perfil fiscal ya leen su identidad). Sin OTP
   posible (sin teléfono, techo de gasto, entrenador) la ficha se queda en «coincide por documento,
