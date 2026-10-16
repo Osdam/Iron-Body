@@ -107,8 +107,12 @@ class CrmMembersAndPlansPerformanceTest extends TestCase
             'status'          => Member::STATUS_INCOMPLETE,
         ]);
 
+        // La gemela de la app ya no existe: exponía los datos de cada alta a
+        // medias a quien sacara el token de la APK (ver
+        // MemberRegistrationOwnershipTest). La URL solo coincide con
+        // DELETE members/{member}, de ahí el 405.
         $this->getJson('/api/members/incomplete', $this->adminHeaders())
-            ->assertStatus(401);
+            ->assertStatus(405);
 
         $this->getJson('/api/admin/members/incomplete', $this->adminHeaders())
             ->assertOk()

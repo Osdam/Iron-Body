@@ -365,10 +365,16 @@ Route::post('members/login/trusted-unlock', [AuthController::class, 'trustedUnlo
     ->middleware('throttle:10,1');
 
 // ── Registro / alta administrativa de miembros — gated por token de registro ──
-// Estos SÍ requieren el secreto `member.registration.token` (crear/editar la
-// identidad de un miembro no es una operación pública de la app de login).
+// Estos SÍ requieren el secreto `member.registration.token`. OJO: ese secreto va
+// compilado dentro de la APK pública y se extrae, así que este grupo es, a
+// efectos de seguridad, PÚBLICO. Quién puede tocar qué ficha lo decide
+// MemberRegistrationController: nunca una ficha activa, suspendida o eliminada,
+// y por {member} solo un alta en curso que acaba de pasar por register.
+//
+// `members/incomplete` ya NO está aquí: es el listado del CRM (nombre, correo,
+// documento y teléfono de cada alta a medias) y vive en la ruta espejo con
+// auth.admin de más abajo. La app nunca lo llamó.
 Route::middleware('member.registration.token')->group(function () {
-    Route::get('members/incomplete', [MemberRegistrationController::class, 'incomplete']);
     Route::post('members/register', [MemberRegistrationController::class, 'register']);
     Route::post('members/{member}/identity', [MemberRegistrationController::class, 'identity']);
     Route::post('members/{member}/legal-consent', [MemberRegistrationController::class, 'legalConsent']);
@@ -376,7 +382,9 @@ Route::middleware('member.registration.token')->group(function () {
     Route::post('members/{member}/biometric', [MemberRegistrationController::class, 'biometric']);
     // Biometría OPCIONAL: el usuario puede omitirla al crear cuenta (Apple).
     Route::post('members/{member}/biometric-skip', [MemberRegistrationController::class, 'skipBiometric']);
-    Route::delete('members/{member}', [MemberRegistrationController::class, 'destroy']);
+    // Solo descarta un alta en curso y sin historia; el borrado de verdad es
+    // del CRM (admin/members/{member}).
+    Route::delete('members/{member}', [MemberRegistrationController::class, 'discardRegistration']);
 });
 
 // ── Registros incompletos — CRM (sesión admin) ────────────────────────────────
