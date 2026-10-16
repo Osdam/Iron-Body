@@ -20,6 +20,13 @@ class CrmTrainerBladeTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // El CRM antiguo está apagado por defecto (EnsureLegacyWebCrmEnabled).
+        config(['app.legacy_web_crm' => true]);
+    }
+
     public function test_crm_create_links_identity_roles_and_maps_portal_fields(): void
     {
         $this->post(route('crm.trainers.store'), [
