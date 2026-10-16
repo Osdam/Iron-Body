@@ -9,6 +9,7 @@ use App\Models\MemberContract;
 use App\Models\MemberLegalConsent;
 use App\Services\Contracts\ContractTemplateService;
 use App\Services\Contracts\MemberContractService;
+use App\Support\Access\AdminActor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -160,8 +161,12 @@ class ContractAdminController extends Controller
     }
 
     /** GET /api/admin/contracts/{contract} */
-    public function show(string $contract): JsonResponse
+    public function show(Request $request, string $contract): JsonResponse
     {
+        if ($rechazo = $this->requirePerson($request)) {
+            return $rechazo;
+        }
+
         $model = $this->resolve($contract);
         $model->load('member:id,full_name,document_number,is_minor');
 
@@ -196,6 +201,10 @@ class ContractAdminController extends Controller
     /** GET /api/admin/contracts/{contract}/download */
     public function download(Request $request, string $contract): StreamedResponse|JsonResponse
     {
+        if ($rechazo = $this->requirePerson($request)) {
+            return $rechazo;
+        }
+
         $model = $this->resolve($contract);
 
         if (! $model->signed_pdf_path || ! Storage::disk($this->templates->disk())->exists($model->signed_pdf_path)) {
@@ -223,6 +232,26 @@ class ContractAdminController extends Controller
         $voided = $this->contracts->void($model, $data['reason'], $data['admin_id'] ?? null, $request);
 
         return response()->json(['data' => $this->contracts->present($voided)]);
+    }
+
+    /**
+     * El contrato firmado —y su detalle, con los datos médicos y del acudiente
+     * que se declararon al firmar— lo consulta una PERSONA, nunca el token
+     * compartido de automatizaciones (que obtiene toda lectura). Ningún
+     * workflow de n8n usa estas rutas; el CRM entra con la sesión de una
+     * persona. Los listados (solo metadatos) no cambian.
+     */
+    private function requirePerson(Request $request): ?JsonResponse
+    {
+        if (AdminActor::from($request) === null) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'person_required',
+                'message' => 'Los contratos solo los consulta una persona. Entra con tu cuenta.',
+            ], 403);
+        }
+
+        return null;
     }
 
     private function resolve(string $key): MemberContract

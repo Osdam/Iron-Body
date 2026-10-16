@@ -12,10 +12,13 @@ class MemberRegistrationTest extends TestCase
 
     public function test_register_reuses_pending_member_with_same_normalized_document(): void
     {
+        // Con su teléfono guardado: reanudar exige el mismo número (sin
+        // número guardado no se reanuda; ver MemberRegistrationTakeoverTest).
         $member = Member::create([
             'full_name' => 'Oscar Mancipe',
             'email' => 'old@example.com',
             'document_number' => '1004301550',
+            'phone' => '3215542105',
             'status' => Member::STATUS_PENDING_REGISTRATION,
         ]);
 
@@ -61,7 +64,8 @@ class MemberRegistrationTest extends TestCase
         $response
             ->assertStatus(409)
             ->assertJsonPath('status', 'duplicate_document')
-            ->assertJsonPath('member_id', $member->id)
+            // Sin ids: el 409 no dice a quién pertenece el documento.
+            ->assertJsonMissingPath('member_id')
             ->assertJsonPath('message', 'Ya existe una cuenta registrada con este documento o correo.');
     }
 

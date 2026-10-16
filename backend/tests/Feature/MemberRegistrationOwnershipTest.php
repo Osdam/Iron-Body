@@ -80,15 +80,13 @@ class MemberRegistrationOwnershipTest extends TestCase
             'phone' => self::TEL_ATACANTE,
         ])
             ->assertStatus(409)
-            // Contrato que la app ya maneja: se conserva EXACTO.
+            // Contrato que la app maneja (solo lee `message`). Ya sin
+            // member_id, member_uuid, user_id ni registration_status: con el
+            // token público eran un oráculo cédula → socio.
             ->assertExactJson([
                 'ok' => false,
                 'message' => 'Ya existe una cuenta registrada con este documento o correo.',
                 'status' => 'duplicate_document',
-                'member_id' => $yuri->id,
-                'member_uuid' => $yuri->member_uuid,
-                'user_id' => $yuri->user_id,
-                'registration_status' => Member::STATUS_ACTIVE,
             ]);
 
         $this->assertSame($antes, $this->snapshot(), 'Un 409 no puede dejar NADA escrito.');
@@ -187,27 +185,32 @@ class MemberRegistrationOwnershipTest extends TestCase
 
         $this->register(['document_number' => self::DOC_VICTIMA, 'phone' => self::TEL_ATACANTE, 'full_name' => 'Atacante'])
             ->assertStatus(409)
-            ->assertJsonPath('member_id', $yuri->id);
+            ->assertJsonMissingPath('member_id');
 
         $this->assertSame($antes, $this->snapshot());
     }
 
     public function test_un_cliente_del_crm_sin_ficha_se_sigue_enlazando_por_documento(): void
     {
-        // Camino legítimo de siempre: cliente del mostrador que se da de alta
-        // en la app con su documento.
+        // Camino legítimo de siempre: cliente del mostrador (creado hace
+        // tiempo) que se da de alta en la app con su documento y SU teléfono.
+        // Con otro teléfono, 409: ver MemberRegistrationTakeoverTest.
         $cliente = User::create([
             'name' => 'Cliente Mostrador', 'email' => 'mostrador@example.com', 'password' => bcrypt('x'),
             'document' => '1075777888', 'phone' => '3007778888', 'status' => 'active',
         ]);
+        $cliente->forceFill(['created_at' => now()->subMonths(3)])->save();
 
-        $res = $this->register(['document_number' => '1075777888', 'email' => 'otro@example.com'])->assertCreated();
+        $res = $this->register(['document_number' => '1075777888', 'email' => 'otro@example.com', 'phone' => '3007778888'])
+            ->assertCreated();
 
         $this->assertSame($cliente->id, $res->json('user_id'));
     }
 
     public function test_un_usuario_sin_ficha_ni_documento_se_enlaza_por_correo(): void
     {
+        // Usuario recién creado y vacío (sin historia): se enlaza sin pedir
+        // teléfono. Uno antiguo o con plan exige el suyo (TakeoverTest).
         $sinDocumento = User::create([
             'name' => 'Sin Documento', 'email' => 'sindoc@example.com', 'password' => bcrypt('x'),
             'document' => null, 'status' => 'pending',
@@ -453,19 +456,24 @@ class MemberRegistrationOwnershipTest extends TestCase
         $this->assertSame($antes, $this->snapshot(), 'Ni ficha, ni usuario, ni pagos, ni ficheros.');
     }
 
-    public function test_delete_publico_de_un_alta_recien_empezada_y_sin_historia_la_descarta(): void
+    public function test_delete_publico_no_borra_ni_un_alta_recien_empezada_y_sin_historia(): void
     {
+        // La APK nunca llamó a esta ruta. Antes descartaba el alta en curso de
+        // la ventana: la de otra persona en el mismo wifi. Ahora no borra nada.
         $alta = $this->register()->assertCreated();
         $id = $alta->json('member_id');
         $this->paso('identity', $id)->assertOk();
         $uuid = $alta->json('member_uuid');
         $this->assertNotEmpty(Storage::disk('local')->allFiles("members/{$uuid}"));
+        $antes = $this->snapshot();
 
-        $this->deleteJson("/api/members/{$id}", [], $this->apk())->assertNoContent();
+        $this->deleteJson("/api/members/{$id}", [], $this->apk())
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'registration_closed');
 
-        $this->assertNull(Member::find($id));
-        $this->assertNull(User::find($alta->json('user_id')));
-        $this->assertSame([], Storage::disk('local')->allFiles("members/{$uuid}"));
+        $this->assertSame($antes, $this->snapshot());
+        $this->assertNotNull(Member::find($id));
+        $this->assertNotNull(User::find($alta->json('user_id')));
     }
 
     public function test_delete_publico_de_un_alta_a_medias_fuera_de_su_sesion_se_rechaza(): void

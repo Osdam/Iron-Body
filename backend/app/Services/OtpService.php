@@ -453,8 +453,14 @@ class OtpService
      */
     public function resend(string $challengeUuid, array $context): array
     {
+        // Solo retos de LOGIN: lo llama `members/login/resend`, que es público
+        // y no sabe de quién es el reto. Sin el filtro reenviaba también el de
+        // borrar la cuenta, revocar equipos o cambiar el número (al número
+        // nuevo), con su SMS, fuera de su flujo. Los demás no se reenvían: se
+        // piden de nuevo. Mismo 410 que un reto inexistente.
         $challenge = MemberAuthChallenge::query()
             ->where('uuid', $challengeUuid)
+            ->where('purpose', MemberAuthChallenge::PURPOSE_LOGIN)
             ->first();
 
         if (! $challenge || ! $challenge->isVerifiable()) {

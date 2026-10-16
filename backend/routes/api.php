@@ -374,17 +374,24 @@ Route::post('members/login/trusted-unlock', [AuthController::class, 'trustedUnlo
 // `members/incomplete` ya NO está aquí: es el listado del CRM (nombre, correo,
 // documento y teléfono de cada alta a medias) y vive en la ruta espejo con
 // auth.admin de más abajo. La app nunca lo llamó.
+//
+// Cupos por red, en cubos propios (ver limitadoresDelRegistroPublico() en
+// AppServiceProvider): register, los pasos por {member} y el DELETE.
 Route::middleware('member.registration.token')->group(function () {
-    Route::post('members/register', [MemberRegistrationController::class, 'register']);
-    Route::post('members/{member}/identity', [MemberRegistrationController::class, 'identity']);
-    Route::post('members/{member}/legal-consent', [MemberRegistrationController::class, 'legalConsent']);
-    Route::post('members/{member}/signature', [MemberRegistrationController::class, 'signature']);
-    Route::post('members/{member}/biometric', [MemberRegistrationController::class, 'biometric']);
-    // Biometría OPCIONAL: el usuario puede omitirla al crear cuenta (Apple).
-    Route::post('members/{member}/biometric-skip', [MemberRegistrationController::class, 'skipBiometric']);
-    // Solo descarta un alta en curso y sin historia; el borrado de verdad es
-    // del CRM (admin/members/{member}).
-    Route::delete('members/{member}', [MemberRegistrationController::class, 'discardRegistration']);
+    Route::post('members/register', [MemberRegistrationController::class, 'register'])
+        ->middleware('throttle:member-register');
+    Route::middleware('throttle:member-register-steps')->group(function () {
+        Route::post('members/{member}/identity', [MemberRegistrationController::class, 'identity']);
+        Route::post('members/{member}/legal-consent', [MemberRegistrationController::class, 'legalConsent']);
+        Route::post('members/{member}/signature', [MemberRegistrationController::class, 'signature']);
+        Route::post('members/{member}/biometric', [MemberRegistrationController::class, 'biometric']);
+        // Biometría OPCIONAL: el usuario puede omitirla al crear cuenta (Apple).
+        Route::post('members/{member}/biometric-skip', [MemberRegistrationController::class, 'skipBiometric']);
+    });
+    // Ya no borra nada (la APK nunca la llamó): siempre 409. El borrado de
+    // verdad es del CRM (admin/members/{member}).
+    Route::delete('members/{member}', [MemberRegistrationController::class, 'discardRegistration'])
+        ->middleware('throttle:member-register-discard');
 });
 
 // ── Registros incompletos — CRM (sesión admin) ────────────────────────────────
