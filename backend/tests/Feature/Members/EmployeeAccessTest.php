@@ -325,6 +325,37 @@ class EmployeeAccessTest extends TestCase
         $this->assertSame('2026-10-14', $res['access']['entries']['last_entry_on']);
     }
 
+    // ── Lo que viaja al terminal ────────────────────────────────────────────
+
+    public function test_el_listado_que_lee_el_terminal_trae_el_acceso_de_empleado(): void
+    {
+        // El terminal sincroniza con GET /api/users y decide en la puerta con
+        // lo que venga ahi. Si este bloque no viaja, el lector no sabe que es
+        // empleado y le dice «membresia vencida» a alguien que si puede
+        // entrar: justo lo que pasaba.
+        $user = $this->persona([
+            'plan' => 'Mensual',
+            'membership_start_date' => $this->hoy()->subDays(40)->toDateString(),
+            'membership_end_date' => $this->hoy()->subDay()->toDateString(),
+        ]);
+        $this->conceder($user, [
+            'position' => 'Especial',
+            'starts_on' => $this->hoy()->toDateString(),
+            'ends_on' => $this->hoy()->addDays(60)->toDateString(),
+        ])->assertStatus(201);
+
+        $fila = collect($this->getJson('/api/users', $this->h)->assertOk()->json('data'))
+            ->firstWhere('id', $user->id);
+
+        $this->assertNotNull($fila, 'el socio tiene que salir en el listado');
+        $this->assertNotNull($fila['access']['employee'] ?? null, 'falta el bloque employee');
+        $this->assertTrue($fila['access']['employee']['current'], 'su permiso vale hoy');
+        $this->assertSame('Especial', $fila['access']['employee']['position']);
+        // Y el veredicto completo: entra, aunque la membresia este vencida.
+        $this->assertTrue($fila['access']['can_enter']);
+        $this->assertSame(MembershipAccess::VIA_EMPLOYEE, $fila['access']['via']);
+    }
+
     // ── El registro de quién entra ──────────────────────────────────────────
 
     public function test_la_asistencia_guarda_que_entro_como_empleado(): void
