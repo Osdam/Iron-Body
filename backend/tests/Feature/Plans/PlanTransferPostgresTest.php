@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Database\Connection;
 use Illuminate\Database\Events\TransactionRolledBack;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -67,6 +68,14 @@ class PlanTransferPostgresTest extends TestCase
             // RefreshDatabase que corran después en la misma base lo verían
             // (dos «Élite» y el traslado se negaría por nombre ambiguo).
             $this->truncateDatabaseTables();
+            // Pero truncar vacía TODAS las tablas, también las que siembran
+            // las migraciones (los roles del sistema en `admin_roles`), y
+            // RefreshDatabase no vuelve a migrar mientras crea que la base ya
+            // está migrada: las pruebas de roles que corrieran después en el
+            // mismo proceso encontrarían el catálogo vacío. Se le dice que no
+            // lo está, y la siguiente —con RefreshDatabase o con este trait—
+            // hace `migrate:fresh` y vuelve a sembrar.
+            RefreshDatabaseState::$migrated = false;
         }
         Carbon::setTestNow();
         parent::tearDown();
