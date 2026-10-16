@@ -31,6 +31,7 @@ class BiometricAdminController extends Controller
         FaceReferenceService::EVENT_CODE_ISSUED => 'Código de autorización generado',
         FaceReferenceService::EVENT_VERIFY_FAILED => 'Verificación fallida',
         FaceReferenceService::EVENT_DUPLICATE_REJECTED => 'Registro rechazado: rostro de otra persona',
+        FaceReferenceService::EVENT_CODE_REJECTED => 'Código rechazado',
     ];
 
     public function __construct(

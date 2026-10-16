@@ -97,8 +97,10 @@ class KioskWorkdayFlowTest extends TestCase
         $this->receptionist(self::ANA);
         $tablet = $this->tablet();
 
+        // Sin código emitido no hay nada que adivinar: se dice que no hay
+        // ninguno vigente (antes, el genérico `authorization_code_invalid`).
         $this->signed('POST', '/api/kiosk/enrollment/start', ['employee_ref' => $this->ref(self::ANA, $tablet), 'authorization_code' => '12345678'], $tablet)
-            ->assertStatus(422)->assertJsonPath('code', 'authorization_code_invalid');
+            ->assertStatus(422)->assertJsonPath('code', 'authorization_code_not_issued');
         $this->assertSame(0, TrainerFaceReference::count());
     }
 
@@ -490,9 +492,9 @@ class KioskWorkdayFlowTest extends TestCase
             ->assertOk()->assertJsonPath('verification.method', 'admin_code')->json('verification.token');
         $this->clock('in', $v, $tablet)->assertCreated()->assertJsonPath('workday.clock_in.method', 'admin_code');
 
-        // Un solo uso.
+        // Un solo uso: el segundo intento se rechaza y dice que ya se usó.
         $this->signed('POST', '/api/kiosk/verify-code', ['employee_ref' => $this->ref(self::ANA, $tablet), 'purpose' => 'workday', 'code' => $code], $tablet)
-            ->assertStatus(422)->assertJsonPath('code', 'authorization_code_invalid');
+            ->assertStatus(422)->assertJsonPath('code', 'authorization_code_used');
     }
 
     public function test_el_documento_identifica_pero_no_registra_nada(): void

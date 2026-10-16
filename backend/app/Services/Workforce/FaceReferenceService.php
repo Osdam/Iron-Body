@@ -44,6 +44,9 @@ class FaceReferenceService
 
     public const EVENT_CODE_ISSUED = 'biometric.code_issued';
 
+    /** Un código de autorización rechazado: sin el código ni su huella, solo el motivo. */
+    public const EVENT_CODE_REJECTED = 'biometric.code_rejected';
+
     public function __construct(private readonly WorkforceEvents $events) {}
 
     // ── Consulta ────────────────────────────────────────────────────────────

@@ -134,6 +134,27 @@ class WorkforceException extends RuntimeException
         return new self('El código no es válido o ya caducó.', 'authorization_code_invalid', 422);
     }
 
+    /**
+     * No hay ningún código vivo de ESA operación para esa persona: lo que se
+     * escribió era de otra operación, de otra persona, o no se generó. El
+     * mensaje lo arma AuthorizationCodeService: dice qué hace falta y, si hay
+     * un código vigente de otra operación, para qué sirve y dónde se escribe.
+     */
+    public static function authorizationCodeNotIssued(string $message): self
+    {
+        return new self($message, 'authorization_code_not_issued', 422);
+    }
+
+    public static function authorizationCodeExpired(string $message): self
+    {
+        return new self($message, 'authorization_code_expired', 422);
+    }
+
+    public static function authorizationCodeUsed(string $message): self
+    {
+        return new self($message, 'authorization_code_used', 422);
+    }
+
     public static function authorizationCodeAttemptsExceeded(): self
     {
         return new self('Demasiados intentos con este código. Pide uno nuevo a un administrador.', 'authorization_code_attempts_exceeded', 429);
