@@ -1,6 +1,8 @@
 # Asistencia laboral, biometría y dispositivos — contrato de API y eventos
 
-Versión del contrato: **v1** (rama `feat/employee-attendance`, 2026-10-10).
+Versión del contrato: **v1** (rama `feat/employee-attendance`, 2026-10-10). Ampliado sin
+romper nada el 2026-10-15 (rama `feat/workforce-unified`): ficha de una persona, comprobación
+previa del alta y vínculo verificado con la ficha de socio (§7.2).
 Fuente de verdad: el backend. CRM y Flutter construyen contra este documento.
 Si una implementación necesita apartarse, se cambia AQUÍ primero.
 
@@ -370,8 +372,119 @@ token compartido de automatizaciones. Por defecto: Super Admin y Administrador.
 = la persona solo es entrenador y no se edita aquí.
 
 `POST admin/workforce/staff` — `workforce.manage`
-`{ "full_name": "…", "document": "…", "phone": "…|null", "positions": ["receptionist"] }`
+`{ "full_name": "…", "document": "…", "phone": "…|null", "positions": ["receptionist"], "identity_id": "<uuid>|null" }`
 → 201 fila. 409 `staff_profile_exists`. Solo cargos `source: staff`.
+`identity_id` es opcional y es la confirmación de la comprobación previa (`staff/lookup`):
+si viene, el documento TIENE que pertenecer a esa identidad; sin identidad o con otra →
+409 `identity_mismatch` y no se crea nada. Si no viene (o viene `null`), comportamiento
+de siempre: se enlaza con la identidad del documento si existe y si no se crea.
+El alta NUNCA toca la ficha de socio (`members.identity_id`, plan, pagos, acceso gratuito).
+
+`POST admin/workforce/staff/lookup` — `workforce.manage`, 30/min por administrador.
+POST y no GET para que el documento no quede en la URL ni en los logs de acceso.
+`{ "document": "…" }` →
+```json
+{ "ok": true, "data": { "identity_id": "<uuid>|null", "full_name": "…|null",
+  "staff_profile": { "status": "active|inactive" } | null,
+  "trainer": { "status": "active", "positions": [ { "key", "label" } ] } | null,
+  "member": null | { "match": true, "linked": false, "full_name": "Yuri …" } } }
+```
+Solo lee: NO crea identidades. `full_name` es el del perfil laboral (o de entrenador).
+`identity_id` de una identidad SIN perfil de personal ni de entrenador (solo de un socio)
+solo llega a quien tiene además `members.view`; sin él la respuesta es la de una persona
+nueva (todo `null`) y el alta sin `identity_id` enlaza por documento como siempre.
+`member` exige además `members.view` (sin él, `null`) y es `null` si ningún socio tiene
+ese documento; `linked` = la ficha de socio ya cuelga de esta misma identidad.
+
+`GET admin/workforce/staff/{identity_id}` — `workforce.view`. La ficha de una persona:
+la misma fila de `GET staff` más estos bloques:
+```json
+{ "ok": true, "data": { <fila>,
+  "staff": { "status": "active|inactive", "created_at": "…", "created_by_name": "…|null", "deactivated_at": "…|null" } | null,
+  "trainer": { "id": 7, "status": "active", "positions": [ { "key", "label" } ] } | null,
+  "workday_state": { "state": "none|open", "current": <Workday>|null, "last": <Workday>|null, "pending_incident": <Workday>|null },
+  "member": null | {
+    "link": "linked|unlinked|conflict|none",
+    "link_blocked_reason": null | "trainer_profile" | "registration_incomplete" | "no_phone" | "phone_recently_changed" | "linked_elsewhere" | "identity_has_member",
+    "member_id": 7699, "user_id": 7702, "full_name": "…", "phone_masked": "•••• 1234",
+    "can_verify": true,
+    "membership": { "plan": "…", "end_date": "YYYY-MM-DD" } | null,
+    "story_live": false | null,
+    "employee_access": null | { "source": "manual|commission", "position", "active", "current", "open_now",
+      "starts_on", "ends_on", "note", "rules", "granted_by_name", "revoked_at", "revoked_by_name" } } } }
+```
+- Identidad sin perfil de personal NI de entrenador (en cualquier estado) → 404
+  `employee_not_found`: la ficha no sirve para recorrer identidades de socios.
+- `staff` y `trainer` salen en cualquier estado (la fila dice si la persona está activa).
+- `member` exige además `members.view` (sin él, `null`).
+  · `linked`: la ficha de socio cuelga de esta identidad.
+  · `unlinked`: hay un socio con el MISMO documento sin identidad. Coincidir por documento
+    NO es prueba de titularidad: solo se vincula con el código SMS de (d). `can_verify`
+    es `false` si hay motivo de bloqueo: `trainer_profile` (esta fase excluye a quien
+    tiene perfil de entrenador), `registration_incomplete` (la ficha de socio no está activa:
+    un registro que se puede reanudar lo reescribe, teléfono incluido, la app pública),
+    `no_phone` (la ficha de socio no tiene teléfono PROPIO, `members.phone`; el del usuario
+    del CRM no cuenta porque lo puede reescribir el registro público),
+    `phone_recently_changed` (el teléfono de la ficha de socio cambió hace menos de 7 días:
+    desde la ficha del CRM, desde soporte, desde la app o por recuperación; un número recién
+    puesto puede ser de quien lo puso y no prueba titularidad).
+    Sin verificación posible (o con el envío caído, 503) el CRM se queda en «coincide por
+    documento, sin verificar» y enlaza a Miembros con `user_id`; nunca vincula.
+  · `conflict` + `linked_elsewhere`: el socio del documento ya cuelga de OTRA identidad.
+  · `none`: ningún socio con ese documento.
+  · `identity_has_member` no sale en la ficha (si la identidad ya tiene ficha de socio,
+    `link` es `linked`); se reserva para el 409 del vínculo.
+- `membership`, `story_live` (`members.is_staff`, solo lectura: se gestiona en Miembros) y
+  `employee_access` solo con `link: "linked"`; si no, `null`. `employee_access` son los
+  mismos campos que `access.employee` de `GET users/{user}/employee-access` más `source`.
+  Se administra con las rutas de siempre (`members.employee`) usando `user_id`.
+- Desactivar el perfil laboral NO retira el acceso gratuito.
+
+`POST admin/workforce/staff/{identity_id}/member-link` — `workforce.manage` + `members.edit`,
+10/min por administrador (compartido con la confirmación, sea cual sea la sesión) y 30 al día
+por administrador. Envía un código por SMS al teléfono PROPIO de la ficha de socio
+(`members.phone`; nunca al del usuario del CRM, al del perfil laboral ni a uno de la petición).
+Si el reto creado no fuera a ese número, se bloquea y responde 409 `member_link_destination_mismatch`.
+`{ "member_id": 7699 }` →
+201 `{ "ok": true, "challenge_id": "<uuid>", "destination": "•••• 1234", "expires_in": 300, "reused": false }`
+(`dev_code` solo con el driver `dev` fuera de producción; `reused: true` = sigue vivo el
+código anterior y no se manda otro SMS; `expires_in` = segundos que le quedan;
+`delivery_warning` (texto) solo si el proveedor no confirmó el envío, como en el login).
+200 `{ "ok": true, "result": "already_linked", "data": <ficha> }` si ya estaba vinculada.
+
+`POST admin/workforce/staff/{identity_id}/member-link/confirm` — mismos permisos y cupo.
+`{ "member_id": 7699, "challenge_id": "<uuid>", "code": "123456" }` →
+200 `{ "ok": true, "result": "linked|already_linked", "data": <ficha> }`.
+El código se comprueba FUERA de la transacción (un intento fallido cuenta aunque no se
+vincule); después, con la identidad y el socio bloqueados, se repiten todas las
+comprobaciones de (d) antes de escribir `members.identity_id`. Nada más cambia:
+ni `is_staff`, ni el usuario, ni pagos, ni acceso gratuito. Queda traza (al pedir y al
+vincular) sin el código y con `destination_masked` y `destination_hash` (huella de la
+política de OTP) del número al que fue. Un código mal tecleado aquí lo teclea quien atiende:
+cuenta en el reto (bloquea al quinto) pero NO suma riesgo a la cuenta del socio.
+
+Errores de (d) y (e):
+
+| HTTP | `code` | Cuándo |
+|---|---|---|
+| 403 | `forbidden` (+ `required_permission: "members.edit"`) | sin `members.edit` |
+| 404 | `employee_not_found` | la identidad no tiene perfil de personal ni de entrenador |
+| 404 | `member_not_found` | el socio no existe o no tiene el documento de esta persona (misma respuesta) |
+| 409 | `member_link_trainer_unsupported` | la identidad tiene perfil de entrenador |
+| 409 | `member_linked_elsewhere` | el socio ya cuelga de otra identidad |
+| 409 | `identity_has_member` | otra ficha de socio ya cuelga de esta identidad |
+| 409 | `member_phone_recently_changed` | el teléfono del socio cambió hace menos de 7 días (en d antes de enviar; en e antes de comprobar el código y otra vez con las filas bloqueadas) |
+| 409 | `member_registration_incomplete` | la ficha de socio no está activa (registro reanudable) (en d; en e antes de comprobar el código y con las filas bloqueadas) |
+| 422 | `member_without_phone` | la ficha de socio no tiene teléfono propio (`members.phone`), aunque el usuario del CRM tenga uno (en d; en e antes de comprobar el código y con las filas bloqueadas) |
+| 409 | `member_link_destination_mismatch` | el código no fue (o ya no es) al teléfono propio actual de la ficha de socio; no se vincula y hay que pedir otro |
+| 429 | `otp_rate_limited` (+ `retry_after`) | cupo de envíos del socio o del número (solo en d) |
+| 503 | `otp_unavailable` (+ `retry_after`) | envío apagado o techo de gasto (solo en d) |
+| 404 | `otp_not_found` | el reto no existe, es de otro socio o de otro propósito (p. ej. login) (solo en e) |
+| 409 | `otp_used` | el código ya se usó (solo en e) |
+| 410 | `otp_expired` | el código caducó (solo en e) |
+| 422 | `otp_invalid` (+ `remaining`) | código incorrecto (solo en e) |
+| 423 | `otp_blocked` | demasiados intentos: hay que pedir otro (solo en e) |
+| 429 | `too_many_requests` | cupo de la ruta por administrador (lookup 30/min; vínculo 10/min; inicio del vínculo 30/día) |
 
 `PATCH admin/workforce/staff/{identity_id}` — `workforce.manage`
 `{ "full_name?", "phone?", "positions?", "status?": "active|inactive" }` → fila.

@@ -212,4 +212,88 @@ class WorkforceException extends RuntimeException
     {
         return new self('Esta persona ya tiene un perfil de personal.', 'staff_profile_exists', 409);
     }
+
+    // ── Ficha de una persona y vínculo con su ficha de socio ────────────────
+
+    /**
+     * Mismo código que {@see employeeNotFound()}, con un texto que no habla de
+     * documentos: la ficha se abre por identidad. Se responde igual para una
+     * identidad inexistente y para una que solo es de un socio, para que la
+     * ficha no sirva para recorrer identidades de socios.
+     */
+    public static function staffRecordNotFound(): self
+    {
+        return new self('Esta persona no está registrada en el personal.', 'employee_not_found', 404);
+    }
+
+    /** El documento del alta ya no es de la persona que se comprobó. */
+    public static function identityMismatch(): self
+    {
+        return new self('El documento ya no corresponde a la persona que se comprobó. Vuelve a comprobarlo.', 'identity_mismatch', 409);
+    }
+
+    /**
+     * Inexistente o con otro documento: la misma respuesta, para no confirmar
+     * qué ids de socio existen.
+     */
+    public static function memberNotFound(): self
+    {
+        return new self('No encontramos una ficha de socio con el documento de esta persona.', 'member_not_found', 404);
+    }
+
+    public static function memberLinkTrainerUnsupported(): self
+    {
+        return new self('Esta persona tiene perfil de entrenador: su ficha de socio no se vincula desde aquí.', 'member_link_trainer_unsupported', 409);
+    }
+
+    public static function memberLinkedElsewhere(): self
+    {
+        return new self('Esta ficha de socio ya está vinculada con otra persona.', 'member_linked_elsewhere', 409);
+    }
+
+    public static function identityHasMember(): self
+    {
+        return new self('Esta persona ya tiene otra ficha de socio vinculada.', 'identity_has_member', 409);
+    }
+
+    public static function memberWithoutPhone(): self
+    {
+        return new self('La ficha de socio no tiene teléfono: no se puede verificar por SMS.', 'member_without_phone', 422);
+    }
+
+    /**
+     * Registro sin terminar (o cuenta no activa): la app pública lo puede
+     * reanudar y reescribir, teléfono incluido, así que no prueba titularidad.
+     */
+    public static function memberRegistrationIncomplete(): self
+    {
+        return new self('La ficha de socio no tiene el registro terminado: no se puede verificar por SMS. Revísala en Miembros.', 'member_registration_incomplete', 409);
+    }
+
+    /** El código no fue (o ya no es) al teléfono propio de la ficha de socio. */
+    public static function memberLinkDestinationMismatch(): self
+    {
+        return new self('El código no corresponde al teléfono actual de la ficha de socio. No se vinculó nada: pide uno nuevo.', 'member_link_destination_mismatch', 409);
+    }
+
+    /**
+     * Un número recién puesto no prueba que la ficha sea de quien lo recibe:
+     * pudo ponerlo quien ahora pide el código.
+     */
+    public static function memberPhoneRecentlyChanged(): self
+    {
+        return new self('El teléfono de la ficha de socio cambió hace poco: todavía no sirve para verificar. Revísalo en Miembros.', 'member_phone_recently_changed', 409);
+    }
+
+    /**
+     * Rechazos del motor de OTP de socios, con un código estable de este
+     * contrato. El texto es el del propio motor; los campos que la pantalla
+     * necesita (`retry_after`, `remaining`) se conservan.
+     *
+     * @param  array<string, mixed>  $extra
+     */
+    public static function otp(string $code, int $status, string $message, array $extra = []): self
+    {
+        return new self($message, $code, $status, $extra);
+    }
 }

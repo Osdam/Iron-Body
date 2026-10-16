@@ -351,9 +351,16 @@ class OtpService
             $challenge->increment('attempts');
             $remaining = max($this->maxAttempts() - $challenge->attempts, 0);
 
+            // El código del vínculo con el personal lo teclea un administrador
+            // en el mostrador, no el socio: sus errores no son intentos contra
+            // la cuenta del socio y no pueden sumarle riesgo (ni endurecerle el
+            // login ni acercarlo a la suspensión automática). El intento sigue
+            // contando en el reto y queda en `otp.invalid`.
+            $pesaSobreElSocio = $member && $challenge->purpose !== MemberAuthChallenge::PURPOSE_IDENTITY_LINK;
+
             if ($remaining <= 0) {
                 $challenge->update(['status' => MemberAuthChallenge::STATUS_BLOCKED]);
-                if ($member) {
+                if ($pesaSobreElSocio) {
                     $this->security->record($member, MemberSecurityEvent::TYPE_OTP_BLOCKED, $context, [
                         'challenge' => $challenge->uuid,
                         'purpose' => $challenge->purpose,
@@ -362,7 +369,7 @@ class OtpService
                 throw new OtpException('Demasiados intentos fallidos. Solicita un código nuevo.', 423);
             }
 
-            if ($member) {
+            if ($pesaSobreElSocio) {
                 $this->security->record($member, MemberSecurityEvent::TYPE_LOGIN_FAILED, $context, [
                     'challenge' => $challenge->uuid,
                     'purpose' => $challenge->purpose,

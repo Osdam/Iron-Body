@@ -18,6 +18,7 @@ use App\Observers\Marketing\AttributionOfferObserver;
 use App\Observers\Marketing\ConversationPreviewObserver;
 use App\Observers\Marketing\MarketingPaymentOutcomeObserver;
 use App\Observers\WorkforceProfileObserver;
+use App\Services\Admin\AdminSessionService;
 use App\Services\Billing\Factus\FactusClient;
 use App\Services\Billing\Factus\FactusConfigValidator;
 use App\Services\Billing\Factus\FactusTokenManager;
@@ -36,6 +37,7 @@ use App\Services\Marketing\SalesAiConfig;
 use App\Services\Meta\WhatsappIntegrationRegistry;
 use App\Services\Observability\QueueHealthService;
 use App\Services\Wompi\WompiConfigValidator;
+use App\Support\Access\AdminActor;
 use App\Support\Access\TrainerMemberScope;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -134,6 +136,7 @@ class AppServiceProvider extends ServiceProvider
         $this->limitadoresInternos();
         $this->limitadorDeClases();
         $this->limitadorDelAgente();
+        $this->limitadorDePersonal();
 
         $this->guardWompiConfig();
         $this->guardFactusConfig();
@@ -442,6 +445,59 @@ class AppServiceProvider extends ServiceProvider
                 'code' => 'too_many_agenda_requests',
                 'message' => 'Demasiadas consultas seguidas a la agenda. Espera un momento.',
             ], 429, $headers)));
+    }
+
+    /**
+     * Ficha laboral: comprobar un documento y vincular una ficha de socio.
+     *
+     * Con nombre, no `throttle:N,1`: el anónimo comparte cubo por IP con el
+     * login del CRM (`throttle:8,1`), y unas cuantas comprobaciones en la
+     * oficina dejarían a todos sin poder entrar. La clave es el ADMINISTRADOR,
+     * no la sesión: abrir otra pestaña o volver a entrar no da cupo nuevo
+     * (revisión de seguridad 2026-10-15, B2). El throttle corre antes que la
+     * autenticación, así que el admin se resuelve aquí desde el token; si no
+     * se resuelve (token compartido, sesión caducada), la clave es el token o
+     * la IP y la autenticación lo rechazará igual.
+     *
+     * Comprobar documentos es lo que serviría para tantear quién es socio;
+     * pedir códigos le cuesta un SMS al gimnasio y le escribe a un socio, y
+     * por eso el inicio del vínculo tiene además un tope diario. El techo de
+     * cada socio y de cada número lo pone la política de OTP.
+     */
+    private function limitadorDePersonal(): void
+    {
+        $quien = function (Request $request): string {
+            $admin = AdminActor::from($request);
+            if ($admin !== null) {
+                return 'admin:'.$admin->id;
+            }
+            $token = $request->bearerToken();
+            $sesion = $token ? app(AdminSessionService::class)->resolveByToken($token) : null;
+            if ($sesion !== null) {
+                return 'admin:'.$sesion->admin_id;
+            }
+
+            return $token ? 'token:'.hash('sha256', $token) : 'ip:'.$request->ip();
+        };
+        $tooMany = fn (string $mensaje) => fn ($request, array $headers) => response()->json([
+            'ok' => false,
+            'code' => 'too_many_requests',
+            'message' => $mensaje,
+        ], 429, $headers);
+
+        RateLimiter::for('workforce-lookup', fn (Request $request) => Limit::perMinute(30)
+            ->by('workforce-lookup:'.$quien($request))
+            ->response($tooMany('Demasiadas comprobaciones seguidas. Espera un minuto.')));
+
+        // Pedir y confirmar el código comparten este cupo por minuto.
+        RateLimiter::for('workforce-member-link', fn (Request $request) => Limit::perMinute(10)
+            ->by('workforce-member-link:'.$quien($request))
+            ->response($tooMany('Demasiadas solicitudes seguidas. Espera un minuto.')));
+
+        // Solo el inicio (el que manda SMS): 30 al día por administrador.
+        RateLimiter::for('workforce-member-link-day', fn (Request $request) => Limit::perDay(30)
+            ->by('workforce-member-link-day:'.$quien($request))
+            ->response($tooMany('Llegaste al máximo de códigos de verificación por hoy.')));
     }
 
     /**

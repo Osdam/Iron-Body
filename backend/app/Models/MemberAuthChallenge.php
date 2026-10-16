@@ -40,6 +40,11 @@ class MemberAuthChallenge extends Model
     // tras la biometría LOCAL. No envía SMS ni actualiza nada por sí mismo.
     public const PURPOSE_PHONE_RECOVERY_TICKET = 'phone_recovery_ticket';
 
+    // Vincular la ficha de socio con la identidad de una persona del personal
+    // desde el CRM: el código va al teléfono registrado del socio y prueba que
+    // la ficha es suya. Propósito propio para que un reto de login no sirva.
+    public const PURPOSE_IDENTITY_LINK = 'identity_link';
+
     /** Nivel del login adaptativo (Bloque 3b). Null = login clásico. */
     public const TIER_LOCAL = 'local';
 

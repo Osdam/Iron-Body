@@ -6,7 +6,6 @@ use App\Exceptions\WorkforceException;
 use App\Http\Controllers\Controller;
 use App\Models\Identity;
 use App\Models\StaffProfile;
-use App\Models\Trainer;
 use App\Models\Workday;
 use App\Models\WorkforceAuthorizationCode;
 use App\Services\Audit\AuditTrail;
@@ -15,6 +14,7 @@ use App\Services\Workforce\AuthorizationCodeService;
 use App\Services\Workforce\EmployeeDirectory;
 use App\Services\Workforce\EmployeeProfile;
 use App\Services\Workforce\FaceReferenceService;
+use App\Services\Workforce\StaffRecord;
 use App\Services\Workforce\WorkforceEvents;
 use App\Support\Access\AdminActor;
 use App\Support\Access\CrmPermission;
@@ -22,7 +22,6 @@ use App\Support\Workforce\Positions;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
@@ -31,7 +30,11 @@ use Illuminate\Validation\Rule;
  *
  * Una persona, una identidad: el alta de personal ENLAZA con la identidad del
  * documento si ya existe (un socio que empieza a trabajar aquí, un entrenador
- * que además atiende recepción), nunca crea otra.
+ * que además atiende recepción), nunca crea otra. Desde la ficha unificada el
+ * CRM comprueba antes (`lookup`) y confirma con `identity_id` a quién vio; el
+ * alta sin esa confirmación sigue funcionando como siempre. El alta NUNCA toca
+ * la ficha de socio: vincularla exige el código SMS del socio
+ * ({@see WorkforceMemberLinkController}).
  */
 class WorkforceStaffController extends Controller
 {
@@ -42,6 +45,7 @@ class WorkforceStaffController extends Controller
         private readonly AuthorizationCodeService $codes,
         private readonly WorkforceEvents $events,
         private readonly AuditTrail $auditTrail,
+        private readonly StaffRecord $records,
     ) {}
 
     public function positions(): JsonResponse
@@ -72,6 +76,39 @@ class WorkforceStaffController extends Controller
         return response()->json(['ok' => true, 'data' => $rows]);
     }
 
+    /**
+     * La ficha de una persona: la fila del listado más sus perfiles, su jornada
+     * y —con `members.view`— su ficha de socio. Contrato §7.2.
+     */
+    public function show(Request $request, string $identity): JsonResponse
+    {
+        $person = $this->records->resolve($identity);
+        $admin = AdminActor::from($request);
+
+        return response()->json(['ok' => true, 'data' => $this->records->record(
+            $person,
+            withPhone: CrmPermission::allows($admin, 'workforce.manage'),
+            withMember: CrmPermission::allows($admin, 'members.view'),
+        )]);
+    }
+
+    /**
+     * Comprobación previa del alta: ¿esta persona ya existe como personal,
+     * entrenador o socio? POST para que el documento no quede en la URL ni en
+     * los logs de acceso. Solo lee: no crea identidades.
+     */
+    public function lookup(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'document' => ['required', 'string', 'min:4', 'max:30'],
+        ]);
+
+        return response()->json(['ok' => true, 'data' => $this->records->lookup(
+            $data['document'],
+            withMember: CrmPermission::allows(AdminActor::from($request), 'members.view'),
+        )]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -80,12 +117,25 @@ class WorkforceStaffController extends Controller
             'phone' => ['nullable', 'string', 'max:40'],
             'positions' => ['required', 'array', 'min:1'],
             'positions.*' => ['string', Rule::in(Positions::staffKeys())],
+            // Confirmación de la comprobación previa (`lookup`): la persona que
+            // se vio en pantalla. Opcional: sin ella, el alta de siempre.
+            'identity_id' => ['nullable', 'uuid'],
         ]);
 
-        // Fuera de la transacción: ante dos altas a la vez, `ensureIdentity`
-        // relee la identidad ganadora, y en PostgreSQL esa relectura falla
-        // dentro de una transacción ya abortada por la violación de unicidad.
-        $identity = $this->identities->ensureIdentity($data['document'], $data['phone'] ?? null);
+        if (! empty($data['identity_id'])) {
+            // El documento tiene que seguir siendo de quien se comprobó. Si ya
+            // no hay identidad o es otra, no se crea nada: quien da el alta
+            // vuelve a comprobar en vez de enlazar con alguien que no vio.
+            $identity = $this->identities->findByDocument($data['document']);
+            if ($identity === null || $identity->uuid !== $data['identity_id']) {
+                throw WorkforceException::identityMismatch();
+            }
+        } else {
+            // Fuera de la transacción: ante dos altas a la vez, `ensureIdentity`
+            // relee la identidad ganadora, y en PostgreSQL esa relectura falla
+            // dentro de una transacción ya abortada por la violación de unicidad.
+            $identity = $this->identities->ensureIdentity($data['document'], $data['phone'] ?? null);
+        }
 
         try {
             $profile = DB::transaction(fn (): StaffProfile => $this->createProfile($identity, $data, $request));
@@ -224,33 +274,9 @@ class WorkforceStaffController extends Controller
         ], 201);
     }
 
+    /** La fila la arma {@see StaffRecord}: la misma para el listado y la ficha. */
     private function row(EmployeeProfile $p, mixed $openSince): array
     {
-        $ref = $this->faces->referenceForIdentity($p->identity);
-        $doc = (string) $p->identity->document_normalized;
-
-        return [
-            'identity_id' => $p->identity->uuid,
-            'full_name' => $p->fullName,
-            'document_masked' => $doc !== '' ? '•••• '.substr($doc, -4) : null,
-            'positions' => $p->describedPositions(),
-            'status' => $p->isActive() ? 'active' : 'inactive',
-            'trainer_id' => $p->trainer?->id ?? Trainer::query()->where('identity_id', $p->identity->getKey())->value('id'),
-            'staff_profile' => StaffProfile::query()->where('identity_id', $p->identity->getKey())->exists(),
-            'capabilities' => $p->capabilities(),
-            'biometric' => [
-                'status' => $this->faces->status($ref),
-                'enrolled_at' => $ref?->enrolled_at?->toIso8601String(),
-                'updated_at' => $ref?->updated_at?->toIso8601String(),
-            ],
-            // Dato personal: solo para quien puede editar la ficha.
-            'phone' => CrmPermission::allows(AdminActor::from(request()), 'workforce.manage')
-                ? StaffProfile::query()->where('identity_id', $p->identity->getKey())->value('phone')
-                : null,
-            'workday' => [
-                'open' => $openSince !== null,
-                'since' => $openSince !== null ? Carbon::parse($openSince)->toIso8601String() : null,
-            ],
-        ];
+        return $this->records->row($p, $openSince, CrmPermission::allows(AdminActor::from(request()), 'workforce.manage'));
     }
 }

@@ -162,6 +162,58 @@ Orden: backend → CRM → app. Cada paso es compatible con el anterior.
 6. `TRAINER_FACE_LOGIN_ENABLED` puede volver a `true` tras el paso 1 (el control de norma
    ya está desplegado), o dejarse apagado: la app nueva usa `kiosk/verify`.
 
+## 10b. Ficha laboral unificada (2026-10-15, rama `feat/workforce-unified`)
+
+Sin migraciones, sin permisos nuevos y sin tocar el kiosko ni la APK. Contrato: §7.2.
+
+- **Ficha de una persona** (`GET admin/workforce/staff/{identity}`, `StaffRecord`): la fila del
+  listado + perfil de personal y de entrenador en cualquier estado + estado de jornada + (con
+  `members.view`) su ficha de socio. Membresía pagada, acceso gratuito y cargo laboral son tres
+  cosas distintas y se dan separadas; el cargo no da permisos en el CRM. Una identidad sin perfil
+  de personal ni de entrenador responde 404 `employee_not_found`, igual que una inexistente.
+- **Comprobación previa del alta** (`POST staff/lookup`): solo lee, no crea identidades. El alta
+  acepta `identity_id` para confirmar a quién se vio; si el documento ya no es de esa identidad,
+  409 `identity_mismatch` sin crear nada. Sin `identity_id`, el alta de siempre (enlace por
+  documento). El alta NUNCA escribe `members.identity_id`: una socia sin identidad (caso Yuri)
+  recibe una identidad nueva y su ficha de socio queda intacta.
+- **Vínculo con la ficha de socio** (`MemberOwnershipLink`): coincidir por documento no prueba
+  titularidad. El único vínculo es con el código OTP enviado al teléfono REGISTRADO del socio
+  (`OtpService::resolvePhone`, nunca el del perfil laboral ni uno de la petición), propósito
+  `identity_link`. El código se comprueba FUERA de la transacción (un intento fallido cuenta);
+  después, con identidad y socio bloqueados (`FOR UPDATE`, siempre en ese orden), se repiten
+  documento, sin entrenador, `identity_id` vacío o el mismo y ninguna otra ficha colgando de la
+  identidad (`members.identity_id` solo tiene índice: la comprobación con bloqueo es la
+  garantía), y se escribe con `attachMember(..., ownershipVerified: true)`. Solo cambia
+  `members.identity_id`: ni `is_staff`, ni el usuario, ni pagos, ni acceso gratuito, ni
+  comisiones. Exige `workforce.manage` + `members.edit`.
+- **Revisión de seguridad (2026-10-15):** un teléfono cambiado hace menos de 7 días no
+  verifica (`phone_recently_changed` / 409 `member_phone_recently_changed`): quien tiene
+  `members.edit` podría poner el suyo y recibir el código. Fuentes: la traza del PATCH de la
+  ficha (`audit_logs`, «Miembros»/«cliente»/id del usuario, campo `phone`) y el evento
+  `phone_changed` del socio (app, recuperación, soporte). Se comprueba al pedir, antes de
+  gastar el código y otra vez con las filas bloqueadas. Las trazas guardan el destino
+  enmascarado y su huella. Cupos por ADMINISTRADOR (no por sesión) y 30 inicios al día. Los
+  códigos fallidos de `identity_link` no suman riesgo al socio. La comprobación previa no
+  nombra identidades que solo son de un socio a quien no tiene `members.view`.
+- **Solo el teléfono propio y solo registro terminado (2026-10-15):** `POST members/register`
+  (token compilado en la APK pública) sobre el documento de un socio ACTIVO responde 409 pero
+  reescribe `users.phone` sin traza; `resolvePhone` usa `members.phone ?: users.phone`. Ese
+  fallo del registro es previo y queda FUERA de este cambio. Defensa en el vínculo: solo vale
+  `members.phone` (vacío → `no_phone` / 422), el reto creado debe ir a ese número (si no, se
+  bloquea: 409 `member_link_destination_mismatch`), al confirmar el código tuvo que ir al
+  teléfono que la ficha tiene AHORA, y la ficha de socio tiene que estar activa
+  (`registration_incomplete` / 409 `member_registration_incomplete`), en la ficha, al pedir,
+  antes de comprobar el código y bajo bloqueo.
+- **Decisiones del 2026-10-15:** quien tiene perfil de entrenador queda fuera de esta fase (409
+  `member_link_trainer_unsupported`: comisiones y perfil fiscal ya leen su identidad). Sin OTP
+  posible (sin teléfono, techo de gasto, entrenador) la ficha se queda en «coincide por documento,
+  sin verificar» y enlaza a Miembros; nunca vincula. Desactivar el perfil laboral NO retira el
+  acceso gratuito.
+- **Riesgos que siguen abiertos:** cada código fallido queda como `login_failed` del socio y
+  durante una hora (`security.window`) puede endurecer su siguiente login en la app (OTP u
+  OTP + rostro); mientras el CRM viejo siga en uso, su alta enlaza
+  por documento sin comprobación visible; `TRAINER_OTP_DEV_BYPASS=true` en producción.
+
 ## 11. Reversión
 
 - CRM: volver a publicar el commit anterior (`deploy.mjs`, chunks conservados).
