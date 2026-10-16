@@ -485,9 +485,17 @@ final class AuthorizationMap
         'PUT api/users/{user}/employee-access' => 'members.employee',
         'DELETE api/users/{user}/employee-access' => 'members.employee',
 
-        // Webhook del torniquete: lo llama el hardware, no una persona. Su
-        // autenticación es la del propio dispositivo.
-        'POST api/turnstile/webhook/fire' => self::PUBLIC,
+        /*
+         * Disparo de prueba del relé del torniquete. Estuvo aquí como PÚBLICO
+         * con la nota «lo llama el hardware», y no es así: es el SERVIDOR el
+         * que lanza una petición a la URL que viaja en el cuerpo y devuelve
+         * parte de la respuesta. Abierto, el token compartido —o cualquier
+         * sesión— hacía que el servidor consultara direcciones internas.
+         *
+         * Es gestionar el torniquete, igual que configurarlo o abrirlo por
+         * ZKTeco o puerto serie; el controlador exige además una persona.
+         */
+        'POST api/turnstile/webhook/fire' => 'classes.manage',
 
         // Movimientos de existencias y foto de producto: EDITAN un producto que
         // ya existe. Crear es solo `POST api/admin/products`. La regla genérica

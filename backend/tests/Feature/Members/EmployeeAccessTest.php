@@ -249,6 +249,82 @@ class EmployeeAccessTest extends TestCase
         $this->assertTrue(MembershipAccess::consumesEntry($comoSocio, true));
     }
 
+    /**
+     * Socio del plan Valera (15 entradas) que además es empleado de 14 a 17.
+     * El reloj va en UTC, como en producción: el día del gimnasio lo calcula
+     * el código.
+     */
+    private function valeraQueAdemasEsEmpleado(): User
+    {
+        $plan = Plan::create([
+            'name' => 'Valera', 'price' => 65000, 'duration_days' => 30,
+            'access_mode' => PlanAccessRules::MODE_ENTRIES, 'entry_credits' => 15, 'active' => true,
+        ]);
+        $inicio = $this->hoy()->subDays(5);
+        $user = $this->persona([
+            'plan' => $plan->name,
+            'membership_start_date' => $inicio->toDateString(),
+            'membership_end_date' => $inicio->addDays(30)->toDateString(),
+        ]);
+        Payment::create([
+            'user_id' => $user->id, 'plan_id' => $plan->id, 'amount' => $plan->price,
+            'method' => 'cash', 'status' => 'paid', 'paid_at' => $inicio->setTime(9, 0)->utc(),
+            'period_start' => $inicio->toDateString(), 'period_end' => $inicio->addDays(30)->toDateString(),
+        ]);
+        $this->conceder($user, ['access_windows' => [['from' => '14:00', 'to' => '17:00']]])->assertStatus(201);
+
+        return $user;
+    }
+
+    /** Lo que manda el lector de la sede al reconocer a alguien en la puerta. */
+    private function entraPorLaPuerta(User $user): array
+    {
+        return $this->postJson('/api/attendances', [
+            'user_id' => $user->id, 'action' => 'entry', 'source' => 'facial',
+        ], $this->h)->assertStatus(201)->json();
+    }
+
+    public function test_el_dia_que_entra_como_empleado_no_se_descuenta_de_sus_entradas(): void
+    {
+        // Miércoles a las 15:00 de Neiva: dentro de su franja de empleado.
+        $this->travelTo(CarbonImmutable::parse('2026-10-14 15:00', MembershipAccess::TZ)->utc());
+        $user = $this->valeraQueAdemasEsEmpleado();
+
+        $res = $this->entraPorLaPuerta($user);
+
+        $this->assertSame(
+            MembershipAccess::VIA_EMPLOYEE,
+            \App\Models\Attendance::where('user_id', $user->id)->firstOrFail()->access_via,
+        );
+        // El registro se guardó, pero esa entrada no la vendió nadie: las 15
+        // que compró siguen enteras. Antes se contaba como un día gastado.
+        $this->assertSame(0, $res['access']['entries']['used']);
+        $this->assertSame(15, $res['access']['entries']['left']);
+        $this->assertFalse($res['access']['entries']['used_today']);
+    }
+
+    public function test_la_entrada_por_la_membresia_si_se_descuenta(): void
+    {
+        // El martes entró como empleado (15:00); el miércoles vuelve a las
+        // 9:00, fuera de su franja, y le abre lo que pagó.
+        $this->travelTo(CarbonImmutable::parse('2026-10-13 15:00', MembershipAccess::TZ)->utc());
+        $user = $this->valeraQueAdemasEsEmpleado();
+        $this->entraPorLaPuerta($user);
+
+        $this->travelTo(CarbonImmutable::parse('2026-10-14 09:00', MembershipAccess::TZ)->utc());
+        $res = $this->entraPorLaPuerta($user);
+
+        $this->assertSame(
+            MembershipAccess::VIA_MEMBERSHIP,
+            \App\Models\Attendance::where('user_id', $user->id)->orderByDesc('id')->firstOrFail()->access_via,
+        );
+        // Un día pagado (el miércoles), no dos.
+        $this->assertSame(1, $res['access']['entries']['used']);
+        $this->assertSame(14, $res['access']['entries']['left']);
+        $this->assertTrue($res['access']['entries']['used_today']);
+        $this->assertSame('2026-10-14', $res['access']['entries']['last_entry_on']);
+    }
+
     // ── El registro de quién entra ──────────────────────────────────────────
 
     public function test_la_asistencia_guarda_que_entro_como_empleado(): void

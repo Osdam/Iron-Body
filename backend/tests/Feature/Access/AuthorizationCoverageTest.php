@@ -134,10 +134,13 @@ class AuthorizationCoverageTest extends TestCase
         }
 
         sort($publicas);
+        // El disparo del webhook del torniquete estuvo aquí y no debía: no lo
+        // llama el hardware, hace que el servidor llame a una URL arbitraria
+        // (ver AuthorizationMap y TurnstileAccessTest).
         $this->assertSame(
-            ['POST api/admin/auth/login', 'POST api/turnstile/webhook/fire'],
+            ['POST api/admin/auth/login'],
             $publicas,
-            'Solo la puerta de entrada del CRM y el webhook del torniquete pueden ser públicas.',
+            'Solo la puerta de entrada del CRM puede ser pública.',
         );
     }
 
