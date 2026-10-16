@@ -164,6 +164,9 @@ final class AuthorizationMap
         // revocar un dato biométrico o un dispositivo no es editar una ficha.
         'WorkforceSupervisionController' => 'workforce',
         'WorkforceStaffController' => 'workforce',
+        // Vincular la ficha de socio: `workforce.manage` aquí; `members.edit`
+        // además, dentro del controlador (se escribe la ficha de un socio).
+        'WorkforceMemberLinkController' => 'workforce',
         'BiometricAdminController' => 'biometrics',
         'DeviceAdminController' => 'devices',
 

@@ -75,6 +75,51 @@ class IdentityLinkService
     }
 
     /**
+     * La ficha de socio que lleva el documento de esta identidad, o null. SOLO
+     * LECTURA: no enlaza nada. Coincidir por documento IDENTIFICA a quién
+     * habría que verificar; no prueba que la ficha sea de esa persona (eso es
+     * el OTP al teléfono registrado del socio, ver {@see attachMember()}).
+     */
+    public function memberCandidate(Identity $identity): ?Member
+    {
+        return $this->memberForDocument($identity->document_normalized);
+    }
+
+    /**
+     * El socio de un documento, o null. Solo lectura, como {@see memberCandidate()},
+     * para quien todavía no tiene identidad (la comprobación previa del alta).
+     *
+     * Los dos normalizadores no son el mismo: `members.document_number` se guarda
+     * con {@see Member::normalizeDocumentNumber()} (quita espacios, puntos y
+     * guiones; respeta mayúsculas y minúsculas) y la identidad con
+     * {@see DocumentNormalizer} (solo alfanumérico, en mayúsculas). En una cédula
+     * coinciden; un documento de extranjero puede estar en minúsculas en la ficha
+     * de socio. Se busca primero la forma exacta y después sin distinguir
+     * mayúsculas, y el resultado se confirma con el normalizador de identidades:
+     * lo que este no reconozca como el mismo documento no es candidato.
+     */
+    public function memberForDocument(?string $document): ?Member
+    {
+        $normalized = DocumentNormalizer::normalize($document);
+        if ($normalized === null) {
+            return null;
+        }
+
+        $candidate = Member::query()->where('document_number', $normalized)->first();
+        if ($candidate === null) {
+            // `document_number` es único tal cual, no sin mayúsculas: dos fichas
+            // podrían diferir solo en eso. Con más de una no se elige ninguna,
+            // porque adivinar aquí es proponer la ficha de otra persona.
+            $fallback = Member::query()->whereRaw('upper(document_number) = ?', [$normalized])->limit(2)->get();
+            $candidate = $fallback->count() === 1 ? $fallback->first() : null;
+        }
+
+        return $candidate !== null && DocumentNormalizer::normalize($candidate->document_number) === $normalized
+            ? $candidate
+            : null;
+    }
+
+    /**
      * Devuelve la identidad del documento, creándola si no existe. Seguro ante
      * carreras: si dos peticiones intentan crearla a la vez, el índice único
      * deja pasar una y la otra reintenta leyendo la ganadora.

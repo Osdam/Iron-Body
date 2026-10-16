@@ -1102,6 +1102,13 @@ Route::post('admin/workforce/workdays/{workday}/resolve', [\App\Http\Controllers
 Route::get('admin/workforce/positions', [\App\Http\Controllers\Api\Admin\WorkforceStaffController::class, 'positions']);
 Route::get('admin/workforce/staff', [\App\Http\Controllers\Api\Admin\WorkforceStaffController::class, 'index']);
 Route::post('admin/workforce/staff', [\App\Http\Controllers\Api\Admin\WorkforceStaffController::class, 'store']);
+// Ficha unificada: comprobación previa del alta (POST: el documento no va en la
+// URL), la ficha de una persona y el vínculo verificado con su ficha de socio.
+// `lookup` va ANTES de las rutas con {identity}.
+Route::post('admin/workforce/staff/lookup', [\App\Http\Controllers\Api\Admin\WorkforceStaffController::class, 'lookup'])->middleware('throttle:workforce-lookup');
+Route::get('admin/workforce/staff/{identity}', [\App\Http\Controllers\Api\Admin\WorkforceStaffController::class, 'show'])->whereUuid('identity');
+Route::post('admin/workforce/staff/{identity}/member-link', [\App\Http\Controllers\Api\Admin\WorkforceMemberLinkController::class, 'start'])->whereUuid('identity')->middleware(['throttle:workforce-member-link', 'throttle:workforce-member-link-day']);
+Route::post('admin/workforce/staff/{identity}/member-link/confirm', [\App\Http\Controllers\Api\Admin\WorkforceMemberLinkController::class, 'confirm'])->whereUuid('identity')->middleware('throttle:workforce-member-link');
 Route::patch('admin/workforce/staff/{identity}', [\App\Http\Controllers\Api\Admin\WorkforceStaffController::class, 'update'])->whereUuid('identity');
 Route::post('admin/workforce/staff/{identity}/fallback-code', [\App\Http\Controllers\Api\Admin\WorkforceStaffController::class, 'fallbackCode'])->whereUuid('identity');
 Route::get('admin/biometrics/identities/{identity}', [\App\Http\Controllers\Api\Admin\BiometricAdminController::class, 'show'])->whereUuid('identity');
