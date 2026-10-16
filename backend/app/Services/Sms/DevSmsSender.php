@@ -21,6 +21,12 @@ class DevSmsSender implements SmsSender
         return true;
     }
 
+    /** No necesita nada: no envía. En producción la fábrica ni lo construye. */
+    public function isConfigured(): bool
+    {
+        return true;
+    }
+
     public function name(): string
     {
         return 'dev';

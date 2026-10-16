@@ -51,6 +51,12 @@ class LabsMobileSmsSender implements SmsSender
         }
     }
 
+    public function isConfigured(): bool
+    {
+        return (string) config('otp.labsmobile.username') !== ''
+            && (string) config('otp.labsmobile.token') !== '';
+    }
+
     public function name(): string
     {
         return 'labsmobile';

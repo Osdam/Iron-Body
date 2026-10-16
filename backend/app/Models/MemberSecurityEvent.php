@@ -68,6 +68,13 @@ class MemberSecurityEvent extends Model
 
     public const TYPE_PHONE_CHANGED = 'phone_changed';
 
+    // Rastro de DATOS: `members.phone` cambió de verdad, por el camino que sea
+    // (ficha del CRM, registro, importación, app, soporte…). Lo escribe un solo
+    // punto ({@see \App\Services\Members\MemberPhoneTrail}) y no lleva el número.
+    // `phone_changed` sigue siendo el del FLUJO (quién, desde dónde, a qué
+    // número enmascarado) y solo lo dejan los flujos de cambio de número.
+    public const TYPE_PHONE_FIELD_CHANGED = 'phone_field_changed';
+
     public const TYPE_SUPPORT_REPORT = 'support_security_report';
 
     // Suspensión por riesgo (Bloque 3a / Fase 10).

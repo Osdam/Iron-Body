@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Membership\MembershipAccess;
 use App\Services\Membership\MembershipFreeze;
 use App\Services\Audit\AuditTrail;
+use App\Services\Members\MemberPhoneTrail;
 use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Database\QueryException;
@@ -398,6 +399,15 @@ class UserController extends Controller
             }
 
             if ($memberUpdates !== []) {
+                // `update()` del constructor no pasa por los eventos del modelo:
+                // el rastro del teléfono de la ficha de socio se deja aquí. Hace
+                // falta aunque `users.phone` no cambie, porque la traza de abajo
+                // lista los campos del USUARIO y no vería este cambio (M2).
+                if (array_key_exists('phone', $memberUpdates)) {
+                    app(MemberPhoneTrail::class)->recordIfChanged(
+                        $user->appMember, $user->appMember->phone, $memberUpdates['phone'],
+                    );
+                }
                 $user->appMember()->update($memberUpdates);
             }
 

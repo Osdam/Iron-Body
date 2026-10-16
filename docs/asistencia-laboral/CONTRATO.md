@@ -429,8 +429,9 @@ la misma fila de `GET staff` más estos bloques:
     `no_phone` (la ficha de socio no tiene teléfono PROPIO, `members.phone`; el del usuario
     del CRM no cuenta porque lo puede reescribir el registro público),
     `phone_recently_changed` (el teléfono de la ficha de socio cambió hace menos de 7 días:
-    desde la ficha del CRM, desde soporte, desde la app o por recuperación; un número recién
-    puesto puede ser de quien lo puso y no prueba titularidad).
+    desde la ficha del CRM —también si el usuario ya tenía ese número—, desde soporte, desde la
+    app, por recuperación, por el registro o por una importación; un número recién puesto
+    puede ser de quien lo puso y no prueba titularidad).
     Sin verificación posible (o con el envío caído, 503) el CRM se queda en «coincide por
     documento, sin verificar» y enlaza a Miembros con `user_id`; nunca vincula.
   · `conflict` + `linked_elsewhere`: el socio del documento ya cuelga de OTRA identidad.
@@ -452,13 +453,27 @@ facial (`face-reference`, `face-verify`, re-enrolamiento) solo admiten retos de 
 `login`, y uno de otro propósito responde como inexistente—, pero en producción el OTP de
 socios va por **Twilio Verify**, que valida TELÉFONO + código y no el reto: el mismo código
 serviría para un reto de login abierto aparte para ese número mientras esté pendiente.
-Precondiciones para encenderla en producción (las dos):
-1. El código de `identity_link` NO viaja por Twilio Verify, sino por un canal ligado al reto:
-   código propio (hash en el reto) enviado por SMS normal, o un servicio de Verify separado
-   solo para este propósito.
-2. Cerrar el hueco M2: si `users.phone` ya tenía el número nuevo, el PATCH de usuarios cambia
-   `members.phone` sin que `phone` aparezca en la traza y la cuarentena no lo ve. Hay que
-   registrar el cambio de `members.phone` (traza o evento) antes de encender.
+Precondiciones para encenderla en producción — las dos CUMPLIDAS en el código (2026-10-16, rama
+`feat/member-link-secure-channel`); encenderla sigue siendo decisión del propietario, tras la
+comprobación en producción de DISENO §10b:
+1. **Código ligado al reto (cumplida).** El código de `identity_link` nunca pasa por Twilio
+   Verify, ni como reserva: el backend lo genera, guarda su hash en el reto, lo envía por SMS
+   normal (con `OTP_DRIVER=twilio`, API de Messages desde `TWILIO_FROM`, destino en E.164) y lo
+   comprueba localmente contra ESE reto, de ESE socio y de ESE propósito. Un código de Verify
+   (login) no vincula y el del vínculo no abre la app (ni por `challenge_id` ni por teléfono).
+   Se respetan cupos, techo de gasto, candado, vigencia, un solo uso, bloqueo al quinto intento;
+   un reto sustituido por otro más nuevo ya no vale (410 `otp_expired`). Login y acciones
+   sensibles no cambian. Texto del SMS: «Iron Body: código NNNNNN para vincular tu ficha de socio
+   con tu perfil de personal. Dalo solo en persona en el mostrador del gimnasio. Vence en 5 min.»
+   Sin SMS normal configurado (p. ej. sin `TWILIO_FROM`), (d) responde 503 `otp_unavailable`
+   sin crear reto, sin gastar cupo y sin tocar Verify, y la ficha se queda «sin verificar».
+2. **Hueco M2 (cerrado).** Todo cambio REAL de `members.phone` (el mismo número con otro formato
+   no cuenta; el alta de una ficha tampoco) deja el evento `phone_field_changed` en los eventos
+   de seguridad del socio, sin el número: `metadata: { "field": "phone", "via": "<MÉTODO>
+   <plantilla de la ruta>" | "console" }`. Lo deja un observer del modelo (registro, app,
+   recuperación, soporte, importaciones, comandos) y, a mano, el PATCH de la ficha del CRM (que
+   escribe la ficha de socio sin pasar por el modelo). La cuarentena lo lee junto a las dos
+   fuentes anteriores (traza del PATCH y `phone_changed`), que cubren los cambios previos.
 
 `POST admin/workforce/staff/{identity_id}/member-link` — `workforce.manage` + `members.edit`,
 10/min por administrador (compartido con la confirmación, sea cual sea la sesión) y 30 al día
@@ -467,7 +482,8 @@ por administrador. Envía un código por SMS al teléfono PROPIO de la ficha de 
 Si el reto creado no fuera a ese número, se bloquea y responde 409 `member_link_destination_mismatch`.
 `{ "member_id": 7699 }` →
 201 `{ "ok": true, "challenge_id": "<uuid>", "destination": "•••• 1234", "expires_in": 300, "reused": false }`
-(`dev_code` solo con el driver `dev` fuera de producción; `reused: true` = sigue vivo el
+(`dev_code` solo con el driver `dev` fuera de producción; el código viaja por SMS normal,
+nunca por Twilio Verify (precondición 1); `reused: true` = sigue vivo el
 código anterior y no se manda otro SMS; `expires_in` = segundos que le quedan;
 `delivery_warning` (texto) solo si el proveedor no confirmó el envío, como en el login).
 200 `{ "ok": true, "result": "already_linked", "data": <ficha> }` si ya estaba vinculada.
@@ -499,7 +515,7 @@ Errores de (d) y (e):
 | 422 | `member_without_phone` | la ficha de socio no tiene teléfono propio (`members.phone`), aunque el usuario del CRM tenga uno (en d; en e antes de comprobar el código y con las filas bloqueadas) |
 | 409 | `member_link_destination_mismatch` | el código no fue (o ya no es) al teléfono propio actual de la ficha de socio; no se vincula y hay que pedir otro |
 | 429 | `otp_rate_limited` (+ `retry_after`) | cupo de envíos del socio o del número (solo en d) |
-| 503 | `otp_unavailable` (+ `retry_after`) | envío apagado o techo de gasto (solo en d) |
+| 503 | `otp_unavailable` (+ `retry_after`) | envío apagado o techo de gasto (solo en d); también, SIN `retry_after`, si el SMS normal del vínculo no está configurado (no se cae a Verify) |
 | 404 | `otp_not_found` | el reto no existe, es de otro socio o de otro propósito (p. ej. login) (solo en e) |
 | 409 | `otp_used` | el código ya se usó (solo en e) |
 | 410 | `otp_expired` | el código caducó (solo en e) |

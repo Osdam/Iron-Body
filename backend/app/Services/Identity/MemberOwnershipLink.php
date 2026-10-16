@@ -11,6 +11,7 @@ use App\Models\MemberAuthChallenge;
 use App\Models\MemberSecurityEvent;
 use App\Models\Trainer;
 use App\Services\Audit\AuditTrail;
+use App\Services\Members\MemberPhoneTrail;
 use App\Services\Otp\OtpPolicy;
 use App\Services\OtpService;
 use App\Services\Workforce\WorkforceEvents;
@@ -283,9 +284,12 @@ class MemberOwnershipLink
     }
 
     /**
-     * ¿Está encendido el vínculo? Apagado por defecto: hasta que el código del
-     * vínculo viaje por un canal ligado al reto, en producción (Twilio Verify,
-     * que valida teléfono + código) serviría también para un login del socio.
+     * ¿Está encendido el vínculo? Apagado por defecto. Las dos precondiciones
+     * de H1 ya están en el código —el código del vínculo va ligado a su reto por
+     * SMS normal, nunca por Twilio Verify ({@see OtpService}), y todo cambio de
+     * `members.phone` deja rastro para la cuarentena—; encenderlo es decisión
+     * del propietario tras comprobar en producción que el SMS normal llega
+     * (DISENO §10b).
      */
     public function enabled(): bool
     {
@@ -340,15 +344,19 @@ class MemberOwnershipLink
      * ¿El teléfono de esta ficha de socio cambió hace menos de
      * {@see PHONE_CHANGE_QUARANTINE_DAYS} días?
      *
-     * Dos fuentes, porque los caminos que escriben el teléfono dejan rastros
-     * distintos y ninguna los cubre todos:
+     * La fuente que cubre TODOS los caminos es el rastro de datos
+     * `phone_field_changed` ({@see MemberPhoneTrail}): lo
+     * deja cualquier cambio real de `members.phone`, también el del PATCH de la
+     * ficha cuando `users.phone` ya tenía el número nuevo (hueco M2), el registro
+     * y las importaciones. Las otras dos se siguen mirando porque cubren los
+     * cambios hechos antes de que existiera ese rastro:
      *   · la ficha del CRM (`PATCH api/users/{user}`, `members.edit`) deja su
      *     traza en `audit_logs` —módulo «Miembros», entidad «cliente», el id del
      *     USUARIO— con el nombre del campo cambiado y sin el valor;
      *   · el cambio desde la app, la recuperación del número y el cambio desde
      *     soporte dejan `phone_changed` en los eventos de seguridad del socio.
-     * Cualquiera de las dos bloquea: ante la duda, la ficha se queda en
-     * «coincide por documento, sin verificar», que no vincula nada.
+     * Cualquiera bloquea: ante la duda, la ficha se queda en «coincide por
+     * documento, sin verificar», que no vincula nada.
      */
     public function phoneRecentlyChanged(Member $member): bool
     {
@@ -356,7 +364,7 @@ class MemberOwnershipLink
 
         $porElSocioOSoporte = MemberSecurityEvent::query()
             ->where('member_id', $member->getKey())
-            ->where('type', MemberSecurityEvent::TYPE_PHONE_CHANGED)
+            ->whereIn('type', [MemberSecurityEvent::TYPE_PHONE_FIELD_CHANGED, MemberSecurityEvent::TYPE_PHONE_CHANGED])
             ->where('created_at', '>=', $since)
             ->exists();
         if ($porElSocioOSoporte || $member->user_id === null) {
