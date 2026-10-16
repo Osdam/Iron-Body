@@ -288,14 +288,18 @@ class MemberContractTest extends TestCase
         $this->assertDatabaseCount('members', 1);
     }
 
-    public function test_register_resumes_when_user_already_has_member(): void
+    public function test_register_with_the_email_of_another_member_creates_its_own_account(): void
     {
-        // Reproduce el 500 real: el usuario ya existe (por email) y TIENE un
-        // miembro; un nuevo intento con documento distinto pero mismo correo NO
-        // debe insertar otro miembro (members_user_id_unique) ni devolver 500.
+        // Nació para el 500 real: el usuario ya existe (por email) y TIENE un
+        // miembro; un nuevo intento con documento distinto pero mismo correo
+        // violaba members_user_id_unique. Se «arregló» reanudando ESA ficha y
+        // cambiándole el documento: con solo saber un correo se secuestraba el
+        // alta de otra persona. Ahora el correo ajeno no se reutiliza: es un
+        // alta nueva y propia, sin 500 y sin tocar la primera.
         $email = 'sameuser'.random_int(1, 99999).'@example.com';
+        $firstDoc = '7'.random_int(1000000, 9999999);
         $first = $this->postJson('/api/members/register', [
-            'full_name' => 'Usuario A', 'document_number' => '7'.random_int(1000000, 9999999),
+            'full_name' => 'Usuario A', 'document_number' => $firstDoc,
             'phone' => '3001112233', 'gender' => 'Masculino', 'email' => $email, 'is_minor' => false,
             'biometric_status' => 'skipped',
         ]);
@@ -306,8 +310,10 @@ class MemberContractTest extends TestCase
             'full_name' => 'Usuario A', 'document_number' => '8'.random_int(1000000, 9999999),
             'phone' => '3001112233', 'gender' => 'Masculino', 'email' => $email, 'is_minor' => false,
         ]);
-        $second->assertOk()->assertJsonPath('member_id', $memberId);
-        $this->assertDatabaseCount('members', 1);
+        $second->assertCreated();
+        $this->assertNotSame($memberId, $second->json('member_id'));
+        $this->assertDatabaseCount('members', 2);
+        $this->assertDatabaseHas('members', ['id' => $memberId, 'document_number' => $firstDoc]);
     }
 
     public function test_register_active_document_returns_409_not_500(): void

@@ -236,9 +236,42 @@ class Member extends Model
         return $digits === '' ? null : $digits;
     }
 
+    /**
+     * Estados de un alta que NO ha terminado. Es la misma lista que el CRM
+     * enseña en «Registros incompletos»; incluye los estados heredados que
+     * normalizó la migración 2026_05_18_000007 por si queda alguno.
+     *
+     * Lista CERRADA a propósito: lo que no esté aquí (activa, suspendida,
+     * eliminada o cualquier estado nuevo) no lo puede tocar la app pública.
+     */
+    public const REGISTRATION_IN_PROGRESS_STATUSES = [
+        self::STATUS_PENDING_REGISTRATION,
+        self::STATUS_INCOMPLETE,
+        self::STATUS_FAILED,
+        'created',
+        'identity_verified',
+        'identity_review',
+        'legal_accepted',
+        'signed',
+    ];
+
+    /**
+     * ¿Puede la app pública retomar —y escribir— esta alta?
+     *
+     * Las rutas de registro solo las protege un token que va dentro de la APK,
+     * así que la única prueba de quién llama es el documento. Por eso:
+     *
+     *   - Solo un alta EN CURSO. Antes bastaba con «no activa», y una cuenta
+     *     suspendida o eliminada se reanudaba (y revivía) desde la app.
+     *   - Y que nunca haya iniciado sesión. El alta de la app se autentica con
+     *     el `access_hash`, nunca crea sesiones de dispositivo; si las hay, la
+     *     persona ya entró por OTP y esto es una cuenta en uso, no un registro
+     *     a medias: reanudarla entregaba su bearer a quien supiera el documento.
+     */
     public function isRegistrationResumable(): bool
     {
-        return $this->status !== self::STATUS_ACTIVE;
+        return in_array($this->status, self::REGISTRATION_IN_PROGRESS_STATUSES, true)
+            && ! $this->deviceSessions()->exists();
     }
 
     public function user(): BelongsTo

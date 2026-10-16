@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\DebtorType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginMemberRequest;
 use App\Http\Requests\RegisterMemberRequest;
@@ -10,15 +11,24 @@ use App\Http\Requests\StoreMemberIdentityRequest;
 use App\Http\Requests\StoreMemberLegalConsentRequest;
 use App\Http\Requests\StoreMemberSignatureRequest;
 use App\Jobs\Marketing\ProposePaymentClaim;
+use App\Models\Attendance;
+use App\Models\ClassReservation;
+use App\Models\EmployeeAccess;
 use App\Models\Member;
 use App\Models\MemberBiometric;
+use App\Models\MemberContract;
+use App\Models\MembershipAdjustment;
+use App\Models\Payment;
 use App\Models\Plan;
+use App\Models\Receivable;
 use App\Models\User;
+use App\Models\WorkoutSession;
 use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -27,6 +37,15 @@ use Throwable;
 
 class MemberRegistrationController extends Controller
 {
+    /**
+     * Ventana de los pasos por {member}: la abre cada register que termina en
+     * alta nueva o reanudada. La APK encadena identidad, contrato y rostro
+     * justo después de register; si la ventana caduca a mitad, su reintento
+     * vuelve a empezar por register y la reabre. Fuera de ella, recorrer ids
+     * con el token de la APK ya no alcanza a ningún alta.
+     */
+    private const REGISTRATION_WINDOW_MINUTES = 120;
+
     public function login(LoginMemberRequest $request): JsonResponse
     {
         $member = Member::query()
@@ -67,16 +86,7 @@ class MemberRegistrationController extends Controller
     public function incomplete(): JsonResponse
     {
         $members = Member::query()
-            ->whereIn('status', [
-                Member::STATUS_PENDING_REGISTRATION,
-                Member::STATUS_INCOMPLETE,
-                Member::STATUS_FAILED,
-                'created',
-                'identity_verified',
-                'identity_review',
-                'legal_accepted',
-                'signed',
-            ])
+            ->whereIn('status', Member::REGISTRATION_IN_PROGRESS_STATUSES)
             ->orderByDesc('created_at')
             ->paginate(20)
             ->through(fn (Member $member): array => [
@@ -112,48 +122,72 @@ class MemberRegistrationController extends Controller
             $claimant = null;
 
             $response = DB::transaction(function () use ($validated, $biometricStatus, &$claimant): JsonResponse {
-                // (1) ¿Ya hay un miembro con este documento?
+                $document = $validated['document_number'];
+
+                // (1) ¿Ya hay un miembro con este documento? Su fila queda
+                //     bloqueada hasta el commit: comprobar que el alta se puede
+                //     reanudar y escribirla no pueden separarse (otra petición
+                //     podría terminarla o activarla entre medias).
                 $member = Member::query()
-                    ->where('document_number', $validated['document_number'])
+                    ->where('document_number', $document)
+                    ->lockForUpdate()
                     ->first();
 
-                // (2) Resolver/crear el usuario CRM. Si no hubo match por
-                //     documento, el usuario podría existir ya (por email o
-                //     documento) y TENER un miembro: en ese caso se reanuda ese
-                //     miembro en vez de insertar otro (lo que violaba
-                //     members_user_id_unique y devolvía 500).
-                $user = $this->syncCrmUser($member ?? new Member($validated), $validated);
+                // (2) Usuario del CRM al que se enlazaría. SOLO LECTURA: hasta
+                //     descartar todos los rechazos de (3) no se escribe nada.
+                //     Antes se reescribía aquí mismo y el 409 posterior salía
+                //     del closure sin excepción, así que la transacción
+                //     CONFIRMABA el nombre, correo y teléfono del atacante sobre
+                //     el usuario de un socio activo.
+                $user = $member?->user ?? $this->findLinkableCrmUser($validated);
 
-                if (! $member) {
-                    $member = Member::query()->where('user_id', $user->id)->first();
+                //     Si ese usuario ya tiene ficha de socio, se reanuda ESA
+                //     ficha en vez de insertar otra (lo que violaba
+                //     members_user_id_unique y devolvía 500)...
+                $userMember = $user
+                    ? Member::query()->where('user_id', $user->id)->lockForUpdate()->first()
+                    : null;
+
+                if ($member === null) {
+                    $member = $userMember;
+                } elseif ($userMember !== null && $userMember->id !== $member->id) {
+                    // ...pero si el documento es de una ficha y el usuario del
+                    // CRM con ese documento es de OTRA, no hay a quién enlazar.
+                    return $this->rejectRegistration('crm_user_owned_by_other_member', $document, $member);
                 }
 
-                // (3) Resumir un registro existente (idempotente) o rechazar
-                //     claramente si la cuenta ya está activa.
+                // (3) Rechazos. TODOS antes de cualquier escritura: un 409 deja
+                //     la base exactamente como estaba.
                 if ($member) {
                     if (! $member->isRegistrationResumable()) {
-                        Log::info('member:register:duplicate-document', ['member_id' => $member->id]);
-
-                        return $this->duplicateResponse($member);
+                        return $this->rejectRegistration('not_resumable', $document, $member);
                     }
 
+                    // No reasignar un documento que pertenece a OTRO miembro
+                    // (evita 23505). Solo puede pasar cuando la ficha llegó por
+                    // el usuario del CRM, con un documento distinto.
+                    if ($document !== $member->document_number
+                        && Member::query()->where('document_number', $document)->whereKeyNot($member->id)->exists()) {
+                        return $this->rejectRegistration('document_owned_by_other_member', $document, $member);
+                    }
+                }
+
+                // (4) Escrituras.
+                $user = $this->syncCrmUser($user, $member ?? new Member($validated), $validated);
+
+                if ($member) {
                     Log::info('member:register:existing-member', [
                         'user_id' => $user->id,
                         'member_id' => $member->id,
                     ]);
 
-                    $resumed = $this->resumeRegistration($member, $validated, $biometricStatus, $user);
-                    // Reanudar es un alta que continúa: también propone. Salvo
-                    // cuando resumeRegistration rechaza (409 por documento
-                    // ajeno): ahí no hay registro que proponer.
-                    if ($resumed->getStatusCode() < 300) {
-                        $claimant = $member;
-                    }
+                    // Reanudar es un alta que continúa: también propone.
+                    $claimant = $member;
 
-                    return $resumed;
+                    return $this->resumeRegistration($member, $validated, $biometricStatus, $user);
                 }
 
-                // (4) Miembro nuevo.
+                // (5) Miembro nuevo.
                 $member = new Member(array_merge($validated, [
                     'status' => Member::STATUS_PENDING_REGISTRATION,
                 ]));
@@ -188,6 +222,9 @@ class MemberRegistrationController extends Controller
             });
 
             // Ya hay commit: solo ahora puede salir nada hacia fuera.
+            if ($claimant !== null) {
+                $this->openRegistrationWindow($claimant);
+            }
             $this->proposeApprovedPaymentClaim($claimant);
 
             return $response;
@@ -245,14 +282,8 @@ class MemberRegistrationController extends Controller
      */
     private function resumeRegistration(Member $member, array $validated, ?string $biometricStatus, User $user): JsonResponse
     {
-        // No reasignar un documento que pertenece a OTRO miembro (evita 23505).
-        $incomingDoc = $validated['document_number'] ?? null;
-        if ($incomingDoc
-            && $incomingDoc !== $member->document_number
-            && Member::query()->where('document_number', $incomingDoc)->whereKeyNot($member->id)->exists()) {
-            return $this->duplicateResponse($member);
-        }
-
+        // El choque de documento con OTRO miembro ya se descartó en register(),
+        // antes de escribir nada.
         $member->fill($validated);
         if ($biometricStatus !== null && $member->biometric_status !== Member::BIOMETRIC_REGISTERED) {
             $member->biometric_status = $biometricStatus;
@@ -285,6 +316,108 @@ class MemberRegistrationController extends Controller
         ], 409);
     }
 
+    /** Rechazo de register: deja rastro y responde el 409 de siempre. */
+    private function rejectRegistration(string $reason, string $document, Member $member): JsonResponse
+    {
+        $this->logRejected('register', $reason, $member, $document);
+
+        return $this->duplicateResponse($member);
+    }
+
+    /**
+     * Respuesta ÚNICA de las rutas por {member} cuando la ficha no es un alta
+     * en curso de quien llama: activa, suspendida, eliminada, ya en uso, fuera
+     * de su ventana o con historia. Es la misma en todos los casos para no
+     * revelar cuál aplica. 409 y no 401: la APK cierra la sesión ante un 401;
+     * ante esto muestra el mensaje y sigue.
+     */
+    private function registrationClosedResponse(): JsonResponse
+    {
+        return response()->json([
+            'ok' => false,
+            'code' => 'registration_closed',
+            'message' => 'Este registro ya no se puede modificar desde la app. Si ya tienes cuenta, inicia sesión.',
+        ], 409);
+    }
+
+    /**
+     * Guarda de las rutas públicas por {member}. Null = adelante.
+     *
+     * La APK publicada sube identidad, firma y rostro por `members/{id}/…` sin
+     * ninguna credencial del socio: solo el token compartido de la APK. Con
+     * eso y un id secuencial se podía escribir —y activar— cualquier ficha.
+     * Ahora solo se acepta un alta en curso (ver Member::isRegistrationResumable)
+     * que haya pasado por register hace menos de REGISTRATION_WINDOW_MINUTES.
+     */
+    private function rejectUnlessRegistrationEditable(Member $member, string $action): ?JsonResponse
+    {
+        $reason = match (true) {
+            ! $member->isRegistrationResumable() => 'not_resumable',
+            ! $this->registrationWindowIsOpen($member) => 'no_registration_window',
+            default => null,
+        };
+
+        if ($reason === null) {
+            return null;
+        }
+
+        $this->logRejected($action, $reason, $member);
+
+        return $this->registrationClosedResponse();
+    }
+
+    /**
+     * Rastro de cada rechazo de las rutas públicas de registro, para detectar
+     * a quien usa el token de la APK contra fichas ajenas. Sin datos personales
+     * en claro: documento e IP van como huella HMAC (con APP_KEY), que sirve
+     * para ver que alguien insiste en uno o recorre muchos y no para
+     * recuperarlos.
+     */
+    private function logRejected(string $action, string $reason, ?Member $member = null, ?string $document = null): void
+    {
+        Log::warning('member:registration:rejected', [
+            'action' => $action,
+            'reason' => $reason,
+            'member_id' => $member?->id,
+            'member_status' => $member?->status,
+            'document_hash' => $document !== null ? $this->fingerprint($document) : null,
+            'ip_hash' => $this->fingerprint((string) request()->ip()),
+        ]);
+    }
+
+    private function fingerprint(string $value): ?string
+    {
+        return $value === ''
+            ? null
+            : substr(hash_hmac('sha256', $value, (string) config('app.key')), 0, 16);
+    }
+
+    private function registrationWindowKey(Member $member): string
+    {
+        return 'member-registration:window:'.$member->id;
+    }
+
+    private function openRegistrationWindow(Member $member): void
+    {
+        // El uuid, y no un `true`: si un id se reutilizara (SQLite lo hace al
+        // borrar la última fila), la ventana no vale para otra ficha.
+        Cache::put(
+            $this->registrationWindowKey($member),
+            $member->member_uuid,
+            now()->addMinutes(self::REGISTRATION_WINDOW_MINUTES),
+        );
+    }
+
+    private function registrationWindowIsOpen(Member $member): bool
+    {
+        return Cache::get($this->registrationWindowKey($member)) === $member->member_uuid;
+    }
+
+    private function closeRegistrationWindow(Member $member): void
+    {
+        Cache::forget($this->registrationWindowKey($member));
+    }
+
     /** Nombre de la restricción única violada (para log seguro, sin datos). */
     private function constraintNameFrom(UniqueConstraintViolationException $e): string
     {
@@ -297,6 +430,10 @@ class MemberRegistrationController extends Controller
 
     public function identity(StoreMemberIdentityRequest $request, Member $member): JsonResponse
     {
+        if ($rejected = $this->rejectUnlessRegistrationEditable($member, 'identity')) {
+            return $rejected;
+        }
+
         try {
             $validated = $request->validated();
             $old = $member->identityDocument;
@@ -332,6 +469,10 @@ class MemberRegistrationController extends Controller
 
     public function legalConsent(StoreMemberLegalConsentRequest $request, Member $member): JsonResponse
     {
+        if ($rejected = $this->rejectUnlessRegistrationEditable($member, 'legal-consent')) {
+            return $rejected;
+        }
+
         try {
             $validated = $request->validated();
 
@@ -375,6 +516,10 @@ class MemberRegistrationController extends Controller
 
     public function signature(StoreMemberSignatureRequest $request, Member $member): JsonResponse
     {
+        if ($rejected = $this->rejectUnlessRegistrationEditable($member, 'signature')) {
+            return $rejected;
+        }
+
         try {
             $validated = $request->validated();
             $old = $member->signature;
@@ -401,6 +546,13 @@ class MemberRegistrationController extends Controller
 
     public function biometric(StoreMemberBiometricRequest $request, Member $member): JsonResponse
     {
+        // También la usa «Registrar rostro» del perfil de la APK, sin credencial
+        // del socio: con solo el token de la APK se podía poner un rostro
+        // cualquiera —el del torniquete— en la ficha de un socio activo.
+        if ($rejected = $this->rejectUnlessRegistrationEditable($member, 'biometric')) {
+            return $rejected;
+        }
+
         try {
             $validated = $request->validated();
             $old = $member->biometric;
@@ -446,6 +598,12 @@ class MemberRegistrationController extends Controller
      */
     public function skipBiometric(Member $member): JsonResponse
     {
+        // Marca la ficha como ACTIVA: sin esta guarda revivía cuentas
+        // eliminadas o suspendidas.
+        if ($rejected = $this->rejectUnlessRegistrationEditable($member, 'biometric-skip')) {
+            return $rejected;
+        }
+
         Log::info('biometric:skip:start', ['member_id' => $member->id]);
         try {
             if ($member->biometric_status !== Member::BIOMETRIC_REGISTERED) {
@@ -461,43 +619,170 @@ class MemberRegistrationController extends Controller
         }
     }
 
+    /**
+     * DELETE admin/members/{member} — CRM («Registros incompletos»), con sesión
+     * admin. Borra la ficha y su usuario como siempre.
+     */
     public function destroy(Member $member): JsonResponse
     {
+        return $this->deleteMemberAndUser($member);
+    }
+
+    /**
+     * DELETE members/{member} — ruta PÚBLICA (token de la APK).
+     *
+     * La APK nunca la ha llamado; con el token extraído borraba CUALQUIER
+     * ficha, y en PostgreSQL el usuario arrastra en cascada pagos, asistencias
+     * y ajustes de membresía. Ahora solo descarta un alta en curso, de esta
+     * sesión de registro y sin historia. Todo lo demás es del CRM.
+     */
+    public function discardRegistration(Member $member): JsonResponse
+    {
+        if ($rejected = $this->rejectUnlessRegistrationEditable($member, 'discard')) {
+            return $rejected;
+        }
+
+        if ($history = $this->registrationHistory($member)) {
+            $this->logRejected('discard', $history, $member);
+
+            return $this->registrationClosedResponse();
+        }
+
+        $response = $this->deleteMemberAndUser($member);
+        if ($response->getStatusCode() === 204) {
+            $this->closeRegistrationWindow($member);
+        }
+
+        return $response;
+    }
+
+    /**
+     * Lo que impide descartar un alta desde la ruta pública aunque siga en
+     * curso: rastro de dinero, de uso o de un contrato firmado, o un usuario
+     * del CRM que existía antes del alta (un cliente del mostrador que se
+     * enlazó por documento). Null = no hay nada que perder.
+     */
+    private function registrationHistory(Member $member): ?string
+    {
+        if ($member->contracts()->where('status', MemberContract::STATUS_SIGNED)->exists()) {
+            return 'history_signed_contract';
+        }
+
+        $receivables = Receivable::query()
+            ->where('member_id', $member->id)
+            ->orWhere(fn ($q) => $q->where('debtor_type', DebtorType::MEMBER->value)->where('debtor_id', $member->id))
+            ->exists();
+        if ($receivables) {
+            return 'history_receivables';
+        }
+
+        if (Payment::query()->where('member_id', $member->id)->exists()
+            || Attendance::query()->where('member_id', $member->id)->exists()
+            || ClassReservation::query()->where('member_id', $member->id)->exists()
+            || WorkoutSession::query()->where('member_id', $member->id)->exists()) {
+            return 'history_member_activity';
+        }
+
+        $user = $member->user;
+        if ($user === null) {
+            return null;
+        }
+
+        if ($user->payments()->exists()
+            || Attendance::query()->where('user_id', $user->id)->exists()
+            || MembershipAdjustment::query()->where('user_id', $user->id)->exists()
+            || EmployeeAccess::query()->where('user_id', $user->id)->exists()) {
+            return 'history_crm_user_activity';
+        }
+
+        $preexisting = $user->created_at !== null
+            && $member->created_at !== null
+            && $user->created_at->lt($member->created_at->copy()->subMinute());
+        if ($preexisting || $user->imported_at !== null || filled($user->plan) || $user->membership_end_date !== null) {
+            return 'history_crm_user_preexisting';
+        }
+
+        return null;
+    }
+
+    private function deleteMemberAndUser(Member $member): JsonResponse
+    {
         try {
+            // Las rutas de los ficheros se leen ANTES: sus filas caen en cascada.
+            $member->loadMissing(['identityDocument', 'signature', 'biometric']);
+
             DB::transaction(function () use ($member): void {
-                $member->deleteStoredFiles();
                 $user = $member->user;
                 $member->delete();
                 $user?->delete();
             });
-
-            return response()->json(null, 204);
-        } catch (Throwable) {
-            return $this->serverError();
-        }
-    }
-
-    private function syncCrmUser(Member $member, array $data): User
-    {
-        $user = $member->user;
-
-        if (! $user) {
-            $user = User::query()
-                ->where('document', $data['document_number'])
-                ->first();
+        } catch (Throwable $e) {
+            return $this->serverError($e, 'member:destroy');
         }
 
-        if (! $user && filled($data['email'] ?? null)) {
-            $user = User::query()
-                ->where('email', $data['email'])
-                ->first();
-        }
-
-        if (! $user) {
-            $user = new User([
-                'password' => Hash::make('default-password'),
+        // Solo con el commit hecho se tocan los ficheros. Antes se borraban
+        // primero y un DELETE fallido (p. ej. una cuenta por cobrar, RESTRICT)
+        // dejaba la ficha viva sin su documento, su firma ni su rostro.
+        try {
+            $member->deleteStoredFiles();
+        } catch (Throwable $e) {
+            // La ficha ya no existe: un fichero que no se pudo borrar no
+            // convierte el borrado en un 500, pero queda rastro para limpiarlo.
+            Log::warning('member:destroy:files-not-deleted', [
+                'member_id' => $member->id,
+                'exception' => class_basename($e),
             ]);
         }
+
+        return response()->json(null, 204);
+    }
+
+    /**
+     * Usuario del CRM al que puede enlazarse un alta. SOLO LECTURA.
+     *
+     *   - Por DOCUMENTO: la llave con la que el socio entra; así se enlaza el
+     *     cliente del mostrador que se da de alta en la app.
+     *   - Por CORREO, solo si ese usuario no tiene ficha de socio y su documento
+     *     está vacío o es este mismo. Antes valía cualquiera, y el alta le
+     *     reescribía documento y teléfono: con el correo de otra persona se
+     *     le cambiaba el documento a su usuario y su OTP salía al atacante.
+     *     Si no cumple, no se reutiliza: el alta crea su propio usuario.
+     */
+    private function findLinkableCrmUser(array $data): ?User
+    {
+        $byDocument = User::query()->where('document', $data['document_number'])->first();
+        if ($byDocument) {
+            return $byDocument;
+        }
+
+        if (blank($data['email'] ?? null)) {
+            return null;
+        }
+
+        $byEmail = User::query()->where('email', $data['email'])->first();
+        if ($byEmail === null) {
+            return null;
+        }
+
+        $documentMatches = blank($byEmail->document)
+            || Member::normalizeDocumentNumber($byEmail->document) === $data['document_number'];
+        $hasMember = Member::query()->where('user_id', $byEmail->id)->exists();
+
+        if ($documentMatches && ! $hasMember) {
+            return $byEmail;
+        }
+
+        $this->logRejected('register', 'email_owned_by_other_user', null, $data['document_number']);
+
+        return null;
+    }
+
+    /** Crea o actualiza el usuario del CRM ya resuelto (null = uno nuevo). */
+    private function syncCrmUser(?User $user, Member $member, array $data): User
+    {
+        $user ??= new User([
+            'password' => Hash::make('default-password'),
+        ]);
 
         $email = $data['email'] ?? $user->email ?? null;
 
