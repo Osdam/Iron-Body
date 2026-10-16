@@ -134,6 +134,7 @@ class AppServiceProvider extends ServiceProvider
         $this->limitadoresInternos();
         $this->limitadorDeClases();
         $this->limitadorDelAgente();
+        $this->limitadoresDelTrasladoDePlanes();
 
         $this->guardWompiConfig();
         $this->guardFactusConfig();
@@ -402,6 +403,53 @@ class AppServiceProvider extends ServiceProvider
                     'code' => 'too_many_class_writes',
                 ], 429, $headers));
         });
+    }
+
+    /**
+     * TRASLADO DE SOCIOS ENTRE PLANES: cupo por ADMINISTRADOR, no por IP.
+     *
+     * Con el limitador anónimo (`throttle:10,1`) el cubo era el de la IP, el
+     * mismo que usan el login del CRM y la app de los socios en el Wi-Fi del
+     * gimnasio, y corre antes de autenticar: unos cuantos traslados dejaban el
+     * login en 429, y cualquiera desde la misma red gastaba el cupo de quien
+     * trasladaba. La clave es la PERSONA (`admin:{id}`): la que ya dejó la
+     * puerta en `auth_admin` o, si el limitador corre antes, la que resuelve
+     * su sesión. Sin sesión válida se vuelve a la IP, en un cubo propio de
+     * este limitador que no comparte nada con el login.
+     *
+     * Bloque autocontenido a propósito: otras ramas añaden limitadores en este
+     * mismo fichero.
+     */
+    private function limitadoresDelTrasladoDePlanes(): void
+    {
+        $clave = function (Request $request): string {
+            $admin = $request->attributes->get('auth_admin');
+            if ($admin instanceof \App\Models\Admin) {
+                return 'admin:'.$admin->id;
+            }
+
+            $token = $request->bearerToken();
+            $sesion = $token ? app(\App\Services\Admin\AdminSessionService::class)->resolveByToken($token) : null;
+
+            return $sesion !== null ? 'admin:'.$sesion->admin_id : 'ip:'.$request->ip();
+        };
+        $demasiadas = fn (string $mensaje) => fn ($request, array $headers) => response()->json([
+            'ok' => false,
+            'code' => 'too_many_requests',
+            'message' => $mensaje,
+            'retry_after' => (int) ($headers['Retry-After'] ?? 60),
+        ], 429, $headers);
+
+        // Ejecutar y revertir: diez por minuto y persona sobra para cualquier
+        // traslado de verdad y frena un bucle.
+        RateLimiter::for('plan-transfer-write', fn (Request $request) => Limit::perMinute(10)
+            ->by('plan-transfer-write:'.$clave($request))
+            ->response($demasiadas('Demasiados traslados seguidos. Espera un minuto antes de volver a ejecutar.')));
+
+        // Candidatos, simulaciones, historial y detalle.
+        RateLimiter::for('plan-transfer-read', fn (Request $request) => Limit::perMinute(60)
+            ->by('plan-transfer-read:'.$clave($request))
+            ->response($demasiadas('Demasiadas consultas seguidas al traslado de planes. Espera un momento.')));
     }
 
     /**

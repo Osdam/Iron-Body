@@ -445,6 +445,23 @@ final class AuthorizationMap
         'GET api/admin/memberships/stream' => ['members.view', 'plans.view', 'payments.view'],
 
         /*
+         * TRASLADAR SOCIOS ENTRE PLANES. Cambia el plan de un grupo sin cobro:
+         * lo que el socio puede hacer en la puerta y en la app cambia para
+         * decenas de personas de una vez. Las SIETE rutas van aquí, una a una,
+         * y el controlador NO está en CONTROLLERS: si lo estuviera, las
+         * lecturas resolverían a `plans.view`, que tiene recepción y que el
+         * token compartido obtiene por ser lectura. Ver la lista de candidatos
+         * ya es preparar un traslado.
+         */
+        'GET api/admin/plan-transfers/candidates' => 'plans.transfer',
+        'POST api/admin/plan-transfers/dry-run' => 'plans.transfer',
+        'GET api/admin/plan-transfers' => 'plans.transfer',
+        'POST api/admin/plan-transfers' => 'plans.transfer',
+        'GET api/admin/plan-transfers/{batch}' => 'plans.transfer',
+        'POST api/admin/plan-transfers/{batch}/revert/dry-run' => 'plans.transfer',
+        'POST api/admin/plan-transfers/{batch}/revert' => 'plans.transfer',
+
+        /*
          * El canal del CRM lleva ahora también los hechos de personal,
          * biometría y dispositivos (outbox `class_events`, un solo stream por
          * pestaña). Lo abre quien vea cualquiera de las pantallas que lo

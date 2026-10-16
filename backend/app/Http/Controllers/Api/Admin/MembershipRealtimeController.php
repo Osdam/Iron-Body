@@ -19,11 +19,22 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class MembershipRealtimeController extends Controller
 {
+    /**
+     * Cambios de plan que nacen de un TRASLADO entre planes (sin cobro). Los
+     * escribe el módulo de Miembros, no el de Pagos, y solo ellos pueden
+     * venir de allí.
+     */
+    private const TRANSFER_EVENTS = [
+        'membership.plan.transferred',
+        'membership.plan.transfer.reverted',
+    ];
+
     private const MEMBERSHIP_EVENTS = [
         'membership.plan.upgraded',
         'membership.plan.upgrade.cancelled',
         'membership.plan.upgrade.restored',
         'membership.plan.upgrade.updated',
+        ...self::TRANSFER_EVENTS,
     ];
 
     private const EVENTS = [...self::MEMBERSHIP_EVENTS, 'plan.created', 'plan.updated', 'plan.deleted'];
@@ -91,7 +102,12 @@ class MembershipRealtimeController extends Controller
         $type = $meta['event'] ?? null;
         $isUpgrade = in_array($type, self::MEMBERSHIP_EVENTS, true);
         if ($isUpgrade) {
-            if ($log->module !== 'Pagos' || $log->entity !== 'mejora de plan') {
+            // Cada evento de socio vale solo con la fuente que lo escribe: un
+            // traslado no se anuncia como mejora, ni una mejora como traslado.
+            [$module, $entity] = in_array($type, self::TRANSFER_EVENTS, true)
+                ? ['Miembros', 'membresía']
+                : ['Pagos', 'mejora de plan'];
+            if ($log->module !== $module || $log->entity !== $entity) {
                 return null;
             }
             $userId = filter_var($meta['user_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);

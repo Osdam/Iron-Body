@@ -180,6 +180,68 @@ class MembershipRealtimeTest extends TestCase
         $this->assertSame(array_fill(0, 3, $user->id), array_column($events, 'user_id'));
     }
 
+    private function transferred(User $user, array $override = []): AuditLog
+    {
+        return AuditLog::create(array_merge([
+            'action' => 'update', 'module' => 'Miembros', 'entity' => 'membresía',
+            'entity_id' => (string) $user->id, 'target_name' => 'Nombre privado', 'summary' => 'Texto privado',
+            'metadata' => [
+                'event' => 'membership.plan.transferred', 'user_id' => $user->id, 'plan_id' => 8,
+                'batch_id' => 4, 'item_id' => 9, 'changed' => ['membership', 'features', 'plans'],
+            ],
+        ], $override));
+    }
+
+    public function test_plan_transfer_events_are_delivered_only_from_the_members_module(): void
+    {
+        $user = $this->user();
+        $transferred = $this->transferred($user);
+        $reverted = $this->transferred($user, ['metadata' => [
+            'event' => 'membership.plan.transfer.reverted', 'user_id' => $user->id, 'plan_id' => 22,
+            'changed' => ['membership', 'features', 'plans'],
+        ]]);
+        // El mismo evento escrito por otro módulo no es un traslado.
+        $this->transferred($user, ['module' => 'Pagos', 'entity' => 'mejora de plan']);
+        // Y Miembros no puede anunciar una mejora: esa la escribe Pagos.
+        $this->upgraded($user, ['event' => 'membership.plan.upgraded'])->forceFill(['module' => 'Miembros', 'entity' => 'membresía'])->save();
+
+        $events = $this->events($this->get(self::URL.'?after_id=0', $this->adminHeaders())->assertOk()->streamedContent());
+
+        $this->assertSame([$transferred->id, $reverted->id], array_column($events, 'event_id'));
+        $this->assertSame(['membership.plan.transferred', 'membership.plan.transfer.reverted'], array_column($events, 'type'));
+        $this->assertSame([8, 22], array_column($events, 'plan_id'));
+        $this->assertSame([$user->id, $user->id], array_column($events, 'user_id'));
+        $this->assertSame(['membership', 'features', 'plans'], $events[0]['changed']);
+    }
+
+    public function test_a_real_plan_transfer_reaches_the_already_open_stream(): void
+    {
+        $from = Plan::create(['name' => 'TOTAL ACCESS - ELITE', 'price' => 180000, 'duration_days' => 30,
+            'active' => true, 'sellable' => false, 'visible_in_app' => false])->refresh();
+        $to = Plan::create(['name' => 'Élite', 'price' => 180000, 'duration_days' => 30, 'active' => true])->refresh();
+        $user = $this->user();
+        $start = MembershipPeriod::today()->subDays(7);
+        $user->forceFill(['plan' => $from->name, 'status' => 'active',
+            'membership_start_date' => $start->toDateString(), 'membership_end_date' => $start->addDays(30)->toDateString()])->save();
+        $headers = $this->adminHeaders();
+        $this->stream->betweenTicks = function () use ($user, $from, $to, $headers): void {
+            $body = ['from_plan_id' => $from->id, 'to_plan_id' => $to->id, 'user_ids' => [$user->id]];
+            $simulation = $this->postJson('/api/admin/plan-transfers/dry-run', $body, $headers)->assertOk()->json();
+            $this->postJson('/api/admin/plan-transfers', $body + ['fingerprint' => $simulation['fingerprint'],
+                'reason' => 'Unificar planes', 'client_request_id' => 'sse-transfer-1', 'confirm_warnings' => true], $headers)
+                ->assertCreated();
+        };
+
+        $events = $this->events($this->get(self::URL, $headers)->assertOk()->streamedContent());
+
+        // Solo el del socio: el del lote (módulo Planes) no viaja por este canal.
+        $this->assertCount(1, $events);
+        $this->assertSame('membership.plan.transferred', $events[0]['type']);
+        $this->assertSame($user->id, $events[0]['user_id']);
+        $this->assertSame($to->id, $events[0]['plan_id']);
+        $this->assertSame('Élite', $user->refresh()->plan);
+    }
+
     public function test_invalid_cursor_is_rejected_and_a_future_cursor_requests_resynchronization(): void
     {
         $headers = $this->adminHeaders();
