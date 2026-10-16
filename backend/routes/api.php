@@ -692,6 +692,23 @@ Route::middleware('auth.admin')->group(function (): void {
     Route::put('plans/{plan}/ai-capabilities', [PlanController::class, 'updateAiCapabilities']);
     Route::apiResource('plans', PlanController::class)->only(['store','update','destroy']);
 });
+// TRASLADAR SOCIOS ENTRE PLANES: cambiar el plan de un grupo sin cobrar nada,
+// conservando fechas, pagos y entradas usadas. Simular, ejecutar con la huella
+// de la simulación, y revertir como un lote nuevo. Las siete rutas exigen
+// `plans.transfer` (AuthorizationMap::OVERRIDES), incluidas las de lectura.
+// Las estáticas van antes de {batch}.
+Route::middleware('auth.admin')->prefix('admin/plan-transfers')->group(function (): void {
+    // Cupos por persona (AppServiceProvider::limitadoresDelTrasladoDePlanes),
+    // no el anónimo por IP que comparten el login y la app.
+    $traslados = \App\Http\Controllers\Api\Admin\PlanTransferController::class;
+    Route::get('candidates', [$traslados, 'candidates'])->middleware('throttle:plan-transfer-read');
+    Route::post('dry-run', [$traslados, 'dryRun'])->middleware('throttle:plan-transfer-read');
+    Route::get('/', [$traslados, 'index'])->middleware('throttle:plan-transfer-read');
+    Route::post('/', [$traslados, 'store'])->middleware('throttle:plan-transfer-write');
+    Route::get('{batch}', [$traslados, 'show'])->whereNumber('batch')->middleware('throttle:plan-transfer-read');
+    Route::post('{batch}/revert/dry-run', [$traslados, 'revertDryRun'])->whereNumber('batch')->middleware('throttle:plan-transfer-read');
+    Route::post('{batch}/revert', [$traslados, 'revert'])->whereNumber('batch')->middleware('throttle:plan-transfer-write');
+});
 // Lectura de planes/precios: PÚBLICA (la app muestra planes en registro/landing).
 Route::apiResource('plans', PlanController::class)->only(['index','show']);
 // ── Política de versión de la app (PÚBLICA) ───────────────────────────────────

@@ -82,6 +82,7 @@ final class PermissionCatalog
         'charge' => 'Cobrar',
         'cancel' => 'Anular',
         'enroll' => 'Inscribir',
+        'transfer' => 'Trasladar socios',
     ];
 
     /**
@@ -151,6 +152,7 @@ final class PermissionCatalog
         'integrations.manage' => 'Conectar y desconectar WhatsApp Business.',
         'moderation.manage' => 'Sancionar, retirar contenido y resolver apelaciones.',
         'marketing.agent.manage' => 'Pausar o reactivar las respuestas automáticas del agente IA para TODAS las conversaciones de WhatsApp. En pausa los mensajes se siguen recibiendo y guardando para atenderlos a mano. Queda auditado.',
+        'plans.transfer' => 'Cambiar de plan a un grupo de socios sin cobrar nada: conserva sus fechas, sus pagos y sus entradas usadas. Exige una simulación previa, queda auditado por lote y por socio, y se puede revertir mientras el socio no haya cambiado después.',
     ];
 
     /**

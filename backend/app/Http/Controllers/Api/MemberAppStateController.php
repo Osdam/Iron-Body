@@ -11,6 +11,7 @@ use App\Services\DeviceSessionService;
 use App\Services\LiveKitService;
 use App\Services\MembershipService;
 use App\Services\WeeklyStreakService;
+use App\Support\DocumentMask;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -250,14 +251,10 @@ class MemberAppStateController extends Controller
         ];
     }
 
+    /** El mismo enmascarado que usa el CRM: vive en {@see DocumentMask}. */
     private function maskDocument(?string $doc): ?string
     {
-        $doc = (string) $doc;
-        if (strlen($doc) <= 4) {
-            return $doc === '' ? null : str_repeat('•', strlen($doc));
-        }
-
-        return str_repeat('•', strlen($doc) - 4).substr($doc, -4);
+        return DocumentMask::mask($doc);
     }
 
     private function ver($timestamp): int

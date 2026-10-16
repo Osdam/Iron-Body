@@ -193,6 +193,40 @@ class RolePolicyTest extends TestCase
         }
     }
 
+    // ── TRASLADAR SOCIOS ENTRE PLANES ───────────────────────────────────────
+
+    public function test_trasladar_socios_entre_planes_es_del_administrador_y_no_del_mostrador(): void
+    {
+        AdminRole::firstOrCreate(['name' => CrmPermission::ROLE_ENTRENADOR], ['is_system' => true]);
+
+        $this->assertTrue($this->puede(Admin::ROLE_ADMINISTRADOR, 'plans.transfer'),
+            'Administrador debe poder trasladar socios: es quien decide el catálogo.');
+        $this->assertTrue($this->puede(Admin::ROLE_SUPER_ADMIN, 'plans.transfer'));
+
+        foreach ([Admin::ROLE_RECEPCION, CrmPermission::ROLE_ENTRENADOR, Admin::ROLE_ADMINISTRATIVO] as $rol) {
+            $this->assertFalse($this->puede($rol, 'plans.transfer'),
+                "{$rol} NO debe poder cambiar de plan a un grupo de socios.");
+        }
+
+        // El token de automatizaciones lee todo lo que acaba en `.view`; esto
+        // no, y por eso tampoco las lecturas del traslado.
+        $this->assertNotContains('plans.transfer', CrmPermission::readOnly());
+    }
+
+    public function test_recepcion_y_token_reciben_403_hasta_en_las_lecturas_del_traslado(): void
+    {
+        config(['admin.api_token' => 'token-de-automatizacion']);
+
+        foreach ([$this->recepcion(), ['Authorization' => 'Bearer token-de-automatizacion']] as $h) {
+            $this->getJson('/api/admin/plan-transfers', $h)
+                ->assertStatus(403)
+                ->assertJsonPath('required_permission', 'plans.transfer');
+            $this->getJson('/api/admin/plan-transfers/candidates?from_plan_id=1&to_plan_id=2', $h)
+                ->assertStatus(403)
+                ->assertJsonPath('required_permission', 'plans.transfer');
+        }
+    }
+
     // ── SUPER ADMIN ─────────────────────────────────────────────────────────
 
     public function test_super_admin_alcanza_todo_el_catalogo(): void
