@@ -8,6 +8,7 @@ use App\Services\Audit\AuditTrail;
 use App\Services\SerialTurnstileService;
 use App\Services\TurnstileService;
 use App\Services\ZktecoTurnstileService;
+use App\Support\Access\AdminActor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -21,8 +22,12 @@ class TurnstileController extends Controller
         private readonly SerialTurnstileService $serial,
     ) {}
 
-    public function show(): JsonResponse
+    public function show(Request $request): JsonResponse
     {
+        if ($rechazo = $this->requirePerson($request)) {
+            return $rechazo;
+        }
+
         return response()->json([
             'ok' => true,
             'data' => $this->serialize(TurnstileSetting::current()),
@@ -31,6 +36,10 @@ class TurnstileController extends Controller
 
     public function update(Request $request): JsonResponse
     {
+        if ($rechazo = $this->requirePerson($request)) {
+            return $rechazo;
+        }
+
         $data = $request->validate([
             'name' => ['nullable', 'string', 'max:120'],
             'enabled' => ['nullable', 'boolean'],
@@ -80,6 +89,10 @@ class TurnstileController extends Controller
     /** Disparo manual desde el CRM. */
     public function trigger(Request $request): JsonResponse
     {
+        if ($rechazo = $this->requirePerson($request)) {
+            return $rechazo;
+        }
+
         $data = $request->validate([
             'action' => ['nullable', 'in:entry,exit'],
             'reason' => ['nullable', 'string', 'max:200'],
@@ -113,6 +126,10 @@ class TurnstileController extends Controller
      */
     public function fireWebhook(Request $request): JsonResponse
     {
+        if ($rechazo = $this->requirePerson($request)) {
+            return $rechazo;
+        }
+
         $data = $request->validate([
             'url' => ['required', 'string', 'max:500', 'url'],
             'method' => ['nullable', 'in:GET,POST,PUT,PATCH'],
@@ -173,6 +190,10 @@ class TurnstileController extends Controller
      */
     public function openSerial(Request $request): JsonResponse
     {
+        if ($rechazo = $this->requirePerson($request)) {
+            return $rechazo;
+        }
+
         $data = $request->validate([
             'port' => ['nullable', 'string', 'max:20', 'regex:/^COM\d{1,3}$/i'],
             'baud' => ['nullable', 'integer', 'min:300', 'max:921600'],
@@ -221,6 +242,10 @@ class TurnstileController extends Controller
      */
     public function openZkteco(Request $request): JsonResponse
     {
+        if ($rechazo = $this->requirePerson($request)) {
+            return $rechazo;
+        }
+
         $data = $request->validate([
             'host' => ['nullable', 'string', 'max:120'],
             'port' => ['nullable', 'integer', 'min:1', 'max:65535'],
@@ -268,6 +293,33 @@ class TurnstileController extends Controller
             'result' => $result,
             'data' => $this->serialize($settings->refresh()),
         ], ($result['ok'] ?? false) ? 200 : 502);
+    }
+
+    /**
+     * El torniquete lo maneja una PERSONA, nunca el token compartido de
+     * automatizaciones.
+     *
+     * Leer la configuración entrega en claro las credenciales del dispositivo
+     * (`device_comm_key`, `auth_header`) y es lectura, así que la puerta lo
+     * resolvía a `classes.view`, que ese token obtiene. Las demás acciones
+     * abren la puerta física o hacen que el servidor llame a un host o URL
+     * que viaja en el cuerpo: la puerta ya exige `classes.manage`, y esto es
+     * la segunda cerradura.
+     *
+     * El CRM entra con la sesión de una persona y recibe exactamente lo de
+     * siempre. El lector local de la sede no usa estas rutas.
+     */
+    private function requirePerson(Request $request): ?JsonResponse
+    {
+        if (AdminActor::from($request) === null) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'person_required',
+                'message' => 'El torniquete solo lo maneja una persona. Entra con tu cuenta.',
+            ], 403);
+        }
+
+        return null;
     }
 
     private function serialize(TurnstileSetting $s): array

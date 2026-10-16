@@ -566,10 +566,11 @@ class MembershipAccess
     }
 
     /**
-     * Los DÍAS en que cada socio entró, dentro del rango que abarcan todas las
-     * ventanas. Se traen los marcajes y se doblan en PHP a días del calendario
-     * de Neiva: `captured_at` está en UTC, así que una entrada de las 7 de la
-     * noche cae al día siguiente si se agrupa por la fecha cruda.
+     * Los DÍAS en que cada socio entró POR SU MEMBRESÍA, dentro del rango que
+     * abarcan todas las ventanas. Se traen los marcajes y se doblan en PHP a
+     * días del calendario de Neiva: `captured_at` está en UTC, así que una
+     * entrada de las 7 de la noche cae al día siguiente si se agrupa por la
+     * fecha cruda.
      *
      * @param  Collection<int, User>  $users
      * @param  array<int, array{from: CarbonImmutable, to: CarbonImmutable, source: string}>  $ventanas
@@ -594,6 +595,16 @@ class MembershipAccess
         $marcajes = Attendance::query()
             ->whereIn('user_id', $ids)
             ->where('action', 'entry')
+            // Un día en que entró COMO EMPLEADO no le gastó nada del plan: esa
+            // entrada no la vendió nadie (ver consumesEntry()). La puerta está
+            // congelada en el marcaje (`access_via`). Null son las filas de
+            // antes de esa columna —todas socios entrando con su membresía— y
+            // las entradas fuera de regla: esas sí cuentan, por eso no basta
+            // con un `!=`, que en SQL descarta los null.
+            ->where(function ($q): void {
+                $q->whereNull('access_via')
+                    ->orWhere('access_via', '!=', self::VIA_EMPLOYEE);
+            })
             ->where('captured_at', '>=', $desde->startOfDay()->setTimezone('UTC'))
             ->orderBy('captured_at')
             ->get(['user_id', 'captured_at']);

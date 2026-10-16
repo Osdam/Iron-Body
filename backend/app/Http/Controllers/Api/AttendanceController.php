@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\NotificationService;
 use App\Services\TurnstileService;
 use App\Services\WeeklyStreakService;
+use App\Support\Access\AdminActor;
 use App\Support\SseStream;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -227,8 +228,12 @@ class AttendanceController extends Controller
      * descriptores con face-api.js. Solo incluye miembros activos con
      * imagen biométrica guardada.
      */
-    public function faceReferences(): JsonResponse
+    public function faceReferences(Request $request): JsonResponse
     {
+        if ($rechazo = $this->requirePerson($request)) {
+            return $rechazo;
+        }
+
         $members = Member::query()
             ->with(['user:id,name,plan,status', 'biometric:id,member_id,face_path,captured_at'])
             ->whereHas('biometric')
@@ -265,11 +270,16 @@ class AttendanceController extends Controller
 
     /**
      * Sirve la imagen biométrica de un usuario para que el navegador del CRM
-     * pueda computar el descriptor. Solo accesible desde el CRM (mismo origin
-     * en producción) — en una iteración posterior, proteger con auth de staff.
+     * (o el lector de la sede) pueda computar el descriptor. Exige la sesión
+     * de una persona, por cabecera o por el vale de `?ticket=` que usa
+     * `<img src>` (ver EnsureAdminAuth).
      */
-    public function faceImage(int $userId): Response|StreamedResponse
+    public function faceImage(Request $request, int $userId): Response|JsonResponse|StreamedResponse
     {
+        if ($rechazo = $this->requirePerson($request)) {
+            return $rechazo;
+        }
+
         $member = Member::query()
             ->with('biometric')
             ->where('user_id', $userId)
@@ -298,6 +308,10 @@ class AttendanceController extends Controller
      */
     public function faceEnrollmentPending(Request $request): JsonResponse
     {
+        if ($rechazo = $this->requirePerson($request)) {
+            return $rechazo;
+        }
+
         $search = trim((string) $request->query('search', ''));
 
         $members = Member::query()
@@ -351,6 +365,10 @@ class AttendanceController extends Controller
      */
     public function enrollFace(Request $request, Member $member): JsonResponse
     {
+        if ($rechazo = $this->requirePerson($request)) {
+            return $rechazo;
+        }
+
         $request->validate([
             'face' => ['required', 'image', 'mimes:jpeg,jpg,png', 'max:8192'],
         ]);
@@ -413,6 +431,10 @@ class AttendanceController extends Controller
      */
     public function deleteFace(Request $request, Member $member): JsonResponse
     {
+        if ($rechazo = $this->requirePerson($request)) {
+            return $rechazo;
+        }
+
         try {
             $biometric = $member->biometric;
 
@@ -452,6 +474,31 @@ class AttendanceController extends Controller
                 'message' => 'No se pudo eliminar el rostro.',
             ], 500);
         }
+    }
+
+    /**
+     * Los rostros son datos biométricos (Ley 1581): los ve o los cambia una
+     * PERSONA con su cuenta, nunca el token compartido de automatizaciones.
+     *
+     * La puerta no basta para la lectura: el catálogo, la imagen y la lista de
+     * pendientes son lecturas del dominio de clases (`classes.view`), y ese
+     * token obtiene toda lectura. Para la escritura la puerta ya lo impide
+     * —exige `classes.manage`—; esto es la segunda cerradura.
+     *
+     * El lector local de la sede y el CRM entran con la sesión de una persona
+     * (por cabecera o por el vale de `?ticket=`), así que no les afecta.
+     */
+    private function requirePerson(Request $request): ?JsonResponse
+    {
+        if (AdminActor::from($request) === null) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'person_required',
+                'message' => 'Los rostros del control de acceso solo los maneja una persona. Entra con tu cuenta.',
+            ], 403);
+        }
+
+        return null;
     }
 
     /**
