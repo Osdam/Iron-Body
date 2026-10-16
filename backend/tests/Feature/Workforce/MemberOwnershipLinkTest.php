@@ -17,6 +17,7 @@ use App\Services\Admin\AdminSessionService;
 use App\Services\Identity\IdentityLinkService;
 use App\Services\Otp\OtpPolicy;
 use App\Services\OtpService;
+use App\Services\SecurityEventService;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Database\Query\Grammars\SQLiteGrammar;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -568,6 +569,155 @@ class MemberOwnershipLinkTest extends TestCase
         $this->confirmar($identity, $yuri, $inicio->json('challenge_id'), (string) $inicio->json('dev_code'))
             ->assertStatus(409)->assertJsonPath('code', 'member_phone_recently_changed');
         $this->assertTrue($hecho);
+        $this->assertNull($yuri->refresh()->identity_id);
+    }
+
+    // ── Solo el teléfono PROPIO de la ficha de socio, solo registro terminado ─
+
+    /** Alta como administrativa (camino real) de un socio ya creado. */
+    private function enPersonal(Member $member): Identity
+    {
+        $uuid = $this->postJson('/api/admin/workforce/staff', [
+            'full_name' => $member->full_name, 'document' => $member->document_number, 'phone' => self::TEL_PERFIL, 'positions' => ['administrative'],
+        ], $this->admin)->assertCreated()->json('data.identity_id');
+
+        return Identity::query()->where('uuid', $uuid)->firstOrFail();
+    }
+
+    public function test_sin_telefono_propio_en_la_ficha_de_socio_no_se_usa_el_del_usuario(): void
+    {
+        // Socio activo, `members.phone` vacío, el usuario del CRM SÍ tiene.
+        $yuri = $this->socio(self::YURI, ['phone' => ''], ['phone' => '3005551234']);
+        $identity = $this->enPersonal($yuri);
+        $sms = $this->escucharSms();
+
+        $this->getJson("/api/admin/workforce/staff/{$identity->uuid}", $this->admin)
+            ->assertJsonPath('data.member.link', 'unlinked')
+            ->assertJsonPath('data.member.link_blocked_reason', 'no_phone')
+            ->assertJsonPath('data.member.can_verify', false)
+            ->assertJsonPath('data.member.phone_masked', null);
+        $this->pedir($identity, $yuri)->assertStatus(422)->assertJsonPath('code', 'member_without_phone');
+        $this->confirmar($identity, $yuri, (string) Str::uuid(), '123456')->assertStatus(422)->assertJsonPath('code', 'member_without_phone');
+
+        $this->assertSame(0, MemberAuthChallenge::count(), 'Ningún reto creado.');
+        $this->assertSame([], $sms(), 'Ningún SMS salió.');
+    }
+
+    public function test_el_registro_publico_sobre_un_socio_activo_no_desvia_el_codigo_al_atacante(): void
+    {
+        // El ataque reproducido: el token de registro va dentro de la APK
+        // pública. Al escribirse esta prueba, `register` sobre el documento de
+        // un socio ACTIVO responde 409 pero ya reescribió `users.phone` (fallo
+        // previo, fuera de este cambio). Con `members.phone` vacío,
+        // `resolvePhone` mandaría el código a ese número.
+        $yuri = $this->socio(self::YURI, ['phone' => ''], ['phone' => '3005551234']);
+        $identity = $this->enPersonal($yuri);
+        config(['services.member_registration.token' => 'token-de-la-apk']);
+        $this->postJson('/api/members/register', [
+            'full_name' => 'Quien Sea', 'document_number' => self::YURI, 'phone' => '3209998877', 'gender' => 'Femenino',
+        ], ['Authorization' => 'Bearer token-de-la-apk'])->assertStatus(409);
+        $sms = $this->escucharSms();
+
+        $this->getJson("/api/admin/workforce/staff/{$identity->uuid}", $this->admin)
+            ->assertJsonPath('data.member.link_blocked_reason', 'no_phone')
+            ->assertJsonPath('data.member.can_verify', false);
+        $this->pedir($identity, $yuri)->assertStatus(422)->assertJsonPath('code', 'member_without_phone');
+
+        $this->assertNotContains('3209998877', $sms(), 'El código no puede salir hacia el número del atacante.');
+        $this->assertSame([], $sms());
+        $this->assertSame(0, MemberAuthChallenge::count());
+        $this->assertNull($yuri->refresh()->identity_id);
+    }
+
+    public function test_un_socio_con_el_registro_sin_terminar_no_se_verifica(): void
+    {
+        // Un registro reanudable lo reescribe —teléfono incluido— la app pública.
+        $yuri = $this->socio(self::YURI, ['phone' => self::TEL_SOCIO, 'status' => Member::STATUS_INCOMPLETE]);
+        $identity = $this->enPersonal($yuri);
+        $sms = $this->escucharSms();
+
+        $this->getJson("/api/admin/workforce/staff/{$identity->uuid}", $this->admin)
+            ->assertJsonPath('data.member.link', 'unlinked')
+            ->assertJsonPath('data.member.link_blocked_reason', 'registration_incomplete')
+            ->assertJsonPath('data.member.can_verify', false);
+        $this->pedir($identity, $yuri)->assertStatus(409)->assertJsonPath('code', 'member_registration_incomplete');
+        $this->confirmar($identity, $yuri, (string) Str::uuid(), '123456')->assertStatus(409)->assertJsonPath('code', 'member_registration_incomplete');
+
+        $this->assertSame(0, MemberAuthChallenge::count());
+        $this->assertSame([], $sms());
+        $this->assertNull($yuri->refresh()->identity_id);
+    }
+
+    public function test_si_el_registro_se_reabre_mientras_se_comprueba_el_codigo_no_se_vincula(): void
+    {
+        [$identity, $yuri] = $this->yuriEnPersonal();
+        $inicio = $this->pedir($identity, $yuri)->assertCreated();
+
+        $hecho = false;
+        MemberAuthChallenge::updated(function (MemberAuthChallenge $c) use (&$hecho, $yuri): void {
+            if (! $hecho && $c->status === MemberAuthChallenge::STATUS_VERIFIED) {
+                $hecho = true;
+                DB::table('members')->where('id', $yuri->id)->update(['status' => Member::STATUS_INCOMPLETE]);
+            }
+        });
+
+        $this->confirmar($identity, $yuri, $inicio->json('challenge_id'), (string) $inicio->json('dev_code'))
+            ->assertStatus(409)->assertJsonPath('code', 'member_registration_incomplete');
+        $this->assertTrue($hecho);
+        $this->assertNull($yuri->refresh()->identity_id);
+    }
+
+    public function test_si_el_telefono_de_la_ficha_cambia_sin_rastro_mientras_se_comprueba_el_codigo_no_se_vincula(): void
+    {
+        [$identity, $yuri] = $this->yuriEnPersonal();
+        $inicio = $this->pedir($identity, $yuri)->assertCreated();
+
+        // Un camino que no deja traza ni evento: la cuarentena no lo ve, pero
+        // el código ya no fue al teléfono que la ficha tiene ahora.
+        $hecho = false;
+        MemberAuthChallenge::updated(function (MemberAuthChallenge $c) use (&$hecho, $yuri): void {
+            if (! $hecho && $c->status === MemberAuthChallenge::STATUS_VERIFIED) {
+                $hecho = true;
+                DB::table('members')->where('id', $yuri->id)->update(['phone' => '3210000000']);
+            }
+        });
+
+        $this->confirmar($identity, $yuri, $inicio->json('challenge_id'), (string) $inicio->json('dev_code'))
+            ->assertStatus(409)->assertJsonPath('code', 'member_link_destination_mismatch');
+        $this->assertTrue($hecho);
+        $this->assertNull($yuri->refresh()->identity_id);
+    }
+
+    public function test_si_el_motor_de_otp_desviara_el_destino_el_reto_no_sirve(): void
+    {
+        // Regresión simulada del colaborador: un `resolvePhone` que prefiriera
+        // el teléfono del usuario del CRM. Lo que se prueba es la defensa de
+        // MemberOwnershipLink, real: el reto se bloquea y no se devuelve.
+        $this->app->instance(OtpService::class, new class(app(SecurityEventService::class)) extends OtpService
+        {
+            public function resolvePhone(Member $member): ?string
+            {
+                return $member->user?->phone;
+            }
+        });
+        $yuri = $this->socio(self::YURI, ['phone' => self::TEL_SOCIO], ['phone' => '3209998877']);
+        $identity = $this->enPersonal($yuri);
+        $mensajes = [];
+        Event::listen(MessageLogged::class, function (MessageLogged $e) use (&$mensajes): void {
+            if (str_contains($e->message, 'driver dev')) {
+                $mensajes[] = (string) ($e->context['message'] ?? '');
+            }
+        });
+
+        $this->pedir($identity, $yuri)
+            ->assertStatus(409)->assertJsonPath('code', 'member_link_destination_mismatch')
+            ->assertJsonMissingPath('challenge_id')->assertJsonMissingPath('dev_code');
+
+        $reto = MemberAuthChallenge::query()->sole();
+        $this->assertSame(MemberAuthChallenge::STATUS_BLOCKED, $reto->status);
+        // Aun con el código que llegó al otro número, no vincula.
+        $this->assertSame(1, preg_match('/(\d{6})/', $mensajes[0] ?? '', $m));
+        $this->confirmar($identity, $yuri, $reto->uuid, $m[1])->assertStatus(423)->assertJsonPath('code', 'otp_blocked');
         $this->assertNull($yuri->refresh()->identity_id);
     }
 

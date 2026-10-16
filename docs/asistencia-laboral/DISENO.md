@@ -195,6 +195,15 @@ Sin migraciones, sin permisos nuevos y sin tocar el kiosko ni la APK. Contrato: 
   enmascarado y su huella. Cupos por ADMINISTRADOR (no por sesión) y 30 inicios al día. Los
   códigos fallidos de `identity_link` no suman riesgo al socio. La comprobación previa no
   nombra identidades que solo son de un socio a quien no tiene `members.view`.
+- **Solo el teléfono propio y solo registro terminado (2026-10-15):** `POST members/register`
+  (token compilado en la APK pública) sobre el documento de un socio ACTIVO responde 409 pero
+  reescribe `users.phone` sin traza; `resolvePhone` usa `members.phone ?: users.phone`. Ese
+  fallo del registro es previo y queda FUERA de este cambio. Defensa en el vínculo: solo vale
+  `members.phone` (vacío → `no_phone` / 422), el reto creado debe ir a ese número (si no, se
+  bloquea: 409 `member_link_destination_mismatch`), al confirmar el código tuvo que ir al
+  teléfono que la ficha tiene AHORA, y la ficha de socio tiene que estar activa
+  (`registration_incomplete` / 409 `member_registration_incomplete`), en la ficha, al pedir,
+  antes de comprobar el código y bajo bloqueo.
 - **Decisiones del 2026-10-15:** quien tiene perfil de entrenador queda fuera de esta fase (409
   `member_link_trainer_unsupported`: comisiones y perfil fiscal ya leen su identidad). Sin OTP
   posible (sin teléfono, techo de gasto, entrenador) la ficha se queda en «coincide por documento,

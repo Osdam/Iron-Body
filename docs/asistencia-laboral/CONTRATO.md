@@ -405,7 +405,7 @@ la misma fila de `GET staff` más estos bloques:
   "workday_state": { "state": "none|open", "current": <Workday>|null, "last": <Workday>|null, "pending_incident": <Workday>|null },
   "member": null | {
     "link": "linked|unlinked|conflict|none",
-    "link_blocked_reason": null | "trainer_profile" | "no_phone" | "phone_recently_changed" | "linked_elsewhere" | "identity_has_member",
+    "link_blocked_reason": null | "trainer_profile" | "registration_incomplete" | "no_phone" | "phone_recently_changed" | "linked_elsewhere" | "identity_has_member",
     "member_id": 7699, "user_id": 7702, "full_name": "…", "phone_masked": "•••• 1234",
     "can_verify": true,
     "membership": { "plan": "…", "end_date": "YYYY-MM-DD" } | null,
@@ -421,7 +421,10 @@ la misma fila de `GET staff` más estos bloques:
   · `unlinked`: hay un socio con el MISMO documento sin identidad. Coincidir por documento
     NO es prueba de titularidad: solo se vincula con el código SMS de (d). `can_verify`
     es `false` si hay motivo de bloqueo: `trainer_profile` (esta fase excluye a quien
-    tiene perfil de entrenador), `no_phone` (la ficha de socio no tiene teléfono),
+    tiene perfil de entrenador), `registration_incomplete` (la ficha de socio no está activa:
+    un registro que se puede reanudar lo reescribe, teléfono incluido, la app pública),
+    `no_phone` (la ficha de socio no tiene teléfono PROPIO, `members.phone`; el del usuario
+    del CRM no cuenta porque lo puede reescribir el registro público),
     `phone_recently_changed` (el teléfono de la ficha de socio cambió hace menos de 7 días:
     desde la ficha del CRM, desde soporte, desde la app o por recuperación; un número recién
     puesto puede ser de quien lo puso y no prueba titularidad).
@@ -439,8 +442,9 @@ la misma fila de `GET staff` más estos bloques:
 
 `POST admin/workforce/staff/{identity_id}/member-link` — `workforce.manage` + `members.edit`,
 10/min por administrador (compartido con la confirmación, sea cual sea la sesión) y 30 al día
-por administrador. Envía un código por SMS al teléfono REGISTRADO en la ficha de socio
-(nunca al del perfil laboral ni a uno de la petición).
+por administrador. Envía un código por SMS al teléfono PROPIO de la ficha de socio
+(`members.phone`; nunca al del usuario del CRM, al del perfil laboral ni a uno de la petición).
+Si el reto creado no fuera a ese número, se bloquea y responde 409 `member_link_destination_mismatch`.
 `{ "member_id": 7699 }` →
 201 `{ "ok": true, "challenge_id": "<uuid>", "destination": "•••• 1234", "expires_in": 300, "reused": false }`
 (`dev_code` solo con el driver `dev` fuera de producción; `reused: true` = sigue vivo el
@@ -470,7 +474,9 @@ Errores de (d) y (e):
 | 409 | `member_linked_elsewhere` | el socio ya cuelga de otra identidad |
 | 409 | `identity_has_member` | otra ficha de socio ya cuelga de esta identidad |
 | 409 | `member_phone_recently_changed` | el teléfono del socio cambió hace menos de 7 días (en d antes de enviar; en e antes de comprobar el código y otra vez con las filas bloqueadas) |
-| 422 | `member_without_phone` | la ficha de socio no tiene teléfono (solo en d) |
+| 409 | `member_registration_incomplete` | la ficha de socio no está activa (registro reanudable) (en d; en e antes de comprobar el código y con las filas bloqueadas) |
+| 422 | `member_without_phone` | la ficha de socio no tiene teléfono propio (`members.phone`), aunque el usuario del CRM tenga uno (en d; en e antes de comprobar el código y con las filas bloqueadas) |
+| 409 | `member_link_destination_mismatch` | el código no fue (o ya no es) al teléfono propio actual de la ficha de socio; no se vincula y hay que pedir otro |
 | 429 | `otp_rate_limited` (+ `retry_after`) | cupo de envíos del socio o del número (solo en d) |
 | 503 | `otp_unavailable` (+ `retry_after`) | envío apagado o techo de gasto (solo en d) |
 | 404 | `otp_not_found` | el reto no existe, es de otro socio o de otro propósito (p. ej. login) (solo en e) |

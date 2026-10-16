@@ -17,6 +17,7 @@ use App\Services\Workforce\WorkforceEvents;
 use App\Support\DocumentNormalizer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 /**
@@ -29,9 +30,12 @@ use RuntimeException;
  * Qué prueba la titularidad: un código por SMS al teléfono REGISTRADO en la
  * ficha de socio, que la persona dicta a quien la atiende. Conocer el
  * documento no prueba nada —lo tiene recepción, la factura y cualquiera que
- * haya visto la cédula—, así que el destino es siempre el de la ficha de socio
- * ({@see OtpService::resolvePhone()}): nunca el del perfil laboral ni uno que
- * llegue en la petición. La escritura es {@see IdentityLinkService::attachMember()}
+ * haya visto la cédula—, así que el destino es siempre el teléfono PROPIO de la
+ * ficha de socio (`members.phone`): nunca el del perfil laboral, ni uno que
+ * llegue en la petición, ni el del usuario del CRM. Este último lo reescribe el
+ * registro público de la app sin dejar rastro (fallo previo, fuera de este
+ * cambio), y {@see OtpService::resolvePhone()} lo usaría cuando la ficha de
+ * socio no tiene teléfono; por eso sin `members.phone` no se verifica. La escritura es {@see IdentityLinkService::attachMember()}
  * con la propiedad verificada, y es lo ÚNICO que se escribe: ni `is_staff`, ni
  * el usuario, ni pagos, ni el acceso gratuito, ni las comisiones.
  *
@@ -43,6 +47,10 @@ use RuntimeException;
  * socio (`members.edit`) podría poner el suyo y recibir el código. Por eso,
  * durante {@see PHONE_CHANGE_QUARANTINE_DAYS} días después de cualquier cambio
  * de teléfono registrado, no se verifica (revisión de seguridad 2026-10-15, M1).
+ *
+ * Y solo socios con el registro TERMINADO (`status` activo): un registro que
+ * se puede reanudar lo reescribe —teléfono incluido— cualquiera que tenga el
+ * token público de la app (revisión 2026-10-15).
  */
 class MemberOwnershipLink
 {
@@ -63,6 +71,8 @@ class MemberOwnershipLink
     public const BLOCKED_IDENTITY_HAS_MEMBER = 'identity_has_member';
 
     public const BLOCKED_PHONE_CHANGED = 'phone_recently_changed';
+
+    public const BLOCKED_REGISTRATION_INCOMPLETE = 'registration_incomplete';
 
     /** Días en que un teléfono recién cambiado no sirve para probar titularidad. */
     public const PHONE_CHANGE_QUARANTINE_DAYS = 7;
@@ -104,7 +114,8 @@ class MemberOwnershipLink
 
         $reason = match (true) {
             $this->hasTrainerProfile($identity) => self::BLOCKED_TRAINER,
-            $this->otp->resolvePhone($candidate) === null => self::BLOCKED_NO_PHONE,
+            $candidate->status !== Member::STATUS_ACTIVE => self::BLOCKED_REGISTRATION_INCOMPLETE,
+            $this->verifiablePhone($candidate) === null => self::BLOCKED_NO_PHONE,
             $this->phoneRecentlyChanged($candidate) => self::BLOCKED_PHONE_CHANGED,
             default => null,
         };
@@ -126,14 +137,9 @@ class MemberOwnershipLink
             return ['result' => self::RESULT_ALREADY_LINKED, 'challenge' => null, 'code' => '', 'sent' => false, 'reused' => false];
         }
         $this->assertFree($identity, $member);
-        if ($this->otp->resolvePhone($member) === null) {
-            throw WorkforceException::memberWithoutPhone();
-        }
-        // ANTES de enviar: si el número lo acaba de poner alguien, el código
-        // llegaría a quien lo puso, no necesariamente al socio.
-        if ($this->phoneRecentlyChanged($member)) {
-            throw WorkforceException::memberPhoneRecentlyChanged();
-        }
+        // ANTES de enviar: registro terminado, teléfono propio de la ficha y
+        // que no lo acabe de poner nadie.
+        $this->assertVerifiable($member);
 
         try {
             // Sin `destinationOverride`: el código va al teléfono de la ficha
@@ -141,6 +147,20 @@ class MemberOwnershipLink
             $sent = $this->otp->startChallenge($member, $this->context($request), MemberAuthChallenge::PURPOSE_IDENTITY_LINK);
         } catch (OtpException $e) {
             throw $this->startRejected($e);
+        }
+
+        // Defensa en profundidad: hoy `resolvePhone` prefiere `members.phone`,
+        // así que el destino ES ese. Si un cambio futuro lo desviara (al del
+        // usuario del CRM, p. ej.), el reto queda inservible y no se devuelve.
+        if (! $this->sameNumber($sent['challenge']->destination, $this->verifiablePhone($member))) {
+            $sent['challenge']->forceFill(['status' => MemberAuthChallenge::STATUS_BLOCKED])->save();
+            Log::error('workforce.member_link.destination_mismatch', [
+                'member_id' => $member->id,
+                'challenge' => $sent['challenge']->uuid,
+                'destination_hash' => $this->policy->phoneHash($sent['challenge']->destination),
+                'member_phone_hash' => $this->policy->phoneHash($this->verifiablePhone($member)),
+            ]);
+            throw WorkforceException::memberLinkDestinationMismatch();
         }
 
         // Cada envío cuesta dinero y le escribe a un socio: queda quién lo pidió.
@@ -182,9 +202,7 @@ class MemberOwnershipLink
         // Antes de gastar el código: si el vínculo ya es imposible, que no se
         // queme un código ni un intento en él.
         $this->assertFree($identity, $member);
-        if ($this->phoneRecentlyChanged($member)) {
-            throw WorkforceException::memberPhoneRecentlyChanged();
-        }
+        $this->assertVerifiable($member);
 
         // FUERA de la transacción, a propósito. Un código equivocado sube el
         // contador de intentos del reto (y lo bloquea al quinto); dentro de una
@@ -221,9 +239,12 @@ class MemberOwnershipLink
                 return self::RESULT_ALREADY_LINKED;
             }
             $this->assertFree($person, $socio);
-            // El teléfono pudo cambiar mientras la persona dictaba el código.
-            if ($this->phoneRecentlyChanged($socio)) {
-                throw WorkforceException::memberPhoneRecentlyChanged();
+            // El registro o el teléfono pudieron cambiar mientras la persona
+            // dictaba el código.
+            $this->assertVerifiable($socio);
+            // Y el código tuvo que ir al teléfono que la ficha tiene AHORA.
+            if (! $this->sameNumber($challenge->destination, $this->verifiablePhone($socio))) {
+                throw WorkforceException::memberLinkDestinationMismatch();
             }
 
             $this->identities->attachMember($socio, $person, ownershipVerified: true);
@@ -254,6 +275,42 @@ class MemberOwnershipLink
         $digits = preg_replace('/\D+/', '', (string) $phone) ?? '';
 
         return $digits === '' ? null : '•••• '.substr($digits, -4);
+    }
+
+    /**
+     * El único destino que prueba titularidad: el teléfono PROPIO de la ficha
+     * de socio, o null. El del usuario del CRM no cuenta (ver la clase).
+     */
+    public function verifiablePhone(Member $member): ?string
+    {
+        $phone = trim((string) $member->phone);
+
+        return $phone === '' ? null : $phone;
+    }
+
+    /**
+     * Lo que tiene que cumplir el socio para verificar, en este orden: registro
+     * terminado, teléfono propio y sin cambios recientes.
+     */
+    private function assertVerifiable(Member $member): void
+    {
+        if ($member->status !== Member::STATUS_ACTIVE) {
+            throw WorkforceException::memberRegistrationIncomplete();
+        }
+        if ($this->verifiablePhone($member) === null) {
+            throw WorkforceException::memberWithoutPhone();
+        }
+        if ($this->phoneRecentlyChanged($member)) {
+            throw WorkforceException::memberPhoneRecentlyChanged();
+        }
+    }
+
+    /** ¿Dos teléfonos son el mismo número, ignorando el formato? */
+    private function sameNumber(?string $a, ?string $b): bool
+    {
+        $digits = static fn (?string $v): string => ltrim(preg_replace('/\D+/', '', (string) $v) ?? '', '0');
+
+        return $digits($a) !== '' && $digits($a) === $digits($b);
     }
 
     /**

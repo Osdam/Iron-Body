@@ -262,6 +262,21 @@ class WorkforceException extends RuntimeException
     }
 
     /**
+     * Registro sin terminar (o cuenta no activa): la app pública lo puede
+     * reanudar y reescribir, teléfono incluido, así que no prueba titularidad.
+     */
+    public static function memberRegistrationIncomplete(): self
+    {
+        return new self('La ficha de socio no tiene el registro terminado: no se puede verificar por SMS. Revísala en Miembros.', 'member_registration_incomplete', 409);
+    }
+
+    /** El código no fue (o ya no es) al teléfono propio de la ficha de socio. */
+    public static function memberLinkDestinationMismatch(): self
+    {
+        return new self('El código no corresponde al teléfono actual de la ficha de socio. No se vinculó nada: pide uno nuevo.', 'member_link_destination_mismatch', 409);
+    }
+
+    /**
      * Un número recién puesto no prueba que la ficha sea de quien lo recibe:
      * pudo ponerlo quien ahora pide el código.
      */

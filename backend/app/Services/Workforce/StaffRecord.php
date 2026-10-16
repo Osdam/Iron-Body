@@ -13,7 +13,6 @@ use App\Models\Workday;
 use App\Services\Identity\IdentityLinkService;
 use App\Services\Identity\MemberOwnershipLink;
 use App\Services\Membership\MembershipAccess;
-use App\Services\OtpService;
 use App\Support\Workforce\Positions;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -39,7 +38,6 @@ class StaffRecord
         private readonly WorkdayService $workdays,
         private readonly IdentityLinkService $identities,
         private readonly MemberOwnershipLink $links,
-        private readonly OtpService $otp,
         private readonly MembershipAccess $access,
     ) {}
 
@@ -178,7 +176,9 @@ class StaffRecord
             'member_id' => $member?->id,
             'user_id' => $member?->user_id,
             'full_name' => $member?->full_name,
-            'phone_masked' => $member ? MemberOwnershipLink::maskPhone($this->otp->resolvePhone($member)) : null,
+            // El teléfono PROPIO de la ficha de socio: el único al que iría el
+            // código (el del usuario del CRM no prueba titularidad).
+            'phone_masked' => $member ? MemberOwnershipLink::maskPhone($this->links->verifiablePhone($member)) : null,
             'can_verify' => $situation['link'] === MemberOwnershipLink::UNLINKED && $situation['reason'] === null,
             'membership' => $user ? ['plan' => $user->plan, 'end_date' => $user->membership_end_date] : null,
             'story_live' => $linked ? (bool) $member?->is_staff : null,
