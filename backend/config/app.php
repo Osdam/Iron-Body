@@ -16,6 +16,12 @@ return [
     'name' => env('APP_NAME', 'Laravel'),
 
     /*
+    | CRM antiguo en Blade (/crm/*): sin autenticación, apagado por defecto.
+    | Ver App\Http\Middleware\EnsureLegacyWebCrmEnabled.
+    */
+    'legacy_web_crm' => (bool) env('LEGACY_WEB_CRM_ENABLED', false),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Environment
     |--------------------------------------------------------------------------

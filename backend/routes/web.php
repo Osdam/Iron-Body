@@ -76,7 +76,9 @@ Route::get('account-deletion.html', [LegalController::class, 'accountDeletion'])
 // requiere autenticación (PSE/3DS) se abre la URL OFICIAL que entrega la propia
 // transacción de Wompi en el navegador del sistema.
 
-Route::prefix('crm')->name('crm.')->group(function () {
+// Apagado salvo LEGACY_WEB_CRM_ENABLED=true: no tiene autenticación (ver
+// EnsureLegacyWebCrmEnabled).
+Route::prefix('crm')->name('crm.')->middleware(\App\Http\Middleware\EnsureLegacyWebCrmEnabled::class)->group(function () {
     // Entrenadores
     Route::resource('trainers', CrmTrainerController::class)
         ->only(['index', 'create', 'store', 'edit', 'update', 'destroy']);

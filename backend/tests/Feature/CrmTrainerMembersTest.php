@@ -21,6 +21,8 @@ class CrmTrainerMembersTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // El CRM antiguo está apagado por defecto (EnsureLegacyWebCrmEnabled).
+        config(['app.legacy_web_crm' => true]);
         config([
             'trainer.flags.trainer_auth_enabled' => true,
             'trainer.flags.professional_assessments_enabled' => true,
