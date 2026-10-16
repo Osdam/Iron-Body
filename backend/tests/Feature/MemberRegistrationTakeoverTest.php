@@ -210,6 +210,30 @@ class MemberRegistrationTakeoverTest extends TestCase
         $this->assertSame($antes, $this->snapshot());
     }
 
+    public function test_un_alta_a_medias_sin_usuario_no_se_reanuda_con_el_telefono_de_un_usuario_ajeno(): void
+    {
+        // La ficha a medias no tiene usuario del CRM. El atacante tiene uno
+        // propio, sin documento ni ficha, y manda la cédula de la víctima con
+        // SU correo y SU teléfono: el usuario que se encuentra por correo es el
+        // suyo, y su teléfono no prueba nada sobre la ficha de la víctima
+        // (revisión de seguridad de e8aa158, N1).
+        Member::create([
+            'full_name' => 'Víctima A Medias', 'document_number' => '1075999888',
+            'phone' => '3104445566', 'status' => Member::STATUS_PENDING_REGISTRATION,
+        ]);
+        User::create([
+            'name' => 'Atacante', 'email' => 'atacante@example.com', 'password' => bcrypt('x'),
+            'phone' => self::TEL_ATACANTE, 'status' => 'active',
+        ]);
+        $antes = $this->snapshot();
+
+        $this->register(['full_name' => 'Atacante', 'email' => 'atacante@example.com', 'phone' => self::TEL_ATACANTE])
+            ->assertStatus(409)
+            ->assertJsonMissingPath('access_hash');
+
+        $this->assertSame($antes, $this->snapshot());
+    }
+
     public function test_quien_cambio_de_numero_entra_por_otp_aunque_su_alta_este_incompleta(): void
     {
         // La salida de quien ya no tiene el número del alta: el login por OTP

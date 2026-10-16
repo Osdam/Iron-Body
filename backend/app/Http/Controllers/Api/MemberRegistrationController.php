@@ -183,7 +183,11 @@ class MemberRegistrationController extends Controller
                     // quien cambió de número entra por el login con OTP, que
                     // admite altas incompletas. Sin número guardado no hay con
                     // qué comparar: tampoco se entrega.
-                    if (! $this->phoneMatches($validated['phone'] ?? null, $member->phone, $user?->phone)) {
+                    // El usuario de la PROPIA ficha, no el que se encontró por
+                    // correo: si la ficha no tiene usuario, `$user` puede ser el
+                    // de quien hace la petición, y su teléfono no prueba nada
+                    // sobre esta ficha (revisión de seguridad de e8aa158, N1).
+                    if (! $this->phoneMatches($validated['phone'] ?? null, $member->phone, $member->user?->phone)) {
                         return $this->rejectRegistration('resume_phone_mismatch', $document, $member);
                     }
                 } elseif ($user && ($history = $this->crmUserHistory($user, now()))

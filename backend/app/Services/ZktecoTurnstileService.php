@@ -33,6 +33,15 @@ class ZktecoTurnstileService
     private const CMD_ACK_UNAUTH = 2005;
 
     /**
+     * Lo único que sale del servidor cuando la apertura falla. El detalle
+     * (conexión rechazada, timeout, «magic incorrecto», autenticación) va solo
+     * al log: devolverlo convertía `turnstile/zkteco/open` en un escáner de
+     * puertos de la LAN, del propio servidor y de internet (revisión de
+     * seguridad de e8aa158, N3).
+     */
+    public const GENERIC_ERROR = 'No se pudo abrir el torniquete por ZKTeco. El detalle quedó en el registro del servidor.';
+
+    /**
      * Abre la puerta / torniquete durante $durationSeconds (1–254).
      *
      * @return array{ok:bool,host:string,port:int,duration_seconds?:int,session_id?:int,error?:string}
@@ -107,7 +116,7 @@ class ZktecoTurnstileService
                 'ok' => false,
                 'host' => $host,
                 'port' => $port,
-                'error' => $e->getMessage(),
+                'error' => self::GENERIC_ERROR,
             ];
         } finally {
             if (is_resource($socket)) {
