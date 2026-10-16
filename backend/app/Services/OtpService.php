@@ -259,8 +259,14 @@ class OtpService
     }
 
     /**
-     * Verifica un código. Devuelve el miembro y el reto si todo va bien; lanza
-     * {@see OtpException} en cualquier fallo de negocio.
+     * Verifica un código de LOGIN (también el del re-enrolamiento facial, que
+     * abre un reto de login). Devuelve el miembro y el reto si todo va bien;
+     * lanza {@see OtpException} en cualquier fallo de negocio.
+     *
+     * Solo retos de propósito `login`: un reto de otra acción (p. ej. el que
+     * vincula la ficha de socio desde el CRM, cuyo código dicta el socio a quien
+     * lo atiende) no puede canjearse aquí por una sesión de la app. Responde
+     * igual que uno inexistente (revisión de seguridad 2026-10-15, H1).
      *
      * @return array{member: Member, challenge: MemberAuthChallenge}
      */
@@ -268,6 +274,7 @@ class OtpService
     {
         $challenge = MemberAuthChallenge::query()
             ->where('uuid', $challengeUuid)
+            ->where('purpose', MemberAuthChallenge::PURPOSE_LOGIN)
             ->first();
 
         if (! $challenge) {

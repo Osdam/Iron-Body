@@ -527,10 +527,13 @@ class AppServiceProvider extends ServiceProvider
 
             return $token ? 'token:'.hash('sha256', $token) : 'ip:'.$request->ip();
         };
+        // Con `retry_after` (segundos), como el 429 de la política de OTP: la
+        // pantalla dice cuánto esperar sin leer cabeceras.
         $tooMany = fn (string $mensaje) => fn ($request, array $headers) => response()->json([
             'ok' => false,
             'code' => 'too_many_requests',
             'message' => $mensaje,
+            'retry_after' => (int) ($headers['Retry-After'] ?? 60),
         ], 429, $headers);
 
         RateLimiter::for('workforce-lookup', fn (Request $request) => Limit::perMinute(30)

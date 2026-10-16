@@ -8,6 +8,8 @@ use App\Models\ClassEvent;
 use App\Models\Identity;
 use App\Models\Member;
 use App\Models\MemberAuthChallenge;
+use App\Models\MemberBiometric;
+use App\Models\MemberDeviceSession;
 use App\Models\MemberSecurityEvent;
 use App\Models\MemberSupportTicket;
 use App\Models\StaffProfile;
@@ -25,6 +27,7 @@ use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Tests\Feature\Workforce\Concerns\MemberKit;
@@ -59,6 +62,10 @@ class MemberOwnershipLinkTest extends TestCase
         parent::setUp();
         Carbon::setTestNow(Carbon::parse('2026-10-15 09:00', 'America/Bogota')->utc());
         $this->admin = $this->adminWithPermissions(['workforce.view', 'workforce.manage', 'members.view', 'members.edit']);
+        // El vínculo nace APAGADO (H1): estas pruebas lo encienden a propósito,
+        // y las de la bandera apagada lo vuelven a apagar.
+        $this->assertFalse(config('workforce.member_link_enabled'), 'El vínculo tiene que estar apagado por defecto.');
+        config(['workforce.member_link_enabled' => true]);
     }
 
     protected function tearDown(): void
@@ -572,6 +579,112 @@ class MemberOwnershipLinkTest extends TestCase
         $this->assertNull($yuri->refresh()->identity_id);
     }
 
+    // ── Bandera: el vínculo nace apagado ────────────────────────────────────
+
+    public function test_con_el_vinculo_apagado_la_ficha_lo_dice_y_los_endpoints_no_tocan_nada(): void
+    {
+        config(['workforce.member_link_enabled' => false]);
+        // El alta funciona igual con la bandera apagada.
+        [$identity, $yuri] = $this->yuriEnPersonal();
+        $sms = $this->escucharSms();
+        $escrituras = [];
+        DB::listen(function ($q) use (&$escrituras): void {
+            // Fuera queda la marca de actividad de la sesión del administrador.
+            if (preg_match('/^\s*(insert|update|delete)\b/i', $q->sql) === 1 && ! str_contains($q->sql, '"admin_sessions"')) {
+                $escrituras[] = $q->sql;
+            }
+        });
+
+        $this->getJson("/api/admin/workforce/staff/{$identity->uuid}", $this->admin)
+            ->assertOk()
+            ->assertJsonPath('data.member.link', 'unlinked')
+            ->assertJsonPath('data.member.link_blocked_reason', 'link_disabled')
+            ->assertJsonPath('data.member.can_verify', false)
+            ->assertJsonPath('data.member.member_id', $yuri->id)
+            ->assertJsonPath('data.member.membership', null)
+            ->assertJsonPath('data.member.employee_access', null);
+        $this->pedir($identity, $yuri)->assertStatus(409)->assertJsonPath('code', 'member_link_disabled');
+        $this->confirmar($identity, $yuri, (string) Str::uuid(), '123456')->assertStatus(409)->assertJsonPath('code', 'member_link_disabled');
+
+        $this->assertSame(0, MemberAuthChallenge::count(), 'Ningún reto.');
+        $this->assertSame([], $sms(), 'Ningún SMS.');
+        $this->assertSame([], $escrituras, 'Nada escrito.');
+        $this->assertNull($yuri->refresh()->identity_id);
+    }
+
+    public function test_con_el_vinculo_apagado_una_ficha_ya_vinculada_se_ve_como_siempre(): void
+    {
+        config(['workforce.member_link_enabled' => false]);
+        [$identity, $yuri] = $this->yuriEnPersonal();
+        $yuri->forceFill(['identity_id' => $identity->id])->save();
+
+        $this->getJson("/api/admin/workforce/staff/{$identity->uuid}", $this->admin)
+            ->assertOk()
+            ->assertJsonPath('data.member.link', 'linked')
+            ->assertJsonPath('data.member.link_blocked_reason', null)
+            ->assertJsonPath('data.member.membership.plan', 'INGRESO EMPLEADOS')
+            ->assertJsonPath('data.member.employee_access.source', 'manual');
+    }
+
+    // ── H1: el código del vínculo no es un login del socio ──────────────────
+
+    public function test_el_codigo_del_vinculo_no_abre_la_app_del_socio(): void
+    {
+        [$identity, $yuri] = $this->yuriEnPersonal();
+        $inicio = $this->pedir($identity, $yuri)->assertCreated();
+        $reto = (string) $inicio->json('challenge_id');
+        $code = (string) $inicio->json('dev_code');
+
+        // El CRM tiene el challenge_id y el socio le dicta el código: con eso,
+        // el login de la app respondía 200 con la sesión del socio.
+        $comoLogin = $this->postJson('/api/members/login/verify', ['challenge_id' => $reto, 'code' => $code, 'device_id' => 'equipo-del-crm'])
+            ->assertNotFound()
+            ->assertJsonPath('message', 'No encontramos esta verificación. Solicita un código nuevo.')
+            ->assertJsonMissingPath('data.token');
+        $inexistente = $this->postJson('/api/members/login/verify', ['challenge_id' => (string) Str::uuid(), 'code' => $code, 'device_id' => 'equipo-del-crm']);
+        $this->assertSame($inexistente->json(), $comoLogin->json(), 'Igual que un reto inexistente.');
+        $this->assertSame(0, MemberDeviceSession::query()->where('member_id', $yuri->id)->count());
+        $intacto = MemberAuthChallenge::query()->where('uuid', $reto)->sole();
+        $this->assertSame([MemberAuthChallenge::STATUS_PENDING, 0], [$intacto->status, $intacto->attempts]);
+
+        // El vínculo sí lo usa; ya verificado, tampoco sirve de tique facial
+        // (`face-verify` con `matched` declarado por el cliente daba la sesión).
+        $this->confirmar($identity, $yuri, $reto, $code)->assertOk()->assertJsonPath('result', 'linked');
+        $this->postJson('/api/members/login/face-verify', ['ticket' => $reto, 'matched' => true, 'device_id' => 'equipo-del-crm'])
+            ->assertStatus(410)->assertJsonMissingPath('data.token');
+        $this->postJson('/api/members/login/face-reference', ['ticket' => $reto])->assertStatus(410);
+        $this->assertSame(0, MemberDeviceSession::query()->where('member_id', $yuri->id)->count());
+    }
+
+    public function test_el_login_del_socio_y_el_reenrolamiento_facial_siguen_funcionando(): void
+    {
+        $socio = $this->socio('1075000999', ['full_name' => 'Otro Socio', 'phone' => '3007774321'], ['name' => 'Otro Socio']);
+        // Con rostro de referencia heredado: el login pide el paso facial y
+        // admite re-enrolamiento.
+        Storage::fake('local');
+        Storage::disk('local')->put('members/x/face.jpg', 'jpeg');
+        MemberBiometric::create(['member_id' => $socio->id, 'face_path' => 'members/x/face.jpg', 'normalizer_version' => null]);
+        $equipo = ['device_id' => 'telefono-del-socio'];
+
+        $login = $this->postJson('/api/members/login', ['document_number' => '1075000999'] + $equipo)
+            ->assertOk()->assertJsonPath('data.requires_otp', true);
+        $tique = $this->postJson('/api/members/login/verify', [
+            'challenge_id' => $login->json('data.challenge_id'), 'code' => $login->json('data.dev_code'),
+        ] + $equipo)->assertOk()->assertJsonPath('data.requires_face', true)->json('data.ticket');
+
+        $this->postJson('/api/members/login/face-reference', ['ticket' => $tique])->assertOk();
+        $reenrolar = $this->postJson('/api/members/login/face-reenroll/request', ['ticket' => $tique] + $equipo)->assertOk();
+        $this->postJson('/api/members/login/face-reenroll/confirm', [
+            'ticket' => $tique,
+            'reenroll_challenge_id' => $reenrolar->json('data.reenroll_challenge_id'),
+            'otp_code' => $reenrolar->json('data.dev_code'),
+        ] + $equipo)->assertOk();
+
+        $this->postJson('/api/members/login/face-verify', ['ticket' => $tique, 'matched' => true] + $equipo)
+            ->assertOk()->assertJsonPath('data.requires_otp', false);
+        $this->assertSame(1, MemberDeviceSession::query()->where('member_id', $socio->id)->count());
+    }
+
     // ── Solo el teléfono PROPIO de la ficha de socio, solo registro terminado ─
 
     /** Alta como administrativa (camino real) de un socio ya creado. */
@@ -745,7 +858,10 @@ class MemberOwnershipLinkTest extends TestCase
         for ($i = 0; $i < 10; $i++) {
             $this->pedirEnBlanco($i % 2 === 0 ? $una : $otra)->assertNotFound();
         }
-        $this->pedirEnBlanco($otra)->assertStatus(429)->assertJsonPath('code', 'too_many_requests');
+        $espera = $this->pedirEnBlanco($otra)->assertStatus(429)->assertJsonPath('code', 'too_many_requests')->json('retry_after');
+        // Cuánto esperar, en el cuerpo (como el 429 de la política de OTP).
+        $this->assertIsInt($espera);
+        $this->assertTrue($espera > 0 && $espera <= 60, "retry_after={$espera}");
         $this->pedirEnBlanco($una)->assertStatus(429);
         // Confirmar comparte el cupo por minuto.
         $this->postJson('/api/admin/workforce/staff/'.Str::uuid().'/member-link/confirm', ['member_id' => 1, 'challenge_id' => (string) Str::uuid(), 'code' => '123456'], $otra)
@@ -770,8 +886,11 @@ class MemberOwnershipLinkTest extends TestCase
         }
 
         // El 31 del día, con el cupo por minuto ya libre: no.
-        $this->pedirEnBlanco($otra)->assertStatus(429)->assertJsonPath('code', 'too_many_requests')
-            ->assertJsonPath('message', 'Llegaste al máximo de códigos de verificación por hoy.');
+        $espera = $this->pedirEnBlanco($otra)->assertStatus(429)->assertJsonPath('code', 'too_many_requests')
+            ->assertJsonPath('message', 'Llegaste al máximo de códigos de verificación por hoy.')
+            ->json('retry_after');
+        $this->assertIsInt($espera);
+        $this->assertGreaterThan(60, $espera, 'El tope diario se espera en horas, no en un minuto.');
         // Confirmar no gasta ni sufre el tope diario.
         $this->postJson('/api/admin/workforce/staff/'.Str::uuid().'/member-link/confirm', ['member_id' => 1, 'challenge_id' => (string) Str::uuid(), 'code' => '123456'], $una)
             ->assertNotFound();
