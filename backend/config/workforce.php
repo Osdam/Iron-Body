@@ -24,6 +24,16 @@ return [
         'maintenance' => ['label' => 'Aseo y mantenimiento', 'source' => 'staff', 'workday' => true],
     ],
 
+    /*
+    | Vínculo verificado de la ficha laboral con la ficha de socio (código SMS
+    | al teléfono del socio, docs/asistencia-laboral/CONTRATO.md §7.2).
+    | APAGADO por defecto y en producción hasta cumplir sus precondiciones
+    | (DISENO.md §10b): en producción el OTP de socios va por Twilio Verify,
+    | que valida teléfono + código y no el reto, así que el código del vínculo
+    | serviría también para un reto de login abierto para ese número (H1).
+    */
+    'member_link_enabled' => (bool) env('WORKFORCE_MEMBER_LINK_ENABLED', false),
+
     'workday' => [
         // Una jornada abierta más tiempo que esto se considera una salida
         // olvidada: al marcar la siguiente entrada pasa a incidencia (sin

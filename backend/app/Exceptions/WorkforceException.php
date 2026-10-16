@@ -261,6 +261,12 @@ class WorkforceException extends RuntimeException
         return new self('La ficha de socio no tiene teléfono: no se puede verificar por SMS.', 'member_without_phone', 422);
     }
 
+    /** El vínculo con la ficha de socio está apagado (config/workforce.php). */
+    public static function memberLinkDisabled(): self
+    {
+        return new self('La verificación de la ficha de socio está desactivada. Revisa la coincidencia en Miembros.', 'member_link_disabled', 409);
+    }
+
     /**
      * Registro sin terminar (o cuenta no activa): la app pública lo puede
      * reanudar y reescribir, teléfono incluido, así que no prueba titularidad.

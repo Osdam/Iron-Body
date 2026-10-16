@@ -74,6 +74,8 @@ class MemberOwnershipLink
 
     public const BLOCKED_REGISTRATION_INCOMPLETE = 'registration_incomplete';
 
+    public const BLOCKED_DISABLED = 'link_disabled';
+
     /** Días en que un teléfono recién cambiado no sirve para probar titularidad. */
     public const PHONE_CHANGE_QUARANTINE_DAYS = 7;
 
@@ -113,6 +115,7 @@ class MemberOwnershipLink
         }
 
         $reason = match (true) {
+            ! $this->enabled() => self::BLOCKED_DISABLED,
             $this->hasTrainerProfile($identity) => self::BLOCKED_TRAINER,
             $candidate->status !== Member::STATUS_ACTIVE => self::BLOCKED_REGISTRATION_INCOMPLETE,
             $this->verifiablePhone($candidate) === null => self::BLOCKED_NO_PHONE,
@@ -132,6 +135,7 @@ class MemberOwnershipLink
      */
     public function start(Identity $identity, int $memberId, Request $request): array
     {
+        $this->assertEnabled();
         $member = $this->eligibleMember($identity, $memberId);
         if ($this->isLinkedTo($member, $identity)) {
             return ['result' => self::RESULT_ALREADY_LINKED, 'challenge' => null, 'code' => '', 'sent' => false, 'reused' => false];
@@ -195,6 +199,7 @@ class MemberOwnershipLink
      */
     public function confirm(Identity $identity, int $memberId, string $challengeId, string $code, Request $request): string
     {
+        $this->assertEnabled();
         $member = $this->eligibleMember($identity, $memberId);
         if ($this->isLinkedTo($member, $identity)) {
             return self::RESULT_ALREADY_LINKED;
@@ -275,6 +280,24 @@ class MemberOwnershipLink
         $digits = preg_replace('/\D+/', '', (string) $phone) ?? '';
 
         return $digits === '' ? null : '•••• '.substr($digits, -4);
+    }
+
+    /**
+     * ¿Está encendido el vínculo? Apagado por defecto: hasta que el código del
+     * vínculo viaje por un canal ligado al reto, en producción (Twilio Verify,
+     * que valida teléfono + código) serviría también para un login del socio.
+     */
+    public function enabled(): bool
+    {
+        return (bool) config('workforce.member_link_enabled', false);
+    }
+
+    /** Apagado: ni reto, ni SMS, ni lecturas del socio. */
+    private function assertEnabled(): void
+    {
+        if (! $this->enabled()) {
+            throw WorkforceException::memberLinkDisabled();
+        }
     }
 
     /**

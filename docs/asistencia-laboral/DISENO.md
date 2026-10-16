@@ -204,14 +204,30 @@ Sin migraciones, sin permisos nuevos y sin tocar el kiosko ni la APK. Contrato: 
   teléfono que la ficha tiene AHORA, y la ficha de socio tiene que estar activa
   (`registration_incomplete` / 409 `member_registration_incomplete`), en la ficha, al pedir,
   antes de comprobar el código y bajo bloqueo.
+- **El vínculo nace APAGADO (H1, revisión final 2026-10-15).** `members/login/verify` buscaba
+  el reto solo por uuid: con el `challenge_id` del vínculo y el código que dicta el socio, el
+  CRM obtenía la sesión de la app del socio. Además, el tique facial (`validFaceTicket`)
+  aceptaba cualquier reto verificado, y `face-verify` con `matched: true` (lo declara el
+  cliente) emitía la sesión: tras un vínculo confirmado bastaba el `challenge_id`. Corregido:
+  los dos solo admiten retos `login` y uno de otro propósito responde como inexistente. Pero
+  en producción el OTP de socios es Twilio Verify, que valida teléfono + código y no el reto,
+  así que el código del vínculo serviría para un login abierto aparte para ese número. Por eso
+  la bandera `WORKFORCE_MEMBER_LINK_ENABLED` está en `false` por defecto: la ficha da
+  `link_disabled` y los dos endpoints 409 `member_link_disabled` sin tocar nada.
+  **Precondiciones para encenderla en producción:** (a) que el código de `identity_link` NO
+  viaje por Twilio Verify, sino por un canal ligado al reto (código propio con SMS normal, o un
+  servicio de Verify separado); (b) cerrar el hueco M2: si `users.phone` ya tenía el número
+  nuevo, el PATCH de usuarios cambia `members.phone` sin que `phone` aparezca en la traza y la
+  cuarentena no lo ve; hay que registrar el cambio de `members.phone` antes de encender.
+  Pendiente aparte: `members/login/resend` también busca el reto solo por uuid (reenvía el
+  código de un reto de otra acción y reinicia sus intentos, con el tope de 3 reenvíos); no se
+  filtró porque la app podría usar esa ruta para retos de acciones.
 - **Decisiones del 2026-10-15:** quien tiene perfil de entrenador queda fuera de esta fase (409
   `member_link_trainer_unsupported`: comisiones y perfil fiscal ya leen su identidad). Sin OTP
   posible (sin teléfono, techo de gasto, entrenador) la ficha se queda en «coincide por documento,
   sin verificar» y enlaza a Miembros; nunca vincula. Desactivar el perfil laboral NO retira el
   acceso gratuito.
-- **Riesgos que siguen abiertos:** cada código fallido queda como `login_failed` del socio y
-  durante una hora (`security.window`) puede endurecer su siguiente login en la app (OTP u
-  OTP + rostro); mientras el CRM viejo siga en uso, su alta enlaza
+- **Riesgos que siguen abiertos:** mientras el CRM viejo siga en uso, su alta enlaza
   por documento sin comprobación visible; `TRAINER_OTP_DEV_BYPASS=true` en producción.
 
 ## 11. Reversión

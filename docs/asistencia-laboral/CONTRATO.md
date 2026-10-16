@@ -405,7 +405,7 @@ la misma fila de `GET staff` más estos bloques:
   "workday_state": { "state": "none|open", "current": <Workday>|null, "last": <Workday>|null, "pending_incident": <Workday>|null },
   "member": null | {
     "link": "linked|unlinked|conflict|none",
-    "link_blocked_reason": null | "trainer_profile" | "registration_incomplete" | "no_phone" | "phone_recently_changed" | "linked_elsewhere" | "identity_has_member",
+    "link_blocked_reason": null | "link_disabled" | "trainer_profile" | "registration_incomplete" | "no_phone" | "phone_recently_changed" | "linked_elsewhere" | "identity_has_member",
     "member_id": 7699, "user_id": 7702, "full_name": "…", "phone_masked": "•••• 1234",
     "can_verify": true,
     "membership": { "plan": "…", "end_date": "YYYY-MM-DD" } | null,
@@ -418,6 +418,9 @@ la misma fila de `GET staff` más estos bloques:
 - `staff` y `trainer` salen en cualquier estado (la fila dice si la persona está activa).
 - `member` exige además `members.view` (sin él, `null`).
   · `linked`: la ficha de socio cuelga de esta identidad.
+  · Con el vínculo APAGADO (`WORKFORCE_MEMBER_LINK_ENABLED`, por defecto `false`, ver más
+    abajo) un socio `unlinked` sale con `link_blocked_reason: "link_disabled"` y
+    `can_verify: false`; lo demás de la ficha no cambia.
   · `unlinked`: hay un socio con el MISMO documento sin identidad. Coincidir por documento
     NO es prueba de titularidad: solo se vincula con el código SMS de (d). `can_verify`
     es `false` si hay motivo de bloqueo: `trainer_profile` (esta fase excluye a quien
@@ -439,6 +442,23 @@ la misma fila de `GET staff` más estos bloques:
   mismos campos que `access.employee` de `GET users/{user}/employee-access` más `source`.
   Se administra con las rutas de siempre (`members.employee`) usando `user_id`.
 - Desactivar el perfil laboral NO retira el acceso gratuito.
+
+**Bandera `workforce.member_link_enabled` (env `WORKFORCE_MEMBER_LINK_ENABLED`), por defecto
+`false` y APAGADA en producción.** Apagada, (d) y (e) responden 409 `member_link_disabled` sin
+crear reto, sin SMS y sin escribir nada. Motivo (H1, revisión final 2026-10-15): el código del
+vínculo lo dicta el socio a quien lo atiende; si sirviera en el login de la app, el CRM
+abriría la sesión del socio. En el código ya no sirve —`members/login/verify` y el tique
+facial (`face-reference`, `face-verify`, re-enrolamiento) solo admiten retos de propósito
+`login`, y uno de otro propósito responde como inexistente—, pero en producción el OTP de
+socios va por **Twilio Verify**, que valida TELÉFONO + código y no el reto: el mismo código
+serviría para un reto de login abierto aparte para ese número mientras esté pendiente.
+Precondiciones para encenderla en producción (las dos):
+1. El código de `identity_link` NO viaja por Twilio Verify, sino por un canal ligado al reto:
+   código propio (hash en el reto) enviado por SMS normal, o un servicio de Verify separado
+   solo para este propósito.
+2. Cerrar el hueco M2: si `users.phone` ya tenía el número nuevo, el PATCH de usuarios cambia
+   `members.phone` sin que `phone` aparezca en la traza y la cuarentena no lo ve. Hay que
+   registrar el cambio de `members.phone` (traza o evento) antes de encender.
 
 `POST admin/workforce/staff/{identity_id}/member-link` — `workforce.manage` + `members.edit`,
 10/min por administrador (compartido con la confirmación, sea cual sea la sesión) y 30 al día
@@ -468,6 +488,7 @@ Errores de (d) y (e):
 | HTTP | `code` | Cuándo |
 |---|---|---|
 | 403 | `forbidden` (+ `required_permission: "members.edit"`) | sin `members.edit` |
+| 409 | `member_link_disabled` | la bandera está apagada (por defecto); no se crea reto ni se envía nada |
 | 404 | `employee_not_found` | la identidad no tiene perfil de personal ni de entrenador |
 | 404 | `member_not_found` | el socio no existe o no tiene el documento de esta persona (misma respuesta) |
 | 409 | `member_link_trainer_unsupported` | la identidad tiene perfil de entrenador |
@@ -484,7 +505,7 @@ Errores de (d) y (e):
 | 410 | `otp_expired` | el código caducó (solo en e) |
 | 422 | `otp_invalid` (+ `remaining`) | código incorrecto (solo en e) |
 | 423 | `otp_blocked` | demasiados intentos: hay que pedir otro (solo en e) |
-| 429 | `too_many_requests` | cupo de la ruta por administrador (lookup 30/min; vínculo 10/min; inicio del vínculo 30/día) |
+| 429 | `too_many_requests` (+ `retry_after`, segundos) | cupo de la ruta por administrador (lookup 30/min; vínculo 10/min; inicio del vínculo 30/día) |
 
 `PATCH admin/workforce/staff/{identity_id}` — `workforce.manage`
 `{ "full_name?", "phone?", "positions?", "status?": "active|inactive" }` → fila.

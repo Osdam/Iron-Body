@@ -39,6 +39,9 @@ class StaffRecordTest extends TestCase
     {
         parent::setUp();
         $this->reloj('2026-10-15 09:00');
+        // Las fichas de estas pruebas dicen si se PODRÍA verificar: el vínculo
+        // se enciende a propósito (nace apagado, ver MemberOwnershipLinkTest).
+        config(['workforce.member_link_enabled' => true]);
     }
 
     protected function tearDown(): void

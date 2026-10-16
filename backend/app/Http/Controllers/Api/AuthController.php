@@ -1421,7 +1421,14 @@ class AuthController extends Controller
     /** Ticket facial válido = reto verificado por OTP dentro de la ventana. */
     private function validFaceTicket(string $uuid): ?MemberAuthChallenge
     {
-        $challenge = MemberAuthChallenge::query()->where('uuid', $uuid)->first();
+        // Solo retos de LOGIN: el tique lo emite `verifyOtp`. Un reto verificado
+        // de otra acción —el del vínculo de la ficha de socio, que verifica un
+        // administrador en el CRM— no puede abrir el paso facial ni la sesión
+        // de la app del socio (revisión de seguridad 2026-10-15, H1).
+        $challenge = MemberAuthChallenge::query()
+            ->where('uuid', $uuid)
+            ->where('purpose', MemberAuthChallenge::PURPOSE_LOGIN)
+            ->first();
         if (! $challenge || $challenge->status !== MemberAuthChallenge::STATUS_VERIFIED) {
             return null;
         }
