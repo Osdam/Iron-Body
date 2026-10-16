@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\TurnstileSetting;
+use App\Support\Network\OutboundDestination;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -21,6 +22,12 @@ use Throwable;
 class TurnstileService
 {
     private const TIMEOUT_SECONDS = 3;
+
+    /** Lo único que sale hacia el CRM (y a `last_error`) cuando el destino se rechaza. */
+    public const DESTINATION_NOT_ALLOWED = 'Ese destino no está permitido para el torniquete: usa la IP del dispositivo en la red de la sede.';
+
+    /** Lo único que sale cuando no hubo respuesta; el detalle va al log del servidor. */
+    private const UNREACHABLE = 'El dispositivo no respondió.';
 
     public function __construct(
         private readonly ZktecoTurnstileService $zkteco,
@@ -57,16 +64,13 @@ class TurnstileService
         $url = $this->interpolate($settings->webhook_url, $vars);
         $method = strtoupper($settings->http_method ?: 'POST');
 
-        $request = Http::timeout(self::TIMEOUT_SECONDS)
-            ->connectTimeout(self::TIMEOUT_SECONDS)
-            ->acceptJson();
-
+        $headers = [];
         if ($settings->auth_header) {
             [$headerName, $headerValue] = $this->splitAuthHeader(
                 $this->interpolate($settings->auth_header, $vars),
             );
             if ($headerName) {
-                $request = $request->withHeaders([$headerName => $headerValue]);
+                $headers[$headerName] = $headerValue;
             }
         }
 
@@ -74,45 +78,86 @@ class TurnstileService
             ? $this->interpolate($settings->request_payload, $vars)
             : null;
 
+        return $this->sendWebhook($settings, $url, $method, $payloadString, $headers, $vars);
+    }
+
+    /**
+     * La petición HTTP al relé, para el disparo con la configuración guardada
+     * y para la prueba ad-hoc del CRM (`turnstile/webhook/fire`).
+     *
+     * Es el SERVIDOR el que llama a una URL que escribe alguien en el CRM. Por
+     * eso: solo a destinos permitidos (ver OutboundDestination: nunca el propio
+     * servidor ni los metadatos de la nube), sin seguir redirecciones —un 302
+     * hacia 169.254.169.254 se saltaba ese control—, y sin devolver ni guardar
+     * lo que contesta el destino: solo su estado HTTP. Antes volvían 480
+     * caracteres del cuerpo en la respuesta y en `last_error`.
+     *
+     * @param  array<string, string>  $headers
+     * @param  array<string, mixed>  $formData  cuerpo JSON de un POST sin payload
+     * @return array{ok: bool, status?: int, reason?: string, error?: string}
+     */
+    public function sendWebhook(
+        TurnstileSetting $settings,
+        string $url,
+        string $method,
+        ?string $payload = null,
+        array $headers = [],
+        array $formData = [],
+    ): array {
+        $destination = OutboundDestination::forUrl($url);
+        if ($destination === null) {
+            $this->recordOutcome($settings, false, null, self::DESTINATION_NOT_ALLOWED);
+
+            return ['ok' => false, 'reason' => 'destination_not_allowed', 'error' => self::DESTINATION_NOT_ALLOWED];
+        }
+
+        $request = Http::timeout(self::TIMEOUT_SECONDS)
+            ->connectTimeout(self::TIMEOUT_SECONDS)
+            ->acceptJson()
+            ->withoutRedirecting()
+            ->withHeaders($headers);
+
+        if ($destination['pin'] !== null) {
+            // La conexión va a la IP ya validada, no a lo que diga el DNS ahora.
+            $request = $request->withOptions(['curl' => [CURLOPT_RESOLVE => [$destination['pin']]]]);
+        }
+
         try {
             $response = match ($method) {
                 'GET' => $request->get($url),
-                'PUT' => $request->withBody($payloadString ?? '', 'application/json')->put($url),
-                'PATCH' => $request->withBody($payloadString ?? '', 'application/json')->patch($url),
-                default => $payloadString
-                    ? $request->withBody($payloadString, 'application/json')->post($url)
-                    : $request->post($url, $vars),
+                'PUT' => $request->withBody($payload ?? '', 'application/json')->put($url),
+                'PATCH' => $request->withBody($payload ?? '', 'application/json')->patch($url),
+                default => filled($payload)
+                    ? $request->withBody($payload, 'application/json')->post($url)
+                    : $request->post($url, $formData),
             };
-
-            $ok = $response->successful();
-            $settings->forceFill([
-                'last_triggered_at' => now(),
-                'last_status' => $ok ? 'success' : 'error',
-                'last_http_code' => $response->status(),
-                'last_error' => $ok ? null : substr((string) $response->body(), 0, 480),
-            ])->save();
-
-            return [
-                'ok' => $ok,
-                'status' => $response->status(),
-                'body' => substr((string) $response->body(), 0, 480),
-            ];
         } catch (Throwable $e) {
+            // El detalle (host, puerto, «connection refused») se queda en el
+            // log del servidor: hacia el CRM sería un escáner de puertos.
             Log::warning('Turnstile webhook failed', [
                 'url' => $url,
                 'method' => $method,
                 'error' => $e->getMessage(),
             ]);
+            $this->recordOutcome($settings, false, null, self::UNREACHABLE);
 
-            $settings->forceFill([
-                'last_triggered_at' => now(),
-                'last_status' => 'error',
-                'last_http_code' => null,
-                'last_error' => substr($e->getMessage(), 0, 480),
-            ])->save();
-
-            return ['ok' => false, 'reason' => 'exception', 'error' => $e->getMessage()];
+            return ['ok' => false, 'reason' => 'exception', 'error' => self::UNREACHABLE];
         }
+
+        $ok = $response->successful();
+        $this->recordOutcome($settings, $ok, $response->status(), $ok ? null : 'HTTP '.$response->status());
+
+        return ['ok' => $ok, 'status' => $response->status()];
+    }
+
+    private function recordOutcome(TurnstileSetting $settings, bool $ok, ?int $httpCode, ?string $error): void
+    {
+        $settings->forceFill([
+            'last_triggered_at' => now(),
+            'last_status' => $ok ? 'success' : 'error',
+            'last_http_code' => $httpCode,
+            'last_error' => $error,
+        ])->save();
     }
 
     /**
@@ -151,10 +196,19 @@ class TurnstileService
             return ['ok' => false, 'reason' => 'no_device_host'];
         }
 
+        // Socket TCP hacia un host que escribe alguien en el CRM: mismo control
+        // que el relé HTTP, y a la IP resuelta, no al nombre.
+        $host = OutboundDestination::resolve((string) $settings->device_host);
+        if ($host === null) {
+            $this->recordOutcome($settings, false, null, self::DESTINATION_NOT_ALLOWED);
+
+            return ['ok' => false, 'reason' => 'destination_not_allowed', 'error' => self::DESTINATION_NOT_ALLOWED];
+        }
+
         $durationSeconds = max(1, (int) round(($settings->open_duration_ms ?: 3000) / 1000));
 
         $result = $this->zkteco->openDoor(
-            host: $settings->device_host,
+            host: $host,
             port: $settings->device_port ?: 4370,
             durationSeconds: $durationSeconds,
             commKey: $settings->device_comm_key,

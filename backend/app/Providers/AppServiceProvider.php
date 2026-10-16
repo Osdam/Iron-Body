@@ -40,6 +40,7 @@ use App\Services\Observability\QueueHealthService;
 use App\Services\Wompi\WompiConfigValidator;
 use App\Support\Access\AdminActor;
 use App\Support\Access\TrainerMemberScope;
+use App\Support\Network\ClientNetwork;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Queue\Events\JobProcessed;
@@ -144,6 +145,7 @@ class AppServiceProvider extends ServiceProvider
         $this->limitadorDelAgente();
         $this->limitadorDePersonal();
         $this->limitadoresDelTrasladoDePlanes();
+        $this->limitadoresDelRegistroPublico();
 
         $this->guardWompiConfig();
         $this->guardFactusConfig();
@@ -412,6 +414,47 @@ class AppServiceProvider extends ServiceProvider
                     'code' => 'too_many_class_writes',
                 ], 429, $headers));
         });
+    }
+
+    /**
+     * REGISTRO PÚBLICO DE LA APP (grupo `member.registration.token`).
+     *
+     * Ese token va dentro de la APK: a efectos prácticos, cualquiera llama a
+     * estas rutas, y no tenían ningún cupo (cuarenta altas seguidas, cuarenta
+     * 201). No hay socio ni sesión antes de register, así que la clave es la
+     * RED (IPv4, o el /64 de IPv6: ver ClientNetwork), en cubos propios que no
+     * comparten nada con el login.
+     *
+     * El wifi del gimnasio sale por UNA IP. Un alta de la APK es un register
+     * (al pulsar «Finalizar», tras rellenar el formulario y fotografiar la
+     * cédula: minutos por persona) y dos pasos (identidad y rostro); un fallo
+     * de red repite register. Diez altas por minuto desde el mismo wifi —una
+     * cola de diez personas terminando a la vez, con reintentos— no se
+     * alcanzan en el mostrador; treinta pasos por minuto cubren esas diez. El
+     * DELETE público ya no borra nada (siempre 409): su cupo solo frena el
+     * barrido de ids.
+     */
+    private function limitadoresDelRegistroPublico(): void
+    {
+        $demasiadas = fn (string $mensaje) => fn ($request, array $headers) => response()->json([
+            'ok' => false,
+            'code' => 'too_many_requests',
+            'message' => $mensaje,
+            'retry_after' => (int) ($headers['Retry-After'] ?? 60),
+        ], 429, $headers);
+        $red = fn (Request $request): string => ClientNetwork::of($request->ip());
+
+        RateLimiter::for('member-register', fn (Request $request) => Limit::perMinute(10)
+            ->by('member-register:'.$red($request))
+            ->response($demasiadas('Demasiados registros seguidos desde esta red. Espera un minuto e inténtalo de nuevo.')));
+
+        RateLimiter::for('member-register-steps', fn (Request $request) => Limit::perMinute(30)
+            ->by('member-register-steps:'.$red($request))
+            ->response($demasiadas('Demasiados envíos seguidos desde esta red. Espera un minuto e inténtalo de nuevo.')));
+
+        RateLimiter::for('member-register-discard', fn (Request $request) => Limit::perMinute(10)
+            ->by('member-register-discard:'.$red($request))
+            ->response($demasiadas('Demasiadas solicitudes seguidas. Espera un minuto.')));
     }
 
     /**

@@ -142,7 +142,9 @@ class MemberPhoneTrailTest extends TestCase
     public function test_el_registro_reanudado_que_reescribe_el_telefono_activa_la_cuarentena(): void
     {
         // Un registro reanudable lo reescribe con el token público de la app.
-        $yuri = $this->socio(self::YURI, ['phone' => self::TEL_SOCIO, 'status' => Member::STATUS_INCOMPLETE]);
+        // Reanudar exige uno de los teléfonos guardados: aquí el del usuario
+        // del CRM, distinto del de la ficha, que pasa a ser el de la ficha.
+        $yuri = $this->socio(self::YURI, ['phone' => self::TEL_SOCIO, 'status' => Member::STATUS_INCOMPLETE], ['phone' => self::TEL_NUEVO]);
         $identity = $this->enPersonal($yuri);
         config(['services.member_registration.token' => 'token-de-la-apk']);
 

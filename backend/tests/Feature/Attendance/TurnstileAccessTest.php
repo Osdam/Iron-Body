@@ -7,7 +7,9 @@ use App\Models\TurnstileSetting;
 use App\Services\SerialTurnstileService;
 use App\Services\ZktecoTurnstileService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -125,22 +127,27 @@ class TurnstileAccessTest extends TestCase
             ->assertOk()
             ->assertJsonPath('ok', true)
             ->assertJsonPath('result.status', 200)
-            ->assertJsonPath('result.body', '{"error":0}');
+            // Solo el estado HTTP: el cuerpo de lo que contesta el destino no
+            // vuelve al cliente (ver la sección SSRF de abajo).
+            ->assertJsonMissingPath('result.body');
 
         Http::assertSentCount(1);
     }
 
     // ── Una persona lo ve igual que antes ───────────────────────────────────
 
-    public function test_recepcion_sigue_leyendo_la_configuracion_completa(): void
+    public function test_recepcion_sigue_leyendo_la_configuracion_sin_las_credenciales(): void
     {
-        // El CRM edita la configuración con esta misma respuesta: una persona
-        // con permiso la recibe entera, credenciales incluidas.
-        $this->getJson('/api/turnstile', $this->adminAs(Admin::ROLE_RECEPCION))
+        // Recepción y el lector de la sede leen la configuración, pero las
+        // credenciales del dispositivo ya no salen en claro: solo se dice que
+        // existen. El formulario del CRM no las envía al guardar.
+        $res = $this->getJson('/api/turnstile', $this->adminAs(Admin::ROLE_RECEPCION))
             ->assertOk()
             ->assertJsonPath('ok', true)
-            ->assertJsonPath('data.device_comm_key', self::COMM_KEY)
-            ->assertJsonPath('data.auth_header', self::AUTH_HEADER)
+            ->assertJsonPath('data.device_comm_key', '••••')
+            ->assertJsonPath('data.has_device_comm_key', true)
+            ->assertJsonPath('data.auth_header', '••••')
+            ->assertJsonPath('data.has_auth_header', true)
             ->assertJsonPath('data.webhook_url', 'http://192.168.1.50:8081/zeroconf/switch')
             ->assertJsonStructure(['data' => [
                 'id', 'name', 'enabled', 'mode', 'device_host', 'device_port', 'device_comm_key',
@@ -148,6 +155,9 @@ class TurnstileAccessTest extends TestCase
                 'auth_header', 'request_payload', 'open_duration_ms', 'fire_on_entry', 'fire_on_exit',
                 'sound_enabled', 'last_triggered_at', 'last_status', 'last_error', 'last_http_code',
             ]]);
+
+        $this->assertStringNotContainsString(self::COMM_KEY, (string) $res->getContent());
+        $this->assertStringNotContainsString('secreto-del-rele', (string) $res->getContent());
     }
 
     public function test_quien_gestiona_clases_sigue_configurando_y_abriendo(): void
@@ -171,5 +181,185 @@ class TurnstileAccessTest extends TestCase
         $this->postJson('/api/turnstile/serial/open', ['port' => 'COM4'], $h)
             ->assertOk()
             ->assertJsonPath('ok', true);
+    }
+
+    // ── SSRF: a dónde puede llamar el servidor ──────────────────────────────
+    //
+    // Disparar el relé es que el SERVIDOR haga una petición a una URL o abra
+    // un socket a un host que llega en el cuerpo. Quien gestiona clases lo
+    // sigue pudiendo hacer hacia la red de la sede (rangos privados: es donde
+    // vive un relé Sonoff/Shelly/ESP32 o un ZKTeco), pero nunca hacia el
+    // propio servidor ni hacia los metadatos de la nube; sin redirecciones, y
+    // sin devolver ni guardar lo que contesta el destino: solo su estado HTTP.
+
+    public static function destinosProhibidos(): array
+    {
+        return [
+            'metadatos de la nube' => ['http://169.254.169.254/latest/meta-data/'],
+            'loopback' => ['http://127.0.0.1:8000/api/health'],
+            'loopback por nombre' => ['http://localhost/'],
+            'loopback decimal' => ['http://2130706433/'],
+            'loopback ipv6' => ['http://[::1]/'],
+            'ipv4 mapeada en ipv6' => ['http://[::ffff:127.0.0.1]/'],
+            'sin especificar' => ['http://0.0.0.0:80/'],
+            'enlace local ipv6' => ['http://[fe80::1]/'],
+            'con usuario delante del host' => ['http://relay@127.0.0.1/'],
+        ];
+    }
+
+    #[DataProvider('destinosProhibidos')]
+    public function test_el_webhook_no_llama_al_propio_servidor_ni_a_los_metadatos(string $url): void
+    {
+        Http::fake(['*' => Http::response('{"AccessKeyId":"AKIA-SECRETO"}', 200)]);
+
+        $res = $this->postJson('/api/turnstile/webhook/fire', ['url' => $url, 'method' => 'GET'], $this->gestor())
+            ->assertStatus(422)
+            ->assertJsonPath('ok', false)
+            ->assertJsonPath('code', 'destination_not_allowed');
+
+        Http::assertNothingSent();
+        $this->assertStringNotContainsString('AKIA', (string) $res->getContent());
+    }
+
+    public function test_la_red_de_la_sede_sigue_permitida(): void
+    {
+        Http::fake(['*' => Http::response('', 200)]);
+
+        foreach (['http://10.0.0.5/relay', 'http://172.16.4.2:8081/zeroconf/switch', 'http://192.168.1.50/'] as $url) {
+            $this->postJson('/api/turnstile/webhook/fire', ['url' => $url], $this->gestor())->assertOk();
+        }
+
+        Http::assertSentCount(3);
+    }
+
+    public function test_el_webhook_no_sigue_redirecciones(): void
+    {
+        Http::fake([
+            '192.168.1.50:8081/*' => Http::response('', 302, ['Location' => 'http://169.254.169.254/latest/meta-data/']),
+            '169.254.169.254/*' => Http::response('{"AccessKeyId":"AKIA-SECRETO"}', 200),
+        ]);
+
+        $res = $this->postJson('/api/turnstile/webhook/fire', [
+            'url' => 'http://192.168.1.50:8081/zeroconf/switch', 'method' => 'GET',
+        ], $this->gestor())
+            ->assertStatus(502)
+            ->assertJsonPath('result.status', 302);
+
+        Http::assertSentCount(1);
+        $this->assertStringNotContainsString('AKIA', (string) $res->getContent());
+    }
+
+    public function test_lo_que_contesta_el_destino_no_se_devuelve_ni_se_guarda(): void
+    {
+        Http::fake(['*' => Http::response('db_password=secreto-interno', 500)]);
+
+        $res = $this->postJson('/api/turnstile/webhook/fire', [
+            'url' => 'http://192.168.1.50:8081/zeroconf/switch',
+        ], $this->gestor())
+            ->assertStatus(502)
+            ->assertJsonPath('result.status', 500)
+            ->assertJsonPath('data.last_http_code', 500);
+
+        $this->assertStringNotContainsString('secreto-interno', (string) $res->getContent());
+        $this->assertStringNotContainsString('secreto-interno', (string) TurnstileSetting::current()->last_error);
+    }
+
+    public function test_un_fallo_de_conexion_no_devuelve_el_detalle_interno(): void
+    {
+        Http::fake(fn () => throw new ConnectionException('cURL error 7: Failed to connect to 10.0.0.9 port 6379: Connection refused'));
+
+        $res = $this->postJson('/api/turnstile/webhook/fire', ['url' => 'http://10.0.0.9:6379/'], $this->gestor())
+            ->assertStatus(502)
+            ->assertJsonPath('ok', false);
+
+        $this->assertStringNotContainsString('6379', (string) $res->getContent());
+        $this->assertStringNotContainsString('Connection refused', (string) TurnstileSetting::current()->last_error);
+    }
+
+    public function test_la_url_guardada_tampoco_llama_a_destinos_prohibidos(): void
+    {
+        // Mismo SSRF por el otro camino: guardar la URL y disparar.
+        Http::fake(['*' => Http::response('{"AccessKeyId":"AKIA-SECRETO"}', 200)]);
+        $h = $this->gestor();
+        $this->putJson('/api/turnstile', [
+            'enabled' => true, 'mode' => 'webhook', 'http_method' => 'GET',
+            'webhook_url' => 'http://169.254.169.254/latest/meta-data/',
+        ], $h)->assertOk();
+
+        $res = $this->postJson('/api/turnstile/trigger', [], $h)
+            ->assertStatus(502)
+            ->assertJsonPath('result.reason', 'destination_not_allowed');
+
+        Http::assertNothingSent();
+        $this->assertStringNotContainsString('AKIA', (string) $res->getContent());
+    }
+
+    public function test_el_disparo_con_la_url_guardada_tampoco_devuelve_el_cuerpo(): void
+    {
+        Http::fake(['*' => Http::response('respuesta-interna-del-rele', 200)]);
+        $h = $this->gestor();
+        $this->putJson('/api/turnstile', ['enabled' => true, 'mode' => 'webhook'], $h)->assertOk();
+
+        $res = $this->postJson('/api/turnstile/trigger', [], $h)
+            ->assertOk()
+            ->assertJsonPath('result.status', 200);
+
+        Http::assertSentCount(1);
+        $this->assertStringNotContainsString('respuesta-interna', (string) $res->getContent());
+    }
+
+    public static function hostsProhibidos(): array
+    {
+        return [
+            'loopback' => ['127.0.0.1'],
+            'loopback por nombre' => ['localhost'],
+            'metadatos' => ['169.254.169.254'],
+            'loopback ipv6' => ['::1'],
+            'sin especificar' => ['0.0.0.0'],
+        ];
+    }
+
+    #[DataProvider('hostsProhibidos')]
+    public function test_zkteco_no_abre_sockets_hacia_el_propio_servidor(string $host): void
+    {
+        $this->mock(ZktecoTurnstileService::class)->shouldNotReceive('openDoor');
+
+        $this->postJson('/api/turnstile/zkteco/open', ['host' => $host, 'port' => 6379], $this->gestor())
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'destination_not_allowed');
+    }
+
+    // ── Credenciales del dispositivo: se escriben, no se leen ───────────────
+
+    public function test_guardar_sin_tocar_las_credenciales_las_conserva(): void
+    {
+        $h = $this->gestor();
+
+        // Lo que envía hoy el CRM (persistSerialPort): sin credenciales.
+        $this->putJson('/api/turnstile', [
+            'mode' => 'serial', 'serial_port' => 'COM4', 'serial_baud' => 9600,
+            'serial_command' => 'PULSE 3000', 'enabled' => true,
+        ], $h)->assertOk();
+        // Un formulario que reenvía lo que leyó (enmascarado) o las deja vacías.
+        $this->putJson('/api/turnstile', ['device_comm_key' => '••••', 'auth_header' => '••••'], $h)->assertOk();
+        $this->putJson('/api/turnstile', ['device_comm_key' => '', 'auth_header' => null], $h)->assertOk();
+
+        $s = TurnstileSetting::current();
+        $this->assertSame(self::COMM_KEY, $s->device_comm_key);
+        $this->assertSame(self::AUTH_HEADER, $s->auth_header);
+        $this->assertSame('COM4', $s->serial_port);
+    }
+
+    public function test_una_credencial_nueva_se_guarda_y_no_se_devuelve(): void
+    {
+        $res = $this->putJson('/api/turnstile', ['device_comm_key' => '987654', 'auth_header' => 'Bearer otro'], $this->gestor())
+            ->assertOk()
+            ->assertJsonPath('data.device_comm_key', '••••')
+            ->assertJsonPath('data.auth_header', '••••');
+
+        $this->assertStringNotContainsString('987654', (string) $res->getContent());
+        $s = TurnstileSetting::current();
+        $this->assertSame('987654', $s->device_comm_key);
+        $this->assertSame('Bearer otro', $s->auth_header);
     }
 }

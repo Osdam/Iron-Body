@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Member;
+use App\Support\Access\AdminActor;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -25,8 +27,12 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class MemberIdentityReviewController extends Controller
 {
     /** Estado de la documentación de un socio (sin exponer rutas internas). */
-    public function show(Member $member): JsonResponse
+    public function show(Request $request, Member $member): JsonResponse
     {
+        if ($rechazo = $this->requirePerson($request)) {
+            return $rechazo;
+        }
+
         $doc = $member->identityDocument;
 
         if ($doc === null) {
@@ -55,8 +61,12 @@ class MemberIdentityReviewController extends Controller
     }
 
     /** Transmite una cara del documento desde el disco privado. */
-    public function image(Member $member, string $side): StreamedResponse|JsonResponse
+    public function image(Request $request, Member $member, string $side): StreamedResponse|JsonResponse
     {
+        if ($rechazo = $this->requirePerson($request)) {
+            return $rechazo;
+        }
+
         if (! in_array($side, ['front', 'back'], true)) {
             return response()->json(['message' => 'Cara no válida.'], 422);
         }
@@ -79,5 +89,25 @@ class MemberIdentityReviewController extends Controller
             "identidad-{$member->id}-{$side}",
             ['Content-Type' => ($side === 'front' ? $doc->front_mime : $doc->back_mime) ?: 'application/octet-stream'],
         );
+    }
+
+    /**
+     * La documentación de identidad la consulta una PERSONA, nunca el token
+     * compartido de automatizaciones: son lecturas y la puerta las resolvía a
+     * un permiso de lectura que ese token obtiene, así que bastaba con él para
+     * descargar las dos caras de la cédula de cualquier socio. Ningún workflow
+     * de n8n usa estas rutas y el CRM entra con la sesión de una persona.
+     */
+    private function requirePerson(Request $request): ?JsonResponse
+    {
+        if (AdminActor::from($request) === null) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'person_required',
+                'message' => 'Los documentos de identidad solo los consulta una persona. Entra con tu cuenta.',
+            ], 403);
+        }
+
+        return null;
     }
 }

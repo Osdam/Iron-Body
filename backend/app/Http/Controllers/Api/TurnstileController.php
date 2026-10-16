@@ -9,13 +9,17 @@ use App\Services\SerialTurnstileService;
 use App\Services\TurnstileService;
 use App\Services\ZktecoTurnstileService;
 use App\Support\Access\AdminActor;
+use App\Support\Network\OutboundDestination;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
-use Throwable;
 
 class TurnstileController extends Controller
 {
+    /** Lo que devuelve la lectura en lugar de una credencial guardada. */
+    private const MASK = '••••';
+
+    private const SECRET_FIELDS = ['device_comm_key', 'auth_header'];
+
     public function __construct(
         private readonly TurnstileService $turnstile,
         private readonly ZktecoTurnstileService $zkteco,
@@ -59,6 +63,15 @@ class TurnstileController extends Controller
             'fire_on_exit' => ['nullable', 'boolean'],
             'sound_enabled' => ['nullable', 'boolean'],
         ]);
+
+        // Las credenciales ya no se leen (ver serialize()): si llegan vacías,
+        // ausentes o con la máscara que devolvió la lectura, es que no se
+        // tocaron. Para cambiarlas se escribe el valor nuevo.
+        foreach (self::SECRET_FIELDS as $field) {
+            if (array_key_exists($field, $data) && (blank($data[$field]) || $data[$field] === self::MASK)) {
+                unset($data[$field]);
+            }
+        }
 
         $settings = TurnstileSetting::current();
         $previoTorniquete = $settings->getOriginal();
@@ -131,57 +144,39 @@ class TurnstileController extends Controller
         }
 
         $data = $request->validate([
-            'url' => ['required', 'string', 'max:500', 'url'],
+            'url' => ['required', 'string', 'max:500', 'url:http,https'],
             'method' => ['nullable', 'in:GET,POST,PUT,PATCH'],
             'payload' => ['nullable', 'string', 'max:4000'],
         ]);
 
-        $method = strtoupper($data['method'] ?? 'POST');
-        $payload = $data['payload'] ?? null;
         $settings = TurnstileSetting::current();
 
-        try {
-            $request = Http::timeout(3)->connectTimeout(3)->acceptJson();
-            $response = match ($method) {
-                'GET' => $request->get($data['url']),
-                'PUT' => $request->withBody($payload ?? '', 'application/json')->put($data['url']),
-                'PATCH' => $request->withBody($payload ?? '', 'application/json')->patch($data['url']),
-                default => $payload
-                    ? $request->withBody($payload, 'application/json')->post($data['url'])
-                    : $request->post($data['url']),
-            };
+        // Destino, redirecciones y cuerpo: ver TurnstileService::sendWebhook().
+        $result = $this->turnstile->sendWebhook(
+            $settings,
+            $data['url'],
+            strtoupper($data['method'] ?? 'POST'),
+            $data['payload'] ?? null,
+        );
 
-            $ok = $response->successful();
-            $settings->forceFill([
-                'last_triggered_at' => now(),
-                'last_status' => $ok ? 'success' : 'error',
-                'last_http_code' => $response->status(),
-                'last_error' => $ok ? null : substr((string) $response->body(), 0, 480),
-            ])->save();
-
-            return response()->json([
-                'ok' => $ok,
-                'result' => [
-                    'ok' => $ok,
-                    'status' => $response->status(),
-                    'body' => substr((string) $response->body(), 0, 480),
-                ],
-                'data' => $this->serialize($settings->refresh()),
-            ], $ok ? 200 : 502);
-        } catch (Throwable $e) {
-            $settings->forceFill([
-                'last_triggered_at' => now(),
-                'last_status' => 'error',
-                'last_http_code' => null,
-                'last_error' => substr($e->getMessage(), 0, 480),
-            ])->save();
-
-            return response()->json([
-                'ok' => false,
-                'result' => ['ok' => false, 'error' => $e->getMessage()],
-                'data' => $this->serialize($settings->refresh()),
-            ], 502);
+        if (($result['reason'] ?? null) === 'destination_not_allowed') {
+            return $this->destinationNotAllowed();
         }
+
+        // Hacer que el servidor llame a una URL de la red de la sede es, como
+        // abrir la puerta a mano, una acción que queda registrada. Sin la URL.
+        app(AuditTrail::class)->record($request, [
+            'action' => 'status', 'module' => 'Asistencias', 'entity' => 'torniquete',
+            'entity_id' => $settings->id,
+            'summary' => 'Probó el relé HTTP del torniquete desde el CRM',
+            'metadata' => ['ok' => (bool) $result['ok'], 'via' => 'webhook', 'http_code' => $result['status'] ?? null],
+        ]);
+
+        return response()->json([
+            'ok' => $result['ok'],
+            'result' => $result,
+            'data' => $this->serialize($settings->refresh()),
+        ], $result['ok'] ? 200 : 502);
     }
 
     /**
@@ -256,7 +251,10 @@ class TurnstileController extends Controller
         $settings = TurnstileSetting::current();
         $host = $data['host'] ?? $settings->device_host;
         $port = $data['port'] ?? ($settings->device_port ?: 4370);
-        $commKey = array_key_exists('comm_key', $data) ? $data['comm_key'] : $settings->device_comm_key;
+        // La clave enmascarada que devuelve la lectura significa «la guardada».
+        $commKey = array_key_exists('comm_key', $data) && $data['comm_key'] !== self::MASK
+            ? $data['comm_key']
+            : $settings->device_comm_key;
         $duration = $data['duration_seconds']
             ?? max(1, (int) round(($settings->open_duration_ms ?: 3000) / 1000));
 
@@ -267,8 +265,15 @@ class TurnstileController extends Controller
             ], 422);
         }
 
+        // Socket TCP a un host del cuerpo: nunca el propio servidor ni los
+        // metadatos de la nube, y a la IP ya resuelta (ver OutboundDestination).
+        $address = OutboundDestination::resolve((string) $host);
+        if ($address === null) {
+            return $this->destinationNotAllowed();
+        }
+
         $result = $this->zkteco->openDoor(
-            host: $host,
+            host: $address,
             port: (int) $port,
             durationSeconds: (int) $duration,
             commKey: $commKey,
@@ -299,8 +304,8 @@ class TurnstileController extends Controller
      * El torniquete lo maneja una PERSONA, nunca el token compartido de
      * automatizaciones.
      *
-     * Leer la configuración entrega en claro las credenciales del dispositivo
-     * (`device_comm_key`, `auth_header`) y es lectura, así que la puerta lo
+     * Leer la configuración entregaba en claro las credenciales del dispositivo
+     * (hoy van enmascaradas, ver serialize()) y es lectura, así que la puerta lo
      * resolvía a `classes.view`, que ese token obtiene. Las demás acciones
      * abren la puerta física o hacen que el servidor llame a un host o URL
      * que viaja en el cuerpo: la puerta ya exige `classes.manage`, y esto es
@@ -322,6 +327,21 @@ class TurnstileController extends Controller
         return null;
     }
 
+    private function destinationNotAllowed(): JsonResponse
+    {
+        return response()->json([
+            'ok' => false,
+            'code' => 'destination_not_allowed',
+            'message' => TurnstileService::DESTINATION_NOT_ALLOWED,
+        ], 422);
+    }
+
+    /**
+     * Las credenciales del dispositivo se ESCRIBEN pero no se leen: Recepción
+     * y el lector de la sede leen esta configuración y no necesitan la clave
+     * del ZKTeco ni la cabecera del relé. Se dice si existen; el formulario
+     * del CRM no las reenvía al guardar (ver update()).
+     */
     private function serialize(TurnstileSetting $s): array
     {
         return [
@@ -331,13 +351,15 @@ class TurnstileController extends Controller
             'mode' => $s->mode,
             'device_host' => $s->device_host,
             'device_port' => $s->device_port,
-            'device_comm_key' => $s->device_comm_key,
+            'device_comm_key' => filled($s->device_comm_key) ? self::MASK : null,
+            'has_device_comm_key' => filled($s->device_comm_key),
             'serial_port' => $s->serial_port,
             'serial_baud' => $s->serial_baud,
             'serial_command' => $s->serial_command,
             'webhook_url' => $s->webhook_url,
             'http_method' => $s->http_method,
-            'auth_header' => $s->auth_header,
+            'auth_header' => filled($s->auth_header) ? self::MASK : null,
+            'has_auth_header' => filled($s->auth_header),
             'request_payload' => $s->request_payload,
             'open_duration_ms' => $s->open_duration_ms,
             'fire_on_entry' => $s->fire_on_entry,
