@@ -8,7 +8,10 @@
   - backend, CRM y servicio;
   - integración real Laravel ↔ servicio ↔ CRM;
   - Chrome real.
-- **Nada se ha desplegado en producción y nada se ha instalado en el PC de caja.**
+- **Backend y CRM DESPLEGADOS en producción el 17-10-2026** (autorizado por el propietario; §27).
+  Para nadie cambia nada hasta que un administrador registre la estación de caja: el modo agent es
+  por equipo.
+- **El servicio NO está instalado en el PC de caja.**
 - Falta lo que exige hardware real: Windows real (spooler, servicio, instalador), el permiso de red
   local de Chrome frente al dominio público y la impresora física. Ese piloto es `PRUEBAS_FISICAS.md`.
 
@@ -526,13 +529,25 @@ Commits **locales**, sin push: monorepo `Iron-Body` → `6738bfa` (backend), `b0
 
 ## 27. Estado de producción
 
-- **Sin cambios.** Siguen backend `05e74b6` y CRM `55ac7e5`: la impresión por navegador del 17-10.
-- No se ejecutó nada contra producción salvo **lecturas**:
-  - PHP 8.3.31 **sin ext-intl**;
-  - `business_name` vigente «IRON BODY»;
-  - `www.ironbodyneiva.cloud` sirve el CRM sin redirigir.
-- Nada instalado en el PC de recepción.
-- Ninguna venta de prueba.
+**Desplegado el 17-10-2026 entre las 12:26 y las 12:31 UTC (07:26–07:31 en Neiva), con autorización
+expresa del propietario. No había ningún turno de caja abierto.**
+
+| Paso | Resultado |
+|---|---|
+| Respaldo previo | `/var/backups/ironbody/pre-servicio-impresion-20261017T122650Z`: volcado de 30 MB (196 tablas), CRM publicado, HEAD de la API y `SHA256SUMS`. |
+| Backend | `origin/main` `05e74b6` → `462b2f2`, con avance directo en `/var/www/api` y propietario `www-data` en los 27 archivos del backend; `php -l` correcto. |
+| Migración | `PGOPTIONS='-c lock_timeout=5s' … migrate --force`: `2026_10_17_000001_create_receipt_agent_tables` en **67 ms**, lote 116. No había transacciones largas. |
+| Esquema verificado | El índice parcial «un solo original» conserva su `WHERE kind = 'original'`. Existen `receipt_stations` y `receipt_agent_tickets`, y `receipt_prints` tiene `station_id` y `dispatched_at`. Los 9 intentos y el recibo previos siguen igual. |
+| Sondas | `redeem` con un ticket falso da 404 `ticket_invalid`; con `text/plain`, 415. Las rutas de estaciones y de pendientes sin sesión dan 401. `health` responde 200. |
+| Producción sin ext-intl | Un recibo real existente, maquetado como reimpresión a 32 columnas, pasa `assertPrintable` (32 líneas, ≤ 32 columnas). Conserva su encabezado congelado; los recibos nuevos dirán «IRON BODY WORKOUT». Interruptor activo y protocolo mínimo 1. |
+| CRM | `origin/main` `55ac7e5` → `c09c58c`. Build `npm run build:prod` sellado `c09c58c` con `dirty:false` (`main-2F5EVYC4.js`), publicado con `rsync` sin borrar archivos y `chown root:root`. El `main` anterior (`main-ELAS3VTA.js`) sigue en 200 para las pestañas abiertas. `app-source` avanzado (conserva el `package-lock.json` modificado que ya tenía). |
+| Salud tras el despliegue | 0 errores de Laravel, **0 respuestas 5xx en 1.085 peticiones** y 12 workers RUNNING. |
+
+**Hallazgo adyacente, anterior y no tocado:** `receivable.notify_failed` (WARNING, 46 veces en el log,
+la última a las 06:00 UTC) por una violación de NOT NULL al crear el aviso de deuda «vence hoy».
+
+**Pendiente en el PC de recepción:** instalar el paquete (§20–§22), configurar la estación (§23) y
+hacer las pruebas físicas (§24). Sin eso, la caja sigue imprimiendo por el método anterior.
 
 ## 28. Riesgos pendientes
 
@@ -570,7 +585,7 @@ Commits **locales**, sin push: monorepo `Iron-Body` → `6738bfa` (backend), `b0
 
 ## 29. Procedimiento de activación final
 
-**Requiere aprobación expresa del propietario para cada paso de producción.**
+**Pasos 1–3 HECHOS el 17-10-2026 (§27). Los siguientes son en el PC de recepción.**
 
 1. **Despliegue del backend.** Respaldo previo como el del 17-10.
 
