@@ -1,6 +1,6 @@
 # DIGITAL_POS_INTEGRATION_REPORT — 16/17-10-2026
 
-**Estado: IMPLEMENTED_NOT_DEPLOYED** — implementado y probado en ramas locales, sin commit ni despliegue (requieren autorización). Tras desplegar y configurar el PC de caja: READY_FOR_PRINTER_PILOT. **No es PRODUCTION_VERIFIED**: falta la impresora real.
+**Estado: READY_FOR_PRINTER_PILOT** — desplegado en producción el 17-10-2026 (backend `e7e5afc`, CRM `55ac7e5`) y verificado sin crear cobros. **No es PRODUCTION_VERIFIED**: falta el piloto con la impresora física y el PC de caja configurado (`GUIA_PC_CAJA_IMPRESORA.md`).
 
 ## 1. Arquitectura encontrada
 
@@ -217,17 +217,25 @@ Ver `GUIA_PC_CAJA_IMPRESORA.md`.
 
 ## 17. Estado de Git
 
-- **Backend:** rama local `feat/thermal-receipts` sobre `b62bb92`.
-- **CRM:** rama local `feat/thermal-receipts` sobre `11100fb`.
-- Sin commit ni push.
+- Backend: `e7e5afc` en `main` (avance directo desde `b62bb92`).
+- CRM: `55ac7e5` en `main` (avance directo desde `11100fb`).
+- Ramas: `feat/thermal-receipts`.
 
 ## 18. Estado de despliegue
 
-No desplegado. Al desplegar:
-1. backend: `migrate` (solo tablas nuevas, reversible) y `config:cache`;
-2. CRM: build sellado y `rsync` sin `--delete`.
-Va el backend antes que el CRM.
+- **Respaldo previo:** `/var/backups/ironbody/pre-recibos-termicos-20261017T033905Z` (volcado de 30 MB con 192 tablas, CRM publicado y huellas).
+- **Backend:** `merge --ff-only` en el VPS; `migrate` aplicó `2026_10_16_000001_create_receipts_tables` (lote 115). No hacía falta caché de rutas ni de configuración (producción no la usa) ni reiniciar workers.
+- **CRM:** build sellado `55ac7e5` publicado con `rsync` sin `--delete`; el `main` anterior sigue disponible para las pestañas abiertas; `app-source` avanzado.
+- **Verificado en producción:**
+  - 6 rutas; sin sesión, 401;
+  - tablas vacías e índice parcial creado;
+  - solo los 3 Super Admin activos tienen el permiso de omitir;
+  - recibos de un cobro y de una venta reales compuestos dentro de una transacción deshecha (`RG-000001`, `RP-000001`, datos del negocio, NIT y hora de Bogotá), con 0 filas persistidas;
+  - 0 errores 5xx y 0 errores en Laravel tras desplegar.
+- **Rollback:**
+  - backend: `git revert e7e5afc`, avance directo y `migrate:rollback --step=1` (solo tablas nuevas);
+  - CRM: volver a publicar el build de `11100fb`.
 
 ## 19. Pruebas físicas pendientes
 
-(ver la guía)
+Las de `GUIA_PC_CAJA_IMPRESORA.md` §4. Hasta hacerlas no hay PRODUCTION_VERIFIED.
