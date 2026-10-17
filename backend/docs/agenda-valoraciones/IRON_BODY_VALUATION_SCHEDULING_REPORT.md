@@ -2,20 +2,22 @@
 
 **Fecha:** 17-10-2026.
 
-**Estado: READY_FOR_PRODUCTION_REVIEW.**
+**Estado: DESPLEGADO EN PRODUCCIÓN el 17-10-2026, 19:30–19:35 UTC (14:30–14:35 en Bogotá).**
+La verificación técnica está hecha. **PRODUCTION_VERIFIED queda pendiente** de la prueba con una sesión
+real del CRM (§36).
 
-El módulo interno está implementado, probado y revisado:
+El módulo interno está implementado, probado, revisado y desplegado:
 - backend Laravel y CRM Angular;
-- pruebas de extremo a extremo reales contra PostgreSQL y en Chrome.
+- pruebas de extremo a extremo reales contra PostgreSQL y en Chrome;
+- despliegue por orden expresa del propietario, según §31 (resultado en §31.1).
 
-**No se ha hecho push, despliegue ni migración en producción**, como pediste. El canal al socio (app y
-push) queda **apagado** hasta verificarlo. WhatsApp no está disponible porque no hay plantilla
-aprobada.
+El canal al socio (app y push) sigue **apagado** hasta verificarlo. No se ha enviado ninguna
+notificación real y no hay citas. WhatsApp no está disponible porque no hay plantilla aprobada.
 
-| Repositorio | Rama | Base | Commits locales |
+| Repositorio | `main` en producción | Antes | Commits |
 |---|---|---|---|
-| Monorepo `Iron-Body` | `feat/valoraciones` | `f9638e2`, lo que corre en producción | `b86d3c6` (código y pruebas) + el commit de esta documentación |
-| CRM `Iron-Body_Front` | `feat/valoraciones` | `c09c58c`, lo que corre en producción | `6fb16c1` |
+| Monorepo `Iron-Body` | `e2acfba` (+ el commit que actualiza este informe) | `f9638e2` | `b86d3c6` (código y pruebas), `e2acfba` (docs) |
+| CRM `Iron-Body_Front` | `6fb16c1` (`main-BJPFBQQU.js`) | `c09c58c` (`main-2F5EVYC4.js`) | `6fb16c1` |
 
 ---
 
@@ -501,15 +503,18 @@ coherente. 3 procesadores, sin duplicados. Además, la mutación sin cerrojo hac
 
 ## 29. Commits generados
 
-Todos **locales**, en `feat/valoraciones`, **sin push**:
+Hechos en `feat/valoraciones` y subidos a `main` como *fast-forward* el 17-10 (`main` no había
+avanzado):
 
 | Repositorio | Commit | Contenido |
 |---|---|---|
 | Monorepo `Iron-Body` | `b86d3c6` | `feat(valoraciones)`: agenda, disponibilidad, conflictos, recordatorios, bandeja filtrada, permisos, importador, 3 migraciones y 117 pruebas. |
-| Monorepo `Iron-Body` | el siguiente a `b86d3c6` | `docs(valoraciones)`: este informe y la guía de transición desde Google Calendar. |
+| Monorepo `Iron-Body` | `e2acfba` | `docs(valoraciones)`: este informe y la guía de transición desde Google Calendar. |
+| Monorepo `Iron-Body` | el siguiente a `e2acfba` | `docs(valoraciones)`: este informe, actualizado al estado desplegado (solo documentación). |
 | CRM `Iron-Body_Front` | `6fb16c1` | `feat(valoraciones)`: Calendario de citas en Entrenadores, historiales en las fichas, bandeja y alerta, permisos. |
 
-Ninguno toca `main`. Para desplegar hay que integrarlos en `main` (§31), con tu aprobación.
+El servidor corre `e2acfba`. El commit que actualiza este informe es solo documentación: no hace
+falta desplegarlo, y entrará con el próximo `merge --ff-only`.
 
 ## 30. Dependencias nuevas y justificación
 
@@ -520,7 +525,7 @@ En PostgreSQL, la extensión **`btree_gist`** (estándar, «trusted», versión 
 servidor) permite la restricción `EXCLUDE`, la red de seguridad contra solapes. Si no se pudiera
 instalar, la migración lo avisa y la protección por cerrojo sigue valiendo.
 
-## 31. Procedimiento de despliegue (cuando se autorice)
+## 31. Procedimiento de despliegue
 
 **Orden obligatorio: migraciones ANTES que el código.** Con el código viejo y el esquema nuevo todo
 funciona; con el código nuevo y el esquema viejo, la bandeja del CRM falla (revisión de BD I2).
@@ -570,9 +575,37 @@ funciona; con el código nuevo y el esquema viejo, la bandeja del CRM falla (rev
    - 0 errores 5xx.
 8. **Configuración inicial en el CRM:** disponibilidad de los entrenadores, ajustes y permisos (§36).
 
+### 31.1 Ejecución del 17-10-2026 (UTC)
+
+Horas aproximadas, al minuto.
+
+| Hora | Paso | Resultado |
+|---|---|---|
+| 19:29 | Remotos | `origin/main` seguía en `f9638e2` (monorepo) y `c09c58c` (CRM): *fast-forward* sin conflictos. |
+| 19:29 | Estado previo | API en `f9638e2` con 12 workers en marcha. CRM `main-2F5EVYC4.js`. Última migración: lote 116. |
+| 19:30 | Comprobación previa | `iron` no superusuario y dueño, con CREATE. `btree_gist` 1.6 disponible. Tablas inexistentes. 0 transacciones largas. `lock_timeout` llega a PDO (3 s). |
+| 19:30 | Respaldo | `/var/backups/ironbody/pre-agenda-valoraciones-20261017T193051Z`: `ironbody.dump` (legible, 2204 entradas del TOC), CRM publicado (`app-published.tgz`), `api-head.txt`, `app-version.json`, `SHA256SUMS`. |
+| 19:31 | Push del monorepo | `f9638e2..e2acfba → main`. |
+| 19:31 | Migraciones (código viejo sirviendo) | Lote **117**: 200001 en 61 ms, 200002 en 53 ms, 200003 en 2 ms. Sin `55P03`. |
+| 19:32 | Comprobación posterior | Se cumple todo lo del paso 4. `valuation_appointments_no_overlap` (x) creada; ningún índice inválido; sin `valuations.overlap_guard` en el log. |
+| 19:32 | Código del backend | `merge --ff-only` → `e2acfba`. 53 ficheros de `www-data`. 22 rutas. `schedule:list` con `valuations:process-reminders` cada minuto. |
+| 19:33 | Workers | `queue:restart`: 12 en marcha en dos lecturas separadas. No hizo falta recargar PHP-FPM: OPcache revalida cada 2 s. |
+| 19:33 | Humo del backend | Sin sesión: 401. Capacidades leídas sin escribir (Recepción, Super Admin, Administrativo), según el contrato. `member_app_enabled=false`. 0 citas y 0 avisos. Primera pasada del scheduler: DONE en 255 ms. |
+| 19:34 | Push y build del CRM | `c09c58c..6fb16c1 → main`. `npm run build:prod` desde el árbol limpio: `version.json` con `6fb16c1` y `dirty:false`; apunta a la API de producción y no contiene `127.0.0.1`. |
+| 19:35 | Publicación del CRM | `rsync` sin `--delete` y `chown -R root:root`. `index.html` con `main-BJPFBQQU.js`; `main-2F5EVYC4.js` sigue en disco. `/version.json` público: `6fb16c1`. |
+| 19:35 | Humo del CRM | Chrome sin sesión en `/trainers?tab=citas`: lleva al login, sin errores de JavaScript ni recursos 4xx/5xx. Los chunks del calendario se sirven con 200. |
+| 19:35 | Barrido | 0 errores en `laravel.log`, 0 respuestas 5xx en nginx, 276 peticiones 200 a la API y 12 workers en marcha. |
+
+**No se hizo:**
+- **Prueba con el token compartido (403):** no se usó el secreto en el servidor. La cubren las pruebas
+  automáticas, no la de humo.
+- **Entrar al CRM con una sesión real:** no hay credenciales en esta sesión. Es el primer paso del §36.
+
 ## 32. Rollback
 
-**Revisar solo el código** (los datos quedan inertes; es lo recomendado):
+**Respaldo previo al despliegue:** `/var/backups/ironbody/pre-agenda-valoraciones-20261017T193051Z`.
+
+**Revertir solo el código** (los datos quedan inertes; es lo recomendado):
 
 1. Antes, contar las notificaciones que se verían en toda la bandeja:
    `SELECT count(*) FROM notifications WHERE required_permission IS NOT NULL;`
@@ -583,12 +616,15 @@ funciona; con el código nuevo y el esquema viejo, la bandeja del CRM falla (rev
    - Es **destructivo: requiere autorización**.
 2. Volver al commit anterior del backend (`git revert` + `merge --ff-only`) y republicar el CRM anterior
    (`c09c58c`), con `rsync` sin `--delete`.
+   - El CRM anterior también está en el respaldo (`app-published.tgz`).
+   - Su `main-2F5EVYC4.js` sigue en `/var/www/app`.
 
 **Completa** (borra la agenda):
 
 1. Todo lo anterior.
 2. `pg_dump -Fc -t 'public.valuation_*'` a un sitio seguro (datos personales).
-3. Revertir con la copia de las migraciones, porque el código viejo ya no tiene los ficheros:
+3. Revertir con la copia de las migraciones, porque el código viejo ya no tiene los ficheros. La copia
+   quedó en el servidor, en `storage/app/deploy/valoraciones-mig`:
 
    ```bash
    cd /var/www/api/backend
@@ -630,6 +666,8 @@ Ver `TRANSICION_GOOGLE_CALENDAR.md`:
 4. **Notas administrativas:** las ve quien tiene `view_all`, incluida Recepción. Se avisa en la UI que
    no son clínicas, pero alguien podría escribir datos de salud.
 5. **Push real sin verificar en producción:** canal apagado.
+   - **Sin probar con sesión real en producción:** calendario, agendado y aviso interno. La verificación
+     técnica del despliegue está hecha (§31.1).
 6. **Sonido sin oír en el PC de recepción.**
 7. **Sin cuentas CRM de entrenador vinculadas:** la vista «solo mis citas» está implementada y probada,
    pero nadie la usa hoy. Hoy producción tiene 3 Super Admin, 2 Recepción y 1 Administrativo; ninguna cuenta
@@ -653,11 +691,11 @@ Ver `TRANSICION_GOOGLE_CALENDAR.md`:
 
 ## 36. Requisitos para activar producción
 
-1. **Tu aprobación** de este informe y de los dos preexistentes (P-1, P-2) si se quieren resolver.
-2. **Despliegue** según §31: migraciones primero, con `lock_timeout`; después el código; después el
-   CRM.
+1. ~~Tu aprobación de este informe~~ y ~~el despliegue según §31~~: **hechos** el 17-10 (§31.1). Queda tu
+   decisión sobre los dos preexistentes (P-1, P-2).
+2. **Entrar al CRM con una sesión real** y abrir Entrenadores › Calendario de citas.
 3. **Configurar en el CRM:**
-   - disponibilidad de los 8 entrenadores;
+   - disponibilidad de los entrenadores (hay 10 registrados);
    - ajustes (duración, márgenes);
    - permisos por rol (¿Recepción confirma?).
 4. **Probar en producción sin socios reales:**
