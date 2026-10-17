@@ -39,36 +39,55 @@ class ReceiptPrint extends Model
 
     public const CONTEXTS = ['checkout', 'shift_report', 'pending'];
 
-    public const PRINT_MODES = ['silent', 'dialog', 'unknown'];
+    /**
+     * Cómo imprimió el equipo. `agent` = el servicio local de impresión
+     * (ESC/POS por el spooler de Windows): ese intento lo cierra el propio
+     * servicio al reportar, y `sent` significa «aceptado por el sistema».
+     */
+    public const PRINT_MODE_AGENT = 'agent';
+
+    public const PRINT_MODES = ['silent', 'dialog', 'unknown', self::PRINT_MODE_AGENT];
 
     public $timestamps = false;
 
     protected $fillable = [
         'uuid', 'receipt_id', 'kind', 'status', 'context', 'print_mode', 'reason',
         'error_message', 'actor_admin_id', 'actor_name', 'actor_role', 'ip',
-        'user_agent', 'started_at', 'finished_at',
+        'user_agent', 'started_at', 'finished_at', 'station_id', 'dispatched_at',
     ];
 
     protected $casts = [
         'started_at' => 'datetime',
         'finished_at' => 'datetime',
+        'dispatched_at' => 'datetime',
     ];
 
     protected static function booted(): void
     {
-        // La ÚNICA modificación admitida es cerrar un intento abierto. El cierre
-        // normal va por un UPDATE condicional en ReceiptPrints (que es lo que lo
-        // hace seguro frente a dos peticiones a la vez); esto cubre el resto del
-        // código, para que nadie pueda reescribir una fila con un save().
+        // Solo DOS modificaciones admitidas, y cada una una vez:
+        //
+        //  · el CIERRE de un intento abierto (started → sent|error);
+        //  · el DESPACHO: el servicio local canjeó el ticket de un intento que
+        //    sigue abierto y aún no se había despachado. Cambia SOLO
+        //    `dispatched_at` (de null a una fecha): ni el estado ni nada más.
+        //
+        // Ambos van por UPDATE condicional en ReceiptPrints (que es lo que los
+        // hace seguros frente a dos peticiones a la vez); esto cubre el resto
+        // del código, para que nadie pueda reescribir una fila con un save().
         static::updating(function (ReceiptPrint $print): void {
             $cambiados = array_keys($print->getDirty());
-            $permitidos = ['status', 'error_message', 'finished_at'];
+            $abierto = $print->getOriginal('status') === self::STATUS_STARTED;
 
-            $esCierre = $print->getOriginal('status') === self::STATUS_STARTED
+            $esCierre = $abierto
                 && in_array($print->status, [self::STATUS_SENT, self::STATUS_ERROR], true)
-                && array_diff($cambiados, $permitidos) === [];
+                && array_diff($cambiados, ['status', 'error_message', 'finished_at']) === [];
 
-            if (! $esCierre) {
+            $esDespacho = $abierto
+                && $print->getOriginal('dispatched_at') === null
+                && $print->dispatched_at !== null
+                && $cambiados === ['dispatched_at'];
+
+            if (! $esCierre && ! $esDespacho) {
                 throw ReceiptException::printImmutable();
             }
         });
@@ -79,6 +98,11 @@ class ReceiptPrint extends Model
     public function receipt(): BelongsTo
     {
         return $this->belongsTo(Receipt::class);
+    }
+
+    public function station(): BelongsTo
+    {
+        return $this->belongsTo(ReceiptStation::class, 'station_id');
     }
 
     public function isPrintAttempt(): bool

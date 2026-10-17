@@ -7,6 +7,7 @@ use App\Models\CashShift;
 use App\Models\Payment;
 use App\Models\ProductSale;
 use App\Models\Receipt;
+use App\Models\ReceiptPrint;
 use App\Models\ReceiptSource;
 use App\Models\ReceivablePayment;
 use Illuminate\Support\Collection;
@@ -53,7 +54,11 @@ final class ShiftReceipts
             if (! $fila['eligible']) {
                 $resumen['not_eligible']++;
             } else {
-                $resumen[$estado ?? Receipt::PRINT_PENDING]++;
+                // «Enviando» (el servicio local lo tomó y no ha contado cómo
+                // acabó) sigue siendo una tirilla que no consta entregada: cuenta
+                // como pendiente. El resumen conserva sus cinco claves; el
+                // estado exacto va en la fila.
+                $resumen[$estado === Receipt::PRINT_SENDING ? Receipt::PRINT_PENDING : ($estado ?? Receipt::PRINT_PENDING)]++;
             }
 
             $salida[] = [
@@ -70,6 +75,10 @@ final class ShiftReceipts
                 'receipt' => $recibo ? ['uuid' => $recibo->uuid, 'number' => $recibo->number] : null,
                 // Sin recibo: pendiente si se puede emitir, null si no.
                 'print_state' => $estado ?? ($fila['eligible'] ? Receipt::PRINT_PENDING : null),
+                // El último INTENTO DE IMPRESIÓN (las omisiones no cuentan): con
+                // él el CRM distingue «aceptado por el sistema» (servicio local)
+                // de «enviado» (navegador) y enseña el error de la impresora.
+                'last_attempt' => $this->lastAttempt($recibo),
             ];
         }
 
@@ -183,6 +192,23 @@ final class ShiftReceipts
         }
 
         return $out;
+    }
+
+    /** @return array{kind: string, status: string, print_mode: string, dispatched_at: string|null, error_message: string|null}|null */
+    private function lastAttempt(?Receipt $recibo): ?array
+    {
+        $ultimo = $recibo?->prints
+            ->filter(fn (ReceiptPrint $p) => $p->isPrintAttempt())
+            ->sortBy('id')
+            ->last();
+
+        return $ultimo === null ? null : [
+            'kind' => $ultimo->kind,
+            'status' => $ultimo->status,
+            'print_mode' => $ultimo->print_mode,
+            'dispatched_at' => optional($ultimo->dispatched_at)->toIso8601String(),
+            'error_message' => $ultimo->error_message,
+        ];
     }
 
     /**

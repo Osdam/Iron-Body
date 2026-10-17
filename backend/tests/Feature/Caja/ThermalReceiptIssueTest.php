@@ -92,7 +92,8 @@ class ThermalReceiptIssueTest extends TestCase
         $this->assertSame('16/10/2026 19:30', $s['local_datetime']);
 
         $this->assertSame([
-            'name' => 'IRON BODY',
+            // El nombre comercial por defecto (config/caja.php), pedido por el propietario.
+            'name' => 'IRON BODY WORKOUT',
             'legal_name' => 'IRON BODY NEIVA S.A.S.',
             'nit' => '900123456-7',
             'address' => 'Calle 10 # 5-20, Neiva',

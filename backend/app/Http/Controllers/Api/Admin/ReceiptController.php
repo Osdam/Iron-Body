@@ -10,10 +10,12 @@ use App\Models\CashShift;
 use App\Models\Receipt;
 use App\Models\ReceiptPrint;
 use App\Models\ReceiptSource;
+use App\Services\Caja\ReceiptAgentTickets;
 use App\Services\Caja\ReceiptIssuer;
 use App\Services\Caja\ReceiptPresenter;
 use App\Services\Caja\ReceiptPrints;
 use App\Services\Caja\ReceiptSourceResolver;
+use App\Services\Caja\ReceiptStations;
 use App\Services\Caja\ShiftReceipts;
 use App\Support\Access\AdminActor;
 use App\Support\Access\CrmPermission;
@@ -47,11 +49,18 @@ class ReceiptController extends Controller
     /** Abonos por recibo: un «cobrar todo» real no llega ni a la mitad. */
     private const MAX_SOURCE_IDS = 50;
 
+    /** Recibos pendientes: como mucho 50, y de las últimas 168 h como mucho. */
+    private const MAX_PENDING = 50;
+
+    private const MAX_PENDING_HOURS = 168;
+
     public function __construct(
         private readonly ReceiptSourceResolver $resolver,
         private readonly ReceiptIssuer $issuer,
         private readonly ReceiptPresenter $presenter,
         private readonly ReceiptPrints $prints,
+        private readonly ReceiptStations $stations,
+        private readonly ReceiptAgentTickets $tickets,
     ) {}
 
     /**
@@ -154,9 +163,16 @@ class ReceiptController extends Controller
     /**
      * POST /api/admin/receipts/{uuid}/prints — «voy a imprimir».
      *
-     * body: {client_attempt_id, context, print_mode}
+     * body: {client_attempt_id, context, print_mode, station_key?}
      * El SERVIDOR decide si es el original, un reintento o una reimpresión.
      * Repetir el mismo `client_attempt_id` devuelve 200 con la misma respuesta.
+     *
+     * Con `print_mode: agent` (servicio local de impresión) hace falta además la
+     * estación del equipo, registrada y activa, y la respuesta trae
+     * `agent_ticket` {token, expires_at}: lo único con lo que el servicio puede
+     * pedir las líneas de ESTE intento. En una repetición se emite uno nuevo
+     * (revocando los anteriores) si el intento sigue abierto y ningún servicio
+     * lo ha tomado; si no, `agent_ticket: null`.
      */
     public function startPrint(Request $request, string $receipt): JsonResponse
     {
@@ -173,7 +189,33 @@ class ReceiptController extends Controller
             'client_attempt_id' => ['required', 'uuid'],
             'context' => ['required', Rule::in(ReceiptPrint::CONTEXTS)],
             'print_mode' => ['nullable', Rule::in(ReceiptPrint::PRINT_MODES)],
+            'station_key' => ['nullable', 'required_if:print_mode,'.ReceiptPrint::PRINT_MODE_AGENT, 'uuid'],
         ]);
+
+        // El servicio local, ANTES de abrir el intento: un intento `agent` que
+        // ningún servicio puede tomar quedaría abierto para siempre.
+        $station = null;
+        if (($data['print_mode'] ?? null) === ReceiptPrint::PRINT_MODE_AGENT) {
+            if (! ReceiptAgentTickets::enabled()) {
+                return $this->agentDisabled();
+            }
+
+            $station = $this->stations->find($data['station_key']);
+            if ($station === null) {
+                return response()->json([
+                    'ok' => false,
+                    'code' => 'station_not_registered',
+                    'message' => 'Este equipo no está registrado para imprimir con el servicio local.',
+                ], 404);
+            }
+            if (! $station->active) {
+                return response()->json([
+                    'ok' => false,
+                    'code' => 'station_inactive',
+                    'message' => 'Este equipo está desactivado para imprimir recibos con el servicio local.',
+                ], 403);
+            }
+        }
 
         $resultado = $this->prints->start(
             $recibo,
@@ -182,6 +224,7 @@ class ReceiptController extends Controller
             $data['print_mode'] ?? 'unknown',
             $actor,
             $request,
+            $station?->id,
         );
 
         if (isset($resultado['conflict'])) {
@@ -190,14 +233,105 @@ class ReceiptController extends Controller
 
         $intento = $resultado['print'];
 
+        $respuesta = [
+            'client_attempt_id' => $intento->uuid,
+            'kind' => $intento->kind,
+            'copy_label' => $this->prints->copyLabel($intento),
+        ];
+
+        // Solo en modo agent: el resto de modos conserva la respuesta de siempre.
+        if ($station !== null) {
+            $respuesta['agent_ticket'] = $this->tickets->issueForAttempt($intento, $station, $actor);
+
+            // El ticket es una credencial de un solo uso: que ningún
+            // intermedio guarde la respuesta (revisión de seguridad M-3).
+            return response()
+                ->json(['ok' => true, 'data' => $respuesta], $resultado['created'] ? 201 : 200)
+                ->header('Cache-Control', 'no-store');
+        }
+
+        return response()->json(['ok' => true, 'data' => $respuesta], $resultado['created'] ? 201 : 200);
+    }
+
+    /**
+     * GET /api/admin/receipts/pending?hours=48 — tirillas que faltan por salir.
+     *
+     * Recibos emitidos en la ventana (1..168 h) de las cajas que el actor puede
+     * OPERAR o SUPERVISAR, cuyo estado es pendiente, enviando o error. Como
+     * mucho 50, los más recientes primero. Es lo que el CRM ofrece reimprimir
+     * cuando un equipo vuelve a tener impresora.
+     */
+    public function pending(Request $request): JsonResponse
+    {
+        if (! $actor = AdminActor::from($request)) {
+            return $this->sinPersona();
+        }
+
+        $data = $request->validate([
+            'hours' => ['nullable', 'integer', 'min:1', 'max:'.self::MAX_PENDING_HOURS],
+        ]);
+
+        // Solo las cajas en las que puede imprimir: con «ver» se consulta un
+        // recibo, pero esta lista es para volver a mandarlo a la impresora.
+        $cajas = array_values(array_filter(
+            CashShiftType::cases(),
+            fn (CashShiftType $caja) => $this->canWriteCash($actor, $caja),
+        ));
+
+        if ($cajas === []) {
+            return response()->json(['ok' => true, 'data' => []]);
+        }
+
+        $recibos = Receipt::query()
+            ->whereIn('cash_type', array_map(fn (CashShiftType $c) => $c->value, $cajas))
+            ->where('issued_at', '>=', now()->subHours((int) ($data['hours'] ?? 48)))
+            // Lo que ya salió o se omitió no falta: se descarta en la consulta,
+            // no después, para que el límite de 50 cuente solo lo pendiente.
+            ->whereDoesntHave('prints', fn ($q) => $q->whereIn('status', [ReceiptPrint::STATUS_SENT, ReceiptPrint::STATUS_SKIPPED]))
+            ->with('prints')
+            ->orderByDesc('issued_at')
+            ->orderByDesc('id')
+            ->limit(self::MAX_PENDING)
+            ->get();
+
+        $estados = [Receipt::PRINT_PENDING, Receipt::PRINT_SENDING, Receipt::PRINT_ERROR];
+
         return response()->json([
             'ok' => true,
-            'data' => [
-                'client_attempt_id' => $intento->uuid,
-                'kind' => $intento->kind,
-                'copy_label' => $this->prints->copyLabel($intento),
-            ],
-        ], $resultado['created'] ? 201 : 200);
+            'data' => $recibos
+                ->map(function (Receipt $r) use ($estados): ?array {
+                    $estado = $r->printState($r->prints);
+                    if (! in_array($estado, $estados, true)) {
+                        return null;
+                    }
+
+                    $ultimo = $r->prints
+                        ->filter(fn (ReceiptPrint $p) => $p->isPrintAttempt())
+                        ->sortBy('id')
+                        ->last();
+
+                    return [
+                        'uuid' => $r->uuid,
+                        'number' => $r->number,
+                        'cash_type' => $r->cash_type,
+                        'issued_at' => optional($r->issued_at)->toIso8601String(),
+                        'customer_name' => $r->customer_name,
+                        'total' => (float) $r->total,
+                        'print_state' => $estado,
+                        'last_attempt' => $ultimo === null ? null : [
+                            'kind' => $ultimo->kind,
+                            'status' => $ultimo->status,
+                            'print_mode' => $ultimo->print_mode,
+                            'error_message' => $ultimo->error_message,
+                            'started_at' => optional($ultimo->started_at)->toIso8601String(),
+                            'dispatched_at' => optional($ultimo->dispatched_at)->toIso8601String(),
+                        ],
+                    ];
+                })
+                ->filter()
+                ->values()
+                ->all(),
+        ]);
     }
 
     /**
@@ -417,6 +551,15 @@ class ReceiptController extends Controller
             'source_type' => $e->sourceType,
             'source_id' => $e->sourceId,
         ], fn ($v) => $v !== null), $estado);
+    }
+
+    private function agentDisabled(): JsonResponse
+    {
+        return response()->json([
+            'ok' => false,
+            'code' => 'agent_disabled',
+            'message' => 'La impresión con el servicio local está desactivada en el servidor. El cobro quedó registrado y el recibo queda pendiente: avisa a un administrador.',
+        ], 503);
     }
 
     private function attemptConflict(): JsonResponse

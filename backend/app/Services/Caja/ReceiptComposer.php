@@ -91,6 +91,12 @@ final class ReceiptComposer
         ];
     }
 
+    /** El título que lleva un recibo de ese tipo (también los de muestra). */
+    public static function titleFor(string $kind): string
+    {
+        return self::TITLES[$kind];
+    }
+
     /** La fecha y hora de la operación, en la hora del gimnasio. */
     public function localDateTime(?CarbonInterface $at): ?string
     {
@@ -408,9 +414,12 @@ final class ReceiptComposer
      * teléfono son los que ya se declaran ante la DIAN (`billing.company`); el
      * nombre comercial, el que encabeza el informe de cierre.
      *
+     * Pública para los recibos de MUESTRA de la página de prueba
+     * (ReceiptTextLayout): el encabezado tiene que ser el mismo que el real.
+     *
      * @return array{name: string|null, legal_name: string|null, nit: string|null, address: string|null, phone: string|null}
      */
-    private function business(): array
+    public function business(): array
     {
         $empresa = (array) config('billing.company', []);
         $nit = $this->blankToNull($empresa['nit'] ?? null);

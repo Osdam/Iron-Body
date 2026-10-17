@@ -400,6 +400,19 @@ final class AuthorizationMap
         'PATCH api/admin/receipts/{receipt}/prints/{attempt}' => self::RECEIPT_CASH_PERMISSIONS,
         'POST api/admin/receipts/{receipt}/skip' => self::RECEIPT_CASH_PERMISSIONS,
         'GET api/admin/caja/shifts/{shift}/receipts' => self::RECEIPT_CASH_PERMISSIONS,
+        'GET api/admin/receipts/pending' => self::RECEIPT_CASH_PERMISSIONS,
+
+        // Equipos con el servicio local de impresión. Misma puerta que los
+        // recibos; la persona y, para escribir o leer los eventos de un equipo,
+        // `cash.gym.manage` o `cash.products.manage`, las exige
+        // ReceiptStationController. Las rutas
+        // del propio servicio (/api/receipt-agent/*) no son administrativas:
+        // las autoriza el ticket de un solo uso, no una sesión.
+        'GET api/admin/receipt-stations' => self::RECEIPT_CASH_PERMISSIONS,
+        'POST api/admin/receipt-stations' => self::RECEIPT_CASH_PERMISSIONS,
+        'PATCH api/admin/receipt-stations/{station}' => self::RECEIPT_CASH_PERMISSIONS,
+        'POST api/admin/receipt-stations/{station}/tickets' => self::RECEIPT_CASH_PERMISSIONS,
+        'GET api/admin/receipt-stations/{station}/events' => self::RECEIPT_CASH_PERMISSIONS,
 
         // Cobro presencial de membresía: es la caja del GIMNASIO, aunque el
         // controlador sea el de pagos.

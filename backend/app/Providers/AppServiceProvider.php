@@ -146,6 +146,7 @@ class AppServiceProvider extends ServiceProvider
         $this->limitadorDePersonal();
         $this->limitadoresDelTrasladoDePlanes();
         $this->limitadoresDelRegistroPublico();
+        $this->limitadorDelServicioDeImpresion();
 
         $this->guardWompiConfig();
         $this->guardFactusConfig();
@@ -542,6 +543,28 @@ class AppServiceProvider extends ServiceProvider
                 'code' => 'too_many_agenda_requests',
                 'message' => 'Demasiadas consultas seguidas a la agenda. Espera un momento.',
             ], 429, $headers)));
+    }
+
+    /**
+     * El servicio local de impresión (/api/receipt-agent/*): 60 por minuto por
+     * red (IPv4, o el /64 de IPv6: ver ClientNetwork), en un cubo PROPIO.
+     *
+     * Con `throttle:60,1` compartiría contador con todas las rutas que usan esa
+     * forma desde la misma IP (la firma por defecto es dominio|IP), y todo el
+     * gimnasio sale por una. Un equipo de caja canjea y reporta un par de veces
+     * por cobro: 60 es holgado para varios equipos y corto para tantear tickets
+     * (que además son de 256 bits). La respuesta tiene la forma uniforme del
+     * contrato, `{ok:false, code, message}`.
+     */
+    private function limitadorDelServicioDeImpresion(): void
+    {
+        RateLimiter::for('receipt-agent', fn (Request $request) => Limit::perMinute(60)
+            ->by('receipt-agent:'.ClientNetwork::of($request->ip()))
+            ->response(fn (Request $request, array $headers) => response()->json([
+                'ok' => false,
+                'code' => 'rate_limited',
+                'message' => 'Demasiadas peticiones del servicio de impresión. Espera un minuto.',
+            ], 429, $headers + ['Cache-Control' => 'no-store'])));
     }
 
     /**

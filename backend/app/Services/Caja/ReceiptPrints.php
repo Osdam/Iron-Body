@@ -47,16 +47,19 @@ final class ReceiptPrints
     /**
      * Registra un intento de impresión. Idempotente por `client_attempt_id`.
      *
+     * `$stationId`: el equipo con el servicio local, cuando `print_mode` es
+     * `agent`. El ticket lo emite {@see ReceiptAgentTickets}, no esto.
+     *
      * @return array{print: ReceiptPrint, created: bool}|array{conflict: string}
      */
-    public function start(Receipt $recibo, string $attemptId, string $context, string $printMode, Admin $actor, Request $request): array
+    public function start(Receipt $recibo, string $attemptId, string $context, string $printMode, Admin $actor, Request $request, ?int $stationId = null): array
     {
         if ($previo = ReceiptPrint::where('uuid', $attemptId)->first()) {
             return $this->replayOrConflict($recibo, $previo, $actor, expectSkip: false);
         }
 
-        $intentar = function (bool $forzarReintento) use ($recibo, $attemptId, $context, $printMode, $actor, $request): array {
-            return DB::transaction(function () use ($recibo, $attemptId, $context, $printMode, $actor, $request, $forzarReintento): array {
+        $intentar = function (bool $forzarReintento) use ($recibo, $attemptId, $context, $printMode, $actor, $request, $stationId): array {
+            return DB::transaction(function () use ($recibo, $attemptId, $context, $printMode, $actor, $request, $forzarReintento, $stationId): array {
                 // Serializa las decisiones sobre ESTE recibo: dos pestañas que
                 // imprimen a la vez no pueden ver las dos «sin original».
                 Receipt::whereKey($recibo->id)->lockForUpdate()->first();
@@ -72,6 +75,8 @@ final class ReceiptPrints
                     'status' => ReceiptPrint::STATUS_STARTED,
                     'context' => $context,
                     'print_mode' => $printMode,
+                    // Qué equipo lo imprime, si es por el servicio local.
+                    'station_id' => $stationId,
                 ]);
 
                 return ['print' => $intento, 'created' => true];
@@ -140,6 +145,50 @@ final class ReceiptPrints
         }
 
         return ['print' => $intento->fresh()];
+    }
+
+    /**
+     * DESPACHO: el servicio local de impresión canjeó el ticket de este intento.
+     *
+     * Marca `dispatched_at` UNA vez y solo si el intento sigue abierto: es lo
+     * que el CRM enseña como «ENVIANDO». UPDATE condicional, igual que el
+     * cierre: con dos canjes a la vez solo uno cambia la fila. No cambia el
+     * estado: el intento sigue `started` hasta que alguien cuente cómo acabó.
+     */
+    public function dispatch(ReceiptPrint $intento): bool
+    {
+        return ReceiptPrint::query()
+            ->whereKey($intento->id)
+            ->where('status', ReceiptPrint::STATUS_STARTED)
+            ->whereNull('dispatched_at')
+            ->update(['dispatched_at' => now()]) === 1;
+    }
+
+    /**
+     * Cierre desde el SERVICIO LOCAL (POST /api/receipt-agent/report).
+     *
+     * Sin comprobación de actor, a diferencia de {@see finish()}: no hay sesión
+     * de nadie, y lo que prueba que el resultado es de este intento es el ticket
+     * de un solo uso que se emitió para él y que ya se canjeó. El resto es lo
+     * mismo: una vez, desde `started`, por UPDATE condicional. Si el CRM lo
+     * cerró antes (el servicio no pudo reportar a tiempo), no se pisa: se dice.
+     *
+     * @return array{print: ReceiptPrint, already_finished: bool}
+     */
+    public function finishFromAgent(ReceiptPrint $intento, string $status, ?string $errorMessage): array
+    {
+        $afectadas = ReceiptPrint::query()
+            ->whereKey($intento->id)
+            ->where('status', ReceiptPrint::STATUS_STARTED)
+            ->update([
+                'status' => $status,
+                'error_message' => $status === ReceiptPrint::STATUS_ERROR && $errorMessage !== null && $errorMessage !== ''
+                    ? mb_substr($errorMessage, 0, 255)
+                    : null,
+                'finished_at' => now(),
+            ]);
+
+        return ['print' => $intento->fresh(), 'already_finished' => $afectadas === 0];
     }
 
     /**

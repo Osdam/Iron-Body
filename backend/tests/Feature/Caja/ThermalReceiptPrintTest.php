@@ -451,7 +451,11 @@ class ThermalReceiptPrintTest extends TestCase
 
         $impresa = $filas[(string) $impreso->id];
         $this->assertSame(['uuid' => $uImpreso, 'number' => Receipt::where('uuid', $uImpreso)->value('number')], $impresa['receipt']);
-        $this->assertSame(['row_id', 'in_report', 'display', 'source_type', 'source_id', 'eligible', 'reason', 'receipt', 'print_state'], array_keys($impresa));
+        // `last_attempt` (contrato del servicio local, §7) se AÑADE al final: el
+        // resto de la fila no cambia para el CRM que ya la consume.
+        $this->assertSame(['row_id', 'in_report', 'display', 'source_type', 'source_id', 'eligible', 'reason', 'receipt', 'print_state', 'last_attempt'], array_keys($impresa));
+        $this->assertSame(['kind' => 'original', 'status' => 'sent', 'print_mode' => 'silent', 'dispatched_at' => null, 'error_message' => null], $impresa['last_attempt']);
+        $this->assertNull($filas[(string) $sinRecibo->id]['last_attempt']);
         // En el gimnasio todo sale en «Operaciones del turno», abonos incluidos.
         $this->assertTrue($impresa['in_report']);
         $this->assertTrue($filas['abono-'.$primerAbono->id]['in_report']);

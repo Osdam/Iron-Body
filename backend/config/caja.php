@@ -96,8 +96,12 @@ return [
     | el informe del turno no es el que se le entregó al cliente en el mostrador,
     | y eso tiene que poder verse.
     |
-    | `business_name`: el nombre comercial que encabeza la tirilla. La razón
-    | social, el NIT, la dirección y el teléfono salen de `billing.company`
+    | `business_name`: el nombre comercial que encabeza la tirilla. «IRON BODY
+    | WORKOUT» lo pidió expresamente el propietario («ENCABEZADO: IRON BODY
+    | WORKOUT»); CAJA_RECEIPT_BUSINESS_NAME lo sobrescribe. Solo afecta a los
+    | recibos que se emitan desde el cambio: los ya emitidos llevan el nombre
+    | congelado en su snapshot y se reimprimen tal cual. La razón social, el
+    | NIT, la dirección y el teléfono salen de `billing.company`
     | (FACTUS_COMPANY_*), que es lo que ya se declara ante la DIAN.
     |
     */
@@ -108,9 +112,40 @@ return [
         ],
         'number_padding' => 6,
         'late_after_minutes' => (int) env('CAJA_RECEIPT_LATE_AFTER_MINUTES', 10),
-        'business_name' => env('CAJA_RECEIPT_BUSINESS_NAME', 'IRON BODY'),
+        'business_name' => env('CAJA_RECEIPT_BUSINESS_NAME', 'IRON BODY WORKOUT'),
         'template_version' => 1,
         'legend' => 'Este documento no es una factura electrónica de venta',
+
+        /*
+        | Servicio local de impresión (ESC/POS por el spooler de Windows).
+        |
+        | `enabled` es el INTERRUPTOR GENERAL: en false, emitir un ticket y
+        | canjearlo responden 503 `agent_disabled`. Los equipos en modo «agent»
+        | NO pasan solos al navegador: el CRM muestra el error, el cobro queda y
+        | el recibo queda pendiente (se reimprime desde el cierre). Para volver
+        | un equipo al método anterior lo cambia un administrador en
+        | Configuración › Pagos. No toca ningún recibo ni intento ya registrado. Activar el modo «agent» es además por equipo (lo decide el
+        | CRM) y exige una estación registrada: desplegar esto no cambia nada
+        | para nadie.
+        |
+        | `ticket_ttl` en segundos: un ticket de impresión vive lo justo para ir
+        | del navegador al servicio y de ahí aquí; uno de prueba o de
+        | configuración, lo que tarda alguien en ir al equipo.
+        |
+        | `report_window_hours`: hasta cuándo el servicio puede contar cómo
+        | terminó un trabajo canjeado. Más tarde, el resultado ya no describe la
+        | tirilla que se le dio a nadie.
+        */
+        'agent' => [
+            'enabled' => (bool) env('RECEIPT_AGENT_ENABLED', true),
+            'min_protocol' => (int) env('RECEIPT_AGENT_MIN_PROTOCOL', 1),
+            'ticket_ttl' => [
+                'print' => 120,
+                'test' => 300,
+                'configure' => 300,
+            ],
+            'report_window_hours' => 24,
+        ],
     ],
 
 ];

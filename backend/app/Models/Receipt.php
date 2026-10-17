@@ -53,6 +53,9 @@ class Receipt extends Model
 
     public const PRINT_ERROR = 'error';
 
+    /** El servicio local tomó el trabajo y aún no ha contado cómo terminó. */
+    public const PRINT_SENDING = 'sending';
+
     protected $fillable = [
         'uuid', 'number', 'cash_type', 'cash_shift_id', 'kind', 'origin_key',
         'operation_ref', 'operation_at', 'issued_at', 'issued_late',
@@ -111,7 +114,10 @@ class Receipt extends Model
      *  · error:   el último INTENTO DE IMPRESIÓN falló. Las omisiones (también
      *             las denegadas) no cuentan como intento: que alguien pruebe a
      *             saltarse la tirilla no borra que la impresora falló.
-     *  · pending: todo lo demás, incluido un intento que sigue en `started`.
+     *  · sending: el último intento sigue en `started` pero el servicio local
+     *             ya lo tomó (`dispatched_at`): está en camino, sin resultado.
+     *  · pending: todo lo demás, incluido un intento en `started` que ningún
+     *             servicio ha tomado (el navegador, o un ticket sin canjear).
      *
      * @param  Collection<int, ReceiptPrint>|null  $prints  ya cargados, para no
      *                                                      consultar por fila.
@@ -135,6 +141,10 @@ class Receipt extends Model
 
         if ($ultimoIntento?->status === ReceiptPrint::STATUS_ERROR) {
             return self::PRINT_ERROR;
+        }
+
+        if ($ultimoIntento?->status === ReceiptPrint::STATUS_STARTED && $ultimoIntento->dispatched_at !== null) {
+            return self::PRINT_SENDING;
         }
 
         return self::PRINT_PENDING;

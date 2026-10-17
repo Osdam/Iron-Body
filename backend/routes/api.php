@@ -1434,6 +1434,8 @@ Route::post('admin/caja/shifts/{shift}/difference', [CashShiftController::class,
 // enlace implícito: así quien no tiene permiso de caja choca con la puerta antes
 // de saber si el recibo existe.
 Route::post('admin/receipts',                              [\App\Http\Controllers\Api\Admin\ReceiptController::class, 'store'])->middleware('throttle:120,1');
+// Antes que `{receipt}`: si no, «pending» se tomaría por el uuid de un recibo.
+Route::get('admin/receipts/pending',                       [\App\Http\Controllers\Api\Admin\ReceiptController::class, 'pending'])->middleware('throttle:120,1');
 Route::get('admin/receipts/{receipt}',                     [\App\Http\Controllers\Api\Admin\ReceiptController::class, 'show'])->middleware('throttle:120,1');
 Route::post('admin/receipts/{receipt}/prints',             [\App\Http\Controllers\Api\Admin\ReceiptController::class, 'startPrint'])->middleware('throttle:120,1');
 Route::patch('admin/receipts/{receipt}/prints/{attempt}',  [\App\Http\Controllers\Api\Admin\ReceiptController::class, 'finishPrint'])->middleware('throttle:120,1');
@@ -1441,6 +1443,25 @@ Route::post('admin/receipts/{receipt}/skip',               [\App\Http\Controller
 // Estado de impresión de cada operación de un turno. Misma regla que el informe:
 // la caja del TURNO decide el permiso.
 Route::get('admin/caja/shifts/{shift}/receipts',           [\App\Http\Controllers\Api\Admin\ReceiptController::class, 'shift'])->middleware('throttle:120,1');
+// Equipos de caja con el servicio local de impresión (ESC/POS). La puerta es la
+// misma de los recibos; registrar, cambiar y emitir tickets de prueba o de
+// configuración exige además supervisar una caja (lo comprueba el controlador).
+// `{station}` es el station_key (uuid) y se resuelve en el controlador.
+Route::get('admin/receipt-stations',                       [\App\Http\Controllers\Api\Admin\ReceiptStationController::class, 'index'])->middleware('throttle:120,1');
+Route::post('admin/receipt-stations',                      [\App\Http\Controllers\Api\Admin\ReceiptStationController::class, 'store'])->middleware('throttle:120,1');
+Route::patch('admin/receipt-stations/{station}',           [\App\Http\Controllers\Api\Admin\ReceiptStationController::class, 'update'])->middleware('throttle:120,1');
+Route::post('admin/receipt-stations/{station}/tickets',    [\App\Http\Controllers\Api\Admin\ReceiptStationController::class, 'issueTicket'])->middleware('throttle:120,1');
+Route::get('admin/receipt-stations/{station}/events',      [\App\Http\Controllers\Api\Admin\ReceiptStationController::class, 'events'])->middleware('throttle:120,1');
+
+// ── Servicio local de impresión de recibos (Windows) ──────────────────────
+// SIN SESIÓN: lo único que autoriza es el ticket de un solo uso que emitió una
+// persona con sesión (ver ReceiptAgentController). No es /api/admin: no pasa
+// por ProtectAdminPaths ni por el mapa de autorización, y el grupo `api` no
+// lleva CSRF. Cupo propio por red (`receipt-agent`, 60/min).
+Route::prefix('receipt-agent')->middleware('throttle:receipt-agent')->group(function (): void {
+    Route::post('redeem', [\App\Http\Controllers\Api\ReceiptAgentController::class, 'redeem']);
+    Route::post('report', [\App\Http\Controllers\Api\ReceiptAgentController::class, 'report']);
+});
 
 // ── Usuarios administrativos del CRM ─────────────────────────────────────────
 // Quién puede entrar y con qué rol. El permiso fino y los invariantes de Super
