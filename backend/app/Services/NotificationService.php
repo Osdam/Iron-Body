@@ -1210,7 +1210,12 @@ class NotificationService
                 'member' => $member,
                 'action_type' => 'support_ticket',
                 'should_popup' => true,
-                'metadata' => array_filter(['ticket_id' => $id, 'support_type' => $type]),
+                'metadata' => array_filter([
+                    'ticket_id' => $id,
+                    'support_type' => $type,
+                    // Ticket nacido del formulario público del login (sin sesión): ver notifySecuritySupportReport.
+                    'origin' => $this->attr($ticket, 'platform') === 'login' ? 'public' : null,
+                ]),
                 'event_key' => $id ? "support_ticket_{$id}" : null,
             ]);
         });
@@ -1676,6 +1681,9 @@ class NotificationService
                     'document' => $report->document_number,
                     'phone' => $report->phone,
                     'source_event' => 'security_support_report',
+                    // Del formulario del login: lo envía cualquiera, sin sesión. Las alertas
+                    // sonoras del CRM no le dan urgencia (no se fabrica un «crítico» desde fuera).
+                    'origin' => (($report->metadata['source'] ?? null) === 'login') ? 'public' : null,
                 ]),
             ]);
         });

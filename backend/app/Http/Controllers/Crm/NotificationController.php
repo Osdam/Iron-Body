@@ -28,6 +28,13 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * «marcar todas»). Las filas sin `required_permission` —todas las anteriores—
  * se comportan exactamente igual que antes. El leído/no leído sigue siendo
  * global, como siempre (limitación conocida).
+ *
+ * VISIBILIDAD POR TIPO. Las filas sin `required_permission` de un tipo de
+ * {@see self::TYPE_PERMISSIONS} exigen el permiso de ver ese módulo: un aviso
+ * de pago solo lo ve quien puede ver pagos. Antes la bandeja era global y
+ * enseñaba los pagos a cualquier sesión (hallazgo P-1), y con las alertas
+ * sonoras eso sería además un aviso audible para quien no debe. Los tipos que
+ * no están en la lista (sistema, seguridad, promociones…) siguen como siempre.
  */
 class NotificationController extends Controller
 {
@@ -52,8 +59,22 @@ class NotificationController extends Controller
         'valoraciones' => 'valuation',
     ];
 
-    /** Tipos reservados al sistema: no se crean a mano desde `store`. */
-    private const SYSTEM_TYPES = ['valuation'];
+    /**
+     * Lo ÚNICO que se crea a mano desde `store`: avisos internos y promociones.
+     * Lista de permitidos y no de prohibidos: un `payment`, `security` o
+     * `valuation` hecho a mano sonaría en el CRM como uno real, y cualquier tipo
+     * de sistema que nazca mañana nacería ya fabricable.
+     */
+    private const MANUAL_TYPES = ['system', 'promotion'];
+
+    /** Permiso para ver los avisos de cada tipo (las filas sin `required_permission`). */
+    public const TYPE_PERMISSIONS = [
+        'payment' => 'payments.view',
+        'membership' => 'members.view',
+        'class' => 'classes.view',
+        'routine' => 'routines.view',
+        'trainer' => 'trainers.view',
+    ];
 
     public function __construct(private NotificationService $notifications) {}
 
@@ -115,11 +136,16 @@ class NotificationController extends Controller
      */
     public function stream(Request $request): StreamedResponse
     {
-        $cursor = $request->filled('after_id')
-            ? (int) $request->query('after_id')
-            : (int) (Notification::where('audience', Notification::AUDIENCE_ADMIN)->max('id') ?? 0);
         // Una vez por conexión: el stream dura 20 s y el CRM reconecta.
         $permisos = $this->sessionPermissions($request);
+        $cursor = $this->initialCursor($request, $permisos);
+
+        // Al abrir, el cursor de partida (`ready`): el CRM lo devuelve como `after_id`
+        // al reconectar y así no pierde lo creado en el hueco entre dos conexiones.
+        // Solo es un número; no dice nada de ninguna notificación.
+        $alAbrir = function () use (&$cursor): void {
+            SseStream::emit('ready', ['cursor' => $cursor], $cursor);
+        };
 
         return SseStream::response(function () use (&$cursor, $permisos): void {
             $items = $this->streamBatch($permisos, $cursor);
@@ -127,7 +153,7 @@ class NotificationController extends Controller
                 SseStream::emit('notification', $n->toPublicArray(), $n->id);
                 $cursor = $n->id;
             }
-        }, 20, 1500); // sondeo 1.5s para el CRM (pocas conexiones admin)
+        }, 20, 1500, $alAbrir); // sondeo 1.5s para el CRM (pocas conexiones admin)
     }
 
     /** POST /api/admin/notifications/{uuid}/read */
@@ -163,11 +189,11 @@ class NotificationController extends Controller
      * Puede dirigirse a un miembro (member_id/document) o difundirse a todos
      * los miembros, o quedar como nota interna del CRM (audience=admin).
      *
-     * Los tipos de {@see self::SYSTEM_TYPES} solo los escribe el sistema: una
-     * `valuation` con `priority=high` hace sonar la alerta de la agenda en el
-     * CRM, y a mano cualquiera podía fabricarla, sin permiso exigido y visible
-     * para todo el personal (revisión de seguridad V-1). 422. `required_permission`
-     * no se acepta aquí nunca (no está en la validación).
+     * Solo los tipos de {@see self::MANUAL_TYPES}; el resto los escribe el
+     * sistema (422). Una `valuation` con `priority=high` hace sonar la alerta de
+     * la agenda en el CRM (revisión de seguridad V-1), y un `payment` o un
+     * `security` harían sonar las generales. `required_permission` no se acepta
+     * aquí nunca (no está en la validación).
      */
     public function store(Request $request): JsonResponse
     {
@@ -176,8 +202,8 @@ class NotificationController extends Controller
             'message' => 'required|string|max:1000',
             'audience' => 'nullable|in:member,admin',
             'type' => ['nullable', 'string', 'max:40', function (string $attribute, mixed $value, \Closure $fail): void {
-                if (is_string($value) && in_array(mb_strtolower(trim($value)), self::SYSTEM_TYPES, true)) {
-                    $fail('Ese tipo de notificación lo crea solo el sistema.');
+                if (! is_string($value) || ! in_array(mb_strtolower(trim($value)), self::MANUAL_TYPES, true)) {
+                    $fail('A mano solo se crean avisos del sistema o promociones; los demás tipos los crea el sistema.');
                 }
             }],
             'priority' => 'nullable|in:low,medium,high',
@@ -194,20 +220,42 @@ class NotificationController extends Controller
         }
 
         $attrs = [
-            'type' => $data['type'] ?? 'promotion',
+            'type' => isset($data['type']) ? mb_strtolower(trim($data['type'])) : 'promotion',
             'title' => $data['title'],
             'message' => $data['message'],
             'priority' => $data['priority'] ?? 'medium',
         ];
 
+        // Un aviso interno escrito a mano se distingue de uno del sistema por un
+        // dato, no por el texto. Solo en los del CRM: a la app del socio no viaja
+        // el id de quien lo escribió.
         $notification = $audience === Notification::AUDIENCE_ADMIN
-            ? $this->notifications->createAdminNotification(array_merge($attrs, ['member' => $member]))
+            ? $this->notifications->createAdminNotification(array_merge($attrs, [
+                'member' => $member,
+                'metadata' => ['source' => 'manual', 'created_by_admin_id' => AdminActor::from($request)?->id],
+            ]))
             : $this->notifications->createMemberNotification($member, $attrs);
 
         return response()->json(['ok' => true, 'data' => $notification?->toPublicArray()], 201);
     }
 
     // ── Internos ───────────────────────────────────────────────────────────────
+
+    /**
+     * Desde dónde empieza el stream: el `after_id` del cliente o la última fila que
+     * ESTA sesión puede ver. Viaja al cliente en `ready`; el máximo global contaría
+     * lo que no ve (pagos, citas).
+     *
+     * @param  list<string>  $permisos
+     */
+    private function initialCursor(Request $request, array $permisos): int
+    {
+        if ($request->filled('after_id')) {
+            return (int) $request->query('after_id');
+        }
+
+        return (int) ($this->applyVisibility(Notification::where('audience', Notification::AUDIENCE_ADMIN), $permisos)->max('id') ?? 0);
+    }
 
     /**
      * El lote que empuja el stream en cada vuelta: las notificaciones admin
@@ -234,8 +282,20 @@ class NotificationController extends Controller
     /** @param  list<string>  $permisos */
     private function applyVisibility(Builder $query, array $permisos): Builder
     {
-        return $query->where(function (Builder $q) use ($permisos): void {
-            $q->whereNull('required_permission');
+        // Tipos cuyo permiso de ver NO tiene esta sesión: sus filas sin permiso explícito no existen para ella.
+        $vedados = array_keys(array_filter(
+            self::TYPE_PERMISSIONS,
+            fn (string $permiso): bool => ! in_array($permiso, $permisos, true),
+        ));
+
+        return $query->where(function (Builder $q) use ($permisos, $vedados): void {
+            $q->where(function (Builder $sin) use ($vedados): void {
+                $sin->whereNull('required_permission');
+                if ($vedados !== []) {
+                    // `type` NULL no es ninguno de los vedados (NOT IN con NULL daría NULL y la escondería).
+                    $sin->where(fn (Builder $t) => $t->whereNull('type')->orWhereNotIn('type', $vedados));
+                }
+            });
             if ($permisos !== []) {
                 $q->orWhereIn('required_permission', $permisos);
             }

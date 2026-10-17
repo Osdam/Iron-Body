@@ -26,7 +26,8 @@ class ValuationNotificationsTest extends TestCase
 
     private array $entrenador;
 
-    private Notification $pago;
+    /** Una notificación «de siempre», sin permiso exigido, que ven todos los roles (tipo `system`). */
+    private Notification $general;
 
     private Notification $valoracion;
 
@@ -40,9 +41,11 @@ class ValuationNotificationsTest extends TestCase
         $this->entrenador = $this->h($this->staff(CrmPermission::ROLE_ENTRENADOR, $andres));
 
         // Una notificación «de siempre» (sin permiso exigido) y una de la agenda,
-        // nacida del flujo real (agendar).
-        $this->pago = app(NotificationService::class)->createAdminNotification([
-            'type' => 'payment', 'title' => 'Pago aprobado', 'message' => 'Alguien pagó', 'event_key' => 'prueba-pago-1',
+        // nacida del flujo real (agendar). Es de `system` y no de `payment`: desde
+        // las alertas sonoras generales, un pago solo lo ve quien ve pagos (P-1,
+        // ver AdminNotificationVisibilityTest), y aquí se prueba otra cosa.
+        $this->general = app(NotificationService::class)->createAdminNotification([
+            'type' => 'system', 'title' => 'Aviso del sistema', 'message' => 'Para todos', 'event_key' => 'prueba-general-1',
         ]);
         $uuid = $this->book($this->recepcion, $this->member('Laura Gómez'), $andres, '2026-10-24T09:00:00-05:00')->assertCreated()->json('data.uuid');
         $this->valoracion = Notification::where('type', 'valuation')->firstOrFail();
@@ -65,18 +68,18 @@ class ValuationNotificationsTest extends TestCase
         $this->assertNull($n->document);
         $this->assertSame('Valoración agendada', $n->title);
         $this->assertSame('Nueva valoración — Laura G. con Andrés, 24 de octubre a las 9:00 a. m.', $n->message);
-        $this->assertNull($this->pago->required_permission);
+        $this->assertNull($this->general->required_permission);
     }
 
     public function test_index_y_contador_filtran_por_permiso(): void
     {
         $conPermiso = $this->getJson('/api/admin/notifications', $this->recepcion)->assertOk();
-        $this->assertEqualsCanonicalizing([$this->pago->uuid, $this->valoracion->uuid], array_column($conPermiso->json('data'), 'uuid'));
+        $this->assertEqualsCanonicalizing([$this->general->uuid, $this->valoracion->uuid], array_column($conPermiso->json('data'), 'uuid'));
         $this->assertSame(2, $conPermiso->json('unread_count'));
         $this->getJson('/api/admin/notifications/unread-count', $this->recepcion)->assertJsonPath('unread_count', 2);
 
         $sinPermiso = $this->getJson('/api/admin/notifications', $this->entrenador)->assertOk();
-        $this->assertSame([$this->pago->uuid], array_column($sinPermiso->json('data'), 'uuid'));
+        $this->assertSame([$this->general->uuid], array_column($sinPermiso->json('data'), 'uuid'));
         $this->assertSame(1, $sinPermiso->json('unread_count'));
         $this->getJson('/api/admin/notifications/unread-count', $this->entrenador)->assertJsonPath('unread_count', 1);
         // Ni buscándola.
@@ -97,7 +100,7 @@ class ValuationNotificationsTest extends TestCase
         $this->assertSame('unread', $this->valoracion->fresh()->status);
 
         $this->postJson('/api/admin/notifications/read-all', [], $this->entrenador)->assertOk()->assertJsonPath('updated', 1);
-        $this->assertSame('read', $this->pago->fresh()->status);
+        $this->assertSame('read', $this->general->fresh()->status);
         $this->assertSame('unread', $this->valoracion->fresh()->status, 'marcar todas no toca lo que no ve');
 
         $this->postJson("/api/admin/notifications/{$this->valoracion->uuid}/read", [], $this->recepcion)->assertOk();
@@ -108,12 +111,14 @@ class ValuationNotificationsTest extends TestCase
     {
         // La de siempre: la ve, la cuenta y la marca cualquier cuenta, como antes.
         foreach ([$this->recepcion, $this->entrenador, $this->h($this->superAdmin())] as $h) {
-            $this->assertContains($this->pago->uuid, array_column($this->getJson('/api/admin/notifications', $h)->json('data'), 'uuid'));
+            $this->assertContains($this->general->uuid, array_column($this->getJson('/api/admin/notifications', $h)->json('data'), 'uuid'));
         }
-        $this->postJson("/api/admin/notifications/{$this->pago->uuid}/read", [], $this->entrenador)->assertOk()->assertJsonPath('data.status', 'read');
+        $this->postJson("/api/admin/notifications/{$this->general->uuid}/read", [], $this->entrenador)->assertOk()->assertJsonPath('data.status', 'read');
 
-        // Crear manualmente sigue igual (y sin permiso exigido).
-        $this->postJson('/api/admin/notifications', ['title' => 'Nota', 'message' => 'Interna', 'audience' => 'admin'], $this->entrenador)->assertCreated();
+        // Crear a mano ya NO es de cualquier sesión (P-2): exige `content.manage`.
+        // Quien puede, la crea igual que antes y sin permiso exigido.
+        $this->postJson('/api/admin/notifications', ['title' => 'Nota', 'message' => 'Interna', 'audience' => 'admin'], $this->entrenador)->assertForbidden();
+        $this->postJson('/api/admin/notifications', ['title' => 'Nota', 'message' => 'Interna', 'audience' => 'admin'], $this->h($this->superAdmin()))->assertCreated();
         $this->assertNull(Notification::where('title', 'Nota')->value('required_permission'));
         $this->assertSame(['uuid', 'type', 'audience', 'title', 'message', 'status', 'priority', 'document', 'member_id', 'action_type', 'action_url', 'action_payload', 'metadata', 'should_popup', 'read_at', 'created_at', 'time_ago'],
             array_keys($this->getJson('/api/admin/notifications', $this->recepcion)->json('data.0')), 'la forma pública no cambia');
@@ -130,12 +135,16 @@ class ValuationNotificationsTest extends TestCase
         $root = $this->h($this->superAdmin());
         $antes = Notification::where('type', 'valuation')->count();
 
-        foreach ([$this->entrenador, $this->recepcion, $root] as $h) {
+        // Desde P-2 la recepción y el entrenador ni siquiera pueden crear a mano (403);
+        // quien sí puede recibe 422 para el tipo reservado.
+        foreach ([[$this->entrenador, 403], [$this->recepcion, 403], [$root, 422]] as [$h, $esperado]) {
             foreach (['valuation', 'Valuation', ' VALUATION '] as $tipo) {
                 foreach ([['priority' => 'high', 'audience' => 'admin'], ['audience' => 'admin'], ['priority' => 'high'], ['required_permission' => 'valuations.view_all', 'audience' => 'admin']] as $extra) {
-                    $this->postJson('/api/admin/notifications', array_merge(['title' => 'Valoración próxima', 'message' => 'Falsa', 'type' => $tipo], $extra), $h)
-                        ->assertStatus(422)
-                        ->assertJsonValidationErrors('type');
+                    $r = $this->postJson('/api/admin/notifications', array_merge(['title' => 'Valoración próxima', 'message' => 'Falsa', 'type' => $tipo], $extra), $h)
+                        ->assertStatus($esperado);
+                    if ($esperado === 422) {
+                        $r->assertJsonValidationErrors('type');
+                    }
                 }
             }
         }
@@ -144,13 +153,14 @@ class ValuationNotificationsTest extends TestCase
 
         // Las manuales de siempre: igual que antes (tipo libre, prioridad alta,
         // interna o al socio) y SIN permiso exigido aunque se envíe uno.
-        $this->postJson('/api/admin/notifications', ['title' => 'Aviso alto', 'message' => 'Interna', 'audience' => 'admin', 'priority' => 'high', 'type' => 'system', 'required_permission' => 'valuations.view_all'], $this->entrenador)
+        $this->postJson('/api/admin/notifications', ['title' => 'Aviso alto', 'message' => 'Interna', 'audience' => 'admin', 'priority' => 'high', 'type' => 'system', 'required_permission' => 'valuations.view_all'], $root)
             ->assertCreated()->assertJsonPath('data.type', 'system')->assertJsonPath('data.priority', 'high');
         $this->assertNull(Notification::where('title', 'Aviso alto')->value('required_permission'));
         $this->postJson('/api/admin/notifications', ['title' => 'Promo', 'message' => 'Para todos'], $root)
             ->assertCreated()->assertJsonPath('data.type', 'promotion')->assertJsonPath('data.audience', 'member');
+        // A mano solo `system` y `promotion` (lista de permitidos): un tipo cualquiera ya no entra.
         $this->postJson('/api/admin/notifications', ['title' => 'Otro tipo', 'message' => 'x', 'type' => 'valuations_report', 'audience' => 'admin'], $root)
-            ->assertCreated()->assertJsonPath('data.type', 'valuations_report');
+            ->assertStatus(422)->assertJsonValidationErrors('type');
     }
 
     /**
@@ -167,13 +177,13 @@ class ValuationNotificationsTest extends TestCase
         $permisosDe = fn (string $rol) => CrmPermission::defaultsFor($rol);
 
         $sin = $lote->invoke($controlador, $permisosDe(CrmPermission::ROLE_ENTRENADOR), 0)->pluck('uuid')->all();
-        $this->assertSame([$this->pago->uuid], $sin);
+        $this->assertSame([$this->general->uuid], $sin);
 
         $con = $lote->invoke($controlador, $permisosDe(Admin::ROLE_RECEPCION), 0)->pluck('uuid')->all();
-        $this->assertSame([$this->pago->uuid, $this->valoracion->uuid], $con);
+        $this->assertSame([$this->general->uuid, $this->valoracion->uuid], $con);
 
         // Y el cursor sigue mandando igual que antes.
-        $this->assertSame([$this->valoracion->uuid], $lote->invoke($controlador, $permisosDe(Admin::ROLE_RECEPCION), $this->pago->id)->pluck('uuid')->all());
+        $this->assertSame([$this->valoracion->uuid], $lote->invoke($controlador, $permisosDe(Admin::ROLE_RECEPCION), $this->general->id)->pluck('uuid')->all());
 
         // El stream real abre con el vale de una sesión sin el permiso.
         $ticket = $this->getJson('/api/admin/stream-ticket', $this->entrenador)->assertOk()->json('data.ticket');

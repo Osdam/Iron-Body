@@ -407,9 +407,12 @@ final class AuthorizationMap
         // por el permiso del stream que abra.
         'GET api/admin/stream-ticket' => self::SELF,
 
-        // Crear una notificación interna del panel no es contenido de la app:
-        // lo usa el propio CRM para avisar a su gente.
-        'POST api/admin/notifications' => self::SELF,
+        // Crear una notificación a mano. Antes bastaba cualquier sesión (SELF), y
+        // con ella se podía fabricar un aviso «alta» que ahora SUENA en el CRM de
+        // todo el personal, o difundir una notificación a la app de todos los
+        // socios. Ninguna pantalla del CRM la usa. Exige lo mismo que enviar un
+        // push a los socios: `content.manage`.
+        'POST api/admin/notifications' => 'content.manage',
 
         // Turnos de caja: el tipo (products|gym) llega en el cuerpo o la query,
         // así que el permiso fino lo decide el controlador caja por caja. Aquí
