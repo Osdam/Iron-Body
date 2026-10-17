@@ -43,7 +43,7 @@ Se generan en el navegador con WebAudio. No hay archivos de audio que descargar 
 | **Normal** | «Pling-plong» de kalimba en quinta (la–mi), a media voz | ~1 s | RMS −25,1 dBFS, pico −8,8 |
 | **Importante** (por defecto) | Arpegio de campanas en ascenso (sol–do–mi–sol), doblado a la octava grave, con el golpe del macillo y un brillo desafinado como en una campana real | ~1,8 s | RMS −20,8 dBFS, pico −4,0 |
 | **Voz** | Campanilla de megafonía de tres notas (fa–la–do, timbre de vibráfono) y después, con voz del sistema: **«Atención, tienes una valoración próxima.»** | ~1,7 s de campanilla + frase | Campanilla: RMS −23,3 dBFS, pico −8,7 |
-| **Urgente** | Tres ráfagas «bi-bi-bip», con la última nota de cada ráfaga una cuarta más alta | ~2 s | RMS −21,2 dBFS, pico −6,1 |
+| **Urgente** | Tres ráfagas «bi-bi-bip», con la última nota de cada ráfaga una cuarta más alta, y después la voz: **«¡Urgente! ¡Meidei!»**, más lenta y más aguda (añadida después del despliegue, ver §9) | ~2 s de ráfagas + frase | Ráfagas: RMS −21,2 dBFS, pico −6,1 |
 
 **Cómo están hechos:**
 - **Una pizca de sala:** reverberación generada en el propio navegador. Le da cuerpo al sonido sin enturbiarlo.
@@ -229,3 +229,38 @@ No hay datos que deshacer: las preferencias nuevas viven en el navegador y el c�
 3. Elegir sonido y volumen.
 4. Recargar y hacer clic en cualquier sitio.
 5. Esperar el próximo aviso de «valoración en 15 min». Se puede provocar con una cita de prueba, solo con autorización.
+
+---
+
+## 9. Cambio posterior: «Urgente» también habla
+
+**Desplegado el 17-10-2026 a las 21:10 UTC** (16:10 en Bogotá), por orden expresa. Se añadió a petición del usuario, después del despliegue del §8.
+
+| | |
+|---|---|
+| Commit del CRM | `d0bcc24`, sobre `3694ef6` |
+| Publicado | `main-EVIMKLF3.js`; la frase vive en `chunk-5RGYTBBS.js` |
+| Respaldo previo | `/var/backups/ironbody/crm-pre-voz-urgente-20261017T211033Z` |
+
+Verificado en `https://ironbodyneiva.cloud`:
+- `version.json` dice `d0bcc24`, limpio;
+- el chunk servido contiene la frase;
+- la versión anterior (`main-LEOX5IHK.js`) sigue disponible;
+- `/trainers` responde 200.
+
+Antes de publicar se probó en un Chrome real del Mac de desarrollo, con sus voces: sonaron las ráfagas y, a los 1,8 s, «Google español de Estados Unidos» dijo «¡Urgente! ¡Meidei!» a velocidad 0,8 y tono 1,25. Chrome publica las voces tarde y el reproductor esperó a que estuvieran.
+
+**Reversión:** copiar los dos archivos del respaldo sobre `/var/www/app`. Así vuelve `3694ef6`.
+
+- **La frase.** Tras las ráfagas (a 1,8 s), «Urgente» dice **«¡Urgente! ¡Meidei!»** para cualquier aviso. Es fija, como las demás: nunca lee el aviso.
+  - Se escribe «Meidei» y no «Mayday» para que una voz en español lo pronuncie como *mayday*.
+- **El alargamiento.** El efecto de «URGENTEEEEE MEIDEEEEEEIIII» se consigue hablando más lento (0,8) y más agudo (1,25), no repitiendo vocales: cada motor de voz lee las vocales repetidas a su manera, y algunos las deletrean.
+- **Sin voz en español,** «Urgente» se queda en las ráfagas, y el panel lo avisa.
+- **La ventana anti-solape** de «Urgente» sube a 4,3 s, para que otro aviso no corte la frase.
+- **Pruebas:**
+  - módulo de valoraciones: 174 de 174, con 4 pruebas nuevas o ampliadas;
+  - suite completa: 1963 pasan y fallan los mismos 16 de la línea base;
+  - zona horaria: 394 de 394;
+  - build correcto;
+  - mutación «Urgente sin voz»: detectada por 3 pruebas.
+
