@@ -1,0 +1,8 @@
+# Artefactos de compilación y del paquete: se regeneran con build-windows.sh.
+bin/
+obj/
+dist/
+artifacts/
+TestResults/
+*.user
+.vs/

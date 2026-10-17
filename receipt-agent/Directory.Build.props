@@ -1,0 +1,18 @@
+<Project>
+  <!-- Ajustes comunes al servicio y a sus pruebas. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>12</LangVersion>
+    <Deterministic>true</Deterministic>
+    <!-- Versión del servicio (contrato §1). VERSION.txt y GET / la repiten. -->
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <InformationalVersion>1.0.0</InformationalVersion>
+    <Company>Iron Body</Company>
+    <Product>Iron Body · Servicio de impresión de recibos</Product>
+    <SatelliteResourceLanguages>es</SatelliteResourceLanguages>
+  </PropertyGroup>
+</Project>
