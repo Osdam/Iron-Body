@@ -1,6 +1,6 @@
 # Alertas sonoras independientes: notificaciones generales y valoraciones
 
-**Estado: READY_FOR_PRODUCTION_REVIEW.** Implementado y probado en local, en Chrome real. **No desplegado**: no hay push a `main`, migraciones en producción ni envíos reales.
+**Estado: DESPLEGADO EN PRODUCCIÓN el 17-10-2026, 23:05–23:13 UTC** (18:05–18:13 en Bogotá), por orden expresa («despliega backend y CRM a producción y súbelo a GitHub»). Backend `84319be` y CRM `4334dd8`, también en `origin/main`. Sin migraciones ni envíos reales. Falta la prueba con una sesión real en el PC de recepción, así que **no** es PRODUCTION_VERIFIED (§21.1).
 **Fecha:** 17-10-2026.
 
 | Repositorio | Rama | Base |
@@ -459,12 +459,12 @@ Después se repitieron con un script en bash que verifica cada copia y cada rest
 
 ## 19. Commits generados
 
-Todos locales, **sin push**:
+Subidos a `origin/main` el 17-10-2026 con el despliegue:
 
 | Repositorio | Commit | Contenido |
 |---|---|---|
 | Backend `feat/alertas-generales` | `9dfe95f` | `feat(notificaciones)`: la campanita respeta los permisos de cada rol y crear avisos a mano exige `content.manage` |
-| Backend `feat/alertas-generales` | Commit siguiente | `docs(alertas)`: este informe |
+| Backend `feat/alertas-generales` | `84319be` | `docs(alertas)`: este informe, más la actualización con el despliegue |
 | CRM `feat/alertas-generales` | `4334dd8` | `feat(alertas)`: alertas sonoras de la campanita en Configuración y coordinador de audio compartido con valoraciones |
 
 ## 20. Riesgos pendientes y decisiones del propietario
@@ -513,6 +513,45 @@ Todos locales, **sin push**:
    - `chown -R root:root`;
    - comprobar que `index.html` apunta al `main` nuevo y que el anterior sigue en disco.
 4. **Push a `main`** de los dos repositorios, como avance rápido.
+
+### 21.1 Despliegue ejecutado (17-10-2026)
+
+1. **Comprobación previa.** `origin/main` no se había movido: backend en `f6fcc06`, CRM en `d0bcc24`; las dos ramas avanzaban en línea recta. La API corría `ca5064c` y el CRM publicado era `d0bcc24`.
+2. **Respaldo** en `/var/backups/ironbody/pre-alertas-generales-20261017T230513Z`:
+   - volcado completo de la base `ironbody` (30,6 MB, 204 tablas con datos);
+   - `/var/www/app` empaquetado;
+   - `version.json` y la cabeza de la API;
+   - sumas SHA256.
+   - El primer volcado salió vacío, porque el nombre de la base no estaba donde lo busqué. Se repitió sobre `ironbody`, la correcta.
+3. **Backend:**
+   - push a `main` (`f6fcc06..84319be`);
+   - en el servidor, `git fetch` y `merge --ff-only`: la API pasa a `84319be`;
+   - `php -l` de los tres ficheros: correcto;
+   - **sin migraciones**;
+   - `php artisan queue:restart`: 12 workers en marcha.
+4. **Comprobado en producción:**
+   - `AuthorizationMap` resuelve `POST /api/admin/notifications` como `content.manage` y la lista como `@self`;
+   - las cuatro rutas de la campanita, sin sesión, dan 401.
+5. **CRM:**
+   - push a `main` (`d0bcc24..4334dd8`);
+   - `npm run build:prod`, con el sello `4334dd8` limpio;
+   - `rsync -a --no-owner --no-group` **sin `--delete`** y `chown -R root:root`.
+6. **Verificación pública** en `https://ironbodyneiva.cloud`:
+   - `index.html` (`no-cache`) apunta a `main-VR37CLFV.js` y `version.json` dice `4334dd8`;
+   - el `main` anterior (`main-EVIMKLF3.js`) sigue en 200;
+   - `/settings` y `/trainers` en 200;
+   - los chunks servidos contienen las preferencias generales, el candado del coordinador, la sección de Configuración, la frase de la voz y el cursor `after_id`.
+7. **Salud a las 23:13 UTC:**
+   - 0 errores en el log de Laravel desde las 23:00;
+   - 0 respuestas 5xx en las últimas 3000 de nginx;
+   - las rutas de la campanita, 200 para las sesiones abiertas;
+   - 12 workers en marcha.
+
+**Sin verificar en producción:**
+- el evento `ready` del stream y el filtro por rol con una sesión real (no se usaron credenciales de producción);
+- el sonido en el PC de recepción.
+
+Queda para la checklist del §23.
 
 ## 22. Rollback
 
