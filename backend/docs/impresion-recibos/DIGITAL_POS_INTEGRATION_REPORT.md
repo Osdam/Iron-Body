@@ -1,5 +1,7 @@
 # DIGITAL_POS_INTEGRATION_REPORT — 16/17-10-2026
 
+> **Sustituido por `IRON_BODY_POS_FINAL_REPORT.md` (17-10-2026).** Este informe describe la primera versión (impresión desde el navegador), que sigue desplegada y disponible como «método anterior». La impresión física por esa vía falló (corte y pitido); la integración definitiva usa el servicio local ESC/POS.
+
 **Estado: READY_FOR_PRINTER_PILOT** — desplegado en producción el 17-10-2026 (backend `e7e5afc`, CRM `55ac7e5`) y verificado sin crear cobros. **No es PRODUCTION_VERIFIED**: falta el piloto con la impresora física y el PC de caja configurado (`GUIA_PC_CAJA_IMPRESORA.md`).
 
 ## 1. Arquitectura encontrada

@@ -1,5 +1,7 @@
 # Guía: impresora de recibos DIG-58IIK en el PC de caja
 
+> **MÉTODO ANTERIOR (navegador).** Esta guía es la del 17-10-2026: imprimir desde Chrome con `--kiosk-printing`. En la prueba física la DIG-58IIK se cortó y pitó con este método. El método recomendado es el **servicio de impresión Iron Body** (ESC/POS): ver `IRON_BODY_POS_FINAL_REPORT.md` y el paquete `receipt-agent/` (`packaging/INSTALACION.md`, `packaging/PRUEBAS_FISICAS.md`). Esta guía se conserva para los equipos que sigan con el método anterior.
+
 No se instala ningún programa de Iron Body. Solo hace falta el driver de la impresora, Chrome y un acceso directo.
 
 ## 1. Impresora en Windows
