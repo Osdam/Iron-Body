@@ -724,6 +724,46 @@ Route::middleware('auth.admin')->prefix('admin/plan-transfers')->group(function 
     Route::post('{batch}/revert/dry-run', [$traslados, 'revertDryRun'])->whereNumber('batch')->middleware('throttle:plan-transfer-read');
     Route::post('{batch}/revert', [$traslados, 'revert'])->whereNumber('batch')->middleware('throttle:plan-transfer-write');
 });
+
+// AGENDA DE VALORACIONES (Entrenadores › Calendario de citas). Contrato:
+// CONTRATO_AGENDA_VALORACIONES.md §4. Cada ruta exige su permiso en
+// AuthorizationMap::OVERRIDES (el controlador NO está en CONTROLLERS: lo que no
+// esté clasificado se deniega). El alcance «solo mis citas» y la persona los
+// exigen los controladores. Sin route-model binding: el uuid es texto (ver
+// ValuationController). Las estáticas van antes de {uuid}. Cupo propio por
+// credencial (AppServiceProvider::limitadorDeValoraciones), como la Agenda
+// comercial.
+Route::middleware('throttle:valuations')->prefix('admin/valuations')->group(function (): void {
+    $citas = \App\Http\Controllers\Api\Admin\ValuationController::class;
+    $disponibilidad = \App\Http\Controllers\Api\Admin\ValuationAvailabilityController::class;
+    $ajustes = \App\Http\Controllers\Api\Admin\ValuationSettingsController::class;
+
+    Route::get('capabilities', [$citas, 'capabilities']);
+    Route::get('slots', [$citas, 'slots']);
+    Route::get('trainers', [$citas, 'trainers']);
+    Route::get('members/search', [$citas, 'searchMembers']);
+    Route::get('members/by-user/{userId}', [$citas, 'memberByUser'])->whereNumber('userId');
+
+    Route::get('settings', [$ajustes, 'show']);
+    Route::put('settings', [$ajustes, 'update']);
+
+    Route::get('trainers/{trainerId}/availability', [$disponibilidad, 'show'])->whereNumber('trainerId');
+    Route::put('trainers/{trainerId}/availability', [$disponibilidad, 'replace'])->whereNumber('trainerId');
+    Route::get('trainers/{trainerId}/blocks', [$disponibilidad, 'blocks'])->whereNumber('trainerId');
+    Route::post('trainers/{trainerId}/blocks', [$disponibilidad, 'storeBlock'])->whereNumber('trainerId');
+    Route::delete('trainers/{trainerId}/blocks/{blockId}', [$disponibilidad, 'destroyBlock'])->whereNumber(['trainerId', 'blockId']);
+
+    Route::get('/', [$citas, 'index']);
+    Route::post('/', [$citas, 'store']);
+    Route::get('{uuid}', [$citas, 'show'])->whereUuid('uuid');
+    Route::patch('{uuid}', [$citas, 'update'])->whereUuid('uuid');
+    Route::post('{uuid}/reschedule', [$citas, 'reschedule'])->whereUuid('uuid');
+    Route::post('{uuid}/cancel', [$citas, 'cancel'])->whereUuid('uuid');
+    Route::post('{uuid}/confirm', [$citas, 'confirm'])->whereUuid('uuid');
+    Route::post('{uuid}/start', [$citas, 'start'])->whereUuid('uuid');
+    Route::post('{uuid}/complete', [$citas, 'complete'])->whereUuid('uuid');
+    Route::post('{uuid}/no-show', [$citas, 'noShow'])->whereUuid('uuid');
+});
 // Lectura de planes/precios: PÚBLICA (la app muestra planes en registro/landing).
 Route::apiResource('plans', PlanController::class)->only(['index','show']);
 // ── Política de versión de la app (PÚBLICA) ───────────────────────────────────

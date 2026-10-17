@@ -167,12 +167,21 @@ final class CrmPermission
         return array_values(array_filter(
             PermissionCatalog::all(),
             fn (string $p) => str_ends_with($p, '.view')
-                && ! in_array(PermissionCatalog::split($p)[0] ?? '', self::PERSONNEL_DOMAINS, true),
+                && ! in_array(explode('.', $p)[0], self::SHARED_TOKEN_EXCLUDED_DOMAINS, true),
         ));
     }
 
     /** Dominios que nunca obtiene el token compartido (ver readOnly()). */
     public const PERSONNEL_DOMAINS = ['workforce', 'biometrics', 'devices'];
+
+    /**
+     * Todo lo que el token compartido NO lee. Además del personal, la agenda de
+     * valoraciones: cita a un socio con su entrenador para una valoración
+     * física, y eso no se reparte a una credencial sin persona detrás.
+     * Se compara el PRIMER segmento de la clave: `valuations.view_all` y
+     * cualquier `valuations.algo.view` futuro quedan fuera igual.
+     */
+    public const SHARED_TOKEN_EXCLUDED_DOMAINS = [...self::PERSONNEL_DOMAINS, 'valuations'];
 
     /**
      * Permisos por defecto de cada rol del sistema.
@@ -204,6 +213,9 @@ final class CrmPermission
             // recibo es la excepción, y quien la necesite la recibe a mano desde
             // Configuración → Roles, donde queda quién se la dio.
             self::RECEIPTS_PRINT_OPTIONAL,
+            // Configurar la agenda de valoraciones (avisos al socio, canales,
+            // agendar en el pasado). Llega nuevo y se reparte a mano.
+            'valuations.manage_settings',
         ]));
 
         /*
@@ -237,6 +249,11 @@ final class CrmPermission
             // editar horarios no (eso es `classes.manage`).
             'classes.view', 'classes.enroll',
             'support.view',
+            // Agenda de valoraciones: el mostrador agenda, mueve y cancela citas
+            // de todos los entrenadores. No las cierra (eso es del entrenador),
+            // ni configura la agenda ni la disponibilidad.
+            'valuations.view', 'valuations.view_all', 'valuations.create',
+            'valuations.update', 'valuations.cancel',
             // SIN moderación, ni siquiera lectura. ModerationPermission se la
             // concedía, pero el rol base de recepción es atención y cobro; si
             // alguna recepcionista debe revisar comunidad, se le concede
@@ -256,6 +273,10 @@ final class CrmPermission
             'routines.view', 'routines.manage',
             'classes.view', 'classes.manage',
             'trainers.view',
+            // Su agenda de valoraciones: SOLO la suya (`view` sin `view_all`,
+            // acotado por `admins.trainer_id`), y lo que hace con la cita
+            // delante: confirmar, iniciar, completar o marcar ausencia.
+            'valuations.view', 'valuations.complete',
         ];
 
         /*
@@ -269,6 +290,8 @@ final class CrmPermission
         $administrativo = [
             'moderation.view',
             'moderation.manage',
+            // Consulta de la agenda de valoraciones de todos, sin operarla.
+            'valuations.view', 'valuations.view_all',
         ];
 
         return [

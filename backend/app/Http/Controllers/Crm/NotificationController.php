@@ -6,8 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\Member;
 use App\Models\Notification;
 use App\Services\NotificationService;
+use App\Support\Access\AdminActor;
+use App\Support\Access\CrmPermission;
 use App\Support\SseStream;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -18,6 +21,13 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * Búsqueda funcional por nombre de miembro, documento, referencia de pago,
  * tipo, título, mensaje, estado y rango de fechas. Pensado para volúmenes
  * grandes: filtra en BD y pagina.
+ *
+ * VISIBILIDAD POR PERMISO. Una fila con `required_permission` solo existe para
+ * la sesión que tiene ese permiso: no sale en la lista, no cuenta como no leída,
+ * no viaja por el stream y no se puede marcar como leída (ni sola ni con
+ * «marcar todas»). Las filas sin `required_permission` —todas las anteriores—
+ * se comportan exactamente igual que antes. El leído/no leído sigue siendo
+ * global, como siempre (limitación conocida).
  */
 class NotificationController extends Controller
 {
@@ -37,7 +47,13 @@ class NotificationController extends Controller
         'iron_ai' => 'iron_ai',
         'routine' => 'routine',
         'rutina' => 'routine',
+        'valuation' => 'valuation',
+        'valuations' => 'valuation',
+        'valoraciones' => 'valuation',
     ];
+
+    /** Tipos reservados al sistema: no se crean a mano desde `store`. */
+    private const SYSTEM_TYPES = ['valuation'];
 
     public function __construct(private NotificationService $notifications) {}
 
@@ -46,6 +62,7 @@ class NotificationController extends Controller
     {
         $query = Notification::query()
             ->where('audience', Notification::AUDIENCE_ADMIN);
+        $this->visibleTo($query, $request);
 
         $this->applyCategory($query, (string) $request->query('category', 'all'));
 
@@ -82,11 +99,11 @@ class NotificationController extends Controller
     }
 
     /** GET /api/admin/notifications/unread-count */
-    public function unreadCount(): JsonResponse
+    public function unreadCount(Request $request): JsonResponse
     {
-        $count = Notification::where('audience', Notification::AUDIENCE_ADMIN)
-            ->where('status', Notification::STATUS_UNREAD)
-            ->count();
+        $query = Notification::where('audience', Notification::AUDIENCE_ADMIN)
+            ->where('status', Notification::STATUS_UNREAD);
+        $count = $this->visibleTo($query, $request)->count();
 
         return response()->json(['ok' => true, 'unread_count' => $count]);
     }
@@ -101,13 +118,11 @@ class NotificationController extends Controller
         $cursor = $request->filled('after_id')
             ? (int) $request->query('after_id')
             : (int) (Notification::where('audience', Notification::AUDIENCE_ADMIN)->max('id') ?? 0);
+        // Una vez por conexión: el stream dura 20 s y el CRM reconecta.
+        $permisos = $this->sessionPermissions($request);
 
-        return SseStream::response(function () use (&$cursor): void {
-            $items = Notification::where('audience', Notification::AUDIENCE_ADMIN)
-                ->where('id', '>', $cursor)
-                ->orderBy('id')
-                ->limit(30)
-                ->get();
+        return SseStream::response(function () use (&$cursor, $permisos): void {
+            $items = $this->streamBatch($permisos, $cursor);
             foreach ($items as $n) {
                 SseStream::emit('notification', $n->toPublicArray(), $n->id);
                 $cursor = $n->id;
@@ -116,11 +131,12 @@ class NotificationController extends Controller
     }
 
     /** POST /api/admin/notifications/{uuid}/read */
-    public function markRead(string $uuid): JsonResponse
+    public function markRead(Request $request, string $uuid): JsonResponse
     {
-        $notification = Notification::where('uuid', $uuid)
-            ->where('audience', Notification::AUDIENCE_ADMIN)
-            ->first();
+        // Lo que no se puede ver no se puede marcar: 404, igual que si no existiera.
+        $query = Notification::where('uuid', $uuid)
+            ->where('audience', Notification::AUDIENCE_ADMIN);
+        $notification = $this->visibleTo($query, $request)->first();
 
         if (! $notification) {
             return response()->json(['ok' => false, 'message' => 'Notificación no encontrada.'], 404);
@@ -131,11 +147,12 @@ class NotificationController extends Controller
         return response()->json(['ok' => true, 'data' => $notification->toPublicArray()]);
     }
 
-    /** POST /api/admin/notifications/read-all */
-    public function readAll(): JsonResponse
+    /** POST /api/admin/notifications/read-all — solo las que esta sesión puede ver. */
+    public function readAll(Request $request): JsonResponse
     {
-        $updated = Notification::where('audience', Notification::AUDIENCE_ADMIN)
-            ->where('status', Notification::STATUS_UNREAD)
+        $query = Notification::where('audience', Notification::AUDIENCE_ADMIN)
+            ->where('status', Notification::STATUS_UNREAD);
+        $updated = $this->visibleTo($query, $request)
             ->update(['status' => Notification::STATUS_READ, 'read_at' => now()]);
 
         return response()->json(['ok' => true, 'updated' => $updated]);
@@ -145,6 +162,12 @@ class NotificationController extends Controller
      * POST /api/admin/notifications — notificación manual desde el CRM.
      * Puede dirigirse a un miembro (member_id/document) o difundirse a todos
      * los miembros, o quedar como nota interna del CRM (audience=admin).
+     *
+     * Los tipos de {@see self::SYSTEM_TYPES} solo los escribe el sistema: una
+     * `valuation` con `priority=high` hace sonar la alerta de la agenda en el
+     * CRM, y a mano cualquiera podía fabricarla, sin permiso exigido y visible
+     * para todo el personal (revisión de seguridad V-1). 422. `required_permission`
+     * no se acepta aquí nunca (no está en la validación).
      */
     public function store(Request $request): JsonResponse
     {
@@ -152,7 +175,11 @@ class NotificationController extends Controller
             'title' => 'required|string|max:160',
             'message' => 'required|string|max:1000',
             'audience' => 'nullable|in:member,admin',
-            'type' => 'nullable|string|max:40',
+            'type' => ['nullable', 'string', 'max:40', function (string $attribute, mixed $value, \Closure $fail): void {
+                if (is_string($value) && in_array(mb_strtolower(trim($value)), self::SYSTEM_TYPES, true)) {
+                    $fail('Ese tipo de notificación lo crea solo el sistema.');
+                }
+            }],
             'priority' => 'nullable|in:low,medium,high',
             'member_id' => 'nullable|integer|exists:members,id',
             'document' => 'nullable|string|max:40',
@@ -181,6 +208,53 @@ class NotificationController extends Controller
     }
 
     // ── Internos ───────────────────────────────────────────────────────────────
+
+    /**
+     * El lote que empuja el stream en cada vuelta: las notificaciones admin
+     * posteriores al cursor que esta sesión puede ver.
+     *
+     * @param  list<string>  $permisos
+     * @return Collection<int, Notification>
+     */
+    private function streamBatch(array $permisos, int $cursor): Collection
+    {
+        return $this->applyVisibility(Notification::where('audience', Notification::AUDIENCE_ADMIN), $permisos)
+            ->where('id', '>', $cursor)
+            ->orderBy('id')
+            ->limit(30)
+            ->get();
+    }
+
+    /** Solo las filas sin permiso exigido o con un permiso que la sesión tiene. */
+    private function visibleTo(Builder $query, Request $request): Builder
+    {
+        return $this->applyVisibility($query, $this->sessionPermissions($request));
+    }
+
+    /** @param  list<string>  $permisos */
+    private function applyVisibility(Builder $query, array $permisos): Builder
+    {
+        return $query->where(function (Builder $q) use ($permisos): void {
+            $q->whereNull('required_permission');
+            if ($permisos !== []) {
+                $q->orWhereIn('required_permission', $permisos);
+            }
+        });
+    }
+
+    /**
+     * Permisos efectivos de la sesión (nombres canónicos). El token compartido
+     * no es una persona: obtiene lo de siempre, solo lectura.
+     *
+     * @return list<string>
+     */
+    private function sessionPermissions(Request $request): array
+    {
+        return array_values(array_unique(array_map(
+            CrmPermission::canonical(...),
+            CrmPermission::forAdmin(AdminActor::from($request)),
+        )));
+    }
 
     private function applyCategory(Builder $query, string $category): void
     {

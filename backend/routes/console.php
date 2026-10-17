@@ -283,6 +283,18 @@ Schedule::command('marketing:retry-outbox')
     ->withoutOverlapping()
     ->onOneServer();
 
+// ── Agenda de valoraciones: avisos al socio y a la bandeja del CRM ───────────
+// Cada minuto, sin colas. Las ventanas (24 h antes, 60 min antes, 15 min antes,
+// 15 min después) son INSTANTES UTC guardados en `valuation_reminders.due_at`,
+// así que no hay `dailyAt` que pueda salir cinco horas desplazado. Idempotente:
+// cada aviso tiene un dueño (UPDATE condicionado + SKIP LOCKED en PostgreSQL) y
+// la notificación se deduplica por `event_key`; correrlo dos veces no duplica.
+// El canal del socio está APAGADO por defecto (valuation_settings).
+Schedule::command('valuations:process-reminders')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // ── IRON GUARD: pasada de detección ──────────────────────────────────────────
 // Determinista y barata: consulta estado propio (eventos sin procesar, mensajes
 // muertos, adjuntos fallidos, errores de Meta, jobs caídos). No manda nada a un

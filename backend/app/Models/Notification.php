@@ -48,6 +48,9 @@ class Notification extends Model
         'read_at',
         'should_popup',
         'popup_shown_at',
+        // Permiso que necesita una sesión del CRM para VER la fila (y marcarla
+        // leída). NULL = toda la bandeja, como siempre. Ver NotificationController.
+        'required_permission',
     ];
 
     protected function casts(): array

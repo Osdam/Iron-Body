@@ -38,6 +38,7 @@ final class PermissionCatalog
         'classes' => ['label' => 'Clases y asistencia', 'icon' => 'calendar_month', 'hint' => 'Horarios, reservas, ingreso y torniquete'],
         'routines' => ['label' => 'Rutinas y ejercicios', 'icon' => 'exercise', 'hint' => 'Rutinas asignadas y catálogo de ejercicios'],
         'trainers' => ['label' => 'Entrenadores', 'icon' => 'sports', 'hint' => 'Fichas, asignaciones y tareas de entrenadores'],
+        'valuations' => ['label' => 'Agenda de valoraciones', 'icon' => 'event_available', 'hint' => 'Citas de valoración física con los entrenadores: agenda, disponibilidad y avisos'],
         'workforce' => ['label' => 'Personal y jornadas', 'icon' => 'badge', 'hint' => 'Entrada y salida del personal, incidencias y códigos de respaldo'],
         'biometrics' => ['label' => 'Biometría', 'icon' => 'face', 'hint' => 'Estado del rostro registrado, autorizar un registro y revocarlo. Dato sensible'],
         'devices' => ['label' => 'Dispositivos autorizados', 'icon' => 'tablet_android', 'hint' => 'Tablets que pueden registrar jornadas y clases: vincular y revocar'],
@@ -117,6 +118,14 @@ final class PermissionCatalog
         'payments.export' => 'Pagos',
         'marketing.agent.manage' => 'Pausar o reactivar el agente IA',
         'receipts.print_optional' => 'Permitir omitir la impresión de recibos',
+        'valuations.view' => 'Ver la agenda',
+        'valuations.view_all' => 'Ver las citas de todos los entrenadores',
+        'valuations.create' => 'Agendar',
+        'valuations.update' => 'Reprogramar y editar',
+        'valuations.cancel' => 'Cancelar citas',
+        'valuations.complete' => 'Confirmar, iniciar, completar y marcar ausencia',
+        'valuations.manage_availability' => 'Gestionar la disponibilidad',
+        'valuations.manage_settings' => 'Configurar la agenda',
     ];
 
     /**
@@ -155,6 +164,14 @@ final class PermissionCatalog
         'moderation.manage' => 'Sancionar, retirar contenido y resolver apelaciones.',
         'marketing.agent.manage' => 'Pausar o reactivar las respuestas automáticas del agente IA para TODAS las conversaciones de WhatsApp. En pausa los mensajes se siguen recibiendo y guardando para atenderlos a mano. Queda auditado.',
         'receipts.print_optional' => 'Cerrar un cobro de mostrador SIN imprimir su recibo: la impresora no responde, se quedó sin papel o el cliente no lo quiere. Sin este permiso, el CRM exige imprimir y el intento de omitirlo queda registrado como denegado. Cada omisión queda con autor, hora y motivo, y el recibo se puede imprimir después desde el informe del turno.',
+        'valuations.view' => 'Abrir el calendario de citas. Una cuenta vinculada a un entrenador, sin «Ver las citas de todos», ve solo las suyas; sin vínculo ni ese permiso, no ve ninguna.',
+        'valuations.view_all' => 'Ver las citas de valoración de todos los entrenadores, con sus notas administrativas.',
+        'valuations.create' => 'Agendar valoraciones y buscar al socio. Quien solo ve lo suyo, solo agenda con su propio entrenador.',
+        'valuations.update' => 'Mover una cita de hora o de entrenador, cambiar su tipo y editar sus notas. Cada cambio queda en el historial.',
+        'valuations.cancel' => 'Cancelar una cita con motivo. Avisa al socio si el canal de la app está activo.',
+        'valuations.complete' => 'Confirmar la cita, iniciarla, completarla o marcar que el socio no asistió. Pensado para el entrenador con la cita delante.',
+        'valuations.manage_availability' => 'Definir las franjas semanales de cada entrenador y sus bloqueos (descansos, ausencias, días libres). Un bloqueo no cancela las citas que ya existen.',
+        'valuations.manage_settings' => 'Duración, intervalos, márgenes, avisos y canales de la agenda, y agendar una cita en el pasado con motivo. No llega por defecto al Administrador.',
         'plans.transfer' => 'Cambiar de plan a un grupo de socios sin cobrar nada: conserva sus fechas, sus pagos y sus entradas usadas. Exige una simulación previa, queda auditado por lote y por socio, y se puede revertir mientras el socio no haya cambiado después.',
     ];
 
@@ -256,7 +273,7 @@ final class PermissionCatalog
      */
     private static function sortActions(array $permisos): array
     {
-        $orden = ['view' => 0, 'use' => 1, 'create' => 2, 'operate' => 2, 'edit' => 3, 'cancel' => 4, 'archive' => 5, 'delete' => 5, 'manage' => 9];
+        $orden = ['view' => 0, 'view_all' => 0.5, 'use' => 1, 'create' => 2, 'operate' => 2, 'edit' => 3, 'update' => 3, 'cancel' => 4, 'complete' => 4.5, 'archive' => 5, 'delete' => 5, 'manage_availability' => 8, 'manage_settings' => 8.5, 'manage' => 9];
         usort($permisos, fn ($a, $b) => ($orden[$a['action']] ?? 5) <=> ($orden[$b['action']] ?? 5));
 
         return $permisos;

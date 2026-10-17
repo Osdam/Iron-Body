@@ -147,6 +147,7 @@ class AppServiceProvider extends ServiceProvider
         $this->limitadoresDelTrasladoDePlanes();
         $this->limitadoresDelRegistroPublico();
         $this->limitadorDelServicioDeImpresion();
+        $this->limitadorDeValoraciones();
 
         $this->guardWompiConfig();
         $this->guardFactusConfig();
@@ -543,6 +544,31 @@ class AppServiceProvider extends ServiceProvider
                 'code' => 'too_many_agenda_requests',
                 'message' => 'Demasiadas consultas seguidas a la agenda. Espera un momento.',
             ], 429, $headers)));
+    }
+
+    /**
+     * La agenda de valoraciones (/api/admin/valuations/*): 120 por minuto por
+     * CREDENCIAL, en un cubo propio, por la misma razón que la Agenda comercial
+     * (`marketing-agenda`): el calendario se relee con cada aviso, con el sondeo
+     * de 120 s y tras cada acción, y con la clave por IP esas lecturas gastarían
+     * el cubo que comparte toda la oficina, login incluido. El throttle corre
+     * antes que la autenticación: la clave es la huella del bearer, no el admin.
+     *
+     * Bloque autocontenido a propósito: otras ramas añaden limitadores aquí.
+     */
+    private function limitadorDeValoraciones(): void
+    {
+        RateLimiter::for('valuations', function (Request $request) {
+            $token = $request->bearerToken();
+
+            return Limit::perMinute(120)
+                ->by('valuations:'.($token ? 'admin:'.hash('sha256', $token) : 'ip:'.$request->ip()))
+                ->response(fn ($request, array $headers) => response()->json([
+                    'ok' => false,
+                    'code' => 'too_many_requests',
+                    'message' => 'Demasiadas consultas seguidas a la agenda de valoraciones. Espera un momento.',
+                ], 429, $headers));
+        });
     }
 
     /**

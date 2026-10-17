@@ -113,6 +113,50 @@ final class AuthorizationMap
     ];
 
     /**
+     * AGENDA DE VALORACIONES: leer citas. `view` acota a las del propio
+     * entrenador vinculado y `view_all` las abre todas; basta CUALQUIERA para
+     * entrar, y el alcance lo aplica el controlador (ValuationAccess).
+     *
+     * Los tres controladores de la agenda NO están en CONTROLLERS a propósito:
+     * allí sus lecturas resolverían a `valuations.view` por el verbo, y una ruta
+     * nueva quedaría clasificada sin que nadie lo decidiera. Aquí cada ruta está
+     * escrita una a una en OVERRIDES; la que falte se deniega.
+     *
+     * @var list<string>
+     */
+    public const VALUATIONS_READ = ['valuations.view', 'valuations.view_all'];
+
+    /**
+     * Cualquier llave de la agenda: para `capabilities`, que solo dice qué puede
+     * hacer la sesión y lo necesita también quien solo gestiona disponibilidad
+     * o ajustes.
+     *
+     * @var list<string>
+     */
+    public const VALUATIONS_ANY = [
+        'valuations.view',
+        'valuations.view_all',
+        'valuations.create',
+        'valuations.update',
+        'valuations.cancel',
+        'valuations.complete',
+        'valuations.manage_availability',
+        'valuations.manage_settings',
+    ];
+
+    /**
+     * Leer la disponibilidad o los ajustes: quien los gestiona, o quien ve la
+     * agenda (el controlador limita la disponibilidad al propio entrenador y los
+     * ajustes a solo lectura).
+     *
+     * @var list<string>
+     */
+    public const VALUATIONS_AVAILABILITY_READ = ['valuations.manage_availability', 'valuations.view', 'valuations.view_all'];
+
+    /** @var list<string> */
+    public const VALUATIONS_SETTINGS_READ = ['valuations.manage_settings', 'valuations.view', 'valuations.view_all'];
+
+    /**
      * Permiso por CONTROLADOR. Es el caso normal: un controlador administra un
      * dominio y todas sus acciones exigen lo mismo, con la distinción de
      * lectura/escritura resuelta en {@see resolve()} según el verbo HTTP.
@@ -564,6 +608,40 @@ final class AuthorizationMap
         'POST api/admin/commissions/agreements/{agreement}/charge' => 'commissions.charge',
         // Deshacer un cobro es supervisión, no mostrador.
         'POST api/admin/commissions/charges/{charge}/cancel' => 'commissions.cancel',
+
+        /*
+         * AGENDA DE VALORACIONES (Entrenadores › Calendario de citas), ruta a
+         * ruta. Además de esto, los controladores exigen una PERSONA (el token
+         * compartido no recibe nada de `valuations`, ver CrmPermission) y el
+         * ALCANCE de la cita: sin `view_all`, solo las del entrenador vinculado.
+         */
+        'GET api/admin/valuations/capabilities' => self::VALUATIONS_ANY,
+        'GET api/admin/valuations' => self::VALUATIONS_READ,
+        'GET api/admin/valuations/{uuid}' => self::VALUATIONS_READ,
+        'GET api/admin/valuations/slots' => self::VALUATIONS_READ,
+        'GET api/admin/valuations/trainers' => self::VALUATIONS_READ,
+        'GET api/admin/valuations/members/by-user/{userId}' => self::VALUATIONS_READ,
+        // Buscar socios es el primer paso de agendar.
+        'GET api/admin/valuations/members/search' => 'valuations.create',
+        'POST api/admin/valuations' => 'valuations.create',
+        // Mover, cambiar de entrenador o de tipo, y editar notas.
+        'PATCH api/admin/valuations/{uuid}' => 'valuations.update',
+        'POST api/admin/valuations/{uuid}/reschedule' => 'valuations.update',
+        'POST api/admin/valuations/{uuid}/cancel' => 'valuations.cancel',
+        // Lo que hace el entrenador con la cita delante.
+        'POST api/admin/valuations/{uuid}/confirm' => 'valuations.complete',
+        'POST api/admin/valuations/{uuid}/start' => 'valuations.complete',
+        'POST api/admin/valuations/{uuid}/complete' => 'valuations.complete',
+        'POST api/admin/valuations/{uuid}/no-show' => 'valuations.complete',
+        'GET api/admin/valuations/trainers/{trainerId}/availability' => self::VALUATIONS_AVAILABILITY_READ,
+        'GET api/admin/valuations/trainers/{trainerId}/blocks' => self::VALUATIONS_AVAILABILITY_READ,
+        'PUT api/admin/valuations/trainers/{trainerId}/availability' => 'valuations.manage_availability',
+        'POST api/admin/valuations/trainers/{trainerId}/blocks' => 'valuations.manage_availability',
+        'DELETE api/admin/valuations/trainers/{trainerId}/blocks/{blockId}' => 'valuations.manage_availability',
+        // Agendar en el pasado (con motivo) también es `manage_settings`, pero
+        // va en el mismo POST que cualquier cita: lo decide el servicio.
+        'GET api/admin/valuations/settings' => self::VALUATIONS_SETTINGS_READ,
+        'PUT api/admin/valuations/settings' => 'valuations.manage_settings',
 
         // Ver el catálogo de roles ya revela el organigrama y qué puede cada
         // uno. Se exige el mismo permiso que para tocarlo: un dominio con una

@@ -162,6 +162,16 @@ class TrainerController extends Controller
 
     public function destroy(Trainer $trainer)
     {
+        // Sus valoraciones son historial de socios y la FK no deja borrarlo: se
+        // responde ANTES de avisar, para que no salga «eliminado» de algo que sigue.
+        if (\App\Models\ValuationAppointment::query()->where('trainer_id', $trainer->id)->exists()) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'trainer_has_valuations',
+                'message' => 'Este entrenador tiene valoraciones en la agenda o en su historial. Desactívalo en lugar de eliminarlo.',
+            ], 409);
+        }
+
         // Notifica ANTES de borrar para conservar nombre/id (ADITIVO).
         app(NotificationService::class)->notifyTrainerDeleted($trainer);
 

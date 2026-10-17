@@ -25,6 +25,9 @@ final class UntrustedText
     /** C0, DEL y C1. */
     public const CONTROLS = '\x{0000}-\x{001F}\x{007F}-\x{009F}';
 
+    /** Los mismos, salvo tabulador y saltos de línea (\t \n \r): el texto de un `<textarea>`. */
+    public const CONTROLS_EXCEPT_LINE_BREAKS = '\x{0000}-\x{0008}\x{000B}\x{000C}\x{000E}-\x{001F}\x{007F}-\x{009F}';
+
     /** Anchura cero, marcas y empotrados de dirección, aislados y BOM. */
     public const INVISIBLE = '\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2066}-\x{2069}\x{FEFF}';
 
@@ -49,11 +52,17 @@ final class UntrustedText
         return true;
     }
 
-    /** UTF-8 válido, sin controles ni invisibles. */
-    public static function isPlain(string $texto): bool
+    /**
+     * UTF-8 válido, sin controles ni invisibles. Con `$multiline`, se admiten
+     * tabulador y saltos de línea (notas y motivos escritos en varias líneas);
+     * NUL y el resto de controles, nunca.
+     */
+    public static function isPlain(string $texto, bool $multiline = false): bool
     {
+        $controles = $multiline ? self::CONTROLS_EXCEPT_LINE_BREAKS : self::CONTROLS;
+
         return mb_check_encoding($texto, 'UTF-8')
-            && preg_match('/['.self::CONTROLS.self::INVISIBLE.']/u', $texto) === 0;
+            && preg_match('/['.$controles.self::INVISIBLE.']/u', $texto) === 0;
     }
 
     /**
