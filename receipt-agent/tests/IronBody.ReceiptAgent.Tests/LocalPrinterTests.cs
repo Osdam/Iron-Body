@@ -123,6 +123,51 @@ public sealed class LocalPrinterTests
         Assert.Equal(PrinterResolutionStatus.Rejected, LocalPrinterPolicy.Resolve(List(printer), "Caja").Status);
     }
 
+    [Theory]
+    [InlineData("Standard TCP/IP Port")]
+    [InlineData("WSD Port")]
+    [InlineData("LPR Port")]
+    [InlineData("Microsoft IPP Port")]
+    [InlineData("Internet Port")]
+    public void A_renamed_port_whose_windows_monitor_is_network_is_rejected(string monitor)
+    {
+        // Un puerto TCP/IP estándar se puede llamar «CAJA»: el nombre no lo delata, el monitor sí.
+        var monitors = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["CAJA"] = monitor, ["USB001"] = "USB Monitor" };
+        var printer = new PrinterInfo("POS-58", "POS-58", "CAJA", false, PrinterStatuses.Ready,
+            NetworkPorts: LocalPrinterPolicy.NetworkPortsOf("CAJA", monitors));
+
+        var resolution = LocalPrinterPolicy.Resolve(new[] { printer }, "POS-58");
+
+        Assert.Equal(PrinterResolutionStatus.Rejected, resolution.Status);
+        Assert.Contains("CAJA", resolution.Reason);
+    }
+
+    [Theory]
+    [InlineData("USB001", "USB Monitor")]
+    [InlineData("USB002", "Dynamic Print Monitor")]
+    [InlineData("COM3", "Local Port")]
+    [InlineData("LPT1:", "Local Port")]
+    [InlineData("POS-58 Port", "POS58 Port Monitor")]
+    public void Local_monitors_and_vendor_monitors_are_accepted(string port, string monitor)
+    {
+        var monitors = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [port] = monitor };
+        var printer = new PrinterInfo("POS-58", "POS-58", port, false, PrinterStatuses.Ready,
+            NetworkPorts: LocalPrinterPolicy.NetworkPortsOf(port, monitors));
+
+        Assert.Equal(PrinterResolutionStatus.Found, LocalPrinterPolicy.Resolve(new[] { printer }, "POS-58").Status);
+    }
+
+    [Fact]
+    public void A_pooled_printer_with_one_network_monitor_port_is_rejected_and_unknown_monitors_map_is_not_a_block()
+    {
+        var monitors = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["USB001"] = "USB Monitor", ["oficina"] = "Standard TCP/IP Port" };
+
+        Assert.Equal(new[] { "oficina" }, LocalPrinterPolicy.NetworkPortsOf("USB001, oficina", monitors));
+        // Sin lista de puertos de Windows (EnumPortsW falló) no hay veredicto por monitor: siguen las reglas por nombre.
+        Assert.Null(LocalPrinterPolicy.NetworkPortsOf("USB001", null));
+        Assert.Equal(PrinterResolutionStatus.Found, LocalPrinterPolicy.Resolve(new[] { Usb }, "POS-58").Status);
+    }
+
     [Fact]
     public void Name_not_in_the_local_list_is_not_found()
     {

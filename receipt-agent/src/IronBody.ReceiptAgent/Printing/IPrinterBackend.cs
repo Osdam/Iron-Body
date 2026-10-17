@@ -16,7 +16,12 @@ public static class PrinterStatuses
 /// Impresora vista por Windows. El estado es informativo: no decide si se imprime.
 /// <see cref="IsNetwork"/> refleja PRINTER_ATTRIBUTE_NETWORK.
 /// </summary>
-public sealed record PrinterInfo(string Name, string? Driver, string? Port, bool IsDefault, string Status, bool IsNetwork = false);
+/// <remarks>
+/// <see cref="NetworkPorts"/>: puertos de esta impresora cuyo MONITOR de Windows es de red (TCP/IP, WSD,
+/// LPR, IPP…). Un puerto TCP/IP estándar se puede renombrar a cualquier cosa («CAJA»), así que el nombre
+/// del puerto no basta para saberlo. Null si Windows no dio la lista de puertos.
+/// </remarks>
+public sealed record PrinterInfo(string Name, string? Driver, string? Port, bool IsDefault, string Status, bool IsNetwork = false, IReadOnlyList<string>? NetworkPorts = null);
 
 /// <summary>Resultado de entregar un trabajo al spooler y seguirlo en la cola.</summary>
 public sealed record SpoolResult(bool Accepted, int? JobId, int BytesWritten, string? ErrorCode, string? Message)

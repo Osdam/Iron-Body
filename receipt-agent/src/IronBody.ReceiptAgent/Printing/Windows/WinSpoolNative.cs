@@ -80,6 +80,20 @@ internal static class WinSpoolNative
         public uint AveragePPM;
     }
 
+    /// <summary>PORT_INFO_2W: nombre del puerto y monitor que lo atiende.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct PortInfo2
+    {
+        public IntPtr pPortName;
+        public IntPtr pMonitorName;
+        public IntPtr pDescription;
+        public uint fPortType;
+        public uint Reserved;
+    }
+
+    [DllImport("winspool.drv", EntryPoint = "EnumPortsW", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern bool EnumPorts(string? pName, uint level, IntPtr pPorts, uint cbBuf, out uint pcbNeeded, out uint pcReturned);
+
     [DllImport("winspool.drv", EntryPoint = "OpenPrinterW", CharSet = CharSet.Unicode, SetLastError = true)]
     public static extern bool OpenPrinter(string pPrinterName, out IntPtr phPrinter, IntPtr pDefault);
 
