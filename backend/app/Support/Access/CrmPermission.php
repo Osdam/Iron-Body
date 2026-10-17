@@ -93,6 +93,14 @@ final class CrmPermission
 
     public const COMMISSIONS_MANAGE = 'commissions.manage';
 
+    // ── Recibos térmicos de caja ────────────────────────────────────────────
+    //
+    // Toda operación de mostrador entrega su tirilla. Omitirla es una
+    // EXCEPCIÓN —la impresora se quedó sin papel, el cliente no la quiso— y la
+    // decide quien tenga esta llave, no quien está cobrando. Sin ella el intento
+    // de omitir queda registrado como denegado. Ver ReceiptPrints.
+    public const RECEIPTS_PRINT_OPTIONAL = 'receipts.print_optional';
+
     // ── Administración de roles ─────────────────────────────────────────────
     public const ROLES_MANAGE = 'roles.manage';
 
@@ -181,8 +189,8 @@ final class CrmPermission
         /*
          * ADMINISTRADOR. En este primer despliegue conserva el acceso amplio
          * que ya tenía de hecho —hasta ahora podía llamar cualquier endpoint
-         * administrativo— menos las tres llaves que son autoridad sobre el
-         * propio sistema. Endurecerlo más de golpe habría convertido un
+         * administrativo— menos las llaves que son autoridad sobre el propio
+         * sistema y la de omitir recibos. Endurecerlo más de golpe habría convertido un
          * despliegue de seguridad en una interrupción de servicio; se afina
          * después, con uso real medido.
          */
@@ -191,6 +199,11 @@ final class CrmPermission
             'users.manage',        // crear cuentas del CRM, también
             'integrations.manage', // conectar/desconectar canales externos
             'audit.view',          // el registro de quién hizo qué
+            // Omitir la tirilla de un cobro. Llega nuevo y NO se reparte por
+            // defecto a nadie fuera de Super Admin: dejar a un cliente sin su
+            // recibo es la excepción, y quien la necesite la recibe a mano desde
+            // Configuración → Roles, donde queda quién se la dio.
+            self::RECEIPTS_PRINT_OPTIONAL,
         ]));
 
         /*

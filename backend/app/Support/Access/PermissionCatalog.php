@@ -32,6 +32,7 @@ final class PermissionCatalog
         'cash.gym' => ['label' => 'Caja del gimnasio', 'icon' => 'fitness_center', 'hint' => 'Turno de caja de membresías'],
         'receivables' => ['label' => 'Cuentas por cobrar', 'icon' => 'request_quote', 'hint' => 'Saldos pendientes, créditos y abonos'],
         'commissions' => ['label' => 'Comisiones', 'icon' => 'handshake', 'hint' => 'El piso que pagan los entrenadores por cada cliente personalizado'],
+        'receipts' => ['label' => 'Recibos de caja', 'icon' => 'receipt', 'hint' => 'La tirilla impresa de cada cobro de mostrador'],
         'plans' => ['label' => 'Planes', 'icon' => 'card_membership', 'hint' => 'Catálogo de planes y sus funciones'],
         'inventory' => ['label' => 'Inventario', 'icon' => 'inventory_2', 'hint' => 'Productos y existencias'],
         'classes' => ['label' => 'Clases y asistencia', 'icon' => 'calendar_month', 'hint' => 'Horarios, reservas, ingreso y torniquete'],
@@ -115,6 +116,7 @@ final class PermissionCatalog
         'members.export' => 'Miembros',
         'payments.export' => 'Pagos',
         'marketing.agent.manage' => 'Pausar o reactivar el agente IA',
+        'receipts.print_optional' => 'Permitir omitir la impresión de recibos',
     ];
 
     /**
@@ -152,6 +154,7 @@ final class PermissionCatalog
         'integrations.manage' => 'Conectar y desconectar WhatsApp Business.',
         'moderation.manage' => 'Sancionar, retirar contenido y resolver apelaciones.',
         'marketing.agent.manage' => 'Pausar o reactivar las respuestas automáticas del agente IA para TODAS las conversaciones de WhatsApp. En pausa los mensajes se siguen recibiendo y guardando para atenderlos a mano. Queda auditado.',
+        'receipts.print_optional' => 'Cerrar un cobro de mostrador SIN imprimir su recibo: la impresora no responde, se quedó sin papel o el cliente no lo quiere. Sin este permiso, el CRM exige imprimir y el intento de omitirlo queda registrado como denegado. Cada omisión queda con autor, hora y motivo, y el recibo se puede imprimir después desde el informe del turno.',
         'plans.transfer' => 'Cambiar de plan a un grupo de socios sin cobrar nada: conserva sus fechas, sus pagos y sus entradas usadas. Exige una simulación previa, queda auditado por lote y por socio, y se puede revertir mientras el socio no haya cambiado después.',
     ];
 

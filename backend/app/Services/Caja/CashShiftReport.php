@@ -86,6 +86,10 @@ class CashShiftReport
             ->get()
             ->map(fn (ProductSale $v) => [
                 'id' => $v->id,
+                // De qué fila sale, con el mismo vocabulario que los recibos de
+                // caja: el CRM cruza cada línea con su tirilla por aquí.
+                'source_type' => 'product_sale',
+                'source_id' => $v->id,
                 'code' => $v->code,
                 'at' => optional($v->created_at)->toIso8601String(),
                 'cashier' => $v->cashier_name,
@@ -122,6 +126,8 @@ class CashShiftReport
             ->get()
             ->map(fn (Payment $p) => [
                 'id' => $p->id,
+                'source_type' => 'payment',
+                'source_id' => $p->id,
                 'reference' => $p->reference,
                 'at' => optional($p->created_at)->toIso8601String(),
                 'member' => $p->user?->name,
@@ -168,6 +174,8 @@ class CashShiftReport
             ->get()
             ->map(fn (ReceivablePayment $a) => [
                 'id' => 'abono-'.$a->id,
+                'source_type' => 'receivable_payment',
+                'source_id' => $a->id,
                 'reference' => null,
                 'at' => optional($a->created_at)->toIso8601String(),
                 'member' => $a->receivable?->member?->full_name ?? $a->created_by_name,

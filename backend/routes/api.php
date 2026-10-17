@@ -1424,6 +1424,24 @@ Route::get('admin/caja/shifts/{shift}/pdf', [CashShiftController::class, 'pdf'])
 // Exige el permiso de SUPERVISIÓN de la caja del turno, no el de verla.
 Route::post('admin/caja/shifts/{shift}/difference', [CashShiftController::class, 'difference']);
 
+// ── Recibos térmicos de caja ──────────────────────────────────────────────
+// La tirilla de 58 mm de cada cobro de mostrador. El servidor entrega los datos
+// REALES, numera por caja y registra cada impresión; el navegador solo imprime.
+// Ninguna de estas rutas toca dinero. La puerta del mapa es «algún permiso de
+// caja»; la caja CONCRETA del recibo y la exigencia de persona las comprueba
+// ReceiptController (ver AuthorizationMap::RECEIPT_CASH_PERMISSIONS).
+// `{receipt}` y `{attempt}` son UUID y se resuelven en el controlador, no por
+// enlace implícito: así quien no tiene permiso de caja choca con la puerta antes
+// de saber si el recibo existe.
+Route::post('admin/receipts',                              [\App\Http\Controllers\Api\Admin\ReceiptController::class, 'store'])->middleware('throttle:120,1');
+Route::get('admin/receipts/{receipt}',                     [\App\Http\Controllers\Api\Admin\ReceiptController::class, 'show'])->middleware('throttle:120,1');
+Route::post('admin/receipts/{receipt}/prints',             [\App\Http\Controllers\Api\Admin\ReceiptController::class, 'startPrint'])->middleware('throttle:120,1');
+Route::patch('admin/receipts/{receipt}/prints/{attempt}',  [\App\Http\Controllers\Api\Admin\ReceiptController::class, 'finishPrint'])->middleware('throttle:120,1');
+Route::post('admin/receipts/{receipt}/skip',               [\App\Http\Controllers\Api\Admin\ReceiptController::class, 'skip'])->middleware('throttle:120,1');
+// Estado de impresión de cada operación de un turno. Misma regla que el informe:
+// la caja del TURNO decide el permiso.
+Route::get('admin/caja/shifts/{shift}/receipts',           [\App\Http\Controllers\Api\Admin\ReceiptController::class, 'shift'])->middleware('throttle:120,1');
+
 // ── Usuarios administrativos del CRM ─────────────────────────────────────────
 // Quién puede entrar y con qué rol. El permiso fino y los invariantes de Super
 // Admin los comprueba el controlador; el mapa central pone la puerta.

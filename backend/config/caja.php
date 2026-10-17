@@ -81,4 +81,36 @@ return [
         'products' => (int) env('CAJA_PRODUCTS_DEFAULT_PAYMENT_TERM_DAYS', 8),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Recibos térmicos de caja
+    |--------------------------------------------------------------------------
+    |
+    | Numeración propia por caja, sin huecos: RG-000001 en el gimnasio y
+    | RP-000001 en productos. Los prefijos distinguen la caja a simple vista en
+    | la tirilla y en el informe de cierre. NO es la numeración DIAN: esa la
+    | administra Factus y un recibo de caja no es una factura electrónica.
+    |
+    | `late_after_minutes`: un recibo emitido más tarde que esto respecto a la
+    | operación se marca `issued_late`. El que se imprime al día siguiente desde
+    | el informe del turno no es el que se le entregó al cliente en el mostrador,
+    | y eso tiene que poder verse.
+    |
+    | `business_name`: el nombre comercial que encabeza la tirilla. La razón
+    | social, el NIT, la dirección y el teléfono salen de `billing.company`
+    | (FACTUS_COMPANY_*), que es lo que ya se declara ante la DIAN.
+    |
+    */
+    'receipts' => [
+        'prefixes' => [
+            'gym' => env('CAJA_RECEIPT_PREFIX_GYM', 'RG-'),
+            'products' => env('CAJA_RECEIPT_PREFIX_PRODUCTS', 'RP-'),
+        ],
+        'number_padding' => 6,
+        'late_after_minutes' => (int) env('CAJA_RECEIPT_LATE_AFTER_MINUTES', 10),
+        'business_name' => env('CAJA_RECEIPT_BUSINESS_NAME', 'IRON BODY'),
+        'template_version' => 1,
+        'legend' => 'Este documento no es una factura electrónica de venta',
+    ],
+
 ];

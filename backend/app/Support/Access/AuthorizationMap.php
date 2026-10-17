@@ -88,6 +88,31 @@ final class AuthorizationMap
     ];
 
     /**
+     * La puerta de los RECIBOS TÉRMICOS: cualquier permiso de cualquiera de las
+     * dos cajas.
+     *
+     * Es una lista y no un `@controller` porque aquí sí hay algo que exigir en la
+     * puerta —quien no tiene ninguna caja no tiene nada que imprimir— y una lista
+     * no amplía la lista blanca del centinela.
+     *
+     * ReceiptController NO está en CONTROLLERS a propósito: allí sus lecturas
+     * resolverían a un `*.view` de dominio propio, que el token compartido
+     * obtiene por ser lectura. Lo que sigue lo hace el controlador: exige una
+     * PERSONA (el token llega hasta aquí con `cash.*.view` y allí se le cierra) y
+     * el permiso de LA CAJA del recibo o del turno concreto.
+     *
+     * @var list<string>
+     */
+    public const RECEIPT_CASH_PERMISSIONS = [
+        'cash.gym.view',
+        'cash.gym.operate',
+        'cash.gym.manage',
+        'cash.products.view',
+        'cash.products.operate',
+        'cash.products.manage',
+    ];
+
+    /**
      * Permiso por CONTROLADOR. Es el caso normal: un controlador administra un
      * dominio y todas sus acciones exigen lo mismo, con la distinción de
      * lectura/escritura resuelta en {@see resolve()} según el verbo HTTP.
@@ -366,6 +391,16 @@ final class AuthorizationMap
         'GET api/admin/caja/shifts/{shift}/pdf' => self::CONTROLLER,
         'POST api/admin/caja/shifts/{shift}/difference' => self::CONTROLLER,
 
+        // Recibos térmicos. La caja concreta y la persona las exige el
+        // controlador; omitir la impresión exige además `receipts.print_optional`
+        // (CONTROLLER_ENFORCED). Ver RECEIPT_CASH_PERMISSIONS.
+        'POST api/admin/receipts' => self::RECEIPT_CASH_PERMISSIONS,
+        'GET api/admin/receipts/{receipt}' => self::RECEIPT_CASH_PERMISSIONS,
+        'POST api/admin/receipts/{receipt}/prints' => self::RECEIPT_CASH_PERMISSIONS,
+        'PATCH api/admin/receipts/{receipt}/prints/{attempt}' => self::RECEIPT_CASH_PERMISSIONS,
+        'POST api/admin/receipts/{receipt}/skip' => self::RECEIPT_CASH_PERMISSIONS,
+        'GET api/admin/caja/shifts/{shift}/receipts' => self::RECEIPT_CASH_PERMISSIONS,
+
         // Cobro presencial de membresía: es la caja del GIMNASIO, aunque el
         // controlador sea el de pagos.
         'POST api/payments' => 'cash.gym.operate',
@@ -597,6 +632,11 @@ final class AuthorizationMap
      * porque va en el mismo POST que cualquier otro cobro. Lo decide
      * PaymentController al ver la fecha pedida.
      *
+     * Y `receipts.print_optional`: omitir la tirilla de un cobro va en la misma
+     * ruta que cualquier otra acción sobre el recibo, y quien no lo tiene no
+     * recibe un 403 en la puerta sino que su intento se REGISTRA como denegado
+     * antes de rechazarlo. Eso solo lo puede hacer el controlador.
+     *
      * Se declaran aquí para que el catálogo los ofrezca: un permiso que se
      * comprueba pero que nadie puede conceder es peor que no tenerlo.
      *
@@ -604,6 +644,7 @@ final class AuthorizationMap
      */
     private const CONTROLLER_ENFORCED = [
         'payments.backdate',
+        'receipts.print_optional',
         'cash.products.view',
         'cash.products.operate',
         'cash.products.manage',
