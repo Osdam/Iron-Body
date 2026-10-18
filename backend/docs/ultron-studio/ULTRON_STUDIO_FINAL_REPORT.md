@@ -89,4 +89,4 @@ Vista previa protegida publicada el **18-10-2026 02:56 UTC** siguiendo `ULTRON_S
 
 **Limitaciones conocidas:** datos de demostración; el borrador vive en `localStorage` de cada persona; sin backend del Studio (llega con la fase de persistencia); probado en Chrome (escritorio y emulación móvil), no en Safari/Firefox ni con gestos táctiles reales; el asistente IRON del CRM flota en la esquina inferior derecha también aquí.
 
-**Push a `main`: pendiente de autorización.** Mientras `4f7d774` no esté en `origin/main`, quien publique el CRM desde `origin/main` retiraría el Studio sin darse cuenta.
+**Push a `main`:** autorizado y hecho el 18-10-2026 (`origin/main` del CRM en `4f7d774`; del backend, en los commits de esta documentación). Publicar el CRM desde `origin/main` conserva el Studio.
