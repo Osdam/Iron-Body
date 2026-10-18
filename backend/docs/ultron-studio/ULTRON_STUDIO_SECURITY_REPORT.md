@@ -41,6 +41,8 @@
 | S2 (datos) | Baja | `ip_address` y `user_agent` del personal en un libro inmutable sin política de retención (Ley 1581) | No se persisten en esta fase: quedan `NULL` (prueba en `UltronStudioAuditTest`) |
 | S1 (datos) | Nota | El rol de la base que migra es el mismo que ejecuta: podría desactivar los disparadores | Para `devops`/`security` antes del uso real: separar el rol dueño (migra) del rol de ejecución (solo DML) |
 | P5 (datos) | Nota | La tabla de reglas no tenía disparador de borrado: un DELETE por SQL saltaría la auditoría | Disparadores `usr_forbid_delete` y `usr_forbid_truncate` (las reglas se archivan, no se borran) |
+| H-1 (tester) | Baja | La deduplicación de intentos denegados competía consigo misma: cuatro `publish` simultáneos dejaban 3–4 filas | `recordDenied()` comprueba e inserta en una transacción con `pg_advisory_xact_lock`; verificado con la pila real (20 repeticiones, una fila) |
+| H-2 (tester) | Informativo | Oráculo de existencia: un rol con una llave de escritura y sin `ultron.view` recibía 404 con un uuid inexistente y 403 con uno existente | `requirePerson()` exige `ultron.view` antes de buscar ningún recurso: siempre 403 |
 
 **Carreras reales (`tester`, pila real con `artisan serve --no-reload` y PostgreSQL 14):** 57 repeticiones sin un solo resultado incorrecto: dos `PUT draft` con la misma revisión → 200 + 409; dos primeros guardados → una sola fila; dos `POST versions` con el mismo `clientRequestId` → 201 + 200 `replayed`, una sola versión; dos `approve` simultáneos → 200 + 409 y exactamente una reseña. Además, un `POST rules` concurrente podía agotar los reintentos del código S-NNN (500): corregido con `pg_advisory_xact_lock` en PostgreSQL.
 

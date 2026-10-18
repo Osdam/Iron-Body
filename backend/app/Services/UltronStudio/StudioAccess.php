@@ -65,7 +65,14 @@ final class StudioAccess
             throw UltronStudioException::personRequired();
         }
 
-        return new self($admin);
+        // Toda ruta del Studio presupone `ultron.view`: comprobarlo aquí, antes de
+        // buscar ningún recurso, evita el oráculo de existencia (404 con un uuid
+        // inexistente frente a 403 con uno existente) para un rol con una llave
+        // de escritura y sin lectura (hallazgo H-2 del tester).
+        $access = new self($admin);
+        $access->require(self::VIEW);
+
+        return $access;
     }
 
     public function can(string $permission): bool

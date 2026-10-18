@@ -30,9 +30,12 @@ class UltronStudioHardeningTest extends TestCase
         $ana = $this->person(Admin::ROLE_ADMINISTRADOR, 'Ana');
         $uuid = $this->submittedVersion($ana);
 
-        // Solo `ultron.approve`: ni leer la versión ni aprobarla a ciegas.
+        // Solo `ultron.approve`: ni leer la versión ni aprobarla a ciegas. Y sin
+        // oráculo de existencia: un uuid inexistente también responde 403, no 404.
         $soloAprobar = $this->adminWithPermissions(['ultron.approve']);
         $this->json('GET', "/api/admin/ultron-studio/versions/{$uuid}", [], $soloAprobar)->assertStatus(403);
+        $this->json('POST', '/api/admin/ultron-studio/versions/'.Str::uuid().'/approve', ['acknowledgedWarnings' => [], 'note' => null], $soloAprobar)
+            ->assertStatus(403)->assertJsonPath('required_permission', 'ultron.view');
         $this->json('POST', "/api/admin/ultron-studio/versions/{$uuid}/approve", ['acknowledgedWarnings' => [], 'note' => null], $soloAprobar)
             ->assertStatus(403)
             ->assertJsonPath('code', 'forbidden')
