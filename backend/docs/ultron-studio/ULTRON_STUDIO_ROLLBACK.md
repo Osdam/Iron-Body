@@ -14,7 +14,7 @@ La vista previa es solo frontend y no guarda nada en el servidor: revertirla no 
 
 **Verificación tras revertir:** `version.json` público con el commit esperado, `/marketing/ultron-studio` ya no muestra el tablero (redirige al inicio o enseña el CRM sin el submenú), 0 errores en consola al navegar por Mercadeo.
 
-## Hito F (persistencia)
+## Hito F (persistencia) — desplegado el 18-10-2026; respaldo `/var/backups/ironbody/ultron-studio-f-20261018-151812/` (dump completo de la base, CRM anterior `main-GKAYY7VU.js`/`4f7d774`, entorno con el rol `iron`, caché de configuración y commit `84319be`)
 
 | Situación | Qué hacer | Pierde datos |
 |---|---|---|
