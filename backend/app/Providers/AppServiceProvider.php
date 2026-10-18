@@ -596,13 +596,21 @@ class AppServiceProvider extends ServiceProvider
             'retry_after' => (int) ($headers['Retry-After'] ?? 60),
         ], 429, $headers);
 
-        RateLimiter::for('ultron-studio-read', fn (Request $request) => Limit::perMinute(120)
-            ->by($clave($request))
-            ->response($demasiadas('Demasiadas consultas seguidas al Studio de ULTRON. Espera un momento.')));
+        // Dos techos: por credencial (el cupo normal) y por red, porque el cupo por
+        // token corre antes de autenticar y un bearer inventado por petición nunca
+        // lo alcanzaría (revisión de seguridad, H2). El de red es holgado: toda la
+        // oficina puede compartir la misma IP pública.
+        $leer = $demasiadas('Demasiadas consultas seguidas al Studio de ULTRON. Espera un momento.');
+        RateLimiter::for('ultron-studio-read', fn (Request $request) => [
+            Limit::perMinute(120)->by($clave($request))->response($leer),
+            Limit::perMinute(600)->by('ultron-studio-net:'.$request->ip())->response($leer),
+        ]);
 
-        RateLimiter::for('ultron-studio-write', fn (Request $request) => Limit::perMinute(30)
-            ->by($clave($request))
-            ->response($demasiadas('Demasiados cambios seguidos en el Studio de ULTRON. Espera un minuto.')));
+        $escribir = $demasiadas('Demasiados cambios seguidos en el Studio de ULTRON. Espera un minuto.');
+        RateLimiter::for('ultron-studio-write', fn (Request $request) => [
+            Limit::perMinute(30)->by($clave($request))->response($escribir),
+            Limit::perMinute(120)->by('ultron-studio-net:'.$request->ip())->response($escribir),
+        ]);
     }
 
     /**

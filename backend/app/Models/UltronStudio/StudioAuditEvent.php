@@ -13,8 +13,8 @@ use LogicException;
  *
  * Actualizar o borrar lanza aquí; la base lo impide además con disparadores
  * (`usae_forbid_*`), también contra TRUNCATE en PostgreSQL. El actor es una
- * instantánea sin FK. `ip_address` y `user_agent` son de la persona del CRM,
- * nunca de prospectos, y la API no los devuelve.
+ * instantánea sin FK. `ip_address` y `user_agent` existen por si una fase
+ * posterior fija una retención: hoy quedan siempre NULL y la API no los devuelve.
  *
  * @property int $id
  * @property string $event

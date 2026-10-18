@@ -39,6 +39,13 @@ final class StudioRules
     /** Tope de referencias por lista: una regla no cita medio catálogo. */
     public const MAX_REFS = 30;
 
+    /**
+     * Tope de reglas del Studio sin archivar: cada versión copia todas las
+     * reglas vivas en una fila inmutable y `GET rules` no se pagina, así que
+     * sin tope el libro crecería sin freno (revisión de seguridad, H4).
+     */
+    public const MAX_LIVE_STUDIO_RULES = 100;
+
     /** Campos que se pueden editar de una regla del Studio. */
     public const EDITABLE = ['description', 'type', 'priority', 'layers', 'refs'];
 
@@ -87,6 +94,12 @@ final class StudioRules
 
             try {
                 $regla = DB::transaction(function () use ($access, $request, $campos, $hash, $clientRequestId): StudioRule {
+                    $this->serializeCodeAllocation();
+                    $vivas = StudioRule::query()->where('source', StudioRule::SOURCE_STUDIO)->where('status', '<>', StudioRule::STATUS_ARCHIVED)->count();
+                    if ($vivas >= self::MAX_LIVE_STUDIO_RULES) {
+                        throw UltronStudioException::ruleLimitReached(self::MAX_LIVE_STUDIO_RULES);
+                    }
+
                     $yo = $access->snapshot();
                     $regla = StudioRule::query()->forceCreate($campos + [
                         'code' => $this->nextStudioCode(),
@@ -509,6 +522,16 @@ final class StudioRules
      */
     private function conditionalWrite(StudioRule $regla, int $baseRevision, array $values, bool $legacy = false): void
     {
+        // Este UPDATE no pasa por el modelo: la guarda «una regla del Studio
+        // nunca se activa ni cambia de identidad» se repite aquí en código, no
+        // solo en el CHECK de PostgreSQL (revisión de seguridad, H6).
+        if (! $legacy) {
+            $intocables = array_intersect(array_keys($values), ['source', 'enforcement', 'code', 'uuid', 'client_request_id', 'created_by_admin_id', 'created_by_name', 'origin']);
+            if ($intocables !== [] || (array_key_exists('status', $values) && $values['status'] !== StudioRule::STATUS_ARCHIVED)) {
+                throw new \LogicException('Una regla del Studio solo cambia de contenido o se archiva: '.implode(', ', array_keys($values)));
+            }
+        }
+
         $consulta = StudioRule::query()->whereKey($regla->id)->where('revision', $baseRevision);
         if (! $legacy) {
             $consulta->where('source', StudioRule::SOURCE_STUDIO)->where('status', '<>', StudioRule::STATUS_ARCHIVED);
@@ -524,6 +547,20 @@ final class StudioRules
         }
 
         throw UltronStudioException::ruleConflict($actual !== null ? $this->present([$actual])[0] : []);
+    }
+
+    /**
+     * En PostgreSQL, un cerrojo de transacción serializa a quienes crean reglas
+     * a la vez: así dos creaciones no calculan el mismo S-NNN (sin él, cuatro
+     * peticiones simultáneas agotaban los reintentos y una recibía un 500).
+     * SQLite escribe en serie por sí mismo. El UNIQUE de `code` y el reintento
+     * de {@see create()} siguen como red de seguridad.
+     */
+    private function serializeCodeAllocation(): void
+    {
+        if (DB::connection()->getDriverName() === 'pgsql') {
+            DB::statement('SELECT pg_advisory_xact_lock(?)', [crc32('ultron_studio_rules:code')]);
+        }
     }
 
     /**

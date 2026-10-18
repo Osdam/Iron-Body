@@ -169,6 +169,14 @@ class UltronStudioException extends RuntimeException
         return new self('La regla está archivada: ya no se edita ni se vuelve a archivar.', 'rule_archived');
     }
 
+    public static function ruleLimitReached(int $max): self
+    {
+        return new self(
+            "El Studio admite como mucho {$max} reglas propias sin archivar. Archiva alguna antes de crear otra.",
+            'rule_limit_reached',
+        );
+    }
+
     public static function clientRequestReused(): self
     {
         return new self(

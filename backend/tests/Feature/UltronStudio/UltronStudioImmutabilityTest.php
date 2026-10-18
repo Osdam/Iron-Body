@@ -168,9 +168,8 @@ class UltronStudioImmutabilityTest extends TestCase
         if (! $this->isPostgres()) {
             // SQLite no tiene TRUNCATE ni admite añadir CHECK: lo vigila el
             // modelo (estados alcanzables, reglas del Studio nunca activas).
-            $this->assertSame('sqlite', DB::connection()->getDriverName());
-
-            return;
+            // Se marca OMITIDA, no verde: el hueco tiene que verse en la suite.
+            $this->markTestSkipped('Solo PostgreSQL: TRUNCATE y los CHECK de dominio. Ejecuta el grupo con DB_CONNECTION=pgsql.');
         }
 
         foreach (['ultron_studio_versions', 'ultron_studio_version_reviews', 'ultron_studio_audit_events'] as $tabla) {

@@ -10,7 +10,8 @@
 | B. Diseño del Studio (capas, modelo, grafo) | **HECHO** |
 | C. Frontend visual con datos de demostración | **HECHO** → `VISUAL_IMPLEMENTATION_IN_PROGRESS` → terminado y revisado |
 | D. Vista previa protegida publicada | **PENDIENTE DE PUBLICAR** (ver «Publicación» al final) → `ULTRON_VISUAL_PREVIEW_READY` |
-| E–R. Persistencia, reglas, versiones, laboratorio, evaluación IA, Meta, Twilio, canarios, ElevenLabs, gobernanza, pruebas de integración | **NO EMPEZADOS** (autorizados como construcción, no como activación) |
+| F. Persistencia (borradores, versiones con estados, reglas, aprobaciones, auditoría, permisos `ultron.*`, catálogo servido por el backend) | **EN RAMA, NO DESPLEGADO** (18-10): backend implementado y revisado (`ULTRON_STUDIO_BACKEND_REPORT.md`, `ULTRON_STUDIO_SECURITY_REPORT.md`); integración del CRM en curso |
+| G–R. Laboratorio, evaluación IA, Meta, Twilio, canarios, ElevenLabs, vínculo versión↔conversación | **NO EMPEZADOS** (autorizados como construcción, no como activación) |
 
 ## Qué hay (clasificación honesta)
 

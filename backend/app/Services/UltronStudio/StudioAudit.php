@@ -23,8 +23,10 @@ use stdClass;
  *
  * QUÉ SE GUARDA. Los valores del `diff` son escalares de hasta 120 caracteres
  * (las listas y objetos solo agrupan escalares). El Studio no maneja datos de
- * prospectos. `ip_address` y `user_agent` son de la persona del CRM, como en
- * `AuditTrail`, y la API NUNCA los devuelve.
+ * prospectos. `ip_address` y `user_agent` quedan SIEMPRE NULL en esta fase
+ * (libro de solo inserción sin política de retención: Ley 1581); la API no los
+ * devuelve. INTENTOS DENEGADOS: una fila por persona, sujeto y evento cada diez
+ * minutos, para que nadie inunde un libro que no se puede vaciar.
  *
  * QUIÉN VE QUÉ. Cualquiera con `ultron.view` ve el libro, salvo los eventos de
  * borrador ajenos: esos solo los ve su dueño o quien tenga `audit.view`.
@@ -56,6 +58,35 @@ final class StudioAudit
         'rule.legacy_synced',
         'system.baseline_imported',
     ];
+
+    /** Ventana de deduplicación de los intentos denegados. */
+    public const DENIED_WINDOW_MINUTES = 10;
+
+    /**
+     * Un intento denegado (cuatro ojos, publicar, revertir). Como el libro no
+     * se puede vaciar, una misma persona solo deja UNA fila por sujeto, evento
+     * y resumen cada {@see DENIED_WINDOW_MINUTES}: repetir el mismo intento no
+     * inunda nada, pero aprobar y rechazar, o un motivo de rechazo distinto,
+     * sí cuentan aparte. Devuelve null cuando ya hay una fila reciente.
+     *
+     * @param  array{fromStatus?:?string,toStatus?:?string,contentHash?:?string,diff?:array<string,mixed>|null,metadata?:array<string,mixed>|null}  $extra
+     */
+    public function recordDenied(?Request $request, ?Admin $actor, string $event, string $subjectType, ?string $subjectUuid, string $summary, array $extra = []): ?StudioAuditEvent
+    {
+        $reciente = StudioAuditEvent::query()
+            ->where('event', $event)
+            ->where('subject_type', $subjectType)
+            ->where('subject_uuid', $subjectUuid)
+            ->where('actor_admin_id', $actor?->id)
+            ->where('summary', mb_substr($summary, 0, 255))
+            ->where('created_at', '>=', now()->subMinutes(self::DENIED_WINDOW_MINUTES))
+            ->exists();
+        if ($reciente) {
+            return null;
+        }
+
+        return $this->record($request, $actor, $event, $subjectType, $subjectUuid, $summary, $extra);
+    }
 
     /**
      * Escribe un evento. Con `$actor` null el actor es el sistema (el comando

@@ -23,6 +23,27 @@
 
 **Nota sobre la bandera:** `ultronStudioPreviewEnabled` quita la ruta y el submenú en ejecución, pero el chunk se sigue generando en el build. Para que la bandera retirara el chunk habría que resolverla al compilar (`fileReplacements` de un fichero de rutas). Con la poda, el chunk ya no contiene nada operativo, así que no se hizo.
 
+## Fase de persistencia (Hito F): API `/api/admin/ultron-studio/*`
+
+**Superficie nueva:** 19 rutas (status, catálogo, borrador, versiones, reglas, auditoría), cinco tablas `ultron_studio_*`, seis permisos `ultron.*`. El motor no cambia (`git diff origin/main` sobre `app/Services/Marketing`, `app/Jobs`, `app/Http/Controllers/Api/Internal`, `routes/marketing.php`, `routes/api.php` y `config/marketing.php` sale vacío) y no lee ninguna tabla del Studio. **El catálogo ya no viaja en el bundle público**: lo sirve `GET catalog` solo a quien tiene `ultron.view` (cierra H1 de la vista previa de forma estructural).
+
+**Revisión independiente (`api-security-specialist`), sobre el commit `b4e07af`:** sin hallazgos críticos, altos ni medios. Verificado con sondas reales: autorización ruta a ruta (falla cerrado, `auth:coverage --unmapped` vacío, `requirePerson()` en las 19 acciones; token compartido, roles con todo Mercadeo y admin desactivado → 403; Administrador sin `publish`/`rollback`), sin BOLA (el borrador no lleva id y filtra por la persona; un `admin_id` en el cuerpo se ignora; los DTO no llevan ids de base, correos ni `clientRequestId`), cuatro ojos por identidad (aguantan ascensos de rol a mitad del flujo y campos de creador/revisor inyectados), máquina de estados (toda transición inválida → 409; publicar/revertir → 409 siempre; en la base solo hay estados alcanzables), `clientRequestId` ajeno → 409 sin datos, entrada acotada (64 KB, JSON malformado, `baseRevision` no entero, uuid inválido, bidi/ZWSP/NUL → 422; `per_page` ≤ 100), cupos con `Retry-After`.
+
+| # | Gravedad | Hallazgo | Corrección (aplicada, con prueba) |
+|---|---|---|---|
+| H1 | Baja | Las llaves de escritura no exigían `ultron.view`: un rol personalizado con solo `ultron.approve` podía aprobar «a ciegas» copiando los avisos del 409 y leer el detalle en la respuesta | `StudioAccess::require()` exige `ultron.view` además de la llave de la acción (`UltronStudioHardeningTest`) |
+| H2 | Baja | El cupo se contaba por token antes de autenticar: un bearer inventado por petición nunca llegaba a 429 | Segundo techo por red: 600/min lectura y 120/min escritura (holgado: la oficina comparte IP). Depende de que `$request->ip()` sea la IP real tras el proxy (verificar `TrustProxies` en producción) |
+| H3 | Baja | El libro de solo inserción se podía inundar con intentos denegados (aprobar lo propio, publicar) | `StudioAudit::recordDenied()`: una fila por persona, sujeto, evento y resumen cada 10 minutos |
+| H4 | Baja | Reglas sin tope: `GET rules` sin paginar y cada versión copiaba todas las reglas en una fila inmutable | Tope de 100 reglas del Studio sin archivar → 409 `rule_limit_reached` |
+| H6 | Baja (pruebas) | La prueba de las protecciones que solo existen en PG salía en verde en SQLite sin comprobar nada; `conditionalWrite()` no pasaba por el modelo | La prueba se marca OMITIDA en SQLite (hay que correr el grupo con `DB_CONNECTION=pgsql`); `conditionalWrite()` lanza si una regla del Studio intenta cambiar de identidad o activarse |
+| H5 | Informativo | `GET rules` revela qué claves de la base de conocimiento existen y su estado (nunca su contenido) a todo `ultron.view` | **Aceptado** por contrato: `ultron.view` es de Super Admin y Administrador |
+| H7–H9 | Informativos | Ids secuenciales del libro (huecos revelan cuántos eventos ajenos hubo); el catálogo es un mapa del motor (por diseño, solo `ultron.view`); `PlainText` admite U+2028/U+2029/U+00AD (regla compartida por todo el CRM) | Aceptados; U+2028 queda anotado para `security` fuera del Studio |
+| S2 (datos) | Baja | `ip_address` y `user_agent` del personal en un libro inmutable sin política de retención (Ley 1581) | No se persisten en esta fase: quedan `NULL` (prueba en `UltronStudioAuditTest`) |
+| S1 (datos) | Nota | El rol de la base que migra es el mismo que ejecuta: podría desactivar los disparadores | Para `devops`/`security` antes del uso real: separar el rol dueño (migra) del rol de ejecución (solo DML) |
+| P5 (datos) | Nota | La tabla de reglas no tenía disparador de borrado: un DELETE por SQL saltaría la auditoría | Disparadores `usr_forbid_delete` y `usr_forbid_truncate` (las reglas se archivan, no se borran) |
+
+**Carreras reales (`tester`, pila real con `artisan serve --no-reload` y PostgreSQL 14):** 57 repeticiones sin un solo resultado incorrecto: dos `PUT draft` con la misma revisión → 200 + 409; dos primeros guardados → una sola fila; dos `POST versions` con el mismo `clientRequestId` → 201 + 200 `replayed`, una sola versión; dos `approve` simultáneos → 200 + 409 y exactamente una reseña. Además, un `POST rules` concurrente podía agotar los reintentos del código S-NNN (500): corregido con `pg_advisory_xact_lock` en PostgreSQL.
+
 ## Requisitos para las fases siguientes (recogidos de las revisiones y la auditoría)
 
 - Permisos `ultron.*` (ver, editar borrador, reglas, campañas, simulaciones, canarios, pruebas telefónicas, aprobar, publicar, revertir, ajustes) **validados en Laravel en cada endpoint**; separar quien edita, aprueba, publica y administra integraciones.

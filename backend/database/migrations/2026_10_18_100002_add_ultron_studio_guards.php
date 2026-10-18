@@ -96,6 +96,9 @@ return new class extends Migration
         'usvr_forbid_delete' => ['ultron_studio_version_reviews', 'DELETE', 'las reseñas son de solo inserción'],
         'usae_forbid_update' => ['ultron_studio_audit_events', 'UPDATE', 'la auditoría es de solo inserción'],
         'usae_forbid_delete' => ['ultron_studio_audit_events', 'DELETE', 'la auditoría es de solo inserción'],
+        // Las reglas se editan y se archivan, nunca se borran: sin esta guarda un
+        // DELETE por SQL saltaría la auditoría (propuesta P5 del especialista de datos).
+        'usr_forbid_delete' => ['ultron_studio_rules', 'DELETE', 'las reglas se archivan, no se borran'],
     ];
 
     /** Disparadores de sentencia contra TRUNCATE, solo en PG: nombre → [tabla, motivo]. */
@@ -103,6 +106,7 @@ return new class extends Migration
         'usv_forbid_truncate' => ['ultron_studio_versions', 'las versiones no se borran'],
         'usvr_forbid_truncate' => ['ultron_studio_version_reviews', 'las reseñas son de solo inserción'],
         'usae_forbid_truncate' => ['ultron_studio_audit_events', 'la auditoría es de solo inserción'],
+        'usr_forbid_truncate' => ['ultron_studio_rules', 'las reglas se archivan, no se borran'],
     ];
 
     /** CHECK de dominio, solo en PG: tabla → [nombre → [columna, valores]]. */

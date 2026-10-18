@@ -89,8 +89,13 @@ final class StudioAccess
      */
     public function require(string $permission): void
     {
-        if (! $this->can($permission)) {
-            throw UltronStudioException::forbidden($permission);
+        // Toda llave del Studio presupone VER lo que toca: si no, un rol con solo
+        // `ultron.approve` aprobaría a ciegas y leería en la respuesta el detalle
+        // que el GET le niega (revisión de seguridad de la API, H1).
+        foreach (array_unique([self::VIEW, $permission]) as $llave) {
+            if (! $this->can($llave)) {
+                throw UltronStudioException::forbidden($llave);
+            }
         }
     }
 

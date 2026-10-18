@@ -329,7 +329,7 @@ final class StudioVersions
         $access->require($action === 'rollback' ? StudioAccess::ROLLBACK : StudioAccess::PUBLISH);
         $rechazo = StudioPublishing::refusal($action);
 
-        $this->audit->record($request, $access->actor, "version.{$action}_refused", StudioAuditEvent::SUBJECT_VERSION, $version->uuid,
+        $this->audit->recordDenied($request, $access->actor, "version.{$action}_refused", StudioAuditEvent::SUBJECT_VERSION, $version->uuid,
             ($action === 'rollback' ? 'Pidió revertir' : 'Pidió publicar')." «{$version->label}»: rechazado ({$rechazo['code']})", [
                 'fromStatus' => $version->status,
                 'contentHash' => $version->content_hash,
@@ -470,7 +470,7 @@ final class StudioVersions
             return;
         }
 
-        $this->audit->record($request, $access->actor, 'version.four_eyes_denied', StudioAuditEvent::SUBJECT_VERSION, $version->uuid,
+        $this->audit->recordDenied($request, $access->actor, 'version.four_eyes_denied', StudioAuditEvent::SUBJECT_VERSION, $version->uuid,
             ($action === 'reject' ? 'Intentó rechazar' : 'Intentó aprobar')." su propia versión «{$version->label}»", [
                 'fromStatus' => $version->status,
                 'contentHash' => $version->content_hash,
