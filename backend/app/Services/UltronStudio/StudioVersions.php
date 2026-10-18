@@ -87,7 +87,7 @@ final class StudioVersions
         $access->require(StudioAccess::EDIT_DRAFT);
 
         // EL REINTENTO VA PRIMERO: el doble clic encuentra la versión del primero.
-        if ($previa = $this->replay($access, $clientRequestId, $label, $draftRevision)) {
+        if ($previa = $this->replay($access, $clientRequestId, $label, $draftRevision, $note)) {
             return ['version' => $previa, 'replayed' => true];
         }
 
@@ -545,14 +545,15 @@ final class StudioVersions
      * La misma petición repetida devuelve la versión de la primera. La misma
      * llave para otra cosa (otra persona, otra revisión, otra etiqueta) es 409.
      */
-    private function replay(StudioAccess $access, string $clientRequestId, string $label, int $draftRevision): ?StudioVersion
+    private function replay(StudioAccess $access, string $clientRequestId, string $label, int $draftRevision, ?string $note = null): ?StudioVersion
     {
         $previa = StudioVersion::query()->with('review')->where('client_request_id', strtolower($clientRequestId))->first();
         if ($previa === null) {
             return null;
         }
 
-        if (! $access->isCreator($previa) || $previa->source_draft_revision !== $draftRevision || $previa->label !== $label) {
+        // Otra persona, otra revisión, otra etiqueta u otra nota: no es la misma petición.
+        if (! $access->isCreator($previa) || $previa->source_draft_revision !== $draftRevision || $previa->label !== $label || $previa->note !== $note) {
             throw UltronStudioException::clientRequestReused();
         }
 

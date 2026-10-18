@@ -603,13 +603,13 @@ class AppServiceProvider extends ServiceProvider
         $leer = $demasiadas('Demasiadas consultas seguidas al Studio de ULTRON. Espera un momento.');
         RateLimiter::for('ultron-studio-read', fn (Request $request) => [
             Limit::perMinute(120)->by($clave($request))->response($leer),
-            Limit::perMinute(600)->by('ultron-studio-net:'.$request->ip())->response($leer),
+            Limit::perMinute(600)->by('ultron-studio-net:'.ClientNetwork::of($request->ip()))->response($leer),
         ]);
 
         $escribir = $demasiadas('Demasiados cambios seguidos en el Studio de ULTRON. Espera un minuto.');
         RateLimiter::for('ultron-studio-write', fn (Request $request) => [
             Limit::perMinute(30)->by($clave($request))->response($escribir),
-            Limit::perMinute(120)->by('ultron-studio-net:'.$request->ip())->response($escribir),
+            Limit::perMinute(120)->by('ultron-studio-net:'.ClientNetwork::of($request->ip()))->response($escribir),
         ]);
     }
 

@@ -412,3 +412,22 @@ Los eventos de éxito se escriben en la misma transacción que el cambio. Los in
 - `ultron-studio-page.spec.ts` con `HttpTestingController`.
 - Specs de los tres paneles.
 - `permission-contract.spec.ts`, más una prueba del espejo del Administrador para `ultron.*` contra `BACKEND_ROLE_DEFAULTS`.
+
+## Enmiendas tras las revisiones (18-10-2026)
+
+Cambios compatibles con el contrato, aplicados y probados (detalle en `ULTRON_STUDIO_SECURITY_REPORT.md`):
+
+| Origen | Enmienda |
+|---|---|
+| Seguridad H1 | Toda llave `ultron.*` presupone `ultron.view`; `requirePerson()` lo exige antes de buscar ningún recurso (sin oráculo de existencia: siempre 403 `forbidden` con `required_permission: ultron.view`) |
+| Seguridad H2 | Cupos: además de 120/30 por credencial, 600/120 por red (`ClientNetwork::of`, IPv6 por /64) |
+| Seguridad H3 + tester H-1 | Intentos denegados (`version.four_eyes_denied`, `version.publish_refused`, `version.rollback_refused`): una fila por persona, sujeto, evento y resumen cada 10 minutos, con cerrojo consultivo en PostgreSQL |
+| Seguridad H4 | `POST rules` → 409 **`rule_limit_reached`** (código nuevo) con 100 reglas del Studio sin archivar |
+| Seguridad H6 | `conditionalWrite()` rechaza por código que una regla del Studio cambie de identidad o se active; la prueba de CHECK/TRUNCATE se omite visiblemente en SQLite |
+| Datos S2 | `ip_address` y `user_agent` de la auditoría quedan siempre NULL |
+| Datos P5 | Disparadores `usr_forbid_delete` y `usr_forbid_truncate` en `ultron_studio_rules` (11 disparadores en PG, 7 en SQLite) |
+| Tester (carrera S-NNN) | `POST rules` toma `pg_advisory_xact_lock` antes de calcular el código |
+| Revisión final M7 | El replay de `POST versions` compara también `note` (otra nota → 409 `client_request_reused`) |
+| Revisión final I1 | El CRM enseña, al abrir una versión, las reglas copiadas en ella (`content.rules`), y en la línea base solo las del código |
+| Revisión final M5/M6 | Errores anunciados con `role="alert"`; los puntos rojos de la biblioteca siguen al servidor cuando su validación discrepa |
+| Revisión final M8 | El inspector tiene hoja de estilos propia (misma apariencia); la de la página baja de 31 kB |

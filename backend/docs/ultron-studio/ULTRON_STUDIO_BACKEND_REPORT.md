@@ -19,7 +19,7 @@
 | `ultron_studio_rules` | Reglas con estructura verificable: `code` (R-NN del código, S-NNN del Studio), `source`, `enforcement`, `status`, `layers`, `refs`, `revision` | CHECK: las del Studio nunca `active` ni con `enforcement = code`; las del código siempre `code`; disparadores de borrado (se archivan, no se borran) |
 | `ultron_studio_audit_events` | Libro de solo inserción: quién, qué, cuándo, estados, huella, `diff` | Disparadores de UPDATE/DELETE/TRUNCATE; sin IP ni user agent (quedan NULL: libro sin política de retención, Ley 1581) |
 
-Compatibles con PostgreSQL 14 y SQLite (la suite): tipo `json`, sin índices parciales, FKs creadas con la tabla. En SQLite los disparadores usan `RAISE(ABORT)`; los CHECK solo existen en PG (la prueba correspondiente se marca omitida en SQLite). Verificadas con sondas en los dos motores (`P0001`/`23514` en PG), `migrate:rollback` + `migrate`, `migrate:fresh` repetible, con un rol sin superusuario y con EXPLAIN bajo volumen de estrés (490.000 eventos de auditoría: todo por índice, < 6 ms).
+Compatibles con PostgreSQL 14 y SQLite (la suite): tipo `json`, sin índices parciales, FKs creadas con la tabla. En SQLite los disparadores usan `RAISE(ABORT)`; los CHECK solo existen en PG (la prueba correspondiente se marca omitida en SQLite). Verificadas con sondas en los dos motores (`P0001`/`23514` en PG), `migrate:rollback` + `migrate`, `migrate:fresh` repetible, con un rol sin superusuario y con EXPLAIN ANALYZE bajo volumen de estrés (20.000 borradores, 50.000 versiones, 490.000 eventos de auditoría): borrador por persona y auditoría por sujeto por sus índices (< 1 ms); versiones por estado por `usv_status_idx` salvo cuando el estado es muy frecuente en la primera página, que PostgreSQL resuelve por la clave primaria (0,4 ms); el recuento del paginador de la auditoría, 19 ms. Con el volumen real (decenas de filas) se esperan escaneos secuenciales.
 
 ## Permisos (`ultron.*`, validados en Laravel ruta a ruta)
 
@@ -57,7 +57,7 @@ Errores: `{ok:false, code, message}` (403 `forbidden` con `required_permission`,
 
 ## Pruebas
 
-Unit 144 (catálogo, validador, paridad, normalizador, huellas, exportación) · Feature 92 (permisos por matriz de 19 rutas × roles, borrador, ciclo de vida, inmutabilidad, reglas, importación, auditoría, status/catalog, aislamiento del motor, endurecimientos de la revisión de seguridad) · Access 150. En SQLite y en PostgreSQL 14 desechable. `auth:coverage --unmapped` vacío. Suite completa con los mismos fallos preexistentes de la línea base del día.
+Unit 144 (catálogo, validador, paridad, normalizador, huellas, exportación) · Feature 93 (permisos por matriz de 19 rutas × roles, borrador, ciclo de vida, inmutabilidad, reglas, importación, auditoría, status/catalog, aislamiento del motor, endurecimientos de las revisiones: `UltronStudioHardeningTest`) · Access 150. En SQLite y en PostgreSQL 14 desechable. `auth:coverage --unmapped` vacío. Suite completa con los mismos fallos preexistentes de la línea base del día.
 
 ## Lo que el backend no deja cambiar desde el Studio
 

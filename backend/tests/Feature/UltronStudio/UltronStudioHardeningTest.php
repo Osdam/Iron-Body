@@ -4,11 +4,13 @@ namespace Tests\Feature\UltronStudio;
 
 use App\Models\Admin;
 use App\Models\UltronStudio\StudioAuditEvent;
+use App\Models\UltronStudio\StudioRule;
 use App\Models\UltronStudio\StudioVersion;
 use App\Services\UltronStudio\StudioAudit;
 use App\Services\UltronStudio\StudioRules;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -79,27 +81,60 @@ class UltronStudioHardeningTest extends TestCase
     public function test_las_reglas_del_studio_tienen_tope_y_las_archivadas_no_cuentan(): void
     {
         // Cien creaciones seguidas superan el cupo de escritura (30/min), que aquí no es lo que se prueba.
-        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+        $this->withoutMiddleware(ThrottleRequests::class);
         $ana = $this->person(Admin::ROLE_ADMINISTRADOR, 'Ana');
-        $nueva = fn (int $i) => $this->studio('POST', 'rules', $ana, [
+        $cuerpo = fn (int $i, string $clientRequestId) => [
             'description' => "Regla de prueba número {$i} para el tope",
             'type' => 'restriction',
             'priority' => 'normal',
             'layers' => ['composer'],
-            'clientRequestId' => (string) Str::uuid(),
-        ]);
+            'clientRequestId' => $clientRequestId,
+        ];
+        $nueva = fn (int $i, ?string $clientRequestId = null) => $this->studio('POST', 'rules', $ana, $cuerpo($i, $clientRequestId ?? (string) Str::uuid()));
 
         $primera = null;
+        $idPrimera = (string) Str::uuid();
         for ($i = 1; $i <= StudioRules::MAX_LIVE_STUDIO_RULES; $i++) {
-            $r = $nueva($i)->assertCreated();
+            $r = $nueva($i, $i === 1 ? $idPrimera : null)->assertCreated();
             $primera ??= $r->json('data');
         }
         $nueva(0)->assertStatus(409)->assertJsonPath('code', 'rule_limit_reached');
 
-        // Archivar una libera un hueco; repetir una creación existente sigue siendo replay.
+        // Con el tope alcanzado, repetir una creación ya hecha sigue siendo replay (200), no 409.
+        $nueva(1, $idPrimera)->assertOk()->assertJsonPath('replayed', true)->assertJsonPath('data.code', $primera['code']);
+
+        // Archivar una libera un hueco.
         $this->studio('POST', "rules/{$primera['uuid']}/archive", $ana, ['baseRevision' => $primera['revision'], 'reason' => 'Hace hueco para la prueba'])->assertOk();
         $nueva(0)->assertCreated();
         $this->assertSame(StudioRules::MAX_LIVE_STUDIO_RULES, DB::table('ultron_studio_rules')->where('source', 'studio')->where('status', '<>', 'archived')->count());
+    }
+
+    public function test_la_escritura_condicionada_no_deja_activar_ni_cambiar_de_identidad_a_una_regla_del_studio(): void
+    {
+        $ana = $this->person(Admin::ROLE_ADMINISTRADOR, 'Ana');
+        $regla = $this->studio('POST', 'rules', $ana, [
+            'description' => 'Regla del Studio para probar la guarda de escritura',
+            'type' => 'restriction',
+            'priority' => 'normal',
+            'layers' => ['composer'],
+            'clientRequestId' => (string) Str::uuid(),
+        ])->assertCreated()->json('data');
+        $modelo = StudioRule::query()->where('uuid', $regla['uuid'])->sole();
+
+        // La guarda vive en código (además del CHECK de PostgreSQL): el UPDATE
+        // del constructor de consultas no pasa por el modelo.
+        $metodo = new \ReflectionMethod(StudioRules::class, 'conditionalWrite');
+        $servicio = app(StudioRules::class);
+        foreach ([['status' => 'active'], ['enforcement' => 'code'], ['source' => 'legacy_baseline'], ['code' => 'R-99']] as $valores) {
+            try {
+                $metodo->invoke($servicio, $modelo, $modelo->revision, $valores);
+                $this->fail('Tendría que lanzar: '.json_encode($valores));
+            } catch (\LogicException $e) {
+                $this->assertStringContainsString('solo cambia de contenido o se archiva', $e->getMessage());
+            }
+        }
+        $this->assertSame('draft', $modelo->fresh()->status);
+        $this->assertSame('none', $modelo->fresh()->enforcement);
     }
 
     public function test_una_regla_no_se_borra_ni_por_sql(): void
