@@ -51,12 +51,12 @@ class ExportStudioFixturesCommandTest extends TestCase
         return substr($ts, $inicio, $fin - $inicio);
     }
 
-    public function test_it_writes_both_files_and_creates_the_testing_folder_inside_an_existing_one(): void
+    public function test_it_writes_the_three_files_and_creates_the_testing_folder_inside_an_existing_one(): void
     {
         $destino = $this->dir.'/testing';
 
         $this->artisan('ultron-studio:export-fixtures', ['--path' => $destino])
-            ->expectsOutputToContain('casos de paridad exportados')
+            ->expectsOutputToContain('de coherencia exportados')
             ->assertSuccessful();
 
         $catalogo = (string) file_get_contents($destino.'/'.ExportStudioFixturesCommand::CATALOG_FILE);
@@ -73,6 +73,15 @@ class ExportStudioFixturesCommandTest extends TestCase
         $original = rtrim((string) file_get_contents(base_path('tests/fixtures/ultron-studio/validation-cases.json')));
         $this->assertSame($original, self::literal($casos, 'BACKEND_VALIDATION_CASES'), 'los casos viajan tal cual');
         $this->assertStringContainsString('"configs": {}', $casos, 'un objeto vacío sigue siendo un objeto');
+
+        // Hito G: los casos de coherencia, tal cual; el catálogo lleva las claves nuevas.
+        $coherencia = (string) file_get_contents($destino.'/'.ExportStudioFixturesCommand::COHERENCE_FILE);
+        $this->assertStringStartsWith('// Casos de paridad de la coherencia', $coherencia);
+        $this->assertStringEndsWith(" as const;\n", $coherencia);
+        $originalG = rtrim((string) file_get_contents(base_path('tests/fixtures/ultron-studio/coherence-cases.json')));
+        $this->assertSame($originalG, self::literal($coherencia, 'BACKEND_COHERENCE_CASES'), 'los casos de coherencia viajan tal cual');
+        $this->assertArrayHasKey('bindings', json_decode($json, true, 512, JSON_THROW_ON_ERROR));
+        $this->assertArrayHasKey('legacyConditions', json_decode($json, true, 512, JSON_THROW_ON_ERROR));
     }
 
     public function test_it_refuses_a_path_whose_parent_does_not_exist(): void
@@ -94,5 +103,6 @@ class ExportStudioFixturesCommandTest extends TestCase
 
         $this->assertStringContainsString('BACKEND_STUDIO_CATALOG', (string) file_get_contents($this->dir.'/'.ExportStudioFixturesCommand::CATALOG_FILE));
         $this->assertFileExists($this->dir.'/'.ExportStudioFixturesCommand::CASES_FILE);
+        $this->assertFileExists($this->dir.'/'.ExportStudioFixturesCommand::COHERENCE_FILE);
     }
 }

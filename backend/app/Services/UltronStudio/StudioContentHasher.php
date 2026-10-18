@@ -17,8 +17,16 @@ use InvalidArgumentException;
  * Lo que entra en cada huella es lo que decide el COMPORTAMIENTO:
  *
  *  - Borrador: `{catalogVersion, definition, configs}`.
- *  - Versión: lo mismo más las reglas, ordenadas por código.
- *  - Regla: `{description, type, layers, priority, refs, origin}`.
+ *  - Versión: lo mismo más las reglas, ordenadas por código. Depende del
+ *    FORMATO del contenido (`content.format ?? 1`, contrato G §A7):
+ *      · formato 1 (F): exactamente lo de F, {@see VERSION_RULE_FIELDS};
+ *      · formato 2 (G): además `conditions` en cada regla (null incluido) y
+ *        `format` dentro del comportamiento.
+ *    Un formato desconocido no se firma (InvalidArgumentException): la
+ *    integridad de una versión así es `false`, nunca la de otro formato.
+ *  - Regla: `{description, type, layers, priority, refs, origin}`, más
+ *    `conditions` SOLO cuando no es null: las reglas sin condiciones
+ *    conservan la huella de F.
  *
  * La disposición del lienzo (posiciones y vista) NO cuenta: mover un nodo no
  * cambia lo que hace el agente, así que dos versiones con el mismo
@@ -30,8 +38,20 @@ final class StudioContentHasher
 {
     public const JSON_FLAGS = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR;
 
-    /** Lo que se copia de cada regla dentro de una versión. */
+    /** Formato del contenido de las versiones de F (sin `format` en el contenido). */
+    public const FORMAT_1 = 1;
+
+    /** Formato del contenido de las versiones de G: reglas con `conditions`. */
+    public const FORMAT_2 = 2;
+
+    /** El formato con el que se crean las versiones nuevas. */
+    public const LATEST_FORMAT = self::FORMAT_2;
+
+    /** Lo que se copia de cada regla dentro de una versión de formato 1. */
     public const VERSION_RULE_FIELDS = ['code', 'revision', 'source', 'enforcement', 'status', 'description', 'type', 'layers', 'priority', 'refs'];
+
+    /** Lo que se copia de cada regla dentro de una versión de formato 2. */
+    public const VERSION_RULE_FIELDS_FORMAT_2 = [...self::VERSION_RULE_FIELDS, 'conditions'];
 
     /** Lo que identifica el contenido de una regla (sin estado ni revisión). */
     public const RULE_FIELDS = ['description', 'type', 'layers', 'priority', 'refs', 'origin'];
@@ -49,28 +69,80 @@ final class StudioContentHasher
 
     /**
      * Huella de una versión: la del borrador más sus reglas, ordenadas por
-     * código y reducidas a {@see VERSION_RULE_FIELDS}. Lo demás de cada regla
-     * (uuid, fechas, autor) no cambia el comportamiento.
+     * código y reducidas a los campos de su formato ({@see versionRuleFields()}).
+     * Lo demás de cada regla (uuid, fechas, autor) no cambia el comportamiento.
+     * El formato sale del propio contenido ({@see format()}).
      *
      * @param  array<string,mixed>  $content
      * @param  list<array<string,mixed>>  $rules
+     *
+     * @throws InvalidArgumentException si el formato es desconocido o falta un campo
      */
     public static function versionHash(string $catalogVersion, array $content, array $rules): string
     {
-        $copia = array_map(static fn (array $rule): array => self::pick($rule, self::VERSION_RULE_FIELDS), $rules);
+        $formato = self::format($content);
+        $campos = self::versionRuleFields($formato);
+
+        $copia = array_map(static fn (array $rule): array => self::pick($rule, $campos), $rules);
         usort($copia, static fn (array $a, array $b): int => strcmp((string) $a['code'], (string) $b['code']));
 
-        return self::hash(self::behaviour($catalogVersion, $content) + ['rules' => $copia]);
+        $comportamiento = self::behaviour($catalogVersion, $content);
+        if ($formato !== self::FORMAT_1) {
+            $comportamiento['format'] = $formato;
+        }
+
+        return self::hash($comportamiento + ['rules' => $copia]);
     }
 
     /**
-     * Huella del contenido de una regla.
+     * El formato del contenido de una versión: `content.format ?? 1`. Solo
+     * existen el 1 (F) y el 2 (G); cualquier otro valor es un error, no un
+     * formato por defecto.
+     *
+     * @param  array<string,mixed>  $content
+     *
+     * @throws InvalidArgumentException
+     */
+    public static function format(array $content): int
+    {
+        $formato = $content['format'] ?? self::FORMAT_1;
+        if ($formato !== self::FORMAT_1 && $formato !== self::FORMAT_2) {
+            throw new InvalidArgumentException('Formato de contenido desconocido.');
+        }
+
+        return $formato;
+    }
+
+    /**
+     * Los campos de cada regla que copia (y firma) una versión de ese formato.
+     *
+     * @return list<string>
+     *
+     * @throws InvalidArgumentException
+     */
+    public static function versionRuleFields(int $format): array
+    {
+        return match ($format) {
+            self::FORMAT_1 => self::VERSION_RULE_FIELDS,
+            self::FORMAT_2 => self::VERSION_RULE_FIELDS_FORMAT_2,
+            default => throw new InvalidArgumentException('Formato de contenido desconocido.'),
+        };
+    }
+
+    /**
+     * Huella del contenido de una regla. `conditions` entra SOLO si no es
+     * null: así una regla documental (todas las de F) conserva su huella.
      *
      * @param  array<string,mixed>  $rule
      */
     public static function ruleHash(array $rule): string
     {
-        return self::hash(self::pick($rule, self::RULE_FIELDS));
+        $campos = self::pick($rule, self::RULE_FIELDS);
+        if (($rule['conditions'] ?? null) !== null) {
+            $campos['conditions'] = $rule['conditions'];
+        }
+
+        return self::hash($campos);
     }
 
     /** sha256 (hex, 64 caracteres) del JSON canónico de `$value`. */

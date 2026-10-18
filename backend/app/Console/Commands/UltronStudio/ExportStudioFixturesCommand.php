@@ -7,7 +7,7 @@ use Illuminate\Console\Command;
 use JsonException;
 
 /**
- * Vuelca el catálogo de ULTRON STUDIO y los casos de paridad a dos ficheros
+ * Vuelca el catálogo de ULTRON STUDIO y los casos de paridad a tres ficheros
  * que las pruebas del CRM puedan importar.
  *
  * Existe porque el CRM valida el borrador en vivo mientras se edita y el
@@ -17,24 +17,34 @@ use JsonException;
  * leyendo un solo repositorio.
  *
  *  - `backend-studio-catalog.testing.ts`: StudioCatalog::toArray(), la forma
- *    exacta de `GET catalog`.
+ *    exacta de `GET catalog` (con `bindings`, `readings` y `legacyConditions`
+ *    desde el Hito G).
  *  - `backend-validation-cases.testing.ts`: los casos de
  *    `tests/fixtures/ultron-studio/validation-cases.json` tal cual, con la
  *    salida esperada de la referencia. El backend los cumple
  *    (StudioValidationParityTest) y el CRM tiene que cumplirlos también.
+ *  - `backend-coherence-cases.testing.ts` (Hito G): los casos de
+ *    `tests/fixtures/ultron-studio/coherence-cases.json` tal cual. Los escribe
+ *    el tester desde el contrato; el backend los cumple
+ *    (StudioCoherenceParityTest) y el CRM también.
  *
  * No autoriza nada ni se usa en tiempo de ejecución: es un contrato
  * comprobable entre dos repositorios.
  */
 class ExportStudioFixturesCommand extends Command
 {
-    protected $signature = 'ultron-studio:export-fixtures {--path= : directorio donde escribir los dos .ts}';
+    protected $signature = 'ultron-studio:export-fixtures {--path= : directorio donde escribir los tres .ts}';
 
     protected $description = 'Exporta el catálogo de ULTRON STUDIO y los casos de paridad para las pruebas del CRM';
 
     public const CATALOG_FILE = 'backend-studio-catalog.testing.ts';
 
     public const CASES_FILE = 'backend-validation-cases.testing.ts';
+
+    public const COHERENCE_FILE = 'backend-coherence-cases.testing.ts';
+
+    /** Las listas que tiene que traer el fixture de coherencia (versión 1). */
+    public const COHERENCE_SECTIONS = ['canonicalize', 'analyze', 'conflicts', 'evaluate'];
 
     public function handle(): int
     {
@@ -79,6 +89,29 @@ class ExportStudioFixturesCommand extends Command
             return self::FAILURE;
         }
 
+        // Los de coherencia también se copian tal cual. Sin ellos no se exporta
+        // nada: el CRM se quedaría con un juego de casos a medias.
+        $origenCoherencia = base_path('tests/fixtures/ultron-studio/coherence-cases.json');
+        $coherencia = is_file($origenCoherencia) ? file_get_contents($origenCoherencia) : false;
+        if ($coherencia === false) {
+            $this->error('No se encuentran los casos de coherencia: '.$origenCoherencia);
+
+            return self::FAILURE;
+        }
+        try {
+            $fixtureCoherencia = json_decode($coherencia, true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            $this->error('Los casos de coherencia no son JSON válido: '.$origenCoherencia);
+
+            return self::FAILURE;
+        }
+        $secciones = is_array($fixtureCoherencia) ? array_filter(self::COHERENCE_SECTIONS, static fn (string $s): bool => is_array($fixtureCoherencia[$s] ?? null)) : [];
+        if (! is_array($fixtureCoherencia) || ($fixtureCoherencia['version'] ?? null) !== 1 || count($secciones) !== count(self::COHERENCE_SECTIONS)) {
+            $this->error('Los casos de coherencia no tienen la forma esperada (version 1 con '.implode(', ', self::COHERENCE_SECTIONS).').');
+
+            return self::FAILURE;
+        }
+
         $catalogo = StudioCatalog::toArray();
         $version = StudioCatalog::VERSION;
         $huella = StudioCatalog::hash();
@@ -118,10 +151,31 @@ class ExportStudioFixturesCommand extends Command
 
         TS;
 
+        $totalCoherencia = array_sum(array_map(static fn (string $s): int => count($fixtureCoherencia[$s]), self::COHERENCE_SECTIONS));
+        $cuerpoCoherencia = rtrim($coherencia);
+
+        $contenidoCoherencia = <<<TS
+        // Casos de paridad de la coherencia de las reglas de ULTRON STUDIO (Hito G).
+        //
+        // GENERADO — no editar a mano. Lo produce el comando de artisan
+        // `ultron-studio:export-fixtures` copiando tal cual
+        // tests/fixtures/ultron-studio/coherence-cases.json del backend.
+        //
+        // Los casos los escribió el tester desde el contrato (§A3 y §A9), no los
+        // generó ninguna de las dos implementaciones. El backend los cumple
+        // exactamente (StudioCoherenceParityTest) y el CRM tiene que hacer lo
+        // mismo (studio-rules-coherence.parity.spec.ts). Si alguno discrepa, se
+        // corrige la implementación; el fixture solo cambia con una enmienda del
+        // contrato. Catálogo: siempre BACKEND_STUDIO_CATALOG.
+        export const BACKEND_COHERENCE_CASES = {$cuerpoCoherencia} as const;
+
+        TS;
+
         file_put_contents($destino.'/'.self::CATALOG_FILE, $contenidoCatalogo);
         file_put_contents($destino.'/'.self::CASES_FILE, $contenidoCasos);
+        file_put_contents($destino.'/'.self::COHERENCE_FILE, $contenidoCoherencia);
 
-        $this->info("Catálogo {$version} y {$total} casos de paridad exportados a {$destino}");
+        $this->info("Catálogo {$version}, {$total} casos de paridad y {$totalCoherencia} de coherencia exportados a {$destino}");
 
         return self::SUCCESS;
     }

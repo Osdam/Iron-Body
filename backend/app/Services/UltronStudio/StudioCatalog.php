@@ -19,13 +19,22 @@ namespace App\Services\UltronStudio;
  *
  * Nada de esto lo lee el motor de ULTRON: describe el motor, no lo gobierna.
  *
+ * HITO G (contrato §A2 y §A3). Además del grafo, el catálogo dice de cada
+ * parámetro qué mando real tiene en el motor (`bindings`: origen, si su valor
+ * se lee en vivo, se declara o no existe, y quién lo cambia DE VERDAD), qué
+ * otras lecturas del motor enseña el inspector (`readings`) y las condiciones
+ * de las reglas del código (`legacyConditions`), que son controles del motor
+ * para la coherencia de las reglas. Las restricciones que equivalen a una
+ * regla del código la nombran (`rule`). Nada de eso cambia el grafo: los datos
+ * de {@see graph()} son los de F, más la clave `rule`, que el validador ignora.
+ *
  * VERSIÓN. Cambiar cualquier dato obliga a subir VERSION (una prueba fija la
  * huella de cada versión) y a volver a exportar los fixtures del CRM con
  * `ultron-studio:export-fixtures`.
  */
 final class StudioCatalog
 {
-    public const VERSION = '2026-10-18.1';
+    public const VERSION = '2026-10-19.1';
 
     /** Nombre de la línea base del código y del lote de reglas que se importa de él. */
     public const BASELINE_LABEL = 'LEGACY_BASELINE_V1';
@@ -39,10 +48,13 @@ final class StudioCatalog
 
     /**
      * La forma de `GET catalog`: la de `StudioCatalog`, `LayerParameter` y
-     * `StudioDefaults` del CRM más `version`, `hash`, `parameters` y `baseline`.
+     * `StudioDefaults` del CRM más `version`, `hash`, `parameters` y `baseline`,
+     * y desde G `bindings`, `readings` y `legacyConditions`.
      * Las claves opcionales (`feedback`, `opensTurn`, `options`, `min`, `max`,
      * `step`, `important`, `consequence`, `forbidden`, `when`, `requires`,
-     * `forbids`) se OMITEN donde no aplican: nunca valen `false`.
+     * `forbids`, `rule`, `declaredValue`, `engineOption`) se OMITEN donde no
+     * aplican: nunca valen `false` por defecto (`declaredValue` sí puede valer
+     * `false`: es el valor que el código fija).
      *
      * @return array<string,mixed>
      */
@@ -101,6 +113,42 @@ final class StudioCatalog
         return array_column(self::data()['layers'], 'id');
     }
 
+    /**
+     * El mando real de cada parámetro (contrato §A2): capa → parámetro →
+     * `{origin, valueSource, declaredValue?, engineOption?, comparable, effect, changeVia}`.
+     * `live` = lo enseña `GET engine/readings`; `declared` = el valor que fija
+     * el código (`declaredValue`); `none` = no hay un valor único que leer.
+     *
+     * @return array<string,array<string,array<string,mixed>>>
+     */
+    public static function bindings(): array
+    {
+        return self::data()['bindings'];
+    }
+
+    /**
+     * Las lecturas del motor que no son parámetros (contrato §A2): pausa,
+     * freno, canario del cobro, base de conocimiento y planes.
+     *
+     * @return list<array{id:string,layer:string,label:string,origin:string,effect:string,changeVia:string}>
+     */
+    public static function readings(): array
+    {
+        return self::data()['readings'];
+    }
+
+    /**
+     * Las condiciones de las reglas del código que tienen (R-01, R-02, R-07 y
+     * R-12), por código: los controles del motor que la coherencia de las
+     * reglas del Studio usa en los dos lados (contrato §A3).
+     *
+     * @return array<string,array{when:list<array<string,mixed>>,then:list<array<string,mixed>>}>
+     */
+    public static function legacyConditions(): array
+    {
+        return self::data()['legacyConditions'];
+    }
+
     /** sha256 del JSON canónico de {@see toArray()} sin la propia huella. */
     public static function hash(): string
     {
@@ -113,23 +161,45 @@ final class StudioCatalog
      * tabla de reglas como reglas del código. `refs` señala los parámetros,
      * aristas y categorías de conocimiento sobre los que actúa cada una.
      *
-     * @return list<array{code:string,description:string,type:string,layers:list<string>,priority:string,origin:string,status:string,refs:array{configs:list<array{layer:string,key:string}>,edges:list<string>,knowledgeKeys:list<string>,knowledgeCategories:list<string>}}>
+     * `conditions` (Hito G, contrato §A3, sin inventar): solo las cuatro reglas
+     * que equivalen a una restricción del catálogo (`hechos`→R-01,
+     * `descuentos`→R-02, `derivacion`→R-07, `canario`→R-12) tienen condiciones;
+     * el resto vale null (regla documental). La condición de texto de R-02 es
+     * parcial y documental: el código aplica más patrones de los tres que cita
+     * su descripción. Las aristas de `refs.edges` salen de la auditoría §5.
+     *
+     * @return list<array{code:string,description:string,type:string,layers:list<string>,priority:string,origin:string,status:string,refs:array{configs:list<array{layer:string,key:string}>,edges:list<string>,knowledgeKeys:list<string>,knowledgeCategories:list<string>},conditions:array{when:list<array<string,mixed>>,then:list<array<string,mixed>>}|null}>
      */
     public static function legacyRules(): array
     {
         return [
-            ['code' => 'R-01', 'description' => 'El precio solo sale del catálogo, mediante el marcador PLAN_PRICE que resuelve el commit; el modelo nunca ve una cifra.', 'type' => 'restriction', 'layers' => ['knowledge', 'composer', 'rules'], 'priority' => 'critical', 'origin' => 'UltronDraftPlaceholders · OutboundContentGuard', 'status' => 'active', 'refs' => self::refs([['layer' => 'knowledge', 'key' => 'strictFacts']])],
-            ['code' => 'R-02', 'description' => 'Ningún descuento: «gratis», «2x1» y «precio especial» cuentan como descuento y el commit los rechaza.', 'type' => 'restriction', 'layers' => ['strategy', 'rules'], 'priority' => 'critical', 'origin' => 'SalesAgentDecisionSchema (patrones de descuento)', 'status' => 'active', 'refs' => self::refs([['layer' => 'strategy', 'key' => 'discountsAllowed']])],
-            ['code' => 'R-03', 'description' => 'Nunca URLs ni datos de tarjeta en una respuesta.', 'type' => 'restriction', 'layers' => ['rules', 'composer'], 'priority' => 'critical', 'origin' => 'OutboundContentGuard::inspect', 'status' => 'active', 'refs' => self::refs()],
-            ['code' => 'R-04', 'description' => 'No afirma un pago ni acepta una captura como prueba: solo lo que dice Wompi.', 'type' => 'restriction', 'layers' => ['memory', 'rules'], 'priority' => 'critical', 'origin' => 'PaymentFactGuard', 'status' => 'active', 'refs' => self::refs()],
-            ['code' => 'R-05', 'description' => 'No afirma fechas ni estado de membresía sin hechos del CRM.', 'type' => 'restriction', 'layers' => ['memory', 'rules'], 'priority' => 'critical', 'origin' => 'MembershipFactGuard', 'status' => 'active', 'refs' => self::refs()],
-            ['code' => 'R-06', 'description' => 'No promete acciones futuras ni efectos que no ocurren; una cortesía se registra como solicitud, nunca como confirmación.', 'type' => 'restriction', 'layers' => ['composer', 'rules'], 'priority' => 'critical', 'origin' => 'PromiseAuthority · CourtesyAuthority', 'status' => 'active', 'refs' => self::refs()],
-            ['code' => 'R-07', 'description' => 'Solo deriva a una persona si la petición está corroborada.', 'type' => 'condition', 'layers' => ['intent', 'rules'], 'priority' => 'high', 'origin' => 'HumanHandoffAuthority', 'status' => 'active', 'refs' => self::refs([['layer' => 'rules', 'key' => 'handoffOnlyCorroborated']])],
-            ['code' => 'R-08', 'description' => 'Ante un saludo, recepción sin vender; a quien pide información, primero se le informa; no se saluda dos veces.', 'type' => 'condition', 'layers' => ['intent', 'strategy'], 'priority' => 'high', 'origin' => 'SalesIntents::isPureGreeting · CommercialTurnPolicy', 'status' => 'active', 'refs' => self::refs()],
-            ['code' => 'R-09', 'description' => 'El plan que nombra la persona manda; si no, el plan insignia. No se le vende a alguien el plan que ya tiene, salvo renovación.', 'type' => 'condition', 'layers' => ['strategy', 'rules'], 'priority' => 'high', 'origin' => 'CommercialTurnPolicy · UltronCommitService (reventa)', 'status' => 'active', 'refs' => self::refs()],
-            ['code' => 'R-10', 'description' => 'Superlativos solo si están en brand_copy; sin presión ni urgencia inventada.', 'type' => 'style', 'layers' => ['persona', 'composer'], 'priority' => 'normal', 'origin' => 'ComposerStyleGuard', 'status' => 'active', 'refs' => self::refs([], ['brand_copy', 'tone'])],
-            ['code' => 'R-11', 'description' => 'No escribe a quien pidió no recibir mensajes, ni a otro lead con el mismo teléfono que lo haya pedido.', 'type' => 'restriction', 'layers' => ['context', 'integrations'], 'priority' => 'critical', 'origin' => 'ConsentAuthority · MarketingMessageDispatcher', 'status' => 'active', 'refs' => self::refs()],
-            ['code' => 'R-12', 'description' => 'Solo la conversación canaria entra en ULTRON; el resto lo atiende una persona.', 'type' => 'permission', 'layers' => ['governance', 'integrations'], 'priority' => 'high', 'origin' => 'UltronEventEmitter · UltronCommitService (canario)', 'status' => 'active', 'refs' => self::refs([['layer' => 'governance', 'key' => 'canaryOnly']])],
+            ['code' => 'R-01', 'description' => 'El precio solo sale del catálogo, mediante el marcador PLAN_PRICE que resuelve el commit; el modelo nunca ve una cifra.', 'type' => 'restriction', 'layers' => ['knowledge', 'composer', 'rules'], 'priority' => 'critical', 'origin' => 'UltronDraftPlaceholders · OutboundContentGuard', 'status' => 'active',
+                // Auditoría §5: «planes → plan y precio» en el commit (E19) y los marcadores al redactor (E07).
+                'refs' => self::refs([['layer' => 'knowledge', 'key' => 'strictFacts']], [], ['E07', 'E19']),
+                'conditions' => ['when' => [], 'then' => [self::requireEq('knowledge', 'strictFacts', true)]]],
+            ['code' => 'R-02', 'description' => 'Ningún descuento: «gratis», «2x1» y «precio especial» cuentan como descuento y el commit los rechaza.', 'type' => 'restriction', 'layers' => ['strategy', 'rules'], 'priority' => 'critical', 'origin' => 'SalesAgentDecisionSchema (patrones de descuento)', 'status' => 'active',
+                'refs' => self::refs([['layer' => 'strategy', 'key' => 'discountsAllowed']]),
+                'conditions' => ['when' => [], 'then' => [
+                    self::requireEq('strategy', 'discountsAllowed', false),
+                    ['kind' => 'forbid', 'target' => 'text', 'op' => 'contains', 'phrases' => ['gratis', '2x1', 'precio especial']],
+                ]]],
+            ['code' => 'R-03', 'description' => 'Nunca URLs ni datos de tarjeta en una respuesta.', 'type' => 'restriction', 'layers' => ['rules', 'composer'], 'priority' => 'critical', 'origin' => 'OutboundContentGuard::inspect', 'status' => 'active', 'refs' => self::refs(), 'conditions' => null],
+            // R-04, R-05 y R-09, auditoría §5: pago, membresía y perfil → commit (la etiqueta de E18 lo dice tal cual).
+            ['code' => 'R-04', 'description' => 'No afirma un pago ni acepta una captura como prueba: solo lo que dice Wompi.', 'type' => 'restriction', 'layers' => ['memory', 'rules'], 'priority' => 'critical', 'origin' => 'PaymentFactGuard', 'status' => 'active', 'refs' => self::refs([], [], ['E18']), 'conditions' => null],
+            ['code' => 'R-05', 'description' => 'No afirma fechas ni estado de membresía sin hechos del CRM.', 'type' => 'restriction', 'layers' => ['memory', 'rules'], 'priority' => 'critical', 'origin' => 'MembershipFactGuard', 'status' => 'active', 'refs' => self::refs([], [], ['E18']), 'conditions' => null],
+            ['code' => 'R-06', 'description' => 'No promete acciones futuras ni efectos que no ocurren; una cortesía se registra como solicitud, nunca como confirmación.', 'type' => 'restriction', 'layers' => ['composer', 'rules'], 'priority' => 'critical', 'origin' => 'PromiseAuthority · CourtesyAuthority', 'status' => 'active', 'refs' => self::refs(), 'conditions' => null],
+            ['code' => 'R-07', 'description' => 'Solo deriva a una persona si la petición está corroborada.', 'type' => 'condition', 'layers' => ['intent', 'rules'], 'priority' => 'high', 'origin' => 'HumanHandoffAuthority', 'status' => 'active',
+                'refs' => self::refs([['layer' => 'rules', 'key' => 'handoffOnlyCorroborated']]),
+                'conditions' => ['when' => [], 'then' => [self::requireEq('rules', 'handoffOnlyCorroborated', true)]]],
+            ['code' => 'R-08', 'description' => 'Ante un saludo, recepción sin vender; a quien pide información, primero se le informa; no se saluda dos veces.', 'type' => 'condition', 'layers' => ['intent', 'strategy'], 'priority' => 'high', 'origin' => 'SalesIntents::isPureGreeting · CommercialTurnPolicy', 'status' => 'active', 'refs' => self::refs(), 'conditions' => null],
+            ['code' => 'R-09', 'description' => 'El plan que nombra la persona manda; si no, el plan insignia. No se le vende a alguien el plan que ya tiene, salvo renovación.', 'type' => 'condition', 'layers' => ['strategy', 'rules'], 'priority' => 'high', 'origin' => 'CommercialTurnPolicy · UltronCommitService (reventa)', 'status' => 'active', 'refs' => self::refs([], [], ['E18']), 'conditions' => null],
+            // Auditoría §5: `brand_copy` → ComposerStyleGuard en el commit (E19); E08 lleva brand_copy al redactor.
+            ['code' => 'R-10', 'description' => 'Superlativos solo si están en brand_copy; sin presión ni urgencia inventada.', 'type' => 'style', 'layers' => ['persona', 'composer'], 'priority' => 'normal', 'origin' => 'ComposerStyleGuard', 'status' => 'active', 'refs' => self::refs([], ['brand_copy', 'tone'], ['E08', 'E19']), 'conditions' => null],
+            ['code' => 'R-11', 'description' => 'No escribe a quien pidió no recibir mensajes, ni a otro lead con el mismo teléfono que lo haya pedido.', 'type' => 'restriction', 'layers' => ['context', 'integrations'], 'priority' => 'critical', 'origin' => 'ConsentAuthority · MarketingMessageDispatcher', 'status' => 'active', 'refs' => self::refs(), 'conditions' => null],
+            ['code' => 'R-12', 'description' => 'Solo la conversación canaria entra en ULTRON; el resto lo atiende una persona.', 'type' => 'permission', 'layers' => ['governance', 'integrations'], 'priority' => 'high', 'origin' => 'UltronEventEmitter · UltronCommitService (canario)', 'status' => 'active',
+                // Las aristas que llevan el canario al commit (E12) y a las puertas de entrada (E13).
+                'refs' => self::refs([['layer' => 'governance', 'key' => 'canaryOnly']], [], ['E12', 'E13']),
+                'conditions' => ['when' => [], 'then' => [self::requireEq('governance', 'canaryOnly', true)]]],
         ];
     }
 
@@ -143,6 +213,13 @@ final class StudioCatalog
         }
 
         $edges = self::edges();
+
+        $legacyConditions = [];
+        foreach (self::legacyRules() as $r) {
+            if ($r['conditions'] !== null) {
+                $legacyConditions[$r['code']] = $r['conditions'];
+            }
+        }
 
         return self::$data = [
             'version' => self::VERSION,
@@ -163,6 +240,9 @@ final class StudioCatalog
                 )),
                 'configs' => self::baselineConfigs(),
             ],
+            'bindings' => self::parameterBindings(),
+            'readings' => self::engineReadings(),
+            'legacyConditions' => $legacyConditions,
         ];
     }
 
@@ -431,19 +511,20 @@ final class StudioCatalog
 
     /**
      * Lo que el motor real no admite (auditoría §12) y la coherencia entre
-     * banderas y conexiones.
+     * banderas y conexiones. `rule` (G) nombra la regla del código a la que
+     * equivale la restricción; el validador no la lee.
      *
      * @return list<array<string,mixed>>
      */
     private static function constraints(): array
     {
         return [
-            ['id' => 'hechos', 'layer' => 'knowledge', 'key' => 'strictFacts', 'forbidden' => false, 'level' => 'blocking', 'title' => 'Hechos sin verificar', 'detail' => 'Contradice R-01: el precio y los hechos solo salen del catálogo. El commit no lo admite.'],
-            ['id' => 'descuentos', 'layer' => 'strategy', 'key' => 'discountsAllowed', 'forbidden' => true, 'level' => 'blocking', 'title' => 'Descuentos permitidos', 'detail' => 'Contradice R-02: el commit rechaza cualquier descuento («gratis», «2x1» y «precio especial» incluidos).'],
+            ['id' => 'hechos', 'layer' => 'knowledge', 'key' => 'strictFacts', 'forbidden' => false, 'level' => 'blocking', 'title' => 'Hechos sin verificar', 'detail' => 'Contradice R-01: el precio y los hechos solo salen del catálogo. El commit no lo admite.', 'rule' => 'R-01'],
+            ['id' => 'descuentos', 'layer' => 'strategy', 'key' => 'discountsAllowed', 'forbidden' => true, 'level' => 'blocking', 'title' => 'Descuentos permitidos', 'detail' => 'Contradice R-02: el commit rechaza cualquier descuento («gratis», «2x1» y «precio especial» incluidos).', 'rule' => 'R-02'],
             ['id' => 'critic', 'layer' => 'composer', 'key' => 'critic', 'forbidden' => false, 'level' => 'blocking', 'title' => 'Sin veredicto del Critic', 'detail' => 'Sin veredicto el commit entra en rendición: no es una versión publicable.'],
-            ['id' => 'derivacion', 'layer' => 'rules', 'key' => 'handoffOnlyCorroborated', 'forbidden' => false, 'level' => 'blocking', 'title' => 'Derivación sin corroborar', 'detail' => 'La autoridad de derivación vive en el servidor: cambiarla exige aprobación, no un borrador.'],
+            ['id' => 'derivacion', 'layer' => 'rules', 'key' => 'handoffOnlyCorroborated', 'forbidden' => false, 'level' => 'blocking', 'title' => 'Derivación sin corroborar', 'detail' => 'La autoridad de derivación vive en el servidor: cambiarla exige aprobación, no un borrador.', 'rule' => 'R-07'],
             ['id' => 'hermes', 'layer' => 'intent', 'key' => 'driver', 'forbidden' => 'hermes', 'level' => 'blocking', 'title' => 'Hermes está inactivo', 'detail' => 'No hay cerebro Hermes operativo: con él no se clasificaría ningún mensaje.'],
-            ['id' => 'canario', 'layer' => 'governance', 'key' => 'canaryOnly', 'forbidden' => false, 'level' => 'blocking', 'title' => 'Tráfico general', 'detail' => 'Abrir ULTRON a todas las conversaciones no está autorizado hoy: solo la canaria.'],
+            ['id' => 'canario', 'layer' => 'governance', 'key' => 'canaryOnly', 'forbidden' => false, 'level' => 'blocking', 'title' => 'Tráfico general', 'detail' => 'Abrir ULTRON a todas las conversaciones no está autorizado hoy: solo la canaria.', 'rule' => 'R-12'],
             ['id' => 'apagado', 'layer' => 'governance', 'key' => 'enabled', 'forbidden' => false, 'level' => 'warning', 'title' => 'ULTRON apagado', 'detail' => 'Con el interruptor apagado ningún mensaje entra al agente: la versión sería inerte.'],
             ['id' => 'cobro-sin-camino', 'layer' => 'rules', 'key' => 'paymentLinksEnabled', 'when' => true, 'requires' => ['E14', 'E16'], 'level' => 'blocking', 'title' => 'Enlaces de pago sin su camino', 'detail' => 'Con la bandera encendida hacen falta el envío del enlace y el resultado de Wompi hacia la memoria.'],
             ['id' => 'cobro-aprobacion', 'layer' => 'rules', 'key' => 'paymentLinksEnabled', 'forbidden' => true, 'level' => 'warning', 'title' => 'Cobro automático: exige aprobación', 'detail' => 'Encender los enlaces de pago abre todos los caminos de cobro. Requiere aprobación expresa del propietario antes de publicar.'],
@@ -512,10 +593,11 @@ final class StudioCatalog
                 [
                     'key' => 'driver',
                     'label' => 'Cerebro de intención',
-                    'hint' => 'En producción se elige por entorno (hermes → openai → reglas); el valor efectivo no se ha verificado desde el Studio.',
+                    // Hito G: el inspector enseña el valor efectivo (GET engine/readings); ya no puede decir «no verificado».
+                    'hint' => 'En producción lo elige el entorno (hermes → openai → reglas); el inspector enseña el valor efectivo que lee el servidor.',
                     'type' => 'select',
                     'options' => [
-                        ['value' => 'entorno', 'label' => 'Según el entorno (no verificado)'],
+                        ['value' => 'entorno', 'label' => 'Según el entorno'],
                         ['value' => 'openai', 'label' => 'OpenAI'],
                         ['value' => 'rules', 'label' => 'Solo reglas'],
                         ['value' => 'hermes', 'label' => 'Hermes (inactivo)'],
@@ -584,12 +666,113 @@ final class StudioCatalog
     }
 
     /**
+     * El mando real de cada parámetro (contrato §A2, tabla de los 21). En
+     * llano y sin cartografiar el servidor: ni rutas, ni variables de entorno,
+     * ni comandos (StudioCatalogTest lo vigila). 4 `env_flag`, 1 `engine_data`,
+     * 11 `fixed` y 5 `proposal`.
+     *
+     * @return array<string,array<string,array<string,mixed>>>
+     */
+    private static function parameterBindings(): array
+    {
+        $codigo = 'Código';
+
+        return [
+            'knowledge' => [
+                'sources' => self::binding('fixed', 'none', false, 'Fijas en código: el motor solo afirma lo que sale de la base de conocimiento aprobada, los planes vendibles, las clases y horarios y la app. Esta lista no cambia ninguna.', 'Código del motor'),
+                'strictFacts' => self::binding('fixed', 'declared', true, 'Fijo en código: el motor solo afirma hechos verificados y el precio sale del catálogo (R-01). No se puede desactivar.', 'Código (no configurable)', ['declaredValue' => true]),
+            ],
+            'persona' => [
+                'tone' => self::binding('proposal', 'none', false, 'Sin mando en el motor: el tono sale de los prompts de n8n y de los ítems de tono y brand_copy aprobados en la base de conocimiento.', 'Prompts de n8n y base de conocimiento'),
+                'emojis' => self::binding('proposal', 'none', false, 'Sin interruptor en el motor: la guardia de estilo solo anota los mensajes con más de 2 emojis, sin impedirlos.', 'Prompts de n8n'),
+                'maxChars' => self::binding('proposal', 'none', false, 'Sin límite en el motor: la guardia de estilo solo anota los mensajes de más de 900 caracteres, sin cortarlos.', 'Prompts de n8n'),
+            ],
+            'intent' => [
+                // `entorno` en el borrador significa «lo que tenga el motor»: no se marca «≠ motor».
+                'driver' => self::binding('env_flag', 'live', true, 'Qué cerebro clasifica cada mensaje. El motor lo elige por entorno (hermes → openai → reglas) y el inspector enseña el valor efectivo que lee el servidor.', 'Entorno (despliegue)', ['engineOption' => 'entorno']),
+                'fallback' => self::binding('proposal', 'none', false, 'Sin mando en el CRM: qué hacer con una intención ambigua lo decide el prompt del Strategist en n8n.', 'Prompt del Strategist (n8n)'),
+            ],
+            'context' => [
+                'windowTurns' => self::binding('fixed', 'declared', true, 'Fijo en código: el motor pasa siempre los últimos 10 mensajes, con las cifras y los enlaces redactados.', $codigo, ['declaredValue' => 10]),
+            ],
+            'memory' => [
+                'useLeadProfile' => self::binding('fixed', 'declared', true, 'Fijo en código: el motor usa siempre la ficha del prospecto (origen, temperatura, ciclo de vida y acuerdos previos).', $codigo, ['declaredValue' => true]),
+            ],
+            'strategy' => [
+                'goal' => self::binding('proposal', 'none', false, 'Sin mando en el CRM: hacia dónde orienta cada conversación lo decide el prompt del Strategist en n8n.', 'Prompt del Strategist (n8n)'),
+                // Los nombres de los planes no se comparan con las etiquetas del borrador.
+                'offerPriority' => self::binding('engine_data', 'live', false, 'Lo que se cotiza sale de los planes vendibles: primero el plan insignia y luego por su orden. El Studio enseña solo sus nombres y no los compara con esta lista.', 'Módulo de Planes del CRM'),
+                'discountsAllowed' => self::binding('fixed', 'declared', true, 'Fijo en código: ningún descuento pasa el commit (R-02), «gratis», «2x1» y «precio especial» incluidos.', $codigo, ['declaredValue' => false]),
+            ],
+            'rules' => [
+                'handoffOnlyCorroborated' => self::binding('fixed', 'declared', true, 'Fijo en código: el servidor solo deriva a una persona si la petición está corroborada (R-07).', $codigo, ['declaredValue' => true]),
+                'paymentLinksEnabled' => self::binding('env_flag', 'live', true, 'Bandera absoluta de los enlaces de pago: encendida abre todos los caminos de cobro a la vez. Se lee del entorno del servidor.', 'Entorno, con aprobación expresa del propietario'),
+            ],
+            'composer' => [
+                'critic' => self::binding('fixed', 'none', false, 'Vive en n8n: el veredicto del Critic forma parte del workflow y no se lee desde el CRM.', 'Workflow de n8n'),
+                'retry' => self::binding('fixed', 'none', false, 'Vive en n8n: el reintento del Composer forma parte del workflow y no se lee desde el CRM.', 'Workflow de n8n'),
+            ],
+            'integrations' => [
+                'channel' => self::binding('fixed', 'declared', true, 'Fijo en código: el agente conversa solo por WhatsApp (Meta Cloud API).', $codigo, ['declaredValue' => 'whatsapp']),
+                'appointments' => self::binding('fixed', 'declared', true, 'Fijo en código: la cortesía siempre está permitida y se registra como una solicitud que confirma una persona, nunca como una cita confirmada.', $codigo, ['declaredValue' => true]),
+            ],
+            'governance' => [
+                'enabled' => self::binding('env_flag', 'live', true, 'Interruptor general: apagado, ningún mensaje entra al agente. Se lee del entorno del servidor.', 'Entorno; encenderlo exige el procedimiento de activación'),
+                // Si hay canario, nunca cuál es.
+                'canaryOnly' => self::binding('env_flag', 'live', true, 'Con una conversación canaria configurada, solo esa entra en ULTRON. El Studio enseña si hay canario, nunca cuál es.', 'Entorno'),
+                'autoBrake' => self::binding('fixed', 'declared', true, 'Fijo en código: el vigía frena si un turno queda mudo, y solo en la conversación canaria.', $codigo, ['declaredValue' => true]),
+            ],
+        ];
+    }
+
+    /**
+     * Las lecturas del motor que no son parámetros (contrato §A2, «Lecturas
+     * extra»), en el orden del contrato. Lo que enseñan lo sirve
+     * `GET engine/readings`; aquí solo su descripción.
+     *
+     * @return list<array{id:string,layer:string,label:string,origin:string,effect:string,changeVia:string}>
+     */
+    private static function engineReadings(): array
+    {
+        return [
+            ['id' => 'governance.paused', 'layer' => 'governance', 'label' => 'Pausa del agente', 'origin' => 'engine_setting', 'effect' => 'Con la pausa puesta ULTRON no atiende ninguna conversación, aunque el interruptor esté encendido.', 'changeVia' => 'Pausa desde Mercadeo (CRM)'],
+            ['id' => 'governance.brake', 'layer' => 'governance', 'label' => 'Freno de emergencia', 'origin' => 'engine_setting', 'effect' => 'Con el freno echado el commit no envía nada. Lo echa una persona desde la consola o el vigía en la conversación canaria.', 'changeVia' => 'Freno de emergencia (consola); se suelta con firma'],
+            ['id' => 'rules.paymentCanary', 'layer' => 'rules', 'label' => 'Canario del cobro', 'origin' => 'env_flag', 'effect' => 'Si hay una conversación canaria del cobro configurada. El Studio enseña si existe, nunca cuál es.', 'changeVia' => 'Entorno'],
+            ['id' => 'knowledge.base', 'layer' => 'knowledge', 'label' => 'Base de conocimiento', 'origin' => 'engine_data', 'effect' => 'Lo que el motor puede afirmar: versión, ítems activos por categoría (las 14, también las que están a cero) y pendientes de revisión. El Studio no enseña su contenido.', 'changeVia' => 'Consola o API interna (propone), con aprobación'],
+            ['id' => 'strategy.plans', 'layer' => 'strategy', 'label' => 'Planes vendibles', 'origin' => 'engine_data', 'effect' => 'Los planes que el motor puede cotizar, en su orden y con la insignia marcada. Solo los nombres: ni precios ni identificadores.', 'changeVia' => 'Módulo de Planes'],
+        ];
+    }
+
+    /**
+     * Un ParameterBinding con sus claves en el orden del contrato. `$extra`
+     * lleva `declaredValue` (solo con `declared`) o `engineOption`.
+     *
+     * @param  array<string,mixed>  $extra
+     * @return array<string,mixed>
+     */
+    private static function binding(string $origin, string $valueSource, bool $comparable, string $effect, string $changeVia, array $extra = []): array
+    {
+        return ['origin' => $origin, 'valueSource' => $valueSource] + $extra + ['comparable' => $comparable, 'effect' => $effect, 'changeVia' => $changeVia];
+    }
+
+    /**
+     * La afirmación `require <capa>.<clave> eq <valor>` en su forma canónica.
+     *
+     * @return array<string,mixed>
+     */
+    private static function requireEq(string $layer, string $key, mixed $value): array
+    {
+        return ['kind' => 'require', 'target' => 'config', 'layer' => $layer, 'key' => $key, 'op' => 'eq', 'value' => $value];
+    }
+
+    /**
      * @param  list<array{layer:string,key:string}>  $configs
      * @param  list<string>  $knowledgeCategories
+     * @param  list<string>  $edges
      * @return array{configs:list<array{layer:string,key:string}>,edges:list<string>,knowledgeKeys:list<string>,knowledgeCategories:list<string>}
      */
-    private static function refs(array $configs = [], array $knowledgeCategories = []): array
+    private static function refs(array $configs = [], array $knowledgeCategories = [], array $edges = []): array
     {
-        return ['configs' => $configs, 'edges' => [], 'knowledgeKeys' => [], 'knowledgeCategories' => $knowledgeCategories];
+        return ['configs' => $configs, 'edges' => $edges, 'knowledgeKeys' => [], 'knowledgeCategories' => $knowledgeCategories];
     }
 }
