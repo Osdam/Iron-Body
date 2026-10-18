@@ -7,6 +7,7 @@ use App\Models\UltronStudio\StudioAuditEvent;
 use App\Models\UltronStudio\StudioDraft;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use stdClass;
 
 /**
@@ -73,19 +74,29 @@ final class StudioAudit
      */
     public function recordDenied(?Request $request, ?Admin $actor, string $event, string $subjectType, ?string $subjectUuid, string $summary, array $extra = []): ?StudioAuditEvent
     {
-        $reciente = StudioAuditEvent::query()
-            ->where('event', $event)
-            ->where('subject_type', $subjectType)
-            ->where('subject_uuid', $subjectUuid)
-            ->where('actor_admin_id', $actor?->id)
-            ->where('summary', mb_substr($summary, 0, 255))
-            ->where('created_at', '>=', now()->subMinutes(self::DENIED_WINDOW_MINUTES))
-            ->exists();
-        if ($reciente) {
-            return null;
-        }
+        // Comprobar y escribir dentro de una transacción con un cerrojo consultivo
+        // (PostgreSQL): sin él, cuatro intentos simultáneos pasaban todos el
+        // `exists()` y dejaban cuatro filas (hallazgo del tester). SQLite escribe
+        // en serie por sí mismo.
+        return DB::transaction(function () use ($request, $actor, $event, $subjectType, $subjectUuid, $summary, $extra): ?StudioAuditEvent {
+            if (DB::connection()->getDriverName() === 'pgsql') {
+                DB::statement('SELECT pg_advisory_xact_lock(?)', [crc32("ultron_studio_audit:{$event}:{$subjectUuid}:{$actor?->id}")]);
+            }
 
-        return $this->record($request, $actor, $event, $subjectType, $subjectUuid, $summary, $extra);
+            $reciente = StudioAuditEvent::query()
+                ->where('event', $event)
+                ->where('subject_type', $subjectType)
+                ->where('subject_uuid', $subjectUuid)
+                ->where('actor_admin_id', $actor?->id)
+                ->where('summary', mb_substr($summary, 0, 255))
+                ->where('created_at', '>=', now()->subMinutes(self::DENIED_WINDOW_MINUTES))
+                ->exists();
+            if ($reciente) {
+                return null;
+            }
+
+            return $this->record($request, $actor, $event, $subjectType, $subjectUuid, $summary, $extra);
+        });
     }
 
     /**
