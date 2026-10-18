@@ -1,0 +1,5887 @@
+{
+  "version": 1,
+  "source": "Iron-Body_Front@4f7d774 · validateDraft() de src/app/modules/ultron-studio/studio-graph.ts",
+  "catalogVersion": "2026-10-18.1",
+  "catalogs": {
+    "mini": {
+      "layers": [
+        {
+          "id": "knowledge",
+          "order": 1,
+          "name": "Conocimiento",
+          "responsibility": "Responsabilidad de Conocimiento",
+          "icon": "circle",
+          "accent": "violet",
+          "critical": true,
+          "realComponents": [],
+          "configurableToday": [],
+          "fixedInCode": []
+        },
+        {
+          "id": "intent",
+          "order": 2,
+          "name": "Intención",
+          "responsibility": "Responsabilidad de Intención",
+          "icon": "circle",
+          "accent": "violet",
+          "critical": true,
+          "realComponents": [],
+          "configurableToday": [],
+          "fixedInCode": []
+        },
+        {
+          "id": "strategy",
+          "order": 3,
+          "name": "Estrategia",
+          "responsibility": "Responsabilidad de Estrategia",
+          "icon": "circle",
+          "accent": "violet",
+          "critical": false,
+          "realComponents": [],
+          "configurableToday": [],
+          "fixedInCode": []
+        },
+        {
+          "id": "composer",
+          "order": 4,
+          "name": "Composición",
+          "responsibility": "Responsabilidad de Composición",
+          "icon": "circle",
+          "accent": "violet",
+          "critical": true,
+          "realComponents": [],
+          "configurableToday": [],
+          "fixedInCode": []
+        }
+      ],
+      "ports": [
+        {
+          "id": "knowledge:out:facts",
+          "layer": "knowledge",
+          "direction": "out",
+          "dataType": "facts",
+          "label": "Hechos"
+        },
+        {
+          "id": "knowledge:in:events",
+          "layer": "knowledge",
+          "direction": "in",
+          "dataType": "events",
+          "label": "Eventos"
+        },
+        {
+          "id": "intent:in:facts",
+          "layer": "intent",
+          "direction": "in",
+          "dataType": "facts",
+          "label": "Hechos"
+        },
+        {
+          "id": "intent:in:reply",
+          "layer": "intent",
+          "direction": "in",
+          "dataType": "reply",
+          "label": "Respuesta"
+        },
+        {
+          "id": "intent:out:decision",
+          "layer": "intent",
+          "direction": "out",
+          "dataType": "decision",
+          "label": "Decisión"
+        },
+        {
+          "id": "strategy:in:decision",
+          "layer": "strategy",
+          "direction": "in",
+          "dataType": "decision",
+          "label": "Decisión"
+        },
+        {
+          "id": "strategy:in:facts",
+          "layer": "strategy",
+          "direction": "in",
+          "dataType": "facts",
+          "label": "Hechos"
+        },
+        {
+          "id": "strategy:out:reply",
+          "layer": "strategy",
+          "direction": "out",
+          "dataType": "reply",
+          "label": "Respuesta"
+        },
+        {
+          "id": "composer:in:decision",
+          "layer": "composer",
+          "direction": "in",
+          "dataType": "decision",
+          "label": "Decisión"
+        },
+        {
+          "id": "composer:in:reply",
+          "layer": "composer",
+          "direction": "in",
+          "dataType": "reply",
+          "label": "Respuesta"
+        },
+        {
+          "id": "composer:out:events",
+          "layer": "composer",
+          "direction": "out",
+          "dataType": "events",
+          "label": "Eventos"
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-facts",
+          "source": "knowledge:out:facts",
+          "target": "intent:in:facts",
+          "label": "hechos → intención",
+          "mandatory": true,
+          "consequence": ""
+        },
+        {
+          "id": "e-decision",
+          "source": "intent:out:decision",
+          "target": "composer:in:decision",
+          "label": "decisión → composición",
+          "mandatory": true,
+          "consequence": ""
+        },
+        {
+          "id": "e-strategy",
+          "source": "intent:out:decision",
+          "target": "strategy:in:decision",
+          "label": "decisión → estrategia",
+          "mandatory": false,
+          "consequence": "La estrategia no participa del turno."
+        },
+        {
+          "id": "e-reply",
+          "source": "strategy:out:reply",
+          "target": "composer:in:reply",
+          "label": "estrategia → composición",
+          "mandatory": false,
+          "consequence": "La composición no recibe la estrategia."
+        },
+        {
+          "id": "e-events",
+          "source": "composer:out:events",
+          "target": "knowledge:in:events",
+          "label": "eventos → conocimiento (siguiente turno)",
+          "mandatory": false,
+          "feedback": true,
+          "consequence": "No se aprende entre turnos."
+        },
+        {
+          "id": "e-loop",
+          "source": "strategy:out:reply",
+          "target": "intent:in:reply",
+          "label": "estrategia → intención",
+          "mandatory": false,
+          "consequence": "Reentrada."
+        }
+      ],
+      "requiredPaths": [
+        {
+          "id": "hechos-a-salida",
+          "from": "knowledge",
+          "to": "composer",
+          "title": "Los hechos llegan a la composición",
+          "detail": "Sin este camino se responde sin conocimiento."
+        }
+      ],
+      "constraints": [
+        {
+          "id": "estricto",
+          "layer": "knowledge",
+          "key": "strict",
+          "forbidden": false,
+          "level": "blocking",
+          "title": "Sin hechos estrictos",
+          "detail": "El motor no responde sin hechos verificados."
+        },
+        {
+          "id": "ventas-con-estrategia",
+          "layer": "strategy",
+          "key": "goal",
+          "when": "ventas",
+          "requires": [
+            "e-strategy"
+          ],
+          "level": "warning",
+          "title": "Vender sin estrategia",
+          "detail": "Con objetivo de ventas la estrategia debería participar."
+        }
+      ]
+    },
+    "mini-mixto": {
+      "layers": [
+        {
+          "id": "knowledge",
+          "order": 1,
+          "name": "Conocimiento",
+          "responsibility": "Responsabilidad de Conocimiento",
+          "icon": "circle",
+          "accent": "violet",
+          "critical": true,
+          "realComponents": [],
+          "configurableToday": [],
+          "fixedInCode": []
+        },
+        {
+          "id": "intent",
+          "order": 2,
+          "name": "Intención",
+          "responsibility": "Responsabilidad de Intención",
+          "icon": "circle",
+          "accent": "violet",
+          "critical": true,
+          "realComponents": [],
+          "configurableToday": [],
+          "fixedInCode": []
+        },
+        {
+          "id": "strategy",
+          "order": 3,
+          "name": "Estrategia",
+          "responsibility": "Responsabilidad de Estrategia",
+          "icon": "circle",
+          "accent": "violet",
+          "critical": false,
+          "realComponents": [],
+          "configurableToday": [],
+          "fixedInCode": []
+        },
+        {
+          "id": "composer",
+          "order": 4,
+          "name": "Composición",
+          "responsibility": "Responsabilidad de Composición",
+          "icon": "circle",
+          "accent": "violet",
+          "critical": true,
+          "realComponents": [],
+          "configurableToday": [],
+          "fixedInCode": []
+        }
+      ],
+      "ports": [
+        {
+          "id": "knowledge:out:facts",
+          "layer": "knowledge",
+          "direction": "out",
+          "dataType": "facts",
+          "label": "Hechos"
+        },
+        {
+          "id": "knowledge:in:events",
+          "layer": "knowledge",
+          "direction": "in",
+          "dataType": "events",
+          "label": "Eventos"
+        },
+        {
+          "id": "intent:in:facts",
+          "layer": "intent",
+          "direction": "in",
+          "dataType": "facts",
+          "label": "Hechos"
+        },
+        {
+          "id": "intent:in:reply",
+          "layer": "intent",
+          "direction": "in",
+          "dataType": "reply",
+          "label": "Respuesta"
+        },
+        {
+          "id": "intent:out:decision",
+          "layer": "intent",
+          "direction": "out",
+          "dataType": "decision",
+          "label": "Decisión"
+        },
+        {
+          "id": "strategy:in:decision",
+          "layer": "strategy",
+          "direction": "in",
+          "dataType": "decision",
+          "label": "Decisión"
+        },
+        {
+          "id": "strategy:in:facts",
+          "layer": "strategy",
+          "direction": "in",
+          "dataType": "facts",
+          "label": "Hechos"
+        },
+        {
+          "id": "strategy:out:reply",
+          "layer": "strategy",
+          "direction": "out",
+          "dataType": "reply",
+          "label": "Respuesta"
+        },
+        {
+          "id": "composer:in:decision",
+          "layer": "composer",
+          "direction": "in",
+          "dataType": "decision",
+          "label": "Decisión"
+        },
+        {
+          "id": "composer:in:reply",
+          "layer": "composer",
+          "direction": "in",
+          "dataType": "reply",
+          "label": "Respuesta"
+        },
+        {
+          "id": "composer:out:events",
+          "layer": "composer",
+          "direction": "out",
+          "dataType": "events",
+          "label": "Eventos"
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-facts",
+          "source": "knowledge:out:facts",
+          "target": "intent:in:facts",
+          "label": "hechos → intención",
+          "mandatory": true,
+          "consequence": ""
+        },
+        {
+          "id": "e-decision",
+          "source": "intent:out:decision",
+          "target": "composer:in:decision",
+          "label": "decisión → composición",
+          "mandatory": true,
+          "consequence": ""
+        },
+        {
+          "id": "e-strategy",
+          "source": "intent:out:decision",
+          "target": "strategy:in:decision",
+          "label": "decisión → estrategia",
+          "mandatory": false,
+          "consequence": "La estrategia no participa del turno."
+        },
+        {
+          "id": "e-reply",
+          "source": "strategy:out:reply",
+          "target": "composer:in:reply",
+          "label": "estrategia → composición",
+          "mandatory": false,
+          "consequence": "La composición no recibe la estrategia."
+        },
+        {
+          "id": "e-events",
+          "source": "composer:out:events",
+          "target": "knowledge:in:events",
+          "label": "eventos → conocimiento (siguiente turno)",
+          "mandatory": false,
+          "feedback": true,
+          "consequence": "No se aprende entre turnos."
+        },
+        {
+          "id": "e-loop",
+          "source": "strategy:out:reply",
+          "target": "intent:in:reply",
+          "label": "estrategia → intención",
+          "mandatory": false,
+          "consequence": "Reentrada."
+        }
+      ],
+      "requiredPaths": [
+        {
+          "id": "hechos-a-salida",
+          "from": "knowledge",
+          "to": "composer",
+          "title": "Los hechos llegan a la composición",
+          "detail": "Sin este camino se responde sin conocimiento."
+        }
+      ],
+      "constraints": [
+        {
+          "id": "estricto",
+          "layer": "knowledge",
+          "key": "strict",
+          "forbidden": false,
+          "level": "blocking",
+          "title": "Sin hechos estrictos",
+          "detail": "El motor no responde sin hechos verificados."
+        },
+        {
+          "id": "ventas-con-estrategia",
+          "layer": "strategy",
+          "key": "goal",
+          "when": "ventas",
+          "requires": [
+            "e-strategy"
+          ],
+          "level": "warning",
+          "title": "Vender sin estrategia",
+          "detail": "Con objetivo de ventas la estrategia debería participar."
+        },
+        {
+          "id": "mixta",
+          "layer": "composer",
+          "key": "tone",
+          "when": "cercano",
+          "requires": [
+            "e-strategy",
+            "e-reply",
+            "fantasma"
+          ],
+          "forbids": [
+            "e-events",
+            "inexistente"
+          ],
+          "level": "blocking",
+          "title": "Tono cercano sin su camino",
+          "detail": "Con tono cercano la estrategia tiene que llegar a la composición y los eventos no deben volver al conocimiento."
+        },
+        {
+          "id": "fuentes-vacias",
+          "layer": "knowledge",
+          "key": "sources",
+          "forbidden": [],
+          "level": "warning",
+          "title": "Sin fuentes",
+          "detail": "Una lista de fuentes vacía deja al agente sin nada que afirmar."
+        },
+        {
+          "id": "umbral-cero",
+          "layer": "intent",
+          "key": "threshold",
+          "forbidden": 0,
+          "level": "warning",
+          "title": "Umbral en cero",
+          "detail": "Con el umbral en cero cualquier mensaje cuenta como intención."
+        },
+        {
+          "id": "fuentes-exactas",
+          "layer": "knowledge",
+          "key": "sources",
+          "when": [
+            "precios",
+            "horarios"
+          ],
+          "forbids": [
+            "e-reply"
+          ],
+          "level": "warning",
+          "title": "Fuentes mínimas con respuesta de la estrategia",
+          "detail": "Con solo precios y horarios la estrategia no debería redactar."
+        }
+      ]
+    }
+  },
+  "cases": [
+    {
+      "name": "real · línea base sin configuración",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": null,
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        }
+      ]
+    },
+    {
+      "name": "real · línea base con su configuración",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "Base de conocimiento aprobada",
+            "Planes vendibles",
+            "Clases y horarios"
+          ],
+          "strictFacts": true
+        },
+        "persona": {
+          "tone": "cercano",
+          "emojis": true,
+          "maxChars": 320
+        },
+        "intent": {
+          "driver": "entorno",
+          "fallback": "preguntar"
+        },
+        "context": {
+          "windowTurns": 10
+        },
+        "memory": {
+          "useLeadProfile": true
+        },
+        "strategy": {
+          "goal": "cita",
+          "offerPriority": [
+            "Plan insignia (is_recommended)"
+          ],
+          "discountsAllowed": false
+        },
+        "rules": {
+          "handoffOnlyCorroborated": true,
+          "paymentLinksEnabled": false
+        },
+        "composer": {
+          "critic": true,
+          "retry": true
+        },
+        "integrations": {
+          "channel": "whatsapp",
+          "appointments": true
+        },
+        "governance": {
+          "enabled": true,
+          "canaryOnly": true,
+          "autoBrake": true
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        },
+        {
+          "id": "configuracion",
+          "level": "ok",
+          "title": "La configuración respeta las reglas del motor",
+          "detail": "10 comprobaciones sobre los parámetros del borrador."
+        }
+      ]
+    },
+    {
+      "name": "real · todas las aristas sin configuración",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E14",
+          "E15",
+          "E16",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": null,
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        }
+      ]
+    },
+    {
+      "name": "real · todas las aristas con la configuración base: conexiones de cobro sin bandera",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E14",
+          "E15",
+          "E16",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "Base de conocimiento aprobada",
+            "Planes vendibles",
+            "Clases y horarios"
+          ],
+          "strictFacts": true
+        },
+        "persona": {
+          "tone": "cercano",
+          "emojis": true,
+          "maxChars": 320
+        },
+        "intent": {
+          "driver": "entorno",
+          "fallback": "preguntar"
+        },
+        "context": {
+          "windowTurns": 10
+        },
+        "memory": {
+          "useLeadProfile": true
+        },
+        "strategy": {
+          "goal": "cita",
+          "offerPriority": [
+            "Plan insignia (is_recommended)"
+          ],
+          "discountsAllowed": false
+        },
+        "rules": {
+          "handoffOnlyCorroborated": true,
+          "paymentLinksEnabled": false
+        },
+        "composer": {
+          "critic": true,
+          "retry": true
+        },
+        "integrations": {
+          "channel": "whatsapp",
+          "appointments": true
+        },
+        "governance": {
+          "enabled": true,
+          "canaryOnly": true,
+          "autoBrake": true
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "config-cobro-sin-bandera",
+          "level": "warning",
+          "title": "Conexiones de cobro sin efecto",
+          "detail": "Con la bandera apagada esas conexiones no se usan. (sobra: enlace de pago como mensaje aparte · resultado del pago (Wompi) → memoria y fase)",
+          "layer": "rules"
+        }
+      ]
+    },
+    {
+      "name": "real · cobro encendido con su camino",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E14",
+          "E15",
+          "E16",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "Base de conocimiento aprobada",
+            "Planes vendibles",
+            "Clases y horarios"
+          ],
+          "strictFacts": true
+        },
+        "persona": {
+          "tone": "cercano",
+          "emojis": true,
+          "maxChars": 320
+        },
+        "intent": {
+          "driver": "entorno",
+          "fallback": "preguntar"
+        },
+        "context": {
+          "windowTurns": 10
+        },
+        "memory": {
+          "useLeadProfile": true
+        },
+        "strategy": {
+          "goal": "cita",
+          "offerPriority": [
+            "Plan insignia (is_recommended)"
+          ],
+          "discountsAllowed": false
+        },
+        "rules": {
+          "handoffOnlyCorroborated": true,
+          "paymentLinksEnabled": true
+        },
+        "composer": {
+          "critic": true,
+          "retry": true
+        },
+        "integrations": {
+          "channel": "whatsapp",
+          "appointments": true
+        },
+        "governance": {
+          "enabled": true,
+          "canaryOnly": true,
+          "autoBrake": true
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "config-cobro-aprobacion",
+          "level": "warning",
+          "title": "Cobro automático: exige aprobación",
+          "detail": "Encender los enlaces de pago abre todos los caminos de cobro. Requiere aprobación expresa del propietario antes de publicar.",
+          "layer": "rules"
+        }
+      ]
+    },
+    {
+      "name": "real · cobro encendido sin su camino",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "Base de conocimiento aprobada",
+            "Planes vendibles",
+            "Clases y horarios"
+          ],
+          "strictFacts": true
+        },
+        "persona": {
+          "tone": "cercano",
+          "emojis": true,
+          "maxChars": 320
+        },
+        "intent": {
+          "driver": "entorno",
+          "fallback": "preguntar"
+        },
+        "context": {
+          "windowTurns": 10
+        },
+        "memory": {
+          "useLeadProfile": true
+        },
+        "strategy": {
+          "goal": "cita",
+          "offerPriority": [
+            "Plan insignia (is_recommended)"
+          ],
+          "discountsAllowed": false
+        },
+        "rules": {
+          "handoffOnlyCorroborated": true,
+          "paymentLinksEnabled": true
+        },
+        "composer": {
+          "critic": true,
+          "retry": true
+        },
+        "integrations": {
+          "channel": "whatsapp",
+          "appointments": true
+        },
+        "governance": {
+          "enabled": true,
+          "canaryOnly": true,
+          "autoBrake": true
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        },
+        {
+          "id": "config-cobro-sin-camino",
+          "level": "blocking",
+          "title": "Enlaces de pago sin su camino",
+          "detail": "Con la bandera encendida hacen falta el envío del enlace y el resultado de Wompi hacia la memoria. (falta: enlace de pago como mensaje aparte · resultado del pago (Wompi) → memoria y fase)",
+          "layer": "rules"
+        },
+        {
+          "id": "config-cobro-aprobacion",
+          "level": "warning",
+          "title": "Cobro automático: exige aprobación",
+          "detail": "Encender los enlaces de pago abre todos los caminos de cobro. Requiere aprobación expresa del propietario antes de publicar.",
+          "layer": "rules"
+        }
+      ]
+    },
+    {
+      "name": "real · cobro encendido solo con E14",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19",
+          "E14"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "Base de conocimiento aprobada",
+            "Planes vendibles",
+            "Clases y horarios"
+          ],
+          "strictFacts": true
+        },
+        "persona": {
+          "tone": "cercano",
+          "emojis": true,
+          "maxChars": 320
+        },
+        "intent": {
+          "driver": "entorno",
+          "fallback": "preguntar"
+        },
+        "context": {
+          "windowTurns": 10
+        },
+        "memory": {
+          "useLeadProfile": true
+        },
+        "strategy": {
+          "goal": "cita",
+          "offerPriority": [
+            "Plan insignia (is_recommended)"
+          ],
+          "discountsAllowed": false
+        },
+        "rules": {
+          "handoffOnlyCorroborated": true,
+          "paymentLinksEnabled": true
+        },
+        "composer": {
+          "critic": true,
+          "retry": true
+        },
+        "integrations": {
+          "channel": "whatsapp",
+          "appointments": true
+        },
+        "governance": {
+          "enabled": true,
+          "canaryOnly": true,
+          "autoBrake": true
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        },
+        {
+          "id": "config-cobro-sin-camino",
+          "level": "blocking",
+          "title": "Enlaces de pago sin su camino",
+          "detail": "Con la bandera encendida hacen falta el envío del enlace y el resultado de Wompi hacia la memoria. (falta: resultado del pago (Wompi) → memoria y fase)",
+          "layer": "rules"
+        },
+        {
+          "id": "config-cobro-aprobacion",
+          "level": "warning",
+          "title": "Cobro automático: exige aprobación",
+          "detail": "Encender los enlaces de pago abre todos los caminos de cobro. Requiere aprobación expresa del propietario antes de publicar.",
+          "layer": "rules"
+        }
+      ]
+    },
+    {
+      "name": "real · bandera de cobro apagada con E16",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19",
+          "E16"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "Base de conocimiento aprobada",
+            "Planes vendibles",
+            "Clases y horarios"
+          ],
+          "strictFacts": true
+        },
+        "persona": {
+          "tone": "cercano",
+          "emojis": true,
+          "maxChars": 320
+        },
+        "intent": {
+          "driver": "entorno",
+          "fallback": "preguntar"
+        },
+        "context": {
+          "windowTurns": 10
+        },
+        "memory": {
+          "useLeadProfile": true
+        },
+        "strategy": {
+          "goal": "cita",
+          "offerPriority": [
+            "Plan insignia (is_recommended)"
+          ],
+          "discountsAllowed": false
+        },
+        "rules": {
+          "handoffOnlyCorroborated": true,
+          "paymentLinksEnabled": false
+        },
+        "composer": {
+          "critic": true,
+          "retry": true
+        },
+        "integrations": {
+          "channel": "whatsapp",
+          "appointments": true
+        },
+        "governance": {
+          "enabled": true,
+          "canaryOnly": true,
+          "autoBrake": true
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "config-cobro-sin-bandera",
+          "level": "warning",
+          "title": "Conexiones de cobro sin efecto",
+          "detail": "Con la bandera apagada esas conexiones no se usan. (sobra: resultado del pago (Wompi) → memoria y fase)",
+          "layer": "rules"
+        }
+      ]
+    },
+    {
+      "name": "real · bloqueo: hechos sin verificar",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "Base de conocimiento aprobada",
+            "Planes vendibles",
+            "Clases y horarios"
+          ],
+          "strictFacts": false
+        },
+        "persona": {
+          "tone": "cercano",
+          "emojis": true,
+          "maxChars": 320
+        },
+        "intent": {
+          "driver": "entorno",
+          "fallback": "preguntar"
+        },
+        "context": {
+          "windowTurns": 10
+        },
+        "memory": {
+          "useLeadProfile": true
+        },
+        "strategy": {
+          "goal": "cita",
+          "offerPriority": [
+            "Plan insignia (is_recommended)"
+          ],
+          "discountsAllowed": false
+        },
+        "rules": {
+          "handoffOnlyCorroborated": true,
+          "paymentLinksEnabled": false
+        },
+        "composer": {
+          "critic": true,
+          "retry": true
+        },
+        "integrations": {
+          "channel": "whatsapp",
+          "appointments": true
+        },
+        "governance": {
+          "enabled": true,
+          "canaryOnly": true,
+          "autoBrake": true
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        },
+        {
+          "id": "config-hechos",
+          "level": "blocking",
+          "title": "Hechos sin verificar",
+          "detail": "Contradice R-01: el precio y los hechos solo salen del catálogo. El commit no lo admite.",
+          "layer": "knowledge"
+        }
+      ]
+    },
+    {
+      "name": "real · bloqueo: descuentos permitidos",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "Base de conocimiento aprobada",
+            "Planes vendibles",
+            "Clases y horarios"
+          ],
+          "strictFacts": true
+        },
+        "persona": {
+          "tone": "cercano",
+          "emojis": true,
+          "maxChars": 320
+        },
+        "intent": {
+          "driver": "entorno",
+          "fallback": "preguntar"
+        },
+        "context": {
+          "windowTurns": 10
+        },
+        "memory": {
+          "useLeadProfile": true
+        },
+        "strategy": {
+          "goal": "cita",
+          "offerPriority": [
+            "Plan insignia (is_recommended)"
+          ],
+          "discountsAllowed": true
+        },
+        "rules": {
+          "handoffOnlyCorroborated": true,
+          "paymentLinksEnabled": false
+        },
+        "composer": {
+          "critic": true,
+          "retry": true
+        },
+        "integrations": {
+          "channel": "whatsapp",
+          "appointments": true
+        },
+        "governance": {
+          "enabled": true,
+          "canaryOnly": true,
+          "autoBrake": true
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        },
+        {
+          "id": "config-descuentos",
+          "level": "blocking",
+          "title": "Descuentos permitidos",
+          "detail": "Contradice R-02: el commit rechaza cualquier descuento («gratis», «2x1» y «precio especial» incluidos).",
+          "layer": "strategy"
+        }
+      ]
+    },
+    {
+      "name": "real · bloqueo: sin veredicto del Critic",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "Base de conocimiento aprobada",
+            "Planes vendibles",
+            "Clases y horarios"
+          ],
+          "strictFacts": true
+        },
+        "persona": {
+          "tone": "cercano",
+          "emojis": true,
+          "maxChars": 320
+        },
+        "intent": {
+          "driver": "entorno",
+          "fallback": "preguntar"
+        },
+        "context": {
+          "windowTurns": 10
+        },
+        "memory": {
+          "useLeadProfile": true
+        },
+        "strategy": {
+          "goal": "cita",
+          "offerPriority": [
+            "Plan insignia (is_recommended)"
+          ],
+          "discountsAllowed": false
+        },
+        "rules": {
+          "handoffOnlyCorroborated": true,
+          "paymentLinksEnabled": false
+        },
+        "composer": {
+          "critic": false,
+          "retry": true
+        },
+        "integrations": {
+          "channel": "whatsapp",
+          "appointments": true
+        },
+        "governance": {
+          "enabled": true,
+          "canaryOnly": true,
+          "autoBrake": true
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        },
+        {
+          "id": "config-critic",
+          "level": "blocking",
+          "title": "Sin veredicto del Critic",
+          "detail": "Sin veredicto el commit entra en rendición: no es una versión publicable.",
+          "layer": "composer"
+        }
+      ]
+    },
+    {
+      "name": "real · bloqueo: derivación sin corroborar",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "Base de conocimiento aprobada",
+            "Planes vendibles",
+            "Clases y horarios"
+          ],
+          "strictFacts": true
+        },
+        "persona": {
+          "tone": "cercano",
+          "emojis": true,
+          "maxChars": 320
+        },
+        "intent": {
+          "driver": "entorno",
+          "fallback": "preguntar"
+        },
+        "context": {
+          "windowTurns": 10
+        },
+        "memory": {
+          "useLeadProfile": true
+        },
+        "strategy": {
+          "goal": "cita",
+          "offerPriority": [
+            "Plan insignia (is_recommended)"
+          ],
+          "discountsAllowed": false
+        },
+        "rules": {
+          "handoffOnlyCorroborated": false,
+          "paymentLinksEnabled": false
+        },
+        "composer": {
+          "critic": true,
+          "retry": true
+        },
+        "integrations": {
+          "channel": "whatsapp",
+          "appointments": true
+        },
+        "governance": {
+          "enabled": true,
+          "canaryOnly": true,
+          "autoBrake": true
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        },
+        {
+          "id": "config-derivacion",
+          "level": "blocking",
+          "title": "Derivación sin corroborar",
+          "detail": "La autoridad de derivación vive en el servidor: cambiarla exige aprobación, no un borrador.",
+          "layer": "rules"
+        }
+      ]
+    },
+    {
+      "name": "real · bloqueo: Hermes",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "Base de conocimiento aprobada",
+            "Planes vendibles",
+            "Clases y horarios"
+          ],
+          "strictFacts": true
+        },
+        "persona": {
+          "tone": "cercano",
+          "emojis": true,
+          "maxChars": 320
+        },
+        "intent": {
+          "driver": "hermes",
+          "fallback": "preguntar"
+        },
+        "context": {
+          "windowTurns": 10
+        },
+        "memory": {
+          "useLeadProfile": true
+        },
+        "strategy": {
+          "goal": "cita",
+          "offerPriority": [
+            "Plan insignia (is_recommended)"
+          ],
+          "discountsAllowed": false
+        },
+        "rules": {
+          "handoffOnlyCorroborated": true,
+          "paymentLinksEnabled": false
+        },
+        "composer": {
+          "critic": true,
+          "retry": true
+        },
+        "integrations": {
+          "channel": "whatsapp",
+          "appointments": true
+        },
+        "governance": {
+          "enabled": true,
+          "canaryOnly": true,
+          "autoBrake": true
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        },
+        {
+          "id": "config-hermes",
+          "level": "blocking",
+          "title": "Hermes está inactivo",
+          "detail": "No hay cerebro Hermes operativo: con él no se clasificaría ningún mensaje.",
+          "layer": "intent"
+        }
+      ]
+    },
+    {
+      "name": "real · bloqueo: tráfico general sin canario",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "Base de conocimiento aprobada",
+            "Planes vendibles",
+            "Clases y horarios"
+          ],
+          "strictFacts": true
+        },
+        "persona": {
+          "tone": "cercano",
+          "emojis": true,
+          "maxChars": 320
+        },
+        "intent": {
+          "driver": "entorno",
+          "fallback": "preguntar"
+        },
+        "context": {
+          "windowTurns": 10
+        },
+        "memory": {
+          "useLeadProfile": true
+        },
+        "strategy": {
+          "goal": "cita",
+          "offerPriority": [
+            "Plan insignia (is_recommended)"
+          ],
+          "discountsAllowed": false
+        },
+        "rules": {
+          "handoffOnlyCorroborated": true,
+          "paymentLinksEnabled": false
+        },
+        "composer": {
+          "critic": true,
+          "retry": true
+        },
+        "integrations": {
+          "channel": "whatsapp",
+          "appointments": true
+        },
+        "governance": {
+          "enabled": true,
+          "canaryOnly": false,
+          "autoBrake": true
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        },
+        {
+          "id": "config-canario",
+          "level": "blocking",
+          "title": "Tráfico general",
+          "detail": "Abrir ULTRON a todas las conversaciones no está autorizado hoy: solo la canaria.",
+          "layer": "governance"
+        }
+      ]
+    },
+    {
+      "name": "real · ULTRON apagado (aviso)",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "Base de conocimiento aprobada",
+            "Planes vendibles",
+            "Clases y horarios"
+          ],
+          "strictFacts": true
+        },
+        "persona": {
+          "tone": "cercano",
+          "emojis": true,
+          "maxChars": 320
+        },
+        "intent": {
+          "driver": "entorno",
+          "fallback": "preguntar"
+        },
+        "context": {
+          "windowTurns": 10
+        },
+        "memory": {
+          "useLeadProfile": true
+        },
+        "strategy": {
+          "goal": "cita",
+          "offerPriority": [
+            "Plan insignia (is_recommended)"
+          ],
+          "discountsAllowed": false
+        },
+        "rules": {
+          "handoffOnlyCorroborated": true,
+          "paymentLinksEnabled": false
+        },
+        "composer": {
+          "critic": true,
+          "retry": true
+        },
+        "integrations": {
+          "channel": "whatsapp",
+          "appointments": true
+        },
+        "governance": {
+          "enabled": false,
+          "canaryOnly": true,
+          "autoBrake": true
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        },
+        {
+          "id": "config-apagado",
+          "level": "warning",
+          "title": "ULTRON apagado",
+          "detail": "Con el interruptor apagado ningún mensaje entra al agente: la versión sería inerte.",
+          "layer": "governance"
+        }
+      ]
+    },
+    {
+      "name": "real · varios hallazgos de configuración, en el orden del catálogo",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19",
+          "E14"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [],
+          "strictFacts": false
+        },
+        "persona": {
+          "tone": "cercano",
+          "emojis": true,
+          "maxChars": 320
+        },
+        "intent": {
+          "driver": "entorno",
+          "fallback": "preguntar"
+        },
+        "context": {
+          "windowTurns": 10
+        },
+        "memory": {
+          "useLeadProfile": true
+        },
+        "strategy": {
+          "goal": "venta",
+          "offerPriority": [],
+          "discountsAllowed": true
+        },
+        "rules": {
+          "handoffOnlyCorroborated": true,
+          "paymentLinksEnabled": true
+        },
+        "composer": {
+          "critic": true,
+          "retry": true
+        },
+        "integrations": {
+          "channel": "whatsapp",
+          "appointments": true
+        },
+        "governance": {
+          "enabled": false,
+          "canaryOnly": false,
+          "autoBrake": true
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        },
+        {
+          "id": "config-hechos",
+          "level": "blocking",
+          "title": "Hechos sin verificar",
+          "detail": "Contradice R-01: el precio y los hechos solo salen del catálogo. El commit no lo admite.",
+          "layer": "knowledge"
+        },
+        {
+          "id": "config-descuentos",
+          "level": "blocking",
+          "title": "Descuentos permitidos",
+          "detail": "Contradice R-02: el commit rechaza cualquier descuento («gratis», «2x1» y «precio especial» incluidos).",
+          "layer": "strategy"
+        },
+        {
+          "id": "config-canario",
+          "level": "blocking",
+          "title": "Tráfico general",
+          "detail": "Abrir ULTRON a todas las conversaciones no está autorizado hoy: solo la canaria.",
+          "layer": "governance"
+        },
+        {
+          "id": "config-apagado",
+          "level": "warning",
+          "title": "ULTRON apagado",
+          "detail": "Con el interruptor apagado ningún mensaje entra al agente: la versión sería inerte.",
+          "layer": "governance"
+        },
+        {
+          "id": "config-cobro-sin-camino",
+          "level": "blocking",
+          "title": "Enlaces de pago sin su camino",
+          "detail": "Con la bandera encendida hacen falta el envío del enlace y el resultado de Wompi hacia la memoria. (falta: resultado del pago (Wompi) → memoria y fase)",
+          "layer": "rules"
+        },
+        {
+          "id": "config-cobro-aprobacion",
+          "level": "warning",
+          "title": "Cobro automático: exige aprobación",
+          "detail": "Encender los enlaces de pago abre todos los caminos de cobro. Requiere aprobación expresa del propietario antes de publicar.",
+          "layer": "rules"
+        }
+      ]
+    },
+    {
+      "name": "real · falta E10",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "Base de conocimiento aprobada",
+            "Planes vendibles",
+            "Clases y horarios"
+          ],
+          "strictFacts": true
+        },
+        "persona": {
+          "tone": "cercano",
+          "emojis": true,
+          "maxChars": 320
+        },
+        "intent": {
+          "driver": "entorno",
+          "fallback": "preguntar"
+        },
+        "context": {
+          "windowTurns": 10
+        },
+        "memory": {
+          "useLeadProfile": true
+        },
+        "strategy": {
+          "goal": "cita",
+          "offerPriority": [
+            "Plan insignia (is_recommended)"
+          ],
+          "discountsAllowed": false
+        },
+        "rules": {
+          "handoffOnlyCorroborated": true,
+          "paymentLinksEnabled": false
+        },
+        "composer": {
+          "critic": true,
+          "retry": true
+        },
+        "integrations": {
+          "channel": "whatsapp",
+          "appointments": true
+        },
+        "governance": {
+          "enabled": true,
+          "canaryOnly": true,
+          "autoBrake": true
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "blocking",
+          "title": "Faltan conexiones obligatorias",
+          "detail": "borrador, veredicto y token → commit"
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "blocking",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        },
+        {
+          "id": "configuracion",
+          "level": "ok",
+          "title": "La configuración respeta las reglas del motor",
+          "detail": "10 comprobaciones sobre los parámetros del borrador."
+        }
+      ]
+    },
+    {
+      "name": "real · falta E11: la entrada y los hechos no llegan al canal",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": null,
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "blocking",
+          "title": "Faltan conexiones obligatorias",
+          "detail": "solo lo validado se envía"
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "blocking",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "blocking",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        }
+      ]
+    },
+    {
+      "name": "real · falta E13: el control llega al canal por el commit",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E15",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": null,
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "blocking",
+          "title": "Faltan conexiones obligatorias",
+          "detail": "interruptor, pausa y canario → puertas de entrada y despacho"
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        }
+      ]
+    },
+    {
+      "name": "real · E99 desconocida",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19",
+          "E99"
+        ]
+      },
+      "configs": null,
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "aristas-desconocidas",
+          "level": "blocking",
+          "title": "Conexiones que el motor real no tiene",
+          "detail": "E99"
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        }
+      ]
+    },
+    {
+      "name": "real · desconocidas repetidas, en el orden del borrador",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "X-1",
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19",
+          "E99",
+          "E99"
+        ]
+      },
+      "configs": null,
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "aristas-desconocidas",
+          "level": "blocking",
+          "title": "Conexiones que el motor real no tiene",
+          "detail": "X-1, E99, E99"
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        }
+      ]
+    },
+    {
+      "name": "real · persona aislada (sin E08)",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": null,
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "blocking",
+          "title": "Faltan conexiones obligatorias",
+          "detail": "prompts de voz y brand_copy → redactor"
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        },
+        {
+          "id": "aislada-persona",
+          "level": "blocking",
+          "title": "Personalidad y tono quedó aislada",
+          "detail": "Una capa crítica sin conexiones no participa del turno.",
+          "layer": "persona"
+        }
+      ]
+    },
+    {
+      "name": "real · falta una capa crítica",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": null,
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "blocking",
+          "title": "Faltan capas críticas",
+          "detail": "Memoria comercial"
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        }
+      ]
+    },
+    {
+      "name": "real · faltan dos capas críticas",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "Base de conocimiento aprobada",
+            "Planes vendibles",
+            "Clases y horarios"
+          ],
+          "strictFacts": true
+        },
+        "persona": {
+          "tone": "cercano",
+          "emojis": true,
+          "maxChars": 320
+        },
+        "intent": {
+          "driver": "entorno",
+          "fallback": "preguntar"
+        },
+        "context": {
+          "windowTurns": 10
+        },
+        "memory": {
+          "useLeadProfile": true
+        },
+        "strategy": {
+          "goal": "cita",
+          "offerPriority": [
+            "Plan insignia (is_recommended)"
+          ],
+          "discountsAllowed": false
+        },
+        "rules": {
+          "handoffOnlyCorroborated": true,
+          "paymentLinksEnabled": false
+        },
+        "composer": {
+          "critic": true,
+          "retry": true
+        },
+        "integrations": {
+          "channel": "whatsapp",
+          "appointments": true
+        },
+        "governance": {
+          "enabled": true,
+          "canaryOnly": true,
+          "autoBrake": true
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "blocking",
+          "title": "Faltan capas críticas",
+          "detail": "Conocimiento, Control y evolución"
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        },
+        {
+          "id": "configuracion",
+          "level": "ok",
+          "title": "La configuración respeta las reglas del motor",
+          "detail": "10 comprobaciones sobre los parámetros del borrador."
+        }
+      ]
+    },
+    {
+      "name": "real · configs vacío",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": {},
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        }
+      ]
+    },
+    {
+      "name": "real · configuración parcial",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": {
+        "rules": {
+          "paymentLinksEnabled": false
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        },
+        {
+          "id": "configuracion",
+          "level": "ok",
+          "title": "La configuración respeta las reglas del motor",
+          "detail": "3 comprobaciones sobre los parámetros del borrador."
+        }
+      ]
+    },
+    {
+      "name": "real · sin ninguna arista",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": []
+      },
+      "configs": null,
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "blocking",
+          "title": "Faltan conexiones obligatorias",
+          "detail": "mensaje entrante → contexto · mensajes recientes → cerebro de intención · conversación y memoria del turno → redactor · decisión base → Strategist · perfil, pagos y membresía → Strategist · planes y base de conocimiento → Strategist (sin precios) · marcadores de plan y precio → redactor · prompts de voz y brand_copy → redactor · estrategia validada → redactor · borrador, veredicto y token → commit · solo lo validado se envía · interruptor, freno, canario y token → commit · interruptor, pausa y canario → puertas de entrada y despacho · lo enviado → memoria y ficha del prospecto · turnos mudos e incidentes → vigía e IRON GUARD · pagos, membresía y perfil → commit (hechos y reventa) · planes, precio, horario y brand_copy → commit"
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "blocking",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "blocking",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "blocking",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        },
+        {
+          "id": "aislada-knowledge",
+          "level": "blocking",
+          "title": "Conocimiento quedó aislada",
+          "detail": "Una capa crítica sin conexiones no participa del turno.",
+          "layer": "knowledge"
+        },
+        {
+          "id": "aislada-persona",
+          "level": "blocking",
+          "title": "Personalidad y tono quedó aislada",
+          "detail": "Una capa crítica sin conexiones no participa del turno.",
+          "layer": "persona"
+        },
+        {
+          "id": "aislada-intent",
+          "level": "blocking",
+          "title": "Comprensión de intención quedó aislada",
+          "detail": "Una capa crítica sin conexiones no participa del turno.",
+          "layer": "intent"
+        },
+        {
+          "id": "aislada-context",
+          "level": "blocking",
+          "title": "Contexto de conversación quedó aislada",
+          "detail": "Una capa crítica sin conexiones no participa del turno.",
+          "layer": "context"
+        },
+        {
+          "id": "aislada-memory",
+          "level": "blocking",
+          "title": "Memoria comercial quedó aislada",
+          "detail": "Una capa crítica sin conexiones no participa del turno.",
+          "layer": "memory"
+        },
+        {
+          "id": "aislada-strategy",
+          "level": "blocking",
+          "title": "Estrategia comercial quedó aislada",
+          "detail": "Una capa crítica sin conexiones no participa del turno.",
+          "layer": "strategy"
+        },
+        {
+          "id": "aislada-rules",
+          "level": "blocking",
+          "title": "Reglas del negocio quedó aislada",
+          "detail": "Una capa crítica sin conexiones no participa del turno.",
+          "layer": "rules"
+        },
+        {
+          "id": "aislada-composer",
+          "level": "blocking",
+          "title": "Construcción de respuesta quedó aislada",
+          "detail": "Una capa crítica sin conexiones no participa del turno.",
+          "layer": "composer"
+        },
+        {
+          "id": "aislada-integrations",
+          "level": "blocking",
+          "title": "Integraciones quedó aislada",
+          "detail": "Una capa crítica sin conexiones no participa del turno.",
+          "layer": "integrations"
+        },
+        {
+          "id": "aislada-governance",
+          "level": "blocking",
+          "title": "Control y evolución quedó aislada",
+          "detail": "Una capa crítica sin conexiones no participa del turno.",
+          "layer": "governance"
+        }
+      ]
+    },
+    {
+      "name": "real · aristas desordenadas y repetidas",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E19",
+          "E18",
+          "E17",
+          "E15",
+          "E13",
+          "E12",
+          "E11",
+          "E10",
+          "E09",
+          "E08",
+          "E07",
+          "E06",
+          "E05",
+          "E04",
+          "E03",
+          "E02",
+          "E01",
+          "E01",
+          "E19"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "Base de conocimiento aprobada",
+            "Planes vendibles",
+            "Clases y horarios"
+          ],
+          "strictFacts": true
+        },
+        "persona": {
+          "tone": "cercano",
+          "emojis": true,
+          "maxChars": 320
+        },
+        "intent": {
+          "driver": "entorno",
+          "fallback": "preguntar"
+        },
+        "context": {
+          "windowTurns": 10
+        },
+        "memory": {
+          "useLeadProfile": true
+        },
+        "strategy": {
+          "goal": "cita",
+          "offerPriority": [
+            "Plan insignia (is_recommended)"
+          ],
+          "discountsAllowed": false
+        },
+        "rules": {
+          "handoffOnlyCorroborated": true,
+          "paymentLinksEnabled": false
+        },
+        "composer": {
+          "critic": true,
+          "retry": true
+        },
+        "integrations": {
+          "channel": "whatsapp",
+          "appointments": true
+        },
+        "governance": {
+          "enabled": true,
+          "canaryOnly": true,
+          "autoBrake": true
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        },
+        {
+          "id": "configuracion",
+          "level": "ok",
+          "title": "La configuración respeta las reglas del motor",
+          "detail": "10 comprobaciones sobre los parámetros del borrador."
+        }
+      ]
+    },
+    {
+      "name": "real · tipos distintos no coinciden",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "Base de conocimiento aprobada"
+          ],
+          "strictFacts": 0
+        },
+        "persona": {
+          "tone": "cercano",
+          "emojis": true,
+          "maxChars": 320
+        },
+        "intent": {
+          "driver": "Hermes",
+          "fallback": "preguntar"
+        },
+        "context": {
+          "windowTurns": 10
+        },
+        "memory": {
+          "useLeadProfile": true
+        },
+        "strategy": {
+          "goal": "cita",
+          "offerPriority": [],
+          "discountsAllowed": 1
+        },
+        "rules": {
+          "handoffOnlyCorroborated": "true",
+          "paymentLinksEnabled": "true"
+        },
+        "composer": {
+          "critic": true,
+          "retry": true
+        },
+        "integrations": {
+          "channel": "whatsapp",
+          "appointments": true
+        },
+        "governance": {
+          "enabled": "false",
+          "canaryOnly": "false",
+          "autoBrake": true
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        },
+        {
+          "id": "configuracion",
+          "level": "ok",
+          "title": "La configuración respeta las reglas del motor",
+          "detail": "10 comprobaciones sobre los parámetros del borrador."
+        }
+      ]
+    },
+    {
+      "name": "real · un valor null cuenta como comprobado",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "Base de conocimiento aprobada",
+            "Planes vendibles",
+            "Clases y horarios"
+          ],
+          "strictFacts": true
+        },
+        "persona": {
+          "tone": "cercano",
+          "emojis": true,
+          "maxChars": 320
+        },
+        "intent": {
+          "driver": "entorno",
+          "fallback": "preguntar"
+        },
+        "context": {
+          "windowTurns": 10
+        },
+        "memory": {
+          "useLeadProfile": true
+        },
+        "strategy": {
+          "goal": "cita",
+          "offerPriority": [
+            "Plan insignia (is_recommended)"
+          ],
+          "discountsAllowed": false
+        },
+        "rules": {
+          "handoffOnlyCorroborated": true,
+          "paymentLinksEnabled": null
+        },
+        "composer": {
+          "critic": true,
+          "retry": true
+        },
+        "integrations": {
+          "channel": "whatsapp",
+          "appointments": true
+        },
+        "governance": {
+          "enabled": true,
+          "canaryOnly": true,
+          "autoBrake": true
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        },
+        {
+          "id": "configuracion",
+          "level": "ok",
+          "title": "La configuración respeta las reglas del motor",
+          "detail": "10 comprobaciones sobre los parámetros del borrador."
+        }
+      ]
+    },
+    {
+      "name": "real · capas de configuración que no son objetos",
+      "catalog": "real",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "persona",
+          "intent",
+          "context",
+          "memory",
+          "strategy",
+          "rules",
+          "composer",
+          "integrations",
+          "governance"
+        ],
+        "edgeIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E15",
+          "E17",
+          "E18",
+          "E19"
+        ]
+      },
+      "configs": {
+        "knowledge": null,
+        "governance": "encendido",
+        "rules": [
+          "paymentLinksEnabled"
+        ]
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "17 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-entrada-a-envio",
+          "level": "ok",
+          "title": "Todo mensaje llega a una respuesta validada",
+          "detail": "Contexto → intención → estrategia → redacción → commit → canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-hechos-a-envio",
+          "level": "ok",
+          "title": "Los hechos autorizados llegan a lo que se envía",
+          "detail": "Sin este camino el agente respondería sin conocimiento autorizado.",
+          "layer": "integrations"
+        },
+        {
+          "id": "camino-control-a-envio",
+          "level": "ok",
+          "title": "Los interruptores gobiernan lo que se envía",
+          "detail": "Interruptor, freno, pausa y canario tienen que llegar al commit y al canal.",
+          "layer": "integrations"
+        },
+        {
+          "id": "opcional-E14",
+          "level": "warning",
+          "title": "Sin «enlace de pago como mensaje aparte»",
+          "detail": "No se envían enlaces de pago: el cobro lo gestiona una persona. Es el estado actual de producción (bandera apagada)."
+        },
+        {
+          "id": "opcional-E16",
+          "level": "warning",
+          "title": "Sin «resultado del pago (Wompi) → memoria y fase»",
+          "detail": "La memoria no sabría que el prospecto pagó ni cambiaría la fase. Hoy está apagado junto con los enlaces de pago."
+        }
+      ]
+    },
+    {
+      "name": "mini · línea base sin configuración",
+      "catalog": "mini",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "intent",
+          "strategy",
+          "composer"
+        ],
+        "edgeIds": [
+          "e-facts",
+          "e-decision",
+          "e-strategy",
+          "e-reply",
+          "e-events"
+        ]
+      },
+      "configs": null,
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "2 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-hechos-a-salida",
+          "level": "ok",
+          "title": "Los hechos llegan a la composición",
+          "detail": "Sin este camino se responde sin conocimiento.",
+          "layer": "composer"
+        },
+        {
+          "id": "opcional-e-loop",
+          "level": "warning",
+          "title": "Sin «estrategia → intención»",
+          "detail": "Reentrada."
+        }
+      ]
+    },
+    {
+      "name": "mini · línea base con configuración",
+      "catalog": "mini",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "intent",
+          "strategy",
+          "composer"
+        ],
+        "edgeIds": [
+          "e-facts",
+          "e-decision",
+          "e-strategy",
+          "e-reply",
+          "e-events"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "precios",
+            "horarios"
+          ],
+          "strict": true
+        },
+        "intent": {
+          "threshold": 60
+        },
+        "strategy": {
+          "goal": "ventas"
+        },
+        "composer": {
+          "tone": "cercano",
+          "maxChars": 320
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "2 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-hechos-a-salida",
+          "level": "ok",
+          "title": "Los hechos llegan a la composición",
+          "detail": "Sin este camino se responde sin conocimiento.",
+          "layer": "composer"
+        },
+        {
+          "id": "opcional-e-loop",
+          "level": "warning",
+          "title": "Sin «estrategia → intención»",
+          "detail": "Reentrada."
+        },
+        {
+          "id": "configuracion",
+          "level": "ok",
+          "title": "La configuración respeta las reglas del motor",
+          "detail": "2 comprobaciones sobre los parámetros del borrador."
+        }
+      ]
+    },
+    {
+      "name": "mini · ciclo dentro del turno",
+      "catalog": "mini",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "intent",
+          "strategy",
+          "composer"
+        ],
+        "edgeIds": [
+          "e-facts",
+          "e-decision",
+          "e-strategy",
+          "e-reply",
+          "e-events",
+          "e-loop"
+        ]
+      },
+      "configs": null,
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "2 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "blocking",
+          "title": "Ciclo dentro de un turno",
+          "detail": "Intención → Estrategia → Intención"
+        },
+        {
+          "id": "camino-hechos-a-salida",
+          "level": "ok",
+          "title": "Los hechos llegan a la composición",
+          "detail": "Sin este camino se responde sin conocimiento.",
+          "layer": "composer"
+        }
+      ]
+    },
+    {
+      "name": "mini · ciclo sin la arista directa (orden del recorrido)",
+      "catalog": "mini",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "intent",
+          "strategy",
+          "composer"
+        ],
+        "edgeIds": [
+          "e-facts",
+          "e-strategy",
+          "e-loop",
+          "e-reply"
+        ]
+      },
+      "configs": null,
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "blocking",
+          "title": "Faltan conexiones obligatorias",
+          "detail": "decisión → composición"
+        },
+        {
+          "id": "ciclos",
+          "level": "blocking",
+          "title": "Ciclo dentro de un turno",
+          "detail": "Intención → Estrategia → Intención"
+        },
+        {
+          "id": "camino-hechos-a-salida",
+          "level": "ok",
+          "title": "Los hechos llegan a la composición",
+          "detail": "Sin este camino se responde sin conocimiento.",
+          "layer": "composer"
+        },
+        {
+          "id": "opcional-e-events",
+          "level": "warning",
+          "title": "Sin «eventos → conocimiento (siguiente turno)»",
+          "detail": "No se aprende entre turnos."
+        }
+      ]
+    },
+    {
+      "name": "mini · la realimentación sola no es ciclo",
+      "catalog": "mini",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "intent",
+          "strategy",
+          "composer"
+        ],
+        "edgeIds": [
+          "e-facts",
+          "e-decision",
+          "e-events"
+        ]
+      },
+      "configs": null,
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "2 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-hechos-a-salida",
+          "level": "ok",
+          "title": "Los hechos llegan a la composición",
+          "detail": "Sin este camino se responde sin conocimiento.",
+          "layer": "composer"
+        },
+        {
+          "id": "opcional-e-strategy",
+          "level": "warning",
+          "title": "Sin «decisión → estrategia»",
+          "detail": "La estrategia no participa del turno."
+        },
+        {
+          "id": "opcional-e-reply",
+          "level": "warning",
+          "title": "Sin «estrategia → composición»",
+          "detail": "La composición no recibe la estrategia."
+        },
+        {
+          "id": "opcional-e-loop",
+          "level": "warning",
+          "title": "Sin «estrategia → intención»",
+          "detail": "Reentrada."
+        }
+      ]
+    },
+    {
+      "name": "mini · when/requires: vender sin estrategia",
+      "catalog": "mini",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "intent",
+          "strategy",
+          "composer"
+        ],
+        "edgeIds": [
+          "e-facts",
+          "e-decision",
+          "e-reply",
+          "e-events"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "precios",
+            "horarios"
+          ],
+          "strict": true
+        },
+        "intent": {
+          "threshold": 60
+        },
+        "strategy": {
+          "goal": "ventas"
+        },
+        "composer": {
+          "tone": "cercano",
+          "maxChars": 320
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "2 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-hechos-a-salida",
+          "level": "ok",
+          "title": "Los hechos llegan a la composición",
+          "detail": "Sin este camino se responde sin conocimiento.",
+          "layer": "composer"
+        },
+        {
+          "id": "opcional-e-strategy",
+          "level": "warning",
+          "title": "Sin «decisión → estrategia»",
+          "detail": "La estrategia no participa del turno."
+        },
+        {
+          "id": "opcional-e-loop",
+          "level": "warning",
+          "title": "Sin «estrategia → intención»",
+          "detail": "Reentrada."
+        },
+        {
+          "id": "config-ventas-con-estrategia",
+          "level": "warning",
+          "title": "Vender sin estrategia",
+          "detail": "Con objetivo de ventas la estrategia debería participar. (falta: decisión → estrategia)",
+          "layer": "strategy"
+        }
+      ]
+    },
+    {
+      "name": "mini · when que no aplica",
+      "catalog": "mini",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "intent",
+          "strategy",
+          "composer"
+        ],
+        "edgeIds": [
+          "e-facts",
+          "e-decision",
+          "e-reply",
+          "e-events"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "precios",
+            "horarios"
+          ],
+          "strict": true
+        },
+        "intent": {
+          "threshold": 60
+        },
+        "strategy": {
+          "goal": "citas"
+        },
+        "composer": {
+          "tone": "cercano",
+          "maxChars": 320
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "2 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-hechos-a-salida",
+          "level": "ok",
+          "title": "Los hechos llegan a la composición",
+          "detail": "Sin este camino se responde sin conocimiento.",
+          "layer": "composer"
+        },
+        {
+          "id": "opcional-e-strategy",
+          "level": "warning",
+          "title": "Sin «decisión → estrategia»",
+          "detail": "La estrategia no participa del turno."
+        },
+        {
+          "id": "opcional-e-loop",
+          "level": "warning",
+          "title": "Sin «estrategia → intención»",
+          "detail": "Reentrada."
+        },
+        {
+          "id": "configuracion",
+          "level": "ok",
+          "title": "La configuración respeta las reglas del motor",
+          "detail": "2 comprobaciones sobre los parámetros del borrador."
+        }
+      ]
+    },
+    {
+      "name": "mini · forbidden: sin hechos estrictos",
+      "catalog": "mini",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "intent",
+          "strategy",
+          "composer"
+        ],
+        "edgeIds": [
+          "e-facts",
+          "e-decision",
+          "e-strategy",
+          "e-reply",
+          "e-events"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [],
+          "strict": false
+        },
+        "intent": {
+          "threshold": 60
+        },
+        "strategy": {
+          "goal": "ventas"
+        },
+        "composer": {
+          "tone": "cercano",
+          "maxChars": 320
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "2 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-hechos-a-salida",
+          "level": "ok",
+          "title": "Los hechos llegan a la composición",
+          "detail": "Sin este camino se responde sin conocimiento.",
+          "layer": "composer"
+        },
+        {
+          "id": "opcional-e-loop",
+          "level": "warning",
+          "title": "Sin «estrategia → intención»",
+          "detail": "Reentrada."
+        },
+        {
+          "id": "config-estricto",
+          "level": "blocking",
+          "title": "Sin hechos estrictos",
+          "detail": "El motor no responde sin hechos verificados.",
+          "layer": "knowledge"
+        }
+      ]
+    },
+    {
+      "name": "mini · camino ausente",
+      "catalog": "mini",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "intent",
+          "strategy",
+          "composer"
+        ],
+        "edgeIds": [
+          "e-facts",
+          "e-events"
+        ]
+      },
+      "configs": null,
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "blocking",
+          "title": "Faltan conexiones obligatorias",
+          "detail": "decisión → composición"
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-hechos-a-salida",
+          "level": "blocking",
+          "title": "Los hechos llegan a la composición",
+          "detail": "Sin este camino se responde sin conocimiento.",
+          "layer": "composer"
+        },
+        {
+          "id": "opcional-e-strategy",
+          "level": "warning",
+          "title": "Sin «decisión → estrategia»",
+          "detail": "La estrategia no participa del turno."
+        },
+        {
+          "id": "opcional-e-reply",
+          "level": "warning",
+          "title": "Sin «estrategia → composición»",
+          "detail": "La composición no recibe la estrategia."
+        },
+        {
+          "id": "opcional-e-loop",
+          "level": "warning",
+          "title": "Sin «estrategia → intención»",
+          "detail": "Reentrada."
+        }
+      ]
+    },
+    {
+      "name": "mini · camino por la estrategia",
+      "catalog": "mini",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "intent",
+          "strategy",
+          "composer"
+        ],
+        "edgeIds": [
+          "e-facts",
+          "e-strategy",
+          "e-reply"
+        ]
+      },
+      "configs": null,
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "blocking",
+          "title": "Faltan conexiones obligatorias",
+          "detail": "decisión → composición"
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-hechos-a-salida",
+          "level": "ok",
+          "title": "Los hechos llegan a la composición",
+          "detail": "Sin este camino se responde sin conocimiento.",
+          "layer": "composer"
+        },
+        {
+          "id": "opcional-e-events",
+          "level": "warning",
+          "title": "Sin «eventos → conocimiento (siguiente turno)»",
+          "detail": "No se aprende entre turnos."
+        },
+        {
+          "id": "opcional-e-loop",
+          "level": "warning",
+          "title": "Sin «estrategia → intención»",
+          "detail": "Reentrada."
+        }
+      ]
+    },
+    {
+      "name": "mini · capa crítica aislada y arista inventada",
+      "catalog": "mini",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "intent",
+          "strategy",
+          "composer"
+        ],
+        "edgeIds": [
+          "e-decision",
+          "e-strategy",
+          "e-reply",
+          "inventada"
+        ]
+      },
+      "configs": null,
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "blocking",
+          "title": "Faltan conexiones obligatorias",
+          "detail": "hechos → intención"
+        },
+        {
+          "id": "aristas-desconocidas",
+          "level": "blocking",
+          "title": "Conexiones que el motor real no tiene",
+          "detail": "inventada"
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-hechos-a-salida",
+          "level": "blocking",
+          "title": "Los hechos llegan a la composición",
+          "detail": "Sin este camino se responde sin conocimiento.",
+          "layer": "composer"
+        },
+        {
+          "id": "opcional-e-events",
+          "level": "warning",
+          "title": "Sin «eventos → conocimiento (siguiente turno)»",
+          "detail": "No se aprende entre turnos."
+        },
+        {
+          "id": "opcional-e-loop",
+          "level": "warning",
+          "title": "Sin «estrategia → intención»",
+          "detail": "Reentrada."
+        },
+        {
+          "id": "aislada-knowledge",
+          "level": "blocking",
+          "title": "Conocimiento quedó aislada",
+          "detail": "Una capa crítica sin conexiones no participa del turno.",
+          "layer": "knowledge"
+        }
+      ]
+    },
+    {
+      "name": "mini · falta una capa crítica",
+      "catalog": "mini",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "intent",
+          "strategy"
+        ],
+        "edgeIds": [
+          "e-facts",
+          "e-decision",
+          "e-strategy",
+          "e-reply",
+          "e-events"
+        ]
+      },
+      "configs": null,
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "blocking",
+          "title": "Faltan capas críticas",
+          "detail": "Composición"
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "2 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-hechos-a-salida",
+          "level": "ok",
+          "title": "Los hechos llegan a la composición",
+          "detail": "Sin este camino se responde sin conocimiento.",
+          "layer": "composer"
+        },
+        {
+          "id": "opcional-e-loop",
+          "level": "warning",
+          "title": "Sin «estrategia → intención»",
+          "detail": "Reentrada."
+        }
+      ]
+    },
+    {
+      "name": "mini · falta una capa complementaria",
+      "catalog": "mini",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "intent",
+          "composer"
+        ],
+        "edgeIds": [
+          "e-facts",
+          "e-decision",
+          "e-strategy",
+          "e-reply",
+          "e-events"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "precios",
+            "horarios"
+          ],
+          "strict": true
+        },
+        "intent": {
+          "threshold": 60
+        },
+        "strategy": {
+          "goal": "ventas"
+        },
+        "composer": {
+          "tone": "cercano",
+          "maxChars": 320
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "2 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-hechos-a-salida",
+          "level": "ok",
+          "title": "Los hechos llegan a la composición",
+          "detail": "Sin este camino se responde sin conocimiento.",
+          "layer": "composer"
+        },
+        {
+          "id": "opcional-e-loop",
+          "level": "warning",
+          "title": "Sin «estrategia → intención»",
+          "detail": "Reentrada."
+        },
+        {
+          "id": "configuracion",
+          "level": "ok",
+          "title": "La configuración respeta las reglas del motor",
+          "detail": "2 comprobaciones sobre los parámetros del borrador."
+        }
+      ]
+    },
+    {
+      "name": "mini-mixto · línea base: falta y sobra a la vez",
+      "catalog": "mini-mixto",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "intent",
+          "strategy",
+          "composer"
+        ],
+        "edgeIds": [
+          "e-facts",
+          "e-decision",
+          "e-strategy",
+          "e-reply",
+          "e-events"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "precios",
+            "horarios"
+          ],
+          "strict": true
+        },
+        "intent": {
+          "threshold": 60
+        },
+        "strategy": {
+          "goal": "ventas"
+        },
+        "composer": {
+          "tone": "cercano",
+          "maxChars": 320
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "2 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-hechos-a-salida",
+          "level": "ok",
+          "title": "Los hechos llegan a la composición",
+          "detail": "Sin este camino se responde sin conocimiento.",
+          "layer": "composer"
+        },
+        {
+          "id": "opcional-e-loop",
+          "level": "warning",
+          "title": "Sin «estrategia → intención»",
+          "detail": "Reentrada."
+        },
+        {
+          "id": "config-mixta",
+          "level": "blocking",
+          "title": "Tono cercano sin su camino",
+          "detail": "Con tono cercano la estrategia tiene que llegar a la composición y los eventos no deben volver al conocimiento. (falta: fantasma; sobra: eventos → conocimiento (siguiente turno))",
+          "layer": "composer"
+        },
+        {
+          "id": "config-fuentes-exactas",
+          "level": "warning",
+          "title": "Fuentes mínimas con respuesta de la estrategia",
+          "detail": "Con solo precios y horarios la estrategia no debería redactar. (sobra: estrategia → composición)",
+          "layer": "knowledge"
+        }
+      ]
+    },
+    {
+      "name": "mini-mixto · solo falta",
+      "catalog": "mini-mixto",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "intent",
+          "strategy",
+          "composer"
+        ],
+        "edgeIds": [
+          "e-facts",
+          "e-decision"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "precios",
+            "horarios"
+          ],
+          "strict": true
+        },
+        "intent": {
+          "threshold": 60
+        },
+        "strategy": {
+          "goal": "ventas"
+        },
+        "composer": {
+          "tone": "cercano",
+          "maxChars": 320
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "2 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-hechos-a-salida",
+          "level": "ok",
+          "title": "Los hechos llegan a la composición",
+          "detail": "Sin este camino se responde sin conocimiento.",
+          "layer": "composer"
+        },
+        {
+          "id": "opcional-e-strategy",
+          "level": "warning",
+          "title": "Sin «decisión → estrategia»",
+          "detail": "La estrategia no participa del turno."
+        },
+        {
+          "id": "opcional-e-reply",
+          "level": "warning",
+          "title": "Sin «estrategia → composición»",
+          "detail": "La composición no recibe la estrategia."
+        },
+        {
+          "id": "opcional-e-events",
+          "level": "warning",
+          "title": "Sin «eventos → conocimiento (siguiente turno)»",
+          "detail": "No se aprende entre turnos."
+        },
+        {
+          "id": "opcional-e-loop",
+          "level": "warning",
+          "title": "Sin «estrategia → intención»",
+          "detail": "Reentrada."
+        },
+        {
+          "id": "config-ventas-con-estrategia",
+          "level": "warning",
+          "title": "Vender sin estrategia",
+          "detail": "Con objetivo de ventas la estrategia debería participar. (falta: decisión → estrategia)",
+          "layer": "strategy"
+        },
+        {
+          "id": "config-mixta",
+          "level": "blocking",
+          "title": "Tono cercano sin su camino",
+          "detail": "Con tono cercano la estrategia tiene que llegar a la composición y los eventos no deben volver al conocimiento. (falta: decisión → estrategia · estrategia → composición · fantasma)",
+          "layer": "composer"
+        }
+      ]
+    },
+    {
+      "name": "mini-mixto · solo sobra, con desconocidas",
+      "catalog": "mini-mixto",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "intent",
+          "strategy",
+          "composer"
+        ],
+        "edgeIds": [
+          "e-facts",
+          "e-decision",
+          "e-strategy",
+          "e-reply",
+          "e-events",
+          "fantasma",
+          "inexistente"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "precios",
+            "horarios"
+          ],
+          "strict": true
+        },
+        "intent": {
+          "threshold": 60
+        },
+        "strategy": {
+          "goal": "ventas"
+        },
+        "composer": {
+          "tone": "cercano",
+          "maxChars": 320
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "2 conexiones obligatorias presentes."
+        },
+        {
+          "id": "aristas-desconocidas",
+          "level": "blocking",
+          "title": "Conexiones que el motor real no tiene",
+          "detail": "fantasma, inexistente"
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-hechos-a-salida",
+          "level": "ok",
+          "title": "Los hechos llegan a la composición",
+          "detail": "Sin este camino se responde sin conocimiento.",
+          "layer": "composer"
+        },
+        {
+          "id": "opcional-e-loop",
+          "level": "warning",
+          "title": "Sin «estrategia → intención»",
+          "detail": "Reentrada."
+        },
+        {
+          "id": "config-mixta",
+          "level": "blocking",
+          "title": "Tono cercano sin su camino",
+          "detail": "Con tono cercano la estrategia tiene que llegar a la composición y los eventos no deben volver al conocimiento. (sobra: eventos → conocimiento (siguiente turno) · inexistente)",
+          "layer": "composer"
+        },
+        {
+          "id": "config-fuentes-exactas",
+          "level": "warning",
+          "title": "Fuentes mínimas con respuesta de la estrategia",
+          "detail": "Con solo precios y horarios la estrategia no debería redactar. (sobra: estrategia → composición)",
+          "layer": "knowledge"
+        }
+      ]
+    },
+    {
+      "name": "mini-mixto · coherente: una lista when en otro orden no aplica",
+      "catalog": "mini-mixto",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "intent",
+          "strategy",
+          "composer"
+        ],
+        "edgeIds": [
+          "e-facts",
+          "e-decision",
+          "e-strategy",
+          "e-reply",
+          "fantasma"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "horarios",
+            "precios"
+          ],
+          "strict": true
+        },
+        "intent": {
+          "threshold": 60
+        },
+        "strategy": {
+          "goal": "ventas"
+        },
+        "composer": {
+          "tone": "cercano",
+          "maxChars": 320
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "2 conexiones obligatorias presentes."
+        },
+        {
+          "id": "aristas-desconocidas",
+          "level": "blocking",
+          "title": "Conexiones que el motor real no tiene",
+          "detail": "fantasma"
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-hechos-a-salida",
+          "level": "ok",
+          "title": "Los hechos llegan a la composición",
+          "detail": "Sin este camino se responde sin conocimiento.",
+          "layer": "composer"
+        },
+        {
+          "id": "opcional-e-events",
+          "level": "warning",
+          "title": "Sin «eventos → conocimiento (siguiente turno)»",
+          "detail": "No se aprende entre turnos."
+        },
+        {
+          "id": "opcional-e-loop",
+          "level": "warning",
+          "title": "Sin «estrategia → intención»",
+          "detail": "Reentrada."
+        },
+        {
+          "id": "configuracion",
+          "level": "ok",
+          "title": "La configuración respeta las reglas del motor",
+          "detail": "6 comprobaciones sobre los parámetros del borrador."
+        }
+      ]
+    },
+    {
+      "name": "mini-mixto · valores prohibidos que no son booleanos",
+      "catalog": "mini-mixto",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "intent",
+          "strategy",
+          "composer"
+        ],
+        "edgeIds": [
+          "e-facts",
+          "e-decision",
+          "e-strategy",
+          "e-reply",
+          "e-events"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [],
+          "strict": true
+        },
+        "intent": {
+          "threshold": 0
+        },
+        "strategy": {
+          "goal": "ventas"
+        },
+        "composer": {
+          "tone": "cercano",
+          "maxChars": 320
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "2 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-hechos-a-salida",
+          "level": "ok",
+          "title": "Los hechos llegan a la composición",
+          "detail": "Sin este camino se responde sin conocimiento.",
+          "layer": "composer"
+        },
+        {
+          "id": "opcional-e-loop",
+          "level": "warning",
+          "title": "Sin «estrategia → intención»",
+          "detail": "Reentrada."
+        },
+        {
+          "id": "config-mixta",
+          "level": "blocking",
+          "title": "Tono cercano sin su camino",
+          "detail": "Con tono cercano la estrategia tiene que llegar a la composición y los eventos no deben volver al conocimiento. (falta: fantasma; sobra: eventos → conocimiento (siguiente turno))",
+          "layer": "composer"
+        },
+        {
+          "id": "config-fuentes-vacias",
+          "level": "warning",
+          "title": "Sin fuentes",
+          "detail": "Una lista de fuentes vacía deja al agente sin nada que afirmar.",
+          "layer": "knowledge"
+        },
+        {
+          "id": "config-umbral-cero",
+          "level": "warning",
+          "title": "Umbral en cero",
+          "detail": "Con el umbral en cero cualquier mensaje cuenta como intención.",
+          "layer": "intent"
+        }
+      ]
+    },
+    {
+      "name": "mini-mixto · tipos que no coinciden",
+      "catalog": "mini-mixto",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "intent",
+          "strategy",
+          "composer"
+        ],
+        "edgeIds": [
+          "e-facts",
+          "e-decision",
+          "e-strategy",
+          "e-reply",
+          "e-events"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": "",
+          "strict": "false"
+        },
+        "intent": {
+          "threshold": "0"
+        },
+        "strategy": {
+          "goal": "ventas"
+        },
+        "composer": {
+          "tone": "Cercano",
+          "maxChars": 320
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "2 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-hechos-a-salida",
+          "level": "ok",
+          "title": "Los hechos llegan a la composición",
+          "detail": "Sin este camino se responde sin conocimiento.",
+          "layer": "composer"
+        },
+        {
+          "id": "opcional-e-loop",
+          "level": "warning",
+          "title": "Sin «estrategia → intención»",
+          "detail": "Reentrada."
+        },
+        {
+          "id": "configuracion",
+          "level": "ok",
+          "title": "La configuración respeta las reglas del motor",
+          "detail": "6 comprobaciones sobre los parámetros del borrador."
+        }
+      ]
+    },
+    {
+      "name": "mini-mixto · valor null",
+      "catalog": "mini-mixto",
+      "definition": {
+        "layers": [
+          "knowledge",
+          "intent",
+          "strategy",
+          "composer"
+        ],
+        "edgeIds": [
+          "e-facts",
+          "e-decision",
+          "e-strategy",
+          "e-reply",
+          "e-events"
+        ]
+      },
+      "configs": {
+        "knowledge": {
+          "sources": [
+            "precios",
+            "horarios"
+          ],
+          "strict": true
+        },
+        "intent": {
+          "threshold": 60
+        },
+        "strategy": {
+          "goal": "ventas"
+        },
+        "composer": {
+          "tone": null,
+          "maxChars": 320
+        }
+      },
+      "expected": [
+        {
+          "id": "capas-criticas",
+          "level": "ok",
+          "title": "Las diez capas están presentes",
+          "detail": "Ninguna capa crítica falta."
+        },
+        {
+          "id": "aristas-obligatorias",
+          "level": "ok",
+          "title": "Controles obligatorios conectados",
+          "detail": "2 conexiones obligatorias presentes."
+        },
+        {
+          "id": "ciclos",
+          "level": "ok",
+          "title": "Sin ciclos dentro de un turno",
+          "detail": "La memoria entre turnos no cuenta como ciclo."
+        },
+        {
+          "id": "camino-hechos-a-salida",
+          "level": "ok",
+          "title": "Los hechos llegan a la composición",
+          "detail": "Sin este camino se responde sin conocimiento.",
+          "layer": "composer"
+        },
+        {
+          "id": "opcional-e-loop",
+          "level": "warning",
+          "title": "Sin «estrategia → intención»",
+          "detail": "Reentrada."
+        },
+        {
+          "id": "config-fuentes-exactas",
+          "level": "warning",
+          "title": "Fuentes mínimas con respuesta de la estrategia",
+          "detail": "Con solo precios y horarios la estrategia no debería redactar. (sobra: estrategia → composición)",
+          "layer": "knowledge"
+        }
+      ]
+    }
+  ]
+}

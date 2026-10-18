@@ -646,6 +646,43 @@ final class AuthorizationMap
         'GET api/admin/valuations/settings' => self::VALUATIONS_SETTINGS_READ,
         'PUT api/admin/valuations/settings' => 'valuations.manage_settings',
 
+        /*
+         * ULTRON STUDIO (contrato docs/ultron-studio/ULTRON_STUDIO_F_CONTRACT.md
+         * §A3–§A4), ruta a ruta. Sus tres controladores NO están en CONTROLLERS:
+         * allí las lecturas resolverían a `<dominio>.view` por el verbo, y una
+         * ruta nueva quedaría clasificada sin que nadie lo decidiera.
+         *
+         * `marketing.view` y `marketing.agent.manage` no abren nada de esto. Los
+         * controladores exigen además una PERSONA (el token compartido no
+         * recibe nada de `ultron`, ver CrmPermission) y los CUATRO OJOS por
+         * identidad: `ultron.approve` no deja aprobar lo propio. Publicar y
+         * revertir responden 409 siempre en esta fase: el motor no lee
+         * versiones del Studio.
+         */
+        'GET api/admin/ultron-studio/status' => 'ultron.view',
+        'GET api/admin/ultron-studio/catalog' => 'ultron.view',
+        'GET api/admin/ultron-studio/draft' => 'ultron.view',
+        'PUT api/admin/ultron-studio/draft' => 'ultron.edit_draft',
+        'POST api/admin/ultron-studio/draft/discard' => 'ultron.edit_draft',
+        'GET api/admin/ultron-studio/versions' => 'ultron.view',
+        'POST api/admin/ultron-studio/versions' => 'ultron.edit_draft',
+        'GET api/admin/ultron-studio/versions/{uuid}' => 'ultron.view',
+        // Simulación: valida contra el catálogo actual y no escribe nada.
+        'POST api/admin/ultron-studio/versions/{uuid}/validate' => 'ultron.view',
+        // Enviar a revisión: además, solo quien la creó (lo exige el servicio).
+        'POST api/admin/ultron-studio/versions/{uuid}/submit' => 'ultron.edit_draft',
+        'POST api/admin/ultron-studio/versions/{uuid}/approve' => 'ultron.approve',
+        'POST api/admin/ultron-studio/versions/{uuid}/reject' => 'ultron.approve',
+        'POST api/admin/ultron-studio/versions/{uuid}/publish' => 'ultron.publish',
+        'POST api/admin/ultron-studio/versions/{uuid}/rollback' => 'ultron.rollback',
+        'GET api/admin/ultron-studio/rules' => 'ultron.view',
+        'POST api/admin/ultron-studio/rules' => 'ultron.manage_rules',
+        'PATCH api/admin/ultron-studio/rules/{uuid}' => 'ultron.manage_rules',
+        'POST api/admin/ultron-studio/rules/{uuid}/archive' => 'ultron.manage_rules',
+        // Los eventos de borrador ajenos solo los ve quien tenga `audit.view`
+        // (lo filtra el servicio); el resto del libro, cualquiera del Studio.
+        'GET api/admin/ultron-studio/audit' => 'ultron.view',
+
         // Ver el catálogo de roles ya revela el organigrama y qué puede cada
         // uno. Se exige el mismo permiso que para tocarlo: un dominio con una
         // sola llave se entiende mejor que uno con dos que casi coinciden.

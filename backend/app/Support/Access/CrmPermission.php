@@ -178,10 +178,13 @@ final class CrmPermission
      * Todo lo que el token compartido NO lee. Además del personal, la agenda de
      * valoraciones: cita a un socio con su entrenador para una valoración
      * física, y eso no se reparte a una credencial sin persona detrás.
+     * Y ULTRON STUDIO (`ultron`): borradores, versiones y aprobaciones los
+     * firma una persona, y el diseño del agente no se le enseña a una
+     * automatización (los controladores exigen además una persona).
      * Se compara el PRIMER segmento de la clave: `valuations.view_all` y
      * cualquier `valuations.algo.view` futuro quedan fuera igual.
      */
-    public const SHARED_TOKEN_EXCLUDED_DOMAINS = [...self::PERSONNEL_DOMAINS, 'valuations'];
+    public const SHARED_TOKEN_EXCLUDED_DOMAINS = [...self::PERSONNEL_DOMAINS, 'valuations', 'ultron'];
 
     /**
      * Permisos por defecto de cada rol del sistema.
@@ -216,6 +219,11 @@ final class CrmPermission
             // Configurar la agenda de valoraciones (avisos al socio, canales,
             // agendar en el pasado). Llega nuevo y se reparte a mano.
             'valuations.manage_settings',
+            // Publicar y revertir versiones de ULTRON Studio: quien aprueba no
+            // es quien publica. Llegan nuevas y se reparten a mano (hoy, además,
+            // el servidor las rechaza siempre: el motor no lee versiones).
+            'ultron.publish',
+            'ultron.rollback',
         ]));
 
         /*

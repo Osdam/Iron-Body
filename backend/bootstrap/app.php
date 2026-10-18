@@ -33,6 +33,12 @@ return Application::configure(basePath: dirname(__DIR__))
             Route::middleware('api')
                 ->prefix('api')
                 ->group(base_path('routes/marketing.php'));
+
+            // ULTRON STUDIO (/api/admin/ultron-studio/*), en su propio fichero:
+            // el Studio no toca las rutas del motor. Mismo grupo `api`.
+            Route::middleware('api')
+                ->prefix('api')
+                ->group(base_path('routes/ultron-studio.php'));
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {

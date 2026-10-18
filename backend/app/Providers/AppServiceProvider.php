@@ -148,6 +148,7 @@ class AppServiceProvider extends ServiceProvider
         $this->limitadoresDelRegistroPublico();
         $this->limitadorDelServicioDeImpresion();
         $this->limitadorDeValoraciones();
+        $this->limitadoresDelStudio();
 
         $this->guardWompiConfig();
         $this->guardFactusConfig();
@@ -569,6 +570,39 @@ class AppServiceProvider extends ServiceProvider
                     'message' => 'Demasiadas consultas seguidas a la agenda de valoraciones. Espera un momento.',
                 ], 429, $headers));
         });
+    }
+
+    /**
+     * ULTRON STUDIO (/api/admin/ultron-studio/*): lectura 120 por minuto y
+     * escritura 30 por minuto, por CREDENCIAL, en cubos propios (contrato
+     * §A3). El throttle corre antes que la autenticación, así que la clave es
+     * la huella del bearer (nunca el token en claro) o, sin él, la IP; la de un
+     * cubo no se mezcla con la del otro porque Laravel antepone el nombre del
+     * limitador. El 429 lleva `retry_after`, como el traslado de planes.
+     *
+     * Bloque autocontenido a propósito: otras ramas añaden limitadores aquí.
+     */
+    private function limitadoresDelStudio(): void
+    {
+        $clave = function (Request $request): string {
+            $token = $request->bearerToken();
+
+            return 'ultron-studio:'.($token ? hash('sha256', $token) : 'ip:'.$request->ip());
+        };
+        $demasiadas = fn (string $mensaje) => fn ($request, array $headers) => response()->json([
+            'ok' => false,
+            'code' => 'too_many_requests',
+            'message' => $mensaje,
+            'retry_after' => (int) ($headers['Retry-After'] ?? 60),
+        ], 429, $headers);
+
+        RateLimiter::for('ultron-studio-read', fn (Request $request) => Limit::perMinute(120)
+            ->by($clave($request))
+            ->response($demasiadas('Demasiadas consultas seguidas al Studio de ULTRON. Espera un momento.')));
+
+        RateLimiter::for('ultron-studio-write', fn (Request $request) => Limit::perMinute(30)
+            ->by($clave($request))
+            ->response($demasiadas('Demasiados cambios seguidos en el Studio de ULTRON. Espera un minuto.')));
     }
 
     /**
