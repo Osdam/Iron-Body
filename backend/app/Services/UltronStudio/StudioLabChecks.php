@@ -10,6 +10,7 @@ namespace App\Services\UltronStudio;
  *
  * | id                  | nivel    | cuándo                                                          |
  * |---------------------|----------|-----------------------------------------------------------------|
+ * | `lab-invisibles`    | blocking | lleva caracteres de control o invisibles (Enmienda 4.2)         |
  * | `lab-vacia`         | blocking | la respuesta queda vacía tras recortarla                        |
  * | `lab-longitud`      | warning  | tiene más caracteres que `persona.maxChars` del objetivo        |
  * | `lab-emojis`        | warning  | lleva algún emoji y `persona.emojis` es `false`                 |
@@ -27,6 +28,14 @@ namespace App\Services\UltronStudio;
  * estilo del motor (una prueba los compara): el PCRE de producción no conoce
  * `\p{Extended_Pictographic}`.
  *
+ * `lab-invisibles` va PRIMERO (Enmienda 4.2): un control bidi o un espacio de
+ * anchura cero esconde el texto a las demás pruebas y a las guardas del motor
+ * («des\u{200B}cuento» no es «descuento»), y quien emite el veredicto lo
+ * vería distinto de lo evaluado (`\u{202E}000.08$\u{202C}` se pinta
+ * «$80.000»). La respuesta se guarda tal cual y el CRM la interpola: el
+ * hallazgo bloqueante es lo que impide que pase por limpia. También con
+ * rangos explícitos. Este fichero no lleva ningún invisible literal.
+ *
  * Cada hallazgo: `{id, source: studio, level, title, detail, quote?}`, con
  * `quote` de 120 caracteres como mucho, sacado del texto del actor.
  */
@@ -41,6 +50,8 @@ final class StudioLabChecks
     public const LEVEL_INFO = 'info';
 
     public const LEVELS = [self::LEVEL_BLOCKING, self::LEVEL_WARNING, self::LEVEL_INFO];
+
+    public const ID_INVISIBLE = 'lab-invisibles';
 
     public const ID_EMPTY = 'lab-vacia';
 
@@ -65,6 +76,17 @@ final class StudioLabChecks
      * que se le una con ZWJ.
      */
     public const EMOJI_PATTERN = '/(?:[\x{1F1E6}-\x{1F1FF}]{2}|'.self::PICTO.'\x{FE0F}?(?:[\x{1F3FB}-\x{1F3FF}])?(?:\x{200D}'.self::PICTO.'\x{FE0F}?(?:[\x{1F3FB}-\x{1F3FF}])?)*)/u';
+
+    /**
+     * Lo que dispara `lab-invisibles`: la lista de la Enmienda 4.2 más las
+     * marcas LRM/RLM (decisión del lead tras la revisión: son invisibles y
+     * parten una palabra o una cifra igual que un ZWSP). Controles bidi
+     * (U+202A–U+202E, U+2066–U+2069, U+061C, U+200E, U+200F), espacios de
+     * anchura cero (U+200B, U+200C, U+2060, U+FEFF), el guion suave U+00AD,
+     * U+180E, las etiquetas U+E0000–U+E007F y los separadores U+2028/U+2029.
+     * El ZWJ U+200D NO está: lo usan los emojis compuestos (U+1F3CB U+FE0F U+200D U+2640).
+     */
+    public const INVISIBLE_PATTERN = '/[\x{202A}-\x{202E}\x{2066}-\x{2069}\x{061C}\x{200E}\x{200F}\x{200B}\x{200C}\x{2060}\x{FEFF}\x{00AD}\x{180E}\x{E0000}-\x{E007F}\x{2028}\x{2029}]/u';
 
     /**
      * Los espacios de `String.prototype.trim()`, como `StudioRuleCoherence`
@@ -94,6 +116,11 @@ final class StudioLabChecks
         $persona = is_array($configs['persona'] ?? null) ? $configs['persona'] : [];
         $limpia = self::trim($reply);
         $out = [];
+
+        // Sin cita: repetiría los invisibles en lo que se pinta.
+        if (preg_match(self::INVISIBLE_PATTERN, $reply) === 1) {
+            $out[] = self::finding(self::ID_INVISIBLE, self::LEVEL_BLOCKING, 'Caracteres invisibles en la respuesta', 'La respuesta contiene caracteres de control o invisibles que pueden ocultar texto a los filtros');
+        }
 
         if ($limpia === '') {
             $out[] = self::finding(self::ID_EMPTY, self::LEVEL_BLOCKING, 'La respuesta está vacía', 'El actor no escribió nada: no hay mensaje que enviar.');

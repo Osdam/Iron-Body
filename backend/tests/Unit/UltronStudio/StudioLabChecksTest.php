@@ -5,19 +5,24 @@ namespace Tests\Unit\UltronStudio;
 use App\Services\Marketing\Ultron\ComposerStyleGuard;
 use App\Services\UltronStudio\StudioCatalog;
 use App\Services\UltronStudio\StudioLabChecks as K;
+use App\Services\UltronStudio\StudioLabEngineChecks;
+use App\Services\UltronStudio\StudioLabOutcome;
 use App\Services\UltronStudio\StudioRuleCoherence;
 use PHPUnit\Framework\TestCase;
 use ReflectionClassConstant;
 
 /**
- * Las pruebas deterministas del Studio (contrato H4 §A4): `lab-vacia`,
- * `lab-longitud`, `lab-emojis` y `lab-regla-<S-NNN>`.
+ * Las pruebas deterministas del Studio (contrato H4 §A4 y Enmienda 4.2):
+ * `lab-invisibles`, `lab-vacia`, `lab-longitud`, `lab-emojis` y
+ * `lab-regla-<S-NNN>`.
  *
  * LO QUE SE PROTEGE. Niveles y disparos de la tabla; que los emojis se
  * cuenten con los MISMOS rangos que la guardia de estilo del motor y la
  * respuesta se canonicalice como las frases de G (comparados por
  * reflexión: si uno cambia, esto falla); que solo cuenten las afirmaciones
- * `forbid text contains` de las S-NNN cuyo «si» se da; y la forma de cada
+ * `forbid text contains` de las S-NNN cuyo «si» se da; que un invisible de la
+ * lista de la Enmienda 4.2 (más LRM/RLM) bloquee aunque las guardas del motor
+ * no vean nada, y que el ZWJ de los emojis compuestos no; y la forma de cada
  * hallazgo.
  */
 class StudioLabChecksTest extends TestCase
@@ -42,6 +47,71 @@ class StudioLabChecksTest extends TestCase
     private static function ids(array $hallazgos): array
     {
         return array_column($hallazgos, 'id');
+    }
+
+    public function test_cada_invisible_de_la_enmienda_bloquea_con_su_forma_y_sin_cita(): void
+    {
+        $lista = [
+            0x202A, 0x202B, 0x202C, 0x202D, 0x202E, 0x2066, 0x2067, 0x2068, 0x2069, 0x061C, // bidi
+            0x200E, 0x200F,                                                                 // LRM y RLM (decisión del lead)
+            0x200B, 0x200C, 0x2060, 0xFEFF,                                                 // anchura cero
+            0x00AD, 0x180E,                                                                 // guion suave, separador mongol
+            0xE0000, 0xE0001, 0xE0020, 0xE0041, 0xE007F,                                    // etiquetas (bordes y dentro)
+            0x2028, 0x2029,                                                                 // separadores de línea y párrafo
+        ];
+        foreach ($lista as $cp) {
+            $h = K::check('Hola, '.mb_chr($cp, 'UTF-8').'te ayudo con gusto', self::target());
+            $this->assertSame(['lab-invisibles'], self::ids($h), sprintf('U+%04X', $cp));
+            $this->assertSame([
+                'id' => 'lab-invisibles',
+                'source' => 'studio',
+                'level' => 'blocking',
+                'title' => 'Caracteres invisibles en la respuesta',
+                'detail' => 'La respuesta contiene caracteres de control o invisibles que pueden ocultar texto a los filtros',
+            ], $h[0], sprintf('U+%04X: forma literal y SIN cita (repetiría el invisible)', $cp));
+        }
+
+        // Va PRIMERO: un BOM solo es invisible y además deja la respuesta vacía.
+        $this->assertSame(['lab-invisibles', 'lab-vacia'], self::ids(K::check("\u{FEFF}", self::target())));
+        $h = K::check("compra ya\u{200B} 💪", self::target(['emojis' => false], [self::forbid('S-030', ['compra ya'])]));
+        $this->assertSame(['lab-invisibles', 'lab-emojis', 'lab-regla-S-030'], self::ids($h));
+    }
+
+    public function test_el_zwj_de_los_emojis_compuestos_y_los_espacios_tipograficos_no_son_invisibles(): void
+    {
+        // La mujer levantando pesas, el hombre corriendo y la familia (con U+200D y U+FE0F): avisan como emojis, nunca como invisibles.
+        foreach (["\u{1F3CB}\u{FE0F}\u{200D}\u{2640}\u{FE0F}", "\u{1F3C3}\u{200D}\u{2642}\u{FE0F}", "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}"] as $emoji) {
+            $this->assertSame([], K::check("¡Vamos! {$emoji}", self::target(['emojis' => true])), json_encode($emoji));
+            $this->assertSame(['lab-emojis'], self::ids(K::check("¡Vamos! {$emoji}", self::target(['emojis' => false]))), json_encode($emoji));
+        }
+        $this->assertSame([], K::check("a\u{200D}b", self::target()), 'el ZWJ suelto tampoco: la enmienda lo deja fuera');
+
+        // Lo que escribe el español de verdad: espacio duro, espacio fino y estrecho, salto de línea.
+        $this->assertSame([], K::check("La mensualidad es de {{PLAN_PRICE}}\u{00A0}al mes.\nTe espero a las 6\u{202F}p.\u{2009}m.", self::target()));
+    }
+
+    public function test_un_invisible_bloquea_aunque_las_guardas_del_motor_no_vean_nada(): void
+    {
+        $hechos = ['paymentState' => 'none', 'handoffRequested' => false];
+        // Sonda de security (B-2): el precio escrito al revés entre controles bidi
+        // se PINTA «$80.000» y las guardas del motor no lo ven.
+        $alReves = "Vale \u{202E}000.08\$\u{202C} al mes";
+        $this->assertSame([], (new StudioLabEngineChecks)->check($alReves, $hechos), 'si el motor lo viera, la sonda ya no reproduce el hueco');
+        $this->assertNotSame([], (new StudioLabEngineChecks)->check('Vale $80.000 al mes', $hechos), 'sin el truco, el motor sí marca el precio');
+
+        $h = [...K::check($alReves, self::target()), ...(new StudioLabEngineChecks)->check($alReves, $hechos)];
+        $this->assertSame(['lab-invisibles'], self::ids($h));
+        $this->assertSame(StudioLabOutcome::FAIL, StudioLabOutcome::forCase($h, null, []), 'un bloqueante gana siempre');
+
+        // Sonda P09 de api-security: con un ZWSP en medio, ni el descuento ni el
+        // pago se reconocen; con un LRM o un RLM, igual (por eso también cuentan).
+        foreach ([
+            "Te doy un des\u{200B}cuento del 20%", "Listo, tu pago ya lle\u{200B}gó y quedó con\u{200B}firmado",
+            "Te doy un des\u{200E}cuento del 20%", "Te doy un des\u{200F}cuento del 20%", "Listo, tu pago ya lle\u{200E}gó y quedó con\u{200F}firmado",
+        ] as $reply) {
+            $this->assertSame([], (new StudioLabEngineChecks)->check($reply, $hechos), json_encode($reply));
+            $this->assertSame(['lab-invisibles'], self::ids(K::check($reply, self::target())), json_encode($reply));
+        }
     }
 
     public function test_respuesta_vacia_bloquea(): void

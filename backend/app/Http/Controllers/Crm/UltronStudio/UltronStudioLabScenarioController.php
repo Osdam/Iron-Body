@@ -37,7 +37,11 @@ class UltronStudioLabScenarioController extends Controller
 
     public function __construct(private readonly StudioLabScenarios $scenarios) {}
 
-    /** GET lab/scenarios?status=active|archived&category= — lista sin paginar. */
+    /**
+     * GET lab/scenarios?status=active|archived&category= — lista sin paginar
+     * y `meta: {truncated, total}` (los archivados, como mucho los 200 más
+     * recientes: Enmienda 4.3).
+     */
     public function index(Request $request): JsonResponse
     {
         $this->open($request, StudioAccess::VIEW);
@@ -45,8 +49,9 @@ class UltronStudioLabScenarioController extends Controller
             'status' => ['sometimes', 'nullable', Rule::in(StudioLabScenario::STATUSES)],
             'category' => ['sometimes', 'nullable', Rule::in(StudioLabCatalog::CATEGORIES)],
         ]);
+        $lista = $this->scenarios->list($data['status'] ?? null, $data['category'] ?? null);
 
-        return response()->json(['ok' => true, 'data' => $this->scenarios->list($data['status'] ?? null, $data['category'] ?? null)]);
+        return response()->json(['ok' => true, 'data' => $lista['data'], 'meta' => $lista['meta']]);
     }
 
     /**

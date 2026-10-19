@@ -152,6 +152,40 @@ class UltronStudioLabScenariosTest extends TestCase
         $this->lab('POST', 'scenarios', $this->ana, $this->scenarioBody())->assertStatus(409)->assertJsonPath('code', 'scenario_limit_reached');
     }
 
+    public function test_los_archivados_se_listan_como_mucho_doscientos_los_mas_recientes_con_meta(): void
+    {
+        // B-3 de api-security (Enmienda 4.3): los archivados no se borran nunca
+        // y la lista no se pagina. 205 archivados: 200 de «otro» (E-001…E-200)
+        // y 5 de «pago» (E-201…E-205), archivados en orden INVERSO al de su id
+        // (E-001 el más reciente): los 200 más recientes no son los 200 últimos
+        // creados.
+        $contenido = ['turns' => [['role' => 'prospect', 'text' => 'Hola']], 'facts' => StudioLabCatalog::DEFAULT_FACTS, 'criteria' => [['id' => 'c1', 'kind' => 'must', 'text' => 'Saludar', 'rules' => []]]];
+        $hace = now()->subDay();
+        for ($i = 1; $i <= 205; $i++) {
+            StudioLabScenario::query()->forceCreate([
+                'code' => sprintf('E-%03d', $i), 'source' => 'studio', 'status' => 'archived', 'category' => $i <= 200 ? 'otro' : 'pago',
+                'title' => "Archivado {$i}", 'description' => null, 'content' => $contenido, 'content_hash' => str_repeat('a', 64), 'revision' => 2,
+                'archived_at' => $hace->copy()->subMinutes($i), 'archive_reason' => 'Sembrado archivado',
+            ]);
+        }
+
+        $r = $this->lab('GET', 'scenarios?status=archived', $this->ana)->assertOk();
+        $this->assertSame(['truncated' => true, 'total' => 205], $r->json('meta'));
+        $this->assertTrue(array_is_list($r->json('data')), 'la lista sigue sin paginar');
+        $this->assertSame(array_map(static fn (int $i): string => sprintf('E-%03d', $i), range(1, 200)), array_column($r->json('data'), 'code'),
+            'los 200 archivados más recientes, por código');
+
+        // Justo en el tope no se corta; con menos, tampoco.
+        $otro = $this->lab('GET', 'scenarios?status=archived&category=otro', $this->ana)->assertOk();
+        $this->assertSame([['truncated' => false, 'total' => 200], 200], [$otro->json('meta'), count($otro->json('data'))]);
+        $pago = $this->lab('GET', 'scenarios?status=archived&category=pago', $this->ana)->assertOk();
+        $this->assertSame([['truncated' => false, 'total' => 5], ['E-201', 'E-202', 'E-203', 'E-204', 'E-205']], [$pago->json('meta'), array_column($pago->json('data'), 'code')]);
+
+        // Los activos no cambian: los doce del catálogo, nunca cortados.
+        $activos = $this->lab('GET', 'scenarios', $this->ana)->assertOk();
+        $this->assertSame([['truncated' => false, 'total' => 12], 12], [$activos->json('meta'), count($activos->json('data'))]);
+    }
+
     public function test_datos_personales_e_invisibles_son_422_con_el_mensaje_del_contrato_en_su_campo(): void
     {
         $mensaje = StudioLabPersonalData::MESSAGE.'.';

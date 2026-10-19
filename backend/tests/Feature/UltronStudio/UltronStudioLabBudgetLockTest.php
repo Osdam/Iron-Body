@@ -3,7 +3,9 @@
 namespace Tests\Feature\UltronStudio;
 
 use App\Models\Admin;
+use App\Models\UltronStudio\StudioLabEvent;
 use App\Models\UltronStudio\StudioLabRun;
+use App\Services\UltronStudio\StudioLabEvents;
 use App\Services\UltronStudio\StudioLabRunner;
 use App\Services\UltronStudio\StudioLabRuns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -28,7 +30,8 @@ use Tests\TestCase;
  *
  * Además, sobre el SQL: READ COMMITTED primero y el cerrojo antes de leer lo
  * comprometido; y READ COMMITTED aunque la sesión vaya en REPEATABLE READ (la
- * lección B-2 de G).
+ * lección B-2 de G), también en la deduplicación de `run.verdict_denied`
+ * (Enmienda 4.6).
  *
  * Solo PostgreSQL: SQLite no tiene cerrojos consultivos y escribe en serie.
  * El hijo confirma filas que la transacción de la prueba no puede deshacer (y
@@ -158,6 +161,45 @@ class UltronStudioLabBudgetLockTest extends TestCase
             DB::purge('lab_rr');
         }
         $this->assertSame(['read committed', 'read committed'], $niveles);
+    }
+
+    public function test_la_deduplicacion_de_verdict_denied_fija_read_committed_aunque_la_sesion_vaya_en_repeatable_read(): void
+    {
+        // Enmienda 4.6 (HIP-2 del tester), como la prueba B-2 de G: en
+        // REPEATABLE READ la instantánea la toma la sentencia del cerrojo, antes
+        // de esperar, y dos intentos simultáneos de la autora escribirían dos
+        // filas. Una sesión PROPIA con REPEATABLE READ por defecto; justo ANTES
+        // del cerrojo se lee el nivel de la transacción y se corta: nada se
+        // escribe y nadie espera.
+        config(['database.connections.lab_rr' => config('database.connections.'.DB::getDefaultConnection())]);
+        $rr = DB::connection('lab_rr');
+        $rr->statement('SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+        $rr->statement("SET lock_timeout = '5s'");
+        $this->assertSame('repeatable read', $rr->transaction(static fn () => $rr->selectOne('SHOW transaction_isolation')->transaction_isolation), 'la sesión de la prueba no arranca en REPEATABLE READ');
+
+        $niveles = [];
+        $rr->beforeExecuting(function (string $sql) use ($rr, &$niveles): void {
+            if (str_contains($sql, 'pg_advisory_xact_lock')) {
+                $niveles[] = $rr->selectOne('SHOW transaction_isolation')->transaction_isolation;
+
+                throw new RuntimeException('corte de la prueba antes del cerrojo');
+            }
+        });
+
+        $porDefecto = DB::getDefaultConnection();
+        DB::setDefaultConnection('lab_rr');
+        try {
+            app(StudioLabEvents::class)->recordDenied($this->root, 'run.verdict_denied', StudioLabEvent::SUBJECT_RUN, (string) Str::uuid(),
+                'Intentó emitir el veredicto sobre su propia versión', ['diff' => ['reason' => 'four_eyes_required']]);
+            $this->fail('recordDenied no llegó al cerrojo.');
+        } catch (RuntimeException $e) {
+            $this->assertSame('corte de la prueba antes del cerrojo', $e->getMessage());
+        } finally {
+            DB::setDefaultConnection($porDefecto);
+            DB::purge('lab_rr');
+        }
+
+        $this->assertSame(['read committed'], $niveles, 'La deduplicación de run.verdict_denied toma su cerrojo sin READ COMMITTED.');
     }
 
     /**

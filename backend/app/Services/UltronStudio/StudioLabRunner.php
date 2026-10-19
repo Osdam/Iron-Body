@@ -29,11 +29,17 @@ use Throwable;
  *  5. Si hay un caso en curso en el sistema desde hace menos de 150 s, vuelve
  *     a encolarse con 30 s de retraso: un caso a la vez en todo el sistema.
  *  6. Reclama el siguiente caso con un UPDATE condicionado `pending →
- *     running`: dos pasos duplicados nunca procesan el mismo caso.
- *  7. Pasado el plazo de 30 min → `stopped` (`deadline`); con lo comprometido
- *     del día por encima del tope (en `openai`) → `stopped`
- *     (`budget_exhausted`). Se comprueba antes de reclamar: el caso no llega a
- *     empezar.
+ *     running`: dos pasos duplicados nunca procesan el mismo caso. Antes,
+ *     BAJO EL CERROJO, vuelve a leer la petición de cancelar (Enmienda 4.5):
+ *     la del punto 2 es de antes de esperar el cerrojo, y una cancelación
+ *     confirmada mientras tanto nunca deja reclamar (ni pagar) otro caso.
+ *  7. Pasado el plazo de 30 min → `stopped` (`deadline`). En `openai`, con lo
+ *     comprometido del día por encima del tope diario, o con el coste REAL
+ *     de la ejecución por encima de su tope (el menor entre el tope por
+ *     ejecución y el máximo que aceptó la persona: Enmienda 4.1) → `stopped`
+ *     (`budget_exhausted`, y el resumen dice qué tope). Se comprueba antes de
+ *     reclamar, después de liquidar el caso anterior: el siguiente caso no
+ *     llega a empezar.
  *  8. Actor → pruebas deterministas → juez → agregación → liquidación. El
  *     caso termina `done` o `error` con su clase. Sin transacción abierta
  *     mientras se espera al proveedor.
@@ -70,6 +76,24 @@ final class StudioLabRunner
         self::CLASS_WORKER_LOST => 'El proceso que ejecutaba el caso se perdió. Se cobra su reserva: no se sabe si el proveedor cobró.',
         self::CLASS_INTERNAL_ERROR => 'El caso falló por un error interno del laboratorio. Se cobra su reserva: no se sabe si el proveedor cobró.',
         self::CLASS_BLOCKED_INPUT => 'Un texto del caso no pasó el filtro de datos personales: no se envió al proveedor.',
+    ];
+
+    /**
+     * Qué tope paró una ejecución con `budget_exhausted` (Enmienda 4.1: el
+     * motivo se reutiliza y el resumen dice cuál). Va como `budgetCap
+     * {kind, capMicros}` en el resumen de la ejecución y en el `diff` de
+     * `run.finished`, y con su frase en el resumen del evento.
+     */
+    public const BUDGET_CAP_DAILY = 'daily';
+
+    public const BUDGET_CAP_RUN = 'run';
+
+    public const BUDGET_CAP_ACCEPTED = 'accepted';
+
+    public const BUDGET_CAP_SUMMARIES = [
+        self::BUDGET_CAP_DAILY => 'lo comprometido del día superó el tope diario',
+        self::BUDGET_CAP_RUN => 'el coste real superó el tope por ejecución',
+        self::BUDGET_CAP_ACCEPTED => 'el coste real superó el máximo aceptado al lanzarla',
     ];
 
     public function __construct(private readonly StudioLabEvents $events) {}
@@ -134,12 +158,26 @@ final class StudioLabRunner
             // admitido cabe justo y seguir no lo sobrepasa; solo un exceso real
             // (una estimación corta) deja el día por encima.
             if ($gastado + $reservado > $cfg->dailyBudgetMicros) {
-                return $this->closeOrRetry($run, StudioLabRun::STATUS_STOPPED, StudioLabRun::STOP_BUDGET_EXHAUSTED);
+                return $this->closeOrRetry($run, StudioLabRun::STATUS_STOPPED, StudioLabRun::STOP_BUDGET_EXHAUSTED,
+                    ['kind' => self::BUDGET_CAP_DAILY, 'capMicros' => $cfg->dailyBudgetMicros]);
+            }
+            // El tope de ESTA ejecución, sobre su coste REAL (Enmienda 4.1): la
+            // estimación cuenta 3 bytes por token y el proveedor puede facturar
+            // más entrada. Se lee de la fila (lo liquidado hasta ahora, también
+            // un caso perdido que se acaba de cobrar arriba) y, como el del
+            // día, solo para si queda algo por reclamar.
+            $tope = self::runCap($run, $cfg);
+            if ((int) StudioLabRun::query()->whereKey($runId)->value('cost_micros') > $tope['capMicros']) {
+                return $this->closeOrRetry($run, StudioLabRun::STATUS_STOPPED, StudioLabRun::STOP_BUDGET_EXHAUSTED, $tope);
             }
         }
 
         // 6. Reclamar el siguiente caso.
         $reclamo = $this->claim($run, $ahora);
+        if ($reclamo === 'cancelled') {
+            // Se pidió cancelarla mientras el paso esperaba el cerrojo.
+            return $this->closeOrRetry($run, StudioLabRun::STATUS_CANCELLED, null);
+        }
         if ($reclamo === 'busy') {
             $this->requeue($runId, self::REQUEUE_DELAY_SECONDS);
 
@@ -219,14 +257,15 @@ final class StudioLabRunner
      *
      * @param  list<string>  $from
      * @param  array<string, mixed>  $extra  columnas mutables que van en el mismo UPDATE (la petición de cancelar)
+     * @param  array{kind:string,capMicros:int}|null  $budgetCap  qué tope paró la ejecución (solo `budget_exhausted`)
      */
-    public function close(StudioLabRun $run, string $status, ?string $stopReason, ?Admin $actor = null, array $from = StudioLabRun::LIVE_STATUSES, array $extra = []): bool
+    public function close(StudioLabRun $run, string $status, ?string $stopReason, ?Admin $actor = null, array $from = StudioLabRun::LIVE_STATUSES, array $extra = [], ?array $budgetCap = null): bool
     {
         if (! in_array($status, StudioLabRun::TERMINAL_STATUSES, true)) {
             throw new LogicException('ultron_studio_lab: solo se cierra en un estado terminal.');
         }
 
-        return DB::transaction(function () use ($run, $status, $stopReason, $actor, $from, $extra): bool {
+        return DB::transaction(function () use ($run, $status, $stopReason, $actor, $from, $extra, $budgetCap): bool {
             $this->serializeClaims();
             $desde = StudioLabRun::query()->whereKey($run->id)->value('status');
             if (! in_array($desde, $from, true)
@@ -250,7 +289,7 @@ final class StudioLabRunner
             if (! StudioLabRun::advance($run->id, $from, $extra + [
                 'status' => $status,
                 'stop_reason' => $stopReason,
-                'summary' => $resumen,
+                'summary' => $budgetCap !== null ? $resumen + ['budgetCap' => $budgetCap] : $resumen,
                 'ai_recommendation' => $propuesta,
                 'results_hash' => StudioLabRuns::resultsHash($run, $casos),
                 'cost_micros' => $resumen['costMicros'],
@@ -270,7 +309,7 @@ final class StudioLabRunner
             }
 
             $this->events->record($actor, 'run.finished', StudioLabEvent::SUBJECT_RUN, $run->uuid,
-                self::finishedSummary($status, $stopReason), [
+                self::finishedSummary($status, $stopReason, $budgetCap), [
                     'fromStatus' => $desde,
                     'toStatus' => $status,
                     'diff' => [
@@ -279,7 +318,7 @@ final class StudioLabRunner
                         'outcomes' => $resumen['outcomes'],
                         'costMicros' => $resumen['costMicros'],
                         'aiRecommendation' => $propuesta,
-                    ],
+                    ] + ($budgetCap !== null ? ['budgetCap' => $budgetCap] : []),
                 ], StudioLabEvents::SYSTEM_RUNNER);
 
             return true;
@@ -329,19 +368,29 @@ final class StudioLabRunner
     // ── Internos ────────────────────────────────────────────────────────────
 
     /**
-     * El reclamo, detrás del cerrojo: nadie más en curso, la ejecución sigue
-     * viva (y pasa a `running` si estaba en cola) y el siguiente caso pasa de
-     * `pending` a `running` con un UPDATE condicionado.
+     * El reclamo, detrás del cerrojo: no se pidió cancelarla, nadie más en
+     * curso, la ejecución sigue viva (y pasa a `running` si estaba en cola) y
+     * el siguiente caso pasa de `pending` a `running` con un UPDATE
+     * condicionado.
+     *
+     * La petición de cancelar se vuelve a leer AQUÍ (Enmienda 4.5): la que
+     * cargó el paso es de antes de esperar el cerrojo, y `cancel()` escribe
+     * detrás de este mismo cerrojo, así que la que ya se confirmó se ve.
+     * Entonces no se reclama nada: `cancelled`, y el paso la cierra.
      */
     private function claim(StudioLabRun $run, Carbon $ahora): StudioLabRunCase|string
     {
         return DB::transaction(function () use ($run, $ahora): StudioLabRunCase|string {
             $this->serializeClaims();
+            $fila = StudioLabRun::query()->whereKey($run->id)->first(['id', 'status', 'cancel_requested_at']);
+            if ($fila?->cancel_requested_at !== null && in_array($fila->status, StudioLabRun::LIVE_STATUSES, true)) {
+                return 'cancelled';
+            }
             if ($this->busy($ahora)) {
                 return 'busy';
             }
 
-            $actual = StudioLabRun::query()->whereKey($run->id)->value('status');
+            $actual = $fila?->status;
             $viva = match ($actual) {
                 StudioLabRun::STATUS_QUEUED => StudioLabRun::advance($run->id, [StudioLabRun::STATUS_QUEUED], ['status' => StudioLabRun::STATUS_RUNNING, 'started_at' => $ahora]),
                 StudioLabRun::STATUS_RUNNING => StudioLabRun::advance($run->id, [StudioLabRun::STATUS_RUNNING], ['status' => StudioLabRun::STATUS_RUNNING]),
@@ -618,10 +667,14 @@ final class StudioLabRunner
         return StudioLabRunCase::query()->where('run_id', $runId)->where('status', StudioLabRunCase::STATUS_RUNNING)->orderBy('position')->get()->toBase();
     }
 
-    /** Cierra o, si no se puede ahora (un caso en curso), vuelve a intentarlo en 30 s. */
-    private function closeOrRetry(StudioLabRun $run, string $status, ?string $stopReason): string
+    /**
+     * Cierra o, si no se puede ahora (un caso en curso), vuelve a intentarlo en 30 s.
+     *
+     * @param  array{kind:string,capMicros:int}|null  $budgetCap
+     */
+    private function closeOrRetry(StudioLabRun $run, string $status, ?string $stopReason, ?array $budgetCap = null): string
     {
-        if ($this->close($run, $status, $stopReason)) {
+        if ($this->close($run, $status, $stopReason, budgetCap: $budgetCap)) {
             return 'closed';
         }
         if (StudioLabRun::query()->whereKey($run->id)->whereIn('status', StudioLabRun::LIVE_STATUSES)->exists()) {
@@ -642,12 +695,31 @@ final class StudioLabRunner
         }
     }
 
-    private static function finishedSummary(string $status, ?string $stopReason): string
+    /**
+     * El tope de una ejecución sobre su coste real (Enmienda 4.1): el menor
+     * entre el tope por ejecución de la configuración y el máximo que aceptó
+     * la persona al lanzarla. Empatados, es el del servidor.
+     *
+     * @return array{kind:string,capMicros:int}
+     */
+    private static function runCap(StudioLabRun $run, StudioLabConfig $cfg): array
     {
+        $aceptado = (int) $run->accepted_max_micros;
+
+        return $aceptado < $cfg->runBudgetMicros
+            ? ['kind' => self::BUDGET_CAP_ACCEPTED, 'capMicros' => $aceptado]
+            : ['kind' => self::BUDGET_CAP_RUN, 'capMicros' => $cfg->runBudgetMicros];
+    }
+
+    /** @param  array{kind:string,capMicros:int}|null  $budgetCap */
+    private static function finishedSummary(string $status, ?string $stopReason, ?array $budgetCap = null): string
+    {
+        $tope = $budgetCap !== null && isset(self::BUDGET_CAP_SUMMARIES[$budgetCap['kind']]) ? ': '.self::BUDGET_CAP_SUMMARIES[$budgetCap['kind']] : '';
+
         return match ($status) {
             StudioLabRun::STATUS_COMPLETED => 'La ejecución terminó todos sus casos',
             StudioLabRun::STATUS_CANCELLED => 'La ejecución quedó cancelada',
-            default => 'La ejecución se detuvo ('.($stopReason ?? 'sin motivo').')',
+            default => 'La ejecución se detuvo ('.($stopReason ?? 'sin motivo').')'.$tope,
         };
     }
 }

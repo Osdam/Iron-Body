@@ -92,6 +92,29 @@ class UltronStudioLabLaneTest extends TestCase
         $this->lab('POST', 'runs', $this->person(Admin::ROLE_SUPER_ADMIN, 'Otra'), $cuerpo())->assertCreated();
     }
 
+    public function test_el_techo_de_lanzar_es_por_persona_y_no_por_sesion(): void
+    {
+        // I-3 de api-security (Enmienda 4.4): entrar otra vez o abrir otra
+        // pestaña no da diez ejecuciones más. Dos sesiones REALES de la misma
+        // persona comparten el cupo; otra persona tiene el suyo.
+        Queue::fake();
+        $this->labFake(['ultron_studio.lab.max_runs_per_day' => 50]);
+        $this->importLabScenarios();
+        $root = $this->person(Admin::ROLE_SUPER_ADMIN, 'Root');
+        $cuerpo = fn (): array => ['target' => ['kind' => 'baseline'], 'scenarioUuids' => [$this->scenarioUuid('C-01')], 'acceptedMaxCostMicros' => 0, 'clientRequestId' => (string) Str::uuid()];
+        $primera = $this->actingAsAdmin($root);
+        $segunda = $this->actingAsAdmin($root);
+        $this->assertNotSame($primera['Authorization'], $segunda['Authorization'], 'dos sesiones distintas');
+
+        for ($i = 1; $i <= 10; $i++) {
+            $this->json('POST', '/api/admin/ultron-studio/lab/runs', $cuerpo(), $i % 2 === 0 ? $segunda : $primera)->assertCreated();
+        }
+        $this->json('POST', '/api/admin/ultron-studio/lab/runs', $cuerpo(), $segunda)->assertStatus(429)->assertJsonPath('code', 'too_many_requests');
+        $this->json('POST', '/api/admin/ultron-studio/lab/runs', $cuerpo(), $this->actingAsAdmin($root))->assertStatus(429);
+
+        $this->lab('POST', 'runs', $this->person(Admin::ROLE_SUPER_ADMIN, 'Otra'), $cuerpo())->assertCreated();
+    }
+
     public function test_el_latido_de_la_cola_ve_el_carril(): void
     {
         $foto = app(QueueHealthService::class)->snapshot();

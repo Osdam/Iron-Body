@@ -45,25 +45,45 @@ final class StudioLabScenarios
     /** Lo que se puede cambiar de un escenario del personal. */
     public const EDITABLE = ['category', 'title', 'description', 'turns', 'facts', 'criteria'];
 
+    /**
+     * Cuántos archivados lista `GET lab/scenarios?status=archived` como mucho
+     * (Enmienda 4.3): no se borran nunca y la lista no se pagina.
+     */
+    public const ARCHIVED_LIST_MAX = 200;
+
     private const CODE_ATTEMPTS = 3;
 
     public function __construct(private readonly StudioLabEvents $events) {}
 
     /**
      * GET lab/scenarios: una lista SIN paginar (Enmienda 2, §1), por código.
-     * Sin `status`, los activos.
+     * Sin `status`, los activos (como mucho 100 vivos más el catálogo).
      *
-     * @return list<array<string, mixed>>
+     * Los archivados no se pueden borrar y crecen sin vuelta atrás (B-3 de
+     * api-security): se listan como mucho los {@see ARCHIVED_LIST_MAX} más
+     * recientes (por fecha de archivo), también por código. `meta` dice
+     * cuántos hay en total y si la lista se cortó; con los activos va
+     * igual, nunca cortada.
+     *
+     * @return array{data:list<array<string, mixed>>,meta:array{truncated:bool,total:int}}
      */
     public function list(?string $status, ?string $category): array
     {
-        return StudioLabScenario::query()
-            ->where('status', $status ?? StudioLabScenario::STATUS_ACTIVE)
-            ->when($category, fn ($q, string $c) => $q->where('category', $c))
-            ->orderBy('code')
-            ->get()
-            ->map(fn (StudioLabScenario $s): array => self::present($s))
-            ->all();
+        $estado = $status ?? StudioLabScenario::STATUS_ACTIVE;
+        $consulta = StudioLabScenario::query()
+            ->where('status', $estado)
+            ->when($category, fn ($q, string $c) => $q->where('category', $c));
+
+        $total = null;
+        if ($estado === StudioLabScenario::STATUS_ARCHIVED) {
+            $total = (clone $consulta)->count();
+            $consulta = StudioLabScenario::query()->whereIn('id', (clone $consulta)->select('id')
+                ->orderByDesc('archived_at')->orderByDesc('id')->limit(self::ARCHIVED_LIST_MAX));
+        }
+
+        $data = $consulta->orderBy('code')->get()->map(fn (StudioLabScenario $s): array => self::present($s))->all();
+
+        return ['data' => $data, 'meta' => ['truncated' => $total !== null && $total > count($data), 'total' => $total ?? count($data)]];
     }
 
     public function findByUuid(string $uuid): StudioLabScenario

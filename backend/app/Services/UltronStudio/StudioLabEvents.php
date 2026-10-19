@@ -98,8 +98,12 @@ final class StudioLabEvents
         // Comprobar y escribir dentro de una transacción con un cerrojo
         // consultivo (PostgreSQL), como F: sin él, varios intentos simultáneos
         // pasarían todos el `exists()`. SQLite escribe en serie por sí mismo.
+        // READ COMMITTED primero (Enmienda 4.6, la lección B-2 de G): en
+        // REPEATABLE READ la instantánea la toma la sentencia del cerrojo,
+        // ANTES de esperar, y quien esperó no vería la fila del otro.
         return DB::transaction(function () use ($actor, $event, $subjectType, $subjectUuid, $summary, $extra): ?StudioLabEvent {
             if (DB::connection()->getDriverName() === 'pgsql') {
+                DB::statement('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
                 DB::statement('SELECT pg_advisory_xact_lock(?)', [crc32("ultron_studio_lab_events:{$event}:{$subjectUuid}:{$actor?->id}")]);
             }
 

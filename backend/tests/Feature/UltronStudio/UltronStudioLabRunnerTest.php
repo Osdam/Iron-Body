@@ -6,17 +6,21 @@ use App\Models\Admin;
 use App\Models\UltronStudio\StudioLabEvent;
 use App\Models\UltronStudio\StudioLabRun;
 use App\Models\UltronStudio\StudioLabRunCase;
+use App\Services\UltronStudio\StudioAccess;
 use App\Services\UltronStudio\StudioLabCost;
 use App\Services\UltronStudio\StudioLabModelClient;
 use App\Services\UltronStudio\StudioLabRunner;
 use App\Services\UltronStudio\StudioLabRuns;
 use App\Services\UltronStudio\StudioLabStepJob;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Queue\MaxAttemptsExceededException;
 use Illuminate\Queue\TimeoutExceededException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -25,9 +29,11 @@ use Tests\TestCase;
  * registrado solo en esta prueba: el coste de cada llamada, la agregación (un
  * hallazgo bloqueante gana al juez; sin juez, como mucho revisión), las
  * paradas por auth, cuota y rechazo, la racha de dos errores POR CASO, el 429
- * de ritmo que retrasa y no cuenta, el plazo, el presupuesto agotado,
- * `failed()` cobrando la reserva y dos pasos a la vez que nunca procesan el
- * mismo caso.
+ * de ritmo que retrasa y no cuenta, el plazo, el presupuesto agotado (del día,
+ * y el de la ejecución sobre su coste REAL: Enmienda 4.1), un invisible en la
+ * respuesta que bloquea (4.2), `failed()` cobrando la reserva, dos pasos a la
+ * vez que nunca procesan el mismo caso y una cancelación confirmada después de
+ * cargar el paso que no deja reclamar otro (4.5).
  *
  * Precios de las pruebas: 0,40 y 1,60 US$ por millón (400 000 y 1 600 000
  * micro-US$). Un caso con actor [900, 40] y juez [1500, 300] cuesta
@@ -41,6 +47,9 @@ class UltronStudioLabRunnerTest extends TestCase
     use StudioFixtures;
 
     private const ACTOR_OK = ['reply' => 'Hola, ¿en qué te puedo ayudar hoy?', 'usage' => [900, 40]];
+
+    /** Los doce escenarios del catálogo: la ejecución de la sonda P08. */
+    private const DOCE = ['C-01', 'C-02', 'C-03', 'C-04', 'C-05', 'C-06', 'C-07', 'C-08', 'C-09', 'C-10', 'C-11', 'C-12'];
 
     private const JUDGE_PASS = ['judge' => 'pass', 'usage' => [1500, 300]];
 
@@ -236,6 +245,144 @@ class UltronStudioLabRunnerTest extends TestCase
         $run = StudioLabRun::query()->findOrFail($id);
         $this->assertSame(['stopped', 'budget_exhausted'], [$run->status, $run->stop_reason]);
         $this->assertSame(['done', 'skipped'], $run->cases()->pluck('status')->all());
+        // Enmienda 4.1: el motivo se reutiliza y el resumen dice qué tope se alcanzó.
+        $fin = StudioLabEvent::query()->where('event', 'run.finished')->where('subject_uuid', $d['uuid'])->sole();
+        $this->assertSame('La ejecución se detuvo (budget_exhausted): lo comprometido del día superó el tope diario', $fin->summary);
+        $this->assertSame(['kind' => 'daily', 'capMicros' => 10000], $fin->diff['budgetCap']);
+        $this->assertSame(['kind' => 'daily', 'capMicros' => 10000], $run->summary['budgetCap']);
+    }
+
+    public function test_el_tope_de_la_ejecucion_se_aplica_al_coste_real_y_salta_el_resto(): void
+    {
+        // La sonda P08 de api-security, tal cual: tope por ejecución de 0,05
+        // US$, doce casos cuya estimación cabe (47 824 micro-US$, y la persona
+        // acepta ese máximo) y un proveedor que factura el TRIPLE de la entrada
+        // estimada (texto denso en tokens) y toda la salida. Antes la ejecución
+        // terminaba `completed` con 93 530 (1,87 veces el tope). Ahora el tope
+        // es el menor entre el del servidor y el aceptado (aquí, el aceptado) y
+        // la ejecución para justo después del caso que lo supera.
+        Queue::fake();
+        $this->labOpenAi(['ultron_studio.lab.run_budget_usd' => '0.05']);
+        $d = $this->launch($this->root, ['kind' => 'baseline'], self::DOCE)->assertCreated()->json('data');
+        $aceptado = (int) StudioLabRun::query()->where('uuid', $d['uuid'])->value('accepted_max_micros');
+        $this->assertSame($d['cost']['estimateMaxMicros'], $aceptado);
+        $this->assertLessThan(50000, $aceptado, 'la estimación cabe en el tope: se admite');
+        $guion = $this->script($this->tripleInput($d['uuid']));
+
+        $run = $this->drain($d['uuid'], 100);
+
+        $this->assertSame(['stopped', 'budget_exhausted'], [$run->status, $run->stop_reason]);
+        $hechos = $this->assertStoppedRightAfterCrossing($run, $aceptado);
+        $this->assertSame(2 * (12 - $hechos), $guion->remaining(), 'ningún caso saltado llegó al proveedor');
+        $fin = StudioLabEvent::query()->where('event', 'run.finished')->where('subject_uuid', $d['uuid'])->sole();
+        $this->assertSame('La ejecución se detuvo (budget_exhausted): el coste real superó el máximo aceptado al lanzarla', $fin->summary);
+        $this->assertSame(['kind' => 'accepted', 'capMicros' => $aceptado], $fin->diff['budgetCap']);
+        $this->assertSame(['kind' => 'accepted', 'capMicros' => $aceptado], $run->summary['budgetCap']);
+        $vista = $this->lab('GET', "runs/{$d['uuid']}", $this->root)->assertOk()->json('data');
+        $this->assertSame(['stopped', 'budget_exhausted', null, (int) $run->cost_micros], [$vista['status'], $vista['stopReason'], $vista['aiRecommendation'], $vista['cost']['actualMicros']]);
+    }
+
+    public function test_con_un_maximo_aceptado_holgado_manda_el_tope_por_ejecucion(): void
+    {
+        // La misma sonda, pero la persona acepta 60 000 (más que el tope del
+        // servidor, que es lo que ella no puede subir): corta a los 50 000.
+        Queue::fake();
+        $this->labOpenAi(['ultron_studio.lab.run_budget_usd' => '0.05']);
+        $d = $this->lab('POST', 'runs', $this->root, [
+            'target' => ['kind' => 'baseline'],
+            'scenarioUuids' => array_map(fn (string $c): string => $this->scenarioUuid($c), self::DOCE),
+            'acceptedMaxCostMicros' => 60000,
+            'clientRequestId' => (string) Str::uuid(),
+        ])->assertCreated()->json('data');
+        $this->script($this->tripleInput($d['uuid']));
+
+        $run = $this->drain($d['uuid'], 100);
+
+        $this->assertSame(['stopped', 'budget_exhausted'], [$run->status, $run->stop_reason]);
+        $this->assertStoppedRightAfterCrossing($run, 50000);
+        $fin = StudioLabEvent::query()->where('event', 'run.finished')->where('subject_uuid', $d['uuid'])->sole();
+        $this->assertSame('La ejecución se detuvo (budget_exhausted): el coste real superó el tope por ejecución', $fin->summary);
+        $this->assertSame(['kind' => 'run', 'capMicros' => 50000], $fin->diff['budgetCap']);
+        $this->assertSame(['kind' => 'run', 'capMicros' => 50000], $run->summary['budgetCap']);
+    }
+
+    public function test_lo_que_liquida_failed_cuenta_y_el_tope_es_el_de_la_configuracion_de_ahora(): void
+    {
+        // `failed()` cobra la reserva entera del caso; el tope por ejecución es
+        // el de la configuración de AHORA (como el del día). Si se baja a mitad,
+        // el paso siguiente mira el coste de la fila y para antes de reclamar.
+        Queue::fake();
+        $this->labOpenAi();
+        $this->script([]);
+        $uuid = $this->launch($this->root, ['kind' => 'baseline'], ['C-05', 'C-06'])->assertCreated()->json('data.uuid');
+        $id = (int) StudioLabRun::query()->where('uuid', $uuid)->value('id');
+        $primero = StudioLabRunCase::query()->where('run_id', $id)->where('position', 1)->sole();
+        $this->assertGreaterThan(1000, (int) $primero->reserved_micros);
+        $this->claimByHand($id, (int) $primero->id);
+        (new StudioLabStepJob($id))->failed(new MaxAttemptsExceededException('worker perdido'));
+        $this->assertSame((int) $primero->reserved_micros, (int) StudioLabRun::query()->whereKey($id)->value('cost_micros'));
+
+        $this->labOpenAi(['ultron_studio.lab.run_budget_usd' => '0.001']);
+        $this->assertSame('closed', app(StudioLabRunner::class)->step($id));
+
+        $run = StudioLabRun::query()->findOrFail($id);
+        $this->assertSame(['stopped', 'budget_exhausted'], [$run->status, $run->stop_reason]);
+        $this->assertSame(['error', 'skipped'], $run->cases()->pluck('status')->all());
+        $fin = StudioLabEvent::query()->where('event', 'run.finished')->where('subject_uuid', $uuid)->sole();
+        $this->assertSame(['kind' => 'run', 'capMicros' => 1000], $fin->diff['budgetCap']);
+    }
+
+    public function test_un_invisible_en_la_respuesta_bloquea_aunque_el_juez_apruebe(): void
+    {
+        // El precio escrito al revés entre controles bidi (sonda de security,
+        // B-2): el CRM pintaría «$80.000» y las guardas del motor no lo ven.
+        $this->labOpenAi();
+        $reply = "Vale \u{202E}000.08\$\u{202C} al mes";
+        $this->script([['reply' => $reply, 'usage' => [900, 40]], self::JUDGE_PASS]);
+
+        $d = $this->launch($this->root, ['kind' => 'baseline'], ['C-02'])->assertCreated()->json('data');
+
+        $caso = $d['cases'][0];
+        $this->assertSame('pass', $caso['judge']['criteria'][0]['verdict'], 'el juez lo dio por bueno');
+        $this->assertSame(['fail', ['lab-invisibles']], [$caso['outcome'], array_column($caso['checks'], 'id')]);
+        $this->assertSame(['studio', 'blocking', null], [$caso['checks'][0]['source'], $caso['checks'][0]['level'], $caso['checks'][0]['quote']]);
+        $this->assertSame($reply, $caso['reply'], 'la respuesta se guarda y se devuelve literal: el CRM la interpola');
+        $this->assertSame('reject', $d['aiRecommendation']);
+    }
+
+    public function test_una_cancelacion_confirmada_despues_de_cargar_el_paso_no_deja_reclamar(): void
+    {
+        // HIP-1 del tester (Enmienda 4.5). El orden de dos sesiones, simulado en
+        // una: el paso ya cargó la ejecución (sin petición de cancelar) cuando
+        // la cancelación se confirma, justo antes de que el paso tome el cerrojo
+        // de los reclamos. La prueba con dos sesiones de verdad está en
+        // UltronStudioLabCancelLockTest (PostgreSQL).
+        Queue::fake();
+        $this->labOpenAi();
+        $guion = $this->script([self::ACTOR_OK, self::JUDGE_PASS, self::ACTOR_OK, self::JUDGE_PASS]);
+        $uuid = $this->launch($this->root, ['kind' => 'baseline'], ['C-01', 'C-02', 'C-03'])->assertCreated()->json('data.uuid');
+        $id = (int) StudioLabRun::query()->where('uuid', $uuid)->value('id');
+        $this->assertSame('case', app(StudioLabRunner::class)->step($id));
+
+        // La primera consulta del paso tras cargar la ejecución es la de sus casos en curso.
+        $armada = true;
+        DB::listen(function (QueryExecuted $q) use (&$armada, $id): void {
+            if ($armada && str_contains($q->sql, '"ultron_studio_lab_run_cases"') && in_array('running', $q->bindings, true)) {
+                $armada = false;
+                app(StudioLabRuns::class)->cancel(new StudioAccess($this->root), StudioLabRun::query()->findOrFail($id));
+            }
+        });
+        $resultado = app(StudioLabRunner::class)->step($id);
+
+        $this->assertFalse($armada, 'la cancelación no llegó en mitad del paso');
+        $run = StudioLabRun::query()->findOrFail($id);
+        $this->assertNotNull($run->cancel_requested_at);
+        $this->assertSame(['closed', 'cancelled'], [$resultado, $run->status]);
+        $this->assertSame(['done', 'skipped', 'skipped'], $run->cases()->pluck('status')->all());
+        $this->assertCount(2, $guion->calls, 'tras la cancelación no se llamó al proveedor (ni se pagó) otro caso');
+        // Por estado y no por hora: el reclamo fecha el caso con la hora del INICIO del paso, de antes de la cancelación.
+        $this->assertSame([1], StudioLabRunCase::query()->where('run_id', $id)->whereNotNull('started_at')->pluck('position')->all(), 'solo el primer caso llegó a empezar');
+        $this->assertSame(['run.created', 'run.cancel_requested', 'run.finished'], StudioLabEvent::query()->where('subject_uuid', $uuid)->orderBy('id')->pluck('event')->all());
     }
 
     public function test_failed_cobra_la_reserva_entera_del_caso_y_encola_el_siguiente(): void
@@ -354,5 +501,45 @@ class UltronStudioLabRunnerTest extends TestCase
     {
         StudioLabRun::advance($runId, ['queued', 'running'], ['status' => 'running', 'started_at' => now()]);
         $this->assertTrue(StudioLabRunCase::advance($caseId, ['pending'], ['status' => 'running', 'started_at' => now()]));
+    }
+
+    /**
+     * El guion de la sonda P08: cada caso factura el TRIPLE de la entrada
+     * estimada (actor y juez) y toda la salida.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function tripleInput(string $uuid): array
+    {
+        $run = StudioLabRun::query()->where('uuid', $uuid)->sole();
+        $precios = ['input' => 400000, 'output' => 1600000];
+        $guion = [];
+        foreach ($run->cases()->get() as $c) {
+            $e = StudioLabCost::estimateScenario($run->target_snapshot, $c->scenario_snapshot, 400, 900, $precios);
+            $guion[] = ['reply' => 'Hola, te ayudo con gusto.', 'usage' => [3 * $e['actorInputTokens'], 400]];
+            $guion[] = ['judge' => 'pass', 'usage' => [3 * $e['judgeInputTokens'], 900]];
+        }
+
+        return $guion;
+    }
+
+    /**
+     * La ejecución paró JUSTO después del caso que llevó su coste real por
+     * encima de `$cap`: hasta el anterior cabía, los que siguen se saltaron.
+     * Devuelve cuántos casos se hicieron.
+     */
+    private function assertStoppedRightAfterCrossing(StudioLabRun $run, int $cap): int
+    {
+        $casos = $run->cases()->get();
+        $hechos = $casos->where('status', 'done')->count();
+        $this->assertGreaterThanOrEqual(2, $hechos, 'la prueba necesita algún caso que quepa antes del que cruza');
+        $this->assertLessThan($casos->count(), $hechos, 'si no salta nada, el tope no se aplicó al coste real');
+        $this->assertSame(array_merge(array_fill(0, $hechos, 'done'), array_fill(0, $casos->count() - $hechos, 'skipped')), $casos->pluck('status')->all());
+        $costes = $casos->take($hechos)->map(static fn (StudioLabRunCase $c): int => (int) $c->cost_micros)->all();
+        $this->assertLessThanOrEqual($cap, array_sum(array_slice($costes, 0, -1)), 'hasta el caso anterior cabía en el tope');
+        $this->assertGreaterThan($cap, array_sum($costes), 'el último caso hecho es el que superó el tope');
+        $this->assertSame(array_sum($costes), (int) $run->cost_micros);
+
+        return $hechos;
     }
 }

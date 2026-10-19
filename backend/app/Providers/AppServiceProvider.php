@@ -614,12 +614,29 @@ class AppServiceProvider extends ServiceProvider
 
         // Hito 4 (contrato H4 §A7): lanzar una ejecución del laboratorio gasta
         // presupuesto de un proveedor externo. Además del cupo de escritura, un
-        // techo por HORA: 10 por credencial y 30 por red. El cubo es suyo (el
+        // techo por HORA: 10 por PERSONA y 30 por red. El cubo es suyo (el
         // nombre del limitador va en la clave) y no se mezcla con el de
         // escritura, que la ruta gasta además.
+        //
+        // Por persona y no por sesión (Enmienda 4.4, I-3 de api-security):
+        // entrar otra vez o abrir otra pestaña no da diez más. Como en la ficha
+        // laboral, el throttle corre antes que la autenticación y el admin se
+        // resuelve aquí desde el token; si no se resuelve (token compartido,
+        // sesión caducada o inventada), la clave es la de la credencial y la
+        // autenticación lo rechazará igual. El techo por red sigue igual.
+        $persona = function (Request $request) use ($clave): string {
+            $admin = AdminActor::from($request);
+            if ($admin !== null) {
+                return 'ultron-studio:admin:'.$admin->id;
+            }
+            $token = $request->bearerToken();
+            $sesion = $token ? app(AdminSessionService::class)->resolveByToken($token) : null;
+
+            return $sesion !== null ? 'ultron-studio:admin:'.$sesion->admin_id : $clave($request);
+        };
         $lanzar = $demasiadas('Demasiadas ejecuciones del laboratorio en una hora. Espera antes de lanzar otra.');
         RateLimiter::for('ultron-studio-lab-run', fn (Request $request) => [
-            Limit::perHour(10)->by($clave($request))->response($lanzar),
+            Limit::perHour(10)->by($persona($request))->response($lanzar),
             Limit::perHour(30)->by('ultron-studio-net:'.ClientNetwork::of($request->ip()))->response($lanzar),
         ]);
     }

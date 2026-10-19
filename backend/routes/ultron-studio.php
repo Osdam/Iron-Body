@@ -39,7 +39,7 @@ use Illuminate\Support\Facades\Route;
 | persona → la llave → la bandera (409 `lab_disabled`, salvo `GET lab/status`,
 | que responde 200 también apagado). `POST lab/estimate` no escribe: va con las
 | lecturas. `POST lab/runs` gasta presupuesto: además del cupo de escritura,
-| su propio limitador `ultron-studio-lab-run` (10/h por credencial, 30/h por
+| su propio limitador `ultron-studio-lab-run` (10/h por persona, 30/h por
 | red). El cuerpo más grande del laboratorio (un escenario) cabe de sobra en los
 | 64 KB: su contenido codificado no pasa de 16 KB.
 |
