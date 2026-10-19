@@ -127,11 +127,11 @@
 | Ajuste | Valor |
 |---|---|
 | nginx `client_max_body_size` | 10M |
-| PHP-FPM 8.1 | `pm = dynamic`, `pm.max_children = 5`, sin `request_terminate_timeout` explícito |
+| PHP-FPM **8.3** (`php8.3-fpm` activo; `php8.1-fpm` instalado pero inactivo) | `pm = dynamic`, **`pm.max_children = 24`**, sin `request_terminate_timeout` explícito. *Corrección del 19-10-2026: la primera lectura (8.1, 5 procesos) era del pool inactivo* |
 | PHP | `max_execution_time = 30`, `memory_limit = 128M`, `post_max_size = 8M`, `upload_max_filesize = 4M`, `pcre.jit = 1` (por defecto) |
 | PostgreSQL | `default_transaction_isolation = read committed` |
 
-Consecuencia: con 5 workers de FPM compartidos por todo el CRM (caja, ingreso y la API de la app), M-2 permitía a un usuario privilegiado ocupar todos los workers 30 s por ráfaga, con cuerpos muy por debajo de los 8 MB. Por eso las correcciones de M-1 y M-2 son condición para desplegar G.
+Consecuencia: con 24 workers de FPM compartidos por todo el CRM (caja, ingreso y la API de la app) y 12 s de CPU por cuerpo de 150 KB, M-2 permitía a un usuario privilegiado ocupar todos los workers con unas decenas de peticiones dentro del cupo de escritura (30/min por credencial, 120/min por red), con cuerpos muy por debajo de los 8 MB. Por eso las correcciones de M-1 y M-2 fueron condición para desplegar G (la primera estimación, con 5 workers, era del pool inactivo de PHP 8.1; la conclusión no cambia).
 
 **Puerta PostgreSQL obligatoria (H-2 del tester de backend).** Antes de cada despliegue del Studio, `tests/Feature/UltronStudio tests/Unit/UltronStudio` tiene que pasar en verde en un PostgreSQL 14 desechable (unos 25 s; 468/468 en `dfb30f5`). La suite por defecto, en SQLite, no detecta que falte el cerrojo de las reglas.
 
