@@ -81,7 +81,208 @@ Capturas en [`capturas/`](capturas/): [`f1-studio-api-escritorio.png`](capturas/
 
 **E2E en Chrome real (32 de 32, `scratchpad/e2e-studio/studio-f.cjs`, con el mock de la API que valida con el validador de referencia):** carga desde la API (status, catálogo, borrador, reglas y versiones); diez capas y 17 conexiones del servidor; chip del motor; Publicar deshabilitado con motivo; mover deja «sin guardar»; Guardar → `PUT /draft` 200 y revisión 1; posición guardada en el servidor; 409 de otra pestaña abre el conflicto y «sobrescribir» reintenta con la revisión nueva; la validación del servidor bloquea «descuentos»; no se crea una versión con bloqueos; `POST /versions` 201 con las 12 reglas copiadas; el panel enseña la versión; enviar → REVIEW_REQUIRED; la propia no se puede aprobar; otra persona aprueba solo tras reconocer los dos avisos (confirmar deshabilitado hasta marcarlos) → APPROVED; Publicar sigue bloqueado para el Super Admin; reglas del código de solo lectura y S-001 nace en borrador; auditoría con los eventos; línea base de solo lectura; volver al borrador; sin `ultron.view` ni submenú ni página; con solo `ultron.view` el lienzo es de solo lectura; importación única del borrador local (se guarda y se borra la clave); móvil sin desplazamiento horizontal; sin errores de JavaScript (los 4xx esperados no cuentan).
 
-## Revisión final independiente (`reviewer`)
+## Hito G: el inspector funcional (CRM)
+
+**Estado:** implementado en la rama `feat/ultron-studio-g` del CRM, **no desplegado**. Commits sobre `020db86` (= producción):
+- `ddb0958`: capa de datos y núcleo TS;
+- `b0d9635`: fixtures oficiales exportados del backend. Se volvieron a exportar desde `5074f82`, sin diferencias;
+- `688da4a`: la integración, con 40 ficheros y +5436/−255 líneas;
+- `7d3ad2a`: el aviso B-1, en 6 ficheros.
+
+Todo queda dentro de `src/app/modules/ultron-studio/`: ningún fichero fuera del módulo. **`ultron-studio.scss` no gana ni un byte:** sigue en 32 718 bytes, el mismo fichero que en F. Sin dependencias nuevas.
+
+**Qué cambia para quien lo usa:**
+- cada parámetro del inspector enseña, debajo del control del borrador, lo que dice el motor y quién lo cambia de verdad;
+- la página lee el motor al cargar, sin bloquearse;
+- las reglas del Studio se escriben con condiciones («Si… entonces…») y avisan de las contradicciones antes de guardar;
+- el historial se lee en frases, y se pueden comparar versiones.
+
+### Componentes nuevos
+
+Cada componente es standalone, `OnPush` y tiene su propia hoja y su spec.
+
+| Pieza | Fichero | Qué hace |
+|---|---|---|
+| Fila de parámetro | `studio-param-row.ts` (`us-param-row`) | Debajo del control del borrador de siempre, la franja «Motor (solo lectura)»: lo que dice el motor («Motor: …», «Fijo en código: …», «Vive en n8n» o «Sin equivalente en el motor»), la insignia de origen, el efecto, «Lo cambia de verdad», las reglas que lo citan con su estado, «≠ motor», «Usar el valor del motor» y «Volver a la línea base». Solo propone: aplicar es cosa del inspector |
+| Editor de condiciones | `studio-conditions-editor.ts` (`us-conditions-editor`) | «Si…» (de 0 a 3 filas) y «Entonces…» (de 1 a 3). El parámetro va agrupado por capa, y los operadores y el valor dependen del tipo. Ofrece las conexiones del catálogo (las obligatorias, marcadas) y, solo en «entonces», frases. Construye únicamente las claves de cada combinación y pinta cada mensaje del 422 junto a su fila y su campo |
+| Historial | `studio-history-list.ts` (`us-history-list`) | Pide el historial de 100 en 100 (el borrador por su uuid, una regla o una versión; la línea base dice que no tiene) o pinta los eventos que recibe. Filtro por capa con la nota «entre los N cambios más recientes del borrador», «Ver cambios más antiguos», «(recortado por la auditoría)» y la insignia «Disposición» en lo que no cambia nada |
+| Comparación | `studio-compare-view.ts` (`us-compare-view`) | Pide `GET compare` y pinta los dos lados y las diferencias, agrupadas en Configuración, Conexiones, Reglas y Avisos. Si no hay ninguna: «Sin diferencias de comportamiento.» |
+| Núcleo de reglas | `studio-rules-coherence.ts` (puro) | La misma semántica que `StudioRuleCoherence` (canonicalizar, analizar, contradicciones y evaluación), más `ruleOutcome` (cumple, no cumple, no aplica o no comprobable) y `ruleRelations` (qué exige o prohíbe cada arista y qué usa cada parámetro; su forma la fijó el CRM, el contrato no la daba) |
+| Textos | `studio-engine-text.ts`, `studio-conditions-text.ts` y `studio-diff-text.ts` (puros) | Las lecturas del motor en llano, las condiciones en frase y las líneas del historial y de la comparación. Lo que el catálogo no conoce sale en crudo |
+| Modelo del inspector | `studio-inspector-model.ts` (puro) | Qué reglas tocan una capa, la prevención de cambios (`newProblems`) y el aviso del lienzo (`ruleChangeNotice`) |
+
+**Modificados:**
+- `studio-inspector.ts`: las cinco pestañas. Ahora inyecta `StudioSession`;
+- `studio-rules-panel.ts`;
+- `studio-versions-panel.ts`: «Comparar con…»;
+- `studio-audit-panel.ts`: `us-history-list` en lugar del `<pre>`, y el filtro «Mi borrador»;
+- `ultron-studio-page.ts`: solo TypeScript y plantilla;
+- la capa de datos: `studio-session.ts`, `studio-parse.ts`, `studio-api.types.ts`, `studio-api.service.ts` y `studio-model.ts`.
+
+### El inspector de cinco pestañas
+
+Resumen · Configuración · Reglas · Dependencias · Historial, con el patrón de tablist de F (flechas, Inicio y Fin). Para que quepan las cinco en 368 px, la barra de pestañas baja a 11 px, solo en el inspector.
+
+1. **Resumen.** Lo de F, más dos bloques:
+   - «Motor ahora», con las lecturas de la capa:
+     - gobierno: interruptor, pausa, freno, canario y el estado efectivo («Atiende: no», «Atiende: solo la conversación canaria», «Atiende: todo el tráfico» o «Atiende: no se sabe (falta alguna lectura)»);
+     - conocimiento, planes, driver, y la bandera y el canario del cobro;
+     - estados «sin leer», «leyendo», fallo con «Reintentar», y «Nada de esta capa se lee en vivo: está fijo en código o en n8n.»;
+   - «Conflictos y avisos de la capa».
+2. **Configuración.** El aviso fijo «Borrador: el motor no lo lee.» y una `us-param-row` por parámetro. «≠ motor» y «Usar el valor del motor» solo aparecen si se cumplen las cuatro condiciones:
+   - el parámetro es comparable;
+   - el motor tiene valor;
+   - los valores difieren;
+   - el borrador no dice «Según el entorno».
+3. **Reglas.** Las que tocan la capa, por `layers` o por los objetivos de sus condiciones. De cada una:
+   - la frase;
+   - «La aplica el motor» o «El motor no la aplica»;
+   - la verificación;
+   - su estado con los valores abiertos, y qué valor falla;
+   - los `issues` del análisis.
+4. **Dependencias.** Cada conexión, con su estado y quién la exige o la prohíbe. Por parámetro, los controles, las reglas y las conexiones que activa.
+5. **Historial.** El de la capa en el borrador (filtrado entre los 100 cambios más recientes) o el de la versión abierta. La línea base no tiene.
+
+**Prevención.**
+- Al proponer un valor (también con «Usar el valor del motor» y «Volver a la línea base»), el inspector calcula los hallazgos de F y los de reglas con el valor nuevo.
+- Pide confirmación solo si aparece un bloqueo o un `regla-*` **nuevo**. Cancelar devuelve el control al valor del borrador.
+- En el lienzo, conectar o quitar una arista opcional avisa si cambia el cumplimiento de alguna regla.
+- El inspector de arista enseña «Exigida por» y «Prohibida por», con lo que pesa ahora.
+
+### Reglas con condiciones, historial y comparación
+
+- **Panel de reglas:**
+  - el editor de condiciones y las menciones a la base de conocimiento (las 14 categorías y sus claves);
+  - análisis en vivo y contradicciones calculadas antes de enviar. **Avisan, pero no bloquean el envío:** manda el 409 o el 422 del servidor. Lo que no tiene forma (filas a medias, valores fuera de rango, capas que faltan) sí se corrige antes, porque daría un 422 seguro;
+  - el 409 `rule_contradiction` lista los conflictos con «Ver S-NNN»: aparca el formulario con lo escrito, resalta la regla y ofrece «Volver a la regla». **En Chrome real no lleva el foco ni la vista a la regla** (H-1 del E2E, abierto). El diálogo, al cerrarse, devuelve el foco a «Nueva regla», y con las 12 R-xx delante la regla queda unos 3000 px por debajo, fuera de la vista. El informe del frontend decía que sí llevaba el foco: lo desmiente el E2E;
+  - el 422 de un control trae dos mensajes en la misma clave (el de la restricción y el de su R-xx), y se pintan los dos (`StudioApiError.fieldMessages`);
+  - «Historial» en cada regla.
+- **Panel de versiones:** «Comparar con…» la línea base, «Mi borrador» u otra versión. Siempre de lo anterior a lo posterior: línea base → versión, versión → borrador y versión más antigua → más reciente.
+- **Panel de auditoría:** una lista legible en lugar del `<pre>`, y el filtro «Mi borrador», que va por el uuid; sin fila lo dice y no pide nada. El filtro genérico pasa a llamarse «Borradores».
+- **Página:**
+  - `session.init(userId, {readEngine: true})` arranca la lectura del motor sin bloquear la carga. Si falla, el Studio sigue y el inspector dice «No se pudo leer el motor» con «Reintentar»;
+  - la cabecera gana un botón para releer el motor;
+  - la validación y el inspector usan la lista combinada (hallazgos de F y de reglas), y «el servidor manda si discrepan» se calcula sobre ella.
+
+### Planos con color fijo y aviso de datos personales
+
+- **Planos.** Cada plano de A1 tiene su color en todo el Studio: borrador violeta, motor cian, regla magenta y disposición gris punteado. La lectura del motor va **debajo** del control, en una franja con filo cian: lo editable y lo real nunca comparten caja.
+- **Aviso B-1** (`7d3ad2a`): «No escribas datos personales (nombres, teléfonos, correos): las reglas y su historial no se pueden borrar.»
+  - Siempre visible, y enlazado al campo con `aria-describedby`.
+  - En el formulario de reglas, va bajo la descripción y bajo las menciones; en el editor, en cada fila con texto libre (frases y etiquetas).
+  - No toca el contrato, el fixture ni el backend.
+
+### Atributos `data-*` para el E2E
+
+- **Fila de parámetro:** `[data-param="<clave>"]`, `[data-param-real]` (`ok|pending|error|unavailable|none`), `[data-param-origen]`, `[data-param-usar-motor]`, `[data-param-difiere]`, `[data-param-restablecer]`, `[data-param-propuesta]` y `[data-param-regla]`.
+- **Lecturas del motor:** `[data-lecturas-motor]` con `[data-lecturas-estado]` (`idle|loading|ready|error`), filas `[data-lectura="<id>"]` y `[data-lecturas-reintentar]`. En la cabecera, `[data-lecturas-boton]`.
+- **Editor de condiciones:** `[data-regla-condiciones]`, `[data-condicion-when="i"]`, `[data-condicion-then="i"]`, `[data-condicion-add]`, `[data-condicion-error="then.0"]`, `[data-analisis]`, `[data-contradiccion]`, `[data-ver-regla="S-001"]` y `[data-regla-aparcada]`.
+- **Historial y comparación:** `[data-historial]` (`draft|rule|version|baseline|eventos`), `[data-historial-item]`, `[data-comparar]`, `[data-comparacion]` y `[data-comparacion-grupo]`.
+- **Inspector:** `[data-conflictos-capa]`, `[data-dependencia="<arista>"]` con `[data-dependencia-estado="presente|ausente"]` y `[data-razon]` con `data-aplica`.
+- **Prevención:** `[data-prevencion-hallazgo]` y `[data-confirmar-cambio]`.
+- **Aviso B-1:** `[data-aviso-datos-personales]`, cuyo `textContent` es el texto exacto.
+
+### Decisiones fuera del contrato
+
+1. **Relecturas.** Las reglas se releen igual que en F: no tras `rule_limit_reached` ni tras `rule_conflict`.
+2. **«Vive en n8n» frente a «Fijo en código».** Para un `fixed` sin valor, se decide por si `changeVia` nombra n8n. Hoy acierta en los tres casos (`knowledge.sources`, `composer.critic` y `composer.retry`). Si un texto cambia, el peor caso es decir «Fijo en código» de algo que vive en n8n; el efecto, que va debajo, lo aclara.
+3. **El inspector inyecta `StudioSession`** y relee el historial cada vez que se abre su pestaña.
+4. **`readCompare` admite revisiones `null`.** Es solo defensa: el servidor manda enteros.
+5. **El 413 `payload_too_large` de la Enmienda 2 no está en `StudioErrorCode`:** el CRM enseña el mensaje genérico. Ningún cuerpo que genere el CRM llega a 64 KB (el mayor medido mide 38 052 bytes). Se añadirá cuando se toque `studio-api.types.ts`; el lead lo aceptó así.
+
+### Pruebas y medidas
+
+| Comprobación | Resultado |
+|---|---|
+| Specs del módulo (`ng test --include='src/app/modules/ultron-studio/*.spec.ts'`) | **22 ficheros, 489 pruebas en verde.** En F eran 216; con la capa de datos, 340 (124 de ellas de paridad); 487 en `688da4a` y 2 más con B-1 |
+| `src/app/models/*.spec.ts` | 22, en verde |
+| Paridad de coherencia | 124/124 contra `coherence-cases.json` |
+| Suite completa (`ng test --watch=false`) | **2522 en verde; 16 fallos, los de la línea base:** `access-control.moderation` ×6, `auth.moderation-menu` ×7, `auth.guard.moderation` ×1, `financial-realtime.integration` ×1 y `receivables-pagination` ×1. Ninguno es nuevo ni del Studio. No se reprodujeron en un HEAD limpio: coinciden en número y ficheros con la línea base |
+| `tsc` de la aplicación y de los specs | Limpio |
+| `check:literals` | 292 ficheros, correcto |
+| Build de producción | Exit 0 y 0 errores; 29 avisos de presupuesto, los mismos 29 que dejó F. Ninguna hoja nueva ni modificada está entre ellos |
+| Chunk del Studio | 716,51 kB en bruto y 153,56 kB transferidos (F: 578,11 y 122,48). **0 apariciones** de `UltronCommitService`, `SalesAgentOrchestratorService`, `SalesAiConfig`, `MarketingAgentSwitch`, `UltronAbortLatch`, `R-01`, `R-02`, `R-12`, `payment_links_enabled`, `canary_conversation_id`, `MARKETING_`, `ULTRON_STUDIO_` y `webhook`. `.env` y `config(` dan falsos positivos: `this.enviando` y el `_config()` interno de Foblex |
+| Mutaciones | 15, todas detectadas por su spec. Entre ellas: «Usar el valor del motor» sin «≠ motor», quitar la prevención, el 422 con un solo mensaje por clave, el historial sin filtro por capa, comparar al revés, la página sin leer el motor, lo de n8n presentado como «Fijo en código», el efecto del servidor como `[innerHTML]` y las tres del aviso B-1 |
+| Chrome real con la API simulada | **20/20** (ver abajo) |
+
+**Tamaño de las hojas.** Fuente → `sass --style=compressed`, sin la encapsulación de Angular. El build no avisa de ninguna, así que todas compilan por debajo de los 8 kB del aviso.
+- Nuevas: `studio-param-row` 3017 → 2178 B · `studio-conditions-editor` 2630 → 1966 B · `studio-history-list` 1841 → 1380 B · `studio-compare-view` 2329 → 1842 B.
+- Modificadas: `studio-inspector` 8012 → 6309 B (global, sin encapsular) · `studio-rules-panel` 5098 → 4000 B · `studio-versions-panel` 5857 → 4592 B · `studio-audit-panel` 1225 → 898 B.
+
+El build mide hoy `ultron-studio.scss` en 27,87 kB, y el informe final de F decía 31,04 kB. La fuente es byte a byte la misma, así que la diferencia es de medición, no de G.
+
+**En Chrome real (no es el E2E con la pila real).** `ng serve`, `puppeteer-core` y Chrome, con la API del Studio simulada con las formas del informe del backend, y la validación y el análisis hechos por las mismas funciones TS empaquetadas. **20/20:**
+- la lectura del motor no bloquea, y «Motor ahora» de Gobierno;
+- «≠ motor», la prevención, las reglas con su estado y las dependencias;
+- el historial filtrado;
+- la contradicción en vivo con su enlace, el 409 con la lista, y «Ver S-001», que aparca y resalta;
+- el 422 de R-02 junto a su fila;
+- la comparación, y la auditoría sin `<pre>`;
+- escritorio a 1440, tableta a 820 y móvil a 390 px, sin desplazamiento horizontal ni desbordes del inspector;
+- ningún error de JavaScript.
+
+Esa pasada encontró y corrigió dos cosas: la quinta pestaña quedaba oculta tras un desplazamiento horizontal (449 px de pestañas en 368), y había un doble punto en «Leído … p. m..». Sus capturas **no se han incorporado** a `capturas/`.
+
+### E2E con la pila real (tester, 18/19-10-2026)
+
+**La pila.** Backend en instantánea (`git archive`) de `c8d9cf4` y, después, de `391cffb`, con `artisan serve --no-reload` (8 workers) y PostgreSQL 14 en una base propia. CRM `7d3ad2a` con `ng serve`. Chrome real, con login por el formulario y tres cuentas reales (Super Admin, Administrador y Recepción). El entorno de prueba tiene el interruptor, el canario y la bandera de cobro puestos, para que se vean «≠ motor» y «Usar el valor del motor»; solo los lee el Studio.
+
+**Resultado:** **124/126 en `391cffb`** y 122/126 en `c8d9cf4`.
+- Las dos que solo fallan en `c8d9cf4` son las del freno sin tabla: salía como «freno suelto» leído. Es I-1 de `security`, corregido en `dfb30f5`.
+- Las dos que fallan en los dos son de **H-1 del E2E** (este H-1 no es el del tester de backend).
+
+| # | Escenario | `391cffb` |
+|---|---|---|
+| E1 | Carga: fase `ready`, lecturas reales de Gobierno («Atiende: solo la conversación canaria»), una fuente caída (`plans`) sale como no disponible con el Studio usable, el freno sin tabla da «Atiende: no se sabe (falta alguna lectura)» | 18/18 |
+| E2 | Inspector, `rules.paymentLinksEnabled`: «Motor: sí», «≠ motor», «Usar el valor del motor» con prevención (`config-cobro-sin-camino`); cancelar no cambia nada | 13/13 |
+| E3 | Reglas con condiciones: S-001 «≤ 300» (201 canónica), «≥ 320» con aviso en vivo y 409, «descuentos = sí» con 422 y sus dos mensajes, quitar condiciones (`conditions: null`), auditoría | 25/27 (**H-1**) |
+| E4 | Borrador: prevención con `regla-S-001`, hallazgos en vivo y «el servidor manda» cuando otra persona crea una regla | 9/9 |
+| E5 | Versiones y cuatro ojos: formato 2 con 14 reglas copiadas, `REVIEW_REQUIRED`, aprobación por otra persona tras reconocer los 5 avisos, publicar → 409 (403 sin la llave), comparación e historial | 24/24 |
+| E6 | Permisos: el Administrador sin `ultron.manage_rules` (retirado en Roles) recibe 403 y no ve «Nueva regla»; Recepción, sin menú y con 403 en `status`, `engine/readings` y `compare` | 8/8 |
+| E7 | Texto hostil en regla, historial, editor, inspector, etiqueta de versión, comparación y nombre de plan: literal, sin crear elementos ni abrir diálogos | 13/13 |
+| E8 | Teclado en las cinco pestañas y móvil a 390 px, sin desplazamiento horizontal | 9/9 (+2 observaciones) |
+| E9 | Cierre: la huella de las tablas del motor y de las colas es igual al empezar y al terminar; sin errores de JS, sin 5xx (252 peticiones) y `laravel.log` sin ERROR | 5/5 |
+
+El E2E detecta las 6 mutaciones que se le probaron, todas en copias:
+- lecturas del motor sin fallo suave;
+- sin 409 `rule_contradiction`;
+- publicar respondiendo 200;
+- la descripción de una regla como `[innerHTML]`;
+- sin prevención;
+- el sí/no del motor invertido.
+
+**Hallazgos del E2E (abiertos, del CRM):**
+- **H-1 (medio).** «Ver S-NNN», tras el 409, no lleva el foco ni la vista a la regla: el foco vuelve a «Nueva regla» y la regla queda fuera de la vista.
+  - **Causa:** `verRegla` enfoca y desplaza en un `afterNextRender`, y después la restauración del foco del diálogo (`ib-dialog`, un `queueMicrotask` al destruirse) devuelve el foco al botón.
+  - **Por qué no lo vieron las pruebas:** la revisión con la API simulada tenía 5 reglas, con S-001 visible sin desplazar, y el spec del panel no mira el foco.
+  - **Dueño:** frontend.
+- **H-2 (bajo; ya ocurría en F, y G lo agrava).** Con el inspector abierto, la fila de acciones de la cabecera se pinta encima del aviso principal «El motor de ULTRON no lee nada de esto…». A 1440 px, «Validar» tapa parte del texto; a 1680 y 1920, los botones se pintan sobre la franja. Es cosmético, porque los botones funcionan, pero tapa el aviso de seguridad principal en el ancho de escritorio más habitual.
+  - **Causa probable** (no demostrada en el CSS): el chip nuevo «Motor leído …» de la cabecera.
+  - **El dilema:** corregirlo seguramente toca `ultron-studio.scss`, que G tiene a cero bytes. Lo decide el lead.
+- **Observaciones:**
+  - En las pestañas sin nada enfocable, Tab sale del inspector. El patrón APG recomienda `tabindex="0"` en ese `tabpanel`.
+  - El texto real de una fuente caída es «El servidor no pudo leer esta fuente.».
+  - El Administrador tiene `ultron.manage_rules` por defecto.
+
+**Spec de texto hostil, sin commit.** `studio-hostile-text.spec.ts` añade 6 pruebas: comparación, panel de reglas (409 y 422), inspector, editor de condiciones, historial y fila de parámetro.
+- Con él, el módulo pasa a 23 ficheros y 495 pruebas, y la suite completa a 2528 en verde, con los mismos 16 fallos de la línea base.
+- Con `[innerHTML]` en los seis componentes, fallan las 6.
+- Está en el árbol del CRM, pendiente de que el lead lo revise y lo confirme.
+
+**Qué no cubre el E2E:**
+- la pila de producción: nginx con FPM (5 workers), `config:cache` y `route:cache`, y el build de producción, porque corre con `ng serve` en modo desarrollo;
+- los cupos (429), con `CACHE_STORE=array`;
+- el 413, porque el CRM no llega a 64 KB;
+- la tableta a 820 px (solo la revisión con la API simulada);
+- Safari, Firefox, Windows y lectores de pantalla reales.
+
+**Qué no se declara verificado:**
+- lectores de pantalla reales;
+- Safari, Firefox y Windows;
+- el CRM de G sobre la pila de producción;
+- el tamaño compilado exacto de cada hoja con la encapsulación.
+
+## Revisión final independiente (`reviewer`) de la vista previa (Hito C)
 
 Veredicto inicial **BLOQUEADO** por un hallazgo confirmado en Chrome; todo lo que sigue quedó corregido y cubierto por pruebas antes de publicar.
 

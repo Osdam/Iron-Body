@@ -1,6 +1,6 @@
 # ULTRON STUDIO: informe de avance
 
-**Fecha:** 17-10-2026 (se actualiza con cada fase). **Rama:** `feat/ultron-studio` en el CRM (`Iron-Body_Front`) y en el backend (`Iron-Body`, solo documentación).
+**Fecha:** 17-10-2026 (se actualiza con cada fase; última actualización: 19-10-2026, Hito G implementado y sin desplegar). **Rama:** `feat/ultron-studio` en el CRM (`Iron-Body_Front`) y en el backend (`Iron-Body`, solo documentación); el Hito G, en `feat/ultron-studio-g` de los dos repos.
 
 ## Estado
 
@@ -9,9 +9,10 @@
 | A. Auditoría de arquitectura | **HECHO** → `ARCHITECTURE_APPROVED_FOR_BUILD` (17-10) |
 | B. Diseño del Studio (capas, modelo, grafo) | **HECHO** |
 | C. Frontend visual con datos de demostración | **HECHO** → `VISUAL_IMPLEMENTATION_IN_PROGRESS` → terminado y revisado |
-| D. Vista previa protegida publicada | **PENDIENTE DE PUBLICAR** (ver «Publicación» al final) → `ULTRON_VISUAL_PREVIEW_READY` |
-| F. Persistencia (borradores, versiones con estados, reglas, aprobaciones, auditoría, permisos `ultron.*`, catálogo servido por el backend) | **EN RAMA, NO DESPLEGADO** (18-10): backend implementado y revisado (`ULTRON_STUDIO_BACKEND_REPORT.md`, `ULTRON_STUDIO_SECURITY_REPORT.md`); integración del CRM en curso |
-| G–R. Laboratorio, evaluación IA, Meta, Twilio, canarios, ElevenLabs, vínculo versión↔conversación | **NO EMPEZADOS** (autorizados como construcción, no como activación) |
+| D. Vista previa protegida publicada | **PUBLICADA** el 18-10-2026 a las 02:56 UTC (ver «Publicación» al final) → `ULTRON_VISUAL_PREVIEW_READY` |
+| F. Persistencia (borradores, versiones con estados, reglas, aprobaciones, auditoría, permisos `ultron.*`, catálogo servido por el backend) | **DESPLEGADO Y VERIFICADO** (18-10-2026, 15:24–15:28 UTC; backend `9acddc3`, CRM `020db86`): ver «Hito F» más abajo, `ULTRON_STUDIO_BACKEND_REPORT.md` y `ULTRON_STUDIO_SECURITY_REPORT.md` |
+| G. Control funcional de las diez capas (configuración real por capa, lecturas del motor, reglas con condiciones, historial y comparación) | **IMPLEMENTADO EN RAMA, NO DESPLEGADO** (18/19-10-2026; backend `391cffb`, CRM `7d3ad2a`). Revisiones de seguridad y de pruebas incorporadas. E2E con la pila real: 124/126, con H-1 del E2E (CRM) abierto. **Pendientes:** el veredicto del reviewer, la decisión sobre H-1 y H-2 del E2E, y el despliegue (ver «Hito G» más abajo) |
+| Siguientes (rotuladas «G–R» antes de que G pasara a ser el control funcional): laboratorio, evaluación IA, Meta, Twilio, canarios, ElevenLabs, vínculo versión↔conversación | **NO EMPEZADOS** (autorizados como construcción, no como activación) |
 
 ## Qué hay (clasificación honesta)
 
@@ -82,6 +83,113 @@
 - **Smoke autenticado en producción, 22/22**, con una cuenta temporal `studio-smoke@ironbodyneiva.cloud` (admin id 32, Super Admin; creada para el smoke, escrituras limitadas a su propio borrador y desactivada al terminar; su token responde 403): login real, 6 llaves `ultron.*`, `status` (motor no lee versiones, publicar bloqueado), catálogo con versión y huella iguales a `status` y sin rutas del servidor, borrador que se guarda en Laravel y sobrevive a la recarga, 409 con revisión vieja, validación del servidor de configuración (`config-descuentos`) y de conexiones (E99 → 422), 422 `validation_blocked` al crear versión con bloqueos, descartar, 12 reglas del código de solo lectura (409 al editarlas), versiones vacías, publicar → 404/409, auditoría con `draft.saved`/`draft.discarded` y sin IP, 401 sin token.
 - ULTRON Legacy: diff de las zonas del motor entre `84319be` y `9acddc3` vacío; `MARKETING_ULTRON_ENABLED` sigue como estaba; colas sin fallos; ninguna llamada, campaña ni regla real tocada.
 - Lo que no se verificó en producción con sesión real: el flujo de versiones y aprobación (crear → enviar → aprobar por otra persona) se validó con la pila real y PostgreSQL en local (tester, E2E 32/32) y no en producción para no dejar versiones inmutables de prueba en el libro; se recomienda que el propietario lo haga con dos cuentas reales (runbook, paso 8).
+
+## Hito G: implementado (18/19-10-2026, en rama, sin desplegar)
+
+**Resumen ejecutivo.** Hasta F, el inspector enseñaba 21 parámetros como si fueran mandos del agente, y casi ninguno lo es. G hace que el Studio diga la verdad sobre el agente sin tocarlo:
+- cada parámetro declara de dónde sale su valor real y quién lo cambia de verdad;
+- el Studio lee en vivo (solo lee) cinco parámetros y cinco lecturas más del motor;
+- las reglas del Studio ganan condiciones verificables («si… entonces…»), y el servidor rechaza las que contradicen un control del motor u otra regla;
+- el historial se lee en frases, y se pueden comparar versiones.
+
+**El hecho incómodo:** de los 21 parámetros, **4 son mandos reales del motor** (y se cambian en el entorno del servidor, no en el Studio), **1 es un dato del motor** (los planes), **11 están fijos** en el código o en n8n y **5 no tienen equivalente** en el motor.
+
+**Dónde está:** backend `391cffb` (el código, en `dfb30f5`) y CRM `7d3ad2a`, en la rama `feat/ultron-studio-g` de los dos repos, **sin push ni despliegue**. Contrato: `ULTRON_STUDIO_G_CONTRACT.md`, con las Enmiendas 1 y 2.
+
+**IMPLEMENTADO Y PROBADO** (en rama):
+- **Configuración real por capa.** El catálogo `2026-10-19.1` trae `bindings` (origen, valor declarado o en vivo, efecto y quién lo cambia de verdad), y la fila de parámetro del inspector enseña «Motor: …», «≠ motor» y «Usar el valor del motor».
+- **Lecturas del motor** (`GET engine/readings`, solo lectura): el driver efectivo, la bandera del cobro, el interruptor, el canario (si existe, nunca cuál), los planes vendibles (solo nombres), la pausa, el freno, el canario del cobro (si existe) y la base de conocimiento (versión y recuentos, sin contenido). Una fuente caída sale como no disponible, y el Studio sigue.
+- **Reglas con condiciones:**
+  - una gramática verificable, canonicalizada en el servidor;
+  - 422 contra los controles del motor y 409 `rule_contradiction` contra otras reglas del Studio;
+  - el análisis en cada regla, y los hallazgos de reglas en la validación del borrador y de las versiones;
+  - el mismo núcleo en PHP y en TS, con paridad sobre 123 casos escritos a mano.
+- **Historial legible** (del borrador, de cada regla y de cada versión) y **comparación** de una versión con la línea base, con el propio borrador o con otra versión (`GET compare`).
+- **CRM:** inspector de cinco pestañas, editor de condiciones, prevención al proponer valores y un aviso fijo de datos personales en las reglas.
+- **Versiones de formato 2**, con las condiciones copiadas, y compatibilidad completa con las de F.
+- **Correcciones de las revisiones** (`dfb30f5`):
+  - tope de cuerpo de 64 KB y validación en dos fases en las 21 rutas, que también cierra la clase de M-2 en las vías de F;
+  - análisis neutro de las reglas archivadas;
+  - READ COMMITTED fijado en las escrituras de reglas;
+  - repetición idempotente con el tope de reglas lleno;
+  - freno y pausa «no disponibles» si su consulta falla;
+  - pruebas de aislamiento que escuchan cada sentencia SQL.
+
+**QUÉ NO HACE** (por diseño; las protecciones siguen intactas):
+- **El motor no lee nada del Studio** (`StudioPublishing::ENGINE_READS_VERSIONS = false`). Ninguna ruta de G escribe en tablas, configuración o ficheros del motor. Una prueba recorre las 21 rutas con escrituras reales, escucha cada sentencia SQL y exige la misma huella de todas las tablas ajenas al Studio y de la configuración.
+- **Publicar y revertir siguen respondiendo 409 siempre.** Una versión `APPROVED` no cambia al agente.
+- **Las reglas del Studio no se aplican** (`enforcement = none`): aprobar una versión no las hace cumplir. Por eso, toda versión con alguna S-NNN queda en `REVIEW_REQUIRED` (`reglas-sin-aplicacion`).
+- **Los 4 mandos reales no se cambian desde el Studio.** Se cambian en el entorno del servidor, con el procedimiento que exija cada uno. G no escribe ajustes: `ultron.manage_settings` sigue pospuesto.
+- **Las afirmaciones de texto** se guardan, pero no se evalúan: eso llegará con el laboratorio (Hito 4).
+- **Sin llamadas, sin Meta, sin ElevenLabs y sin consumo pagado.**
+
+**Evidencia** (el detalle, en `ULTRON_STUDIO_BACKEND_REPORT.md`, `ULTRON_STUDIO_SECURITY_REPORT.md` y `ULTRON_STUDIO_VISUAL_REPORT.md`):
+- **Backend:**
+  - Studio + Unit + Access en SQLite: 618 pruebas, OK, con 5 omitidas que solo corren en PG (repetido en `391cffb` al escribir este informe);
+  - Studio + Unit en PostgreSQL 14: 468/468;
+  - suite completa: 9589 pruebas, con los mismos 58 fallos de la línea base;
+  - `auth:coverage --unmapped` vacío y 21 rutas;
+  - el motor, sin cambios (`git diff origin/main`: 0 líneas);
+  - carreras reales del tester: 17 escenarios, cada uno con 20 repeticiones naturales y 20 forzadas, sin un resultado incorrecto salvo H-3, ya corregido.
+- **CRM:**
+  - 489 specs del módulo, y la suite completa con 2522 en verde y los 16 fallos de la línea base;
+  - build de producción sin errores de presupuesto, con `ultron-studio.scss` sin un byte más;
+  - el chunk, sin nombres del motor;
+  - 15 mutaciones, todas detectadas;
+  - Chrome real, 20/20 con la API simulada.
+- **E2E con la pila real:** 124/126 en `391cffb`. Los 2 fallos son de H-1 del E2E (CRM), que sigue abierto (ver abajo).
+- **Revisiones:**
+  - `security`: sin críticos, altos ni medios. B-1 se resolvió con un aviso; el procedimiento de redacción queda pendiente del propietario;
+  - `api-security-specialist`: sin críticos ni altos. M-1, M-2 y B-2, corregidos; B-1, aceptado;
+  - `tester` de backend: sus H-1 y H-3, corregidos; su H-2 pasa a ser una puerta del despliegue. Los hallazgos del E2E se numeran aparte.
+
+**Decisiones del lead** (contrato y Enmienda 2):
+1. Incumplir una regla del Studio es un **aviso**, no un bloqueo: las S-NNN son propuestas, y el aviso obliga a que otra persona lo reconozca al aprobar.
+2. Las lecturas del motor las ve todo `ultron.view` (Super Admin y Administrador).
+3. Una regla del Studio puede proponer encender el cobro, como aviso.
+4. Correcciones obligatorias antes de desplegar: el análisis neutro de las archivadas, el tope de cuerpo de 64 KB, la validación en dos fases y READ COMMITTED. Además: la puerta de PostgreSQL y el aviso de datos personales. Se acepta sin cambio el coste acotado del análisis (B-1 de api-security).
+
+### Veredicto del reviewer
+
+<!-- PENDIENTE: veredicto del reviewer -->
+
+**Pendiente.** La revisión final independiente de G no ha emitido veredicto al escribir esto. G no se declara terminado mientras el reviewer mantenga hallazgos bloqueantes.
+
+### E2E con pila real
+
+**Hecho por el tester el 18/19-10-2026, en local. Nada de producción.**
+
+**La pila:**
+- el backend, en instantáneas de `c8d9cf4` y de `391cffb`, con `artisan serve --no-reload` y PostgreSQL 14;
+- el CRM `7d3ad2a` con `ng serve`;
+- Chrome real, con login por el formulario y tres cuentas reales (Super Admin, Administrador y Recepción).
+
+**Resultado: 124/126 en `391cffb`** (122/126 en `c8d9cf4`; las dos de diferencia son las del freno sin tabla, que el código corregido ya da como no disponible).
+
+**Qué pasa en los nueve escenarios:**
+- E1, carga: lecturas reales del motor y una fuente caída sin tumbar el Studio;
+- E2, inspector: «≠ motor», «Usar el valor del motor» y la prevención;
+- E3, reglas con condiciones: 201, 409, 422 y quitar condiciones;
+- E4, borrador: hallazgos de reglas en vivo, y «el servidor manda»;
+- E5, versiones de formato 2 y cuatro ojos: publicar sigue en 409;
+- E6, permisos: 403 sin llave, y Recepción sin acceso;
+- E7, texto hostil: literal en todas las vistas;
+- E8, teclado y móvil;
+- E9, cierre: **la huella de las tablas del motor y de las colas es igual al empezar y al terminar**, sin errores de JS ni 5xx.
+
+El E2E detecta las 6 mutaciones que se le probaron.
+
+**Los 2 fallos abiertos son de H-1 del E2E** (medio, del CRM, para frontend): tras el 409, «Ver S-NNN» no lleva el foco ni la vista a la regla. Además queda **H-2 del E2E** (bajo, ya presente en F): con el inspector abierto, los botones de la cabecera tapan parte del aviso «El motor de ULTRON no lee nada de esto…» a 1440 px. Detalle en `ULTRON_STUDIO_VISUAL_REPORT.md`, «E2E con la pila real».
+
+**Qué no cubre:** la pila de producción (nginx con FPM, cachés y el build de producción), los cupos, el 413, la tableta, Safari, Firefox ni los lectores de pantalla.
+
+**Pendiente del lead:** decidir H-1 y H-2 del E2E, y confirmar el spec de texto hostil que el tester dejó sin commit en el CRM (6 pruebas).
+
+### Despliegue y verificación
+
+<!-- PENDIENTE: despliegue y verificación -->
+
+**Pendiente de autorización y de ejecución.** El runbook está en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md` («Hito G: runbook») y la vuelta atrás en `ULTRON_STUDIO_ROLLBACK.md` («Hito G»).
 
 ## Decisiones tomadas (y por qué)
 
