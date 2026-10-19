@@ -4,15 +4,18 @@ namespace Tests\Unit\UltronStudio;
 
 use App\Console\Commands\UltronStudio\ExportStudioFixturesCommand;
 use App\Services\UltronStudio\StudioCatalog;
+use App\Services\UltronStudio\StudioLabCatalog;
 use Tests\TestCase;
 
 /**
- * El comando que lleva el catálogo y los casos de paridad al CRM.
+ * El comando que lleva el catálogo, los casos de paridad y los escenarios del
+ * laboratorio al CRM.
  *
  * LO QUE SE PROTEGE. Que lo exportado sea exactamente lo que el servidor usa
- * (el catálogo de `GET catalog` y los casos tal cual, sin pasar un `{}` a `[]`)
- * y que una ruta mal escrita no siembre carpetas. Escribe SIEMPRE en un
- * directorio temporal: nunca en el CRM.
+ * (el catálogo de `GET catalog`, los casos tal cual, sin pasar un `{}` a `[]`,
+ * y desde el Hito 4 el catálogo de escenarios del laboratorio) y que una ruta
+ * mal escrita no siembre carpetas. Escribe SIEMPRE en un directorio temporal:
+ * nunca en el CRM.
  */
 class ExportStudioFixturesCommandTest extends TestCase
 {
@@ -51,12 +54,12 @@ class ExportStudioFixturesCommandTest extends TestCase
         return substr($ts, $inicio, $fin - $inicio);
     }
 
-    public function test_it_writes_the_three_files_and_creates_the_testing_folder_inside_an_existing_one(): void
+    public function test_it_writes_the_four_files_and_creates_the_testing_folder_inside_an_existing_one(): void
     {
         $destino = $this->dir.'/testing';
 
         $this->artisan('ultron-studio:export-fixtures', ['--path' => $destino])
-            ->expectsOutputToContain('de coherencia exportados')
+            ->expectsOutputToContain('de coherencia y 12 escenarios del laboratorio')
             ->assertSuccessful();
 
         $catalogo = (string) file_get_contents($destino.'/'.ExportStudioFixturesCommand::CATALOG_FILE);
@@ -82,6 +85,21 @@ class ExportStudioFixturesCommandTest extends TestCase
         $this->assertSame($originalG, self::literal($coherencia, 'BACKEND_COHERENCE_CASES'), 'los casos de coherencia viajan tal cual');
         $this->assertArrayHasKey('bindings', json_decode($json, true, 512, JSON_THROW_ON_ERROR));
         $this->assertArrayHasKey('legacyConditions', json_decode($json, true, 512, JSON_THROW_ON_ERROR));
+
+        // Hito 4: los escenarios del catálogo del laboratorio, con sus listas y límites.
+        $laboratorio = (string) file_get_contents($destino.'/'.ExportStudioFixturesCommand::LAB_SCENARIOS_FILE);
+        $this->assertStringStartsWith('// Escenarios del catálogo del laboratorio', $laboratorio);
+        $this->assertStringContainsString('GENERADO — no editar a mano.', $laboratorio);
+        $this->assertStringContainsString('huella '.StudioLabCatalog::hash(), $laboratorio);
+        $this->assertStringEndsWith(" as const;\n", $laboratorio);
+        $lab = json_decode(self::literal($laboratorio, 'BACKEND_LAB_SCENARIOS'), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(ExportStudioFixturesCommand::labScenarios(), $lab, 'lo mismo que el servidor, en el mismo orden');
+        $this->assertSame(StudioLabCatalog::VERSION, $lab['version']);
+        $this->assertSame(StudioLabCatalog::codes(), array_column($lab['scenarios'], 'code'));
+        $this->assertSame(StudioLabCatalog::scenarioHash(StudioLabCatalog::byCode('C-04')), $lab['scenarios'][3]['contentHash']);
+        $this->assertSame(StudioLabCatalog::CATEGORIES, $lab['categories']);
+        $this->assertSame(100, $lab['limits']['maxLiveScenarios']);
+        $this->assertStringContainsString("\n  \"version\": ", self::literal($laboratorio, 'BACKEND_LAB_SCENARIOS'), 'sangría de dos espacios, como el CRM');
     }
 
     public function test_it_refuses_a_path_whose_parent_does_not_exist(): void
@@ -104,5 +122,6 @@ class ExportStudioFixturesCommandTest extends TestCase
         $this->assertStringContainsString('BACKEND_STUDIO_CATALOG', (string) file_get_contents($this->dir.'/'.ExportStudioFixturesCommand::CATALOG_FILE));
         $this->assertFileExists($this->dir.'/'.ExportStudioFixturesCommand::CASES_FILE);
         $this->assertFileExists($this->dir.'/'.ExportStudioFixturesCommand::COHERENCE_FILE);
+        $this->assertFileExists($this->dir.'/'.ExportStudioFixturesCommand::LAB_SCENARIOS_FILE);
     }
 }

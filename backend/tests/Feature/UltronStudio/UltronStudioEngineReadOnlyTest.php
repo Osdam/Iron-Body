@@ -33,8 +33,10 @@ use Tests\TestCase;
  * la otra dirección, que es la que abre el Hito G al leer el motor:
  *
  *  1. ESTÁTICA, por tokens. En `app/Services/UltronStudio/` solo
- *     `StudioEngineReadings.php` y `StudioRules.php` nombran clases del motor,
- *     y en ellos no hay ninguna llamada de escritura salvo las de
+ *     `StudioEngineReadings.php`, `StudioRules.php` y, desde el Hito 4,
+ *     `StudioLabEngineChecks.php` (las guardas puras del motor sobre el texto
+ *     del laboratorio) nombran clases del motor, y en ellos no hay ninguna
+ *     llamada de escritura salvo las de
  *     `StudioRules` sobre su propio modelo (su nivel de aislamiento y su
  *     cerrojo consultivo). Desde las correcciones del Hito G (I-2), también
  *     los controladores, modelos y comandos del Studio: solo el controlador
@@ -67,7 +69,7 @@ class UltronStudioEngineReadOnlyTest extends TestCase
     use StudioFixtures;
 
     /** Los únicos ficheros del Studio que pueden nombrar clases del motor. */
-    private const ENGINE_READERS = ['StudioEngineReadings.php', 'StudioRules.php'];
+    private const ENGINE_READERS = ['StudioEngineReadings.php', 'StudioLabEngineChecks.php', 'StudioRules.php'];
 
     /** Lo que es escribir (contrato G §A9): no puede aparecer en esos ficheros sobre el motor. */
     private const WRITE_CALLS = ['set', 'engage', 'release', 'save', 'update', 'delete', 'create', 'forcecreate', 'forcefill', 'fill',
@@ -113,13 +115,20 @@ class UltronStudioEngineReadOnlyTest extends TestCase
             }
         }
         sort($nombran);
-        $this->assertSame(self::ENGINE_READERS, $nombran, 'Solo el adaptador de lecturas y las reglas pueden nombrar clases del motor.');
+        $this->assertSame(self::ENGINE_READERS, $nombran, 'Solo el adaptador de lecturas, el de las guardas del laboratorio y las reglas pueden nombrar clases del motor.');
 
         // El adaptador: ni una llamada de escritura, ni fachadas que escriban, ni `config([...])`.
         $lector = app_path('Services/UltronStudio/StudioEngineReadings.php');
         $this->assertSame([], $this->writeCalls($lector), 'StudioEngineReadings escribe.');
         $this->assertSame([], $this->forbiddenNames($lector), 'StudioEngineReadings usa algo que escribe.');
         $this->assertSame([], $this->configWrites($lector), 'StudioEngineReadings cambia la configuración.');
+
+        // Hito 4 (contrato H4 §A10): el adaptador de las guardas puras del
+        // laboratorio, con las mismas restricciones que el de lecturas.
+        $guardas = app_path('Services/UltronStudio/StudioLabEngineChecks.php');
+        $this->assertSame([], $this->writeCalls($guardas), 'StudioLabEngineChecks escribe.');
+        $this->assertSame([], $this->forbiddenNames($guardas), 'StudioLabEngineChecks usa algo que escribe.');
+        $this->assertSame([], $this->configWrites($guardas), 'StudioLabEngineChecks cambia la configuración.');
 
         // Las reglas: escriben SOLO su propio modelo (y toman su cerrojo). Lo que
         // nombra la base de conocimiento, solo lee.

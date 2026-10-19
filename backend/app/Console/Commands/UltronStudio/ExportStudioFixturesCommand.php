@@ -3,12 +3,14 @@
 namespace App\Console\Commands\UltronStudio;
 
 use App\Services\UltronStudio\StudioCatalog;
+use App\Services\UltronStudio\StudioLabCatalog;
 use Illuminate\Console\Command;
 use JsonException;
 
 /**
- * Vuelca el catálogo de ULTRON STUDIO y los casos de paridad a tres ficheros
- * que las pruebas del CRM puedan importar.
+ * Vuelca el catálogo de ULTRON STUDIO, los casos de paridad y el catálogo de
+ * escenarios del laboratorio a cuatro ficheros que las pruebas del CRM puedan
+ * importar.
  *
  * Existe porque el CRM valida el borrador en vivo mientras se edita y el
  * servidor repite la validación y manda él. Si los dos lados no pintan y no
@@ -27,21 +29,28 @@ use JsonException;
  *    `tests/fixtures/ultron-studio/coherence-cases.json` tal cual. Los escribe
  *    el tester desde el contrato; el backend los cumple
  *    (StudioCoherenceParityTest) y el CRM también.
+ *  - `backend-lab-scenarios.testing.ts` (Hito 4): StudioLabCatalog, los doce
+ *    escenarios del catálogo del laboratorio con su huella, más las listas y
+ *    los límites de un escenario. No hay paridad de lógica con el CRM (pinta
+ *    lo que calcula el servidor): sirve para que sus pruebas lean escenarios
+ *    reales y comparen sus listas con las del servidor.
  *
  * No autoriza nada ni se usa en tiempo de ejecución: es un contrato
  * comprobable entre dos repositorios.
  */
 class ExportStudioFixturesCommand extends Command
 {
-    protected $signature = 'ultron-studio:export-fixtures {--path= : directorio donde escribir los tres .ts}';
+    protected $signature = 'ultron-studio:export-fixtures {--path= : directorio donde escribir los cuatro .ts}';
 
-    protected $description = 'Exporta el catálogo de ULTRON STUDIO y los casos de paridad para las pruebas del CRM';
+    protected $description = 'Exporta el catálogo de ULTRON STUDIO, los casos de paridad y los escenarios del laboratorio para las pruebas del CRM';
 
     public const CATALOG_FILE = 'backend-studio-catalog.testing.ts';
 
     public const CASES_FILE = 'backend-validation-cases.testing.ts';
 
     public const COHERENCE_FILE = 'backend-coherence-cases.testing.ts';
+
+    public const LAB_SCENARIOS_FILE = 'backend-lab-scenarios.testing.ts';
 
     /** Las listas que tiene que traer el fixture de coherencia (versión 1). */
     public const COHERENCE_SECTIONS = ['canonicalize', 'analyze', 'conflicts', 'evaluate'];
@@ -171,13 +180,57 @@ class ExportStudioFixturesCommand extends Command
 
         TS;
 
+        $laboratorio = self::labScenarios();
+        $versionLab = StudioLabCatalog::VERSION;
+        $huellaLab = StudioLabCatalog::hash();
+        $totalLab = count($laboratorio['scenarios']);
+        $jsonLab = self::twoSpaces(json_encode($laboratorio, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+
+        $contenidoLaboratorio = <<<TS
+        // Escenarios del catálogo del laboratorio de ULTRON STUDIO (Hito 4).
+        //
+        // GENERADO — no editar a mano. Lo produce el comando de artisan
+        // `ultron-studio:export-fixtures` desde StudioLabCatalog, los escenarios
+        // sintéticos que el backend importa como escenarios de solo lectura.
+        //
+        // Solo lo importan las pruebas del CRM: leen escenarios reales y comparan
+        // sus listas (categorías, estados de pago, tipos de criterio y límites)
+        // con las del servidor. El CRM no repite ninguna lógica del laboratorio.
+        // Versión {$versionLab} · huella {$huellaLab}.
+        export const BACKEND_LAB_SCENARIOS = {$jsonLab} as const;
+
+        TS;
+
         file_put_contents($destino.'/'.self::CATALOG_FILE, $contenidoCatalogo);
         file_put_contents($destino.'/'.self::CASES_FILE, $contenidoCasos);
         file_put_contents($destino.'/'.self::COHERENCE_FILE, $contenidoCoherencia);
+        file_put_contents($destino.'/'.self::LAB_SCENARIOS_FILE, $contenidoLaboratorio);
 
-        $this->info("Catálogo {$version}, {$total} casos de paridad y {$totalCoherencia} de coherencia exportados a {$destino}");
+        $this->info("Catálogo {$version}, {$total} casos de paridad, {$totalCoherencia} de coherencia y {$totalLab} escenarios del laboratorio ({$versionLab}) exportados a {$destino}");
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Lo que viaja en `BACKEND_LAB_SCENARIOS`: versión, huella, las listas y
+     * los límites de un escenario y los doce escenarios con su huella.
+     *
+     * @return array{version:string,hash:string,categories:list<string>,paymentStates:list<string>,criterionKinds:list<string>,turnRoles:list<string>,limits:array<string,int>,scenarios:list<array<string,mixed>>}
+     */
+    public static function labScenarios(): array
+    {
+        $catalogo = StudioLabCatalog::toArray();
+
+        return [
+            'version' => $catalogo['version'],
+            'hash' => $catalogo['hash'],
+            'categories' => StudioLabCatalog::CATEGORIES,
+            'paymentStates' => StudioLabCatalog::PAYMENT_STATES,
+            'criterionKinds' => StudioLabCatalog::CRITERION_KINDS,
+            'turnRoles' => StudioLabCatalog::TURN_ROLES,
+            'limits' => StudioLabCatalog::limits() + ['maxLiveScenarios' => StudioLabCatalog::MAX_LIVE_SCENARIOS],
+            'scenarios' => $catalogo['scenarios'],
+        ];
     }
 
     /** JSON_PRETTY_PRINT sangra con cuatro espacios; el CRM usa dos. */
