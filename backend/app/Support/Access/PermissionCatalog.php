@@ -85,6 +85,11 @@ final class PermissionCatalog
         'charge' => 'Cobrar',
         'cancel' => 'Anular',
         'enroll' => 'Inscribir',
+        // Sin esto la matriz pintaba la llave en crudo —«stock», en
+        // minúscula— entre botones que sí tienen nombre. Un permiso que se
+        // lee distinto al resto parece a medio hacer, y quien reparte
+        // permisos duda de si hace algo.
+        'stock' => 'Ver existencias',
         'transfer' => 'Trasladar socios',
     ];
 
