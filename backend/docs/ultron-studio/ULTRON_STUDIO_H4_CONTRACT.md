@@ -626,3 +626,21 @@ En total, 11 disparadores de fila en SQLite. En PG, esos 11 más 5 contra TRUNCA
 3. **Fallo del juez:** la tabla de A5 describe la llamada que falla y su coste. Si falla el **actor**, el caso termina `error` con esa clase. Si el actor respondió y falla el **juez**, el caso termina `done` con `judge: null` y `judgeError {class}`, su `outcome` se calcula sin opinión de la IA y llega como mucho a `review` (A4 manda); la clase del juez cuenta para la racha y para las paradas de proveedor igual que la del actor.
 4. **Reserva cobrada en un timeout de llamada:** la de **esa llamada** (entrada estimada × Pin + `max_output_tokens` de esa llamada × Pout). El `failed()` del job (timeout del job o worker perdido) sigue cobrando la reserva entera del caso, como dice A3.
 5. **Filtro de datos personales (A2):** se mantiene literal. Consecuencias documentadas para el propietario y para quien escriba escenarios: los emojis compuestos con ZWJ (🏋️‍♀️, 🏃‍♂️) se rechazan (usar emojis simples), un precio de 7 cifras («$1.200.000») se rechaza (escribir «1,2 millones» o usar los marcadores `{{PLAN_PRICE}}`), y una fecha con guiones («15-10-2026») se rechaza (escribir «15 de octubre»). El mensaje del 422 lo explica.
+
+## Enmienda 2 (19-10-2026): formas que el CRM espera y que el backend debe producir igual
+
+Fijadas por la capa de datos del CRM (`studio-lab-parse.ts` falla cerrado ante otra forma; informe `scratchpad/hito-4/informe-front-datos.md` §3):
+1. `GET lab/scenarios` → `data` es una lista SIN paginar (como `GET rules`); `GET lab/runs` y `GET lab/events` → paginador de Laravel (como `GET audit`).
+2. `PATCH lab/scenarios/{uuid}` es parcial: `baseRevision` + solo los campos que cambian. Los criterios viajan SIN `id` (`{kind, text, rules}`), también al crear; los `id` (`c1…`) los asigna el servidor por posición.
+3. `POST lab/scenarios/{uuid}/archive` → cuerpo `{reason}` (`baseRevision` opcional); respuesta: el `ScenarioDto` archivado.
+4. `cancel` y `verdict` responden con `data = RunDetail` (como las transiciones de versión en G).
+5. `verdict`: `approved` envía SIEMPRE `acknowledgedCases` (puede ser `[]` → el backend valida `present|array`, no `required`); `rejected|needs_changes` no lo envían; `note: null` en un `approved` sin nota.
+6. `RunSummary.outcomes` es siempre un objeto con ceros, nunca `null`; `progress` = `{done, error, skipped, pending}` (sin `running`; el caso en curso cuenta en `pending`); `expired: true` puede venir con `status` `queued` o `stopped`.
+7. Caso: `checks` lista (nunca `null`); `usage` siempre objeto con `inputTokens/outputTokens/costMicros` `null` hasta liquidar y `overrunMicros` entero; `errorCode` texto ≤ 32; `judge: null` si no hubo opinión, con `judgeError {class}` cuando falló el juez (Enmienda 1, decisión 3).
+8. `targetSnapshot` = `{configs: {capa: {clave: valor}}, rules: [{code, revision, description, conditions}], contentHash}`; el CRM lo lee suave y solo lo pinta.
+9. `LabEventDto` = `AuditEventDto` de G sin `contentHash`: `{id, event, summary, actor{type: admin|system, name, role}, subjectType: scenario|run|system, subjectUuid, fromStatus, toStatus, diff, createdAt}`.
+10. `model`: texto, o `null` en modo `fake`; `target.uuid` obligatorio solo en `version` (`null` en `draft`/`baseline`).
+11. Payloads de error: `estimate_changed.estimate` = `EstimateDto` completo; `lab_not_configured.reasons` = `string[]`; `lab_run_budget_exceeded {requiredMicros, capMicros}`; `lab_daily_budget_exceeded {requiredMicros, remainingMicros}`; `run_not_reviewable.reason`; `cases_not_acknowledged.cases` = códigos de escenario; `scenario_conflict.current` = `ScenarioDto`; 422 con claves punteadas de Laravel (`turns.0.text`, `criteria.1.rules.0`, `scenarioUuids.2`, `note`, `reason`).
+12. **Decisión del lead:** `EstimateDto` gana `excludedRules: string[]` (códigos S-NNN que no caben en las 20 enviadas al actor; `[]` si caben todas). El CRM lo pintará en el paso 5.
+13. `GET lab/status` apagado: `message` opcional (texto por defecto en el CRM) y `can` obligatorio también apagado.
+14. `reasons` de configuración: el CRM conserva códigos desconocidos; **decisión del lead:** no existe `invalid_price`; un precio 0, vacío o mal formado da `missing_price` (Enmienda 1).
