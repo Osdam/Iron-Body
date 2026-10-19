@@ -151,6 +151,7 @@ final class PermissionCatalog
         'receivables.manage' => 'Anular un abono mal registrado, anular o reabrir una deuda entera y dejarla sin fecha de pago. Nada se borra: todo queda con motivo y autor.',
         'members.archive' => 'Retirar la ficha de un socio. No borra su historial.',
         'members.adjust' => 'Sumarle o quitarle días y entradas a una membresía a mano: por un día que no pudo venir, una entrada que el lector contó dos veces o un error al venderle el plan. Cada ajuste queda con autor y motivo.',
+        'inventory.stock' => 'Ver CUÁNTAS unidades quedan de cada producto. Sin esto, el mostrador sigue pudiendo vender y sigue viendo cuáles están agotados —no podría trabajar si no—, pero no ve la cifra en el punto de venta. El módulo de Inventario se sigue gobernando con «Ver».',
         'members.employee' => 'Dar y retirar el acceso de empleado: entrar a entrenar porque trabaja aquí, sin comprar un plan y sin que entre dinero en caja. Se le pueden poner días y franjas horarias, igual que a las horas valle de un plan, y se apaga el día que la persona deja de trabajar en el gimnasio. Convive con una membresía pagada: un entrenador puede ser empleado y además socio.',
         'members.freeze' => 'Pausar la membresía de un socio y devolverle después los días que le quedaban. Mientras está congelada no puede entrar, y queda registrado quién la pausó y por qué.',
         'payments.cancel' => 'Anular un pago ya registrado.',

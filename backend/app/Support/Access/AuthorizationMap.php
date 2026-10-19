@@ -781,6 +781,10 @@ final class AuthorizationMap
      */
     private const CONTROLLER_ENFORCED = [
         'payments.backdate',
+        // Ver CUÁNTAS unidades quedan. No es una ruta aparte: viaja dentro del
+        // mismo catálogo que usa el mostrador para vender, y el mostrador lo
+        // necesita aunque no pueda ver la cifra.
+        'inventory.stock',
         'receipts.print_optional',
         'cash.products.view',
         'cash.products.operate',
