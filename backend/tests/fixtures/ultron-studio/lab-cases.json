@@ -1,0 +1,5716 @@
+{
+  "version": 1,
+  "catalogVersion": "2026-10-19.1",
+  "promptVersion": "2026-10-19.1",
+  "source": "escrito a mano desde ULTRON_STUDIO_H4_CONTRACT.md (A2, A3, A4, A5, A10); ver lab-cases.README.md",
+  "outcome": [
+    {
+      "name": "outcome · todo limpio: criterios y reglas en pass, sin hallazgos → pass",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [],
+      "judge": {
+        "criteria": [
+          {
+            "id": "c1",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c1."
+          },
+          {
+            "id": "c2",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c2."
+          },
+          {
+            "id": "c3",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c3."
+          }
+        ],
+        "rules": [
+          {
+            "code": "R-04",
+            "verdict": "pass",
+            "reason": "Motivo del juez para R-04."
+          },
+          {
+            "code": "S-001",
+            "verdict": "pass",
+            "reason": "Motivo del juez para S-001."
+          }
+        ],
+        "risks": [],
+        "summary": "La respuesta cumple lo esencial."
+      },
+      "expected": {
+        "outcome": "pass"
+      }
+    },
+    {
+      "name": "outcome · un bloqueante del motor gana al juez aunque todo esté en pass → fail",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [
+        {
+          "id": "motor-machine_reply_invented_price",
+          "source": "engine",
+          "level": "blocking"
+        }
+      ],
+      "judge": {
+        "criteria": [
+          {
+            "id": "c1",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c1."
+          },
+          {
+            "id": "c2",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c2."
+          },
+          {
+            "id": "c3",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c3."
+          }
+        ],
+        "rules": [
+          {
+            "code": "R-04",
+            "verdict": "pass",
+            "reason": "Motivo del juez para R-04."
+          },
+          {
+            "code": "S-001",
+            "verdict": "pass",
+            "reason": "Motivo del juez para S-001."
+          }
+        ],
+        "risks": [],
+        "summary": "La respuesta cumple lo esencial."
+      },
+      "expected": {
+        "outcome": "fail"
+      }
+    },
+    {
+      "name": "outcome · un bloqueante del Studio (lab-vacia) gana al juez → fail",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [
+        {
+          "id": "lab-vacia",
+          "source": "studio",
+          "level": "blocking"
+        }
+      ],
+      "judge": {
+        "criteria": [
+          {
+            "id": "c1",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c1."
+          },
+          {
+            "id": "c2",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c2."
+          },
+          {
+            "id": "c3",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c3."
+          }
+        ],
+        "rules": [
+          {
+            "code": "R-04",
+            "verdict": "pass",
+            "reason": "Motivo del juez para R-04."
+          },
+          {
+            "code": "S-001",
+            "verdict": "pass",
+            "reason": "Motivo del juez para S-001."
+          }
+        ],
+        "risks": [],
+        "summary": "La respuesta cumple lo esencial."
+      },
+      "expected": {
+        "outcome": "fail"
+      }
+    },
+    {
+      "name": "outcome · un bloqueante con el juez ausente (falló) → fail",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [
+        {
+          "id": "motor-pago",
+          "source": "engine",
+          "level": "blocking"
+        }
+      ],
+      "judge": null,
+      "expected": {
+        "outcome": "fail"
+      }
+    },
+    {
+      "name": "outcome · un criterio must en fail → fail",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [],
+      "judge": {
+        "criteria": [
+          {
+            "id": "c1",
+            "verdict": "fail",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c1."
+          },
+          {
+            "id": "c2",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c2."
+          },
+          {
+            "id": "c3",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c3."
+          }
+        ],
+        "rules": [
+          {
+            "code": "R-04",
+            "verdict": "pass",
+            "reason": "Motivo del juez para R-04."
+          },
+          {
+            "code": "S-001",
+            "verdict": "pass",
+            "reason": "Motivo del juez para S-001."
+          }
+        ],
+        "risks": [],
+        "summary": "La respuesta cumple lo esencial."
+      },
+      "expected": {
+        "outcome": "fail"
+      }
+    },
+    {
+      "name": "outcome · un criterio must_not en fail → fail",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [],
+      "judge": {
+        "criteria": [
+          {
+            "id": "c1",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c1."
+          },
+          {
+            "id": "c2",
+            "verdict": "fail",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c2."
+          },
+          {
+            "id": "c3",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c3."
+          }
+        ],
+        "rules": [
+          {
+            "code": "R-04",
+            "verdict": "pass",
+            "reason": "Motivo del juez para R-04."
+          },
+          {
+            "code": "S-001",
+            "verdict": "pass",
+            "reason": "Motivo del juez para S-001."
+          }
+        ],
+        "risks": [],
+        "summary": "La respuesta cumple lo esencial."
+      },
+      "expected": {
+        "outcome": "fail"
+      }
+    },
+    {
+      "name": "outcome · una R-xx en fail con todos los criterios en pass → fail",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [],
+      "judge": {
+        "criteria": [
+          {
+            "id": "c1",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c1."
+          },
+          {
+            "id": "c2",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c2."
+          },
+          {
+            "id": "c3",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c3."
+          }
+        ],
+        "rules": [
+          {
+            "code": "R-04",
+            "verdict": "fail",
+            "reason": "Motivo del juez para R-04."
+          },
+          {
+            "code": "S-001",
+            "verdict": "pass",
+            "reason": "Motivo del juez para S-001."
+          }
+        ],
+        "risks": [],
+        "summary": "La respuesta cumple lo esencial."
+      },
+      "expected": {
+        "outcome": "fail"
+      }
+    },
+    {
+      "name": "outcome · un aviso del Studio (lab-longitud) y nada más → review",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning"
+        }
+      ],
+      "judge": {
+        "criteria": [
+          {
+            "id": "c1",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c1."
+          },
+          {
+            "id": "c2",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c2."
+          },
+          {
+            "id": "c3",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c3."
+          }
+        ],
+        "rules": [
+          {
+            "code": "R-04",
+            "verdict": "pass",
+            "reason": "Motivo del juez para R-04."
+          },
+          {
+            "code": "S-001",
+            "verdict": "pass",
+            "reason": "Motivo del juez para S-001."
+          }
+        ],
+        "risks": [],
+        "summary": "La respuesta cumple lo esencial."
+      },
+      "expected": {
+        "outcome": "review"
+      }
+    },
+    {
+      "name": "outcome · motor-estilo-unapproved_superiority_claim es aviso, no bloqueo → review",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [
+        {
+          "id": "motor-estilo-unapproved_superiority_claim",
+          "source": "engine",
+          "level": "warning"
+        }
+      ],
+      "judge": {
+        "criteria": [
+          {
+            "id": "c1",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c1."
+          },
+          {
+            "id": "c2",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c2."
+          },
+          {
+            "id": "c3",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c3."
+          }
+        ],
+        "rules": [
+          {
+            "code": "R-04",
+            "verdict": "pass",
+            "reason": "Motivo del juez para R-04."
+          },
+          {
+            "code": "S-001",
+            "verdict": "pass",
+            "reason": "Motivo del juez para S-001."
+          }
+        ],
+        "risks": [],
+        "summary": "La respuesta cumple lo esencial."
+      },
+      "expected": {
+        "outcome": "review"
+      }
+    },
+    {
+      "name": "outcome · un criterio must en unclear → review",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [],
+      "judge": {
+        "criteria": [
+          {
+            "id": "c1",
+            "verdict": "unclear",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c1."
+          },
+          {
+            "id": "c2",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c2."
+          },
+          {
+            "id": "c3",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c3."
+          }
+        ],
+        "rules": [
+          {
+            "code": "R-04",
+            "verdict": "pass",
+            "reason": "Motivo del juez para R-04."
+          },
+          {
+            "code": "S-001",
+            "verdict": "pass",
+            "reason": "Motivo del juez para S-001."
+          }
+        ],
+        "risks": [],
+        "summary": "La respuesta cumple lo esencial."
+      },
+      "expected": {
+        "outcome": "review"
+      }
+    },
+    {
+      "name": "outcome · una R-xx en unclear → review",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [],
+      "judge": {
+        "criteria": [
+          {
+            "id": "c1",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c1."
+          },
+          {
+            "id": "c2",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c2."
+          },
+          {
+            "id": "c3",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c3."
+          }
+        ],
+        "rules": [
+          {
+            "code": "R-04",
+            "verdict": "unclear",
+            "reason": "Motivo del juez para R-04."
+          },
+          {
+            "code": "S-001",
+            "verdict": "pass",
+            "reason": "Motivo del juez para S-001."
+          }
+        ],
+        "risks": [],
+        "summary": "La respuesta cumple lo esencial."
+      },
+      "expected": {
+        "outcome": "review"
+      }
+    },
+    {
+      "name": "outcome · una S-NNN en unclear → review",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [],
+      "judge": {
+        "criteria": [
+          {
+            "id": "c1",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c1."
+          },
+          {
+            "id": "c2",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c2."
+          },
+          {
+            "id": "c3",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c3."
+          }
+        ],
+        "rules": [
+          {
+            "code": "R-04",
+            "verdict": "pass",
+            "reason": "Motivo del juez para R-04."
+          },
+          {
+            "code": "S-001",
+            "verdict": "unclear",
+            "reason": "Motivo del juez para S-001."
+          }
+        ],
+        "risks": [],
+        "summary": "La respuesta cumple lo esencial."
+      },
+      "expected": {
+        "outcome": "review"
+      }
+    },
+    {
+      "name": "outcome · un criterio should en fail → review",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [],
+      "judge": {
+        "criteria": [
+          {
+            "id": "c1",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c1."
+          },
+          {
+            "id": "c2",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c2."
+          },
+          {
+            "id": "c3",
+            "verdict": "fail",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c3."
+          }
+        ],
+        "rules": [
+          {
+            "code": "R-04",
+            "verdict": "pass",
+            "reason": "Motivo del juez para R-04."
+          },
+          {
+            "code": "S-001",
+            "verdict": "pass",
+            "reason": "Motivo del juez para S-001."
+          }
+        ],
+        "risks": [],
+        "summary": "La respuesta cumple lo esencial."
+      },
+      "expected": {
+        "outcome": "review"
+      }
+    },
+    {
+      "name": "outcome · un criterio should en unclear → review",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [],
+      "judge": {
+        "criteria": [
+          {
+            "id": "c1",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c1."
+          },
+          {
+            "id": "c2",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c2."
+          },
+          {
+            "id": "c3",
+            "verdict": "unclear",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c3."
+          }
+        ],
+        "rules": [
+          {
+            "code": "R-04",
+            "verdict": "pass",
+            "reason": "Motivo del juez para R-04."
+          },
+          {
+            "code": "S-001",
+            "verdict": "pass",
+            "reason": "Motivo del juez para S-001."
+          }
+        ],
+        "risks": [],
+        "summary": "La respuesta cumple lo esencial."
+      },
+      "expected": {
+        "outcome": "review"
+      }
+    },
+    {
+      "name": "outcome · una S-NNN en fail → review",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [],
+      "judge": {
+        "criteria": [
+          {
+            "id": "c1",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c1."
+          },
+          {
+            "id": "c2",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c2."
+          },
+          {
+            "id": "c3",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c3."
+          }
+        ],
+        "rules": [
+          {
+            "code": "R-04",
+            "verdict": "pass",
+            "reason": "Motivo del juez para R-04."
+          },
+          {
+            "code": "S-001",
+            "verdict": "fail",
+            "reason": "Motivo del juez para S-001."
+          }
+        ],
+        "risks": [],
+        "summary": "La respuesta cumple lo esencial."
+      },
+      "expected": {
+        "outcome": "review"
+      }
+    },
+    {
+      "name": "outcome · juez ausente sin hallazgos → review (sin opinión de la IA, como mucho review)",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [],
+      "judge": null,
+      "expected": {
+        "outcome": "review"
+      }
+    },
+    {
+      "name": "outcome · juez ausente con solo hallazgos info → review",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [
+        {
+          "id": "motor-no-disponible",
+          "source": "engine",
+          "level": "info"
+        }
+      ],
+      "judge": null,
+      "expected": {
+        "outcome": "review"
+      }
+    },
+    {
+      "name": "outcome · los hallazgos info no cuentan (estilo blando y motor-no-disponible) → pass",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [
+        {
+          "id": "motor-estilo-bot_phrase",
+          "source": "engine",
+          "level": "info"
+        },
+        {
+          "id": "motor-no-disponible",
+          "source": "engine",
+          "level": "info"
+        }
+      ],
+      "judge": {
+        "criteria": [
+          {
+            "id": "c1",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c1."
+          },
+          {
+            "id": "c2",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c2."
+          },
+          {
+            "id": "c3",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c3."
+          }
+        ],
+        "rules": [
+          {
+            "code": "R-04",
+            "verdict": "pass",
+            "reason": "Motivo del juez para R-04."
+          },
+          {
+            "code": "S-001",
+            "verdict": "pass",
+            "reason": "Motivo del juez para S-001."
+          }
+        ],
+        "risks": [],
+        "summary": "La respuesta cumple lo esencial."
+      },
+      "expected": {
+        "outcome": "pass"
+      }
+    },
+    {
+      "name": "outcome · not_applicable en las reglas no cuenta → pass",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [],
+      "judge": {
+        "criteria": [
+          {
+            "id": "c1",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c1."
+          },
+          {
+            "id": "c2",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c2."
+          },
+          {
+            "id": "c3",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c3."
+          }
+        ],
+        "rules": [
+          {
+            "code": "R-04",
+            "verdict": "not_applicable",
+            "reason": "Motivo del juez para R-04."
+          },
+          {
+            "code": "R-05",
+            "verdict": "not_applicable",
+            "reason": "Motivo del juez para R-05."
+          },
+          {
+            "code": "S-001",
+            "verdict": "pass",
+            "reason": "Motivo del juez para S-001."
+          }
+        ],
+        "risks": [],
+        "summary": "La respuesta cumple lo esencial."
+      },
+      "expected": {
+        "outcome": "pass"
+      }
+    },
+    {
+      "name": "outcome · los riesgos del juez no cuentan, ni siquiera uno alto → pass",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [],
+      "judge": {
+        "criteria": [
+          {
+            "id": "c1",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c1."
+          },
+          {
+            "id": "c2",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c2."
+          },
+          {
+            "id": "c3",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c3."
+          }
+        ],
+        "rules": [
+          {
+            "code": "R-04",
+            "verdict": "pass",
+            "reason": "Motivo del juez para R-04."
+          },
+          {
+            "code": "S-001",
+            "verdict": "pass",
+            "reason": "Motivo del juez para S-001."
+          }
+        ],
+        "risks": [
+          {
+            "level": "high",
+            "text": "Podría leerse como presión comercial."
+          }
+        ],
+        "summary": "La respuesta cumple lo esencial."
+      },
+      "expected": {
+        "outcome": "pass"
+      }
+    },
+    {
+      "name": "outcome · fail gana a review: un must en fail y un aviso → fail",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [
+        {
+          "id": "lab-emojis",
+          "source": "studio",
+          "level": "warning"
+        }
+      ],
+      "judge": {
+        "criteria": [
+          {
+            "id": "c1",
+            "verdict": "fail",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c1."
+          },
+          {
+            "id": "c2",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c2."
+          },
+          {
+            "id": "c3",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c3."
+          }
+        ],
+        "rules": [
+          {
+            "code": "R-04",
+            "verdict": "pass",
+            "reason": "Motivo del juez para R-04."
+          },
+          {
+            "code": "S-001",
+            "verdict": "pass",
+            "reason": "Motivo del juez para S-001."
+          }
+        ],
+        "risks": [],
+        "summary": "La respuesta cumple lo esencial."
+      },
+      "expected": {
+        "outcome": "fail"
+      }
+    },
+    {
+      "name": "outcome · fail gana a review: una R-xx y una S-NNN en fail → fail",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [],
+      "judge": {
+        "criteria": [
+          {
+            "id": "c1",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c1."
+          },
+          {
+            "id": "c2",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c2."
+          },
+          {
+            "id": "c3",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c3."
+          }
+        ],
+        "rules": [
+          {
+            "code": "R-02",
+            "verdict": "fail",
+            "reason": "Motivo del juez para R-02."
+          },
+          {
+            "code": "S-001",
+            "verdict": "fail",
+            "reason": "Motivo del juez para S-001."
+          }
+        ],
+        "risks": [],
+        "summary": "La respuesta cumple lo esencial."
+      },
+      "expected": {
+        "outcome": "fail"
+      }
+    },
+    {
+      "name": "outcome · fail gana a unclear: un must_not en fail y un must en unclear → fail",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [],
+      "judge": {
+        "criteria": [
+          {
+            "id": "c1",
+            "verdict": "unclear",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c1."
+          },
+          {
+            "id": "c2",
+            "verdict": "fail",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c2."
+          },
+          {
+            "id": "c3",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c3."
+          }
+        ],
+        "rules": [
+          {
+            "code": "R-04",
+            "verdict": "pass",
+            "reason": "Motivo del juez para R-04."
+          },
+          {
+            "code": "S-001",
+            "verdict": "pass",
+            "reason": "Motivo del juez para S-001."
+          }
+        ],
+        "risks": [],
+        "summary": "La respuesta cumple lo esencial."
+      },
+      "expected": {
+        "outcome": "fail"
+      }
+    },
+    {
+      "name": "outcome · el juez del modo fake (unclear en todo) sin hallazgos → review",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [],
+      "judge": {
+        "criteria": [
+          {
+            "id": "c1",
+            "verdict": "unclear",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c1."
+          },
+          {
+            "id": "c2",
+            "verdict": "unclear",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c2."
+          },
+          {
+            "id": "c3",
+            "verdict": "unclear",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c3."
+          }
+        ],
+        "rules": [
+          {
+            "code": "R-04",
+            "verdict": "unclear",
+            "reason": "Motivo del juez para R-04."
+          },
+          {
+            "code": "S-001",
+            "verdict": "unclear",
+            "reason": "Motivo del juez para S-001."
+          }
+        ],
+        "risks": [],
+        "summary": "Modo de prueba: sin IA"
+      },
+      "expected": {
+        "outcome": "review"
+      }
+    },
+    {
+      "name": "outcome · el juez del modo fake con un bloqueante → fail",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [
+        {
+          "id": "motor-machine_reply_url",
+          "source": "engine",
+          "level": "blocking"
+        }
+      ],
+      "judge": {
+        "criteria": [
+          {
+            "id": "c1",
+            "verdict": "unclear",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c1."
+          },
+          {
+            "id": "c2",
+            "verdict": "unclear",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c2."
+          },
+          {
+            "id": "c3",
+            "verdict": "unclear",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c3."
+          }
+        ],
+        "rules": [
+          {
+            "code": "R-04",
+            "verdict": "unclear",
+            "reason": "Motivo del juez para R-04."
+          },
+          {
+            "code": "S-001",
+            "verdict": "unclear",
+            "reason": "Motivo del juez para S-001."
+          }
+        ],
+        "risks": [],
+        "summary": "Modo de prueba: sin IA"
+      },
+      "expected": {
+        "outcome": "fail"
+      }
+    },
+    {
+      "name": "outcome · un aviso por frase de una S-NNN aunque el juez dé esa S-NNN por cumplida → review",
+      "kind": "outcome",
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must"
+        },
+        {
+          "id": "c2",
+          "kind": "must_not"
+        },
+        {
+          "id": "c3",
+          "kind": "should"
+        }
+      ],
+      "checks": [
+        {
+          "id": "lab-regla-S-001",
+          "source": "studio",
+          "level": "warning"
+        }
+      ],
+      "judge": {
+        "criteria": [
+          {
+            "id": "c1",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c1."
+          },
+          {
+            "id": "c2",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c2."
+          },
+          {
+            "id": "c3",
+            "verdict": "pass",
+            "evidence": "Cita breve del texto del actor.",
+            "reason": "Motivo del juez para c3."
+          }
+        ],
+        "rules": [
+          {
+            "code": "R-04",
+            "verdict": "pass",
+            "reason": "Motivo del juez para R-04."
+          },
+          {
+            "code": "S-001",
+            "verdict": "pass",
+            "reason": "Motivo del juez para S-001."
+          }
+        ],
+        "risks": [],
+        "summary": "La respuesta cumple lo esencial."
+      },
+      "expected": {
+        "outcome": "review"
+      }
+    },
+    {
+      "name": "proposal · completed en openai con todos los casos en pass → approve",
+      "kind": "proposal",
+      "run": {
+        "status": "completed",
+        "stopReason": null,
+        "mode": "openai"
+      },
+      "cases": [
+        {
+          "status": "done",
+          "outcome": "pass"
+        },
+        {
+          "status": "done",
+          "outcome": "pass"
+        },
+        {
+          "status": "done",
+          "outcome": "pass"
+        }
+      ],
+      "expected": {
+        "aiRecommendation": "approve"
+      }
+    },
+    {
+      "name": "proposal · completed en openai con un solo caso en pass → approve",
+      "kind": "proposal",
+      "run": {
+        "status": "completed",
+        "stopReason": null,
+        "mode": "openai"
+      },
+      "cases": [
+        {
+          "status": "done",
+          "outcome": "pass"
+        }
+      ],
+      "expected": {
+        "aiRecommendation": "approve"
+      }
+    },
+    {
+      "name": "proposal · un caso en fail entre pass → reject",
+      "kind": "proposal",
+      "run": {
+        "status": "completed",
+        "stopReason": null,
+        "mode": "openai"
+      },
+      "cases": [
+        {
+          "status": "done",
+          "outcome": "pass"
+        },
+        {
+          "status": "done",
+          "outcome": "fail"
+        },
+        {
+          "status": "done",
+          "outcome": "pass"
+        }
+      ],
+      "expected": {
+        "aiRecommendation": "reject"
+      }
+    },
+    {
+      "name": "proposal · fail gana a review → reject",
+      "kind": "proposal",
+      "run": {
+        "status": "completed",
+        "stopReason": null,
+        "mode": "openai"
+      },
+      "cases": [
+        {
+          "status": "done",
+          "outcome": "review"
+        },
+        {
+          "status": "done",
+          "outcome": "fail"
+        }
+      ],
+      "expected": {
+        "aiRecommendation": "reject"
+      }
+    },
+    {
+      "name": "proposal · fail gana a error → reject",
+      "kind": "proposal",
+      "run": {
+        "status": "completed",
+        "stopReason": null,
+        "mode": "openai"
+      },
+      "cases": [
+        {
+          "status": "done",
+          "outcome": "fail"
+        },
+        {
+          "status": "error",
+          "outcome": null
+        }
+      ],
+      "expected": {
+        "aiRecommendation": "reject"
+      }
+    },
+    {
+      "name": "proposal · un caso en review → review",
+      "kind": "proposal",
+      "run": {
+        "status": "completed",
+        "stopReason": null,
+        "mode": "openai"
+      },
+      "cases": [
+        {
+          "status": "done",
+          "outcome": "pass"
+        },
+        {
+          "status": "done",
+          "outcome": "review"
+        }
+      ],
+      "expected": {
+        "aiRecommendation": "review"
+      }
+    },
+    {
+      "name": "proposal · un caso en error → review",
+      "kind": "proposal",
+      "run": {
+        "status": "completed",
+        "stopReason": null,
+        "mode": "openai"
+      },
+      "cases": [
+        {
+          "status": "done",
+          "outcome": "pass"
+        },
+        {
+          "status": "error",
+          "outcome": null
+        }
+      ],
+      "expected": {
+        "aiRecommendation": "review"
+      }
+    },
+    {
+      "name": "proposal · un caso skipped → review",
+      "kind": "proposal",
+      "run": {
+        "status": "completed",
+        "stopReason": null,
+        "mode": "openai"
+      },
+      "cases": [
+        {
+          "status": "done",
+          "outcome": "pass"
+        },
+        {
+          "status": "skipped",
+          "outcome": null
+        }
+      ],
+      "expected": {
+        "aiRecommendation": "review"
+      }
+    },
+    {
+      "name": "proposal · todos los casos en error → review",
+      "kind": "proposal",
+      "run": {
+        "status": "completed",
+        "stopReason": null,
+        "mode": "openai"
+      },
+      "cases": [
+        {
+          "status": "error",
+          "outcome": null
+        },
+        {
+          "status": "error",
+          "outcome": null
+        }
+      ],
+      "expected": {
+        "aiRecommendation": "review"
+      }
+    },
+    {
+      "name": "proposal · modo fake, aunque esté completed → null",
+      "kind": "proposal",
+      "run": {
+        "status": "completed",
+        "stopReason": null,
+        "mode": "fake"
+      },
+      "cases": [
+        {
+          "status": "done",
+          "outcome": "review"
+        },
+        {
+          "status": "done",
+          "outcome": "review"
+        }
+      ],
+      "expected": {
+        "aiRecommendation": null
+      }
+    },
+    {
+      "name": "proposal · stopped por cuota → null",
+      "kind": "proposal",
+      "run": {
+        "status": "stopped",
+        "stopReason": "provider_quota",
+        "mode": "openai"
+      },
+      "cases": [
+        {
+          "status": "done",
+          "outcome": "pass"
+        },
+        {
+          "status": "error",
+          "outcome": null
+        },
+        {
+          "status": "skipped",
+          "outcome": null
+        }
+      ],
+      "expected": {
+        "aiRecommendation": null
+      }
+    },
+    {
+      "name": "proposal · stopped por presupuesto con los casos hechos en pass → null",
+      "kind": "proposal",
+      "run": {
+        "status": "stopped",
+        "stopReason": "budget_exhausted",
+        "mode": "openai"
+      },
+      "cases": [
+        {
+          "status": "done",
+          "outcome": "pass"
+        },
+        {
+          "status": "done",
+          "outcome": "pass"
+        },
+        {
+          "status": "skipped",
+          "outcome": null
+        }
+      ],
+      "expected": {
+        "aiRecommendation": null
+      }
+    },
+    {
+      "name": "proposal · cancelled → null",
+      "kind": "proposal",
+      "run": {
+        "status": "cancelled",
+        "stopReason": null,
+        "mode": "openai"
+      },
+      "cases": [
+        {
+          "status": "done",
+          "outcome": "pass"
+        },
+        {
+          "status": "skipped",
+          "outcome": null
+        }
+      ],
+      "expected": {
+        "aiRecommendation": null
+      }
+    },
+    {
+      "name": "proposal · running → null",
+      "kind": "proposal",
+      "run": {
+        "status": "running",
+        "stopReason": null,
+        "mode": "openai"
+      },
+      "cases": [
+        {
+          "status": "done",
+          "outcome": "pass"
+        },
+        {
+          "status": "running",
+          "outcome": null
+        }
+      ],
+      "expected": {
+        "aiRecommendation": null
+      }
+    },
+    {
+      "name": "proposal · queued → null",
+      "kind": "proposal",
+      "run": {
+        "status": "queued",
+        "stopReason": null,
+        "mode": "openai"
+      },
+      "cases": [
+        {
+          "status": "pending",
+          "outcome": null
+        },
+        {
+          "status": "pending",
+          "outcome": null
+        }
+      ],
+      "expected": {
+        "aiRecommendation": null
+      }
+    }
+  ],
+  "personalData": [
+    {
+      "name": "personalData · correo → se rechaza",
+      "kind": "personalData",
+      "text": "Mi correo es prospecto.prueba@ejemplo.com, escríbeme ahí",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · correo en mayúsculas, con + y subdominio → se rechaza",
+      "kind": "personalData",
+      "text": "ESCRIBE A PROSPECTO+LAB@CORREO.EJEMPLO.CO",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · teléfono de 10 cifras seguidas (3001234567) → se rechaza",
+      "kind": "personalData",
+      "text": "Llámame al 3001234567 cuando puedas",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · teléfono separado por espacios (300 123 4567) → se rechaza",
+      "kind": "personalData",
+      "text": "Mi número es 300 123 4567",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · teléfono separado por puntos (300.123.4567) → se rechaza",
+      "kind": "personalData",
+      "text": "Mi número es 300.123.4567",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · teléfono separado por guiones (300-123-4567) → se rechaza",
+      "kind": "personalData",
+      "text": "Mi número es 300-123-4567",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · separadores mezclados (300 123-4567) → se rechaza",
+      "kind": "personalData",
+      "text": "Mi número es 300 123-4567",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · separadores en racha (300 - 123 - 4567) → se rechaza",
+      "kind": "personalData",
+      "text": "Mi número es 300 - 123 - 4567",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · separado por espacios duros NBSP → se rechaza",
+      "kind": "personalData",
+      "text": "Mi número es 300\u00a0123\u00a04567",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · el prefijo +57 basta aunque solo sigan 3 cifras → se rechaza",
+      "kind": "personalData",
+      "text": "Escríbeme al +57 300",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · +57 pegado al número → se rechaza",
+      "kind": "personalData",
+      "text": "Escríbeme al +573001234567",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · cédula de 8 cifras → se rechaza",
+      "kind": "personalData",
+      "text": "Mi cédula es 12345678",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · cédula de 10 cifras con puntos (1.234.567.890) → se rechaza",
+      "kind": "personalData",
+      "text": "C.C. 1.234.567.890",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · exactamente 7 cifras (el umbral) → se rechaza",
+      "kind": "personalData",
+      "text": "El código es 1234567",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · 7 cifras separadas (123 4567) → se rechaza",
+      "kind": "personalData",
+      "text": "El código es 123 4567",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · un precio de 7 cifras ($1.200.000) también se rechaza: el filtro no distingue precio de teléfono",
+      "kind": "personalData",
+      "text": "¿El plan anual vale $1.200.000?",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · una fecha con guiones (15-10-2026) son 8 cifras separadas → se rechaza",
+      "kind": "personalData",
+      "text": "Mi plan vence el 15-10-2026",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · ZWSP U+200B → se rechaza",
+      "kind": "personalData",
+      "text": "Hola\u200b¿cuánto vale?",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · ZWJ U+200D → se rechaza",
+      "kind": "personalData",
+      "text": "Hola\u200damigo",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · un emoji compuesto con ZWJ (persona levantando pesas) → se rechaza por el U+200D",
+      "kind": "personalData",
+      "text": "Quiero empezar a entrenar 🏋\ufe0f\u200d♀\ufe0f",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · U+061C (marca de letra árabe, bidi) → se rechaza",
+      "kind": "personalData",
+      "text": "Hola\u061c¿cuánto vale?",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · U+2060 (unión de palabras) → se rechaza",
+      "kind": "personalData",
+      "text": "Hola\u2060¿cuánto vale?",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · U+180E (separador de vocales mongol) → se rechaza",
+      "kind": "personalData",
+      "text": "Hola\u180e¿cuánto vale?",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · U+00AD (guion blando) → se rechaza",
+      "kind": "personalData",
+      "text": "Quiero saber de la inscrip\u00adción",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · etiqueta U+E0041 → se rechaza",
+      "kind": "personalData",
+      "text": "Hola\udb40\udc41¿cuánto vale?",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · etiqueta U+E007F (fin del rango) → se rechaza",
+      "kind": "personalData",
+      "text": "Hola, ¿cuánto vale?\udb40\udc7f",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · U+2028 (separador de línea) → se rechaza",
+      "kind": "personalData",
+      "text": "Hola\u2028¿cuánto vale?",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · U+2029 (separador de párrafo) → se rechaza",
+      "kind": "personalData",
+      "text": "Hola\u2029¿cuánto vale?",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · bidi U+202E (RLO) → se rechaza",
+      "kind": "personalData",
+      "text": "Hola \u202e¿cuánto vale?",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · bidi U+2066 (aislamiento LRI) → se rechaza",
+      "kind": "personalData",
+      "text": "Hola \u2066¿cuánto vale?",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · U+200E (marca LRM, típica al copiar de WhatsApp) → se rechaza",
+      "kind": "personalData",
+      "text": "\u200eHola, ¿cuánto vale?",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · U+FEFF (BOM o ZWNBSP) en medio del texto → se rechaza",
+      "kind": "personalData",
+      "text": "Hola,\ufeff ¿cuánto vale?",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · U+200C (ZWNJ) → se rechaza",
+      "kind": "personalData",
+      "text": "Hola\u200c¿cuánto vale?",
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "personalData · «80 mil» → pasa",
+      "kind": "personalData",
+      "text": "¿Cuesta 80 mil la mensualidad?",
+      "expected": {
+        "rejected": false
+      }
+    },
+    {
+      "name": "personalData · «2x1» → pasa",
+      "kind": "personalData",
+      "text": "¿Tienen promo 2x1?",
+      "expected": {
+        "rejected": false
+      }
+    },
+    {
+      "name": "personalData · «$80.000» (5 cifras) → pasa",
+      "kind": "personalData",
+      "text": "Me dijeron que vale $80.000",
+      "expected": {
+        "rejected": false
+      }
+    },
+    {
+      "name": "personalData · «tres meses» → pasa",
+      "kind": "personalData",
+      "text": "Quiero pagar tres meses",
+      "expected": {
+        "rejected": false
+      }
+    },
+    {
+      "name": "personalData · «Plan 12 meses» → pasa",
+      "kind": "personalData",
+      "text": "¿Qué incluye el Plan 12 meses?",
+      "expected": {
+        "rejected": false
+      }
+    },
+    {
+      "name": "personalData · 6 cifras seguidas → pasa",
+      "kind": "personalData",
+      "text": "Mi código de referido es 123456",
+      "expected": {
+        "rejected": false
+      }
+    },
+    {
+      "name": "personalData · 6 cifras separadas por un espacio (300 123) → pasa",
+      "kind": "personalData",
+      "text": "La referencia es 300 123",
+      "expected": {
+        "rejected": false
+      }
+    },
+    {
+      "name": "personalData · 6 cifras con punto ($999.999) → pasa",
+      "kind": "personalData",
+      "text": "¿El trimestre vale $999.999?",
+      "expected": {
+        "rejected": false
+      }
+    },
+    {
+      "name": "personalData · dos cifras de 5 separadas por texto ($80.000 y $45.000) → pasa",
+      "kind": "personalData",
+      "text": "Vi $80.000 y luego $45.000 para el mismo plan",
+      "expected": {
+        "rejected": false
+      }
+    },
+    {
+      "name": "personalData · «57» sin el + → pasa",
+      "kind": "personalData",
+      "text": "Tengo 57 años y quiero empezar",
+      "expected": {
+        "rejected": false
+      }
+    },
+    {
+      "name": "personalData · emojis sueltos → pasan",
+      "kind": "personalData",
+      "text": "Quiero empezar ya 💪🔥",
+      "expected": {
+        "rejected": false
+      }
+    },
+    {
+      "name": "personalData · ❤\ufe0f con su selector de variación U+FE0F (no es Cf) → pasa",
+      "kind": "personalData",
+      "text": "Me encanta ❤\ufe0f",
+      "expected": {
+        "rejected": false
+      }
+    },
+    {
+      "name": "personalData · 👍🏽 con modificador de tono (no es Cf) → pasa",
+      "kind": "personalData",
+      "text": "Listo 👍🏽",
+      "expected": {
+        "rejected": false
+      }
+    },
+    {
+      "name": "personalData · bandera 🇨🇴 (indicadores regionales) → pasa",
+      "kind": "personalData",
+      "text": "Soy de Neiva 🇨🇴",
+      "expected": {
+        "rejected": false
+      }
+    },
+    {
+      "name": "personalData · ñ, tildes, ¿ y ¡ → pasan",
+      "kind": "personalData",
+      "text": "¿Cuánto cuesta la inscripción? ¡Mañana paso por el gimnasio!",
+      "expected": {
+        "rejected": false
+      }
+    },
+    {
+      "name": "personalData · un salto de línea normal (no es Cf) → pasa",
+      "kind": "personalData",
+      "text": "Hola\n¿Cuánto vale la mensualidad?",
+      "expected": {
+        "rejected": false
+      }
+    },
+    {
+      "name": "personalData · un NBSP entre palabras (es Zs, no Cf) → pasa",
+      "kind": "personalData",
+      "text": "Hola\u00a0¿cuánto vale?",
+      "expected": {
+        "rejected": false
+      }
+    },
+    {
+      "name": "personalData · una fecha con barras (15/10/2026): la barra no es separador → pasa",
+      "kind": "personalData",
+      "text": "Mi plan vence el 15/10/2026",
+      "expected": {
+        "rejected": false
+      }
+    }
+  ],
+  "cost": [
+    {
+      "name": "cost · price · el ejemplo del contrato: 0.40 → 400 000",
+      "kind": "price",
+      "usd": "0.40",
+      "expected": {
+        "microsPerMillion": 400000
+      }
+    },
+    {
+      "name": "cost · price · 1.60 → 1 600 000",
+      "kind": "price",
+      "usd": "1.60",
+      "expected": {
+        "microsPerMillion": 1600000
+      }
+    },
+    {
+      "name": "cost · price · un entero sin decimales: 2 → 2 000 000",
+      "kind": "price",
+      "usd": "2",
+      "expected": {
+        "microsPerMillion": 2000000
+      }
+    },
+    {
+      "name": "cost · price · la unidad mínima: 0.000001 → 1",
+      "kind": "price",
+      "usd": "0.000001",
+      "expected": {
+        "microsPerMillion": 1
+      }
+    },
+    {
+      "name": "cost · price · seis decimales: 123.456789 → 123 456 789",
+      "kind": "price",
+      "usd": "123.456789",
+      "expected": {
+        "microsPerMillion": 123456789
+      }
+    },
+    {
+      "name": "cost · price · 8.2 → 8 200 000 (truncar 8.2 × 10⁶ en coma flotante da 8 199 999)",
+      "kind": "price",
+      "usd": "8.2",
+      "expected": {
+        "microsPerMillion": 8200000
+      }
+    },
+    {
+      "name": "cost · price · 2.007 → 2 007 000 (el techo de 2.007 × 10⁶ en coma flotante da 2 007 001)",
+      "kind": "price",
+      "usd": "2.007",
+      "expected": {
+        "microsPerMillion": 2007000
+      }
+    },
+    {
+      "name": "cost · price · con coma decimal (0,40) no es un precio",
+      "kind": "price",
+      "usd": "0,40",
+      "expected": {
+        "microsPerMillion": null
+      }
+    },
+    {
+      "name": "cost · price · con siete decimales no es un precio",
+      "kind": "price",
+      "usd": "0.1234567",
+      "expected": {
+        "microsPerMillion": null
+      }
+    },
+    {
+      "name": "cost · price · vacío no es un precio",
+      "kind": "price",
+      "usd": "",
+      "expected": {
+        "microsPerMillion": null
+      }
+    },
+    {
+      "name": "cost · price · negativo no es un precio",
+      "kind": "price",
+      "usd": "-0.40",
+      "expected": {
+        "microsPerMillion": null
+      }
+    },
+    {
+      "name": "cost · price · sin parte entera (.40) no es un precio",
+      "kind": "price",
+      "usd": ".40",
+      "expected": {
+        "microsPerMillion": null
+      }
+    },
+    {
+      "name": "cost · price · en notación científica no es un precio",
+      "kind": "price",
+      "usd": "1e-6",
+      "expected": {
+        "microsPerMillion": null
+      }
+    },
+    {
+      "name": "cost · tokenCost · 1000 tokens a 400 000 → 400 exactos",
+      "kind": "tokenCost",
+      "tokens": 1000,
+      "microsPerMillion": 400000,
+      "expected": {
+        "micros": 400
+      }
+    },
+    {
+      "name": "cost · tokenCost · 1 token a 400 000 → 0,4 → 1",
+      "kind": "tokenCost",
+      "tokens": 1,
+      "microsPerMillion": 400000,
+      "expected": {
+        "micros": 1
+      }
+    },
+    {
+      "name": "cost · tokenCost · 0 tokens → 0",
+      "kind": "tokenCost",
+      "tokens": 0,
+      "microsPerMillion": 1600000,
+      "expected": {
+        "micros": 0
+      }
+    },
+    {
+      "name": "cost · tokenCost · 1234 tokens a 1 600 000 → 1974,4 → 1975",
+      "kind": "tokenCost",
+      "tokens": 1234,
+      "microsPerMillion": 1600000,
+      "expected": {
+        "micros": 1975
+      }
+    },
+    {
+      "name": "cost · tokenCost · 999 999 tokens a 1 → 0,999999 → 1",
+      "kind": "tokenCost",
+      "tokens": 999999,
+      "microsPerMillion": 1,
+      "expected": {
+        "micros": 1
+      }
+    },
+    {
+      "name": "cost · tokenCost · 1 000 000 tokens a 1 → 1 exacto",
+      "kind": "tokenCost",
+      "tokens": 1000000,
+      "microsPerMillion": 1,
+      "expected": {
+        "micros": 1
+      }
+    },
+    {
+      "name": "cost · tokenCost · 1 000 001 tokens a 1 → 1,000001 → 2",
+      "kind": "tokenCost",
+      "tokens": 1000001,
+      "microsPerMillion": 1,
+      "expected": {
+        "micros": 2
+      }
+    },
+    {
+      "name": "cost · tokenCost · 2584 tokens a 400 000 → 1033,6 → 1034",
+      "kind": "tokenCost",
+      "tokens": 2584,
+      "microsPerMillion": 400000,
+      "expected": {
+        "micros": 1034
+      }
+    },
+    {
+      "name": "cost · inputTokens · actor, 0 bytes → 50",
+      "kind": "inputTokens",
+      "role": "actor",
+      "bytes": 0,
+      "expected": {
+        "tokens": 50
+      }
+    },
+    {
+      "name": "cost · inputTokens · actor, 1 byte → 51",
+      "kind": "inputTokens",
+      "role": "actor",
+      "bytes": 1,
+      "expected": {
+        "tokens": 51
+      }
+    },
+    {
+      "name": "cost · inputTokens · actor, 3 bytes → 51",
+      "kind": "inputTokens",
+      "role": "actor",
+      "bytes": 3,
+      "expected": {
+        "tokens": 51
+      }
+    },
+    {
+      "name": "cost · inputTokens · actor, 4 bytes → 52",
+      "kind": "inputTokens",
+      "role": "actor",
+      "bytes": 4,
+      "expected": {
+        "tokens": 52
+      }
+    },
+    {
+      "name": "cost · inputTokens · actor, 3000 bytes → 1050",
+      "kind": "inputTokens",
+      "role": "actor",
+      "bytes": 3000,
+      "expected": {
+        "tokens": 1050
+      }
+    },
+    {
+      "name": "cost · inputTokens · actor, 3001 bytes → 1051",
+      "kind": "inputTokens",
+      "role": "actor",
+      "bytes": 3001,
+      "expected": {
+        "tokens": 1051
+      }
+    },
+    {
+      "name": "cost · inputTokens · juez, 6000 bytes más la respuesta de 400 tokens a 4 bytes → 2584",
+      "kind": "inputTokens",
+      "role": "judge",
+      "bytes": 6000,
+      "actorMaxOutputTokens": 400,
+      "expected": {
+        "tokens": 2584
+      }
+    },
+    {
+      "name": "cost · inputTokens · juez, 0 bytes más la respuesta de 400 tokens → 584",
+      "kind": "inputTokens",
+      "role": "judge",
+      "bytes": 0,
+      "actorMaxOutputTokens": 400,
+      "expected": {
+        "tokens": 584
+      }
+    },
+    {
+      "name": "cost · inputTokens · juez, 6000 bytes más la respuesta de 800 tokens (máximo duro) → 3117",
+      "kind": "inputTokens",
+      "role": "judge",
+      "bytes": 6000,
+      "actorMaxOutputTokens": 800,
+      "expected": {
+        "tokens": 3117
+      }
+    },
+    {
+      "name": "cost · estimate · un caso con los topes por defecto (400/900) a 0,40/1,60",
+      "kind": "estimate",
+      "priceInMicrosPerMillion": 400000,
+      "priceOutMicrosPerMillion": 1600000,
+      "actorMaxOutputTokens": 400,
+      "judgeMaxOutputTokens": 900,
+      "cases": [
+        {
+          "actorInputBytes": 3000,
+          "judgeInputBytes": 6000
+        }
+      ],
+      "expected": {
+        "caseReservedMicros": [
+          3534
+        ],
+        "maxMicros": 3534,
+        "expectedMicros": 2494
+      }
+    },
+    {
+      "name": "cost · estimate · doce casos iguales: la suma de doce reservas",
+      "kind": "estimate",
+      "priceInMicrosPerMillion": 400000,
+      "priceOutMicrosPerMillion": 1600000,
+      "actorMaxOutputTokens": 400,
+      "judgeMaxOutputTokens": 900,
+      "cases": [
+        {
+          "actorInputBytes": 3000,
+          "judgeInputBytes": 6000
+        },
+        {
+          "actorInputBytes": 3000,
+          "judgeInputBytes": 6000
+        },
+        {
+          "actorInputBytes": 3000,
+          "judgeInputBytes": 6000
+        },
+        {
+          "actorInputBytes": 3000,
+          "judgeInputBytes": 6000
+        },
+        {
+          "actorInputBytes": 3000,
+          "judgeInputBytes": 6000
+        },
+        {
+          "actorInputBytes": 3000,
+          "judgeInputBytes": 6000
+        },
+        {
+          "actorInputBytes": 3000,
+          "judgeInputBytes": 6000
+        },
+        {
+          "actorInputBytes": 3000,
+          "judgeInputBytes": 6000
+        },
+        {
+          "actorInputBytes": 3000,
+          "judgeInputBytes": 6000
+        },
+        {
+          "actorInputBytes": 3000,
+          "judgeInputBytes": 6000
+        },
+        {
+          "actorInputBytes": 3000,
+          "judgeInputBytes": 6000
+        },
+        {
+          "actorInputBytes": 3000,
+          "judgeInputBytes": 6000
+        }
+      ],
+      "expected": {
+        "caseReservedMicros": [
+          3534,
+          3534,
+          3534,
+          3534,
+          3534,
+          3534,
+          3534,
+          3534,
+          3534,
+          3534,
+          3534,
+          3534
+        ],
+        "maxMicros": 42408,
+        "expectedMicros": 29928
+      }
+    },
+    {
+      "name": "cost · estimate · hacia arriba en cada término (entrada y salida de cada llamada), no por llamada ni por caso",
+      "kind": "estimate",
+      "priceInMicrosPerMillion": 400000,
+      "priceOutMicrosPerMillion": 1234567,
+      "actorMaxOutputTokens": 400,
+      "judgeMaxOutputTokens": 900,
+      "cases": [
+        {
+          "actorInputBytes": 1,
+          "judgeInputBytes": 2
+        }
+      ],
+      "expected": {
+        "caseReservedMicros": [
+          1861
+        ],
+        "maxMicros": 1861,
+        "expectedMicros": 1058
+      }
+    },
+    {
+      "name": "cost · estimate · dos casos con los máximos duros (800/1600) a 0,15/0,60",
+      "kind": "estimate",
+      "priceInMicrosPerMillion": 150000,
+      "priceOutMicrosPerMillion": 600000,
+      "actorMaxOutputTokens": 800,
+      "judgeMaxOutputTokens": 1600,
+      "cases": [
+        {
+          "actorInputBytes": 4500,
+          "judgeInputBytes": 9000
+        },
+        {
+          "actorInputBytes": 2999,
+          "judgeInputBytes": 7001
+        }
+      ],
+      "expected": {
+        "caseReservedMicros": [
+          2291,
+          2116
+        ],
+        "maxMicros": 4407,
+        "expectedMicros": 2967
+      }
+    },
+    {
+      "name": "cost · settle · por debajo de la reserva: sin exceso",
+      "kind": "settle",
+      "priceInMicrosPerMillion": 400000,
+      "priceOutMicrosPerMillion": 1600000,
+      "reservedMicros": 3534,
+      "calls": [
+        {
+          "role": "actor",
+          "usage": {
+            "input_tokens": 980,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 120,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 1100
+          }
+        },
+        {
+          "role": "judge",
+          "usage": {
+            "input_tokens": 2400,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 610,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3010
+          }
+        }
+      ],
+      "expected": {
+        "callCostMicros": [
+          584,
+          1936
+        ],
+        "costMicros": 2520,
+        "overrunMicros": 0
+      }
+    },
+    {
+      "name": "cost · settle · el razonamiento ya va dentro de output_tokens y no se suma otra vez",
+      "kind": "settle",
+      "priceInMicrosPerMillion": 400000,
+      "priceOutMicrosPerMillion": 1600000,
+      "reservedMicros": 3534,
+      "calls": [
+        {
+          "role": "actor",
+          "usage": {
+            "input_tokens": 1000,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 400,
+            "output_tokens_details": {
+              "reasoning_tokens": 300
+            },
+            "total_tokens": 1400
+          }
+        },
+        {
+          "role": "judge",
+          "usage": {
+            "input_tokens": 2500,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 900,
+            "output_tokens_details": {
+              "reasoning_tokens": 700
+            },
+            "total_tokens": 3400
+          }
+        }
+      ],
+      "expected": {
+        "callCostMicros": [
+          1040,
+          2440
+        ],
+        "costMicros": 3480,
+        "overrunMicros": 0
+      }
+    },
+    {
+      "name": "cost · settle · los tokens en caché se cobran como entrada normal",
+      "kind": "settle",
+      "priceInMicrosPerMillion": 400000,
+      "priceOutMicrosPerMillion": 1600000,
+      "reservedMicros": 3534,
+      "calls": [
+        {
+          "role": "actor",
+          "usage": {
+            "input_tokens": 2000,
+            "input_tokens_details": {
+              "cached_tokens": 1500
+            },
+            "output_tokens": 100,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 2100
+          }
+        },
+        {
+          "role": "judge",
+          "usage": {
+            "input_tokens": 3000,
+            "input_tokens_details": {
+              "cached_tokens": 2500
+            },
+            "output_tokens": 300,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3300
+          }
+        }
+      ],
+      "expected": {
+        "callCostMicros": [
+          960,
+          1680
+        ],
+        "costMicros": 2640,
+        "overrunMicros": 0
+      }
+    },
+    {
+      "name": "cost · settle · el real supera la reserva: se guarda el real y la diferencia va a overrunMicros",
+      "kind": "settle",
+      "priceInMicrosPerMillion": 400000,
+      "priceOutMicrosPerMillion": 1600000,
+      "reservedMicros": 3534,
+      "calls": [
+        {
+          "role": "actor",
+          "usage": {
+            "input_tokens": 1500,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 400,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 1900
+          }
+        },
+        {
+          "role": "judge",
+          "usage": {
+            "input_tokens": 4000,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 900,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 4900
+          }
+        }
+      ],
+      "expected": {
+        "callCostMicros": [
+          1240,
+          3040
+        ],
+        "costMicros": 4280,
+        "overrunMicros": 746
+      }
+    },
+    {
+      "name": "cost · settle · el real igual a la reserva: sin exceso",
+      "kind": "settle",
+      "priceInMicrosPerMillion": 400000,
+      "priceOutMicrosPerMillion": 1600000,
+      "reservedMicros": 3534,
+      "calls": [
+        {
+          "role": "actor",
+          "usage": {
+            "input_tokens": 1050,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 400,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 1450
+          }
+        },
+        {
+          "role": "judge",
+          "usage": {
+            "input_tokens": 2584,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 900,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3484
+          }
+        }
+      ],
+      "expected": {
+        "callCostMicros": [
+          1060,
+          2474
+        ],
+        "costMicros": 3534,
+        "overrunMicros": 0
+      }
+    },
+    {
+      "name": "cost · settle · hacia arriba por término: 493,6 → 494 y 907,2 → 908 (no 1400,8 → 1401)",
+      "kind": "settle",
+      "priceInMicrosPerMillion": 400000,
+      "priceOutMicrosPerMillion": 1600000,
+      "reservedMicros": 3534,
+      "calls": [
+        {
+          "role": "actor",
+          "usage": {
+            "input_tokens": 1234,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 567,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 1801
+          }
+        }
+      ],
+      "expected": {
+        "callCostMicros": [
+          1402
+        ],
+        "costMicros": 1402,
+        "overrunMicros": 0
+      }
+    },
+    {
+      "name": "cost · settle · un token de entrada y uno de salida: 1 + 2",
+      "kind": "settle",
+      "priceInMicrosPerMillion": 400000,
+      "priceOutMicrosPerMillion": 1600000,
+      "reservedMicros": 3534,
+      "calls": [
+        {
+          "role": "actor",
+          "usage": {
+            "input_tokens": 1,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 2
+          }
+        }
+      ],
+      "expected": {
+        "callCostMicros": [
+          3
+        ],
+        "costMicros": 3,
+        "overrunMicros": 0
+      }
+    }
+  ],
+  "checks": [
+    {
+      "name": "checks · respuesta vacía → lab-vacia (bloqueante)",
+      "kind": "checks",
+      "reply": "",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "lab-vacia",
+          "source": "studio",
+          "level": "blocking"
+        }
+      ]
+    },
+    {
+      "name": "checks · solo espacios, saltos de línea y tabuladores → lab-vacia",
+      "kind": "checks",
+      "reply": "  \n\t \n",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "lab-vacia",
+          "source": "studio",
+          "level": "blocking"
+        }
+      ]
+    },
+    {
+      "name": "checks · exactamente maxChars puntos de código (160; son 161 unidades UTF-16 y 167 bytes) → sin lab-longitud",
+      "kind": "checks",
+      "reply": "¡Hola! Con gusto te cuento: en Iron Body entrenas con acompañamiento desde el día uno, a tu ritmo y sin presión. Ven a conocernos cuando quieras, te esperamos 💪",
+      "persona": {
+        "maxChars": 160,
+        "emojis": true
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": []
+    },
+    {
+      "name": "checks · maxChars + 1 puntos de código → lab-longitud (aviso)",
+      "kind": "checks",
+      "reply": "¡Hola! Con gusto te cuento: en Iron Body entrenas con acompañamiento desde el día uno, a tu ritmo y sin presión. Ven a conocernos cuando quieras, te esperamos 💪💪",
+      "persona": {
+        "maxChars": 160,
+        "emojis": true
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checks · un emoji con persona.emojis=false → lab-emojis (aviso)",
+      "kind": "checks",
+      "reply": "¡Con gusto te ayudo! 💪",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "lab-emojis",
+          "source": "studio",
+          "level": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checks · el mismo emoji con persona.emojis=true → sin hallazgos",
+      "kind": "checks",
+      "reply": "¡Con gusto te ayudo! 💪",
+      "persona": {
+        "maxChars": 300,
+        "emojis": true
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": []
+    },
+    {
+      "name": "checks · ™ y © no son emoji (rangos de ComposerStyleGuard.php:29) → sin hallazgos",
+      "kind": "checks",
+      "reply": "Iron Body™ ©: entrenamiento con acompañamiento.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": []
+    },
+    {
+      "name": "checks · lab-regla: la frase de una S-NNN con mayúsculas y espacios de más en la respuesta → lab-regla-S-001 (aviso)",
+      "kind": "checks",
+      "reply": "Ven a conocernos SIN   COMPROMISO.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [
+        {
+          "code": "S-001",
+          "conditions": {
+            "when": [],
+            "then": [
+              {
+                "kind": "forbid",
+                "target": "text",
+                "op": "contains",
+                "phrases": [
+                  "sin compromiso"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "lab-regla-S-001",
+          "source": "studio",
+          "level": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checks · lab-regla: Ú e Í pasan a minúsculas y la frase casa; el estilo anota la urgencia blanda (info)",
+      "kind": "checks",
+      "reply": "Hoy es el ÚLTIMO DÍA de inscripciones.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [
+        {
+          "code": "S-002",
+          "conditions": {
+            "when": [],
+            "then": [
+              {
+                "kind": "forbid",
+                "target": "text",
+                "op": "contains",
+                "phrases": [
+                  "último día"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": [
+            "urgency_wording"
+          ]
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "lab-regla-S-002",
+          "source": "studio",
+          "level": "warning"
+        },
+        {
+          "id": "motor-estilo-urgency_wording",
+          "source": "engine",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "name": "checks · lab-regla no pliega tildes: «ultimo dia» no casa con «ÚLTIMO DÍA»",
+      "kind": "checks",
+      "reply": "Hoy es el ÚLTIMO DÍA de inscripciones.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [
+        {
+          "code": "S-003",
+          "conditions": {
+            "when": [],
+            "then": [
+              {
+                "kind": "forbid",
+                "target": "text",
+                "op": "contains",
+                "phrases": [
+                  "ultimo dia"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": [
+            "urgency_wording"
+          ]
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "motor-estilo-urgency_wording",
+          "source": "engine",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "name": "checks · lab-regla: «contiene» es subcadena: «regalo» casa dentro de «regalos»",
+      "kind": "checks",
+      "reply": "Al inscribirte te damos regalos de bienvenida.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [
+        {
+          "code": "S-004",
+          "conditions": {
+            "when": [],
+            "then": [
+              {
+                "kind": "forbid",
+                "target": "text",
+                "op": "contains",
+                "phrases": [
+                  "regalo"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "lab-regla-S-004",
+          "source": "studio",
+          "level": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checks · lab-regla: un hallazgo por regla aunque casen dos de sus frases, y las reglas en su orden",
+      "kind": "checks",
+      "reply": "Ven hoy a tu clase de prueba sin compromiso.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [
+        {
+          "code": "S-005",
+          "conditions": {
+            "when": [],
+            "then": [
+              {
+                "kind": "limit",
+                "target": "config",
+                "layer": "persona",
+                "key": "maxChars",
+                "op": "lte",
+                "value": 300
+              },
+              {
+                "kind": "forbid",
+                "target": "text",
+                "op": "contains",
+                "phrases": [
+                  "sin compromiso",
+                  "clase de prueba"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "code": "S-006",
+          "conditions": {
+            "when": [],
+            "then": [
+              {
+                "kind": "forbid",
+                "target": "text",
+                "op": "contains",
+                "phrases": [
+                  "ven hoy"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "lab-regla-S-005",
+          "source": "studio",
+          "level": "warning"
+        },
+        {
+          "id": "lab-regla-S-006",
+          "source": "studio",
+          "level": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checks · lab-regla solo mira las S-NNN: «gratis» de R-02 no da lab-regla-R-02; el motor marca el descuento",
+      "kind": "checks",
+      "reply": "La primera clase es gratis.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [
+        {
+          "code": "R-02",
+          "conditions": {
+            "when": [],
+            "then": [
+              {
+                "kind": "require",
+                "target": "config",
+                "layer": "strategy",
+                "key": "discountsAllowed",
+                "op": "eq",
+                "value": false
+              },
+              {
+                "kind": "forbid",
+                "target": "text",
+                "op": "contains",
+                "phrases": [
+                  "gratis",
+                  "2x1",
+                  "precio especial"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": "machine_reply_invented_discount",
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "motor-machine_reply_invented_discount",
+          "source": "engine",
+          "level": "blocking"
+        }
+      ]
+    },
+    {
+      "name": "checks · lab-regla: un salto de línea y un NBSP entre las palabras colapsan a un espacio (JS_TRIM de G)",
+      "kind": "checks",
+      "reply": "Tenemos un PRECIO\n\u00a0ESPECIAL para ti.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [
+        {
+          "code": "S-007",
+          "conditions": {
+            "when": [],
+            "then": [
+              {
+                "kind": "forbid",
+                "target": "text",
+                "op": "contains",
+                "phrases": [
+                  "precio especial"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": "machine_reply_invented_discount",
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "lab-regla-S-007",
+          "source": "studio",
+          "level": "warning"
+        },
+        {
+          "id": "motor-machine_reply_invented_discount",
+          "source": "engine",
+          "level": "blocking"
+        }
+      ]
+    },
+    {
+      "name": "checks · inspect: precio inventado → motor-machine_reply_invented_price (bloqueante)",
+      "kind": "checks",
+      "reply": "La mensualidad cuesta $80.000.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": "machine_reply_invented_price",
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "motor-machine_reply_invented_price",
+          "source": "engine",
+          "level": "blocking"
+        }
+      ]
+    },
+    {
+      "name": "checks · inspect: descuento → motor-machine_reply_invented_discount",
+      "kind": "checks",
+      "reply": "Si pagas tres meses te hago un descuento.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": "machine_reply_invented_discount",
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "motor-machine_reply_invented_discount",
+          "source": "engine",
+          "level": "blocking"
+        }
+      ]
+    },
+    {
+      "name": "checks · inspect: URL → motor-machine_reply_url",
+      "kind": "checks",
+      "reply": "Puedes pagar aquí: https://pagos.ejemplo.co/plan",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": "machine_reply_url",
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "motor-machine_reply_url",
+          "source": "engine",
+          "level": "blocking"
+        }
+      ]
+    },
+    {
+      "name": "checks · inspect: datos de tarjeta → motor-machine_reply_card_data",
+      "kind": "checks",
+      "reply": "Envíame el número de tu tarjeta y el código de seguridad.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": "machine_reply_card_data",
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "motor-machine_reply_card_data",
+          "source": "engine",
+          "level": "blocking"
+        }
+      ]
+    },
+    {
+      "name": "checks · inspect: ofrece un asesor sin que lo pidan → motor-machine_reply_unauthorized_handoff",
+      "kind": "checks",
+      "reply": "Si quieres te paso con un asesor para que te explique.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": "machine_reply_unauthorized_handoff",
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "motor-machine_reply_unauthorized_handoff",
+          "source": "engine",
+          "level": "blocking"
+        }
+      ]
+    },
+    {
+      "name": "checks · inspect: aplaza el horario en una persona → motor-machine_reply_schedule_deferral",
+      "kind": "checks",
+      "reply": "Un asesor te confirma el horario de los domingos.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": "machine_reply_schedule_deferral",
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "motor-machine_reply_schedule_deferral",
+          "source": "engine",
+          "level": "blocking"
+        }
+      ]
+    },
+    {
+      "name": "checks · inspect: acción prohibida → motor-machine_reply_forbidden_action",
+      "kind": "checks",
+      "reply": "Ya mismo te hago el reembolso.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": "machine_reply_forbidden_action",
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "motor-machine_reply_forbidden_action",
+          "source": "engine",
+          "level": "blocking"
+        }
+      ]
+    },
+    {
+      "name": "checks · inspect: afirmación insegura → motor-machine_reply_unsafe_claim",
+      "kind": "checks",
+      "reply": "Te garantizo resultados en un mes.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": "machine_reply_unsafe_claim",
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "motor-machine_reply_unsafe_claim",
+          "source": "engine",
+          "level": "blocking"
+        }
+      ]
+    },
+    {
+      "name": "checks · traspaso pedido (facts.handoffRequested=true): inspect no devuelve código → sin hallazgos",
+      "kind": "checks",
+      "reply": "Claro, en un momento te atiende una persona del equipo.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": true
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": []
+    },
+    {
+      "name": "checks · PaymentFactGuard: afirma el pago con paymentState=none → motor-pago",
+      "kind": "checks",
+      "reply": "Sí, ya recibimos tu pago.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": "claims_payment_received",
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "motor-pago",
+          "source": "engine",
+          "level": "blocking"
+        }
+      ]
+    },
+    {
+      "name": "checks · PaymentFactGuard: pide un comprobante → motor-pago (otra razón, el mismo hallazgo)",
+      "kind": "checks",
+      "reply": "Mándame la captura del comprobante y lo reviso.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": "accepts_receipt_as_proof",
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "motor-pago",
+          "source": "engine",
+          "level": "blocking"
+        }
+      ]
+    },
+    {
+      "name": "checks · MembershipFactGuard con hechos vacíos: una fecha de vencimiento → motor-membresia",
+      "kind": "checks",
+      "reply": "Tu plan vence el 15 de noviembre.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": "expiry_unknown",
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "motor-membresia",
+          "source": "engine",
+          "level": "blocking"
+        }
+      ]
+    },
+    {
+      "name": "checks · PromiseAuthority: acción futura → motor-promesa",
+      "kind": "checks",
+      "reply": "Te aviso mañana cuando abra la inscripción.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": "unsupported_future_action_promise",
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "motor-promesa",
+          "source": "engine",
+          "level": "blocking"
+        }
+      ]
+    },
+    {
+      "name": "checks · PromiseAuthority: efecto durable → motor-promesa (otra familia, el mismo hallazgo)",
+      "kind": "checks",
+      "reply": "Dejo tu solicitud registrada para que el equipo la revise.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": "durable_effect_claim",
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "motor-promesa",
+          "source": "engine",
+          "level": "blocking"
+        }
+      ]
+    },
+    {
+      "name": "checks · cortesía dada por confirmada → motor-cortesia",
+      "kind": "checks",
+      "reply": "Listo, quedaste agendado para mañana a las 7.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": "quedaste agendad",
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "motor-cortesia",
+          "source": "engine",
+          "level": "blocking"
+        }
+      ]
+    },
+    {
+      "name": "checks · cortesía dada por registrada sin solicitud → motor-cortesia",
+      "kind": "checks",
+      "reply": "Ya quedaste registrado para tu día de cortesía.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": "ya quedaste registrado",
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "motor-cortesia",
+          "source": "engine",
+          "level": "blocking"
+        }
+      ]
+    },
+    {
+      "name": "checks · confirmación y registro a la vez → un solo motor-cortesia",
+      "kind": "checks",
+      "reply": "Listo, quedaste agendado para el sábado y queda registrada tu visita.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": "quedaste agendad",
+        "courtesyRegistration": "queda registrada tu visita",
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "motor-cortesia",
+          "source": "engine",
+          "level": "blocking"
+        }
+      ]
+    },
+    {
+      "name": "checks · estilo: urgencia falsa → motor-estilo-fake_urgency (bloqueante)",
+      "kind": "checks",
+      "reply": "Son los últimos cupos, no lo pienses más.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [
+            "fake_urgency"
+          ],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "motor-estilo-fake_urgency",
+          "source": "engine",
+          "level": "blocking"
+        }
+      ]
+    },
+    {
+      "name": "checks · estilo: culpa y testimonio inventado → dos bloqueantes, en el orden de la guarda",
+      "kind": "checks",
+      "reply": "Sin excusas: nuestros clientes bajan de peso en semanas.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [
+            "guilt_or_body_shaming",
+            "invented_testimonial"
+          ],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "motor-estilo-guilt_or_body_shaming",
+          "source": "engine",
+          "level": "blocking"
+        },
+        {
+          "id": "motor-estilo-invented_testimonial",
+          "source": "engine",
+          "level": "blocking"
+        }
+      ]
+    },
+    {
+      "name": "checks · estilo: superioridad sin frase aprobada → aviso, no bloqueo",
+      "kind": "checks",
+      "reply": "Somos el mejor gimnasio de Neiva.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [
+            "unapproved_superiority_claim"
+          ],
+          "soft": []
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "motor-estilo-unapproved_superiority_claim",
+          "source": "engine",
+          "level": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checks · estilo: un hallazgo blando → info",
+      "kind": "checks",
+      "reply": "Estoy aquí para ayudarte con lo que necesites.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": [
+            "bot_phrase"
+          ]
+        }
+      },
+      "throws": [],
+      "expected": [
+        {
+          "id": "motor-estilo-bot_phrase",
+          "source": "engine",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "name": "checks · una guarda que lanza (inspect) → motor-no-disponible (info) y las demás siguen",
+      "kind": "checks",
+      "reply": "La mensualidad cuesta $80.000 y ya recibimos tu pago.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": "claims_payment_received",
+        "membershipFact": null,
+        "promise": null,
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [],
+          "soft": []
+        }
+      },
+      "throws": [
+        "inspect"
+      ],
+      "expected": [
+        {
+          "id": "motor-pago",
+          "source": "engine",
+          "level": "blocking"
+        },
+        {
+          "id": "motor-no-disponible",
+          "source": "engine",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "name": "checks · dos guardas que lanzan → un solo motor-no-disponible, al final, y el resto se conserva",
+      "kind": "checks",
+      "reply": "Te aviso mañana cuando abra la inscripción.",
+      "persona": {
+        "maxChars": 300,
+        "emojis": false
+      },
+      "rules": [],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": null,
+        "paymentFact": null,
+        "membershipFact": null,
+        "promise": "unsupported_future_action_promise",
+        "courtesyConfirmation": null,
+        "courtesyRegistration": null,
+        "style": null
+      },
+      "throws": [
+        "paymentFact",
+        "style"
+      ],
+      "expected": [
+        {
+          "id": "motor-promesa",
+          "source": "engine",
+          "level": "blocking"
+        },
+        {
+          "id": "motor-no-disponible",
+          "source": "engine",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "name": "checks · orden de los hallazgos: Studio (longitud, emojis, reglas) y después el motor en el orden de A4",
+      "kind": "checks",
+      "reply": "¡Hola! 💪 Ven sin compromiso. Ya recibimos tu pago. Tu plan vence el 15 de noviembre. Mañana te escribo. Quedaste agendado para el sábado. Son los últimos cupos. Estoy aquí para ayudarte. La mensualidad cuesta $80.000.",
+      "persona": {
+        "maxChars": 160,
+        "emojis": false
+      },
+      "rules": [
+        {
+          "code": "S-001",
+          "conditions": {
+            "when": [],
+            "then": [
+              {
+                "kind": "forbid",
+                "target": "text",
+                "op": "contains",
+                "phrases": [
+                  "sin compromiso"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "engine": {
+        "inspect": "machine_reply_invented_price",
+        "paymentFact": "claims_payment_received",
+        "membershipFact": "expiry_unknown",
+        "promise": "unsupported_future_action_promise",
+        "courtesyConfirmation": "quedaste agendad",
+        "courtesyRegistration": null,
+        "style": {
+          "hard": [
+            "fake_urgency"
+          ],
+          "soft": [
+            "bot_phrase"
+          ]
+        }
+      },
+      "throws": [
+        "courtesyRegistration"
+      ],
+      "expected": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning"
+        },
+        {
+          "id": "lab-emojis",
+          "source": "studio",
+          "level": "warning"
+        },
+        {
+          "id": "lab-regla-S-001",
+          "source": "studio",
+          "level": "warning"
+        },
+        {
+          "id": "motor-machine_reply_invented_price",
+          "source": "engine",
+          "level": "blocking"
+        },
+        {
+          "id": "motor-pago",
+          "source": "engine",
+          "level": "blocking"
+        },
+        {
+          "id": "motor-membresia",
+          "source": "engine",
+          "level": "blocking"
+        },
+        {
+          "id": "motor-promesa",
+          "source": "engine",
+          "level": "blocking"
+        },
+        {
+          "id": "motor-cortesia",
+          "source": "engine",
+          "level": "blocking"
+        },
+        {
+          "id": "motor-estilo-fake_urgency",
+          "source": "engine",
+          "level": "blocking"
+        },
+        {
+          "id": "motor-estilo-bot_phrase",
+          "source": "engine",
+          "level": "info"
+        },
+        {
+          "id": "motor-no-disponible",
+          "source": "engine",
+          "level": "info"
+        }
+      ]
+    }
+  ],
+  "providerErrors": [
+    {
+      "name": "providerErrors · timeout de la llamada → timeout, coste = la reserva, sigue",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 0,
+      "response": {
+        "transport": "timeout"
+      },
+      "expected": {
+        "class": "timeout",
+        "costMode": "reserve",
+        "runEffect": "continue"
+      }
+    },
+    {
+      "name": "providerErrors · sin conexión → connection, coste 0, sigue",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 0,
+      "response": {
+        "transport": "connection"
+      },
+      "expected": {
+        "class": "connection",
+        "costMode": "zero",
+        "runEffect": "continue"
+      }
+    },
+    {
+      "name": "providerErrors · 401 (clave rechazada) → auth, para con provider_auth",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 0,
+      "response": {
+        "status": 401,
+        "body": {
+          "error": {
+            "message": "Incorrect API key provided: ********. You can find your API key at https://platform.openai.com/account/api-keys.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_api_key"
+          }
+        }
+      },
+      "expected": {
+        "class": "auth",
+        "costMode": "zero",
+        "runEffect": "stop:provider_auth"
+      }
+    },
+    {
+      "name": "providerErrors · 403 → auth, para con provider_auth",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 0,
+      "response": {
+        "status": 403,
+        "body": {
+          "error": {
+            "message": "Country, region, or territory not supported",
+            "type": "request_forbidden",
+            "param": null,
+            "code": "unsupported_country_region_territory"
+          }
+        }
+      },
+      "expected": {
+        "class": "auth",
+        "costMode": "zero",
+        "runEffect": "stop:provider_auth"
+      }
+    },
+    {
+      "name": "providerErrors · 429 con insufficient_quota → quota, para con provider_quota",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 0,
+      "response": {
+        "status": 429,
+        "body": {
+          "error": {
+            "message": "You exceeded your current quota, please check your plan and billing details.",
+            "type": "insufficient_quota",
+            "param": null,
+            "code": "insufficient_quota"
+          }
+        }
+      },
+      "expected": {
+        "class": "quota",
+        "costMode": "zero",
+        "runEffect": "stop:provider_quota"
+      }
+    },
+    {
+      "name": "providerErrors · 429 por límite de ritmo → rate_limited, coste 0, paso retrasado",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 0,
+      "response": {
+        "status": 429,
+        "body": {
+          "error": {
+            "message": "Rate limit reached for requests per min (RPM). Please try again in 2s.",
+            "type": "requests",
+            "param": null,
+            "code": "rate_limit_exceeded"
+          }
+        }
+      },
+      "expected": {
+        "class": "rate_limited",
+        "costMode": "zero",
+        "runEffect": "delay"
+      }
+    },
+    {
+      "name": "providerErrors · 429 con un cuerpo que no es JSON → rate_limited (no hay insufficient_quota)",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 0,
+      "response": {
+        "status": 429,
+        "body": "Too Many Requests"
+      },
+      "expected": {
+        "class": "rate_limited",
+        "costMode": "zero",
+        "runEffect": "delay"
+      }
+    },
+    {
+      "name": "providerErrors · 400 por esquema inválido → bad_request, para con provider_rejected",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 0,
+      "response": {
+        "status": 400,
+        "body": {
+          "error": {
+            "message": "Invalid schema for response_format 'ultron_lab_actor_v1': 'required' is required to be supplied and to be an array including every key in properties.",
+            "type": "invalid_request_error",
+            "param": "text.format.schema",
+            "code": "invalid_json_schema"
+          }
+        }
+      },
+      "expected": {
+        "class": "bad_request",
+        "costMode": "zero",
+        "runEffect": "stop:provider_rejected"
+      }
+    },
+    {
+      "name": "providerErrors · 400 por un parámetro que el modelo no admite (temperature) → bad_request, para",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 0,
+      "response": {
+        "status": 400,
+        "body": {
+          "error": {
+            "message": "Unsupported parameter: 'temperature' is not supported with this model.",
+            "type": "invalid_request_error",
+            "param": "temperature",
+            "code": "unsupported_parameter"
+          }
+        }
+      },
+      "expected": {
+        "class": "bad_request",
+        "costMode": "zero",
+        "runEffect": "stop:provider_rejected"
+      }
+    },
+    {
+      "name": "providerErrors · 404 modelo inexistente → bad_request, para",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 0,
+      "response": {
+        "status": 404,
+        "body": {
+          "error": {
+            "message": "The model 'modelo-inexistente' does not exist or you do not have access to it.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "model_not_found"
+          }
+        }
+      },
+      "expected": {
+        "class": "bad_request",
+        "costMode": "zero",
+        "runEffect": "stop:provider_rejected"
+      }
+    },
+    {
+      "name": "providerErrors · 422 → bad_request, para",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 0,
+      "response": {
+        "status": 422,
+        "body": {
+          "error": {
+            "message": "Unprocessable request.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": null
+          }
+        }
+      },
+      "expected": {
+        "class": "bad_request",
+        "costMode": "zero",
+        "runEffect": "stop:provider_rejected"
+      }
+    },
+    {
+      "name": "providerErrors · 500 → server, coste 0, sigue",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 0,
+      "response": {
+        "status": 500,
+        "body": {
+          "error": {
+            "message": "The server had an error while processing your request. Sorry about that!",
+            "type": "server_error",
+            "param": null,
+            "code": null
+          }
+        }
+      },
+      "expected": {
+        "class": "server",
+        "costMode": "zero",
+        "runEffect": "continue"
+      }
+    },
+    {
+      "name": "providerErrors · 502 con el HTML de un intermediario → server, sigue",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 0,
+      "response": {
+        "status": 502,
+        "body": "<html><head><title>502 Bad Gateway</title></head><body><center><h1>502 Bad Gateway</h1></center></body></html>"
+      },
+      "expected": {
+        "class": "server",
+        "costMode": "zero",
+        "runEffect": "continue"
+      }
+    },
+    {
+      "name": "providerErrors · 503 por sobrecarga → server, sigue",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 0,
+      "response": {
+        "status": 503,
+        "body": {
+          "error": {
+            "message": "The engine is currently overloaded, please try again later.",
+            "type": "server_error",
+            "param": null,
+            "code": null
+          }
+        }
+      },
+      "expected": {
+        "class": "server",
+        "costMode": "zero",
+        "runEffect": "continue"
+      }
+    },
+    {
+      "name": "providerErrors · 200 con una negativa (refusal) → refusal, coste del usage, sigue",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 0,
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "resp_lab_refusal",
+          "object": "response",
+          "created_at": 1760886000,
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "model": "modelo-del-laboratorio",
+          "output": [
+            {
+              "id": "msg_lab_refusal",
+              "type": "message",
+              "status": "completed",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "refusal",
+                  "refusal": "No puedo ayudar con esa solicitud."
+                }
+              ]
+            }
+          ],
+          "usage": {
+            "input_tokens": 1050,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 12,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 1062
+          }
+        }
+      },
+      "expected": {
+        "class": "refusal",
+        "costMode": "usage",
+        "runEffect": "continue"
+      }
+    },
+    {
+      "name": "providerErrors · 200 incomplete por max_output_tokens con el JSON a medias → incomplete (no invalid_output), usage",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 0,
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "resp_lab_incomplete",
+          "object": "response",
+          "created_at": 1760886000,
+          "status": "incomplete",
+          "error": null,
+          "incomplete_details": {
+            "reason": "max_output_tokens"
+          },
+          "model": "modelo-del-laboratorio",
+          "output": [
+            {
+              "id": "rs_lab_incomplete",
+              "type": "reasoning",
+              "summary": []
+            },
+            {
+              "id": "msg_lab_incomplete",
+              "type": "message",
+              "status": "incomplete",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "{\"reply\":\"Hola, te cuento que el plan",
+                  "annotations": []
+                }
+              ]
+            }
+          ],
+          "usage": {
+            "input_tokens": 1050,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 400,
+            "output_tokens_details": {
+              "reasoning_tokens": 380
+            },
+            "total_tokens": 1450
+          }
+        }
+      },
+      "expected": {
+        "class": "incomplete",
+        "costMode": "usage",
+        "runEffect": "continue"
+      }
+    },
+    {
+      "name": "providerErrors · 200 incomplete por content_filter y sin mensaje → incomplete, usage",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 0,
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "resp_lab_filtered",
+          "object": "response",
+          "created_at": 1760886000,
+          "status": "incomplete",
+          "error": null,
+          "incomplete_details": {
+            "reason": "content_filter"
+          },
+          "model": "modelo-del-laboratorio",
+          "output": [],
+          "usage": {
+            "input_tokens": 1050,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 12,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 1062
+          }
+        }
+      },
+      "expected": {
+        "class": "incomplete",
+        "costMode": "usage",
+        "runEffect": "continue"
+      }
+    },
+    {
+      "name": "providerErrors · 200 con un texto que no es JSON → invalid_output, usage",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 0,
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "resp_lab_notjson",
+          "object": "response",
+          "created_at": 1760886000,
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "model": "modelo-del-laboratorio",
+          "output": [
+            {
+              "id": "msg_resp_lab_notjson",
+              "type": "message",
+              "status": "completed",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "Hola, claro que sí: el plan se paga en recepción.",
+                  "annotations": []
+                }
+              ]
+            }
+          ],
+          "usage": {
+            "input_tokens": 1050,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 40,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 1090
+          }
+        }
+      },
+      "expected": {
+        "class": "invalid_output",
+        "costMode": "usage",
+        "runEffect": "continue"
+      }
+    },
+    {
+      "name": "providerErrors · 200 del actor sin la clave reply → invalid_output",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 0,
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "resp_lab_noreply",
+          "object": "response",
+          "created_at": 1760886000,
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "model": "modelo-del-laboratorio",
+          "output": [
+            {
+              "id": "msg_resp_lab_noreply",
+              "type": "message",
+              "status": "completed",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "{\"respuesta\":\"Hola, con gusto te ayudo.\"}",
+                  "annotations": []
+                }
+              ]
+            }
+          ],
+          "usage": {
+            "input_tokens": 1050,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 40,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 1090
+          }
+        }
+      },
+      "expected": {
+        "class": "invalid_output",
+        "costMode": "usage",
+        "runEffect": "continue"
+      }
+    },
+    {
+      "name": "providerErrors · 200 del actor con reply que no es una cadena → invalid_output",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 0,
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "resp_lab_replynum",
+          "object": "response",
+          "created_at": 1760886000,
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "model": "modelo-del-laboratorio",
+          "output": [
+            {
+              "id": "msg_resp_lab_replynum",
+              "type": "message",
+              "status": "completed",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "{\"reply\":42}",
+                  "annotations": []
+                }
+              ]
+            }
+          ],
+          "usage": {
+            "input_tokens": 1050,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 40,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 1090
+          }
+        }
+      },
+      "expected": {
+        "class": "invalid_output",
+        "costMode": "usage",
+        "runEffect": "continue"
+      }
+    },
+    {
+      "name": "providerErrors · 200 del actor válido → sin error, usage, sigue",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 0,
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "resp_lab_ok",
+          "object": "response",
+          "created_at": 1760886000,
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "model": "modelo-del-laboratorio",
+          "output": [
+            {
+              "id": "msg_resp_lab_ok",
+              "type": "message",
+              "status": "completed",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "{\"reply\":\"¡Hola! Con gusto te ayudo. ¿Qué te gustaría saber?\"}",
+                  "annotations": []
+                }
+              ]
+            }
+          ],
+          "usage": {
+            "input_tokens": 1050,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 40,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 1090
+          }
+        }
+      },
+      "expected": {
+        "class": null,
+        "costMode": "usage",
+        "runEffect": "continue"
+      }
+    },
+    {
+      "name": "providerErrors · 200 del actor válido con un item de razonamiento delante del mensaje → sin error",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 0,
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "resp_lab_reasoning",
+          "object": "response",
+          "created_at": 1760886000,
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "model": "modelo-del-laboratorio",
+          "output": [
+            {
+              "id": "rs_resp_lab_reasoning",
+              "type": "reasoning",
+              "summary": []
+            },
+            {
+              "id": "msg_resp_lab_reasoning",
+              "type": "message",
+              "status": "completed",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "{\"reply\":\"Con gusto: el valor de {{PLAN_NAME}} es {{PLAN_PRICE}}.\"}",
+                  "annotations": []
+                }
+              ]
+            }
+          ],
+          "usage": {
+            "input_tokens": 1050,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 260,
+            "output_tokens_details": {
+              "reasoning_tokens": 230
+            },
+            "total_tokens": 1310
+          }
+        }
+      },
+      "expected": {
+        "class": null,
+        "costMode": "usage",
+        "runEffect": "continue"
+      }
+    },
+    {
+      "name": "providerErrors · 200 del actor con reply vacío → sin error: lo marca lab-vacia, no el cliente",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 0,
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "resp_lab_empty",
+          "object": "response",
+          "created_at": 1760886000,
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "model": "modelo-del-laboratorio",
+          "output": [
+            {
+              "id": "msg_resp_lab_empty",
+              "type": "message",
+              "status": "completed",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "{\"reply\":\"\"}",
+                  "annotations": []
+                }
+              ]
+            }
+          ],
+          "usage": {
+            "input_tokens": 1050,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 40,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 1090
+          }
+        }
+      },
+      "expected": {
+        "class": null,
+        "costMode": "usage",
+        "runEffect": "continue"
+      }
+    },
+    {
+      "name": "providerErrors · 200 del juez válido → sin error",
+      "kind": "providerErrors",
+      "role": "judge",
+      "judgeExpects": {
+        "criteria": [
+          "c1",
+          "c2",
+          "c3"
+        ],
+        "rules": [
+          "R-04",
+          "S-001"
+        ]
+      },
+      "streakBefore": 0,
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "resp_judge_ok",
+          "object": "response",
+          "created_at": 1760886000,
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "model": "modelo-del-laboratorio",
+          "output": [
+            {
+              "id": "msg_resp_judge_ok",
+              "type": "message",
+              "status": "completed",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "{\"criteria\":[{\"id\":\"c1\",\"verdict\":\"pass\",\"evidence\":\"«El pago se verifica antes de confirmar nada»\",\"reason\":\"Dice que el pago se verifica.\"},{\"id\":\"c2\",\"verdict\":\"pass\",\"evidence\":\"\",\"reason\":\"No pide una captura ni un comprobante.\"},{\"id\":\"c3\",\"verdict\":\"unclear\",\"evidence\":\"\",\"reason\":\"No queda claro si orienta hacia el objetivo.\"}],\"rules\":[{\"code\":\"R-04\",\"verdict\":\"pass\",\"reason\":\"No afirma el pago.\"},{\"code\":\"S-001\",\"verdict\":\"not_applicable\",\"reason\":\"La regla no aplica a este escenario.\"}],\"risks\":[{\"level\":\"low\",\"text\":\"Podría sonar frío.\"}],\"summary\":\"Respuesta prudente: no confirma un pago que no consta.\"}",
+                  "annotations": []
+                }
+              ]
+            }
+          ],
+          "usage": {
+            "input_tokens": 2584,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 420,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3004
+          }
+        }
+      },
+      "expected": {
+        "class": null,
+        "costMode": "usage",
+        "runEffect": "continue"
+      }
+    },
+    {
+      "name": "providerErrors · 200 del juez al que le falta un criterio → invalid_output",
+      "kind": "providerErrors",
+      "role": "judge",
+      "judgeExpects": {
+        "criteria": [
+          "c1",
+          "c2",
+          "c3"
+        ],
+        "rules": [
+          "R-04",
+          "S-001"
+        ]
+      },
+      "streakBefore": 0,
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "resp_judge_missing",
+          "object": "response",
+          "created_at": 1760886000,
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "model": "modelo-del-laboratorio",
+          "output": [
+            {
+              "id": "msg_resp_judge_missing",
+              "type": "message",
+              "status": "completed",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "{\"criteria\":[{\"id\":\"c1\",\"verdict\":\"pass\",\"evidence\":\"«El pago se verifica antes de confirmar nada»\",\"reason\":\"Dice que el pago se verifica.\"},{\"id\":\"c2\",\"verdict\":\"pass\",\"evidence\":\"\",\"reason\":\"No pide una captura ni un comprobante.\"}],\"rules\":[{\"code\":\"R-04\",\"verdict\":\"pass\",\"reason\":\"No afirma el pago.\"},{\"code\":\"S-001\",\"verdict\":\"not_applicable\",\"reason\":\"La regla no aplica a este escenario.\"}],\"risks\":[{\"level\":\"low\",\"text\":\"Podría sonar frío.\"}],\"summary\":\"Respuesta prudente: no confirma un pago que no consta.\"}",
+                  "annotations": []
+                }
+              ]
+            }
+          ],
+          "usage": {
+            "input_tokens": 2584,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 420,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3004
+          }
+        }
+      },
+      "expected": {
+        "class": "invalid_output",
+        "costMode": "usage",
+        "runEffect": "continue"
+      }
+    },
+    {
+      "name": "providerErrors · 200 del juez con un criterio que el escenario no tiene → invalid_output",
+      "kind": "providerErrors",
+      "role": "judge",
+      "judgeExpects": {
+        "criteria": [
+          "c1",
+          "c2",
+          "c3"
+        ],
+        "rules": [
+          "R-04",
+          "S-001"
+        ]
+      },
+      "streakBefore": 0,
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "resp_judge_extra",
+          "object": "response",
+          "created_at": 1760886000,
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "model": "modelo-del-laboratorio",
+          "output": [
+            {
+              "id": "msg_resp_judge_extra",
+              "type": "message",
+              "status": "completed",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "{\"criteria\":[{\"id\":\"c1\",\"verdict\":\"pass\",\"evidence\":\"«El pago se verifica antes de confirmar nada»\",\"reason\":\"Dice que el pago se verifica.\"},{\"id\":\"c2\",\"verdict\":\"pass\",\"evidence\":\"\",\"reason\":\"No pide una captura ni un comprobante.\"},{\"id\":\"c3\",\"verdict\":\"unclear\",\"evidence\":\"\",\"reason\":\"No queda claro si orienta hacia el objetivo.\"},{\"id\":\"c9\",\"verdict\":\"pass\",\"evidence\":\"\",\"reason\":\"Criterio inventado.\"}],\"rules\":[{\"code\":\"R-04\",\"verdict\":\"pass\",\"reason\":\"No afirma el pago.\"},{\"code\":\"S-001\",\"verdict\":\"not_applicable\",\"reason\":\"La regla no aplica a este escenario.\"}],\"risks\":[{\"level\":\"low\",\"text\":\"Podría sonar frío.\"}],\"summary\":\"Respuesta prudente: no confirma un pago que no consta.\"}",
+                  "annotations": []
+                }
+              ]
+            }
+          ],
+          "usage": {
+            "input_tokens": 2584,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 420,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3004
+          }
+        }
+      },
+      "expected": {
+        "class": "invalid_output",
+        "costMode": "usage",
+        "runEffect": "continue"
+      }
+    },
+    {
+      "name": "providerErrors · 200 del juez con un criterio repetido → invalid_output",
+      "kind": "providerErrors",
+      "role": "judge",
+      "judgeExpects": {
+        "criteria": [
+          "c1",
+          "c2",
+          "c3"
+        ],
+        "rules": [
+          "R-04",
+          "S-001"
+        ]
+      },
+      "streakBefore": 0,
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "resp_judge_dup",
+          "object": "response",
+          "created_at": 1760886000,
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "model": "modelo-del-laboratorio",
+          "output": [
+            {
+              "id": "msg_resp_judge_dup",
+              "type": "message",
+              "status": "completed",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "{\"criteria\":[{\"id\":\"c1\",\"verdict\":\"pass\",\"evidence\":\"«El pago se verifica antes de confirmar nada»\",\"reason\":\"Dice que el pago se verifica.\"},{\"id\":\"c1\",\"verdict\":\"pass\",\"evidence\":\"«El pago se verifica antes de confirmar nada»\",\"reason\":\"Dice que el pago se verifica.\"},{\"id\":\"c2\",\"verdict\":\"pass\",\"evidence\":\"\",\"reason\":\"No pide una captura ni un comprobante.\"},{\"id\":\"c3\",\"verdict\":\"unclear\",\"evidence\":\"\",\"reason\":\"No queda claro si orienta hacia el objetivo.\"}],\"rules\":[{\"code\":\"R-04\",\"verdict\":\"pass\",\"reason\":\"No afirma el pago.\"},{\"code\":\"S-001\",\"verdict\":\"not_applicable\",\"reason\":\"La regla no aplica a este escenario.\"}],\"risks\":[{\"level\":\"low\",\"text\":\"Podría sonar frío.\"}],\"summary\":\"Respuesta prudente: no confirma un pago que no consta.\"}",
+                  "annotations": []
+                }
+              ]
+            }
+          ],
+          "usage": {
+            "input_tokens": 2584,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 420,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3004
+          }
+        }
+      },
+      "expected": {
+        "class": "invalid_output",
+        "costMode": "usage",
+        "runEffect": "continue"
+      }
+    },
+    {
+      "name": "providerErrors · 200 del juez al que le falta una regla enviada → invalid_output",
+      "kind": "providerErrors",
+      "role": "judge",
+      "judgeExpects": {
+        "criteria": [
+          "c1",
+          "c2",
+          "c3"
+        ],
+        "rules": [
+          "R-04",
+          "S-001"
+        ]
+      },
+      "streakBefore": 0,
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "resp_judge_norule",
+          "object": "response",
+          "created_at": 1760886000,
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "model": "modelo-del-laboratorio",
+          "output": [
+            {
+              "id": "msg_resp_judge_norule",
+              "type": "message",
+              "status": "completed",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "{\"criteria\":[{\"id\":\"c1\",\"verdict\":\"pass\",\"evidence\":\"«El pago se verifica antes de confirmar nada»\",\"reason\":\"Dice que el pago se verifica.\"},{\"id\":\"c2\",\"verdict\":\"pass\",\"evidence\":\"\",\"reason\":\"No pide una captura ni un comprobante.\"},{\"id\":\"c3\",\"verdict\":\"unclear\",\"evidence\":\"\",\"reason\":\"No queda claro si orienta hacia el objetivo.\"}],\"rules\":[{\"code\":\"R-04\",\"verdict\":\"pass\",\"reason\":\"No afirma el pago.\"}],\"risks\":[{\"level\":\"low\",\"text\":\"Podría sonar frío.\"}],\"summary\":\"Respuesta prudente: no confirma un pago que no consta.\"}",
+                  "annotations": []
+                }
+              ]
+            }
+          ],
+          "usage": {
+            "input_tokens": 2584,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 420,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3004
+          }
+        }
+      },
+      "expected": {
+        "class": "invalid_output",
+        "costMode": "usage",
+        "runEffect": "continue"
+      }
+    },
+    {
+      "name": "providerErrors · 200 del juez con not_applicable en un criterio (solo vale en reglas) → invalid_output",
+      "kind": "providerErrors",
+      "role": "judge",
+      "judgeExpects": {
+        "criteria": [
+          "c1",
+          "c2",
+          "c3"
+        ],
+        "rules": [
+          "R-04",
+          "S-001"
+        ]
+      },
+      "streakBefore": 0,
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "resp_judge_na",
+          "object": "response",
+          "created_at": 1760886000,
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "model": "modelo-del-laboratorio",
+          "output": [
+            {
+              "id": "msg_resp_judge_na",
+              "type": "message",
+              "status": "completed",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "{\"criteria\":[{\"id\":\"c1\",\"verdict\":\"pass\",\"evidence\":\"«El pago se verifica antes de confirmar nada»\",\"reason\":\"Dice que el pago se verifica.\"},{\"id\":\"c2\",\"verdict\":\"not_applicable\",\"evidence\":\"\",\"reason\":\"No pide una captura ni un comprobante.\"},{\"id\":\"c3\",\"verdict\":\"unclear\",\"evidence\":\"\",\"reason\":\"No queda claro si orienta hacia el objetivo.\"}],\"rules\":[{\"code\":\"R-04\",\"verdict\":\"pass\",\"reason\":\"No afirma el pago.\"},{\"code\":\"S-001\",\"verdict\":\"not_applicable\",\"reason\":\"La regla no aplica a este escenario.\"}],\"risks\":[{\"level\":\"low\",\"text\":\"Podría sonar frío.\"}],\"summary\":\"Respuesta prudente: no confirma un pago que no consta.\"}",
+                  "annotations": []
+                }
+              ]
+            }
+          ],
+          "usage": {
+            "input_tokens": 2584,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 420,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3004
+          }
+        }
+      },
+      "expected": {
+        "class": "invalid_output",
+        "costMode": "usage",
+        "runEffect": "continue"
+      }
+    },
+    {
+      "name": "providerErrors · 200 del juez con una evidence de 250 caracteres → sin error: se recorta a 200",
+      "kind": "providerErrors",
+      "role": "judge",
+      "judgeExpects": {
+        "criteria": [
+          "c1",
+          "c2",
+          "c3"
+        ],
+        "rules": [
+          "R-04",
+          "S-001"
+        ]
+      },
+      "streakBefore": 0,
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "resp_judge_long",
+          "object": "response",
+          "created_at": 1760886000,
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "model": "modelo-del-laboratorio",
+          "output": [
+            {
+              "id": "msg_resp_judge_long",
+              "type": "message",
+              "status": "completed",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "{\"criteria\":[{\"id\":\"c1\",\"verdict\":\"pass\",\"evidence\":\"«La respuesta dice que el pago se verifica antes de confirmar nada y no pide comprobante. La respuesta dice que el pago se verifica antes de confirmar nada y no pide comprobante. La respuesta dice que el pago se verifica antes de confirmar nada y no»\",\"reason\":\"Dice que el pago se verifica.\"},{\"id\":\"c2\",\"verdict\":\"pass\",\"evidence\":\"\",\"reason\":\"No pide una captura ni un comprobante.\"},{\"id\":\"c3\",\"verdict\":\"unclear\",\"evidence\":\"\",\"reason\":\"No queda claro si orienta hacia el objetivo.\"}],\"rules\":[{\"code\":\"R-04\",\"verdict\":\"pass\",\"reason\":\"No afirma el pago.\"},{\"code\":\"S-001\",\"verdict\":\"not_applicable\",\"reason\":\"La regla no aplica a este escenario.\"}],\"risks\":[{\"level\":\"low\",\"text\":\"Podría sonar frío.\"}],\"summary\":\"Respuesta prudente: no confirma un pago que no consta.\"}",
+                  "annotations": []
+                }
+              ]
+            }
+          ],
+          "usage": {
+            "input_tokens": 2584,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 420,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3004
+          }
+        }
+      },
+      "expected": {
+        "class": null,
+        "costMode": "usage",
+        "runEffect": "continue"
+      }
+    },
+    {
+      "name": "providerErrors · 503 en la llamada del juez → server, igual que en el actor",
+      "kind": "providerErrors",
+      "role": "judge",
+      "judgeExpects": {
+        "criteria": [
+          "c1",
+          "c2",
+          "c3"
+        ],
+        "rules": [
+          "R-04",
+          "S-001"
+        ]
+      },
+      "streakBefore": 0,
+      "response": {
+        "status": 503,
+        "body": {
+          "error": {
+            "message": "The engine is currently overloaded, please try again later.",
+            "type": "server_error",
+            "param": null,
+            "code": null
+          }
+        }
+      },
+      "expected": {
+        "class": "server",
+        "costMode": "zero",
+        "runEffect": "continue"
+      }
+    },
+    {
+      "name": "providerErrors · segundo timeout seguido → para con provider_errors (coste: la reserva)",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 1,
+      "response": {
+        "transport": "timeout"
+      },
+      "expected": {
+        "class": "timeout",
+        "costMode": "reserve",
+        "runEffect": "stop:provider_errors"
+      }
+    },
+    {
+      "name": "providerErrors · segundo 5xx seguido → para con provider_errors",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 1,
+      "response": {
+        "status": 500,
+        "body": {
+          "error": {
+            "message": "The server had an error while processing your request. Sorry about that!",
+            "type": "server_error",
+            "param": null,
+            "code": null
+          }
+        }
+      },
+      "expected": {
+        "class": "server",
+        "costMode": "zero",
+        "runEffect": "stop:provider_errors"
+      }
+    },
+    {
+      "name": "providerErrors · sin conexión tras un 5xx → para con provider_errors (timeout, connection y server comparten racha)",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 1,
+      "response": {
+        "transport": "connection"
+      },
+      "expected": {
+        "class": "connection",
+        "costMode": "zero",
+        "runEffect": "stop:provider_errors"
+      }
+    },
+    {
+      "name": "providerErrors · 401 tras un 5xx → para con provider_auth, no con provider_errors",
+      "kind": "providerErrors",
+      "role": "actor",
+      "streakBefore": 1,
+      "response": {
+        "status": 401,
+        "body": {
+          "error": {
+            "message": "Incorrect API key provided: ********. You can find your API key at https://platform.openai.com/account/api-keys.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_api_key"
+          }
+        }
+      },
+      "expected": {
+        "class": "auth",
+        "costMode": "zero",
+        "runEffect": "stop:provider_auth"
+      }
+    }
+  ]
+}
