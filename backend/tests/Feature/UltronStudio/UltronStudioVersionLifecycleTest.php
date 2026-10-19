@@ -396,7 +396,9 @@ class UltronStudioVersionLifecycleTest extends TestCase
         $this->assertNotContains($archivada->json('data.code'), $codigos);
         $this->assertCount(13, $codigos);
         $copia = collect($r->json('data.content.rules'))->firstWhere('code', $viva->json('data.code'));
-        $this->assertSame(['code', 'revision', 'source', 'enforcement', 'status', 'description', 'type', 'layers', 'priority', 'refs'], array_keys($copia));
+        // Formato 2 (Hito G): las de F más `conditions` (null en una regla documental).
+        $this->assertSame(['code', 'revision', 'source', 'enforcement', 'status', 'description', 'type', 'layers', 'priority', 'refs', 'conditions'], array_keys($copia));
+        $this->assertNull($copia['conditions']);
         $this->assertSame(['studio', 'none', 'draft'], [$copia['source'], $copia['enforcement'], $copia['status']]);
     }
 

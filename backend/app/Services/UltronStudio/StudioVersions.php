@@ -35,13 +35,29 @@ use InvalidArgumentException;
  * aprobaciones simultáneas, una gana y la otra recibe 409 `invalid_transition`.
  *
  * Aprobar aquí no cambia al agente: el motor no lee versiones del Studio.
+ *
+ * FORMATO (Hito G, contrato G §A7). Las versiones nuevas son de formato 2
+ * (`content.format = 2`): sus reglas copiadas llevan `conditions` y su huella
+ * las incluye. Al validarlas, los hallazgos de SUS reglas copiadas (nunca las
+ * vivas) se añaden al final de los de F, así que revalidar al aprobar sigue
+ * dependiendo solo del catálogo. Las de F (sin `format`, formato 1) se leen,
+ * validan, envían y aprueban exactamente como en F: sin hallazgos de reglas y
+ * con su huella de F ({@see StudioContentHasher::versionHash()} elige por el
+ * formato del contenido).
+ *
+ * COMPARAR ({@see compare()}, `GET compare`): la línea base, el borrador de
+ * QUIEN PIDE o una versión, con {@see StudioContentDiff}. Solo lee.
  */
 final class StudioVersions
 {
+    /** Cómo se llaman los lados que no son una versión en `GET compare`. */
+    public const BASELINE_SIDE_LABEL = 'Línea base del código';
+
+    public const DRAFT_SIDE_LABEL = 'Mi borrador';
+
     public function __construct(
         private readonly StudioAudit $audit,
         private readonly StudioDrafts $drafts,
-        private readonly StudioRules $rules,
     ) {}
 
     /**
@@ -105,19 +121,24 @@ final class StudioVersions
                 // desde que se guardó, lo que ya no conoce es un 422, no una
                 // versión con piezas que el motor no tiene.
                 $content = StudioDraftNormalizer::normalize($draft->content);
-                $findings = self::findings($content);
-                if (! StudioGraphValidator::isPublishable($findings)) {
-                    throw UltronStudioException::validationBlocked('El borrador tiene bloqueos: corrígelos antes de crear una versión.', $findings);
-                }
 
-                $reglas = $this->rules->snapshotForVersion();
+                // Formato 2 (Hito G): las reglas vivas, con sus condiciones. Los
+                // hallazgos se calculan sobre la COPIA, con las reglas copiadas:
+                // es exactamente lo que se revalidará al enviar y al aprobar.
+                $reglas = StudioRules::snapshotForVersion(StudioContentHasher::LATEST_FORMAT);
                 $copia = [
                     'catalogVersion' => StudioCatalog::VERSION,
+                    'format' => StudioContentHasher::LATEST_FORMAT,
                     'definition' => $content['definition'],
                     'configs' => $content['configs'],
                     'layout' => $content['layout'],
                     'rules' => $reglas,
                 ];
+                $findings = self::findings($copia);
+                if (! StudioGraphValidator::isPublishable($findings)) {
+                    throw UltronStudioException::validationBlocked('El borrador tiene bloqueos: corrígelos antes de crear una versión.', $findings);
+                }
+
                 $hash = StudioContentHasher::versionHash(StudioCatalog::VERSION, $copia, $reglas);
                 $validacion = self::lastValidation($findings);
                 $yo = $access->snapshot();
@@ -394,7 +415,13 @@ final class StudioVersions
 
         return $this->summary($access, $v) + [
             'note' => $v->note,
-            'content' => $salida + ['rules' => array_values($contenido['rules'] ?? [])],
+            // `format` tal como se guardó (`?? 1`: las de F no lo llevan). Un
+            // valor desconocido viaja tal cual: el CRM no lo interpreta y la
+            // integridad ya dice `false`.
+            'content' => $salida + [
+                'format' => $contenido['format'] ?? StudioContentHasher::FORMAT_1,
+                'rules' => array_values($contenido['rules'] ?? []),
+            ],
             'lastValidation' => $v->last_validation,
             'integrityOk' => self::integrityOk($v),
             'actions' => $this->actions($access, $v),
@@ -402,9 +429,33 @@ final class StudioVersions
     }
 
     /**
+     * GET compare (contrato G §A4): dos lados, cada uno `baseline`, `draft` o
+     * el uuid de una versión, con {@see StudioContentDiff}. Solo lee.
+     *
+     *  - `baseline`: el contenido de `LEGACY_BASELINE_V1` y las reglas del
+     *    código ({@see StudioRules::baselineSnapshot()}).
+     *  - `draft`: el borrador DE QUIEN PIDE (la línea base si no tiene) y las
+     *    reglas vivas. No hay forma de nombrar el borrador de otra persona: un
+     *    uuid solo se busca entre las versiones.
+     *  - uuid: la versión y SUS reglas copiadas (las versiones ya las ve todo
+     *    `ultron.view`). 404 `version_not_found` si no existe.
+     *
+     * @return array<string, mixed> `{from, to, same, edges, configs, rules, warnings, catalogChanged}`
+     */
+    public function compare(StudioAccess $access, string $from, string $to): array
+    {
+        [$ladoA, $contenidoA] = $this->side($access, $from);
+        [$ladoB, $contenidoB] = $this->side($access, $to);
+
+        return ['from' => $ladoA, 'to' => $ladoB] + StudioContentDiff::compare($contenidoA, $contenidoB, StudioCatalog::toArray());
+    }
+
+    /**
      * Recalcula la huella del contenido guardado y la compara con la guardada.
      * Un contenido que ni siquiera se puede firmar (decimales, campos que
-     * faltan) tampoco es íntegro.
+     * faltan, un formato desconocido) tampoco es íntegro. La huella se elige
+     * por `content.format ?? 1` ({@see StudioContentHasher::versionHash()}):
+     * una versión de F se firma exactamente como en F.
      */
     public static function integrityOk(StudioVersion $v): bool
     {
@@ -561,14 +612,81 @@ final class StudioVersions
     }
 
     /**
-     * Valida un contenido contra el catálogo actual.
+     * Valida el contenido de una versión contra el catálogo actual: los
+     * hallazgos de F y, desde el formato 2, al final los de SUS reglas
+     * copiadas. Una versión de formato 1 (F) se valida exactamente como en F.
+     * Un formato desconocido no se interpreta: la versión no es íntegra.
      *
      * @param  array<string, mixed>  $content
      * @return list<array<string, mixed>>
+     *
+     * @throws UltronStudioException 409 `integrity_mismatch` con un formato desconocido
      */
     private static function findings(array $content): array
     {
-        return StudioGraphValidator::validate(StudioCatalog::graph(), $content['definition'], $content['configs']);
+        $formato = self::formatOf($content);
+        $reglas = is_array($content['rules'] ?? null) ? array_values(array_filter($content['rules'], 'is_array')) : [];
+
+        return [
+            ...StudioGraphValidator::validate(StudioCatalog::graph(), $content['definition'], $content['configs']),
+            ...StudioRuleCoherence::evaluate($reglas, $content['definition'], $content['configs'], StudioCatalog::toArray(), $formato),
+        ];
+    }
+
+    /**
+     * `content.format ?? 1`. Solo pasa con un contenido escrito a mano en la
+     * base (las versiones son inmutables y las crea el servidor), y entonces se
+     * responde como a cualquier versión que no cuadra, nunca con un 500.
+     *
+     * @param  array<string, mixed>  $content
+     *
+     * @throws UltronStudioException 409 `integrity_mismatch`
+     */
+    private static function formatOf(array $content): int
+    {
+        try {
+            return StudioContentHasher::format($content);
+        } catch (InvalidArgumentException) {
+            throw UltronStudioException::integrityMismatch();
+        }
+    }
+
+    /**
+     * Un lado de `GET compare`: su descripción (`CompareSide` del CRM) y el
+     * contenido que compara {@see StudioContentDiff}.
+     *
+     * @return array{0:array{kind:string,uuid:string|null,label:string,catalogVersion:string,format:int},1:array<string,mixed>}
+     */
+    private function side(StudioAccess $access, string $side): array
+    {
+        if ($side === 'baseline') {
+            return [
+                ['kind' => 'baseline', 'uuid' => null, 'label' => self::BASELINE_SIDE_LABEL, 'catalogVersion' => StudioCatalog::VERSION, 'format' => StudioContentHasher::LATEST_FORMAT],
+                ['catalogVersion' => StudioCatalog::VERSION, 'format' => StudioContentHasher::LATEST_FORMAT]
+                + StudioDrafts::baselineContent()
+                + ['rules' => StudioRules::baselineSnapshot()],
+            ];
+        }
+
+        if ($side === 'draft') {
+            // SIEMPRE el de quien pide, por su cuenta: nunca por un uuid.
+            $draft = $this->drafts->find($access);
+            $catalogo = $draft !== null ? $draft->catalog_version : StudioCatalog::VERSION;
+
+            return [
+                ['kind' => 'draft', 'uuid' => null, 'label' => self::DRAFT_SIDE_LABEL, 'catalogVersion' => $catalogo, 'format' => StudioContentHasher::LATEST_FORMAT],
+                ['catalogVersion' => $catalogo, 'format' => StudioContentHasher::LATEST_FORMAT]
+                + ($draft !== null ? $draft->content : StudioDrafts::baselineContent())
+                + ['rules' => StudioRules::snapshotForVersion(StudioContentHasher::LATEST_FORMAT)],
+            ];
+        }
+
+        $version = $this->findByUuid($side);
+
+        return [
+            ['kind' => 'version', 'uuid' => $version->uuid, 'label' => $version->label, 'catalogVersion' => $version->catalog_version, 'format' => self::formatOf($version->content)],
+            $version->content,
+        ];
     }
 
     /**

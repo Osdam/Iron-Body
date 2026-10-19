@@ -277,6 +277,53 @@ class UltronStudioDraftTest extends TestCase
         $this->assertSame(0, StudioAuditEvent::query()->count());
     }
 
+    public function test_el_borrador_lleva_el_uuid_de_su_fila(): void
+    {
+        // Hito G (contrato G §A4): sin fila no hay uuid; con fila, el suyo, en
+        // todas las formas de GET draft (también la `current` de un 409).
+        $this->studio('GET', 'draft', $this->ana)->assertOk()->assertJsonPath('data.uuid', null);
+
+        $guardado = $this->saveDraft($this->ana)->assertOk();
+        $uuid = StudioDraft::query()->sole()->uuid;
+        $guardado->assertJsonPath('data.uuid', $uuid);
+        $this->studio('GET', 'draft', $this->ana)->assertOk()->assertJsonPath('data.uuid', $uuid);
+        $this->saveDraft($this->ana, null, 0)->assertStatus(409)->assertJsonPath('current.uuid', $uuid);
+        $this->studio('POST', 'draft/discard', $this->ana, ['baseRevision' => 1])->assertOk()->assertJsonPath('data.uuid', $uuid);
+
+        // Con él se pide su historia, que la ruta de auditoría ya filtra por dueño.
+        $this->assertSame(['draft.discarded', 'draft.saved'], array_column(
+            $this->studio('GET', "audit?subjectType=draft&subjectUuid={$uuid}&per_page=100", $this->ana)->assertOk()->json('data.data'), 'event'));
+    }
+
+    public function test_la_validacion_del_borrador_se_calcula_con_las_reglas_vivas(): void
+    {
+        $this->importBaseline();
+        $regla = $this->newStudioRule($this->ana, ['description' => 'Mensajes cortos.', 'conditions' => self::conditionsOf([self::limitOn('persona', 'maxChars', 'lte', 300)])])->assertCreated()->json('data');
+
+        // La línea base (320) no cumple S-001: aviso, no bloqueo. Al final, tras los de F.
+        $r = $this->studio('GET', 'draft', $this->ana)->assertOk();
+        $r->assertJsonPath('data.validation.publishable', true)
+            ->assertJsonPath('data.validation.warnings', ['opcional-E14', 'opcional-E16', 'regla-S-001', 'reglas-sin-aplicacion']);
+        $this->assertSame([
+            ['id' => 'regla-S-001', 'level' => 'warning', 'title' => 'S-001 no se cumple', 'detail' => 'Mensajes cortos. (Longitud máxima: 320)', 'layer' => 'persona'],
+            ['id' => 'reglas-sin-aplicacion', 'level' => 'warning', 'title' => 'Reglas que el motor no aplica', 'detail' => 'S-001: son propuestas del Studio; aprobar no las hace cumplir.'],
+        ], array_slice($r->json('data.validation.findings'), -2));
+        // Las del código no dan `regla-R-xx`: las comprueban las restricciones del catálogo.
+        $this->assertSame([], array_values(array_filter(array_column($r->json('data.validation.findings'), 'id'), static fn (string $id): bool => str_starts_with($id, 'regla-R-'))));
+
+        // Guardado a 280, se cumple: lo dice `reglas`.
+        $this->saveDraft($this->ana, $this->contentWith(['persona' => ['maxChars' => 280]]))->assertOk()
+            ->assertJsonPath('data.validation.warnings', ['opcional-E14', 'opcional-E16', 'reglas-sin-aplicacion']);
+        $this->assertSame(
+            ['id' => 'reglas', 'level' => 'ok', 'title' => 'Las reglas del Studio se cumplen', 'detail' => 'Comprobadas: S-001.'],
+            collect($this->studio('GET', 'draft', $this->ana)->json('data.validation.findings'))->firstWhere('id', 'reglas'),
+        );
+
+        // Archivada, deja de contar: vuelven exactamente los avisos de F.
+        $this->studio('POST', "rules/{$regla['uuid']}/archive", $this->ana, ['baseRevision' => 1, 'reason' => 'Ya no hace falta'])->assertOk();
+        $this->studio('GET', 'draft', $this->ana)->assertOk()->assertJsonPath('data.validation.warnings', ['opcional-E14', 'opcional-E16']);
+    }
+
     public function test_cada_persona_tiene_su_borrador(): void
     {
         $bea = $this->person(Admin::ROLE_SUPER_ADMIN, 'Bea Ruiz');

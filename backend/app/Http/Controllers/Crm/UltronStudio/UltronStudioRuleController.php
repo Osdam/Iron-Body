@@ -8,6 +8,7 @@ use App\Models\UltronStudio\StudioRule;
 use App\Rules\PlainText;
 use App\Services\UltronStudio\StudioAccess;
 use App\Services\UltronStudio\StudioCatalog;
+use App\Services\UltronStudio\StudioRuleCoherence;
 use App\Services\UltronStudio\StudioRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,6 +22,13 @@ use Illuminate\Validation\ValidationException;
  *
  * Las del código (R-01…R-12) son de solo lectura: 409 `legacy_rule_read_only`.
  * Las del Studio nacen S-NNN en borrador y el motor no las aplica nunca.
+ *
+ * `conditions` (Hito G, contrato G §A6): aquí solo se valida su FORMA (un
+ * objeto con `when` y `then`, listas de objetos y sus tamaños). La semántica
+ * (catálogo, valores, imposibles, controles del motor y capas) la hace
+ * {@see StudioRuleCoherence} en el servicio, con un 422 que trae todas las
+ * claves a la vez; la contradicción con otra regla es un 409
+ * `rule_contradiction`.
  */
 class UltronStudioRuleController extends Controller
 {
@@ -44,7 +52,7 @@ class UltronStudioRuleController extends Controller
     }
 
     /**
-     * POST /api/admin/ultron-studio/rules   {description, type, priority, layers, refs?, clientRequestId}
+     * POST /api/admin/ultron-studio/rules   {description, type, priority, layers, refs?, conditions?, clientRequestId}
      *
      * 201 si se creó; 200 con `replayed` si esta misma petición ya se había atendido.
      */
@@ -58,12 +66,12 @@ class UltronStudioRuleController extends Controller
             'layers' => ['required', 'array', 'list', 'min:1', 'max:10'],
             'layers.*' => ['string', 'distinct', Rule::in(StudioCatalog::layerIds())],
             'clientRequestId' => ['required', 'uuid'],
-        ] + self::refsRules());
+        ] + self::refsRules() + self::conditionsRules());
 
         $resultado = $this->rules->create(
             $access,
             $request,
-            Arr::only($data, ['description', 'type', 'priority', 'layers', 'refs']),
+            self::withRawConditions($request, Arr::only($data, ['description', 'type', 'priority', 'layers', 'refs', 'conditions'])),
             strtolower($data['clientRequestId']),
         );
 
@@ -74,7 +82,11 @@ class UltronStudioRuleController extends Controller
         return response()->json(['ok' => true, 'data' => $resultado['rule']], 201);
     }
 
-    /** PATCH /api/admin/ultron-studio/rules/{uuid}   {baseRevision, …solo los campos que cambian} */
+    /**
+     * PATCH /api/admin/ultron-studio/rules/{uuid}   {baseRevision, …solo los campos que cambian}
+     *
+     * `conditions: null` las quita (la regla pasa a documental); sin la clave, no cambian.
+     */
     public function update(Request $request, string $uuid): JsonResponse
     {
         $access = StudioAccess::requirePerson($request);
@@ -85,7 +97,7 @@ class UltronStudioRuleController extends Controller
             'priority' => ['sometimes', 'required', Rule::in(StudioRule::PRIORITIES)],
             'layers' => ['sometimes', 'required', 'array', 'list', 'min:1', 'max:10'],
             'layers.*' => ['string', 'distinct', Rule::in(StudioCatalog::layerIds())],
-        ] + self::refsRules());
+        ] + self::refsRules() + self::conditionsRules());
 
         $regla = $this->rules->findByUuid($uuid);
 
@@ -94,7 +106,7 @@ class UltronStudioRuleController extends Controller
             $request,
             $regla,
             $data['baseRevision'],
-            Arr::only($data, StudioRules::EDITABLE),
+            self::withRawConditions($request, Arr::only($data, StudioRules::EDITABLE)),
         )]);
     }
 
@@ -135,5 +147,48 @@ class UltronStudioRuleController extends Controller
             'refs.knowledgeCategories' => ['sometimes', 'array', 'list', "max:{$max}"],
             'refs.knowledgeCategories.*' => ['string', 'distinct', Rule::in(MarketingKnowledgeItem::CATEGORIES)],
         ];
+    }
+
+    /**
+     * La FORMA de `conditions` (contrato G §A6), con las mismas claves de error
+     * que da la canonización para esos mismos fallos. Que falten `when` o
+     * `then`, y todo lo demás, lo dice {@see StudioRuleCoherence::check()}.
+     *
+     * @return array<string, list<mixed>>
+     */
+    private static function conditionsRules(): array
+    {
+        return [
+            'conditions' => ['sometimes', 'nullable', 'array:when,then'],
+            'conditions.when' => ['sometimes', 'array', 'list', 'max:'.StudioRuleCoherence::MAX_WHEN],
+            'conditions.when.*' => ['array'],
+            'conditions.then' => ['sometimes', 'array', 'list', 'min:1', 'max:'.StudioRuleCoherence::MAX_THEN],
+            'conditions.then.*' => ['array'],
+        ];
+    }
+
+    /**
+     * `conditions` TAL COMO LLEGÓ, si llegó. Los middleware globales recortan
+     * los textos y convierten "" en null también dentro de un JSON anidado, y la
+     * canonización es la validación del borde de las condiciones (como el
+     * normalizador lo es del contenido del borrador, ver
+     * {@see UltronStudioController}): tiene que ver lo mismo que el CRM, que
+     * recorta con el conjunto de espacios de JavaScript. La forma ya se validó.
+     *
+     * @param  array<string, mixed>  $data  lo validado
+     * @return array<string, mixed>
+     */
+    private static function withRawConditions(Request $request, array $data): array
+    {
+        if (! array_key_exists('conditions', $data) || ! $request->isJson()) {
+            return $data;
+        }
+
+        $cuerpo = json_decode((string) $request->getContent(), true);
+        if (is_array($cuerpo) && array_key_exists('conditions', $cuerpo)) {
+            $data['conditions'] = $cuerpo['conditions'];
+        }
+
+        return $data;
     }
 }

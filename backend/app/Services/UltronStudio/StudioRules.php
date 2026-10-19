@@ -6,6 +6,7 @@ use App\Exceptions\UltronStudioException;
 use App\Models\MarketingKnowledgeItem;
 use App\Models\UltronStudio\StudioAuditEvent;
 use App\Models\UltronStudio\StudioRule;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +29,18 @@ use Illuminate\Validation\ValidationException;
  * `knowledgeKey` que no está en `marketing_knowledge_items.key` es 422. El
  * Studio LEE esa tabla; el motor no lee nada de aquí.
  *
+ * CONDICIONES (Hito G, contrato G §A3). Una regla puede llevar `conditions`
+ * (`{when, then}`): la valida y canoniza {@see StudioRuleCoherence} contra el
+ * catálogo, y lo que choca con un control del motor (una restricción que
+ * bloquea, una arista obligatoria o una regla del código) es un 422. Lo que
+ * contradice otra regla del Studio VIVA es un 409 `rule_contradiction`, y para
+ * eso hacen falta las reglas vivas: crear, editar e importar toman el MISMO
+ * cerrojo de transacción que reparte los códigos ({@see serializeRuleWrites()})
+ * ANTES de leerlas. Sin él, dos escrituras simultáneas y contradictorias entre
+ * sí pasarían las dos. Archivar no lo toma: quitar una regla no crea
+ * contradicciones. Cada RuleDto lleva su `analysis`, calculado sobre las reglas
+ * vivas y los controles.
+ *
  * Cada versión guarda una copia de las reglas no archivadas
  * ({@see snapshotForVersion()}): esa copia, la revisión y la auditoría son la
  * historia de cada regla.
@@ -46,8 +59,8 @@ final class StudioRules
      */
     public const MAX_LIVE_STUDIO_RULES = 100;
 
-    /** Campos que se pueden editar de una regla del Studio. */
-    public const EDITABLE = ['description', 'type', 'priority', 'layers', 'refs'];
+    /** Campos que se pueden editar de una regla del Studio. `conditions` desde el Hito G. */
+    public const EDITABLE = ['description', 'type', 'priority', 'layers', 'refs', 'conditions'];
 
     private const CODE_ATTEMPTS = 3;
 
@@ -70,20 +83,31 @@ final class StudioRules
      * POST rules: nace S-NNN, `draft`, `enforcement = none`. Idempotente por
      * `clientRequestId`: 201 la primera vez, 200 `replayed` al repetir.
      *
-     * @param  array{description:string,type:string,priority:string,layers:list<string>,refs?:array<string,mixed>|null}  $data
+     * `conditions` llega TAL COMO LA MANDÓ EL CLIENTE (sin los recortes de los
+     * middleware): la canonización es la validación del borde, igual que el
+     * normalizador del borrador, y tiene que ver lo mismo que el CRM.
+     *
+     * @param  array{description:string,type:string,priority:string,layers:list<string>,refs?:array<string,mixed>|null,conditions?:mixed}  $data
      * @return array{rule:array<string,mixed>,replayed:bool}
+     *
+     * @throws ValidationException 422 con las claves `refs.*`, `conditions.*` y `layers` a la vez
+     * @throws UltronStudioException 409 `rule_contradiction`, `rule_limit_reached`, `client_request_reused`
      */
     public function create(StudioAccess $access, Request $request, array $data, string $clientRequestId): array
     {
         $access->require(StudioAccess::MANAGE_RULES);
 
+        $capas = array_values($data['layers']);
+        [$refs, $conditions] = $this->validatedContent($data['refs'] ?? null, $data['conditions'] ?? null, $capas);
+
         $campos = [
             'description' => $data['description'],
             'type' => $data['type'],
             'priority' => $data['priority'],
-            'layers' => array_values($data['layers']),
-            'refs' => $this->refs($data['refs'] ?? null),
+            'layers' => $capas,
+            'refs' => $refs,
             'origin' => null,
+            'conditions' => $conditions,
         ];
         $hash = StudioContentHasher::ruleHash($campos);
 
@@ -94,15 +118,23 @@ final class StudioRules
 
             try {
                 $regla = DB::transaction(function () use ($access, $request, $campos, $hash, $clientRequestId): StudioRule {
-                    $this->serializeCodeAllocation();
-                    $vivas = StudioRule::query()->where('source', StudioRule::SOURCE_STUDIO)->where('status', '<>', StudioRule::STATUS_ARCHIVED)->count();
-                    if ($vivas >= self::MAX_LIVE_STUDIO_RULES) {
+                    $this->serializeRuleWrites();
+                    $vivas = self::liveStudioRows();
+                    if ($vivas->count() >= self::MAX_LIVE_STUDIO_RULES) {
                         throw UltronStudioException::ruleLimitReached(self::MAX_LIVE_STUDIO_RULES);
                     }
 
+                    $codigo = $this->nextStudioCode();
+                    $this->assertNoContradiction($campos + [
+                        'code' => $codigo,
+                        'source' => StudioRule::SOURCE_STUDIO,
+                        'enforcement' => StudioRule::ENFORCEMENT_NONE,
+                        'status' => StudioRule::STATUS_DRAFT,
+                    ], $vivas);
+
                     $yo = $access->snapshot();
                     $regla = StudioRule::query()->forceCreate($campos + [
-                        'code' => $this->nextStudioCode(),
+                        'code' => $codigo,
                         'source' => StudioRule::SOURCE_STUDIO,
                         'enforcement' => StudioRule::ENFORCEMENT_NONE,
                         'status' => StudioRule::STATUS_DRAFT,
@@ -118,7 +150,7 @@ final class StudioRules
                             'toStatus' => StudioRule::STATUS_DRAFT,
                             'contentHash' => $hash,
                             'diff' => ['code' => $regla->code] + $campos,
-                        ]);
+                        ], maxValueLength: StudioAudit::MAX_RULE_VALUE_LENGTH);
 
                     return $regla;
                 });
@@ -140,8 +172,14 @@ final class StudioRules
     /**
      * PATCH rules/{uuid}.
      *
+     * `conditions` (si llega) es la del cliente sin recortar, como en
+     * {@see create()}; `null` la quita y la regla vuelve a ser documental.
+     *
      * @param  array<string, mixed>  $fields  solo los que llegaron
      * @return array<string, mixed>
+     *
+     * @throws ValidationException 422 con las claves `refs.*`, `conditions.*` y `layers`
+     * @throws UltronStudioException 409 `legacy_rule_read_only`, `rule_archived`, `rule_conflict`, `rule_contradiction`
      */
     public function update(StudioAccess $access, Request $request, StudioRule $regla, int $baseRevision, array $fields): array
     {
@@ -151,12 +189,13 @@ final class StudioRules
         $nuevos = [];
         foreach (self::EDITABLE as $campo) {
             if (array_key_exists($campo, $fields)) {
-                $nuevos[$campo] = $campo === 'refs' ? $this->refs($fields['refs']) : $fields[$campo];
+                $nuevos[$campo] = $fields[$campo];
             }
         }
         if (isset($nuevos['layers'])) {
             $nuevos['layers'] = array_values($nuevos['layers']);
         }
+        $nuevos = $this->validatedChanges($regla, $nuevos);
 
         $cambios = [];
         foreach ($nuevos as $campo => $valor) {
@@ -171,16 +210,30 @@ final class StudioRules
 
         $completo = array_merge(
             ['description' => $regla->description, 'type' => $regla->type, 'priority' => $regla->priority,
-                'layers' => $regla->layers, 'refs' => $regla->refs, 'origin' => $regla->origin],
+                'layers' => $regla->layers, 'refs' => $regla->refs, 'origin' => $regla->origin, 'conditions' => $regla->conditions],
             $nuevos,
         );
         $hash = StudioContentHasher::ruleHash($completo);
 
-        $actualizada = DB::transaction(function () use ($access, $request, $regla, $baseRevision, $nuevos, $hash, $cambios): StudioRule {
+        $actualizada = DB::transaction(function () use ($access, $request, $regla, $baseRevision, $nuevos, $completo, $hash, $cambios): StudioRule {
+            // El cerrojo va ANTES de leer las reglas vivas: una edición y otra
+            // escritura que la contradice no pueden pasar a la vez.
+            $this->serializeRuleWrites();
+            if (array_key_exists('conditions', $nuevos) && $nuevos['conditions'] !== null) {
+                $this->assertNoContradiction($completo + [
+                    'code' => $regla->code,
+                    'source' => $regla->source,
+                    'enforcement' => $regla->enforcement,
+                    'status' => $regla->status,
+                ], self::liveStudioRows());
+            }
+
             $yo = $access->snapshot();
             $valores = $nuevos;
-            foreach (['layers', 'refs'] as $json) {
-                if (array_key_exists($json, $valores)) {
+            foreach (['layers', 'refs', 'conditions'] as $json) {
+                // El UPDATE del constructor no aplica los casts del modelo; un
+                // `conditions` null queda NULL, no el texto «null».
+                if (array_key_exists($json, $valores) && $valores[$json] !== null) {
                     $valores[$json] = json_encode($valores[$json], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
                 }
             }
@@ -196,7 +249,7 @@ final class StudioRules
                 "Editó la regla {$regla->code} (revisión ".($baseRevision + 1).')', [
                     'contentHash' => $hash,
                     'diff' => ['fromRevision' => $baseRevision, 'toRevision' => $baseRevision + 1, 'changes' => $cambios],
-                ]);
+                ], maxValueLength: StudioAudit::MAX_RULE_VALUE_LENGTH);
 
             return $regla->refresh();
         });
@@ -205,7 +258,8 @@ final class StudioRules
     }
 
     /**
-     * POST rules/{uuid}/archive.
+     * POST rules/{uuid}/archive. Sin el cerrojo de las escrituras: quitar una
+     * regla no crea contradicciones.
      *
      * @return array<string, mixed>
      */
@@ -233,7 +287,7 @@ final class StudioRules
                     'toStatus' => StudioRule::STATUS_ARCHIVED,
                     'contentHash' => $regla->content_hash,
                     'diff' => ['reason' => $reason, 'fromRevision' => $baseRevision, 'toRevision' => $baseRevision + 1],
-                ]);
+                ], maxValueLength: StudioAudit::MAX_RULE_VALUE_LENGTH);
 
             return $regla->refresh();
         });
@@ -243,17 +297,19 @@ final class StudioRules
 
     /**
      * Las reglas que copia una versión: todas las no archivadas, ordenadas por
-     * código y reducidas a {@see StudioContentHasher::VERSION_RULE_FIELDS}.
+     * código y reducidas a los campos de su formato
+     * ({@see StudioContentHasher::versionRuleFields()}): en el 1 (F),
+     * exactamente los de F; en el 2 (G), además `conditions`. Son también las
+     * reglas con las que se evalúa el borrador: las mismas que copiará.
      *
      * @return list<array<string, mixed>>
      */
-    public function snapshotForVersion(): array
+    public static function snapshotForVersion(int $format = StudioContentHasher::LATEST_FORMAT): array
     {
-        return StudioRule::query()
-            ->where('status', '<>', StudioRule::STATUS_ARCHIVED)
-            ->orderBy('code')
-            ->get()
-            ->map(fn (StudioRule $r): array => [
+        $campos = StudioContentHasher::versionRuleFields($format);
+
+        return self::liveRows()
+            ->map(fn (StudioRule $r): array => self::pickInOrder([
                 'code' => $r->code,
                 'revision' => (int) $r->revision,
                 'source' => $r->source,
@@ -264,8 +320,51 @@ final class StudioRules
                 'layers' => array_values($r->layers),
                 'priority' => $r->priority,
                 'refs' => $r->refs,
-            ])
+                'conditions' => $r->conditions,
+            ], $campos))
+            ->values()
             ->all();
+    }
+
+    /**
+     * Las reglas de la línea base del código (`StudioCatalog::legacyRules()`)
+     * con la forma de las que copia una versión de formato 2, para
+     * `GET compare` (contrato G §A4). La revisión es la que tendrían en la
+     * tabla tras `import-baseline`: la de su fila si ya coincide con el código,
+     * la siguiente si el comando aún tiene que sincronizarla y 1 si no existe.
+     * Así, comparar la línea base con un borrador que no la cambia da «sin
+     * diferencias» con la tabla al día, y no una revisión inventada.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function baselineSnapshot(): array
+    {
+        $codigos = array_column(StudioCatalog::legacyRules(), 'code');
+        $filas = StudioRule::query()->whereIn('code', $codigos)->get()->keyBy('code');
+
+        $out = [];
+        foreach (StudioCatalog::legacyRules() as $r) {
+            $fila = $filas->get($r['code']);
+            $revision = 1;
+            if ($fila !== null && $fila->source === StudioRule::SOURCE_LEGACY) {
+                $revision = (int) $fila->revision + (self::legacyChanges(self::legacyRow($r), $fila) === [] ? 0 : 1);
+            }
+            $out[] = self::pickInOrder([
+                'code' => $r['code'],
+                'revision' => $revision,
+                'source' => StudioRule::SOURCE_LEGACY,
+                'enforcement' => StudioRule::ENFORCEMENT_CODE,
+                'status' => StudioRule::STATUS_ACTIVE,
+                'description' => $r['description'],
+                'type' => $r['type'],
+                'layers' => $r['layers'],
+                'priority' => $r['priority'],
+                'refs' => $r['refs'],
+                'conditions' => $r['conditions'],
+            ], StudioContentHasher::versionRuleFields(StudioContentHasher::FORMAT_2));
+        }
+
+        return $out;
     }
 
     public function legacyCount(): int
@@ -276,66 +375,31 @@ final class StudioRules
     /**
      * Copia `LEGACY_BASELINE_V1` (las reglas del código, {@see StudioCatalog::legacyRules()})
      * a la tabla. Idempotente: crea las que faltan, SINCRONIZA las que alguien
-     * alteró a mano (y lo audita) y no toca las que ya coinciden. Nunca toca
-     * una regla del Studio: si una ocupara un código del código, se aborta sin
-     * escribir nada. Todo en una transacción: o se aplica entero o nada.
+     * alteró a mano o las que cambió el código (y lo audita) y no toca las que
+     * ya coinciden. Nunca toca una regla del Studio: si una ocupara un código
+     * del código, se aborta sin escribir nada. Todo en una transacción: o se
+     * aplica entero o nada.
+     *
+     * Desde el Hito G la tabla se lee DENTRO de la transacción y después del
+     * cerrojo de las escrituras ({@see serializeRuleWrites()}): una importación
+     * simultánea a otra (o a una edición) espera y calcula su plan con lo que
+     * la otra dejó.
      *
      * @return array{created:list<string>,updated:list<string>,unchanged:list<string>,orphans:list<string>}
      */
     public function importLegacyBaseline(bool $dryRun): array
     {
-        $plan = ['created' => [], 'updated' => [], 'unchanged' => [], 'orphans' => []];
-        $acciones = [];
-
-        $existentes = StudioRule::query()->whereIn('code', array_column(StudioCatalog::legacyRules(), 'code'))->get()->keyBy('code');
-        foreach (StudioCatalog::legacyRules() as $r) {
-            $esperado = self::legacyRow($r);
-            $fila = $existentes->get($r['code']);
-
-            if ($fila === null) {
-                $plan['created'][] = $r['code'];
-                $acciones[] = ['create', $r['code'], $esperado, null, []];
-
-                continue;
-            }
-            if ($fila->source !== StudioRule::SOURCE_LEGACY) {
-                throw new UltronStudioException(
-                    "La regla {$r['code']} existe y no es del código (source={$fila->source}). No se importa nada: una regla del Studio no se pisa.",
-                    'legacy_code_taken',
-                );
-            }
-
-            $cambios = [];
-            foreach ($esperado as $campo => $valor) {
-                $actual = $fila->getAttribute($campo);
-                if ($actual instanceof \DateTimeInterface) {
-                    $actual = $actual->format(DATE_ATOM);
-                }
-                if (json_encode($actual) !== json_encode($valor)) {
-                    $cambios[] = ['field' => $campo, 'from' => $actual, 'to' => $valor];
-                }
-            }
-            if ($cambios === []) {
-                $plan['unchanged'][] = $r['code'];
-            } else {
-                $plan['updated'][] = $r['code'];
-                $acciones[] = ['sync', $r['code'], $esperado, $fila, $cambios];
-            }
+        if ($dryRun) {
+            return self::legacyPlan()['plan'];
         }
 
-        // Reglas del código que ya no están en el catálogo: se señalan, no se tocan.
-        $plan['orphans'] = StudioRule::query()
-            ->where('source', StudioRule::SOURCE_LEGACY)
-            ->whereNotIn('code', array_column(StudioCatalog::legacyRules(), 'code'))
-            ->orderBy('code')
-            ->pluck('code')
-            ->all();
+        return DB::transaction(function (): array {
+            $this->serializeRuleWrites();
+            ['plan' => $plan, 'actions' => $acciones] = self::legacyPlan();
+            if ($acciones === []) {
+                return $plan;
+            }
 
-        if ($dryRun || $acciones === []) {
-            return $plan;
-        }
-
-        DB::transaction(function () use ($acciones, $plan): void {
             foreach ($acciones as [$tipo, $codigo, $esperado, $fila, $cambios]) {
                 if ($tipo === 'create') {
                     $regla = StudioRule::query()->forceCreate($esperado + ['code' => $codigo, 'revision' => 1]);
@@ -344,14 +408,16 @@ final class StudioRules
                             'toStatus' => StudioRule::STATUS_ACTIVE,
                             'contentHash' => $esperado['content_hash'],
                             'diff' => ['code' => $codigo, 'revision' => 1],
-                        ]);
+                        ], maxValueLength: StudioAudit::MAX_RULE_VALUE_LENGTH);
 
                     continue;
                 }
 
                 $valores = $esperado;
-                foreach (['layers', 'refs'] as $json) {
-                    $valores[$json] = json_encode($valores[$json], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+                foreach (['layers', 'refs', 'conditions'] as $json) {
+                    if ($valores[$json] !== null) {
+                        $valores[$json] = json_encode($valores[$json], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+                    }
                 }
                 $this->conditionalWrite($fila, (int) $fila->revision, $valores + [
                     'revision' => (int) $fila->revision + 1,
@@ -366,7 +432,7 @@ final class StudioRules
                         'toStatus' => StudioRule::STATUS_ACTIVE,
                         'contentHash' => $esperado['content_hash'],
                         'diff' => ['fromRevision' => (int) $fila->revision, 'toRevision' => (int) $fila->revision + 1, 'changes' => $cambios],
-                    ]);
+                    ], maxValueLength: StudioAudit::MAX_RULE_VALUE_LENGTH);
             }
 
             $this->audit->record(null, null, 'system.baseline_imported', StudioAuditEvent::SUBJECT_SYSTEM, null,
@@ -375,14 +441,15 @@ final class StudioRules
                     'diff' => ['created' => $plan['created'], 'updated' => $plan['updated'], 'unchanged' => $plan['unchanged']],
                     'metadata' => ['catalogVersion' => StudioCatalog::VERSION, 'label' => StudioCatalog::BASELINE_LABEL],
                 ]);
-        });
 
-        return $plan;
+            return $plan;
+        });
     }
 
     /**
-     * RuleDto, con el estado de cada clave de conocimiento citada. Una sola
-     * consulta para todas las reglas.
+     * RuleDto, con el estado de cada clave de conocimiento citada y, desde el
+     * Hito G, `conditions` y `analysis`. Dos consultas para todas las reglas:
+     * la base de conocimiento y las reglas vivas del análisis.
      *
      * @param  list<StudioRule>  $reglas
      * @return list<array<string, mixed>>
@@ -399,8 +466,9 @@ final class StudioRules
             ->whereIn('key', array_keys($claves))
             ->get(['key', 'review_status', 'is_active'])
             ->keyBy('key');
+        $analisis = $reglas === [] ? [] : self::analyses($reglas);
 
-        return array_map(function (StudioRule $r) use ($conocimiento): array {
+        return array_map(function (StudioRule $r) use ($conocimiento, $analisis): array {
             $refs = self::refsShape($r->refs);
 
             return [
@@ -411,6 +479,7 @@ final class StudioRules
                 'priority' => $r->priority,
                 'layers' => array_values($r->layers),
                 'refs' => $refs,
+                'conditions' => $r->conditions,
                 'source' => $r->source,
                 'enforcement' => $r->enforcement,
                 'status' => $r->status,
@@ -432,6 +501,7 @@ final class StudioRules
                 'updatedAt' => $r->updated_at?->toIso8601String(),
                 'archivedAt' => $r->archived_at?->toIso8601String(),
                 'archiveReason' => $r->archive_reason,
+                'analysis' => $analisis[$r->id],
             ];
         }, $reglas);
     }
@@ -498,6 +568,176 @@ final class StudioRules
     }
 
     /**
+     * `refs` y `conditions` de una regla nueva, validadas a la vez: un 422 con
+     * TODAS las claves (`refs.*`, `conditions.*` y `layers`), no solo las del
+     * primer bloque que falla.
+     *
+     * @param  list<string>  $layers
+     * @return array{0:array<string,list<mixed>>,1:array<string,mixed>|null}
+     *
+     * @throws ValidationException
+     */
+    private function validatedContent(mixed $refs, mixed $conditions, array $layers): array
+    {
+        $errores = [];
+        $refsValidas = null;
+        try {
+            $refsValidas = $this->refs($refs);
+        } catch (ValidationException $e) {
+            $errores = $e->errors();
+        }
+
+        $coherencia = StudioRuleCoherence::check($conditions, StudioCatalog::toArray(), $layers);
+        $errores += $coherencia['errors'];
+        if ($errores !== []) {
+            throw ValidationException::withMessages($errores);
+        }
+
+        return [$refsValidas, $coherencia['conditions']];
+    }
+
+    /**
+     * Lo que llegó en un PATCH, validado y en su forma canónica. Las
+     * condiciones se comprueban con las capas que TENDRÁ la regla; si solo
+     * cambian las capas, se comprueba que sigan cubriendo los objetivos de las
+     * condiciones guardadas (422 en `layers`).
+     *
+     * @param  array<string, mixed>  $nuevos
+     * @return array<string, mixed>
+     *
+     * @throws ValidationException
+     */
+    private function validatedChanges(StudioRule $regla, array $nuevos): array
+    {
+        $errores = [];
+        if (array_key_exists('refs', $nuevos)) {
+            try {
+                $nuevos['refs'] = $this->refs($nuevos['refs']);
+            } catch (ValidationException $e) {
+                $errores = $e->errors();
+            }
+        }
+
+        $capas = $nuevos['layers'] ?? array_values($regla->layers);
+        if (array_key_exists('conditions', $nuevos)) {
+            $coherencia = StudioRuleCoherence::check($nuevos['conditions'], StudioCatalog::toArray(), $capas);
+            $errores += $coherencia['errors'];
+            $nuevos['conditions'] = $coherencia['conditions'];
+        } elseif (array_key_exists('layers', $nuevos) && $regla->conditions !== null) {
+            // Las condiciones guardadas no se tocan: de su comprobación solo
+            // cuenta si las capas nuevas siguen cubriendo sus objetivos.
+            $coherencia = StudioRuleCoherence::check($regla->conditions, StudioCatalog::toArray(), $capas);
+            if (isset($coherencia['errors']['layers'])) {
+                $errores['layers'] = $coherencia['errors']['layers'];
+            }
+        }
+
+        if ($errores !== []) {
+            throw ValidationException::withMessages($errores);
+        }
+
+        return $nuevos;
+    }
+
+    /**
+     * 409 `rule_contradiction` si las condiciones de `$candidate` contradicen
+     * alguna regla del Studio VIVA de `$vivas` (ella misma no cuenta). Lo que
+     * choca con un control del motor ya es un 422 de
+     * {@see StudioRuleCoherence::check()}: aquí solo quedan las otras reglas.
+     *
+     * @param  array<string, mixed>  $candidate  RuleInput (contrato G §A9)
+     * @param  Collection<int, StudioRule>  $vivas  las reglas del Studio sin archivar, por código
+     *
+     * @throws UltronStudioException
+     */
+    private function assertNoContradiction(array $candidate, Collection $vivas): void
+    {
+        if (($candidate['conditions'] ?? null) === null) {
+            return;
+        }
+
+        $porCodigo = $vivas->keyBy('code');
+        $conflictos = [];
+        $choques = StudioRuleCoherence::contradictions($candidate, array_map(self::input(...), $vivas->all()), StudioCatalog::toArray());
+        foreach ($choques as $c) {
+            if ($c['kind'] !== 'rule') {
+                continue;
+            }
+            $otra = $porCodigo[$c['with']];
+            $conflictos[] = [
+                'code' => $otra->code,
+                'uuid' => $otra->uuid,
+                'revision' => (int) $otra->revision,
+                'target' => $c['target'],
+                'label' => $c['label'],
+            ];
+        }
+
+        if ($conflictos !== []) {
+            throw UltronStudioException::ruleContradiction($conflictos);
+        }
+    }
+
+    /**
+     * `analysis` de cada regla (contrato G §A3), por id de fila: contra los
+     * controles del motor y contra las reglas VIVAS, recorridas por código. Una
+     * archivada se analiza contra las vivas sin contar entre ellas.
+     *
+     * @param  list<StudioRule>  $reglas
+     * @return array<int, array{verification:string,issues:list<array{id:string,level:string,with:list<string>,target:string}>}>
+     */
+    private static function analyses(array $reglas): array
+    {
+        $catalogo = StudioCatalog::toArray();
+        $vivas = array_map(self::input(...), self::liveRows()->all());
+        $deLasVivas = StudioRuleCoherence::analyzeAll($vivas, $catalogo);
+
+        $out = [];
+        foreach ($reglas as $r) {
+            $out[$r->id] = ! $r->isArchived() && isset($deLasVivas[$r->code])
+                ? $deLasVivas[$r->code]
+                : StudioRuleCoherence::analyze(self::input($r), $vivas, $catalogo);
+        }
+
+        return $out;
+    }
+
+    /**
+     * RuleInput (contrato G §A9) de una fila: lo que necesita la coherencia.
+     *
+     * @return array{code:string,source:string,enforcement:string,status:string,description:string,layers:list<string>,conditions:array<string,mixed>|null,refs:array<string,list<mixed>>}
+     */
+    private static function input(StudioRule $r): array
+    {
+        return [
+            'code' => $r->code,
+            'source' => $r->source,
+            'enforcement' => $r->enforcement,
+            'status' => $r->status,
+            'description' => $r->description,
+            'layers' => array_values($r->layers),
+            'conditions' => $r->conditions,
+            'refs' => self::refsShape($r->refs),
+        ];
+    }
+
+    /** @return Collection<int, StudioRule> Las reglas no archivadas (de las dos procedencias), por código. */
+    private static function liveRows(): Collection
+    {
+        return StudioRule::query()->where('status', '<>', StudioRule::STATUS_ARCHIVED)->orderBy('code')->get();
+    }
+
+    /** @return Collection<int, StudioRule> Las reglas del Studio no archivadas, por código. */
+    private static function liveStudioRows(): Collection
+    {
+        return StudioRule::query()
+            ->where('source', StudioRule::SOURCE_STUDIO)
+            ->where('status', '<>', StudioRule::STATUS_ARCHIVED)
+            ->orderBy('code')
+            ->get();
+    }
+
+    /**
      * Lo que hace falta para editar o archivar: que sea del Studio, que no esté
      * archivada y que nadie la haya cambiado desde que se leyó.
      */
@@ -525,6 +765,7 @@ final class StudioRules
         // Este UPDATE no pasa por el modelo: la guarda «una regla del Studio
         // nunca se activa ni cambia de identidad» se repite aquí en código, no
         // solo en el CHECK de PostgreSQL (revisión de seguridad, H6).
+        // `conditions` no es identidad ni estado: se edita como el resto.
         if (! $legacy) {
             $intocables = array_intersect(array_keys($values), ['source', 'enforcement', 'code', 'uuid', 'client_request_id', 'created_by_admin_id', 'created_by_name', 'origin']);
             if ($intocables !== [] || (array_key_exists('status', $values) && $values['status'] !== StudioRule::STATUS_ARCHIVED)) {
@@ -550,13 +791,20 @@ final class StudioRules
     }
 
     /**
-     * En PostgreSQL, un cerrojo de transacción serializa a quienes crean reglas
-     * a la vez: así dos creaciones no calculan el mismo S-NNN (sin él, cuatro
-     * peticiones simultáneas agotaban los reintentos y una recibía un 500).
-     * SQLite escribe en serie por sí mismo. El UNIQUE de `code` y el reintento
-     * de {@see create()} siguen como red de seguridad.
+     * EL cerrojo de las escrituras de reglas. En PostgreSQL, un cerrojo de
+     * transacción serializa a quienes crean, editan o importan reglas a la vez:
+     *
+     *  - dos creaciones no calculan el mismo S-NNN (sin él, cuatro peticiones
+     *    simultáneas agotaban los reintentos y una recibía un 500);
+     *  - y desde el Hito G, quien lo tiene lee las reglas vivas sabiendo que
+     *    nadie más está escribiendo: dos reglas que se contradicen entre sí no
+     *    pueden guardarse a la vez (una recibe 409 `rule_contradiction`).
+     *
+     * Se toma ANTES de leer nada. SQLite escribe en serie por sí mismo. El
+     * UNIQUE de `code` y el reintento de {@see create()} siguen como red de
+     * seguridad. La clave es la de F: es el MISMO cerrojo (contrato G §A3).
      */
-    private function serializeCodeAllocation(): void
+    private function serializeRuleWrites(): void
     {
         if (DB::connection()->getDriverName() === 'pgsql') {
             DB::statement('SELECT pg_advisory_xact_lock(?)', [crc32('ultron_studio_rules:code')]);
@@ -602,8 +850,83 @@ final class StudioRules
     }
 
     /**
+     * Qué haría la importación con la tabla tal como está: las reglas que
+     * crearía, las que sincronizaría (con sus cambios), las que no tocaría y
+     * las huérfanas. Solo lee.
+     *
+     * @return array{plan:array{created:list<string>,updated:list<string>,unchanged:list<string>,orphans:list<string>},actions:list<array{0:string,1:string,2:array<string,mixed>,3:StudioRule|null,4:list<array<string,mixed>>}>}
+     *
+     * @throws UltronStudioException `legacy_code_taken` si una regla del Studio ocupa un código del código
+     */
+    private static function legacyPlan(): array
+    {
+        $plan = ['created' => [], 'updated' => [], 'unchanged' => [], 'orphans' => []];
+        $acciones = [];
+
+        $existentes = StudioRule::query()->whereIn('code', array_column(StudioCatalog::legacyRules(), 'code'))->get()->keyBy('code');
+        foreach (StudioCatalog::legacyRules() as $r) {
+            $esperado = self::legacyRow($r);
+            $fila = $existentes->get($r['code']);
+
+            if ($fila === null) {
+                $plan['created'][] = $r['code'];
+                $acciones[] = ['create', $r['code'], $esperado, null, []];
+
+                continue;
+            }
+            if ($fila->source !== StudioRule::SOURCE_LEGACY) {
+                throw new UltronStudioException(
+                    "La regla {$r['code']} existe y no es del código (source={$fila->source}). No se importa nada: una regla del Studio no se pisa.",
+                    'legacy_code_taken',
+                );
+            }
+
+            $cambios = self::legacyChanges($esperado, $fila);
+            if ($cambios === []) {
+                $plan['unchanged'][] = $r['code'];
+            } else {
+                $plan['updated'][] = $r['code'];
+                $acciones[] = ['sync', $r['code'], $esperado, $fila, $cambios];
+            }
+        }
+
+        // Reglas del código que ya no están en el catálogo: se señalan, no se tocan.
+        $plan['orphans'] = StudioRule::query()
+            ->where('source', StudioRule::SOURCE_LEGACY)
+            ->whereNotIn('code', array_column(StudioCatalog::legacyRules(), 'code'))
+            ->orderBy('code')
+            ->pluck('code')
+            ->all();
+
+        return ['plan' => $plan, 'actions' => $acciones];
+    }
+
+    /**
+     * En qué difiere una fila de lo que el código dice que tiene que ser.
+     *
+     * @param  array<string, mixed>  $esperado  {@see legacyRow()}
+     * @return list<array{field:string,from:mixed,to:mixed}>
+     */
+    private static function legacyChanges(array $esperado, StudioRule $fila): array
+    {
+        $cambios = [];
+        foreach ($esperado as $campo => $valor) {
+            $actual = $fila->getAttribute($campo);
+            if ($actual instanceof \DateTimeInterface) {
+                $actual = $actual->format(DATE_ATOM);
+            }
+            if (json_encode($actual) !== json_encode($valor)) {
+                $cambios[] = ['field' => $campo, 'from' => $actual, 'to' => $valor];
+            }
+        }
+
+        return $cambios;
+    }
+
+    /**
      * La fila que corresponde a una regla del código, tal como la escribe el
-     * importador (sin código ni revisión).
+     * importador (sin código ni revisión). Desde el Hito G, con sus
+     * condiciones (null en las documentales).
      *
      * @param  array<string, mixed>  $r  un elemento de {@see StudioCatalog::legacyRules()}
      * @return array<string, mixed>
@@ -619,11 +942,31 @@ final class StudioRules
             'priority' => $r['priority'],
             'layers' => $r['layers'],
             'refs' => $r['refs'],
+            'conditions' => $r['conditions'],
             'origin' => $r['origin'],
             'content_hash' => StudioContentHasher::ruleHash($r),
             'archived_at' => null,
             'archive_reason' => null,
         ];
+    }
+
+    /**
+     * Los campos `$fields` de `$values`, en el orden de `$fields`: el de
+     * {@see StudioContentHasher::versionRuleFields()}, que es el de F con
+     * `conditions` al final en el formato 2.
+     *
+     * @param  array<string, mixed>  $values
+     * @param  list<string>  $fields
+     * @return array<string, mixed>
+     */
+    private static function pickInOrder(array $values, array $fields): array
+    {
+        $out = [];
+        foreach ($fields as $campo) {
+            $out[$campo] = $values[$campo];
+        }
+
+        return $out;
     }
 
     /**

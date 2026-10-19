@@ -74,7 +74,8 @@ class UltronStudioStatusCatalogTest extends TestCase
             json_decode((string) json_encode(StudioCatalog::toArray()), true),
             $r->json('data'),
         );
-        $this->assertSame(['version', 'hash', 'layers', 'ports', 'edges', 'requiredPaths', 'constraints', 'parameters', 'baseline'], array_keys($r->json('data')));
+        // Hito G (contrato G §A2 y §A3): los mandos reales, las lecturas y las condiciones de las reglas del código.
+        $this->assertSame(['version', 'hash', 'layers', 'ports', 'edges', 'requiredPaths', 'constraints', 'parameters', 'baseline', 'bindings', 'readings', 'legacyConditions'], array_keys($r->json('data')));
         // Claves opcionales omitidas, nunca `false`.
         foreach ($r->json('data.edges') as $arista) {
             foreach (['feedback', 'opensTurn'] as $opcional) {

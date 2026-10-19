@@ -8,6 +8,7 @@ use App\Services\UltronStudio\StudioCatalog;
 use App\Services\UltronStudio\StudioContentHasher;
 use App\Services\UltronStudio\StudioDrafts;
 use App\Services\UltronStudio\StudioGraphValidator;
+use App\Services\UltronStudio\StudioRuleCoherence;
 use App\Services\UltronStudio\StudioRules;
 use Closure;
 use Illuminate\Support\Facades\Artisan;
@@ -119,13 +120,22 @@ trait StudioFixtures
      * avisos (VALIDATED), una con bloqueos que ya estaba enviada, una con la
      * huella alterada.
      *
+     * `$format` (Hito G): 2, como las crea hoy la API (reglas con
+     * `conditions`), o 1, con la forma exacta de F (sin `format` y con las
+     * reglas reducidas a los campos de F).
+     *
      * @param  array<string, mixed>  $content  {definition, configs, layout}
      */
-    protected function seedVersion(Admin $creator, array $content, string $status = 'DRAFT', ?string $hash = null): StudioVersion
+    protected function seedVersion(Admin $creator, array $content, string $status = 'DRAFT', ?string $hash = null, int $format = StudioContentHasher::LATEST_FORMAT): StudioVersion
     {
-        $reglas = app(StudioRules::class)->snapshotForVersion();
-        $copia = ['catalogVersion' => StudioCatalog::VERSION] + $content + ['rules' => $reglas];
-        $findings = StudioGraphValidator::validate(StudioCatalog::graph(), $content['definition'], $content['configs']);
+        $reglas = StudioRules::snapshotForVersion($format);
+        $copia = ['catalogVersion' => StudioCatalog::VERSION]
+            + ($format === StudioContentHasher::FORMAT_1 ? [] : ['format' => $format])
+            + $content + ['rules' => $reglas];
+        $findings = [
+            ...StudioGraphValidator::validate(StudioCatalog::graph(), $content['definition'], $content['configs']),
+            ...StudioRuleCoherence::evaluate($reglas, $content['definition'], $content['configs'], StudioCatalog::toArray(), $format),
+        ];
 
         return StudioVersion::query()->forceCreate([
             'client_request_id' => (string) Str::uuid(),
@@ -141,6 +151,66 @@ trait StudioFixtures
             'created_by_role' => $creator->role,
             'last_validation' => [
                 'catalogVersion' => StudioCatalog::VERSION,
+                'validatedAt' => now()->toIso8601String(),
+                'publishable' => StudioGraphValidator::isPublishable($findings),
+                'warnings' => StudioGraphValidator::warnings($findings),
+                'findings' => $findings,
+            ],
+            'submitted_at' => $status === 'DRAFT' ? null : now(),
+            'status_changed_at' => now(),
+        ]);
+    }
+
+    /** La versión del catálogo de F: la de las versiones que ya hay en producción. */
+    protected const CATALOG_F = '2026-10-18.1';
+
+    /**
+     * La huella de una versión de F con la línea base y las doce reglas del
+     * código recién importadas, calculada con node desde F (el vector de
+     * `StudioContentHasherTest`).
+     */
+    protected const F_BASELINE_VERSION_HASH = '667c9168ee6dc3951d6da09266e3ac677a0038641f07b32297fe83acf0a1abff';
+
+    /**
+     * Una versión EXACTAMENTE como la dejó el código de F en producción:
+     * catálogo `2026-10-18.1`, sin `format`, y las doce reglas del código como
+     * se copiaban entonces (revisión 1, sin `conditions` y sin las aristas que
+     * añadió G). Con la línea base, su huella es {@see F_BASELINE_VERSION_HASH}.
+     *
+     * @param  array<string, array<string, mixed>>  $configs  cambios sobre la línea base
+     */
+    protected function seedFormat1Version(Admin $creator, string $status = 'DRAFT', array $configs = []): StudioVersion
+    {
+        $contenido = $this->contentWith($configs);
+        $reglas = array_map(static fn (array $r): array => [
+            'code' => $r['code'],
+            'revision' => 1,
+            'source' => 'legacy_baseline',
+            'enforcement' => 'code',
+            'status' => 'active',
+            'description' => $r['description'],
+            'type' => $r['type'],
+            'layers' => $r['layers'],
+            'priority' => $r['priority'],
+            'refs' => array_replace($r['refs'], ['edges' => []]),
+        ], StudioCatalog::legacyRules());
+        $copia = ['catalogVersion' => self::CATALOG_F] + $contenido + ['rules' => $reglas];
+        $findings = StudioGraphValidator::validate(StudioCatalog::graph(), $contenido['definition'], $contenido['configs']);
+
+        return StudioVersion::query()->forceCreate([
+            'client_request_id' => (string) Str::uuid(),
+            'label' => 'De F '.Str::random(4),
+            'status' => $status,
+            'content' => $copia,
+            'content_hash' => StudioContentHasher::versionHash(self::CATALOG_F, $copia, $reglas),
+            'catalog_version' => self::CATALOG_F,
+            'catalog_hash' => '704dd094ddbbd2a5ccbfec6de3989be15b078401dac9a74c0fd6316628268473',
+            'source_draft_revision' => 1,
+            'created_by_admin_id' => $creator->id,
+            'created_by_name' => $creator->name,
+            'created_by_role' => $creator->role,
+            'last_validation' => [
+                'catalogVersion' => self::CATALOG_F,
                 'validatedAt' => now()->toIso8601String(),
                 'publishable' => StudioGraphValidator::isPublishable($findings),
                 'warnings' => StudioGraphValidator::warnings($findings),
@@ -188,5 +258,54 @@ trait StudioFixtures
     protected function isPostgres(): bool
     {
         return DB::connection()->getDriverName() === 'pgsql';
+    }
+
+    /**
+     * POST rules (Hito G: con `conditions` si se pasan) con valores por
+     * defecto razonables.
+     *
+     * @param  array<string, mixed>  $extra
+     */
+    protected function newStudioRule(Admin $as, array $extra = []): TestResponse
+    {
+        return $this->studio('POST', 'rules', $as, $extra + [
+            'description' => 'Regla del Studio para la prueba.',
+            'type' => 'style',
+            'priority' => 'normal',
+            'layers' => ['persona'],
+            'clientRequestId' => (string) Str::uuid(),
+        ]);
+    }
+
+    /**
+     * `limit <capa>.<clave> <lte|gte> <valor>` sobre un parámetro de rango.
+     *
+     * @return array<string, mixed>
+     */
+    protected static function limitOn(string $layer, string $key, string $op, int $value): array
+    {
+        return ['kind' => 'limit', 'target' => 'config', 'layer' => $layer, 'key' => $key, 'op' => $op, 'value' => $value];
+    }
+
+    /**
+     * `require <capa>.<clave> eq <valor>`.
+     *
+     * @return array<string, mixed>
+     */
+    protected static function requireEq(string $layer, string $key, mixed $value): array
+    {
+        return ['kind' => 'require', 'target' => 'config', 'layer' => $layer, 'key' => $key, 'op' => 'eq', 'value' => $value];
+    }
+
+    /**
+     * Unas condiciones en su forma canónica.
+     *
+     * @param  list<array<string, mixed>>  $then
+     * @param  list<array<string, mixed>>  $when
+     * @return array{when:list<array<string,mixed>>,then:list<array<string,mixed>>}
+     */
+    protected static function conditionsOf(array $then, array $when = []): array
+    {
+        return ['when' => $when, 'then' => $then];
     }
 }

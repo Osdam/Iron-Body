@@ -177,6 +177,23 @@ class UltronStudioException extends RuntimeException
         );
     }
 
+    /**
+     * Hito G (contrato §A3): las condiciones contradicen otra regla del Studio
+     * VIVA. Lo que choca con un control del motor no llega aquí: es un 422.
+     * Los códigos y uuids de las reglas ya los ve cualquiera con `ultron.view`.
+     *
+     * @param  list<array{code:string,uuid:string,revision:int,target:string,label:string}>  $conflicts
+     */
+    public static function ruleContradiction(array $conflicts): self
+    {
+        return new self(
+            'Estas condiciones contradicen otra regla del Studio. Cámbialas, o edita o archiva la otra regla antes de guardar.',
+            'rule_contradiction',
+            409,
+            ['conflicts' => $conflicts],
+        );
+    }
+
     public static function clientRequestReused(): self
     {
         return new self(

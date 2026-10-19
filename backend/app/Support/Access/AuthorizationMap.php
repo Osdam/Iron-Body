@@ -682,6 +682,12 @@ final class AuthorizationMap
         // Los eventos de borrador ajenos solo los ve quien tenga `audit.view`
         // (lo filtra el servicio); el resto del libro, cualquiera del Studio.
         'GET api/admin/ultron-studio/audit' => 'ultron.view',
+        // Hito G (contrato docs/ultron-studio/ULTRON_STUDIO_G_CONTRACT.md §A6,
+        // decisión 2 del lead): lo que lee HOY el motor, de solo lectura y sin
+        // ids ni secretos, y la comparación (`draft` es siempre el borrador de
+        // quien pide). Sin llaves nuevas.
+        'GET api/admin/ultron-studio/engine/readings' => 'ultron.view',
+        'GET api/admin/ultron-studio/compare' => 'ultron.view',
 
         // Ver el catálogo de roles ya revela el organigrama y qué puede cada
         // uno. Se exige el mismo permiso que para tocarlo: un dominio con una

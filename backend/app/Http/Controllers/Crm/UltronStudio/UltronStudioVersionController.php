@@ -22,10 +22,15 @@ use Illuminate\Validation\ValidationException;
  * formato) y lo resuelve el servicio, con 404 `version_not_found`.
  *
  * Aprobar aquí no cambia al agente; publicar y revertir son 409 siempre.
+ *
+ * Desde el Hito G, también la comparación (ruta 21, contrato G §A4).
  */
 class UltronStudioVersionController extends Controller
 {
     use ResolvesPagination;
+
+    /** Un lado de `GET compare`: `baseline`, `draft` o el uuid de una versión. */
+    private const COMPARE_SIDE = '/^(baseline|draft|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/';
 
     public function __construct(private readonly StudioVersions $versions) {}
 
@@ -89,6 +94,28 @@ class UltronStudioVersionController extends Controller
         $access = StudioAccess::requirePerson($request);
 
         return response()->json(['ok' => true, 'data' => $this->versions->detail($access, $this->versions->findByUuid($uuid))]);
+    }
+
+    /**
+     * GET /api/admin/ultron-studio/compare?from=<baseline|draft|uuid>&to=<baseline|draft|uuid>
+     *
+     * Solo lee. `draft` es SIEMPRE el borrador de quien pide; un uuid solo se
+     * busca entre las versiones (404 `version_not_found`). 422 con un lado que
+     * no es ninguna de las tres cosas o con dos lados iguales.
+     */
+    public function compare(Request $request): JsonResponse
+    {
+        $access = StudioAccess::requirePerson($request);
+        $lado = ['required', 'string', 'max:36', 'regex:'.self::COMPARE_SIDE];
+        $data = $request->validate(['from' => $lado, 'to' => $lado]);
+
+        $desde = strtolower($data['from']);
+        $hasta = strtolower($data['to']);
+        if ($desde === $hasta) {
+            throw ValidationException::withMessages(['to' => ['Compara dos cosas distintas: los dos lados son el mismo.']]);
+        }
+
+        return response()->json(['ok' => true, 'data' => $this->versions->compare($access, $desde, $hasta)]);
     }
 
     /** POST /api/admin/ultron-studio/versions/{uuid}/validate — simulación: no escribe nada. */

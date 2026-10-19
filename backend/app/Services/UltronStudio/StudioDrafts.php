@@ -32,6 +32,11 @@ use stdClass;
  * enseñan en `validation`, y lo que no se puede es crear una versión con ellos.
  *
  * Nada se borra: descartar vuelve a la línea base y sube la revisión.
+ *
+ * HITO G (contrato G §A3 y §A4). La forma de GET draft gana `uuid` (null sin
+ * fila), con el que el CRM pide el historial del borrador a `GET audit`. Y la
+ * validación añade AL FINAL de los hallazgos de F los de las reglas del Studio,
+ * evaluadas con las reglas VIVAS: las mismas que copiará la versión.
  */
 final class StudioDrafts
 {
@@ -165,6 +170,7 @@ final class StudioDrafts
             return [
                 'exists' => false,
                 'isBaseline' => true,
+                'uuid' => null,
                 'revision' => 0,
                 'savedAt' => null,
                 'catalogVersion' => StudioCatalog::VERSION,
@@ -179,6 +185,7 @@ final class StudioDrafts
         return [
             'exists' => true,
             'isBaseline' => self::isBaseline($content),
+            'uuid' => $draft->uuid,
             'revision' => $draft->revision,
             'savedAt' => $draft->updated_at?->toIso8601String(),
             'catalogVersion' => $draft->catalog_version,
@@ -190,20 +197,38 @@ final class StudioDrafts
 
     /**
      * La validación del servidor contra el catálogo ACTUAL. Manda sobre la del
-     * navegador si discrepan.
+     * navegador si discrepan. Sin `$rules`, las reglas son las vivas
+     * ({@see StudioRules::snapshotForVersion()}).
      *
      * @param  array<string, mixed>  $content
+     * @param  list<array<string, mixed>>|null  $rules
      * @return array{catalogVersion:string,publishable:bool,warnings:list<string>,findings:list<array<string,mixed>>}
      */
-    public static function validation(array $content): array
+    public static function validation(array $content, ?array $rules = null): array
     {
-        $findings = StudioGraphValidator::validate(StudioCatalog::graph(), $content['definition'], $content['configs']);
+        $findings = self::findings($content, $rules ?? StudioRules::snapshotForVersion());
 
         return [
             'catalogVersion' => StudioCatalog::VERSION,
             'publishable' => StudioGraphValidator::isPublishable($findings),
             'warnings' => StudioGraphValidator::warnings($findings),
             'findings' => $findings,
+        ];
+    }
+
+    /**
+     * Los hallazgos de un borrador: los de F y, al final, los de las reglas del
+     * Studio de `$rules` (formato 2: un borrador siempre es del último).
+     *
+     * @param  array<string, mixed>  $content
+     * @param  list<array<string, mixed>>  $rules
+     * @return list<array<string, mixed>>
+     */
+    private static function findings(array $content, array $rules): array
+    {
+        return [
+            ...StudioGraphValidator::validate(StudioCatalog::graph(), $content['definition'], $content['configs']),
+            ...StudioRuleCoherence::evaluate($rules, $content['definition'], $content['configs'], StudioCatalog::toArray(), StudioContentHasher::LATEST_FORMAT),
         ];
     }
 

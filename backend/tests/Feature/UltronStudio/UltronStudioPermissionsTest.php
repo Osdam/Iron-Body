@@ -13,9 +13,10 @@ use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
- * Quién puede qué en ULTRON STUDIO, contra el servidor (contrato §A4 y §A8).
+ * Quién puede qué en ULTRON STUDIO, contra el servidor (contrato §A4 y §A8; y
+ * contrato G §A6 para las dos rutas de lectura del Hito G).
  *
- * Las 19 rutas, una a una, con cada perfil: sin sesión, token compartido, los
+ * Las 21 rutas, una a una, con cada perfil: sin sesión, token compartido, los
  * roles sin Studio, un rol con TODO Mercadeo (incluido pausar el agente), el
  * Administrador y el Super Admin. «Permitido» quiere decir que la puerta deja
  * pasar: la respuesta puede ser 200, 404, 409 o 422 según el cuerpo, pero
@@ -26,7 +27,7 @@ class UltronStudioPermissionsTest extends TestCase
     use RefreshDatabase;
     use StudioFixtures;
 
-    /** Las 19 rutas del contrato §A3 con su permiso. */
+    /** Las 19 rutas del contrato §A3 y las 2 del contrato G §A6, con su permiso. */
     private const ROUTES = [
         ['GET', 'status', 'ultron.view'],
         ['GET', 'catalog', 'ultron.view'],
@@ -47,6 +48,8 @@ class UltronStudioPermissionsTest extends TestCase
         ['PATCH', 'rules/{uuid}', 'ultron.manage_rules'],
         ['POST', 'rules/{uuid}/archive', 'ultron.manage_rules'],
         ['GET', 'audit', 'ultron.view'],
+        ['GET', 'engine/readings', 'ultron.view'],
+        ['GET', 'compare', 'ultron.view'],
     ];
 
     private string $version;
@@ -70,7 +73,7 @@ class UltronStudioPermissionsTest extends TestCase
         ])->assertCreated()->json('data.uuid');
     }
 
-    public function test_el_mapa_resuelve_exactamente_las_19_rutas_del_contrato(): void
+    public function test_el_mapa_resuelve_exactamente_las_21_rutas_del_contrato(): void
     {
         $esperado = [];
         foreach (self::ROUTES as [$metodo, $ruta, $permiso]) {
@@ -89,7 +92,7 @@ class UltronStudioPermissionsTest extends TestCase
         $this->assertSame($esperado, $real);
     }
 
-    public function test_sin_sesion_es_401_en_las_19(): void
+    public function test_sin_sesion_es_401_en_las_21(): void
     {
         foreach (self::ROUTES as [$metodo, $ruta]) {
             $this->json($metodo, $this->url($ruta), $this->body($ruta))
@@ -282,6 +285,7 @@ class UltronStudioPermissionsTest extends TestCase
             'rules' => ['description' => 'Regla de la matriz', 'type' => 'style', 'priority' => 'normal', 'layers' => ['persona'], 'clientRequestId' => (string) Str::uuid()],
             'rules/{uuid}' => ['baseRevision' => 1, 'description' => 'Editada desde la matriz'],
             'rules/{uuid}/archive' => ['baseRevision' => 1, 'reason' => 'Archivada desde la matriz'],
+            'compare' => ['from' => 'baseline', 'to' => 'draft'],
             default => [],
         };
     }

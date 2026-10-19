@@ -9,6 +9,7 @@ use App\Services\UltronStudio\StudioAccess;
 use App\Services\UltronStudio\StudioAudit;
 use App\Services\UltronStudio\StudioCatalog;
 use App\Services\UltronStudio\StudioDrafts;
+use App\Services\UltronStudio\StudioEngineReadings;
 use App\Services\UltronStudio\StudioPublishing;
 use App\Services\UltronStudio\StudioRules;
 use App\Services\UltronStudio\StudioVersionStatus;
@@ -18,8 +19,9 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 /**
- * ULTRON STUDIO: estado, catálogo, borrador y auditoría (contrato
- * docs/ultron-studio/ULTRON_STUDIO_F_CONTRACT.md §A3, rutas 1–5 y 19).
+ * ULTRON STUDIO: estado, catálogo, borrador, auditoría (contrato
+ * docs/ultron-studio/ULTRON_STUDIO_F_CONTRACT.md §A3, rutas 1–5 y 19) y, desde
+ * el Hito G, las lecturas del motor (ruta 20, contrato G §A2).
  *
  * AUTORIZACIÓN EN DOS PUERTAS, igual en los tres controladores del Studio. El
  * mapa central ({@see AuthorizationMap::OVERRIDES}) exige el permiso `ultron.*`
@@ -65,6 +67,20 @@ class UltronStudioController extends Controller
         StudioAccess::requirePerson($request);
 
         return response()->json(['ok' => true, 'data' => StudioCatalog::toArray()]);
+    }
+
+    /**
+     * GET /api/admin/ultron-studio/engine/readings — lo que lee HOY el proceso
+     * web del motor. Solo lectura: el Studio no escribe nada del motor, y una
+     * fuente que falla sale `{available:false}` sin tumbar la respuesta. El
+     * adaptador se resuelve aquí y no en el constructor: las demás rutas del
+     * Studio no tocan ninguna clase del motor.
+     */
+    public function engineReadings(Request $request, StudioEngineReadings $engine): JsonResponse
+    {
+        StudioAccess::requirePerson($request);
+
+        return response()->json(['ok' => true, 'data' => $engine->read()]);
     }
 
     /** GET /api/admin/ultron-studio/draft */

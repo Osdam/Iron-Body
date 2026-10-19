@@ -20,10 +20,16 @@ use stdClass;
  * falla y su transacción no existe.
  *
  * QUÉ NO SE AUDITA: las lecturas, la simulación de validación, los 4xx de
- * formato ni los conflictos de revisión (en ninguno cambió nada).
+ * formato ni los conflictos de revisión (en ninguno cambió nada). Desde el
+ * Hito G tampoco las lecturas del motor (`GET engine/readings`), la
+ * comparación (`GET compare`), el análisis de las reglas ni las condiciones
+ * rechazadas (422 o 409 `rule_contradiction`): tampoco cambian nada.
  *
  * QUÉ SE GUARDA. Los valores del `diff` son escalares de hasta 120 caracteres
- * (las listas y objetos solo agrupan escalares). El Studio no maneja datos de
+ * (las listas y objetos solo agrupan escalares); desde el Hito G, los eventos
+ * `rule.*` llegan a 500, que es lo que miden una descripción y un motivo de
+ * archivo, para que el historial de una regla no pierda nada (contrato G §A4 y
+ * §A8; lo anterior a G queda recortado a 120). El Studio no maneja datos de
  * prospectos. `ip_address` y `user_agent` quedan SIEMPRE NULL en esta fase
  * (libro de solo inserción sin política de retención: Ley 1581); la API no los
  * devuelve. INTENTOS DENEGADOS: una fila por persona, sujeto y evento cada diez
@@ -38,6 +44,9 @@ final class StudioAudit
     public const SYSTEM_IMPORT = 'ultron-studio:import-baseline';
 
     public const MAX_VALUE_LENGTH = 120;
+
+    /** La cota de los eventos `rule.*` (Hito G): la longitud de `description` y de `archive_reason`. */
+    public const MAX_RULE_VALUE_LENGTH = 500;
 
     /** Tope defensivo de elementos por lista dentro de un diff. */
     public const MAX_LIST_ITEMS = 100;
@@ -101,7 +110,9 @@ final class StudioAudit
 
     /**
      * Escribe un evento. Con `$actor` null el actor es el sistema (el comando
-     * de importación), con el nombre `$systemName`.
+     * de importación), con el nombre `$systemName`. `$maxValueLength` es la
+     * cota de cada texto del `diff` y de `metadata`: 120 salvo en los eventos
+     * `rule.*`, que pasan {@see MAX_RULE_VALUE_LENGTH}.
      *
      * @param  array{fromStatus?:?string,toStatus?:?string,contentHash?:?string,diff?:array<string,mixed>|null,metadata?:array<string,mixed>|null}  $extra
      */
@@ -114,9 +125,10 @@ final class StudioAudit
         string $summary,
         array $extra = [],
         string $systemName = self::SYSTEM_IMPORT,
+        int $maxValueLength = self::MAX_VALUE_LENGTH,
     ): StudioAuditEvent {
-        $diff = isset($extra['diff']) ? self::bounded($extra['diff']) : null;
-        $metadata = isset($extra['metadata']) ? self::bounded($extra['metadata']) : null;
+        $diff = isset($extra['diff']) ? self::bounded($extra['diff'], $maxValueLength) : null;
+        $metadata = isset($extra['metadata']) ? self::bounded($extra['metadata'], $maxValueLength) : null;
 
         return StudioAuditEvent::query()->forceCreate([
             'event' => $event,
@@ -189,32 +201,33 @@ final class StudioAudit
     }
 
     /**
-     * Recorta un valor para el libro: cada texto a {@see MAX_VALUE_LENGTH}
-     * caracteres y cada lista a {@see MAX_LIST_ITEMS} elementos. Los números,
-     * booleanos y null pasan tal cual; cualquier otra cosa se convierte en texto.
+     * Recorta un valor para el libro: cada texto a `$maxLength` caracteres
+     * ({@see MAX_VALUE_LENGTH} por defecto) y cada lista a
+     * {@see MAX_LIST_ITEMS} elementos. Los números, booleanos y null pasan tal
+     * cual; cualquier otra cosa se convierte en texto.
      */
-    public static function bounded(mixed $value): mixed
+    public static function bounded(mixed $value, int $maxLength = self::MAX_VALUE_LENGTH): mixed
     {
         if ($value === null || is_bool($value) || is_int($value) || is_float($value)) {
             return $value;
         }
         if (is_string($value)) {
-            return mb_strlen($value) > self::MAX_VALUE_LENGTH
-                ? mb_substr($value, 0, self::MAX_VALUE_LENGTH - 1).'…'
+            return mb_strlen($value) > $maxLength
+                ? mb_substr($value, 0, $maxLength - 1).'…'
                 : $value;
         }
         if (is_array($value)) {
             if (array_is_list($value)) {
-                return array_map(self::bounded(...), array_slice($value, 0, self::MAX_LIST_ITEMS));
+                return array_map(static fn (mixed $v): mixed => self::bounded($v, $maxLength), array_slice($value, 0, self::MAX_LIST_ITEMS));
             }
             $out = [];
             foreach ($value as $k => $v) {
-                $out[$k] = self::bounded($v);
+                $out[$k] = self::bounded($v, $maxLength);
             }
 
             return $out;
         }
 
-        return self::bounded(get_debug_type($value));
+        return self::bounded(get_debug_type($value), $maxLength);
     }
 }

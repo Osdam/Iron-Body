@@ -2,6 +2,7 @@
 
 namespace App\Models\UltronStudio;
 
+use App\Services\UltronStudio\StudioRuleCoherence;
 use App\Services\UltronStudio\StudioRules;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -23,6 +24,12 @@ use LogicException;
  * historia vive en `revision`, en la auditoría y en la copia de cada versión
  * ({@see StudioRules}).
  *
+ * `conditions` (Hito G, contrato §A3): la estructura verificable de la regla,
+ * en su forma canónica (`{when, then}`), o NULL si la regla es documental
+ * (todas las de F). La forma la garantiza el servicio
+ * ({@see StudioRuleCoherence::canonicalize()}); la
+ * base no la comprueba.
+ *
  * @property int $id
  * @property string $uuid
  * @property string $code
@@ -34,6 +41,7 @@ use LogicException;
  * @property string $priority
  * @property list<string> $layers
  * @property array{configs:list<array{layer:string,key:string}>,edges:list<string>,knowledgeKeys:list<string>,knowledgeCategories:list<string>} $refs
+ * @property array{when:list<array<string,mixed>>,then:list<array<string,mixed>>}|null $conditions
  * @property string|null $origin
  * @property int $revision
  * @property string $content_hash
@@ -78,6 +86,7 @@ class StudioRule extends Model
         return [
             'layers' => 'array',
             'refs' => 'array',
+            'conditions' => 'array',
             'revision' => 'integer',
             'created_by_admin_id' => 'integer',
             'updated_by_admin_id' => 'integer',

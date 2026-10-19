@@ -23,6 +23,11 @@ use Illuminate\Support\Facades\Route;
 | Dos cupos por credencial (AppServiceProvider::limitadoresDelStudio):
 | lectura 120/min y escritura 30/min. `validate` es una simulación que no
 | escribe: va con las lecturas. Sin route-model binding: el uuid es texto.
+|
+| Hito G (docs/ultron-studio/ULTRON_STUDIO_G_CONTRACT.md §A6): las lecturas del
+| motor (`engine/readings`, un literal) y la comparación (`compare`, con los
+| lados en la query string), las dos de solo lectura y con el cupo de lectura.
+| No chocan con `versions/{uuid}`. Son 21 rutas.
 */
 
 Route::prefix('admin/ultron-studio')->group(function (): void {
@@ -35,6 +40,8 @@ Route::prefix('admin/ultron-studio')->group(function (): void {
         Route::post('versions/{uuid}/validate', [UltronStudioVersionController::class, 'simulate'])->whereUuid('uuid');
         Route::get('rules', [UltronStudioRuleController::class, 'index']);
         Route::get('audit', [UltronStudioController::class, 'audit']);
+        Route::get('engine/readings', [UltronStudioController::class, 'engineReadings']);
+        Route::get('compare', [UltronStudioVersionController::class, 'compare']);
     });
 
     Route::middleware('throttle:ultron-studio-write')->group(function (): void {

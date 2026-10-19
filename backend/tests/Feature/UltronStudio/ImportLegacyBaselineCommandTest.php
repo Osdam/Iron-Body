@@ -98,6 +98,42 @@ class ImportLegacyBaselineCommandTest extends TestCase
         $this->assertSame(['R-03'], StudioAuditEvent::query()->where('event', 'system.baseline_imported')->orderByDesc('id')->firstOrFail()->diff['updated']);
     }
 
+    public function test_las_filas_de_f_se_sincronizan_con_las_condiciones_y_aristas_de_g(): void
+    {
+        // Hito G (contrato G §A3 y §A8): las doce como las dejó F en producción,
+        // sin `conditions` y sin las aristas que añade G.
+        foreach (StudioCatalog::legacyRules() as $r) {
+            $deF = ['description' => $r['description'], 'type' => $r['type'], 'layers' => $r['layers'], 'priority' => $r['priority'],
+                'refs' => array_replace($r['refs'], ['edges' => []]), 'origin' => $r['origin']];
+            StudioRule::query()->forceCreate($deF + ['code' => $r['code'], 'source' => 'legacy_baseline', 'enforcement' => 'code',
+                'status' => 'active', 'revision' => 1, 'content_hash' => StudioContentHasher::ruleHash($deF)]);
+        }
+
+        $this->artisan('ultron-studio:import-baseline')->assertExitCode(0);
+
+        $cambian = ['R-01', 'R-02', 'R-04', 'R-05', 'R-07', 'R-09', 'R-10', 'R-12'];
+        $sistema = StudioAuditEvent::query()->where('event', 'system.baseline_imported')->sole();
+        $this->assertSame($cambian, $sistema->diff['updated']);
+        $this->assertSame(['R-03', 'R-06', 'R-08', 'R-11'], $sistema->diff['unchanged']);
+        foreach (StudioCatalog::legacyRules() as $r) {
+            $fila = StudioRule::query()->where('code', $r['code'])->sole();
+            $this->assertSame([$r['conditions'], $r['refs'], StudioContentHasher::ruleHash($r)], [$fila->conditions, $fila->refs, $fila->content_hash], $r['code']);
+            $this->assertSame(in_array($r['code'], $cambian, true) ? 2 : 1, $fila->revision, $r['code']);
+        }
+
+        // La sincronización enseña el cambio de condiciones y aristas, sin recortar.
+        $r01 = StudioAuditEvent::query()->where('event', 'rule.legacy_synced')->where('subject_uuid', StudioRule::query()->where('code', 'R-01')->value('uuid'))->sole();
+        $cambios = collect($r01->diff['changes'])->keyBy('field');
+        $this->assertSame(['refs', 'conditions', 'content_hash'], $cambios->keys()->all());
+        $this->assertNull($cambios['conditions']['from']);
+        $this->assertSame(StudioCatalog::legacyConditions()['R-01'], $cambios['conditions']['to']);
+        $this->assertSame(['E07', 'E19'], $cambios['refs']['to']['edges']);
+        $this->assertSame(8, StudioAuditEvent::query()->where('event', 'rule.legacy_synced')->count());
+
+        // Y la segunda vez ya no hay nada que sincronizar.
+        $this->artisan('ultron-studio:import-baseline')->expectsOutputToContain('nada que importar')->assertExitCode(0);
+    }
+
     public function test_dry_run_no_escribe_nada(): void
     {
         $this->artisan('ultron-studio:import-baseline', ['--dry-run' => true])

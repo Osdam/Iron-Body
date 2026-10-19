@@ -129,15 +129,42 @@ class UltronStudioAuditTest extends TestCase
 
     public function test_los_valores_del_diff_se_recortan_a_120_caracteres(): void
     {
-        $larga = str_repeat('Regla muy larga. ', 25);
-        $this->studio('POST', 'rules', $this->ana, [
-            'description' => mb_substr($larga, 0, 500), 'type' => 'style', 'priority' => 'normal',
-            'layers' => ['persona'], 'clientRequestId' => (string) Str::uuid(),
-        ])->assertCreated();
+        // Fuera de las reglas, la cota sigue en 120 (contrato G §A8): el motivo
+        // de un rechazo, que admite hasta 500, se recorta en el libro.
+        $uuid = $this->submittedVersion($this->ana);
+        $motivo = mb_substr(str_repeat('Motivo de rechazo muy largo. ', 12), 0, 300);
+        $this->studio('POST', "versions/{$uuid}/reject", $this->root, ['reason' => $motivo])->assertOk();
 
-        $diff = StudioAuditEvent::query()->where('event', 'rule.created')->sole()->diff;
-        $this->assertSame(StudioAudit::MAX_VALUE_LENGTH, mb_strlen($diff['description']));
-        $this->assertStringEndsWith('…', $diff['description']);
+        $diff = StudioAuditEvent::query()->where('event', 'version.rejected')->sole()->diff;
+        $this->assertSame(StudioAudit::MAX_VALUE_LENGTH, mb_strlen($diff['reason']));
+        $this->assertStringEndsWith('…', $diff['reason']);
+    }
+
+    public function test_los_eventos_de_reglas_guardan_hasta_500_caracteres(): void
+    {
+        // Hito G (contrato G §A4 y §A8): `rule.*` pasa a 500, la longitud de la
+        // descripción y del motivo de archivo; el historial no pierde nada.
+        // Sin blanco al final: los middleware recortan los extremos de cada texto.
+        $descripcion = str_repeat('Acción larga ', 38).'final.';
+        $this->assertSame(StudioAudit::MAX_RULE_VALUE_LENGTH, mb_strlen($descripcion));
+        $regla = $this->studio('POST', 'rules', $this->ana, [
+            'description' => $descripcion, 'type' => 'style', 'priority' => 'normal',
+            'layers' => ['persona'], 'clientRequestId' => (string) Str::uuid(),
+        ])->assertCreated()->json('data');
+
+        $otra = str_repeat('Otra descripción ', 29).'al fin.';
+        $this->studio('PATCH', "rules/{$regla['uuid']}", $this->ana, ['baseRevision' => 1, 'description' => $otra])->assertOk();
+        $motivo = str_repeat('Se archiva hoy ', 33).'listo';
+        $this->assertSame([500, 500], [mb_strlen($otra), mb_strlen($motivo)]);
+        $this->studio('POST', "rules/{$regla['uuid']}/archive", $this->ana, ['baseRevision' => 2, 'reason' => $motivo])->assertOk();
+
+        $this->assertSame($descripcion, StudioAuditEvent::query()->where('event', 'rule.created')->sole()->diff['description']);
+        $cambio = StudioAuditEvent::query()->where('event', 'rule.updated')->sole()->diff['changes'][0];
+        $this->assertSame(['description', $descripcion, $otra], [$cambio['field'], $cambio['from'], $cambio['to']]);
+        $this->assertSame($motivo, StudioAuditEvent::query()->where('event', 'rule.archived')->sole()->diff['reason']);
+        // Y la API lo devuelve tal cual.
+        $this->assertSame($descripcion, $this->studio('GET', "audit?subjectType=rule&subjectUuid={$regla['uuid']}&event=rule.created", $this->ana)
+            ->assertOk()->json('data.data.0.diff.description'));
     }
 
     public function test_el_resumen_y_el_actor_quedan_como_instantanea(): void
