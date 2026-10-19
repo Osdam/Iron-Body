@@ -154,7 +154,7 @@ Resumen · Configuración · Reglas · Dependencias · Historial, con el patrón
 - **Panel de reglas:**
   - el editor de condiciones y las menciones a la base de conocimiento (las 14 categorías y sus claves);
   - análisis en vivo y contradicciones calculadas antes de enviar. **Avisan, pero no bloquean el envío:** manda el 409 o el 422 del servidor. Lo que no tiene forma (filas a medias, valores fuera de rango, capas que faltan) sí se corrige antes, porque daría un 422 seguro;
-  - el 409 `rule_contradiction` lista los conflictos con «Ver S-NNN»: aparca el formulario con lo escrito, resalta la regla y ofrece «Volver a la regla». **En Chrome real no lleva el foco ni la vista a la regla** (H-1 del E2E, abierto). El diálogo, al cerrarse, devuelve el foco a «Nueva regla», y con las 12 R-xx delante la regla queda unos 3000 px por debajo, fuera de la vista. El informe del frontend decía que sí llevaba el foco: lo desmiente el E2E;
+  - el 409 `rule_contradiction` lista los conflictos con «Ver S-NNN»: aparca el formulario con lo escrito, resalta la regla y ofrece «Volver a la regla». En Chrome real no llevaba el foco ni la vista a la regla (H-1 del E2E): el diálogo, al cerrarse, devolvía el foco a «Nueva regla» después del desplazamiento. **Corregido en `38b238b`:** el desplazamiento y el foco se encolan detrás del foco que devuelve el diálogo (prueba con 51 reglas y el `ib-dialog` real; E2E 126/126);
   - el 422 de un control trae dos mensajes en la misma clave (el de la restricción y el de su R-xx), y se pintan los dos (`StudioApiError.fieldMessages`);
   - «Historial» en cada regla.
 - **Panel de versiones:** «Comparar con…» la línea base, «Mi borrador» u otra versión. Siempre de lo anterior a lo posterior: línea base → versión, versión → borrador y versión más antigua → más reciente.
@@ -227,9 +227,9 @@ Esa pasada encontró y corrigió dos cosas: la quinta pestaña quedaba oculta tr
 
 **La pila.** Backend en instantánea (`git archive`) de `c8d9cf4` y, después, de `391cffb`, con `artisan serve --no-reload` (8 workers) y PostgreSQL 14 en una base propia. CRM `7d3ad2a` con `ng serve`. Chrome real, con login por el formulario y tres cuentas reales (Super Admin, Administrador y Recepción). El entorno de prueba tiene el interruptor, el canario y la bandera de cobro puestos, para que se vean «≠ motor» y «Usar el valor del motor»; solo los lee el Studio.
 
-**Resultado:** **124/126 en `391cffb`** y 122/126 en `c8d9cf4`.
+**Resultado:** **126/126 sobre el código final** (backend `dfb30f5`, CRM `44c0e8c`, ejecutado por el lead el 19-10-2026); pasadas previas del tester: 124/126 en `391cffb` y 122/126 en `c8d9cf4`.
 - Las dos que solo fallan en `c8d9cf4` son las del freno sin tabla: salía como «freno suelto» leído. Es I-1 de `security`, corregido en `dfb30f5`.
-- Las dos que fallan en los dos son de **H-1 del E2E** (este H-1 no es el del tester de backend).
+- Las dos que fallaban en las pasadas previas eran de **H-1 del E2E** (este H-1 no es el del tester de backend), corregido en `38b238b`; H-2 (cabecera que se encogía con el inspector abierto) corregido en el mismo commit con `flex: none` (+10 bytes compilados); I-1 del reviewer (falsa discrepancia tras escribir reglas) corregido en `44c0e8c`.
 
 | # | Escenario | `391cffb` |
 |---|---|---|

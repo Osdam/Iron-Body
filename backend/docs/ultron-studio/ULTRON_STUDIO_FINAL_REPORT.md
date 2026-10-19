@@ -11,7 +11,7 @@
 | C. Frontend visual con datos de demostración | **HECHO** → `VISUAL_IMPLEMENTATION_IN_PROGRESS` → terminado y revisado |
 | D. Vista previa protegida publicada | **PUBLICADA** el 18-10-2026 a las 02:56 UTC (ver «Publicación» al final) → `ULTRON_VISUAL_PREVIEW_READY` |
 | F. Persistencia (borradores, versiones con estados, reglas, aprobaciones, auditoría, permisos `ultron.*`, catálogo servido por el backend) | **DESPLEGADO Y VERIFICADO** (18-10-2026, 15:24–15:28 UTC; backend `9acddc3`, CRM `020db86`): ver «Hito F» más abajo, `ULTRON_STUDIO_BACKEND_REPORT.md` y `ULTRON_STUDIO_SECURITY_REPORT.md` |
-| G. Control funcional de las diez capas (configuración real por capa, lecturas del motor, reglas con condiciones, historial y comparación) | **IMPLEMENTADO EN RAMA, NO DESPLEGADO** (18/19-10-2026; backend `391cffb`, CRM `7d3ad2a`). Revisiones de seguridad y de pruebas incorporadas. E2E con la pila real: 124/126, con H-1 del E2E (CRM) abierto. **Pendientes:** el veredicto del reviewer, la decisión sobre H-1 y H-2 del E2E, y el despliegue (ver «Hito G» más abajo) |
+| G. Control funcional de las diez capas (configuración real por capa, lecturas del motor, reglas con condiciones, historial y comparación) | **IMPLEMENTADO, REVISADO Y VERIFICADO EN RAMA; DESPLIEGUE EN CURSO** (18/19-10-2026; backend código `dfb30f5`, CRM `44c0e8c`). Revisiones de seguridad, de pruebas y final (APROBADO CON OBSERVACIONES, todas cerradas) incorporadas. E2E con la pila real: 126/126 sobre el código final. Smoke de producción validado en local 29/29. **Pendiente:** el despliegue y su verificación (ver «Hito G» más abajo) |
 | Siguientes (rotuladas «G–R» antes de que G pasara a ser el control funcional): laboratorio, evaluación IA, Meta, Twilio, canarios, ElevenLabs, vínculo versión↔conversación | **NO EMPEZADOS** (autorizados como construcción, no como activación) |
 
 ## Qué hay (clasificación honesta)
@@ -137,7 +137,7 @@
   - el chunk, sin nombres del motor;
   - 15 mutaciones, todas detectadas;
   - Chrome real, 20/20 con la API simulada.
-- **E2E con la pila real:** 124/126 en `391cffb`. Los 2 fallos son de H-1 del E2E (CRM), que sigue abierto (ver abajo).
+- **E2E con la pila real:** 126/126 sobre el código final (backend `dfb30f5`, CRM `44c0e8c`); las pasadas previas dieron 124/126 por H-1 del E2E, corregido (ver abajo).
 - **Revisiones:**
   - `security`: sin críticos, altos ni medios. B-1 se resolvió con un aviso; el procedimiento de redacción queda pendiente del propietario;
   - `api-security-specialist`: sin críticos ni altos. M-1, M-2 y B-2, corregidos; B-1, aceptado;
@@ -151,9 +151,10 @@
 
 ### Veredicto del reviewer
 
-<!-- PENDIENTE: veredicto del reviewer -->
-
-**Pendiente.** La revisión final independiente de G no ha emitido veredicto al escribir esto. G no se declara terminado mientras el reviewer mantenga hallazgos bloqueantes.
+**APROBADO CON OBSERVACIONES** (19-10-2026, sobre backend `dfb30f5` y CRM `7d3ad2a`; informe en `scratchpad/hito-g/informe-reviewer.md`). Sin bloqueantes en el código. Verificado por el reviewer: 0 líneas en el motor; Studio + Access 618 en SQLite y Studio 468/468 en PG 14; suite completa con los mismos 58 fallos de línea base; `auth:coverage --unmapped` vacío; 21 rutas; `permissions:export` y los 3 fixtures idénticos a los del CRM; Pint en los 42 ficheros PHP de G; migración reversible (7 disparadores en SQLite, 11 + 11 CHECK en PG); CRM 2 522 con los 16 de base, build sin error de presupuesto, `ultron-studio.scss` intacto, sin `innerHTML`; 16 mutaciones cazadas (11 backend, 5 CRM); transcripción A3 fiel a la auditoría. Observaciones y su cierre:
+- **I-1 (importante, CRM):** tras crear, editar o archivar una regla no se revalidaba el borrador y aparecía una discrepancia falsa → **corregido en el CRM `44c0e8c`** (relectura simultánea de reglas y borrador, con guarda de revisión; prueba de regresión a partir de la sonda del reviewer).
+- **I-2 (importante, lead):** el smoke de producción tenía un caso que la primera fase de validación cortaba y asumía que no hay reglas S-NNN vivas → **corregido** (`smoke-g.py` lee las reglas vivas antes de asumir nada; validado contra la pila local).
+- Menores: la cifra de reglas resincronizadas (8 de 12) y el texto del 413 en la Enmienda 2, corregidos en la documentación; las pruebas con umbrales de tiempo (50 ms, 1 s) están entre 3 y 40 veces por encima de lo medido y se repiten si la máquina está cargada; una versión con formato desconocido solo puede existir por inserción manual en la base (aceptado). El 413 sí consume cupo (el límite de peticiones corre antes que el tope de cuerpo).
 
 ### E2E con pila real
 
@@ -164,7 +165,7 @@
 - el CRM `7d3ad2a` con `ng serve`;
 - Chrome real, con login por el formulario y tres cuentas reales (Super Admin, Administrador y Recepción).
 
-**Resultado: 124/126 en `391cffb`** (122/126 en `c8d9cf4`; las dos de diferencia son las del freno sin tabla, que el código corregido ya da como no disponible).
+**Resultado final: 126/126 en 91 s** (ejecutado por el lead el 19-10-2026 sobre la instantánea `45eb958`, código `dfb30f5`, con el CRM `44c0e8c`; `scratchpad/e2e-studio/g-run.sh 45eb958`). Pasadas previas del tester: 124/126 en `391cffb` y 122/126 en `c8d9cf4` (las dos de diferencia son las del freno sin tabla, que el código corregido ya da como no disponible; las dos restantes, H-1 del E2E, corregidas en el CRM `38b238b`).
 
 **Qué pasa en los nueve escenarios:**
 - E1, carga: lecturas reales del motor y una fuente caída sin tumbar el Studio;
@@ -179,11 +180,11 @@
 
 El E2E detecta las 6 mutaciones que se le probaron.
 
-**Los 2 fallos abiertos son de H-1 del E2E** (medio, del CRM, para frontend): tras el 409, «Ver S-NNN» no lleva el foco ni la vista a la regla. Además queda **H-2 del E2E** (bajo, ya presente en F): con el inspector abierto, los botones de la cabecera tapan parte del aviso «El motor de ULTRON no lee nada de esto…» a 1440 px. Detalle en `ULTRON_STUDIO_VISUAL_REPORT.md`, «E2E con la pila real».
+**Hallazgos del E2E, cerrados en el CRM `38b238b`:** H-1 (medio): tras el 409, «Ver S-NNN» no llevaba el foco ni la vista a la regla porque `ib-dialog` devuelve el foco al cerrarse después del desplazamiento; el desplazamiento y el foco se encolan ahora detrás (prueba con 51 reglas y el `ib-dialog` real; en Chrome con 63 reglas el foco queda en la regla y visible). H-2 (bajo, ya presente en F): con el inspector abierto la cabecera se encogía (`min-height` anulaba el mínimo por contenido) y los botones tapaban el aviso a 1440–1920 px; `flex: none` en la cabecera (+10 bytes compilados, hoja en 27,88 kB). Detalle en `ULTRON_STUDIO_VISUAL_REPORT.md`, «E2E con la pila real».
 
 **Qué no cubre:** la pila de producción (nginx con FPM, cachés y el build de producción), los cupos, el 413, la tableta, Safari, Firefox ni los lectores de pantalla.
 
-**Pendiente del lead:** decidir H-1 y H-2 del E2E, y confirmar el spec de texto hostil que el tester dejó sin commit en el CRM (6 pruebas).
+**Cerrado por el lead:** H-1 y H-2 corregidos (`38b238b`), I-1 del reviewer corregido (`44c0e8c`), spec de texto hostil confirmado en el CRM (`88a6dc5`, 6 pruebas). Suite completa del CRM en `44c0e8c`: 16 fallos, idénticos nombre a nombre a la línea base; módulo del Studio 499 specs.
 
 ### Despliegue y verificación
 
