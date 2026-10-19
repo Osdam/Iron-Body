@@ -60,9 +60,9 @@ Ejecutado tal como sigue, con el modelo de roles de PostgreSQL aplicado (ver aba
 
 **Antes del uso real (decisiones abiertas):** separar el rol de la base que migra del que ejecuta (S1: el dueño puede desactivar disparadores); confirmar `TrustProxies` para el cupo por red; decidir la retención de la auditoría si alguna fase vuelve a guardar IP o user agent.
 
-## Hito G (control funcional): runbook de despliegue — PENDIENTE DE EJECUCIÓN
+## Hito G (control funcional): runbook de despliegue — EJECUTADO el 19-10-2026 (06:00–06:04 UTC)
 
-**Estado: PENDIENTE DE EJECUCIÓN.** Ningún paso de esta sección se ha ejecutado en producción. Se ejecuta solo con el ciclo completo en verde (pruebas, revisiones, regresión y respaldo) y con la autorización del usuario. Parte del borrador del lead y está contrastado con el código de `391cffb`.
+**Estado: EJECUTADO** el 19-10-2026 entre las 06:00 y las 06:04 UTC, con el ciclo completo en verde y la autorización del usuario; evidencia paso a paso en `ULTRON_STUDIO_FINAL_REPORT.md` («Despliegue y verificación» del Hito G). Respaldos: `/var/backups/ironbody/ultron-studio-g-20261019-060047/` y `/var/backups/ironbody/ultron-studio-g-crm-20261019-060251/`. Parte del borrador del lead y está contrastado con el código de `391cffb`.
 
 **Qué toca:**
 - **Backend:**

@@ -11,7 +11,7 @@
 | C. Frontend visual con datos de demostración | **HECHO** → `VISUAL_IMPLEMENTATION_IN_PROGRESS` → terminado y revisado |
 | D. Vista previa protegida publicada | **PUBLICADA** el 18-10-2026 a las 02:56 UTC (ver «Publicación» al final) → `ULTRON_VISUAL_PREVIEW_READY` |
 | F. Persistencia (borradores, versiones con estados, reglas, aprobaciones, auditoría, permisos `ultron.*`, catálogo servido por el backend) | **DESPLEGADO Y VERIFICADO** (18-10-2026, 15:24–15:28 UTC; backend `9acddc3`, CRM `020db86`): ver «Hito F» más abajo, `ULTRON_STUDIO_BACKEND_REPORT.md` y `ULTRON_STUDIO_SECURITY_REPORT.md` |
-| G. Control funcional de las diez capas (configuración real por capa, lecturas del motor, reglas con condiciones, historial y comparación) | **IMPLEMENTADO, REVISADO Y VERIFICADO EN RAMA; DESPLIEGUE EN CURSO** (18/19-10-2026; backend código `dfb30f5`, CRM `44c0e8c`). Revisiones de seguridad, de pruebas y final (APROBADO CON OBSERVACIONES, todas cerradas) incorporadas. E2E con la pila real: 126/126 sobre el código final. Smoke de producción validado en local 29/29. **Pendiente:** el despliegue y su verificación (ver «Hito G» más abajo) |
+| G. Control funcional de las diez capas (configuración real por capa, lecturas del motor, reglas con condiciones, historial y comparación) | **DESPLEGADO Y VERIFICADO** (19-10-2026 06:00–06:04 UTC; backend `e651dd9`, código `dfb30f5`; CRM `44c0e8c`). Revisiones de seguridad, de pruebas y final (APROBADO CON OBSERVACIONES, todas cerradas); E2E con la pila real 126/126; smoke en producción 29/29. Detalle en «Hito G» más abajo. **`HITO_3_COMPLETED`** |
 | Siguientes (rotuladas «G–R» antes de que G pasara a ser el control funcional): laboratorio, evaluación IA, Meta, Twilio, canarios, ElevenLabs, vínculo versión↔conversación | **NO EMPEZADOS** (autorizados como construcción, no como activación) |
 
 ## Qué hay (clasificación honesta)
@@ -188,9 +188,16 @@ El E2E detecta las 6 mutaciones que se le probaron.
 
 ### Despliegue y verificación
 
-<!-- PENDIENTE: despliegue y verificación -->
+**EJECUTADO el 19-10-2026, 06:00–06:04 UTC**, por el lead, con la autorización del usuario para el despliegue progresivo de los componentes terminados, verificados y seguros.
 
-**Pendiente de autorización y de ejecución.** El runbook está en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md` («Hito G: runbook») y la vuelta atrás en `ULTRON_STUDIO_ROLLBACK.md` («Hito G»).
+- **Respaldo verificado:** `/var/backups/ironbody/ultron-studio-g-20261019-060047/` (`ironbody.dump` 30 MB con 209 tablas con datos, las 5 del Studio incluidas; `app-crm.tgz` 76 MB, 1 703 entradas; `env.backup` 600; `bootstrap-cache/`; `api-commit.txt` = `9acddc3`; `crm-main.txt` = `main-7A6NMSXZ.js`). CRM: `/var/backups/ironbody/ultron-studio-g-crm-20261019-060251/` (`index.html` y `version.json` anteriores).
+- **Push por fast-forward:** backend `origin/main` = `e651dd9` (código `dfb30f5`), CRM `origin/main` = `44c0e8c`; sin trabajo ajeno, lockfiles sin cambios.
+- **Backend:** `/var/www/api` en `e651dd9` sin modificados; `ironbody-migrate` con `lock_timeout` 5 s → `2026_10_19_100001_add_conditions_to_ultron_studio_rules` en 8,74 ms; cachés de configuración y rutas regeneradas como `www-data` con modo 600; `queue:restart`; 11 disparadores y 11 CHECK; columna `conditions json` nullable; **21 rutas**; `ultron-studio:import-baseline` (simulación y real): «0 nuevas, 8 sincronizadas, 4 sin cambios» (R-01, 02, 04, 05, 07, 09, 10 y 12 en revisión 2; R-03, 06, 08 y 11 en revisión 1); `auth:coverage --unmapped` vacío; `status`, `engine/readings` y `compare` sin token → 401; 12 workers RUNNING, 0 en BACKOFF/FATAL.
+- **CRM:** build sellado `44c0e8c` (`dirty: false`), `main-JNV5BHFD.js`, chunk del Studio `chunk-W3AZFF3A.js` sin nombres del motor; `rsync` sin `--delete` y `chown root:root`; el bundle anterior `main-7A6NMSXZ.js` sigue servido (pestañas abiertas); `/marketing/ultron-studio` → 200.
+- **Smoke autenticado en producción: 29/29** (`smoke-g.py` con la cuenta temporal admin id 32, reactivada con contraseña nueva y desactivada al terminar; su token → 403): catálogo `2026-10-19.1` con 21 `bindings`, 5 `readings` y `legacyConditions`; `engine/readings` con `paymentLinksEnabled = no` y driver `openai`, sin secretos; borrador con `uuid`, sin hallazgos de reglas (0 S-NNN vivas); `compare` línea base→borrador `same: true`, 422 con lados iguales, 404 con versión inexistente; 12 reglas del código con condiciones en R-01/R-02/R-07/R-12 y `analysis`; tres `POST rules` → 422 (control, forma en dos claves, tamaño de lista) sin dejar fila; R-xx → 409 `legacy_rule_read_only`; publicar → 404 en ruta protegida; descartar conserva el `uuid`; auditoría sin IP ni user agent. Solo escrituras reversibles en el borrador de esa cuenta; 0 versiones y 0 reglas del Studio en producción.
+- **Después:** `git diff HEAD` vacío; fichero de entorno idéntico al respaldo (`MARKETING_ULTRON_ENABLED` sin cambios); 0 colas fallidas; 0 errores en `laravel.log`; auditoría reciente: `system.baseline_imported` 1, `rule.legacy_synced` 8, `draft.saved` 1, `draft.discarded` 1. El motor no lee nada del Studio: `ENGINE_READS_VERSIONS = false`, publicar y revertir siguen en 409.
+
+Runbook en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md` («Hito G: runbook», ejecutado) y vuelta atrás en `ULTRON_STUDIO_ROLLBACK.md` («Hito G»). **Estado: `HITO_3_COMPLETED`** (F y G desplegados y verificados).
 
 ## Decisiones tomadas (y por qué)
 
