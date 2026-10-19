@@ -11,6 +11,7 @@ use App\Models\Plan;
 use App\Models\UltronAbort;
 use App\Services\Marketing\MarketingAgentSwitch;
 use App\Support\Access\AuthorizationMap;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\ThrottleRequests;
@@ -34,7 +35,11 @@ use Tests\TestCase;
  *  1. ESTÁTICA, por tokens. En `app/Services/UltronStudio/` solo
  *     `StudioEngineReadings.php` y `StudioRules.php` nombran clases del motor,
  *     y en ellos no hay ninguna llamada de escritura salvo las de
- *     `StudioRules` sobre su propio modelo (y su cerrojo consultivo).
+ *     `StudioRules` sobre su propio modelo (su nivel de aislamiento y su
+ *     cerrojo consultivo). Desde las correcciones del Hito G (I-2), también
+ *     los controladores, modelos y comandos del Studio: solo el controlador
+ *     de reglas nombra el motor (las categorías del conocimiento), y solo lo
+ *     lee.
  *  2. DE COMPORTAMIENTO. Con la pausa puesta, el freno echado, conocimiento,
  *     planes y una conversación sembrados, se toma la huella de TODAS las
  *     tablas que no son del Studio y de la configuración; se recorren las 21
@@ -42,6 +47,15 @@ use Tests\TestCase;
  *     reglas con condiciones, versiones, envío, aprobación por otra persona,
  *     rechazo, publicar y revertir, lecturas y comparación); y al final las
  *     huellas son idénticas, no se encoló nada y no salió ninguna petición.
+ *     Además se ESCUCHA cada sentencia: un INSERT, UPDATE, DELETE, REPLACE o
+ *     TRUNCATE fuera de las tablas `ultron_studio_*` y de `admin_sessions`
+ *     (la sesión del personal, que se toca en cada petición), o cualquier DDL,
+ *     es un fallo aunque su efecto se deshaga. La huella sola no lo veía: el
+ *     tester del Hito G metió en la lectura de la pausa una escritura que la
+ *     ALTERNA, el recorrido lee el motor dos veces y `updated_at` tiene
+ *     precisión de segundo, así que la huella salía idéntica (H-1). Esa
+ *     escucha venía de `UltronStudioGEngineWritesTest`, que con esto quedaba
+ *     repetida y se retiró.
  *
  * Si una mutación mete una escritura del motor en el adaptador de lecturas (o
  * en cualquier ruta del Studio), la parte de comportamiento falla aunque la
@@ -58,6 +72,24 @@ class UltronStudioEngineReadOnlyTest extends TestCase
     /** Lo que es escribir (contrato G §A9): no puede aparecer en esos ficheros sobre el motor. */
     private const WRITE_CALLS = ['set', 'engage', 'release', 'save', 'update', 'delete', 'create', 'forcecreate', 'forcefill', 'fill',
         'insert', 'upsert', 'increment', 'decrement', 'approve', 'reject', 'truncate', 'statement', 'saveQuietly', 'push', 'touch', 'destroy'];
+
+    /** Fuera de los servicios, los únicos ficheros del Studio que pueden nombrar clases del motor. */
+    private const ENGINE_NAMERS_OUTSIDE_SERVICES = ['Http/Controllers/Crm/UltronStudio/UltronStudioRuleController.php'];
+
+    /** Los demás directorios del Studio, que se rastrean como los servicios (correcciones del Hito G, I-2). */
+    private const OTHER_STUDIO_DIRS = ['Http/Controllers/Crm/UltronStudio', 'Models/UltronStudio', 'Console/Commands/UltronStudio'];
+
+    /** Las tablas del Studio, en las que sus rutas sí escriben. */
+    private const STUDIO_TABLES = ['ultron_studio_drafts', 'ultron_studio_rules', 'ultron_studio_versions', 'ultron_studio_version_reviews', 'ultron_studio_audit_events'];
+
+    /** Una sentencia que escribe, con su tabla (con o sin esquema y comillas). */
+    private const WRITE_SQL = '/^\s*(?:with\b.*?\)\s*)?(?:insert\s+(?:or\s+\w+\s+)?into|update(?:\s+or\s+\w+)?|delete\s+from|replace\s+into|truncate(?:\s+table)?)\s+(?:only\s+)?((?:"?\w+"?\.)?"?\w+"?)/is';
+
+    /** Una sentencia que cambia el esquema o los permisos: ninguna ruta del Studio la necesita. */
+    private const DDL_SQL = '/^\s*(?:create|alter|drop|rename|comment\s+on|grant|revoke)\b/i';
+
+    /** @var list<array{table:string,sql:string}> */
+    private array $writes = [];
 
     /** Fachadas y funciones que el adaptador de lecturas no necesita para nada. */
     private const READER_FORBIDDEN = ['DB', 'Http', 'Queue', 'Bus', 'Artisan', 'Cache', 'Event', 'Mail', 'Notification', 'Storage', 'File',
@@ -99,17 +131,50 @@ class UltronStudioEngineReadOnlyTest extends TestCase
             $permitidas[] = match (true) {
                 $llamada['method'] === 'forcecreate' && str_contains($llamada['statement'], 'StudioRule::query()->forceCreate(') => 'StudioRule::forceCreate',
                 $llamada['method'] === 'update' && str_contains($llamada['statement'], '$consulta->update(') => 'StudioRule::update',
+                $llamada['method'] === 'statement' && $llamada['statement'] === "DB::statement('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');" => 'read_committed',
                 $llamada['method'] === 'statement' && str_contains($llamada['statement'], "DB::statement('SELECT pg_advisory_xact_lock(?)'") => 'advisory_lock',
                 default => $this->fail("StudioRules escribe algo que no es su propio modelo: {$llamada['statement']}"),
             };
         }
-        $this->assertSame(['StudioRule::forceCreate', 'StudioRule::forceCreate', 'StudioRule::update', 'advisory_lock'], $permitidas);
+        $this->assertSame(['StudioRule::forceCreate', 'StudioRule::forceCreate', 'StudioRule::update', 'read_committed', 'advisory_lock'], $permitidas);
         foreach ($this->statementsNaming($reglas, 'MarketingKnowledgeItem') as $sentencia) {
             foreach (self::WRITE_CALLS as $metodo) {
                 $this->assertDoesNotMatchRegularExpression('/(->|::)'.preg_quote($metodo, '/').'\s*\(/i', $sentencia, "StudioRules escribe la base de conocimiento: {$sentencia}");
             }
         }
         $this->assertSame([], $this->configWrites($reglas));
+    }
+
+    public function test_controladores_modelos_y_comandos_del_studio_no_escriben_el_motor(): void
+    {
+        $nombran = [];
+        foreach (self::OTHER_STUDIO_DIRS as $dir) {
+            $ficheros = glob(app_path($dir.'/*.php'));
+            $this->assertNotEmpty($ficheros, "No hay nada que rastrear en {$dir}: actualiza esta prueba.");
+            foreach ($ficheros as $ruta) {
+                $relativa = $dir.'/'.basename($ruta);
+                $this->assertSame([], $this->configWrites($ruta), "{$relativa} cambia la configuración.");
+
+                $clases = array_values(array_unique(array_map(
+                    static fn (string $nombre): string => substr((string) strrchr('\\'.$nombre, '\\'), 1),
+                    $this->engineReferences($ruta),
+                )));
+                if ($clases === []) {
+                    continue;
+                }
+                $nombran[] = $relativa;
+                // Lo que nombra del motor, solo lo lee: ninguna sentencia que lo nombre escribe.
+                foreach ($clases as $clase) {
+                    foreach ($this->statementsNaming($ruta, $clase) as $sentencia) {
+                        foreach (self::WRITE_CALLS as $metodo) {
+                            $this->assertDoesNotMatchRegularExpression('/(->|::)'.preg_quote($metodo, '/').'\s*\(/i', $sentencia, "{$relativa} escribe el motor: {$sentencia}");
+                        }
+                    }
+                }
+            }
+        }
+        sort($nombran);
+        $this->assertSame(self::ENGINE_NAMERS_OUTSIDE_SERVICES, $nombran, 'Fuera de los servicios, solo el controlador de reglas nombra el motor (la lista de categorías del conocimiento).');
     }
 
     // ── 2. De comportamiento ────────────────────────────────────────────────
@@ -131,8 +196,23 @@ class UltronStudioEngineReadOnlyTest extends TestCase
         Mail::fake();
         Notification::fake();
         $antes = $this->fingerprint();
+        DB::listen(function (QueryExecuted $q): void {
+            if (preg_match(self::WRITE_SQL, $q->sql, $m) === 1) {
+                $this->writes[] = ['table' => strtolower((string) preg_replace('/^.*\./', '', str_replace('"', '', $m[1]))), 'sql' => $q->sql];
+            } elseif (preg_match(self::DDL_SQL, $q->sql) === 1) {
+                $this->writes[] = ['table' => '(ddl)', 'sql' => $q->sql];
+            }
+        });
 
         $this->walkEveryRoute($ana, $root);
+
+        // Ninguna sentencia de escritura fuera del Studio, deje el valor que deje.
+        $ajenas = array_values(array_filter($this->writes, static fn (array $e): bool => ! str_starts_with($e['table'], 'ultron_studio_') && $e['table'] !== 'admin_sessions'));
+        $this->assertSame([], $ajenas, 'El Studio mandó escrituras fuera de sus tablas (aunque su efecto se deshaga).');
+        // El oído funciona: vio las escrituras del propio Studio.
+        foreach (self::STUDIO_TABLES as $tabla) {
+            $this->assertContains($tabla, array_column($this->writes, 'table'), "No se vio ninguna escritura en {$tabla}: el recorrido o el oído fallan.");
+        }
 
         $despues = $this->fingerprint();
         foreach ($antes['tables'] as $tabla => $filas) {

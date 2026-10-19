@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Crm\UltronStudio;
 
+use App\Http\Controllers\Concerns\ValidatesListSizesFirst;
 use App\Http\Controllers\Controller;
 use App\Models\MarketingKnowledgeItem;
 use App\Models\UltronStudio\StudioRule;
@@ -29,9 +30,16 @@ use Illuminate\Validation\ValidationException;
  * {@see StudioRuleCoherence} en el servicio, con un 422 que trae todas las
  * claves a la vez; la contradicción con otra regla es un 409
  * `rule_contradiction`.
+ *
+ * Las listas con reglas por elemento (`layers.*`, `refs.*`, `conditions.*`)
+ * se validan en dos fases ({@see ValidatesListSizesFirst}): primero su forma y
+ * su tope, después cada elemento. Una lista enorme se rechaza sin recorrerla
+ * (revisión de seguridad de la API del Hito G, M-2).
  */
 class UltronStudioRuleController extends Controller
 {
+    use ValidatesListSizesFirst;
+
     public function __construct(private readonly StudioRules $rules) {}
 
     /** GET /api/admin/ultron-studio/rules?status=active,draft (por defecto, sin archivadas) */
@@ -59,7 +67,7 @@ class UltronStudioRuleController extends Controller
     public function store(Request $request): JsonResponse
     {
         $access = StudioAccess::requirePerson($request);
-        $data = $request->validate([
+        $data = $this->validateListSizesFirst($request, [
             'description' => ['required', 'string', 'max:500', new PlainText(multiline: true)],
             'type' => ['required', Rule::in(StudioRule::TYPES)],
             'priority' => ['required', Rule::in(StudioRule::PRIORITIES)],
@@ -90,7 +98,7 @@ class UltronStudioRuleController extends Controller
     public function update(Request $request, string $uuid): JsonResponse
     {
         $access = StudioAccess::requirePerson($request);
-        $data = $request->validate([
+        $data = $this->validateListSizesFirst($request, [
             'baseRevision' => ['required', 'integer:strict', 'min:1', 'max:2147483647'],
             'description' => ['sometimes', 'required', 'string', 'max:500', new PlainText(multiline: true)],
             'type' => ['sometimes', 'required', Rule::in(StudioRule::TYPES)],

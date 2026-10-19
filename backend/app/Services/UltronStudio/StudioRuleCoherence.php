@@ -1336,8 +1336,13 @@ final class StudioRuleCoherence
         return ['verification' => self::verification($rule['conditions'] ?? null), 'issues' => $issues];
     }
 
-    /** `studio` con alguna afirmación de configuración o de arista; `lab` si solo hay texto; `none` sin condiciones. */
-    private static function verification(mixed $conditions): string
+    /**
+     * `studio` con alguna afirmación de configuración o de arista; `lab` si solo hay texto; `none` sin condiciones.
+     *
+     * Pública para el análisis de una regla archivada ({@see StudioRules}),
+     * que es solo esto, sin problemas (correcciones del Hito G, M-1).
+     */
+    public static function verification(mixed $conditions): string
     {
         if ($conditions === null) {
             return 'none';

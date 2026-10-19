@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Crm\UltronStudio;
 
 use App\Http\Controllers\Concerns\ResolvesPagination;
+use App\Http\Controllers\Concerns\ValidatesListSizesFirst;
 use App\Http\Controllers\Controller;
 use App\Rules\PlainText;
 use App\Services\UltronStudio\StudioAccess;
@@ -28,6 +29,7 @@ use Illuminate\Validation\ValidationException;
 class UltronStudioVersionController extends Controller
 {
     use ResolvesPagination;
+    use ValidatesListSizesFirst;
 
     /** Un lado de `GET compare`: `baseline`, `draft` o el uuid de una versión. */
     private const COMPARE_SIDE = '/^(baseline|draft|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/';
@@ -139,7 +141,9 @@ class UltronStudioVersionController extends Controller
     public function approve(Request $request, string $uuid): JsonResponse
     {
         $access = StudioAccess::requirePerson($request);
-        $data = $request->validate([
+        // En dos fases: una lista de miles de avisos se rechaza por su tope sin
+        // recorrerla (revisión de seguridad de la API del Hito G, M-2).
+        $data = $this->validateListSizesFirst($request, [
             // `present`: una lista vacía es válida (versión sin avisos), pero
             // tiene que venir: no reconocer nada no es lo mismo que no decirlo.
             'acknowledgedWarnings' => ['present', 'array', 'list', 'max:100'],

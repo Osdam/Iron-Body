@@ -2,8 +2,10 @@
 
 namespace App\Services\UltronStudio;
 
+use App\Models\MarketingAgentSetting;
 use App\Models\MarketingKnowledgeItem;
 use App\Models\Plan;
+use App\Models\UltronAbort;
 use App\Services\Marketing\MarketingAgentSwitch;
 use App\Services\Marketing\MarketingKnowledgeBaseService;
 use App\Services\Marketing\SalesAiConfig;
@@ -19,24 +21,30 @@ use Throwable;
  *
  * SOLO LECTURA, Y ES LA FRONTERA. Es la única clase nueva del Studio que nombra
  * clases del motor; además de ella solo lo hace `StudioRules`, que ya leía la
- * base de conocimiento. Aquí solo se llaman métodos de LECTURA (`current`,
- * `engaged`, `effectiveDriver`, `version`, scopes de consulta y `config()` con
- * una clave): el Studio no escribe en tablas, configuración ni ficheros del
- * motor. Lo vigilan una prueba por tokens y otra de comportamiento
- * (`UltronStudioEngineReadOnlyTest`).
+ * base de conocimiento. Aquí solo se llaman métodos de LECTURA
+ * (`effectiveDriver`, `version`, consultas de modelo con sus scopes y
+ * `config()` con una clave): el Studio no escribe en tablas, configuración ni
+ * ficheros del motor. Lo vigilan una prueba por tokens y otra que escucha cada
+ * sentencia (`UltronStudioEngineReadOnlyTest`).
  *
  * QUÉ NUNCA SALE: la URL del webhook, secretos ni claves, ids de conversación
  * (ni el del canario ni el del canario del cobro: solo si existen), teléfonos,
  * precios, ids de planes ni el contenido de la base de conocimiento.
  *
  * FALLO SUAVE. Cada lectura va por su cuenta: si una fuente falla (una tabla que
- * no responde, un método del motor que cambió de nombre), esa entrada sale
- * `{available:false}`, sin mensaje técnico, deja una línea en el log sin datos
- * y las demás siguen. Nunca hay un 500 por una lectura parcial.
+ * no responde o no existe, un método del motor que cambió de nombre), esa
+ * entrada sale `{available:false}`, sin mensaje técnico, deja una línea en el
+ * log sin datos y las demás siguen. Nunca hay un 500 por una lectura parcial,
+ * y nunca un valor por defecto que parezca leído.
  *
  * MATICES (contrato G §A2):
- *  - `UltronAbortLatch::engaged()` devuelve `false` si su tabla no existe (y lo
- *    anota él mismo). En producción la tabla existe.
+ *  - La pausa y el freno se leen con la MISMA consulta que el motor
+ *    ({@see MarketingAgentSwitch::current()}, {@see UltronAbortLatch::current()})
+ *    pero sin pasar por ellos: los dos se tragan un fallo de la consulta (el
+ *    freno, cualquiera; la pausa, una tabla que no existe) y devuelven null,
+ *    que es «sin pausa» y «freno suelto». Para el motor es la forma de seguir
+ *    funcionando; aquí sería enseñar como dato real algo que no se pudo leer
+ *    (revisión de seguridad del Hito G, I-1).
  *  - Las banderas son las del PROCESO WEB (con su caché de configuración): un
  *    worker sin reiniciar puede ir por detrás. Lo dice `note`.
  */
@@ -53,11 +61,7 @@ final class StudioEngineReadings
 
     public const NOTE = 'Lectura del proceso web. Tras cambiar el entorno, los workers lo ven cuando se reinician.';
 
-    public function __construct(
-        private readonly MarketingAgentSwitch $switch,
-        private readonly UltronAbortLatch $latch,
-        private readonly MarketingKnowledgeBaseService $knowledge,
-    ) {}
+    public function __construct(private readonly MarketingKnowledgeBaseService $knowledge) {}
 
     /**
      * La forma de `GET engine/readings`.
@@ -113,8 +117,10 @@ final class StudioEngineReadings
                 ->pluck('name')
                 ->map(static fn (mixed $nombre): string => (string) $nombre)
                 ->all(),
-            'governance.paused' => fn (): bool => (bool) $this->switch->current()?->paused,
-            'governance.brake' => fn (): bool => $this->latch->engaged(),
+            // La fila del interruptor (sin fila, el motor no pausa) y la parada
+            // abierta del freno: las consultas del motor, sin su red (ver arriba).
+            'governance.paused' => static fn (): bool => (bool) MarketingAgentSetting::query()->find(MarketingAgentSwitch::ROW_ID)?->paused,
+            'governance.brake' => static fn (): bool => UltronAbort::query()->open()->exists(),
             // 0 (o vacío) es «sin canario del cobro»; el id no sale.
             'rules.paymentCanary' => static fn (): bool => (int) config('marketing.ultron.payment_canary_conversation_id', 0) > 0,
             'knowledge.base' => fn (): array => $this->knowledgeBase(),

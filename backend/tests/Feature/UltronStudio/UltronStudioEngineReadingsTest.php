@@ -10,13 +10,15 @@ use App\Models\UltronAbort;
 use App\Models\UltronStudio\StudioAuditEvent;
 use App\Services\Marketing\MarketingAgentSwitch;
 use App\Services\Marketing\MarketingKnowledgeBaseService;
-use App\Services\Marketing\Ultron\UltronAbortLatch;
 use App\Services\UltronStudio\StudioCatalog;
 use App\Services\UltronStudio\StudioEngineReadings;
-use Error;
+use Exception;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use PDOException;
+use ReflectionProperty;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -157,28 +159,39 @@ class UltronStudioEngineReadingsTest extends TestCase
         $this->assertSame(['available' => true, 'value' => 'rules'], $this->studio('GET', 'engine/readings', $this->ana)->assertOk()->json('data.params')['intent.driver']);
     }
 
+    /**
+     * Las consultas que contengan `$fragmento` fallan ANTES de ejecutarse, como
+     * falla una tabla que no existe o una base que no responde, con el SQLSTATE
+     * de PDO como código. Antes de ejecutarse: en PostgreSQL, una sentencia
+     * fallida de verdad dejaría abortada la transacción de la prueba entera.
+     */
+    private function failQueriesOn(string $fragmento, string $sqlState, string $mensaje): void
+    {
+        DB::connection()->beforeExecuting(static function (string $sql, array $bindings, $conexion) use ($fragmento, $sqlState, $mensaje): void {
+            if (str_contains($sql, $fragmento)) {
+                $pdo = new PDOException("SQLSTATE[{$sqlState}]: {$mensaje}");
+                (new ReflectionProperty(Exception::class, 'code'))->setValue($pdo, $sqlState);
+
+                throw new QueryException($conexion->getName(), $sql, $bindings, $pdo);
+            }
+        });
+    }
+
     public function test_una_fuente_caida_da_available_false_y_la_respuesta_sigue(): void
     {
         $this->engineConfig();
+        // La pausa puesta y el freno echado: si una consulta caída se enseñara
+        // con un valor por defecto, saldría justo el contrario.
         $this->seedEngine();
         Log::spy();
 
-        // La pausa no responde, el freno «cambió de nombre» y la base de
-        // conocimiento falla: las otras siete lecturas siguen.
-        $this->app->instance(MarketingAgentSwitch::class, new class extends MarketingAgentSwitch
-        {
-            public function current(): ?MarketingAgentSetting
-            {
-                throw new RuntimeException('SQLSTATE[08006] host=db.interno contraseña=…');
-            }
-        });
-        $this->app->instance(UltronAbortLatch::class, new class extends UltronAbortLatch
-        {
-            public function engaged(): bool
-            {
-                throw new Error('Call to undefined method UltronAbortLatch::engaged()');
-            }
-        });
+        // La tabla de la pausa «no existe» (lo que MarketingAgentSwitch::current()
+        // se traga y da como «sin pausa»), la base no responde al leer el freno
+        // (lo que UltronAbortLatch::current() se traga entero y da como «freno
+        // suelto») y la base de conocimiento falla: las otras siete lecturas
+        // siguen (correcciones del Hito G, I-1).
+        $this->failQueriesOn('"marketing_agent_settings"', 'HY000', 'General error: 1 no such table: marketing_agent_settings');
+        $this->failQueriesOn('"ultron_aborts"', '08006', 'could not connect to server: host=db.interno contraseña=…');
         $this->app->instance(MarketingKnowledgeBaseService::class, new class extends MarketingKnowledgeBaseService
         {
             public function version(): string
@@ -199,12 +212,34 @@ class UltronStudioEngineReadingsTest extends TestCase
             $this->assertTrue($data['params'][$id]['available'], $id);
         }
         // Sin mensaje técnico en la respuesta, y una línea sin datos en el log.
-        foreach (['SQLSTATE', 'db.interno', 'contraseña', 'undefined method', 'fallo de la base'] as $prohibido) {
+        foreach (['SQLSTATE', 'db.interno', 'contraseña', 'no such table', 'fallo de la base'] as $prohibido) {
             $this->assertStringNotContainsString($prohibido, $r->getContent());
         }
-        Log::shouldHaveReceived('warning')->with('ultron_studio.engine_reading_unavailable', ['reading' => 'governance.paused', 'error_class' => 'RuntimeException'])->once();
-        Log::shouldHaveReceived('warning')->with('ultron_studio.engine_reading_unavailable', ['reading' => 'governance.brake', 'error_class' => 'Error'])->once();
+        Log::shouldHaveReceived('warning')->with('ultron_studio.engine_reading_unavailable', ['reading' => 'governance.paused', 'error_class' => 'QueryException'])->once();
+        Log::shouldHaveReceived('warning')->with('ultron_studio.engine_reading_unavailable', ['reading' => 'governance.brake', 'error_class' => 'QueryException'])->once();
         Log::shouldHaveReceived('warning')->with('ultron_studio.engine_reading_unavailable', ['reading' => 'knowledge.base', 'error_class' => 'RuntimeException'])->once();
+    }
+
+    public function test_el_freno_y_la_pausa_se_leen_con_la_consulta_del_motor_sin_su_red(): void
+    {
+        $this->engineConfig();
+
+        // Sin pausa ni freno en la base: «no» y «no», leídos.
+        $data = $this->studio('GET', 'engine/readings', $this->ana)->assertOk()->json('data.extras');
+        $this->assertSame(['available' => true, 'value' => false], $data['governance.paused']);
+        $this->assertSame(['available' => true, 'value' => false], $data['governance.brake']);
+
+        // Con las dos tablas «sin crear» (un despliegue a medias), el motor sigue
+        // como si no hubiera pausa ni freno: MarketingAgentSwitch::current() y
+        // UltronAbortLatch::current() se tragan el error. El Studio no puede
+        // enseñar eso como un «no» leído.
+        $this->failQueriesOn('"marketing_agent_settings"', '42P01', 'Undefined table: 7 ERROR:  relation "marketing_agent_settings" does not exist');
+        $this->failQueriesOn('"ultron_aborts"', '42P01', 'Undefined table: 7 ERROR:  relation "ultron_aborts" does not exist');
+
+        $data = $this->studio('GET', 'engine/readings', $this->ana)->assertOk()->json('data.extras');
+        $this->assertSame(['available' => false], $data['governance.paused']);
+        $this->assertSame(['available' => false], $data['governance.brake']);
+        $this->assertTrue($data['knowledge.base']['available']);
     }
 
     public function test_la_respuesta_no_lleva_ni_secretos_ni_ids_ni_precios_ni_contenido(): void

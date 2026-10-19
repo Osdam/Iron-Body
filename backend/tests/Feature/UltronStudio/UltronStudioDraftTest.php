@@ -203,11 +203,15 @@ class UltronStudioDraftTest extends TestCase
         $this->assertSame(0, StudioAuditEvent::query()->count());
     }
 
-    public function test_un_contenido_de_mas_de_64_kb_o_con_controles_es_422(): void
+    public function test_un_contenido_de_mas_de_64_kb_es_413_y_con_controles_es_422(): void
     {
+        // Desde las correcciones del Hito G (M-2), un cuerpo de más de 64 KB no
+        // llega al normalizador: lo para el tope de cuerpo de las rutas del
+        // Studio. El tope propio del normalizador (64 KB del contenido
+        // codificado) sigue y lo prueba StudioDraftNormalizerTest.
         $grande = $this->baseline();
         $grande['relleno'] = str_repeat('x', 70 * 1024);
-        $this->saveDraft($this->ana, $grande)->assertStatus(422)->assertJsonValidationErrors(['content']);
+        $this->saveDraft($this->ana, $grande)->assertStatus(413)->assertJsonPath('code', 'payload_too_large');
 
         $this->saveDraft($this->ana, $this->contentWith(['knowledge' => ['sources' => ["Planes\u{0000}ocultos"]]]))
             ->assertStatus(422)->assertJsonValidationErrors(['content.configs.knowledge.sources.0']);

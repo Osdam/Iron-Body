@@ -3,6 +3,7 @@
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioRuleController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioVersionController;
+use App\Http\Middleware\LimitRequestBodySize;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -28,9 +29,23 @@ use Illuminate\Support\Facades\Route;
 | motor (`engine/readings`, un literal) y la comparación (`compare`, con los
 | lados en la query string), las dos de solo lectura y con el cupo de lectura.
 | No chocan con `versions/{uuid}`. Son 21 rutas.
+|
+| Tope de CUERPO de 64 KB (65 536 bytes) en las 21 rutas: por encima, 413
+| `payload_too_large` antes del controlador (revisión de seguridad de la API
+| del Hito G, M-2). Es defensa en profundidad: la validación en dos fases de
+| los controladores ya rechaza una lista enorme sin recorrerla. Por qué 64 KB:
+| es el tope del contenido del borrador (`StudioDraftNormalizer::MAX_BYTES`),
+| el cuerpo más grande del Studio. El borrador más grande que admite el
+| normalizador (20 etiquetas de 60 caracteres de 4 bytes en cada lista,
+| todas las aristas, coordenadas y vista extremas) ocupa 11 061 bytes tal como
+| lo envía el CRM (UTF-8 sin escapar) y 30 261 con todo el Unicode escapado.
+| Con caracteres de 4 bytes en todos los textos, el CRM envía como mucho
+| 38 052 bytes en `POST rules` (condiciones de 4 KB, descripción entera, todas
+| las referencias y 30 claves de 255 caracteres) y 33 436 en `approve` (100
+| avisos de 80). Producción admite hasta 8 MB (`post_max_size`).
 */
 
-Route::prefix('admin/ultron-studio')->group(function (): void {
+Route::prefix('admin/ultron-studio')->middleware(LimitRequestBodySize::class.':65536')->group(function (): void {
     Route::middleware('throttle:ultron-studio-read')->group(function (): void {
         Route::get('status', [UltronStudioController::class, 'status']);
         Route::get('catalog', [UltronStudioController::class, 'catalog']);

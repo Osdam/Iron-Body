@@ -5,13 +5,18 @@ namespace Tests\Feature\UltronStudio;
 use App\Models\Admin;
 use App\Models\UltronStudio\StudioAuditEvent;
 use App\Models\UltronStudio\StudioRule;
+use App\Services\UltronStudio\StudioAccess;
 use App\Services\UltronStudio\StudioCatalog;
 use App\Services\UltronStudio\StudioContentHasher;
+use App\Services\UltronStudio\StudioRuleCoherence;
+use App\Services\UltronStudio\StudioRules;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -319,11 +324,59 @@ class UltronStudioRuleConditionsTest extends TestCase
         $this->assertSame('regla-incompatible', $reglas['S-005']['analysis']['issues'][0]['id']);
         $this->assertSame('blocking', $reglas['S-005']['analysis']['issues'][0]['level']);
 
-        // Una archivada se analiza contra las vivas, sin contar entre ellas.
+        // Una archivada lleva un análisis neutro: su verificación y ningún
+        // problema. Ya no se analiza contra las vivas (correcciones del Hito G,
+        // M-1), aunque las contradiga, y deja de contar para ellas.
         $s004 = StudioRule::query()->where('code', 'S-004')->sole();
         $this->studio('POST', "rules/{$s004->uuid}/archive", $this->ana, ['baseRevision' => 1, 'reason' => 'Contradice a S-003'])->assertOk()
-            ->assertJsonPath('data.analysis.issues.0.with', ['S-003']);
+            ->assertJsonPath('data.analysis', ['verification' => 'studio', 'issues' => []]);
+        $archivadas = collect($this->studio('GET', 'rules?status=archived', $this->ana)->assertOk()->json('data'))->keyBy('code');
+        $this->assertSame(['verification' => 'studio', 'issues' => []], $archivadas['S-004']['analysis']);
         $this->assertSame([], collect($this->studio('GET', 'rules', $this->ana)->json('data'))->firstWhere('code', 'S-003')['analysis']['issues']);
+    }
+
+    public function test_listar_las_archivadas_no_relee_ni_reanaliza_las_vivas(): void
+    {
+        // El peor caso de la revisión de seguridad de la API (M-1): el tope de
+        // 100 vivas, todas «pesadas» (tres «si» y tres afirmaciones, veinte
+        // frases), y archivadas que no cuentan para el tope ni se pueden borrar.
+        $capas = ['persona', 'strategy', 'composer', 'integrations', 'rules', 'governance'];
+        $pesadas = StudioRuleCoherence::canonicalize(self::heavyConditions(), StudioCatalog::toArray(), $capas);
+        $this->seedMany(100, 1, 'draft', $pesadas, $capas);
+        $this->seedMany(10, 101, 'archived', $pesadas, $capas);
+        $this->studio('GET', 'rules?status=archived', $this->ana)->assertOk(); // abre la sesión fuera de la cuenta
+
+        $consultas = function (): array {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            $inicio = hrtime(true);
+            $r = $this->studio('GET', 'rules?status=archived', $this->ana)->assertOk();
+            $ms = (hrtime(true) - $inicio) / 1e6;
+            // Solo las de datos: la sesión del personal se toca o no según
+            // cambie de segundo `last_seen_at` (AdminSessionService::touch).
+            $sql = array_values(array_filter(array_column(DB::getQueryLog(), 'query'), static fn (string $q): bool => str_contains($q, '"ultron_studio_') || str_contains($q, '"marketing_knowledge_items"')));
+            DB::disableQueryLog();
+
+            return [$r->json('data'), $sql, $ms];
+        };
+        [$diez, $sqlDiez] = $consultas();
+        $this->seedMany(290, 111, 'archived', $pesadas, $capas);
+        [$trescientas, $sqlTrescientas, $ms] = $consultas();
+
+        $this->assertCount(10, $diez);
+        $this->assertCount(300, $trescientas);
+        // Las consultas no crecen con las archivadas, y ninguna lee las vivas.
+        $this->assertNotSame([], $sqlDiez);
+        $this->assertSame($sqlDiez, $sqlTrescientas, 'Con más archivadas, otras consultas.');
+        $this->assertSame([], array_values(preg_grep('/"status" <> \?/', $sqlTrescientas)), 'Listar las archivadas leyó las reglas vivas.');
+        // Ninguna archivada se analiza: su verificación y ningún problema.
+        foreach ($trescientas as $regla) {
+            $this->assertSame(['verification' => 'studio', 'issues' => []], $regla['analysis'], $regla['code']);
+        }
+        // Y el tiempo queda acotado: antes, cada archivada volvía a analizar las
+        // cien vivas (unos 2,6 s aquí con 300; 7,7 s con 1000 en la medida de
+        // api-security). Ahora es solo serializar.
+        $this->assertLessThan(1000, $ms, sprintf('GET rules?status=archived con 300 archivadas y 100 vivas pesadas tardó %.0f ms.', $ms));
     }
 
     public function test_crear_editar_e_importar_toman_el_mismo_cerrojo_antes_de_leer_las_reglas_vivas(): void
@@ -372,6 +425,108 @@ class UltronStudioRuleConditionsTest extends TestCase
         // Archivar no lo necesita: quitar una regla no crea contradicciones.
         [$cerrojo] = $orden(fn () => $this->studio('POST', "rules/{$uuid}/archive", $this->ana, ['baseRevision' => 2, 'reason' => 'Sin cerrojo'])->assertOk(), $vivas);
         $this->assertNull($cerrojo);
+    }
+
+    public function test_crear_editar_e_importar_fijan_read_committed_aunque_la_sesion_vaya_en_repeatable_read(): void
+    {
+        if (! $this->isPostgres()) {
+            $this->markTestSkipped('El nivel de aislamiento y el cerrojo consultivo son de PostgreSQL: SQLite escribe en serie.');
+        }
+
+        // El cerrojo de las escrituras de reglas solo sirve en READ COMMITTED
+        // (revisión de seguridad de la API del Hito G, B-2). Una sesión PROPIA,
+        // fuera de la transacción de la prueba, con REPEATABLE READ por defecto,
+        // como la dejaría un `default_transaction_isolation` en el rol.
+        config(['database.connections.studio_rr' => config('database.connections.'.DB::getDefaultConnection())]);
+        $rr = DB::connection('studio_rr');
+        $rr->statement('SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+        $rr->statement("SET lock_timeout = '5s'");
+        $this->assertSame('repeatable read', $rr->transaction(static fn () => $rr->selectOne('SHOW transaction_isolation')->transaction_isolation), 'la sesión de la prueba no arranca en REPEATABLE READ');
+
+        // Justo ANTES del cerrojo (que la transacción de la prueba ya tiene por
+        // importar la línea base) se lee el nivel de la transacción en curso y
+        // se corta: nada se escribe y nadie espera.
+        $niveles = [];
+        $rr->beforeExecuting(function (string $sql) use ($rr, &$niveles): void {
+            if (str_contains($sql, 'pg_advisory_xact_lock')) {
+                $niveles[] = $rr->selectOne('SHOW transaction_isolation')->transaction_isolation;
+
+                throw new RuntimeException('corte de la prueba antes del cerrojo');
+            }
+        });
+
+        $this->ruleWith(self::conditionsOf([self::limitOn('persona', 'maxChars', 'lte', 300)]))->assertCreated();
+        $regla = StudioRule::query()->where('code', 'S-001')->sole();
+        $acceso = new StudioAccess($this->ana);
+        $this->assertTrue($acceso->can(StudioAccess::MANAGE_RULES)); // los permisos, leídos en la sesión de la prueba
+        $reglas = app(StudioRules::class);
+        $caminos = [
+            'POST rules' => fn () => $reglas->create($acceso, Request::create('/'), ['description' => 'Otra', 'type' => 'style', 'priority' => 'normal', 'layers' => ['persona'],
+                'conditions' => self::conditionsOf([self::limitOn('persona', 'maxChars', 'lte', 320)])], (string) Str::uuid()),
+            'PATCH rules' => fn () => $reglas->update($acceso, Request::create('/'), $regla, 1, ['conditions' => self::conditionsOf([self::limitOn('persona', 'maxChars', 'lte', 280)])]),
+            'import-baseline' => fn () => $reglas->importLegacyBaseline(false),
+        ];
+
+        $porDefecto = DB::getDefaultConnection();
+        DB::setDefaultConnection('studio_rr');
+        try {
+            foreach ($caminos as $camino => $escribir) {
+                try {
+                    $escribir();
+                    $this->fail("{$camino} no llegó al cerrojo.");
+                } catch (RuntimeException $e) {
+                    $this->assertSame('corte de la prueba antes del cerrojo', $e->getMessage(), $camino);
+                }
+            }
+        } finally {
+            DB::setDefaultConnection($porDefecto);
+            DB::purge('studio_rr');
+        }
+
+        $this->assertSame(['read committed', 'read committed', 'read committed'], $niveles, 'Alguna escritura de reglas lee las vivas sin READ COMMITTED.');
+    }
+
+    /** Condiciones «pesadas» (la sonda de api-security): tres «si» y tres afirmaciones, dos con diez frases. */
+    private static function heavyConditions(): array
+    {
+        $frases = static fn (string $p): array => array_map(static fn (int $i): string => "{$p} frase numero {$i} de prueba", range(1, 10));
+
+        return self::conditionsOf([
+            self::limitOn('persona', 'maxChars', 'lte', 460),
+            ['kind' => 'forbid', 'target' => 'text', 'op' => 'contains', 'phrases' => $frases('alfa')],
+            ['kind' => 'forbid', 'target' => 'text', 'op' => 'contains', 'phrases' => $frases('beta')],
+        ], [
+            ['target' => 'config', 'layer' => 'strategy', 'key' => 'goal', 'op' => 'eq', 'value' => 'venta'],
+            ['target' => 'config', 'layer' => 'persona', 'key' => 'emojis', 'op' => 'eq', 'value' => false],
+            ['target' => 'edge', 'edge' => 'E14', 'op' => 'absent'],
+        ]);
+    }
+
+    /**
+     * `$n` reglas del Studio con las mismas condiciones, escritas directamente
+     * en la tabla (S-NNN desde `$desde`): cien POST superarían el cupo.
+     *
+     * @param  array<string, mixed>  $conditions
+     * @param  list<string>  $layers
+     */
+    private function seedMany(int $n, int $desde, string $status, array $conditions, array $layers): void
+    {
+        $refs = ['configs' => [], 'edges' => [], 'knowledgeKeys' => [], 'knowledgeCategories' => []];
+        $filas = [];
+        for ($i = $desde; $i < $desde + $n; $i++) {
+            $campos = ['description' => "Sembrada {$i}", 'type' => 'style', 'priority' => 'normal', 'layers' => $layers, 'refs' => $refs, 'origin' => null, 'conditions' => $conditions];
+            $filas[] = [
+                'uuid' => (string) Str::uuid(), 'code' => sprintf('S-%03d', $i), 'source' => 'studio', 'enforcement' => 'none', 'status' => $status,
+                'description' => $campos['description'], 'type' => 'style', 'priority' => 'normal', 'origin' => null, 'revision' => 1,
+                'layers' => json_encode($layers), 'refs' => json_encode($refs), 'conditions' => json_encode($conditions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'content_hash' => StudioContentHasher::ruleHash($campos), 'client_request_id' => (string) Str::uuid(),
+                'archived_at' => $status === 'archived' ? now() : null, 'archive_reason' => $status === 'archived' ? 'Sembrada archivada' : null,
+                'created_at' => now(), 'updated_at' => now(),
+            ];
+        }
+        foreach (array_chunk($filas, 100) as $lote) {
+            DB::table('ultron_studio_rules')->insert($lote);
+        }
     }
 
     /** Una regla del Studio escrita directamente en la tabla, como si el catálogo hubiera cambiado después. */

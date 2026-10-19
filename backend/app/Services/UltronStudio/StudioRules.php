@@ -117,8 +117,21 @@ final class StudioRules
             }
 
             try {
-                $regla = DB::transaction(function () use ($access, $request, $campos, $hash, $clientRequestId): StudioRule {
+                $repetida = false;
+                $regla = DB::transaction(function () use ($access, $request, $campos, $hash, $clientRequestId, &$repetida): StudioRule {
                     $this->serializeRuleWrites();
+                    // La misma petición pudo confirmarse mientras esta esperaba
+                    // el cerrojo (doble clic simultáneo) y la comprobación de
+                    // arriba no la vio. Se repite aquí, ANTES del tope: con 99
+                    // vivas, el segundo clic recibe su 200 `replayed` y no un
+                    // 409 `rule_limit_reached` por la regla que creó el primero
+                    // (tester del Hito G, H-3; el orden venía de F).
+                    if ($previa = $this->replay($access, $clientRequestId, $hash)) {
+                        $repetida = true;
+
+                        return $previa;
+                    }
+
                     $vivas = self::liveStudioRows();
                     if ($vivas->count() >= self::MAX_LIVE_STUDIO_RULES) {
                         throw UltronStudioException::ruleLimitReached(self::MAX_LIVE_STUDIO_RULES);
@@ -155,7 +168,7 @@ final class StudioRules
                     return $regla;
                 });
 
-                return ['rule' => $this->present([$regla->refresh()])[0], 'replayed' => false];
+                return ['rule' => $this->present([$regla->refresh()])[0], 'replayed' => $repetida];
             } catch (UniqueConstraintViolationException $e) {
                 // O la misma petición llegó dos veces a la vez (se resuelve con
                 // el replay de la siguiente vuelta), o dos reglas nuevas
@@ -680,23 +693,41 @@ final class StudioRules
 
     /**
      * `analysis` de cada regla (contrato G §A3), por id de fila: contra los
-     * controles del motor y contra las reglas VIVAS, recorridas por código. Una
-     * archivada se analiza contra las vivas sin contar entre ellas.
+     * controles del motor y contra las reglas VIVAS, que se leen y se analizan
+     * UNA vez por llamada, y solo si alguna de `$reglas` está viva.
+     *
+     * Una ARCHIVADA lleva un análisis neutro: su verificación y ningún
+     * problema. Ya no entra en las versiones ni en las contradicciones, así que
+     * analizarla contra las vivas no aporta nada, y costaba volver a analizar
+     * todas las vivas por cada archivada: las archivadas no cuentan para el
+     * tope ni se pueden borrar, y con mil `GET rules?status=archived` tardaba
+     * ~8 s (revisión de seguridad de la API del Hito G, M-1).
      *
      * @param  list<StudioRule>  $reglas
      * @return array<int, array{verification:string,issues:list<array{id:string,level:string,with:list<string>,target:string}>}>
      */
     private static function analyses(array $reglas): array
     {
+        $out = [];
+        $vivasPedidas = [];
+        foreach ($reglas as $r) {
+            if ($r->isArchived()) {
+                $out[$r->id] = ['verification' => StudioRuleCoherence::verification($r->conditions), 'issues' => []];
+            } else {
+                $vivasPedidas[] = $r;
+            }
+        }
+        if ($vivasPedidas === []) {
+            return $out;
+        }
+
         $catalogo = StudioCatalog::toArray();
         $vivas = array_map(self::input(...), self::liveRows()->all());
         $deLasVivas = StudioRuleCoherence::analyzeAll($vivas, $catalogo);
-
-        $out = [];
-        foreach ($reglas as $r) {
-            $out[$r->id] = ! $r->isArchived() && isset($deLasVivas[$r->code])
-                ? $deLasVivas[$r->code]
-                : StudioRuleCoherence::analyze(self::input($r), $vivas, $catalogo);
+        foreach ($vivasPedidas as $r) {
+            // Si otra petición la archivó entre las dos lecturas, ya no está
+            // entre las vivas: se analiza ella sola contra ellas.
+            $out[$r->id] = $deLasVivas[$r->code] ?? StudioRuleCoherence::analyze(self::input($r), $vivas, $catalogo);
         }
 
         return $out;
@@ -803,10 +834,24 @@ final class StudioRules
      * Se toma ANTES de leer nada. SQLite escribe en serie por sí mismo. El
      * UNIQUE de `code` y el reintento de {@see create()} siguen como red de
      * seguridad. La clave es la de F: es el MISMO cerrojo (contrato G §A3).
+     *
+     * Y solo sirve en READ COMMITTED, así que se FIJA aquí, como primera
+     * sentencia de la transacción (lo es en las tres que llaman a esto). En
+     * REPEATABLE READ o SERIALIZABLE la instantánea la toma la propia sentencia
+     * del cerrojo, ANTES de esperar: quien esperó leería las reglas vivas de
+     * antes de que la otra escritura confirmara, y dos reglas contradictorias
+     * se guardarían (revisión de seguridad de la API del Hito G, B-2: 3 de 3
+     * en una sesión con REPEATABLE READ). Hoy PostgreSQL trae READ COMMITTED
+     * por defecto y producción lo confirma, pero nada lo garantizaba: un
+     * `default_transaction_isolation` en el rol o en `postgresql.conf` lo
+     * habría roto sin avisar. PostgreSQL acepta repetir el mismo nivel en
+     * cualquier momento (también dentro de un punto de guardado); cambiarlo
+     * cuando la transacción ya leyó algo es un error, nunca un fallo silencioso.
      */
     private function serializeRuleWrites(): void
     {
         if (DB::connection()->getDriverName() === 'pgsql') {
+            DB::statement('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
             DB::statement('SELECT pg_advisory_xact_lock(?)', [crc32('ultron_studio_rules:code')]);
         }
     }
