@@ -644,3 +644,11 @@ Fijadas por la capa de datos del CRM (`studio-lab-parse.ts` falla cerrado ante o
 12. **Decisión del lead:** `EstimateDto` gana `excludedRules: string[]` (códigos S-NNN que no caben en las 20 enviadas al actor; `[]` si caben todas). El CRM lo pintará en el paso 5.
 13. `GET lab/status` apagado: `message` opcional (texto por defecto en el CRM) y `can` obligatorio también apagado.
 14. `reasons` de configuración: el CRM conserva códigos desconocidos; **decisión del lead:** no existe `invalid_price`; un precio 0, vacío o mal formado da `missing_price` (Enmienda 1).
+
+## Enmienda 3 (19-10-2026): decisiones tras el núcleo (`StudioLab*`)
+
+1. **Driver inválido:** un `ULTRON_STUDIO_LAB_DRIVER` distinto de `fake` u `openai` no abre ningún cerrojo en silencio: `configured:false` con el motivo **`invalid_driver`** (sexto motivo de A1) y **`mode: null`** en `GET lab/status`, en la estimación y en las ejecuciones que no puedan crearse. El CRM acepta `mode: null` y etiqueta el motivo.
+2. **429 de facturación sin `insufficient_quota`:** se mantiene el contrato (solo `insufficient_quota` es `quota` y para la ejecución); otro 429 es `rate_limited`, retrasa el paso 30 s y no cuenta para la racha. Consecuencia aceptada: un límite de gasto del proyecto en OpenAI que llegue sin ese marcador deja la ejecución reintentando sin gastar hasta el plazo de 30 min (`stopped: deadline`). Se documenta para el propietario; el Hito 5 podrá añadir una parada por tiempo total en `rate_limited`.
+3. **Objetivo con datos personales:** si el contenido del objetivo (descripciones o frases de reglas, etiquetas de parámetros) no pasa el filtro de A2, `POST lab/estimate` y `POST lab/runs` responden **409 `target_contains_personal_data {fields: [...]}`** (nunca se construye la entrada al modelo). El CRM muestra el mensaje del servidor.
+4. La prueba `UltronStudioEngineReadOnlyTest` registra `StudioLabEngineChecks.php` como lector del motor con las mismas restricciones que `StudioEngineReadings` (sin `assertSafe`, base, log ni escrituras).
+5. Tras desplegar se sondean en el servidor (PCRE 10.39) las expresiones del filtro (`\p{Cf}`) y de los emojis por rangos.
