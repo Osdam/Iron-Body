@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioController;
+use App\Http\Controllers\Crm\UltronStudio\UltronStudioLabController;
+use App\Http\Controllers\Crm\UltronStudio\UltronStudioLabScenarioController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioRuleController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioVersionController;
 use App\Http\Middleware\LimitRequestBodySize;
@@ -30,7 +32,18 @@ use Illuminate\Support\Facades\Route;
 | lados en la query string), las dos de solo lectura y con el cupo de lectura.
 | No chocan con `versions/{uuid}`. Son 21 rutas.
 |
-| Tope de CUERPO de 64 KB (65 536 bytes) en las 21 rutas: por encima, 413
+| Hito 4 (docs/ultron-studio/ULTRON_STUDIO_H4_CONTRACT.md §A7): el LABORATORIO
+| de IA, `lab/*`, 12 rutas más (33 en total). Es una SIMULACIÓN DEL STUDIO, no
+| ULTRON. Cerraduras: la puerta (`ultron.view`, `ultron.lab_manage`,
+| `ultron.lab_run` o `ultron.approve`, una a una en AuthorizationMap) → una
+| persona → la llave → la bandera (409 `lab_disabled`, salvo `GET lab/status`,
+| que responde 200 también apagado). `POST lab/estimate` no escribe: va con las
+| lecturas. `POST lab/runs` gasta presupuesto: además del cupo de escritura,
+| su propio limitador `ultron-studio-lab-run` (10/h por credencial, 30/h por
+| red). El cuerpo más grande del laboratorio (un escenario) cabe de sobra en los
+| 64 KB: su contenido codificado no pasa de 16 KB.
+|
+| Tope de CUERPO de 64 KB (65 536 bytes) en las 33 rutas: por encima, 413
 | `payload_too_large` antes del controlador (revisión de seguridad de la API
 | del Hito G, M-2). Es defensa en profundidad: la validación en dos fases de
 | los controladores ya rechaza una lista enorme sin recorrerla. Por qué 64 KB:
@@ -57,6 +70,14 @@ Route::prefix('admin/ultron-studio')->middleware(LimitRequestBodySize::class.':6
         Route::get('audit', [UltronStudioController::class, 'audit']);
         Route::get('engine/readings', [UltronStudioController::class, 'engineReadings']);
         Route::get('compare', [UltronStudioVersionController::class, 'compare']);
+
+        // Hito 4: el laboratorio (lecturas y la estimación, que no escribe).
+        Route::get('lab/status', [UltronStudioLabController::class, 'status']);
+        Route::get('lab/scenarios', [UltronStudioLabScenarioController::class, 'index']);
+        Route::get('lab/runs', [UltronStudioLabController::class, 'runs']);
+        Route::get('lab/runs/{uuid}', [UltronStudioLabController::class, 'show'])->whereUuid('uuid');
+        Route::post('lab/estimate', [UltronStudioLabController::class, 'estimate']);
+        Route::get('lab/events', [UltronStudioLabController::class, 'events']);
     });
 
     Route::middleware('throttle:ultron-studio-write')->group(function (): void {
@@ -71,5 +92,13 @@ Route::prefix('admin/ultron-studio')->middleware(LimitRequestBodySize::class.':6
         Route::post('rules', [UltronStudioRuleController::class, 'store']);
         Route::patch('rules/{uuid}', [UltronStudioRuleController::class, 'update'])->whereUuid('uuid');
         Route::post('rules/{uuid}/archive', [UltronStudioRuleController::class, 'archive'])->whereUuid('uuid');
+
+        // Hito 4: el laboratorio (escenarios, ejecuciones y veredicto).
+        Route::post('lab/scenarios', [UltronStudioLabScenarioController::class, 'store']);
+        Route::patch('lab/scenarios/{uuid}', [UltronStudioLabScenarioController::class, 'update'])->whereUuid('uuid');
+        Route::post('lab/scenarios/{uuid}/archive', [UltronStudioLabScenarioController::class, 'archive'])->whereUuid('uuid');
+        Route::post('lab/runs', [UltronStudioLabController::class, 'store'])->middleware('throttle:ultron-studio-lab-run');
+        Route::post('lab/runs/{uuid}/cancel', [UltronStudioLabController::class, 'cancel'])->whereUuid('uuid');
+        Route::post('lab/runs/{uuid}/verdict', [UltronStudioLabController::class, 'verdict'])->whereUuid('uuid');
     });
 });

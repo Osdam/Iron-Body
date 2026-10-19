@@ -94,7 +94,7 @@ return [
         | Carriles de Iron Body
         |----------------------------------------------------------------------
         |
-        | Cinco conexiones sobre la MISMA tabla `jobs`, que se diferencian solo
+        | Seis conexiones sobre la MISMA tabla `jobs`, que se diferencian solo
         | en el nombre de la cola y en `retry_after`. No es duplicación: en el
         | driver `database`, `retry_after` es por CONEXIÓN, no por cola, así que
         | es el único sitio donde se puede decir que un mensaje entrante se
@@ -171,6 +171,21 @@ return [
             'after_commit' => false,
         ],
 
+        // P5 · El laboratorio de IA de ULTRON STUDIO (contrato H4 §A3): un paso
+        // por job, con su worker propio (`ironbody-lab`, 1 proceso, timeout
+        // 150 s y tries=1: un reintento de la cola podría pagar dos veces). Es
+        // una simulación del Studio, no el agente: su lentitud no es la de
+        // nadie más. retry_after 300 > timeout 150. `after_commit` false como
+        // los demás: quien encola lo pide con `afterCommit()`.
+        'lab' => [
+            'driver' => 'database',
+            'connection' => env('DB_QUEUE_CONNECTION'),
+            'table' => env('DB_QUEUE_TABLE', 'jobs'),
+            'queue' => env('QUEUE_STUDIO_LAB', 'studio-lab'),
+            'retry_after' => (int) env('QUEUE_STUDIO_LAB_RETRY_AFTER', 300),
+            'after_commit' => false,
+        ],
+
     ],
 
     /*
@@ -196,6 +211,8 @@ return [
         'media' => ['connection' => 'media', 'queue' => env('QUEUE_MEDIA', 'media'), 'priority' => 3, 'slo_wait_ms' => 60000],
         'commercial' => ['connection' => 'commercial', 'queue' => env('QUEUE_COMMERCIAL', 'commercial'), 'priority' => 4, 'slo_wait_ms' => 300000],
         'billing' => ['connection' => 'billing', 'queue' => env('FACTUS_QUEUE', 'billing'), 'priority' => 4, 'slo_wait_ms' => 300000],
+        // Nadie espera al laboratorio con un cliente al otro lado: diez minutos.
+        'lab' => ['connection' => 'lab', 'queue' => env('QUEUE_STUDIO_LAB', 'studio-lab'), 'priority' => 5, 'slo_wait_ms' => 600000],
     ],
 
     /*

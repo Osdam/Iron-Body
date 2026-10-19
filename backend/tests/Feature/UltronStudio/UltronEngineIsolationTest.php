@@ -37,6 +37,9 @@ class UltronEngineIsolationTest extends TestCase
         'database/migrations/2026_10_18_100002_add_ultron_studio_guards.php',
         // Hito G (contrato G §A7): la columna `conditions` de las reglas.
         'database/migrations/2026_10_19_100001_add_conditions_to_ultron_studio_rules.php',
+        // Hito 4 (contrato H4 §A8): el laboratorio.
+        'database/migrations/2026_10_19_100002_create_ultron_studio_lab_tables.php',
+        'database/migrations/2026_10_19_100003_add_ultron_studio_lab_guards.php',
     ];
 
     /** Lo que se rastrea: todo el PHP de la aplicación que corre en producción. */
@@ -100,8 +103,9 @@ class UltronEngineIsolationTest extends TestCase
             $this->assertNotContains('automation.internal', $route->gatherMiddleware(), $route->uri());
         }
 
-        // Las 19 de F más las dos de lectura del Hito G (engine/readings y compare).
-        $this->assertSame(21, $delStudio);
+        // Las 19 de F, las dos de lectura del Hito G (engine/readings y compare)
+        // y las 12 del laboratorio del Hito 4 (`lab/*`, contrato H4 §A7).
+        $this->assertSame(33, $delStudio);
     }
 
     public function test_el_motor_no_lee_versiones_y_publicar_esta_apagado(): void

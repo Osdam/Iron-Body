@@ -130,6 +130,8 @@ final class PermissionCatalog
         'ultron.view' => 'Ver ULTRON Studio',
         'ultron.edit_draft' => 'Editar el borrador y crear versiones',
         'ultron.manage_rules' => 'Administrar reglas del Studio',
+        'ultron.lab_manage' => 'Administrar escenarios del laboratorio',
+        'ultron.lab_run' => 'Lanzar ejecuciones del laboratorio (consume presupuesto)',
         'ultron.approve' => 'Aprobar o rechazar versiones de otra persona',
         'ultron.publish' => 'Publicar versiones',
         'ultron.rollback' => 'Revertir versiones',
@@ -183,7 +185,9 @@ final class PermissionCatalog
         'ultron.view' => 'Abrir el tablero del agente comercial: el catálogo, las versiones, las reglas y la auditoría del Studio. El motor de ULTRON no lee nada de esto todavía: ver o cambiar cosas aquí no cambia al agente.',
         'ultron.edit_draft' => 'Guardar el propio borrador del tablero y crear versiones a partir de él, y enviarlas a revisión. Cada guardado queda en la auditoría.',
         'ultron.manage_rules' => 'Proponer reglas comerciales nuevas, editarlas y archivarlas. Nacen en borrador y el motor no las aplica; las reglas del código no se tocan desde aquí.',
-        'ultron.approve' => 'Aprobar o rechazar versiones enviadas a revisión, reconociendo sus avisos. Nadie aprueba lo que creó: la versión tiene que ser de otra persona.',
+        'ultron.lab_manage' => 'Crear, editar y archivar los escenarios sintéticos del laboratorio de IA. Los del catálogo son de solo lectura; nada se borra y cada cambio queda en el libro del laboratorio. Los escenarios se envían a un proveedor externo: nunca llevan datos de personas reales.',
+        'ultron.lab_run' => 'Lanzar y cancelar ejecuciones del laboratorio de IA: un modelo externo interpreta una versión sobre escenarios sintéticos y cada ejecución gasta presupuesto del proveedor. Es una simulación del Studio, no ULTRON. No llega por defecto al Administrador: se concede a mano.',
+        'ultron.approve' => 'Aprobar o rechazar versiones enviadas a revisión, reconociendo sus avisos, y emitir el veredicto del laboratorio sobre ejecuciones de versiones ajenas. Nadie aprueba lo que creó: la versión tiene que ser de otra persona.',
         'ultron.publish' => 'Publicar una versión aprobada para que la use el agente. Hoy desactivado en el servidor; no llega por defecto al Administrador.',
         'ultron.rollback' => 'Volver a una versión publicada anterior. Hoy desactivado en el servidor; no llega por defecto al Administrador.',
     ];
@@ -286,7 +290,7 @@ final class PermissionCatalog
      */
     private static function sortActions(array $permisos): array
     {
-        $orden = ['view' => 0, 'view_all' => 0.5, 'use' => 1, 'create' => 2, 'operate' => 2, 'edit' => 3, 'update' => 3, 'edit_draft' => 3, 'cancel' => 4, 'complete' => 4.5, 'archive' => 5, 'delete' => 5, 'manage_rules' => 6, 'approve' => 7, 'publish' => 8, 'rollback' => 8.2, 'manage_availability' => 8, 'manage_settings' => 8.5, 'manage' => 9];
+        $orden = ['view' => 0, 'view_all' => 0.5, 'use' => 1, 'create' => 2, 'operate' => 2, 'edit' => 3, 'update' => 3, 'edit_draft' => 3, 'cancel' => 4, 'complete' => 4.5, 'archive' => 5, 'delete' => 5, 'manage_rules' => 6, 'lab_manage' => 6.4, 'lab_run' => 6.6, 'approve' => 7, 'publish' => 8, 'rollback' => 8.2, 'manage_availability' => 8, 'manage_settings' => 8.5, 'manage' => 9];
         usort($permisos, fn ($a, $b) => ($orden[$a['action']] ?? 5) <=> ($orden[$b['action']] ?? 5));
 
         return $permisos;

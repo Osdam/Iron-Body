@@ -70,6 +70,8 @@ class ChaosLaneIsolationTest extends ChaosTestCase
         \App\Jobs\SendAutomationEventToN8n::dispatch(1);
         \App\Jobs\Commercial\EvaluateCommercialSubject::dispatch(1);
         \App\Jobs\EmitElectronicInvoiceJob::dispatch(1);
+        // Hito 4: el paso del laboratorio de ULTRON STUDIO vive fuera de app/Jobs.
+        \App\Services\UltronStudio\StudioLabStepJob::dispatch(1);
 
         Queue::assertPushedOn($this->lane('whatsapp'), ProcessMetaWebhookEvent::class);
         Queue::assertPushedOn($this->lane('agent'), AnalyzeInboundMessage::class);
@@ -77,6 +79,7 @@ class ChaosLaneIsolationTest extends ChaosTestCase
         Queue::assertPushedOn($this->lane('commercial'), \App\Jobs\SendAutomationEventToN8n::class);
         Queue::assertPushedOn($this->lane('commercial'), \App\Jobs\Commercial\EvaluateCommercialSubject::class);
         Queue::assertPushedOn($this->lane('billing'), \App\Jobs\EmitElectronicInvoiceJob::class);
+        Queue::assertPushedOn($this->lane('lab'), \App\Services\UltronStudio\StudioLabStepJob::class);
     }
 
     /**
@@ -175,7 +178,7 @@ class ChaosLaneIsolationTest extends ChaosTestCase
     }
 
     /**
-     * Los cinco carriles son cinco de verdad.
+     * Los carriles son distintos de verdad (seis desde el Hito 4).
      *
      * Si dos compartieran nombre, la separación sería decorativa: los workers
      * de uno estarían atendiendo el trabajo del otro sin que nada lo delatara.
@@ -210,6 +213,8 @@ class ChaosLaneIsolationTest extends ChaosTestCase
             'media' => 420,
             'commercial' => 120,
             'billing' => 600,
+            // Hito 4: el worker `ironbody-lab` (docs/ops/supervisor/ironbody-lab.conf).
+            'lab' => 150,
         ];
 
         foreach ($timeouts as $lane => $timeout) {

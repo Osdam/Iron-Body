@@ -10,6 +10,7 @@ use App\Models\MarketingLead;
 use App\Models\Plan;
 use App\Models\UltronAbort;
 use App\Services\Marketing\MarketingAgentSwitch;
+use App\Services\UltronStudio\StudioLabStepJob;
 use App\Support\Access\AuthorizationMap;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -62,9 +63,15 @@ use Tests\TestCase;
  * Si una mutación mete una escritura del motor en el adaptador de lecturas (o
  * en cualquier ruta del Studio), la parte de comportamiento falla aunque la
  * estática no la vea.
+ *
+ * Hito 4 (contrato H4 §A10): el recorrido son 33 rutas, con el laboratorio
+ * ENCENDIDO en `fake` (escenarios, estimación, ejecuciones procesadas en
+ * línea, cancelación, veredicto rechazado y libro), sus tablas entre las del
+ * Studio, y lo único que se encola es el paso del laboratorio en su carril.
  */
 class UltronStudioEngineReadOnlyTest extends TestCase
 {
+    use LabFixtures;
     use RefreshDatabase;
     use StudioFixtures;
 
@@ -82,7 +89,11 @@ class UltronStudioEngineReadOnlyTest extends TestCase
     private const OTHER_STUDIO_DIRS = ['Http/Controllers/Crm/UltronStudio', 'Models/UltronStudio', 'Console/Commands/UltronStudio'];
 
     /** Las tablas del Studio, en las que sus rutas sí escriben. */
-    private const STUDIO_TABLES = ['ultron_studio_drafts', 'ultron_studio_rules', 'ultron_studio_versions', 'ultron_studio_version_reviews', 'ultron_studio_audit_events'];
+    private const STUDIO_TABLES = [
+        'ultron_studio_drafts', 'ultron_studio_rules', 'ultron_studio_versions', 'ultron_studio_version_reviews', 'ultron_studio_audit_events',
+        // Hito 4: el laboratorio (sin veredictos: en `fake` no se admiten).
+        'ultron_studio_lab_scenarios', 'ultron_studio_lab_runs', 'ultron_studio_lab_run_cases', 'ultron_studio_lab_events',
+    ];
 
     /** Una sentencia que escribe, con su tabla (con o sin esquema y comillas). */
     private const WRITE_SQL = '/^\s*(?:with\b.*?\)\s*)?(?:insert\s+(?:or\s+\w+\s+)?into|update(?:\s+or\s+\w+)?|delete\s+from|replace\s+into|truncate(?:\s+table)?)\s+(?:only\s+)?((?:"?\w+"?\.)?"?\w+"?)/is';
@@ -194,6 +205,9 @@ class UltronStudioEngineReadOnlyTest extends TestCase
         $this->withoutMiddleware(ThrottleRequests::class);
         $this->seedEngine();
         $this->importBaseline();
+        // Hito 4: el laboratorio encendido en `fake` y su catálogo importado.
+        $this->labFake();
+        $this->importLabScenarios();
         $ana = $this->person(Admin::ROLE_ADMINISTRADOR, 'Ana Pérez');
         $root = $this->person(Admin::ROLE_SUPER_ADMIN, 'Root');
         // Las sesiones se abren ANTES de la huella: abrirlas no es del Studio.
@@ -229,7 +243,12 @@ class UltronStudioEngineReadOnlyTest extends TestCase
         }
         $this->assertSame(array_keys($antes['tables']), array_keys($despues['tables']), 'El Studio creó o borró tablas.');
         $this->assertSame($antes['config'], $despues['config'], 'El Studio cambió la configuración.');
-        Queue::assertNothingPushed();
+        // Solo el paso del laboratorio, y solo en su carril (contrato H4 §A10).
+        $empujados = Queue::pushedJobs();
+        $this->assertSame([StudioLabStepJob::class], array_keys($empujados), 'El Studio encoló algo que no es el paso del laboratorio.');
+        foreach ($empujados[StudioLabStepJob::class] as $empujado) {
+            $this->assertSame((string) config('queue.lanes.lab.queue'), $empujado['queue'], 'El paso del laboratorio salió de su carril.');
+        }
         Http::assertNothingSent();
         Mail::assertNothingSent();
         Notification::assertNothingSent();
@@ -245,7 +264,7 @@ class UltronStudioEngineReadOnlyTest extends TestCase
         $recorridas = array_values(array_unique($this->walked));
         sort($recorridas);
         $this->assertSame($todas, $recorridas);
-        $this->assertCount(21, $recorridas);
+        $this->assertCount(33, $recorridas);
     }
 
     /** @var list<string> */
@@ -341,6 +360,31 @@ class UltronStudioEngineReadOnlyTest extends TestCase
         foreach (["compare?from={$v1}&to={$v2}", "compare?from=baseline&to={$v1}", "compare?from={$v1}&to=draft", 'engine/readings', 'audit', 'rules', 'versions', 'status'] as $lectura) {
             $this->walk('GET', $lectura, $root)->assertOk();
         }
+
+        // Hito 4: el laboratorio en `fake`. Un escenario propio, editado; una
+        // ejecución sobre la versión aprobada, procesada EN LÍNEA (el runner
+        // y las guardas del motor sobre el texto); otra cancelada en cola; un
+        // veredicto que el ensayo sin IA no admite; el archivo y las lecturas.
+        $this->walk('GET', 'lab/status', $ana)->assertOk()->assertJsonPath('data.mode', 'fake');
+        $this->walk('GET', 'lab/scenarios', $ana)->assertOk();
+        $propio = $this->walk('POST', 'lab/scenarios', $ana, $this->scenarioBody())->assertCreated()->json('data');
+        $this->walk('PATCH', "lab/scenarios/{$propio['uuid']}", $ana, ['baseRevision' => 1, 'title' => 'Editado en el recorrido'])->assertOk();
+        $cuerpo = ['target' => ['kind' => 'version', 'uuid' => $v1], 'scenarioUuids' => [$this->scenarioUuid('C-02'), $this->scenarioUuid('C-04'), $propio['uuid']]];
+        $estimacion = $this->walk('POST', 'lab/estimate', $root, $cuerpo)->assertOk()->json('data');
+        $ejecucion = $this->walk('POST', 'lab/runs', $root, $cuerpo + ['acceptedMaxCostMicros' => $estimacion['estimate']['maxMicros'], 'clientRequestId' => (string) Str::uuid()])
+            ->assertCreated()->json('data');
+        $this->assertSame('completed', $this->drain($ejecucion['uuid'])->status);
+        $otra = $this->walk('POST', 'lab/runs', $root, ['target' => ['kind' => 'baseline'], 'scenarioUuids' => [$this->scenarioUuid('C-01')], 'acceptedMaxCostMicros' => 0, 'clientRequestId' => (string) Str::uuid()])
+            ->assertCreated()->json('data');
+        $this->walk('POST', "lab/runs/{$otra['uuid']}/cancel", $root)->assertOk()->assertJsonPath('data.status', 'cancelled');
+        $huella = $this->walk('GET', "lab/runs/{$ejecucion['uuid']}", $ana)->assertOk()->json('data.resultsHash');
+        $this->walk('POST', "lab/runs/{$ejecucion['uuid']}/verdict", $root, ['decision' => 'needs_changes', 'note' => 'Recorrido del motor', 'resultsHash' => $huella])
+            ->assertStatus(409)->assertJsonPath('code', 'run_not_reviewable');
+        $this->walk('POST', "lab/scenarios/{$propio['uuid']}/archive", $ana, ['reason' => 'Fin del recorrido'])->assertOk();
+        foreach (['lab/runs', 'lab/events', 'lab/status'] as $lectura) {
+            $this->walk('GET', $lectura, $root)->assertOk();
+        }
+
         $this->walk('POST', 'draft/discard', $ana, ['baseRevision' => $borrador['revision']])->assertOk();
     }
 

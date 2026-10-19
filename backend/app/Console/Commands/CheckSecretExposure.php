@@ -50,6 +50,8 @@ class CheckSecretExposure extends Command
         'FACTUS_CLIENT_SECRET', 'FACTUS_PASSWORD',
         'TWILIO_AUTH_TOKEN', 'LIVEKIT_API_SECRET', 'FIREBASE_PRIVATE_KEY',
         'MARKETING_HERMES_API_KEY', 'API_SERVER_KEY',
+        // La clave PROPIA del laboratorio de ULTRON STUDIO (Hito 4).
+        'ULTRON_STUDIO_LAB_OPENAI_API_KEY',
     ];
 
     /** Valores que no son secretos aunque la clave lo parezca. */

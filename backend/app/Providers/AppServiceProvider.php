@@ -611,6 +611,17 @@ class AppServiceProvider extends ServiceProvider
             Limit::perMinute(30)->by($clave($request))->response($escribir),
             Limit::perMinute(120)->by('ultron-studio-net:'.ClientNetwork::of($request->ip()))->response($escribir),
         ]);
+
+        // Hito 4 (contrato H4 §A7): lanzar una ejecución del laboratorio gasta
+        // presupuesto de un proveedor externo. Además del cupo de escritura, un
+        // techo por HORA: 10 por credencial y 30 por red. El cubo es suyo (el
+        // nombre del limitador va en la clave) y no se mezcla con el de
+        // escritura, que la ruta gasta además.
+        $lanzar = $demasiadas('Demasiadas ejecuciones del laboratorio en una hora. Espera antes de lanzar otra.');
+        RateLimiter::for('ultron-studio-lab-run', fn (Request $request) => [
+            Limit::perHour(10)->by($clave($request))->response($lanzar),
+            Limit::perHour(30)->by('ultron-studio-net:'.ClientNetwork::of($request->ip()))->response($lanzar),
+        ]);
     }
 
     /**

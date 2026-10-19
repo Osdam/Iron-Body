@@ -22,6 +22,7 @@ el mensaje del siguiente cliente no llegaba a guardarse.
 | `EmitCreditNoteJob` | `billing` | idem | P4 | 600 s | 900 s | 5 |
 | `SendElectronicInvoiceEmailJob` | `billing` | idem | P4 | 600 s | 900 s | 3 |
 | `SyncFactusInvoiceStatusJob` | `billing` | idem | P4 | 600 s | 900 s | — |
+| `StudioLabStepJob` (`app/Services/UltronStudio/`) | `studio-lab` | supervisor `ironbody-lab` ×1 (`docs/ops/supervisor/ironbody-lab.conf`, fichero aparte) | P5 | 150 s | 300 s | 1 |
 
 Nada queda en `default`. Si algún día aparece trabajo ahí, es un job nuevo al que
 se le olvidó el carril: lo delata `ChaosLaneIsolationTest`.

@@ -688,6 +688,26 @@ final class AuthorizationMap
         // quien pide). Sin llaves nuevas.
         'GET api/admin/ultron-studio/engine/readings' => 'ultron.view',
         'GET api/admin/ultron-studio/compare' => 'ultron.view',
+        // Hito 4 (contrato docs/ultron-studio/ULTRON_STUDIO_H4_CONTRACT.md §A7,
+        // decisión 2 del lead): el laboratorio de IA. Leer, estimar (no escribe)
+        // y el libro, con `ultron.view`; los escenarios, con `ultron.lab_manage`;
+        // lanzar y cancelar ejecuciones, que gastan presupuesto, con
+        // `ultron.lab_run` (solo Super Admin por defecto); el veredicto, con
+        // `ultron.approve` y cuatro ojos respecto al autor de la versión (lo
+        // exige el servicio). Con la bandera apagada, todo menos `lab/status`
+        // responde 409 DESPUÉS de esta puerta: sin permiso, 403.
+        'GET api/admin/ultron-studio/lab/status' => 'ultron.view',
+        'GET api/admin/ultron-studio/lab/scenarios' => 'ultron.view',
+        'GET api/admin/ultron-studio/lab/runs' => 'ultron.view',
+        'GET api/admin/ultron-studio/lab/runs/{uuid}' => 'ultron.view',
+        'POST api/admin/ultron-studio/lab/estimate' => 'ultron.view',
+        'GET api/admin/ultron-studio/lab/events' => 'ultron.view',
+        'POST api/admin/ultron-studio/lab/scenarios' => 'ultron.lab_manage',
+        'PATCH api/admin/ultron-studio/lab/scenarios/{uuid}' => 'ultron.lab_manage',
+        'POST api/admin/ultron-studio/lab/scenarios/{uuid}/archive' => 'ultron.lab_manage',
+        'POST api/admin/ultron-studio/lab/runs' => 'ultron.lab_run',
+        'POST api/admin/ultron-studio/lab/runs/{uuid}/cancel' => 'ultron.lab_run',
+        'POST api/admin/ultron-studio/lab/runs/{uuid}/verdict' => 'ultron.approve',
 
         // Ver el catálogo de roles ya revela el organigrama y qué puede cada
         // uno. Se exige el mismo permiso que para tocarlo: un dominio con una

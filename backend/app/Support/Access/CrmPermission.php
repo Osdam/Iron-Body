@@ -224,6 +224,10 @@ final class CrmPermission
             // el servidor las rechaza siempre: el motor no lee versiones).
             'ultron.publish',
             'ultron.rollback',
+            // Lanzar ejecuciones del laboratorio de IA: gastan presupuesto de un
+            // proveedor externo. Solo Super Admin por defecto; se concede a mano
+            // desde Roles (contrato H4, decisión 2). Escenarios y veredicto, sí.
+            'ultron.lab_run',
         ]));
 
         /*

@@ -22,6 +22,13 @@ use RecursiveIteratorIterator;
  *  - Nada del núcleo usa el reloj, la base, el log, la caché ni las colas.
  *  - Todos los ficheros van PLANOS en `app/Services/UltronStudio/`: la prueba
  *    estática de lectores del motor no recorre subdirectorios.
+ *
+ * Desde el paso 3 del Hito 4 hay dos grupos de `StudioLab*`: el NÚCLEO puro
+ * (lo de arriba, sin reloj, base, log ni colas) y la PERSISTENCIA (escenarios,
+ * ejecuciones, runner, job, veredicto y libro), que sí usa la base, el reloj,
+ * el log y la cola, pero tampoco nombra el motor ni su configuración, ni sale a
+ * la red. Las dos listas son explícitas: un fichero nuevo tiene que elegir
+ * grupo aquí.
  */
 class StudioLabIsolationTest extends TestCase
 {
@@ -31,6 +38,17 @@ class StudioLabIsolationTest extends TestCase
     private const AJENO = ['services.openai', 'marketing.ai', 'OPENAI_API_KEY', 'SalesAiConfig'];
 
     private const IMPURO = ['now', 'today', 'Carbon', 'CarbonImmutable', 'DB', 'Log', 'Cache', 'Queue', 'Bus', 'Mail', 'Notification', 'Event', 'Storage', 'File', 'dispatch', 'event', 'cache', 'logger', 'info', 'report', 'env', 'StudioLabVerdict'];
+
+    /** El núcleo puro (paso 2 del Hito 4). */
+    private const NUCLEO = [
+        'StudioLabCatalog.php', 'StudioLabChecks.php', 'StudioLabConfig.php', 'StudioLabCost.php', 'StudioLabEngineChecks.php', 'StudioLabFakeClient.php',
+        'StudioLabModelClient.php', 'StudioLabOpenAiClient.php', 'StudioLabOutcome.php', 'StudioLabPersonalData.php', 'StudioLabPrompts.php',
+    ];
+
+    /** La persistencia y la orquestación (paso 3 del Hito 4). */
+    private const PERSISTENCIA = [
+        'StudioLabEvents.php', 'StudioLabRunner.php', 'StudioLabRuns.php', 'StudioLabScenarios.php', 'StudioLabStepJob.php', 'StudioLabVerdicts.php',
+    ];
 
     /** @return array<string,string> nombre → ruta */
     private static function ficheros(): array
@@ -46,10 +64,9 @@ class StudioLabIsolationTest extends TestCase
 
     public function test_estan_todos_y_planos(): void
     {
-        $this->assertSame([
-            'StudioLabCatalog.php', 'StudioLabChecks.php', 'StudioLabConfig.php', 'StudioLabCost.php', 'StudioLabEngineChecks.php', 'StudioLabFakeClient.php',
-            'StudioLabModelClient.php', 'StudioLabOpenAiClient.php', 'StudioLabOutcome.php', 'StudioLabPersonalData.php', 'StudioLabPrompts.php',
-        ], array_keys(self::ficheros()));
+        $todos = [...self::NUCLEO, ...self::PERSISTENCIA];
+        sort($todos);
+        $this->assertSame($todos, array_keys(self::ficheros()));
 
         $raiz = dirname(__DIR__, 3).'/app/Services/UltronStudio';
         foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($raiz, RecursiveDirectoryIterator::SKIP_DOTS)) as $f) {
@@ -97,9 +114,14 @@ class StudioLabIsolationTest extends TestCase
             $esperadas = match ($nombre) {
                 'StudioLabConfig.php' => ["'ultron_studio.lab'"],
                 'StudioLabOpenAiClient.php' => ["'ultron_studio.lab.openai.api_key'", "'ultron_studio.lab.openai.base_url'"],
+                // El carril del job, como los demás jobs (config/queue.php → lanes).
+                'StudioLabStepJob.php' => ["'queue.lanes.lab'"],
                 default => [],
             };
             $this->assertSame($esperadas, $lecturas, "{$nombre} lee la configuración");
+            if (! in_array($nombre, self::NUCLEO, true)) {
+                continue;
+            }
             foreach (self::IMPURO as $impuro) {
                 $this->assertNotContains($impuro, $usos, "{$nombre} usa {$impuro}");
             }
