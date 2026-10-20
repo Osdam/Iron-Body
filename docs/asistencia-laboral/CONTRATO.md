@@ -544,14 +544,18 @@ Desactivar a alguien que ya no conserva ningún perfil activo revoca y BORRA su 
 ```
 Nunca incluye la plantilla.
 
-`renewal_pending` = hay plantilla pero NO verifica: o se registró antes del kiosko (sin
-consentimiento ni autorización: las 4 de producción, decisión 2026-10-11) o un
-administrador ya autorizó un registro nuevo. En ambos casos la persona debe registrarse
-de nuevo con código. Solo una plantilla `active` verifica (kiosko, clases y login facial).
+`renewal_pending` = hay que registrar el rostro de nuevo, por uno de dos motivos:
+- la plantilla se registró antes del kiosko (sin consentimiento ni autorización: las 4 de
+  producción, decisión 2026-10-11): NO verifica hasta el registro nuevo;
+- un administrador autorizó un registro nuevo: la tablet ofrece «Registrar mi rostro», pero
+  la plantilla válida SIGUE verificando (kiosko, clases y login facial) hasta que la nueva
+  la sustituya o se revoque (decisión 2026-10-19).
+Verifica toda plantilla con consentimiento no revocada. Para dejar de aceptar un rostro al
+instante, se revoca; un código de enrolamiento no lo invalida.
 
 `POST admin/biometrics/identities/{identity_id}/enrollment-code` — `biometrics.manage`
 `{ "reason": "…" }` → `{ "ok": true, "code": "…", "expires_at": "…" }`. Con plantilla activa
-el estado pasa a `renewal_pending` hasta que se use o caduque.
+el estado pasa a `renewal_pending` hasta que se use o caduque, sin dejar de verificar.
 
 `POST admin/biometrics/identities/{identity_id}/revoke` — `biometrics.manage`
 `{ "reason": "motivo (5-500)" }` → `{ "ok": true, "data": { "status": "revoked", "revoked_at": "…" } }`

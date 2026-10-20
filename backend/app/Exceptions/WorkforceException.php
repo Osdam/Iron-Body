@@ -114,10 +114,19 @@ class WorkforceException extends RuntimeException
         return new self("Demasiados intentos. Espera {$minutes} minutos o usa un código de administrador.", 'face_attempts_exceeded', 429);
     }
 
+    /**
+     * El mensaje dice lo que pasa de verdad: antes decía «no tiene un rostro
+     * registrado» también con la plantilla en renovación, y eso llevaba a
+     * emitir códigos de enrolamiento para iniciar una clase.
+     */
     public static function biometricNotEnrolled(string $status): self
     {
         return new self(
-            'Esta persona no tiene un rostro registrado. Un administrador debe autorizar el registro.',
+            match ($status) {
+                'renewal_pending' => 'El rostro registrado debe renovarse: regístralo de nuevo en la tablet («Registrar mi rostro») con la autorización de un administrador.',
+                'revoked' => 'El rostro registrado fue revocado. Un administrador debe autorizar un registro nuevo.',
+                default => 'Esta persona no tiene un rostro registrado. Un administrador debe autorizar el registro.',
+            },
             'biometric_not_enrolled',
             409,
             ['biometric' => ['status' => $status]],

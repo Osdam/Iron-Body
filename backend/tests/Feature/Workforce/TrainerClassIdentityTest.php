@@ -118,6 +118,28 @@ class TrainerClassIdentityTest extends TestCase
         $this->assertIsInt($fila->json('events_cursor'));
     }
 
+    public function test_un_codigo_de_enrolamiento_vivo_no_bloquea_el_rostro_valido_en_clase(): void
+    {
+        // Caso real del 19-10-2026: un código de enrolamiento emitido «para la
+        // clase» dejaba el rostro bueno en renovación y la clase solo entraba
+        // con el código de respaldo.
+        $this->enrollCoach();
+        $tablet = $this->tablet();
+        $this->postJson("/api/admin/biometrics/identities/{$this->coach->identity->uuid}/enrollment-code", ['reason' => 'Clase'], $this->adminWithPermissions(['biometrics.manage']))
+            ->assertCreated();
+        $this->identify('1075000010', $tablet)->assertJsonPath('employee.biometric.status', 'renewal_pending');
+
+        $this->signed('POST', "/api/trainer/classes/{$this->clase->id}/start", ['session_date' => self::LUNES, 'embedding' => $this->capture($this->face(20), 3)], $tablet, ['Authorization' => 'Bearer '.$this->token])
+            ->assertOk()->assertJsonPath('session.start_identity_method', 'face');
+        Carbon::setTestNow(Carbon::parse(self::LUNES.' 10:02', 'America/Bogota')->utc());
+        $this->signed('POST', "/api/trainer/classes/{$this->clase->id}/end", ['session_date' => self::LUNES, 'embedding' => $this->capture($this->face(20), 4)], $tablet, ['Authorization' => 'Bearer '.$this->token])
+            ->assertOk()->assertJsonPath('session.end_identity_method', 'face');
+
+        // Y un rostro ajeno sigue sin pasar aunque haya renovación autorizada.
+        $this->postJson("/api/trainer/classes/{$this->clase->id}/start", ['session_date' => self::LUNES, 'embedding' => $this->face(21)], $this->bearer())
+            ->assertStatus(422)->assertJsonPath('code', 'face_no_match');
+    }
+
     public function test_un_rostro_que_no_es_el_suyo_no_inicia_la_clase(): void
     {
         $this->enrollCoach();
