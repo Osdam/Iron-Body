@@ -478,16 +478,19 @@ class TrainerClassIdentityTest extends TestCase
         $this->getJson('/api/trainer/auth/me', $this->bearer())->assertOk();
     }
 
-    public function test_el_interruptor_del_login_facial_apaga_tambien_el_rostro_al_portal_en_el_kiosko(): void
+    public function test_el_rostro_al_portal_en_el_kiosko_tiene_su_propio_interruptor(): void
     {
-        // I2: TRAINER_FACE_LOGIN_ENABLED=false (mitigación de incidente) no deja
-        // abierta la vía nueva rostro → portal.
+        // El login facial PÚBLICO (roster sin firma) apagado, como en producción,
+        // no cierra la entrada segura de la tablet: es la única al portal ahí.
         $this->enrollCoach();
         config(['trainer.face.login_enabled' => false]);
+        $this->getJson('/api/trainer/auth/face/roster')->assertNotFound();
+        $this->verifyFace('1075000010', $this->face(20), $this->tablet(), 'trainer_session')->assertOk();
 
+        // I2: ante un incidente se corta con su interruptor; la jornada no depende de él.
+        config(['workforce.kiosk.trainer_portal_face' => false]);
         $this->verifyFace('1075000010', $this->face(20), $this->tablet(), 'trainer_session')
             ->assertStatus(403)->assertJsonPath('code', 'trainer_face_login_disabled');
-        // La jornada no depende de ese interruptor.
         $this->verifyFace('1075000010', $this->face(20), $this->tablet())->assertOk();
     }
 }
