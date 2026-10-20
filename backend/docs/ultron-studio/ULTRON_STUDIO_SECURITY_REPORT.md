@@ -178,7 +178,7 @@ Con las cuatro abiertas, cada ejecución sigue limitada por: la estimación que 
 | `tester` de backend, parte 1 | Backend `4fbce0a`, con la pila real y PostgreSQL 14 | Carreras de creación sin un solo resultado incorrecto; dos hipótesis por lectura de código (HIP-1 y HIP-2) |
 | `tester` de backend, parte 2 | Backend `6dbf485`, con la pila real, el worker real y PostgreSQL 14 | Las correcciones aguantan: 5 carreras forzadas 10/10 en READ COMMITTED y en REPEATABLE READ, 21 casos límite correctos y las 14 mutaciones del encargo cazadas. Un hallazgo de producto (H-P2-1) y dos huecos de cobertura (H-P2-2 y H-P2-3), abiertos; su corrección la decide la Enmienda 5 |
 | `tester` del E2E | Backend `4fbce0a` y CRM `32c03d3`/`564cf14`, con la pila real; final sobre `6dbf485` y `3e630eb` | 121/122 por H-1, cosmético, del CRM; **122/122** sobre `6dbf485` y `3e630eb` |
-| `reviewer` | Backend `6dbf485` y CRM `3e630eb` | <!-- PENDIENTE: veredicto del reviewer --> |
+| `reviewer` | Backend `6dbf485` y CRM `3e630eb` | **APROBADO CON OBSERVACIONES** para las fases 1 y 2, sin bloqueantes; I-1 (C-11 retirado), I-2 (`lab-invisibles` con la clase completa de invisibles), I-3 (`budgetCap` expuesto), I-4 (cliente por `mode` de la ejecución) cerradas en el segundo lote antes de la fase 3 (Enmienda 6) |
 
 ### Hallazgos y estado
 

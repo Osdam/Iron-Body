@@ -387,7 +387,7 @@ Con el visto bueno del propietario. Se deshace con otro `config:cache`.
 2. `sudo -u www-data php backend/artisan config:cache && chmod 600 backend/bootstrap/cache/config.php`.
 3. `supervisorctl restart 'ironbody-lab:*'`: el worker lee la configuración al arrancar.
 4. La comprobación del paso 3 de la fase 1 → `["production",true,"fake","0",null,false]`.
-5. Smoke con `SMOKE_LAB_EXPECT_ENABLED=1`, también sin filas positivas: `lab/status` con `enabled: true`, `mode: fake`, presupuesto diario 0, 12 escenarios importados y la etiqueta «No es ULTRON»; los 12 escenarios del catálogo, de solo lectura; una estimación en `fake` (coste 0, `allowed`, no crea nada); `GET lab/runs` con el paginador; un `POST lab/scenarios` con un correo → 422 sin fila; y los mismos escenarios al final.
+5. Smoke con `SMOKE_LAB_EXPECT_ENABLED=1`, también sin filas positivas: `lab/status` con `enabled: true`, `mode: fake`, presupuesto diario 0, 11 escenarios importados y la etiqueta «No es ULTRON»; los 12 escenarios del catálogo, de solo lectura; una estimación en `fake` (coste 0, `allowed`, no crea nada); `GET lab/runs` con el paginador; un `POST lab/scenarios` con un correo → 422 sin fila; y los mismos escenarios al final.
 6. Si el propietario quiere ver la fontanería, lanza una ejecución `fake` desde el CRM con un Super Admin: «Ensayo sin IA», coste 0, sin propuesta y sin veredicto posible. **Deja filas que no se pueden borrar** (la ejecución, sus casos y su evento): es decisión suya.
 
 ### Fase 3: OpenAI (solo con la clave dedicada del propietario)

@@ -215,7 +215,7 @@ Antes de gastar, la persona ve cuánto costará como mucho y lo acepta; el servi
 **Dónde está:** backend `6dbf485` (más la documentación, hasta `403a12b`) y CRM `3e630eb`, en la rama `feat/ultron-studio-h4` de los dos repos, **sin push ni despliegue**. Contrato: `ULTRON_STUDIO_H4_CONTRACT.md`, con las Enmiendas 1–5 y sus precisiones. **La Enmienda 5 (ejecuciones huérfanas y cobertura) está pendiente de implementar:** lo que sigue describe `6dbf485`.
 
 **IMPLEMENTADO Y PROBADO** (en rama):
-- **Escenarios:** el catálogo de 12 (`C-01` a `C-12`, versión `2026-10-19.1`) y los del personal (`E-001…`, hasta 100 vivos), con idempotencia, conflicto 409, archivo con motivo y un filtro que rechaza correos, teléfonos, documentos y caracteres invisibles en todo texto que sale hacia el proveedor.
+- **Escenarios:** el catálogo de 11 (`C-01` a `C-10` y `C-12`, versión `2026-10-20.1`; C-11 retirado por la Enmienda 6 porque contradecía R-11) y los del personal (`E-001…`, hasta 100 vivos), con idempotencia, conflicto 409, archivo con motivo y un filtro que rechaza correos, teléfonos, documentos y caracteres invisibles en todo texto que sale hacia el proveedor.
 - **Ejecuciones** sobre una versión, el borrador propio o la línea base: estimación aceptada de forma explícita, reserva atómica contra el tope diario (día de Bogotá) y por ejecución, corte por coste real, cancelación, caducidad, plazo y paradas por errores del proveedor, un caso a la vez en un worker propio.
 - **Evaluación:** 5 comprobaciones del Studio (entre ellas `lab-invisibles`) y las guardas puras del motor a través de un único adaptador; un juez con salida estricta; una agregación determinista en la que un hallazgo bloqueante gana siempre a la IA.
 - **Cliente de OpenAI** (Responses API) con `store: false` siempre, URL fija en producción, sin reintentos y con la clave del laboratorio, que nunca sale del entorno del servidor; un **modo de ensayo** sin red ni coste.
@@ -247,7 +247,7 @@ Antes de gastar, la persona ve cuánto costará como mucho y lo acepta; el servi
   - `api-security-specialist`: sin críticos, altos ni medios. B-1, B-2, B-3 e I-3, corregidos; el resto, aceptado y documentado;
   - `security`: sin críticos, altos ni medios. B-1 y B-2, corregidos; la retención de OpenAI y el proyecto dedicado, pendientes del propietario;
   - `tester` de backend: carreras de creación sin un solo resultado incorrecto; HIP-1 (cancelar frente al reclamo) confirmada y corregida; HIP-2, corregida. Sobre `6dbf485`, las correcciones aguantan con el worker real; quedan **abiertos H-P2-1** (ejecución huérfana, sin gasto) y dos huecos de cobertura, con su corrección decidida en la Enmienda 5 y pendiente de implementar (ver abajo);
-  - `reviewer`: <!-- PENDIENTE: veredicto del reviewer --> pendiente al escribir esto.
+  - `reviewer`: APROBADO CON OBSERVACIONES para las fases 1 y 2, sin bloqueantes; cuatro observaciones importantes cerradas antes de la fase 3 (Enmienda 6).
 
 **Decisiones del lead** (contrato y enmiendas):
 1. **Simulación del Studio**, etiquetada en datos y pantalla, con las guardas puras del motor desde un único adaptador; el veredicto lo emite una persona.
@@ -259,8 +259,10 @@ Antes de gastar, la persona ve cuánto costará como mucho y lo acepta; el servi
 
 ### Hito 4: veredicto del reviewer
 
-<!-- PENDIENTE: veredicto del reviewer -->
-**Pendiente.** La revisión final independiente (`reviewer`) sobre el backend `6dbf485` y el CRM `3e630eb` no ha terminado al escribir esto. Mientras mantenga un hallazgo bloqueante, el hito no se despliega.
+**APROBADO CON OBSERVACIONES** para las fases 1 (apagado) y 2 (`fake`), sin bloqueantes (20-10-2026, sobre backend `6dbf485` y CRM `3e630eb`; informe en `scratchpad/hito-4/informe-reviewer.md`). Verificado por el reviewer: diff del motor vacío y las 21 rutas de F/G intactas; Studio + Access + Chaos 1 185 en SQLite y Studio 934 en PG 14; suite completa igual que `origin/main` en el mismo entorno; migraciones con rol sin superusuario (27 disparadores / 24 CHECK, `rollback --step=2` limpio); `auth:coverage` vacío; permisos y 4 fixtures idénticos a los del CRM; CRM 739 specs, build limpio, hojas < 8 kB, `ultron-studio.scss` intacto; 24 mutaciones cazadas salvo M16. Cuatro observaciones importantes **a cerrar antes de la fase 3** (todas decididas en la Enmienda 6 y aplicadas en el segundo lote de correcciones): I-1 el escenario C-11 contradecía R-11 (el motor no responde a quien pide que no le escriban) → retirado, catálogo de 11; I-2 `lab-invisibles` dejaba pasar 116 caracteres invisibles → misma clase que el filtro de entrada menos el ZWJ; I-3 `budgetCap` no se exponía → expuesto en `RunSummary`/`RunDetail` y redactado por tipo en el CRM; I-4 ninguna prueba vigilaba que una ejecución `fake` no use OpenAI si el driver cambia a mitad → el cliente se elige por el `mode` de la ejecución, con prueba. Menores: m-1 ejecución huérfana (= H-P2-1 del tester, corregida en `7113f9f`), m-2 aislamiento de `UltronStudioLabCancelLockTest` (corregido en el segundo lote), m-3 posible falsa alarma `queue_unattended` de IRON GUARD con pasos largos en la fase 3 (umbral por carril si la observabilidad lo admite; si no, pendiente de la fase 3), m-4 constante duplicada del aviso en el CRM (unificada).
+
+<!-- nota: el texto siguiente era el marcador original -->
+La revisión final independiente (`reviewer`) sobre el backend `6dbf485` y el CRM `3e630eb` terminó el 20-10-2026. Mientras mantenga un hallazgo bloqueante, el hito no se despliega.
 
 ### Hito 4: E2E con la pila real
 
@@ -310,7 +312,7 @@ El runbook está en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md` («Hito 4: runbook por fa
 
 | Fase | Qué queda en producción | Coste | Quién decide |
 |---|---|---|---|
-| 1. Código desplegado con la bandera **apagada** | Migraciones, 33 rutas (las 12 nuevas en 409 salvo `lab/status`), worker `ironbody-lab` durmiendo, 12 escenarios importados y el CRM nuevo con «Laboratorio apagado» | 0 | El usuario autoriza el despliegue |
+| 1. Código desplegado con la bandera **apagada** | Migraciones, 33 rutas (las 12 nuevas en 409 salvo `lab/status`), worker `ironbody-lab` durmiendo, 11 escenarios importados y el CRM nuevo con «Laboratorio apagado» | 0 | El usuario autoriza el despliegue |
 | 2. Bandera **encendida en `fake`** | El laboratorio usable en ensayo sin IA: escenarios, ejecuciones sin red, sin propuesta ni veredicto | 0 | El propietario da el visto bueno |
 | 3. **OpenAI** | Ejecuciones reales con el modelo y los precios del propietario, dentro de sus topes | El que fije el propietario | Solo con la clave dedicada del propietario y sus condiciones confirmadas |
 

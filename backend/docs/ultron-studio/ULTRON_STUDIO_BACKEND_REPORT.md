@@ -432,7 +432,7 @@ Once servicios planos en `app/Services/UltronStudio/` (la prueba estática de le
 | Servicio | Qué hace |
 |---|---|
 | `StudioLabConfig` | Lee `config('ultron_studio.lab')` y nada más: el modo, los motivos de configuración, los topes duros y las constantes fijas. Nunca devuelve ni registra la clave |
-| `StudioLabCatalog` | Los 12 escenarios del catálogo, su versión y su huella, y los límites que publica `GET lab/status` |
+| `StudioLabCatalog` | Los escenarios del catálogo (12 en `2026-10-19.1`; 11 en `2026-10-20.1`, C-11 retirado por la Enmienda 6), su versión y su huella, y los límites que publica `GET lab/status` |
 | `StudioLabPrompts` | Instrucciones del actor y del juez, esquemas estrictos, construcción de las entradas, lectura de las salidas y selección de las reglas que viajan |
 | `StudioLabChecks` | Las comprobaciones del Studio (`lab-*`) |
 | `StudioLabEngineChecks` | El adaptador de las guardas puras del motor (`motor-*`) |

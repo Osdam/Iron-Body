@@ -292,7 +292,7 @@ El E2E detecta las 6 mutaciones que se le probaron, todas en copias:
 | `e3d1a0d` | Formas de las Enmiendas 2 y 3 (`excludedRules`, `judgeError`, `invalid_driver`, `mode: null`, `target_contains_personal_data`) y dos lecturas de G |
 | `7da6f08` | Permisos `ultron.lab_manage` y `ultron.lab_run` y exclusión del Administrador para `lab_run` |
 | `4c022f8` | La página, sus componentes, la ruta y las dos entradas desde el tablero |
-| `32c03d3` | Fixture oficial de los 12 escenarios exportado desde el backend |
+| `32c03d3` | Fixture oficial de los escenarios exportado desde el backend (12 entonces; 11 tras retirar C-11 en la Enmienda 6, regenerado en el commit final) |
 | `564cf14` | Correcciones de la Enmienda 4: aviso al archivar, archivados recortados y `lab-invisibles` |
 | `3e630eb` | H-1 del E2E (frase del filtro del motor sin duplicar) y aviso al rechazar una versión |
 
