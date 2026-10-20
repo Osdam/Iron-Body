@@ -26,7 +26,7 @@ La vista previa es solo frontend y no guarda nada en el servidor: revertirla no 
 
 ## Hito G (control funcional) — PENDIENTE DE DESPLIEGUE; respaldo `/var/backups/ironbody/ultron-studio-g-<fecha UTC>/` (lo crea el paso 2 del runbook)
 
-**Estado:** G no está desplegado y ningún paso de esta sección se ha ejecutado. Es el plan. El respaldo guarda el commit del backend (`api-commit.txt`), el volcado de la base, el CRM publicado (`app-crm.tgz`), el `.env` (modo 600) y la caché de `bootstrap/cache`.
+**Estado:** G no está desplegado y ningún paso de esta sección se ha ejecutado. Es el plan. *(Así se escribió. **Actualización del 19-10-2026:** G se desplegó ese día, 06:00–06:04 UTC; sus respaldos reales están al final de este documento. La vuelta atrás de G sigue sin ejecutarse.)* El respaldo guarda el commit del backend (`api-commit.txt`), el volcado de la base, el CRM publicado (`app-crm.tgz`), el `.env` (modo 600) y la caché de `bootstrap/cache`.
 
 | Situación | Qué hacer | Pierde datos |
 |---|---|---|
@@ -46,6 +46,34 @@ La vista previa es solo frontend y no guarda nada en el servidor: revertirla no 
 - el `version.json` público trae el commit esperado;
 - con el CRM de F, el Studio abre en fase `ready`, no en `error`;
 - 12 workers RUNNING, ninguno en BACKOFF.
+
+## Hito 4 (laboratorio de IA) — PENDIENTE DE DESPLIEGUE; respaldo `/var/backups/ironbody/ultron-studio-h4-<fecha UTC>/` (lo crea el paso 2 del runbook)
+
+**Estado:** el Hito 4 no está desplegado y ningún paso de esta sección se ha ejecutado, ni en local. Es el plan, a partir del borrador del lead (`scratchpad/hito-4/deploy-h4.md`) y del informe del database-specialist. El respaldo guarda el commit del backend (`api-commit.txt`), el volcado de la base, el CRM publicado (`app-crm.tgz` y `crm-main.txt`), el `.env` (modo 600), la caché de `bootstrap/cache` y una copia de `/etc/supervisor/conf.d/`.
+
+**Regla que no cambia: nunca `migrate:rollback` (`down()`) en producción.** El `down()` de las dos migraciones borra escenarios, ejecuciones, veredictos y libro: `DROP` no pasa por los disparadores de fila. Las tablas se quedan aunque el código vuelva a G: el código de G no las nombra (frontera de aislamiento) y vacías no cuestan nada. Retirar el laboratorio es apagar la bandera.
+
+| Situación | Qué hacer | Pierde datos |
+|---|---|---|
+| **Parar el laboratorio ya** (gasto inesperado, fallo del proveedor, cualquier duda), en cualquier fase | `ULTRON_STUDIO_LAB_ENABLED=false` en `backend/.env`; `sudo -u www-data php backend/artisan config:cache && chmod 600 backend/bootstrap/cache/config.php`; `supervisorctl restart 'ironbody-lab:*'`. Desde ese momento todas las rutas `lab/*` responden 409 `lab_disabled` (salvo `GET lab/status`, 200 apagado) y el siguiente paso de cada ejecución viva la cierra `stopped: lab_disabled`. La llamada que esté en vuelo termina y se cobra (como mucho, un caso). **No basta con `config:cache`:** el worker se queda con la configuración que leyó al arrancar hasta que se reinicia | Nada: lo ya ejecutado queda en el libro |
+| **Volver a la fase 2 desde la 3** (sin OpenAI, pero con el laboratorio en `fake`) | `ULTRON_STUDIO_LAB_DRIVER=fake` y, si se quiere, quitar la clave del `.env`; `config:cache` como `www-data` y reiniciar `ironbody-lab:*`. Las ejecuciones `openai` vivas se cierran `stopped: not_configured` en su siguiente paso | Nada |
+| **Falla solo el CRM del Hito 4** (el backend va bien) | Restaurar `index.html` y `version.json` del CRM anterior (`44c0e8c`, `main-JNV5BHFD.js`) desde `app-crm.tgz` sobre `/var/www/app` y `chown root:root`. Los chunks anteriores siguen en disco, porque se publica sin `--delete`. El CRM de G funciona con el backend del Hito 4: tolera las llaves nuevas (comprobado con pruebas, no en producción) | Nada |
+| **Hay que volver el backend a G** | **Primero el CRM**, como en la fila anterior. Después: (1) bandera apagada, `config:cache` como `www-data` y `supervisorctl restart 'ironbody-lab:*'`; (2) dejar que el worker cierre las ejecuciones vivas: con la bandera apagada, la API no deja cancelar (409), pero el siguiente paso de cada una la cierra `stopped: lab_disabled`. Esperar a que `SELECT count(*) FROM ultron_studio_lab_runs WHERE status IN ('queued', 'running');` dé 0. Una ejecución huérfana (H-P2-1) no se cierra sola: ver «Incidencias conocidas del laboratorio» en el runbook; (3) `supervisorctl stop 'ironbody-lab:*'`, quitar `/etc/supervisor/conf.d/ironbody-lab.conf` y `supervisorctl reread && supervisorctl update`; (4) en `/var/www/api`, volver a `e651dd9` (`git checkout e651dd9` o un merge inverso); (5) `config:cache` y `route:cache` como `www-data`, con `chmod 600`, y `queue:restart`; (6) comprobar que vuelven a ser 21 rutas del Studio | Nada en la base: las tablas y sus filas se quedan |
+| **Un veredicto o un escenario por error** | No hay transición hacia atrás por diseño: el veredicto es inmutable y uno por ejecución (se lanza otra ejecución y se emite otro veredicto), y el escenario se archiva (no se borra) | Nada |
+
+**Qué queda si el backend vuelve a G** (inferido del código; **no se ha ejecutado nunca**, ni en local):
+- Las 5 tablas `ultron_studio_lab_*`, sus 16 disparadores, los 13 CHECK y la función `ultron_studio_lab_forbid()` se quedan. El código de G no las lee ni las escribe.
+- Las variables `ULTRON_STUDIO_LAB_*` y `QUEUE_STUDIO_LAB*` del `.env` se pueden quedar: el código de G no las lee. Si se quitan, se compara contra `env.backup` sin imprimir el fichero.
+- Si se concedió `ultron.lab_run` a mano en Roles, esa excepción queda en `role_permissions`. El código de G no conoce la llave: qué hace con ella no se ha probado; el CRM de G tolera llaves desconocidas.
+- Los pasos del laboratorio que quedaran en `jobs` (cola `studio-lab`) no los atiende nadie sin `ironbody-lab`, y nadie los vería: en G el carril `lab` no existe y `queue:health` no lo vigila. Por eso se cierran las ejecuciones antes de retirar el worker, y antes de volver el código se comprueba `SELECT count(*) FROM jobs WHERE queue = 'studio-lab';` → 0.
+
+**Solo con autorización expresa del usuario, y nunca como paso rutinario:** retirar las tablas con `php artisan migrate:rollback --step=2 --database=pgsql_owner --force` y el rol dueño, **sabiendo que borra todo el laboratorio**. Antes, `migrate:status` para confirmar que `2026_10_19_100002` y `2026_10_19_100003` son las dos últimas (si no, `--step=2` revertiría otras), y un respaldo nuevo de la base.
+
+**Verificación tras revertir:**
+- con la bandera apagada: `GET lab/status` responde 200 con `enabled: false`, y cualquier otra ruta `lab/*`, 409 `lab_disabled`;
+- con el backend en G: `route:list --path=admin/ultron-studio` da 21 rutas y `auth:coverage --unmapped` sale vacío;
+- el `version.json` público trae el commit esperado y el Studio abre en fase `ready`;
+- 12 workers RUNNING (13 si `ironbody-lab` sigue instalado), ninguno en BACKOFF.
 
 ## Fases siguientes
 

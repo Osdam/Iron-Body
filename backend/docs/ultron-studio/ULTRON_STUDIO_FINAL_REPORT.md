@@ -1,6 +1,6 @@
 # ULTRON STUDIO: informe de avance
 
-**Fecha:** 17-10-2026 (se actualiza con cada fase; última actualización: 19-10-2026, Hito G implementado y sin desplegar). **Rama:** `feat/ultron-studio` en el CRM (`Iron-Body_Front`) y en el backend (`Iron-Body`, solo documentación); el Hito G, en `feat/ultron-studio-g` de los dos repos.
+**Fecha:** 17-10-2026 (se actualiza con cada fase; última actualización: 19-10-2026, noche en hora de Bogotá: Hito 4 implementado en rama y sin desplegar). **Rama:** `feat/ultron-studio` en el CRM (`Iron-Body_Front`) y en el backend (`Iron-Body`, solo documentación); el Hito G, en `feat/ultron-studio-g` de los dos repos; el Hito 4, en `feat/ultron-studio-h4` de los dos repos.
 
 ## Estado
 
@@ -12,9 +12,12 @@
 | D. Vista previa protegida publicada | **PUBLICADA** el 18-10-2026 a las 02:56 UTC (ver «Publicación» al final) → `ULTRON_VISUAL_PREVIEW_READY` |
 | F. Persistencia (borradores, versiones con estados, reglas, aprobaciones, auditoría, permisos `ultron.*`, catálogo servido por el backend) | **DESPLEGADO Y VERIFICADO** (18-10-2026, 15:24–15:28 UTC; backend `9acddc3`, CRM `020db86`): ver «Hito F» más abajo, `ULTRON_STUDIO_BACKEND_REPORT.md` y `ULTRON_STUDIO_SECURITY_REPORT.md` |
 | G. Control funcional de las diez capas (configuración real por capa, lecturas del motor, reglas con condiciones, historial y comparación) | **DESPLEGADO Y VERIFICADO** (19-10-2026 06:00–06:04 UTC; backend `e651dd9`, código `dfb30f5`; CRM `44c0e8c`). Revisiones de seguridad, de pruebas y final (APROBADO CON OBSERVACIONES, todas cerradas); E2E con la pila real 126/126; smoke en producción 29/29. Detalle en «Hito G» más abajo. **`HITO_3_COMPLETED`** |
-| Siguientes (rotuladas «G–R» antes de que G pasara a ser el control funcional): laboratorio, evaluación IA, Meta, Twilio, canarios, ElevenLabs, vínculo versión↔conversación | **NO EMPEZADOS** (autorizados como construcción, no como activación) |
+| Hito 4. Laboratorio de IA (escenarios sintéticos, simulaciones del Studio, evaluación asistida con OpenAI y clave propia, veredicto humano) | **IMPLEMENTADO Y VERIFICADO EN RAMA, NO DESPLEGADO** (19-10-2026; backend `6dbf485`, CRM `3e630eb`). Revisiones de `security`, `api-security-specialist` y `tester` cerradas; E2E con la pila real 122/122; pendientes: la Enmienda 5 (ejecuciones huérfanas y cobertura, sin implementar), la revisión final del `reviewer` y el despliegue por fases. Detalle en «Hito 4» más abajo |
+| Siguientes (rotuladas «G–R» antes de que G pasara a ser el control funcional): Meta, Twilio, canarios, ElevenLabs, vínculo versión↔conversación (el laboratorio y la evaluación con IA son el Hito 4) | **NO EMPEZADOS** (autorizados como construcción, no como activación) |
 
 ## Qué hay (clasificación honesta)
+
+*Clasificación del 17-10-2026, de la vista previa visual. Lo implementado después está en las secciones de F, de G y del Hito 4.*
 
 **IMPLEMENTADA Y PROBADA** (en el CRM, con pruebas unitarias y E2E en Chrome real):
 - Navegación: submenú **Mercadeo › ULTRON Studio** (etiqueta «preview», orbe iridiscente) y ruta propia `/marketing/ultron-studio`, ambas tras la bandera `ultronStudioPreviewEnabled` y el permiso `marketing.agent.manage`.
@@ -198,6 +201,127 @@ El E2E detecta las 6 mutaciones que se le probaron.
 - **Después:** `git diff HEAD` vacío; fichero de entorno idéntico al respaldo (`MARKETING_ULTRON_ENABLED` sin cambios); 0 colas fallidas; 0 errores en `laravel.log`; auditoría reciente: `system.baseline_imported` 1, `rule.legacy_synced` 8, `draft.saved` 1, `draft.discarded` 1. El motor no lee nada del Studio: `ENGINE_READS_VERSIONS = false`, publicar y revertir siguen en 409.
 
 Runbook en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md` («Hito G: runbook», ejecutado) y vuelta atrás en `ULTRON_STUDIO_ROLLBACK.md` («Hito G»). **Estado: `HITO_3_COMPLETED`** (F y G desplegados y verificados).
+
+## Hito 4: laboratorio de IA (19-10-2026, implementado en rama, sin desplegar)
+
+**Resumen ejecutivo.** El laboratorio deja probar una versión del Studio antes de que nadie la apruebe, sin tocar al agente. Una persona elige la versión (o su borrador, o la línea base del código) y unos escenarios, conversaciones **sintéticas** escritas por el personal. Por cada escenario:
+- un **actor de laboratorio** (un modelo de IA con la clave propia del laboratorio) contesta como lo haría un asesor que siguiera esa configuración y esas reglas;
+- los **filtros del motor** (los mismos que usa ULTRON, como funciones de solo lectura) y las comprobaciones del Studio marcan lo que el motor marcaría;
+- otro modelo, el **juez**, opina criterio a criterio sin ver lo anterior;
+- el código **propone** (aprobar, revisar o rechazar) y una **persona distinta del autor** emite el veredicto.
+
+Antes de gastar, la persona ve cuánto costará como mucho y lo acepta; el servidor reserva ese dinero contra un tope diario y no deja pasar de él. Hoy **no gasta nada**: el laboratorio está apagado por defecto, en modo de ensayo sin IA y con presupuesto 0.
+
+**Dónde está:** backend `6dbf485` (más la documentación, hasta `403a12b`) y CRM `3e630eb`, en la rama `feat/ultron-studio-h4` de los dos repos, **sin push ni despliegue**. Contrato: `ULTRON_STUDIO_H4_CONTRACT.md`, con las Enmiendas 1–5 y sus precisiones. **La Enmienda 5 (ejecuciones huérfanas y cobertura) está pendiente de implementar:** lo que sigue describe `6dbf485`.
+
+**IMPLEMENTADO Y PROBADO** (en rama):
+- **Escenarios:** el catálogo de 12 (`C-01` a `C-12`, versión `2026-10-19.1`) y los del personal (`E-001…`, hasta 100 vivos), con idempotencia, conflicto 409, archivo con motivo y un filtro que rechaza correos, teléfonos, documentos y caracteres invisibles en todo texto que sale hacia el proveedor.
+- **Ejecuciones** sobre una versión, el borrador propio o la línea base: estimación aceptada de forma explícita, reserva atómica contra el tope diario (día de Bogotá) y por ejecución, corte por coste real, cancelación, caducidad, plazo y paradas por errores del proveedor, un caso a la vez en un worker propio.
+- **Evaluación:** 5 comprobaciones del Studio (entre ellas `lab-invisibles`) y las guardas puras del motor a través de un único adaptador; un juez con salida estricta; una agregación determinista en la que un hallazgo bloqueante gana siempre a la IA.
+- **Cliente de OpenAI** (Responses API) con `store: false` siempre, URL fija en producción, sin reintentos y con la clave del laboratorio, que nunca sale del entorno del servidor; un **modo de ensayo** sin red ni coste.
+- **Veredicto humano:** cuatro ojos respecto al autor de la versión, uno por ejecución, inmutable, con la huella de lo que la persona vio y el reconocimiento exacto de los casos que no pasaron.
+- **Libro propio** de solo inserción, y 5 tablas con sus guardas en PostgreSQL y en SQLite.
+- **CRM:** la página `marketing/ultron-studio/laboratorio` con escenarios, lanzador con estimación, vista de la ejecución y de cada caso, veredicto, comparación con la línea base e historial; enlaces desde el tablero y desde cada versión.
+- **Correcciones de las revisiones** (Enmienda 4): tope por ejecución sobre el coste real, `lab-invisibles`, archivados con tope, limitador por persona, cancelación releída bajo el cerrojo, READ COMMITTED en la deduplicación y avisos de datos personales al archivar y al rechazar.
+
+**QUÉ NO HACE** (por diseño; las protecciones siguen intactas):
+- **No es ULTRON.** Es una simulación del Studio: no usa n8n, ni sus prompts, ni `decide`/`commit`, y la pantalla lo dice en cada ejecución («Simulación del Studio · no es ULTRON»). Los filtros del motor se aplican a un texto sintético con hechos sintéticos: el laboratorio dice lo que el filtro **marcaría**, nunca lo que el motor haría.
+- **El motor no lee nada del Studio** (`StudioPublishing::ENGINE_READS_VERSIONS = false`) ni del laboratorio, y el laboratorio no escribe en el motor: 0 bytes de diff en sus zonas, y una prueba que escucha cada sentencia SQL lo vigila.
+- **Publicar y revertir siguen respondiendo 409 siempre.** El veredicto no cambia la versión ni el motor, y en este hito no condiciona `submit` ni `approve` (podrá hacerlo el Hito 5).
+- **Nada se aprueba solo:** la propuesta del laboratorio no es un veredicto, y ningún código del runner, del job ni de los comandos escribe uno (lo vigila una prueba estática; la Enmienda 5 la amplía a las escrituras directas en la tabla de veredictos).
+- **Sin llamadas, sin Meta, sin ElevenLabs.** No reproduce conversaciones reales, no simula varios turnos con un prospecto simulado y el modelo nunca escribe escenarios.
+- **Sin coste hasta la fase 3.** En las fases 1 y 2 no sale ninguna petición a OpenAI: no hay clave, el driver es `fake` y el presupuesto es 0.
+
+**Evidencia** (el detalle, en `ULTRON_STUDIO_BACKEND_REPORT.md`, `ULTRON_STUDIO_SECURITY_REPORT.md` y `ULTRON_STUDIO_VISUAL_REPORT.md`):
+- **Backend:**
+  - Unit del Studio: 702/702 en el núcleo; paridad con el fixture del tester, 207/207 (206 casos escritos a mano desde el contrato);
+  - Studio + Unit + Access + Chaos en SQLite: 1185, OK (11 omitidas que solo corren en PG);
+  - Studio + Unit en PostgreSQL 14: 934/934 en `6dbf485`;
+  - suite completa: 10 055 pruebas, 0 fallos nuevos frente a la línea base;
+  - `auth:coverage --unmapped` vacío y 33 rutas;
+  - el motor, sin cambios (`git diff origin/main 6dbf485`: 0 bytes en sus zonas);
+  - 26 mutaciones del backend, todas cazadas (5 del núcleo, 12 de la API y 9 de las correcciones), más las 14 del encargo del tester sobre `6dbf485`, también cazadas.
+- **CRM:** 739/739 specs del módulo en `3e630eb`; suite completa con 2786 pruebas y los 16 fallos de la línea base (`564cf14`); build de producción sin errores de presupuesto; chunk del laboratorio de 187,58 kB sin nombres del motor ni secretos; `ultron-studio.scss` sin un byte más; 27 mutaciones cazadas (18 + 6 + 3) y Chrome real con la API simulada 40/40, 19/19 y 13/13.
+- **E2E con la pila real:** **122/122** sobre `6dbf485` y `3e630eb` (ver abajo).
+- **Revisiones:**
+  - `api-security-specialist`: sin críticos, altos ni medios. B-1, B-2, B-3 e I-3, corregidos; el resto, aceptado y documentado;
+  - `security`: sin críticos, altos ni medios. B-1 y B-2, corregidos; la retención de OpenAI y el proyecto dedicado, pendientes del propietario;
+  - `tester` de backend: carreras de creación sin un solo resultado incorrecto; HIP-1 (cancelar frente al reclamo) confirmada y corregida; HIP-2, corregida. Sobre `6dbf485`, las correcciones aguantan con el worker real; quedan **abiertos H-P2-1** (ejecución huérfana, sin gasto) y dos huecos de cobertura, con su corrección decidida en la Enmienda 5 y pendiente de implementar (ver abajo);
+  - `reviewer`: <!-- PENDIENTE: veredicto del reviewer --> pendiente al escribir esto.
+
+**Decisiones del lead** (contrato y enmiendas):
+1. **Simulación del Studio**, etiquetada en datos y pantalla, con las guardas puras del motor desde un único adaptador; el veredicto lo emite una persona.
+2. **Llaves:** `ultron.lab_manage` (escenarios; Administrador por defecto) y `ultron.lab_run` (lanzar y cancelar, que gastan; **solo Super Admin por defecto**); el veredicto con `ultron.approve` y cuatro ojos.
+3. **Topes:** presupuesto diario 0 por defecto. Los valores propuestos para cuando llegue la clave (US$ 2 al día, US$ 0,50 por ejecución, 20 ejecuciones al día, 12 casos) y el modelo y los precios los fija el propietario con la página oficial.
+4. **Worker dedicado `ironbody-lab`** desde la fase 1, con la bandera apagada.
+5. **El smoke de producción no crea filas positivas**; antes de la fase 3, el propietario confirma la retención de OpenAI, crea un proyecto con presupuesto propio y escribe la clave en el servidor.
+6. **Enmienda 4:** corregir B-1, B-2, B-3, el limitador por persona, la cancelación y READ COMMITTED antes de desplegar; aceptar y documentar el resto.
+
+### Hito 4: veredicto del reviewer
+
+<!-- PENDIENTE: veredicto del reviewer -->
+**Pendiente.** La revisión final independiente (`reviewer`) sobre el backend `6dbf485` y el CRM `3e630eb` no ha terminado al escribir esto. Mientras mantenga un hallazgo bloqueante, el hito no se despliega.
+
+### Hito 4: E2E con la pila real
+
+**Hecho el 19-10-2026, en local. Nada de producción y ninguna llamada real a OpenAI.**
+
+**La pila:**
+- el backend, en una instantánea de `6dbf485`, con `artisan serve --no-reload` y PostgreSQL 14;
+- el **worker real**, `queue:work lab --queue=studio-lab --tries=1 --timeout=150`;
+- un simulador local de OpenAI, al que apunta `ULTRON_STUDIO_LAB_OPENAI_BASE_URL` (solo fuera de producción), que registra cada petición y marca como violación todo lo que incumpla el contrato;
+- el CRM `3e630eb` con `ng serve`, y Chrome con login por el formulario y tres cuentas (Super Admin, Administradora y Recepción).
+
+**Resultado final: 122/122 en 183 s** (`scratchpad/e2e-studio/h4-run.sh 6dbf485 3e630eb`, salida en `h4-run-final-out.txt`). La pasada anterior, sobre `4fbce0a` con el CRM `32c03d3` o `564cf14`, dio 121/122 por H-1, corregido en `3e630eb`.
+
+| # | Escenario | Resultado |
+|---|---|---|
+| E1 | Bandera apagada: la página dice «apagado» sin error; `GET lab/status` 200 y las otras 11 rutas 409 `lab_disabled`; el simulador no recibe nada | 5/5 |
+| E2 | Encendido: cabecera y presupuesto; la Administradora crea E-001 (un correo da 422 junto a su turno y no crea nada); Recepción recibe 403 y no ve el laboratorio | 17/17 |
+| E3 | Estimar y ejecutar sobre la versión de la Administradora con el worker real: estimar no escribe; «Ejecutar (máx. US$ 0,008)» envía ese máximo; progreso en vivo; C-02 falla por el filtro del motor (la frase, una sola vez) y la propuesta es `reject`; 4 llamadas, todas con la clave del laboratorio | 28/28 |
+| E4 | Veredicto: la autora no puede (403 `four_eyes_required`); el Super Admin emite `needs_changes`; un segundo veredicto da 409 `verdict_exists` | 9/9 |
+| E5 | Cancelar en cola y en curso (el caso en vuelo termina y se cobra; el siguiente no se envía); `insufficient_quota` para tras 1 llamada; `incomplete` en todos para al segundo caso; el ensayo sin IA termina sin llamadas, sin propuesta y sin veredicto posible | 15/15 |
+| E6 | Presupuesto: con el tope diario bajo, la estimación sale rechazada y `POST lab/runs` da 409; al subir los precios, `estimate_changed` obliga a reconfirmar el nuevo máximo | 8/8 |
+| E7 | Texto hostil (`<img onerror>`, `<svg onload>` y un `<script>` en la respuesta del actor): literal, sin crear elementos ni abrir diálogos | 7/7 |
+| E8 | Teclado (pestañas, diálogo de archivar con su aviso) y tres tamaños (1440, 820 y 390 px) sin desplazamiento horizontal | 21/21 (+1 esperado tras las correcciones) |
+| E9 | Cierre: la huella de 16 tablas del motor y del Studio de F/G, de `jobs` fuera de `studio-lab` y de `failed_jobs` es idéntica; sin 5xx fuera de los reinicios del arnés; `laravel.log` sin ERROR; el simulador, 0 violaciones en 15 peticiones; la clave no aparece en respuestas, DOM, libro ni log | 12/12 |
+
+El E2E detectó las 4 mutaciones que se le probaron sobre `4fbce0a` (`store: true`, sin cuatro ojos, el adaptador del motor sin hallazgos y la respuesta como `[innerHTML]`).
+
+**Qué no cubre:** la pila de producción (nginx con FPM, cachés y el build de producción); el cupo de 10/h (el arnés usa `CACHE_STORE=array`); `excludedRules` con más de 20 S-NNN; la caducidad, el plazo de 30 min, los 5xx y el fallo del juez (los cubre la parte 2 del tester con la pila real); `rate_limited`, `refusal` y el timeout del job (solo las pruebas Feature); Safari, Firefox y lectores de pantalla.
+
+### Hito 4: validación del backend por el tester sobre `6dbf485`
+
+**Hecha el 19/20-10-2026 (de 23:40 a ~00:50 UTC)** sobre el commit `6dbf485`, con la pila real (`artisan serve --no-reload` y PostgreSQL 14), el worker real (`queue:work lab --once`) y el simulador; árbol limpio al empezar y al terminar (`scratchpad/hito-4/informe-tester-backend.md`, «Parte 2»).
+- **Regresión:** Studio + Unit en PostgreSQL 14, 934/934 (0 omitidas), y 934 en SQLite (11 omitidas que solo corren en PG); el smoke de G contra su servidor, 29/29; `migrate:rollback --step=2` y `migrate` con un dueño sin superusuario: 27/24 → 11/11 → 27/24, y la pila sigue funcionando tras reimportar el catálogo.
+- **Carreras con el worker real**, cada una con 10 repeticiones válidas de 10 en READ COMMITTED y otras tantas en REPEATABLE READ, todas correctas: cancelar frente al reclamo, en dos montajes (`cancelled`, un solo caso empezado, 2 llamadas); dos pasos duplicados del job (un solo caso procesado); dos veredictos a la vez (200 + 409 `verdict_exists`, una fila); y dos veredictos denegados a la vez (un solo `run.verdict_denied`). Cada carrera cae con la mutación que rompe su garantía.
+- **Mutaciones:** las 14 del encargo, cazadas (entre ellas: sin cerrojo de presupuesto, `tries = 3`, juez que anula un bloqueante, sin `store: false`, leer la clave del motor, sin filtro de borradores ajenos, sin disparador terminal, el runner escribiendo en el motor, `failed()` que no cobra, la racha sin `incomplete`, sin la relectura de la cancelación y sin el corte por tope de ejecución).
+- **21 casos límite, todos correctos:** el día de Bogotá con el reloj en UTC (a las 23:30 de Bogotá sigue el día 19: sin reinicio prematuro del presupuesto), la caducidad en cola presentada sin escribir y sus bordes, el plazo de 30 min, los tres topes en tiempo de ejecución (`daily`, `run` y `accepted`), un timeout HTTP real del proveedor, las rachas de errores, `auth` en el acto, `incomplete` en todos, 16 KB exactos y +1, 20 casos, más de 200 archivados y `lab-invisibles` con el precio al revés y con emojis compuestos.
+
+**Hallazgos abiertos en `6dbf485`** (la Enmienda 5 del contrato, `403a12b`, decide su corrección, **pendiente de implementar y de verificar**):
+- **H-P2-1 (producto, media-baja): ejecución huérfana.** Si un paso falla antes de reclamar un caso, la ejecución queda `running` sin ningún paso en cola: cancelar responde 200 pero no la cierra, el plazo y la caducidad no se aplican y su reserva cuenta en el presupuesto del día hasta que cambia el día de Bogotá. No gasta dinero ni bloquea otras ejecuciones. Enmienda 5: cancelar la cerrará en el acto, el plazo vencido se presentará como `stopped: deadline` y `failed()` sin caso reclamado reencolará un paso. Hasta entonces, la salida operativa (pedir la cancelación y reencolar solo ese paso) está en el runbook.
+- **H-P2-2 y H-P2-3 (cobertura):** dos variantes de mutación sobreviven a PHPUnit (veredictos insertados por SQL directo desde un comando, y el «ocupado» dentro del reclamo, que solo caza la carrera real).
+
+**No verificado por el tester:** la muerte real del worker con un caso en curso y el timeout del job de 150 s; `rate_limited`, `quota`, `bad_request`, `refusal` e `invalid_output` con la pila real (solo PHPUnit; `quota` sí está en el E2E); las carreras de creación sobre `6dbf485` (se hicieron sobre `4fbce0a`); y la suite completa.
+
+### Hito 4: despliegue por fases
+
+El runbook está en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md` («Hito 4: runbook por fases») y la vuelta atrás en `ULTRON_STUDIO_ROLLBACK.md` («Hito 4»). **Ninguna fase se ha ejecutado.**
+
+| Fase | Qué queda en producción | Coste | Quién decide |
+|---|---|---|---|
+| 1. Código desplegado con la bandera **apagada** | Migraciones, 33 rutas (las 12 nuevas en 409 salvo `lab/status`), worker `ironbody-lab` durmiendo, 12 escenarios importados y el CRM nuevo con «Laboratorio apagado» | 0 | El usuario autoriza el despliegue |
+| 2. Bandera **encendida en `fake`** | El laboratorio usable en ensayo sin IA: escenarios, ejecuciones sin red, sin propuesta ni veredicto | 0 | El propietario da el visto bueno |
+| 3. **OpenAI** | Ejecuciones reales con el modelo y los precios del propietario, dentro de sus topes | El que fije el propietario | Solo con la clave dedicada del propietario y sus condiciones confirmadas |
+
+**Criterio de cierre:**
+- **`HITO_4_COMPLETED`** solo con las tres fases hechas: desplegado, **una ejecución real con OpenAI validada** (el coste registrado coincide aproximadamente con el panel de uso de OpenAI) y **un veredicto de una segunda persona** sobre una versión.
+- Sin la clave del propietario, el hito queda en **`HITO_4_IMPLEMENTED_WITH_EXTERNAL_DEPENDENCY`**: desplegado en la fase 1 (o en la 2) y a la espera de la clave, el proyecto, la retención, el modelo y los precios.
+
+### Hito 4: despliegue y verificación
+
+<!-- PENDIENTE: despliegue y verificación -->
+**No ejecutado.** Esta sección se rellena con la evidencia de cada fase cuando se despliegue (fecha UTC, commits, respaldo, recuentos, smoke y estado final).
 
 ## Decisiones tomadas (y por qué)
 

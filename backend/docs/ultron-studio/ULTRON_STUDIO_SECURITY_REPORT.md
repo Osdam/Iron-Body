@@ -48,7 +48,7 @@
 
 ## Hito G (control funcional): revisiones de seguridad
 
-**Estado:** implementado en la rama `feat/ultron-studio-g` (backend `391cffb`, con el código en `dfb30f5`; CRM `7d3ad2a`), **no desplegado**.
+**Estado:** implementado en la rama `feat/ultron-studio-g` (backend `391cffb`, con el código en `dfb30f5`; CRM `7d3ad2a`), **no desplegado** *(así se escribió. **Actualización del 19-10-2026:** G está desplegado y verificado desde las 06:00–06:04 UTC de ese día, backend `e651dd9` y CRM `44c0e8c`; ver `ULTRON_STUDIO_FINAL_REPORT.md`)*.
 
 **Superficie nueva:**
 - dos rutas de lectura, `GET engine/readings` y `GET compare`, con `ultron.view` y el cupo de lectura (21 rutas en total);
@@ -73,7 +73,7 @@
 | Origen · # | Gravedad | Hallazgo | Estado |
 |---|---|---|---|
 | api-security · M-1 | Media | `GET rules?status=archived` analizaba cada archivada releyendo todas las vivas: con 100 vivas pesadas, 1000 archivadas costaban 7,69 s por petición (PG local). Las archivadas no cuentan para el tope de 100 y no se pueden borrar, así que el coste se acumula. Regresión de G | **Corregido en `dfb30f5`.** Análisis neutro para las archivadas, y con `status=archived` no se leen las vivas (100 vivas y 300 archivadas: de 2371 a 27 ms, SQLite local) |
-| api-security · M-2 | Media | La validación con comodines (`conditions.when.*`, `conditions.then.*`) es superlineal y corre antes de `max:3`: un cuerpo de 150 KB costaba 12,2 s de CPU. La misma clase ya estaba en producción con F (`layers.*`, `refs.*`, `acknowledgedWarnings.*`; `refs.configs` de 1,65 MB, 157 s) | **Corregido en `dfb30f5`, también en las vías de F.** Validación en dos fases y tope de cuerpo de 64 KB en las 21 rutas (413 `payload_too_large`). Una lista por encima de su tope da un 422 solo con su clave, en menos de 50 ms. **Mientras G no se despliegue, las vías de F siguen expuestas en producción** |
+| api-security · M-2 | Media | La validación con comodines (`conditions.when.*`, `conditions.then.*`) es superlineal y corre antes de `max:3`: un cuerpo de 150 KB costaba 12,2 s de CPU. La misma clase ya estaba en producción con F (`layers.*`, `refs.*`, `acknowledgedWarnings.*`; `refs.configs` de 1,65 MB, 157 s) | **Corregido en `dfb30f5`, también en las vías de F.** Validación en dos fases y tope de cuerpo de 64 KB en las 21 rutas (413 `payload_too_large`). Una lista por encima de su tope da un 422 solo con su clave, en menos de 50 ms. **Mientras G no se despliegue, las vías de F siguen expuestas en producción** *(cerrado: G se desplegó el 19-10-2026, 06:00–06:04 UTC)* |
 | api-security · B-1 | Baja | Con 100 vivas de 3 + 3 predicados, cada lectura o escritura del Studio cuesta unos 120 ms, y `compare`, unos 240 ms | **Aceptado sin cambio:** el coste lo acotan el tope de 100 reglas y los 4 KB de condiciones |
 | api-security · B-2 | Baja | El cerrojo consultivo solo protege en READ COMMITTED, y nada lo fijaba: con la sesión en REPEATABLE READ, la contradicción se colaba (3 de 3) | **Corregido en `dfb30f5`.** `SET TRANSACTION ISOLATION LEVEL READ COMMITTED` como primera sentencia, con una prueba en PG con la sesión en REPEATABLE READ |
 | api-security · I-1 | Informativo | El recorte de etiquetas y frases es cuadrático sin PCRE JIT: en G, unos 92 ms como mucho (por los 4 KB); en el normalizador de F (hasta 64 KB), unos 20 s si JIT estuviera apagado | **Sin acción:** producción tiene `pcre.jit = 1` |
@@ -144,13 +144,118 @@ Consecuencia: con 24 workers de FPM compartidos por todo el CRM (caja, ingreso y
 
 **Secretos:** `api-security-specialist` no encontró ninguno expuesto; no hay nada que rotar.
 
+## Hito 4 (laboratorio de IA): revisiones de seguridad
+
+**Estado:** implementado en la rama `feat/ultron-studio-h4` (backend `6dbf485`, CRM `3e630eb`), **no desplegado**. Fecha de las revisiones: 19-10-2026. La Enmienda 5 del contrato (`403a12b`: ejecuciones huérfanas y cobertura) está pendiente de implementar.
+
+**Superficie nueva:**
+- 12 rutas `lab/*` (33 en el Studio), con dos llaves nuevas (`ultron.lab_manage` y `ultron.lab_run`) y el veredicto con `ultron.approve`;
+- 5 tablas `ultron_studio_lab_*` de filas inmutables o de solo inserción, un carril de cola (`studio-lab`) y un worker propio (`ironbody-lab`);
+- **la primera llamada del Studio a un tercero de pago:** la Responses API de OpenAI, con una clave propia del laboratorio y solo desde el worker;
+- texto libre del personal que no se puede borrar (escenarios, motivos de archivo y notas de veredicto) y salida de un LLM guardada sin vuelta atrás (respuesta del actor y opinión del juez).
+
+**Lo que no cambia:** el motor (`git diff origin/main 6dbf485` sobre sus zonas da 0 bytes) y sigue sin leer el Studio; el contrato de las 21 rutas de F/G; las dependencias (`composer.json/lock` y `package.json/lock` sin cambios). `.env.example` solo gana las variables del laboratorio, con la clave vacía.
+
+### Las cuatro cerraduras antes de gastar
+
+Son independientes: basta una cerrada para que no se gaste nada. Al crear una ejecución, la bandera se comprueba la primera, antes que la configuración:
+
+| # | Cerradura | Valor por defecto | Con ella cerrada |
+|---|---|---|---|
+| 1 | Bandera `ULTRON_STUDIO_LAB_ENABLED` | `false` | Todas las rutas `lab/*` responden 409 `lab_disabled`, salvo `GET lab/status` (200) |
+| 2 | Driver `ULTRON_STUDIO_LAB_DRIVER` | `fake` | Sin red y coste 0; sin propuesta ni veredicto. Un valor desconocido no cae en ningún modo: `invalid_driver` |
+| 3 | Presupuesto diario `ULTRON_STUDIO_LAB_DAILY_BUDGET_USD` | `0` | En `openai`, `lab_not_configured` con `zero_budget`: ninguna ejecución de pago |
+| 4 | Clave `ULTRON_STUDIO_LAB_OPENAI_API_KEY` | vacía | `missing_key`; si es la misma que `OPENAI_API_KEY`, `shared_key`. Sin configuración no sale ninguna petición HTTP (probado) |
+
+Con las cuatro abiertas, cada ejecución sigue limitada por: la estimación que la persona acepta de forma explícita (`acceptedMaxCostMicros`; si el servidor estima más, 409 `estimate_changed`); la reserva atómica contra el tope diario (día de Bogotá); el tope por ejecución, que desde la Enmienda 4 se aplica también **al coste real** durante la ejecución; `max_output_tokens` en cada llamada; `tries = 1` y ningún `retry()`; un solo caso en curso en todo el sistema; el plazo de 30 min; la parada por 2 errores seguidos; y el limitador de 10 lanzamientos por hora y persona. El límite exterior es el presupuesto del proyecto en OpenAI, que crea el propietario.
+
+### Revisores y veredictos
+
+| Revisión | Sobre | Veredicto |
+|---|---|---|
+| `api-security-specialist` | Backend `4fbce0a`, con sondas en SQLite y en PostgreSQL 14 | Sin críticos, altos ni medios: 3 bajos (B-1 a B-3) y 5 informativos. Nada bloqueaba las fases 1 y 2; B-1, a cerrar antes de la fase 3 |
+| `security` (transversal) | Backend `4fbce0a` y CRM `4c022f8` y `32c03d3` | Sin críticos, altos ni medios: 2 bajos (B-1 y B-2) y 6 informativos. Nada bloqueaba las fases 1 y 2; B-2 y la retención (I-3), antes de la fase 3 |
+| `tester` de backend, parte 1 | Backend `4fbce0a`, con la pila real y PostgreSQL 14 | Carreras de creación sin un solo resultado incorrecto; dos hipótesis por lectura de código (HIP-1 y HIP-2) |
+| `tester` de backend, parte 2 | Backend `6dbf485`, con la pila real, el worker real y PostgreSQL 14 | Las correcciones aguantan: 5 carreras forzadas 10/10 en READ COMMITTED y en REPEATABLE READ, 21 casos límite correctos y las 14 mutaciones del encargo cazadas. Un hallazgo de producto (H-P2-1) y dos huecos de cobertura (H-P2-2 y H-P2-3), abiertos; su corrección la decide la Enmienda 5 |
+| `tester` del E2E | Backend `4fbce0a` y CRM `32c03d3`/`564cf14`, con la pila real; final sobre `6dbf485` y `3e630eb` | 121/122 por H-1, cosmético, del CRM; **122/122** sobre `6dbf485` y `3e630eb` |
+| `reviewer` | Backend `6dbf485` y CRM `3e630eb` | <!-- PENDIENTE: veredicto del reviewer --> |
+
+### Hallazgos y estado
+
+Los códigos se repiten entre revisiones, así que cada uno lleva su origen.
+
+| Origen · # | Gravedad | Hallazgo | Estado |
+|---|---|---|---|
+| api-security · B-1 | Baja | El tope por ejecución solo se aplicaba a la **estimación**, que cuenta 3 bytes por token. Con un proveedor que factura más tokens de entrada que los estimados, la ejecución seguía hasta el tope diario: en la sonda P08 (3× la entrada estimada) terminó `completed` con 93 530 µUSD frente a un tope de 50 000 (1,87×). La premisa de A3 («la desviación está acotada por `max_output_tokens`») no era exacta: la desviación viene de la entrada | **Corregido en `6dbf485`** (Enmienda 4.1): antes de reclamar cada caso, el paso para con `budget_exhausted` si el coste real de la ejecución supera `min(tope por ejecución, máximo aceptado)`. P08 queda `stopped` tras 7 de 12 casos con 54 613 µUSD; el exceso residual es como mucho el coste de un caso |
+| api-security · B-2 | Baja | Caracteres invisibles en la respuesta del actor esquivaban guardas del motor: con un ZWSP dentro de «descuento» o de «confirmado», el filtro no marcaba nada, y el texto llegaba sin sanear a quien emite el veredicto | **Corregido en `6dbf485`** (Enmienda 4.2): hallazgo bloqueante `lab-invisibles` (ver security · B-2) |
+| api-security · B-3 | Baja | `GET lab/scenarios?status=archived` sin paginar ni tope, sobre filas que no se pueden borrar: 300 archivados de unos 8 KB daban 3,2 MB por respuesta | **Corregido en `6dbf485`** (Enmienda 4.3): como mucho los 200 más recientes y `meta {truncated, total}`; el CRM avisa del recorte desde `564cf14` |
+| api-security · I-1 | Informativo | El filtro de datos personales no reconoce cifras separadas por `,`, `/`, `_` u otros signos, correos ofuscados, dígitos en superíndice o en círculo, ni selectores de variación. Cumple la letra del contrato; el riesgo es el pegado accidental (Ley 1581), no un atacante | **Aceptado y documentado** (Enmienda 4.9). Ampliar los separadores daría falsos positivos en listas de precios |
+| api-security · I-2 | Informativo | Fuera de producción, `ULTRON_STUDIO_LAB_OPENAI_BASE_URL` admite cualquier host http(s): un entorno de pruebas con `APP_ENV` distinto de `production` y una clave real enviaría el bearer a esa URL | **Aceptado** (Enmienda 4.9). En producción la URL es fija (verificado en código y en pruebas). El runbook comprueba `APP_ENV=production` y la variable vacía en el servidor |
+| api-security · I-3 | Informativo | El techo de 10 lanzamientos por hora era por sesión: otra sesión de la misma persona empezaba de cero | **Corregido en `6dbf485`** (Enmienda 4.4): por persona; el de red (30/h) no cambia |
+| api-security · I-4 | Informativo | `shared_key` solo compara con `OPENAI_API_KEY` del backend: una clave reutilizada de n8n no se detecta | **Aceptado.** El control real es el proyecto dedicado de OpenAI (pendiente del propietario) |
+| api-security · I-5 | Informativo | Ventana de milisegundos entre la comprobación de caducidad y el reclamo de una ejecución en cola de casi 30 min | **Aceptado:** el reclamo es condicionado y el impacto es como mucho una reserva |
+| security · B-1 | Baja (cumplimiento, Ley 1581) | El motivo de archivo de un escenario (5 a 500 caracteres) no llevaba aviso de datos personales y queda en una tabla sin DELETE y en el libro inmutable. G tampoco avisaba al archivar reglas ni al rechazar versiones | **Corregido en el CRM:** aviso fijo en archivar escenarios y reglas (`564cf14`) y en rechazar una versión (`3e630eb`), con una ranura opcional en `ib-reason-dialog` que no cambia sus otros usos. **Pendiente del propietario (Hito 7):** el procedimiento de redacción del libro, que ahora debe cubrir también las cinco tablas del laboratorio |
+| security · B-2 | Baja (integridad de lo que ve el revisor) | La respuesta del actor se guardaba y se pintaba con controles bidi e invisibles: un precio escrito al revés entre U+202E y U+202C no lo marcaba el filtro del motor y en pantalla se leía como un precio. Al juez sí se le limpiaban | **Corregido en `6dbf485`** (Enmienda 4.2): `lab-invisibles`, la primera comprobación, bloqueante, sin cita, con la lista de la enmienda más LRM/RLM; excluye el ZWJ de los emojis compuestos. La respuesta se guarda y se pinta literal e interpolada; no se adoptó mostrar los invisibles escapados. Las banderas subnacionales (Escocia, Gales…) también lo disparan: aceptado |
+| security · I-1 | Informativo | Alcance del filtro de datos personales (mismo fondo que api-security · I-1) | **Aceptado y documentado.** No se añadieron los selectores de variación U+E0100–E01EF |
+| security · I-2 | Informativo | `shared_key` solo compara con `OPENAI_API_KEY`; los LLM de ULTRON corren en n8n con su propia credencial | **Pendiente del propietario:** proyecto de OpenAI dedicado, con presupuesto propio y una clave nueva, confirmado por escrito antes de la fase 3 |
+| security · I-3 | Informativo | **Retención en OpenAI.** Según la documentación oficial consultada el 19-10-2026, los registros de vigilancia de abusos pueden contener prompts y respuestas y se conservan hasta 30 días por defecto. `store: false` evita el estado de aplicación de 30 días, pero no esos registros. No conservarlos exige una aprobación previa de OpenAI | **Pendiente del propietario:** confirmar la retención que aplica a su cuenta antes de la fase 3. La mitigación real son los escenarios sintéticos y el filtro |
+| security · I-4 | Informativo | IRON GUARD reencola los `StudioLabStepJob` fallidos con `queue:retry all` | **Sin acción:** no paga dos veces (`failed()` ya liquidó el caso y cada paso reclama con un UPDATE condicionado). Anotado en el runbook |
+| security · I-5 | Informativo (despliegue) | El borrador del runbook escribía las variables nuevas **después** de `ironbody-migrate`, que ya regenera la caché: regirían los valores por defecto (los seguros) hasta otro `config:cache` | **Corregido en el runbook** (Enmienda 4.8): las variables antes del envoltorio, y una comprobación de la configuración efectiva sin imprimir secretos |
+| security · I-6 | Informativo | El catálogo de permisos del CRM era provisional, escrito a mano | **Cerrado:** el `backend-permission-catalog.ts` de `3e630eb` es idéntico byte a byte al que exporta `permissions:export` (sha256 `1075374b…`, comparado el 19-10-2026) |
+| tester · HIP-1 | Sin gravedad asignada (afecta al gasto) | Un paso podía reclamar y pagar un caso **después** de una cancelación confirmada, si esta llegaba entre la carga de la ejecución y el cerrojo de reclamos | **Confirmado y corregido en `6dbf485`** (Enmienda 4.5): la mutación que devuelve el comportamiento anterior reclama el caso 2 con la cancelación confirmada; con la corrección, `claim()` relee la cancelación bajo el cerrojo. Prueba de dos sesiones en PG: 10/10 |
+| tester · HIP-2 | Baja | La deduplicación de `run.verdict_denied` no fijaba READ COMMITTED: en REPEATABLE READ podían quedar dos filas | **Corregido en `6dbf485`** (Enmienda 4.6), con su prueba en PG. **Fuera de alcance:** `StudioAudit::recordDenied` (F) tiene el mismo patrón |
+| tester · H-P2-1 | Media-baja (producto) | **Ejecución huérfana:** si un paso falla antes de reclamar un caso (por ejemplo, se corta la conexión del worker con la base mientras espera el cerrojo), `failed()` no encola nada y la ejecución queda `running` sin ningún paso. Cancelar responde 200 pero no la cierra, el plazo y la caducidad no se aplican y su reserva cuenta hasta que cambia el día de Bogotá. No gasta dinero ni bloquea otras ejecuciones | **Abierto en `6dbf485`. Corrección decidida en la Enmienda 5 (`403a12b`), pendiente de implementar:** `cancel` cierra en el acto una ejecución en curso sin caso en curso, el plazo vencido se presenta como `stopped: deadline` sin escribir, y `failed()` sin caso reclamado reencola un paso (o, al segundo fallo, para con `provider_errors`). Mientras tanto, salida operativa sin código en el runbook del Hito 4 |
+| tester · H-P2-2 | — (cobertura) | «Nada aprueba solo» se vigila por el nombre de la clase: un comando que insertara veredictos con `DB::table(…)` pasaría todas las pruebas. Hoy ningún código lo hace | **Abierto en `6dbf485`.** Enmienda 5: la prueba estática detectará también las escrituras crudas en `ultron_studio_lab_verdicts`; pendiente de implementar |
+| tester · H-P2-3 | — (cobertura) | La comprobación de «ocupado» dentro del reclamo solo la caza la carrera real de pasos duplicados, no PHPUnit | **Abierto en `6dbf485`.** Enmienda 5: prueba de dos sesiones en PG para los pasos duplicados; pendiente de implementar |
+| E2E · H-1 | Cosmético (CRM) | La frase del filtro del motor salía duplicada: el backend la pone en el `title` y el CRM la volvía a envolver | **Corregido en el CRM `3e630eb`**; el E2E final la ve una sola vez |
+
+### Verificado sin hallazgo
+
+- **La clave del laboratorio.** Solo vive en el entorno y solo la lee el cliente en el momento de llamar (`withToken`). Nunca se guarda en una propiedad, un resultado, un DTO, el libro ni el log (`StudioLabConfig::toArray()` no lleva ni la clave ni su huella). `CheckSecretExposure` la incluye. Sin Telescope, Sentry ni oyentes globales de `Http`; el cliente lleva `withoutRedirecting()` y no desactiva TLS. **Centinela:** `UltronStudioLabNoEngineEffectsTest` y las sondas de api-security siembran una clave reconocible, también en cuerpos de error del proveedor que la repiten (401, 500, 502 en HTML, JSON inválido, `refusal`, 429), y no aparece en respuestas, tablas, `jobs`, `failed_jobs` ni log. Ningún literal con forma de clave en los commits de H4: lo revisó security hasta `4fbce0a` y `32c03d3`, y se repitió el 19-10-2026 sobre `6dbf485` y `3e630eb`; solo aparecen las centinelas de prueba `sk-lab-CENTINELA-…` y `sk-motor-NO-USAR-…`.
+- **Datos hacia el proveedor.** El filtro se aplica a toda la entrada antes de codificarla; un objetivo con datos personales da 409 `target_contains_personal_data` y nunca se construye la entrada. No viajan nombres, ids, la etiqueta ni la nota de la versión, ni datos del motor. `store: false` siempre y sin `user`, `safety_identifier` ni `metadata` (cliente, prueba y simulador del E2E, que lo comprobó en sus 15 peticiones).
+- **Inyección de instrucciones.** Escenarios y reglas viajan como JSON dato, y las instrucciones lo dicen. El juez no recibe los hallazgos; el servidor exige exactamente sus ids y códigos y acota y limpia sus textos. El resultado lo decide `StudioLabOutcome` (un bloqueante gana siempre). **Nada aprueba solo:** la única inserción de veredictos tiene un solo llamador, el controlador, y una prueba estática impide que el runner, el job o los comandos nombren el veredicto.
+- **Autorización y BOLA.** Sin `ultron.view`, 403 idéntico para un uuid existente y para uno inexistente, también con la bandera apagada. Una ejecución sobre el borrador de otra persona no aparece en `GET lab/runs` ni en `lab/events` (tampoco por `subjectUuid` en mayúsculas) y su detalle es un 404 idéntico al de un uuid inexistente; un `target` de borrador con la revisión de otra persona corre sobre el borrador **propio**. `clientRequestId` ajeno → 409 sin datos. Matriz de 33 rutas por perfiles, token compartido y 401 sin sesión en `UltronStudioPermissionsTest`.
+- **Asignación masiva.** Se ignoran `code`, `source`, `status`, `revision`, `uuid`, `contentHash` y autoría en escenarios, y `mode`, `model`, `prices`, `budget_day`, `status` y `target_snapshot` en ejecuciones. `acceptedMaxCostMicros` solo puede endurecer: los topes son del servidor. Una ejecución `fake` nunca sale a la red.
+- **CRM.** 0 `innerHTML`, `bypassSecurityTrust*`, `DomSanitizer`, `[href]`, `[src]` ni `eval` en el módulo; todo texto del servidor, también la salida del LLM, se interpola (spec hostil y E2E con `<script>`, `<img onerror>` y `<svg onload>`). El chunk del laboratorio no contiene nombres del motor, variables de entorno, `api_key`, `sk-` ni `Bearer`.
+- **Operación.** `ironbody-lab.conf` con `user=www-data`, `numprocs=1`, `--tries=1`, `--timeout=150` por debajo del `retry_after` de 300 y `stopwaitsecs=180`. Carril propio: no comparte cola con `commercial`, que lleva el puente vivo de ULTRON a n8n. Migraciones aditivas, con el `down()` destructivo documentado y prohibido en producción.
+
+### Lecturas de producción que condicionan el laboratorio
+
+Hechas por el lead en solo lectura el 19-10-2026; no se han repetido.
+
+| Lectura | Valor | Consecuencia para el laboratorio |
+|---|---|---|
+| PHP-FPM | **PHP 8.3** (`php8.3-fpm` activo; el pool de 8.1 está instalado pero inactivo), `pm.max_children = 24`, `max_execution_time = 30` | Una llamada a un LLM nunca va dentro de la petición HTTP: la hace el worker `ironbody-lab`. **Corrección del 19-10-2026 (`fc5b571`):** la primera lectura, «FPM 8.1 con 5 procesos», era del pool inactivo; la conclusión de M-2 de G no cambia |
+| PCRE | 10.39 | Compila todas las expresiones del filtro de datos personales y de los emojis del laboratorio, como root y como www-data (sonda del lead). El patrón de `lab-invisibles` llegó después (`6dbf485`): usa solo puntos de código explícitos y se sondea tras desplegar |
+| PostgreSQL | 14.24; `iron` con `CREATE` en `public`; privilegios por defecto de `iron` hacia `iron_app`: tablas `arwd`, secuencias `rwU`, funciones `X` | La migración puede crear tablas y función con `ironbody-migrate`, y la aplicación las usa sin ningún GRANT nuevo |
+| Supervisor | Los programas viven en `/etc/supervisor/conf.d/` (hoy solo `ironbody-workers.conf`) | `ironbody-lab.conf` va al lado, como fichero aparte |
+
+### Puerta PostgreSQL obligatoria
+
+Sigue vigente y cubre ahora el laboratorio: antes del despliegue, `tests/Feature/UltronStudio tests/Unit/UltronStudio` tiene que pasar en verde en un PostgreSQL 14 desechable (934/934 en `6dbf485`). Solo PG ejecuta las pruebas de los 13 CHECK y del rol, las de dos sesiones reales (la reserva atómica con la sesión en REPEATABLE READ y la cancelación frente al reclamo) y las de READ COMMITTED. Las pruebas que cazan la falta del cerrojo de presupuesto solo corren en PG.
+
+### Pendiente del propietario antes de la fase 3
+
+- Crear un **proyecto de OpenAI dedicado**, con presupuesto propio y una **clave nueva**, distinta de la del motor y de la de n8n.
+- Confirmar qué conserva OpenAI con `store: false` en su cuenta (registros de abuso hasta 30 días por defecto).
+- Elegir el modelo y los precios con la página oficial (los del plan son de terceros y solo orientativos).
+- Escribir la clave **él mismo** en el entorno del servidor, nunca por chat.
+
+### Fuera del Hito 4
+
+- `StudioAudit::recordDenied` (F) sin READ COMMITTED.
+- El procedimiento de redacción del libro (Hito 7), que debe cubrir también `scenario_snapshot`, `reply`, `judge`, `checks`, `calls`, `note`, `summary` y `diff` de las tablas del laboratorio.
+- Invisibles en el borrador de respuesta del motor: api-security lo apunta como **hipótesis** sobre producción (depende de lo que haga n8n antes del commit); security sondeó la guarda del motor y no encontró un hueco nuevo. Revisión del motor en el Hito 7.
+
+**Secretos:** ninguna revisión encontró secretos expuestos; no hay nada que rotar.
+
 ## Requisitos para las fases siguientes (recogidos de las revisiones y la auditoría)
 
 - Permisos `ultron.*` (ver, editar borrador, reglas, campañas, simulaciones, canarios, pruebas telefónicas, aprobar, publicar, revertir, ajustes) **validados en Laravel en cada endpoint**; separar quien edita, aprueba, publica y administra integraciones.
 - **El servidor revalida todo lo publicable** sin fiarse del borrador: la confirmación de los parámetros importantes hoy solo existe en el navegador, y un borrador cargado de `localStorage` podría traer `paymentLinksEnabled: true` sin haber pasado por ella.
 - El Studio **nunca** reutiliza las rutas internas de n8n ni muestra ejecuciones de n8n (guardan el bearer).
 - Nunca devolver al front tokens, secretos de webhook, claves de OpenAI/ElevenLabs ni teléfonos en claro; ids de Meta enmascarados como hace el panel actual.
-- Evaluación con OpenAI: clave y proyecto propios, salidas estructuradas estrictas, registro de tokens y coste, entradas redactadas.
+- Evaluación con OpenAI: clave y proyecto propios, salidas estructuradas estrictas, registro de tokens y coste, entradas redactadas. *(Implementado en la rama del Hito 4, salvo «entradas redactadas»: el laboratorio no lee textos de prospectos y rechaza los datos personales en vez de redactarlos. El proyecto propio lo crea el propietario; ver «Hito 4».)*
 - Twilio Voice: subcuenta, `TimeLimit`, cupo diario propio y rangos de alto riesgo cerrados; webhooks con firma validada e idempotencia; ningún mecanismo actual frenaría un gasto de voz.
 - ElevenLabs: adaptador tras bandera, webhooks firmados, grabación desactivada hasta resolver consentimiento y retención (Ley 1581).
 - Hallazgos previos del motor que no son del Studio pero importan (auditoría §13): `/ai/decide` sin interruptor ni canario, el precio que llega al Strategist, la respuesta del commit con precio y URL de pago hacia n8n.

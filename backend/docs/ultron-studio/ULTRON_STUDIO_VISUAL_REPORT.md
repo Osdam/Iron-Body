@@ -83,7 +83,7 @@ Capturas en [`capturas/`](capturas/): [`f1-studio-api-escritorio.png`](capturas/
 
 ## Hito G: el inspector funcional (CRM)
 
-**Estado:** implementado en la rama `feat/ultron-studio-g` del CRM, **no desplegado**. Commits sobre `020db86` (= producción):
+**Estado:** implementado en la rama `feat/ultron-studio-g` del CRM, **no desplegado** *(así se escribió. **Actualización del 19-10-2026:** desplegado y verificado ese día, CRM `44c0e8c`; ver `ULTRON_STUDIO_FINAL_REPORT.md`)*. Commits sobre `020db86` (= producción):
 - `ddb0958`: capa de datos y núcleo TS;
 - `b0d9635`: fixtures oficiales exportados del backend. Se volvieron a exportar desde `5074f82`, sin diferencias;
 - `688da4a`: la integración, con 40 ficheros y +5436/−255 líneas;
@@ -270,7 +270,7 @@ El E2E detecta las 6 mutaciones que se le probaron, todas en copias:
 - Está en el árbol del CRM, pendiente de que el lead lo revise y lo confirme.
 
 **Qué no cubre el E2E:**
-- la pila de producción: nginx con FPM (5 workers), `config:cache` y `route:cache`, y el build de producción, porque corre con `ng serve` en modo desarrollo;
+- la pila de producción: nginx con PHP-FPM 8.3 (24 procesos; la cifra de 5 que figuraba aquí era del pool inactivo de PHP 8.1, corregida el 19-10-2026), `config:cache` y `route:cache`, y el build de producción, porque corre con `ng serve` en modo desarrollo;
 - los cupos (429), con `CACHE_STORE=array`;
 - el 413, porque el CRM no llega a 64 KB;
 - la tableta a 820 px (solo la revisión con la API simulada);
@@ -281,6 +281,124 @@ El E2E detecta las 6 mutaciones que se le probaron, todas en copias:
 - Safari, Firefox y Windows;
 - el CRM de G sobre la pila de producción;
 - el tamaño compilado exacto de cada hoja con la encapsulación.
+
+## Hito 4: el laboratorio de IA en el CRM
+
+**Estado:** implementado en la rama `feat/ultron-studio-h4` del CRM (HEAD `3e630eb`), **no desplegado**. Commits sobre `44c0e8c` (= producción):
+
+| Commit | Qué |
+|---|---|
+| `dbdf73d` | Capa de datos: tipos, parse, servicio, sesión, dinero y specs |
+| `e3d1a0d` | Formas de las Enmiendas 2 y 3 (`excludedRules`, `judgeError`, `invalid_driver`, `mode: null`, `target_contains_personal_data`) y dos lecturas de G |
+| `7da6f08` | Permisos `ultron.lab_manage` y `ultron.lab_run` y exclusión del Administrador para `lab_run` |
+| `4c022f8` | La página, sus componentes, la ruta y las dos entradas desde el tablero |
+| `32c03d3` | Fixture oficial de los 12 escenarios exportado desde el backend |
+| `564cf14` | Correcciones de la Enmienda 4: aviso al archivar, archivados recortados y `lab-invisibles` |
+| `3e630eb` | H-1 del E2E (frase del filtro del motor sin duplicar) y aviso al rechazar una versión |
+
+70 ficheros: 64 dentro de `src/app/modules/ultron-studio/` y 6 fuera (`app.routes.ts`, `permissions.enum.ts`, `backend-permission-catalog.ts`, `permission-contract.spec.ts`, `access-control.service.ts` y `shared/components/reason-dialog/reason-dialog.ts`). **`ultron-studio.scss` no gana ni un byte** y no hay dependencias nuevas (`package.json` y `package-lock.json` sin cambios). El inspector del tablero (`studio-inspector.ts`) no cambia en este hito.
+
+### Página hija y entradas
+
+- **Ruta** `marketing/ultron-studio/laboratorio`, con `ULTRON_VIEW` y dentro del bloque de la bandera `ultronStudioPreviewEnabled`; `loadComponent` carga `studio-lab-page` (selector `app-ultron-studio-lab`). Ver la página basta con `ultron.view`; escenarios, ejecuciones y veredictos los autoriza el servidor con `ultron.lab_manage`, `ultron.lab_run` y `ultron.approve`.
+- **Entradas desde el tablero**, solo en plantilla:
+  - «Laboratorio» en la cabecera (`ultron-studio-page.ts`, icono `biotech`; en móvil solo el icono, con el nombre accesible);
+  - «Probar en el laboratorio» en el detalle de cada versión (`studio-versions-panel.ts`): abre «Ejecuciones» con `?version=<uuid>`. Con `integrityOk: false` es un botón deshabilitado con su motivo, porque el servidor daría `integrity_mismatch`.
+- **Por qué una página y no un panel:** el panel del tablero es una columna lateral, los resultados necesitan anchura y `ultron-studio.scss` no admite ni un byte. El coste: los 24 tokens `--us-*` viven en el host del tablero, así que la página los declara en su hoja y `studio-lab-tokens.spec.ts` compara nombres y valores con `ultron-studio.scss` (leído del disco) para que no deriven.
+
+### Componentes
+
+Cada componente es standalone y `OnPush`, con su hoja y su spec.
+
+| Pieza | Selector | Qué hace |
+|---|---|---|
+| `studio-lab-page.ts` (+ `studio-lab-kit.scss`) | `app-ultron-studio-lab` | La página: provee `StudioLabSession`, cabecera, fases (`loading`, `ready`, `disabled`, `forbidden`, `error`), pestañas «Escenarios» y «Ejecuciones» y las dos columnas |
+| `studio-lab-budget.ts` | `us-lab-budget` | Presupuesto del día de Bogotá: gastado, reservado, lo que queda, ejecuciones del día y tope por ejecución. La barra es `aria-hidden`; las cifras van en texto |
+| `studio-lab-scenarios.ts` | `us-lab-scenarios` | Lista con filtro de estado y de categoría, ficha (el catálogo, «solo lectura»), crear, editar y archivar, e historial plegable |
+| `studio-lab-scenario-editor.ts` | `us-lab-scenario-editor` | El editor de escenarios (ver abajo) |
+| `studio-lab-transcript.ts` | `us-lab-transcript` | El guion como conversación y los hechos sintéticos |
+| `studio-lab-launcher.ts` | `us-lab-launcher` | «Nueva ejecución»: objetivo, escenarios, estimación y «Ejecutar (máx. US$ …)» |
+| `studio-lab-runs.ts` | `us-lab-runs` | Lista de ejecuciones con alcance (todas o mías), objetivo y paginador |
+| `studio-lab-run-view.ts` | `us-lab-run-view` | La ejecución abierta: progreso, gradilla, propuesta, casos, veredicto e historial |
+| `studio-lab-case.ts` | `us-lab-case` | Un caso: guion, respuesta, hallazgos, opinión de la IA y coste |
+| `studio-lab-verdict.ts` | `us-lab-verdict` | El formulario del veredicto y el veredicto emitido |
+| `studio-lab-compare.ts` | `us-lab-compare` | «Comparar con la línea base», con el `GET compare` de G en solo lectura |
+| `studio-lab-history.ts` | `us-lab-history` | El libro del laboratorio en frases |
+| `studio-lab-text.ts`, `studio-lab-dom.ts` y `studio-lab-money.ts` (puros) | — | Las etiquetas (planos, estados con icono y texto, motivos, paradas y clases de fallo); llevar a la vista sin mover el shell; importes en micro-USD con `Intl.NumberFormat('es-CO', …)` |
+| `studio-lab-api.types.ts`, `studio-lab-parse.ts`, `studio-lab-api.service.ts` y `studio-lab-session.ts` | — | La capa de datos: las 12 rutas, el parse que falla cerrado y la sesión con su sondeo |
+
+**Ficheros de G que cambian:** `ultron-studio-page.ts` y `studio-versions-panel.ts` (plantilla e importación de `RouterLink`); `studio-rules-panel.ts` y `studio-versions-panel.ts` (el aviso de datos personales al archivar una regla y al rechazar una versión); `studio-conditions-editor.ts` (la constante del aviso); `studio-parse.ts` (solo exporta, al final del fichero, sus herramientas de lectura). Fuera del módulo, `ib-reason-dialog` gana una ranura opcional `[rd-aviso]` y la entrada `avisoId`: sin ellas pinta lo mismo, y sus otros cuatro usos siguen en verde (331/331).
+
+### Lo que se ve
+
+Capturas del E2E final (Chrome, pila real local con el simulador de OpenAI) en `scratchpad/e2e-studio/shots-h4-6dbf485/`; no se han incorporado a `capturas/`.
+
+- **Cabecera:** «Laboratorio de ULTRON STUDIO» y, debajo, fijo y en cian, «Simulación del Studio · no es ULTRON». A la derecha, el modo: «Ensayo sin IA», «OpenAI · <modelo>» o «Modo no válido» (`mode: null`). Debajo, el presupuesto a todo lo ancho y una franja con el texto `fidelity` del servidor; si no está configurado, los motivos en llano.
+- **Planos con color fijo y siempre con texto:** «Comprobación del Studio» en violeta, «Filtro del motor» en cian, «Opinión de la IA» en magenta y la propuesta con el tono de lo que propone. Ningún estado es solo color.
+- **La gradilla:** un tubo por caso que se llena con el tono de su resultado, con el código, el icono y el estado en su nombre accesible. El que está en curso late en opacidad, nunca en `transform`, y respeta `prefers-reduced-motion`.
+- **Disposición:** en escritorio (≥ 1100 px) la raíz no se desplaza y cada columna tiene su scroll; en tableta y móvil todo se apila.
+
+**Editor de escenarios.** Límites de `status.limits` contados en caracteres reales, contadores y un medidor de tamaño frente a los 16 KB. Turnos de 1 a 8 (el último, de la persona), criterios con las reglas citables de `GET rules` de G. No envía lo que el servidor rechazaría seguro, y cada 422 va junto a su campo y su fila (`turns.2.text`, `criteria.0.rules.0`…). El 409 `scenario_conflict` ofrece «Cargar su versión» o «Guardar los míos sobre la suya». El `clientRequestId` se genera al abrir y se reutiliza en los reintentos. **Aviso fijo**, enlazado con `aria-describedby`: «No escribas datos personales (nombres, teléfonos, correos, documentos): los escenarios son sintéticos, se envían a un proveedor externo y no se pueden borrar.», con una pista de lo que rechaza el filtro (emojis compuestos, «$1.200.000», «15-10-2026»).
+
+**Lanzador.** Objetivo (una versión, «Mi borrador (revisión N)» o la línea base; `?version` manda), escenarios agrupados en catálogo y personal, y la estimación: «Como mucho US$ …», lo esperado en su línea y el desglose (casos, modo, prompts, el día, tope por ejecución y ejecuciones de hoy), con `excludedRules` y la negativa del servidor. «Ejecutar (máx. US$ …)» envía exactamente ese máximo; se deshabilita, con el motivo **en texto visible**, sin la llave, sin configurar, sin estimar, si la selección cambió o si la estimación lo niega. Cualquier cambio de objetivo o de escenarios descarta la estimación.
+
+**La ejecución.** Objetivo, estado, fidelidad, modo, prompts, autoría, fechas y coste real frente al máximo. El progreso está en `aria-live="polite"` («1 de 2 casos cerrados, 1 por hacer…») y se actualiza cada 5 s, solo mientras esté en cola o en curso y con la pestaña visible. Cancelar (con su motivo si no se puede), «Comparar con la línea base», la propuesta («Propuesta del laboratorio: no es un veredicto»; en un ensayo sin IA, «Ensayo sin IA: no hay propuesta ni veredicto.»), las reglas que recibió el actor, los casos, el veredicto y el historial.
+
+**El caso.** Abierto por defecto si falla, hay que revisarlo o dio error. La respuesta va rotulada «Actor de laboratorio (simulación del Studio, no es ULTRON)» y se pinta literal. Cada hallazgo lleva su plano y su nivel en icono y texto; los del motor se leen tal como los manda el servidor en el `title`, «El filtro real del motor marcaría este texto (<motivo>).», con el código del filtro debajo. Después, la opinión de la IA criterio a criterio (evidencia y razón), las reglas, los riesgos y el coste con tokens y exceso. Si el juez falló: «La IA no pudo opinar (<clase>): sin su opinión, el caso llega como mucho a «Revisar».».
+
+**El veredicto.** Tres decisiones con lo que significa cada una. `approved` exige marcar exactamente los casos que no pasaron («Faltan N casos por reconocer»); la nota es obligatoria salvo al aprobar. Aviso fijo: «No escribas datos personales (nombres, teléfonos, correos): la nota del veredicto queda en un libro que no se puede borrar.». Si no procede, el formulario se deshabilita con el motivo (versión propia, ensayo sin IA, parcial, objetivo que no es una versión o sin `approve`). Texto fijo: «Uno por ejecución y no se puede cambiar. No cambia la versión ni el motor.».
+
+**Avisos al archivar y al rechazar** (Enmienda 4.7): «No escribas datos personales (nombres, teléfonos, correos): el motivo queda en un historial que no se puede borrar.», en archivar un escenario (`564cf14`), archivar una regla de G (`564cf14`) y rechazar una versión de G (`3e630eb`), dentro del diálogo y anunciado por el campo.
+
+**Archivados recortados** (Enmienda 4.3): con `meta.truncated`, la lista dice «Mostrando los 200 más recientes de N.» encima de los elementos.
+
+**Accesibilidad.** Pestañas con roles, `aria-selected`, `aria-controls`, `tabindex` itinerante y flechas, Inicio y Fin; detalles nativos, radios y casillas reales; el foco va al título al abrir una ejecución, una ficha o el editor (con `preventScroll`), y el foco visible es cian.
+
+### Atributos `data-*` para el E2E
+
+Todos los de A9 del contrato, más algunos de apoyo:
+- **Página:** `[data-lab-pagina]` con `data-lab-fase`, `[data-lab-apagado]`, `[data-lab-modo]` con `data-lab-modo-valor` (`openai`, `fake` o `invalido`), `[data-lab-presupuesto]` con `data-lab-presupuesto-estado` (`disponible`, `agotado` o `sin-tope`) y `[data-lab-pestana="escenarios|ejecuciones"]`.
+- **Entradas en G:** `[data-lab-enlace]` y `[data-version-lab="<uuid>"]`.
+- **Escenarios:** `[data-lab-escenario="<code>"]`, `[data-lab-escenario-nuevo]`, `[data-lab-escenario-guardar]`, `[data-lab-escenario-archivar]`, `[data-lab-aviso-datos]` (en el editor, en el veredicto y en el diálogo de archivar: ya no es único), `[data-lab-editor-campo-error="<clave>"]` y `[data-lab-archivados-truncados]` (solo con `truncated: true`).
+- **Lanzador:** `[data-lab-objetivo]`, `[data-lab-estimacion]` con `data-lab-estimacion-estado` (`permitida` o `rechazada`), `[data-lab-reglas-fuera]`, `[data-lab-negativa]`, `[data-lab-ejecutar]` y `[data-lab-ejecutar-motivo]`.
+- **Ejecución:** `[data-lab-run="<uuid>"]`, `[data-lab-run-estado]` con `data-estado`, `[data-lab-cancelar]`, `[data-lab-tubo="<code>"]`, `[data-lab-progreso]`, `[data-lab-caso="<code>"]` con `data-lab-caso-estado`, `[data-lab-hallazgo="<id>"]` con `data-plano` (`studio` o `engine`), `[data-lab-juez]` con `data-lab-juez-estado` (`opina`, `fallo` o `sin-opinion`) y `[data-lab-propuesta]` con `data-lab-propuesta-valor`.
+- **Veredicto:** `[data-lab-veredicto]` con `data-lab-veredicto-estado` (`disponible`, `no-disponible` o `registrado`), `[data-lab-veredicto-decision="approved|needs_changes|rejected"]`, `[data-lab-veredicto-reconocer="<code>"]`, `[data-lab-veredicto-nota]` y `[data-lab-veredicto-enviar]`.
+- **Avisos de G:** `#rp-archivar-datos` y `#vp-rechazar-datos` con `[data-aviso-datos-personales]`.
+
+### Decisiones fuera del contrato
+
+1. Dos hojas de página (`studio-lab-page.scss` y `studio-lab-kit.scss`), globales bajo `.lab-root` y con el prefijo `lab-`: en una sola eran 8,6 kB de fuente.
+2. `studio-lab-dom.ts` (`labReveal`): solo desplaza el contenedor con scroll propio y enfoca con `preventScroll`. La revisión en Chrome vio que `scrollIntoView` y `focus()` movían los contenedores del shell con `overflow: hidden`; `.lab-root` pasa a `overflow: clip` en escritorio.
+3. El estado (activos o archivados) se filtra en el servidor; la categoría, en local.
+4. La capa de datos falla cerrado ante una forma desconocida, pero conserva los motivos de configuración que no conoce y lee suave `targetSnapshot` y `meta`.
+5. Desde `3e630eb`, la frase de A4 («marcaría», nunca «rechazaría») solo la pone el backend: el CRM pinta el `title` tal cual. «Parte del filtro del motor no está disponible» ya no sale vestido de «marcaría».
+
+### Pruebas y medidas
+
+| Comprobación | Resultado |
+|---|---|
+| Specs del módulo (`ng test --include='src/app/modules/ultron-studio/*.spec.ts'`) | 499 en G → 622 con la capa de datos (`dbdf73d`) → 730 con la página (`4c022f8`) → 737 (`564cf14`) → **739/739 en `3e630eb`**, 43 ficheros |
+| Suite completa (`ng test --watch=false`) | **2786 pruebas en `564cf14`, con 16 fallos idénticos nombre a nombre a la línea base** (moderación ×14, `financial-realtime.integration` y `receivables-pagination`); ninguno nuevo ni del Studio. En `3e630eb` solo se repitió el módulo: nadie fuera de él importa los ficheros tocados |
+| `tsc` de la aplicación y de los specs | Limpio en `3e630eb` |
+| `check:literals` | 313 ficheros, correcto |
+| Build de producción | Exit 0 y 0 errores; los mismos 29 avisos de presupuesto de siempre, ninguno del laboratorio. Todas las hojas nuevas compilan por debajo de los 8 kB del aviso, y un spec lo vigila |
+| Chunk del laboratorio (`studio-lab-page`) | **186,75 kB en bruto y 44,14 kB transferidos en `4c022f8`** (idéntico en `32c03d3`); 187,77 kB en `564cf14` y **187,58 kB en `3e630eb`**. El tablero baja de 716,51 a 636,94 kB: unos 80 kB de módulos de G pasan a chunks compartidos. En el cierre del chunk: 0 apariciones de `UltronCommitService`, `SalesAgentOrchestratorService`, `SalesAiConfig`, R-01/R-02/R-12, `OPENAI_API_KEY`, `ULTRON_STUDIO_LAB`, `api_key`, `sk-`, `MARKETING_`, `webhook`, `Bearer`, `innerHTML` y `bypassSecurityTrust` |
+| `ultron-studio.scss` | 0 bytes de diff |
+| Catálogo de permisos | `backend-permission-catalog.ts` idéntico byte a byte al exportado por el backend (sha256 `1075374b…`) |
+| Mutaciones | **18 + 6 + 3, todas tumbadas** (página y componentes en `4c022f8`; correcciones en `564cf14`; H-1 y aviso de rechazar en `3e630eb`), más 11 de la capa de datos en `dbdf73d`. Entre ellas: el botón que enseña lo esperado en vez del máximo, «Ejecutar» sin `lab_run`, aprobar sin reconocer todos los casos, el progreso sin `aria-live`, la respuesta del actor como `[innerHTML]`, un token que deriva del tablero, el Administrador con `lab_run`, quitar cada aviso y volver a envolver el título del motor |
+| Chrome real con la API simulada (no es el E2E con la pila real) | **40/40** (`4c022f8`, a 1440, 820 y 390 px sin desplazamiento horizontal), **19/19** (`564cf14`) y **13/13** (`3e630eb`), las dos últimas a 1440 y 390 px; sin errores de JavaScript |
+
+### E2E con la pila real (19-10-2026)
+
+**122/122 en 183 s** sobre el backend `6dbf485` y el CRM `3e630eb` (`scratchpad/e2e-studio/h4-run.sh`, salida en `h4-run-final-out.txt`): backend con `artisan serve`, PostgreSQL 14, el worker real `queue:work lab`, un simulador local de OpenAI y Chrome con login real. Por escenario: E1 bandera apagada 5/5, E2 encendido, editor y Recepción 17/17, E3 estimar y ejecutar 28/28, E4 veredicto 9/9, E5 cancelar, cuota, `incomplete` y ensayo sin IA 15/15, E6 presupuesto y `estimate_changed` 8/8, E7 texto hostil 7/7, E8 teclado y tres tamaños 21/21 (más el aviso al archivar, ya esperado), E9 cierre 12/12. La pasada anterior, sobre `4fbce0a` y `32c03d3`, dio 121/122 por H-1, corregido en `3e630eb`. El detalle está en `ULTRON_STUDIO_FINAL_REPORT.md`.
+
+### Pendiente y no verificado
+
+- **Etiqueta de `budget_exhausted`** (**pendiente; lo decide el lead**): el CRM dice «Se agotó el presupuesto del día», pero desde la Enmienda 4.1 la parada también puede venir del tope por ejecución o del máximo aceptado. El motivo exacto va en el libro de la ejecución (`budgetCap`). Opciones del backend: un texto genérico en el CRM, o exponer `budgetCap` en el DTO.
+- **Color de los avisos:** ningún aviso de datos personales sale con su color de acento (tampoco los de G), porque una regla global del CRM con `!important` lo pisa. Se leen con buen contraste. Fuera de alcance.
+- **El asistente flotante del shell** tapa a 390 px parte de «Archivar la regla» en G, y en el laboratorio flota sobre la esquina inferior derecha. Ya ocurría; no se comprobó si intercepta toques.
+- **Riesgo previo más visible:** el tablero no tiene guarda de salida para cambios sin guardar del borrador; ir al laboratorio por el enlace nuevo, igual que por el menú, abandona lo no guardado.
+- **No verificado:** Safari (`overflow: clip` necesita Safari 16 o posterior), Firefox, Windows, lectores de pantalla reales, gestos táctiles y el CRM del laboratorio sobre la pila de producción.
 
 ## Revisión final independiente (`reviewer`) de la vista previa (Hito C)
 
