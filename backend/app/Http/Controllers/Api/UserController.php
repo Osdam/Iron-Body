@@ -101,6 +101,14 @@ class UserController extends Controller
             ->select(array_merge($this->memberFields(), self::FREEZE_COLUMNS))
             ->with('appMember.guardian')
             ->orderByDesc('created_at')
+            // DESEMPATE OBLIGATORIO. Los socios importados en bloque comparten
+            // el mismo created_at y, sin un segundo criterio, la base los
+            // devuelve en un orden distinto en cada consulta: al pasar de
+            // página unos salían dos veces y otros ninguna. El terminal de
+            // recepción baja el directorio entero página a página, así que
+            // esos socios desaparecían de su copia local y la puerta decía
+            // «socio no encontrado» a gente con la membresía al día.
+            ->orderByDesc('id')
             ->paginate($this->resolvePerPage($request));
 
         // Adjunta menor de edad + acudiente por fila (para prefijar el editar)
