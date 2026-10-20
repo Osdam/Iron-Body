@@ -12,7 +12,8 @@ sin tocar datos.
 | Backend | `24549ad` | El rostro solo vale desde un equipo firmado (tablet). Sin código para clases. `legacy_claim` prohibido a quien ya tiene rostro. `dev-login` solo desde un equipo que ese entrenador ya usaba. |
 | Backend | `713d99a` | El portal en la tablet (rostro) tiene su interruptor propio, encendido; el login facial público sigue apagado. |
 | CRM | `e0f7ab5`, `1b3e2bf` | Textos de renovación; sin opción de código para clases; «Declarado sin verificar (teléfono)». |
-| App | `9333146` (rama `feat/employee-attendance`) | Teléfono: entrada con SMS, sin iniciar/finalizar. Tablet: portal solo con rostro, reintento sin códigos. Versión 2.0.7+19. |
+| Backend | `74bd889` | Perfil → Registro facial: el primer rostro del socio con su sesión (OTP) y su autorización biométrica (`member/face-enrollment`). |
+| App | `37ae697` (`main` = `feat/employee-attendance`) | Teléfono: entrada con SMS, sin iniciar/finalizar. Tablet: portal solo con rostro, reintento sin códigos. Perfil → Registro facial. Versión 2.0.8+21 (Play, App Store y tablet). |
 
 Interruptores en producción tras la fase 0:
 
@@ -29,8 +30,8 @@ Interruptores en producción tras la fase 0:
 
 ## Fase 1 — física (pendiente)
 
-1. **Tablet**: instalar `_apk/IronBody-Empleados-2.0.7-build19-9333146.apk`
-   (SHA-256 `8721eaaf260fcabe7e65f55f14d818dbcfaf2173db7af1c89b2c4fef1e57e19d`)
+1. **Tablet**: instalar `_apk/release-2.0.8-build21-572410b/IronBody-Empleados-2.0.8-build21-572410b.apk`
+   (SHA-256 `11e86dc018198b578ecbc82c7432671ae6e43f91ac9ad0ef188b121b2b37fae0`)
    **como actualización**: abrir el archivo en la tablet → «Actualizar», o
    `adb install -r <apk>`. **No desinstalar**: borra la clave que la vincula y
    habría que vincularla de nuevo con un código.
@@ -45,16 +46,17 @@ Interruptores en producción tras la fase 0:
      and r.status = 'active' and r.template is not null and r.consent_version is not null
    where t.status in ('active','activo') and r.id is null;
    ```
-3. **Tiendas**: subir `_apk/IronBody-Play-2.0.7-build20-32e910b.aab`
-   (SHA-256 `5f61874da74e66644f81d83558901b03a4522a8955b2573720f1a765368ac94d`;
-   incluye además el arreglo de Perfil → Registro facial)
-   a Google Play. iOS: compilar y subir la misma versión (requiere el arreglo
-   de iOS de la rama `fix/ios-tflite-symbols` y la firma de App Store).
+3. **Tiendas**: subir `_apk/release-2.0.8-build21-572410b/IronBody-Play-2.0.8-build21-572410b.aab`
+   (SHA-256 `e7f52f998e36382152a73cd4542b4cd3ec1e2e43da1c990485c7e56b5895f106`)
+   a Google Play. iOS: el archive 2.0.8 (21) ya está firmado y verificado
+   (símbolos TFLite presentes) en el Organizer de Xcode; la subida la rechazó
+   Apple por un acuerdo pendiente de aceptar en la cuenta de desarrollador.
+   Aceptado el acuerdo, Organizer → «Distribute App» → App Store Connect.
 
 ## Fase 2 — cerrar el inicio de clases desde teléfonos
 
 Cuando la consulta de la fase 1.2 devuelva **cero** entrenadores y la tablet
-tenga la 2.0.7+19:
+tenga la 2.0.8+21:
 
 ```bash
 ssh ironbody-vps
@@ -75,7 +77,7 @@ Vuelta atrás: restaurar el `.env` del respaldo y repetir el script.
 
 ## Fase 3 — cerrar la entrada con la cédula sola
 
-Cuando la app con SMS (2.0.7+19 o posterior) esté instalada en los teléfonos de
+Cuando la app con SMS (2.0.8+21 o posterior) esté instalada en los teléfonos de
 los entrenadores, Android **y** iPhone:
 
 ```bash
