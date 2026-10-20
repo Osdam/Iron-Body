@@ -138,6 +138,16 @@ class WorkforceException extends RuntimeException
         return new self('Esta persona no tiene acceso al portal de entrenadores.', 'not_a_trainer', 403);
     }
 
+    /** Regla del propietario (2026-10-20): una clase se opera con rostro, no con código. */
+    public static function classFallbackDisabled(): self
+    {
+        return new self(
+            'Las clases se inician y finalizan solo con tu rostro en la tablet del gimnasio. Si no te reconoce, pide a administración que revise tu registro facial.',
+            'class_fallback_disabled',
+            422,
+        );
+    }
+
     public static function authorizationCodeInvalid(): self
     {
         return new self('El código no es válido o ya caducó.', 'authorization_code_invalid', 422);

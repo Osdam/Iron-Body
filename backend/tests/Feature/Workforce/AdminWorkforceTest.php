@@ -373,6 +373,7 @@ class AdminWorkforceTest extends TestCase
 
     public function test_un_codigo_de_clases_exige_tambien_administrar_entrenadores(): void
     {
+        config(['workforce.classes.fallback_code' => true]);
         // F5: el código de clases abre el portal del entrenador.
         $coach = $this->trainerPerson('1075000010', [TrainerRole::FUNCTIONAL]);
         $uuid = $coach->identity->uuid;

@@ -47,6 +47,10 @@ return [
     'trusted_device' => [
         'enabled'  => filter_var(env('TRAINER_TRUSTED_DEVICE_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
         'ttl_days' => (int) env('TRAINER_TRUSTED_DEVICE_TTL_DAYS', 30),
+        // Confianza anterior a esta fecha (AAAA-MM-DD) no cuenta: al cerrar el
+        // acceso por documento sin OTP, los equipos que solo entraron así deben
+        // confirmar UNA vez por SMS. Vacío = sin corte.
+        'not_before' => env('TRAINER_TRUSTED_DEVICE_NOT_BEFORE'),
     ],
 
     /*
@@ -58,6 +62,11 @@ return [
     | atajo TEMPORAL para probar el portal: déjalo en false en cuanto termines,
     | porque mientras esté en true cualquiera con un documento de entrenador
     | activo puede entrar sin segundo factor. Cada acceso queda auditado.
+    |
+    | Desde 2026-10-20 solo sirve en un equipo que ESE entrenador ya usaba (su
+    | `device_id` aleatorio ya tiene sesión): un teléfono nuevo con la cédula
+    | sola no entra. Es la transición hasta que la app publicada use el OTP
+    | (`access` + `verify`); entonces se apaga (docs/asistencia-laboral).
     */
     'otp_dev_bypass' => filter_var(env('TRAINER_OTP_DEV_BYPASS', false), FILTER_VALIDATE_BOOLEAN),
 

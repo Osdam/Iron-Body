@@ -81,6 +81,12 @@ class KioskVerificationController extends Controller
         $device = $request->attributes->get('auth_device');
         [$identity, $profile] = $this->person($data['employee_ref'], $device);
 
+        // El portal del entrenador en la tablet existe para operar clases, y
+        // una clase solo se opera con rostro: el código de clases no abre nada.
+        if ($data['purpose'] === 'trainer_session' && ! (bool) config('workforce.classes.fallback_code', false)) {
+            throw WorkforceException::classFallbackDisabled();
+        }
+
         $code = $this->codes->consume(
             $identity,
             $data['purpose'] === 'workday' ? WorkforceAuthorizationCode::PURPOSE_FALLBACK_WORKDAY : WorkforceAuthorizationCode::PURPOSE_FALLBACK_CLASS,

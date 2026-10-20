@@ -313,12 +313,17 @@ class TrainerAuthController extends Controller
         ]);
 
         $trainer = $this->resolveActiveTrainer($data['document']);
-        if (! $trainer) {
+        // Transición (2026-10-20): la cédula sola solo entra desde un equipo
+        // que ESE entrenador ya usaba. El `device_id` lo genera la app al azar y
+        // lo guarda cifrado: quien sabe una cédula no lo tiene. Un id de kiosko
+        // o generado por el servidor no cuenta. Misma respuesta si no hay
+        // entrenador: no se revela qué cédulas lo son.
+        if (! $trainer || ! $this->sessions->knownDevice($trainer, $this->context($request)['device_id'])) {
             return response()->json([
                 'ok' => false,
-                'code' => 'trainer_inactive',
-                'message' => 'No hay un entrenador activo con ese documento.',
-            ], 404);
+                'code' => 'device_not_recognized',
+                'message' => 'Este equipo no está reconocido para entrar solo con el documento. Actualiza la aplicación para entrar con el código que llega por SMS.',
+            ], 403);
         }
 
         $issued = $this->sessions->issueSession($trainer, $this->context($request));
