@@ -45,8 +45,9 @@ Interruptores en producción tras la fase 0:
      and r.status = 'active' and r.template is not null and r.consent_version is not null
    where t.status in ('active','activo') and r.id is null;
    ```
-3. **Tiendas**: subir `_apk/IronBody-Play-2.0.7-build19-9333146.aab`
-   (SHA-256 `5e9fe33f8fc1de73947072429321a1be0edf45384ff6e5c7eec0ff4f0a401b48`)
+3. **Tiendas**: subir `_apk/IronBody-Play-2.0.7-build20-32e910b.aab`
+   (SHA-256 `5f61874da74e66644f81d83558901b03a4522a8955b2573720f1a765368ac94d`;
+   incluye además el arreglo de Perfil → Registro facial)
    a Google Play. iOS: compilar y subir la misma versión (requiere el arreglo
    de iOS de la rama `fix/ios-tflite-symbols` y la firma de App Store).
 
