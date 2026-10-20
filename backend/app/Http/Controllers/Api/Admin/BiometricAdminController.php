@@ -62,6 +62,7 @@ class BiometricAdminController extends Controller
 
         return response()->json(['ok' => true, 'data' => [
             'status' => $this->faces->status($ref),
+            'verifiable' => $this->faces->verifiable($ref),
             'enrolled_at' => $ref?->enrolled_at?->toIso8601String(),
             'updated_at' => $ref?->updated_at?->toIso8601String(),
             'enrolled_via' => $ref?->enrolled_via,

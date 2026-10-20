@@ -99,6 +99,16 @@ class FaceReferenceService
         return $this->status($this->referenceForIdentity($identity));
     }
 
+    /**
+     * ¿Verifica esta plantilla? Con consentimiento y sin revocar. Puede ser
+     * cierto en `renewal_pending` (renovación autorizada): la tablet y el CRM
+     * lo usan para no tratar como inservible un rostro que funciona.
+     */
+    public function verifiable(?TrainerFaceReference $ref): bool
+    {
+        return $ref !== null && $ref->isValidated();
+    }
+
     // ── Comparación ─────────────────────────────────────────────────────────
 
     /** El embedding es un rostro calculado por la app (tamaño, finitos, norma). */
@@ -131,7 +141,7 @@ class FaceReferenceService
         // invalida: hasta 2026-10-19 la dejaba sin verificar mientras el código
         // vivía, y un código emitido por error («para la clase») bloqueaba un
         // rostro bueno y obligaba a pedir el código de respaldo.
-        if ($ref === null || ! $ref->isValidated()) {
+        if ($ref === null || ! $this->verifiable($ref)) {
             throw WorkforceException::biometricNotEnrolled($this->status($ref));
         }
 

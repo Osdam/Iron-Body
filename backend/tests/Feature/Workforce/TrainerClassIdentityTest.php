@@ -127,7 +127,8 @@ class TrainerClassIdentityTest extends TestCase
         $tablet = $this->tablet();
         $this->postJson("/api/admin/biometrics/identities/{$this->coach->identity->uuid}/enrollment-code", ['reason' => 'Clase'], $this->adminWithPermissions(['biometrics.manage']))
             ->assertCreated();
-        $this->identify('1075000010', $tablet)->assertJsonPath('employee.biometric.status', 'renewal_pending');
+        $this->identify('1075000010', $tablet)->assertJsonPath('employee.biometric.status', 'renewal_pending')
+            ->assertJsonPath('employee.biometric.verifiable', true);
 
         $this->signed('POST', "/api/trainer/classes/{$this->clase->id}/start", ['session_date' => self::LUNES, 'embedding' => $this->capture($this->face(20), 3)], $tablet, ['Authorization' => 'Bearer '.$this->token])
             ->assertOk()->assertJsonPath('session.start_identity_method', 'face');
@@ -274,9 +275,11 @@ class TrainerClassIdentityTest extends TestCase
         $this->postJson('/api/trainer/auth/face/enroll', ['embedding' => $this->face(20)], $this->bearer())->assertOk();
         $tablet = $this->tablet();
 
-        $this->identify('1075000010', $tablet)->assertJsonPath('employee.biometric.status', 'renewal_pending');
+        $this->identify('1075000010', $tablet)->assertJsonPath('employee.biometric.status', 'renewal_pending')
+            ->assertJsonPath('employee.biometric.verifiable', false);
         $this->verifyFace('1075000010', $this->face(20), $tablet)
-            ->assertStatus(409)->assertJsonPath('code', 'biometric_not_enrolled')->assertJsonPath('biometric.status', 'renewal_pending');
+            ->assertStatus(409)->assertJsonPath('code', 'biometric_not_enrolled')->assertJsonPath('biometric.status', 'renewal_pending')
+            ->assertJsonPath('biometric.verifiable', false);
         $this->postJson("/api/trainer/classes/{$this->clase->id}/start", ['session_date' => self::LUNES, 'embedding' => $this->face(20)], $this->bearer())
             ->assertStatus(409);
         $this->postJson('/api/trainer/auth/face/login', ['trainer_id' => $this->coach->id, 'embedding' => $this->face(20)])->assertStatus(422);

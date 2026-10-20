@@ -49,12 +49,14 @@ class KioskEmployeeController extends Controller
 
     private function present(EmployeeProfile $profile, AuthorizedDevice $device): array
     {
+        $ref = $this->faces->referenceForIdentity($profile->identity);
+
         return [
             'ref' => $this->tokens->employeeRef($profile->identity, $device),
             'display_name' => $profile->shortName(),
             'positions' => array_map(fn (array $p) => ['key' => $p['key'], 'label' => $p['label']], $profile->describedPositions()),
             'capabilities' => $profile->capabilities(),
-            'biometric' => ['status' => $this->faces->statusForIdentity($profile->identity)],
+            'biometric' => ['status' => $this->faces->status($ref), 'verifiable' => $this->faces->verifiable($ref)],
         ];
     }
 }

@@ -163,13 +163,15 @@ class TrainerAdminController extends Controller
             request: $request,
         );
 
+        $after = $faces->referenceForTrainer($trainer);
+
         return response()->json([
             'ok' => true,
             'face_enrolled' => false,
             'message' => $revoked
                 ? 'Biometría revocada: la plantilla se borró. Para registrar un rostro nuevo hace falta la autorización de un administrador.'
                 : 'El entrenador no tenía rostro registrado.',
-            'biometric' => ['status' => $faces->status($faces->referenceForTrainer($trainer))],
+            'biometric' => ['status' => $faces->status($after), 'verifiable' => $faces->verifiable($after)],
         ]);
     }
 

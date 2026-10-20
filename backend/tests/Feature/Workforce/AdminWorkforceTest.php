@@ -271,7 +271,10 @@ class AdminWorkforceTest extends TestCase
 
         $this->postJson("/api/admin/biometrics/identities/{$ana->uuid}/enrollment-code", ['reason' => 'Cambio de aspecto'], $this->adminWithPermissions(['biometrics.manage']))->assertCreated();
         // La tablet ofrece «Registrar mi rostro»…
-        $this->identify('1075000001', $tablet)->assertJsonPath('employee.biometric.status', 'renewal_pending');
+        $this->identify('1075000001', $tablet)->assertJsonPath('employee.biometric.status', 'renewal_pending')
+            ->assertJsonPath('employee.biometric.verifiable', true);
+        $this->getJson("/api/admin/biometrics/identities/{$ana->uuid}", $this->adminWithPermissions(['biometrics.view']))
+            ->assertOk()->assertJsonPath('data.status', 'renewal_pending')->assertJsonPath('data.verifiable', true);
         // …pero la plantilla válida sigue verificando la jornada hasta que la
         // nueva la sustituya: la renovación no deja a la persona sin rostro.
         $this->verifyFace('1075000001', $this->face(1), $tablet)->assertOk();

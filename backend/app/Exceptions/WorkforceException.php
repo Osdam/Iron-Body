@@ -129,7 +129,7 @@ class WorkforceException extends RuntimeException
             },
             'biometric_not_enrolled',
             409,
-            ['biometric' => ['status' => $status]],
+            ['biometric' => ['status' => $status, 'verifiable' => false]],
         );
     }
 
