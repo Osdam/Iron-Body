@@ -29,7 +29,9 @@ use Throwable;
  *
  * `failed()` (timeout del job o worker perdido): el caso en curso pasa a
  * `error` con coste = su reserva, porque no se sabe si se cobró, y se encola el
- * siguiente paso. NADA APRUEBA SOLO: este job no nombra el veredicto.
+ * siguiente paso. Sin caso en curso (falló antes de reclamar), un paso de
+ * rescate a los 30 s, una sola vez ({@see StudioLabRunner::failed()}). NADA
+ * APRUEBA SOLO: este job no nombra el veredicto.
  */
 final class StudioLabStepJob implements ShouldQueue
 {

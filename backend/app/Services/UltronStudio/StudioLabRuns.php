@@ -280,10 +280,13 @@ final class StudioLabRuns
     // ── POST lab/runs/{uuid}/cancel ─────────────────────────────────────────
 
     /**
-     * Parar el gasto siempre se permite a quien tenga la llave. En cola: pasa a
-     * `cancelled` al instante. En curso: se marca y la llamada en vuelo
+     * Parar el gasto siempre se permite a quien tenga la llave. Sin ningún caso
+     * en vuelo (en cola, o en curso entre dos pasos o con su paso perdido:
+     * H-P2-1 del tester, Enmienda 5): pasa a `cancelled` al instante, bajo el
+     * cerrojo de los reclamos. Con un caso en vuelo: se marca y la llamada
      * termina (y se cobra); el siguiente paso cierra la ejecución. Terminal:
-     * 409 `run_not_cancellable`. Pedirlo dos veces no escribe nada más.
+     * 409 `run_not_cancellable`. Pedirlo dos veces no vuelve a escribir la
+     * petición; si para entonces ya no queda ningún caso en vuelo, la cierra.
      */
     public function cancel(StudioAccess $access, StudioLabRun $run): StudioLabRun
     {
@@ -298,20 +301,25 @@ final class StudioLabRuns
             if ($actual === null || $actual->isTerminal()) {
                 throw UltronStudioException::runNotCancellable((string) $actual?->status);
             }
-            if ($actual->cancel_requested_at !== null) {
+
+            $pedida = $actual->cancel_requested_at !== null;
+            $campos = $pedida ? [] : ['cancel_requested_at' => now(), 'cancel_requested_by_name' => $yo['name']];
+            if (! $pedida) {
+                $this->events->record($access->actor, 'run.cancel_requested', StudioLabEvent::SUBJECT_RUN, $run->uuid,
+                    'Pidió cancelar la ejecución', ['fromStatus' => $actual->status]);
+            }
+
+            // Sin caso en vuelo, se cierra ya: `close()` vuelve a mirarlo bajo
+            // este mismo cerrojo y se niega si hay un caso en curso. Una
+            // ejecución en curso sin caso en vuelo puede no tener ningún paso
+            // en la cola (el suyo falló antes de reclamar): esperar al
+            // siguiente paso la dejaría viva para siempre.
+            if ($this->runner->close($run, StudioLabRun::STATUS_CANCELLED, null, $access->actor, StudioLabRun::LIVE_STATUSES, $campos)
+                || $pedida) {
                 return;
             }
 
-            $campos = ['cancel_requested_at' => now(), 'cancel_requested_by_name' => $yo['name']];
-            $this->events->record($access->actor, 'run.cancel_requested', StudioLabEvent::SUBJECT_RUN, $run->uuid,
-                'Pidió cancelar la ejecución', ['fromStatus' => $actual->status]);
-
-            if ($actual->status === StudioLabRun::STATUS_QUEUED
-                && $this->runner->close($run, StudioLabRun::STATUS_CANCELLED, null, $access->actor, [StudioLabRun::STATUS_QUEUED], $campos)) {
-                return;
-            }
-
-            // En curso (o lo estaba ya al ir a cerrarla): la cierra el siguiente paso.
+            // Con un caso en vuelo: la cierra el siguiente paso.
             $marcada = StudioLabRun::query()->whereKey($run->id)
                 ->whereIn('status', StudioLabRun::LIVE_STATUSES)
                 ->whereNull('cancel_requested_at')
@@ -347,9 +355,9 @@ final class StudioLabRuns
             ->orderByDesc('id')
             ->paginate($perPage);
 
-        $conteos = self::countsByRun($pagina->getCollection()->pluck('id')->all());
+        [$conteos, $enVuelo] = self::countsByRun($pagina->getCollection()->pluck('id')->all());
 
-        return $pagina->through(fn (StudioLabRun $r): array => $this->summary($access, $r, $conteos[$r->id] ?? self::emptyCounts()));
+        return $pagina->through(fn (StudioLabRun $r): array => $this->summary($access, $r, $conteos[$r->id] ?? self::emptyCounts(), isset($enVuelo[$r->id])));
     }
 
     /** La ejecución si quien mira puede verla; si no, el mismo 404 que un uuid inexistente. */
@@ -389,8 +397,9 @@ final class StudioLabRuns
     {
         $run->loadMissing(['verdict', 'targetVersion:id,uuid,created_by_admin_id']);
         $casos = StudioLabRunCase::query()->with('scenario:id,uuid')->where('run_id', $run->id)->orderBy('position')->get();
+        $enVuelo = $casos->contains(static fn (StudioLabRunCase $c): bool => $c->status === StudioLabRunCase::STATUS_RUNNING);
 
-        return $this->summary($access, $run, self::countsOf($casos)) + [
+        return $this->summary($access, $run, self::countsOf($casos), $enVuelo) + [
             'fidelity' => self::FIDELITY,
             'targetSnapshot' => self::snapshotOut(is_array($run->target_snapshot) ? $run->target_snapshot : []),
             'cases' => $casos->map(fn (StudioLabRunCase $c): array => self::presentCase($c))->all(),
@@ -401,21 +410,26 @@ final class StudioLabRuns
     }
 
     /**
-     * RunSummary (§A7 y Enmienda 2, §6).
+     * RunSummary (§A7 y Enmienda 2, §6). Una ejecución huérfana con el plazo
+     * vencido ({@see isOrphanPastDeadline()}) se presenta `stopped` con
+     * `deadline` y `expired: true`, sin escribir nada.
      *
      * @param  array{progress:array{done:int,error:int,skipped:int,pending:int},outcomes:array{pass:int,review:int,fail:int}}  $counts
+     * @param  bool  $caseInFlight  si tiene algún caso `running` (sin saberlo, true: nada se presenta parado)
      * @return array<string, mixed>
      */
-    public function summary(StudioAccess $access, StudioLabRun $run, array $counts): array
+    public function summary(StudioAccess $access, StudioLabRun $run, array $counts, bool $caseInFlight = true): array
     {
         $veredicto = $run->relationLoaded('verdict') ? $run->verdict : $run->verdict()->first();
+        $huerfana = self::isOrphanPastDeadline($run, $caseInFlight);
+        $estado = $huerfana ? StudioLabRun::STATUS_STOPPED : $run->status;
 
         return [
             'uuid' => $run->uuid,
-            'status' => $run->status,
-            'statusLabel' => self::STATUS_LABELS[$run->status] ?? $run->status,
-            'stopReason' => $run->stop_reason,
-            'expired' => self::isExpired($run),
+            'status' => $estado,
+            'statusLabel' => self::STATUS_LABELS[$estado] ?? $estado,
+            'stopReason' => $huerfana ? StudioLabRun::STOP_DEADLINE : $run->stop_reason,
+            'expired' => $huerfana || self::isExpired($run),
             'cancelRequested' => $run->cancel_requested_at !== null,
             'target' => [
                 'kind' => $run->target_kind,
@@ -490,6 +504,24 @@ final class StudioLabRuns
         return $run->status === StudioLabRun::STATUS_QUEUED
             && $run->created_at !== null
             && $run->created_at->lt(now()->subMinutes(StudioLabConfig::QUEUED_EXPIRY_MINUTES));
+    }
+
+    /**
+     * ¿Es una ejecución HUÉRFANA con el plazo vencido? En curso, sin ningún
+     * caso en vuelo y con `started_at` + 30 min ya pasado (H-P2-1 del tester,
+     * Enmienda 5): su paso falló antes de reclamar y nadie la va a mover, o el
+     * siguiente paso la parará con `deadline` en cuanto llegue. Se presenta
+     * `stopped` con `deadline` (y `expired: true`) sin escribir nada, como la
+     * caducidad en cola; la materializa el siguiente paso que llegue
+     * (`deadline`), el `failed()` del job (`deadline`) o `cancel`, que la
+     * cierra `cancelled`. Las acciones se calculan sobre lo guardado.
+     */
+    public static function isOrphanPastDeadline(StudioLabRun $run, bool $caseInFlight): bool
+    {
+        return $run->status === StudioLabRun::STATUS_RUNNING
+            && ! $caseInFlight
+            && $run->started_at !== null
+            && $run->started_at->lt(now()->subMinutes(StudioLabConfig::RUN_DEADLINE_MINUTES));
     }
 
     /**
@@ -1069,18 +1101,21 @@ final class StudioLabRuns
     }
 
     /**
-     * Los recuentos de los casos de varias ejecuciones, en UNA consulta.
+     * Los recuentos de los casos de varias ejecuciones, en UNA consulta, y qué
+     * ejecuciones tienen algún caso en vuelo (`running`; en el recuento cuenta
+     * como `pending`).
      *
      * @param  list<int>  $ids
-     * @return array<int, array{progress:array{done:int,error:int,skipped:int,pending:int},outcomes:array{pass:int,review:int,fail:int}}>
+     * @return array{0:array<int, array{progress:array{done:int,error:int,skipped:int,pending:int},outcomes:array{pass:int,review:int,fail:int}}>,1:array<int,true>}
      */
     private static function countsByRun(array $ids): array
     {
         if ($ids === []) {
-            return [];
+            return [[], []];
         }
 
         $out = [];
+        $enVuelo = [];
         $filas = DB::table('ultron_studio_lab_run_cases')
             ->whereIn('run_id', $ids)
             ->groupBy('run_id', 'status', 'outcome')
@@ -1090,9 +1125,12 @@ final class StudioLabRuns
             $id = (int) $f->run_id;
             $out[$id] ??= self::emptyCounts();
             self::count($out[$id], (string) $f->status, $f->outcome !== null ? (string) $f->outcome : null, (int) $f->n);
+            if ((string) $f->status === StudioLabRunCase::STATUS_RUNNING) {
+                $enVuelo[$id] = true;
+            }
         }
 
-        return $out;
+        return [$out, $enVuelo];
     }
 
     /** @return array{progress:array{done:int,error:int,skipped:int,pending:int},outcomes:array{pass:int,review:int,fail:int}} */

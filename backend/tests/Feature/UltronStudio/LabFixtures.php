@@ -7,9 +7,12 @@ use App\Models\UltronStudio\StudioLabRun;
 use App\Models\UltronStudio\StudioLabScenario;
 use App\Services\UltronStudio\StudioLabModelClient;
 use App\Services\UltronStudio\StudioLabRunner;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
+use RuntimeException;
 
 /**
  * Datos y peticiones del LABORATORIO de ULTRON STUDIO (Hito 4) para las
@@ -162,6 +165,34 @@ trait LabFixtures
         }
 
         return $run->refresh();
+    }
+
+    /**
+     * Un paso que FALLA ANTES DE RECLAMAR (H-P2-1 del tester: la conexión con
+     * la base se corta mientras el paso espera el cerrojo de los reclamos). La
+     * primera consulta del paso tras cargar la ejecución (la de sus casos en
+     * curso) lanza, como lanzaría PDO: el paso no liquida nada ni encola el
+     * siguiente. Devuelve la excepción, la que el worker pasa a `failed()`.
+     */
+    protected function stepFailsBeforeClaiming(int $runId): RuntimeException
+    {
+        $armada = true;
+        DB::listen(function (QueryExecuted $q) use (&$armada, $runId): void {
+            if ($armada && str_contains($q->sql, '"ultron_studio_lab_run_cases"') && in_array('running', $q->bindings, true) && in_array($runId, $q->bindings, true)) {
+                $armada = false;
+                throw new RuntimeException('SQLSTATE[08006]: no connection to the server (simulada)');
+            }
+        });
+
+        try {
+            $resultado = app(StudioLabRunner::class)->step($runId);
+        } catch (RuntimeException $e) {
+            $this->assertFalse($armada);
+
+            return $e;
+        }
+        $armada = false;
+        $this->fail("El paso no falló antes de reclamar: devolvió «{$resultado}».");
     }
 
     /** @return array<string, mixed> el objetivo «versión» de un uuid */

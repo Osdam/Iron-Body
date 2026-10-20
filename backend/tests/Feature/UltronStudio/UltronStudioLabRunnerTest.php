@@ -7,6 +7,7 @@ use App\Models\UltronStudio\StudioLabEvent;
 use App\Models\UltronStudio\StudioLabRun;
 use App\Models\UltronStudio\StudioLabRunCase;
 use App\Services\UltronStudio\StudioAccess;
+use App\Services\UltronStudio\StudioLabConfig;
 use App\Services\UltronStudio\StudioLabCost;
 use App\Services\UltronStudio\StudioLabModelClient;
 use App\Services\UltronStudio\StudioLabRunner;
@@ -32,8 +33,9 @@ use Tests\TestCase;
  * de ritmo que retrasa y no cuenta, el plazo, el presupuesto agotado (del día,
  * y el de la ejecución sobre su coste REAL: Enmienda 4.1), un invisible en la
  * respuesta que bloquea (4.2), `failed()` cobrando la reserva, dos pasos a la
- * vez que nunca procesan el mismo caso y una cancelación confirmada después de
- * cargar el paso que no deja reclamar otro (4.5).
+ * vez que nunca procesan el mismo caso, una cancelación confirmada después de
+ * cargar el paso que no deja reclamar otro (4.5) y un paso que falla ANTES de
+ * reclamar: un rescate a los 30 s por punto de avance, o la parada (Enmienda 5).
  *
  * Precios de las pruebas: 0,40 y 1,60 US$ por millón (400 000 y 1 600 000
  * micro-US$). Un caso con actor [900, 40] y juez [1500, 300] cuesta
@@ -359,30 +361,53 @@ class UltronStudioLabRunnerTest extends TestCase
         // UltronStudioLabCancelLockTest (PostgreSQL).
         Queue::fake();
         $this->labOpenAi();
-        $guion = $this->script([self::ACTOR_OK, self::JUDGE_PASS, self::ACTOR_OK, self::JUDGE_PASS]);
+        $guion = $this->script([self::ACTOR_OK, self::JUDGE_PASS, self::ACTOR_OK, self::JUDGE_PASS, self::ACTOR_OK, self::JUDGE_PASS]);
+
+        // 1) `cancel()` de verdad, sin ningún caso en vuelo: desde la Enmienda 5
+        // la cierra en el acto, así que el paso la encuentra cerrada y no reclama.
         $uuid = $this->launch($this->root, ['kind' => 'baseline'], ['C-01', 'C-02', 'C-03'])->assertCreated()->json('data.uuid');
         $id = (int) StudioLabRun::query()->where('uuid', $uuid)->value('id');
         $this->assertSame('case', app(StudioLabRunner::class)->step($id));
+        $resultado = $this->stepWithMidStepCancel($id, fn () => app(StudioLabRuns::class)->cancel(new StudioAccess($this->root), StudioLabRun::query()->findOrFail($id)));
 
-        // La primera consulta del paso tras cargar la ejecución es la de sus casos en curso.
-        $armada = true;
-        DB::listen(function (QueryExecuted $q) use (&$armada, $id): void {
-            if ($armada && str_contains($q->sql, '"ultron_studio_lab_run_cases"') && in_array('running', $q->bindings, true)) {
-                $armada = false;
-                app(StudioLabRuns::class)->cancel(new StudioAccess($this->root), StudioLabRun::query()->findOrFail($id));
-            }
-        });
-        $resultado = app(StudioLabRunner::class)->step($id);
-
-        $this->assertFalse($armada, 'la cancelación no llegó en mitad del paso');
         $run = StudioLabRun::query()->findOrFail($id);
         $this->assertNotNull($run->cancel_requested_at);
-        $this->assertSame(['closed', 'cancelled'], [$resultado, $run->status]);
+        $this->assertSame(['gone', 'cancelled'], [$resultado, $run->status], 'la cerró la cancelación; el paso no reclamó');
         $this->assertSame(['done', 'skipped', 'skipped'], $run->cases()->pluck('status')->all());
         $this->assertCount(2, $guion->calls, 'tras la cancelación no se llamó al proveedor (ni se pagó) otro caso');
         // Por estado y no por hora: el reclamo fecha el caso con la hora del INICIO del paso, de antes de la cancelación.
         $this->assertSame([1], StudioLabRunCase::query()->where('run_id', $id)->whereNotNull('started_at')->pluck('position')->all(), 'solo el primer caso llegó a empezar');
         $this->assertSame(['run.created', 'run.cancel_requested', 'run.finished'], StudioLabEvent::query()->where('subject_uuid', $uuid)->orderBy('id')->pluck('event')->all());
+
+        // 2) Una petición solo MARCADA (la que deja una cancelación que llegó con
+        // un caso en vuelo, ya terminado): la relee el reclamo, bajo el cerrojo.
+        $uuid = $this->launch($this->root, ['kind' => 'baseline'], ['C-04', 'C-05', 'C-06'])->assertCreated()->json('data.uuid');
+        $id = (int) StudioLabRun::query()->where('uuid', $uuid)->value('id');
+        $this->assertSame('case', app(StudioLabRunner::class)->step($id));
+        $resultado = $this->stepWithMidStepCancel($id, fn () => $this->assertSame(1, StudioLabRun::query()->whereKey($id)->whereNull('cancel_requested_at')
+            ->update(['cancel_requested_at' => now(), 'cancel_requested_by_name' => 'Otra sesión'])));
+
+        $run = StudioLabRun::query()->findOrFail($id);
+        $this->assertSame(['closed', 'cancelled'], [$resultado, $run->status], 'el paso reclamó con la cancelación ya confirmada');
+        $this->assertSame(['done', 'skipped', 'skipped'], $run->cases()->pluck('status')->all());
+        $this->assertCount(4, $guion->calls, 'tras la cancelación no se llamó al proveedor (ni se pagó) otro caso');
+        $this->assertSame([1], StudioLabRunCase::query()->where('run_id', $id)->whereNotNull('started_at')->pluck('position')->all(), 'solo el primer caso llegó a empezar');
+    }
+
+    /** Un paso en el que `$cancel` ocurre justo después de cargar la ejecución (en la consulta de sus casos en curso). */
+    private function stepWithMidStepCancel(int $id, \Closure $cancel): string
+    {
+        $armada = true;
+        DB::listen(function (QueryExecuted $q) use (&$armada, $id, $cancel): void {
+            if ($armada && str_contains($q->sql, '"ultron_studio_lab_run_cases"') && in_array('running', $q->bindings, true) && in_array($id, $q->bindings, true)) {
+                $armada = false;
+                $cancel();
+            }
+        });
+        $resultado = app(StudioLabRunner::class)->step($id);
+        $this->assertFalse($armada, 'la cancelación no llegó en mitad del paso');
+
+        return $resultado;
     }
 
     public function test_failed_cobra_la_reserva_entera_del_caso_y_encola_el_siguiente(): void
@@ -408,13 +433,133 @@ class UltronStudioLabRunnerTest extends TestCase
         $this->assertSame(['error', 'worker_lost', (int) $c2->reserved_micros], [$c2->status, $c2->error_code, (int) $c2->cost_micros]);
         $this->assertSame('running', StudioLabRun::query()->whereKey($id)->value('status'), 'worker_lost no es del proveedor: no cuenta para la racha');
 
-        // Sin caso en curso no hay nada que liquidar: no se encola nada (no gira en bucle).
+        // Sin caso en curso no hay nada que liquidar: el paso falló antes de
+        // reclamar y se encola UN paso de rescate a los 30 s (Enmienda 5; el
+        // resto, en test_un_paso_que_falla_antes_de_reclamar_…).
         $antes = count(Queue::pushed(StudioLabStepJob::class));
         (new StudioLabStepJob($id))->failed(new \RuntimeException('fallo antes de reclamar'));
-        $this->assertCount($antes, Queue::pushed(StudioLabStepJob::class));
+        $this->assertCount($antes + 1, Queue::pushed(StudioLabStepJob::class));
+        $this->assertNotNull(Queue::pushed(StudioLabStepJob::class)->last()->delay);
 
         // El coste de la ejecución ya cuenta las dos reservas.
         $this->assertSame((int) $c1->reserved_micros + (int) $c2->reserved_micros, (int) StudioLabRun::query()->whereKey($id)->value('cost_micros'));
+    }
+
+    public function test_un_paso_que_falla_antes_de_reclamar_se_reencola_una_vez_y_si_vuelve_a_fallar_para(): void
+    {
+        // H-P2-1 del tester (Enmienda 5): el paso del caso 2 falla antes de
+        // reclamar (la base se cae mientras espera el cerrojo). Antes, `failed()`
+        // no hacía nada y la ejecución quedaba en curso para siempre, sin paso.
+        Queue::fake();
+        $this->labOpenAi();
+        $guion = $this->script([self::ACTOR_OK, self::JUDGE_PASS]);
+        $uuid = $this->launch($this->root, ['kind' => 'baseline'], ['C-01', 'C-02', 'C-03'])->assertCreated()->json('data.uuid');
+        $id = (int) StudioLabRun::query()->where('uuid', $uuid)->value('id');
+        $this->assertSame('case', app(StudioLabRunner::class)->step($id));
+        $antes = count(Queue::pushed(StudioLabStepJob::class));
+
+        $e = $this->stepFailsBeforeClaiming($id);
+        $this->assertCount($antes, Queue::pushed(StudioLabStepJob::class), 'el paso que falla no encola nada');
+        (new StudioLabStepJob($id))->failed($e);
+
+        // Un paso de rescate a los 30 s, y la marca en el resumen de la ejecución viva.
+        $rescates = Queue::pushed(StudioLabStepJob::class)->slice($antes)->values();
+        $this->assertCount(1, $rescates);
+        $this->assertSame($id, $rescates[0]->runId);
+        $this->assertEqualsWithDelta(StudioLabRunner::REQUEUE_DELAY_SECONDS, now()->diffInSeconds($rescates[0]->delay), 2);
+        $run = StudioLabRun::query()->findOrFail($id);
+        $this->assertSame('running', $run->status);
+        $marca = $run->summary['recovery'];
+        $this->assertSame(['class' => 'internal_error', 'startedCases' => 1], array_intersect_key($marca, ['class' => 0, 'startedCases' => 0]));
+
+        // El paso de rescate TAMBIÉN falla antes de reclamar: para con
+        // `provider_errors`, los pendientes se saltan y el resumen lo explica.
+        (new StudioLabStepJob($id))->failed($this->stepFailsBeforeClaiming($id));
+
+        $run->refresh();
+        $this->assertSame(['stopped', 'provider_errors'], [$run->status, $run->stop_reason]);
+        $this->assertSame(['done', 'skipped', 'skipped'], $run->cases()->pluck('status')->all());
+        $this->assertSame(['failures' => 2, 'class' => 'internal_error', 'firstClass' => 'internal_error'], array_diff_key($run->summary['stepFailure'], ['firstAt' => 0]));
+        $this->assertSame($marca['at'], $run->summary['stepFailure']['firstAt'], 'cuándo falló la primera vez');
+        $this->assertArrayNotHasKey('recovery', $run->summary, 'el cierre sustituye la marca');
+        $this->assertSame($run->results_hash, StudioLabRuns::resultsHash($run, $run->cases()->get()));
+        $this->assertCount($antes + 1, Queue::pushed(StudioLabStepJob::class), 'no hay un segundo rescate');
+        $fin = StudioLabEvent::query()->where('event', 'run.finished')->where('subject_uuid', $uuid)->sole();
+        $this->assertSame('La ejecución se detuvo (provider_errors): el paso falló dos veces sin llegar a reclamar un caso', $fin->summary);
+        $this->assertSame(['failures' => 2, 'class' => 'internal_error'], array_intersect_key($fin->diff['stepFailure'], ['failures' => 0, 'class' => 0]));
+        $this->assertCount(2, $guion->calls, 'nadie llamó al proveedor por los casos saltados');
+    }
+
+    public function test_si_el_rescate_reclama_un_caso_un_fallo_posterior_tiene_su_propio_rescate(): void
+    {
+        // «Una sola vez» es por punto de avance: si el rescate llegó a reclamar
+        // (y liquidar) un caso, el siguiente fallo antes de reclamar no para.
+        Queue::fake();
+        $this->labOpenAi();
+        $this->script([self::ACTOR_OK, self::JUDGE_PASS, self::ACTOR_OK, self::JUDGE_PASS]);
+        $uuid = $this->launch($this->root, ['kind' => 'baseline'], ['C-01', 'C-02', 'C-03', 'C-04'])->assertCreated()->json('data.uuid');
+        $id = (int) StudioLabRun::query()->where('uuid', $uuid)->value('id');
+        $this->assertSame('case', app(StudioLabRunner::class)->step($id));
+        (new StudioLabStepJob($id))->failed($this->stepFailsBeforeClaiming($id));
+        $this->assertSame(1, StudioLabRun::query()->findOrFail($id)->summary['recovery']['startedCases']);
+
+        // El rescate llega y procesa el caso 2; el paso del 3 vuelve a fallar antes de reclamar.
+        $this->assertSame('case', app(StudioLabRunner::class)->step($id));
+        $antes = count(Queue::pushed(StudioLabStepJob::class));
+        (new StudioLabStepJob($id))->failed($this->stepFailsBeforeClaiming($id));
+
+        $run = StudioLabRun::query()->findOrFail($id);
+        $this->assertSame(['running', 2], [$run->status, $run->summary['recovery']['startedCases']]);
+        $this->assertCount($antes + 1, Queue::pushed(StudioLabStepJob::class), 'su propio rescate');
+        $this->assertSame(['done', 'done', 'pending', 'pending'], $run->cases()->pluck('status')->all());
+    }
+
+    public function test_sin_caso_en_curso_failed_aplica_la_caducidad_el_plazo_y_la_cancelacion_pedida(): void
+    {
+        Queue::fake();
+        $this->labFake();
+
+        // En cola desde hace más de 30 min (su primer paso falló antes de
+        // reclamar): `expired`, como haría el paso.
+        $enCola = (int) StudioLabRun::query()->where('uuid', $this->launch($this->root, ['kind' => 'baseline'], ['C-01'])->assertCreated()->json('data.uuid'))->value('id');
+        $e = $this->stepFailsBeforeClaiming($enCola);
+        $this->travel(StudioLabConfig::QUEUED_EXPIRY_MINUTES + 1)->minutes();
+        $antes = count(Queue::pushed(StudioLabStepJob::class));
+        (new StudioLabStepJob($enCola))->failed($e);
+        $run = StudioLabRun::query()->findOrFail($enCola);
+        $this->assertSame(['stopped', 'expired', ['skipped']], [$run->status, $run->stop_reason, $run->cases()->pluck('status')->all()]);
+        $this->assertCount($antes, Queue::pushed(StudioLabStepJob::class), 'sin rescate');
+        $this->travelBack();
+
+        // En curso con el plazo vencido: `deadline`, el motivo con el que ya la presentaba la lectura.
+        $enCurso = (int) StudioLabRun::query()->where('uuid', $this->launch($this->root, ['kind' => 'baseline'], ['C-02', 'C-03'])->assertCreated()->json('data.uuid'))->value('id');
+        $this->assertSame('case', app(StudioLabRunner::class)->step($enCurso));
+        $e = $this->stepFailsBeforeClaiming($enCurso);
+        $this->travel(StudioLabConfig::RUN_DEADLINE_MINUTES + 1)->minutes();
+        $antes = count(Queue::pushed(StudioLabStepJob::class));
+        (new StudioLabStepJob($enCurso))->failed($e);
+        $run = StudioLabRun::query()->findOrFail($enCurso);
+        $this->assertSame(['stopped', 'deadline', ['done', 'skipped']], [$run->status, $run->stop_reason, $run->cases()->pluck('status')->all()]);
+        $this->assertCount($antes, Queue::pushed(StudioLabStepJob::class), 'sin rescate');
+        $this->travelBack();
+
+        // Con la cancelación pedida (llegó con el caso 1 en vuelo): `cancelled`, sin rescate.
+        $this->labOpenAi();
+        $guion = $this->script([self::ACTOR_OK, self::JUDGE_PASS]);
+        $pedida = (int) StudioLabRun::query()->where('uuid', $this->launch($this->root, ['kind' => 'baseline'], ['C-04', 'C-05'])->assertCreated()->json('data.uuid'))->value('id');
+        $guion->whileWaiting = function (int $llamada) use ($pedida): void {
+            if ($llamada === 1) {
+                app(StudioLabRuns::class)->cancel(new StudioAccess($this->root), StudioLabRun::query()->findOrFail($pedida));
+            }
+        };
+        $this->assertSame('case', app(StudioLabRunner::class)->step($pedida));
+        $this->assertSame('running', StudioLabRun::query()->whereKey($pedida)->value('status'));
+        $e = $this->stepFailsBeforeClaiming($pedida);
+        $antes = count(Queue::pushed(StudioLabStepJob::class));
+        (new StudioLabStepJob($pedida))->failed($e);
+        $run = StudioLabRun::query()->findOrFail($pedida);
+        $this->assertSame(['cancelled', null, ['done', 'skipped']], [$run->status, $run->stop_reason, $run->cases()->pluck('status')->all()]);
+        $this->assertCount($antes, Queue::pushed(StudioLabStepJob::class), 'sin rescate');
     }
 
     public function test_un_timeout_del_job_tras_un_error_del_proveedor_para_la_ejecucion(): void

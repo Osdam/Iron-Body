@@ -10,7 +10,9 @@ use App\Models\UltronStudio\StudioLabRun;
 use App\Models\UltronStudio\StudioLabRunCase;
 use App\Models\UltronStudio\StudioRule;
 use App\Services\UltronStudio\StudioContentHasher;
+use App\Services\UltronStudio\StudioLabConfig;
 use App\Services\UltronStudio\StudioLabRunner;
+use App\Services\UltronStudio\StudioLabRuns;
 use App\Services\UltronStudio\StudioLabStepJob;
 use App\Support\Access\RolePermissionPolicy;
 use Illuminate\Database\Events\QueryExecuted;
@@ -27,7 +29,9 @@ use Tests\TestCase;
  * de ejecuciones), la reserva, el día de Bogotá con el reloj en UTC, los tres
  * objetivos, la visibilidad de las ejecuciones sobre un borrador ajeno, la
  * caducidad presentada sin escribir, cancelar, la repetición y el objetivo con
- * datos personales.
+ * datos personales. Y la ejecución HUÉRFANA (H-P2-1 del tester, Enmienda 5):
+ * cancelar sin caso en vuelo la cierra en el acto y, vencido el plazo, se
+ * presenta detenida sin escribir hasta que algo la materializa.
  *
  * Con `Queue::fake()` las ejecuciones se quedan en cola: así se ve la reserva
  * y el estado intermedio. El runner en línea va en `UltronStudioLabRunnerTest`.
@@ -37,6 +41,10 @@ class UltronStudioLabRunsTest extends TestCase
     use LabFixtures;
     use RefreshDatabase;
     use StudioFixtures;
+
+    private const ACTOR_OK = ['reply' => 'Hola, ¿en qué te puedo ayudar hoy?', 'usage' => [900, 40]];
+
+    private const JUDGE_PASS = ['judge' => 'pass', 'usage' => [1500, 300]];
 
     private Admin $ana;
 
@@ -277,20 +285,168 @@ class UltronStudioLabRunsTest extends TestCase
         $this->assertSame(['run.created', 'run.cancel_requested', 'run.finished'], StudioLabEvent::query()->where('subject_uuid', $enCola['uuid'])->orderBy('id')->pluck('event')->all());
         $this->lab('POST', "runs/{$enCola['uuid']}/cancel", $this->root)->assertStatus(409)->assertJsonPath('code', 'run_not_cancellable');
 
-        // En curso: se marca, y el siguiente paso la cierra.
-        $enCurso = $this->launch($this->root, ['kind' => 'baseline'], ['C-01', 'C-02', 'C-03'])->assertCreated()->json('data');
-        $id = (int) StudioLabRun::query()->where('uuid', $enCurso['uuid'])->value('id');
+        // En curso ENTRE DOS PASOS (ningún caso en vuelo): también al instante,
+        // bajo el cerrojo de los reclamos (Enmienda 5). El paso que llegue
+        // después no hace nada.
+        $entrePasos = $this->launch($this->root, ['kind' => 'baseline'], ['C-01', 'C-02', 'C-03'])->assertCreated()->json('data');
+        $id = (int) StudioLabRun::query()->where('uuid', $entrePasos['uuid'])->value('id');
         $this->assertSame('case', app(StudioLabRunner::class)->step($id));
-        $d = $this->lab('POST', "runs/{$enCurso['uuid']}/cancel", $this->root)->assertOk()->json('data');
-        $this->assertSame(['running', true], [$d['status'], $d['cancelRequested']]);
-        $this->assertSame(['allowed' => false, 'code' => 'cancel_requested', 'message' => 'Ya se pidió cancelarla: la cierra el siguiente paso.'], $d['actions']['cancel']);
-        $this->lab('POST', "runs/{$enCurso['uuid']}/cancel", $this->root)->assertOk();
-        $this->assertSame(1, StudioLabEvent::query()->where('subject_uuid', $enCurso['uuid'])->where('event', 'run.cancel_requested')->count());
-
-        app(StudioLabRunner::class)->step($id);
-        $d = $this->lab('GET', "runs/{$enCurso['uuid']}", $this->root)->json('data');
-        $this->assertSame('cancelled', $d['status']);
+        $d = $this->lab('POST', "runs/{$entrePasos['uuid']}/cancel", $this->root)->assertOk()->json('data');
+        $this->assertSame(['cancelled', true], [$d['status'], $d['cancelRequested']]);
         $this->assertSame(['done', 'skipped', 'skipped'], array_column($d['cases'], 'status'));
+        $this->assertNotNull($d['resultsHash']);
+        $this->assertSame('noop', app(StudioLabRunner::class)->step($id));
+
+        // En curso CON UN CASO EN VUELO: se marca; la llamada termina (y se
+        // cobra) y el siguiente paso la cierra.
+        $this->labOpenAi();
+        $guion = $this->script([self::ACTOR_OK, self::JUDGE_PASS, self::ACTOR_OK, self::JUDGE_PASS]);
+        $enVuelo = $this->launch($this->root, ['kind' => 'baseline'], ['C-04', 'C-05', 'C-06'])->assertCreated()->json('data');
+        $id = (int) StudioLabRun::query()->where('uuid', $enVuelo['uuid'])->value('id');
+        $this->assertSame('case', app(StudioLabRunner::class)->step($id));
+        $marcada = null;
+        $guion->whileWaiting = function (int $llamada) use (&$marcada, $enVuelo): void {
+            if ($llamada === 3) {
+                // El actor del caso 2 está en vuelo.
+                $marcada = $this->lab('POST', "runs/{$enVuelo['uuid']}/cancel", $this->root)->assertOk()->json('data');
+                // Pedirlo otra vez con el caso aún en vuelo no escribe nada más.
+                $this->lab('POST', "runs/{$enVuelo['uuid']}/cancel", $this->root)->assertOk()->assertJsonPath('data.status', 'running');
+            }
+        };
+        $this->assertSame('case', app(StudioLabRunner::class)->step($id), 'la llamada en vuelo termina');
+        $this->assertSame(['running', true], [$marcada['status'], $marcada['cancelRequested']]);
+        $this->assertSame(['allowed' => false, 'code' => 'cancel_requested', 'message' => 'Ya se pidió cancelarla: la cierra el siguiente paso.'], $marcada['actions']['cancel']);
+        $this->assertSame(1, StudioLabEvent::query()->where('subject_uuid', $enVuelo['uuid'])->where('event', 'run.cancel_requested')->count());
+
+        $this->assertSame('closed', app(StudioLabRunner::class)->step($id));
+        $d = $this->lab('GET', "runs/{$enVuelo['uuid']}", $this->root)->json('data');
+        $this->assertSame('cancelled', $d['status']);
+        $this->assertSame(['done', 'done', 'skipped'], array_column($d['cases'], 'status'));
+        $this->assertCount(4, $guion->calls, 'el caso en vuelo se completó y se cobró; el tercero no empezó');
+    }
+
+    public function test_cancelar_una_ejecucion_huerfana_la_cierra_en_el_acto(): void
+    {
+        // H-P2-1 del tester (Enmienda 5): el paso del caso 2 falla ANTES de
+        // reclamar. La ejecución queda en curso, sin caso en vuelo y sin ningún
+        // paso en la cola. Antes, cancelar solo la marcaba y nadie la cerraba.
+        Queue::fake();
+        $this->labFake();
+        $run = $this->launch($this->root, ['kind' => 'baseline'], ['C-01', 'C-02', 'C-03'])->assertCreated()->json('data');
+        $id = (int) StudioLabRun::query()->where('uuid', $run['uuid'])->value('id');
+        $this->assertSame('case', app(StudioLabRunner::class)->step($id));
+        $encolados = count(Queue::pushed(StudioLabStepJob::class));
+        $this->stepFailsBeforeClaiming($id);
+        $this->assertCount($encolados, Queue::pushed(StudioLabStepJob::class), 'el paso que falla no deja otro en la cola');
+        $this->assertSame(['running', ['done', 'pending', 'pending']], [StudioLabRun::query()->whereKey($id)->value('status'), StudioLabRunCase::query()->where('run_id', $id)->orderBy('position')->pluck('status')->all()]);
+
+        $d = $this->lab('POST', "runs/{$run['uuid']}/cancel", $this->root)->assertOk()->json('data');
+
+        $this->assertSame(['cancelled', 'Cancelada', null, true, false], [$d['status'], $d['statusLabel'], $d['stopReason'], $d['cancelRequested'], $d['expired']]);
+        $this->assertSame(['done', 'skipped', 'skipped'], array_column($d['cases'], 'status'));
+        $this->assertNotNull($d['finishedAt']);
+        $fila = StudioLabRun::query()->findOrFail($id);
+        $this->assertSame([$fila->results_hash, $fila->results_hash], [$d['resultsHash'], StudioLabRuns::resultsHash($fila, $fila->cases()->get())], 'la huella, calculada al cerrar');
+        $this->assertSame(['allowed' => false, 'code' => 'run_not_cancellable', 'message' => 'La ejecución ya terminó: no hay nada que cancelar.'], $d['actions']['cancel']);
+        $eventos = StudioLabEvent::query()->where('subject_uuid', $run['uuid'])->orderBy('id')->get();
+        $this->assertSame(['run.created', 'run.cancel_requested', 'run.finished'], $eventos->pluck('event')->all());
+        $this->assertSame(['admin', 'Root', 'running', 'cancelled'], [$eventos[2]->actor_type, $eventos[2]->actor_name, $eventos[2]->from_status, $eventos[2]->to_status]);
+        $this->assertSame('noop', app(StudioLabRunner::class)->step($id), 'si después llega un paso, no hace nada');
+        $this->lab('POST', "runs/{$run['uuid']}/cancel", $this->root)->assertStatus(409)->assertJsonPath('code', 'run_not_cancellable');
+    }
+
+    public function test_con_la_cancelacion_ya_pedida_y_sin_caso_en_vuelo_pedirla_otra_vez_la_cierra(): void
+    {
+        // La petición llegó con el caso 1 en vuelo (se marcó) y el paso que
+        // tenía que cerrarla falló antes de reclamar: viva, marcada y sin paso.
+        Queue::fake();
+        $this->labOpenAi();
+        $guion = $this->script([self::ACTOR_OK, self::JUDGE_PASS]);
+        $run = $this->launch($this->root, ['kind' => 'baseline'], ['C-01', 'C-02', 'C-03'])->assertCreated()->json('data');
+        $id = (int) StudioLabRun::query()->where('uuid', $run['uuid'])->value('id');
+        $guion->whileWaiting = function (int $llamada) use ($run): void {
+            if ($llamada === 1) {
+                $this->lab('POST', "runs/{$run['uuid']}/cancel", $this->root)->assertOk()->assertJsonPath('data.cancelRequested', true)->assertJsonPath('data.status', 'running');
+            }
+        };
+        $this->assertSame('case', app(StudioLabRunner::class)->step($id));
+        $this->stepFailsBeforeClaiming($id);
+        $this->assertSame('running', StudioLabRun::query()->whereKey($id)->value('status'));
+
+        $d = $this->lab('POST', "runs/{$run['uuid']}/cancel", $this->root)->assertOk()->json('data');
+
+        $this->assertSame(['cancelled', true], [$d['status'], $d['cancelRequested']]);
+        $this->assertSame(['done', 'skipped', 'skipped'], array_column($d['cases'], 'status'));
+        $this->assertSame(['run.created', 'run.cancel_requested', 'run.finished'], StudioLabEvent::query()->where('subject_uuid', $run['uuid'])->orderBy('id')->pluck('event')->all(), 'la petición no se escribe dos veces');
+        $this->assertCount(2, $guion->calls);
+    }
+
+    public function test_una_huerfana_con_el_plazo_vencido_se_presenta_detenida_sin_escribir_y_la_materializa_el_siguiente_paso(): void
+    {
+        // H-P2-1 (Enmienda 5): en curso, sin caso en vuelo y pasados 30 min
+        // desde que empezó. Se presenta `stopped`/`deadline` con `expired`, como
+        // la caducidad en cola, sin escribir nada.
+        Queue::fake();
+        $this->labFake();
+        $run = $this->launch($this->root, ['kind' => 'baseline'], ['C-01', 'C-02', 'C-03'])->assertCreated()->json('data');
+        $id = (int) StudioLabRun::query()->where('uuid', $run['uuid'])->value('id');
+        $this->assertSame('case', app(StudioLabRunner::class)->step($id));
+        $this->stepFailsBeforeClaiming($id);
+        $antes = $this->lab('GET', "runs/{$run['uuid']}", $this->root)->assertOk()->json('data');
+        $this->assertSame(['running', null, false], [$antes['status'], $antes['stopReason'], $antes['expired']], 'dentro del plazo sigue en curso');
+
+        $this->travel(StudioLabConfig::RUN_DEADLINE_MINUTES + 1)->minutes();
+        $escrituras = [];
+        DB::listen(function (QueryExecuted $q) use (&$escrituras): void {
+            if (preg_match('/^\s*(insert|update|delete)\b/i', $q->sql) === 1 && ! str_contains($q->sql, 'admin_sessions')) {
+                $escrituras[] = $q->sql;
+            }
+        });
+        $leida = $this->lab('GET', "runs/{$run['uuid']}", $this->root)->assertOk()->json('data');
+        $enLista = collect($this->lab('GET', 'runs', $this->root)->assertOk()->json('data.data'))->firstWhere('uuid', $run['uuid']);
+
+        foreach (['detalle' => $leida, 'lista' => $enLista] as $donde => $r) {
+            $this->assertSame(['stopped', 'Detenida', 'deadline', true, null], [$r['status'], $r['statusLabel'], $r['stopReason'], $r['expired'], $r['finishedAt']], $donde);
+        }
+        $this->assertSame(['done', 'pending', 'pending'], array_column($leida['cases'], 'status'), 'los casos, tal como están');
+        $this->assertNull($leida['resultsHash']);
+        $this->assertSame([], $escrituras, 'Leer una ejecución huérfana escribió.');
+        $this->assertSame(['running', null], [StudioLabRun::query()->whereKey($id)->value('status'), StudioLabRun::query()->whereKey($id)->value('stop_reason')]);
+
+        // El siguiente paso que llegue la materializa, con el mismo motivo.
+        $this->assertSame('closed', app(StudioLabRunner::class)->step($id));
+        $cerrada = $this->lab('GET', "runs/{$run['uuid']}", $this->root)->json('data');
+        $this->assertSame(['stopped', 'deadline'], [$cerrada['status'], $cerrada['stopReason']]);
+        $this->assertSame(['done', 'skipped', 'skipped'], array_column($cerrada['cases'], 'status'));
+        $this->assertNotNull($cerrada['finishedAt']);
+    }
+
+    public function test_con_un_caso_en_curso_no_se_presenta_detenida_y_cancelar_una_huerfana_vencida_la_cierra(): void
+    {
+        Queue::fake();
+        $this->labFake();
+        // B: huérfana (su paso falló antes de reclamar).
+        $b = $this->launch($this->root, ['kind' => 'baseline'], ['C-03', 'C-04'])->assertCreated()->json('data');
+        $idB = (int) StudioLabRun::query()->where('uuid', $b['uuid'])->value('id');
+        $this->assertSame('case', app(StudioLabRunner::class)->step($idB));
+        $this->stepFailsBeforeClaiming($idB);
+        // A: en curso con su caso 1 en curso (el que tiene el proceso que la mueve).
+        $a = $this->launch($this->root, ['kind' => 'baseline'], ['C-01', 'C-02'])->assertCreated()->json('data');
+        $idA = (int) StudioLabRun::query()->where('uuid', $a['uuid'])->value('id');
+        $this->assertTrue(StudioLabRun::advance($idA, ['queued'], ['status' => 'running', 'started_at' => now()]));
+        $this->assertTrue(StudioLabRunCase::advance((int) StudioLabRunCase::query()->where('run_id', $idA)->where('position', 1)->value('id'), ['pending'], ['status' => 'running', 'started_at' => now()]));
+
+        $this->travel(StudioLabConfig::RUN_DEADLINE_MINUTES + 1)->minutes();
+        $lista = collect($this->lab('GET', 'runs', $this->root)->assertOk()->json('data.data'))->keyBy('uuid');
+        $this->assertSame(['running', null, false], [$lista[$a['uuid']]['status'], $lista[$a['uuid']]['stopReason'], $lista[$a['uuid']]['expired']], 'con un caso en curso no es huérfana');
+        $this->assertSame(['stopped', 'deadline', true], [$lista[$b['uuid']]['status'], $lista[$b['uuid']]['stopReason'], $lista[$b['uuid']]['expired']]);
+        $this->assertSame('running', $this->lab('GET', "runs/{$a['uuid']}", $this->root)->json('data.status'));
+
+        // Cancelar la huérfana la materializa: `cancelled` (la petición expresa
+        // de la persona, como en la caducidad en cola).
+        $d = $this->lab('POST', "runs/{$b['uuid']}/cancel", $this->root)->assertOk()->json('data');
+        $this->assertSame(['cancelled', null, false], [$d['status'], $d['stopReason'], $d['expired']]);
+        $this->assertSame(['done', 'skipped'], array_column($d['cases'], 'status'));
     }
 
     public function test_la_misma_peticion_es_200_replayed_y_la_llave_reutilizada_409(): void

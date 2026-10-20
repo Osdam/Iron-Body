@@ -54,8 +54,8 @@ use Tests\TestCase;
  *
  * Además, por tokens: los `StudioLab*` no nombran la configuración ni la clave
  * del motor; NADA APRUEBA SOLO (el runner, el job y los comandos no nombran el
- * veredicto, y solo su servicio lo inserta); y el contrato de las 21 rutas de
- * F/G sigue igual.
+ * veredicto, solo su servicio lo inserta y la tabla solo la nombran el modelo
+ * y ese servicio); y el contrato de las 21 rutas de F/G sigue igual.
  */
 class UltronStudioLabNoEngineEffectsTest extends TestCase
 {
@@ -250,6 +250,33 @@ class UltronStudioLabNoEngineEffectsTest extends TestCase
         $this->assertSame(0, preg_match('/StudioLabVerdict::(query|create|forceCreate|insert)\b/', $controlador));
         $servicio = (string) file_get_contents(app_path('Services/UltronStudio/StudioLabVerdicts.php'));
         $this->assertSame(1, preg_match_all('/StudioLabVerdict::query\(\)->forceCreate\(/', $servicio));
+
+        // Ni por la TABLA (H-P2-2 del tester): `DB::table('ultron_studio_lab_verdicts')`,
+        // un `insert`/`insertGetId` o un SQL con ese nombre no nombran el modelo.
+        // La tabla solo la nombran su modelo y el servicio del veredicto, en todo
+        // app/ y routes/ (comandos de consola incluidos), en el código y no en
+        // los comentarios. Un nombre armado a trozos o con una variable no se ve
+        // aquí: para eso, lo de abajo.
+        $nombranLaTabla = [];
+        foreach ([app_path(), base_path('routes')] as $raiz) {
+            foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($raiz, \RecursiveDirectoryIterator::SKIP_DOTS)) as $f) {
+                if ($f->getExtension() === 'php' && $this->namesVerdictTable($f->getPathname())) {
+                    $nombranLaTabla[] = substr($f->getPathname(), strlen(base_path()) + 1);
+                }
+            }
+        }
+        sort($nombranLaTabla);
+        $this->assertContains('app/Models/UltronStudio/StudioLabVerdict.php', $nombranLaTabla, 'el escáner no ve la tabla ni en su modelo: no vigila nada');
+        $this->assertSame([], array_values(array_diff($nombranLaTabla, ['app/Models/UltronStudio/StudioLabVerdict.php', 'app/Services/UltronStudio/StudioLabVerdicts.php'])),
+            'Solo el modelo y el servicio del veredicto nombran la tabla de los veredictos.');
+
+        // Y el runner, el job y los comandos del Studio no tienen NADA del
+        // veredicto en su código: ni la tabla a trozos, ni la relación
+        // (`$run->verdict()->create(…)`), ni el modelo.
+        foreach (['Services/UltronStudio/StudioLabRunner.php', 'Services/UltronStudio/StudioLabStepJob.php', ...array_map(
+            static fn (string $p): string => 'Console/Commands/UltronStudio/'.basename($p), glob(app_path('Console/Commands/UltronStudio/*.php')))] as $relativa) {
+            $this->assertSame([], $this->verdictTokens(app_path($relativa)), "{$relativa} tiene algo del veredicto en su código.");
+        }
     }
 
     public function test_el_contrato_de_las_21_rutas_de_f_y_g_no_cambia(): void
@@ -352,6 +379,37 @@ class UltronStudioLabNoEngineEffectsTest extends TestCase
         }
 
         return false;
+    }
+
+    /** ¿Nombra el fichero la TABLA de los veredictos en una cadena de su código (también en heredocs y SQL)? */
+    private function namesVerdictTable(string $ruta): bool
+    {
+        foreach (token_get_all((string) file_get_contents($ruta)) as $t) {
+            if (is_array($t) && in_array($t[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE, T_INLINE_HTML], true)
+                && stripos($t[1], 'ultron_studio_lab_verdicts') !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Las piezas de CÓDIGO (no comentarios) que contienen «verdict», en
+     * cualquier forma: identificadores, nombres cualificados, cadenas.
+     *
+     * @return list<string>
+     */
+    private function verdictTokens(string $ruta): array
+    {
+        $piezas = [];
+        foreach (token_get_all((string) file_get_contents($ruta)) as $t) {
+            if (is_array($t) && ! in_array($t[0], [T_COMMENT, T_DOC_COMMENT, T_WHITESPACE], true) && stripos($t[1], 'verdict') !== false) {
+                $piezas[] = $t[1];
+            }
+        }
+
+        return $piezas;
     }
 
     /** El motor «vivo»: pausa, freno, conocimiento, planes y una conversación con su mensaje. */
