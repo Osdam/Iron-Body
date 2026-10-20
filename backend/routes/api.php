@@ -880,6 +880,13 @@ Route::middleware('auth.member')->group(function (): void {
     Route::post('member/account/delete-confirm', [\App\Http\Controllers\Api\MemberAccountController::class, 'deleteConfirm'])
         ->middleware('throttle:6,1');
 
+    // ── Perfil → Registro facial: el PRIMER rostro, con la sesión del socio
+    // (equipo vinculado con OTP) y su autorización biométrica. No reabre
+    // members/{id}/biometric, que solo lleva el token de la APK.
+    Route::get('member/face-enrollment', [\App\Http\Controllers\Api\MemberFaceEnrollmentController::class, 'show']);
+    Route::post('member/face-enrollment', [\App\Http\Controllers\Api\MemberFaceEnrollmentController::class, 'store'])
+        ->middleware('throttle:10,1');
+
     // ── Seguridad: sesiones / dispositivos del miembro ────────────────────────
     Route::get('members/devices', [AuthController::class, 'devices']);
     Route::post('members/devices/{uuid}/revoke', [AuthController::class, 'revokeDevice']);

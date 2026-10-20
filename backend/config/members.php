@@ -46,4 +46,27 @@ return [
     */
     'legal_adult_age' => (int) env('LEGAL_ADULT_AGE', 18),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Autorización biométrica del socio (registro facial desde Perfil)
+    |--------------------------------------------------------------------------
+    |
+    | El tratamiento de datos de la ficha (contrato) no cubre el dato
+    | biométrico: es un dato sensible (Ley 1581 de 2012) y exige autorización
+    | propia. La app muestra este texto antes de abrir la cámara y devuelve la
+    | versión aceptada; el servidor solo acepta la vigente y la guarda con la
+    | referencia. Si cambia el texto, se sube la versión.
+    |
+    */
+    'biometric_consent' => [
+        'version' => '2026-10-v1',
+        'title' => 'Autorización para el tratamiento de tu dato biométrico',
+        'text' => 'Autorizo a Iron Body a guardar una foto de mi rostro como referencia para verificar '
+            .'mi identidad en el control de acceso del gimnasio. La foto se guarda de forma privada y '
+            .'solo la usan el sistema de acceso y el personal autorizado. El dato biométrico es un dato '
+            .'sensible (Ley 1581 de 2012): esta autorización es voluntaria, puedo ingresar sin ella '
+            .'identificándome en recepción, y puedo revocarla allí en cualquier momento para que se '
+            .'elimine mi rostro.',
+    ],
+
 ];

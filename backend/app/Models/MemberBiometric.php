@@ -30,6 +30,9 @@ class MemberBiometric extends Model
         'biometric_legacy_reason',
         'last_biometric_enrolled_at',
         'last_biometric_verified_at',
+        'consent_version',
+        'consent_accepted_at',
+        'enrolled_via',
     ];
 
     protected function casts(): array
@@ -38,6 +41,7 @@ class MemberBiometric extends Model
             'captured_at' => 'datetime',
             'last_biometric_enrolled_at' => 'datetime',
             'last_biometric_verified_at' => 'datetime',
+            'consent_accepted_at' => 'datetime',
         ];
     }
 

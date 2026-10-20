@@ -82,6 +82,9 @@ class MemberSecurityEvent extends Model
 
     public const TYPE_ACCOUNT_UNLOCKED = 'account_unlocked';
 
+    // Primer rostro registrado por el propio socio desde Perfil (sesión con OTP).
+    public const TYPE_FACE_SELF_ENROLLED = 'biometric_self_enrolled';
+
     protected $fillable = [
         'member_id',
         'type',
