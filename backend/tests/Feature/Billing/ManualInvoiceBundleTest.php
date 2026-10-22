@@ -429,6 +429,42 @@ class ManualInvoiceBundleTest extends TestCase
         $this->assertCount(1, $this->getJson('/api/admin/electronic-invoices/bundles/customers?q=Laura', $this->h)->assertOk()->json('data'));
     }
 
+    /**
+     * Búsqueda de clientes: cada entrada es texto literal. Nunca un 500, nunca
+     * un comodín que liste a todos, nunca SQL.
+     */
+    public function test_la_busqueda_de_clientes_trata_toda_entrada_como_texto(): void
+    {
+        $laura = $this->member('Laura Daniela Borrero');
+        $laura->update(['document_number' => '1075123456']);
+        $obrien = $this->member("Ana O'Brien");
+        $pct = $this->member('Ana 50% Pérez');
+        $under = $this->member('Juan_Perez');
+        $space = $this->member('Juan Perez');
+        $back = $this->member('Back\\slash Gómez');
+
+        $ids = fn (string $q) => collect($this->getJson('/api/admin/electronic-invoices/bundles/customers?q='.rawurlencode($q), $this->h)
+            ->assertOk()->json('data'))->pluck('id')->sort()->values()->all();
+
+        $this->assertSame([$laura->id], $ids('Laura'));
+        $this->assertSame([$laura->id], $ids('LAURA'));
+        $this->assertSame([$laura->id], $ids('aniela'));                  // parcial
+        $this->assertSame([$laura->id], $ids('1075123'));                 // documento (prefijo)
+        $this->assertSame([$obrien->id], $ids("O'Br"));                   // apóstrofe
+        $this->assertSame([$pct->id], $ids('50%'));                       // % literal
+        $this->assertSame([$under->id], $ids('n_P'));                     // _ literal: no «Juan Perez»
+        $this->assertSame([$back->id], $ids('k\\s'));                     // barra invertida
+        $this->assertSame([$pct->id], $ids('Pérez'));                     // acentos
+        $this->assertSame([], $ids('%%%'));                               // indiscriminada
+        $this->assertSame([], $ids('___'));
+        $this->assertSame([], $ids("' OR 1=1 --"));                       // inyección
+        $this->assertSame([], $ids("x'); DROP TABLE members; --"));
+        $this->assertSame([], $ids(''));
+        $this->assertSame([], $ids('ab'));                                // < 3 caracteres
+        $this->assertSame(6, Member::count(), 'Ninguna búsqueda altera datos.');
+        $this->assertContains($space->id, $ids('Juan Perez'));
+    }
+
     public function test_emision_exitosa_y_error_de_factus_sin_estados_inconsistentes(): void
     {
         Queue::fake();

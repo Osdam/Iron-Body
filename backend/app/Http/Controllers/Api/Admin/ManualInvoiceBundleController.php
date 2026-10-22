@@ -39,10 +39,14 @@ class ManualInvoiceBundleController extends Controller
         }
 
         // Comodines escapados: «%%%» no puede convertirse en «todos los socios».
-        $like = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q);
+        // El escape es «!» y no la barra invertida: el analizador de marcadores
+        // de PDO toma `'\'` como comilla escapada, el literal no se cierra y los
+        // `?` siguientes desaparecen (SQLSTATE HY093 en PostgreSQL). Con un
+        // ESCAPE explícito el tratamiento es el mismo en PostgreSQL y SQLite.
+        $like = str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $q);
         $members = Member::query()
-            ->where(fn ($w) => $w->whereRaw("lower(full_name) like ? escape '\\'", ['%'.mb_strtolower($like).'%'])
-                ->orWhereRaw("document_number like ? escape '\\'", [$like.'%']))
+            ->where(fn ($w) => $w->whereRaw("lower(full_name) like ? escape '!'", ['%'.mb_strtolower($like).'%'])
+                ->orWhereRaw("document_number like ? escape '!'", [$like.'%']))
             ->orderBy('full_name')->limit(15)
             ->get(['id', 'user_id', 'full_name', 'document_number', 'status']);
 
