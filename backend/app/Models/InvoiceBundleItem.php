@@ -22,6 +22,7 @@ class InvoiceBundleItem extends Model
 
     protected $fillable = [
         'invoice_bundle_id', 'origin_type', 'origin_id', 'description', 'occurred_at', 'amount', 'active',
+        'replaces_invoice_id',
     ];
 
     protected function casts(): array

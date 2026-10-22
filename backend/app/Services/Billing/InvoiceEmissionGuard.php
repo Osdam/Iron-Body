@@ -197,6 +197,15 @@ class InvoiceEmissionGuard
 
         if ($source instanceof InvoiceBundle) {
             foreach ($source->items()->get() as $item) {
+                // Otro lote cuya factura sigue viva (no anulada por nota
+                // crédito validada) respalda la misma operación.
+                if ($otra = ManualInvoiceBundleService::conflictingInvoiceFor($item->origin_type, (int) $item->origin_id, (int) $source->id)) {
+                    throw $this->reject(sprintf(
+                        'la operación %s de la factura multiconcepto #%d ya respalda la factura %s (solicitud #%d), que no está anulada por una nota crédito validada.',
+                        $item->key(), $invoice->id, $otra->full_number ?: 'sin número', $otra->id,
+                    ));
+                }
+
                 $class = match ($item->origin_type) {
                     InvoiceBundleItem::ORIGIN_PAYMENT => Payment::class,
                     InvoiceBundleItem::ORIGIN_PRODUCT_SALE => ProductSale::class,

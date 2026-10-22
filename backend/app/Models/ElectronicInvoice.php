@@ -413,6 +413,7 @@ class ElectronicInvoice extends Model
                     'key' => $i->key(), 'type' => $i->origin_type, 'id' => $i->origin_id,
                     'description' => $i->description, 'amount' => (float) $i->amount,
                     'occurred_at' => optional($i->occurred_at)->toIso8601String(), 'active' => $i->active,
+                    'replaces_invoice_id' => $i->replaces_invoice_id,
                 ])->all(),
             ];
         }

@@ -4,6 +4,7 @@ namespace Tests\Feature\Billing;
 
 use App\Enums\CashShiftType;
 use App\Enums\InvoiceStatus;
+use App\Jobs\EmitCreditNoteJob;
 use App\Jobs\EmitElectronicInvoiceJob;
 use App\Models\Admin;
 use App\Models\ElectronicInvoice;
@@ -23,6 +24,7 @@ use App\Models\TrainerCommissionAgreement;
 use App\Models\TrainerCommissionCharge;
 use App\Models\User;
 use App\Services\Billing\InvoicingService;
+use App\Services\Billing\ManualInvoiceBundleService;
 use App\Services\Commissions\TrainerCommissions;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -581,6 +583,161 @@ class ManualInvoiceBundleTest extends TestCase
         $inv = ElectronicInvoice::findOrFail($id);
         $this->assertSame(InvoiceStatus::REJECTED, $inv->status);
         $this->assertSame('Rechazo de Factus/DIAN (HTTP 422).', $inv->failure_reason);
+    }
+
+    // ── Refacturación tras nota crédito ───────────────────────────────────
+
+    /** Factus simulado: dos facturas (IBFE51, IBFE52) y la nota crédito NC2. */
+    private function fakeFactusConNotaCredito(): void
+    {
+        Http::fake([
+            '*/oauth/token' => Http::response(['access_token' => 'tok', 'expires_in' => 3600]),
+            '*/v2/bills/validate' => Http::sequence()
+                ->push(['data' => ['bill' => ['id' => 'F51', 'number' => 'IBFE51', 'prefix' => 'IBFE', 'cufe' => 'cufe-51', 'status' => 'Validada']]], 201)
+                ->push(['data' => ['bill' => ['id' => 'F52', 'number' => 'IBFE52', 'prefix' => 'IBFE', 'cufe' => 'cufe-52', 'status' => 'Validada']]], 201),
+            '*/credit-notes/validate' => Http::response(['data' => [
+                'number' => 'NC2', 'cude' => 'cude-nc2', 'is_validated' => true,
+                'bill' => ['number' => 'IBFE51', 'cufe' => 'cufe-51'],
+            ]], 201),
+            '*' => Http::response([], 200),
+        ]);
+    }
+
+    /** @return array{0: Member, 1: list<string>, 2: ElectronicInvoice} plan + piso facturados y validados */
+    private function facturadaYValidada(): array
+    {
+        $m = $this->member();
+        $keys = ["payment:{$this->planPayment($m)->id}", "commission_charge:{$this->piso($m)->id}"];
+        $id = $this->emit($m, $keys)->assertCreated()->json('data.id');
+        app()->call([new EmitElectronicInvoiceJob($id), 'handle']);
+        $original = ElectronicInvoice::findOrFail($id);
+        $this->assertSame(InvoiceStatus::VALIDATED, $original->status);
+
+        return [$m, $keys, $original];
+    }
+
+    private function anularConNotaCredito(ElectronicInvoice $original): ElectronicInvoice
+    {
+        $nc = app(InvoicingService::class)->createCreditNote($original, 'La cédula del cliente tenía un dígito de más.');
+        app()->call([new EmitCreditNoteJob($nc->id), 'handle']);
+
+        return $nc->fresh();
+    }
+
+    public function test_refactura_tras_nota_credito_validada_con_trazabilidad_y_sin_duplicar(): void
+    {
+        Queue::fake();
+        $this->fakeFactusConNotaCredito();
+        [$m, $keys, $original] = $this->facturadaYValidada();
+        $pagos = Payment::count();
+
+        // Con la factura viva, nada se refactura.
+        $this->preview($m, $keys)->assertStatus(422);
+
+        $nc = $this->anularConNotaCredito($original);
+        $this->assertSame(InvoiceStatus::CREDIT_NOTE_VALIDATED, $nc->status);
+        $this->assertSame(InvoiceStatus::CANCELLED, $original->fresh()->status);
+        $this->assertTrue(ManualInvoiceBundleService::isVoid($original->fresh()));
+
+        $cand = collect($this->getJson("/api/admin/electronic-invoices/bundles/members/{$m->id}/candidates", $this->h)->json('data'))->keyBy('key');
+        foreach ($keys as $k) {
+            $this->assertTrue($cand[$k]['selectable'], $k);
+            $this->assertSame(['invoice_id' => $original->id, 'full_number' => 'IBFE51', 'credit_note' => 'NC2'], $cand[$k]['replaces']);
+        }
+
+        $prev = $this->preview($m, $keys)->assertOk()->json('data');
+        $this->assertStringStartsWith('Reemplaza IBFE51 (anulada con NC2).', $prev['observation']);
+        $this->assertSame('130000.00', $prev['totals']['total']);
+
+        $nuevoId = $this->emit($m, $keys, $prev['preview_hash'])->assertCreated()->json('data.id');
+        app()->call([new EmitElectronicInvoiceJob($nuevoId), 'handle']);
+        $nueva = ElectronicInvoice::findOrFail($nuevoId);
+        $this->assertSame(InvoiceStatus::VALIDATED, $nueva->status);
+        $this->assertSame('IBFE52', $nueva->number);
+
+        // Trazabilidad: original → NC → reemplazante, y una sola reserva viva por operación.
+        $this->assertSame($original->id, $nc->references_invoice_id);
+        $this->assertSame([$original->id, $original->id], InvoiceBundleItem::where('invoice_bundle_id', $nueva->source_id)->pluck('replaces_invoice_id')->all());
+        $this->assertSame(0, InvoiceBundleItem::where('invoice_bundle_id', $original->source_id)->where('active', true)->count());
+        $this->assertSame(2, InvoiceBundleItem::where('active', true)->count());
+        $this->assertSame($pagos, Payment::count(), 'No se duplica ningún pago.');
+
+        // Y no se puede facturar una tercera vez.
+        $this->preview($m, $keys)->assertStatus(422);
+    }
+
+    public function test_sin_nota_credito_validada_por_el_total_no_se_refactura(): void
+    {
+        Queue::fake();
+        $this->fakeFactusConNotaCredito();
+        [$m, $keys, $original] = $this->facturadaYValidada();
+
+        // Nota crédito creada pero aún sin validar: la factura sigue viva.
+        $nc = app(InvoicingService::class)->createCreditNote($original, 'pendiente');
+        $this->preview($m, $keys)->assertStatus(422);
+
+        // Anulada «a mano» sin nota validada, o con una nota PARCIAL: tampoco.
+        $original->forceFill(['status' => InvoiceStatus::CANCELLED->value])->save();
+        $this->assertFalse(ManualInvoiceBundleService::isVoid($original->fresh()));
+        $this->assertStringContainsString('sin una nota crédito VALIDADA por el total', $this->preview($m, $keys)->assertStatus(422)->json('message'));
+
+        $nc->forceFill(['status' => InvoiceStatus::CREDIT_NOTE_VALIDATED->value, 'cufe' => 'cude-parcial', 'total' => 50000])->save();
+        $this->assertFalse(ManualInvoiceBundleService::isVoid($original->fresh()));
+        $this->preview($m, $keys)->assertStatus(422);
+        $this->assertSame(1, InvoiceBundle::count());
+    }
+
+    public function test_dos_refacturaciones_simultaneas_solo_una_reserva(): void
+    {
+        Queue::fake();
+        $this->fakeFactusConNotaCredito();
+        [$m, $keys, $original] = $this->facturadaYValidada();
+        $this->anularConNotaCredito($original);
+        $hash = $this->preview($m, $keys)->json('data.preview_hash');
+
+        $otro = Admin::create(['name' => 'Otro', 'email' => 'otro2-'.uniqid().'@ironbody.test', 'password' => 'secret-password', 'role' => Admin::ROLE_SUPER_ADMIN, 'status' => 'active']);
+        $this->emit($m, $keys, $hash)->assertCreated();
+        $this->emit($m, $keys, $hash, null, $this->actingAsAdmin($otro))->assertStatus(422);
+
+        $this->assertSame(2, InvoiceBundle::count());
+        $this->assertSame(2, InvoiceBundleItem::where('active', true)->count());
+    }
+
+    public function test_la_barrera_para_un_lote_si_otra_factura_viva_respalda_la_operacion(): void
+    {
+        Queue::fake();
+        $this->fakeFactusConNotaCredito();
+        [$m, $keys, $original] = $this->facturadaYValidada();
+
+        // Manipulación: la reserva del lote validado se desactiva a mano y se
+        // arma otro lote con la misma operación.
+        InvoiceBundleItem::where('invoice_bundle_id', $original->source_id)->update(['active' => false]);
+        $id = $this->emit($m, $keys)->assertCreated()->json('data.id');
+
+        try {
+            app()->call([new EmitElectronicInvoiceJob($id), 'handle']);
+        } catch (\Throwable) {
+        }
+
+        $inv = ElectronicInvoice::findOrFail($id);
+        $this->assertNull($inv->cufe);
+        $this->assertStringContainsString('no está anulada por una nota crédito validada', (string) $inv->failure_reason);
+        // Solo la primera factura llegó a bills/validate; la segunda nunca salió.
+        $this->assertCount(1, Http::recorded(fn ($req) => str_contains($req->url(), 'bills/validate')));
+    }
+
+    public function test_el_indice_parcial_sobrevive_a_las_migraciones(): void
+    {
+        $m = $this->member();
+        $p = $this->planPayment($m);
+        $b = InvoiceBundle::create(['member_id' => $m->id, 'idempotency_key' => (string) Str::uuid(), 'total' => 80000, 'preview_hash' => str_repeat('a', 64)]);
+        $item = fn (bool $active) => InvoiceBundleItem::create(['invoice_bundle_id' => $b->id, 'origin_type' => 'payment', 'origin_id' => $p->id, 'description' => 'x', 'amount' => 80000, 'active' => $active]);
+
+        $item(false);
+        $item(false);   // las inactivas no chocan (historial)
+        $item(true);    // una activa…
+        $this->expectException(UniqueConstraintViolationException::class);
+        $item(true);    // …y solo una
     }
 
     public function test_emision_exitosa_y_error_de_factus_sin_estados_inconsistentes(): void

@@ -194,6 +194,7 @@ class ManualInvoiceBundleService
                         'occurred_at' => $o['occurred_at'],
                         'amount' => $o['amount']->toDatabase(),
                         'active' => true,
+                        'replaces_invoice_id' => $o['replaces']?->id,
                     ]);
                 }
 
@@ -333,9 +334,77 @@ class ManualInvoiceBundleService
             ->where('origin_type', $originType)
             ->where('origin_id', $originId)
             ->where('active', true)
-            ->whereHas('bundle', fn ($q) => $q->whereDoesntHave('invoice', fn ($i) => $i
-                ->where('status', InvoiceStatus::CANCELLED->value)))
+            ->whereHas('bundle', fn ($q) => $q->whereDoesntHave('invoice', fn ($i) => self::applyVoid($i)))
             ->first();
+    }
+
+    /**
+     * Factura de lote que YA NO respalda sus operaciones:
+     *
+     *  - anulada sin haber llegado nunca a Factus (sin CUFE, número ni id), o
+     *  - anulada por una nota crédito VALIDADA ante la DIAN (con CUFE) por el
+     *    TOTAL de la factura.
+     *
+     * Una anulación sin nota crédito validada, una nota pendiente o rechazada,
+     * o una nota parcial NO la anulan: la factura sigue existiendo ante la DIAN
+     * y sus operaciones siguen facturadas. La misma regla en consulta
+     * (applyVoid) y en PHP (isVoid); las pruebas cubren las dos.
+     */
+    public static function applyVoid($query): void
+    {
+        $query->where('electronic_invoices.status', InvoiceStatus::CANCELLED->value)
+            ->where(fn ($w) => $w
+                ->where(fn ($n) => $n->whereNull('electronic_invoices.cufe')
+                    ->whereNull('electronic_invoices.full_number')
+                    ->whereNull('electronic_invoices.factus_id'))
+                ->orWhereExists(fn ($cn) => $cn->selectRaw('1')
+                    ->from('electronic_invoices as cn')
+                    ->whereColumn('cn.references_invoice_id', 'electronic_invoices.id')
+                    ->where('cn.type', InvoiceType::CREDIT_NOTE->value)
+                    ->where('cn.status', InvoiceStatus::CREDIT_NOTE_VALIDATED->value)
+                    ->whereNotNull('cn.cufe')
+                    ->whereColumn('cn.total', 'electronic_invoices.total')));
+    }
+
+    public static function isVoid(?ElectronicInvoice $invoice): bool
+    {
+        if ($invoice === null || $invoice->status !== InvoiceStatus::CANCELLED) {
+            return false;
+        }
+        if (blank($invoice->cufe) && blank($invoice->full_number) && blank($invoice->factus_id)) {
+            return true;
+        }
+
+        return self::annullingCreditNote($invoice) !== null;
+    }
+
+    /** Nota crédito validada (con CUFE) que anula la factura por el total. */
+    public static function annullingCreditNote(ElectronicInvoice $invoice): ?ElectronicInvoice
+    {
+        return ElectronicInvoice::query()
+            ->where('references_invoice_id', $invoice->id)
+            ->where('type', InvoiceType::CREDIT_NOTE->value)
+            ->where('status', InvoiceStatus::CREDIT_NOTE_VALIDATED->value)
+            ->whereNotNull('cufe')
+            ->get()
+            ->first(fn (ElectronicInvoice $cn) => Money::fromAmount($cn->total)->cents() === Money::fromAmount($invoice->total)->cents());
+    }
+
+    /**
+     * Factura de OTRO lote que todavía respalda esta operación (no nula). La
+     * usa la barrera previa al envío como red independiente del índice único.
+     */
+    public static function conflictingInvoiceFor(string $originType, int $originId, int $exceptBundleId): ?ElectronicInvoice
+    {
+        foreach (InvoiceBundleItem::query()->where('origin_type', $originType)->where('origin_id', $originId)
+            ->where('invoice_bundle_id', '!=', $exceptBundleId)->get() as $item) {
+            $invoice = $item->bundle?->invoice;
+            if ($invoice !== null && ! self::isVoid($invoice)) {
+                return $invoice;
+            }
+        }
+
+        return null;
     }
 
     /** Tipo de origen de un modelo facturable individualmente. */
@@ -413,6 +482,7 @@ class ManualInvoiceBundleService
             'payload' => $built['payload'],
             'lines' => $built['line_items'],
             'supersedes' => array_map(fn ($o) => $o['supersedes']?->id, $origins),
+            'replaces' => array_map(fn ($o) => $o['replaces']?->id, $origins),
         ], JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION));
 
         return ['keys' => $keys, 'origins' => $origins, 'built' => $built, 'hash' => $hash];
@@ -439,6 +509,7 @@ class ManualInvoiceBundleService
             'blocked' => null,
             'fiscal' => ['state' => 'available', 'invoice_id' => null, 'full_number' => null, 'bundle_invoice_id' => null],
             'supersedes' => null,
+            'replaces' => self::replacedInvoiceFor($type, (int) $model->getKey()),
         ];
 
         $o['blocked'] = $this->paidProblem($type, $model)
@@ -455,8 +526,11 @@ class ManualInvoiceBundleService
             $bundleInvoice = $claim->bundle?->invoice;
             $o['fiscal'] = ['state' => 'in_bundle', 'invoice_id' => null,
                 'full_number' => $bundleInvoice?->full_number, 'bundle_invoice_id' => $bundleInvoice?->id];
-            $o['blocked'] ??= sprintf('ya está incluida en la factura multiconcepto (solicitud #%s, %s)',
-                $bundleInvoice?->id ?? '?', $bundleInvoice?->full_number ?: ($bundleInvoice?->status->value ?? 'sin estado'));
+            $o['blocked'] ??= $bundleInvoice?->status === InvoiceStatus::CANCELLED
+                ? sprintf('la factura %s (solicitud #%d) figura anulada pero sin una nota crédito VALIDADA por el total: '
+                    .'sigue existiendo ante la DIAN y no se refactura', $bundleInvoice->full_number ?: 'multiconcepto', $bundleInvoice->id)
+                : sprintf('ya está incluida en la factura multiconcepto (solicitud #%s, %s)',
+                    $bundleInvoice?->id ?? '?', $bundleInvoice?->full_number ?: ($bundleInvoice?->status->value ?? 'sin estado'));
 
             return $o;
         }
@@ -497,6 +571,24 @@ class ManualInvoiceBundleService
         }
 
         return $o;
+    }
+
+    /**
+     * Factura de lote anulada ANTE LA DIAN (nota crédito validada) que esta
+     * operación respaldaba: la nueva factura la reemplaza. Las que nunca
+     * llegaron a Factus no cuentan: no existieron fiscalmente.
+     */
+    private static function replacedInvoiceFor(string $type, int $id): ?ElectronicInvoice
+    {
+        foreach (InvoiceBundleItem::query()->where('origin_type', $type)->where('origin_id', $id)
+            ->orderByDesc('id')->get() as $item) {
+            $invoice = $item->bundle?->invoice;
+            if ($invoice !== null && filled($invoice->cufe) && self::isVoid($invoice)) {
+                return $invoice;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -554,9 +646,7 @@ class ManualInvoiceBundleService
 
             InvoiceBundleItem::query()
                 ->where('origin_type', $type)->where('origin_id', (int) $id)->where('active', true)
-                ->whereHas('bundle.invoice', fn ($i) => $i
-                    ->where('status', InvoiceStatus::CANCELLED->value)
-                    ->whereNull('cufe')->whereNull('full_number'))
+                ->whereHas('bundle.invoice', fn ($i) => self::applyVoid($i))
                 ->update(['active' => false, 'updated_at' => now()]);
         }
     }
@@ -785,7 +875,16 @@ class ManualInvoiceBundleService
 
     private function observation(array $origins): string
     {
-        $text = 'Factura consolidada: '.implode('; ', array_map(fn ($o) => $o['label'], $origins));
+        $reemplazos = [];
+        foreach ($origins as $o) {
+            if ($o['replaces'] !== null) {
+                $nc = self::annullingCreditNote($o['replaces']);
+                $reemplazos[$o['replaces']->id] = ($o['replaces']->full_number ?: '#'.$o['replaces']->id)
+                    .($nc?->full_number ? ' (anulada con '.$nc->full_number.')' : '');
+            }
+        }
+        $text = ($reemplazos !== [] ? 'Reemplaza '.implode(', ', $reemplazos).'. ' : '')
+            .'Factura consolidada: '.implode('; ', array_map(fn ($o) => $o['label'], $origins));
 
         return mb_strlen($text) > 250 ? mb_substr($text, 0, 247).'...' : $text;
     }
@@ -842,6 +941,11 @@ class ManualInvoiceBundleService
             'blocked_reason' => $o['blocked'],
             'fiscal' => $o['fiscal'],
             'supersedes_invoice_id' => $o['supersedes']?->id,
+            'replaces' => $o['replaces'] ? [
+                'invoice_id' => $o['replaces']->id,
+                'full_number' => $o['replaces']->full_number,
+                'credit_note' => self::annullingCreditNote($o['replaces'])?->full_number,
+            ] : null,
         ];
     }
 }
