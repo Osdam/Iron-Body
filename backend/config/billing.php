@@ -194,6 +194,21 @@ return [
         'PAS' => '41',
         'TI' => '12',
     ],
+
+    // -- Medio de pago REAL de cada cobro → código Factus ---------------------
+    // Tabla oficial de Factus («Códigos de métodos de pago»): 10 Efectivo,
+    // 42 Consignación, 20 Cheque, 47 Transferencia, 71 Bonos, 72 Vales,
+    // 1 Medio de pago no definido, 49 Tarjeta Débito, 48 Tarjeta Crédito,
+    // ZZZ Otro. Lo usa la factura multiconcepto. Un datáfono no dice si la
+    // tarjeta fue débito o crédito, así que no se adivina: «no definido».
+    'payment_means_map' => [
+        'cash' => '10',
+        'efectivo' => '10',
+        'transfer' => '47',
+        'transferencia' => '47',
+        'nequi' => '47',
+    ],
+    'payment_means_unknown_code' => '1',
     // -- Consumidor final ----------------------------------------------------
     // Cuando el pago no trae datos fiscales completos, se factura a consumidor
     // final (sin bloquear el cobro). Documento/tipo exactos según Factus/DIAN.

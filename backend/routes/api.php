@@ -1656,6 +1656,16 @@ Route::get('admin/electronic-invoices/config',        [ElectronicInvoiceControll
 // además no poder anularla después (creditNote sí comprobaba rol).
 Route::post('admin/electronic-invoices/manual-emit',  [ElectronicInvoiceController::class, 'manualEmit'])
     ->middleware('admin.can:billing.manage');
+// Emitir manual MULTICONCEPTO: varias operaciones cobradas de un cliente en
+// una sola factura. Vista previa (no escribe) y emisión (exige la huella de esa
+// vista previa) son rutas distintas; las dos, solo con billing.manage.
+Route::get('admin/electronic-invoices/bundles/customers', [\App\Http\Controllers\Api\Admin\ManualInvoiceBundleController::class, 'customers']);
+Route::get('admin/electronic-invoices/bundles/members/{member}/candidates', [\App\Http\Controllers\Api\Admin\ManualInvoiceBundleController::class, 'candidates'])
+    ->whereNumber('member');
+Route::post('admin/electronic-invoices/bundles/preview', [\App\Http\Controllers\Api\Admin\ManualInvoiceBundleController::class, 'preview'])
+    ->middleware('admin.can:billing.manage');
+Route::post('admin/electronic-invoices/bundles', [\App\Http\Controllers\Api\Admin\ManualInvoiceBundleController::class, 'store'])
+    ->middleware('admin.can:billing.manage');
 Route::get('admin/electronic-invoices/{invoice}',             [ElectronicInvoiceController::class, 'show'])->whereNumber('invoice');
 Route::post('admin/electronic-invoices/{invoice}/retry',      [ElectronicInvoiceController::class, 'retry'])->whereNumber('invoice')
     ->middleware('admin.can:billing.manage');

@@ -10,6 +10,7 @@ use App\Jobs\EmitCreditNoteJob;
 use App\Jobs\EmitElectronicInvoiceJob;
 use App\Models\ElectronicInvoice;
 use App\Models\ElectronicInvoiceLog;
+use App\Models\InvoiceBundle;
 use App\Models\Payment;
 use App\Models\ProductSale;
 use Illuminate\Database\Eloquent\Model;
@@ -112,6 +113,17 @@ class InvoicingService
 
         $this->assertSourceIsPaid($model);
         $this->assertOriginIsTraceable($model);
+
+        // Incluida en una factura multiconcepto activa: facturarla aparte la
+        // declararía dos veces ante la DIAN.
+        $tipo = ManualInvoiceBundleService::originTypeOf($model);
+        if ($tipo !== null && ($claim = ManualInvoiceBundleService::activeClaimFor($tipo, (int) $model->getKey()))) {
+            throw ManualEmissionRejectedException::conflicto(sprintf(
+                'Esta operación está incluida en una factura multiconcepto (lote %s). '
+                .'No se factura por separado.',
+                $claim->bundle?->uuid ?? '#'.$claim->invoice_bundle_id,
+            ));
+        }
 
         [$invoice, $debeDespachar] = DB::transaction(
             fn () => $this->claimForManualEmission($model, $adminId, $finalConsumer, $force)
@@ -604,6 +616,9 @@ class InvoicingService
         }
         if ($source instanceof Payment) {
             return $source->grossAmountValue();
+        }
+        if ($source instanceof InvoiceBundle) {
+            return app(ManualInvoiceBundleService::class)->liveTotal($source);
         }
 
         return null;

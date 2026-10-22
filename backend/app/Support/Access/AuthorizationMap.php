@@ -207,6 +207,7 @@ final class AuthorizationMap
 
         // ── Facturación electrónica ─────────────────────────────────────────
         'ElectronicInvoiceController' => 'billing',
+        'ManualInvoiceBundleController' => 'billing',
         'BillingTaxController' => 'billing',
         'BillingQuoteController' => 'billing',
 

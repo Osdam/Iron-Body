@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Enums\InvoiceLogAction;
 use App\Enums\InvoiceStatus;
 use App\Models\ElectronicInvoice;
+use App\Models\InvoiceBundle;
 use App\Models\Payment;
 use App\Models\ProductSale;
 use App\Services\Billing\Factus\FactusClient;
@@ -139,6 +140,14 @@ class EmitElectronicInvoiceJob implements ShouldQueue
         } else {
             if ($source === null) {
                 $invoice->markError('Fuente del comprobante no encontrada.');
+
+                return;
+            }
+
+            // Una factura multiconcepto nace siempre con el payload que la
+            // persona confirmó. Sin él no hay nada legítimo que reconstruir.
+            if ($source instanceof InvoiceBundle) {
+                $invoice->markError('Factura multiconcepto sin payload confirmado. No se emite.');
 
                 return;
             }

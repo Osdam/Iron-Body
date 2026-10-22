@@ -80,7 +80,7 @@ class ElectronicInvoice extends Model
 
     // ── Relaciones ──────────────────────────────────────────────────────────
 
-    /** Fuente facturada (Payment | ProductSale). */
+    /** Fuente facturada (Payment | ProductSale | InvoiceBundle). */
     public function source(): MorphTo
     {
         return $this->morphTo();
@@ -393,7 +393,7 @@ class ElectronicInvoice extends Model
     /** Resumen liviano de la fuente facturada (sin datos sensibles). */
     private function sourceSummary(): array
     {
-        $source = $this->source; // morphTo (Payment | ProductSale)
+        $source = $this->source; // morphTo (Payment | ProductSale | InvoiceBundle)
         if ($source === null) {
             return ['type' => $this->source_type, 'id' => $this->source_id, 'label' => null];
         }
@@ -401,6 +401,19 @@ class ElectronicInvoice extends Model
             return [
                 'type' => 'product_sale', 'id' => $source->id, 'label' => $source->code,
                 'total' => (float) $source->total, 'channel' => $source->channel,
+            ];
+        }
+        if ($source instanceof InvoiceBundle) {
+            return [
+                'type' => 'bundle', 'id' => $source->id, 'label' => 'Multiconcepto · '.$source->items()->count().' operaciones',
+                'total' => (float) $source->total, 'member_id' => $source->member_id,
+                'created_by' => $source->created_by_name,
+                // Operaciones vinculadas: qué respalda cada línea del comprobante.
+                'items' => $source->items()->orderBy('id')->get()->map(fn (InvoiceBundleItem $i) => [
+                    'key' => $i->key(), 'type' => $i->origin_type, 'id' => $i->origin_id,
+                    'description' => $i->description, 'amount' => (float) $i->amount,
+                    'occurred_at' => optional($i->occurred_at)->toIso8601String(), 'active' => $i->active,
+                ])->all(),
             ];
         }
 
