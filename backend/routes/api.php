@@ -1659,9 +1659,13 @@ Route::post('admin/electronic-invoices/manual-emit',  [ElectronicInvoiceControll
 // Emitir manual MULTICONCEPTO: varias operaciones cobradas de un cliente en
 // una sola factura. Vista previa (no escribe) y emisión (exige la huella de esa
 // vista previa) son rutas distintas; las dos, solo con billing.manage.
-Route::get('admin/electronic-invoices/bundles/customers', [\App\Http\Controllers\Api\Admin\ManualInvoiceBundleController::class, 'customers']);
+// Las dos lecturas existen solo para emitir: exponen documento, perfil fiscal
+// y cobros del socio, así que piden lo mismo que emitir (y una persona, en el
+// controlador), no el `billing.view` que tiene el token de automatizaciones.
+Route::get('admin/electronic-invoices/bundles/customers', [\App\Http\Controllers\Api\Admin\ManualInvoiceBundleController::class, 'customers'])
+    ->middleware('admin.can:billing.manage');
 Route::get('admin/electronic-invoices/bundles/members/{member}/candidates', [\App\Http\Controllers\Api\Admin\ManualInvoiceBundleController::class, 'candidates'])
-    ->whereNumber('member');
+    ->whereNumber('member')->middleware('admin.can:billing.manage');
 Route::post('admin/electronic-invoices/bundles/preview', [\App\Http\Controllers\Api\Admin\ManualInvoiceBundleController::class, 'preview'])
     ->middleware('admin.can:billing.manage');
 Route::post('admin/electronic-invoices/bundles', [\App\Http\Controllers\Api\Admin\ManualInvoiceBundleController::class, 'store'])

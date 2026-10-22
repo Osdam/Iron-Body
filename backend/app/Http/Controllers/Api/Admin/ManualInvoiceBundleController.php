@@ -30,14 +30,19 @@ class ManualInvoiceBundleController extends Controller
     // GET /api/admin/electronic-invoices/bundles/customers?q=
     public function customers(Request $request): JsonResponse
     {
+        if ($denied = $this->requirePerson($request)) {
+            return $denied;
+        }
         $q = trim((string) $request->query('q', ''));
         if (mb_strlen($q) < 3) {
             return response()->json(['ok' => true, 'data' => []]);
         }
 
+        // Comodines escapados: «%%%» no puede convertirse en «todos los socios».
+        $like = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q);
         $members = Member::query()
-            ->where(fn ($w) => $w->whereRaw('lower(full_name) like ?', ['%'.mb_strtolower($q).'%'])
-                ->orWhere('document_number', 'like', $q.'%'))
+            ->where(fn ($w) => $w->whereRaw("lower(full_name) like ? escape '\\'", ['%'.mb_strtolower($like).'%'])
+                ->orWhereRaw("document_number like ? escape '\\'", [$like.'%']))
             ->orderBy('full_name')->limit(15)
             ->get(['id', 'user_id', 'full_name', 'document_number', 'status']);
 
@@ -50,8 +55,11 @@ class ManualInvoiceBundleController extends Controller
     }
 
     // GET /api/admin/electronic-invoices/bundles/members/{member}/candidates
-    public function candidates(Member $member): JsonResponse
+    public function candidates(Request $request, Member $member): JsonResponse
     {
+        if ($denied = $this->requirePerson($request)) {
+            return $denied;
+        }
         $profile = FiscalProfile::query()
             ->when($member->identity_id, fn ($q) => $q->orWhere('identity_id', $member->identity_id))
             ->orWhere('member_id', $member->id)

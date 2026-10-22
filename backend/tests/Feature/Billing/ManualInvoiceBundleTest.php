@@ -411,6 +411,24 @@ class ManualInvoiceBundleTest extends TestCase
         $this->assertSame(0, InvoiceBundle::count());
     }
 
+    public function test_las_lecturas_del_flujo_no_las_ve_el_token_ni_quien_no_factura(): void
+    {
+        $m = $this->member();
+        config(['admin.api_token' => 'token-de-automatizacion-para-pruebas']);
+        $token = ['Authorization' => 'Bearer token-de-automatizacion-para-pruebas'];
+        $recepcion = $this->actingAsAdmin(Admin::create(['name' => 'Recepción', 'email' => 'rec2-'.uniqid().'@ironbody.test', 'password' => 'secret-password', 'role' => Admin::ROLE_RECEPCION, 'status' => 'active']));
+
+        foreach ([$token, $recepcion] as $h) {
+            $this->getJson("/api/admin/electronic-invoices/bundles/members/{$m->id}/candidates", $h)->assertStatus(403);
+            $this->getJson('/api/admin/electronic-invoices/bundles/customers?q=Laura', $h)->assertStatus(403);
+        }
+
+        // Un comodín no lista a todo el mundo.
+        $this->member('Otra Persona');
+        $this->assertSame([], $this->getJson('/api/admin/electronic-invoices/bundles/customers?q=%25%25%25', $this->h)->assertOk()->json('data'));
+        $this->assertCount(1, $this->getJson('/api/admin/electronic-invoices/bundles/customers?q=Laura', $this->h)->assertOk()->json('data'));
+    }
+
     public function test_emision_exitosa_y_error_de_factus_sin_estados_inconsistentes(): void
     {
         Queue::fake();
