@@ -7,6 +7,7 @@ use App\Enums\InvoiceStatus;
 use App\Jobs\EmitElectronicInvoiceJob;
 use App\Models\Admin;
 use App\Models\ElectronicInvoice;
+use App\Models\FiscalProfile;
 use App\Models\InvoiceBundle;
 use App\Models\InvoiceBundleItem;
 use App\Models\Member;
@@ -465,6 +466,121 @@ class ManualInvoiceBundleTest extends TestCase
         $this->assertSame([], $ids('ab'));                                // < 3 caracteres
         $this->assertSame(6, Member::count(), 'Ninguna búsqueda altera datos.');
         $this->assertContains($space->id, $ids('Juan Perez'));
+    }
+
+    private function perfilNatural(Member $m, string $municipio): FiscalProfile
+    {
+        return FiscalProfile::create([
+            'member_id' => $m->id, 'doc_type' => 'CC', 'doc_number' => '1075296642',
+            'legal_name' => $m->full_name, 'person_type' => 'natural',
+            'email' => 'laura.prueba@correo.com', 'city_code' => $municipio,
+        ]);
+    }
+
+    private function fakeValidate(mixed $body, int $status): void
+    {
+        Http::fake([
+            '*/oauth/token' => Http::response(['access_token' => 'tok', 'expires_in' => 3600]),
+            '*/v2/bills/validate' => Http::response($body, $status),
+            '*download-pdf' => Http::response(['pdf_base_64' => base64_encode('%PDF demo')]),
+            '*download-xml' => Http::response(['xml_base_64' => base64_encode('<Invoice/>')]),
+            '*' => Http::response([], 200),
+        ]);
+    }
+
+    public function test_persona_natural_nominativa_con_divipola_valido_se_emite_con_el_contrato_v2(): void
+    {
+        Queue::fake();
+        $m = $this->member();
+        $this->perfilNatural($m, '41001');
+        $p = $this->planPayment($m);
+        $c = $this->piso($m);
+        $keys = ["payment:{$p->id}", "commission_charge:{$c->id}"];
+
+        $hash = $this->postJson('/api/admin/electronic-invoices/bundles/preview', ['member_id' => $m->id, 'items' => $keys, 'final_consumer' => false], $this->h)
+            ->assertOk()->assertJsonPath('data.customer.is_final_consumer', false)->json('data.preview_hash');
+        $id = $this->postJson('/api/admin/electronic-invoices/bundles', [
+            'member_id' => $m->id, 'items' => $keys, 'final_consumer' => false,
+            'idempotency_key' => (string) Str::uuid(), 'preview_hash' => $hash, 'confirm' => true,
+        ], $this->h)->assertCreated()->json('data.id');
+
+        $this->fakeValidate(['data' => ['bill' => ['id' => 'F1', 'number' => 'SETP1', 'prefix' => 'SETP', 'cufe' => 'cufe-nat', 'status' => 'Validada']]], 201);
+        app()->call([new EmitElectronicInvoiceJob($id), 'handle']);
+
+        Http::assertSent(function ($req) {
+            if (! str_contains($req->url(), 'bills/validate')) {
+                return false;
+            }
+            $cu = $req['customer'];
+
+            return $cu['identification_document_code'] === '13' && $cu['legal_organization_code'] === '2'
+                && $cu['municipality_code'] === '41001' && $cu['tribute_code'] === 'ZZ' && filled($cu['names'] ?? null)
+                && count($req['items']) === 2
+                && $req['payment_details'] === [['payment_form' => 1, 'payment_method_code' => '47', 'amount' => '130000.00']];
+        });
+        $this->assertSame(InvoiceStatus::VALIDATED, ElectronicInvoice::findOrFail($id)->status);
+    }
+
+    public function test_un_municipio_que_no_es_divipola_bloquea_la_nominativa_antes_de_factus(): void
+    {
+        Queue::fake();
+        Http::fake();
+        $m = $this->member();
+        $this->perfilNatural($m, '410001');
+        $p = $this->planPayment($m);
+
+        $msg = $this->postJson('/api/admin/electronic-invoices/bundles/preview', ['member_id' => $m->id, 'items' => ["payment:{$p->id}"], 'final_consumer' => false], $this->h)
+            ->assertStatus(422)->json('message');
+        $this->assertStringContainsString('DIVIPOLA', $msg);
+        $this->assertSame(0, InvoiceBundle::count());
+        Http::assertNothingSent();
+
+        // Y el formulario del perfil ya no lo acepta.
+        $this->putJson("/api/admin/members/{$m->id}/fiscal-profile", ['doc_type' => 'CC', 'doc_number' => '1075296642', 'city_code' => '410001'], $this->h)
+            ->assertStatus(422)->assertJsonValidationErrors(['city_code']);
+    }
+
+    public function test_un_422_de_factus_guarda_el_detalle_por_campo_sin_datos_sensibles(): void
+    {
+        Queue::fake();
+        $m = $this->member();
+        $p = $this->planPayment($m);
+        $id = $this->emit($m, ["payment:{$p->id}"])->assertCreated()->json('data.id');
+
+        $this->fakeValidate(['status' => 'Validation error', 'message' => 'Error de validación', 'data' => [
+            'message' => 'Error de validación',
+            'errors' => [
+                'customer.municipality_code' => ['El campo código municipio es inválido.'],
+                'customer.identification' => ['La identificación 1075296642 no es válida.'],
+            ],
+        ]], 422);
+        app()->call([new EmitElectronicInvoiceJob($id), 'handle']);
+
+        $inv = ElectronicInvoice::findOrFail($id);
+        $this->assertSame(InvoiceStatus::REJECTED, $inv->status);
+        $this->assertStringContainsString('customer.municipality_code: El campo código municipio es inválido.', $inv->failure_reason);
+        $this->assertSame(['El campo código municipio es inválido.'], $inv->response_payload['validation']['errors']['customer.municipality_code']);
+        $this->assertStringNotContainsString('1075296642', $inv->failure_reason.json_encode($inv->response_payload));
+        $this->assertNull($inv->cufe);
+        $this->assertSame(1, InvoiceBundleItem::where('active', true)->count(), 'Sigue reservada: nada se libera solo.');
+
+        // El CRM lo ve en el detalle.
+        $this->assertStringContainsString('municipality_code', (string) $this->getJson("/api/admin/electronic-invoices/{$id}", $this->h)->json('data.failure_reason'));
+    }
+
+    public function test_un_422_sin_json_no_rompe_y_queda_rechazada(): void
+    {
+        Queue::fake();
+        $m = $this->member();
+        $p = $this->planPayment($m);
+        $id = $this->emit($m, ["payment:{$p->id}"])->assertCreated()->json('data.id');
+
+        $this->fakeValidate('Unprocessable Entity', 422);
+        app()->call([new EmitElectronicInvoiceJob($id), 'handle']);
+
+        $inv = ElectronicInvoice::findOrFail($id);
+        $this->assertSame(InvoiceStatus::REJECTED, $inv->status);
+        $this->assertSame('Rechazo de Factus/DIAN (HTTP 422).', $inv->failure_reason);
     }
 
     public function test_emision_exitosa_y_error_de_factus_sin_estados_inconsistentes(): void

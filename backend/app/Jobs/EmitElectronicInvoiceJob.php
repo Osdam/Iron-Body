@@ -314,7 +314,13 @@ class EmitElectronicInvoiceJob implements ShouldQueue
         // No-2xx: distinguir rechazo de datos (no reintentar) de fallo técnico.
         $status = (int) $result['status'];
         if ($status >= 400 && $status < 500) {
-            $invoice->markRejected('Rechazo de Factus/DIAN (HTTP '.$status.').');
+            // Lo que Factus dijo, campo por campo: sin esto el CRM solo veía
+            // «HTTP 422» y el detalle quedaba enterrado en el log.
+            $detalle = self::validationSummary($result['body'] ?? []);
+            $invoice->markRejected(
+                'Rechazo de Factus/DIAN (HTTP '.$status.')'.($detalle['text'] !== '' ? ': '.$detalle['text'] : '.'),
+                ['response_payload' => $detalle['payload']],
+            );
 
             return;
         }
@@ -322,6 +328,50 @@ class EmitElectronicInvoiceJob implements ShouldQueue
         // Técnico (5xx / red / 0): marcar error y relanzar para backoff.
         $invoice->markError('Error técnico al emitir (HTTP '.$status.').');
         throw new RuntimeException('Factus emit failed (HTTP '.$status.') invoice='.$invoice->id);
+    }
+
+    /**
+     * Resumen SANEADO de un rechazo de validación de Factus V2: mensaje y
+     * errores por campo (`{"data":{"errors":{"customer.municipality_code":
+     * ["…"]}}}`). Solo nombres de campo y textos, recortados, con las cifras
+     * largas enmascaradas: nada de documentos, teléfonos ni del cuerpo crudo.
+     *
+     * @return array{text: string, payload: array<string,mixed>}
+     */
+    public static function validationSummary(mixed $body): array
+    {
+        $body = is_array($body) ? $body : [];
+        $limpiar = static fn (mixed $v): string => mb_substr(
+            (string) preg_replace('/\d{6,}/', '…', trim(is_scalar($v) ? (string) $v : '')), 0, 200,
+        );
+
+        $message = $limpiar($body['data']['message'] ?? $body['message'] ?? '');
+        $rawErrors = $body['data']['errors'] ?? $body['errors'] ?? [];
+        $errors = [];
+        foreach (is_array($rawErrors) ? array_slice($rawErrors, 0, 20, true) : [] as $field => $msgs) {
+            $campo = preg_replace('/[^A-Za-z0-9_.\-]/', '', (string) $field);
+            if ($campo === '') {
+                continue;
+            }
+            $errors[mb_substr($campo, 0, 80)] = array_values(array_filter(array_map($limpiar, array_slice((array) $msgs, 0, 5))));
+        }
+
+        $text = implode('; ', array_map(
+            static fn ($campo, $msgs) => $campo.': '.implode(' ', $msgs),
+            array_keys($errors), $errors,
+        ));
+        if ($text === '' && $message !== '') {
+            $text = $message;
+        }
+
+        return [
+            'text' => mb_substr($text, 0, 900),
+            'payload' => ['validation' => array_filter([
+                'status' => $limpiar($body['status'] ?? ''),
+                'message' => $message,
+                'errors' => $errors,
+            ])],
+        ];
     }
 
     /** Persiste número/CUFE/QR/archivos y marca validado o rechazado. */

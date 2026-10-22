@@ -30,8 +30,16 @@ class UpdateFiscalProfileRequest extends FormRequest
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:40'],
             'address' => ['nullable', 'string', 'max:255'],
-            'city_code' => ['nullable', 'string', 'max:20'],
+            // Código DIVIPOLA del municipio: es lo que Factus V2 valida.
+            'city_code' => ['nullable', 'string', 'regex:/^\d{5}$/'],
             'department_code' => ['nullable', 'string', 'max:20'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'city_code.regex' => 'El código de municipio debe ser el código DIVIPOLA de 5 dígitos (por ejemplo, Neiva: 41001).',
         ];
     }
 }

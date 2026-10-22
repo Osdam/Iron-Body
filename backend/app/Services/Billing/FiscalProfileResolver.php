@@ -164,6 +164,13 @@ class FiscalProfileResolver
             $faltantes[] = 'falta la razón social o el nombre del cliente';
         }
 
+        // Factus V2 exige el código DIVIPOLA del municipio (5 dígitos; Neiva
+        // 41001). «410001» llegó a la DIAN y volvió como 422.
+        $municipio = trim((string) $profile->city_code);
+        if ($municipio !== '' && preg_match('/^\d{5}$/', $municipio) !== 1) {
+            $faltantes[] = 'el código de municipio «'.$municipio.'» no es un código DIVIPOLA válido (5 dígitos; Neiva = 41001)';
+        }
+
         return $faltantes;
     }
 
