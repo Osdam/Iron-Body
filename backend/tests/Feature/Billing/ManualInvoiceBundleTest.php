@@ -449,6 +449,8 @@ class ManualInvoiceBundleTest extends TestCase
         $this->assertSame([$laura->id], $ids('Laura'));
         $this->assertSame([$laura->id], $ids('LAURA'));
         $this->assertSame([$laura->id], $ids('aniela'));                  // parcial
+        $this->assertSame([$laura->id], $ids('laura borrero'));           // palabras no contiguas
+        $this->assertSame([$laura->id], $ids('Borrero  Laura'));
         $this->assertSame([$laura->id], $ids('1075123'));                 // documento (prefijo)
         $this->assertSame([$obrien->id], $ids("O'Br"));                   // apóstrofe
         $this->assertSame([$pct->id], $ids('50%'));                       // % literal

@@ -43,10 +43,16 @@ class ManualInvoiceBundleController extends Controller
         // de PDO toma `'\'` como comilla escapada, el literal no se cierra y los
         // `?` siguientes desaparecen (SQLSTATE HY093 en PostgreSQL). Con un
         // ESCAPE explícito el tratamiento es el mismo en PostgreSQL y SQLite.
-        $like = str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $q);
+        $like = fn (string $s) => str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $s);
+        // Cada palabra debe estar en el nombre: «Laura Borrero» encuentra a
+        // «Laura Daniela Borrero».
+        $words = array_slice(preg_split('/\s+/u', mb_strtolower($q), -1, PREG_SPLIT_NO_EMPTY) ?: [], 0, 5);
         $members = Member::query()
-            ->where(fn ($w) => $w->whereRaw("lower(full_name) like ? escape '!'", ['%'.mb_strtolower($like).'%'])
-                ->orWhereRaw("document_number like ? escape '!'", [$like.'%']))
+            ->where(fn ($w) => $w->where(function ($n) use ($words, $like) {
+                foreach ($words as $word) {
+                    $n->whereRaw("lower(full_name) like ? escape '!'", ['%'.$like($word).'%']);
+                }
+            })->orWhereRaw("document_number like ? escape '!'", [$like($q).'%']))
             ->orderBy('full_name')->limit(15)
             ->get(['id', 'user_id', 'full_name', 'document_number', 'status']);
 
