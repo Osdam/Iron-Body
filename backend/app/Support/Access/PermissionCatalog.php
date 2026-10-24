@@ -90,6 +90,7 @@ final class PermissionCatalog
         // lee distinto al resto parece a medio hacer, y quien reparte
         // permisos duda de si hace algo.
         'stock' => 'Ver existencias',
+        'cost' => 'Ver costo de compra',
         'transfer' => 'Trasladar socios',
     ];
 
@@ -156,6 +157,7 @@ final class PermissionCatalog
         'receivables.manage' => 'Anular un abono mal registrado, anular o reabrir una deuda entera y dejarla sin fecha de pago. Nada se borra: todo queda con motivo y autor.',
         'members.archive' => 'Retirar la ficha de un socio. No borra su historial.',
         'members.adjust' => 'Sumarle o quitarle días y entradas a una membresía a mano: por un día que no pudo venir, una entrada que el lector contó dos veces o un error al venderle el plan. Cada ajuste queda con autor y motivo.',
+        'inventory.cost' => 'Ver lo que CUESTA la mercancía: el precio de compra de cada producto, el valor del inventario a costo, el importe de las entradas y salidas de existencias y la utilidad de cafetería (venta menos costo). Sin esto se sigue viendo el precio de venta y el stock —con eso se atiende y se vende—, pero no con cuánto se queda el gimnasio en cada venta. El servidor no lo manda: no es que se oculte en la pantalla.',
         'inventory.stock' => 'Ver CUÁNTAS unidades quedan de cada producto. Sin esto, el mostrador sigue pudiendo vender y sigue viendo cuáles están agotados —no podría trabajar si no—, pero no ve la cifra en el punto de venta. El módulo de Inventario se sigue gobernando con «Ver».',
         'members.employee' => 'Dar y retirar el acceso de empleado: entrar a entrenar porque trabaja aquí, sin comprar un plan y sin que entre dinero en caja. Se le pueden poner días y franjas horarias, igual que a las horas valle de un plan, y se apaga el día que la persona deja de trabajar en el gimnasio. Convive con una membresía pagada: un entrenador puede ser empleado y además socio.',
         'members.freeze' => 'Pausar la membresía de un socio y devolverle después los días que le quedaban. Mientras está congelada no puede entrar, y queda registrado quién la pausó y por qué.',
@@ -292,7 +294,7 @@ final class PermissionCatalog
      */
     private static function sortActions(array $permisos): array
     {
-        $orden = ['view' => 0, 'view_all' => 0.5, 'use' => 1, 'create' => 2, 'operate' => 2, 'edit' => 3, 'update' => 3, 'edit_draft' => 3, 'cancel' => 4, 'complete' => 4.5, 'archive' => 5, 'delete' => 5, 'manage_rules' => 6, 'approve' => 7, 'publish' => 8, 'rollback' => 8.2, 'manage_availability' => 8, 'manage_settings' => 8.5, 'manage' => 9];
+        $orden = ['view' => 0, 'view_all' => 0.5, 'stock' => 0.6, 'cost' => 0.7, 'use' => 1, 'create' => 2, 'operate' => 2, 'edit' => 3, 'update' => 3, 'edit_draft' => 3, 'cancel' => 4, 'complete' => 4.5, 'archive' => 5, 'delete' => 5, 'manage_rules' => 6, 'approve' => 7, 'publish' => 8, 'rollback' => 8.2, 'manage_availability' => 8, 'manage_settings' => 8.5, 'manage' => 9];
         usort($permisos, fn ($a, $b) => ($orden[$a['action']] ?? 5) <=> ($orden[$b['action']] ?? 5));
 
         return $permisos;

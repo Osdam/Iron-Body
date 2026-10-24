@@ -8,9 +8,10 @@ use App\Exceptions\InsufficientStockException;
 use App\Http\Controllers\Controller;
 use App\Models\InventoryMovement;
 use App\Models\Product;
-use App\Services\Inventory\InventoryService;
 use App\Services\Audit\AuditTrail;
+use App\Services\Inventory\InventoryService;
 use App\Support\Access\AdminActor;
+use App\Support\Access\InventoryCosts;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -68,7 +69,10 @@ class InventoryController extends Controller
         $page = $query->paginate($filters['per_page'] ?? 50);
 
         return response()->json([
-            'data' => $page->getCollection()->map(fn (InventoryMovement $m) => $m->toCrmArray())->all(),
+            'data' => InventoryCosts::movements(
+                $request,
+                $page->getCollection()->map(fn (InventoryMovement $m) => $m->toCrmArray()),
+            ),
             'meta' => [
                 'current_page' => $page->currentPage(),
                 'last_page' => $page->lastPage(),
@@ -84,12 +88,14 @@ class InventoryController extends Controller
         $limit = (int) $request->integer('limit', 50);
 
         return response()->json([
-            'data' => $product->inventoryMovements()
-                ->with(['reference'])
-                ->limit(max(1, min($limit, 200)))
-                ->get()
-                ->map(fn (InventoryMovement $m) => $m->toCrmArray())
-                ->all(),
+            'data' => InventoryCosts::movements(
+                $request,
+                $product->inventoryMovements()
+                    ->with(['reference'])
+                    ->limit(max(1, min($limit, 200)))
+                    ->get()
+                    ->map(fn (InventoryMovement $m) => $m->toCrmArray()),
+            ),
         ]);
     }
 
@@ -107,13 +113,21 @@ class InventoryController extends Controller
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
+        // El costo unitario de la entrada solo lo pone quien puede ver costos.
+        // Del resto se ignora: con null, InventoryService hereda el costo que ya
+        // tiene el producto, que es el dato bueno. Aceptarlo a ciegas dejaría a
+        // quien no ve el costo escribiendo el costo.
+        $unitAmount = isset($data['unit_amount']) && InventoryCosts::visibleTo($request)
+            ? (float) $data['unit_amount']
+            : null;
+
         $movement = $this->inventory->registerEntry(
             product: $product,
             quantity: (int) $data['quantity'],
             origin: InventoryMovementOrigin::from($data['origin'] ?? InventoryMovementOrigin::PURCHASE->value),
             reason: $data['reason'] ?? null,
             user: AdminActor::from($request),
-            unitAmount: isset($data['unit_amount']) ? (float) $data['unit_amount'] : null,
+            unitAmount: $unitAmount,
             notes: $data['notes'] ?? null,
         );
 
@@ -133,8 +147,8 @@ class InventoryController extends Controller
         ]);
 
         return response()->json([
-            'data' => $product->fresh(),
-            'movement' => $movement->fresh('product')->toCrmArray(),
+            'data' => InventoryCosts::product($request, $product->fresh()),
+            'movement' => InventoryCosts::movement($request, $movement->fresh('product')->toCrmArray()),
         ], 201);
     }
 
@@ -189,8 +203,8 @@ class InventoryController extends Controller
         ]);
 
         return response()->json([
-            'data' => $product->fresh(),
-            'movement' => $movement->fresh('product')->toCrmArray(),
+            'data' => InventoryCosts::product($request, $product->fresh()),
+            'movement' => InventoryCosts::movement($request, $movement->fresh('product')->toCrmArray()),
         ], 201);
     }
 

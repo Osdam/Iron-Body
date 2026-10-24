@@ -2,16 +2,17 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Enums\CashShiftStatus;
+use App\Enums\CashShiftType;
 use App\Http\Controllers\Controller;
 use App\Models\CashShift;
 use App\Models\Payment;
 use App\Models\ProductSale;
 use App\Models\ProductSaleItem;
 use App\Models\Receivable;
-use App\Services\Caja\CashReceipts;
 use App\Models\ReceivablePayment;
-use App\Enums\CashShiftStatus;
-use App\Enums\CashShiftType;
+use App\Services\Caja\CashReceipts;
+use App\Support\Access\InventoryCosts;
 use App\Support\SseStream;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -90,6 +91,12 @@ class EarningsController extends Controller
                 + $this->receivedQuery(CashShiftType::GYM, $from, $to)->count();
         }
 
+        // La UTILIDAD de cafetería es venta menos costo, así que enseñarla a
+        // quien no puede ver el costo se lo entrega con una resta: la venta ya
+        // la tiene delante. Quien no tenga `inventory.cost` ve los ingresos
+        // —eso es `earnings.view`— pero no el margen.
+        $verCosto = InventoryCosts::visibleTo($request);
+
         $cafeRevenue = 0.0;
         $cafeCount = 0;
         $cafeProfit = 0.0;
@@ -100,24 +107,25 @@ class EarningsController extends Controller
             $cafeCount = ProductSale::whereIn('status', self::CAFE_PAID)
                 ->whereBetween('paid_at', [$from, $to])->count()
                 + $this->receivedQuery(CashShiftType::PRODUCTS, $from, $to)->count();
-            $cafeProfit = (float) $this->cafeProfitQuery($from, $to)
-                ->selectRaw('SUM((product_sale_items.unit_price - products.cost_price) * product_sale_items.quantity) as profit')
-                ->value('profit');
+            $cafeProfit = $verCosto
+                ? (float) $this->cafeProfitQuery($from, $to)
+                    ->selectRaw('SUM((product_sale_items.unit_price - products.cost_price) * product_sale_items.quantity) as profit')
+                    ->value('profit')
+                : 0.0;
         }
 
         // ── Serie temporal alineada por periodo ───────────────────────────────
         $gymByPeriod = $includeGym ? $this->gymSeries($from, $to, $groupBy) : [];
         $cafeByPeriod = $includeCafe ? $this->cafeSeries($from, $to, $groupBy) : [];
-        $cafeProfitByPeriod = $includeCafe ? $this->cafeProfitSeries($from, $to, $groupBy) : [];
+        $cafeProfitByPeriod = $includeCafe && $verCosto ? $this->cafeProfitSeries($from, $to, $groupBy) : [];
 
         $periods = collect(array_keys($gymByPeriod + $cafeByPeriod))->unique()->sort()->values();
-        $series = $periods->map(fn (string $p) => [
+        $series = $periods->map(fn (string $p) => array_merge([
             'period' => $p,
             'gym' => round($gymByPeriod[$p] ?? 0, 2),
             'cafeteria' => round($cafeByPeriod[$p] ?? 0, 2),
             'total' => round(($gymByPeriod[$p] ?? 0) + ($cafeByPeriod[$p] ?? 0), 2),
-            'cafeteria_profit' => round($cafeProfitByPeriod[$p] ?? 0, 2),
-        ])->all();
+        ], $verCosto ? ['cafeteria_profit' => round($cafeProfitByPeriod[$p] ?? 0, 2)] : []))->all();
 
         // ── Desglose por método de pago ───────────────────────────────────────
         $byMethod = [];
@@ -176,16 +184,17 @@ class EarningsController extends Controller
                 'group_by' => $groupBy,
                 'source' => $source,
             ],
-            'totals' => [
+            'totals' => array_merge([
                 'gym_revenue' => round($gymRevenue, 2),
                 'cafeteria_revenue' => round($cafeRevenue, 2),
                 'combined_revenue' => round($gymRevenue + $cafeRevenue, 2),
+                'gym_count' => $gymCount,
+                'cafeteria_count' => $cafeCount,
+            ], $verCosto ? [
                 'cafeteria_profit' => round($cafeProfit, 2),
                 // Utilidad gimnasio = ingresos (sin costo asociado).
                 'combined_profit' => round($gymRevenue + $cafeProfit, 2),
-                'gym_count' => $gymCount,
-                'cafeteria_count' => $cafeCount,
-            ],
+            ] : []),
             'series' => $series,
             'by_method' => $byMethod,
         ]);

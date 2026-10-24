@@ -125,6 +125,20 @@ final class CrmPermission
     // ── Inventario ──────────────────────────────────────────────────────────
     public const INVENTORY_VIEW = 'inventory.view';
 
+    /**
+     * Ver el COSTO DE COMPRA de la mercancía.
+     *
+     * Aparte de `inventory.view`, por el mismo motivo que las existencias: una
+     * cosa es entrar al módulo y otra saber con cuánto se queda el gimnasio en
+     * cada venta. Quien no lo tenga sigue viendo el precio de venta y el stock
+     * —con eso se trabaja—, pero no el costo, ni el valor del inventario a
+     * costo, ni el importe de los movimientos, ni la utilidad de cafetería, que
+     * es venta menos costo y lo despejaría con una resta.
+     *
+     * Ver App\Support\Access\InventoryCosts, que es quien lo aplica.
+     */
+    public const INVENTORY_COST = 'inventory.cost';
+
     public const INVENTORY_CREATE = 'inventory.create';
 
     public const INVENTORY_EDIT = 'inventory.edit';

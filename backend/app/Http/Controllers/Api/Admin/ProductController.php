@@ -7,14 +7,16 @@ use App\Exceptions\InsufficientStockException;
 use App\Http\Controllers\Controller;
 use App\Models\InventoryMovement;
 use App\Models\Product;
-use App\Services\Billing\SaleReadiness;
 use App\Models\ProductSaleItem;
+use App\Services\Audit\AuditTrail;
+use App\Services\Billing\SaleReadiness;
 use App\Services\CatalogEvents;
 use App\Services\Inventory\InventoryService;
-use App\Services\Audit\AuditTrail;
 use App\Support\Access\AdminActor;
+use App\Support\Access\InventoryCosts;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -43,7 +45,7 @@ class ProductController extends Controller
                 ->filter(fn (Product $p) => $p->stock_status === $status)
                 ->values();
 
-            return response()->json(['data' => $items]);
+            return response()->json(['data' => InventoryCosts::products($request, $items)]);
         }
         if ($request->filled('search')) {
             $term = '%'.$request->input('search').'%';
@@ -52,7 +54,9 @@ class ProductController extends Controller
                 ->orWhere('supplier', 'like', $term));
         }
 
-        return response()->json(['data' => $this->withSaleState($query->orderBy('name')->get())]);
+        return response()->json([
+            'data' => $this->withSaleState($request, $query->orderBy('name')->get()),
+        ]);
     }
 
     /**
@@ -63,37 +67,56 @@ class ProductController extends Controller
      * reglas de disponibilidad. Quien necesita saber si el mostrador puede
      * cobrarlo es el CRM, y este es su endpoint.
      *
-     * @param  \Illuminate\Support\Collection<int, Product>  $items
-     * @return \Illuminate\Support\Collection<int, array<string,mixed>>
+     * Y le QUITA el costo a quien no puede verlo. Va en el mismo paso porque
+     * es la misma pregunta —qué parte de la ficha se le enseña a quien
+     * pregunta— y separarlas dejaría una lista compuesta sin recortar.
+     *
+     * @param  Collection<int, Product>  $items
+     * @return list<array<string,mixed>>
      */
-    private function withSaleState($items)
+    private function withSaleState(Request $request, $items): array
     {
         $readiness = app(SaleReadiness::class);
 
-        return $items->map(fn (Product $p) => array_merge($p->toArray(), $readiness->for($p)));
+        return InventoryCosts::products(
+            $request,
+            $items->map(fn (Product $p) => array_merge($p->toArray(), $readiness->for($p))),
+        );
     }
 
     // GET /api/admin/products/stats
-    public function stats(): JsonResponse
+    public function stats(Request $request): JsonResponse
     {
         $all = Product::all();
 
-        return response()->json([
+        $stats = [
             'total' => $all->count(),
             'in_app' => $all->where('visible_in_app', true)->where('active', true)->count(),
             'low_stock' => $all->filter(fn (Product $p) => $p->stock_status === 'low')->count(),
             'out_of_stock' => $all->filter(fn (Product $p) => $p->stock_status === 'out')->count(),
-            'inventory_value' => (float) $all->sum(fn (Product $p) => (float) $p->cost_price * $p->stock),
             'retail_value' => (float) $all->sum(fn (Product $p) => (float) $p->sale_price * $p->stock),
             'categories' => $all->pluck('category')->unique()->values(),
-        ]);
+        ];
+
+        // El valor del inventario A COSTO es el costo de compra sumado: quien no
+        // puede ver el costo de un producto tampoco puede verlo de todos a la
+        // vez. La valorización a precio de VENTA se queda: no revela nada que no
+        // esté ya en la ficha.
+        if (InventoryCosts::visibleTo($request)) {
+            $stats['inventory_value'] = (float) $all->sum(fn (Product $p) => (float) $p->cost_price * $p->stock);
+        }
+
+        return response()->json($stats);
     }
 
     // GET /api/admin/products/{product}
-    public function show(Product $product): JsonResponse
+    public function show(Request $request, Product $product): JsonResponse
     {
         return response()->json([
-            'data' => array_merge($product->toArray(), app(SaleReadiness::class)->for($product)),
+            'data' => InventoryCosts::product(
+                $request,
+                array_merge($product->toArray(), app(SaleReadiness::class)->for($product)),
+            ),
         ]);
     }
 
@@ -129,7 +152,7 @@ class ProductController extends Controller
             'metadata' => ['sale_price' => (string) $product->sale_price, 'stock' => (int) $product->stock],
         ]);
 
-        return response()->json(['data' => $product->fresh()], 201);
+        return response()->json(['data' => InventoryCosts::product($request, $product->fresh())], 201);
     }
 
     /**
@@ -201,7 +224,7 @@ class ProductController extends Controller
             'metadata' => ['sale_price' => (string) $product->sale_price, 'stock' => (int) $product->fresh()->stock],
         ]);
 
-        return response()->json(['data' => $product->fresh()]);
+        return response()->json(['data' => InventoryCosts::product($request, $product->fresh())]);
     }
 
     /**
@@ -477,9 +500,22 @@ class ProductController extends Controller
         return null;
     }
 
+    /**
+     * Valida la ficha y DESCARTA el costo si quien edita no puede verlo.
+     *
+     * Descartarlo —y no validarlo a cero— es lo que conserva el costo que ya
+     * tenía el producto: el formulario de quien no ve el costo no lo manda, y
+     * si llegara de todas formas (un cliente viejo, una llamada a mano) sería
+     * un valor escrito a ciegas sobre un dato que esa persona no puede leer.
+     * Un cero ahí diría que la mercancía no costó nada y falsearía el margen de
+     * todas las ventas de ese producto.
+     *
+     * Al crear, el costo queda sin poner en lugar de en cero, por lo mismo: no
+     * se sabe, y eso es más honesto que un número inventado.
+     */
     private function validatePayload(Request $request, ?int $ignoreId = null): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'sku' => ['nullable', 'string', 'max:255'],
             'name' => ['required', 'string', 'max:255'],
             'category' => ['nullable', 'string', 'max:255'],
@@ -493,5 +529,11 @@ class ProductController extends Controller
             'visible_in_app' => ['nullable', 'boolean'],
             'active' => ['nullable', 'boolean'],
         ]);
+
+        if (! InventoryCosts::visibleTo($request)) {
+            unset($data['cost_price']);
+        }
+
+        return $data;
     }
 }
