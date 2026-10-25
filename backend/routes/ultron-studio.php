@@ -118,8 +118,9 @@ Route::prefix('admin/ultron-studio')->middleware(LimitRequestBodySize::class.':6
         Route::post('lab/runs/{uuid}/cancel', [UltronStudioLabController::class, 'cancel'])->whereUuid('uuid');
         Route::post('lab/runs/{uuid}/verdict', [UltronStudioLabController::class, 'verdict'])->whereUuid('uuid');
 
-        // Hito 5: promover y volver a Legacy (publicar y revertir, arriba).
-        Route::post('versions/{uuid}/promote', [UltronStudioVersionController::class, 'promote'])->whereUuid('uuid');
+        // Hito 5: promover y volver a Legacy (publicar y revertir, arriba). Promover calcula la evidencia entera
+        // (acta incluida), así que comparte el cubo de la evidencia: 10/min por persona (AS-2 de la revisión de la API).
+        Route::post('versions/{uuid}/promote', [UltronStudioVersionController::class, 'promote'])->whereUuid('uuid')->middleware('throttle:ultron-studio-evidence');
         Route::post('publications/legacy', [UltronStudioPublicationController::class, 'legacy']);
     });
 });

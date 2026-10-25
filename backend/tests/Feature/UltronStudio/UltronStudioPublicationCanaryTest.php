@@ -297,6 +297,27 @@ class UltronStudioPublicationCanaryTest extends TestCase
         $this->json('GET', '/api/admin/ultron-studio/status', [], $primera)->assertOk();
     }
 
+    /**
+     * AS-2 de la revisión de la API (25-10): promover calcula la evidencia
+     * entera, acta incluida, así que comparte el cubo de la evidencia (10/min
+     * por persona). Diez lecturas y el intento de promover desde otra sesión
+     * de la misma persona es el undécimo: 429. Otra persona tiene su cubo.
+     */
+    public function test_promover_comparte_el_limitador_de_la_evidencia(): void
+    {
+        $v = $this->inCanary();
+        $primera = $this->actingAsAdmin($this->root);
+        for ($i = 1; $i <= StudioPublications::EVIDENCE_PER_MINUTE; $i++) {
+            $this->json('GET', "/api/admin/ultron-studio/versions/{$v->uuid}/canary-evidence", [], $primera)->assertOk();
+        }
+        $cuerpo = ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => str_repeat('0', 64)];
+        $r = $this->json('POST', "/api/admin/ultron-studio/versions/{$v->uuid}/promote", $cuerpo, $this->actingAsAdmin($this->root));
+        $r->assertStatus(429)->assertJsonPath('code', 'too_many_requests')->assertJsonPath('message', 'Demasiadas consultas seguidas a la evidencia del canario. Espera un minuto.');
+        $this->assertSame(1, StudioPublication::query()->count(), 'el 429 no escribe en la cadena');
+        // Otra persona pasa el limitador (y cae en la puerta que le toque, nunca en 429).
+        $this->assertNotSame(429, $this->promoteAs($this->ana, $v->uuid)->status());
+    }
+
     public function test_ninguna_respuesta_de_la_publicacion_lleva_el_canario_ni_la_cadena_firmada(): void
     {
         $this->withoutMiddleware(ThrottleRequests::class);
