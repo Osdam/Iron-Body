@@ -71,7 +71,7 @@ final class StudioPublishing
     /** ¿Está encendida la llave del Studio? */
     public static function flagEnabled(): bool
     {
-        return (bool) config('ultron_studio.publishing_enabled', false);
+        return config('ultron_studio.publishing_enabled', false) === true;
     }
 
     /**

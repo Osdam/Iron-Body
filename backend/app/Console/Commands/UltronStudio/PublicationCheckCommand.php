@@ -4,6 +4,8 @@ namespace App\Console\Commands\UltronStudio;
 
 use App\Services\UltronStudio\StudioPublications;
 use Illuminate\Console\Command;
+use Symfony\Component\Console\Formatter\OutputFormatter;
+use Symfony\Component\Console\Output\OutputInterface;
 use Throwable;
 
 /**
@@ -46,7 +48,8 @@ class PublicationCheckCommand extends Command
         }
 
         if ($this->option('json')) {
-            $this->line((string) json_encode(['ok' => $problemas === [], 'problems' => $problemas, 'publication' => $estado], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+            // Salida cruda: una etiqueta con forma de marcado (`<href=…>`, `<error>`) no debe desaparecer ni convertirse en ANSI (N-5).
+            $this->output->writeln((string) json_encode(['ok' => $problemas === [], 'problems' => $problemas, 'publication' => $estado], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT), OutputInterface::OUTPUT_RAW);
 
             return $problemas === [] ? self::SUCCESS : self::FAILURE;
         }
@@ -58,10 +61,10 @@ class PublicationCheckCommand extends Command
             : "Cabeza: entrada {$cabeza['seq']} ({$cabeza['action']}, {$cabeza['at']}) · ".($cabeza['signatureOk'] ? 'verifica' : 'NO VERIFICA'));
         foreach (['canary' => 'Canario', 'rest' => 'Resto'] as $parte => $nombre) {
             $p = $estado[$parte];
-            $this->line("{$nombre}: ".($p === null ? 'Legacy' : "«{$p['label']}» ({$p['versionUuid']})"));
+            $this->line(OutputFormatter::escape("{$nombre}: ".($p === null ? 'Legacy' : "«{$p['label']}» ({$p['versionUuid']})")));
         }
         foreach ($estado['drift'] as $d) {
-            $this->warn("Deriva en {$d['param']}: declara ".json_encode($d['declared']).' y el motor lee '.json_encode($d['engine']).'.');
+            $this->warn(OutputFormatter::escape("Deriva en {$d['param']}: declara ".json_encode($d['declared']).' y el motor lee '.json_encode($d['engine']).'.'));
         }
 
         if ($problemas === []) {

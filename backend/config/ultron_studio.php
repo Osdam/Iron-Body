@@ -58,9 +58,11 @@ return [
     | llave que permite cambiar). La otra llave es la del motor
     | (`MARKETING_ULTRON_STUDIO_CONFIG`): en `off`, publicar y promover responden
     | 409 `engine_not_reading_versions`, porque declarar algo que el motor no
-    | lee no tendría efecto.
+    | lee no tendría efecto. Solo `true` (o 1/on/yes) la enciende: `false`,
+    | `off`, `no`, vacío o cualquier otro texto la dejan apagada (revisión de
+    | seguridad de H5, M-1: `(bool) env()` daba `off` por encendida).
     */
-    'publishing_enabled' => (bool) env('ULTRON_STUDIO_PUBLISHING_ENABLED', false),
+    'publishing_enabled' => filter_var(env('ULTRON_STUDIO_PUBLISHING_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
 
     /*
     |--------------------------------------------------------------------------
@@ -110,7 +112,8 @@ return [
     'lab' => [
 
         // Apagada: todas las rutas `lab/*` responden 409 `lab_disabled`, salvo `GET lab/status`.
-        'enabled' => (bool) env('ULTRON_STUDIO_LAB_ENABLED', false),
+        // Solo `true` (o 1/on/yes) la enciende; `off`, `no` o basura la dejan apagada (M-1 de H5).
+        'enabled' => filter_var(env('ULTRON_STUDIO_LAB_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
 
         // `fake` (sin red, coste 0) u `openai`. Cualquier otro valor deja el
         // laboratorio sin configurar (`invalid_driver`): nunca se cae en

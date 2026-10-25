@@ -66,9 +66,10 @@ class UltronStudioPublicationConfigTest extends TestCase
      * El fichero de configuración evaluado con unas variables del entorno.
      *
      * @param  array<string, string|null>  $variables  null = sin la variable
+     * @param  string|null  $seccion  la sección del fichero, o null = el fichero entero
      * @return array<string, mixed>
      */
-    private function configWith(array $variables): array
+    private function configWith(array $variables, ?string $seccion = 'publishing'): array
     {
         $antes = [];
         foreach ($variables as $nombre => $valor) {
@@ -82,7 +83,9 @@ class UltronStudioPublicationConfigTest extends TestCase
         }
 
         try {
-            return (require base_path('config/ultron_studio.php'))['publishing'];
+            $todo = require base_path('config/ultron_studio.php');
+
+            return $seccion === null ? $todo : $todo[$seccion];
         } finally {
             foreach ($antes as $nombre => [$servidor, $entorno, $proceso]) {
                 unset($_SERVER[$nombre], $_ENV[$nombre]);
@@ -124,6 +127,39 @@ class UltronStudioPublicationConfigTest extends TestCase
         }
         $this->assertSame(1, $this->configWith(['ULTRON_STUDIO_CANARY_MIN_HOURS' => '-3'])['canary_min_hours']);
         $this->assertSame(24, $this->configWith(['ULTRON_STUDIO_CANARY_MIN_HOURS' => '1.5'])['canary_min_hours']);
+    }
+
+    /**
+     * M-1 de la revisión de seguridad de H5 (25-10): `(bool) env()` daba por
+     * ENCENDIDA la llave con `off`, `no`, `disabled` o ` false`, y `off` es
+     * justo el valor «apagado» de la llave hermana del motor. Solo `true`
+     * (o 1/on/yes) la enciende; cualquier otro texto y la basura la apagan,
+     * también en el servicio y en la puerta de publicar.
+     */
+    public function test_la_llave_de_publicar_solo_se_enciende_con_true(): void
+    {
+        foreach (['off', 'no', 'disabled', ' false', 'false', '0', '', 'si', 'enabled', 'activa'] as $valor) {
+            $this->assertFalse($this->configWith(['ULTRON_STUDIO_PUBLISHING_ENABLED' => $valor], null)['publishing_enabled'], json_encode($valor));
+        }
+        $this->assertFalse($this->configWith(['ULTRON_STUDIO_PUBLISHING_ENABLED' => null], null)['publishing_enabled'], 'sin la variable');
+        foreach (['true', 'TRUE', '1', 'on', 'yes'] as $valor) {
+            $this->assertTrue($this->configWith(['ULTRON_STUDIO_PUBLISHING_ENABLED' => $valor], null)['publishing_enabled'], $valor);
+        }
+        // La llave del laboratorio (Hito 4) tenía la misma clase de fallo.
+        foreach (['off', 'no', 'disabled', ''] as $valor) {
+            $this->assertFalse($this->configWith(['ULTRON_STUDIO_LAB_ENABLED' => $valor], null)['lab']['enabled'], json_encode($valor));
+        }
+        $this->assertTrue($this->configWith(['ULTRON_STUDIO_LAB_ENABLED' => 'true'], null)['lab']['enabled']);
+
+        // En el servicio, un valor que no sea exactamente `true` es «apagada» aunque el motor lea.
+        foreach (['off', 'true', 1, '1', null] as $valor) {
+            config(['marketing.ultron.studio_config' => 'canary', 'ultron_studio.publishing_enabled' => $valor]);
+            $this->assertFalse(StudioPublishing::flagEnabled(), json_encode($valor));
+            $this->assertSame('publishing_disabled', StudioPublishing::keyRefusal(D::ACTION_PUBLISH)['code'] ?? null, json_encode($valor));
+        }
+        config(['ultron_studio.publishing_enabled' => true]);
+        $this->assertTrue(StudioPublishing::flagEnabled());
+        $this->assertNull(StudioPublishing::keyRefusal(D::ACTION_PUBLISH));
     }
 
     public function test_la_ventana_y_los_umbrales_se_vuelven_a_acotar_al_leerlos(): void
